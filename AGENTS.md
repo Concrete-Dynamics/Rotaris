@@ -7,39 +7,31 @@ state, the architecture views and the design language. Read it first — nothing
 term derived from `docs/spec/` and citing the requirement that owns it. Read it before naming anything new,
 and prefer its word over a synonym you would otherwise reach for.
 
-This file covers one thing it does not: **the live run**, the only check here that spends real money.
+This file covers the two checks `CLAUDE.md` does not spell out: **`pnpm app:drive`** (free, interactive
+debugging of the built app) and **`pnpm live-run`** (the only check that spends real money).
 
 ## Driving the built app — `pnpm app:drive`
 
-The app can be launched and then **driven one command at a time from a shell**, which is the fastest way to see
-what a surface actually does without editing a proof script and waiting out a launch. It spends nothing, talks to
-no provider by default (the scripted dialect), and runs against a scratch profile under `.drive/`.
+The fastest way to see what a surface actually does without editing a proof script and waiting out a
+launch. It spends nothing, talks to no provider by default (the scripted dialect), and runs against a
+scratch profile under `.drive/`. Full usage is in the script's own header
+(`apps/desktop/scripts/drive.mjs`) — `pnpm app:drive` with no command prints it.
 
 ```
 pnpm build                                  # it drives the BUILT app, so build first
 pnpm app:drive start [--workspace=PATH] [--fresh] [--dialect=scripted]
 pnpm app:drive waitFor ".app-shell"         # waits for it; never a fixed sleep
 pnpm app:drive click ".nav-item" --text=Git
-pnpm app:drive chord Ctrl+1
-pnpm app:drive type "some text" --enter
 pnpm app:drive inspect ".composer"          # boxes, attributes, text, what holds focus
-pnpm app:drive probe "[data-testid=…]"      # the shape the *-proof scripts read
-pnpm app:drive eval "document.title"
 pnpm app:drive shot screen.png              # a PNG you can open, or read in a transcript
-pnpm app:drive resize 1000 680
-pnpm app:drive command '{"kind":"theme.set","name":"nocturne"}'
 pnpm app:drive log --tail=40                # what the app printed
 pnpm app:drive stop
 ```
 
 `command` is relayed to main's own `runCommand` — the same path the renderer's channel reaches — so driving a
-command drives the product, not a stand-in for it. Everything else moves a pointer, presses a key or reads the
-document the user is looking at.
-
-The seam behind it (`apps/desktop/src/main/driver.ts`) exists only when `ROTARIS_DRIVER` names an endpoint file at
-launch, and every request must carry the secret that launch minted. It is verification only: no product surface
-reaches it, and no requirement names it. `pnpm driver-proof` is its proof, and `docs/architecture/codebase.md`
-records what its first execution found.
+command drives the product, not a stand-in for it. The seam (`apps/desktop/src/main/driver.ts`) exists only
+when `ROTARIS_DRIVER` names an endpoint file at launch; it is verification only, and `pnpm driver-proof`
+is its proof.
 
 Two habits worth keeping: **`shot` produces a PNG an agent can read directly**, which is the cheapest way to meet
 `CLAUDE.md`'s "match after drawing" obligation; and a step that needs a condition should `waitFor` it rather than
@@ -68,36 +60,15 @@ An agent must not run it on its own initiative: it costs money the owner pays.
 ### Registering an endpoint, and storing its key
 
 Any OpenAI-compatible endpoint works — a self-hosted or custom model as readily as a hosted one. Register it
-once:
-
-```
-pnpm live-run --add-endpoint     # name, label, base URL, model id, optional prices, then the key (hidden prompt)
-pnpm live-run --endpoints        # what is registered, which is the default, which has a key
-pnpm live-run --add-endpoint --name=custom --label="My Endpoint" --base-url=https://host/v1 \
-              --model=my-model --context=256000 --unmetered
-                                 # the same, scripted; any field left out is asked for, and a terminal-less
-                                 # shell must supply the key in ROTARIS_LIVE_API_KEY. Re-registering an
-                                 # existing name keeps its stored key.
-pnpm live-run --set-default=<name>
-pnpm live-run --set-key    --endpoint=<name>
-pnpm live-run --forget-key --endpoint=<name>
-pnpm live-run --remove-endpoint=<name>
-```
-
-The **base URL** is the part before `/chat/completions` (the same string the product's "Add endpoint" dialog
-takes). The **label** is what the product shows, and it decides the provider id the app stores the credential
-under: `openai-compatible--<label lowercased, every run of non-alphanumerics one dash>` (`REQ-PROVIDER-051`). The
-**model id** is whatever that endpoint calls the model. The two **prices**, in USD per million tokens, are
-optional and only affect what the budget ceiling can measure (below).
+once (`pnpm live-run --add-endpoint`; `pnpm live-run --endpoints` lists what is registered). The full flag
+list is in the script's own header (`apps/desktop/scripts/live-run.mjs`, `USAGE`) — `pnpm live-run --help`
+prints it.
 
 The registry is `~/.rotaris/live-run/endpoints.json`. Keys live beside it, one file per endpoint, never in this
 repository and never on a command line: on Windows `~/.rotaris/live-run/<name>.key.dpapi`, encrypted with DPAPI
-— readable by **this account on this machine** and by nothing else, a copied file being useless elsewhere — with
-the file's ACL reduced to the owner; elsewhere `~/.rotaris/live-run/<name>.key` at mode 600.
-DPAPI needs a PowerShell host that can load `Microsoft.PowerShell.Security`, so the script probes PowerShell 7
-first and Windows PowerShell second — 5.1 cannot always load it. Where neither can, the key goes into
-`<name>.key` with its ACL cut to this account alone, and `--add-endpoint` and `--set-key` print which protection
-they used: the weaker one is never silent.
+— readable by **this account on this machine** and by nothing else — with the file's ACL reduced to the owner;
+elsewhere `~/.rotaris/live-run/<name>.key` at mode 600. Where DPAPI is unavailable the key goes into
+`<name>.key` with an owner-only ACL, and the script says so — the weaker protection is never silent.
 `ROTARIS_LIVE_API_KEY` in the environment wins over the stored file, for a one-off or a machine where the hidden
 prompt cannot run.
 
@@ -113,32 +84,26 @@ pnpm live-run --confirm              # the run, against the default endpoint
 pnpm live-run --confirm --endpoint=openrouter
 ```
 
-`--confirm` is required. Useful flags: `--endpoint=<name>`, `--model=<id>` and `--base-url=<url>` (one-run
-overrides), `--budget=<usd>` (default `1.00`), `--max-tokens=<n>` (default 500 000), `--only=ask,edit,requirements,shell`,
-`--max-iterations=<n>` (default 15), `--keep` (keep the sandbox), `--skip-build`.
+`--confirm` is required. The full flag list (`--endpoint`, `--model`, `--base-url`, `--budget`,
+`--max-tokens`, `--only`, `--max-iterations`, `--keep`, `--skip-build`) is in the script's own
+header — `pnpm live-run --help` prints it.
 
 ### What it costs, and what stops it
 
 Two bounds always hold: the model the owner chose, and `runtime.max_iterations` written into the sandbox's
-`agents.yaml`, so one confused run cannot spend the lot. The third depends on what the endpoint will tell us,
-and the script names which one it used rather than implying a number it cannot know:
-
-0. **nothing** — an endpoint registered `--unmetered`, meaning the owner's own hardware, carries no third bound
-   at all. Tokens are still counted and reported; nothing stops on them. Naming `--budget=` or `--max-tokens=`
-   on the command line puts a ceiling back for that one run.
-1. **the provider's own figure** — OpenRouter answers `GET /key` with credits used; read before the first
-   scenario and after each real run, the difference is what was actually spent;
-2. **the registered prices** — the store's token counts times the USD per million entered at `--add-endpoint`;
-3. **tokens alone** — an endpoint that reports no cost and carries no prices has no money figure at all, so the
-   ceiling becomes `--max-tokens` instead, and `--budget` is not pretended to apply.
+`agents.yaml`, so one confused run cannot spend the lot. The third is whatever the endpoint allows, and the
+script names which one it used rather than implying a number it cannot know: **nothing** for an endpoint
+registered `--unmetered` (the owner's own hardware — tokens counted, nothing stopping on them, unless the
+invocation names a ceiling itself); else the **provider's own figure** (OpenRouter's `GET /key`); else the
+**registered prices** over the store's token counts; else **tokens alone** against `--max-tokens`.
 
 Crossing whichever ceiling applies stops the run there, records the figure and reports a failure.
 
 `--context=<tokens>` is for an endpoint whose `/models` payload does not declare a context window in a key
 discovery reads — vLLM's `max_model_len` is one such. The number is written into the sandbox's `agents.yaml` as
-`max_input_tokens` on a `models:` entry. That entry **replaces** the snapshot layer's entry for the same model as
-a whole, so the script writes the provider, `model_id`, `auth_provider` and `base_url` with it rather than the
-lone field, which is what keeps the leased bearer reaching the right endpoint.
+`max_input_tokens` on a `models:` entry that **replaces** the snapshot layer's entry for the same model as
+a whole (provider, `model_id`, `auth_provider`, `base_url` with it), which is what keeps the leased bearer
+reaching the right endpoint.
 
 ### What it does
 
@@ -206,20 +171,10 @@ hand-driven precursor it was written from — the **eighty-first**, recorded in 
 store whose every document the engine rejected read exactly like an empty store, because this fixture's own
 identifiers were not identifiers and no surface but the board had ever parsed them.
 
-It still found a defect, in the way this record says it would, and not through a red check:
-
-**The persisted tool-call total was the entry agent's own, not the session's** (`REQ-MONITOR-102`). The store held
-`sessions.tool_calls = 9` where the ring held 25 rows: `orchestrator` 9, `coding-agent` 13, `tester` 3. Two
-surfaces read it. Overview's "Tool calls" card showed 9 of 25. Worse, the Inspector's synthetic run row computes
-`max(0, total − Σ per-agent)`, which on any run that delegated is `max(0, 9 − 16)` — so the entry agent that had
-just dispatched nine calls was drawn as **"0 tool calls"**. `run.ts` added only the entry agent's turns to the
-aggregates; a child's count reached `children.tool_calls` and stopped there. The fix passes the run's aggregate a
-counter the child settles into (`ChildrenDeps.countToolCalls`), so the total is maintained rather than recomputed,
-as ADR-0008 requires, and every descendant counts once.
-
-**The harness's own gap, from the same finding:** it asserted tool *names* and never tool *counts*, which is why
-twenty-six green checks sat above a wrong number. The `edit` scenario now compares the session's counter with the
-ring, by agent — the assertion that would have failed before the fix.
+It still found a defect, in the way this record says it would, and not through a red check — the persisted
+tool-call total was the entry agent's own, not the session's (`REQ-MONITOR-102`), recorded in
+`docs/architecture/first-executions.md`'s live-run row. The `edit` scenario now compares the session's counter
+with the ring, by agent — the assertion that would have failed before the fix.
 
 Two things it surfaced that are **not** defects, recorded so they are not re-investigated: the Overview metric
 cards read the *attached* session, so they are zero in the `shell` scenario by design; and `iterations_completed`

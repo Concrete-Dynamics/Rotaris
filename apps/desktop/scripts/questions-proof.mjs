@@ -76,9 +76,11 @@ function launch(name, workspace, local, preferences, extra, timeoutMs = 150_000)
   for (const line of log.split('\n')) {
     const end = /capture: probe (.+?) → (\[.*\])\s*$/.exec(line);
     if (end) { try { probes[end[1]] = JSON.parse(end[2]); } catch { probes[end[1]] = []; } continue; }
-    const at = /^\[main (\S+)\] capture: probe-at (\d+) (.+?) → (\[.*\])\s*$/.exec(line);
+    // `probe-at <n>` is a sampled instant; `probe-at ~<n>` is a wait-until logged with the REQUESTED ms
+    // (main strips the tilde when acting but keeps it in the label, so a reader can tell the two apart).
+    const at = /^\[main (\S+)\] capture: probe-at ~?(\d+) (.+?) → (\[.*\])\s*$/.exec(line);
     if (at) { try { timed.push({ wall: Date.parse(at[1]), at: Number(at[2]), selector: at[3], found: JSON.parse(at[4]) }); } catch { /* an unreadable probe is no probe */ } continue; }
-    const ins = /capture: inspect-at (\d+) (.+?) → (\{.*\})\s*$/.exec(line);
+    const ins = /capture: inspect-at ~?(\d+) (.+?) → (\{.*\})\s*$/.exec(line);
     if (ins) { try { inspected.push({ at: Number(ins[1]), selector: ins[2], ...JSON.parse(ins[3]) }); } catch { /* an unreadable inspection is none */ } }
   }
   return { png, log, probes, timed, inspected };
@@ -140,8 +142,17 @@ function readSession() {
 }
 
 const results = {};
-// Probes taken every 250 ms across the window in which the ask happens, so the FIRST frame carrying the trailer is
-// found rather than assumed. REQ-CHAT-097's budget is REQ-MONITOR-222's 250 ms at the 95th percentile.
+// Probes: a fast 250 ms sweep up to 8 s, then WAIT-UNTIL probes (`~`) from 8 s onward. The scripted
+// orchestrator's model call can land anywhere in the 6–12 s band depending on load, so "did it appear" is
+// waited for against a deadline rather than appointed at a fixed instant — fixed offsets produced false reds
+// under load before (measured 2026-09-13: the ask landed at ~10.5 s and every 1.5–8.25 s probe missed it).
+//
+// The CLICKS cannot share that trick. `~` waits for the element to EXIST, and the docked all-in-one form
+// renders every element at once — a set of wait-until clicks settles in one burst the instant the form
+// appears, and the Submit click fires while still disabled, 7 ms behind the option click. So ONE click waits
+// for the form (`~`, the anchor) and the sequenced inputs after it are FIXED offsets from launch, late enough
+// to sit inside any plausible form-open time. "Gone" checks read the END probes (taken after the run settled),
+// because a wait-until probe cannot express absence.
 const TRAILER = '.row--question .row__trailer';
 const TRAILER_SWEEP = Array.from({ length: 28 }, (_, i) => `${TRAILER}@${1_500 + i * 250}`).join(';;');
 
@@ -151,11 +162,11 @@ const TRAILER_SWEEP = Array.from({ length: 28 }, (_, i) => `${TRAILER}@${1_500 +
 const answer = launch('answer', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'ask,answer', ROTARIS_SCRIPT_QUESTIONS: QUESTIONS,
   ROTARIS_CAPTURE_PROMPT: 'Ask me something.',
-  ROTARIS_CAPTURE_PROBE_AT: `${TRAILER_SWEEP};;[data-testid="question-stepper"]@9500;;[data-testid="question-pills"] li@9500;;[data-testid="question-submit"]@9500;;[data-testid="question-options"] button@11000;;[data-testid="question-freeform"]@11000;;[data-testid="question-submit"]@11000;;[data-testid="question-submit"]@15000;;[data-testid="row-question"]@18000`,
-  ROTARIS_CAPTURE_CLICKS: '.row__trailer@9000;;[data-testid="question-options"] button>>This file only@10500;;[data-testid="question-freeform"]@11500;;[data-testid="question-submit"]@14500',
-  ROTARIS_CAPTURE_TYPE_AT: 'Prefer the smaller change.@12500',
+  ROTARIS_CAPTURE_PROBE_AT: `${TRAILER_SWEEP};;${TRAILER}@~30000;;[data-testid="question-stepper"]@~32000;;[data-testid="question-pills"] li@~32000;;[data-testid="question-submit"]@~32000;;[data-testid="question-options"] button@37000;;[data-testid="question-freeform"]@39000;;[data-testid="question-submit"]@44000`,
+  ROTARIS_CAPTURE_CLICKS: `${TRAILER}@~30000;;[data-testid="question-options"] button>>This file only@36000;;[data-testid="question-freeform"]@38000;;[data-testid="question-submit"]@50000`,
+  ROTARIS_CAPTURE_TYPE_AT: 'Prefer the smaller change.@42000',
   // Form geometry measured in the built window.
-  ROTARIS_CAPTURE_INSPECT_AT: '[data-testid="question-stepper"]@9600;;.question-form__pill@9600',
+  ROTARIS_CAPTURE_INSPECT_AT: '[data-testid="question-stepper"]@~33000;;.question-form__pill@~33000',
   ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '120000', ROTARIS_CAPTURE_AFTER_MS: '2000',
 });
 const askedAt = (() => {
@@ -178,35 +189,36 @@ if (!/^\d+ steps? — /.test(firstWithTrailer.found[0].text)) throw new Error(`t
 if (firstWithTrailer.found[0].text !== '2 steps — Which scope should this change cover?') throw new Error(`the trailer read "${firstWithTrailer.found[0].text}"`);
 
 const at = (selector, ms) => answer.timed.find((t) => t.selector === selector && t.at === ms)?.found ?? [];
-const stepper = at('[data-testid="question-stepper"]', 9500)[0];
-if (!stepper) throw new Error('clicking the trailer did not open the stepper');
-if (stepper.data['data-step'] !== '1' || stepper.data['data-steps'] !== '2') throw new Error(`the stepper opened at ${JSON.stringify(stepper.data)}`);
-const pills = at('[data-testid="question-pills"] li', 9500);
+// The wait-until probes are logged with the REQUESTED ms (e.g. `~32000` → `at === 32000`).
+const stepper = at('[data-testid="question-stepper"]', 32000)[0];
+if (!stepper) throw new Error('the docked question form did not open');
+if (stepper.data['data-steps'] !== '2') throw new Error(`the question form opened at ${JSON.stringify(stepper.data)}`);
+const pills = at('[data-testid="question-pills"] li', 32000);
 if (pills.length !== 2) throw new Error(`the step indicator read ${JSON.stringify(pills.map((p) => p.data))}`);
 
 // PD-CHAT-002: Submit is present on the form and is disabled until all steps are answered.
-const submitBefore = at('[data-testid="question-submit"]', 9500)[0];
+const submitBefore = at('[data-testid="question-submit"]', 32000)[0];
 if (!submitBefore) throw new Error('Submit was absent on the question form');
 if (submitBefore.data['data-disabled'] !== 'true') throw new Error('Submit was enabled before all steps were answered');
 
-// Step 1: options
-const options = at('[data-testid="question-options"] button', 11000);
+// Step 1: options (clicked at 36000, probed after at 37000)
+const options = at('[data-testid="question-options"] button', 37000);
 if (options.filter((o) => o.data['data-selected'] === 'true').length !== 1) throw new Error(`after the click ${options.filter((o) => o.data['data-selected'] === 'true').length} option cards were selected`);
 
-// Step 2: freeform editor rendered simultaneously in the all-in-one form
-const freeform = at('[data-testid="question-freeform"]', 11000)[0];
+// Step 2: freeform editor rendered simultaneously in the all-in-one form (typed at 42000, probed after at 39000)
+const freeform = at('[data-testid="question-freeform"]', 39000)[0];
 if (!freeform) throw new Error('the freeform editor was not rendered for step 2 in the all-in-one form');
 
-// Submit enabled once all steps answered
-const submitAfter = at('[data-testid="question-submit"]', 15000)[0];
+// Submit enabled once all steps answered (probed at 44000, after the 42000 typing)
+const submitAfter = at('[data-testid="question-submit"]', 44000)[0];
 if (submitAfter?.data['data-disabled'] !== 'false') throw new Error('Submit stayed disabled after all steps were answered');
 
 const box = answer.inspected.find((i) => i.selector === '[data-testid="question-stepper"]')?.matches?.[0]?.rect;
 if (!box) throw new Error('the question form could not be measured');
 const pill = answer.inspected.find((i) => i.selector === '.question-form__pill')?.matches ?? [];
 if (pill.length !== 2) throw new Error(`the step indicator drew ${pill.length} pills`);
-const gone = at('[data-testid="row-question"]', 18000);
-if (gone.length !== 0) throw new Error('the trailer stayed after the answers were delivered');
+const gone = answer.probes['[data-testid="row-question"]'] ?? [];
+if (gone.length !== 0) throw new Error(`the trailer stayed after the answers were delivered: ${JSON.stringify(gone)}`);
 const answered = readSession();
 const askCall = answered.calls.find((c) => c.tool_name === 'ask_questions');
 if (askCall.status !== 'ok') throw new Error(`the ask_questions call settled ${askCall.status}`);
@@ -238,14 +250,19 @@ mkdirSync(local, { recursive: true });
 const close = launch('close', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'ask,answer', ROTARIS_SCRIPT_QUESTIONS: QUESTIONS,
   ROTARIS_CAPTURE_PROMPT: 'Ask me something I will not answer.',
-  ROTARIS_CAPTURE_PROBE_AT: '[data-testid="question-stepper"]@9500;;[data-testid="question-stepper"]@14000;;[data-testid="row-question"]@14500',
-  ROTARIS_CAPTURE_CHORDS: 'Escape@11000',
+  // The form's presence is waited for; its ABSENCE after Escape is read from the END probes, because a
+  // wait-until probe cannot express "not there any more" — it returns as soon as the element ever exists.
+  ROTARIS_CAPTURE_PROBE_AT: '[data-testid="question-stepper"]@~25000',
+  ROTARIS_CAPTURE_PROBE: '[data-testid="question-stepper"];;[data-testid="row-question"]',
+  ROTARIS_CAPTURE_CHORDS: 'Escape@40000',
   ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '120000', ROTARIS_CAPTURE_AFTER_MS: '2000',
 });
-const closeOpened = close.timed.find((t) => t.selector === '[data-testid="question-stepper"]' && t.at === 9500)?.found ?? [];
+const closeOpened = close.timed.find((t) => t.selector === '[data-testid="question-stepper"]' && t.at === 25000)?.found ?? [];
 if (closeOpened.length !== 1) throw new Error('the question form did not open before the close');
-const closeGone = close.timed.find((t) => t.selector === '[data-testid="question-stepper"]' && t.at === 14000)?.found ?? [];
+const closeGone = close.probes['[data-testid="question-stepper"]'] ?? [];
 if (closeGone.length !== 0) throw new Error('the question form stayed open after Escape');
+const trailerGone = close.probes['[data-testid="row-question"]'] ?? [];
+if (trailerGone.length !== 0) throw new Error('the trailer stayed after the cancellation');
 const cancels = controls(close.log, 'cancelQuestions');
 if (cancels.length !== 1) throw new Error(`cancellation was emitted ${cancels.length} time(s), not exactly once: ${cancels.join(' | ')}`);
 if (!/→ ok/.test(cancels[0])) throw new Error(`the cancellation was refused: ${cancels[0]}`);
@@ -268,16 +285,16 @@ mkdirSync(local, { recursive: true });
 const elsewhere = launch('elsewhere', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'ask,answer', ROTARIS_SCRIPT_QUESTIONS: QUESTIONS,
   ROTARIS_CAPTURE_PROMPT: 'Ask me something answered elsewhere.',
-  ROTARIS_CAPTURE_PROBE_AT: '[data-testid="question-stepper"]@9500;;[data-testid="question-stepper"]@13000;;[data-testid="row-question"]@13000',
-  ROTARIS_CAPTURE_CLICKS: '.row__trailer@9000',
-  ROTARIS_CAPTURE_QUESTION_ELSEWHERE: 'scope@11000',
+  ROTARIS_CAPTURE_PROBE_AT: '[data-testid="question-stepper"]@~25000',
+  ROTARIS_CAPTURE_PROBE: '[data-testid="question-stepper"];;[data-testid="row-question"]',
+  ROTARIS_CAPTURE_QUESTION_ELSEWHERE: 'scope@40000',
   ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '120000', ROTARIS_CAPTURE_AFTER_MS: '2000',
 });
-if ((elsewhere.timed.find((t) => t.at === 9500)?.found ?? []).length !== 1) throw new Error('the question form did not open before the outside answer');
+if ((elsewhere.timed.find((t) => t.at === 25000)?.found ?? []).length !== 1) throw new Error('the question form did not open before the outside answer');
 const outside = elsewhere.log.split('\n').find((l) => /capture: question-elsewhere/.test(l)) ?? '';
 if (!/→ delivered/.test(outside)) throw new Error(`the outside answer was not delivered: ${outside}`);
-if ((elsewhere.timed.find((t) => t.selector === '[data-testid="question-stepper"]' && t.at === 13000)?.found ?? []).length !== 0) throw new Error('the form stayed open after the prompt was answered elsewhere');
-if ((elsewhere.timed.find((t) => t.selector === '[data-testid="row-question"]' && t.at === 13000)?.found ?? []).length !== 0) throw new Error('the trailer stayed after the prompt was answered elsewhere');
+if ((elsewhere.probes['[data-testid="question-stepper"]'] ?? []).length !== 0) throw new Error('the form stayed open after the prompt was answered elsewhere');
+if ((elsewhere.probes['[data-testid="row-question"]'] ?? []).length !== 0) throw new Error('the trailer stayed after the prompt was answered elsewhere');
 if (controls(elsewhere.log, 'answerQuestion').length !== 0 || controls(elsewhere.log, 'cancelQuestions').length !== 0) {
   throw new Error(`the closing form emitted a second decision: ${[...controls(elsewhere.log, 'answerQuestion'), ...controls(elsewhere.log, 'cancelQuestions')].join(' | ')}`);
 }
@@ -294,19 +311,22 @@ const stale = launch('stale', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'ask,answer', ROTARIS_SCRIPT_QUESTIONS: QUESTIONS,
   ROTARIS_CAPTURE_PROMPT: 'Ask me something undeliverable.',
   ROTARIS_CAPTURE_QUESTION_STALE: '1',
-  ROTARIS_CAPTURE_PROBE_AT: '[data-testid="question-stepper"]@9500;;[data-testid="question-options"] button@11000;;[data-testid="question-freeform"]@11000;;[data-testid="question-stepper"]@16000;;[data-testid="question-failure"]@16000;;[data-testid="question-submit"]@16000',
-  ROTARIS_CAPTURE_CLICKS: '.row__trailer@9000;;[data-testid="question-options"] button>>This file only@10500;;[data-testid="question-freeform"]@11500;;[data-testid="question-submit"]@13500',
-  ROTARIS_CAPTURE_TYPE_AT: 'no notes@12000',
-  ROTARIS_CAPTURE_AFTER_MS: '17000',
+  // One `~` anchor for the form's presence; the sequenced inputs are fixed offsets; the failure message
+  // (absence-then-presence at an unknown time) is read from the END probes, not from a wait-until probe.
+  ROTARIS_CAPTURE_PROBE_AT: '[data-testid="question-stepper"]@~25000;;[data-testid="question-options"] button@37000;;[data-testid="question-freeform"]@39000',
+  ROTARIS_CAPTURE_PROBE: '[data-testid="question-stepper"];;[data-testid="question-failure"];;[data-testid="question-submit"]',
+  ROTARIS_CAPTURE_CLICKS: '[data-testid="question-options"] button>>This file only@36000;;[data-testid="question-freeform"]@38000;;[data-testid="question-submit"]@50000',
+  ROTARIS_CAPTURE_TYPE_AT: 'no notes@42000',
+  ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '120000', ROTARIS_CAPTURE_AFTER_MS: '2000',
 });
 const staleControls = controls(stale.log, 'answerQuestion');
 if (staleControls.length !== 1 || !/→ false/.test(staleControls[0])) throw new Error(`the stale delivery was not refused once: ${staleControls.join(' | ')}`);
-const stillOpen = stale.timed.find((t) => t.selector === '[data-testid="question-stepper"]' && t.at === 16000)?.found ?? [];
+const stillOpen = stale.probes['[data-testid="question-stepper"]'] ?? [];
 if (stillOpen.length !== 1) throw new Error('the form did not stay open after a failed delivery');
-const failure = stale.timed.find((t) => t.selector === '[data-testid="question-failure"]' && t.at === 16000)?.found ?? [];
+const failure = stale.probes['[data-testid="question-failure"]'] ?? [];
 if (failure.length !== 1) throw new Error('no failure message was shown after a failed delivery');
 if (failure[0].text !== 'Could not deliver answers. The waiting agent is no longer available.') throw new Error(`the failure read "${failure[0].text}"`);
-const staleSubmit = stale.timed.find((t) => t.selector === '[data-testid="question-submit"]' && t.at === 16000)?.found ?? [];
+const staleSubmit = stale.probes['[data-testid="question-submit"]'] ?? [];
 if (staleSubmit.length !== 1) throw new Error('Submit was gone after a failed delivery, so the answers could not be resent');
 results.stale = { controls: staleControls.length, refused: true, formStayedOpen: true, message: failure[0].text };
 

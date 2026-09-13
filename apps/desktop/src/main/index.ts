@@ -2269,12 +2269,16 @@ async function main(): Promise<void> {
       return { keyCode, modifiers };
     };
     for (const step of steps(process.env['ROTARIS_CAPTURE_CHORDS'])) {
-      clocks.timers.after(millis(step.at), () => {
+      void (async () => {
+        // The keys loop waits for its target; a chord does the same when `~` is used, so a press lands on a
+        // state the run reaches when it reaches it rather than at an appointment the run can miss.
+        if (step.until) await settleAt({ selector: step.selector, arg: null, at: step.at, until: true });
+        else await new Promise<void>((r) => { clocks.timers.after(millis(step.at), () => r()); });
         const { keyCode, modifiers } = chordEvent(step.selector);
         win.webContents.sendInputEvent({ type: 'keyDown', keyCode, modifiers });
         win.webContents.sendInputEvent({ type: 'keyUp', keyCode, modifiers });
         log(`capture: chord ${step.selector} at ${step.at}`);
-      });
+      })();
     }
     // ROTARIS_CAPTURE_TYPE_AT="text@ms;;…": real characters into whatever holds focus (a chord alone moves no caret and
     // inserts nothing — the renderer needs the `char` event), so the proof fills the palette's filter field as a user does.
@@ -2292,10 +2296,14 @@ async function main(): Promise<void> {
     // viewport and the focused element — the palette's 560×420 measured, its names read, focus return checked (REQ-SHELL-051/052).
     const inspectScript = (selector: string) => `(() => { const d = (el) => ({ tag: el.tagName.toLowerCase(), id: el.id || null, className: typeof el.className === 'string' ? el.className : null, label: el.getAttribute('aria-label'), testId: el.getAttribute('data-testid') }); return { viewport: { width: innerWidth, height: innerHeight }, active: document.activeElement ? d(document.activeElement) : null, matches: [...document.querySelectorAll(${JSON.stringify(selector)})].map((el) => { const r = el.getBoundingClientRect(); return { rect: { x: r.x, y: r.y, width: r.width, height: r.height }, attrs: Object.fromEntries([...el.attributes].map((a) => [a.name, a.value])), text: (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' ? el.value : (el.textContent || '')).trim().slice(0, 600) }; }) }; })()`;
     for (const step of steps(process.env['ROTARIS_CAPTURE_INSPECT_AT'])) {
-      clocks.timers.after(millis(step.at), async () => {
+      void (async () => {
+        // The click loops wait for their element; the inspector follows the same `~` rule so a waited-for
+        // measurement lands when the element exists rather than at an appointment the run may miss.
+        if (step.until) await settleAt({ selector: step.selector, arg: null, at: step.at, until: true });
+        else await new Promise<void>((r) => { clocks.timers.after(millis(step.at), () => r()); });
         const found = await win.webContents.executeJavaScript(inspectScript(step.selector)).catch((cause: unknown) => ({ error: String(cause) })) as unknown;
         log(`capture: inspect-at ${step.at} ${step.selector} → ${JSON.stringify(found)}`);
-      });
+      })();
     }
     // Part V's seams (verification only). ROTARIS_CAPTURE_NOTICES='<json>@ms;;…': one publication through the REAL
     // store — the same `report`/`acknowledge`/`dismiss`/`clearForRunStart` the product calls, never a shortcut to the

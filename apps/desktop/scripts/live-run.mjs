@@ -49,7 +49,8 @@
  * Every log this script writes has the key substituted out of it, and each one is asserted to hold no bearer.
  *
  * Evidence under `.live-run/`: one PNG and one log per scenario, `results.json`, `changed/` (what the agent
- * wrote), `diff.txt`. The sandbox goes away at the end unless `--keep` is given.
+ * wrote), `diff.txt`. The sandbox goes away at the end unless `--keep` is given. The run is unattended and its
+ * window is hidden; `--gui` shows it, for watching rather than using.
  */
 import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -71,6 +72,15 @@ const argv = process.argv.slice(2);
 const has = (name) => argv.includes(`--${name}`);
 const value = (name, fallback) => { const hit = argv.find((a) => a.startsWith(`--${name}=`)); return hit === undefined ? fallback : hit.slice(name.length + 3); };
 
+/**
+ * `--gui`: show the window each scenario drives, instead of hiding it. Off by default — the run is unattended and
+ * a window that appears on every launch is a nuisance — and asked for explicitly when the owner wants to watch.
+ * It changes ONE thing, `windowsHide` on the spawn: every scripted click and keystroke goes through
+ * `webContents.sendInputEvent`/`executeJavaScript` in the main process, so it needs no focus and the owner clicking
+ * around cannot steal it. The evidence is identical either way — `capturePage()` photographs the composited frame
+ * whether the window is on screen or not.
+ */
+const GUI = has('gui');
 const BUDGET = Number(value('budget', '1.00'));
 const MAX_TOKENS = Number(value('max-tokens', '500000'));
 const MAX_ITERATIONS = Number(value('max-iterations', '15'));
@@ -254,6 +264,7 @@ const USAGE = `pnpm live-run — the application against a real model endpoint, 
                        an endpoint registered --unmetered carries no ceiling unless one of these two is named here
   --max-iterations=<n> the ceiling written into the workspace's runtime configuration (default 15)
   --only=<csv>         run only some of ${OPTIONAL.join(', ')} (sign-in always runs; the sandbox is fresh)
+  --gui                show the window each scenario drives, to watch it (hidden by default; nothing else changes)
   --keep               keep the sandbox workspace instead of deleting it
   --skip-build         trust apps/desktop/out as it stands
 `;
@@ -373,6 +384,7 @@ if (!has('confirm')) {
   console.log(`Model:    ${endpoint.model} (${modelSource})${discovery?.ok && discovery.all.length > 1 ? `; the endpoint also serves ${discovery.all.slice(1).join(', ')}` : ''}`);
   console.log(`Context:  ${typeof endpoint.contextTokens === 'number' ? `${endpoint.contextTokens} tokens` : 'whatever discovery reports'}`);
   console.log(`Plan:     ${['sign-in', ...wanted].join(' → ')}, ${MAX_ITERATIONS} iterations per run`);
+  console.log(`Window:   ${GUI ? 'shown — each scenario appears on screen (--gui)' : 'hidden — add --gui to watch it'}`);
   console.log(`Ceiling:  ${accountingKind === 'unmetered' ? 'none — registered unmetered; only the iteration ceiling binds' : accountingKind === 'tokens' ? `${MAX_TOKENS} tokens (this endpoint reports no cost and carries no prices)` : `${BUDGET.toFixed(2)} USD, ${accountingKind === 'provider' ? "read from the provider's own accounting" : 'estimated from the registered prices'}`}`);
   console.log(`Key:      ${keySource ?? `NONE — run \`pnpm live-run --set-key --endpoint=${endpoint.name}\`, or set ${KEY_ENV}`}`);
   console.log('\nNothing ran. Add --confirm to spend.');
@@ -381,6 +393,7 @@ if (!has('confirm')) {
 if (key === null || key === '') { console.error(`No key for "${endpoint.name}". Run \`pnpm live-run --set-key --endpoint=${endpoint.name}\`, or set ${KEY_ENV}.`); process.exit(1); }
 const redact = (text) => text.split(key).join('[redacted]');
 console.log(`Model:    ${endpoint.model} (${modelSource})`);
+if (GUI) console.log('window:   shown (--gui) — the window is driven from inside the process, so clicking it does not steer the run, but typing into it does write into the product');
 
 // ── What has been spent ──────────────────────────────────────────────────────────────────────────────────────
 async function providerCredits() {
@@ -454,7 +467,7 @@ function oneDatabase() {
 function launch(name, extra, timeoutMs = 180_000) {
   const png = join(output, `${name}.png`);
   const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), workspace], {
-    cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
+    cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: !GUI,
     env: {
       ...cleanEnvironment(),
       LOCALAPPDATA: local, APPDATA: join(sandbox, 'roaming'), ROTARIS_PREFERENCES_ROOT: join(sandbox, 'preferences'),

@@ -93,11 +93,18 @@ the sandbox's credential store the way a person's would.
 pnpm live-run                        # the plan, the endpoint, the ceiling, the key's source — it does not spend
 pnpm live-run --confirm              # the run, against the default endpoint
 pnpm live-run --confirm --endpoint=openrouter
+pnpm live-run --confirm --gui        # the same run, with the window on screen to watch
 ```
 
 `--confirm` is required. The full flag list (`--endpoint`, `--model`, `--base-url`, `--budget`,
-`--max-tokens`, `--only`, `--max-iterations`, `--keep`, `--skip-build`) is in the script's own
+`--max-tokens`, `--only`, `--max-iterations`, `--gui`, `--keep`, `--skip-build`) is in the script's own
 header — `pnpm live-run --help` prints it.
+
+The run is **unattended and the window is hidden** unless `--gui` says otherwise. `--gui` changes one
+thing, `windowsHide` on the spawn: the scenarios are driven from inside the main process with
+`sendInputEvent`/`executeJavaScript`, which need no focus, so watching cannot disturb the run and the
+evidence is byte-identical either way. Typing into a shown window does reach the product, so watch it
+rather than use it.
 
 ### What it costs, and what stops it
 

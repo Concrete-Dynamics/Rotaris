@@ -63,7 +63,12 @@ if (existsSync(join(output, 'critique.json')) && !argv.includes('--reshoot')) {
   throw new Error(`iteration ${iteration} already holds a critique (${join(output, 'critique.json')}); capture a new iteration, or pass --reshoot to discard it`);
 }
 const audit = join(repo, 'apps', 'desktop', 'scripts', 'ui-audit.mjs');
-const forwarded = argv.filter((value) => value !== `--iteration=${iteration}` && value !== '--reshoot' && !value.startsWith('--validate='));
+// `--reshoot` is the only way a critique is allowed to die: the refusal above passes, and the capture is
+// told to discard rather than preserve it. Without the flag `ui-audit` carries it across its own wipe.
+const forwarded = [
+  ...argv.filter((value) => value !== `--iteration=${iteration}` && value !== '--reshoot' && !value.startsWith('--validate=')),
+  ...(argv.includes('--reshoot') ? ['--discard-critique'] : []),
+];
 const run = spawnSync(process.execPath, [audit, `--output=${output}`, ...forwarded], { cwd: repo, stdio: 'inherit' });
 if (run.status !== 0) process.exit(run.status ?? 1);
 

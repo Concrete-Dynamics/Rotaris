@@ -29,7 +29,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { join, relative, resolve, sep } from 'node:path';
 import { buildDesktop, evidenceDirectory, repo } from './lib/harness.mjs';
 import { startApp } from './lib/driver.mjs';
-import { evaluateContracts } from './lib/layout-relations.mjs';
+import { evaluateContracts, shrunkBoxes } from './lib/layout-relations.mjs';
 
 const argv = process.argv.slice(2);
 const flag = (name, fallback) => {
@@ -42,8 +42,22 @@ const outputFlag = flag('output', null);
 const output = outputFlag === null ? evidenceDirectory('.ui-audit') : resolve(repo, String(outputFlag));
 const outputWithinRepo = relative(repo, output);
 if (outputWithinRepo === '' || outputWithinRepo === '..' || outputWithinRepo.startsWith(`..${sep}`)) throw new Error(`ui-audit output escaped the repository: ${output}`);
+/**
+ * Emptying the directory carries the one file in it that is not evidence across the wipe.
+ *
+ * Evidence is reproducible — every PNG, box and computed style here comes back by running the capture
+ * again. A `critique.json` does not: it is the record of a reading, it costs a whole pass to produce,
+ * and it is written INTO the pack it judges. `ui-review` refuses to re-capture over one, which is the
+ * loud guard; this is the quiet one, because the ninety-ninth defect destroyed a critique twice and the
+ * second time it was this line reached directly rather than through the wrapper. Preserving beats
+ * refusing here: a reshoot is a legitimate thing to want, and losing the reading is not the price of it.
+ * `--discard-critique` says the loss is intended (`ui-review --reshoot` passes it).
+ */
+const critiquePath = join(output, 'critique.json');
+const preservedCritique = existsSync(critiquePath) && !argv.includes('--discard-critique') ? readFileSync(critiquePath) : null;
 rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });
+if (preservedCritique !== null) writeFileSync(critiquePath, preservedCritique);
 if (!argv.includes('--skip-build')) buildDesktop(output);
 
 const workspace = join(output, 'workspace');
@@ -273,6 +287,9 @@ const AUDIT = `JSON.stringify((() => {
     const s = getComputedStyle(el);
     return { id: el.dataset.ui || null, component: el.dataset.uiComponent || null, element: cls(el),
       display: s.display, position: s.position, fontFamily: s.fontFamily, fontSize: s.fontSize, fontWeight: s.fontWeight,
+      // Read pairwise with the geometry row of the same index: a box smaller than its content is only a
+      // defect when there is no scroll to reach the remainder (lib/layout-relations.mjs, shrunkBoxes).
+      overflowX: s.overflowX, overflowY: s.overflowY,
       color: s.color, backgroundColor: s.backgroundColor, borderRadius: s.borderRadius,
       gap: s.gap, rowGap: s.rowGap, columnGap: s.columnGap,
       padding: [s.paddingTop, s.paddingRight, s.paddingBottom, s.paddingLeft].join(' '),
@@ -418,9 +435,11 @@ try {
       for (const e of a.escapees) note('CONTAINMENT', view.name, size.label, e);
       for (const b of a.buried) note('STACKING', view.name, size.label, b);
       for (const t of a.trapped) note('TRAPPED', view.name, size.label, t);
+      const shrunk = shrunkBoxes(a.geometry, a.styles);
+      for (const s of shrunk) note('SHRUNK', view.name, size.label, s);
       const contracts = evaluateContracts(a.measured);
       for (const contract of contracts.filter((candidate) => !candidate.pass)) note('CONTRACT', view.name, size.label, contract);
-      console.log(`${a.tracks.length + a.escapees.length + a.buried.length + a.trapped.length + contracts.filter((candidate) => !candidate.pass).length === 0 ? 'CLEAN' : 'FOUND'}  ${view.name} @ ${size.label} (${a.counts.elements} elements, ${a.counts.controls} controls, ${contracts.length} contracts, skipped ${JSON.stringify(a.counts.skipped)})`);
+      console.log(`${a.tracks.length + a.escapees.length + a.buried.length + a.trapped.length + shrunk.length + contracts.filter((candidate) => !candidate.pass).length === 0 ? 'CLEAN' : 'FOUND'}  ${view.name} @ ${size.label} (${a.counts.elements} elements, ${a.counts.controls} controls, ${contracts.length} contracts, skipped ${JSON.stringify(a.counts.skipped)})`);
     }
   }
   // ── The overlays, at both sizes. Nothing was open during the sweep above, and every overlay is a surface

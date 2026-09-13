@@ -24,7 +24,13 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-13** — **all twelve critic findings, repaired** (R-008): the component
+Last reconciled with the code: **2026-09-13** — **UIR-014 repaired and its whole class made deterministic**: the
+component view's `layout-contract.ts` paragraph gains `shrunkBoxes`, the one question asked of every marked box
+rather than only of the boxes that published a relation — a box standing smaller than the content inside it, on an
+axis that does not scroll, where nothing is clipped and the remainder pays out under whatever paints next. The
+repair itself is one declaration (`.page-header { flex: 0 0 auto }`), and **no package, edge, process, message kind,
+channel, command, window role, store table, run-loop step or control operation moves**. Earlier the same day —
+**all twelve critic findings, repaired** (R-008): the component
 view's design-system section gains `Checkbox` (the twenty-eighth brief, closing **OQ-57** — the adopted material
 defines none, and the owner ruled that the product draws one), and the count moves to twenty-eight briefs and thirty
 exports. Six named sizes join the theme data — two control heights read off the adopted `.btn` and `.btn-compact`, a

@@ -94,6 +94,48 @@ export function evaluateRelation(relation, m) {
   return { pass: actual === relation.expected, detail: `scrolls x=${x} y=${y}; expected ${relation.expected}` };
 }
 
+/**
+ * Boxes standing shorter or narrower than the content inside them, with no scroll to reach the rest.
+ *
+ * This is the deterministic form of the reading that took a critic two cycles to make by hand, and it
+ * is not the same question `text-fit` asks: `text-fit` is opt-in, published by a component about
+ * itself, and it caught nothing here because nobody thought to publish it on a header. The defect it
+ * would have caught (UIR-014) is a property of EVERY box: a view is a `flex-direction: column` and its
+ * children carry the default `flex-shrink: 1`, so when the content of a short window exceeds it, the
+ * column takes the difference out of whichever child will give — down to its `min-height`, which reads
+ * like a floor and is only a limit. The box ends up smaller than what it holds while the content keeps
+ * its size, and because the box does not scroll nothing is CLIPPED: the remainder simply pays out past
+ * the edge, where the next sibling's background covers it. That is invisible to a containment check
+ * (the child is inside the view), invisible to a stacking check (nothing is on top of the control's
+ * own centre), and plain in two numbers that were already in `geometry.json` all along.
+ *
+ * An element that scrolls is excluded: overflowing content with a way to reach it is a scroll
+ * container doing its job. Only `visible` on the axis counts, and only the marked components and
+ * contract boxes are examined, which is what keeps this from reporting every decorative overflow
+ * in the product.
+ */
+export function shrunkBoxes(geometryItems, styleItems, tolerance = DEFAULT_TOLERANCE) {
+  if (geometryItems.length !== styleItems.length) {
+    return [{ element: '(audit)', id: null, component: null, axis: 'both', detail: `the probe returned ${geometryItems.length} boxes and ${styleItems.length} style rows; they are read pairwise` }];
+  }
+  const rows = [];
+  geometryItems.forEach((item, index) => {
+    const style = styleItems[index];
+    const axes = [
+      { axis: 'y', overflow: style.overflowY, content: item.scrollHeight, box: item.clientHeight },
+      { axis: 'x', overflow: style.overflowX, content: item.scrollWidth, box: item.clientWidth },
+    ];
+    for (const { axis, overflow, content, box } of axes) {
+      if (overflow !== 'visible') continue;
+      if (!Number.isFinite(content) || !Number.isFinite(box) || box === 0) continue;
+      if (content <= box + tolerance) continue;
+      rows.push({ element: item.element, id: item.id ?? null, component: item.component ?? null, axis,
+        detail: `${axis === 'y' ? 'client height' : 'client width'} ${box} holds content ${content} and does not scroll` });
+    }
+  });
+  return rows;
+}
+
 /** Every measurement the probe collected, judged. */
 export function evaluateContracts(measured) {
   return measured.flatMap((entry) => {

@@ -667,8 +667,19 @@
 /* UIR-003 — ONE page header, declared once: the same cross-alignment, the same gap and the same
    minimum band on all seven views. The per-view rules that stood in for it disagreed — two centred,
    two on the baseline, one with its own vertical padding — and the heights came out 30.39, 51.81,
-   51.44 and absent. */
-.page-header { display: flex; align-items: center; gap: var(--rt-space-3); flex-wrap: wrap; min-height: var(--rt-control-height); }
+   51.44 and absent.
+   UIR-014 — `flex: 0 0 auto` is the whole repair, and the reason it took two cycles to see is that the
+   measurement read as a wrapping defect. Every view is a `flex-direction: column` box, so its header is a
+   flex ITEM carrying the default `flex-shrink: 1`: when a view's content exceeds the window the header is
+   a candidate for shrinking, and `min-height` only says how far it may go — down to one control. At
+   1000x680 the Git header's actions wrap to a second line and its content stands 76px tall, so the column
+   shrank the BOX to 56 while the content kept its size. Nothing was clipped, because a header does not
+   scroll: the second line paid out below the box, and the worktrees card — painted later — covered it.
+   That is why "Merge selected" ended at y 231.25 beneath a card border at y 227 with its own bottom
+   border never drawn. A header shows its content or the view scrolls; it is never the thing that gives
+   way. Same shape as the three repairs the second cycle caught, mirrored: the bound was on the header,
+   and what the header needed was to refuse to shrink. */
+.page-header { display: flex; align-items: center; gap: var(--rt-space-3); flex-wrap: wrap; flex: 0 0 auto; min-height: var(--rt-control-height); }
 /* UIR-003 — ONE view title, decided once.
    `.display` was defined NOWHERE in the product, so an h1 carrying it fell back to the browser's 2em
    wherever a view had not overridden it: Library and Settings drew at 32 px while Overview and Git
@@ -739,6 +750,19 @@
    the shape elsewhere — elision that never changes the panel width, full text in the tooltip — and
    these two cells follow it now; every row already carries its `title`. */
 .git__table th, .git__table td.mono:not(.git__cell-branch):not(.git__cell-session), .git__table td.git__cell-actions { white-space: nowrap; }
+/* SEVEN columns share 342px at 1000x680, and that is an open finding, not a repaired one.
+   `table-layout: fixed` fitted the table to its card, which is what UIR-002 asked for, and the cost only
+   became visible once `SHRUNK` measured it: the seven columns take 48.56px each, and six of the seven
+   hold content wider than that — heading "Branch" 59, "mainbase" 71 (elided), "idle . ready" 59,
+   "+0 -0 / 0" 73, the Delete button 58. Every one with `overflow: visible` paints across its neighbour,
+   and because only the LAST column can overflow the table itself, the table reports 350 inside 340.
+   Two repairs were tried against the 350 and measured afterwards: confining the heading cells did not
+   move it (their overflow lands on the next heading, inside the table), and letting the action cell wrap
+   did not move it either (a 58px button cannot wrap below its own width). Neither was kept.
+   What the numbers say is that the view's split gives the seven-column table the narrow side —
+   `.git__body` hands the checkpoint column its full 480px and the remainder to the worktrees — and
+   choosing between a narrower checkpoint column, a stacked layout, and fewer columns at the minimum
+   size is the design material's call, not a CSS nudge at the end of a repair round. */
 .git__cell-branch, .git__cell-session { min-width: 0; max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .git__cell-branch .git__branch-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* UIR-012: the history ran 2229.56 px inside a 754.75 px view, so its last row was cut by the status

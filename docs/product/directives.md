@@ -174,7 +174,7 @@ other two behind a press acceptable.
 > **Narrows:** REQ-CHAT-009
 > **Extends:** REQ-CHAT-006, REQ-CHAT-007
 
-*Raised by the owner, 2026-09-13; logged as [R-009](requests.md#r-009).*
+*Raised by the owner, 2026-09-13; logged as [R-010](requests.md#r-010).*
 
 ---
 

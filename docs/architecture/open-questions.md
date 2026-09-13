@@ -1052,10 +1052,14 @@ scanner, an indexer, a cloud-sync client, or the user's own editor opened throug
 There is now exactly one ladder in the corpus and nothing to reconcile: **the conflict is gone, the
 ladder is not.** Constraint D-25 records the re-derivation.
 
-**The caveat travels with the closure and is unchanged in kind:** the one ladder the corpus states is in
-the sessions domain, and `REQ-TRACE-061` — which faces exactly the case it was written for — still
-requires a failed replace re-raised with none. That is **OQ-44**, whose own statement of fact was also
-wrong and has been corrected.
+**The caveat travelled with the closure and is now discharged.** It read: the one ladder the corpus states
+is in the sessions domain, and `REQ-TRACE-061` — which faces exactly the case it was written for — still
+requires a failed replace re-raised with none. That was **OQ-44**, whose own statement of fact was also
+wrong and has been corrected. *Since the OQ-41 amendment of 2026-09-06, `REQ-TRACE-061` states its own
+ladder — five attempts at 0.05 / 0.1 / 0.2 / 0.4 s, exhaustion producing a recoverable error with the
+previous file retained — so the corpus now holds **two** ladders with two owners and no overlap: this one
+for the toolchain's four repository artifacts, `REQ-SESSION-033`'s six attempts for the local summary file.
+`REQ-EVENTS-145`'s export destinations cite this one rather than minting a third.*
 
 **OQ-26 — Ordering between the delivery state write and the audit append. *Resolved.*** *(ADR-0041.)*
 The delivery state, the requirement's history, `REQ-CONFIG-192`'s 200-entry prune and the audit record
@@ -1408,9 +1412,36 @@ Windows.
 **OQ-11 — Resolved by dissolution.** See *Resolved, and closed with the reason* above, and **OQ-44**,
 which the closure opened.
 
-**OQ-12 — Durability semantics are unstated. *Materially moved by measurement, still open — and the fact
+**OQ-12 — The WORDING is CLOSED as a policy decision, 2026-09-06 and applied 2026-09-13; the MEASUREMENT
+stays open as evidence debt.** *(ADR-0004, ADR-0058.)*
+
+The accepted review answers the question this entry actually asked — what "atomic", "durable" and "flushed"
+each promise — and `REQ-SESSION-034` is now the product's single definition, in **three levels** that may not
+be collapsed: **(1) process-crash atomicity for every successful write**, owed unconditionally and never
+traded; **(2) operating-system and power-loss survival for an acknowledged terminal commit and a completed
+backup artifact**, subject to the storage device honouring the flushes the product issues — a condition
+stated rather than assumed, because a device that acknowledges a flush it did not perform cannot be detected
+from software; and **(3) a permitted loss of intermediate updates** between those boundaries, stated as
+permitted rather than left to be discovered. The stronger terminal commit setting is preserved and may only
+ever be reconsidered on power-loss and operating-system-crash grounds, never on readability, which
+`spikes/commit-on-the-publish-path.md` §11.4 already disproved as a reason. `REQ-LIBRARY-138`'s "flushed to
+disk" — the one durability verb the corpus carried, promising a level it never named — and
+`REQ-LIBRARY-043`'s "readable after a crash or loss of power" now cite which level they mean instead of
+implying one.
+
+***The evidence is NOT discharged and the wording says so itself.*** No power-loss test has been run on any
+supported platform. Both figures this entry owes — whether an acknowledged commit survives a power cut, and
+how far behind the ordinary setting can be in commits and milliseconds — come from the same run, and the
+fault half is a physical act on this machine that only the owner can perform: a forced power-off, or a
+kernel crash that loses the operating-system cache while the disk stays powered, which is what separates the
+software claim from the device's honesty. `spikes/power-loss.md` carries the steps and an empty table. The
+proof is tracked **per supported platform**; on this one it is owed and unmeasured, and on the other two it
+cannot even be attempted while **IC-3** stands. **Accepting the wording did not measure anything**, and no
+surface may make a claim stronger than the three levels above until the table is filled.
+
+**Historical question — durability semantics are unstated. *Materially moved by measurement — and the fact
 it partly rested on is false. A SECOND measurement on 2026-09-02 pulls the same way and RAISES the
-stakes.*** *(ADR-0004, ADR-0058.)*
+stakes.***
 
 ***Added 2026-09-02, and this entry is now larger than it was.*** Two things changed. **(a)** The
 directory-flush picture gained a second, apparently contradictory result:
@@ -1767,9 +1798,40 @@ is why it is filed rather than chosen. *Not measured and therefore not claimed:*
 is attached or removed while the window exists, behaviour at a scale factor other than 1, and whether
 either other platform's window manager clamps where Windows does not.
 
-**OQ-41 — `REQ-TRACE-502` on Windows. *Sharply narrowed by SR-1, not dissolved by SR-4. Still open.***
+**OQ-41 — CLOSED as a policy decision, 2026-09-06; implemented and the contended case STAGED 2026-09-13.**
 *(ADR-0004, ADR-0040 — both of which cite this as "OQ-38", a provisional number that collided with the
 entry above; ADR-0040 proceeds and does not treat it as blocking its own ratification.)*
+
+The accepted review takes the closure this entry itself named — **`REQ-TRACE-061` gains a bounded ladder** —
+and settles the residue on both halves. The write keeps its complete-file guarantee unnarrowed: a reader
+never observes a partial file and two writers never leave a blend, whatever the contention. The **independence
+promise is scoped to whole invocations and view freshness**, which is the reading `REQ-TRACE-502`'s own middle
+sentence supports; ordering individual whole-file operations against one another is permitted, and is how the
+single I/O owner of ADR-0040 meets the guarantee. **Exhaustion produces a recoverable error with the old file
+retained** — the clause "an invocation SHALL NEVER fail … because another was running" is narrowed rather than
+kept whole, because it could not be met as written, and the honest outcome of a held file is a failed operation
+the user can repeat rather than a corrupted artifact. `REQ-TRACE-182`'s adapter keeps its catch-and-report
+behaviour explicitly, because the test session is the one concurrent invocation the product still has.
+
+***What building it found — two defects, both in the case this entry kept open.*** The ladder was cited by
+name all over the implementation and **`REQ-TRACE-061` did not state one**; it said "the failure re-raised".
+Worse, the generator that writes the artifact — `tools/symbol-artifact/generate.mjs`, the one the test session
+runs — replaced it with a single `writeFileSync` **over the target**, with no staging, no rename and no ladder,
+so a concurrent reader could observe a partial artifact (`REQ-TRACE-502` forbids that in terms) and a transient
+failure escaped uncharacterised. And the adapter did not catch: `execFileSync` throws on a non-zero exit and a
+throw out of vitest's `globalSetup` **fails the whole run before one test is collected**, which is exactly what
+`REQ-TRACE-182` says SHALL NEVER happen. Both are repaired, and the write now goes through a shared
+`tools/symbol-artifact/replace.mjs` carrying the requirement's own contract and constants.
+
+***The contended case is STAGED, and it passes.*** The 2026-09-09 note below records that it was not — "the
+contended case, a test session in the same checkout on Windows, was not staged and the residue stands".
+`tools/symbol-artifact/replace.test.ts` now holds the artifact open with a real descriptor, drives the ladder
+to exhaustion, and asserts the previous file byte-identical with no staged leftover. Residue **(a)** is
+therefore measured rather than argued. Residue **(b)** — a foreign process, an editor, an indexer, antivirus, a
+cloud-sync client — is *characterised* rather than removed: it produces the same recoverable failure, which is
+what the amendment fixes as the correct outcome, and no product change can stop a foreign holder.
+
+**Historical question — `REQ-TRACE-502` on Windows.**
 
 **The ruling said this was dissolved. It is not, and the record must not record a closure it did not
 earn.** SR-4 argued that "that defect is unreachable in a store whose readers do not block its writers" —
@@ -1940,6 +2002,14 @@ the benchmark's isolation and the one-instance rule.
 **OQ-44 — `REQ-TRACE-061` faces the one case a ladder is for, in the one domain that has none. *RESOLVED
 2026-09-02 by amendment, at BOTH sites, in the platform-defect round.*** *(ADR-0004, ADR-0040; constraints
 D-25, C-11, D-06. Successor to OQ-11 and to OQ-41's residue.)*
+
+***The amendment this entry records was ruled and NOT applied, and that was found on 2026-09-13.*** OQ-41's
+delivery read `REQ-TRACE-061` and found it still saying "the failure re-raised", with no ladder in it, while
+this entry, the surrounding register text and the implementation all cited the constants by name. The ruling
+stands and is unchanged; what was missing was its application to the requirement, which the OQ-41 amendment
+now carries in full, including the "only ladder this domain states" declaration and the `REQ-TRACE-514`
+scope below. **A closure recorded in this register is not evidence that the requirement carries it**, and
+this is the second time that gap has been found by going to the requirement rather than to the record.
 
 ***The answer, and it is the one this entry asked for rather than a borrowing.*** `REQ-TRACE-061` **now
 states a ladder of its own**: at most five attempts in total, delays of **0.05 / 0.1 / 0.2 / 0.4 s** before

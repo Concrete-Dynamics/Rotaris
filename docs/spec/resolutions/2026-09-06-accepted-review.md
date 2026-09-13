@@ -166,3 +166,37 @@ affected run to settle, runs the rolled-back write probe, and rebuilds the opene
 session's writer and projection — so the notice now names it as an action, mapped
 in main onto REQ-NOTIFY-044's existing `focus-session` member. No member is added
 to that closed vocabulary.
+
+## OQ-12 — the durability contract, in three levels (applied)
+
+REQ-SESSION-034 is now the product's single definition of what "durable" promises
+and every other durability claim cites it. The three levels are deliberately not
+collapsible: process-crash atomicity for every successful write, owed
+unconditionally; operating-system and power-loss survival for an acknowledged
+terminal commit and a completed backup artifact, subject to the storage device
+honouring the flushes the product issues; and a stated permitted loss of
+intermediate updates between the two. The stronger terminal commit setting is
+preserved and may only be reconsidered on power-loss and operating-system-crash
+grounds, never on readability — which a spike already disproved as a reason.
+
+REQ-LIBRARY-138 carried the corpus's only durability verb, "flushed to disk",
+promising a level it never named; it now names level 1. REQ-LIBRARY-043's
+"readable after a crash or loss of power" likewise says which level it means.
+
+**The measurement is not discharged and the wording says so.** No power-loss test
+has been run on any supported platform. The harness exists; its fault half is a
+physical act only the machine's owner can perform. The proof is tracked per
+supported platform — owed on Windows, blocked on Linux and macOS while IC-3
+stands — and `docs/architecture/implementation-conditions.md` carries the debt.
+Accepting the wording measured nothing, and no surface may claim more than the
+three levels state.
+
+## OQ-41 — the replacement ladder and the scope of independence (applied)
+
+REQ-TRACE-061 states the bounded ladder its own domain owns; REQ-TRACE-502 keeps
+the complete-file guarantee whole and scopes the independence promise to
+invocations and view freshness; REQ-TRACE-182's catch covers the whole
+regeneration. The owning domain's resolution record carries the detail, including
+the two defects applying it found — a generator that replaced the artifact with a
+plain `writeFileSync`, and a test adapter whose regeneration failure would have
+blocked collection — and the contended case, staged and passing.

@@ -315,6 +315,17 @@ them is not promoting them to conditions:
   steps and the empty table in the report's section 4. Two harness defects on first execution, in the
   report's section 6; nothing in the product.
 
+  *Updated 2026-09-13, with OQ-12's wording closure.* The **specification** half of OQ-12 is applied:
+  `REQ-SESSION-034` now defines durability in three levels — process-crash atomicity for every successful
+  write, operating-system and power-loss survival for an acknowledged terminal commit and a completed backup
+  artifact subject to the device honouring flushes, and a stated permitted loss of intermediate updates — and
+  `REQ-LIBRARY-043` and `REQ-LIBRARY-138` cite which level they mean instead of implying one. **That changed
+  nothing about this debt.** The two figures the test decides are unmeasured, the ground for forcing the
+  stronger setting is unchanged, and the wording explicitly records the measurement as outstanding rather
+  than resolving it by definition. The proof is tracked **per supported platform**: on Windows it is owed and
+  needs the owner's physical act; on Linux and macOS it cannot be attempted at all while **IC-3** stands, so
+  those two are recorded as blocked rather than owed. This entry closes only when the table is filled.
+
 ## The permission gate and the first tools — 2026-09-03: no condition bound, none was downgraded
 
 The gate (ADR-0016 to ADR-0019), the evidence rings (ADR-0024), the first eight tools and the terminal

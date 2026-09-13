@@ -42,6 +42,18 @@ back-pointer to the directive in the same commit (`pnpm symbols` enforces the id
 A request contradicting a faithful requirement is a **directive**, not an escalation. When in doubt,
 log the request and classify it in writing.
 
+## Defects noticed along the way
+
+A defect an agent notices **while doing other work** is written to `docs/defects/` **without asking the
+owner first** — recording it is never gated on permission, so nothing is lost when the session that saw
+it ends. Follow the schema in `docs/defects/README.md`: name, concise description, the specification it
+contradicts (or none), and the relevant files. Record it whether or not it is in scope to fix.
+
+Recording is not repairing and not classifying. Writing the note does not authorize the fix, and it does
+not substitute for the paths above: a **defect found by building** still owes its amendment round and its
+row in `docs/architecture/first-executions.md`, and a change the owner asks for is still classified in
+`docs/product/requests.md` before code.
+
 ## Process state
 
 **Both gates are closed and implementation is authorized, bounded.** The Specification Gate closed

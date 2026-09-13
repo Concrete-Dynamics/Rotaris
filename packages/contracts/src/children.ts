@@ -154,3 +154,27 @@ export function contextPercent(used: number, limit: number): number {
   if (!(limit > 0)) return 0;
   return Math.round((Math.max(0, used) / limit) * 100);
 }
+
+/**
+ * REQ-ORCH-072: the iteration's root execution record.
+ * Created with the entry role and the task's execution payload and transitioned to running.
+ * That record is the run's own and is NOT a delegated child: it never arrives through a `delegate`
+ * call, counts against none of the admission limits of REQ-ORCH-046 (depth, total, active), holds no
+ * per-model slot of REQ-ORCH-050, and is not presented as a task agent (REQ-MONITOR-043,
+ * REQ-MONITOR-089, REQ-CHAT-068).
+ * It carries an identity of the same shape a delegated child carries — a canonical name and a task id,
+ * in the same namespace — so a lookup naming the root resolves to it rather than reporting it unknown;
+ * the parent-scoping of REQ-TOOLS-155 and REQ-TOOLS-156 is unchanged by that, so an agent asking about
+ * a record it does not own is refused for that reason and never told the root does not exist.
+ * Every delegated child of the iteration names the root execution record as its parent and sits one
+ * level deeper than it.
+ */
+export interface RootExecutionRecord {
+  readonly taskId: string;
+  readonly canonicalName: string;
+  readonly persona: string;
+  readonly task: string;
+  readonly iteration: number;
+  readonly depth: 0;
+  state: 'running' | 'succeeded' | 'failed' | 'cancelled';
+}

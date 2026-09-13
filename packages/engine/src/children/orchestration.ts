@@ -1,5 +1,5 @@
 import { millis, toIsoUtc, type Clocks, type Millis, type SessionId } from '@rotaris/kernel';
-import { isTerminalChildState, reportStatusToState, TASK_ID_PATTERN } from '@rotaris/contracts';
+import { isTerminalChildState, reportStatusToState, TASK_ID_PATTERN, type RootExecutionRecord } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ModelRef, ThinkingLevel } from '@rotaris/model';
 import type { ChildRow, StoreDal } from '@rotaris/store';
 import type { ProjectionOwner } from '../projection-owner.js';
@@ -88,6 +88,8 @@ export interface ChildrenDeps {
    * Absent means no gate can hold this run and no delegation is refused on its account.
    */
   readonly planGate?: { readonly held: () => boolean; readonly withholds: (tool: string) => boolean } | undefined;
+  /** REQ-ORCH-072: the iteration's root execution record. */
+  readonly rootRecord?: RootExecutionRecord | undefined;
 }
 
 function personaOf(deps: ChildrenDeps, name: string): Persona | undefined {
@@ -104,7 +106,7 @@ export class IterationChildren implements DelegationOps {
   private readonly attached = new Map<string, readonly string[]>();
 
   constructor(private readonly deps: ChildrenDeps, readonly iteration: number) {
-    this.ledger = new ChildLedger({ dal: deps.dal, writer: deps.writer, sessionId: deps.sessionId, iteration, budget: deps.budget, modelCap: deps.modelCap, warn: deps.warn , personas: deps.personas, ...(deps.artifacts ? { artifacts: deps.artifacts } : {}) });
+    this.ledger = new ChildLedger({ dal: deps.dal, writer: deps.writer, sessionId: deps.sessionId, iteration, budget: deps.budget, modelCap: deps.modelCap, warn: deps.warn , personas: deps.personas, ...(deps.artifacts ? { artifacts: deps.artifacts } : {}), ...(deps.rootRecord ? { rootRecord: deps.rootRecord } : {}) });
     this.scheduler = new Scheduler({ ledger: this.ledger, runChild: (row) => this.execute(row), warn: deps.warn });
     this.scheduler.onTerminal((row) => { const w = this.resumeWaiters.get(row.parent_id); if (w) { this.resumeWaiters.delete(row.parent_id); w(); } });
   }
@@ -117,7 +119,7 @@ export class IterationChildren implements DelegationOps {
 
   async delegate(parentId: string, req: DelegateRequest): Promise<DelegateOutcome> {
     const parent = this.ledger.get(parentId);
-    const parentDepth = parent ? parent.depth : 0;
+    const parentDepth = parent ? parent.depth : (this.ledger.isRoot(parentId) ? this.ledger.root.depth : 0);
     const persona = personaOf(this.deps, req.persona);
     /*
      * REQ-ORCH-153: refused at ADMISSION, before a record exists. The dispatch check in the tool gate is the
@@ -169,9 +171,15 @@ export class IterationChildren implements DelegationOps {
   }
 
   backgroundOutput(parentId: string, taskId: string, detail: 'summary' | 'verbatim'): BackgroundOutput {
+    if (this.ledger.isRoot(taskId)) {
+      // REQ-ORCH-072 / REQ-TOOLS-155: root resolves, but caller does not own it (root is never a child of caller).
+      // Results are parent-scoped: a task whose parent is not the caller reads as not_found.
+      return { status: 'not_found', state: '', text: '' };
+    }
     const row = this.ledger.get(taskId);
     // REQ-TOOLS-155: parent-scoped — another parent's child reads as not_found.
-    if (!row || row.parent_id !== parentId) return { status: 'not_found', state: '', text: '' };
+    const isOwned = row && (row.parent_id === parentId || (this.ledger.isRoot(parentId) && this.ledger.isRoot(row.parent_id)));
+    if (!row || !isOwned) return { status: 'not_found', state: '', text: '' };
     if (!isTerminalChildState(row.state)) return { status: 'still_running', state: row.state, text: '' };
     const r = parseReport(row);
     const lines = [`agent: ${row.canonical_name} (${row.persona})`, `status: ${r?.status ?? row.state}`, `summary: ${r?.summary ?? ''}`, `key findings:\n${(r?.key_findings ?? []).map((k) => `- ${k}`).join('\n') || '(none)'}`, `last reply: ${r?.last_response ?? ''}`];
@@ -181,9 +189,17 @@ export class IterationChildren implements DelegationOps {
 
   /** REQ-TOOLS-156: only direct children, never the caller's own task, no deadline; N = 0 is valid. */
   async waitForTasks(parentId: string, taskIds: readonly string[]): Promise<WaitOutcome | { readonly refused: string }> {
-    if (taskIds.includes(parentId)) return { refused: 'An agent cannot wait for its own task.' };
+    const isCallerRoot = this.ledger.isRoot(parentId);
+    for (const id of taskIds) {
+      if (id === parentId || (isCallerRoot && this.ledger.isRoot(id))) {
+        return { refused: 'An agent cannot wait for its own task.' };
+      }
+    }
     const mine = this.ledger.childrenOf(parentId);
     for (const id of taskIds) {
+      if (this.ledger.isRoot(id)) {
+        return { refused: 'An agent can wait only for its direct child tasks.' };
+      }
       if (!TASK_ID_PATTERN.test(id)) return { refused: `'${id}' is not a task id.` };
       if (!mine.some((c) => c.task_id === id)) return { refused: 'An agent can wait only for its direct child tasks.' };
     }

@@ -1,6 +1,6 @@
 import { Budget, millis, toIsoUtc, type Clocks, type MachineId, type Millis, type SessionId, type TimerHandle, type Timers } from '@rotaris/kernel';
 import type { SessionRow } from '@rotaris/store';
-import { DEFAULT_CONTEXT_CAPACITY, isAnswerOnly, type ApprovalOption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt } from '@rotaris/contracts';
+import { DEFAULT_CONTEXT_CAPACITY, isAnswerOnly, type ApprovalOption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RootExecutionRecord } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ContentPart, ModelError, ModelRef, ThinkingLevel, TurnReport } from '@rotaris/model';
 import type { EventBus } from './event-bus.js';
 import type { ProjectionOwner } from '../projection-owner.js';
@@ -13,6 +13,7 @@ import { runTurn, type ToolPort } from './turn.js';
 import { IterationChildren } from '../children/orchestration.js';
 import type { DelegationOps } from '../children/delegation.js';
 import type { Budget as ChildBudget } from '../children/ledger.js';
+import { canonicaliseName, mintTaskId } from '../children/naming.js';
 import type { SummariserDeps } from '../children/report.js';
 import type { HookPort, RunNotice } from '../hooks-port.js';
 import type { CheckpointPort } from '../checkpoint-port.js';
@@ -262,6 +263,23 @@ export class Run {
   private children: IterationChildren | null = null;
   /** REQ-ORCH-072: the root agent's own child identity for this iteration. */
   private rootId = 'root';
+  private rootIterationId = 'root:1';
+  private rootRecord: RootExecutionRecord | null = null;
+
+  /** REQ-ORCH-072: the current iteration's root execution record. */
+  get rootExecutionRecord(): RootExecutionRecord | null {
+    return this.rootRecord;
+  }
+
+  private isRootAgent(id: string): boolean {
+    return (
+      id === 'run' ||
+      id === 'root' ||
+      id === this.rootId ||
+      id === this.rootIterationId ||
+      (this.rootRecord !== null && (id === this.rootRecord.taskId || id === this.rootRecord.canonicalName))
+    );
+  }
   /** Every tool port this run created — the root's and each child's — so an answer, a cancel or a mode change reaches all of them (REQ-TOOLS-030). */
   private readonly ports = new Set<ToolPort>();
   /** REQ-HOOKS-087: the session's hook attachment, removed at the end of the run. */
@@ -543,16 +561,20 @@ export class Run {
         outcome = 'cancelled';
         task.state = 'pending';
         summary = 'the run was cancelled before the agent finished';
+        if (this.rootRecord) this.rootRecord.state = 'cancelled';
       } else if (this.pauseRequested) {
         // REQ-MONITOR-123: the current step finished; the task stays pending for the continuation.
         outcome = 'cancelled';
         task.state = 'pending';
         summary = 'the run paused at the user\'s request before the agent finished';
+        if (this.rootRecord) this.rootRecord.state = 'cancelled';
       } else if (report.status === 'succeeded') {
         outcome = 'succeeded';
         this.todo.complete(task);
+        if (this.rootRecord) this.rootRecord.state = 'succeeded';
       } else if (report.status === 'partial') {
         outcome = this.todo.requeue(task) === 'abandoned' ? 'abandoned' : 'partial';
+        if (this.rootRecord) this.rootRecord.state = outcome === 'abandoned' ? 'failed' : 'succeeded';
       } else {
         // REQ-ORCH-074: failed → the task is abandoned; for the root agent the run ends agent_session_aborted.
         outcome = 'failed';
@@ -560,6 +582,7 @@ export class Run {
         summary = this.lastFailure;
         this.todo.abandon(task);
         escalate = true;
+        if (this.rootRecord) this.rootRecord.state = 'failed';
       }
     } catch (cause) {
       // REQ-ORCH-073 / REQ-ORCH-135: an iteration that raises closes as failed, the task abandoned.
@@ -567,6 +590,7 @@ export class Run {
       summary = `the iteration ended with an unhandled error: ${String(cause)}`;
       this.todo.abandon(task);
       escalate = true;
+      if (this.rootRecord) this.rootRecord.state = 'failed';
     }
     writer.recordEvent('iteration.end', { task: task.text, outcome, summary }, iteration);
     // ADR-0039 / REQ-GIT-051: exactly one capture per iteration that closes, at the moment it closes — after
@@ -585,7 +609,7 @@ export class Run {
     // REQ-HOOKS-075/077/080/082: iteration_end for N finishes before N+1 begins; the iteration's own state beside the dispatched outcome.
     if (this.hooks) {
       const iterationState = outcome === 'cancelled' ? 'cancelled' : outcome === 'failed' || outcome === 'abandoned' ? 'failed' : 'succeeded';
-      await this.hooks.fireLifecycle('iteration_end', { iteration, outcome, child_name: this.rootId, status: iterationState, summary });
+      await this.hooks.fireLifecycle('iteration_end', { iteration, outcome, child_name: this.rootIterationId, status: iterationState, summary });
     }
     this.iterationsCompleted += 1;
     this.saveRunning({});
@@ -704,9 +728,25 @@ export class Run {
   private async turn(task: string, iterationOverride?: number): Promise<TurnReport> {
     const { writer, owner, backend, config } = this.deps;
     const iteration = iterationOverride ?? this.iterationsCompleted + 1;
-    this.rootId = `root:${iteration}`;
+    this.rootIterationId = `root:${iteration}`;
+    // REQ-ORCH-072: the iteration's root execution record with the entry role and task payload, in the children namespace
+    const taken = new Set(this.deps.dal ? this.deps.dal.childrenOf(this.sessionId).map((c) => c.task_id) : []);
+    const rootTaskId = mintTaskId(taken);
+    const rootCanonical = canonicaliseName(config.persona);
+    const rootRecord: RootExecutionRecord = {
+      taskId: rootTaskId,
+      canonicalName: rootCanonical,
+      persona: config.persona,
+      task,
+      iteration,
+      depth: 0,
+      state: 'running',
+    };
+    this.rootRecord = rootRecord;
+    this.rootId = rootTaskId;
     const children = this.deps.toolsFor && this.deps.dal
       ? new IterationChildren({
+        rootRecord,
         // REQ-GIT-019: the children are told the root they work in — the worktree for an isolated run.
         sessionId: this.sessionId, workspaceRoot: this.deps.effectiveRoot ?? this.deps.workspaceRoot, dal: this.deps.dal, writer, owner, backend, clocks: this.deps.clocks, model: config.model, thinking: config.thinking,
         modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries, credentialFor: config.credentialFor, maxStepsPerTurn: config.maxStepsPerTurn,
@@ -777,7 +817,7 @@ export class Run {
   /** REQ-MONITOR-133: a steer is pending until its conversation's next step; the id is the control's string value. */
   steer(agentId: string, text: string): string | null {
     if (this.ended || text.trim() === '' || agentId.trim() === '') return null;
-    const key = agentId === 'run' || agentId === 'root' || agentId === this.rootId ? 'root' : agentId;
+    const key = this.isRootAgent(agentId) ? 'root' : agentId;
     if (key !== 'root' && !this.children?.ledger.get(key)) return null;
     const id = randomUUID();
     const list = this.steering.get(key) ?? [];
@@ -787,7 +827,7 @@ export class Run {
     return id;
   }
   private steeringFor(conversationId: string): () => readonly { id: string; text: string }[] {
-    const key = conversationId === this.rootId || conversationId === 'run' ? 'root' : conversationId;
+    const key = this.isRootAgent(conversationId) ? 'root' : conversationId;
     return () => { const list = this.steering.get(key) ?? []; this.steering.delete(key); return list; };
   }
 
@@ -1044,7 +1084,7 @@ export class Run {
   /** REQ-MONITOR-009 / REQ-ORCH-133: cancel one child; the reserved run id is a full cancellation. */
   cancelAgent(taskId: string): boolean {
     if (this.ended) return false;
-    if (taskId === 'run' || taskId === this.rootId) { this.stop.request('user_cancelled'); return true; }
+    if (this.isRootAgent(taskId)) { this.stop.request('user_cancelled'); return true; }
     const ch = this.children;
     if (!ch) return false;
     const row = ch.ledger.get(taskId);

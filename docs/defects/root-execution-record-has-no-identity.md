@@ -44,3 +44,26 @@ gate is held.
 - `apps/desktop/src/run-host/tools.ts` — `isEntryPort`, which reads the root by the
   `^root(:\d+)?$` spelling and by depth 0; a first execution already found that spelling drifting
   once.
+
+## Repaired, 2026-09-13
+
+The root execution record now carries a canonical name and a task id minted in the children namespace
+(`RootExecutionRecord` in `@rotaris/contracts`), exactly as REQ-ORCH-072 requires:
+
+1. **Identity in the children namespace**: At the start of each iteration, `turn()` mints a task id
+   (`bg_xxxxxxxx` via `mintTaskId`) and canonical name (`canonicaliseName(config.persona)`),
+   creating the iteration's `RootExecutionRecord` at depth 0 in state `running`.
+2. **Separation from delegated ledger rows preserved**: As required by ADR-0012 and REQ-ORCH-072, the root
+   record is never inserted into the delegated child ledger table, consuming zero admission limits and
+   holding zero model slots (`all()`, `activeCount()`, and `slotsInUse()` remain untouched).
+3. **Parent of delegated children**: When the root delegates a child, the child's `parent_id` is set to the
+   root's `taskId` (`bg_xxxxxxxx`), and its depth is 1 (one level deeper than root's depth 0).
+4. **Lookup resolution and parent-scoping refusals**:
+   - `waitForTasks`: A root agent waiting for its own task id, canonical name, or root alias is refused
+     `'An agent cannot wait for its own task.'`. A non-root caller waiting for the root resolves to the root
+     record and is refused under parent-scoping: `'An agent can wait only for its direct child tasks.'`
+     (never reporting the root unknown or not a task id).
+   - `backgroundOutput`: Lookups naming the root resolve and are refused under parent-scoping as `not_found`
+     (`Task <id> was not found among your children.`).
+   - Control operations (`steer`, `cancelAgent`): Lookups by root task id, canonical name, `root:<iteration>`,
+     or `root` resolve directly to the root agent.

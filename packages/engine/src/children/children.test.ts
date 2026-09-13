@@ -5,8 +5,9 @@ import { join } from 'node:path';
 import { FakeClock, millis, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling, type ChildRow } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ScriptedCall } from '@rotaris/model';
-import { CHILD_STATES, CHILD_TRANSITIONS, isLegalChildMove, TERMINAL_CHILD_STATES } from '@rotaris/contracts';
+import { CHILD_STATES, CHILD_TRANSITIONS, isLegalChildMove, TASK_ID_PATTERN, TERMINAL_CHILD_STATES } from '@rotaris/contracts';
 import { canonicaliseName, ChildLedger, RUN_CONFIG_DEFAULTS, Scheduler, Sessions, SessionWriter, uniqueUnderParent, type DelegationOps, type PortToolResult, type Publisher, type RunConfig, type ToolPort } from '../index.js';
+import type { ProjectionOwner } from '../projection-owner.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
@@ -245,7 +246,9 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     const rows = children(sid);
     expect(rows).toHaveLength(1);
     const c = rows[0]!;
-    expect(c).toMatchObject({ persona: 'coding-agent', canonical_name: 'implement', state: 'succeeded', iteration: 1, parent_id: 'root:1', depth: 1, observed: 1, report_stored: 1 });
+    expect(c).toMatchObject({ persona: 'coding-agent', canonical_name: 'implement', state: 'succeeded', iteration: 1, depth: 1, observed: 1, report_stored: 1 });
+    // REQ-ORCH-072: the child names the root execution record's task id as its parent
+    expect(c.parent_id).toMatch(TASK_ID_PATTERN);
     expect(JSON.parse(c.report!)).toMatchObject({ agent_name: 'implement', role: 'coding-agent', status: 'succeeded', summary: 'The child wrote the file.', key_findings: ['one file'], final_response: 'I implemented it.' });
     // the ordering obligations: child.spawn precedes every event naming the child, child.complete carries the report
     const ks = kinds(sid);
@@ -408,5 +411,133 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     expect(result.status).toBe('completed');
     expect(children(sid)[0]!.state).toBe('cancelled');
     void millis;
+  });
+
+  describe('REQ-ORCH-072: the root execution record identity and lookups', () => {
+    it('carries canonical name and task id in the children namespace, and is distinct from delegated children', () => {
+      const sid = 'S-root-test' as SessionId;
+      const w = SessionWriter.create({ dal, sessionId: sid, wall: clock, retentionCap: 0, warn: () => undefined, onCommitted: () => undefined }, { workspaceRoot: 'C:/ws', pid: 1, host: HOST });
+      if (!w.ok) throw new Error('writer');
+      const ledger = new ChildLedger({ dal, writer: w.value, sessionId: sid, iteration: 1, budget: { maxDepth: 3, maxTotal: 20, maxActive: 6 }, modelCap: () => null, warn: () => undefined });
+      expect(ledger.root.taskId).toMatch(TASK_ID_PATTERN);
+      expect(ledger.root.canonicalName).toBe('orchestrator');
+      expect(ledger.root.persona).toBe('orchestrator');
+      expect(ledger.root.depth).toBe(0);
+      expect(ledger.root.state).toBe('running');
+      // The root record is NOT a delegated child row
+      expect(ledger.all()).toHaveLength(0);
+      expect(ledger.activeCount()).toBe(0);
+      expect(ledger.slotsInUse('m')).toBe(0);
+      // isRoot recognizes all forms of identity
+      expect(ledger.isRoot(ledger.root.taskId)).toBe(true);
+      expect(ledger.isRoot(ledger.root.canonicalName)).toBe(true);
+      expect(ledger.isRoot('root')).toBe(true);
+      expect(ledger.isRoot('root:1')).toBe(true);
+      expect(ledger.isRoot('bg_ffffffff')).toBe(false);
+      w.value.release(1, HOST);
+    });
+
+    it('wait_for_tasks and background_output lookups naming the root resolve and enforce parent-scoping', async () => {
+      const sid = 'S-ops-test' as SessionId;
+      const w = SessionWriter.create({ dal, sessionId: sid, wall: clock, retentionCap: 0, warn: () => undefined, onCommitted: () => undefined }, { workspaceRoot: 'C:/ws', pid: 1, host: HOST });
+      if (!w.ok) throw new Error('writer');
+      const { IterationChildren } = await import('./orchestration.js');
+      const ops = new IterationChildren({
+        dal,
+        writer: w.value,
+        sessionId: sid,
+        workspaceRoot: 'C:/ws',
+        owner: null as unknown as ProjectionOwner,
+        backend: new DefaultAgentBackend(new ScriptedModelClient([])),
+        clocks: clock,
+        model: MODEL,
+        thinking: 'unset',
+        modelTimeoutMs: 1000,
+        modelRetries: 0,
+        credentialFor: () => async () => '',
+        maxStepsPerTurn: 10,
+        budget: { maxDepth: 3, maxTotal: 20, maxActive: 6 },
+        modelCap: () => null,
+        toolsFor: () => null,
+        summariser: null,
+        runSignal: new AbortController().signal,
+        warn: () => undefined,
+      }, 1);
+      const rootId = ops.ledger.root.taskId;
+      const rootName = ops.ledger.root.canonicalName;
+      // 1. Root caller waiting for its own task (by task id, canonical name, 'root', or 'root:1') is refused
+      expect(await ops.waitForTasks(rootId, [rootId])).toEqual({ refused: 'An agent cannot wait for its own task.' });
+      expect(await ops.waitForTasks(rootId, [rootName])).toEqual({ refused: 'An agent cannot wait for its own task.' });
+      expect(await ops.waitForTasks(rootId, ['root'])).toEqual({ refused: 'An agent cannot wait for its own task.' });
+      expect(await ops.waitForTasks(rootId, ['root:1'])).toEqual({ refused: 'An agent cannot wait for its own task.' });
+
+      // 2. Child caller waiting for root is refused under parent-scoping, NOT told root is not a task id
+      const childId = 'bg_11112222';
+      expect(await ops.waitForTasks(childId, [rootId])).toEqual({ refused: 'An agent can wait only for its direct child tasks.' });
+      expect(await ops.waitForTasks(childId, [rootName])).toEqual({ refused: 'An agent can wait only for its direct child tasks.' });
+      expect(await ops.waitForTasks(childId, ['root'])).toEqual({ refused: 'An agent can wait only for its direct child tasks.' });
+      // Non-existent invalid id is refused as not a task id
+      expect(await ops.waitForTasks(childId, ['not-a-task-id'])).toEqual({ refused: "'not-a-task-id' is not a task id." });
+
+      // 3. background_output naming the root reads as not_found under parent-scoping (caller does not own root)
+      expect(ops.backgroundOutput(rootId, rootId, 'summary')).toEqual({ status: 'not_found', state: '', text: '' });
+      expect(ops.backgroundOutput(childId, rootId, 'summary')).toEqual({ status: 'not_found', state: '', text: '' });
+      expect(ops.backgroundOutput(childId, rootName, 'summary')).toEqual({ status: 'not_found', state: '', text: '' });
+
+      w.value.release(1, HOST);
+    });
+
+    it('end-to-end: delegated children carry the root task id as parent_id and steer/cancel resolve the root', async () => {
+      let releaseChild!: () => void;
+      const hold = new Promise<void>((r) => { releaseChild = r; });
+      let rootCapturedTaskId = '';
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'child-task', task: 'TASK: do child work', run_in_background: false } }]);
+          return answer('done');
+        }
+        if (persona === 'summariser') return answer('{"summary":"child done"}');
+        return { parts: [{ hold }, { part: { kind: 'text', delta: 'late' } }, { part: { kind: 'finish', reason: 'stop' } }] };
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'build with root') as { value: SessionId }).value;
+      await new Promise((r) => setTimeout(r, 10));
+      // Access root execution record identity
+      const childRow = children(sid)[0]!;
+      rootCapturedTaskId = childRow.parent_id;
+      expect(rootCapturedTaskId).toMatch(TASK_ID_PATTERN);
+      expect(childRow.depth).toBe(1);
+
+      // Steer by root task id
+      expect(sessions.control({ op: 'submitSteeringPrompt', sessionId: sid, args: { agentId: rootCapturedTaskId, text: 'keep going' } })).toMatchObject({ ok: true });
+      // Steer by root canonical name
+      expect(sessions.control({ op: 'submitSteeringPrompt', sessionId: sid, args: { agentId: 'orchestrator', text: 'focus' } })).toMatchObject({ ok: true });
+
+      releaseChild();
+      const result = await sessions.running(sid)!;
+      expect(result.status).toBe('completed');
+    });
+
+    it('end-to-end: cancelAgent naming the root by task id stops the run', async () => {
+      let releaseChild!: () => void;
+      const hold = new Promise<void>((r) => { releaseChild = r; });
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'child-task', task: 'TASK: do child work', run_in_background: false } }]);
+          return answer('done');
+        }
+        if (persona === 'summariser') return answer('{"summary":"child done"}');
+        return { parts: [{ hold }, { part: { kind: 'text', delta: 'late' } }, { part: { kind: 'finish', reason: 'stop' } }] };
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'build with cancel') as { value: SessionId }).value;
+      await new Promise((r) => setTimeout(r, 10));
+      const childRow = children(sid)[0]!;
+      const rootTaskId = childRow.parent_id;
+
+      // Cancel by root task id
+      expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: rootTaskId } })).toEqual({ ok: true });
+      releaseChild();
+      const result = await sessions.running(sid)!;
+      expect(result.status).toBe('interrupted');
+    });
   });
 });

@@ -1,5 +1,5 @@
 import type { SessionId } from '@rotaris/kernel';
-import { isTerminalChildState, type ChildState, type SettlingPath } from '@rotaris/contracts';
+import { isTerminalChildState, type ChildState, type RootExecutionRecord, type SettlingPath } from '@rotaris/contracts';
 import type { ChildInsert, ChildRow, StoreDal } from '@rotaris/store';
 import type { SessionWriter } from '../session-writer.js';
 import type { ArtifactStore } from '../artifacts/store.js';
@@ -72,7 +72,45 @@ export interface Spawned {
 }
 
 export class ChildLedger {
-  constructor(private readonly deps: { readonly dal: StoreDal; readonly writer: SessionWriter; readonly sessionId: SessionId; readonly iteration: number; readonly budget: Budget; readonly modelCap: (modelKey: string) => number | null; readonly warn: (m: string) => void; readonly personas?: PersonaResolver | undefined; readonly artifacts?: ArtifactStore | undefined }) {}
+  readonly root: RootExecutionRecord;
+
+  constructor(private readonly deps: {
+    readonly dal: StoreDal;
+    readonly writer: SessionWriter;
+    readonly sessionId: SessionId;
+    readonly iteration: number;
+    readonly budget: Budget;
+    readonly modelCap: (modelKey: string) => number | null;
+    readonly warn: (m: string) => void;
+    readonly personas?: PersonaResolver | undefined;
+    readonly artifacts?: ArtifactStore | undefined;
+    readonly rootRecord?: RootExecutionRecord | undefined;
+  }) {
+    if (deps.rootRecord) {
+      this.root = deps.rootRecord;
+    } else {
+      const taken = new Set(deps.dal.childrenOf(deps.sessionId).map((c) => c.task_id));
+      const taskId = mintTaskId(taken);
+      this.root = {
+        taskId,
+        canonicalName: 'orchestrator',
+        persona: 'orchestrator',
+        task: '',
+        iteration: deps.iteration,
+        depth: 0,
+        state: 'running',
+      };
+    }
+  }
+
+  isRoot(idOrName: string): boolean {
+    return (
+      idOrName === this.root.taskId ||
+      idOrName === this.root.canonicalName ||
+      idOrName === 'root' ||
+      idOrName === `root:${this.root.iteration}`
+    );
+  }
 
   get sessionId(): SessionId {
     return this.deps.sessionId;
@@ -94,6 +132,9 @@ export class ChildLedger {
     return this.deps.dal.getChild(this.deps.sessionId, taskId);
   }
   childrenOf(parentId: string): ChildRow[] {
+    if (this.isRoot(parentId)) {
+      return this.all().filter((c) => this.isRoot(c.parent_id));
+    }
     return this.all().filter((c) => c.parent_id === parentId);
   }
   activeCount(): number {
@@ -129,7 +170,8 @@ export class ChildLedger {
     for (const dep of input.dependsOn) {
       const d = all.find((c) => c.task_id === dep);
       if (!d) return { ok: false, error: { reason: `Unknown dependency '${dep}'` } };
-      if (d.parent_id !== input.parentId) return { ok: false, error: { reason: `Dependency '${dep}' is owned by parent '${d.parent_id}', not '${input.parentId}'` } };
+      const matchParent = d.parent_id === input.parentId || (this.isRoot(input.parentId) && this.isRoot(d.parent_id));
+      if (!matchParent) return { ok: false, error: { reason: `Dependency '${dep}' is owned by parent '${d.parent_id}', not '${input.parentId}'` } };
     }
     // (5) the new edges close no cycle: a dependency that (transitively) depends on a child of this parent named here.
     const edges = new Map(all.map((c) => [c.task_id, JSON.parse(c.depends_on) as string[]]));
@@ -142,14 +184,19 @@ export class ChildLedger {
     };
     for (const inh of input.inheritedContext) if (inh.trim() === '') return { ok: false, error: { reason: 'A malformed inherited-context entry (empty) was rejected' } };
     const taken = new Set(all.map((c) => c.task_id));
+    taken.add(this.root.taskId);
     const taskId = mintTaskId(taken);
     for (const dep of input.dependsOn) if (reaches(dep, taskId)) return { ok: false, error: { reason: 'Dependency cycle detected' } };
     const siblings = new Set(this.childrenOf(input.parentId).map((c) => c.canonical_name));
+    if (this.isRoot(input.parentId)) {
+      siblings.add(this.root.canonicalName);
+    }
     const canonical = uniqueUnderParent(canonicaliseName(input.taskName), siblings);
     const held = input.dependsOn.length === 0 && !this.slotFree(input.modelKey);
     const state: ChildState = input.dependsOn.length > 0 ? 'waiting_on_dependencies' : held ? 'waiting_on_model_slot' : 'queued';
+    const effectiveParentId = this.isRoot(input.parentId) ? this.root.taskId : input.parentId;
     const row: Omit<ChildInsert, 'session_id' | 'spawned_at'> = {
-      task_id: taskId, canonical_name: canonical, given_name: input.taskName, persona: role.persona.name, state, parent_id: input.parentId, depth,
+      task_id: taskId, canonical_name: canonical, given_name: input.taskName, persona: role.persona.name, state, parent_id: effectiveParentId, depth,
       iteration: this.deps.iteration, model_key: input.modelKey, category: input.category, background: input.background ? 1 : 0, task: input.task,
       depends_on: JSON.stringify(input.dependsOn), inherited_context: JSON.stringify(input.inheritedContext), granted_tools: JSON.stringify(input.grantedTools),
       // REQ-MCP-065 / REQ-MCP-114 (Part S): the grant evidence at spawn — `{ granted: {server: [tool…]}, servers: [{name, transport, origin, fate, reason?}] }` — from the persona's resolver; `{}` was written until then.

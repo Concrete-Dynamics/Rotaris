@@ -115,6 +115,13 @@ export interface TurnDeps {
   readonly compression?: TurnCompression | undefined;
   /** REQ-ORCH-093: this turn resumes a parent with its children's reports, so a rejection on its FIRST call is `parent_resume_bad_request`. */
   readonly parentResume?: boolean | undefined;
+  /**
+   * OQ-8 (REQ-EVENTS-053): every completed provider request of this turn, reported once as it completes —
+   * the successful ones and the failed or partial ones the ladder discarded. A caller that maintains the run's
+   * cumulative figures takes them from here rather than from `TurnOutcome.report.usage`, which carries only what
+   * one turn's surviving attempts spent.
+   */
+  readonly onRequestUsage?: ((usage: { readonly input: number; readonly output: number }) => void) | undefined;
 }
 
 export interface SteeringPrompt {
@@ -156,6 +163,15 @@ export async function runTurn(deps: TurnDeps, task: string, history: readonly Ch
   let steps = 0;
   let lastReport: TurnReport = { status: 'succeeded', text: '', usage: { input: 0, output: 0 } };
   let usage = { input: 0, output: 0 };
+  /**
+   * OQ-8: the ONE place a completed provider request's usage is counted — the turn's own total and the caller's
+   * cumulative figures both come from here, so a request the ladder retried past is counted exactly once rather
+   * than dropped with the report it belonged to.
+   */
+  const observeRequestUsage = (u: { readonly input: number; readonly output: number }): void => {
+    usage = { input: usage.input + u.input, output: usage.output + u.output };
+    deps.onRequestUsage?.(u);
+  };
   /**
    * Part AH (ADR-0060). `condensed` says the history no longer matches the provider's last prompt count, so
    * REQ-MONITOR-081's preference for the real figure falls back to the estimate until the next step reports one.
@@ -213,14 +229,13 @@ export async function runTurn(deps: TurnDeps, task: string, history: readonly Ch
       ? { ...deps.resilience, condense: async () => { const ok = await compression.run(conv, 'rejection', condensed, signal); if (ok) condensed = true; return ok; }, resumeIssue: deps.parentResume === true && steps === 1 }
       : deps.resilience;
     const report = resilience
-      ? await resilientStep({ writer, clocks, warn: deps.warn, agent: deps.agentName }, resilience, (choice, unresponsiveMs) => step(stepDeps, choice, conv.snapshot(), specs, signal, unresponsiveMs, segment), signal)
-      : (await step(stepDeps, { model: deps.model, thinking: deps.thinking }, conv.snapshot(), specs, signal, null, segment)).report;
+      ? await resilientStep({ writer, clocks, warn: deps.warn, agent: deps.agentName, onRequestUsage: observeRequestUsage }, resilience, (choice, unresponsiveMs) => step(stepDeps, choice, conv.snapshot(), specs, signal, unresponsiveMs, segment), signal)
+      : await (async () => { const o = await step(stepDeps, { model: deps.model, thinking: deps.thinking }, conv.snapshot(), specs, signal, null, segment); observeRequestUsage(o.report.usage); return o.report; })();
     lastReport = report;
     // REQ-MONITOR-049 (Part R): the step's input count is this agent's latest prompt-token reading; the surface reads it from the record.
     // REQ-MONITOR-089: after a compression the reading FALLS, because the step that follows one reports the shorter prompt.
     writer.activity.usage(deps.agentName, report.usage.input);
     if (report.usage.input > 0) condensed = false;
-    usage = { input: usage.input + report.usage.input, output: usage.output + report.usage.output };
     if (report.status === 'failed') return { report: { ...report, usage }, messages: conv.snapshot(), toolCallCount };
     deps.supervisor?.observe({ kind: 'message', text: report.text });
     const calls = report.toolCalls ?? [];

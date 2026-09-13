@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import * as fs from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
@@ -273,6 +274,66 @@ describe('Part U — repair, delete and the exports', () => {
       event('S-segment', 6, 'session.end', { status: 'failed', stop_reason: 'failure', duration_seconds: 1.5 });
       event('S-segment', 7, 'usage.update', { tokens: { total: 5 } });
       expect(readTrajectory(dal, sid)!.document).toMatchObject({ status: 'failed', stop_reason: 'failure', ended_at: '2026-09-05T10:00:06.000Z', duration_seconds: 1.5 });
+    });
+
+    it("A6 / REQ-EVENTS-138: a duration is only ever the outcome's own — an end with no status supplies neither, and a result that supplies the status supplies its duration too", () => {
+      // An end carrying the figure but no status: the segment is unfinished, so status is unknown and the duration is zero.
+      const unfinished = plant('S-nostatus', 'running');
+      event('S-nostatus', 1, 'session.start', { task: 't' });
+      event('S-nostatus', 2, 'session.end', { stop_reason: 'partway', duration_seconds: 77 });
+      expect(readTrajectory(dal, unfinished)!.document).toMatchObject({ status: 'unknown', stop_reason: '', ended_at: '', duration_seconds: 0 });
+      // A result supplying the outcome supplies its duration: it takes precedence over the two timestamps' elapsed time.
+      const viaResult = plant('S-viaresult', 'completed');
+      event('S-viaresult', 1, 'session.start', { task: 't' });
+      event('S-viaresult', 5, 'result', { result: { status: 'completed', stop_reason: 'tasks_complete', duration_seconds: 2.5 } });
+      expect(readTrajectory(dal, viaResult)!.document).toMatchObject({ status: 'completed', stop_reason: 'tasks_complete', ended_at: '2026-09-05T10:00:05.000Z', duration_seconds: 2.5 });
+    });
+
+    /**
+     * A9 / REQ-EVENTS-145 / REQ-TRACE-061: the destination-failure half. The refusal is REAL — a reader's open
+     * descriptor on Windows (constraint D-06, the condition the ladder exists for), a write-denied parent
+     * elsewhere — never a stubbed `fs`, because what is under test is that the ladder exhausts and the previous
+     * export survives the exhaustion, and a stub proves nothing about either.
+     */
+    const refuseReplacement = (target: string): (() => void) => {
+      if (process.platform === 'win32') { const fd = fs.openSync(target, 'r'); return () => fs.closeSync(fd); }
+      const parent = join(target, '..');
+      const before = fs.statSync(parent).mode;
+      fs.chmodSync(parent, 0o555);
+      return () => fs.chmodSync(parent, before);
+    };
+
+    it('A9 / REQ-EVENTS-145 / REQ-TRACE-061: a destination that cannot be replaced exhausts the ladder, reports recoverably and leaves the previous export exactly as it was', async () => {
+      const target = join(dir, 'exports', 'previous.json');
+      const first = await writeExport(target, { generation: 1 } as unknown as JsonValue, clock.timers);
+      expect(first.ok).toBe(true);
+      const before = readFileSync(target, 'utf8');
+      const release = refuseReplacement(target);
+      let failed;
+      try {
+        const attempt = writeExport(target, { generation: 2 } as unknown as JsonValue, clock.timers);
+        // REQ-TRACE-061's ladder: four waits of 0.05 / 0.1 / 0.2 / 0.4 s behind five attempts in total.
+        for (let i = 0; i < 6; i += 1) { for (let j = 0; j < 8; j += 1) await Promise.resolve(); clock.advance(400); }
+        failed = await attempt;
+      } finally { release(); }
+      expect(failed.ok).toBe(false);
+      if (failed.ok) throw new Error('unreachable');
+      expect(failed.error.code).toBe('document.replace');
+      expect(failed.error.detail).toContain('after 5 attempt(s)');
+      // The previous export is byte-identical and no staged leftover sits beside it.
+      expect(readFileSync(target, 'utf8')).toBe(before);
+      expect(readdirSync(join(dir, 'exports'))).toEqual(['previous.json']);
+    });
+
+    it('A9 / REQ-EVENTS-145: a destination whose parent cannot be created is a recoverable refusal, not a raised exception', async () => {
+      // A file standing where the export's parent directory would go: the create fails, and the caller must still get a Result.
+      const blocked = join(dir, 'blocked');
+      writeFileSync(blocked, 'not a directory');
+      const r = await writeExport(join(blocked, 'nested', 'export.json'), { a: 1 } as unknown as JsonValue, clock.timers);
+      expect(r.ok).toBe(false);
+      if (r.ok) throw new Error('unreachable');
+      expect(r.error.code).toBe('document.parent');
+      expect(readFileSync(blocked, 'utf8')).toBe('not a directory');
     });
 
     it('a capped history reports its drop count and the warning; a batch keeps selection order under the three-key wrapper', async () => {

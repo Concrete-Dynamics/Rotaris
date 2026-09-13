@@ -277,12 +277,33 @@ export function readTrajectory(dal: StoreDal, sessionId: SessionId): Trajectory 
     const result = segment.findLast((e) => str(e['event']) === 'result');
     const nestedResult = result?.['result'];
     const resultPayload = nestedResult !== null && typeof nestedResult === 'object' && !Array.isArray(nestedResult) ? nestedResult : result;
-    const outcome = str(end?.['status']) ? end : resultPayload;
+    /**
+     * REQ-EVENTS-138: the `session.end` of this segment supplies the outcome; where it supplies no status the
+     * segment's last `result` does. `outcomeEvent` is the terminal EVENT that supplied it — its own timestamp is
+     * the export's `ended_at` — and `outcome` is the payload the fields are read from, which for a `result` is the
+     * nested object the runtime producer writes them into.
+     */
+    const endSupplies = str(end?.['status']) !== '';
+    const outcomeEvent = endSupplies ? end : result;
+    const outcome = endSupplies ? end : resultPayload;
+    const settled = str(outcome?.['status']) !== '';
     const first = events[0];
     const startedAt = str(latest?.['timestamp']) || str(first?.['timestamp']) || row.run_started_at || row.created_at;
-    const endedAt = str(outcome?.['status']) ? str((str(end?.['status']) ? end : result)?.['timestamp']) : '';
+    const endedAt = settled ? str(outcomeEvent?.['timestamp']) : '';
     const started = Date.parse(startedAt); const ended = Date.parse(endedAt);
-    const duration = Number.isFinite(started) && Number.isFinite(ended) && ended >= started ? (ended - started) / 1000 : 0;
+    const elapsed = Number.isFinite(started) && Number.isFinite(ended) && ended >= started ? (ended - started) / 1000 : 0;
+    /**
+     * REQ-EVENTS-138: the terminal outcome's OWN supplied duration takes precedence over elapsed time; when
+     * neither terminal event supplied a status the duration is zero.
+     *
+     * The falsified reading, kept beside its replacement: this read `duration_seconds` off the segment's last
+     * `session.end` whatever that event said. An end that carried a duration but no status — the shape a writer
+     * produces when it records the figure before the outcome is decided — therefore exported `status: unknown`
+     * beside a non-zero duration, which REQ-EVENTS-138 forbids in terms; and a `result` that supplied both the
+     * status and the duration had its duration discarded in favour of the two timestamps.
+     */
+    const supplied = outcome?.['duration_seconds'];
+    const duration = !settled ? 0 : typeof supplied === 'number' ? num(supplied) : elapsed;
     const summary = summariseTrajectory(events, warnings);
     // The writer named the workspace key `workspace` before Part U corrected it to REQ-SESSION-193's `workspace_root`; both are read.
     const workspace = str(latest?.['workspace_root']) || str(latest?.['workspace']) || row.workspace_root;
@@ -296,7 +317,7 @@ export function readTrajectory(dal: StoreDal, sessionId: SessionId): Trajectory 
       ended_at: endedAt,
       status: str(outcome?.['status']) || 'unknown',
       stop_reason: str(outcome?.['stop_reason']),
-      duration_seconds: typeof end?.['duration_seconds'] === 'number' ? num(end['duration_seconds']) : duration,
+      duration_seconds: duration,
       truncated: row.truncated === 1,
       dropped_events: row.dropped_count,
       summary: summary as unknown as JsonValue,

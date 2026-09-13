@@ -53,7 +53,17 @@ function transient(code: string | undefined): boolean {
 
 /** Replace the whole of `target` with `content`, atomically as a reader observes. */
 export async function replaceDocument(target: string, content: string | Uint8Array, opts: ReplaceOptions = {}): Promise<Result<{ attempts: number }, Failure>> {
-  if (opts.createParent) mkdirSync(dirname(target), { recursive: true });
+  /**
+   * A destination the caller chose can refuse the parent itself — a file standing where the directory would go,
+   * a folder the account may not write into, a path that is not one. This function's whole contract is a
+   * `Result`, and a raised `mkdirSync` escaped it: found by A9's destination-failure coverage, where the export
+   * of REQ-EVENTS-145 goes to a destination the user picked in a file chooser and the failure must reach them as
+   * the recoverable refusal REQ-TRACE-061 requires, not as an exception thrown through the run host's command.
+   */
+  if (opts.createParent) {
+    try { mkdirSync(dirname(target), { recursive: true }); }
+    catch (e) { return err(failure('document.parent', 'The destination folder could not be created', String(e), e)); }
+  }
   const staged = stagePath(target);
   try {
     const fd = openSync(staged, 'w');

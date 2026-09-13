@@ -596,6 +596,14 @@ than a generic refusal.
    writer's commit latency while never blocking it, so the literal reading is unsatisfiable by any store.*
 8. **OQ-8 survives untouched.** Journal volume against the cap for `usage.update` is a question about how
    many events a run raises, which the store does not change.
+
+   ***Answered, 2026-09-06, and the answer is compatible with this consequence.*** OQ-8 closed on the
+   **completed provider request** as the emission trigger (`REQ-EVENTS-053`): one event per request that
+   contributes new usage, the usage a failed or partial request reported counted, identical cumulative
+   totals skipped. This record's point stands as written — the store still does not decide how many events
+   a run raises — and the number is now bounded by something nameable: a run raises at most one
+   `usage.update` per provider request it makes. `REQ-MONITOR-166`'s sampling keeps its separate cadence
+   and does not enter this journal.
 9. **The trim is two commits where a shared transaction would have been one, and that cost is accepted
    without a measurement.** Separating the trim from the append adds one transaction per `cap ÷ 8`
    appends — one in every 2,500 at the cap `REQ-CONFIG-473` registers — so the amortised cost is small by

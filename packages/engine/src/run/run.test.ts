@@ -249,6 +249,38 @@ describe('engine/run — the run loop end to end against a real store and a scri
     expect(warnings.some((w) => w.includes('Transient model failure'))).toBe(true);
   });
 
+  it('OQ-8 / REQ-EVENTS-053: one usage.update per completed provider request — a retried failure\'s reported usage is counted, identical totals are skipped, and session.end carries the final totals', async () => {
+    // A transient failure that reported its usage before failing, then the retry that succeeded.
+    const failedWithUsage: ScriptedCall = { parts: [{ part: { kind: 'usage', usage: { input: 11, output: 3 } } }, { error: modelError({ code: 'http', status: 503, headline: 'overloaded' }) }] };
+    const { client, backend } = scripted([failedWithUsage, answer('second time lucky', { input: 20, output: 6 })]);
+    const { sessions } = sessionsWith(backend);
+    const sid = (sessions.start(dal, 'C:/ws', 'retry') as { value: SessionId }).value;
+    await new Promise((r) => setTimeout(r, 5));
+    clock.advance(1_000);
+    const result = await sessions.running(sid)!;
+    expect(client.requests.length).toBe(2);
+    expect(result.status).toBe('completed');
+    // Two requests completed, each contributing new usage: two events, cumulative, the newest superseding.
+    const updates = dal.eventsOfKind(sid, 'usage.update').map((e) => JSON.parse(e.payload) as { tokens: { input: number; output: number; total: number } });
+    expect(updates.map((u) => u.tokens)).toEqual([
+      { input: 11, output: 3, total: 14 },
+      { input: 31, output: 9, total: 40 },
+    ]);
+    // The spent tokens of the discarded attempt are in the session's own totals and in the terminal event.
+    expect(dal.getSession(sid)).toMatchObject({ tokens_input: 31, tokens_output: 9 });
+    expect(payload(sid, 'session.end')).toMatchObject({ tokens: { input: 31, output: 9, total: 40 } });
+    expect(result.tokens).toEqual({ input: 31, output: 9, total: 40 });
+  });
+
+  it('OQ-8 / REQ-EVENTS-053: a request that reports no figures moves no total and raises no event', async () => {
+    const { backend } = scripted([answer('nothing to report', { input: 0, output: 0 })]);
+    const { sessions } = sessionsWith(backend);
+    const sid = (sessions.start(dal, 'C:/ws', 'silent') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    expect(dal.eventsOfKind(sid, 'usage.update')).toEqual([]);
+    expect(events(sid)).not.toContain('usage.update');
+  });
+
   it('a failure outside the transient class ends the run agent_session_aborted → failed, with the error in the row and the result', async () => {
     const { backend } = scripted([{ parts: [{ error: modelError({ code: 'http', status: 401, headline: 'unauthorised', providerMessage: 'bad key' }) }] }]);
     const { sessions } = sessionsWith(backend);

@@ -281,6 +281,15 @@ staged file on every failure path; apply the store's declared mode, and where th
 **read the protection back** before reporting success (`REQ-PROVIDER-016`). **The staged file's own
 descriptor need not be closed first** — measured: a handle on the rename's source does not block it.
 
+*Corrected 2026-09-13, by A9's destination-failure coverage.* **Creating the parent is inside the
+primitive's contract, not beside it.** The implementation created it before the `try`, so a parent that
+cannot be created — a file standing where the folder would go, a folder the account may not write into —
+**raised** rather than returning the `Result` every other failure here returns. The shape that made it
+reachable is exactly the one this primitive exists for: `REQ-EVENTS-145`'s export writes to a destination
+the *user* chose in a save dialog, so the parent is not the product's own directory and its refusal is an
+ordinary outcome rather than a programming error. The failure is now reported as `document.parent`,
+alongside `document.stage`, `document.replace` and `document.mode`.
+
 **Write side — exclusive create.** Create the target with exclusive-create semantics; on success the caller
 minted it; on an already-exists failure **read what is there and use it**, which is not an error. This shape
 never replaces, so no reader can block it, and deletion of such a file succeeds even while a reader holds it

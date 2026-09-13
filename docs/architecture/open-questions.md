@@ -1359,7 +1359,24 @@ records as a "documented, deliberate artifact" that an empty directory may appea
 on one platform. **These cannot both hold.** The record implements `REQ-SANDBOX-077` — refuse rather than
 create — because it is the fail-closed reading and is stated as an obligation on the backend.
 
-**OQ-8 — At what granularity is the usage event emitted?** *(ADR-0009.)* `REQ-EVENTS-053` fixes only that
+**OQ-8 — CLOSED as a policy decision, 2026-09-06; implemented and measured 2026-09-13.** *(ADR-0009.)*
+
+The accepted review names the **completed provider request** as the trigger: one `usage.update` per
+request that contributes new usage, counting the usage a failed or partial request reported, skipping a
+request whose figures leave the cumulative totals unchanged. `REQ-MONITOR-166`'s sampling keeps its own
+cadence and neither raises nor suppresses one, and `REQ-SESSION-094`'s terminal `session.end` carries the
+final cumulative totals regardless. Journal volume against `REQ-EVENTS-091`'s cap is therefore bounded by
+the number of provider requests a run makes. `REQ-EVENTS-053` carries the amendment; ADR-0009 consequence
+8 is reconciled with it.
+
+***What building it found.*** The event was raised once per *iteration*, from the turn's returned report,
+and that report carries only the attempts that survived: `resilientStep` discards the report of every
+attempt it retries past, and `runWithChildren` returns the last parent turn of a resume loop. A run that
+retried a transient failure or resumed its parent therefore spent tokens the session's totals, its terminal
+event and its cost never counted. The decision's own wording — *including reported failed/partial-request
+usage* — is what exposed it.
+
+**Historical question — at what granularity is the usage event emitted?** `REQ-EVENTS-053` fixed only that
 it must not be emitted with no figures and that it carries run-to-date cumulative totals.
 `REQ-MONITOR-166` fixes a **sampling** cadence for the token-history sparkline, which is a different
 thing. Whether a usage event accompanies every model turn, or follows the sample, or both, is unstated

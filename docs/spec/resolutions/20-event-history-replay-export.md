@@ -330,6 +330,26 @@ whole-history counts retain their scope. This addresses the sequence
 supplying an outcome absent from the exported events. Regression coverage is
 in `packages/engine/src/session-actions.test.ts`.
 
+**Dependent contracts reconciled, 2026-09-13.** REQ-SESSION-153 now states the
+two scopes the one document carries — identity and outcome from the latest run
+segment, every summary count from the whole exported history — and cites
+REQ-EVENTS-138 as the owner of the derivation rather than restating it.
+REQ-SESSION-193's key inventory is unchanged and needed no change: the amendment
+moved no key and added none. No ADR states a competing derivation; ADR-0024 owns
+the export's shape and file discipline, not its outcome fields, and the audit
+confirmed it names none.
+
+**What the reconciliation found in the implementation.** `duration_seconds` was
+read from the segment's last `session.end` whatever that event carried. Two
+consequences, both contradicting the amendment: an end carrying the figure but no
+status — the shape a writer produces when the figure is recorded before the
+outcome is decided — exported `status: unknown` beside a non-zero duration, which
+this requirement forbids in terms; and where a `result` supplied the outcome, its
+own `duration_seconds` was discarded in favour of elapsed time between the two
+timestamps, against "its supplied duration takes precedence". The duration is now
+taken from whichever terminal event supplied the outcome, and is zero when neither
+supplied a status.
+
 ## Accepted amendment, 2026-09-06 — A9: export replacement retries
 
 The user accepted specification-review item A9. REQ-EVENTS-145 now cites
@@ -339,3 +359,39 @@ preserves the previous destination. REQ-SESSION-033 retains its local summary-fi
 scope. This closes the export-ladder question recorded in the historical
 2026-09-02 amendment above. Implementation verification is tracked in
 `SPECIFICATION_RESOLUTION_PROGRESS.md` at the repository root.
+
+**Destination failure, delivered 2026-09-13.** The replacement ladder was already
+in place; what was missing was evidence that exhaustion behaves as the amendment
+requires. A real refusal — a reader's open descriptor on Windows, a write-denied
+parent elsewhere — now drives the ladder to exhaustion and the regression asserts
+the recoverable failure, the previous export byte-identical, and no staging
+leftover beside it. It found one defect: `replaceDocument` created the
+destination's parent outside its own `try`, so a destination whose parent cannot
+be created — a file standing where the folder would go — **raised** out of
+`writeExport` instead of returning the refusal this amendment requires, and the
+run host's export command would have propagated an exception rather than the
+recoverable failure the user is owed. The create is now inside the contract, as
+`document.parent`.
+
+## Accepted amendment, 2026-09-06 — OQ-8: the usage event's emission trigger
+
+REQ-EVENTS-053 fixed what a `usage.update` may not carry and what its figures
+mean, and left unstated *when* one is raised. The accepted resolution names the
+completed provider request as the trigger: one event per request that contributes
+new usage, counting the usage a failed or partial request reported, skipping a
+request whose reported figures leave the cumulative totals unchanged. Sampling
+(REQ-MONITOR-166) keeps its own independent cadence and neither raises nor
+suppresses one; REQ-SESSION-094's terminal `session.end` carries the final
+cumulative totals regardless. Journal volume against REQ-EVENTS-091's cap is
+thereby bounded by the number of provider requests a run makes, which is what
+ADR-0009 consequence 8 said the store does not decide.
+
+**What the first implementation of the trigger found, 2026-09-13.** The event was
+raised once per *iteration*, from the turn's returned report — and that report
+carries only the attempts that survived. `resilientStep` discards the report of
+every attempt it retries past, and `runWithChildren` returns the last parent turn
+of a resume loop, so a run that retried a transient failure or resumed its parent
+spent tokens the session's own totals, its terminal event and its cost never
+counted. Counting is now done once per completed request, at the one place a
+request completes. Regression coverage is in
+`packages/engine/src/run/run.test.ts`.

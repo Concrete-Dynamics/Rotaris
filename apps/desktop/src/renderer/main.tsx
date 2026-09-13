@@ -8,7 +8,7 @@ import { createAcknowledgementStore, createNoticeStore, createReplicaStore, type
 // preview registry every transcript surface reads, the host that carries it, and the terminal window's own registry.
 import { TERMINAL_REFUSALS, TERMINAL_WINDOW_ROLE, type TerminalFrame, type TerminalRefusal, type TerminalWindowPayload } from '@rotaris/contracts';
 import { createTerminalWindowStreams, headlessEmulator, TerminalHostProvider, TerminalStreamSet, TerminalWindow, terminalWindowTitle, type TerminalActionResult, type TerminalActions, type TerminalHost } from '@rotaris/ui';
-import { Acknowledgements, type AboutInfo, applyChange, applyTheme, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, readTranscriptCounts, RowProof, QuestionStepper, type TrailerRow, WorktreeDialog, type SlashHost, RequirementsBoard } from '@rotaris/ui';
+import { Acknowledgements, type AboutInfo, applyChange, applyTheme, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, readTranscriptCounts, RowProof, type TrailerRow, WorktreeDialog, type SlashHost, RequirementsBoard } from '@rotaris/ui';
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls, and the shape it answers.
 import { bindPromptRootsReader, ToggleSwitch } from '@rotaris/ui';
 import type { PromptsRootsResult } from '@rotaris/contracts';
@@ -617,6 +617,8 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
     onSetNextModel={(model) => setField({ personas: { [entryPersona]: { model } } })}
     onSetNextReasoning={(level) => setField({ personas: { [entryPersona]: { thinking: level } } })}
     onOpenTrailer={onOpenTrailer}
+    onAnswerQuestions={answerQuestions}
+    onCancelQuestions={cancelQuestions}
     session={session} rows={rows} onSubmit={submitPrompt} onStop={stopRun} onSetMode={setMode} onCancelAgent={cancelAgent} nowIso={nowIso}
     onPageOlder={pageOlder} reachedOldest={reachedOldest} groupTools={groupTools} displayCaps={pendingCaps ?? snapshot?.display}
     onStash={(text) => prompts.push('stash', text)} stashCount={prompts.stash.length} onOpenStash={onOpenStash}
@@ -1282,20 +1284,16 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
   useEffect(() => { focusSession = (id) => { void openSession(id); }; return () => { focusSession = null; }; }, [openSession]);
 
   /*
-   * Part AC — REQ-CHAT-098/103: ONE trailer handler and ONE modal for this window, held here rather than in the
-   * Workspace view so that switching views cannot unmount a stepper the user is halfway through. A question trailer
-   * opens the stepper; an approval trailer raises the dialog window that is already up (ADR-0019/ADR-0048 paint an
-   * approval in its own window, and REQ-CHAT-103's difference is that the first approval auto-opens while a question
-   * waits for this click). The open stepper is derived by looking the request id up in the record's pending list, so
-   * REQ-CHAT-098's "the modal closes programmatically when the pending state clears" is not an effect that has to
-   * fire — the prompt leaves the list and there is nothing left to render.
+   * PD-CHAT-002 (superseding REQ-CHAT-098/099): question prompts auto-open docked at the bottom of the transcript.
+   * Approval prompts retain their own window dialog (ADR-0019/ADR-0048).
    */
-  const [stepperRequestId, setStepperRequestId] = useState<string | null>(null);
   const openTrailer = useCallback((trailer: TrailerRow) => {
-    if (trailer.sort === 'question') { setStepperRequestId(trailer.requestId); return; }
+    if (trailer.sort === 'question') {
+      document.querySelector<HTMLElement>('[data-testid="question-stepper"]')?.focus();
+      return;
+    }
     void bridge.command({ kind: 'approval.raise', requestId: trailer.requestId });
   }, []);
-  const stepperPrompt = session?.pendingQuestions.find((q) => q.request_id === stepperRequestId) ?? null;
   const branchItem = useMemo(() => branchStripItem(git.state, session?.worktreeBranch ?? null), [git.state, session]);
   const status = useMemo<readonly StatusItem[]>(
     () => [
@@ -1360,16 +1358,6 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
         onRevealFiles={async (sessionId) => outcomeOf(await bridge.command({ kind: 'session.revealFiles', sessionId }))}
         onBackup={() => workspaceAction('workspace.backup')}
         onRestore={() => workspaceAction('workspace.restore')}
-      />
-    )}
-    {/* Part AC — REQ-CHAT-098..102: the question stepper, one per window, keyed so a new prompt never reuses its state. */}
-    {stepperPrompt && (
-      <QuestionStepper
-        key={stepperPrompt.request_id}
-        prompt={stepperPrompt}
-        onSubmit={(answers) => answerQuestions(stepperPrompt.request_id, answers)}
-        onCancel={() => cancelQuestions(stepperPrompt.request_id)}
-        onClose={() => setStepperRequestId(null)}
       />
     )}
     {/* REQ-LIBRARY-141: the stash dialog, opened from the transcript toolbar (and, once the slash catalogue exists, by `/pop`). */}

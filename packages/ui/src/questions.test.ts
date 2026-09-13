@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { stepsPhrase } from '@rotaris/contracts';
-import { FREEFORM_PLACEHOLDER, hasAnswer, QUESTION_DELIVERY_FAILED } from './QuestionStepper.js';
+import { FREEFORM_PLACEHOLDER, hasAnswer, parseAnswersText, QUESTION_DELIVERY_FAILED } from './QuestionStepper.js';
 import { APPROVAL_DELIVERY_FAILED } from './ApprovalDialog.js';
 
 /**
@@ -33,5 +33,33 @@ describe('REQ-CHAT-168 — one grammar for the step count, shared by the trailer
     expect(stepsPhrase(1)).toBe('1 step');
     expect(stepsPhrase(2)).toBe('2 steps');
     expect(stepsPhrase(10)).toBe('10 steps');
+  });
+});
+
+describe('PD-CHAT-002 — parseAnswersText for question tool row output', () => {
+  it('extracts answers map from ## User Answers markdown', () => {
+    const output = [
+      'Received answers for 2 steps.',
+      '',
+      '## User Answers',
+      '- **scope**: This file only',
+      '- **notes**: Prefer the smaller change.',
+    ].join('\n');
+    const parsed = parseAnswersText(output);
+    expect(parsed.kind).toBe('answers');
+    expect(parsed.answers['scope']).toBe('This file only');
+    expect(parsed.answers['notes']).toBe('Prefer the smaller change.');
+  });
+
+  it('detects cancellation outcome', () => {
+    const parsed = parseAnswersText('Questions were cancelled.');
+    expect(parsed.kind).toBe('cancelled');
+    expect(parsed.answers).toEqual({});
+  });
+
+  it('detects timeout outcome', () => {
+    const parsed = parseAnswersText('User did not respond to the questions in time.');
+    expect(parsed.kind).toBe('timed_out');
+    expect(parsed.answers).toEqual({});
   });
 });

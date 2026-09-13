@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
-import { isBusy, PERMISSION_PRESETS, resolveTheme, RUN_AGENT_ID, THEME_NAMES, type AgentRecord, type ControlOp, type ImageAttachment, type ImageAttachmentInput, type Notice, type PermissionPreset, type PlanDecision, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
+import { isBusy, PERMISSION_PRESETS, resolveTheme, RUN_AGENT_ID, THEME_NAMES, type AgentRecord, type ControlOp, type ImageAttachment, type ImageAttachmentInput, type Notice, type PermissionPreset, type PlanDecision, type QuestionAnswers, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
 import { err, ok } from '@rotaris/kernel';
 import {
   clampComposerHeight, composerChipReason, composerPlaceholderFor, COMPOSER_DEFAULT_HEIGHT, COMPOSER_MIN_HEIGHT, DEFAULT_REASONING,
@@ -28,6 +28,7 @@ import type { TrailerRow } from './transcript/types.js';
 import { TodoPane, type TodoEdit } from './TodoPane.js';
 import { addImageBytes, composerTokenEstimate } from './attachments.js';
 import { PlanGate } from './PlanGate.js';
+import { QuestionForm } from './QuestionStepper.js';
 import './attachments.css';
 import { Button as DesignButton, Input as DesignInput, PopoverMenu, Select as DesignSelect, TextArea as DesignTextArea } from './design-system/index.js';
 
@@ -157,6 +158,9 @@ export interface WorkspaceViewProps {
   readonly onComposerHeight?: ((sizes: readonly [number, number]) => void) | undefined;
   /** Part AC — REQ-CHAT-098/103: clicking a trailer row opens the question stepper or raises the approval dialog. */
   readonly onOpenTrailer?: ((trailer: TrailerRow) => void) | undefined;
+  /** PD-CHAT-002: submission and cancellation callbacks for the docked question form. */
+  readonly onAnswerQuestions?: ((requestId: string, answers: QuestionAnswers) => Promise<{ delivered: boolean }>) | undefined;
+  readonly onCancelQuestions?: ((requestId: string) => void) | undefined;
   /**
    * Part AN — what the slash catalogue needs that this view cannot reach through its other props (REQ-CHAT-028..033,
    * REQ-CHAT-159). Every member is optional: a command whose member is absent stays LISTED and is unavailable with the
@@ -584,7 +588,7 @@ function ModeSelector({ current, enabled, onSetMode }: { current: PermissionPres
   );
 }
 
-export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onPlanEdit, onPlanDecision, runStartMode = 'auto', onSetRunStartMode, onSteer, onSetModel, onSetReasoning, models = [], imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight , onOpenTrailer, slash}: WorkspaceViewProps) {
+export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onPlanEdit, onPlanDecision, runStartMode = 'auto', onSetRunStartMode, onSteer, onSetModel, onSetReasoning, models = [], imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight, onOpenTrailer, onAnswerQuestions, onCancelQuestions, slash}: WorkspaceViewProps) {
   const [text, setText] = useState(draft ?? '');
   // REQ-CHAT-069: the transcript's scope. "This task" needs a selected agent, so it falls back to "All activity".
   const [scope, setScope] = useState<'all' | 'task'>('all');
@@ -1164,6 +1168,15 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
           onOpenTrailer={onOpenTrailer}
           nowMs={nowIso === null ? 0 : Date.parse(nowIso)}
         />
+        {/* PD-CHAT-002: auto-opened interactive question form docked at the bottom of the transcript */}
+        {session?.pendingQuestions?.[0] && onAnswerQuestions && onCancelQuestions && (
+          <QuestionForm
+            key={session.pendingQuestions[0].request_id}
+            prompt={session.pendingQuestions[0]}
+            onSubmit={(answers) => onAnswerQuestions(session.pendingQuestions[0]!.request_id, answers)}
+            onCancel={() => onCancelQuestions(session.pendingQuestions[0]!.request_id)}
+          />
+        )}
       </div>
       {(!narrow || drawer === 'inspector') && inspector}
       <QueuePanel prompts={queued} onEdit={onEditQueued} onRemove={onRemoveQueued} onError={setError} />

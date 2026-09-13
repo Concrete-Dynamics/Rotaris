@@ -754,6 +754,24 @@ suite was green — and the scenario still failed. **A state-driven press aimed 
 the thing it waits for is no better than a clock, and is harder to see**, because the clock at least fails visibly.
 The gate became `[data-req-card="REQ-104"][data-column="review"]:focus`, which cannot hold before the release.
 
+**A measured negative, kept so it is not re-attempted: turning `code_intelligence` OFF makes the board scenario
+slower, not faster.** The scenario costs six to thirteen minutes against this endpoint, nearly all of it the model's
+own loop, and the spread between two runs of identical code had looked like the symbol server's doing — seven tool
+names and 153 k input tokens in six minutes where the agent stayed off it, seventeen and 291 k in 12.9 minutes where
+it did not, including three `*_memory` calls over a workspace deleted at the end. A `--lean` flag disabling the one
+shipped-enabled server (REQ-MCP-010) was built to test that reading and **falsified it on the first run**: without
+the symbol server the agent brute-forces the same task with `read_file` 44 times, `terminal` 41 and `grep` 37 —
+**144 tool calls and no review at all** inside the 900 s deadline, against 7 to 17 calls when it has the server. The
+flag was discarded rather than merged. Removing a capability does not remove the work; it moves it into more, cheaper
+round trips, and round trips are what the wall clock measures. Harness iteration belongs in
+`pnpm requirements-runs-proof`, which drives the real delivery service, traceability engine, store and Git helper
+with only the run host scripted and no model at all.
+
+That failing run is also the repair above proving itself under the exact condition that produced the defect: **one**
+failure for the expiry — "the window expired with the card where the trail leaves it" — and a `NOTE` reading "the
+review was never offered, so the accept was not pressed — review control: expired; decision: expired; confirmation:
+expired". No accusation against the board, where the old shape would have manufactured two.
+
 **What an owner's own run found — 2026-09-12, and the seven defects eighty-two to eighty-eight.** Not a harness
 and not a scenario: a 22-minute run in a scratch workspace, twelve children, 226 tool calls, 686k tokens, stopped
 by hand because it was going in circles. It commissioned the same architecture design three times and produced

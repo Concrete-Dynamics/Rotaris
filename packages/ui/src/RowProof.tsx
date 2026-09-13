@@ -124,7 +124,7 @@ export function rowProofSession(): SessionRecord {
     agents: [AGENT], pendingQuestions: [], tokenUsage: { input: 120, output: 80 }, cost: '0', stopReason: null, runStartedAt: AT,
     iterationsCompleted: 1, summary: null, permissionMode: 'guided', sandboxed: false,
     pendingApprovals: [{ request_id: 'req-1', session_id: 'rows-proof-session', agent_id: 'helper', persona: 'coding-agent', tool_name: 'terminal', command: 'git push origin main', argument_summary: '', rule_id: 'starter.push', reason: 'a push leaves the machine', sequence: 1 }],
-    backgroundSessions: 0, intent: null, queuedPrompts: [], todo: null, childTodos: {}, messageLimit: null, pausedAtCount: null,
+    backgroundSessions: 0, intent: null, queuedPrompts: [], todo: null, childTodos: {}, messageLimit: null, pausedAtCount: null, planGate: null,
     usageHistory: [], costLabel: { text: 'cost unknown', qualifier: 'unknown' },
     toolCalls: { total: 4, agents: 1, byTool: [{ tool: 'read_file', count: 2 }, { tool: 'terminal', count: 2 }] },
     worktreeBranch: null, wait: null, compression: null, entryContext: { used: 12_000, limit: DEFAULT_CONTEXT_CAPACITY },

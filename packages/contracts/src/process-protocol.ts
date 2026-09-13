@@ -7,7 +7,7 @@ import { PlaybookCatalogueSchema } from './intent.js';
 import { CONTRACT_SCHEMA_VERSION } from './version.js';
 import { ImageAttachmentInputSchema, SessionSnapshotSchema, TerminalFrameSchema, TimelineSeveritySchema, TranscriptIncrementSchema, TranscriptRowSchema } from './channels.js';
 import { TERMINAL_COMMAND_SCHEMAS, TerminalStreamMetaSchema } from './terminal.js';
-import { ControlRequestSchema, ControlResultSchema } from './control.js';
+import { ControlRequestSchema, ControlResultSchema, PLAN_DECISIONS } from './control.js';
 import { ApprovalPayloadSchema } from './tools.js';
 import { ArtifactsStateSchema } from './artifacts.js';
 import { GitViewStateSchema, RepositoryStateSchema, WorktreeBindingSchema } from './repository.js';
@@ -86,6 +86,9 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('session.resume'), workspaceId: z.string(), sessionId: z.string().min(1) }),
   /** REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause (continue, double, cancel) or continue a manually paused session. */
   z.object({ kind: z.literal('session.continue'), sessionId: z.string().min(1), action: z.enum(['continue', 'double', 'cancel']) }),
+  /** REQ-ORCH-153/154 (ADR-0062): the plan gate's two entries, forwarded to the run host that owns the session. */
+  z.object({ kind: z.literal('session.planEdit'), sessionId: z.string().min(1), text: z.string() }),
+  z.object({ kind: z.literal('session.planDecision'), sessionId: z.string().min(1), decision: z.enum(PLAN_DECISIONS), changes: z.string().optional() }),
   z.object({ kind: z.literal('session.prompt'), sessionId: z.string(), prompt: z.string(), attachments: z.array(ImageAttachmentInputSchema).max(10).optional() }).refine((v) => v.prompt.trim() !== '' || (v.attachments?.length ?? 0) > 0, { message: 'A prompt or attachment is required.' }),
   z.object({ kind: z.literal('session.readAttachment'), sessionId: z.string().min(1), path: z.string().min(1), digest: z.string().regex(/^[0-9a-f]{64}$/) }),
   /** A surface begins following: snapshot first, then the resident transcript (REQ-MONITOR-214, REQ-SESSION-161). */
@@ -365,6 +368,8 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('session.resumed'), sessionId: z.string(), settledChildren: z.number().int().nonnegative() }),
   z.object({ kind: z.literal('config.snapshot'), snapshot: ConfigSnapshotSchema }),
   z.object({ kind: z.literal('session.continued'), sessionId: z.string(), resumed: z.boolean(), messageLimit: z.number().int().nullable() }),
+  /** REQ-ORCH-154: the cycle the answer settled, and whether a further segment launched (approve and revise) or not (cancel). */
+  z.object({ kind: z.literal('session.planResolved'), sessionId: z.string(), cycle: z.number().int().positive(), relaunched: z.boolean() }),
   /** REQ-CHAT-165: a span older than `beforeIndex`, oldest first; `oldest` says the first recorded row is in it. */
   z.object({ kind: z.literal('session.page'), sessionId: z.string(), rows: z.array(TranscriptRowSchema), oldest: z.boolean() }),
   z.object({ kind: z.literal('ack') }),

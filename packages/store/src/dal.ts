@@ -57,6 +57,25 @@ export interface SessionRow {
   readonly sandbox_mode: string;
   // v9 — REQ-SESSION-195 / REQ-GIT-155: the checkpoint most recently restored into the session's tree; NULL = never.
   readonly last_restored_sequence: number | null;
+  // v17 — REQ-ORCH-153/154: the plan cycle awaiting an answer (NULL = none) and whether approval released this run.
+  readonly plan_cycle: number | null;
+  readonly plan_released: number;
+}
+/** v17 — REQ-ORCH-154's durable record: one row per plan cycle, the decision taken and the text that was approved. */
+export interface PlanCycleRow {
+  readonly session_id: string;
+  readonly cycle: number;
+  readonly opened_at: string;
+  /** Verbatim, as the producing role wrote it (REQ-ORCH-153); never rewritten. */
+  readonly plan: string;
+  readonly intent: string;
+  readonly todo: string;
+  /** The changes the user stated when choosing revise into this cycle; '' on the first. */
+  readonly changes: string;
+  /** The user's own text; NULL while they have not edited (REQ-ORCH-154). */
+  readonly edited: string | null;
+  readonly decision: string | null;
+  readonly decided_at: string | null;
 }
 /** v9 — REQ-GIT-016's record: one row per checkpoint, `files` the JSON list of changed paths, `kind` REQ-GIT-067's vocabulary. */
 export interface CheckpointRow {
@@ -343,6 +362,14 @@ export class StoreDal {
         WHERE session_id = @session_id`),
       // REQ-ORCH-087 / REQ-SESSION-110: the pause recorded with its count; the resolution clears it in the same act that writes the status.
       setPause: db.prepare('UPDATE sessions SET execution_status = ?, paused_at_count = ?, message_limit = ?, updated_at = ? WHERE session_id = ?'),
+      // REQ-ORCH-153/154 (v17): the plan cycle record, and the two session columns that hold a gate open across a restart.
+      insertPlanCycle: db.prepare('INSERT INTO plan_cycles (session_id, cycle, opened_at, plan, intent, todo, changes) VALUES (?, ?, ?, ?, ?, ?, ?)'),
+      editPlanCycle: db.prepare('UPDATE plan_cycles SET edited = ? WHERE session_id = ? AND cycle = ? AND decision IS NULL'),
+      decidePlanCycle: db.prepare('UPDATE plan_cycles SET decision = ?, decided_at = ? WHERE session_id = ? AND cycle = ? AND decision IS NULL'),
+      planCycle: db.prepare('SELECT * FROM plan_cycles WHERE session_id = ? AND cycle = ?'),
+      planCyclesOf: db.prepare('SELECT * FROM plan_cycles WHERE session_id = ? ORDER BY cycle'),
+      setPlanGate: db.prepare('UPDATE sessions SET execution_status = ?, plan_cycle = ?, updated_at = ? WHERE session_id = ?'),
+      setPlanReleased: db.prepare('UPDATE sessions SET plan_released = ?, updated_at = ? WHERE session_id = ?'),
       // REQ-CHAT-038: the prompt records; the QUEUED → TRIGGERED move is one conditional update whose row count is the claim.
       insertQueuedPrompt: db.prepare('INSERT INTO queued_prompts (session_id, prompt_id, position, content, status, created_at, context_snapshot) VALUES (?, ?, ?, ?, ?, ?, ?)'),
       queuedPromptsOf: db.prepare('SELECT * FROM queued_prompts WHERE session_id = ? ORDER BY position'),
@@ -674,6 +701,33 @@ export class StoreDal {
   /** REQ-ORCH-087 / REQ-SESSION-110: status, the count reached (null clears the pause) and the limit in force, one statement. */
   setPause(id: SessionId, status: string, pausedAtCount: number | null, messageLimit: number | null, updatedAt: string): void {
     this.stmts['setPause']!.run(status, pausedAtCount, messageLimit, updatedAt, id);
+  }
+
+  /** REQ-ORCH-154 (v17): one cycle's opening record — the plan verbatim, never rewritten after this insert. */
+  insertPlanCycle(id: SessionId, cycle: number, openedAt: string, plan: string, intent: string, todo: string, changes: string): void {
+    this.stmts['insertPlanCycle']!.run(id, cycle, openedAt, plan, intent, todo, changes);
+  }
+  /** REQ-ORCH-154: the user's own text. False when the cycle is unknown or already decided — an answered gate takes no further edit. */
+  editPlanCycle(id: SessionId, cycle: number, edited: string): boolean {
+    return this.stmts['editPlanCycle']!.run(edited, id, cycle).changes === 1;
+  }
+  /** REQ-ORCH-154: the answer, recorded once; a second answer for the same cycle changes nothing and reports false. */
+  decidePlanCycle(id: SessionId, cycle: number, decision: string, decidedAt: string): boolean {
+    return this.stmts['decidePlanCycle']!.run(decision, decidedAt, id, cycle).changes === 1;
+  }
+  planCycle(id: SessionId, cycle: number): PlanCycleRow | undefined {
+    return this.stmts['planCycle']!.get(id, cycle) as PlanCycleRow | undefined;
+  }
+  planCyclesOf(id: SessionId): PlanCycleRow[] {
+    return this.stmts['planCyclesOf']!.all(id) as PlanCycleRow[];
+  }
+  /** REQ-ORCH-153: the held status and the cycle awaiting an answer (null clears the gate), one statement. */
+  setPlanGate(id: SessionId, status: string, cycle: number | null, updatedAt: string): void {
+    this.stmts['setPlanGate']!.run(status, cycle, updatedAt, id);
+  }
+  /** REQ-ORCH-154: approval is one-way for the run that received it; the next user prompt clears it. */
+  setPlanReleased(id: SessionId, released: boolean, updatedAt: string): void {
+    this.stmts['setPlanReleased']!.run(released ? 1 : 0, updatedAt, id);
   }
   /**
    * REQ-CHAT-038/039 (v13): the owner is `id` and is the primary key's first column, so it is fixed at the insert and

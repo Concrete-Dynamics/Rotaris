@@ -97,6 +97,34 @@ export const PausePayloadSchema = z.object({
 });
 export type PausePayload = z.infer<typeof PausePayloadSchema>;
 
+/**
+ * REQ-ORCH-153: the three answers offered at the plan gate, exactly — approve releases execution, revise starts
+ * another plan cycle, cancel stops the run with `user_cancelled`. They are session COMMANDS and not control
+ * operations: `CONTROL_OPS` above is REQ-MONITOR-004's closed enumeration over a LIVE run, and a run held at the
+ * gate is parked with no process executing it — the answer must reach it whether or not the process that hosted
+ * the hold outlived it (REQ-ORCH-153's closing sentence). Recorded as the reading taken, in ADR-0062.
+ */
+export const PLAN_DECISIONS = ['approve', 'revise', 'cancel'] as const;
+export type PlanDecision = (typeof PLAN_DECISIONS)[number];
+
+/**
+ * REQ-ORCH-153/154: what the gate surface is given — the plan VERBATIM as the producing role wrote it, the user's
+ * edit while one stands (null until they edit), the classified intent and the todo state the plan implies. `plan`
+ * is never rewritten: the edit is a separate field so that "editing alone never approves it" is structural, and so
+ * that a window closed mid-edit loses neither the edit nor the text the role produced.
+ */
+export const PlanGateSchema = z.object({
+  cycle: z.number().int().positive(),
+  openedAt: z.string(),
+  plan: z.string(),
+  edited: z.string().nullable(),
+  intent: z.string(),
+  todo: z.string(),
+  /** The changes the user stated when they chose revise into this cycle; '' on the first. */
+  changes: z.string(),
+});
+export type PlanGatePayload = z.infer<typeof PlanGateSchema>;
+
 /** REQ-CHAT-038: a queued prompt's status series. */
 export const QUEUED_PROMPT_STATUSES = ['QUEUED', 'TRIGGERED', 'COMPLETED'] as const;
 export type QueuedPromptStatus = (typeof QUEUED_PROMPT_STATUSES)[number];

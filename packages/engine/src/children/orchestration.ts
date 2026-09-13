@@ -81,6 +81,13 @@ export interface ChildrenDeps {
   readonly compressionFor?: ((current: ModelChoice, todoLines: () => readonly string[]) => TurnCompression | undefined) | undefined;
   /** Part Y (REQ-LIBRARY-092/097/098): the session artifact store — child reports land in it and its two context blocks reach every child. */
   readonly artifacts?: ArtifactStore | undefined;
+  /**
+   * REQ-ORCH-153 (ADR-0062): "While the gate is held the run MUST NOT spawn a child whose role holds such a
+   * tool." `held` is the run's own live read; `withholds` is the registry predicate, injected because the
+   * declarations live in `@rotaris/agent-tools` and the engine does not import it (ADR-0002's boundaries).
+   * Absent means no gate can hold this run and no delegation is refused on its account.
+   */
+  readonly planGate?: { readonly held: () => boolean; readonly withholds: (tool: string) => boolean } | undefined;
 }
 
 function personaOf(deps: ChildrenDeps, name: string): Persona | undefined {
@@ -112,6 +119,20 @@ export class IterationChildren implements DelegationOps {
     const parent = this.ledger.get(parentId);
     const parentDepth = parent ? parent.depth : 0;
     const persona = personaOf(this.deps, req.persona);
+    /*
+     * REQ-ORCH-153: refused at ADMISSION, before a record exists. The dispatch check in the tool gate is the
+     * authoritative line and would refuse the child's calls one by one; this refusal is kept beside it because it
+     * tells the delegating role WHY at the moment it asked, rather than letting a child start and fail on every
+     * call it was spawned to make. A role that declares nothing withheld is spawned as usual — the gate holds the
+     * run, not the idea of delegation (a researcher reading files is exactly what a plan cycle wants).
+     */
+    const gate = this.deps.planGate;
+    if (gate?.held() === true) {
+      const withheld = (persona?.tools ?? []).filter((t) => gate.withholds(t));
+      if (withheld.length > 0) {
+        return { status: 'rejected', canonicalName: req.taskName, message: `The '${req.persona}' role was not started: this run is held at the plan gate, and that role holds ${withheld.join(', ')} — tools that write workspace files or run commands (REQ-ORCH-153). Delegate to a role that only reads, or finish the plan and let the user's approval release execution.` };
+      }
+    }
     const r = this.ledger.spawn({
       parentId, parentDepth, persona: req.persona, taskName: req.taskName, task: req.task, dependsOn: req.dependsOn, inheritedContext: req.inheritedContext,
       category: req.category, background: req.runInBackground, modelKey: persona?.modelRef?.modelId ?? this.deps.model.modelId, grantedTools: persona?.tools ?? [],

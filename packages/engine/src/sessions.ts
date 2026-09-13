@@ -26,6 +26,7 @@ import { persistAttachments, projectAttachments, readAttachmentBody, validateAtt
 import { artifactOps, type ArtifactOps } from './artifacts/port.js';
 import type { Preflight, PreflightContext } from './preflight.js';
 import { IntentResultSchema, type IntentCategory, type IntentGrant, type IntentStatus } from '@rotaris/contracts';
+import type { PlanDecision, PlanGatePayload } from '@rotaris/contracts';
 import { SupervisorRegistry, type LoopClassifier, type SupervisorConfig } from './run/supervisor.js';
 import { Todo, type TodoDocument } from './run/todo.js';
 import type { PersonaResolver } from './children/personas.js';
@@ -98,6 +99,13 @@ export interface ToolPortContext {
   /** REQ-CHAT-088/090: the agent-owned todo for this exact conversation and its write-through. */
   readonly readTodo?: (() => AgentTodoDocument | null) | undefined;
   readonly writeTodo?: ((document: AgentTodoDocument) => boolean) | undefined;
+  /**
+   * REQ-ORCH-153 (ADR-0062): whether the run this port serves is held at the plan gate. The ONE seam the hold
+   * travels through to the tool surface — the port narrows its declared set by it, and the gate reads it again at
+   * each dispatch. A live read through the run, on the same late-binding terms as `readTodo` above, so a port
+   * built while the gate held stops withholding the moment the run says the hold is over.
+   */
+  readonly planGateHeld?: (() => boolean) | undefined;
 }
 
 /** Decision 1 of the plan: runtime keys the configuration loader (ADR-0036) will own; read from the environment until then. */
@@ -118,6 +126,8 @@ export interface RuntimePosture {
   readonly messageLimit?: number | null;
   /** REQ-ORCH-088 / REQ-CONFIG-114: `runtime.child_timeout` in milliseconds; absent means the engine's 1,200 s. */
   readonly childTimeoutMs?: number | undefined;
+  /** REQ-ORCH-152 / REQ-CONFIG-476: `runtime.run_start_mode`; absent means `auto` and no gate applies. */
+  readonly runStartMode?: 'auto' | 'plan' | undefined;
 }
 
 export interface SessionsDeps {
@@ -136,6 +146,12 @@ export interface SessionsDeps {
   readonly onRunResult?: (sessionId: SessionId, result: RunResult) => void;
   /** REQ-ORCH-085: the run paused at the message limit — the host is told the count and the limit. */
   readonly onRunPaused?: ((sessionId: SessionId, info: { count: number; limit: number | null; tokens: { input: number; output: number } }) => void) | undefined;
+  /**
+   * REQ-ORCH-153 (ADR-0062): "every tool the public tool-name registry declares as writing workspace files or
+   * running commands", as a predicate. Injected because the declarations live in `@rotaris/agent-tools`, which
+   * the engine does not import (ADR-0002); absent means the plan gate refuses no delegation on a role's tools.
+   */
+  readonly planWithholds?: ((tool: string) => boolean) | undefined;
   /** The tool surface per session; absent means the model is offered no tool. */
   readonly tools?: (ctx: ToolPortContext) => ToolPort;
   /** REQ-TOOLS-053/069: whether a prompt can be put in front of a person, at the moment asked. */
@@ -365,6 +381,23 @@ export function buildContinuationPayload(dal: StoreDal, row: SessionRow, prompt:
   ].join('\n');
 }
 
+/**
+ * REQ-ORCH-154: what the next segment is told about the plan it inherits. On **approve** it is the plan the run
+ * carries out, carried whole and unedited by the product (the user's own text where they edited it). On **revise**
+ * it is "the plan as it currently stands together with the changes the user stated" — both, and in that order, so
+ * the producing role revises rather than starts again.
+ */
+export function planSection(decision: PlanDecision, plan: string, changes: string): string {
+  if (decision === 'approve') {
+    return ['The user approved this plan. Carry it out; every tool the plan gate withheld is now available.', '', 'Approved plan:', plan].join('\n');
+  }
+  return [
+    'The user asked for a revision of this plan. Produce a fresh plan that answers what they said; do not begin the work.',
+    '', 'The plan as it currently stands:', plan,
+    '', 'The changes the user stated:', changes.trim() === '' ? '(the user stated no specific changes)' : changes,
+  ].join('\n');
+}
+
 /** REQ-MONITOR-171: the run's duration as `m:ss` / `h:mm:ss`; empty before any run. */
 export function durationLabel(startedAt: string | null, until: string): string {
   if (!startedAt) return '';
@@ -406,7 +439,20 @@ export function costLabelOf(cost: string): SessionRecord['costLabel'] {
   return { text: cost === '0' || cost === '' ? 'price not established' : `${cost} (price not established)`, qualifier: 'unknown' };
 }
 
-export function toSessionRecord(r: SessionRow, queued: readonly { id: string; content: string; createdAt: string }[] = [], toolCalls: readonly { tool_name: string; count: number; agents: number }[] = []): SessionRecord {
+/**
+ * REQ-ORCH-153/154: the plan cycle awaiting an answer, as the surface is given it. Read from the STORE — the run
+ * that produced it has parked and its process may be gone, and the decision must still be there when the session
+ * is opened again. `edited` stays separate from `plan`: the surface shows the user's own text where one exists and
+ * the role's verbatim otherwise, and neither overwrites the other.
+ */
+export function planGateOf(dal: StoreDal, r: SessionRow): PlanGatePayload | null {
+  if (r.execution_status !== 'awaiting_plan_decision' || r.plan_cycle === null) return null;
+  const row = dal.planCycle(asSessionId(r.session_id), r.plan_cycle);
+  if (!row || row.decision !== null) return null;
+  return { cycle: row.cycle, openedAt: row.opened_at, plan: row.plan, edited: row.edited, intent: row.intent, todo: row.todo, changes: row.changes };
+}
+
+export function toSessionRecord(r: SessionRow, queued: readonly { id: string; content: string; createdAt: string }[] = [], toolCalls: readonly { tool_name: string; count: number; agents: number }[] = [], planGate: PlanGatePayload | null = null): SessionRecord {
   return {
     // REQ-MONITOR-085: derived from the live run at every snapshot; a record read from the store alone carries none.
     compression: null,
@@ -437,6 +483,7 @@ export function toSessionRecord(r: SessionRow, queued: readonly { id: string; co
     childTodos: {},
     messageLimit: r.message_limit,
     pausedAtCount: r.paused_at_count,
+    planGate,
     usageHistory: parseTokenSamples(r.token_samples),
     costLabel: costLabelOf(r.cost),
     toolCalls: { total: r.tool_calls, agents: Math.max(0, ...toolCalls.map((t) => t.agents)), byTool: toolCalls.map((t) => ({ tool: t.tool_name, count: t.count })) },
@@ -686,7 +733,7 @@ export class Sessions {
     const writer = opened.value;
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const current = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId)), ...projectSessionTodos(current, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: current.execution_status, updatedAt: current.updated_at } })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
+      readSession: () => { const current = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, current)), ...projectSessionTodos(current, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: current.execution_status, updatedAt: current.updated_at } })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
@@ -748,7 +795,7 @@ export class Sessions {
     if (!storedAttachments.ok) return err({ code: 'attachment-invalid', reason: storedAttachments.reason });
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const row = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId)), ...projectSessionTodos(row, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: row.execution_status, updatedAt: row.updated_at } })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
+      readSession: () => { const row = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, row)), ...projectSessionTodos(row, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: row.execution_status, updatedAt: row.updated_at } })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
@@ -766,7 +813,7 @@ export class Sessions {
     // ADR-0015: the hook set is resolved once here, before the run exists, and is fixed for the run (REQ-HOOKS-131).
     let hooks: HookPort | null = null;
     if (this.deps.hooks) {
-      try { hooks = this.deps.hooks({ sessionId, workspaceRoot, effectiveRoot, writer, warn, log: (m) => { log?.info(m); } }); } catch (cause) { warn(`Could not resolve this run's hooks; continuing without them. (${String(cause)})`); }
+      try { hooks = this.deps.hooks({ sessionId, workspaceRoot, effectiveRoot, writer, warn, log: (m) => { log?.info(m); }, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false }); } catch (cause) { warn(`Could not resolve this run's hooks; continuing without them. (${String(cause)})`); }
     }
     const checkpoints = this.checkpointPortFor({ sessionId, workspaceRoot, effectiveRoot, isolated: opts.worktree !== undefined, dal, writer, warn, log: (m) => { log?.info(m); } });
     // REQ-ORCH-005/016: the pre-flight's grant reaches the entry role's tool port; the ports are created after the pre-flight ran.
@@ -791,6 +838,8 @@ export class Sessions {
       resilience: { memory: live.memory!, catalogue: setup.value.resilience?.catalogue ?? [], fallbackModel: setup.value.resilience?.fallbackModel ?? null },
       ...(runtime?.childTimeoutMs === undefined ? {} : { childTimeoutMs: runtime.childTimeoutMs as Millis }),
       messageLimit: runtime?.messageLimit ?? null, onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),
+      // REQ-ORCH-152/153: the plan gate as a launch input; the run settles the hold itself once the intent is known.
+      ...(this.planLaunchFor(dal, sessionId, runtime) ?? {}),
       backend: model.backend, config: model.config, tools, permission, configurationSnapshot: setup.value.configurationSnapshot, pid: this.deps.pid, host: this.deps.host,
       // Part AH (ADR-0060): the configuration's half joined to the session's backend, timers and credentials. It sits
       // at the top level and NOT inside the tools block: an agent with no tool port still holds a conversation.
@@ -800,7 +849,7 @@ export class Sessions {
       ...(supervisors ? { supervisorFor: (conversationId: string) => supervisors.forConversation(conversationId) } : {}),
       ...(preflight ? { preflight: async (signal: AbortSignal) => { const p = await preflight({ sessionId, workspaceRoot, prompt, signal, warn }); decided.grant = p.grant; decided.intent = p.intent.category; return p; } } : {}),
       ...(this.deps.tools ? {
-        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, grant: decided.grant, intent: decided.intent, artifacts: artifactOps(artifacts, { canonicalName: agentName, persona, conversationId: parentId }), readTodo: () => runRef.run?.agentTodoFor(parentId, depth === 0) ?? null, writeTodo: (document) => runRef.run?.replaceAgentTodo(parentId, depth === 0, document) ?? false }),
+        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, grant: decided.grant, intent: decided.intent, artifacts: artifactOps(artifacts, { canonicalName: agentName, persona, conversationId: parentId }), readTodo: () => runRef.run?.agentTodoFor(parentId, depth === 0) ?? null, writeTodo: (document) => runRef.run?.replaceAgentTodo(parentId, depth === 0, document) ?? false, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false }),
         dal, artifacts, budget, modelCap: capFor,
         summariser: { backend: model.backend, model: model.summariser?.model ?? model.config.model, thinking: model.summariser?.thinking ?? model.config.thinking, timers: this.deps.clocks.timers, credentialFor: model.config.credentialFor },
       } : {}),
@@ -845,6 +894,9 @@ export class Sessions {
     if (!attachments.ok) return err({ code: 'attachment-invalid', reason: attachments.reason });
     const row = s.writer.appendRow('user', prompt, true, { attachments: attachments.attachments });
     if (!row.ok) return err({ code: row.error.code, reason: 'reason' in row.error ? row.error.reason : String(row.error.code) });
+    // REQ-ORCH-154: approval is one-way FOR THE RUN THAT RECEIVED IT. A fresh user prompt is the next run, which
+    // the mode governs again — so the release is cleared here and nowhere else.
+    s.writer.clearPlanRelease();
     this.launchContinuation(s, prompt, payload, todo.value, previousIntent(s.dal, sessionId), setup.value, attachments.content);
     return ok(row.value);
   }
@@ -861,7 +913,7 @@ export class Sessions {
     return ok({ model: this.deps.model, ...(this.deps.runtime ? { runtime: this.deps.runtime } : { runtime: { permissionMode: '', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING' } }) });
   }
 
-  private launchContinuation(s: Live, prompt: string, payload: string, todo: TodoDocument | undefined, priorIntent: IntentCategory | null, setupIn: RunSetup, attachmentContent: readonly ContentPart[] = []): void {
+  private launchContinuation(s: Live, prompt: string, payload: string, todo: TodoDocument | undefined, priorIntent: IntentCategory | null, setupIn: RunSetup, attachmentContent: readonly ContentPart[] = [], plan?: { readonly cycle: number; readonly changes: string }): void {
     const { model, runtime } = setupIn;
     const sessionId = s.writer.sessionId;
     const storedRow = s.dal.getSession(sessionId)!;
@@ -880,7 +932,7 @@ export class Sessions {
     const runRef: { run?: Run } = {};
     let hooks: HookPort | null = null;
     if (this.deps.hooks) {
-      try { hooks = this.deps.hooks({ sessionId, workspaceRoot, effectiveRoot, writer: s.writer, warn, log: (m) => { s.log?.info(m); } }); } catch (cause) { warn(`Could not resolve this continuation's hooks; continuing without them. (${String(cause)})`); }
+      try { hooks = this.deps.hooks({ sessionId, workspaceRoot, effectiveRoot, writer: s.writer, warn, log: (m) => { s.log?.info(m); }, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false }); } catch (cause) { warn(`Could not resolve this continuation's hooks; continuing without them. (${String(cause)})`); }
     }
     // REQ-GIT-051: numbering continues across a resume — the port reads the rows and the refs at each capture.
     const checkpoints = this.checkpointPortFor({ sessionId, workspaceRoot, effectiveRoot, isolated: effectiveRootOf(storedRow).binding !== null, dal: s.dal, writer: s.writer, warn, log: (m) => { s.log?.info(m); } });
@@ -911,6 +963,9 @@ export class Sessions {
       resilience: { memory: s.memory, catalogue: setupIn.resilience?.catalogue ?? [], fallbackModel: setupIn.resilience?.fallbackModel ?? null },
       ...(runtime?.childTimeoutMs === undefined ? {} : { childTimeoutMs: runtime.childTimeoutMs as Millis }),
       messageLimit: runtime?.messageLimit ?? null, onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),
+      // REQ-ORCH-152/153/154: a continuation holds again unless approval already released this run, and a revise
+      // cycle passes its own number and the changes the user stated.
+      ...(this.planLaunchFor(s.dal, sessionId, runtime, plan) ?? {}),
       writer: s.writer, owner: s.owner, bus: this.bus, clocks: this.deps.clocks, backend: model.backend, config: model.config, configurationSnapshot: setupIn.configurationSnapshot,
       // Part AH (ADR-0060): the configuration's half joined to the session's backend, timers and credentials. It sits
       // at the top level and NOT inside the tools block: an agent with no tool port still holds a conversation.
@@ -921,7 +976,7 @@ export class Sessions {
       onSaved: (generation) => summary.rebuild(generation, () => s.dal.getSession(sessionId)),
       ...(preflight ? { preflight: async (signal: AbortSignal) => { const p = await preflight({ sessionId, workspaceRoot, prompt, signal, warn, previousIntent: priorIntent, hasUnfinishedWork: true }); decided.grant = p.grant; decided.intent = p.intent.category; return p; } } : {}),
       ...(this.deps.tools ? {
-        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, grant: decided.grant, intent: decided.intent, artifacts: artifactOps(artifacts, { canonicalName: agentName, persona, conversationId: parentId }), readTodo: () => runRef.run?.agentTodoFor(parentId, depth === 0) ?? null, writeTodo: (document) => runRef.run?.replaceAgentTodo(parentId, depth === 0, document) ?? false }),
+        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, grant: decided.grant, intent: decided.intent, artifacts: artifactOps(artifacts, { canonicalName: agentName, persona, conversationId: parentId }), readTodo: () => runRef.run?.agentTodoFor(parentId, depth === 0) ?? null, writeTodo: (document) => runRef.run?.replaceAgentTodo(parentId, depth === 0, document) ?? false, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false }),
         dal: s.dal, artifacts, budget, modelCap: capFor,
         summariser: { backend: model.backend, model: model.summariser?.model ?? model.config.model, thinking: model.summariser?.thinking ?? model.config.thinking, timers: this.deps.clocks.timers, credentialFor: model.config.credentialFor },
       } : {}),
@@ -1253,6 +1308,97 @@ export class Sessions {
     const runtimeWithLimit: RunSetup = { ...setup.value, runtime: { ...setup.value.runtime, messageLimit: limit } };
     this.launchContinuation(s, lastPrompt, payload, todo.value, previousIntent(s.dal, sessionId), runtimeWithLimit);
     return ok({ resumed: true, messageLimit: limit });
+  }
+
+  /**
+   * REQ-ORCH-152/153/154 (ADR-0062): whether THIS launch is a plan cycle, and which.
+   *
+   * The mode is read at the launch and never again while the segment runs, which is REQ-ORCH-154's "a change to
+   * the mode setting made while a run is in flight takes effect only for the next run" expressed as the place the
+   * value is read. `plan_released` is approval's one-way flag: once execution has been released the run no longer
+   * holds, whatever the mode says and whichever process is asking — that is what makes "a plan produced later in
+   * the same run MUST NOT block execution" survive the process boundary the park introduces. `override` is a
+   * revise cycle, which carries its own number and the changes the user stated and is not subject to the mode
+   * read: the user asked for that cycle explicitly.
+   *
+   * `withholds` falls back to a predicate that withholds nothing where the host injected none — the dispatch
+   * check in the tool gate is the authoritative enforcement point, and a build with no registry predicate is a test.
+   */
+  private planLaunchFor(dal: StoreDal, sessionId: SessionId, runtime: RuntimePosture | undefined, override?: { readonly cycle: number; readonly changes: string }): { readonly plan: { cycle: number; changes: string; withholds: (tool: string) => boolean } } | undefined {
+    const withholds = this.deps.planWithholds ?? (() => false);
+    if (override) return { plan: { ...override, withholds } };
+    if ((runtime?.runStartMode ?? 'auto') !== 'plan') return undefined;
+    const row = dal.getSession(sessionId);
+    if (!row || row.plan_released === 1) return undefined;
+    const cycles = dal.planCyclesOf(sessionId);
+    return { plan: { cycle: (cycles[cycles.length - 1]?.cycle ?? 0) + 1, changes: '', withholds } };
+  }
+
+  /**
+   * REQ-ORCH-154: the user's own text over the plan awaiting a decision. It approves nothing and starts nothing —
+   * the session stays at `awaiting_plan_decision` and the same cycle stays pending.
+   */
+  planEdit(sessionId: SessionId, text: string): Result<boolean, { readonly code: string; readonly reason: string }> {
+    const s = this.live.get(sessionId);
+    if (!s) return err({ code: 'not-live', reason: `${sessionId} is not a live session` });
+    const stored = s.dal.getSession(sessionId);
+    if (!stored) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
+    if (stored.execution_status !== 'awaiting_plan_decision' || stored.plan_cycle === null) {
+      return err({ code: 'not-at-gate', reason: `Session ${sessionId} is not waiting at the plan gate (${stored.execution_status}).` });
+    }
+    const r = s.writer.recordPlanEdit(stored.plan_cycle, text);
+    if (!r.ok) return err({ code: r.error.code, reason: 'reason' in r.error ? r.error.reason : r.error.code });
+    s.owner.reconcile();
+    return ok(r.value);
+  }
+
+  /**
+   * REQ-ORCH-153/154: the answer, exactly one of three.
+   *
+   *  - **approve** releases execution for the remainder of the run: `plan_released` is set, the gate is cleared,
+   *    and a continuation launches carrying the plan the user approved — edited where they edited it, verbatim
+   *    otherwise. The launch reads the released flag, so nothing later in that run can return to the gate.
+   *  - **revise** starts a further plan cycle with the plan as it currently stands and the changes stated. This
+   *    document places no limit on how many.
+   *  - **cancel** stops the run with stop reason `user_cancelled` and launches nothing.
+   *
+   * Every answer is recorded with a `plan_gate_resolved` timeline entry naming it, in the same durable act that
+   * clears the gate — so a process that dies between the two cannot leave a session claiming to wait on a cycle
+   * that was settled.
+   */
+  planDecision(sessionId: SessionId, decision: PlanDecision, changes = ''): Result<{ readonly relaunched: boolean; readonly cycle: number }, { readonly code: string; readonly reason: string }> {
+    const s = this.live.get(sessionId);
+    if (!s) return err({ code: 'not-live', reason: `${sessionId} is not a live session` });
+    const storeFailure = SessionWriter.storeFailure(s.dal) ?? s.writer.failed;
+    if (storeFailure) return err({ code: 'store-failed', reason: `The workspace store requires recovery before continuing work: ${storeFailure}` });
+    const stored = s.dal.getSession(sessionId);
+    if (!stored) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
+    if (stored.execution_status !== 'awaiting_plan_decision' || stored.plan_cycle === null) {
+      return err({ code: 'not-at-gate', reason: `Session ${sessionId} is not waiting at the plan gate (${stored.execution_status}).` });
+    }
+    const cycle = stored.plan_cycle;
+    const row = s.dal.planCycle(sessionId, cycle);
+    if (!row) return err({ code: 'no-cycle', reason: `Session ${sessionId} has no record of plan cycle ${cycle}.` });
+    // REQ-ORCH-154: "the edited text is the plan the run carries out".
+    const text = row.edited ?? row.plan;
+    if (decision === 'cancel') {
+      const r = s.writer.resolvePlanGate(cycle, decision, 'paused', false, 'user_cancelled');
+      if (!r.ok) return err({ code: r.error.code, reason: 'reason' in r.error ? r.error.reason : r.error.code });
+      s.owner.reconcile();
+      return ok({ relaunched: false, cycle });
+    }
+    const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId);
+    if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
+    const gone = missingWorktree(stored);
+    if (gone) return err(gone);
+    const todo = parseTodoDocument(stored);
+    if (!todo.ok) return todo;
+    const resolved = s.writer.resolvePlanGate(cycle, decision, 'idle', decision === 'approve', null);
+    if (!resolved.ok) return err({ code: resolved.error.code, reason: 'reason' in resolved.error ? resolved.error.reason : resolved.error.code });
+    const lastPrompt = [...s.dal.residentRows(sessionId)].reverse().find((r) => r.kind === 'user')?.body ?? stored.session_id;
+    const payload = `${buildContinuationPayload(s.dal, s.dal.getSession(sessionId)!, lastPrompt, todo.value)}\n\n${planSection(decision, text, changes)}`;
+    this.launchContinuation(s, lastPrompt, payload, todo.value, previousIntent(s.dal, sessionId), setup.value, [], decision === 'revise' ? { cycle: cycle + 1, changes } : undefined);
+    return ok({ relaunched: true, cycle });
   }
 
   /** ADR-0039: the port is built by the root; a root that raises leaves the run with no checkpoints and one warning (REQ-GIT-045: never aborts). */

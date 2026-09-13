@@ -206,7 +206,7 @@ The owners assigned in the first three rounds:
 | REQ-LIBRARY-089 | The artifact tag vocabulary and its normalisation |
 | REQ-GIT-137 | Where requirement-unit checkouts live, and that no configuration key names that location |
 | REQ-CONFIG-068, REQ-CONFIG-194 | The one key that names a session worktree's storage subpath, and the absence of any key for the requirement-unit one |
-| REQ-CONFIG-231 | The referential-validation rule for `models:` and the role fields — which messages are produced, the order they are produced in, and that a rejected tool name is reported with the accepted names sorted (cited by REQ-ORCH-016, REQ-ORCH-028, REQ-ORCH-153, REQ-CONFIG-465). It does not own the tool-name registry: it reads the accepted set from the tools-and-permissions domain and says so in its own text |
+| REQ-CONFIG-231 | The referential-validation rule for `models:` and the role fields — which messages are produced, the order they are produced in, and that a rejected tool name is reported with the accepted names sorted (cited by REQ-CONFIG-465; REQ-ORCH-016, REQ-ORCH-028 and REQ-ORCH-153 cited it until A4's round of 2026-09-13 re-pointed them at REQ-TOOLS-001 for the capability classification they had always been reading). It does not own the tool-name registry: it reads the accepted set from the tools-and-permissions domain and says so in its own text |
 
 The owners assigned in the fourth round:
 
@@ -291,7 +291,9 @@ now cites REQ-TOOLS-006 and REQ-TOOLS-001, REQ-CONFIG-105 cites REQ-TOOLS-007 an
 which leaves the recorded pairing naming nothing at all. Nothing was duplicated at any point, so no
 content was ever at risk; what was wrong was the record. The row now names the requirements that do
 carry the citation and do rely on the validation rule: REQ-ORCH-016, REQ-ORCH-028, REQ-ORCH-153 and
-REQ-CONFIG-465.
+REQ-CONFIG-465. **Three of those four left the row on 2026-09-13**, when A4's round re-pointed
+REQ-ORCH-016, REQ-ORCH-028 and REQ-ORCH-153 at REQ-TOOLS-001; the row is REQ-CONFIG-465's alone now,
+and the correction this paragraph records is finished rather than merely re-aimed.
 
 Every other pairing in the tables was found present in the follower's own text. What that check
 establishes is that the follower carries the owner's identifier. That the follower cites it *for the
@@ -330,6 +332,15 @@ now exists; the three followers point at the wrong requirement for it. This is t
 REQ-CONFIG-104 and REQ-CONFIG-105 mis-pairing the fifth round corrected, in the same place, and it is
 the reason that correction should have been read across the whole set of citers rather than the two
 that raised it.
+
+**Closed, 2026-09-13, in A4's amendment round.** All three now cite REQ-TOOLS-001 for the
+classification they read. The round that closed it was amending REQ-ORCH-153 for another reason
+entirely — the accepted review's item A4 — and took the re-point with it rather than leaving a
+second visit to the same sentence owed to a sweep. That is the shape the fifth round's lesson
+predicts: the mis-pairing is cheapest to correct in the round that is already reading the
+follower's text for something else. REQ-CONFIG-231 keeps the referential-validation rule it does
+own, and the run-orchestration resolution record carries the executed note beside the entry that
+recorded the debt.
 
 **Still open.** Two owners carry no sentence declaring them the single definition, so their ownership
 is recorded here and nowhere else: REQ-MONITOR-301, for the closed stop-reason set and its mapping

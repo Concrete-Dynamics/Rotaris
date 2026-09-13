@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
-import { isBusy, PERMISSION_PRESETS, resolveTheme, RUN_AGENT_ID, THEME_NAMES, type AgentRecord, type ControlOp, type ImageAttachment, type ImageAttachmentInput, type Notice, type PermissionPreset, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
+import { isBusy, PERMISSION_PRESETS, resolveTheme, RUN_AGENT_ID, THEME_NAMES, type AgentRecord, type ControlOp, type ImageAttachment, type ImageAttachmentInput, type Notice, type PermissionPreset, type PlanDecision, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
 import { err, ok } from '@rotaris/kernel';
 import {
   clampComposerHeight, composerChipReason, composerPlaceholderFor, COMPOSER_DEFAULT_HEIGHT, COMPOSER_MIN_HEIGHT, DEFAULT_REASONING,
@@ -27,6 +27,7 @@ import type { DisplayCaps } from './transcript/project.js';
 import type { TrailerRow } from './transcript/types.js';
 import { TodoPane, type TodoEdit } from './TodoPane.js';
 import { addImageBytes, composerTokenEstimate } from './attachments.js';
+import { PlanGate } from './PlanGate.js';
 import './attachments.css';
 import { Button as DesignButton, Input as DesignInput, Select as DesignSelect, TextArea as DesignTextArea } from './design-system/index.js';
 
@@ -67,6 +68,22 @@ export interface WorkspaceViewProps {
   /** REQ-MONITOR-123/125: pause the whole run; continue a paused session from the composer. */
   readonly onPause?: (() => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
   readonly onContinue?: (() => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
+  /**
+   * REQ-ORCH-153/154 (ADR-0062): the plan gate's two entries. `onPlanEdit` records the user's text and approves
+   * nothing; `onPlanDecision` carries one of exactly three answers with the changes `revise` hands to the next
+   * cycle. The gate draws only when both are given, so a surface with no route to the run host shows no answers it
+   * cannot deliver.
+   */
+  readonly onPlanEdit?: ((text: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
+  readonly onPlanDecision?: ((decision: PlanDecision, changes: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
+  /**
+   * REQ-ORCH-152: the run-start mode, offered "both where a run is started in the desktop interface and in the
+   * settings interface". This control and the start dialog's write the same key (`runtime.run_start_mode`,
+   * REQ-CONFIG-476) through the same scoped per-field path; neither holds a mode of its own, so the setting is
+   * persistent and one value governs whichever surface the user next starts from.
+   */
+  readonly runStartMode?: 'auto' | 'plan' | undefined;
+  readonly onSetRunStartMode?: ((mode: 'auto' | 'plan') => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
   /** REQ-MONITOR-133/137: steer one live agent (`run` for the entry role). */
   readonly onSteer?: ((agentId: string, text: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
   /** REQ-MONITOR-142/144: the run header's model and reasoning switch, next-iteration changes. */
@@ -520,7 +537,7 @@ function ModeSelector({ current, enabled, onSetMode }: { current: PermissionPres
   );
 }
 
-export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onSteer, onSetModel, onSetReasoning, models = [], imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight , onOpenTrailer, slash}: WorkspaceViewProps) {
+export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onPlanEdit, onPlanDecision, runStartMode = 'auto', onSetRunStartMode, onSteer, onSetModel, onSetReasoning, models = [], imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight , onOpenTrailer, slash}: WorkspaceViewProps) {
   const [text, setText] = useState(draft ?? '');
   // REQ-CHAT-069: the transcript's scope. "This task" needs a selected agent, so it falls back to "All activity".
   const [scope, setScope] = useState<'all' | 'task'>('all');
@@ -951,7 +968,13 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
       onCancel={inspectorCancel} onPopOut={(agent) => onOpenPersona?.(agent, false)} onSetModel={onSetModel} onSetReasoning={onSetReasoning}
       drawer={narrow} onCloseDrawer={narrow ? () => setDrawer(null) : undefined} />
   );
-  const paused = session !== null && (session.executionStatus === 'paused' || session.executionStatus === 'paused_message_limit');
+  /*
+   * REQ-ORCH-153 / REQ-NOTIFY-049: a session held at the plan gate presents as paused, so the paused read takes it
+   * in beside the two pause statuses. `planGate` itself is what says a DECISION is pending; it is read from the
+   * store, so it is there after a restart with no run behind it.
+   */
+  const planGate = session?.planGate ?? null;
+  const paused = session !== null && (session.executionStatus === 'paused' || session.executionStatus === 'paused_message_limit' || session.executionStatus === 'awaiting_plan_decision');
   const queued = session?.queuedPrompts ?? [];
   // REQ-CHAT-158: the step the run is inside now, from the newest row it produced (live one first). See `composer.ts`.
   const stepStartedAt = useMemo(() => modelCallStartedAt(rows), [rows]);
@@ -1002,7 +1025,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
     else if (e.key === 'End') { e.preventDefault(); commitHeight(COMPOSER_MIN_HEIGHT); }
   };
   return (
-    <div ref={shell} style={{ ['--rt-composer-height' as string]: `${height}px` }} className={`workspace workspace--with-sidebar${narrow ? ' workspace--narrow' : ''}`} data-drawer={drawer ?? ''}>
+    <div ref={shell} style={{ ['--rt-composer-height' as string]: `${height}px` }} className={`workspace workspace--with-sidebar${narrow ? ' workspace--narrow' : ''}`} data-drawer={drawer ?? ''} data-plan-gate={planGate ? '1' : ''}>
       {narrow && (
         <div className="workspace__drawer-bar" aria-label="Panels">
           {agents.length > 0 && <DesignButton type="button" className={`btn btn-ghost btn-compact${drawer === 'agents' ? ' is-active' : ''}`} aria-pressed={drawer === 'agents'} onClick={() => setDrawer(drawer === 'agents' ? null : 'agents')}>Agents</DesignButton>}
@@ -1032,6 +1055,17 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
         * controls and follow the OPPOSITE enablement rule to the composer's chips (REQ-CHAT-006's closing sentence).
         */}
       <RunHeader runState={runState} session={session} runActive={runActive} stepStartedAt={stepStartedAt} models={models} onSetModel={onSetModel} onSetReasoning={onSetReasoning} onError={setError} />
+      {/*
+        * REQ-SHELL-168: the plan gate is hosted inside THIS view and nowhere else — not a modal window, not the
+        * Overview, not a notice. It is its own row of the workspace grid, ABOVE the transcript rather than inside
+        * it: the transcript is a scrolling log that tail-follows, and a surface the user must answer cannot be
+        * something the next published row scrolls away. Its row is `auto`, so it costs no height when no gate holds.
+        */}
+      {planGate && onPlanEdit && onPlanDecision && (
+        <PlanGate key={planGate.cycle} gate={planGate}
+          onEdit={(t) => onPlanEdit(t)}
+          onDecide={(d, c) => onPlanDecision(d, c)} />
+      )}
       <div className="transcript" role="log" aria-label="Transcript" aria-live="polite">
         {/* REQ-LIBRARY-140 (Part X): the transcript toolbar and, so far, its one control — the stash opener with its live count. */}
         {(onOpenStash || agents.length > 0) && (
@@ -1172,6 +1206,14 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
                 </DesignSelect>
               </ChipShell>
             )}
+            {/* REQ-ORCH-152: the run-start mode. It obeys the same enablement rule as its three neighbours — it
+              * chooses what the NEXT run starts with, and a change made while a run is in flight takes effect only
+              * for the next run (REQ-ORCH-154). */}
+            {onSetRunStartMode && (
+              <SelectorChip id="chip-run-start-mode" testId="chip-run-start-mode" label={runStartMode === 'plan' ? 'plan first' : 'start at once'}
+                ariaLabel="Run-start mode for the next run" reason={chipReason} value={runStartMode} options={['auto', 'plan']}
+                onChoose={(v) => { void onSetRunStartMode(v as 'auto' | 'plan').then((r) => { if (!r.ok) setError(r.reason); }); }} />
+            )}
             {onSetNextReasoning && (
               <SelectorChip id="chip-reasoning" testId="chip-reasoning" label={reasoningChipLabel(entry?.reasoning ?? null)} ariaLabel="Reasoning effort for the next run"
                 reason={chipReason} value={(REASONING_LEVELS as readonly string[]).includes(entry?.reasoning ?? '') ? entry!.reasoning : DEFAULT_REASONING}
@@ -1189,6 +1231,16 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
               <DesignButton type="button" className="btn btn-danger" onClick={() => setConfirming('stop')} aria-describedby="stop-hint">{stopLabel(stopPending)}</DesignButton>
               <DesignButton type="submit" className="btn btn-primary" disabled={busy}>Queue</DesignButton>
             </>
+          ) : planGate ? (
+            /*
+              * A DECISION TAKEN, recorded in ADR-0062 rather than read off the page. REQ-ORCH-153 says the answers
+              * offered MUST be exactly three and forbids proceeding "on any default"; an open composer is a fourth
+              * exit, because a typed prompt starts a new run and silently discards the pending plan. So the
+              * composer's submit is locked while the gate holds and the hint names the gate as the reason and
+              * points at it. The tension is with REQ-NOTIFY-050, under which `awaiting_plan_decision` presents as
+              * paused and is therefore not busy: this lock is the gate's, not the status mapping's.
+              */
+            <DesignButton type="submit" className="btn btn-primary" disabled aria-describedby="plan-gate-hint">Answer the plan first</DesignButton>
           ) : paused && onContinue ? (
             <>
               <DesignButton type="button" className="btn btn-primary" onClick={() => { void continueRun(); }}>Continue run</DesignButton>
@@ -1198,7 +1250,8 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
             <DesignButton type="submit" className="btn btn-primary" disabled={busy}>{composerAction(session, runActive)}</DesignButton>
           )}
           {runActive && <span id="stop-hint" className="composer__hint">{stopPending ? 'The stop is pending; the next activation forces it.' : 'Stops gracefully; a second activation forces.'}</span>}
-          {paused && <span className="composer__hint">Paused. Run controls need the run continued before they can be used.</span>}
+          {planGate && <span id="plan-gate-hint" className="composer__hint">A plan is waiting for your decision above. Approve, revise, or cancel the run to continue.</span>}
+          {paused && !planGate && <span className="composer__hint">Paused. Run controls need the run continued before they can be used.</span>}
         </div>
       </form>
       {confirming === 'stop' && (

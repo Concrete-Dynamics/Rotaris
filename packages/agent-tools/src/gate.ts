@@ -5,6 +5,7 @@ import { APPROVAL_RESOLUTION_SOURCES, denialText, type ApprovalPayload, type Hea
 import type { ApprovalOutcome, PendingApprovals, PresenterPort } from './approvals.js';
 import { argumentSummary, permissionRequest, requestSummary, type DecisionRecord, type PermissionRequest, type PolicyContext } from './policy.js';
 import { META_TOOL_NAMES } from './registry.js';
+import { planGateRefusal, withheldUnderPlanGate } from './planning-grants.js';
 import type { Observation, ToolExecutor } from './tools/types.js';
 
 /**
@@ -106,6 +107,12 @@ export interface GateDeps {
   readonly newRequestId?: () => string;
   /** ADR-0015: absent or null means no hook exists for the session (REQ-HOOKS-069/070). */
   readonly hooks?: ToolHooks | null | undefined;
+  /**
+   * REQ-ORCH-153 (ADR-0062): whether the run this gate serves is held at the plan gate, read LIVE at each
+   * dispatch. Absent means no gate can hold it. A function rather than a flag because the hold is a property of
+   * the RUN, and a port built while it held must stop refusing the moment the run's own state says so.
+   */
+  readonly planGateHeld?: (() => boolean) | undefined;
 }
 
 /** REQ-TOOLS-032's first repair: close the strings, objects and arrays still open at the cut. */
@@ -185,6 +192,25 @@ export class Gate {
       if (ordinal !== null) deps.sink.toolSettle(ordinal, open, { status: r.status, elapsed_ms: durationMs, is_error: r.isError, result: r.text, ...extra });
       return { ...r, callId: call.callId, name: call.name, durationMs, args: argsForGate, label };
     };
+
+    /*
+     * REQ-ORCH-153 (ADR-0062): the plan gate's authoritative enforcement point. It sits HERE — ahead of the
+     * executor lookup, the schema parse and the permission resolution — for three reasons the requirement states
+     * or implies:
+     *  - "by whatever route the tool reached that role": a name the port's narrowing never saw (an MCP tool
+     *    registered late, a plugin, a name the model invented) is refused with the gate's reason rather than
+     *    reported unknown, and the fail-closed predicate withholds exactly those;
+     *  - "MUST NOT run a hook command": REQ-HOOKS-004's order puts `pre_tool` hooks after the permission
+     *    resolution, so refusing before it means a withheld call's tool hooks never fire at all — the hooks
+     *    amendment (REQ-HOOKS-126) then reaches only the lifecycle points, which is the whole of what it must;
+     *  - "no refusal under this requirement is a refusal to record": the evidence record is already open above,
+     *    and `finish` settles it as `blocked` exactly as a permission denial does.
+     * Meta tools are never gated (REQ-TOOLS-014, ADR-0016 c.4) and are checked first; they touch no workspace.
+     */
+    if (!isMeta && deps.planGateHeld?.() === true && withheldUnderPlanGate(call.name)) {
+      const reason = planGateRefusal(call.name);
+      return finish({ text: reason, isError: true, status: 'blocked', decision: null, observation: null, blockedReason: reason }, { failure_kind: 'plan_gate_withheld', error: 'withheld while the run is held at the plan gate' });
+    }
 
     // REQ-TOOLS-032: a payload still unreadable or schema-invalid after repair is a recoverable error, not executed.
     if (!executor) {

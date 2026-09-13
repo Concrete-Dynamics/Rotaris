@@ -77,6 +77,12 @@ to carry the Settings surface's live values.
 `session.start/newId/list/resume/prompt/continue/subscribe/unsubscribe/reconcile/pageOlder/control` (`pageOlder`
 is wired end to end and, from Part Z, is CALLED: the transcript asks for the next older span when the reader scrolls
 toward the top, and the replica's `prependOlder` places it above — REQ-CHAT-165, REQ-SESSION-192),
+**`session.planEdit {text}` / `session.planDecision {decision, changes?}`** (ADR-0062, REQ-ORCH-153/154: the plan
+gate's two entries, relayed to the run host that owns the session and answered `ack` / `{cycle, relaunched}`. They
+are session commands and **not** control operations, because `CONTROL_OPS` is REQ-MONITOR-004's closed enumeration
+over a LIVE run and a run held at the gate is parked — the answer must reach a session whose hosting process may
+have exited since the gate opened. `planEdit` records the user's text and approves nothing; `planDecision` carries
+one of exactly three answers),
 `git.read`, `worktree.create/remove/chooseAttach/probePath` (Part O — see the Git paragraph below),
 `pause.present/payload`, `approval.payload`, `approval.raise {requestId}` (Part AC, REQ-CHAT-098/103: the approval
 trailer row shares the question trailer's one click handler, and an approval's modal is a separate window, so

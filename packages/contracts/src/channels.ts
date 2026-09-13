@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { IntentStatusSchema } from './intent.js';
+import { PlanGateSchema } from './control.js';
 import { ApprovalPayloadSchema, QuestionPromptSchema } from './tools.js';
 import { AgentRecordSchema } from './children.js';
 import { CONTRACT_SCHEMA_VERSION } from './version.js';
@@ -226,6 +227,12 @@ export const SessionRecordSchema = z.object({
   /** REQ-ORCH-084/087: the message limit in force (null = disabled) and, while paused at it, the count reached. */
   messageLimit: z.number().int().nullable(),
   pausedAtCount: z.number().int().nullable(),
+  /**
+   * REQ-ORCH-153/154: the plan cycle awaiting an answer; null when none is. Read from the STORE and not from a
+   * live run — the gate is a park, so the deciding surface must find it after a restart with no process behind it
+   * (REQ-ORCH-153's restart clause, on the same terms as `pausedAtCount`).
+   */
+  planGate: PlanGateSchema.nullable(),
   /** REQ-MONITOR-166: the token history the run sampled — [at, cumulative total], oldest first, at most 120 (named without the word the secret test forbids). */
   usageHistory: z.array(z.tuple([z.string(), z.number().int().nonnegative()])),
   /** REQ-MONITOR-166: the pre-rendered cost label with its qualifier, so no view invents one. */

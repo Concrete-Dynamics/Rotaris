@@ -70,6 +70,11 @@ export interface HookPortContext {
   readonly warn: (message: string) => void;
   /** The application log only. */
   readonly log: (message: string) => void;
+  /**
+   * REQ-ORCH-153 / REQ-HOOKS-126: whether the run is held at the plan gate, read live at each invocation. While
+   * held no hook command runs and each withheld invocation announces itself on the stream. Absent means no gate.
+   */
+  readonly planGateHeld?: (() => boolean) | undefined;
 }
 
 /** REQ-HOOKS-054/086/087, REQ-NOTIFY-223/224: what the run hands the host's notice channel. */

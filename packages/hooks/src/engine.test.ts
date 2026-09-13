@@ -7,7 +7,7 @@ import type { Outcome } from './verdict.js';
 import { hook } from './hooks.test.js';
 
 /** A fake runner: the command names the outcome; `wait:<ms>` holds the fake clock's timer. */
-function harness(hooks: HookEntry[], withheld: HookEntry[] = []) {
+function harness(hooks: HookEntry[], withheld: HookEntry[] = [], planGateHeld?: () => boolean) {
   const clock = new FakeClock();
   const events: { kind: string; payload: HookStartPayload | HookFinishPayload }[] = [];
   const timeline: { name: string; actor: string; message: string; metadata: Record<string, unknown>; severity: string }[] = [];
@@ -34,7 +34,7 @@ function harness(hooks: HookEntry[], withheld: HookEntry[] = []) {
     if (h.command.includes('throw')) throw new Error('runner exploded');
     return base;
   };
-  const engine = new HookEngine(hooks, withheld, { sessionId: 'sid', workspace: 'W', cwd: 'W', env: {}, timers: clock.timers, monotonic: clock.monotonic, sinks, invoke });
+  const engine = new HookEngine(hooks, withheld, { sessionId: 'sid', workspace: 'W', cwd: 'W', env: {}, timers: clock.timers, monotonic: clock.monotonic, sinks, invoke, ...(planGateHeld ? { planGateHeld } : {}) });
   return { engine, clock, events, timeline, issues, warnings, logs, invoked };
 }
 const call = { toolName: 'terminal', facetText: 'git push --force', arguments: { command: 'git push --force' }, command: 'git push --force' };
@@ -144,5 +144,42 @@ describe('the HookEngine', () => {
     serializePayload(buildToolPayload({ event: 'pre_tool', toolName: 'terminal', arguments: big, sessionId: 's', workspace: 'w', command: big.command }));
     expect(Number(process.hrtime.bigint() - s2) / 1e6).toBeLessThan(10);
     expect(t.engine.hasHooksFor('pre_tool')).toBe(true);
+  });
+});
+
+/**
+ * REQ-ORCH-153 / REQ-HOOKS-126 (ADR-0062): "While the gate is held the run … MUST NOT run a hook command", and the
+ * withholding is announced per INVOCATION rather than per session, because the hold ends when the user answers.
+ */
+describe('the plan gate over hooks (REQ-HOOKS-126, REQ-ORCH-153)', () => {
+  it('starts no process and emits one `hook.finish` per withheld invocation, with no `hook.start` and no timeline entry', async () => {
+    let held = true;
+    const t = harness([hook({ event: 'session_start', command: 'ok', name: 'A' })], [], () => held);
+    expect(await t.engine.fireLifecycle('session_start', { task: 't' })).toEqual([]);
+    expect(await t.engine.fireLifecycle('session_start', { task: 't' })).toEqual([]);
+    expect(t.invoked).toEqual([]);
+    expect(t.timeline).toEqual([]);
+    expect(t.events.map((e) => e.kind)).toEqual(['hook.finish', 'hook.finish']);
+    // REQ-HOOKS-126's exact shape: the stable id in `hook_name`, null exit code and duration, the second reason.
+    expect(t.events[0]!.payload).toMatchObject({
+      hook_id: 'global:0:session_start', hook_name: 'global:0:session_start', lifecycle_point: 'session_start',
+      skipped: true, skip_reason: 'plan_gate', exit_code: null, duration_ms: null, blocked: false, timed_out: false, output: '',
+    });
+    // Once the user answers, the same hook runs normally — and is not run late for the moment that passed.
+    held = false;
+    const after = await t.engine.fireLifecycle('session_start', { task: 't' });
+    expect(after).toHaveLength(1);
+    expect(t.invoked).toEqual(['global:0:session_start']);
+    expect(t.events.map((e) => e.kind)).toEqual(['hook.finish', 'hook.finish', 'hook.start', 'hook.finish']);
+  });
+
+  it('withholds a tool hook the same way, and stops nothing by doing so', async () => {
+    const t = harness([hook({ event: 'pre_tool', command: 'exit2', name: 'A' })], [], () => true);
+    const r = await t.engine.fireTool('pre_tool', call);
+    // A withheld invocation produces no outcome and therefore no verdict: a blocking hook that never ran blocks nothing.
+    expect(r).toEqual({ blocked: false, refusal: '', feedback: '', outcomes: [] });
+    expect(t.invoked).toEqual([]);
+    expect(t.events.map((e) => e.kind)).toEqual(['hook.finish']);
+    expect(t.events[0]!.payload).toMatchObject({ skip_reason: 'plan_gate', tool_name: 'terminal' });
   });
 });

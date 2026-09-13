@@ -193,9 +193,12 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
   // ---- REQ-CHAT-058: heights, measured rather than assumed -------------------------------------------------
   // `measuredVersion` is read so the table is rebuilt once the observer has recorded a real height; a `peek` is a
   // pure read that moves no recency and counts no hit, which is what makes it safe to do while laying out.
+  // The expansion state rides to `estimateHeight` because a collapsed thinking row draws only its one-line
+  // summary (REQ-CHAT-167 / REQ-CHAT-062) and is never measured while live — the estimate is all it has.
   const heights = display.map((d) => {
-    const key = reuseKey(d, viewport.width, expanded.has(d.key), null);
-    return (key === null ? undefined : measurements.peek(key)) ?? estimateHeight(d);
+    const open = expanded.has(d.key);
+    const key = reuseKey(d, viewport.width, open, null);
+    return (key === null ? undefined : measurements.peek(key)) ?? estimateHeight(d, open);
   });
   const table = buildOffsets(heights);
 

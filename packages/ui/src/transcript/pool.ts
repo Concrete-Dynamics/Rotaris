@@ -1,4 +1,5 @@
 import { OVERSCAN, ROW_MIN_HEIGHT } from './constants.js';
+import { isReasoningRow } from './Row.js';
 import type { DisplayRow } from './types.js';
 
 /**
@@ -12,11 +13,21 @@ import type { DisplayRow } from './types.js';
  * Until a row has genuinely completed layout, its height is an ESTIMATE. The estimate is deliberately coarse and
  * deliberately per-shape: a wrong estimate above the viewport is corrected by the anchor rule of REQ-CHAT-071 on
  * the next settle, and a wrong estimate below it is never seen.
+ *
+ * **The estimate must estimate what the row DRAWS.** A thinking row's body is the whole streamed reasoning
+ * text, but under REQ-CHAT-167 (show-reasoning default OFF) a collapsed one draws only its one-line summary —
+ * and a LIVE row is never measured (`reuseKey` returns null for it), so a body-based estimate for one survives
+ * uncorrected for the whole streaming period, pushing every row below off-screen and reading as blank space
+ * (docs/defects/estimate-counts-collapsed-thinking-body.md). The caller therefore passes the expansion state it
+ * already holds, and a collapsed reasoning row estimates its header. Expanded reasoning rows keep the body-based
+ * estimate; live tool rows draw their one-line preview, which the per-line term already covers.
  */
-export function estimateHeight(d: DisplayRow): number {
+export function estimateHeight(d: DisplayRow, expanded = false): number {
   if (d.shape === 'trailer') return 44;
   if (d.shape === 'group') return 44;
   const row = d.row;
+  // REQ-CHAT-062: a collapsed reasoning row draws exactly one summary line, whatever the hidden body holds.
+  if (isReasoningRow(row) && !expanded) return Math.max(ROW_MIN_HEIGHT, 34);
   const lines = row.body === '' ? 1 : row.body.split('\n').length;
   const extra = (row.input !== undefined && row.input !== '' ? 1 : 0) + (row.output !== undefined && row.output !== '' ? 1 : 0);
   return Math.max(ROW_MIN_HEIGHT, 34 + (lines - 1) * 18 + extra * 20);

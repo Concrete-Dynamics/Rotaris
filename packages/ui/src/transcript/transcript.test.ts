@@ -131,6 +131,20 @@ describe('ADR-0045 — the pool, its capacity and its geometry', () => {
   it('a height estimate never falls below REQ-CHAT-057\'s 30 px minimum', () => {
     expect(estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: '' }) })).toBeGreaterThanOrEqual(ROW_MIN_HEIGHT);
   });
+
+  it('a collapsed thinking row estimates its one-line summary, never its hidden body (REQ-CHAT-062/167)', () => {
+    // Three hundred streamed reasoning lines are hidden while collapsed; the estimate must not count them.
+    const body = Array.from({ length: 300 }, (_, i) => `line ${i}`).join('\n');
+    const collapsed = estimateHeight({ shape: 'row', key: 'k', row: row(0, { kind: 'thinking', body }) }, false);
+    expect(collapsed).toBeLessThan(60);
+    expect(collapsed).toBeGreaterThanOrEqual(ROW_MIN_HEIGHT);
+    // Expanded, the body is drawn, so the body-based estimate returns.
+    expect(estimateHeight({ shape: 'row', key: 'k', row: row(0, { kind: 'thinking', body }) }, true))
+      .toBeGreaterThan(collapsed);
+    // Other shapes are unaffected by the flag.
+    expect(estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: 'a\nb\nc' }) }, false))
+      .toBe(estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: 'a\nb\nc' }) }, true));
+  });
 });
 
 describe('ADR-0046 step 3 — the row-level classification', () => {

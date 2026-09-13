@@ -174,6 +174,17 @@ describe('engine — the session writer feeds the projection owner (ADR-0008, AD
     expect(dal.residentRows(sessionId)[0]).toMatchObject({ tool_status: 'blocked', duration_ms: 0.5, blocked_reason: 'denied' });
   });
 
+  it('a thinking row stamped with startedAt settles with the durationMs REQ-CHAT-062\'s final figures close on', () => {
+    const pub = recorder();
+    const { writer, sessionId } = open('s1', pub);
+    writer.appendRow('thinking', 'partial reasoning', false, { name: 'orchestrator', startedAt: '2026-09-07T09:00:00.000Z' });
+    // The wall clock is the test's fixed fake clock; the stamp is whatever the settle reads at that instant.
+    const r = writer.settleRow(0, 'partial reasoning, done', { durationMs: 7_500 });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value.durationMs).toBe(7_500);
+    expect(dal.residentRows(sessionId)[0]).toMatchObject({ kind: 'thinking', settled: 1, duration_ms: 7_500 });
+  });
+
   it('a second claim of the same session is refused as lock-held and steals nothing (REQ-SESSION-047)', () => {
     open('s1', recorder());
     const again = SessionWriter.create(

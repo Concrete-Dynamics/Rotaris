@@ -304,6 +304,8 @@ async function step(deps: TurnDeps, choice: ModelChoice, messages: readonly Chat
   /** REQ-CHAT-163 / REQ-CHAT-062: the streamed-reasoning row of this step, and the text it has been given. */
   let reasoningIndex: number | null = null;
   let reasoning = '';
+  /** The `startedAt` stamped on the reasoning row's append; the span REQ-CHAT-062's settled figure closes. */
+  let reasoningStartedAt: string | null = null;
   const controller = new AbortController();
   const onAbort = () => controller.abort();
   if (signal.aborted) controller.abort(); else signal.addEventListener('abort', onAbort, { once: true });
@@ -337,6 +339,19 @@ async function step(deps: TurnDeps, choice: ModelChoice, messages: readonly Chat
     armStall();
   };
 
+  /**
+   * REQ-CHAT-062's settled form carries FINAL figures, so the settle stamps `durationMs` — the wall span from the
+   * row's `startedAt` to this settle, on the clock port. Without the stamp the renderer's settled branch falls
+   * through to `nowMs - startedAt` against its once-a-second tick and the seconds keep rising after the row is
+   * finished (docs/defects/settled-reasoning-row-counts-forever.md).
+   */
+  const settleReasoning = (): void => {
+    if (reasoningIndex === null) return;
+    const started = reasoningStartedAt === null ? Number.NaN : Date.parse(reasoningStartedAt);
+    const durationMs = Number.isFinite(started) ? Math.max(0, Date.parse(toIsoUtc(clocks.wall.instant())) - started) : undefined;
+    writer.settleRow(reasoningIndex, reasoning, durationMs === undefined ? {} : { durationMs });
+    reasoningIndex = null;
+  };
   const sink = {
     started: () => { seen = true; timer?.cancel(); armStall(); },
     delta: (d: string) => {
@@ -344,7 +359,7 @@ async function step(deps: TurnDeps, choice: ModelChoice, messages: readonly Chat
       // REQ-CHAT-163: a reasoning burst is finished the moment the answer body starts, so its row settles here
       // rather than at the end of the call - a thinking row that stayed live past its own content would keep
       // counting upward against REQ-CHAT-062 while nothing was arriving for it.
-      if (reasoningIndex !== null) { writer.settleRow(reasoningIndex, reasoning); reasoningIndex = null; }
+      settleReasoning();
       text += d;
       if (index === null) {
         const r = writer.upsertMessageRow(segment, 'agent', text, false, { persona: deps.persona, name: deps.agentName });
@@ -363,7 +378,8 @@ async function step(deps: TurnDeps, choice: ModelChoice, messages: readonly Chat
       outputArrived();
       reasoning += d;
       if (reasoningIndex === null) {
-        const r = writer.upsertMessageRow(`${segment}:reasoning`, 'thinking', reasoning, false, { persona: deps.persona, name: deps.agentName, startedAt: toIsoUtc(clocks.wall.instant()) });
+        reasoningStartedAt = toIsoUtc(clocks.wall.instant());
+        const r = writer.upsertMessageRow(`${segment}:reasoning`, 'thinking', reasoning, false, { persona: deps.persona, name: deps.agentName, startedAt: reasoningStartedAt });
         if (r.ok) reasoningIndex = r.value.index;
       } else {
         owner.grow(reasoningIndex, reasoning);
@@ -384,7 +400,7 @@ async function step(deps: TurnDeps, choice: ModelChoice, messages: readonly Chat
   }
   // REQ-CHAT-164: "when a streamed phase completes, its animation MUST stop where it stands" - settling does that,
   // and no completion row is appended for either phase.
-  if (reasoningIndex !== null) writer.settleRow(reasoningIndex, reasoning);
+  settleReasoning();
   if (index !== null) writer.upsertMessageRow(segment, 'agent', report.text || text, true, {});
   return { report, unresponsive: unresponsive && !signal.aborted };
 }

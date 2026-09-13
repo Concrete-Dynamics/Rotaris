@@ -103,6 +103,20 @@ describe('rows — REQ-CHAT-062/164/065, the sentences that carry counts (REQ-CH
     expect(reasoningSummary(streaming, at2 + 5_000, false).live).toBe(false);
   });
 
+  it('a settled reasoning row never reads the tick, stamped or not (REQ-CHAT-062 final figures)', () => {
+    const at2 = Date.parse(AT);
+    // Stamped: the engine's durationMs stands whatever the tick says.
+    const stamped = row({ kind: 'thinking', settled: true, startedAt: AT, durationMs: 12_000, body: 'x' });
+    expect(reasoningSummary(stamped, at2 + 600_000).seconds).toBe(12);
+    // Unstamped (older records): frozen at the span the row's own record closes, at − startedAt.
+    const unstamped = row({ kind: 'thinking', settled: true, startedAt: AT, at: '2026-09-07T09:00:07.000Z', body: 'x' });
+    expect(reasoningSummary(unstamped, at2 + 600_000).seconds).toBe(7);
+    expect(reasoningSummary(unstamped, at2 + 600_000).text).toBe('▸ reasoning · 7s · ~0 tok');
+    // Unstamped with no readable startedAt: zero rather than a rising figure.
+    const bare = row({ kind: 'thinking', settled: true, body: 'x' });
+    expect(reasoningSummary(bare, at2 + 600_000).seconds).toBe(0);
+  });
+
   it('REQ-CHAT-164: the stalled indicator is grammatical at zero, one and many seconds', () => {
     expect(stalledLabel(0)).toBe('⏱ no output for 0 seconds');
     expect(stalledLabel(1)).toBe('⏱ no output for 1 second');

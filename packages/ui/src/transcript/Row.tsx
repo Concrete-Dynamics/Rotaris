@@ -228,8 +228,15 @@ export function reasoningChars(row: TranscriptRow): number {
 }
 export function reasoningSummary(row: TranscriptRow, nowMs: number, runActive = true): { text: string; marker: string; label: string; live: boolean; seconds: number; tokens: number } {
   const started = row.startedAt === undefined ? Number.NaN : Date.parse(row.startedAt);
-  const elapsedMs = row.durationMs !== undefined && row.settled
-    ? row.durationMs
+  /**
+   * REQ-CHAT-062's settled form is FINAL figures, so a settled row never reads the tick: a stamp settles it,
+   * and a row the engine settled without one (older records; docs/defects/settled-reasoning-row-counts-forever.md)
+   * freezes at the span its own record closes — `at` minus `startedAt` — rather than counting against `nowMs`
+   * for the rest of the session.
+   */
+  const settledMs = row.durationMs ?? (Number.isNaN(started) || row.at === undefined ? undefined : Math.max(0, Date.parse(row.at) - started));
+  const elapsedMs = row.settled
+    ? settledMs ?? 0
     : Number.isNaN(started) ? (row.durationMs ?? 0) : Math.max(0, nowMs - started);
   // REQ-CHAT-049 and REQ-CHAT-062's cutoff: an unstamped row in a dead session, or one live past an hour, is not live.
   const live = !row.settled && runActive && elapsedMs < THINKING_LIVE_CUTOFF_MS;

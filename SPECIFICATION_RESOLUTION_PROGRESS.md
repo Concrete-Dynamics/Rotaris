@@ -41,7 +41,7 @@ Each item requires current evidence for its operative specification, dependent c
 | Package | Accepted items | State |
 |---|---|---|
 | Session lifecycle, durability and exports | A3, A6, A9, OQ-8, OQ-12, OQ-41, OQ-42, OQ-46 | **Delivered 2026-09-13**, with one explicitly recorded evidence debt (OQ-12's power-loss measurement) |
-| Permissions, orchestration and terminal | A2, A4, OQ-4, OQ-5, OQ-7, OQ-9, OQ-10, OQ-13, OQ-15, OQ-16, OQ-17, OQ-35, OQ-36, OQ-37, OQ-38, OQ-39 | Pending |
+| Permissions, orchestration and terminal | A2, A4, OQ-4, OQ-5, OQ-7, OQ-9, OQ-10, OQ-13, OQ-15, OQ-16, OQ-17, OQ-35, OQ-36, OQ-37, OQ-38, OQ-39 | Pending — **A2 delivered 2026-09-13**, audited against the requirement text and the code |
 | Providers and MCP | A5, A7, A8, OQ-6, OQ-18, OQ-19, OQ-20, OQ-21, OQ-22, OQ-50 | Pending |
 | Services, stores and recovery | OQ-1, OQ-2, OQ-43, OQ-45, OQ-47, OQ-48 | Pending |
 | Traceability, presentation and benchmarks | OQ-24, OQ-25, OQ-29, OQ-32, OQ-33, OQ-34, OQ-40 | Pending |
@@ -178,3 +178,36 @@ carrying an action identifier, mapped in main to a member of the closed vocabula
 rendered with its label and dispatched by the renderer — **is** exercised end to end
 in the built app by the OQ-46 drive above; what is unexercised is the trigger for
 this one identifier.
+
+### 2026-09-13 — A2 audited and delivered
+
+The first item of the permissions/orchestration/terminal package, checked the way
+package 1 taught: against the requirement text and the code, not against the
+2026-09-07 note above.
+
+**The specification carries it.** `REQ-ORCH-008` states the accepted boundary in its
+own sentence — the raw prompt truncated to 4,000 characters, a small metadata mapping,
+and the optional prior-response field owned by `REQ-ORCH-012` with its own independent
+4,000-character cap; additional repository retrieval excluded; prompt text and
+historical response text may each contain code and each stays confined to its named
+field; the field untrusted. `REQ-ORCH-012` keeps its text and its cap, and the
+cross-domain record reads the same. No requirement was found stating a competing input
+boundary.
+
+**The code matches it.** `classificationUserText` cuts each field at `PROMPT_CAP`
+separately and delimits both as quotations, the metadata mapping carries run context
+only, the classification turn is dispatched with an empty tool list, and the system
+prompt states that a prior response is untrusted context whose embedded instructions are
+never followed. The A2 regression asserts all four boundaries at once, including
+historical code surviving inside the truncated field.
+`pnpm exec vitest run packages/engine/src/intent/intent.test.ts` passed on merged
+`main`: 1 file / 13 tests.
+
+**What the audit adds.** The bounded field has **no production producer**. The run
+host's pre-flight supplies the prompt and the metadata only, so `priorResponse` is
+exercised by the regression and never in the built product. That is `REQ-ORCH-012`'s own
+delivery — the prior-response route, still listed as outstanding in
+`docs/architecture/codebase.md` — and not a defect in the boundary A2 decides: a
+contradiction over what the classifier input may contain is settled whether or not the
+field is populated yet. **A2 is delivered; the route it bounds remains owed**, and it is
+the natural first act of whoever builds `REQ-ORCH-012`.

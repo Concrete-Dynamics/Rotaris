@@ -77,6 +77,16 @@
   width: max-content;
   min-width: var(--rt-rail-width);
 }
+/* UIR-023 was attempted, measured, and NOT kept — the finding is fair and the obvious repair is worse.
+   Each item is sized to its own text, so the selection tint changes shape as the user moves between
+   views: the seven measure 54, 58.73, 54, 70.98, 54, 54 and 54 and, being centred, Requirements draws a
+   box 16.98px wider than Overview's starting 8.48px further left. `align-self: stretch` does give all
+   seven one width and one x — measured at 54 and 6 across every view — but the rail then resolves to
+   its `min-width` instead of to its longest label, and the `SHRUNK` sweep reported every item in the
+   pack holding 57px of content in 54px of box: "Requirements" clipped, which is the one thing
+   REQ-SHELL-029 names this rail's width for. A constant tint box is craft; an ellipsis in the primary
+   navigation is a requirement. Whatever fixes this has to widen the rail and equalise the items in the
+   same move, and that is the rail's declared width to change, not a side effect to take. */
 .nav-item {
   display: flex; flex-direction: column; align-items: center; gap: 3px;
   width: max-content; min-width: var(--rt-nav-item-width);
@@ -978,7 +988,11 @@
 .mission__setting { display: grid; grid-template-columns: var(--rt-label-column) minmax(0, max-content); align-items: center; gap: var(--rt-space-2, 8px); }
 .mission__setting > label { min-width: 0; }
 .mission__setting .select, .mission__setting .input { width: max-content; max-width: 100%; min-width: var(--rt-field-min); }
-.mission__setting .settings__hint { grid-column: 1 / -1; font-size: var(--rt-text-2xs, 10px); }
+/* UIR-024 — the caption hangs under the control it describes, not under the label of it.
+   Spanning both columns gave the form THREE left edges where the label column was introduced to give
+   it two: label ink at x 145, field at x 272.98, and a caption starting at 145 that belongs to the
+   field — so "Stored as rotaris.delegation_strategy." read as a property of the label above it. */
+.mission__setting .settings__hint { grid-column: 2; font-size: var(--rt-text-2xs, 10px); }
 .agent-table { font-size: var(--rt-text-xs, 12px); }
 .agent-table__row { cursor: pointer; }
 .agent-table__row:hover { background: var(--rt-hover); }

@@ -1615,6 +1615,48 @@ Neither was kept. What the numbers say is that `.git__body` hands the checkpoint
 seven-column table the remainder, and choosing between a narrower checkpoint column, a stacked layout and fewer
 columns at the minimum size is the design material's call — not a CSS nudge at the end of a repair round.
 
+### The third cycle's critique, recovered from the reader rather than from the disk
+
+The file was gone; the reading was not. The critic still held its own transcript, so the twenty-four entries came
+back verbatim in three messages and were written to the path the tool now protects — twelve verification entries
+and twelve findings, **valid against the schema on the first parse**. Its evidence arrays name files that no
+longer exist, which is the true cost of defect 99: the observations' numbers are the only remaining check on them,
+and a fourth reader could not re-measure a single one. **Ask a critic for its findings in the message, not for a
+path to them.**
+
+**Two of the twelve are misreadings, and both were settled from the source rather than argued.** UIR-018 reports
+`.seg-opt.is-active` painting an alpha of 0.18 where the language declares three tints — but the theme data
+defines `--rt-accent-tint-14` as `oklch(59% 0.160 292 / 0.18)`, and the rule cites the token, not a number: the
+name is the tint's nominal strength, not its alpha, and the three declared tints are 0.09, 0.13 and 0.18. There is
+no literal to lint. UIR-022 reports the Library's violet kicker as an outlier against eight grey ones — but
+`.card-accented .card-kicker { color: var(--rt-accent-300) }` is declared in the **adopted**
+`docs/design/system/components.css`, and the stash card takes `card-accented` deliberately. What is fair in it is
+the question of whether that card should be the accented one, which is an information-architecture choice and not
+a defect. Both readings were reasonable from a screenshot; neither survives the source.
+
+**UIR-024 repaired and measured**: the Mission captions spanned both columns, so the form had three left edges
+where the label column was introduced to give it two — label ink at 145, field at 272.98, and a caption starting
+at 145 that belonged to the field. `grid-column: 2` puts each caption under the control it describes, measured at
+**272.98 at both window sizes**.
+
+**UIR-023 attempted, measured, and reverted — the finding is fair and the obvious repair is worse.** The rail's
+seven items are sized to their own labels (54, 58.73, 54, 70.98, 54, 54, 54), so the selection tint changes shape
+as the user moves. `align-self: stretch` does equalise them — measured at one width and one x across every view —
+and then the rail resolves to its `min-width` rather than to its longest label, and the new sweep immediately
+reported **every item in the pack holding 57 px of content in a 54 px box**: "Requirements" clipped, which is the
+one thing REQ-SHELL-029 names this rail's width for. A constant tint box is craft; an ellipsis in the primary
+navigation is a requirement. **The guard caught the repair within minutes of being merged, which is what it is
+for.** Whatever answers this has to widen the rail and equalise the items in one move, and the rail's declared
+width is the design material's to change.
+
+**Seven remain open with written reasons**: UIR-013 (the strip elides all twelve items rather than dropping the
+lowest-priority ones and middle-eliding the path), UIR-015 and the seven-column table above, UIR-016 (the Library
+card did not shrink with its panel), UIR-017 (the dot motif paints under the copy — the motif is the material's
+own), UIR-019 (the session browser's empty message inherits a column's alignment), UIR-020 (the slash catalogue's
+kind tag is not a column) and UIR-021 (the composer's kickers carry values the controls already state). Four want
+a decision from the design material; three are drawable but touch spec-owned surfaces, and none should be guessed
+at from a pack that no longer exists.
+
 ## Verifying a part runs the WHOLE proof suite, not its neighbours
 
 Every part until now named a handful of proofs to keep green — its own, and the two or three whose surfaces it

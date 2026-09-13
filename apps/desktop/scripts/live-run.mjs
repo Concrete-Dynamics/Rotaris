@@ -246,7 +246,8 @@ const USAGE = `pnpm live-run — the application against a real model endpoint, 
   pnpm live-run --remove-endpoint=<n>
 
   --endpoint=<name>    the endpoint to run against (default: the registry's default)
-  --model=<id>         override the endpoint's model for this run
+  --model=<id>         override the endpoint's model for this run (and skip discovery)
+  --no-discover-model  keep the registered model instead of reading the endpoint's /models listing
   --base-url=<url>     override the endpoint's base URL for this run
   --budget=<usd>       stop when the spend crosses this (default 1.00); needs a provider figure or prices
   --max-tokens=<n>     the ceiling when no money figure exists (default 500000)
@@ -306,10 +307,57 @@ if (endpoint === null) {
   console.error('No endpoint is registered. Run `pnpm live-run --add-endpoint` first.');
   process.exit(1);
 }
-const PROVIDER_ID = instanceIdFor(endpoint.label);
-const QUALIFIED = `${PROVIDER_ID}/${endpoint.model}`;
 const envKey = (process.env[KEY_ENV] ?? '').trim();
 const keySource = envKey !== '' ? `the environment (${KEY_ENV})` : hasKey(endpoint.name) ? keyFileFor(endpoint.name) : null;
+const key = envKey !== '' ? envKey : hasKey(endpoint.name) ? storedKey(endpoint.name) : null;
+
+/**
+ * The model the run uses, asked of the ENDPOINT rather than remembered.
+ *
+ * A self-hosted endpoint serves whatever is loaded into it, and what is loaded changes — the registry's stored id
+ * is a note of what was there when it was registered, not a fact about what is there now. So the endpoint's own
+ * `/models` listing is read at every start and its FIRST entry is the model the run uses, exactly as a caller with
+ * no prior knowledge would pick one. The stored id stays as the fallback for an endpoint that serves no listing,
+ * and `--model=` still wins over both: an explicit choice is never overridden by discovery.
+ *
+ * Failure is never fatal. A listing that cannot be read, is empty, or is not the shape OpenAI's API documents
+ * leaves the stored id in place and says why — the run is about the product, and refusing to start it over a
+ * convenience read would be the wrong trade.
+ */
+async function discoverModel(baseUrl, bearer) {
+  const url = `${baseUrl}/models`;
+  try {
+    const res = await fetch(url, { headers: bearer ? { authorization: `Bearer ${bearer}` } : {} });
+    if (!res.ok) return { ok: false, reason: `${url} answered ${res.status} ${res.statusText}` };
+    const body = await res.json();
+    const list = Array.isArray(body?.data) ? body.data : null;
+    if (list === null) return { ok: false, reason: `${url} answered without a \`data\` array` };
+    const ids = list.map((entry) => (typeof entry?.id === 'string' ? entry.id.trim() : '')).filter((id) => id !== '');
+    if (ids.length === 0) return { ok: false, reason: `${url} lists no model with an id` };
+    const first = list.find((entry) => typeof entry?.id === 'string' && entry.id.trim() === ids[0]) ?? {};
+    return { ok: true, model: ids[0], all: ids, url, entry: first };
+  } catch (cause) {
+    return { ok: false, reason: `${url} could not be reached: ${String(cause instanceof Error ? cause.message : cause)}` };
+  }
+}
+
+const modelWasAsked = value('model', null) !== null;
+const discovery = modelWasAsked || has('no-discover-model') ? null : await discoverModel(endpoint.baseUrl, key);
+if (discovery?.ok) {
+  endpoint.model = discovery.model;
+  /*
+   * The context window comes from the same listing, for the same reason the model does: the registry's figure was
+   * measured against whatever was loaded the day the endpoint was registered, and a different model has a different
+   * window. vLLM states it as `max_model_len`; an OpenAI-compatible gateway may state `context_length`. Neither is
+   * guaranteed, so an entry that states no window leaves the registered figure alone rather than clearing it.
+   */
+  const stated = [discovery.entry?.max_model_len, discovery.entry?.context_length].find((n) => typeof n === 'number' && n > 0);
+  if (stated !== undefined) endpoint.contextTokens = stated;
+}
+const modelSource = modelWasAsked ? '--model' : discovery === null ? 'the registry (discovery off)' : discovery.ok ? `discovered from ${discovery.url}` : `the registry — discovery failed: ${discovery.reason}`;
+
+const PROVIDER_ID = instanceIdFor(endpoint.label);
+const QUALIFIED = `${PROVIDER_ID}/${endpoint.model}`;
 /** OpenRouter is the one endpoint in this build whose own accounting can be read; everything else is priced or counted. */
 const providerAccounting = /(^|\/\/|\.)openrouter\.ai(\/|$)/.test(endpoint.baseUrl);
 const priced = typeof endpoint.inputUsdPerMillion === 'number' && typeof endpoint.outputUsdPerMillion === 'number';
@@ -321,16 +369,18 @@ const accountingKind = unmetered && !ceilingAsked ? 'unmetered' : providerAccoun
 
 if (!has('confirm')) {
   console.log(USAGE);
-  console.log(`Endpoint: ${endpoint.name} — ${endpoint.label} at ${endpoint.baseUrl}, model ${endpoint.model}`);
+  console.log(`Endpoint: ${endpoint.name} — ${endpoint.label} at ${endpoint.baseUrl}`);
+  console.log(`Model:    ${endpoint.model} (${modelSource})${discovery?.ok && discovery.all.length > 1 ? `; the endpoint also serves ${discovery.all.slice(1).join(', ')}` : ''}`);
+  console.log(`Context:  ${typeof endpoint.contextTokens === 'number' ? `${endpoint.contextTokens} tokens` : 'whatever discovery reports'}`);
   console.log(`Plan:     ${['sign-in', ...wanted].join(' → ')}, ${MAX_ITERATIONS} iterations per run`);
   console.log(`Ceiling:  ${accountingKind === 'unmetered' ? 'none — registered unmetered; only the iteration ceiling binds' : accountingKind === 'tokens' ? `${MAX_TOKENS} tokens (this endpoint reports no cost and carries no prices)` : `${BUDGET.toFixed(2)} USD, ${accountingKind === 'provider' ? "read from the provider's own accounting" : 'estimated from the registered prices'}`}`);
   console.log(`Key:      ${keySource ?? `NONE — run \`pnpm live-run --set-key --endpoint=${endpoint.name}\`, or set ${KEY_ENV}`}`);
   console.log('\nNothing ran. Add --confirm to spend.');
   process.exit(2);
 }
-const key = envKey !== '' ? envKey : storedKey(endpoint.name);
 if (key === null || key === '') { console.error(`No key for "${endpoint.name}". Run \`pnpm live-run --set-key --endpoint=${endpoint.name}\`, or set ${KEY_ENV}.`); process.exit(1); }
 const redact = (text) => text.split(key).join('[redacted]');
+console.log(`Model:    ${endpoint.model} (${modelSource})`);
 
 // ── What has been spent ──────────────────────────────────────────────────────────────────────────────────────
 async function providerCredits() {

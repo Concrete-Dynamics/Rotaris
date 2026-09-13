@@ -171,9 +171,10 @@ wrapper that drops the originals' own properties (`fs.realpath.native`) breaks f
 8. **the run loop (2026-09-03):** the prompt is consumed. The session goes `starting` → `running`
    (REQ-SESSION-087: aggregates rehydrated, the one-shot launch audit, `run_start`), one iteration runs
    the root agent over the model port, an `agent` row appears on the first delta and grows on the 50 ms
-   tick, `usage.update` and `iteration.end` are recorded, the stop conditions are evaluated between
-   iterations, and teardown records the system row, releases the lock, records `session.end` then
-   `result` and the terminal status in one durable transaction, then rebuilds `summary.md` off the path.
+   tick, `usage.update` is recorded once per completed provider request that moved the cumulative totals (OQ-8: the usage a retried failure reported is counted, identical totals raise nothing), `iteration.end` is recorded, the stop conditions are evaluated between
+   iterations, and teardown records the system row, records `session.end` then
+   `result` and the terminal status in one durable transaction **while still holding the lock** (A3, REQ-EVENTS-098),
+   releases it in guaranteed cleanup after the sink is detached, then rebuilds `summary.md` off the path.
    The stop control cancels gracefully and a second press forces; the outcome is presented once as the
    persistent notice; the status strip shows the presentation vocabulary. Every event is recorded then
    forwarded on the bus with the 5 s bound. **No tool, no child, no hook, no intent classification, no

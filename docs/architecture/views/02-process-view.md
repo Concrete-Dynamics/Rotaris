@@ -270,7 +270,9 @@ continue, prompt, attach, detach, reconcile, pageOlder, control), `runs.active`,
 `session.list` — REQ-LIBRARY-137/138), `timeline.append` (Part V, REQ-NOTIFY-268; its optional
 `severity` is REQ-SESSION-134's vocabulary and `info` where absent, while the entry's `id` is minted by the writer
 that records it and never travels on the wire), `shutdown`. Events back: `publish.increment`, `publish.snapshot`,
-`run.result`, `run.paused`, `approval.present/close`, `presenter.poll`, `notice.publish` (Part V: the fields
+`run.result` (since 2026-09-13 it may carry `persistence: {confirmed: false, last_event_ordinal}` — present only when
+terminal persistence could not be confirmed, and what main reads to suppress its own terminal notice, `REQ-EVENTS-088`
+allowing exactly one failure notification per affected run), `run.paused`, `approval.present/close`, `presenter.poll`, `notice.publish` (Part V: the fields
 REQ-NOTIFY-023 lists, `sessionId` and `persistent` among them; the `ttlMs` Part S added is gone — REQ-NOTIFY-040
 forbids a notice leaving on a timer), `acknowledgement.publish` (REQ-MCP-044's warning, now a transient),
 `log`, `ready`. **The run host's

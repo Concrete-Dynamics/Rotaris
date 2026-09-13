@@ -273,9 +273,16 @@ continuation payload built to REQ-SESSION-115's budgets).
 `teardown(reason)` runs every step guarded even on exception (REQ-SESSION-094): the stop reason classified to the
 terminal result (REQ-MONITOR-301) and the persisted status (REQ-SESSION-093 / REQ-MONITOR-029) →
 `session_end` hooks → `run_end` timeline entry → pending publications flushed → **the terminal transaction**
-(the token history's last sample — the run samples the cumulative total every 10 s on the clock port while live, each a status save and so a whole-session update — then the system row, the lock release, `session.end` then `result`, the terminal save with aggregates, todo and
-progress — one durable transaction) → the bus drained → the hooks advisory → every per-session binding removed.
-Main presents `run.result` once as the notice. **Part V:** a starting run first clears the standing notice where it
+(the token history's last sample — the run samples the cumulative total every 10 s on the clock port while live, each a status save and so a whole-session update — then the system row, `session.end` then `result`, the terminal save with aggregates, todo and
+progress — one durable transaction, **the session lock held throughout**) → the bus drained → the hooks advisory →
+**guaranteed cleanup: the sink detached, every per-session binding removed, then the lock released.** *A3 moved
+the release out of the terminal transaction and to the end of cleanup: `REQ-EVENTS-098` makes the right to write a
+session's history exactly the right to hold its lock, so releasing it before `session.end` and `result` would have
+recorded both after writing authority ended. This paragraph said “the lock release” inside the transaction until
+2026-09-13; the code has not done that since A3 was applied.*
+Main presents `run.result` once as the notice — **except where that result carries `persistence: {confirmed: false}`**,
+the run host having already published the one failure notice `REQ-EVENTS-088` allows, with the last durable ordinal
+and the reopen action on it (OQ-42). **Part V:** a starting run first clears the standing notice where it
 is unscoped or scoped to that same session and no other (REQ-NOTIFY-029/058), and every `warning` or `error` notice is
 written to the session's timeline as a `notice` entry BEFORE it is broadcast (REQ-NOTIFY-268, `timeline.append` to the
 run host), so a notice replaced within the same turn is still readable afterwards.

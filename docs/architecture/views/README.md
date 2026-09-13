@@ -24,7 +24,16 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-13** — **UIR-014 repaired and its whole class made deterministic**: the
+Last reconciled with the code: **2026-09-13** — **the session-lifecycle work package (A3, A6, A9, OQ-8, OQ-12,
+OQ-41, OQ-42, OQ-46)**: the runtime view's teardown paragraph is corrected — it still put **the lock release inside
+the terminal transaction**, which A3 moved to the end of guaranteed cleanup, and the code had not done that since A3
+was applied; it also now records that main does not present `run.result` as a notice when that result carries
+`persistence: {confirmed: false}`, the run host having already published the one failure notice REQ-EVENTS-088
+allows. The process view's `run.result` gains that optional field. The repair's timeline entry is
+`session.interrupted_recovered` throughout, REQ-SESSION-062's fixed shape, where three views and two ADRs carried the
+invented `session_marked_interrupted`. **No package, edge, process, window role, store table or control operation
+moves**; one message kind gains an optional field and one run-loop step changes cadence (`usage.update`, now one per
+completed provider request rather than one per iteration — OQ-8). Earlier the same day — **UIR-014 repaired and its whole class made deterministic**: the
 component view's `layout-contract.ts` paragraph gains `shrunkBoxes`, the one question asked of every marked box
 rather than only of the boxes that published a relation — a box standing smaller than the content inside it, on an
 axis that does not scroll, where nothing is clipped and the remainder pays out under whatever paints next. The

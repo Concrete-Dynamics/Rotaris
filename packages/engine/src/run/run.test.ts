@@ -341,6 +341,28 @@ describe('engine/run — the run loop end to end against a real store and a scri
     expect(warnings.some((w) => w.includes('flush exploded'))).toBe(true);
   });
 
+  it('A3 / REQ-SESSION-094 / REQ-EVENTS-098: the lock is still held when both terminal events are delivered, and released only after the sink is detached', async () => {
+    const { backend } = scripted([answer('done')]);
+    const { sessions } = sessionsWith(backend);
+    const sid = asSessionId('S1');
+    const heldAt: { event: string; lock: boolean }[] = [];
+    // A blocking consumer observes each event at the moment it is delivered, which is while teardown is mid-pipeline.
+    (sessions as unknown as { bus: { attach: (id: SessionId, c: { mode: 'blocking'; deliver: (e: { event: string }) => void }) => void } })
+      .bus.attach(sid, { mode: 'blocking', deliver: (e) => { heldAt.push({ event: e.event, lock: dal.getLock(sid) !== undefined }); } });
+    const started = sessions.start(dal, 'C:/ws', 'terminal');
+    if (!started.ok) throw new Error('start');
+    await sessions.running(sid);
+    /**
+     * REQ-EVENTS-098 makes the right to write a session's history exactly the right to hold its lock, and A3
+     * settled that the lock is therefore held THROUGH terminal persistence and both final events rather than
+     * released before them. Every delivered event, the terminal pair included, sees the lock held.
+     */
+    expect(heldAt.map((h) => h.event).slice(-2)).toEqual(['session.end', 'result']);
+    expect(heldAt.every((h) => h.lock)).toBe(true);
+    // Guaranteed cleanup runs after the pipeline: the lock is gone once the run has ended.
+    expect(dal.getLock(sid)).toBeUndefined();
+  });
+
   it('REQ-EVENTS-021 / REQ-SESSION-082: with no model configured the run is refused before it starts — no session, one error result marked failed-before-start', () => {
     const sessions = new Sessions({ clocks: clock, publisher: recorder(), pid: 1, host: HOST, retentionCap: 0, warn: () => undefined, mintSessionId: () => 'never', model: null, sessionFilesDir: () => dir });
     const r = sessions.start(dal, 'C:/ws', 'x');

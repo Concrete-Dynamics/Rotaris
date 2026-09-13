@@ -36,6 +36,7 @@ import { groupSeverity, groupSummary, type Severity } from './project.js';
 export type { TrailerRow, DisplayRow, RowRenderProps } from './types.js';
 import type { TrailerRow, DisplayRow, RowRenderProps } from './types.js';
 import { Button as DesignButton } from '../design-system/index.js';
+import { QuestionSummaryCard } from '../QuestionStepper.js';
 
 /**
  * What a row cannot know about itself, computed once per displayed array by `placements()` below.
@@ -571,11 +572,15 @@ export function Row(p: RowProps) {
                 : <div className="tool__preview text-secondary mono">⤷ {(row.output ?? row.input ?? '').split('\n')[0]}</div>
             )}
             {expanded && (
-              <div className="tool__card">
-                {row.input !== undefined && row.input !== '' && (<><div className="tool__caption">INPUT</div><pre className="tool__pre mono" data-testid="tool-input">{row.input}</pre></>)}
-                {row.output !== undefined && row.output !== '' && (<><div className="tool__caption">OUTPUT</div><pre className="tool__pre mono" data-testid="tool-output">{row.output}</pre></>)}
-                {outcome.state === 'blocked' && <div className="tool__blocked">{blockedReason}</div>}
-              </div>
+              row.toolName === 'ask_questions' ? (
+                <QuestionSummaryCard input={row.input} output={row.output} blockedReason={outcome.state === 'blocked' ? blockedReason : undefined} />
+              ) : (
+                <div className="tool__card">
+                  {row.input !== undefined && row.input !== '' && (<><div className="tool__caption">INPUT</div><pre className="tool__pre mono" data-testid="tool-input">{row.input}</pre></>)}
+                  {row.output !== undefined && row.output !== '' && (<><div className="tool__caption">OUTPUT</div><pre className="tool__pre mono" data-testid="tool-output">{row.output}</pre></>)}
+                  {outcome.state === 'blocked' && <div className="tool__blocked">{blockedReason}</div>}
+                </div>
+              )
             )}
           </div>
         </div>

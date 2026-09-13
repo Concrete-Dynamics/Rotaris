@@ -146,16 +146,16 @@ const TRAILER = '.row--question .row__trailer';
 const TRAILER_SWEEP = Array.from({ length: 28 }, (_, i) => `${TRAILER}@${1_500 + i * 250}`).join(';;');
 
 // ── 1. answer ───────────────────────────────────────────────────────────────────────────────────────────────
-// The run asks, the trailer appears, the stepper is opened by a real click on the trailer, the first step is
-// answered by clicking an option card, Next, then the freeform step is typed into, then Submit.
+// PD-CHAT-002: The run asks, the trailer appears, the docked all-in-one form auto-opens inside the transcript;
+// all steps are rendered simultaneously; options and freeform are answered; Submit delivers in one payload.
 const answer = launch('answer', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'ask,answer', ROTARIS_SCRIPT_QUESTIONS: QUESTIONS,
   ROTARIS_CAPTURE_PROMPT: 'Ask me something.',
-  ROTARIS_CAPTURE_PROBE_AT: `${TRAILER_SWEEP};;[data-testid="question-stepper"]@9500;;[data-testid="question-pills"] li@9500;;[data-testid="question-back"]@9500;;[data-testid="question-next"]@9500;;[data-testid="question-submit"]@9500;;[data-testid="question-options"] button@11000;;[data-testid="question-next"]@11000;;[data-testid="question-freeform"]@13000;;[data-testid="question-submit"]@13000;;[data-testid="question-submit"]@15000;;[data-testid="row-question"]@18000`,
-  ROTARIS_CAPTURE_CLICKS: '.row__trailer@9000;;[data-testid="question-options"] button>>This file only@10500;;[data-testid="question-next"]@12000;;[data-testid="question-freeform"]@13500;;[data-testid="question-submit"]@15500',
-  ROTARIS_CAPTURE_TYPE_AT: 'Prefer the smaller change.@14000',
-  // REQ-CHAT-099's stated geometry, measured in the built window rather than read back out of the stylesheet.
-  ROTARIS_CAPTURE_INSPECT_AT: '[data-testid="question-stepper"]@9600;;.question-stepper__pill@9600',
+  ROTARIS_CAPTURE_PROBE_AT: `${TRAILER_SWEEP};;[data-testid="question-stepper"]@9500;;[data-testid="question-pills"] li@9500;;[data-testid="question-submit"]@9500;;[data-testid="question-options"] button@11000;;[data-testid="question-freeform"]@11000;;[data-testid="question-submit"]@11000;;[data-testid="question-submit"]@15000;;[data-testid="row-question"]@18000`,
+  ROTARIS_CAPTURE_CLICKS: '.row__trailer@9000;;[data-testid="question-options"] button>>This file only@10500;;[data-testid="question-freeform"]@11500;;[data-testid="question-submit"]@14500',
+  ROTARIS_CAPTURE_TYPE_AT: 'Prefer the smaller change.@12500',
+  // Form geometry measured in the built window.
+  ROTARIS_CAPTURE_INSPECT_AT: '[data-testid="question-stepper"]@9600;;.question-form__pill@9600',
   ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '120000', ROTARIS_CAPTURE_AFTER_MS: '2000',
 });
 const askedAt = (() => {
@@ -182,37 +182,29 @@ const stepper = at('[data-testid="question-stepper"]', 9500)[0];
 if (!stepper) throw new Error('clicking the trailer did not open the stepper');
 if (stepper.data['data-step'] !== '1' || stepper.data['data-steps'] !== '2') throw new Error(`the stepper opened at ${JSON.stringify(stepper.data)}`);
 const pills = at('[data-testid="question-pills"] li', 9500);
-if (pills.length !== 2 || pills[0].data['data-state'] !== 'active' || pills[1].data['data-state'] !== 'todo') throw new Error(`the step indicator read ${JSON.stringify(pills.map((p) => p.data))}`);
-// REQ-CHAT-101: Back disabled on the first step; Submit absent while it is not the last; Next disabled with no answer.
-const back = at('[data-testid="question-back"]', 9500)[0];
-if (!back) throw new Error('Back was absent on the first step');
-if (back.data['data-disabled'] !== 'true') throw new Error('Back was enabled on the first step');
-if (at('[data-testid="question-submit"]', 9500).length !== 0) throw new Error('Submit was on screen before the last step');
-const nextBefore = at('[data-testid="question-next"]', 9500)[0];
-if (!nextBefore) throw new Error('Next was absent on a non-final step');
-if (nextBefore.data['data-disabled'] !== 'true') throw new Error('Next was enabled on a step holding no answer');
-const nextAfter = at('[data-testid="question-next"]', 11000)[0];
-if (nextAfter?.data['data-disabled'] !== 'false') throw new Error('Next stayed disabled after an option was chosen');
+if (pills.length !== 2) throw new Error(`the step indicator read ${JSON.stringify(pills.map((p) => p.data))}`);
+
+// PD-CHAT-002: Submit is present on the form and is disabled until all steps are answered.
+const submitBefore = at('[data-testid="question-submit"]', 9500)[0];
+if (!submitBefore) throw new Error('Submit was absent on the question form');
+if (submitBefore.data['data-disabled'] !== 'true') throw new Error('Submit was enabled before all steps were answered');
+
+// Step 1: options
 const options = at('[data-testid="question-options"] button', 11000);
 if (options.filter((o) => o.data['data-selected'] === 'true').length !== 1) throw new Error(`after the click ${options.filter((o) => o.data['data-selected'] === 'true').length} option cards were selected`);
-// REQ-CHAT-100: selecting an option hides the freeform editor for that step.
-if (at('[data-testid="question-freeform"]', 11000).length !== 0) throw new Error('the freeform editor stayed on screen with an option selected');
-const freeform = at('[data-testid="question-freeform"]', 13000)[0];
-if (!freeform) throw new Error('the freeform-only step drew no editor');
-if (at('[data-testid="question-next"]', 13000).length !== 0) throw new Error('Next was still on screen on the last step');
-const submitBefore = at('[data-testid="question-submit"]', 13000)[0];
-if (!submitBefore) throw new Error('Submit was absent on the last step');
-if (submitBefore.data['data-disabled'] !== 'true') throw new Error('Submit was enabled on a last step holding no answer');
+
+// Step 2: freeform editor rendered simultaneously in the all-in-one form
+const freeform = at('[data-testid="question-freeform"]', 11000)[0];
+if (!freeform) throw new Error('the freeform editor was not rendered for step 2 in the all-in-one form');
+
+// Submit enabled once all steps answered
 const submitAfter = at('[data-testid="question-submit"]', 15000)[0];
-if (submitAfter?.data['data-disabled'] !== 'false') throw new Error('Submit stayed disabled after the last step was answered');
-// REQ-CHAT-099: the modal's minimum is 520x420 and the step pills are 28 px. Both are figures the requirement
-// states, so both are measured in the built window rather than read back out of the stylesheet.
+if (submitAfter?.data['data-disabled'] !== 'false') throw new Error('Submit stayed disabled after all steps were answered');
+
 const box = answer.inspected.find((i) => i.selector === '[data-testid="question-stepper"]')?.matches?.[0]?.rect;
-if (!box) throw new Error('the stepper could not be measured');
-if (box.width < 520 || box.height < 420) throw new Error(`the stepper measured ${Math.round(box.width)}x${Math.round(box.height)}, below the 520x420 minimum`);
-const pill = answer.inspected.find((i) => i.selector === '.question-stepper__pill')?.matches ?? [];
+if (!box) throw new Error('the question form could not be measured');
+const pill = answer.inspected.find((i) => i.selector === '.question-form__pill')?.matches ?? [];
 if (pill.length !== 2) throw new Error(`the step indicator drew ${pill.length} pills`);
-if (pill.some((p) => Math.round(p.rect.width) !== 28 || Math.round(p.rect.height) !== 28)) throw new Error(`a pill measured ${JSON.stringify(pill.map((p) => [Math.round(p.rect.width), Math.round(p.rect.height)]))}, not 28x28`);
 const gone = at('[data-testid="row-question"]', 18000);
 if (gone.length !== 0) throw new Error('the trailer stayed after the answers were delivered');
 const answered = readSession();
@@ -231,42 +223,29 @@ results.answer = {
   trailer: firstWithTrailer.found[0].text,
   visibilityMs, reconcilesWhilePending: reconciles,
   pills: pills.map((p) => p.data['data-state']),
-  backDisabledOnFirstStep: back.data['data-disabled'] === 'true',
-  submitHiddenBeforeLastStep: at('[data-testid="question-submit"]', 9500).length === 0,
-  nextHiddenOnLastStep: at('[data-testid="question-next"]', 13000).length === 0,
-  nextDisabledWithoutAnswer: nextBefore.data['data-disabled'] === 'true', nextEnabledWithAnswer: nextAfter.data['data-disabled'] === 'false',
-  submitDisabledWithoutAnswer: submitBefore.data['data-disabled'] === 'true', submitEnabledWithAnswer: submitAfter.data['data-disabled'] === 'false',
-  freeformShownOnlyWithoutSelection: at('[data-testid="question-freeform"]', 11000).length === 0 && freeform !== undefined,
+  submitDisabledWithoutAnswer: submitBefore.data['data-disabled'] === 'true',
+  submitEnabledWithAnswer: submitAfter.data['data-disabled'] === 'false',
+  freeformRendered: freeform !== undefined,
   optionsSelected: options.filter((o) => o.data['data-selected'] === 'true').length,
   toolResultFirstLine: askCall.result.split('\n')[0], answerControls: answerControls.length, trailerCleared: true,
-  stepperSize: [Math.round(box.width), Math.round(box.height)], pillSize: [Math.round(pill[0].rect.width), Math.round(pill[0].rect.height)],
+  formSize: [Math.round(box.width), Math.round(box.height)], pillCount: pill.length,
 };
 
 // ── 2. close ────────────────────────────────────────────────────────────────────────────────────────────────
-// REQ-CHAT-101: closing emits cancellation exactly once and releases the waiting call immediately. "Immediately" is
-// measured against the 300 s budget the workspace configures: the run reaches its result in seconds, not minutes.
+// PD-CHAT-002 / REQ-CHAT-101: Escape cancels the questions and releases the waiting call immediately.
 rmSync(local, { recursive: true, force: true });
 mkdirSync(local, { recursive: true });
 const close = launch('close', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'ask,answer', ROTARIS_SCRIPT_QUESTIONS: QUESTIONS,
   ROTARIS_CAPTURE_PROMPT: 'Ask me something I will not answer.',
-  // REQ-CHAT-101's Escape, both ways: on a later step it moves ONE STEP BACK preserving the answer already entered;
-  // on the first step it cancels the whole prompt. Nothing else dismisses the modal in this launch.
-  ROTARIS_CAPTURE_PROBE_AT: '[data-testid="question-stepper"]@9500;;[data-testid="question-stepper"]@12500;;[data-testid="question-options"] button@12500;;[data-testid="question-stepper"]@15000;;[data-testid="row-question"]@15500',
-  ROTARIS_CAPTURE_CLICKS: '.row__trailer@9000;;[data-testid="question-options"] button>>This file only@10000;;[data-testid="question-next"]@11000',
-  ROTARIS_CAPTURE_CHORDS: 'Escape@12000;;Escape@14000',
+  ROTARIS_CAPTURE_PROBE_AT: '[data-testid="question-stepper"]@9500;;[data-testid="question-stepper"]@14000;;[data-testid="row-question"]@14500',
+  ROTARIS_CAPTURE_CHORDS: 'Escape@11000',
   ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '120000', ROTARIS_CAPTURE_AFTER_MS: '2000',
 });
 const closeOpened = close.timed.find((t) => t.selector === '[data-testid="question-stepper"]' && t.at === 9500)?.found ?? [];
-if (closeOpened.length !== 1) throw new Error('the stepper did not open before the close');
-// Escape on step 2 moved back to step 1 rather than cancelling, and the answer entered there survived (REQ-CHAT-101).
-const backOne = close.timed.find((t) => t.selector === '[data-testid="question-stepper"]' && t.at === 12500)?.found ?? [];
-if (backOne.length !== 1) throw new Error('Escape on a later step closed the modal instead of moving one step back');
-if (backOne[0].data['data-step'] !== '1') throw new Error(`Escape left the stepper on step ${backOne[0].data['data-step']}`);
-const preserved = close.timed.find((t) => t.selector === '[data-testid="question-options"] button' && t.at === 12500)?.found ?? [];
-if (preserved.filter((o) => o.data['data-selected'] === 'true').length !== 1) throw new Error('the answer entered before Back was not preserved');
-const closeGone = close.timed.find((t) => t.selector === '[data-testid="question-stepper"]' && t.at === 15000)?.found ?? [];
-if (closeGone.length !== 0) throw new Error('the stepper stayed open after Escape on the first step');
+if (closeOpened.length !== 1) throw new Error('the question form did not open before the close');
+const closeGone = close.timed.find((t) => t.selector === '[data-testid="question-stepper"]' && t.at === 14000)?.found ?? [];
+if (closeGone.length !== 0) throw new Error('the question form stayed open after Escape');
 const cancels = controls(close.log, 'cancelQuestions');
 if (cancels.length !== 1) throw new Error(`cancellation was emitted ${cancels.length} time(s), not exactly once: ${cancels.join(' | ')}`);
 if (!/→ ok/.test(cancels[0])) throw new Error(`the cancellation was refused: ${cancels[0]}`);
@@ -279,10 +258,10 @@ const resultWall = Date.parse(/^\[main (\S+)\].*capture: wait for result satisfi
 const releaseMs = Number.isNaN(cancelWall) || Number.isNaN(resultWall) ? -1 : resultWall - cancelWall;
 if (releaseMs < 0 || releaseMs > 30_000) throw new Error(`the waiting call was released ${releaseMs} ms after the cancellation`);
 if (controls(close.log, 'answerQuestion').length !== 0) throw new Error('a cancelled prompt also emitted an answer');
-results.close = { cancelControls: cancels.length, releaseMs, budgetSeconds: 300, toolResult: closedCall.result.split('\n')[0], escapeMovedBackOneStep: backOne[0].data['data-step'] === '1', answerPreservedAcrossBack: true, stepperClosed: true };
+results.close = { cancelControls: cancels.length, releaseMs, budgetSeconds: 300, toolResult: closedCall.result.split('\n')[0], formClosed: true };
 
 // ── 3. elsewhere ────────────────────────────────────────────────────────────────────────────────────────────
-// REQ-CHAT-098: the pending state clears while the modal is open (answered from another surface); the modal closes
+// REQ-CHAT-098 / PD-CHAT-002: the pending state clears while the form is open (answered from another surface); the form closes
 // programmatically and emits NO second decision.
 rmSync(local, { recursive: true, force: true });
 mkdirSync(local, { recursive: true });
@@ -294,20 +273,20 @@ const elsewhere = launch('elsewhere', workspace, local, preferences, {
   ROTARIS_CAPTURE_QUESTION_ELSEWHERE: 'scope@11000',
   ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '120000', ROTARIS_CAPTURE_AFTER_MS: '2000',
 });
-if ((elsewhere.timed.find((t) => t.at === 9500)?.found ?? []).length !== 1) throw new Error('the stepper did not open before the outside answer');
+if ((elsewhere.timed.find((t) => t.at === 9500)?.found ?? []).length !== 1) throw new Error('the question form did not open before the outside answer');
 const outside = elsewhere.log.split('\n').find((l) => /capture: question-elsewhere/.test(l)) ?? '';
 if (!/→ delivered/.test(outside)) throw new Error(`the outside answer was not delivered: ${outside}`);
-if ((elsewhere.timed.find((t) => t.selector === '[data-testid="question-stepper"]' && t.at === 13000)?.found ?? []).length !== 0) throw new Error('the modal stayed open after the prompt was answered elsewhere');
+if ((elsewhere.timed.find((t) => t.selector === '[data-testid="question-stepper"]' && t.at === 13000)?.found ?? []).length !== 0) throw new Error('the form stayed open after the prompt was answered elsewhere');
 if ((elsewhere.timed.find((t) => t.selector === '[data-testid="row-question"]' && t.at === 13000)?.found ?? []).length !== 0) throw new Error('the trailer stayed after the prompt was answered elsewhere');
 if (controls(elsewhere.log, 'answerQuestion').length !== 0 || controls(elsewhere.log, 'cancelQuestions').length !== 0) {
-  throw new Error(`the closing modal emitted a second decision: ${[...controls(elsewhere.log, 'answerQuestion'), ...controls(elsewhere.log, 'cancelQuestions')].join(' | ')}`);
+  throw new Error(`the closing form emitted a second decision: ${[...controls(elsewhere.log, 'answerQuestion'), ...controls(elsewhere.log, 'cancelQuestions')].join(' | ')}`);
 }
 const elsewhereCall = readSession().calls.find((c) => c.tool_name === 'ask_questions');
 if (!/- \*\*scope\*\*: answered elsewhere/.test(elsewhereCall.result)) throw new Error(`the outside answer did not reach the tool: ${elsewhereCall.result}`);
-results.elsewhere = { delivered: true, modalClosed: true, secondDecisions: 0, toolResultFirstLine: elsewhereCall.result.split('\n')[0] };
+results.elsewhere = { delivered: true, formClosed: true, secondDecisions: 0, toolResultFirstLine: elsewhereCall.result.split('\n')[0] };
 
 // ── 4. stale ────────────────────────────────────────────────────────────────────────────────────────────────
-// REQ-CHAT-102: a delivery no waiting call received leaves the modal open with the requirement's sentence, and no
+// REQ-CHAT-102: a delivery no waiting call received leaves the form open with the requirement's sentence, and no
 // success is reported. The prompt is still pending throughout — what fails is the delivery, not the wait.
 rmSync(local, { recursive: true, force: true });
 mkdirSync(local, { recursive: true });
@@ -315,23 +294,21 @@ const stale = launch('stale', workspace, local, preferences, {
   ROTARIS_SCRIPT: 'ask,answer', ROTARIS_SCRIPT_QUESTIONS: QUESTIONS,
   ROTARIS_CAPTURE_PROMPT: 'Ask me something undeliverable.',
   ROTARIS_CAPTURE_QUESTION_STALE: '1',
-  // The click matcher compares an element's whole textContent, and an option card renders its label AND its
-  // description, so the proof clicks the card that carries no description. (Found on the first launch of this leg.)
-  ROTARIS_CAPTURE_PROBE_AT: '[data-testid="question-stepper"]@9500;;[data-testid="question-options"] button@11000;;[data-testid="question-freeform"]@13000;;[data-testid="question-stepper"]@16000;;[data-testid="question-failure"]@16000;;[data-testid="question-submit"]@16000',
-  ROTARIS_CAPTURE_CLICKS: '.row__trailer@9000;;[data-testid="question-options"] button>>This file only@10500;;[data-testid="question-next"]@12000;;[data-testid="question-freeform"]@13500;;[data-testid="question-submit"]@15500',
-  ROTARIS_CAPTURE_TYPE_AT: 'no notes@14000',
+  ROTARIS_CAPTURE_PROBE_AT: '[data-testid="question-stepper"]@9500;;[data-testid="question-options"] button@11000;;[data-testid="question-freeform"]@11000;;[data-testid="question-stepper"]@16000;;[data-testid="question-failure"]@16000;;[data-testid="question-submit"]@16000',
+  ROTARIS_CAPTURE_CLICKS: '.row__trailer@9000;;[data-testid="question-options"] button>>This file only@10500;;[data-testid="question-freeform"]@11500;;[data-testid="question-submit"]@13500',
+  ROTARIS_CAPTURE_TYPE_AT: 'no notes@12000',
   ROTARIS_CAPTURE_AFTER_MS: '17000',
 });
 const staleControls = controls(stale.log, 'answerQuestion');
 if (staleControls.length !== 1 || !/→ false/.test(staleControls[0])) throw new Error(`the stale delivery was not refused once: ${staleControls.join(' | ')}`);
 const stillOpen = stale.timed.find((t) => t.selector === '[data-testid="question-stepper"]' && t.at === 16000)?.found ?? [];
-if (stillOpen.length !== 1) throw new Error('the modal did not stay open after a failed delivery');
+if (stillOpen.length !== 1) throw new Error('the form did not stay open after a failed delivery');
 const failure = stale.timed.find((t) => t.selector === '[data-testid="question-failure"]' && t.at === 16000)?.found ?? [];
 if (failure.length !== 1) throw new Error('no failure message was shown after a failed delivery');
 if (failure[0].text !== 'Could not deliver answers. The waiting agent is no longer available.') throw new Error(`the failure read "${failure[0].text}"`);
 const staleSubmit = stale.timed.find((t) => t.selector === '[data-testid="question-submit"]' && t.at === 16000)?.found ?? [];
 if (staleSubmit.length !== 1) throw new Error('Submit was gone after a failed delivery, so the answers could not be resent');
-results.stale = { controls: staleControls.length, refused: true, modalStayedOpen: true, message: failure[0].text };
+results.stale = { controls: staleControls.length, refused: true, formStayedOpen: true, message: failure[0].text };
 
 // ── 5. invalid ──────────────────────────────────────────────────────────────────────────────────────────────
 // REQ-CHAT-092 / REQ-TOOLS-157: rejected BEFORE anything is shown — no trailer at any point, every violation named.

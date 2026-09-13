@@ -1323,7 +1323,15 @@ export class Sessions {
     const r = this.withWriter(dal, sessionId, (writer) => {
       const saved = writer.save('interrupted');
       if (!saved.ok) throw new Error('reason' in saved.error ? saved.error.reason : saved.error.code);
-      writer.appendTimeline('session_marked_interrupted', 'rotaris', `Session was still marked '${previous}', but ${reason}. Rotaris marked it interrupted.`, { previous_status: previous, reason });
+      /**
+       * REQ-SESSION-062 fixes this entry exactly — type, severity, actor, message and metadata keys — and this
+       * implementation had invented all of them but the actor: `session_marked_interrupted` for the type, the
+       * default `info` for the severity, a two-sentence message, and `previous_status` for a key the requirement
+       * calls `previous_execution_status`, with `execution_status` missing beside it. Found by OQ-46's audit of
+       * the same requirement. A reader of the exported timeline (REQ-SESSION-199) could not have found the entry
+       * the specification promises, under the name it promises, carrying the fields it promises.
+       */
+      writer.appendTimeline('session.interrupted_recovered', 'rotaris', `Session was still marked '${previous}' but ${reason}; status set to 'interrupted'.`, { previous_execution_status: previous, execution_status: 'interrupted', reason }, 'warning');
     });
     if (!r.ok) { this.deps.warn(`session ${sessionId} could not be marked interrupted: ${r.error.reason}`); return { repaired: null, skipped: `the correction could not be made durable (${r.error.reason}); nothing was changed` }; }
     this.live.get(sessionId)?.owner.reconcile();

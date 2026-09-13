@@ -55,9 +55,11 @@ describe('Part U — repair, delete and the exports', () => {
       expect(report.repaired).toEqual([{ sessionId: 'S-dead', from: 'running', to: 'interrupted', reason: 'the lock names this machine and its process (pid 4242) is gone' }]);
       expect(dal.getSession(sid)?.execution_status).toBe('interrupted');
       expect(dal.getLock(sid)).toBeUndefined();
-      const t = dal.timelineOf(sid).filter((e) => e.name === 'session_marked_interrupted');
+      // REQ-SESSION-062 fixes the entry exactly: type, severity, actor, message and the three metadata keys.
+      const t = dal.timelineOf(sid).filter((e) => e.name === 'session.interrupted_recovered');
       expect(t).toHaveLength(1);
-      expect(t[0]!.message).toContain("still marked 'running'");
+      expect(t[0]).toMatchObject({ severity: 'warning', actor: 'rotaris', message: "Session was still marked 'running' but the lock names this machine and its process (pid 4242) is gone; status set to 'interrupted'." });
+      expect(JSON.parse(t[0]!.metadata)).toEqual({ previous_execution_status: 'running', execution_status: 'interrupted', reason: 'the lock names this machine and its process (pid 4242) is gone' });
       expect(s.list(dal, WS).find((r) => r.sessionId === 'S-dead')).toMatchObject({ status: 'interrupted', stale: false });
     });
 
@@ -80,6 +82,29 @@ describe('Part U — repair, delete and the exports', () => {
       expect(dal.getSession(asSessionId('S-live'))?.execution_status).toBe('running');
       expect(dal.getSession(asSessionId('S-done'))?.execution_status).toBe('completed');
       alive.delete(777);
+    });
+
+    it('OQ-46 / REQ-SESSION-062/063: a run-host crash stales several sessions at once — every one of them is repaired inside the one call and every one gets its own entry', () => {
+      // ADR-0002's accepted consequence: one stale session per in-flight run.
+      for (const id of ['S-c1', 'S-c2', 'S-c3']) plant(id, 'running', { lock: { pid: 4242 } });
+      const s = sessions();
+      const all = s.repair(dal, WS, { all: true });
+      expect(all.repaired.map((r) => r.sessionId)).toEqual(['S-c1', 'S-c2', 'S-c3']);
+      // The batch has settled when the call returns: nothing is left in an active status for the caller to act on.
+      expect(s.list(dal, WS).map((r) => [r.sessionId, r.status, r.stale])).toEqual([
+        ['S-c1', 'interrupted', false], ['S-c2', 'interrupted', false], ['S-c3', 'interrupted', false],
+      ]);
+      // REQ-SESSION-062: one entry per session, in that session's own record — never folded into a neighbour's.
+      for (const id of ['S-c1', 'S-c2', 'S-c3']) {
+        const entries = dal.timelineOf(asSessionId(id)).filter((e) => e.name === 'session.interrupted_recovered');
+        expect(entries).toHaveLength(1);
+        expect(entries[0]).toMatchObject({ severity: 'warning', actor: 'rotaris' });
+        expect(JSON.parse(entries[0]!.metadata)).toMatchObject({ previous_execution_status: 'running', execution_status: 'interrupted' });
+      }
+      // REQ-SESSION-063: a second pass repairs nothing and writes nothing.
+      const again = s.repair(dal, WS, { all: true });
+      expect(again.repaired).toEqual([]);
+      expect(dal.timelineOf(asSessionId('S-c1')).filter((e) => e.name === 'session.interrupted_recovered')).toHaveLength(1);
     });
 
     it('nothing stale is an explicit answer; a missing id and a foreign-host lock are skipped with reasons, untouched', () => {

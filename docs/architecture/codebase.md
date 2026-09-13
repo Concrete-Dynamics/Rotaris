@@ -378,7 +378,7 @@ in `configuration.ts`'s header.)
 
 26. **the session browser's actions — repair, delete, export (2026-09-06, Part U; built in parallel with 27, each in its
    own worktree):** the explicit repair as ONE unit shared with REQ-GIT-094's open-time repair (the liveness predicate,
-   the state read, `interrupted` saved durably, the `session_marked_interrupted` entry written under the lock, the lock
+   the state read, `interrupted` saved durably, the `session.interrupted_recovered` entry (REQ-SESSION-062's fixed type, severity, message and metadata keys — corrected under OQ-46) written under the lock, the lock
    released last; per session the id, the stuck status, the new status and the reason; "nothing was stale" said rather
    than nothing); the delete in REQ-SESSION-166's order — state → the refs through a fourth checkpoint ask
    `checkpoint.deleteNamespace` (REQ-GIT-069, best-effort, the vanished tree logged) → one transaction cascading

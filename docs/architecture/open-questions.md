@@ -1857,8 +1857,23 @@ identify the failure, last durable event ordinal and recovery instructions.
 Terminal persistence failure produces an explicitly unconfirmed caller outcome.
 Explicit reopening waits for cancellation and performs a rolled-back write probe
 before admitting execution. Failed probes preserve quarantine. The engine's
-shared-store and projection-failure regressions cover these paths; desktop
-presentation verification remains tracked in the root resolution progress ledger.
+shared-store and projection-failure regressions cover these paths.
+
+***Delivery completed 2026-09-13, and it found two defects.*** The **dependent-spec
+consistency scan** turned up two continue-on-recording-failure clauses outside the pair the first pass
+amended: `REQ-CLI-067` ("the run carries on with a logged warning … persistence trouble is never allowed to
+fail a run") and `REQ-SESSION-145` ("an event that cannot be recorded is discarded with a warning"). Both
+contradicted `REQ-EVENTS-088` in terms and are amended in place with their falsified reading kept beside
+them; `REQ-MONITOR-221` needed no exception and gained none. The **cross-process propagation audit**
+establishes the surface: the run host is the only process that opens a workspace store for writing
+(ADR-0058, ADR-0005), main holds no handle and the workspace service opens one read-only for a restore
+check, so propagation is exactly `notice.publish` and `run.result` — and `run.result` was **lossy**, because
+the engine's `persistence: {confirmed: false, …}` had no field in `RunResultSchema` and stopped at the
+boundary. Main therefore raised its own terminal notice beside the run host's, which is two notifications
+for one failure where `REQ-EVENTS-088` allows exactly one. The field now crosses and main suppresses its
+own. The **desktop notice** gained the recovery ACTION it was missing: reopening the session, mapped onto
+`REQ-NOTIFY-044`'s existing `focus-session` member, with no member added to that closed vocabulary.
+
 The following text preserves the historical question and its former interim policy.
 
 **Historical OQ-42 — After a sticky mid-run store failure, may publication continue unanchored? *Narrowed on one
@@ -2093,8 +2108,30 @@ costs nothing if it is taken alongside ADR-0041's transitions-ever-recorded coun
 shape of obligation for the same reason (constraints C-10, W-26). **Someone should own this store before
 it is discovered from a user's export.**
 
-**OQ-46 — The repair notice is specified in the singular and the failure it reports is plural.**
-*(ADR-0002, ADR-0055; constraint R-17.)* `REQ-SESSION-062` and `REQ-SHELL-155` specify a repair notice
+**OQ-46 — CLOSED as a policy decision, 2026-09-06; implemented 2026-09-13.** *(ADR-0002, ADR-0055;
+constraint R-17.)*
+
+The accepted review answers **one aggregate notice for the batch**: `REQ-SHELL-155` keeps its singular title
+word for word for a single repaired session, and a batch raises exactly one warning naming how many were
+repaired, naming them, and carrying a route to the surface the affected-session list is reached from.
+`REQ-SESSION-062` keeps one timeline entry per repaired session — the record is unchanged by what is shown —
+and continuation is offered only once the relevant batch has settled. **No escalation is needed**: this entry
+said the answer becomes one *only if* it changes the notice vocabulary `REQ-NOTIFY-044` and `REQ-NOTIFY-048`
+to `REQ-NOTIFY-050` close, and it does not — the route is `open-view` to Overview, an existing member of
+`REQ-SHELL-115`'s closed list, whose own "List sessions" control opens the browser. A reader who thinks the
+list deserves a member of its own should raise that as the escalation; nothing here presumes the answer.
+
+***What building it found.*** `REQ-SESSION-062` fixes the repair's timeline entry exactly — type, severity,
+actor, message and metadata keys — and the implementation had invented every one of them but the actor:
+`session_marked_interrupted` for a type the requirement calls `session.interrupted_recovered`, the default
+`info` for a severity it fixes as `warning`, a two-sentence message for one it fixes word for word, and
+`previous_status` for `previous_execution_status`, with `execution_status` missing beside it. A reader of the
+exported timeline (`REQ-SESSION-199`) could not have found the entry the specification promises. It was
+reachable only by auditing the requirement this entry names, which is what this closure required and what a
+sweep of the surrounding code would not have done.
+
+**Historical question — the repair notice is specified in the singular and the failure it reports is plural.**
+`REQ-SESSION-062` and `REQ-SHELL-155` specify a repair notice
 written for **one** stale session. ADR-0002 now accepts as a consequence rather than disputing that a
 run-host crash produces **one stale session per in-flight run**, possibly across several workspaces — and
 `REQ-MONITOR-249` to `REQ-MONITOR-258` make concurrent runs a supported and encouraged shape, so the

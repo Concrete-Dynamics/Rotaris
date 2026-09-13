@@ -95,6 +95,23 @@ The unsupported sign-in-method branch now returns its actionable failure while
 preserving last-error state. Regression coverage verifies zero provider contact,
 unchanged credentials, no diagnostics and unchanged last-error state.
 
+## OQ-46 — the repair announcement in the plural (applied)
+
+REQ-SHELL-155 keeps its singular title for one repaired session and requires
+exactly one aggregate warning for a batch, naming how many were repaired and
+carrying a route to the surface the affected-session list is reached from; the
+action stays inside REQ-NOTIFY-044's closed vocabulary, so no escalation follows.
+REQ-SESSION-062 keeps one timeline entry per repaired session and now says so:
+the record is not reduced by what is shown. Continuation is offered only once the
+relevant batch has settled, which the run host's whole-workspace repair already
+establishes by repairing every stale session inside one request.
+
+Applying it found the entry itself non-conformant. REQ-SESSION-062 fixes type,
+severity, actor, message and metadata keys; the implementation carried
+`session_marked_interrupted`, severity `info`, a two-sentence message and
+`previous_status` without `execution_status`. All five now match the requirement,
+and the regression asserts each of them rather than a substring of the message.
+
 ## OQ-42 — durable recording failure (applied)
 
 REQ-EVENTS-078 now scopes isolation to consumer-delivery faults. REQ-EVENTS-088
@@ -110,3 +127,42 @@ affected runs to settle and performs a write probe that is rolled back. Probe
 failure retains quarantine; successful recovery rebuilds the opened session's
 writer and projection from persisted state. Existing failed writers remain
 closed to further writes until their sessions are explicitly reopened.
+
+**The dependent-spec consistency scan, 2026-09-13.** It found two continue-on-
+recording-failure clauses still standing outside the two requirements the first
+pass amended, and both are now amended in place with their falsified reading kept
+beside them. REQ-CLI-067 said a run "carries on with a logged warning" when the
+event store cannot be opened *or written* and that "persistence trouble is never
+allowed to fail a run" — contradicting REQ-EVENTS-084 and REQ-EVENTS-088 in terms;
+it now cites both and keeps only the part that was always true, that a streaming
+consumer's own trouble never ends a run (REQ-EVENTS-078). REQ-SESSION-145 said an
+event that cannot be recorded "is discarded with a warning rather than raised";
+that survives for the serialization case REQ-EVENTS-088 names and is withdrawn for
+durable failures, and the requirement now owns only the property it was written
+for — the writer never *raises* into a run. REQ-MONITOR-221 needed no exception and
+gained none; it states explicitly that a failed persistence publishes nothing and
+that the in-memory status shown afterwards sits outside the authoritative
+transcript. REQ-MONITOR-292 is unchanged and consistent as written.
+
+**The cross-process failure-propagation audit, 2026-09-13.** The quarantine is per
+open database and therefore per process; the audit establishes that this is the
+whole of the propagation surface, because the run host is the only process that
+opens a workspace store for writing (ADR-0058, ADR-0005) — main holds no handle on
+it, and the workspace service opens one only read-only, and only to verify a
+restore. What crosses a process boundary is therefore the run host's own
+`notice.publish` and its `run.result`, and the audit found the second of those
+lossy: the engine's `RunResult` carried `persistence: {confirmed: false, …}` and
+the contract's `RunResultSchema` had no such field, so main could tell an
+unconfirmed completion from any other error only by reading the summary sentence.
+It now crosses as a field, and main uses it to suppress its own terminal notice for
+such a run — REQ-EVENTS-088 allows exactly one failure notification per affected
+run, and the run host has already published it. Two notices for one failure was a
+live defect before this change.
+
+**The desktop notice and its recovery action, 2026-09-13.** The notice carried the
+last durable ordinal and a sentence telling the user to reopen the session; it
+carried no action. Reopening is the product's own recovery — it waits for every
+affected run to settle, runs the rolled-back write probe, and rebuilds the opened
+session's writer and projection — so the notice now names it as an action, mapped
+in main onto REQ-NOTIFY-044's existing `focus-session` member. No member is added
+to that closed vocabulary.

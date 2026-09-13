@@ -6,7 +6,7 @@ import { asSessionId, FakeClock, mintMachineId, type MachineId, type SessionId }
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import type { SessionSnapshot, TranscriptIncrement } from '@rotaris/contracts';
 import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, type AgentBackend, type ScriptedCall, type TurnReport } from '@rotaris/model';
-import { parseEventLine, ProjectionOwner, Run, RUN_CONFIG_DEFAULTS, SequenceCounters, Sessions, SessionWriter, toSessionRecord, toTranscriptRow, type Publisher, type RunConfig, type RunResult } from '../index.js';
+import { parseEventLine, ProjectionOwner, Run, RUN_CONFIG_DEFAULTS, SequenceCounters, Sessions, SessionWriter, toSessionRecord, toTranscriptRow, type Publisher, type RunConfig, type RunNotice, type RunResult } from '../index.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
@@ -33,7 +33,7 @@ describe('engine/run — the run loop end to end against a real store and a scri
 
   const config = (over: Partial<RunConfig> = {}): RunConfig => ({ ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k', ...over });
 
-  function sessionsWith(backend: AgentBackend, over: Partial<RunConfig> = {}, extra: { onRunResult?: (id: SessionId, r: RunResult) => void } = {}) {
+  function sessionsWith(backend: AgentBackend, over: Partial<RunConfig> = {}, extra: { onRunResult?: (id: SessionId, r: RunResult) => void; notice?: (n: RunNotice) => void } = {}) {
     const pub = recorder();
     let n = 0;
     const sessions = new Sessions({
@@ -386,7 +386,8 @@ describe('engine/run — the run loop end to end against a real store and a scri
       entered += 1;
       signal.addEventListener('abort', () => resolve({ status: 'failed', text: '', usage: { input: 0, output: 0 }, error: modelError({ code: 'aborted', headline: 'aborted', transient: false }) }), { once: true });
     }) };
-    const { sessions } = sessionsWith(backend);
+    const notices: RunNotice[] = [];
+    const { sessions } = sessionsWith(backend, {}, { notice: (n) => notices.push(n) });
     const a = (sessions.start(dal, 'C:/ws', 'a') as { value: SessionId }).value;
     const b = (sessions.start(dal, 'C:/ws', 'b') as { value: SessionId }).value;
     await vi.waitFor(() => expect(entered).toBe(2));
@@ -400,7 +401,21 @@ describe('engine/run — the run loop end to end against a real store and a scri
     expect(sessions.start(dal, 'C:/ws', 'blocked')).toMatchObject({ ok: false, error: { code: 'store-failed' } });
     expect(sessions.resume(dal, 'C:/ws', a)).toMatchObject({ ok: false, error: { code: 'store' } });
     const outcomes = await Promise.all([sessions.running(a), sessions.running(b)]);
-    for (const outcome of outcomes) expect(outcome).toMatchObject({ status: 'error', persistence: { confirmed: false } });
+    // REQ-EVENTS-088: the caller's outcome discloses the uncertainty structurally — the ordinal is readable, not a sentence.
+    for (const outcome of outcomes) expect(outcome).toMatchObject({ status: 'error', execution_status: 'unknown', persistence: { confirmed: false } });
+    for (const outcome of outcomes) expect(typeof outcome!.persistence!.last_event_ordinal).toBe('number');
+    /**
+     * REQ-EVENTS-088 / OQ-42: exactly one failure notification per AFFECTED run — two runs, two notices, never
+     * one per failed write — each naming its own session, its own last durable ordinal, and the recovery action
+     * that reopens that session. The key is per session for the same reason.
+     */
+    const failures = notices.filter((n) => n.headline === 'Run recording failed; completion is unconfirmed');
+    expect(failures.map((n) => n.sessionId).sort()).toEqual([a, b].sort());
+    for (const n of failures) {
+      expect(n).toMatchObject({ severity: 'error', action: 'session.reopen', key: `recording-failure:${n.sessionId}` });
+      expect(n.detail).toContain('Last durable event ordinal:');
+      expect(n.detail).toContain('reopen the session');
+    }
     expect(events(a).length).toBe(boundaryA);
     expect(events(b).length).toBe(boundaryB);
     expect(sessions.prompt(a, 'blocked')).toMatchObject({ ok: false, error: { code: 'store-failed' } });

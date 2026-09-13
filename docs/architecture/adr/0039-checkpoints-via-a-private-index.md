@@ -434,7 +434,7 @@ with checkpoints — owed) can be handed it; awaited, so it precedes the next it
 *REQ-GIT-094's open-time repair is reachable:* ADR-0005's reap at resume releases a dead lock but leaves the status
 `running`, and a session never resumed keeps both; the listing repairs a persisted-active session whose liveness is
 `not-live` (a lock on this host with a dead pid, no lock at all, or this process's own lock with no run behind it) —
-`interrupted`, the lock released, a `session_marked_interrupted` timeline entry, the notice — and the proof's `live`
+`interrupted`, the lock released, a `session.interrupted_recovered` timeline entry, the notice — and the proof's `live`
 launch exits mid-run to produce exactly that session for the `repaired` launch (its notice is raised and logged; at the
 capture the first-launch provider notice, raised 200 ms later, occupies ADR-0049's one slot — the same observation the Git
 proof made of "Working without Git"). *REQ-GIT-093's probe with our own pid:*

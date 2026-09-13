@@ -206,8 +206,13 @@ export interface RunResult {
   readonly error: string | null;
   readonly execution_status: string;
   readonly severity: 'information' | 'warning' | 'error';
-  /** Present for the in-memory outcome when terminal persistence could not be confirmed. */
-  readonly persistence?: { readonly confirmed: false; readonly lastEventOrdinal: number };
+  /**
+   * REQ-EVENTS-088 (OQ-42): present for the in-memory outcome when terminal persistence could not be confirmed,
+   * and absent otherwise. It is snake-cased like every other field here because this value crosses the process
+   * boundary as it stands (ADR-0044's `run.result`): a caller must be able to READ the uncertainty rather than
+   * recognise a sentence, which is what "caller outcomes disclose that uncertainty" asks for.
+   */
+  readonly persistence?: { readonly confirmed: false; readonly last_event_ordinal: number };
 }
 
 /** ADR-0014 rule 1: the one 30 s allowance, shared by the cancellation grace and the force-exit backstop. */
@@ -308,6 +313,14 @@ export class Run {
       this.deps.notice?.({
         severity: 'error', headline: 'Run recording failed; completion is unconfirmed',
         detail: `In-memory status: cancellation requested. Last durable event ordinal: ${lastEventOrdinal}. ${reason}. Restore writable storage, then reopen the session to inspect its saved boundary before continuing.`,
+        /**
+         * OQ-42: the recovery is an ACTION and not only a sentence. Reopening the session is the product's own
+         * recovery path — it waits for every affected run to settle, runs the rolled-back write probe, and
+         * rebuilds this session's writer and projection (`Sessions.resume`) — so the notice offers exactly that,
+         * against exactly this session. The identifier is REQ-NOTIFY-223's; main maps it to the member of
+         * REQ-NOTIFY-044's closed vocabulary that focuses a named session, and adds nothing to that vocabulary.
+         */
+        action: 'session.reopen',
         sessionId: this.sessionId, key: `recording-failure:${this.sessionId}`,
       });
     });
@@ -1073,7 +1086,7 @@ export class Run {
       this.result = {
         ...result, status: 'error', execution_status: 'unknown', severity: 'error',
         stop_reason: 'agent_session_aborted', summary: 'Run completion is unconfirmed because durable recording failed.',
-        error: failure.reason, persistence: { confirmed: false, lastEventOrdinal: failure.lastEventOrdinal },
+        error: failure.reason, persistence: { confirmed: false, last_event_ordinal: failure.lastEventOrdinal },
       };
       return this.result;
     }

@@ -109,6 +109,8 @@ file leaves the hole open rather than inventing a row to fill it.
 
 ---
 
+| **2026-09-13** | **Run-local board permissions and captured launch configuration** (R-009, REQ-TRACE-470/471) | **ADR-0041**, Part AP execution, closure dated 2026-09-13 | — | Focused tests against configuration loads and session records exposed the launch audit's literal `default` permission and empty runtime snapshot. The audit now records the effective permission and captured runtime. Overlapping launches retain their own grants and credentials; a refused active-run prompt returns before configuration loading. |
+
 ## The two ledgers, reconciled — 2026-09-11
 
 The reconciliation this file first recorded as owed is done. It did not resolve the way the note assumed, and

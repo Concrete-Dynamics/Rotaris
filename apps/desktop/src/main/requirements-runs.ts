@@ -13,19 +13,8 @@ import { millis, type Millis } from '@rotaris/kernel';
  * surface asks for a launch preview, kicks a dispatch after an act or a queue change, suppresses the disclosure
  * permanently, or lists the board runs this process owns (REQ-TRACE-475).
  *
- * The elevation (REQ-TRACE-470/471), as this build can grant it: `runtime.permission_mode` is a Tier B key
- * (REQ-CONFIG-263), so the coordinator hands the run host a live state carrying `permission_mode: autonomous` for the
- * one `session.start` it issues and restores the live state at once afterwards — the workspace's stored configuration
- * is never touched and the composer's next run reads the file again. TWO residues are stated rather than hidden:
- * (1) `runtime.allow_unsandboxed_autonomous` is NOT a Tier B key (REQ-CONFIG-263 closes the list; REQ-CONFIG-265 makes
- * it Tier C), so the opt-in half of REQ-TRACE-470 has no per-run route in this build. On the attended desktop the
- * engine's REQ-TOOLS-067 downgrade does not fire (an interactive approval host is registered), so the run holds the
- * permissive preset; a headless host would downgrade it to `ask`, exactly as REQ-TRACE-470 warns. A per-run field on
- * the run host's `session.start` would close it and is the ruling requested in the handoff. (2) A composer start that
- * reaches the run host between the two live-state hand-overs would read the elevated state — a window of two
- * round-trips that only a per-run field closes as well. The live state restored is `{}`: the settings surface hands its
- * pending values over on every change (REQ-CONFIG-262), and REQ-CONFIG-286's guard means a dirty settings form cannot
- * be on screen while the board is, so nothing pending is lost by the restore in practice; stated in the ADR note.
+ * REQ-TRACE-470/471: the authorized board grant travels on this run's session.start.
+ * The run host applies both permission fields to its captured configuration.
  */
 export interface RequirementsRunsDeps {
   /** The workspace this instance has open, canonical, or undefined; and its run-host id. */
@@ -109,17 +98,7 @@ export function createRequirementsRuns(deps: RequirementsRunsDeps): Requirements
     const binding: WorktreeBinding = { worktree_path: claim.worktree.path, branch: claim.worktree.branch, base_branch: claim.worktree.baseBranch, base_revision: claim.worktree.baseRevision, created_by_session: false, merge_status: 'ready', integration_session_id: null };
     const elevate = claim.permissions === 'permissive';
     try {
-      if (elevate) {
-        const handed = await deps.runHost.request({ kind: 'config.liveState', state: { runtime: { permission_mode: 'autonomous' } } }, BOUND_SHORT);
-        if (handed.kind !== 'ack') return { started: false, reason: `the run host did not take the elevated permissions for this run (${handed.kind}); nothing started` };
-      }
-      let r: ProcessReply;
-      try {
-        r = await deps.runHost.request({ kind: 'session.start', workspaceId, prompt: claim.prompt, sessionId, effectiveRoot: claim.worktree.path, worktree: binding }, BOUND_START);
-      } finally {
-        // The elevation is confined to that one start (REQ-TRACE-470/471): the live state goes back before anything else can read it.
-        if (elevate) await deps.runHost.request({ kind: 'config.liveState', state: {} }, BOUND_SHORT).catch(() => undefined);
-      }
+      const r = await deps.runHost.request({ kind: 'session.start', workspaceId, prompt: claim.prompt, sessionId, effectiveRoot: claim.worktree.path, worktree: binding, ...(elevate ? { boardPermissions: 'permissive' as const } : {}) }, BOUND_START);
       if (r.kind !== 'session.started') return { started: false, reason: r.kind === 'refused' ? [r.headline, r.detail].filter(Boolean).join(': ') : `unexpected reply ${r.kind}` };
       if (r.sessionId !== sessionId) deps.log(`requirements: the run host minted ${r.sessionId} for the start that named ${sessionId}; the row carries the host's id`);
       return { started: true, sessionId: r.sessionId };

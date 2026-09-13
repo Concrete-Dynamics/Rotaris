@@ -24,7 +24,9 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-13** — **the session-lifecycle work package (A3, A6, A9, OQ-8, OQ-12,
+Last reconciled with the code: **2026-09-13** — **run-local launch permissions (R-009, REQ-TRACE-470/471)**:
+the process and runtime views record the per-launch board grant, configuration capture before credentials,
+session-owned run ports, and runtime launch-audit evidence. Earlier reconciliation: **the session-lifecycle work package (A3, A6, A9, OQ-8, OQ-12,
 OQ-41, OQ-42, OQ-46)**: the runtime view's teardown paragraph is corrected — it still put **the lock release inside
 the terminal transaction**, which A3 moved to the end of guaranteed cleanup, and the code had not done that since A3
 was applied; it also now records that main does not present `run.result` as a notice when that result carries

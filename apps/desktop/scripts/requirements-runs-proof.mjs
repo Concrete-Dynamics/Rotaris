@@ -55,6 +55,7 @@ const SUITES = [
   'apps/desktop/src/workspace-service/delivery.test.ts',
   'packages/workspace/src/delivery/transition.test.ts',
   'packages/workspace/src/delivery/guard.test.ts',
+  'apps/desktop/src/run-host/launch.test.ts',
   'packages/workspace/src/delivery/proof.test.ts',
 ];
 /** The plan's five assertions for this row, verbatim as `it` titles in requirements-runs.proof.test.ts. */

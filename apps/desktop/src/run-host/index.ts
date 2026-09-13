@@ -14,6 +14,7 @@ import { McpHost } from './mcp.js';
 import { deleteSession, exportRecords, exportTrajectories, repairSessions, sessionFiles } from './session-actions.js';
 import { CHECKPOINTS_DEFAULTS, RUNTIME_DEFAULTS, type LiveState, CODE_INTELLIGENCE_TOKEN } from '@rotaris/config';
 import { classifierSlotsOf, configureRun, egressReader, modelRefOf, type ConfiguredRun } from './configuration.js';
+import { launchSession } from './launch.js';
 import { type ModelClient, type ModelRequest, type StreamPart } from '@rotaris/model';
 import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
@@ -343,10 +344,13 @@ const configDir = resolveUserDirs().config;
 const rungMemory = new RungMemory();
 // ADR-0037 Tier B: the settings store's current values, as main last told this process; empty until it does.
 let liveState: LiveState = {};
-// The configuration resolved for each workspace's latest run start; every port of that run reads it.
+// Latest workspace configuration for workspace-scoped controls and continuation loads.
 const configured = new Map<string, ConfiguredRun>();
-// ADR-0030: the bearers main leased for each workspace's current run; a resolver reads this map per request.
-const leased = new Map<string, Record<string, string>>();
+// ADR-0030: latest workspace lease for continuation loads. Active launches capture their own lease.
+const leased = new Map<string, Readonly<Record<string, string>>>();
+// Each active run retains its setup through deferred preflight and tool creation.
+const configuredRuns = new Map<string, ConfiguredRun>();
+const runBearers = new Map<string, Readonly<Record<string, string>>>();
 // ADR-0034 (Part S): the one MCP holder of the application — discovery memo, probes, session connections, the override, the sink.
 const mcp = new McpHost({
   clocks, log: (m, level) => log(m, level ?? 'info'), parentEnv: hostEnv,
@@ -360,12 +364,14 @@ const mcp = new McpHost({
 const packaged = import.meta.dirname.includes('app.asar');
 const codeIntelligenceLaunch = { command: process.execPath, args: packaged ? [CODE_INTELLIGENCE_TOKEN, '--'] : [join(import.meta.dirname, 'index.js'), CODE_INTELLIGENCE_TOKEN, '--'] };
 log(`mcp: the reserved token launches ${codeIntelligenceLaunch.command} ${codeIntelligenceLaunch.args.join(' ')} (${packaged ? 'packaged' : 'development'})`);
+const configurationDeps = {
+  clocks, globalDir: configDir, env: process.env, scriptedClient: () => scriptedClient(clocks), codeIntelligenceLaunch,
+  onRequest: (i: { method: string; url: string; headers: Record<string, string> }) => log(`model request ${i.method} ${i.url}${i.headers['authorization'] ? '' : ' (no authorization header)'}`),
+  log: (m: string) => log(m), liveState: () => liveState, bearers: (root: string) => leased.get(root) ?? {},
+  mcpEvidence: (cfg: ConfiguredRun['cfg'], root: string, role: string) => mcp.evidenceFor(cfg, root, role),
+};
 const configure = (workspaceRoot: string, attended: boolean) => {
-  const r = configureRun(workspaceRoot, attended, {
-    clocks, globalDir: configDir, env: process.env, scriptedClient: () => scriptedClient(clocks), codeIntelligenceLaunch,
-    onRequest: (i) => log(`model request ${i.method} ${i.url}${i.headers['authorization'] ? '' : ' (no authorization header)'}`), log: (m) => log(m), liveState: () => liveState, bearers: (root) => leased.get(root) ?? {},
-    mcpEvidence: (cfg, root, role) => mcp.evidenceFor(cfg, root, role),
-  });
+  const r = configureRun(workspaceRoot, attended, configurationDeps);
   if (r.ok) { configured.set(workspaceRoot, r.value); mcp.newConfiguration(r.value.cfg); }
   return r;
 };
@@ -392,6 +398,7 @@ const sessions = new Sessions({
   // ADR-0036/0037: the files, the live state, the loader's passes — once per run start.
   configure: (workspaceRoot, ctx) => {
     const r = configure(workspaceRoot, ctx.attended);
+    if (r.ok) { configuredRuns.set(ctx.sessionId, r.value); runBearers.set(ctx.sessionId, leased.get(workspaceRoot) ?? {}); }
     return r.ok ? r : { ok: false as const, error: { reason: r.error.reason } };
   },
   /**
@@ -407,13 +414,13 @@ const sessions = new Sessions({
     increment: (payload) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'publish.increment', payload } }),
     snapshot: (payload) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'publish.snapshot', payload } }),
   },
-  onRunResult: (sessionId, result) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'run.result', sessionId, result } }),
+  onRunResult: (sessionId, result) => { configuredRuns.delete(sessionId); runBearers.delete(sessionId); send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'run.result', sessionId, result } }); },
   // REQ-ORCH-085: the host told the run paused at the message limit.
   onRunPaused: (sessionId, info) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'run.paused', sessionId, count: info.count, limit: info.limit, tokens: info.tokens } }),
   tools: (ctx) => createToolPort(ctx, {
-    clocks, presenter, nextSequence: () => ++approvalSequence, fileStates, terminal, mcp, configured: (root) => configuredFor(root),
-    runtime: (workspaceRoot) => configuredFor(workspaceRoot)?.runtime ?? configureRunFallback(),
-    personas: (workspaceRoot) => configuredFor(workspaceRoot)?.personas ?? null,
+    clocks, presenter, nextSequence: () => ++approvalSequence, fileStates, terminal, mcp, configured: () => configuredRuns.get(ctx.sessionId) ?? null,
+    runtime: () => configuredRuns.get(ctx.sessionId)?.runtime ?? configureRunFallback(),
+    personas: () => configuredRuns.get(ctx.sessionId)?.personas ?? null,
     // ADR-0023 / REQ-SANDBOX-038: the saved files at each fetch call, never the live state; the read's cost logged.
     egress: (workspaceRoot) => {
       const read = egressReader(configDir, workspaceRoot, clocks);
@@ -430,22 +437,22 @@ const sessions = new Sessions({
   // ADR-0015: the hook set per run from the two file scopes; the hook process inherits this process's environment (REQ-HOOKS-032).
   hooks: (ctx) => createHookPort(ctx, { clocks, globalDir: configDir, env: hostEnv }),
   // ADR-0039: the capture at iteration close — Git through main to the workspace service, the row through the writer.
-  checkpoints: (ctx) => createCheckpointPort(ctx, { clocks, ask, section: configuredFor(ctx.workspaceRoot)?.cfg.checkpoints ?? CHECKPOINTS_DEFAULTS, log: (m) => log(m) }),
+  checkpoints: (ctx) => createCheckpointPort(ctx, { clocks, ask, section: configuredRuns.get(ctx.sessionId)?.cfg.checkpoints ?? CHECKPOINTS_DEFAULTS, log: (m) => log(m) }),
   // Part V: the engine's headline is the title and its prose the message body (REQ-NOTIFY-005: the detail block is for diagnostic output, which none of the three run notices carries); every run notice is dismissible.
   notice: (n) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'notice.publish', severity: n.severity, title: n.headline, message: n.detail, detail: '', ...(n.action === undefined ? {} : { action: n.action }), ...(n.key === undefined ? {} : { key: n.key }), sessionId: n.sessionId ?? '', persistent: true } }),
   // Part AO — the two control arms' channels: the completion toast (REQ-CHAT-080/084) on the window's stack, and the two
   // failure notices with a COPYABLE detail block (REQ-MONITOR-094, REQ-NOTIFY-037/038) through main's one persistent slot.
   acknowledge: (kind, title, body) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'acknowledgement.publish', kindOf: kind, title, ...(body === undefined ? {} : { body }) } }),
   report: (n) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'notice.publish', severity: n.severity, title: n.title, message: n.message, detail: n.detail, sessionId: n.sessionId, persistent: true } }),
-  supervisor: (workspaceRoot) => {
-    const run = configuredFor(workspaceRoot);
+  supervisor: (_workspaceRoot, sessionId) => {
+    const run = configuredRuns.get(sessionId);
     if (!run) return null;
     const cb = run.cfg.circuitBreaker;
     if (!cb.enabled || process.env['ROTARIS_CIRCUIT_BREAKER'] === 'off') return null;
     const timeoutMs = Math.round(run.runtime.loopClassificationTimeoutS * 1_000);
     const classifier = createLoopClassifier({
       backend: run.model.backend, runModel: run.model.config.model, thinking: run.model.config.thinking, credentialFor: run.model.config.credentialFor,
-      memory: rungMemory, configuredModel: modelRefOf(run.cfg, cb.model, run.scripted), slots: classifierSlotsOf(run.cfg, run.scripted, leased.get(workspaceRoot), (m) => log(m, 'warn')), modelTimeoutMs: timeoutMs,
+      memory: rungMemory, configuredModel: modelRefOf(run.cfg, cb.model, run.scripted), slots: classifierSlotsOf(run.cfg, run.scripted, runBearers.get(sessionId), (m) => log(m, 'warn')), modelTimeoutMs: timeoutMs,
     });
     return classifier ? {
       config: {
@@ -458,11 +465,11 @@ const sessions = new Sessions({
   },
   // REQ-ORCH-005: the pre-flight before the coordinator exists; the slots, the strategy and the tier from the run's configuration.
   preflight: (ctx) => {
-    const run = configuredFor(ctx.workspaceRoot);
+    const run = configuredRuns.get(ctx.sessionId);
     if (!run) throw new Error('the run has no configuration');
     return runPreflight(ctx, {
       clocks, backend: run.model.backend, runModel: run.model.config.model, credentialFor: run.model.config.credentialFor, modelTimeoutMs: run.model.config.modelTimeoutMs,
-      globalDir: configDir, tier: run.tier, slots: classifierSlotsOf(run.cfg, run.scripted, leased.get(ctx.workspaceRoot), (m) => ctx.warn(m)), runOverride: run.runtime.runOverride, memory: rungMemory, log: (m) => log(m),
+      globalDir: configDir, tier: run.tier, slots: classifierSlotsOf(run.cfg, run.scripted, runBearers.get(ctx.sessionId), (m) => ctx.warn(m)), runOverride: run.runtime.runOverride, memory: rungMemory, log: (m) => log(m),
     });
   },
 });
@@ -549,42 +556,45 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
       if (lease.isRefusing(req.workspaceId as WorkspaceId)) return { kind: 'refused', code: 'workspace.refusing', headline: 'New runs are refused for this workspace while a restore is under way' };
       const s = stores.get(req.workspaceId);
       if (!s?.dal) return { kind: 'refused', code: 'workspace.not-open', headline: 'No store is open for this workspace' };
-      // ADR-0030 / REQ-PROVIDER-066/067: resolve the configuration once to learn the providers it names, lease their
-      // bearers from main, and refuse before any session exists when the entry model's provider is not authenticated
-      // (REQ-WORKSPACE-137). `sessions.start` configures again; its resolvers read the leased map per request.
-      const pre = configure(s.root, presenters.attended);
-      if (!pre.ok) {
-        if (pre.error.code === 'no-model') return { kind: 'refused', code: 'session.no-model', headline: 'No model configured', detail: 'Choose a model in Settings before starting a run.' };
-        return { kind: 'refused', code: 'session.configuration', headline: 'The run was refused before it started', detail: pre.error.reason };
-      }
-      if (pre.value.authProviders.length > 0) {
-        const answer = await ask({ kind: 'credentials.lease', providerIds: [...pre.value.authProviders] }, millis(5_000)).catch((e: Error) => { log(`credentials: main did not answer the lease (${e.message})`, 'warn'); return null; });
-        const bearers = answer?.kind === 'credentials.leased' ? answer.bearers : {};
-        leased.set(s.root, bearers);
-        log(`credentials: leased for ${Object.keys(bearers).join(', ') || 'no provider'} (workspace ${s.root})`);
-        if (answer?.kind === 'credentials.leased') {
-          const u = Object.entries(answer.report.unresolved);
-          log(`credentials: ${answer.report.authenticated.length} provider(s) authenticated${u.length > 0 ? `; unresolved: ${u.map(([id, why]) => `${id} (${why})`).join(', ')}` : ''}`);
-        }
-        if (pre.value.entryAuthProvider !== null && !bearers[pre.value.entryAuthProvider]) {
-          return { kind: 'refused', code: 'session.provider-auth', headline: 'Provider authentication required', detail: 'Authenticate at least one configured provider before starting a run.' };
-        }
-      } else {
-        leased.set(s.root, {});
-      }
-      // ADR-0034 (Part S): discovery for every carried server starts now, bounded (REQ-MCP-053); the first tool port awaits it.
-      void mcp.prepare(pre.value.cfg, s.root).catch((e: unknown) => log(`mcp: discovery ahead of the run failed: ${String(e)}`, 'warn'));
-      // REQ-GIT-022 (Part O): the binding was made by the workspace service and the id minted in main before this
-      // request; the session row records the binding and the run works in the effective root (REQ-GIT-019).
-      if (req.effectiveRoot !== undefined && req.effectiveRoot !== s.root) log(`session ${req.sessionId ?? '(host-minted)'} is isolated: the run works in ${req.effectiveRoot}${req.worktree ? ` on branch ${req.worktree.branch}` : ''}; the record stays under ${s.root}`);
-      const r = sessions.start(s.dal, s.root, req.prompt, { ...(req.sessionId === undefined ? {} : { sessionId: req.sessionId }), ...(req.worktree === undefined ? {} : { worktree: req.worktree }), ...(req.sandboxMode === undefined ? {} : { sandboxMode: req.sandboxMode }), ...(req.attachments === undefined ? {} : { attachments: req.attachments }) });
-      if (!r.ok) {
-        // REQ-SESSION-082: a refusal before the run starts is reported at once, marked as such, with no session behind it.
-        if ('failedBeforeStart' in r.error) return { kind: 'refused', code: `session.${r.error.code}`, headline: 'The run was refused before it started', detail: r.error.reason };
-        return { kind: 'refused', code: `session.${r.error.code}`, headline: 'The session could not be started', detail: r.error.reason };
-      }
-      log(`session ${r.value} started; row 0 recorded; the run is executing`);
-      return { kind: 'session.started', sessionId: r.value };
+      return launchSession(req, {
+        workspaceRoot: s.root, attended: presenters.attended, configuration: configurationDeps,
+        leaseCredentials: async (providers) => {
+          const answer = await ask({ kind: 'credentials.lease', providerIds: [...providers] }, millis(5_000)).catch((e: Error) => { log(`credentials: main did not answer the lease (${e.message})`, 'warn'); return null; });
+          const bearers = answer?.kind === 'credentials.leased' ? answer.bearers : {};
+          log(`credentials: leased for ${Object.keys(bearers).join(', ') || 'no provider'} (workspace ${s.root})`);
+          if (answer?.kind === 'credentials.leased') {
+            const u = Object.entries(answer.report.unresolved);
+            log(`credentials: ${answer.report.authenticated.length} provider(s) authenticated${u.length > 0 ? `; unresolved: ${u.map(([id, why]) => `${id} (${why})`).join(', ')}` : ''}`);
+          }
+          return bearers;
+        },
+        start: (setup, bearers) => {
+          // Publish the setup only when its credential lease has settled. Deferred run ports use the session key.
+          const sessionId = req.sessionId ?? randomUUID();
+          const previousSetup = configuredRuns.get(sessionId);
+          const previousBearers = runBearers.get(sessionId);
+          const restore = () => {
+            if (previousSetup) configuredRuns.set(sessionId, previousSetup); else configuredRuns.delete(sessionId);
+            if (previousBearers) runBearers.set(sessionId, previousBearers); else runBearers.delete(sessionId);
+          };
+          configuredRuns.set(sessionId, setup);
+          runBearers.set(sessionId, bearers);
+          configured.set(s.root, setup);
+          leased.set(s.root, bearers);
+          mcp.newConfiguration(setup.cfg);
+          void mcp.prepare(setup.cfg, s.root).catch((e: unknown) => log(`mcp: discovery ahead of the run failed: ${String(e)}`, 'warn'));
+          if (req.effectiveRoot !== undefined && req.effectiveRoot !== s.root) log(`session ${sessionId} is isolated: the run works in ${req.effectiveRoot}${req.worktree ? ` on branch ${req.worktree.branch}` : ''}; the record stays under ${s.root}`);
+          try {
+            const r = sessions.start(s.dal!, s.root, req.prompt, { setup, sessionId, ...(req.worktree === undefined ? {} : { worktree: req.worktree }), ...(req.sandboxMode === undefined ? {} : { sandboxMode: req.sandboxMode }), ...(req.attachments === undefined ? {} : { attachments: req.attachments }) });
+            if (r.ok) log(`session ${r.value} started; row 0 recorded; the run is executing`);
+            else restore();
+            return r;
+          } catch (cause) {
+            restore();
+            throw cause;
+          }
+        },
+      });
     }
     case 'session.continue': {
       // REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause or continue a paused session; nothing is appended.

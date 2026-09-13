@@ -124,17 +124,19 @@ describe.skipIf(!out || !fixtureRoot)('requirements-runs-proof — runs from the
     expect(report.started.map((s) => s.id)).toEqual(['REQ-101']);
     firstSession = report.started[0]!.sessionId;
 
-    // REQ-TRACE-470/471: the start was made under the elevated live state, and only that one start was.
+    // REQ-TRACE-470/471: the board grant belongs to this start request.
     const started = hostRequests.find((h) => h.request.kind === 'session.start');
     expect(started).toBeDefined();
-    expect(started!.liveState).toEqual({ runtime: { permission_mode: 'autonomous' } });
+    expect(started!.request).toHaveProperty('boardPermissions', 'permissive');
+    expect(started!.liveState).toEqual({});
     expect((started!.request as { effectiveRoot?: string }).effectiveRoot).toBe(preview.worktreePath);
-    expect(hostRequests.map((h) => h.request.kind)).toEqual(['config.liveState', 'session.start', 'config.liveState']);
+    expect(hostRequests.map((h) => h.request.kind)).toEqual(['session.start']);
 
-    // The composer's next run reaches the same run host and does NOT get the preset: the live state was put back.
+    // The composer carries its ordinary configuration on the next start.
     await host({ kind: 'session.start', workspaceId: 'proof-workspace', prompt: 'the composer\'s next run', sessionId: 'composer-run' } as RunHostRequest);
     expect(hostRequests[hostRequests.length - 1]!.liveState).toEqual({});
-    results.launch = { branch: preview.branch, worktree: preview.worktreePath, session: firstSession, elevated: started!.liveState, composerLiveState: {} };
+    expect(hostRequests[hostRequests.length - 1]!.request).not.toHaveProperty('boardPermissions');
+    results.launch = { branch: preview.branch, worktree: preview.worktreePath, session: firstSession, boardPermissions: 'permissive', composerLiveState: {} };
   });
 
   it('the run row carries the session id while the unit runs', async () => {

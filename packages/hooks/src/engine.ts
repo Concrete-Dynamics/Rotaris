@@ -50,6 +50,13 @@ export interface HookEngineDeps {
   readonly spawn?: (spec: SpawnSpec) => ChildProcess;
   /** Test seam: replaces the process runner. */
   readonly invoke?: (hook: HookEntry, payload: Uint8Array, deps: RunnerDeps) => Promise<Outcome>;
+  /**
+   * REQ-ORCH-153 / REQ-HOOKS-126 (ADR-0062): whether the run this engine serves is held at the plan gate, read
+   * live at each invocation. While held "the run MUST NOT run a hook command", and each withheld invocation
+   * announces itself once — not once per session, because the hold ends when the user answers and the same hook
+   * then runs normally. Absent means no gate can hold it.
+   */
+  readonly planGateHeld?: (() => boolean) | undefined;
 }
 
 export interface ToolCallOccurrence extends ToolOccurrence {
@@ -167,6 +174,20 @@ export class HookEngine {
     // A hook switched off by a concurrent occurrence since selection is skipped without comment.
     if (this.off.has(hook.id)) return null;
     const { sinks } = this.deps;
+    /*
+     * REQ-ORCH-153 / REQ-HOOKS-126: no process is started while the run is held at the plan gate, and the
+     * withholding is announced as ONE `hook.finish` with no `hook.start`, no `hook_run` entry and no outcome
+     * (REQ-HOOKS-130's second by-design case). `hook_name` carries the stable id, never the configured display
+     * name (REQ-HOOKS-102). Once per withheld invocation: the hold is a moment that passes, and a hook withheld
+     * at the gate is not run late and never runs twice for that moment.
+     */
+    if (this.deps.planGateHeld?.() === true) {
+      this.publish(() => sinks.event('hook.finish', {
+        hook_id: hook.id, hook_name: hook.id, lifecycle_point: hook.event, scope: hook.source, tool_name: toolName,
+        exit_code: null, duration_ms: null, blocked: false, timed_out: false, skipped: true, skip_reason: 'plan_gate', output: '',
+      }), hook);
+      return null;
+    }
     const name = hookDisplayName(hook);
     const identity = { hook_id: hook.id, hook_name: name, lifecycle_point: hook.event, scope: hook.source, tool_name: toolName };
     this.publish(() => sinks.event('hook.start', { ...identity, command: redact(hook.command) }), hook);

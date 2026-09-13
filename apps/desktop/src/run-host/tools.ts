@@ -4,7 +4,7 @@ import { toIsoUtc, type Clocks } from '@rotaris/kernel';
 import { resolvePreset, type ApprovalPayload, type PermissionPreset, type ToolStatus } from '@rotaris/contracts';
 import {
   askQuestionsTool, buildPolicy, directWorkBundle, effectiveMode, fetchTool, FileToolState, findShell, Gate, globTool, grepTool, haetEditTool, haetReadTool, nodePtyFactory, PendingApprovals, PendingQuestions, PolicyContext, readFileTool, realPathOf,
-  resolveToolSet, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, writeFileTool, type GateSink, type PolicyRead, type PresenterPort, type ToolExecutor,
+  resolveToolSet, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, withheldUnderPlanGate, writeFileTool, type GateSink, type PolicyRead, type PresenterPort, type ToolExecutor,
 } from '@rotaris/agent-tools';
 import { BUILT_IN_PERSONAS, type ModeChange, type PersonaResolver, type PortToolCall, type PortToolResult, type RoleName, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
 import type { ConfiguredRun, RuntimeFromConfiguration } from './configuration.js';
@@ -161,7 +161,17 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   const single = runtime.runOverride === 'single';
   // REQ-ORCH-016/018: the pre-flight's grant reaches the entry role only; the bundle is resolved by facet against the registry.
   const directWork = isEntry && (single || ctx.grant === 'direct-work');
-  const declared = directWork ? [...new Set([...persona.tools, ...directWorkBundle()])] : persona.tools;
+  const granted = directWork ? [...new Set([...persona.tools, ...directWorkBundle()])] : persona.tools;
+  /*
+   * REQ-ORCH-153 (ADR-0062), enforcement point 1 of three: the planning grants applied to the DECLARED set, so
+   * one resolution still feeds both the model's listing and the callable map (REQ-TOOLS-010) — a held run is
+   * offered exactly the tools it may call, rather than being shown a tool the gate would then refuse. The `single`
+   * override is narrowed here on the same terms as every other role: the requirement grants it the direct-work
+   * bundle above and then narrows that bundle, which is why the narrowing comes after the union and not instead
+   * of it. This point only REMOVES; the dispatch check in the gate is what makes the withholding authoritative.
+   */
+  const planGateHeld = ctx.planGateHeld ?? (() => false);
+  const declared = planGateHeld() ? granted.filter((t) => !withheldUnderPlanGate(t)) : granted;
   const delegationAvailable = ctx.delegation !== undefined && !single;
   if (delegationAvailable && ctx.delegation) {
     const parentId = ctx.parentId ?? 'root';
@@ -221,6 +231,9 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     monotonic: deps.clocks.monotonic, wall: deps.clocks.wall, timers: deps.clocks.timers,
     sink: writerSink(ctx.writer, ctx.sessionId, deps.clocks, ctx.warn), nextSequence: deps.nextSequence,
     hooks: ctx.hooks ?? null,
+    // REQ-ORCH-153, enforcement point 2: the authoritative one — refused whichever role issues the call and by
+    // whatever route the tool reached it, including a name this port's narrowing never saw.
+    planGateHeld,
   });
 
   // ADR-0034 (Part S): the persona's MCP surface — demanded on `ready()`, after the discovery the run start kicked off, and
@@ -250,6 +263,10 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
       }
       const remove = (name: string) => { callable.delete(name); };
       for (const e of mcp.executorsFor({ cfg: run.cfg, workspaceRoot: ctx.workspaceRoot, role: ctx.persona, surface, ctx: session, remove, log: (m) => ctx.warn(m) })) {
+        // REQ-ORCH-153: an MCP tool carries no declaration, so the fail-closed predicate withholds it while the
+        // gate is held (ADR-0016's reading, the same one `restricted` and `read_only` already take above). The
+        // gate's dispatch check would refuse it anyway; removing it here keeps the listing honest.
+        if (planGateHeld() && withheldUnderPlanGate(e.name)) { ctx.warn(`mcp: '${e.name}' is withheld while this run is held at the plan gate (REQ-ORCH-153)`); continue; }
         if (callable.has(e.name)) { ctx.warn(`mcp: the tool name '${e.name}' collides with a native tool of ${ctx.persona}; the MCP tool is not offered`); continue; }
         callable.set(e.name, e);
         specs.push(specOf(e));

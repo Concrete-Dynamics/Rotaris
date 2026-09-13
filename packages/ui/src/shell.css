@@ -127,7 +127,7 @@
  * Four rows now: the run header (REQ-CHAT-008/158), the transcript, the queue panel (REQ-CHAT-036, "directly
  * above the composer" — it had no grid area and was auto-placed BELOW it) and the composer with its divider.
  */
-.workspace { display: grid; grid-template-rows: auto minmax(180px, 1fr) auto auto minmax(min-content, var(--rt-composer-height, 150px)); height: 100%; min-height: 0; }
+.workspace { display: grid; grid-template-rows: auto auto minmax(180px, 1fr) auto auto minmax(min-content, var(--rt-composer-height, 150px)); height: 100%; min-height: 0; }
 .run-header { display: flex; align-items: center; gap: var(--rt-space-3, 12px); padding: var(--rt-space-2, 8px) var(--rt-space-5, 24px); border-bottom: var(--rt-hairline-width) solid var(--rt-border); background: var(--rt-chrome); }
 /* The run state is a design Tag now (`RUN_STATE_TAGS` picks the tone), so the four colour overrides that used to
    sit here are gone — the tone is the tag's, and restating it per state is how the two drift apart. The dot takes
@@ -452,6 +452,22 @@
 .workspace--with-sidebar > .composer { grid-area: composer; }
 /* Part AB: every layout names the same five rows, so the queue panel is above the composer in all of them. */
 .workspace > .run-header { grid-area: runhead; }
+.workspace > .plan-gate { grid-area: plangate; }
+/*
+ * REQ-ORCH-153 / REQ-SHELL-048: while a plan gate holds, the transcript's 180 px floor gives way. Without this the
+ * grid is over-constrained on an ordinary window — the gate's `auto` row is allocated less than its content, the
+ * overflow is painted over by the next row, and the three answers sit under the transcript where no click reaches
+ * them (four built-app captures found exactly that, each time a row further down). The transcript is a log the
+ * reader can scroll; the gate is a decision the run is stopped on, so the transcript gives way first. What is left
+ * over after that comes off the gate's own row (`minmax(0, auto)`), and the block scrolls rather than overflowing.
+ * **The three answers are pinned sticky to the block's own floor**, which is the part that is not an optimisation:
+ * five built-app captures each left some part of the gate unreachable, and a decision the run is stopped on cannot
+ * depend on grid arithmetic coming out right at one window size. Pinned to the block's own floor they are reachable
+ * at every height, which is what REQ-SHELL-048 asks of every action and REQ-ORCH-153 of these three in particular. Nothing here applies when no gate holds, so REQ-CHAT-010's 180 px floor is untouched
+ * for every other run.
+ */
+.workspace[data-plan-gate='1'] { grid-template-rows: auto minmax(0, auto) minmax(0, 1fr) auto auto minmax(min-content, var(--rt-composer-height, 150px)); }
+.workspace--narrow[data-plan-gate='1'] { grid-template-rows: auto auto minmax(0, auto) minmax(0, 1fr) auto auto minmax(min-content, var(--rt-composer-height, 150px)); }
 .workspace > .queue { grid-area: queue; }
 .workspace > .composer__divider { grid-area: divider; }
 .agents { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); padding: var(--rt-space-3, 12px); border-right: 1px solid var(--rt-border); background: var(--rt-chrome); overflow: auto; }
@@ -563,6 +579,50 @@
 .wait-header__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rt-space-2, 8px); }
 .wait-header[data-exhausted='1'] { border-left-color: var(--rt-warn); }
 .wait-header[data-exhausted='1'] .wait-header__timing { color: var(--rt-warn); }
+
+/*
+ * REQ-ORCH-153/154 / REQ-SHELL-168: the plan gate, hosted inside the workspace view above the transcript. It takes
+ * the wait header's shape — a bordered block with an accent edge, sticky at the top of the column it belongs to —
+ * because it is the same kind of thing: the run is waiting on the user and the surface must say so without leaving
+ * the view. The accent is the attention token rather than the wait token: this is a decision to take, not time to
+ * pass. Every metric is a token and none a literal (the UI-language ratchet, `tools/check-ui-language.mjs`): the
+ * accent edge reuses the `--rt-hairline-width` the block's own border draws, tripled by `calc`, rather than
+ * restating the wait header's 3px. The plan field is monospace and preserves the role's own line breaks, which is
+ * REQ-ORCH-153's "verbatim" as a style rule — a soft-wrapped or re-flowed plan is a plan re-rendered.
+ *
+ * It is its OWN GRID ROW, not a block inside the transcript. Three built-app captures were needed to learn why,
+ * and each named the same mistake in different clothes: `.transcript` is a flex column that tail-follows, so a
+ * gate placed in it stood at its natural height and the column clipped whatever did not fit — first the title,
+ * then the three answers. Neither `position: sticky` nor a `vh` bound nor `max-height: 100%` nor `min-height: 0`
+ * repairs that, because the question is not how the box shrinks but which box it belongs to. On its own `auto`
+ * row the gate is whole, the transcript takes what is left, and no published row can scroll the decision away.
+ * The row is `minmax(0, auto)`, so it costs no height when no gate holds AND can shrink below the gate's natural
+ * height on a short window — where the shrink lands on the plan field (`flex: 1 1 0`, `min-height: 0`), the one
+ * child that can absorb it, rather than on the three answers. Keeping every answer reachable without scrolling is
+ * REQ-SHELL-048's obligation on every action. Sticky does nothing for a box taller than its scroll container, and the first two
+ * built-app captures showed exactly that: the transcript tail-follows, the gate stood taller than the column, and
+ * the title and then the three answers scrolled out of sight. A `vh` bound does not fix it either, because the
+ * column is not the window. Bounding it against the column is what keeps every answer reachable without
+ * scrolling — REQ-SHELL-048's obligation on every action, and what REQ-SHELL-168 means by hosting the gate inside
+ * the view that carries the run.
+ */
+.plan-gate { display: flex; flex-direction: column; min-height: 0; overflow: auto; gap: var(--rt-space-2); margin: 0 var(--rt-space-5) var(--rt-space-3); padding: var(--rt-space-3); background: var(--rt-surface); border: var(--rt-hairline-width) solid var(--rt-border); border-left: calc(var(--rt-hairline-width) * 3) solid var(--rt-accent); border-radius: var(--rt-radius-md); }
+.plan-gate__header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--rt-space-2); }
+.plan-gate__title { margin: 0; font-size: var(--rt-text-md); font-weight: var(--rt-weight-medium); color: var(--rt-text); }
+.plan-gate__facts { display: flex; gap: var(--rt-space-3); margin: 0; font-size: var(--rt-text-xs); }
+.plan-gate__facts > div { display: flex; gap: var(--rt-space-1); }
+.plan-gate__facts dt { color: var(--rt-text-secondary); }
+.plan-gate__facts dd { margin: 0; color: var(--rt-text); }
+.plan-gate__body { margin: 0; font-size: var(--rt-text-sm); color: var(--rt-text-secondary); }
+.plan-gate__prior { margin: 0; font-size: var(--rt-text-xs); }
+.plan-gate > * { flex: 0 0 auto; }
+.plan-gate__plan { flex: 1 1 0; width: 100%; min-height: 0; resize: vertical; white-space: pre; overflow-wrap: normal; overflow: auto; line-height: var(--rt-leading-body); }
+.plan-gate__todo { display: flex; flex-direction: column; gap: var(--rt-space-1); }
+.plan-gate__todo-label { font-size: var(--rt-text-xs); color: var(--rt-text-secondary); }
+.plan-gate__todo-list { margin: 0; padding-left: var(--rt-space-4); font-size: var(--rt-text-xs); color: var(--rt-text); }
+.plan-gate__changes-label { font-size: var(--rt-text-xs); color: var(--rt-text-secondary); }
+.plan-gate__changes { width: 100%; resize: vertical; }
+.plan-gate__actions { position: sticky; bottom: 0; justify-content: flex-end; padding-top: var(--rt-space-2); background: var(--rt-surface); }
 .tag-wait { border-color: var(--rt-wait); color: var(--rt-wait); }
 .playbooks__slot { margin: var(--rt-space-3, 12px) 0 0; }
 .playbooks__variant { display: grid; grid-template-columns: 140px 1fr; gap: var(--rt-space-2, 8px); padding: var(--rt-space-1, 4px) 0; border-bottom: 1px solid var(--rt-divider); font-size: var(--rt-text-sm, 13px); }
@@ -900,7 +960,7 @@
 /* Part T: the code-intelligence setup's three steps as text (REQ-MCP-112, REQ-SHELL-149). */
 .settings__steps { list-style: none; margin: var(--rt-space-3, 12px) 0; padding: 0; display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); }
 /* ── Part R: the agent surfaces — Mission, the inspector, the persona window, the table, the ring, the chips (tokens by name) ── */
-.workspace--with-sidebar { grid-template-columns: 260px 1fr auto; grid-template-areas: 'agents runhead inspector' 'agents transcript inspector' 'agents queue inspector' 'agents divider inspector' 'agents composer inspector'; }
+.workspace--with-sidebar { grid-template-columns: 260px 1fr auto; grid-template-areas: 'agents runhead inspector' 'agents plangate inspector' 'agents transcript inspector' 'agents queue inspector' 'agents divider inspector' 'agents composer inspector'; }
 /**
  * REMOVED 2026-09-11 — the eighty-second defect, and the falsified rule is stated rather than quietly deleted.
  *
@@ -956,7 +1016,7 @@
 .ctx-ring__tick { stroke: var(--rt-text-secondary); stroke-width: 2; }
 .ctx-ring__value { position: relative; font-size: var(--rt-text-2xs, 10px); color: var(--rt-text); }
 .agent-row__dot--idle { background: var(--rt-text-tertiary); }
-.workspace--narrow { grid-template-columns: 1fr; grid-template-areas: 'bar' 'runhead' 'transcript' 'queue' 'divider' 'composer'; grid-template-rows: auto auto minmax(180px, 1fr) auto auto minmax(min-content, var(--rt-composer-height, 150px)); position: relative; }
+.workspace--narrow { grid-template-columns: 1fr; grid-template-areas: 'bar' 'runhead' 'plangate' 'transcript' 'queue' 'divider' 'composer'; grid-template-rows: auto auto auto minmax(180px, 1fr) auto auto minmax(min-content, var(--rt-composer-height, 150px)); position: relative; }
 .workspace--narrow > .workspace__drawer-bar { grid-area: bar; display: flex; gap: var(--rt-space-2, 8px); padding: var(--rt-space-1, 4px) var(--rt-space-3, 12px); border-bottom: 1px solid var(--rt-border); background: var(--rt-chrome); }
 .workspace--narrow > .transcript { grid-area: transcript; }
 .workspace--narrow > .composer { grid-area: composer; }

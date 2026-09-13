@@ -1280,6 +1280,21 @@ async function main(): Promise<void> {
         log(`session ${req.sessionId} ${req.action}: ${r.resumed ? 'continued' : 'left paused'}`);
         return { ok: true, value: { resumed: r.resumed, messageLimit: r.messageLimit } };
       }
+      /*
+       * REQ-ORCH-153/154 (ADR-0062): the plan gate's two entries, forwarded to the run host that owns the session.
+       * They are session commands and not controls: the run is PARKED, so there is nothing live to control and the
+       * answer must reach a session whose hosting process may have exited since the gate opened.
+       */
+      case 'session.planEdit': {
+        const r = await runHost.request({ kind: 'session.planEdit', sessionId: req.sessionId, text: req.text }, millis(10_000));
+        return r.kind === 'ack' ? { ok: true, value: null } : refusal(r, 'The plan could not be edited');
+      }
+      case 'session.planDecision': {
+        const r = await runHost.request({ kind: 'session.planDecision', sessionId: req.sessionId, decision: req.decision, ...(req.changes === undefined ? {} : { changes: req.changes }) }, millis(10_000));
+        if (r.kind !== 'session.planResolved') { if (r.kind === 'refused') raiseNotice('error', r.headline, r.detail); return refusal(r, 'The plan decision could not be applied'); }
+        log(`session ${req.sessionId} plan cycle ${r.cycle}: ${req.decision}${r.relaunched ? ' — a further segment is executing' : ' — the run came to rest'}`);
+        return { ok: true, value: { cycle: r.cycle, relaunched: r.relaunched } };
+      }
       case 'hooks.summary': {
         if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace to see its hooks' };
         const r = await runHost.request({ kind: 'hooks.summary', workspaceId: w.workspaceId, ...(req.sessionId === undefined ? {} : { sessionId: req.sessionId }) }, millis(10_000));

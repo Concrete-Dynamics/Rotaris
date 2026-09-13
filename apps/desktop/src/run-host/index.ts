@@ -3,7 +3,7 @@ import { asSessionId, millis, ok, toIsoUtc, type Clocks, type Millis, type Works
 import { dataLayout, nodeClocks, probePid, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
 import { openStore, StoreDal, forgetSpelling, type PromptLists, type StoreHandle } from '@rotaris/store';
 import { CATALOGUE, RefusalLease, relativeTime, RungMemory, Sessions, SUPERVISOR_DEFAULTS, timelineId } from '@rotaris/engine';
-import { PresenterRegistry, STREAM_SETTINGS_DEFAULTS, type FileToolState, type TerminalManager } from '@rotaris/agent-tools';
+import { PresenterRegistry, STREAM_SETTINGS_DEFAULTS, withheldUnderPlanGate, type FileToolState, type TerminalManager } from '@rotaris/agent-tools';
 import { createToolPort, fileAppender, RunHostPresenter, terminalManagerFromHost } from './tools.js';
 import { createTerminalHost } from './terminal.js';
 import { clearHooksDecision, createHookPort, decideHooks, hooksSummaryFor, setHookToggle } from './hooks.js';
@@ -410,6 +410,9 @@ const sessions = new Sessions({
   onRunResult: (sessionId, result) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'run.result', sessionId, result } }),
   // REQ-ORCH-085: the host told the run paused at the message limit.
   onRunPaused: (sessionId, info) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'run.paused', sessionId, count: info.count, limit: info.limit, tokens: info.tokens } }),
+  // REQ-ORCH-153 (ADR-0062): the registry predicate the plan gate's child-admission check reads; the engine holds
+  // no copy of the tool declarations (ADR-0002's boundaries).
+  planWithholds: withheldUnderPlanGate,
   tools: (ctx) => createToolPort(ctx, {
     clocks, presenter, nextSequence: () => ++approvalSequence, fileStates, terminal, mcp, configured: (root) => configuredFor(root),
     runtime: (workspaceRoot) => configuredFor(workspaceRoot)?.runtime ?? configureRunFallback(),
@@ -592,6 +595,19 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
       if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: 'The session could not be continued', detail: r.error.reason };
       log(`session ${req.sessionId} ${req.action}: ${r.value.resumed ? 'a continuation run is executing' : 'left paused'}${r.value.messageLimit === null ? '' : ` (message limit ${r.value.messageLimit})`}`);
       return { kind: 'session.continued', sessionId: req.sessionId, resumed: r.value.resumed, messageLimit: r.value.messageLimit };
+    }
+    case 'session.planEdit': {
+      // REQ-ORCH-154: the edit is recorded and nothing else moves — the gate stays held on the same cycle.
+      const r = sessions.planEdit(asSessionId(req.sessionId), req.text);
+      if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: 'The plan could not be edited', detail: r.error.reason };
+      return { kind: 'ack' };
+    }
+    case 'session.planDecision': {
+      // REQ-ORCH-153: the three answers, exactly; approve and revise launch the next segment, cancel launches nothing.
+      const r = sessions.planDecision(asSessionId(req.sessionId), req.decision, req.changes ?? '');
+      if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: 'The plan decision could not be applied', detail: r.error.reason };
+      log(`session ${req.sessionId} plan cycle ${r.value.cycle}: ${req.decision}${r.value.relaunched ? ' — a further segment is executing' : ' — the run came to rest'}`);
+      return { kind: 'session.planResolved', sessionId: req.sessionId, cycle: r.value.cycle, relaunched: r.value.relaunched };
     }
     case 'session.prompt': {
       const r = sessions.prompt(asSessionId(req.sessionId), req.prompt, req.attachments ?? []);

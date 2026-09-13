@@ -46,9 +46,26 @@ sequenceDiagram
 ```
 
 `Run.start()` in order (REQ-SESSION-087): save `starting` → the pre-flight (intent classification through the
-small slot's rung ladder; the grant; the playbooks; the BUDGET cell) → the launch audit (once per session,
-REQ-SESSION-138) → `run_start` timeline entry → hook trust announced → the effective permission posture
-(downgrade row if any) → save `running` → `session_start` hooks → the loop.
+small slot's rung ladder; the grant; the playbooks; the BUDGET cell) → **the plan gate's hold settled** → the
+launch audit (once per session, REQ-SESSION-138) → `run_start` timeline entry → hook trust announced → the
+effective permission posture (downgrade row if any) → save `running` → `session_start` hooks → **the plan cycle
+if the gate holds**, otherwise the loop.
+
+**The plan gate (Part; ADR-0062, REQ-ORCH-152/153/154).** In `plan` mode a run whose classified intent is outside
+REQ-ORCH-021's answer group is a sequence of **run segments**: one or more plan cycles, then one execution
+segment. The hold is settled once, after the pre-flight and before anything it withholds, and never cleared in
+place — so a segment's grants are constant and the model's listing and callable set stay one resolution
+(REQ-TOOLS-010). A held segment takes **one turn of the entry role** through the ordinary `turn()` path, numbered
+**iteration 0** (`root:0`) because a plan cycle is not an iteration, and then `parkAtPlanGate()` mirrors
+`pauseAtLimit` exactly: status `awaiting_plan_decision` with the cycle, the cycle's row written in the same
+durable transaction with a `plan_gate_opened` entry, **no terminal pair**, and an EMPTY stop reason
+(REQ-MONITOR-301's set names no hold). The turn's report text IS the plan, verbatim.
+
+While the hold stands, three places enforce the planning grants of REQ-ORCH-153 — the port's narrowing
+(`createToolPort`, which only removes), `Gate.dispatch` ahead of the permission resolution (so a refused call's
+tool hooks never fire, REQ-HOOKS-004), and child admission (`IterationChildren.delegate`) — and the hook engine
+starts no process, emitting one `hook.finish` with `skip_reason: 'plan_gate'` per withheld invocation
+(REQ-HOOKS-126). The check suite is unreachable rather than guarded: a held segment never enters the loop.
 
 ## 2. The loop and one iteration
 
@@ -262,6 +279,15 @@ sweep on open settles the row first in this build's routes.
 | `clearTranscript` | `SessionWriter.clearTranscript()` — the run's own writer, or the loaded idle session's | **Part AO** (REQ-CHAT-082..084, both routes): every transcript row, resident or released to a page, deleted in ONE transaction with the **`transcript_cleared`** timeline entry, so a reader sees the old rows or none; the writer's resident count and open response rows reset so the run's next write cannot resurrect a row, the row index counter NOT reset (the `events` history keeps REQ-EVENTS-052's contiguity, the next row takes the next index); the commit hand-off carries `clear` and the projection owner drops every held row, cancels a pending growth tick and republishes — an increment from 0 with no rows, then the record. Failures: the persistent "Could not clear transcript" with the store's reason as detail; "Transcript is busy and could not be cleared." is a toast whose condition the store's synchronous transactions make unreachable in this build (stated in `sessions.ts`) |
 | everything else in REQ-MONITOR-004 | — | answers `false` (no mechanism yet) |
 
+A session **waiting at the plan gate** likewise has no live run. `session.planEdit {text}` records the user's own
+text and moves nothing else; `session.planDecision {decision, changes?}` carries one of exactly three answers
+(REQ-ORCH-153) and, in one durable act, decides the cycle, clears `sessions.plan_cycle` and writes
+`plan_gate_resolved`. **approve** sets `plan_released = 1` and launches the execution segment with the approved
+text (the edit where one exists); **revise** launches a further plan cycle with the plan as it stands and the
+changes stated, without limit; **cancel** comes to rest with stop reason `user_cancelled` and launches nothing.
+`plan_released` is read at every launch and cleared only by the next user prompt, which is REQ-ORCH-154's one-way
+approval across the process boundary the park introduces.
+
 A **paused** session has no live run: `session.continue {action}` is a session command — at the message limit
 it resolves the pause (continue → `idle`; double → the limit ×2; cancel → `paused`, stop reason
 `message_limit_reached`) and, for continue/double and for a manually paused session, launches a **continuation
@@ -310,11 +336,12 @@ of §5 and none a channel: each is a request answered once.
   record, no run pauses, a live session exports what it holds at that instant; the file is written afterwards, outside
   the transaction, through `replaceDocument` with REQ-TRACE-061's ladder.
 
-## 7. The store the run writes (`packages/store/src/schema.ts`, v16)
+## 7. The store the run writes (`packages/store/src/schema.ts`, v17)
 
 | Table | Holds | Written by |
 |---|---|---|
-| `sessions` | the session record: status (**`waiting`** while an agent is parked on a provider limit, Part Q — REQ-SESSION-073's arm, presented as `running`; the wait's own fields live on the record's `wait`, not in a column; **pending question prompts likewise live on the record's `pendingQuestions`**, derived from the live run at every snapshot — Part AC, so REQ-SESSION-025's persistence limb is owed), workspace, run columns (stop reason, iterations, tokens, cost, summary, todo, progress, permission mode, pending approvals, message limit, paused-at count, **`token_samples`** — v7, REQ-MONITOR-166's history the run samples every 10 s and once at the end, 120 kept), truncation facts, **`worktree`** (v8, REQ-GIT-015's binding as JSON; NULL = no worktree, REQ-GIT-017), **`sandbox_mode`** (v8, REQ-SHELL-125's choice; recorded, not honoured — ADR-0022) and **`last_restored_sequence`** (v9, REQ-SESSION-195 / REQ-GIT-155: NULL until a restore succeeds, written in that restore's transaction, untouched by every refusal) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, `recordRestore`; the binding and the mode at `create` only |
+| `sessions` | the session record: status (**`waiting`** while an agent is parked on a provider limit, Part Q — REQ-SESSION-073's arm, presented as `running`; the wait's own fields live on the record's `wait`, not in a column; **pending question prompts likewise live on the record's `pendingQuestions`**, derived from the live run at every snapshot — Part AC, so REQ-SESSION-025's persistence limb is owed), workspace, run columns (stop reason, iterations, tokens, cost, summary, todo, progress, permission mode, pending approvals, message limit, paused-at count, **`token_samples`** — v7, REQ-MONITOR-166's history the run samples every 10 s and once at the end, 120 kept), truncation facts, **`worktree`** (v8, REQ-GIT-015's binding as JSON; NULL = no worktree, REQ-GIT-017), **`sandbox_mode`** (v8, REQ-SHELL-125's choice; recorded, not honoured — ADR-0022) and **`last_restored_sequence`** (v9, REQ-SESSION-195 / REQ-GIT-155: NULL until a restore succeeds, written in that restore's transaction, untouched by every refusal), and **`plan_cycle` / `plan_released`** (v17, REQ-ORCH-153/154: the cycle awaiting an answer, NULL when none, and approval's one-way release, cleared only by the next user prompt) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, `recordRestore`, **`openPlanGate`/`resolvePlanGate`**; the binding and the mode at `create` only |
+| `plan_cycles` (**v17**, REQ-ORCH-154) | one row per plan cycle: `opened_at`, the role's `plan` VERBATIM (never rewritten after the insert), the classified `intent`, the `todo` the plan implies, the `changes` the user stated when choosing revise into it, the user's `edited` text (NULL until they edit � which is what makes "editing alone never approves it" structural), and the `decision` with `decided_at`. Keyed `(session_id, cycle)`, so an answer is recorded once and a second answer for the same cycle changes nothing | `openPlanGate` (one durable transaction with the status and the `plan_gate_opened` entry), `recordPlanEdit`, `resolvePlanGate` |
 | `checkpoints` (v9) | REQ-GIT-016's record, one row per checkpoint keyed `(session_id, sequence)` — ref, commit, created_at, iteration, child_name, `files` as one JSON list, `kind` from REQ-GIT-067's vocabulary; `checkpoint_count` is a count over these rows, never stored (ADR-0039); the listing is `ORDER BY sequence` under the primary key (a plan the store test asserts) | `recordCheckpoint` (insert + the trim to `max_per_session`, one transaction with the timeline entry and the event) |
 | `session_locks` | `(session_id, pid, host, acquired_at)` — the capability token (ADR-0005) | `create`/`open` (INSERT OR IGNORE), `endRun`, release |
 | `transcript_rows` | the rows, resident or released to a page (REQ-SESSION-131/192). Part Z added derived `chars` and transient `streamId`. Part AE adds ordered image metadata in `attachments` (v14): original name, content-derived media type, size, session-relative path and SHA-256 digest; bytes remain under the session files directory and reopen verifies availability and digest (REQ-CHAT-046/153/173) | `appendRow`, `settleRow`, `upsertMessageRow` |

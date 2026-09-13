@@ -1,6 +1,6 @@
 import { Budget, millis, toIsoUtc, type Clocks, type MachineId, type Millis, type SessionId, type TimerHandle, type Timers } from '@rotaris/kernel';
 import type { SessionRow } from '@rotaris/store';
-import { DEFAULT_CONTEXT_CAPACITY, type ApprovalOption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt } from '@rotaris/contracts';
+import { DEFAULT_CONTEXT_CAPACITY, isAnswerOnly, type ApprovalOption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ContentPart, ModelError, ModelRef, ThinkingLevel, TurnReport } from '@rotaris/model';
 import type { EventBus } from './event-bus.js';
 import type { ProjectionOwner } from '../projection-owner.js';
@@ -171,6 +171,16 @@ export interface RunDeps {
   readonly messageLimit?: number | null | undefined;
   /** REQ-ORCH-085: the host told the run paused at the limit, with the count and the limit. */
   readonly onPaused?: ((info: { count: number; limit: number | null; tokens: { input: number; output: number } }) => void) | undefined;
+  /**
+   * REQ-ORCH-152/153/154 (ADR-0062): the plan gate as a LAUNCH input. Present means this segment is a plan cycle
+   * IF the classified intent is outside REQ-ORCH-021's answer group — the run settles that itself, after the
+   * pre-flight and before anything a gate would withhold. Absent means `auto` mode, an answer-group run whose
+   * caller already knows it, or a run whose approval has released execution: in all three no gate can hold.
+   * `cycle` is the number this segment would open (1 upwards); `changes` is what the user stated when they chose
+   * revise into it, '' on the first cycle. `withholds` is the registry predicate the child-admission check reads
+   * (REQ-ORCH-153), injected because the tool declarations live outside the engine.
+   */
+  readonly plan?: { readonly cycle: number; readonly changes: string; readonly withholds: (tool: string) => boolean } | undefined;
   /** REQ-MONITOR-142 / REQ-ORCH-091 (d): a `models:` key resolved for a mid-run switch, or why it cannot be applied. */
   readonly models?: ((key: string) => ModelLookup) | undefined;
   /** Part Q: the session-wide memory, the catalogue the candidate rule reads, the run-level fallback slot. Absent: fresh memory, no candidate, no fallback. */
@@ -258,6 +268,12 @@ export class Run {
   /** REQ-MONITOR-123: a graceful pause requested; honoured at the next model step and at the iteration boundary. */
   private pauseRequested = false;
   private pausedAtLimit: { count: number; limit: number | null } | null = null;
+  /**
+   * REQ-ORCH-153: whether this run is held at the plan gate. Settled once, after the pre-flight and before the
+   * first thing the gate withholds; never cleared in place, because approval releases execution by launching the
+   * next segment (ADR-0062) rather than by flipping a flag under a running turn.
+   */
+  private planHeld = false;
   /** REQ-MONITOR-133/134: pending steering per conversation (`root` for the entry role, the task id for a child). */
   private readonly steering = new Map<string, { id: string; text: string }[]>();
   /** REQ-MONITOR-142: the entry model/reasoning switched mid-run; applied from the next iteration. */
@@ -335,6 +351,14 @@ export class Run {
   }
   get outcome(): RunResult | null {
     return this.result;
+  }
+  /**
+   * REQ-ORCH-153: the one live read of the hold, for the three places that enforce it — the tool port's narrowing,
+   * the gate's dispatch check and child admission. Read through a closure rather than copied, so a port built
+   * before the answer can never keep refusing after it.
+   */
+  get isPlanGateHeld(): boolean {
+    return this.planHeld;
   }
   /** REQ-NOTIFY-263: the wait the record carries; null while no agent is parked on a provider limit. */
   get currentWait(): WaitState | null {
@@ -420,6 +444,14 @@ export class Run {
         const intent = this.preflight?.intent ?? NO_PREFLIGHT_INTENT;
         writer.appendRow('system', `Intent classified: ${intent.category}${intent.carried_over ? ' (continued from previous run)' : ''}`, true);
       }
+      /*
+       * REQ-ORCH-153: the hold is settled HERE — after the pre-flight, so the answer group is known, and ahead of
+       * everything the gate withholds: the tool ports the first turn builds, the first hook command (`session_start`
+       * below) and any child. "Where the classified intent is not a member of the answer group of REQ-ORCH-021" is
+       * the one exemption; a run with no pre-flight falls back to `moderate_feature`, which is outside it, so a
+       * plan-mode run with no classifier still holds rather than silently proceeding.
+       */
+      this.planHeld = this.deps.plan !== undefined && !isAnswerOnly((this.preflight?.intent ?? NO_PREFLIGHT_INTENT).category);
       if (this.stop.requested) return await this.teardown(this.stop.reason ?? 'user_cancelled');
       const auditPayload = {
         session_id: this.sessionId, workspace_root: this.deps.workspaceRoot, created_at: this.deps.readSession()?.created_at ?? null,
@@ -455,6 +487,10 @@ export class Run {
       await this.drain();
       // REQ-HOOKS-003/081: session_start once, ahead of the first iteration, in line with the loop (REQ-HOOKS-080).
       if (this.hooks) await this.hooks.fireLifecycle('session_start', { task: this.deps.task });
+
+      // REQ-ORCH-153: a held run produces its plan and parks; it never enters the iteration loop, so it selects no
+      // task, judges no completion and runs no check suite — the prohibition is structural rather than a branch.
+      if (this.planHeld) return await this.parkAtPlanGate();
 
       // REQ-ORCH-069: stop conditions between iterations, first match wins; the stop request wins over all.
       for (;;) {
@@ -657,10 +693,15 @@ export class Run {
     return this.resilienceFor(this.rootCell, config.modelTimeoutMs);
   }
 
-  /** One turn: the tool loop of `turn.ts`, every model step streamed into its own `agent` row; with children, the resume loop. */
-  private async turn(task: string): Promise<TurnReport> {
+  /**
+   * One turn: the tool loop of `turn.ts`, every model step streamed into its own `agent` row; with children, the
+   * resume loop. `iterationOverride` is the plan cycle's 0 (ADR-0062): a plan cycle is NOT an iteration
+   * (REQ-ORCH-153's owner ruling), so it numbers itself 0 and leaves `root:1` upwards to the execution segment —
+   * `isEntryPort` reads `root:0` as the entry by depth and by spelling alike.
+   */
+  private async turn(task: string, iterationOverride?: number): Promise<TurnReport> {
     const { writer, owner, backend, config } = this.deps;
-    const iteration = this.iterationsCompleted + 1;
+    const iteration = iterationOverride ?? this.iterationsCompleted + 1;
     this.rootId = `root:${iteration}`;
     const children = this.deps.toolsFor && this.deps.dal
       ? new IterationChildren({
@@ -682,6 +723,8 @@ export class Run {
         // Part Y (REQ-LIBRARY-092/097/098): the session artifact store — child reports materialise into it and its
         // two context blocks reach every child the iteration launches.
         ...(this.deps.artifacts ? { artifacts: this.deps.artifacts } : {}),
+        // REQ-ORCH-153: the live hold and the registry predicate, for the child-admission refusal.
+        ...(this.deps.plan ? { planGate: { held: () => this.planHeld, withholds: this.deps.plan.withholds } } : {}),
       }, iteration)
       : null;
     this.children = children;
@@ -900,6 +943,66 @@ export class Run {
   }
   get pausedAtMessageLimit(): { count: number; limit: number | null } | null {
     return this.pausedAtLimit;
+  }
+
+  /**
+   * REQ-ORCH-153/154 (ADR-0062): one plan cycle, then the park.
+   *
+   * The cycle is ONE turn of the entry role under planning grants, taken through the ordinary turn path so the
+   * role holds the surface it would otherwise hold less what the gate withholds — the root execution record is
+   * therefore "created with the entry role exactly as REQ-ORCH-072 requires" rather than by a second code path
+   * that would drift from it. The report's text IS the plan: no separate tool announces one, because the public
+   * tool-name vocabulary is closed (REQ-TOOLS-002) and the requirement asks for the text the producing role
+   * wrote, verbatim.
+   *
+   * The park mirrors `pauseAtLimit` above, and for the same reason: the hold "is not a termination — it MUST
+   * raise no terminal run status and no terminal result", so nothing here records a `result` event, appends a
+   * run_end, releases the lock or writes a terminal status. The returned value is the in-process outcome of
+   * `start()` and reaches no user surface. Its `stop_reason` is EMPTY: `STOP_REASONS` (REQ-MONITOR-301) is closed
+   * and nothing in it names a hold, and the run did not stop, so no reason is claimed.
+   */
+  private async parkAtPlanGate(): Promise<RunResult> {
+    const { writer, owner, bus } = this.deps;
+    const cycle = this.deps.plan?.cycle ?? 1;
+    const intent = (this.preflight?.intent ?? NO_PREFLIGHT_INTENT).category;
+    let plan = '';
+    try {
+      const report = await this.turn(this.deps.task, 0);
+      plan = report.status === 'failed' ? '' : report.text.trim();
+      if (report.status === 'failed') this.lastFailure = describe(report.error);
+    } catch (cause) {
+      this.lastFailure = String(cause);
+    }
+    if (this.stop.requested) return await this.teardown(this.stop.reason ?? 'user_cancelled');
+    if (plan === '') {
+      // Nothing to put a decision on. A gate with no plan would offer three answers over an empty surface, so the
+      // run ends the way a failed root iteration does (REQ-ORCH-074) and the reason is the role's own.
+      this.lastFailure = this.lastFailure ?? 'the entry role produced no plan text while the run was held at the plan gate';
+      return await this.teardown('agent_session_aborted');
+    }
+    writer.appendRow('system', `A plan is ready for your decision (cycle ${cycle}). Approve to release execution, revise to ask for another plan, or cancel the run.`, true);
+    this.sampler?.cancel();
+    this.sampleTokens(false);
+    const opened = writer.openPlanGate(cycle, plan, intent, this.todoJson(), this.deps.plan?.changes ?? '', {
+      ...this.aggregates.patch(), token_samples: JSON.stringify(this.tokenSamples), todo: this.todoJson(), progress: JSON.stringify(this.progress()),
+    });
+    if (!opened.ok || writer.failed) return this.teardown('agent_session_aborted');
+    owner.flushPending();
+    try { await this.drain(); } catch (cause) { this.deps.warn(`forwarding the plan gate failed on ${this.sessionId}: ${String(cause)}`); }
+    // REQ-HOOKS-126: the attachment goes the way it does at a pause; the hook engine withheld every command this
+    // segment would have run and announced each withholding on the stream.
+    if (this.hooks) { try { await this.hooks.fireLifecycle('session_end', { status: 'interrupted' }); } catch { /* recorded elsewhere */ } this.hooks = null; }
+    bus.detachSession(this.sessionId);
+    this.unsubscribeRecordingFailure();
+    this.ended = true;
+    const usage = this.aggregates.usagePayload();
+    const result: RunResult = {
+      status: 'interrupted', session_id: this.sessionId, stop_reason: '', summary: `The run is waiting for a decision on its plan (cycle ${cycle}).`,
+      iterations_completed: this.iterationsCompleted, report: null, tokens: usage.tokens, cost: usage.cost, error: null,
+      execution_status: 'awaiting_plan_decision', severity: 'information',
+    };
+    this.result = result;
+    return result;
   }
 
   /** REQ-MONITOR-012 / REQ-TOOLS-177: every waiting approval of every agent in this run. */

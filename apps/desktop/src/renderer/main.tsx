@@ -2,7 +2,7 @@ import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'r
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
-import { BRIDGE_KEY, isBusy, isViewId, LIBRARY_TABS, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type ImageAttachmentInput, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type DisplayView, type PausePayload, type PauseResolution, type HookAgentId, type HooksSummary, type McpHealth, type McpListing, type McpSecretsView, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload, type QuestionAnswers } from '@rotaris/contracts';
+import { BRIDGE_KEY, isBusy, isViewId, LIBRARY_TABS, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type ImageAttachmentInput, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type DisplayView, type PausePayload, type PauseResolution, type PlanDecision, type HookAgentId, type HooksSummary, type McpHealth, type McpListing, type McpSecretsView, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload, type QuestionAnswers } from '@rotaris/contracts';
 import { createAcknowledgementStore, createNoticeStore, createReplicaStore, type AcknowledgementStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
 // Part AL2 — the terminal in this window (ADR-0021's subscription point, ADR-0047's window; REQ-SHELL-079..111): the
 // preview registry every transcript surface reads, the host that carries it, and the terminal window's own registry.
@@ -327,6 +327,35 @@ async function continueSession(action: PauseResolution = 'continue'): Promise<{ 
   return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline };
 }
 
+/**
+ * REQ-ORCH-154: the user's text over the plan awaiting a decision. It approves nothing — main forwards it to the
+ * run host, which records it against the pending cycle and leaves the gate exactly where it was.
+ */
+async function planEdit(text: string): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const sessionId = replica.getState().sessionId;
+  if (!sessionId) return { ok: false, reason: 'No session is loaded.' };
+  const r = await bridge.command({ kind: 'session.planEdit', sessionId, text });
+  return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline };
+}
+
+/** REQ-ORCH-153: one of exactly three answers, with the changes `revise` hands to the next cycle. */
+async function planDecision(decision: PlanDecision, changes: string): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const sessionId = replica.getState().sessionId;
+  if (!sessionId) return { ok: false, reason: 'No session is loaded.' };
+  const r = await bridge.command({ kind: 'session.planDecision', sessionId, decision, changes });
+  return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline };
+}
+
+/**
+ * REQ-ORCH-152 / REQ-CONFIG-476 / ADR-0037 ESC-1: the run-start mode written through the scoped per-field path,
+ * the same one the permission-mode chip uses. The composer's control and the start dialog's both come here, so
+ * there is one key and no surface holds a mode of its own.
+ */
+async function setRunStartMode(mode: 'auto' | 'plan'): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const written = await bridge.command({ kind: 'config.setField', patch: { runtime: { run_start_mode: mode } } });
+  return written.ok ? { ok: true } : { ok: false, reason: written.detail ?? written.headline };
+}
+
 /** ADR-0037: the configuration snapshot as the screen reads it — once on mount, again on every `config:changed`. */
 function useConfigSnapshot(workspace: string): ConfigSnapshot | null {
   const [snapshot, setSnapshot] = useState<ConfigSnapshot | null>(null);
@@ -609,6 +638,12 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
       }, 'Todo editing is not ready for this active run yet.')}
     onPause={() => control('pause', {}, 'Pause is unavailable because no active run exists.')}
     onContinue={() => continueSession('continue')}
+    /* REQ-ORCH-153/154 (ADR-0062): the plan gate's two entries, addressed to the focused session. */
+    onPlanEdit={(text) => planEdit(text)}
+    onPlanDecision={(decision, changes) => planDecision(decision, changes)}
+    /* REQ-ORCH-152 / REQ-CONFIG-476: the composer's half of the run-start mode; the start dialog writes the same key. */
+    runStartMode={snapshot?.runtime.run_start_mode ?? 'auto'}
+    onSetRunStartMode={(mode) => setRunStartMode(mode)}
     onSteer={(agentId, text) => control('submitSteeringPrompt', { agentId, text }, 'Steering is unavailable for this run.')}
     onSetModel={(model) => control('setModel', { model }, 'The run did not accept that model.')}
     onSetReasoning={(level) => control('setReasoning', { level }, 'The run did not accept that reasoning level.')}
@@ -1133,18 +1168,23 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
    * active on this single-run host; accepting holds the choices for the composer's next submission, releases the
    * followed session, empties the composer and shows Workspace.
    */
-  const [launch, setLaunch] = useState<{ sessionId: string; sandboxMode: SandboxModeName; runActive: boolean } | null>(null);
+  const [launch, setLaunch] = useState<{ sessionId: string; sandboxMode: SandboxModeName; runStartMode: 'auto' | 'plan'; runActive: boolean } | null>(null);
   const openStartDialog = useCallback(async (): Promise<{ ok: true } | { ok: false; reason: string }> => {
     const current = replica.getState();
     if (current.session && isBusy(current.session.executionStatus)) return { ok: false, reason: 'Finish or cancel the active run before starting a new session.' };
     const [id, config] = await Promise.all([bridge.command({ kind: 'session.newId' }), bridge.command({ kind: 'config.read' })]);
     if (!id.ok) return { ok: false, reason: id.detail ?? id.headline };
     const sandboxMode = config.ok ? (config.value as ConfigSnapshot).runtime.sandbox_mode : 'off';
-    setLaunch({ sessionId: (id.value as { sessionId: string }).sessionId, sandboxMode, runActive: false });
+    // REQ-ORCH-152: the persisted mode is what the dialog preselects; it holds none of its own.
+    const runStartMode = config.ok ? (config.value as ConfigSnapshot).runtime.run_start_mode : 'auto';
+    setLaunch({ sessionId: (id.value as { sessionId: string }).sessionId, sandboxMode, runStartMode, runActive: false });
     return { ok: true };
   }, []);
   const acceptLaunch = useCallback(async (options: LaunchOptions) => {
     setLaunch(null);
+    // REQ-ORCH-152 / REQ-CONFIG-476: the dialog's mode is the persistent setting, written before the session starts
+    // so the run this launch begins reads it. A failure to write is surfaced by the settings path, not swallowed here.
+    await setRunStartMode(options.runStartMode);
     useShellState.getState().setLaunchOptions(options);
     const current = replica.getState();
     if (current.sessionId) await bridge.command({ kind: 'session.unsubscribe', sessionId: current.sessionId });
@@ -1338,7 +1378,7 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
         onTake={(index, remove) => { void prompts.take('stash', index, remove).then(loadIntoComposer); }} />
     )}
     {launch && (
-      <StartSessionDialog sessionId={launch.sessionId} runActive={launch.runActive} defaultSandboxMode={launch.sandboxMode} confinementAvailable={false}
+      <StartSessionDialog sessionId={launch.sessionId} runActive={launch.runActive} defaultSandboxMode={launch.sandboxMode} defaultRunStartMode={launch.runStartMode} confinementAvailable={false}
         onChooseAttach={async () => { const r = await bridge.command({ kind: 'worktree.chooseAttach' }); if (!r.ok) return { ok: false, reason: r.detail ?? r.headline }; const v = r.value as { cancelled?: boolean; path?: string; branch?: string }; return v.cancelled || !v.path ? { ok: true, cancelled: true } : { ok: true, path: v.path, branch: v.branch ?? '' }; }}
         onAccept={(options) => { void acceptLaunch(options); }} onCancel={() => setLaunch(null)} />
     )}

@@ -44,7 +44,7 @@ function recordingSink() {
   return { sink, decisions, requested, issues, timeline, opens, settles, pending, warnings };
 }
 
-function harness(opts: { preset?: string; attended?: boolean; presenter?: PresenterPort | null; headless?: 'deny' | 'abort'; abortHook?: (() => void) | null; timeoutMs?: number; extraExecutors?: [string, ReturnType<typeof simpleExecutor>][]; hooks?: ToolHooks | null } = {}) {
+function harness(opts: { preset?: string; attended?: boolean; presenter?: PresenterPort | null; headless?: 'deny' | 'abort'; abortHook?: (() => void) | null; timeoutMs?: number; extraExecutors?: [string, ReturnType<typeof simpleExecutor>][]; hooks?: ToolHooks | null; planGateHeld?: boolean } = {}) {
   const clock = new FakeClock();
   const rec = recordingSink();
   const approvals = new PendingApprovals(clock);
@@ -62,6 +62,7 @@ function harness(opts: { preset?: string; attended?: boolean; presenter?: Presen
     headlessPolicy: opts.headless ?? 'deny', abortHook: opts.abortHook ?? null, approvalTimeoutMs: opts.timeoutMs ?? 300_000, executors, resolvePath: (p) => (p.startsWith('D:/') ? p : `${ROOT}/${p}`),
     monotonic: clock, wall: clock, timers: clock, sink: rec.sink, nextSequence: () => ++seq, newRequestId: () => `req${++seq}`,
     hooks: opts.hooks ?? null,
+    planGateHeld: () => opts.planGateHeld ?? false,
   });
   const call = (name: string, args: unknown): ToolCall => ({ callId: `c-${name}`, name, rawArgs: typeof args === 'string' ? args : (args as Record<string, unknown>), persona: 'orchestrator', agentId: 'orchestrator', agentName: 'orchestrator' });
   return { gate, clock, rec, approvals, policy, executed, call };
@@ -313,5 +314,55 @@ describe('the two hook slots (ADR-0015, REQ-HOOKS-004/005/047/068/071/072/074)',
     const none = harness({ preset: 'autonomous' });
     const r2 = await none.gate.dispatch(h.call('write_file', { operation: 'create', path: 'b.txt' }), new AbortController().signal);
     expect(r2.text).toBe('wrote b.txt');
+  });
+});
+
+/**
+ * REQ-ORCH-153 (ADR-0062): the plan gate's enforcement at dispatch — the authoritative point, because it binds
+ * "whichever role issues it and by whatever route the tool reached that role".
+ */
+describe('the plan gate at dispatch (REQ-ORCH-153, ADR-0062)', () => {
+  function hooksThatRecord() {
+    const slots: string[] = [];
+    const hooks: ToolHooks = {
+      preTool: async () => { slots.push('pre'); return { blocked: false, refusal: '' }; },
+      postTool: async () => { slots.push('post'); return { feedback: '' }; },
+    };
+    return { hooks, slots };
+  }
+
+  it('refuses a withheld call as blocked, executes nothing, and settles the evidence record', async () => {
+    const h = harness({ preset: 'autonomous', planGateHeld: true });
+    const r = await h.gate.dispatch(h.call('write_file', { operation: 'create', path: 'a.txt' }), new AbortController().signal);
+    expect(r).toMatchObject({ status: 'blocked', isError: true });
+    expect(r.text).toContain('held at the plan gate');
+    expect(r.blockedReason).toBe(r.text);
+    expect(h.executed).toEqual([]);
+    expect(h.rec.settles[0]).toMatchObject({ status: 'blocked', failure_kind: 'plan_gate_withheld' });
+  });
+
+  it('fires no tool hook for a refused call — the refusal precedes the permission resolution (REQ-HOOKS-004)', async () => {
+    const rh = hooksThatRecord();
+    const h = harness({ preset: 'autonomous', planGateHeld: true, hooks: rh.hooks });
+    await h.gate.dispatch(h.call('terminal', { command: 'rm -rf .' }), new AbortController().signal);
+    expect(rh.slots).toEqual([]);
+    // No permission decision is taken either: nothing was permitted, so nothing is audited as permitted.
+    expect(h.rec.decisions).toEqual([]);
+  });
+
+  it('refuses a name this port never offered — an MCP tool reaching the role by another route', async () => {
+    const h = harness({ preset: 'autonomous', planGateHeld: true });
+    const r = await h.gate.dispatch(h.call('mcp__x__write', { any: 1 }), new AbortController().signal);
+    expect(r.status).toBe('blocked');
+    expect(r.text).toContain('held at the plan gate');
+  });
+
+  it('lets a reading tool through, and the same call through untouched once the hold is over', async () => {
+    const held = harness({ preset: 'autonomous', planGateHeld: true });
+    const todo = await held.gate.dispatch(held.call('todo', { operation: 'list' }), new AbortController().signal);
+    expect(todo.status).toBe('ok');
+    const released = harness({ preset: 'autonomous', planGateHeld: false });
+    const write = await released.gate.dispatch(released.call('write_file', { operation: 'create', path: 'a.txt' }), new AbortController().signal);
+    expect(write).toMatchObject({ status: 'ok', text: 'wrote a.txt' });
   });
 });

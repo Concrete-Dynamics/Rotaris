@@ -24,8 +24,13 @@ export const TRUSTED_HOOK_SCOPES = ['default', 'global', 'workspace'] as const;
 export type TrustedHookScope = (typeof TRUSTED_HOOK_SCOPES)[number];
 export const EXTERNAL_CLAUDE_CODE_SCOPE = 'external:claude-code' as const;
 
-/** REQ-HOOKS-126: the only defined skip reason. */
-export const HOOK_SKIP_REASONS = ['untrusted_workspace'] as const;
+/**
+ * REQ-HOOKS-126: the defined skip reasons, exactly two. `untrusted_workspace` is announced once per session
+ * (REQ-HOOKS-127); `plan_gate` is emitted once per WITHHELD INVOCATION, because the hold ends when the user
+ * answers and the same hook then runs normally for the rest of the run (REQ-ORCH-153).
+ */
+export const HOOK_SKIP_REASONS = ['untrusted_workspace', 'plan_gate'] as const;
+export type HookSkipReason = (typeof HOOK_SKIP_REASONS)[number];
 
 /** REQ-HOOKS-123: the identity every `hook.start` and `hook.finish` carries. */
 export const HookIdentitySchema = z.object({

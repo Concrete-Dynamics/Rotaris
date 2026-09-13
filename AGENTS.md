@@ -100,6 +100,11 @@ pnpm live-run --confirm --gui        # the same run, with the window on screen t
 `--max-tokens`, `--only`, `--max-iterations`, `--gui`, `--keep`, `--skip-build`) is in the script's own
 header — `pnpm live-run --help` prints it.
 
+The `requirements` scenario waits for the board rather than for a clock: every press after the release
+names the state it needs, `LIVE_RUN_BOARD_MS` (900 s) is the deadline for all of them, and the capture
+ends when the accept lands. A quick model does not pay the deadline; a slow one fails **once**, saying the
+window expired, and the presses it never made are noted rather than reported as faults of the board.
+
 The run is **unattended and the window is hidden** unless `--gui` says otherwise. `--gui` changes one
 thing, `windowsHide` on the spawn: the scenarios are driven from inside the main process with
 `sendInputEvent`/`executeJavaScript`, which need no focus, so watching cannot disturb the run and the

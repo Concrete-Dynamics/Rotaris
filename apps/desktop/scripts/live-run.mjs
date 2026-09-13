@@ -662,18 +662,50 @@ if (wanted.includes('edit')) {
  * The poll times below are an OBSERVATION schedule and are never reported as durations: they are the moments this
  * script LOOKED, and a different schedule would print different numbers for identical work. The product's own times
  * are read from the delivery store afterwards, which is the only place a duration here comes from.
+ *
+ * NOTHING THIS SCENARIO PRESSES IS PRESSED ON A CLOCK. Every click, the Enter that opens the card, and the two reads
+ * of what the accept left behind wait for the state they act on (`@~ms`, a deadline rather than an appointment), and
+ * the capture ends on the accept landing (`ROTARIS_CAPTURE_WAIT=js:…`) rather than at the far end of the window.
+ *
+ * That is a repair, and the defect it repairs is worth keeping in view: these presses used to fire at offsets
+ * measured from the end of `LIVE_RUN_BOARD_MS`, whatever the board was showing by then. A model slower than the
+ * window turned one timing failure into three, and two of the three accused the PRODUCT of faults it had not
+ * committed — "the card rests in running", "the history lacks the accept" — when the truth was that accept had been
+ * pressed at a card still running and the product had correctly declined it. Measured 2026-09-13 against
+ * `qwen3.8-flash-next`: 240 s expired with the run about half-way, and the same run passed every check at 900 s.
+ * `docs/defects/live-run-board-window-presses-accept-blind.md` is the note. A harness that manufactures false
+ * product symptoms is worse than one that is merely slow, because `AGENTS.md` rightly says to believe it.
  */
 if (wanted.includes('requirements')) {
-  const RUN_MS = Number(process.env['LIVE_RUN_BOARD_MS'] ?? 240_000);
+  // A bound now, not a schedule: the scenario ends when the accept lands, so a generous deadline costs a fast model
+  // nothing. It is raised from 240 s because the endpoint's own model needs about twice that.
+  const RUN_MS = Number(process.env['LIVE_RUN_BOARD_MS'] ?? 900_000);
   const CARD = '[data-req-card="REQ-104"]';
   const BOARD_AT = `(() => { const el = document.querySelector('[data-req-card="REQ-104"]'); const b = window.__rotarisBoard; return { column: el === null ? null : el.getAttribute('data-column'), openPane: b ? b.openPane : null, feedback: [...document.querySelectorAll('[data-testid="req-feedback"]')].map((f) => f.textContent.trim()).slice(0, 3) }; })()`;
   const HISTORY_AT = `(() => { const p = document.querySelector('[data-testid="req-history-state"]'); return p === null ? null : { state: p.getAttribute('data-state'), entries: [...p.querySelectorAll('li')].map((l) => l.textContent.trim()) }; })()`;
   // REQ-TRACE-364: `done` lies outside the columns area at this width, so the resting read goes through the board's
-  // own reveal first; reading the DOM without it reads `null` and proves nothing.
-  const REVEAL = `(() => { const b = window.__rotarisBoard; return b && typeof b.reveal === 'function' ? b.reveal('REQ-104') : 'no observable'; })()`;
+  // own reveal first; reading the DOM without it reads `null` and proves nothing. The reveal and the read are ONE
+  // expression because two of them would be two coroutines racing for the same frame, with no order between them.
+  const RESTING_AT = `(async () => { const b = window.__rotarisBoard; if (b && typeof b.reveal === 'function') b.reveal('REQ-104'); await new Promise((r) => requestAnimationFrame(() => r(undefined))); const el = document.querySelector('[data-req-card="REQ-104"]'); return { column: el === null ? null : el.getAttribute('data-column') }; })()`;
+  // The accept's own trace in the surface: the history the detail panel already keeps live gains a second entry.
+  // It is what the scenario waits on to finish and what the two closing reads wait on to look — one signal, so a
+  // read can never happen before the thing it reads about.
+  const ACCEPTED = '[data-testid="req-history-state"] li:nth-child(2)';
+  const CARD_IN_REVIEW = `${CARD}[data-column="review"], ${CARD}[data-column="done"]`;
+  /**
+   * The Enter that opens the detail waits for the card to be BOTH in review and the focused one, not merely focused.
+   * Measured 2026-09-13, first attempt at this repair: `${CARD}:focus` alone matched 63 ms into the run — the opening
+   * click focuses the card — so Enter opened the detail at 3 s, the Review control appeared, and the press that waits
+   * for it opened a review pane over a card that had not been released yet. The decisions never came, and the
+   * scenario failed with the card resting in `review`: a state-driven press aimed at a state that is also true
+   * BEFORE the thing it is waiting for is no better than a clock, and is harder to see.
+   */
+  const FOCUSED_CARD = `${CARD}[data-column="review"]:focus, ${CARD}[data-column="done"]:focus`;
+  // Scoped to the open detail for REQ-104, so the control is this card's and not another's.
+  const REVIEW_CONTROL = `[data-testid="req-detail"][data-req="REQ-104"] [data-testid="req-detail-review"]`;
   const poll = [];
   for (let t = 8_000; t < RUN_MS; t += 30_000) poll.push(t);
-  const review = RUN_MS;
+  const deadline = RUN_MS;
   const clicks = [
     `${CARD}@3000`,
     '[data-testid="req-move-control"]@4400',
@@ -681,35 +713,63 @@ if (wanted.includes('requirements')) {
     // REQ-TRACE-474: a workspace that has already opted in to unattended work raises NO disclosure, and this
     // sandbox opts in — so the press is a no-op where there is none and the acceptance where there is one.
     '[data-testid="req-pane-disclosure"] .btn>>Start the run@6800',
-    `${CARD}@${review}`,
-    `[data-testid="req-detail-review"]@${review + 6_000}`,
-    `[data-testid="req-pane-review-decisions"] .btn-primary@${review + 9_000}`,
-    `[data-testid="req-pane-review-confirm"] .btn-primary@${review + 11_500}`,
+    // From here the model decides the pace. Each press names the thing that must be on screen before it means
+    // anything, and the deadline is the only number: the card once the run puts it in review, the Review control
+    // once the detail is open, the decision once the pane is, the confirmation once the dialog is.
+    `${CARD_IN_REVIEW}@~${deadline}`,
+    `${REVIEW_CONTROL}@~${deadline}`,
+    `[data-testid="req-pane-review-decisions"] .btn-primary@~${deadline}`,
+    `[data-testid="req-pane-review-confirm"] .btn-primary@~${deadline}`,
   ];
-  const watches = [`${BOARD_AT}@6400`, ...poll.map((t) => `${BOARD_AT}@${t}`), `${REVEAL}@${review + 14_000}`, `${BOARD_AT}@${review + 15_000}`, `${HISTORY_AT}@${review + 15_500}`];
+  const watches = [
+    `${BOARD_AT}@6400`,
+    ...poll.map((t) => `${BOARD_AT}@${t}`),
+    `${RESTING_AT}>>${ACCEPTED}@~${deadline}`,
+    `${HISTORY_AT}>>${ACCEPTED}@~${deadline + 1}`,
+  ];
   const log = launch('requirements', {
     ROTARIS_CAPTURE_RESIZE: '1264x800@300',
     ROTARIS_CAPTURE_VIEWS: '4@1200',
     ROTARIS_CAPTURE_CLICKS: clicks.join(';;'),
-    // REQ-TRACE-484: the focused card opens its own detail with Enter; the harness sends single clicks only.
-    ROTARIS_CAPTURE_KEYS: `Return@${review + 3_000}`,
+    // REQ-TRACE-484: the focused card opens its own detail with Enter; the harness sends single clicks only. The
+    // press waits for the card to BE the focused one, which is the click above having landed.
+    ROTARIS_CAPTURE_KEYS: `Return>>${FOCUSED_CARD}@~${deadline}`,
     ROTARIS_CAPTURE_EVAL_AT: watches.join(';;'),
-    ROTARIS_CAPTURE_AFTER_MS: String(review + 17_000),
-  }, review + 120_000);
+    ROTARIS_CAPTURE_WAIT: `js:document.querySelector(${JSON.stringify(ACCEPTED)}) !== null`,
+    ROTARIS_CAPTURE_WAIT_MS: String(deadline + 30_000),
+    ROTARIS_CAPTURE_AFTER_MS: '6000',
+  }, deadline + 150_000);
   const readEval = (at) => {
     const line = new RegExp(`capture: eval-at ${at} .*? → (.*)\\s*$`, 'm').exec(log);
     if (line === null) return null;
     try { return JSON.parse(line[1]); } catch { return null; }
   };
+  /** What `settleAt` wrote about one waited-for selector: it matched, it never did, or the press never got that far. */
+  const waited = (selector) => {
+    const quoted = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (new RegExp(`capture: ${quoted} matched with`).test(log)) return 'matched';
+    if (new RegExp(`capture: ${quoted} never matched within`).test(log)) return 'expired';
+    return 'not reached';
+  };
   const columns = poll.map((t) => readEval(t)?.column ?? null);
-  const trail = columns.join(' → ');
+  const trail = columns.filter((c) => c !== null).join(' → ') || 'the board showed nothing';
   check(columns.some((c) => c === 'running' || c === 'review' || c === 'done'), 'the release became a real run, started by the board and not by a prompt', trail);
-  const reachedReview = columns.includes('review') || columns.includes('done');
-  check(reachedReview, `the run reached review inside the ${Math.round(review / 1000)} s the board was given`, `${trail} — raise it with LIVE_RUN_BOARD_MS if the model is slower than that`);
-  const settled = readEval(review + 15_000);
-  check(settled?.column === 'done', "the review's accept left the card resting in done", `it rests in ${settled?.column ?? 'nothing the board showed'}`);
-  const entries = readEval(review + 15_500)?.entries ?? [];
-  check(entries.some((e) => /release/i.test(e)) && entries.some((e) => /accept/i.test(e)), 'the delivery history carries both the release and the accept', entries.join(' | ') || 'the history read empty');
+  /**
+   * One expiry, one failure. The three presses after it are not attempted against a board that never offered them,
+   * so they are NOTED rather than failed: a press that was never made cannot be evidence about the product, and
+   * reporting it as one is how this scenario used to accuse the board of losing a card it had never been given.
+   */
+  let settled = null;
+  const reachedReview = waited(CARD_IN_REVIEW) === 'matched';
+  check(reachedReview, `the run reached review inside the ${Math.round(deadline / 1000)} s the board was given`, reachedReview ? trail : `${trail} — the window expired with the card where the trail leaves it; raise LIVE_RUN_BOARD_MS if the model is slower than that`);
+  if (!reachedReview) {
+    noted('the review was never offered, so the accept was not pressed', `review control: ${waited(REVIEW_CONTROL)}; decision: ${waited('[data-testid="req-pane-review-decisions"] .btn-primary')}; confirmation: ${waited('[data-testid="req-pane-review-confirm"] .btn-primary')}`);
+  } else {
+    settled = readEval(deadline);
+    check(settled?.column === 'done', "the review's accept left the card resting in done", `it rests in ${settled?.column ?? 'nothing the board showed'}`);
+    const entries = readEval(deadline + 1)?.entries ?? [];
+    check(entries.some((e) => /release/i.test(e)) && entries.some((e) => /accept/i.test(e)), 'the delivery history carries both the release and the accept', entries.join(' | ') || 'the history read empty');
+  }
 
   // The store, for the two facts no surface shows: that the run was recorded at all, and what it was granted.
   const db = new (require('better-sqlite3'))(oneDatabase(), { readonly: true });

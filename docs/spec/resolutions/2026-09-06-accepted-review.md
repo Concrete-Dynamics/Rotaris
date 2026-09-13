@@ -68,6 +68,33 @@ replaced with this accepted order. Recording failure behavior is coupled to
 OQ-42; implementation of that separate item remains tracked in the progress
 ledger.
 
+## A4 — the root execution record and the planning execution path (applied)
+
+REQ-ORCH-072 now names the **root execution record** and states that it is not a delegated
+child: it arrives through no `delegate` call, counts against none of REQ-ORCH-046's admission
+limits, holds no model slot of REQ-ORCH-050, and is not presented as a task agent. Its identity
+— a canonical name and a task id in the same namespace a delegated child's lives in — is kept,
+so a lookup naming the root resolves to it, while the parent-scoping of REQ-TOOLS-155 and
+REQ-TOOLS-156 is unchanged. REQ-ORCH-025's "no child is ever spawned" reads **no delegated
+child**, and a `single` run is exactly one root execution record per iteration and zero
+delegated children.
+
+REQ-ORCH-153 states the planning execution path. The gate withholds capability rather than
+preventing the run from starting: every agent holds planning grants — its ordinary set less
+every tool declared as writing workspace files or running commands, an undeclared tool counting
+as declaring all three — enforced where a call is dispatched, so it binds whatever route a tool
+reached a role by. The spawn restriction is kept beside that enforcement rather than replaced by
+it. A `single` run is neither exempted nor blocked from starting. Approval installs the
+execution grants for the remainder of the run. The hold raises no terminal status and no
+terminal result, and the product's own recording stays writable throughout.
+
+REQ-HOOKS-126 now defines exactly two skip reasons; `"plan_gate"` is emitted once per withheld
+invocation rather than once per session. REQ-ORCH-016, REQ-ORCH-028 and REQ-ORCH-153 are
+re-pointed from REQ-CONFIG-231 to REQ-TOOLS-001 for the capability classification they read,
+closing an item the domain-01 resolution record had carried open since its sixth round. The
+domain record holds the full disposition, including each falsified reading beside its
+replacement. Delivery of REQ-ORCH-152 to REQ-ORCH-154 is tracked in the root ledger.
+
 ## A5 — optional image-input declaration
 
 REQ-PROVIDER-149 now owns an optional boolean: true, false or absent/unknown.

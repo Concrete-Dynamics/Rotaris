@@ -41,7 +41,7 @@ Each item requires current evidence for its operative specification, dependent c
 | Package | Accepted items | State |
 |---|---|---|
 | Session lifecycle, durability and exports | A3, A6, A9, OQ-8, OQ-12, OQ-41, OQ-42, OQ-46 | **Delivered 2026-09-13**, with one explicitly recorded evidence debt (OQ-12's power-loss measurement) |
-| Permissions, orchestration and terminal | A2, A4, OQ-4, OQ-5, OQ-7, OQ-9, OQ-10, OQ-13, OQ-15, OQ-16, OQ-17, OQ-35, OQ-36, OQ-37, OQ-38, OQ-39 | Pending — **A2 delivered 2026-09-13**, audited against the requirement text and the code |
+| Permissions, orchestration and terminal | A2, A4, OQ-4, OQ-5, OQ-7, OQ-9, OQ-10, OQ-13, OQ-15, OQ-16, OQ-17, OQ-35, OQ-36, OQ-37, OQ-38, OQ-39 | Pending — **A2 delivered 2026-09-13**, audited against the requirement text and the code; **A4's specification resolved 2026-09-13**, its mechanism owed with the build of REQ-ORCH-152..154 |
 | Providers and MCP | A5, A7, A8, OQ-6, OQ-18, OQ-19, OQ-20, OQ-21, OQ-22, OQ-50 | Pending |
 | Services, stores and recovery | OQ-1, OQ-2, OQ-43, OQ-45, OQ-47, OQ-48 | Pending |
 | Traceability, presentation and benchmarks | OQ-24, OQ-25, OQ-29, OQ-32, OQ-33, OQ-34, OQ-40 | Pending |
@@ -211,3 +211,87 @@ delivery — the prior-response route, still listed as outstanding in
 contradiction over what the classifier input may contain is settled whether or not the
 field is populated yet. **A2 is delivered; the route it bounds remains owed**, and it is
 the natural first act of whoever builds `REQ-ORCH-012`.
+
+### 2026-09-13 — A4's specification resolved, the mechanism owed
+
+The second item of the permissions/orchestration/terminal package. A4 is a **contradiction across
+three requirements**, so this round settles the text; the mechanism it describes is plan mode
+(REQ-ORCH-152..154), which is **not built** and is owed by a Part of its own.
+
+**The contradiction, and what carried it.** REQ-ORCH-025 promised that a `single` run spawns no
+child; REQ-ORCH-072 spawned "the root child" at the start of every iteration of every run. The word
+was doing two jobs — the run's own root agent, and an agent another agent delegated to. Every other
+document in the corpus had already taken the second reading: REQ-MONITOR-043 and REQ-MONITOR-089 call
+it "the run's synthetic root", REQ-CHAT-068 withholds the delegation-context header from it, and
+ADR-0012 is titled for the *delegated*-child scheduler. REQ-ORCH-072 was the only sentence out of
+step, and it is the one that changed. It now names the **root execution record**, states that it is
+not a delegated child — no `delegate` call, none of REQ-ORCH-046's admission limits, no model slot of
+REQ-ORCH-050, not presented as a task agent — and keeps its identity clause, made precise: a
+canonical name and a task id in the same namespace, so a lookup naming the root resolves, with
+REQ-TOOLS-155 and REQ-TOOLS-156's parent-scoping unchanged so a caller who may not read a record is
+refused for **that** reason rather than told the root does not exist.
+
+**The half nobody could have built.** REQ-ORCH-153 stated the plan gate as a restriction on
+*spawning*: no child whose role holds a writing or command-running tool. Under `single` the entry
+role holds exactly those tools, by REQ-ORCH-025 — so the gate as written either blocked a `single`
+run from starting at all or said nothing about the one agent that would do the writing. The
+replacement withholds **capability** and not the start: the run starts, its root execution record is
+created with the entry role, and while the gate is held every agent holds **planning grants** — its
+ordinary set less every tool declared as writing workspace files or running commands, an undeclared
+tool counting as declaring all three — enforced **where a call is dispatched**, so the refusal binds
+whatever route a tool reached a role by. The spawn restriction is kept beside that enforcement rather
+than replaced by it, because a refusal at admission tells the model why at the moment it asked.
+Approval installs the execution grants for the rest of the run.
+
+**Two boundaries that had to be said out loud.** A hold is not a termination: no terminal status, no
+terminal result, and the run the user answers is the run that reached the gate whether or not the
+process that hosted it outlived the hold. And the gate blocks the work the run's *agents* do and
+never the product's own recording — the session, the plan, the todo state and the events stay
+writable throughout, because a gate that stopped the product recording what it was doing would lose
+the plan it exists to obtain.
+
+**Dependent contracts reconciled.** REQ-HOOKS-126 declared `"untrusted_workspace"` "the only defined
+reason" for a withheld hook; it now defines exactly two, `"plan_gate"` emitted once per withheld
+invocation rather than once per session, because that hold ends when the user answers while the trust
+gate's verdict stands for the session. REQ-HOOKS-004's existing order — policy before hooks, so a
+refused call starts no hook process — is what keeps the tool hooks of a gate-refused call from
+firing, so the amendment needed to reach only the reason vocabulary.
+
+**A debt closed in passing.** The domain-01 resolution record had carried an open item since its
+sixth round: REQ-ORCH-016, REQ-ORCH-028 and REQ-ORCH-153 resolve capability questions against
+REQ-CONFIG-231, which says in its own text that it owns no capability, while REQ-TOOLS-001 does. All
+three now cite REQ-TOOLS-001. It was taken here because this round was already reading two of the
+three sentences — which is the lesson the fifth round's own mis-pairing recorded.
+
+**Rulings the owner made for the build, recorded so the Part does not re-litigate them.**
+
+1. **Park, do not block.** The gate parks the way a message-limit pause does — durable status, the
+   run segment ends, bindings released — rather than holding a live run. REQ-ORCH-153 already points
+   at REQ-ORCH-087 for restart survival; REQ-SHELL-168 already says a session at the gate is not an
+   active run; and parking makes the planning phase constant for a segment, so planning grants are a
+   launch-time input rather than mutable mid-run state.
+2. **The answer is a session command, not a control.** `CONTROL_OPS` is REQ-MONITOR-004's closed
+   enumeration and there is no live run to control. Two commands, not one: the edited plan persists
+   on its own so that REQ-ORCH-154's "editing alone never approves" is structural and a closed window
+   does not discard the user's edits.
+3. **A plan cycle is not an iteration.** It advances neither `iterations_completed` nor the message
+   count; token usage is counted as it already is. REQ-ORCH-154 places no limit on revise cycles, and
+   a cycle that spent an iteration would put REQ-ORCH-070's limit of 20 on them by the back door.
+   REQ-ORCH-072's mechanics do not describe a plan cycle either: it selects no task, resolves none of
+   REQ-ORCH-074's three outcomes, and emits no report artifact.
+4. **The word `plan` stays where the specification put it.** REQ-ORCH-153/154 say plan, plan cycle,
+   plan gate; the todo document keeps `todo` in its own names. Both entries belong in the
+   orchestration context's `CONTEXT.md`, each citing its own requirement. No new word is coined.
+5. **The mode is offered in the composer, and in the start dialog too.** The composer is where a run
+   is started in every case after the first, and REQ-ORCH-152 promises the mode there. Per
+   REQ-CONFIG-476 every surface offering it **writes `runtime.run_start_mode`** and none holds a mode
+   of its own.
+
+**Owed, and stated rather than worked around.** No code changed in this round. Plan mode is unbuilt —
+only the configuration key and the settings control exist — so REQ-ORCH-153's planning grants have no
+implementation to be audited against, and the architecture of the mechanism (an ADR for the phase and
+its enforcement points) belongs to the Part that builds it. Two defects found while reading are
+recorded in `docs/defects/` without being repaired here: the root execution record carries no
+resolvable identity, which is REQ-ORCH-072's own clause and the first thing that Part will need; and
+`presentationStatus` maps `interrupted` onto `paused` where REQ-NOTIFY-049 says `idle`, which is
+unrelated to A4 and wants its own commit.

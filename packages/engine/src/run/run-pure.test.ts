@@ -44,8 +44,11 @@ describe('engine/run — the closed vocabularies and their total mappings', () =
     expect(presentationStatus('background')).toBe('running');
     expect(presentationStatus('waiting')).toBe('running');
     expect(presentationStatus('paused_message_limit')).toBe('paused');
+    // REQ-NOTIFY-049/160: a repaired session's `interrupted` is at rest, not resumable.
+    expect(presentationStatus('interrupted')).toBe('idle');
     expect(isBusy('waiting')).toBe(true);
     expect(isBusy('paused')).toBe(false);
+    expect(isBusy('interrupted')).toBe(false);
     expect(isBusy('cancelling')).toBe(true);
   });
   it('REQ-ORCH-069: first match wins, in its order; budgets are never overridden', () => {

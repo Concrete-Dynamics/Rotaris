@@ -8,6 +8,8 @@ import {
   CONTROL_OPS_WITH_VALUE,
   CommandRequestSchema,
   ControlRequestSchema,
+  EXECUTION_STATUSES,
+  PRESENTATION_STATUSES,
   ProcessRequestEnvelopeSchema,
   SEQUENCED_CHANNELS,
   SessionSnapshotSchema,
@@ -15,7 +17,9 @@ import {
   THEMES,
   assertThemeContrast,
   contrastRatio,
+  isBusy,
   parseOklch,
+  presentationStatus,
   raiseLightness,
   resolveTheme,
   themeCustomProperties,
@@ -106,6 +110,32 @@ describe('contracts — process protocol (ADR-0002)', () => {
       v: 1, id: 1, request: { kind: 'workspace.opened', workspaceId: 'v1-x', storeFile: 'C:\\store\\workspace.db', workspaceRoot: 'C:\\ws' },
     });
     expect(r.success).toBe(true);
+  });
+});
+
+describe('contracts — the presentation mapping (REQ-NOTIFY-049, REQ-NOTIFY-050)', () => {
+  // Every member of REQ-SESSION-073's fourteen, stated per member so a fold like the one
+  // that mapped `interrupted` onto `paused` cannot pass again. Cites the arm it states.
+  const ARMS: Readonly<Record<string, string>> = {
+    idle: 'idle', running: 'running', paused: 'paused', completed: 'completed', failed: 'failed',
+    stopped: 'stopped', starting: 'starting', pausing: 'pausing', cancelling: 'cancelling', // presents as itself
+    background: 'running', waiting: 'running', // REQ-NOTIFY-263's busy wait
+    paused_message_limit: 'paused', awaiting_plan_decision: 'paused', // reads as resumable
+    interrupted: 'idle', // REQ-NOTIFY-160: a repaired session is at rest
+  };
+  it('one arm per member of the closed persisted vocabulary, stated exactly', () => {
+    expect(Object.keys(ARMS)).toHaveLength(EXECUTION_STATUSES.length);
+    for (const s of EXECUTION_STATUSES) expect(ARMS).toHaveProperty(s);
+    for (const s of EXECUTION_STATUSES) expect(presentationStatus(s), s).toBe(ARMS[s]!);
+  });
+  it('every arm lands in REQ-NOTIFY-048 and an unknown token catches to idle (REQ-NOTIFY-049)', () => {
+    for (const arm of Object.values(ARMS)) expect(PRESENTATION_STATUSES).toContain(arm);
+    expect(presentationStatus('value-from-a-different-version')).toBe('idle');
+  });
+  it('interrupted is not busy (REQ-NOTIFY-160); a waiting run still is (REQ-NOTIFY-263)', () => {
+    expect(presentationStatus('interrupted')).toBe('idle');
+    expect(isBusy('interrupted')).toBe(false);
+    expect(isBusy('waiting')).toBe(true);
   });
 });
 

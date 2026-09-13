@@ -20,6 +20,25 @@ defect is that `interrupted` was folded in with them.
 **REQ-SESSION-073** is the owner of the persisted vocabulary and records that `interrupted` is
 "written only by stale repair", which is the case REQ-NOTIFY-049's reasoning is about.
 
+## Repaired — 2026-09-13
+
+Fixed in `packages/contracts/src/status.ts`: `interrupted` now has its own arm returning
+`'idle'`, with the REQ-NOTIFY-049/160 citation beside it. The regression the note asked for
+is in `packages/contracts/src/contracts.test.ts`: one stated arm per member of
+REQ-SESSION-073's fourteen, a check that every arm lands in REQ-NOTIFY-048, the catch-all to
+`idle`, and the not-busy assertion for `interrupted` beside the busy one for `waiting`. The
+two existing assertions of the old mapping — `packages/engine/src/run/run-pure.test.ts` and
+`packages/ui/src/composer.test.ts` — were corrected to the requirement's arm rather than left
+green against the wrong value.
+
+Verification: focused suites `contracts.test.ts`, `run-pure.test.ts`, `composer.test.ts`,
+`ui.test.ts` passed (75 tests); `tsc -p tsconfig.json --noEmit` and `git diff --check`
+clean. No visual re-draw was involved — the change is one mapping arm — so the design-language
+pair is not engaged. The composer's partition (`CHIPS_DISABLED_STATES`) is unchanged: `idle`
+was already enabled there, which is exactly the affordance REQ-NOTIFY-160 describes — a
+repaired session reads as at rest, its chips usable, its interrupted marker (REQ-NOTIFY-156)
+carrying the distinction the label no longer tries to.
+
 ## Relevant files
 
 - `packages/contracts/src/status.ts` — `presentationStatus`; the `case 'interrupted':` label sits

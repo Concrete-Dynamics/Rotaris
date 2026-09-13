@@ -28,9 +28,9 @@ describe('composer — REQ-CHAT-008: the run-state label vocabulary', () => {
     // A settled session is never "needs recovery", whatever a stale listing says.
     expect(runStateOf('completed', true)).toBe('completed');
     expect(runStateOf('paused', true)).toBe('paused');
-    // REQ-NOTIFY-049's normalisation is the only route in: `waiting` presents as running, `interrupted` as paused.
+    // REQ-NOTIFY-049's normalisation is the only route in: `waiting` presents as running, `interrupted` as idle.
     expect(runStateOf('waiting', false)).toBe('running');
-    expect(runStateOf('interrupted', false)).toBe('paused');
+    expect(runStateOf('interrupted', false)).toBe('idle');
     expect(runStateOf(null, false)).toBe('idle');
   });
 });

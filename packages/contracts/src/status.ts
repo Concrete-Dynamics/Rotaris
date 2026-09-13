@@ -45,8 +45,10 @@ export function presentationStatus(persisted: string): PresentationStatus {
       return 'running';
     case 'paused_message_limit':
     case 'awaiting_plan_decision':
-    case 'interrupted':
       return 'paused';
+    // REQ-NOTIFY-049: a repaired session's `interrupted` is at rest, not resumable — REQ-NOTIFY-160.
+    case 'interrupted':
+      return 'idle';
     default:
       return 'idle';
   }

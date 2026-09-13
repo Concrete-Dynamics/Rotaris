@@ -144,8 +144,32 @@
 .composer__chips { display: flex; align-items: center; gap: var(--rt-space-2, 8px); flex-wrap: wrap; }
 .chip-control { display: inline-flex; align-items: center; gap: var(--rt-space-1, 4px); }
 .chip-control__label { font-size: var(--rt-text-2xs, 10px); letter-spacing: var(--rt-tracking-label, .06em); text-transform: uppercase; color: var(--rt-text-tertiary); }
+.chip-control__icon { font-size: var(--rt-text-sm, 14px); color: var(--rt-text-tertiary); }
 .chip-control__select { min-height: 28px; width: max-content; padding: 3px 26px 3px 8px; font-size: var(--rt-text-xs, 12px); }
 .chip-control__select:disabled { opacity: 0.6; cursor: default; }
+/*
+ * PD-CHAT-001 — the press-revealed value chip and its popover. Craft is the slash popup's
+ * (`.slash-popup`): surface ground, hairline, `--rt-shadow-lg`, `--rt-radius-lg`, `rt-rise` entrance.
+ * The active row is `--rt-accent-tint-14` + `--rt-accent-200` (design README §1.2, per UIR-005).
+ */
+.chip-menu { display: inline-flex; align-items: center; gap: var(--rt-space-1, 4px); min-height: 28px; padding: 3px 8px; border: var(--rt-hairline-width) solid var(--rt-border); border-radius: var(--rt-radius-sm); background: transparent; color: var(--rt-text-secondary); font-family: inherit; font-size: var(--rt-text-xs, 12px); font-weight: var(--rt-weight-medium); cursor: pointer; }
+.chip-menu:hover { background: var(--rt-hover); }
+.chip-menu.is-open { border-color: var(--rt-border-strong); }
+.chip-menu:disabled { opacity: 0.6; cursor: default; }
+.chip-menu:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
+.chip-menu .ph { font-size: var(--rt-text-sm, 12px); color: var(--rt-text-tertiary); }
+.chip-menu__value { color: var(--rt-text); }
+.chip-menu__caret { font-size: 10px; color: var(--rt-text-tertiary); }
+.chip-menu__panel { position: fixed; z-index: 30; display: flex; flex-direction: column; padding: var(--rt-space-1, 4px); background: var(--rt-surface); border: var(--rt-hairline-width) solid var(--rt-border); border-radius: var(--rt-radius-lg); box-shadow: var(--rt-shadow-lg); margin-bottom: var(--rt-space-1, 4px); animation: rt-rise var(--rt-duration-slow) var(--rt-ease-out); }
+.chip-menu__item { display: flex; align-items: center; gap: var(--rt-space-2, 8px); padding: var(--rt-space-1, 4px) var(--rt-space-2, 8px); border: 0; border-radius: var(--rt-radius-sm); background: transparent; color: var(--rt-text); font-family: inherit; font-size: var(--rt-text-xs, 12px); text-align: left; cursor: pointer; }
+.chip-menu__item.is-active { background: var(--rt-accent-tint-14); color: var(--rt-accent-200); }
+.chip-menu__item.is-chosen:not(.is-active) { color: var(--rt-text); }
+.chip-menu__item.is-disabled { color: var(--rt-text-disabled); cursor: default; }
+.chip-menu__check { flex: none; width: 14px; display: inline-flex; justify-content: center; color: var(--rt-accent-200); }
+.chip-menu__label { flex: 1 1 auto; white-space: nowrap; }
+.chip-menu__hint { font-size: var(--rt-text-2xs, 10px); color: var(--rt-text-tertiary); }
+/* The run header's live-run selectors, slimmed the same way (PD-CHAT-001's icon clause). */
+.run-controls__icon { font-size: var(--rt-text-sm, 14px); color: var(--rt-text-tertiary); }
 /*
  * ADR-0045 (Part Z): the transcript is a scroll container of absolutely positioned slots, so the pane owns the
  * scrolling and `.transcript` becomes the frame the toolbar, the intent line and the wait header share with it.

@@ -59,7 +59,7 @@ const expect = (condition, message) => { if (!condition) throw new Error(message
 
 const PROBES = [
   '[data-testid="run-header"]', '[data-testid="run-state"]', '[data-testid="run-timing"]', '[data-testid="composer-divider"]',
-  '[data-testid="chip-persona"] select', '[data-testid="chip-model"] select', '[data-testid="chip-reasoning"] select',
+  '[data-testid="chip-persona"] select', '[data-testid="chip-model"] select', '[data-testid="chip-reasoning"] [aria-haspopup="menu"]',
   '[data-testid="chip-mode-label"]', '.composer__input', '.queue__head span', '.composer__error', '.composer__actions .btn-primary',
   '.app-shell',
 ];
@@ -186,17 +186,21 @@ results.draft = { typedBack: DRAFT.length, storedUnderKey: keyA, characterForCha
 // ── 2. The relaunch: the draft and the divider come back; the chips are enabled and state no reason ──
 const back = launch('relaunch', workspaceA, local, preferences, {
   ROTARIS_CAPTURE_EVAL_AT: `${readComposer}@3200`,
-  ROTARIS_CAPTURE_INSPECT_AT: '[data-testid="composer-divider"]@3400;;[data-testid="chip-model"] select@3400;;[data-testid="chip-reasoning"] select@3400;;[data-testid="chip-persona"] select@3400;;[data-testid="chip-mode-label"]@3400;;.composer__actions .btn-primary@3400',
+  ROTARIS_CAPTURE_INSPECT_AT: '[data-testid="composer-divider"]@3400;;[data-testid="chip-model"] select@3400;;[data-testid="chip-reasoning"] [aria-haspopup="menu"]@3400;;[data-testid="chip-persona"] select@3400;;[data-testid="chip-mode-label"]@3400;;.composer__actions .btn-primary@3400',
   ROTARIS_CAPTURE_AFTER_MS: '3800',
 });
 const restored = back.evals.find((e) => e.at === 3200)?.value;
 expect(restored === DRAFT, `the draft did not survive the quit character for character: ${JSON.stringify(restored)}`);
 expect(match(back, '[data-testid="composer-divider"]', 3400)?.attrs['aria-valuenow'] === '180', 'the divider position did not survive the relaunch');
-for (const chip of ['chip-model', 'chip-reasoning', 'chip-persona']) {
+for (const chip of ['chip-model', 'chip-persona']) {
   const el = match(back, `[data-testid="${chip}"] select`, 3400);
   expect(el !== null, `${chip} is not on screen`);
   expect(el.attrs['aria-disabled'] !== 'true', `${chip} is disabled while the session is idle (REQ-CHAT-006)`);
 }
+// PD-CHAT-001: the reasoning chip is a menu button now, and it is enabled while the session is idle.
+const reasoningChip = match(back, '[data-testid="chip-reasoning"] [aria-haspopup="menu"]', 3400);
+expect(reasoningChip !== null, 'the reasoning chip is not on screen');
+expect(reasoningChip.attrs['aria-disabled'] !== 'true', 'chip-reasoning is disabled while the session is idle (REQ-CHAT-006)');
 const modeLabel = match(back, '[data-testid="chip-mode-label"]', 3400)?.text ?? '';
 expect(modeLabel === 'mode: ask', `the permission chip should name the CONFIGURED mode the next run starts from: ${JSON.stringify(modeLabel)}`);
 const primary = match(back, '.composer__actions .btn-primary', 3400)?.text;
@@ -226,7 +230,7 @@ const run = launch('run', workspaceA, local, preferences, {
   ROTARIS_CAPTURE_TYPE: 'first follow-up@5200;;second follow-up@7200',
   ROTARIS_CAPTURE_INSPECT_AT: [
     '[data-testid="run-state"]@4200', '[data-testid="run-timing"]@4200', '[data-testid="chip-model"] select@4200',
-    '[data-testid="chip-reasoning"] select@4200', '[data-testid="chip-persona"] select@4200', '.composer__input@4200',
+    '[data-testid="chip-reasoning"] [aria-haspopup="menu"]@4200', '[data-testid="chip-persona"] select@4200', '.composer__input@4200',
     '[data-testid="chip-mode-label"]@4200', '.composer__actions .btn-primary@4200',
     '[data-testid="chip-model"] .visually-hidden@4200', '[data-testid="chip-reasoning"] .visually-hidden@4200', '[data-testid="chip-persona"] .visually-hidden@4200',
     '.queue__head span@6200', '.queue__head span@8200',
@@ -244,17 +248,30 @@ expect(/^mode: /.test(match(run, '[data-testid="chip-mode-label"]', 4200)?.text 
 // REQ-CHAT-006/007: every disabled chip publishes its reason through BOTH the tooltip and the accessible description.
 const REASON = 'Run controls are unavailable while run active';
 const chipReasons = {};
-for (const chip of ['chip-model', 'chip-reasoning', 'chip-persona']) {
+for (const chip of ['chip-model', 'chip-persona']) {
   const el = match(run, `[data-testid="${chip}"] select`, 4200);
   expect(el?.attrs['aria-disabled'] === 'true', `${chip} was enabled while the run was active (REQ-CHAT-006)`);
   expect(el.attrs['title'] === REASON, `${chip}'s tooltip is not the reason text: ${JSON.stringify(el.attrs['title'])}`);
   expect(el.attrs['aria-describedby'] === `${chip}-reason`, `${chip} has no accessible description (REQ-CHAT-007)`);
   chipReasons[chip] = { tooltip: el.attrs['title'], describedBy: el.attrs['aria-describedby'] };
 }
-for (const chip of ['chip-model', 'chip-reasoning', 'chip-persona']) {
+// PD-CHAT-001: the reasoning chip publishes the same reason through the same two channels, as a menu button.
+{
+  const el = match(run, '[data-testid="chip-reasoning"] [aria-haspopup="menu"]', 4200);
+  expect(el?.attrs['aria-disabled'] === 'true', 'chip-reasoning was enabled while the run was active (REQ-CHAT-006)');
+  expect(el.attrs['title'] === REASON, `chip-reasoning's tooltip is not the reason text: ${JSON.stringify(el.attrs['title'])}`);
+  expect(el.attrs['aria-describedby'] === 'chip-reasoning-reason', 'chip-reasoning has no accessible description (REQ-CHAT-007)');
+  chipReasons['chip-reasoning'] = { tooltip: el.attrs['title'], describedBy: el.attrs['aria-describedby'] };
+}
+for (const chip of ['chip-model', 'chip-persona']) {
   const described = match(run, `[data-testid="${chip}"] .visually-hidden`, 4200);
   expect(described?.text === REASON, `${chip}'s accessible description does not carry the reason: ${JSON.stringify(described?.text)}`);
   chipReasons[chip].description = described.text;
+}
+{
+  const described = match(run, '[data-testid="chip-reasoning"] .visually-hidden', 4200);
+  expect(described?.text === REASON, `chip-reasoning's accessible description does not carry the reason: ${JSON.stringify(described?.text)}`);
+  chipReasons['chip-reasoning'].description = described.text;
 }
 // REQ-CHAT-168: the queue header is grammatical at the count it carries — read at one and at two.
 const queueAtOne = match(run, '.queue__head span', 6200)?.text;
@@ -310,19 +327,20 @@ expect(walked[5] === 'a draft in progress', `the saved draft was not restored pa
 results.history = { walk: walked, entriesPushed: 3 };
 
 // ── 6. REQ-CHAT-009 / REQ-CHAT-155: the autonomous confirmation, declined by a reflex Return ──
+// PD-CHAT-001: the presets live in the mode chip's popover now — open it, then choose autonomous from the menu.
 const configBefore = readFileSync(join(workspaceA, '.rotaris', 'agents.yaml'), 'utf8');
 const autonomous = launch('autonomous', workspaceA, local, preferences, {
-  ROTARIS_CAPTURE_CLICKS: '.seg-opt>>autonomous@3000',
-  ROTARIS_CAPTURE_INSPECT_AT: '.dialog-actions .btn-secondary@3400;;.dialog@3400;;.dialog@4400;;[data-testid="chip-mode-label"]@4400',
+  ROTARIS_CAPTURE_CLICKS: '[data-testid="chip-mode"] [aria-haspopup="menu"]@3000;;.chip-menu__panel [role="menuitemradio"]:nth-child(3)@3200',
+  ROTARIS_CAPTURE_INSPECT_AT: '.dialog-actions .btn-secondary@3600;;.dialog@3600;;.dialog@4600;;[data-testid="chip-mode-label"]@4600',
   // The reflex confirm: an empty type step is a bare Return (down, char, up) into whatever holds focus — which is
   // what REQ-CHAT-009 means by "confirming by reflex". Cancel holds initial focus, so the reflex declines.
-  ROTARIS_CAPTURE_TYPE: '@3800',
-  ROTARIS_CAPTURE_AFTER_MS: '4800',
+  ROTARIS_CAPTURE_TYPE: '@4000',
+  ROTARIS_CAPTURE_AFTER_MS: '5000',
 });
-const focused = inspect(autonomous, '.dialog-actions .btn-secondary', 3400)?.active;
-expect(inspect(autonomous, '.dialog', 3400)?.matches?.length === 1, 'the autonomous confirmation was not raised (REQ-CHAT-009, REQ-CHAT-155)');
+const focused = inspect(autonomous, '.dialog-actions .btn-secondary', 3600)?.active;
+expect(inspect(autonomous, '.dialog', 3600)?.matches?.length === 1, 'the autonomous confirmation was not raised (REQ-CHAT-009, REQ-CHAT-155)');
 expect((focused?.className ?? '').includes('btn-secondary'), `Cancel did not hold initial focus; focus was on ${JSON.stringify(focused)}`);
-expect(inspect(autonomous, '.dialog', 4400)?.matches?.length === 0, 'the dialog is still open after the reflex Return');
+expect(inspect(autonomous, '.dialog', 4600)?.matches?.length === 0, 'the dialog is still open after the reflex Return');
 const configAfter = readFileSync(join(workspaceA, '.rotaris', 'agents.yaml'), 'utf8');
 expect(configAfter === configBefore, 'declining the confirmation still wrote the autonomous mode');
 expect(/permission_mode: ask/.test(configAfter), 'the previous permission mode is not in place after the decline');

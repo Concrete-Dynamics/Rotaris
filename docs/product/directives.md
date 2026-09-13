@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Three.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Four.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale.
 
 ---
@@ -142,6 +142,39 @@ of REQ-SESSION-136, which this directive does not require and does not forbid.
 > **Extends:** REQ-LIBRARY-088, REQ-LIBRARY-090, REQ-LIBRARY-099
 
 *Raised by the owner, 2026-09-12; logged as [R-006](requests.md#r-006).*
+
+<a id="pd-chat-001"></a>
+
+### PD-CHAT-001 — the composer's selector chips open their alternatives in a press-revealed popover
+
+The composer's reasoning-effort, permission-mode and run-start-mode chips SHALL present as a
+**value chip** — an icon, the current choice as a short value, and a press affordance — whose
+alternatives open in a small press-revealed popover rather than being offered by an always-expanded
+selector. The chip SHALL keep the current choice visible at rest; what the popover replaces is the
+permanently drawn alternative set. The permission-mode chip's popover SHALL present the presets
+strictest-first, and selecting the preset that grants autonomous execution SHALL still first raise
+the warning confirmation dialog REQ-CHAT-009 fixes, with Cancel holding initial keyboard focus.
+
+An explanatory sentence this domain draws beside such a control MAY be published as a tooltip and
+an accessible description instead of as visible text, and an icon MAY carry a control's name where
+the specification fixes the wording as an accessible name rather than as visible copy; where a
+requirement fixes a string as *visible*, the string stays visible and the icon rides beside it.
+
+**Why, and what it costs.** The reference the owner pointed at is a chat interface whose reasoning
+level is one compact chip ("High") that opens a three-item menu — the value at rest, the
+alternatives on press. The specification's chips do the reverse: `REQ-CHAT-009` fixes labels like
+`reasoning: <level>`, and the current build draws the label *and* an open select *and* the
+alternatives all at once, three facts where one is a choice. The cost is one press between the user
+and the alternative values, paid on every change; the current value remains visible at rest, which
+is the part of REQ-CHAT-009's labelling that does the daily work. The permission-mode segmented
+control is the same trade at higher stakes — three always-visible words where one mode is live —
+and the autonomous dialog already standing between the user and that mode is what makes hiding the
+other two behind a press acceptable.
+
+> **Narrows:** REQ-CHAT-009
+> **Extends:** REQ-CHAT-006, REQ-CHAT-007
+
+*Raised by the owner, 2026-09-13; logged as [R-009](requests.md#r-009).*
 
 ---
 

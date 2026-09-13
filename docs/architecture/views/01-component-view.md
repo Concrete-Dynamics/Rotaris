@@ -196,13 +196,16 @@ is written: `core.tsx` (`Button`, `StatusDot`, `Tag`, `ToggleSwitch`, `Segmented
 `MeterBar`, `ContextRing`, `Table`), `feedback.tsx` (`Dialog`, `Tooltip`, `Spinner`, and the `Acknowledgement` /
 `AcknowledgementStack` adapter that keeps REQ-SHELL-115's vocabulary over the visual the design material calls a
 toast), `navigation.tsx` (`Tabs`, `NavRail`, `CommandPalette`), `patterns.tsx` (`TableCard`, `PageHeader`,
-`EmptyState`, `LogPanel`, `ConfirmDialog`) — twenty-eight briefs, thirty exports — plus `shared.ts` (the two
-class helpers) and `layout-contract.ts`. **Edges unchanged** — `ui → kernel, contracts, ui-core`; the layer imports
-nothing but `react`, which is what lets `tools/check-ui-language.mjs` forbid a raw `button`, `input`, `textarea`,
-`select` or `table` everywhere *else* under `packages/ui/src` and `apps/desktop/src/renderer` without an exception
-list. Each component forwards native attributes and its ref, so a caller's `data-testid`, `aria-*` and handler
-survive the substitution; a specialised class already carrying a requirement's visual contract is passed through
-rather than overwritten (`componentClass`).
+`EmptyState`, `LogPanel`, `ConfirmDialog`), `overlays.tsx` (`PopoverMenu` — PD-CHAT-001's press-revealed value
+chip: the trigger button carries the current value with `aria-haspopup`/`aria-expanded`, and the alternatives open
+in an anchored `role="menu"` panel of `menuitemradio` rows, Escape closing back to the trigger) — twenty-nine
+briefs, thirty-one exports — plus `shared.ts` (the two class helpers) and `layout-contract.ts`. **Edges unchanged**
+— `ui → kernel, contracts, ui-core`; the layer imports nothing but `react`, which is what lets
+`tools/check-ui-language.mjs` forbid a raw `button`, `input`, `textarea`, `select` or `table` everywhere *else*
+under `packages/ui/src` and `apps/desktop/src/renderer` without an exception list. Each component forwards native
+attributes and its ref, so a caller's `data-testid`, `aria-*` and handler survive the substitution; a specialised
+class already carrying a requirement's visual contract is passed through rather than overwritten
+(`componentClass`).
 
 `layout-contract.ts` is **verification-only data, not behaviour**: a `UiLayoutContract` on a component root is
 serialised into `data-ui` / `data-ui-contract` and evaluated by `ui-audit` against live geometry after layout and

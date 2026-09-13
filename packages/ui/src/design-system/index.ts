@@ -6,3 +6,4 @@ export * from './data.js';
 export * from './feedback.js';
 export * from './navigation.js';
 export * from './patterns.js';
+export * from './overlays.js';

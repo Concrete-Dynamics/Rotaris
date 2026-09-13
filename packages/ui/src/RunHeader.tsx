@@ -109,20 +109,27 @@ export function RunHeader({ runState, session, runActive, stepStartedAt, models,
         <div className="run-controls" aria-label="Active run model and reasoning">
           <span className="visually-hidden" id="run-controls-reason">{headerReason ?? ''}</span>
           {onSetModel && models.length > 0 && (
-            <DesignSelect className="input select" aria-label="Active run model" data-testid="run-model" defaultValue="" disabled={headerReason !== null} aria-disabled={headerReason !== null}
-              title={headerReason ?? 'Switch the live run to another model from its next iteration.'} aria-describedby="run-controls-reason"
-              onChange={(e) => { const v = e.currentTarget.value; if (v !== '') void onSetModel(v).then((r) => { if (!r.ok) onError(r.reason); }); }}>
-              <option value="">Switch model…</option>
-              {models.map((m) => <option key={m} value={m}>{m}</option>)}
-            </DesignSelect>
+            <>
+              {/* PD-CHAT-001's icon clause: the wording rides as the accessible name; the icon leads. */}
+              <i className="ph ph-cpu run-controls__icon" aria-hidden="true" />
+              <DesignSelect className="input select chip-control__select" aria-label="Active run model" data-testid="run-model" defaultValue="" disabled={headerReason !== null} aria-disabled={headerReason !== null}
+                title={headerReason ?? 'Switch the live run to another model from its next iteration.'} aria-describedby="run-controls-reason"
+                onChange={(e) => { const v = e.currentTarget.value; if (v !== '') void onSetModel(v).then((r) => { if (!r.ok) onError(r.reason); }); }}>
+                <option value="">Switch model…</option>
+                {models.map((m) => <option key={m} value={m}>{m}</option>)}
+              </DesignSelect>
+            </>
           )}
           {onSetReasoning && (
-            <DesignSelect className="input select" aria-label="Active run reasoning" data-testid="run-reasoning" defaultValue="" disabled={headerReason !== null} aria-disabled={headerReason !== null}
-              title={headerReason ?? 'Switch the live run to another reasoning effort from its next iteration.'} aria-describedby="run-controls-reason"
-              onChange={(e) => { const v = e.currentTarget.value; if (v !== '') void onSetReasoning(v).then((r) => { if (!r.ok) onError(r.reason); }); }}>
-              <option value="">Switch reasoning…</option>
-              {REASONING_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
-            </DesignSelect>
+            <>
+              <i className="ph ph-brain run-controls__icon" aria-hidden="true" />
+              <DesignSelect className="input select chip-control__select" aria-label="Active run reasoning" data-testid="run-reasoning" defaultValue="" disabled={headerReason !== null} aria-disabled={headerReason !== null}
+                title={headerReason ?? 'Switch the live run to another reasoning effort from its next iteration.'} aria-describedby="run-controls-reason"
+                onChange={(e) => { const v = e.currentTarget.value; if (v !== '') void onSetReasoning(v).then((r) => { if (!r.ok) onError(r.reason); }); }}>
+                <option value="">Switch reasoning…</option>
+                {REASONING_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
+              </DesignSelect>
+            </>
           )}
         </div>
       )}

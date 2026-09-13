@@ -3,7 +3,7 @@ import { isBusy, PERMISSION_PRESETS, resolveTheme, RUN_AGENT_ID, THEME_NAMES, ty
 import { err, ok } from '@rotaris/kernel';
 import {
   clampComposerHeight, composerChipReason, composerPlaceholderFor, COMPOSER_DEFAULT_HEIGHT, COMPOSER_MIN_HEIGHT, DEFAULT_REASONING,
-  DRAFT_PUBLISH_MS, DRAFT_WRITE_MS, formatDuration, historyDown, historyUp, modelCallStartedAt, modelChipLabel, reasoningChipLabel,
+  DRAFT_PUBLISH_MS, DRAFT_WRITE_MS, formatDuration, historyDown, historyUp, modelCallStartedAt, modelChipLabel,
   REASONING_LEVELS, runStateOf, sendRefusal,
   type HistoryWalk, type RunState,
 } from './composer.js';
@@ -29,7 +29,7 @@ import { TodoPane, type TodoEdit } from './TodoPane.js';
 import { addImageBytes, composerTokenEstimate } from './attachments.js';
 import { PlanGate } from './PlanGate.js';
 import './attachments.css';
-import { Button as DesignButton, Input as DesignInput, Select as DesignSelect, TextArea as DesignTextArea } from './design-system/index.js';
+import { Button as DesignButton, Input as DesignInput, PopoverMenu, Select as DesignSelect, TextArea as DesignTextArea } from './design-system/index.js';
 
 // Part AA: the row helpers moved to `transcript/Row.tsx`, the ONE row renderer, and are exported from the package
 // root through that module alone (`TranscriptRows.tsx` is deleted). Re-exporting them here as well would make the
@@ -268,7 +268,7 @@ function QueuePanel({ prompts, onEdit, onRemove, onError }: { prompts: SessionRe
   };
   return (
     <section className="queue" aria-label="Queued messages">
-      <div className="queue__head"><span>Queued messages ({prompts.length})</span><span className="queue__hint">Sent after current iteration</span></div>
+      <div className="queue__head"><span>Queued messages ({prompts.length})</span><span className="queue__hint" title="Sent after the current iteration finishes">Sent after current iteration</span></div>
       <ul className="queue__list">
         {prompts.map((p) => (
           <li key={p.id} className="queue__row" data-prompt-id={p.id}>
@@ -453,14 +453,18 @@ function ChipShell({ id, label, reason, testId, children }: { id: string; label:
  * REQ-CHAT-009's selector chips. Each is a `select` so the chip both states the current choice in its label and
  * offers the alternatives without a second surface; the label is the requirement's own (`mode: <name>`,
  * `reasoning: <level>`). A disabled chip carries the reason twice (REQ-CHAT-006/007) through `ChipShell`.
+ * PD-CHAT-001's icon clause: an icon may carry the name where the spec fixes it as an accessible name, so the
+ * visible `persona:` / model prefix becomes an icon and the label text rides hidden.
  */
-function SelectorChip({ id, testId, label, ariaLabel, value, options, reason, onChoose }: {
+function SelectorChip({ id, testId, label, ariaLabel, value, options, reason, onChoose, icon }: {
   id: string; testId: string; label: string; ariaLabel: string; value: string; options: readonly string[]; reason: string | null;
-  onChoose: (value: string) => void;
+  onChoose: (value: string) => void; icon?: string | undefined;
 }) {
   return (
     <ChipShell id={id} label={label} reason={reason} testId={testId}>
-      <label className="chip-control__label" htmlFor={id}>{label}</label>
+      {icon !== undefined
+        ? <i className={`ph ${icon} chip-control__icon`} aria-hidden="true" />
+        : <label className="chip-control__label" htmlFor={id}>{label}</label>}
       <DesignSelect
         id={id} className="input select chip-control__select" aria-label={ariaLabel} value={value} disabled={reason !== null}
         aria-disabled={reason !== null} title={reason ?? `Chosen for the next run.`} aria-describedby={`${id}-reason`}
@@ -469,6 +473,38 @@ function SelectorChip({ id, testId, label, ariaLabel, value, options, reason, on
         {options.length === 0 && <option value="">—</option>}
         {options.map((o) => <option key={o} value={o}>{o}</option>)}
       </DesignSelect>
+    </ChipShell>
+  );
+}
+
+/**
+ * PD-CHAT-001's value chip: the current choice visible at rest (icon + value), the alternatives in a
+ * press-revealed popover. Used for the small fixed sets — reasoning effort, permission mode and the
+ * run-start mode; persona and model keep `SelectorChip`, their lists too long for a menu.
+ *
+ * REQ-CHAT-006/007 govern unchanged: a disabled chip carries its reason through both the tooltip and
+ * the accessible description, which `ChipShell` publishes and the chip references. The accessible name
+ * carries the spec's wording ("Reasoning effort for the next run"); the visible value is the choice
+ * alone ("High"), which is the narrowing the directive makes.
+ */
+function PopoverChip({ id, testId, ariaLabel, value, options, reason, icon, labels, hints, onChoose }: {
+  id: string; testId: string; ariaLabel: string; value: string; options: readonly string[]; reason: string | null;
+  icon: string; labels?: Readonly<Record<string, string>> | undefined; hints?: Readonly<Record<string, string>> | undefined;
+  onChoose: (value: string) => void;
+}) {
+  return (
+    <ChipShell id={id} label={ariaLabel} reason={reason} testId={testId}>
+      <PopoverMenu
+        anchorRef={undefined}
+        ariaLabel={ariaLabel}
+        aria-describedby={`${id}-reason`}
+        icon={icon}
+        value={labels?.[value] ?? value}
+        disabled={reason !== null}
+        title={reason ?? `Chosen for the next run.`}
+        options={options.map((o) => ({ value: o, label: labels?.[o] ?? o, hint: hints?.[o] }))}
+        onChoose={onChoose}
+      />
     </ChipShell>
   );
 }
@@ -494,7 +530,13 @@ function useThemeName(): string {
   return name;
 }
 
-/** REQ-TOOLS-077: strictest-first; `autonomous` needs an explicit confirmation; declining restores the previous selection. */
+/**
+ * REQ-TOOLS-077: strictest-first; `autonomous` needs an explicit confirmation; declining restores the previous
+ * selection. PD-CHAT-001: the three presets open in a press-revealed popover behind one value chip instead of an
+ * always-drawn segmented row; the confirmation dialog and the "enabled in EVERY run state" rule (REQ-CHAT-006)
+ * govern unchanged. The visible value is the mode alone; the label text REQ-CHAT-009 fixes rides as the
+ * accessible name, and the per-preset sentences stay as each option's tooltip through the popover's title.
+ */
 function ModeSelector({ current, enabled, onSetMode }: { current: PermissionPreset | null; enabled: boolean; onSetMode: (m: PermissionPreset) => Promise<{ ok: true } | { ok: false; reason: string }> }) {
   const [confirming, setConfirming] = useState<PermissionPreset | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -505,21 +547,26 @@ function ModeSelector({ current, enabled, onSetMode }: { current: PermissionPres
   };
   return (
     <div className="mode chip-control" data-testid="chip-mode" aria-label="Permission mode">
-      {/* REQ-CHAT-009: the chip is labelled `mode: <name>`. REQ-CHAT-006: it stays enabled in EVERY run state. */}
-      <span className="mode__label text-secondary" data-testid="chip-mode-label">mode: {current ?? 'default'}</span>
-      <div className="seg" role="radiogroup" aria-label="Permission mode, strictest first">
-        {PERMISSION_PRESETS.map((m) => (
-          <DesignButton
-            key={m}
-            type="button"
-            role="radio"
-            aria-checked={current === m}
-            className={`seg-opt${current === m ? ' is-active' : ''}`}
-            title={enabled ? `Switch the active run to '${m}' from the next tool call, and write it as the configured mode.` : `Write '${m}' as the configured permission mode; the next run starts from it (REQ-CONFIG-288).`}
-            onClick={() => { if (m === 'autonomous') setConfirming(m); else void apply(m); }}
-          >{m}</DesignButton>
-        ))}
-      </div>
+      <span className="visually-hidden" data-testid="chip-mode-label">mode: {current ?? 'default'}</span>
+      <PopoverMenu
+        ariaLabel="Permission mode, strictest first"
+        aria-describedby="chip-mode-reason"
+        icon="ph-shield-check"
+        value={current ?? 'default'}
+        title={enabled
+          ? 'Switch the active run\'s mode from the next tool call, and write it as the configured mode.'
+          : 'Write the configured permission mode; the next run starts from it (REQ-CONFIG-288).'}
+        options={PERMISSION_PRESETS.map((m) => ({
+          value: m,
+          label: m,
+          hint: m === 'autonomous' ? 'runs without asking' : m === 'ask' ? 'asks per tool call' : 'denies by default',
+        }))}
+        onChoose={(m) => { if (m === 'autonomous') setConfirming(m as PermissionPreset); else void apply(m as PermissionPreset); }}
+      />
+      {/* REQ-CHAT-007's dual channel: the mode chip never disables, so the description carries the tooltip's sentence. */}
+      <span className="visually-hidden" id="chip-mode-reason">{enabled
+        ? 'Switch the active run\'s mode from the next tool call, and write it as the configured mode.'
+        : 'Write the configured permission mode; the next run starts from it (REQ-CONFIG-288).'}</span>
       {error && <span className="composer__error" role="alert">{error}</span>}
       {confirming && (
         <div className="dialog-backdrop" role="presentation">
@@ -1072,7 +1119,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
           <div className="transcript__toolbar" role="toolbar" aria-label="Transcript actions">
             {onOpenStash && (
               <DesignButton type="button" className="btn btn-ghost btn-compact" aria-label="Manage prompt stash" title="Apply or pop a stashed prompt"
-                data-testid="transcript-stash" data-count={stashCount} onClick={onOpenStash}>{applyStashLabel(stashCount)}</DesignButton>
+                data-testid="transcript-stash" data-count={stashCount} onClick={onOpenStash}><i className="ph ph-push-pin" aria-hidden="true" />{applyStashLabel(stashCount)}</DesignButton>
             )}
             {/* Part AO — REQ-CHAT-073/082/083/084: "Clear transcript" beside "Apply stash", and the binding of the chat-controls host
               * (`slash/host.ts`) from this closure; `/compress`, `/clear` and the prompt-file commands (REQ-CHAT-160) register on
@@ -1175,8 +1222,11 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
         </div>
         <div className="composer__attachments" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); void addFiles([...e.dataTransfer.files]); }} data-testid="composer-attachments">
           <DesignInput ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden onChange={(e) => { void addFiles([...(e.currentTarget.files ?? [])]); e.currentTarget.value = ''; }} />
-          <DesignButton type="button" className="btn btn-ghost" disabled={!acceptsImages} title={attachmentReason ?? 'Attach images'} aria-describedby="attachment-capability" onClick={() => fileInput.current?.click()}>Attach images</DesignButton>
-          <span id="attachment-capability" className="composer__hint">{attachmentReason ?? 'Drop PNG, JPEG, WebP, or GIF images here.'}</span>
+          {/* PD-CHAT-001: the explanatory sentence rides as tooltip + accessible description; a refusal reason stays visible text. */}
+          {attachmentReason !== null
+            ? <span id="attachment-capability" className="composer__hint" role="status">{attachmentReason}</span>
+            : <span id="attachment-capability" className="visually-hidden">Drop PNG, JPEG, WebP, or GIF images here.</span>}
+          <DesignButton type="button" className="btn btn-ghost btn-compact" disabled={!acceptsImages} aria-label="Attach images" aria-describedby="attachment-capability" title={attachmentReason ?? 'Attach images — drop PNG, JPEG, WebP, or GIF here.'} data-testid="composer-attach" onClick={() => fileInput.current?.click()}><i className="ph ph-paperclip" aria-hidden="true" /></DesignButton>
           {attachments.length > 0 && <ol className="composer__attachment-list">{attachments.map((a, i) => <li key={`${a.name}-${i}`}><span>{a.name}</span><span className="mono">{Math.ceil(a.size / 1024)} KiB</span><DesignButton type="button" className="btn btn-ghost" aria-label={`Remove ${a.name}`} onClick={() => setAttachments((xs) => xs.filter((_, x) => x !== i))}>Remove</DesignButton></li>)}</ol>}
           <span className="composer__estimate mono" data-lower-bound={estimate.lowerBound ? '1' : '0'}>{estimate.label}</span>
         </div>
@@ -1189,12 +1239,12 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
           <div className="composer__chips" aria-label="Next run">
             {onSetNextPersona && (
               <SelectorChip id="chip-persona" testId="chip-persona" label="persona" ariaLabel="Persona for the next run" reason={chipReason}
-                value={entry?.persona ?? ''} options={personas.length > 0 ? personas.map((p) => p.role) : entry ? [entry.persona] : []}
+                icon="ph-user-circle" value={entry?.persona ?? ''} options={personas.length > 0 ? personas.map((p) => p.role) : entry ? [entry.persona] : []}
                 onChoose={(v) => { void onSetNextPersona(v).then((r) => { if (!r.ok) setError(r.reason); }); }} />
             )}
             {onSetNextModel && (
               <ChipShell id="chip-model" testId="chip-model" label={modelChipLabel(modelsLoaded, models, entry?.model ?? null)} reason={modelsLoaded ? chipReason : 'Model options are still loading.'}>
-                <label className="chip-control__label" htmlFor="chip-model">{modelChipLabel(modelsLoaded, models, entry?.model ?? null)}</label>
+                <i className="ph ph-cpu chip-control__icon" aria-hidden="true" />
                 <DesignSelect id="chip-model" className="input select chip-control__select" aria-label="Model for the next run"
                   value={entry?.model && models.includes(entry.model) ? entry.model : ''}
                   /* REQ-CHAT-009: disabled while the neutral loading label is showing, so no run starts against a model nobody chose. */
@@ -1208,27 +1258,36 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
             )}
             {/* REQ-ORCH-152: the run-start mode. It obeys the same enablement rule as its three neighbours — it
               * chooses what the NEXT run starts with, and a change made while a run is in flight takes effect only
-              * for the next run (REQ-ORCH-154). */}
+              * for the next run (REQ-ORCH-154). PD-CHAT-001: a value chip over a press-revealed popover. */}
             {onSetRunStartMode && (
-              <SelectorChip id="chip-run-start-mode" testId="chip-run-start-mode" label={runStartMode === 'plan' ? 'plan first' : 'start at once'}
-                ariaLabel="Run-start mode for the next run" reason={chipReason} value={runStartMode} options={['auto', 'plan']}
+              <PopoverChip id="chip-run-start-mode" testId="chip-run-start-mode" ariaLabel="Run-start mode for the next run"
+                icon="ph-play-circle" reason={chipReason} value={runStartMode} options={['auto', 'plan']}
+                labels={{ auto: 'Auto', plan: 'Plan first' }}
+                hints={{ auto: 'start at once', plan: 'plan gate first' }}
                 onChoose={(v) => { void onSetRunStartMode(v as 'auto' | 'plan').then((r) => { if (!r.ok) setError(r.reason); }); }} />
             )}
             {onSetNextReasoning && (
-              <SelectorChip id="chip-reasoning" testId="chip-reasoning" label={reasoningChipLabel(entry?.reasoning ?? null)} ariaLabel="Reasoning effort for the next run"
-                reason={chipReason} value={(REASONING_LEVELS as readonly string[]).includes(entry?.reasoning ?? '') ? entry!.reasoning : DEFAULT_REASONING}
+              <PopoverChip id="chip-reasoning" testId="chip-reasoning" ariaLabel="Reasoning effort for the next run"
+                icon="ph-brain" reason={chipReason}
+                value={(REASONING_LEVELS as readonly string[]).includes(entry?.reasoning ?? '') ? entry!.reasoning : DEFAULT_REASONING}
                 options={REASONING_LEVELS}
+                labels={{ low: 'Low', medium: 'Medium', high: 'High' }}
+                hints={{ medium: 'default' }}
                 onChoose={(v) => { void onSetNextReasoning(v).then((r) => { if (!r.ok) setError(r.reason); }); }} />
             )}
           </div>
           {onSetMode && <ModeSelector current={mode} enabled={runActive} onSetMode={onSetMode} />}
-          {/* REQ-LIBRARY-140 / REQ-CHAT-042: a ghost control beside the composer; it stashes whatever is typed, run or no run. */}
-          {onStash && <DesignButton type="button" className="btn btn-ghost" title="Stash prompt for later" data-testid="composer-stash" onClick={stash}>Stash</DesignButton>}
-          {runActive && onSteer && <DesignButton type="button" className="btn btn-secondary" onClick={() => setSteering({ id: 'run', name: 'the run' })}>Steer</DesignButton>}
-          {runActive && onPause && <DesignButton type="button" className="btn btn-secondary" disabled={pausePending || session?.executionStatus === 'pausing'} onClick={() => { void pause(); }}>{pausePending || session?.executionStatus === 'pausing' ? 'Pausing…' : 'Pause'}</DesignButton>}
+          {/* REQ-LIBRARY-140 / REQ-CHAT-042: a ghost control beside the composer; it stashes whatever is typed, run or no run.
+            * PD-CHAT-001: icon-only with the sentence as tooltip; the visible word was never spec-fixed. */}
+          {onStash && <DesignButton type="button" className="btn btn-ghost btn-compact" aria-label="Stash prompt for later" title="Stash prompt for later" data-testid="composer-stash" onClick={stash}><i className="ph ph-push-pin" aria-hidden="true" /></DesignButton>}
+          {runActive && onSteer && <DesignButton type="button" className="btn btn-secondary btn-compact" aria-label="Steer the run" title="Send steering text to the run's agent" onClick={() => setSteering({ id: 'run', name: 'the run' })}><i className="ph ph-compass" aria-hidden="true" /></DesignButton>}
+          {runActive && onPause && <DesignButton type="button" className="btn btn-secondary btn-compact" disabled={pausePending || session?.executionStatus === 'pausing'} aria-label="Pause the run" title="Pause after the current step" onClick={() => { void pause(); }}>{pausePending || session?.executionStatus === 'pausing' ? 'Pausing…' : <i className="ph ph-pause" aria-hidden="true" />}</DesignButton>}
           {runActive ? (
             <>
-              <DesignButton type="button" className="btn btn-danger" onClick={() => setConfirming('stop')} aria-describedby="stop-hint">{stopLabel(stopPending)}</DesignButton>
+              {/* REQ-SESSION-186's two-step stop: the hint sentence rides as tooltip + accessible description
+                * (PD-CHAT-001) instead of a visible line, and the label stays the spec's own. */}
+              <DesignButton type="button" className="btn btn-danger btn-compact" onClick={() => setConfirming('stop')} aria-describedby="stop-hint" title={stopPending ? 'The stop is pending; the next activation forces it.' : 'Stops gracefully; a second activation forces.'}>{stopLabel(stopPending)}</DesignButton>
+              <span id="stop-hint" className="visually-hidden">{stopPending ? 'The stop is pending; the next activation forces it.' : 'Stops gracefully; a second activation forces.'}</span>
               <DesignButton type="submit" className="btn btn-primary" disabled={busy}>Queue</DesignButton>
             </>
           ) : planGate ? (
@@ -1249,7 +1308,6 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
           ) : (
             <DesignButton type="submit" className="btn btn-primary" disabled={busy}>{composerAction(session, runActive)}</DesignButton>
           )}
-          {runActive && <span id="stop-hint" className="composer__hint">{stopPending ? 'The stop is pending; the next activation forces it.' : 'Stops gracefully; a second activation forces.'}</span>}
           {planGate && <span id="plan-gate-hint" className="composer__hint">A plan is waiting for your decision above. Approve, revise, or cancel the run to continue.</span>}
           {paused && !planGate && <span className="composer__hint">Paused. Run controls need the run continued before they can be used.</span>}
         </div>

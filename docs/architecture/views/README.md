@@ -24,7 +24,14 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-13** — **the plan gate (REQ-ORCH-152 to REQ-ORCH-154, ADR-0062)**: the
+Last reconciled with the code: **2026-09-13** — **the composer declutter (R-009, PD-CHAT-001)**: the component
+view's `ui/design-system` section gains `overlays.tsx` (`PopoverMenu`, the press-revealed value chip), taking the
+brief count to twenty-nine; the Workspace view's reasoning-effort, run-start-mode and permission-mode chips present
+through it, the persona and model selects gain leading icons, and the explanatory hints of the composer's
+attachment, stop and queue controls moved into tooltip-plus-accessible-description pairs. **No package, edge,
+process or window role moves, and `CONTROL_OPS` is untouched.**
+
+Earlier the same day — **the plan gate (REQ-ORCH-152 to REQ-ORCH-154, ADR-0062)**: the
 runtime view's run-start order gains the hold, a new paragraph covers the plan cycle and the park, its
 session-command paragraph gains the two answers and the one-way release, and its store section moves to **v17** with
 `plan_cycles` beside two new `sessions` columns; the process view's renderer → main family gains `session.planEdit`

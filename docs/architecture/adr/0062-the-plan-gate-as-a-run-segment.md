@@ -1,6 +1,6 @@
 # ADR-0062 — The plan gate as a run segment: park rather than block, and three places that enforce it
 
-- **Status:** proposed
+- **Status:** accepted, with its first execution recorded below
 - **Date:** 2026-09-13
 - **Origin:** `REQ-ORCH-152`, `REQ-ORCH-153` and `REQ-ORCH-154`, settled by A4's amendment round (merged
   `2dd77e7`) and by five owner rulings recorded in `SPECIFICATION_RESOLUTION_PROGRESS.md` (2026-09-13). The
@@ -224,3 +224,19 @@ looks the root up by name. The defect stands and keeps its own commit, where `ba
 5. **The gate is offered on two surfaces and holds state on neither.** The composer's control and the start
    dialog's both write `runtime.run_start_mode` through the scoped per-field path, so the setting is
    persistent and one value governs whichever surface the user next starts from.
+
+## First execution — 2026-09-13, the plan gate in the built app (`pnpm plan-gate-proof`)
+
+ADR-0062's first execution in the built app proved the plan gate end to end across five launches
+(`apps/desktop/scripts/plan-gate-proof.mjs`, schema v17, commit `d9738ece8`):
+1. `runtime.run_start_mode: plan` holds a run at the gate — the surface is drawn inside the primary view, the plan is presented verbatim, the composer submit is locked, and the session's persisted status is `awaiting_plan_decision` with a cycle recorded.
+2. The user's edit (`session.planEdit`) is written through directly to `plan_cycles.edited` and approves nothing.
+3. The pending decision survives the application closing (`REQ-ORCH-153`): the window is closed, the store is inspected directly with the process gone, and a subsequent launch finds the gate and edit intact.
+4. Revise (`session.planDecision` with `revise`) starts a further cycle carrying the changes stated by the user.
+5. Approve (`session.planDecision` with `approve`) releases execution one way, `plan_released` is set to 1, and the run carries the approved text.
+6. The file named in the plan does not exist during the hold and does exist after approval — verifying that execution is blocked before any file-modifying work is done.
+
+**Defects surfaced by the first execution:**
+- **Event specification contradiction:** A4 widened `REQ-HOOKS-126` to define `plan_gate` as a valid skip reason. `REQ-EVENTS-047` and the `hook.finish` row in `20-event-history-replay-export.md` still asserted `untrusted_workspace` was the only defined value. Recorded as a defect found by building (`docs/defects/hook-skip-reason-vocabulary-stale-in-events-spec.md`).
+- **Surface layout and reachability:** Scripted clicks on *Approve* initially failed because flex children and layout sums pushed the buttons out of view or under dividers across varying heights. Repaired by making the three answers sticky (`position: sticky; bottom: 0`) inside the block.
+- **Synthesized events:** The harness verified that synthetic `blur` does not trigger React's `onBlur` delegation (which listens to `focusout`).

@@ -41,7 +41,7 @@ Each item requires current evidence for its operative specification, dependent c
 | Package | Accepted items | State |
 |---|---|---|
 | Session lifecycle, durability and exports | A3, A6, A9, OQ-8, OQ-12, OQ-41, OQ-42, OQ-46 | **Delivered 2026-09-13**, with one explicitly recorded evidence debt (OQ-12's power-loss measurement) |
-| Permissions, orchestration and terminal | A2, A4, OQ-4, OQ-5, OQ-7, OQ-9, OQ-10, OQ-13, OQ-15, OQ-16, OQ-17, OQ-35, OQ-36, OQ-37, OQ-38, OQ-39 | Pending — **A2 delivered 2026-09-13**, audited against the requirement text and the code; **A4's specification resolved 2026-09-13**, its mechanism owed with the build of REQ-ORCH-152..154 |
+| Permissions, orchestration and terminal | A2, A4, OQ-4, OQ-5, OQ-7, OQ-9, OQ-10, OQ-13, OQ-15, OQ-16, OQ-17, OQ-35, OQ-36, OQ-37, OQ-38, OQ-39 | In progress — **A2 and A4 delivered 2026-09-13** (A4's plan gate built and proven under REQ-ORCH-152..154 / ADR-0062) |
 | Providers and MCP | A5, A7, A8, OQ-6, OQ-18, OQ-19, OQ-20, OQ-21, OQ-22, OQ-50 | Pending |
 | Services, stores and recovery | OQ-1, OQ-2, OQ-43, OQ-45, OQ-47, OQ-48 | Pending |
 | Traceability, presentation and benchmarks | OQ-24, OQ-25, OQ-29, OQ-32, OQ-33, OQ-34, OQ-40 | Pending |
@@ -295,3 +295,16 @@ recorded in `docs/defects/` without being repaired here: the root execution reco
 resolvable identity, which is REQ-ORCH-072's own clause and the first thing that Part will need; and
 `presentationStatus` maps `interrupted` onto `paused` where REQ-NOTIFY-049 says `idle`, which is
 unrelated to A4 and wants its own commit.
+
+### 2026-09-13 — A4 delivered: the plan gate built and proven (REQ-ORCH-152..154, ADR-0062)
+
+The mechanism of A4 is built, proven in the built app, and merged (`part-plan-gate`, commit `d9738ece8`).
+
+**Delivered mechanism.**
+- **Park, do not block (ADR-0062):** A plan-mode run is a sequence of run segments, launched through `SessionManager.launchContinuation`. In `plan` mode, unless classified in the answer group of REQ-ORCH-021 (`question`, `exploration`), iteration 0 runs a single turn of the entry role to produce the plan verbatim, parks at `awaiting_plan_decision` with `plan_cycle = 1`, and raises no terminal result or stop reason.
+- **Three enforcement points for planning grants:** Withholding of file-modifying and command-running tools (`withheldUnderPlanGate`, covering all MCP/plugin tools fail-closed) is enforced: (1) at port construction (`createToolPort`), (2) at dispatch (`Gate.dispatch`) as `blocked` ahead of permission/hook evaluation, and (3) at child admission (`IterationChildren.delegate`). Meta tools remain exempt (`REQ-TOOLS-014`).
+- **Hook skip reason:** Hook invocations withheld during the hold emit `hook.finish` with `skipped: true` and `skip_reason: 'plan_gate'` once per withheld invocation (`REQ-HOOKS-126/130`).
+- **Durable half (schema v17):** Dedicated table `plan_cycles` persists every cycle verbatim, optional user edits, and the decision taken (`approve`, `revise`, `cancel`). `sessions.plan_cycle` and `sessions.plan_released` track active gate state and one-way execution release across application restarts (`REQ-ORCH-153/154`).
+- **Session commands:** Direct user plan editing via `session.planEdit` persists user edits without approving. Three-way decision via `session.planDecision` handles `approve` (one-way execution release), `revise` (launches next plan cycle with specified changes), and `cancel` (marks session paused with `user_cancelled`).
+- **Surface:** Hosted inside `WorkspaceView` (`PlanGate.tsx`) per `REQ-SHELL-168` with verbatim monospace presentation, inline editing, and sticky keyboard-accessible decision buttons. Composer is locked while gate holds. Mode is offered and persists via `runtime.run_start_mode` in both composer chip and start session dialog.
+- **Verification:** Unit and integration coverage in `packages/engine/src/run/plan-gate.test.ts` (10 tests), `packages/agent-tools/src/gate.test.ts`, `packages/agent-tools/src/planning-grants.test.ts`, `packages/hooks/src/engine.test.ts`, and `packages/store/src/store.test.ts`. Full end-to-end built-app proof executed in `apps/desktop/scripts/plan-gate-proof.mjs` and recorded in `docs/architecture/first-executions.md`.

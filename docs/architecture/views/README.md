@@ -24,7 +24,14 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-13** — **the composer declutter (R-010, PD-CHAT-001)**: the component
+Last reconciled with the code: **2026-09-13** — **the workspace chrome density pass**: the Inspector's persona
+tab strip is replaced by a `PopoverMenu` picker (the design-system's `overlays.tsx` unchanged, one more consumer;
+`REQ-MONITOR-050`'s grouping kept, no spec figure touched), the composer's input is capped at 120 px and its
+actions band is one row at ≥1180 px (UIR-009's two-row composition kept below the breakpoint), the run header /
+toolbar / intent bands tighten to the mockup's rhythm, and the agents panel header becomes the mockup's 40 px bar
+with a live agent count. All spacing craft under the adopted design language — no requirement narrowed.
+
+Previous reconciliation: **2026-09-13** — **the composer declutter (R-010, PD-CHAT-001)**: the component
 view's `ui/design-system` section gains `overlays.tsx` (`PopoverMenu`, the press-revealed value chip), taking the
 brief count to twenty-nine; the Workspace view's reasoning-effort, run-start-mode and permission-mode chips present
 through it, the persona and model selects gain leading icons, and the explanatory hints of the composer's

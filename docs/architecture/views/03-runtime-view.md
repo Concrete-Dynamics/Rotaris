@@ -24,7 +24,7 @@ sequenceDiagram
     M->>WS: worktree.create {target: session {sessionId: the id session.newId minted}} — collision-safe, under <ws>/.rotaris/worktrees/<sid> — or worktree.checkAttach {path}
     WS-->>M: worktree.created {path, branch, baseBranch, baseRevision} | worktree.attachable | refused → "Error: could not create or attach the requested worktree: <detail>"; NO session exists (REQ-GIT-023 by construction)
   end
-  M->>RH: session.start {workspaceId, prompt, sessionId?, effectiveRoot?, worktree?, sandboxMode?}
+  M->>RH: session.start {workspaceId, prompt, sessionId?, effectiveRoot?, worktree?, sandboxMode?, boardPermissions?}
   RH->>CFG: configure(workspaceRoot): load the snapshot (layer 3) and both scopes' four files, overlay live state (Tier B), resolve — from the BASE workspace even for an isolated run (REQ-GIT-019)
   CFG-->>RH: RunSetup {model, runtime, personas, models, authProviders, tier} — or a fatal report / no entry model
   alt refused before it starts (REQ-EVENTS-021, REQ-CONFIG-478, REQ-WORKSPACE-137 "No model configured")
@@ -33,6 +33,7 @@ sequenceDiagram
   else
     RH->>M: ask credentials.lease {providerIds} (ADR-0030; REQ-PROVIDER-066/067)
     M-->>RH: credentials.leased {bearers, report} — read per request by the resolver OF THE MODEL each call goes to (credentialFor; Part L); an unleased slot is skipped
+    RH->>RH: complete the captured configuration with this launch's lease; Sessions.start consumes its prepared RunSetup
     alt the entry model's auth_provider is unresolved (REQ-WORKSPACE-137 "Provider authentication required")
       RH-->>M: refused; nothing was recorded
     end
@@ -66,6 +67,16 @@ While the hold stands, three places enforce the planning grants of REQ-ORCH-153 
 tool hooks never fire, REQ-HOOKS-004), and child admission (`IterationChildren.delegate`) — and the hook engine
 starts no process, emitting one `hook.finish` with `skip_reason: 'plan_gate'` per withheld invocation
 (REQ-HOOKS-126). The check suite is unreachable rather than guarded: a held segment never enters the loop.
+
+**Launch ownership (2026-09-13, REQ-TRACE-470/471).** `run-host/launch.ts` owns configuration capture,
+credential preparation and pre-start refusal mapping. The board coordinator sends its authorized
+`boardPermissions: permissive` on one start request. The run host applies autonomous mode and the
+unsandboxed opt-in together to the captured runtime. Settings files and live state retain their values.
+The configuration is loaded and validated before the credential wait; completing it builds the model
+setup and authenticated catalogue from those captured inputs. Active tool ports, preflight, checkpoints
+and supervision resolve their configuration by session identifier. A refused prompt for an active run
+returns before another configuration load. Launch audits record effective permission and the captured
+runtime section; the other configuration sections remain outside this snapshot implementation.
 
 ## 2. The loop and one iteration
 
@@ -363,7 +374,9 @@ of §5 and none a channel: each is a request answered once.
   (REQ-CONFIG-034: an authenticated provider's models as entries keyed by qualified id with `auth_provider`, and its
   slot picks) — and overlays the screen's live state (`config.liveState`, handed over on every pending change), then
   runs the loader's own passes; the run's `RunConfig`, runtime posture, persona resolver, model references, entry
-  tier, providers to lease and message limit come from that.
+  tier, providers to lease and message limit come from that. Initial starts capture this once before
+  credential preparation and pass the completed setup into `Sessions.start`. The authorized board grant
+  is a separate per-launch input carrying both fields required by REQ-TRACE-470.
 - **Tier C** — everything else is read at the next load; nothing watches a file. **The `display:` section** —
   REQ-CHAT-166's four transcript caps, the reader `SECTION_KEYS` declared and nothing stood behind until Part Z —
   is Tier C: it is read by `loadConfiguration`, carried on the configuration snapshot, and reaches every window over

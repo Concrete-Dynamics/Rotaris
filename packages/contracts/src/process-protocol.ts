@@ -76,8 +76,9 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
    * REQ-GIT-022 (Part O): an isolated or attached session arrives with its id minted in main, the binding the
    * workspace service already made, and the effective root the run works in; the session row stays anchored to
    * the base workspace (REQ-GIT-019). `sandboxMode` is REQ-SHELL-125's choice, recorded on the row (ADR-0022: not honoured here).
+   * REQ-TRACE-470/471: boardPermissions carries the authorized board grant for this launch.
    */
-  z.object({ kind: z.literal('session.start'), workspaceId: z.string(), prompt: z.string(), attachments: z.array(ImageAttachmentInputSchema).max(10).optional(), sessionId: z.string().min(1).optional(), effectiveRoot: z.string().optional(), worktree: WorktreeBindingSchema.optional(), sandboxMode: z.enum(SANDBOX_MODE_NAMES).optional() }).refine((v) => v.prompt.trim() !== '' || (v.attachments?.length ?? 0) > 0, { message: 'A prompt or attachment is required.' }),
+  z.object({ kind: z.literal('session.start'), workspaceId: z.string(), prompt: z.string(), attachments: z.array(ImageAttachmentInputSchema).max(10).optional(), sessionId: z.string().min(1).optional(), effectiveRoot: z.string().optional(), worktree: WorktreeBindingSchema.optional(), boardPermissions: z.literal('permissive').optional(), sandboxMode: z.enum(SANDBOX_MODE_NAMES).optional() }).refine((v) => v.prompt.trim() !== '' || (v.attachments?.length ?? 0) > 0, { message: 'A prompt or attachment is required.' }),
   z.object({ kind: z.literal('circuit_breaker.status'), workspaceId: z.string() }),
   /** ADR-0037 Tier B: the settings store's current values, handed to the run host ahead of the next run start. */
   z.object({ kind: z.literal('config.liveState'), state: z.record(z.string(), z.unknown()) }),

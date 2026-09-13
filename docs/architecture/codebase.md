@@ -723,6 +723,55 @@ stands at eighty-one.** The precursor also produced two *harness* mistakes worth
 transcript tool rows as `kind = 'tool_call'` where they are `kind = 'tool'`, and it asserted an elevation disclosure
 in a sandbox that opts in to unattended work, where REQ-TRACE-474 requires there to be none.
 
+**A third harness mistake in the same scenario, found 2026-09-13 and repaired the same day: it pressed the review
+decision on a clock.** The four presses after the release fired at offsets measured from the end of
+`LIVE_RUN_BOARD_MS`, whatever the board happened to be showing by then. Against `qwen3.8-flash-next` — the model the
+endpoint now serves, and the one `--no-discover-model` no longer hides — 240 s expired with the board-started run
+about half-way through, and **one timing failure became three**, two of which accused the product of faults it had
+not committed: "the card rests in running", "the history lacks the accept". Both were true statements about a card
+that accept had been pressed at while it was still running, which the board had correctly declined to move. Re-running
+the one scenario at 900 s with nothing else changed passed every check, which is how the harness was shown to be the
+wrong one — `AGENTS.md`'s standing rule is to believe the harness first, and that rule is what makes a harness that
+manufactures false product symptoms expensive rather than merely annoying.
+
+The repair is the one the scenario's own comment now carries: **nothing it presses is pressed on a clock.** The
+`selector@~ms` deadline that clicks already had was extended to `ROTARIS_CAPTURE_KEYS` (`Return>>selector@~ms`,
+because Enter opens the *focused* card under REQ-TRACE-484 and means nothing before the click has landed) and to
+`ROTARIS_CAPTURE_EVAL_AT` (`expression>>selector@~ms`, because a read of what something left behind has a
+precondition, while a read that watches a value *change* wants the appointment and keeps the plain form). A third
+form, `ROTARIS_CAPTURE_WAIT=js:<expression>`, ends the capture when the accept lands rather than at the far end of
+the window — so the deadline became a bound that a quick model does not pay, where the old shape always cost
+`window + 17 s`. An expiry is now **one** failure, and the presses never made are noted with what each wait did
+rather than reported as evidence about the board. The note is
+`docs/defects/live-run-board-window-presses-accept-blind.md`; it stays, with its repair recorded in it.
+
+**The first repair was itself wrong, and the live run caught it before it landed** — kept beside its replacement
+because it sharpens the finding. Enter was gated on `[data-req-card="REQ-104"]:focus`, which matched **63 ms into
+the run**, because the opening click focuses the card: Enter opened the detail at 3 s, the Review control appeared,
+and the press waiting for that control opened a review pane over a card that had not been released. The board work
+itself was sound in that run — the card reached `review` in 520 s, `completedCount` was exported, the worktree's
+suite was green — and the scenario still failed. **A state-driven press aimed at a state that is also true before
+the thing it waits for is no better than a clock, and is harder to see**, because the clock at least fails visibly.
+The gate became `[data-req-card="REQ-104"][data-column="review"]:focus`, which cannot hold before the release.
+
+**A measured negative, kept so it is not re-attempted: turning `code_intelligence` OFF makes the board scenario
+slower, not faster.** The scenario costs six to thirteen minutes against this endpoint, nearly all of it the model's
+own loop, and the spread between two runs of identical code had looked like the symbol server's doing — seven tool
+names and 153 k input tokens in six minutes where the agent stayed off it, seventeen and 291 k in 12.9 minutes where
+it did not, including three `*_memory` calls over a workspace deleted at the end. A `--lean` flag disabling the one
+shipped-enabled server (REQ-MCP-010) was built to test that reading and **falsified it on the first run**: without
+the symbol server the agent brute-forces the same task with `read_file` 44 times, `terminal` 41 and `grep` 37 —
+**144 tool calls and no review at all** inside the 900 s deadline, against 7 to 17 calls when it has the server. The
+flag was discarded rather than merged. Removing a capability does not remove the work; it moves it into more, cheaper
+round trips, and round trips are what the wall clock measures. Harness iteration belongs in
+`pnpm requirements-runs-proof`, which drives the real delivery service, traceability engine, store and Git helper
+with only the run host scripted and no model at all.
+
+That failing run is also the repair above proving itself under the exact condition that produced the defect: **one**
+failure for the expiry — "the window expired with the card where the trail leaves it" — and a `NOTE` reading "the
+review was never offered, so the accept was not pressed — review control: expired; decision: expired; confirmation:
+expired". No accusation against the board, where the old shape would have manufactured two.
+
 **What an owner's own run found — 2026-09-12, and the seven defects eighty-two to eighty-eight.** Not a harness
 and not a scenario: a 22-minute run in a scratch workspace, twelve children, 226 tool calls, 686k tokens, stopped
 by hand because it was going in circles. It commissioned the same architecture design three times and produced

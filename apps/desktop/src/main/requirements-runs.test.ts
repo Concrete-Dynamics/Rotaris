@@ -67,15 +67,12 @@ describe('the launch preview (REQ-TRACE-472/473/474, 467/468)', () => {
 });
 
 describe('the dispatch (REQ-TRACE-464/470/471/463)', () => {
-  it('claims, elevates for the one start and restores the live state, then writes the session id onto the run row', async () => {
+  it('claims, carries the grant on one start, then records the session id', async () => {
     const h = harness({ claims: [CLAIM] });
     const report = await h.runs.dispatch();
     expect(report).toEqual({ started: [{ id: 'REQ-101', unit: 'u1', sessionId: 'sess-1' }], abandoned: [] });
-    // The run host saw: the elevated live state, the start bound to the provisioned worktree, the restore — in that order and nothing else.
-    expect(h.hostSent.map((r) => r.kind)).toEqual(['config.liveState', 'session.start', 'config.liveState']);
-    expect(h.hostSent[0]).toEqual({ kind: 'config.liveState', state: { runtime: { permission_mode: 'autonomous' } } });
-    expect(h.hostSent[1]).toMatchObject({ kind: 'session.start', workspaceId: 'ws-id', sessionId: 'sess-1', prompt: 'Implement REQ-101', effectiveRoot: CLAIM.worktree.path, worktree: { worktree_path: CLAIM.worktree.path, branch: 'rotaris/req/req-101/u1', base_branch: 'main', base_revision: 'abc', created_by_session: false } });
-    expect(h.hostSent[2]).toEqual({ kind: 'config.liveState', state: {} });
+    expect(h.hostSent.map((r) => r.kind)).toEqual(['session.start']);
+    expect(h.hostSent[0]).toMatchObject({ kind: 'session.start', boardPermissions: 'permissive', workspaceId: 'ws-id', sessionId: 'sess-1', prompt: 'Implement REQ-101', effectiveRoot: CLAIM.worktree.path, worktree: { worktree_path: CLAIM.worktree.path, branch: 'rotaris/req/req-101/u1', base_branch: 'main', base_revision: 'abc', created_by_session: false } });
     const names = h.sent.map((r) => (r.kind === 'requirements.command' ? r.command.name : r.kind));
     expect(names).toEqual(['requirements.run.claim', 'requirements.run.started', 'requirements.run.claim']);
     expect(h.sent[1]).toMatchObject({ command: { name: 'requirements.run.started', id: 'REQ-101', unit: 'u1', sessionId: 'sess-1', permissions: 'permissive' } });
@@ -86,12 +83,13 @@ describe('the dispatch (REQ-TRACE-464/470/471/463)', () => {
     const h = harness({ claims: [{ ...CLAIM, permissions: 'workspace' }] });
     await h.runs.dispatch();
     expect(h.hostSent.map((r) => r.kind)).toEqual(['session.start']);
+    expect(h.hostSent[0]).not.toHaveProperty('boardPermissions');
   });
-  it('a refused start abandons the launch with the run host\'s reason, restores the live state, and starts nothing', async () => {
+  it('a refused start records the run host\'s reason and abandons the launch', async () => {
     const h = harness({ claims: [CLAIM], startReply: { kind: 'refused', code: 'session.no-model', headline: 'No model configured', detail: 'Choose a model in Settings before starting a run.' } });
     const report = await h.runs.dispatch();
     expect(report).toEqual({ started: [], abandoned: [{ id: 'REQ-101', unit: 'u1', reason: 'No model configured: Choose a model in Settings before starting a run.' }] });
-    expect(h.hostSent.map((r) => r.kind)).toEqual(['config.liveState', 'session.start', 'config.liveState']);
+    expect(h.hostSent.map((r) => r.kind)).toEqual(['session.start']);
     expect(h.sent.map((r) => (r.kind === 'requirements.command' ? r.command.name : r.kind))).toEqual(['requirements.run.claim', 'requirements.run.abandon', 'requirements.run.claim']);
     expect(h.runs.live()).toEqual([]);
   });

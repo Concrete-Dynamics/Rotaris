@@ -107,57 +107,5 @@ file leaves the hole open rather than inventing a row to fill it.
 | **2026-09-13** | **OQ-46's repair announcement in the plural** (`announceRepairs`, the batch notice and its route) | **`open-questions.md`** OQ-46 / `REQ-SHELL-155` | — | **the timeline entry the requirement fixes had been invented instead.** `REQ-SESSION-062` fixes type, severity, actor, message and metadata keys; the code carried `session_marked_interrupted`, severity `info`, a two-sentence message and `previous_status` with no `execution_status`. A reader of the exported timeline could not have found the entry the specification promises |
 | **2026-09-13** | **OQ-41's atomic replacement of the toolchain artifact, and the contended case staged** (`tools/symbol-artifact/replace.mjs`, `replace.test.ts`) | **`docs/spec/resolutions/08-requirements-traceability.md`** / OQ-41 | — | **three.** The ladder was ruled under OQ-44 on 2026-09-02 and **its amendment never reached `REQ-TRACE-061`**, which still said "the failure re-raised" while the register and the implementation cited the constants by name. The generator a test session runs replaced the artifact with a single `writeFileSync` **over the target** — no staging, no rename, no ladder — so a concurrent reader could observe a partial artifact, which `REQ-TRACE-502` forbids in terms. And the adapter did not catch: a throw out of vitest's `globalSetup` fails the whole run before one test is collected, which `REQ-TRACE-182` says shall never happen |
 | **2026-09-13** | **the plan gate, built** — the planning phase as a run segment, its three enforcement points and its durable half (`pnpm plan-gate-proof`, schema v17) | **`adr/0062-the-plan-gate-as-a-run-segment.md`** / `REQ-ORCH-152` to `REQ-ORCH-154` | — *(unnumbered; this work package's own findings)* | **the event specification contradicted the requirement it cites.** A4's round widened `REQ-HOOKS-126`'s skip-reason set to two members; `REQ-EVENTS-047` and the `hook.finish` row of the payload table in `20-event-history-replay-export.md` both still say `untrusted_workspace` is *the only defined value*, so a reader validating against the event document alone would reject a conformant `plan_gate` event. Recorded as a defect found by building, and it owes an amendment round. **The built-app proof (`pnpm plan-gate-proof`) found a second defect, and it was in the surface this Part drew**: every behavioural assertion held first time — the pending decision and the user's edit came back from the store with the process that wrote them gone, and no file the plan named existed at any held launch — but **five consecutive captures each left some part of the gate unreachable**, and the fifth was the first where a scripted click on *Approve* actually landed. Each attempt named the same mistake in different clothes and each repair moved the casualty rather than removing it: sticky inside a tail-following log scrolled the title away, a `vh` bound measured the window instead of the column, `max-height: 100%` and then `min-height: 0` left a flex child that would not shrink, its own grid row was allocated less than its content and the transcript painted over the answers, and lowering the transcript's floor still left the buttons twenty pixels under the divider. The repair that holds is not arithmetic: the three answers are `position: sticky; bottom: 0` inside the block, so a decision the run is stopped on cannot depend on a layout sum coming out right at one window size. This is UIR-014's class — a box standing smaller than the content inside it — and **no unit test in 1,639 could have seen it**; only the pixels could. The harness taught one thing too: a synthetic `blur` reaches no React handler, because React delegates `onBlur` from `focusout`. Two things the record expected to find were **not** defects: `withholdsOn` already delivered the fail-closed reading for every MCP and plugin name with no new machinery, and the root execution record's missing identity (`docs/defects/root-execution-record-has-no-identity.md`) turned out not to block the gate at all — the note's claim that it is *the first thing that Part will need* is wrong, because nothing in a plan cycle looks the root up by name |
+| **2026-09-13** | **Run-local board permissions and captured launch configuration** (R-009, REQ-TRACE-470/471) | **ADR-0041**, Part AP execution, closure dated 2026-09-13 | — | Focused tests against configuration loads and session records exposed the launch audit's literal `default` permission and empty runtime snapshot. The audit now records the effective permission and captured runtime. Overlapping launches retain their own grants and credentials; a refused active-run prompt returns before configuration loading. |
 | **2026-09-13** | **the composer's press-revealed popover, built** — the `PopoverMenu` primitive and the three chips that present through it (`pnpm composer-proof`) | **`directives.md`** `PD-CHAT-001` / `REQ-CHAT-006`, `REQ-CHAT-007`, `REQ-CHAT-009` | — | **the two-channel reason rule was lost in the first rendering and the proof, not the unit tests, caught it.** REQ-CHAT-007 requires every disabled control to publish its reason through tooltip **and** accessible description; the popover chip carried the `visually-hidden` reason span beside it but never pointed the trigger's `aria-describedby` at it, so screen readers got half the contract the proof asserts (`chip-reasoning has no accessible description`). The repair is one prop — the trigger takes `aria-describedby` through the same attribute-forwarding the design system guarantees every component. The autonomous confirmation was re-proven end to end: popover open → third row chosen → dialog raised with Cancel holding focus → reflex Return declines and `agents.yaml` stays byte-identical. Nothing else the record expected to check failed |
-
----
-
-## The two ledgers, reconciled — 2026-09-11
-
-The reconciliation this file first recorded as owed is done. It did not resolve the way the note assumed, and
-the note's reading is kept here beside its replacement: it said the overlap was *"between `codebase.md`'s 46 and
-60"*, produced by wave 1 renumbering in merge order. That is where the collision is **visible**; it is not where
-it starts.
-
-**The two sequences diverge from Part Y (2026-09-07), not from wave 1.** ADR-0058's sentence numbers the session
-artifact store **35–37**; `codebase.md` numbers the same Part's findings **33–36** — three against four, already
-offset by two before wave 1 was planned. From there the sequences drift independently: ADR-0058 reaches 53 at
-Parts AB/AC on 2026-09-07 and stops; `codebase.md` reaches 45 at Part AH on 2026-09-08, then wave 1 renumbers
-its five Parts in merge order from 46 and carries on to **80**.
-
-**They cannot be merged into one integer line, and must not be.** Doing it would renumber one record's findings
-inside the other's, which is precisely what "a changed requirement gets a new revision, not a new number"
-forbids by analogy. So:
-
-- **`codebase.md` holds the canonical defect ledger** — continuous, current, 1→87, counting *every defect the
-  build found, whatever found it*. **Anywhere but this file's own table, a number cited without a ledger means
-  this one**; inside the table the historic rows predate it, so there an unlabelled number is ADR-0058's.
-- **ADR-0058's sentence is a superseded parallel narrative**, 1→53, closed on 2026-09-11, counting *mechanisms
-  whose first execution held a defect*. It is kept verbatim because its reasoning is cited elsewhere; its
-  integers are historic and are never to be continued.
-- **This register counts neither.** It counts **first executions** — one row per mechanism that met something
-  real for the first time, including the ones that found nothing. Its rows carry a source number only as a
-  cross-reference, always labelled.
-
-**What is therefore *not* a row here, and why.** A merge defect, a proof defect and a gate finding are not first
-executions of a mechanism the architecture record decided — they are the build finding its own faults, which is
-`codebase.md`'s ledger. Named so the exclusion is checkable rather than implied: the merge-1 defects (59, 60),
-the wave-2 merge's three (61–63), the palette count pins and their neighbours (64–67), the proof that read the
-wrong store (68), and wave 3's twelve (69–80, including **T2-1** at 78 and **C2-1** at 79). Part AN (2026-09-09,
-defects 56–58) is excluded on the same principle for the opposite reason: it executed ADR-0050 a second time,
-ADR-0049 a third and ADR-0048 a second, so it holds no first execution at all.
-
-**The tail is short because it is finished, not because it is unwritten:** between Part AM (2026-09-09) and the
-live run (2026-09-11) **no ADR was first executed**. Waves 2 and 3 closed lanes that already had one.
-
----
-
-## How to append
-
-When a mechanism runs for the first time:
-
-1. record what it found **in the record that decided it**, in place, as `CLAUDE.md` requires — including when it
-   found nothing, and keeping any falsified reason beside its replacement;
-2. **append one row here**, pointing at that record.
-
-Two writes. The second is mechanical and a reviewer can check it at a glance: a part that closes without a row
-is as visible as a stale architecture view, and refusable on the same ground.

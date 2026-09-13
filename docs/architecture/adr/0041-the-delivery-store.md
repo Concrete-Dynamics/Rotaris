@@ -895,6 +895,27 @@ proof passed, and the fourth and fifth failed together on one cause.
   reached the run host between the two hand-overs would read the elevated state — a window of two round trips. Both
   close the same way, with a per-run permission field on `session.start`, which is a run-host seam this row does not
   own; it is raised in the handoff as a ruling request.
+  **Closed by the owner's authorized refactoring, 2026-09-13 (R-009).** The original residue above remains
+  as the record of the first implementation. `session.start.boardPermissions = permissive` now carries the
+  board coordinator's grant over the main-to-run-host boundary. The launch module captures configuration
+  before leasing credentials and applies `permission_mode: autonomous` together with
+  `allow_unsandboxed_autonomous: true` to that launch. `Sessions.start` consumes the prepared setup.
+  Active run ports resolve configuration by session identifier, and every model resolver retains its launch's
+  leased bearers. Board dispatch sends one start request. Tier B's key list and the user's live settings retain
+  their existing meaning.
+
+  The first focused execution found an additional defect: `Run.start` wrote `permission_mode: default` and
+  an empty configuration snapshot into every launch audit. The session record already held the effective
+  permission. The audit now records that effective permission and the captured runtime section, including both
+  board grant fields. Other configuration sections in the launch snapshot remain outside this refactoring.
+  `launch.test.ts` exercises real configuration loads and session records with scripted provider responses:
+  overlapping board/composer starts, reversed lease completion across workspaces, failed credential leases,
+  a thrown session start, and renderer contract isolation. The snapshot assertion failed against the literal
+  `default` audit and passed after the correction; the existing session-resume tests preserve the original audit.
+  Validation: the focused launch/configuration/board/session/run/tool suite passed 57 tests;
+  `requirements-runs-proof` passed 104 tests after its handover assertions were updated to the per-launch
+  grant, and now includes the real launch suite. `pnpm check` passed 1,625 tests with 25 skipped;
+  `pnpm build` passed. All model responses in these checks were scripted.
 - *`edit` and `create` are transitions that record, not refusals.* The first execution left them refusing and named
   this part. They now write into the project's own artifact through `requirements.source.write` and record the
   action with the summary the audit keeps (`REQ-TRACE-405`); the wave-1 refusal sentence and its pin in

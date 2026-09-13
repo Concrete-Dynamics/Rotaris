@@ -2241,14 +2241,23 @@ async function main(): Promise<void> {
         log(`capture: typed "${step.selector}"`);
       });
     }
-    // ROTARIS_CAPTURE_KEYS="keyCode@ms;;…": one real key press (down and up) into whatever holds focus — how the Git proof
-    // drags the divider with Left after clicking it (REQ-SHELL-069; verification only).
+    /**
+     * ROTARIS_CAPTURE_KEYS="keyCode@ms;;…": one real key press (down and up) into whatever holds focus — how the Git
+     * proof drags the divider with Left after clicking it (REQ-SHELL-069; verification only).
+     *
+     * `keyCode>>selector@~ms` presses as soon as the selector matches, giving up at `ms` — the same opt-in deadline
+     * `selector@~ms` gives a click, for the presses that have a precondition rather than an appointment. The board
+     * scenario needs it: Enter opens the focused card's detail (REQ-TRACE-484), so the press is meaningless until
+     * the card it is aimed at is the focused one, and the moment that happens is the model's to choose, not ours.
+     */
     for (const step of steps(process.env['ROTARIS_CAPTURE_KEYS'])) {
-      clocks.timers.after(millis(step.at), () => {
+      void (async () => {
+        if (step.until) await settleAt({ selector: step.arg ?? '*', arg: null, at: step.at, until: true });
+        else await new Promise<void>((r) => { clocks.timers.after(millis(step.at), () => r()); });
         win.webContents.sendInputEvent({ type: 'keyDown', keyCode: step.selector });
         win.webContents.sendInputEvent({ type: 'keyUp', keyCode: step.selector });
         log(`capture: key ${step.selector}`);
-      });
+      })();
     }
     // Part W's seams (verification only). ROTARIS_CAPTURE_CHORDS="Ctrl+K@ms;;F1@ms;;Escape@ms": one real chord (down and up,
     // with its modifiers) into the main window — how the palette proof presses Ctrl+K, Ctrl+,, Ctrl+Return, F1 and Escape.
@@ -2509,12 +2518,19 @@ async function main(): Promise<void> {
      * the apply-to-paint samples through it, and drives the scroller with it — all of which are values the product
      * already computes for itself. It reads and moves nothing a user cannot reach; the counting rule it calls
      * (`window.__rotarisCounts`) is the product's ONE definition (ADR-0045's closing obligation), not a restatement.
+     *
+     * `<expression>>>selector@~ms` reads as soon as the selector matches, giving up at `ms`. A reading taken at an
+     * appointment is the right shape for watching a value CHANGE — which is why the plain form stays and the poll
+     * schedules keep using it — and the wrong shape for reading the state left behind by something the product did
+     * when it was ready: that read has a precondition, and pinning it to a clock reports whatever the clock found.
      */
     for (const step of steps(process.env['ROTARIS_CAPTURE_EVAL_AT'])) {
-      clocks.timers.after(millis(step.at), async () => {
+      void (async () => {
+        if (step.until) await settleAt({ selector: step.arg ?? '*', arg: null, at: step.at, until: true });
+        else await new Promise<void>((r) => { clocks.timers.after(millis(step.at), () => r()); });
         const found = await win.webContents.executeJavaScript(`(async () => { try { return await (${step.selector}); } catch (cause) { return { error: String(cause) }; } })()`).catch((cause: unknown) => ({ error: String(cause) })) as unknown;
         log(`capture: eval-at ${step.at} ${step.selector} → ${JSON.stringify(found)}`);
-      });
+      })();
     }
     /**
      * ROTARIS_CAPTURE_GAP_AT="count@ms": `count` transcript publications delivered to the window with a sequence
@@ -2592,8 +2608,10 @@ async function main(): Promise<void> {
     }
     }
     // ROTARIS_CAPTURE_AFTER_MS lets a verification run wait for the run loop to finish before the capture.
-    // ROTARIS_CAPTURE_WAIT=file:<path>|result, bounded by ROTARIS_CAPTURE_WAIT_MS: the AFTER timer starts only once the
-    // file exists or the first terminal result was presented — how the slice proof waits for a pasted key and for a real run.
+    // ROTARIS_CAPTURE_WAIT=file:<path>|result|js:<expression>, bounded by ROTARIS_CAPTURE_WAIT_MS: the AFTER timer starts
+    // only once the file exists, the first terminal result was presented, or the expression answers truthy — how the slice
+    // proof waits for a pasted key and for a real run, and how the board scenario waits for the accept it pressed to land
+    // rather than for a clock. Without it a scenario whose work is state-driven still costs its whole deadline.
     const after = Number(process.env['ROTARIS_CAPTURE_AFTER_MS'] ?? (prompt ? 3_000 : 1_500));
     const wait = process.env['ROTARIS_CAPTURE_WAIT'];
     const waitBound = Number(process.env['ROTARIS_CAPTURE_WAIT_MS'] ?? 600_000);
@@ -2620,9 +2638,18 @@ async function main(): Promise<void> {
     });
     if (wait) {
       const { existsSync: exists } = await import('node:fs');
-      const satisfied = () => (wait === 'result' ? resultSeen : wait.startsWith('file:') ? exists(wait.slice(5)) : true);
+      // `js:` is read in the renderer, so its answer arrives a tick late; the flag carries it between polls. A throw
+      // or a `null` is "not yet", never "satisfied" — a broken expression must not end the capture early and silently.
+      let jsHit = false;
+      const expression = wait.startsWith('js:') ? wait.slice(3) : null;
+      const satisfied = () => (wait === 'result' ? resultSeen : wait.startsWith('file:') ? exists(wait.slice(5)) : expression !== null ? jsHit : true);
       const started = clocks.monotonic.now();
       const poll = clocks.timers.every(millis(500), () => {
+        if (expression !== null && !jsHit) {
+          void win.webContents.executeJavaScript(`(async () => { try { return Boolean(await (${expression})); } catch { return false; } })()`)
+            .then((hit: unknown) => { jsHit = hit === true; })
+            .catch(() => { jsHit = false; });
+        }
         if (satisfied()) { poll.cancel(); log(`capture: wait for ${wait} satisfied after ${Math.round(clocks.monotonic.now() - started)} ms`); finish(); }
         else if (clocks.monotonic.now() - started > waitBound) { poll.cancel(); log(`capture: wait for ${wait} timed out after ${waitBound} ms`); finish(); }
       });

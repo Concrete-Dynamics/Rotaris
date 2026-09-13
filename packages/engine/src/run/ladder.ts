@@ -72,6 +72,13 @@ export interface LadderDeps {
   readonly clocks: Clocks;
   readonly warn: (m: string) => void;
   readonly agent: string;
+  /**
+   * OQ-8 (REQ-EVENTS-053): every COMPLETED provider request is observed here, once, whatever the ladder then does
+   * with it. A request the ladder discards — a transient failure it retries, a context rejection it condenses past,
+   * an attempt superseded by a fallback — still reported whatever usage the provider reported, and that usage is
+   * spent. Reading the usage off the ladder's return value alone loses it.
+   */
+  readonly onRequestUsage?: ((usage: { readonly input: number; readonly output: number }) => void) | undefined;
 }
 
 function pause(clocks: Clocks, ms: number, signal: AbortSignal): Promise<void> {
@@ -98,6 +105,8 @@ export async function resilientStep(deps: LadderDeps, r: TurnResilience, call: (
   let condensations = 0;
   for (;;) {
     const { report, unresponsive } = await call(cell.model, unresponsiveThreshold(r));
+    // OQ-8: one observation per completed provider request, before the ladder decides what to do with it.
+    deps.onRequestUsage?.(report.usage);
     const provider = providerIdentity(catalogue, cell.model.model);
     const modelId = cell.model.model.modelId;
     if (unresponsive && !signal.aborted && cell.fallback !== null && !cell.fallbackAttempted) {

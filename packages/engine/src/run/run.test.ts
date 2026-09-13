@@ -6,7 +6,7 @@ import { asSessionId, FakeClock, mintMachineId, type MachineId, type SessionId }
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import type { SessionSnapshot, TranscriptIncrement } from '@rotaris/contracts';
 import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, type AgentBackend, type ScriptedCall, type TurnReport } from '@rotaris/model';
-import { parseEventLine, ProjectionOwner, Run, RUN_CONFIG_DEFAULTS, SequenceCounters, Sessions, SessionWriter, toSessionRecord, toTranscriptRow, type Publisher, type RunConfig, type RunResult } from '../index.js';
+import { parseEventLine, ProjectionOwner, Run, RUN_CONFIG_DEFAULTS, SequenceCounters, Sessions, SessionWriter, toSessionRecord, toTranscriptRow, type Publisher, type RunConfig, type RunNotice, type RunResult } from '../index.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
@@ -33,7 +33,7 @@ describe('engine/run — the run loop end to end against a real store and a scri
 
   const config = (over: Partial<RunConfig> = {}): RunConfig => ({ ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k', ...over });
 
-  function sessionsWith(backend: AgentBackend, over: Partial<RunConfig> = {}, extra: { onRunResult?: (id: SessionId, r: RunResult) => void } = {}) {
+  function sessionsWith(backend: AgentBackend, over: Partial<RunConfig> = {}, extra: { onRunResult?: (id: SessionId, r: RunResult) => void; notice?: (n: RunNotice) => void } = {}) {
     const pub = recorder();
     let n = 0;
     const sessions = new Sessions({
@@ -249,6 +249,38 @@ describe('engine/run — the run loop end to end against a real store and a scri
     expect(warnings.some((w) => w.includes('Transient model failure'))).toBe(true);
   });
 
+  it('OQ-8 / REQ-EVENTS-053: one usage.update per completed provider request — a retried failure\'s reported usage is counted, identical totals are skipped, and session.end carries the final totals', async () => {
+    // A transient failure that reported its usage before failing, then the retry that succeeded.
+    const failedWithUsage: ScriptedCall = { parts: [{ part: { kind: 'usage', usage: { input: 11, output: 3 } } }, { error: modelError({ code: 'http', status: 503, headline: 'overloaded' }) }] };
+    const { client, backend } = scripted([failedWithUsage, answer('second time lucky', { input: 20, output: 6 })]);
+    const { sessions } = sessionsWith(backend);
+    const sid = (sessions.start(dal, 'C:/ws', 'retry') as { value: SessionId }).value;
+    await new Promise((r) => setTimeout(r, 5));
+    clock.advance(1_000);
+    const result = await sessions.running(sid)!;
+    expect(client.requests.length).toBe(2);
+    expect(result.status).toBe('completed');
+    // Two requests completed, each contributing new usage: two events, cumulative, the newest superseding.
+    const updates = dal.eventsOfKind(sid, 'usage.update').map((e) => JSON.parse(e.payload) as { tokens: { input: number; output: number; total: number } });
+    expect(updates.map((u) => u.tokens)).toEqual([
+      { input: 11, output: 3, total: 14 },
+      { input: 31, output: 9, total: 40 },
+    ]);
+    // The spent tokens of the discarded attempt are in the session's own totals and in the terminal event.
+    expect(dal.getSession(sid)).toMatchObject({ tokens_input: 31, tokens_output: 9 });
+    expect(payload(sid, 'session.end')).toMatchObject({ tokens: { input: 31, output: 9, total: 40 } });
+    expect(result.tokens).toEqual({ input: 31, output: 9, total: 40 });
+  });
+
+  it('OQ-8 / REQ-EVENTS-053: a request that reports no figures moves no total and raises no event', async () => {
+    const { backend } = scripted([answer('nothing to report', { input: 0, output: 0 })]);
+    const { sessions } = sessionsWith(backend);
+    const sid = (sessions.start(dal, 'C:/ws', 'silent') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    expect(dal.eventsOfKind(sid, 'usage.update')).toEqual([]);
+    expect(events(sid)).not.toContain('usage.update');
+  });
+
   it('a failure outside the transient class ends the run agent_session_aborted → failed, with the error in the row and the result', async () => {
     const { backend } = scripted([{ parts: [{ error: modelError({ code: 'http', status: 401, headline: 'unauthorised', providerMessage: 'bad key' }) }] }]);
     const { sessions } = sessionsWith(backend);
@@ -309,6 +341,28 @@ describe('engine/run — the run loop end to end against a real store and a scri
     expect(warnings.some((w) => w.includes('flush exploded'))).toBe(true);
   });
 
+  it('A3 / REQ-SESSION-094 / REQ-EVENTS-098: the lock is still held when both terminal events are delivered, and released only after the sink is detached', async () => {
+    const { backend } = scripted([answer('done')]);
+    const { sessions } = sessionsWith(backend);
+    const sid = asSessionId('S1');
+    const heldAt: { event: string; lock: boolean }[] = [];
+    // A blocking consumer observes each event at the moment it is delivered, which is while teardown is mid-pipeline.
+    (sessions as unknown as { bus: { attach: (id: SessionId, c: { mode: 'blocking'; deliver: (e: { event: string }) => void }) => void } })
+      .bus.attach(sid, { mode: 'blocking', deliver: (e) => { heldAt.push({ event: e.event, lock: dal.getLock(sid) !== undefined }); } });
+    const started = sessions.start(dal, 'C:/ws', 'terminal');
+    if (!started.ok) throw new Error('start');
+    await sessions.running(sid);
+    /**
+     * REQ-EVENTS-098 makes the right to write a session's history exactly the right to hold its lock, and A3
+     * settled that the lock is therefore held THROUGH terminal persistence and both final events rather than
+     * released before them. Every delivered event, the terminal pair included, sees the lock held.
+     */
+    expect(heldAt.map((h) => h.event).slice(-2)).toEqual(['session.end', 'result']);
+    expect(heldAt.every((h) => h.lock)).toBe(true);
+    // Guaranteed cleanup runs after the pipeline: the lock is gone once the run has ended.
+    expect(dal.getLock(sid)).toBeUndefined();
+  });
+
   it('REQ-EVENTS-021 / REQ-SESSION-082: with no model configured the run is refused before it starts — no session, one error result marked failed-before-start', () => {
     const sessions = new Sessions({ clocks: clock, publisher: recorder(), pid: 1, host: HOST, retentionCap: 0, warn: () => undefined, mintSessionId: () => 'never', model: null, sessionFilesDir: () => dir });
     const r = sessions.start(dal, 'C:/ws', 'x');
@@ -354,7 +408,8 @@ describe('engine/run — the run loop end to end against a real store and a scri
       entered += 1;
       signal.addEventListener('abort', () => resolve({ status: 'failed', text: '', usage: { input: 0, output: 0 }, error: modelError({ code: 'aborted', headline: 'aborted', transient: false }) }), { once: true });
     }) };
-    const { sessions } = sessionsWith(backend);
+    const notices: RunNotice[] = [];
+    const { sessions } = sessionsWith(backend, {}, { notice: (n) => notices.push(n) });
     const a = (sessions.start(dal, 'C:/ws', 'a') as { value: SessionId }).value;
     const b = (sessions.start(dal, 'C:/ws', 'b') as { value: SessionId }).value;
     await vi.waitFor(() => expect(entered).toBe(2));
@@ -368,7 +423,21 @@ describe('engine/run — the run loop end to end against a real store and a scri
     expect(sessions.start(dal, 'C:/ws', 'blocked')).toMatchObject({ ok: false, error: { code: 'store-failed' } });
     expect(sessions.resume(dal, 'C:/ws', a)).toMatchObject({ ok: false, error: { code: 'store' } });
     const outcomes = await Promise.all([sessions.running(a), sessions.running(b)]);
-    for (const outcome of outcomes) expect(outcome).toMatchObject({ status: 'error', persistence: { confirmed: false } });
+    // REQ-EVENTS-088: the caller's outcome discloses the uncertainty structurally — the ordinal is readable, not a sentence.
+    for (const outcome of outcomes) expect(outcome).toMatchObject({ status: 'error', execution_status: 'unknown', persistence: { confirmed: false } });
+    for (const outcome of outcomes) expect(typeof outcome!.persistence!.last_event_ordinal).toBe('number');
+    /**
+     * REQ-EVENTS-088 / OQ-42: exactly one failure notification per AFFECTED run — two runs, two notices, never
+     * one per failed write — each naming its own session, its own last durable ordinal, and the recovery action
+     * that reopens that session. The key is per session for the same reason.
+     */
+    const failures = notices.filter((n) => n.headline === 'Run recording failed; completion is unconfirmed');
+    expect(failures.map((n) => n.sessionId).sort()).toEqual([a, b].sort());
+    for (const n of failures) {
+      expect(n).toMatchObject({ severity: 'error', action: 'session.reopen', key: `recording-failure:${n.sessionId}` });
+      expect(n.detail).toContain('Last durable event ordinal:');
+      expect(n.detail).toContain('reopen the session');
+    }
     expect(events(a).length).toBe(boundaryA);
     expect(events(b).length).toBe(boundaryB);
     expect(sessions.prompt(a, 'blocked')).toMatchObject({ ok: false, error: { code: 'store-failed' } });

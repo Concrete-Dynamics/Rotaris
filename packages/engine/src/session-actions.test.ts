@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import * as fs from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
@@ -54,9 +55,11 @@ describe('Part U — repair, delete and the exports', () => {
       expect(report.repaired).toEqual([{ sessionId: 'S-dead', from: 'running', to: 'interrupted', reason: 'the lock names this machine and its process (pid 4242) is gone' }]);
       expect(dal.getSession(sid)?.execution_status).toBe('interrupted');
       expect(dal.getLock(sid)).toBeUndefined();
-      const t = dal.timelineOf(sid).filter((e) => e.name === 'session_marked_interrupted');
+      // REQ-SESSION-062 fixes the entry exactly: type, severity, actor, message and the three metadata keys.
+      const t = dal.timelineOf(sid).filter((e) => e.name === 'session.interrupted_recovered');
       expect(t).toHaveLength(1);
-      expect(t[0]!.message).toContain("still marked 'running'");
+      expect(t[0]).toMatchObject({ severity: 'warning', actor: 'rotaris', message: "Session was still marked 'running' but the lock names this machine and its process (pid 4242) is gone; status set to 'interrupted'." });
+      expect(JSON.parse(t[0]!.metadata)).toEqual({ previous_execution_status: 'running', execution_status: 'interrupted', reason: 'the lock names this machine and its process (pid 4242) is gone' });
       expect(s.list(dal, WS).find((r) => r.sessionId === 'S-dead')).toMatchObject({ status: 'interrupted', stale: false });
     });
 
@@ -79,6 +82,29 @@ describe('Part U — repair, delete and the exports', () => {
       expect(dal.getSession(asSessionId('S-live'))?.execution_status).toBe('running');
       expect(dal.getSession(asSessionId('S-done'))?.execution_status).toBe('completed');
       alive.delete(777);
+    });
+
+    it('OQ-46 / REQ-SESSION-062/063: a run-host crash stales several sessions at once — every one of them is repaired inside the one call and every one gets its own entry', () => {
+      // ADR-0002's accepted consequence: one stale session per in-flight run.
+      for (const id of ['S-c1', 'S-c2', 'S-c3']) plant(id, 'running', { lock: { pid: 4242 } });
+      const s = sessions();
+      const all = s.repair(dal, WS, { all: true });
+      expect(all.repaired.map((r) => r.sessionId)).toEqual(['S-c1', 'S-c2', 'S-c3']);
+      // The batch has settled when the call returns: nothing is left in an active status for the caller to act on.
+      expect(s.list(dal, WS).map((r) => [r.sessionId, r.status, r.stale])).toEqual([
+        ['S-c1', 'interrupted', false], ['S-c2', 'interrupted', false], ['S-c3', 'interrupted', false],
+      ]);
+      // REQ-SESSION-062: one entry per session, in that session's own record — never folded into a neighbour's.
+      for (const id of ['S-c1', 'S-c2', 'S-c3']) {
+        const entries = dal.timelineOf(asSessionId(id)).filter((e) => e.name === 'session.interrupted_recovered');
+        expect(entries).toHaveLength(1);
+        expect(entries[0]).toMatchObject({ severity: 'warning', actor: 'rotaris' });
+        expect(JSON.parse(entries[0]!.metadata)).toMatchObject({ previous_execution_status: 'running', execution_status: 'interrupted' });
+      }
+      // REQ-SESSION-063: a second pass repairs nothing and writes nothing.
+      const again = s.repair(dal, WS, { all: true });
+      expect(again.repaired).toEqual([]);
+      expect(dal.timelineOf(asSessionId('S-c1')).filter((e) => e.name === 'session.interrupted_recovered')).toHaveLength(1);
     });
 
     it('nothing stale is an explicit answer; a missing id and a foreign-host lock are skipped with reasons, untouched', () => {
@@ -273,6 +299,66 @@ describe('Part U — repair, delete and the exports', () => {
       event('S-segment', 6, 'session.end', { status: 'failed', stop_reason: 'failure', duration_seconds: 1.5 });
       event('S-segment', 7, 'usage.update', { tokens: { total: 5 } });
       expect(readTrajectory(dal, sid)!.document).toMatchObject({ status: 'failed', stop_reason: 'failure', ended_at: '2026-09-05T10:00:06.000Z', duration_seconds: 1.5 });
+    });
+
+    it("A6 / REQ-EVENTS-138: a duration is only ever the outcome's own — an end with no status supplies neither, and a result that supplies the status supplies its duration too", () => {
+      // An end carrying the figure but no status: the segment is unfinished, so status is unknown and the duration is zero.
+      const unfinished = plant('S-nostatus', 'running');
+      event('S-nostatus', 1, 'session.start', { task: 't' });
+      event('S-nostatus', 2, 'session.end', { stop_reason: 'partway', duration_seconds: 77 });
+      expect(readTrajectory(dal, unfinished)!.document).toMatchObject({ status: 'unknown', stop_reason: '', ended_at: '', duration_seconds: 0 });
+      // A result supplying the outcome supplies its duration: it takes precedence over the two timestamps' elapsed time.
+      const viaResult = plant('S-viaresult', 'completed');
+      event('S-viaresult', 1, 'session.start', { task: 't' });
+      event('S-viaresult', 5, 'result', { result: { status: 'completed', stop_reason: 'tasks_complete', duration_seconds: 2.5 } });
+      expect(readTrajectory(dal, viaResult)!.document).toMatchObject({ status: 'completed', stop_reason: 'tasks_complete', ended_at: '2026-09-05T10:00:05.000Z', duration_seconds: 2.5 });
+    });
+
+    /**
+     * A9 / REQ-EVENTS-145 / REQ-TRACE-061: the destination-failure half. The refusal is REAL — a reader's open
+     * descriptor on Windows (constraint D-06, the condition the ladder exists for), a write-denied parent
+     * elsewhere — never a stubbed `fs`, because what is under test is that the ladder exhausts and the previous
+     * export survives the exhaustion, and a stub proves nothing about either.
+     */
+    const refuseReplacement = (target: string): (() => void) => {
+      if (process.platform === 'win32') { const fd = fs.openSync(target, 'r'); return () => fs.closeSync(fd); }
+      const parent = join(target, '..');
+      const before = fs.statSync(parent).mode;
+      fs.chmodSync(parent, 0o555);
+      return () => fs.chmodSync(parent, before);
+    };
+
+    it('A9 / REQ-EVENTS-145 / REQ-TRACE-061: a destination that cannot be replaced exhausts the ladder, reports recoverably and leaves the previous export exactly as it was', async () => {
+      const target = join(dir, 'exports', 'previous.json');
+      const first = await writeExport(target, { generation: 1 } as unknown as JsonValue, clock.timers);
+      expect(first.ok).toBe(true);
+      const before = readFileSync(target, 'utf8');
+      const release = refuseReplacement(target);
+      let failed;
+      try {
+        const attempt = writeExport(target, { generation: 2 } as unknown as JsonValue, clock.timers);
+        // REQ-TRACE-061's ladder: four waits of 0.05 / 0.1 / 0.2 / 0.4 s behind five attempts in total.
+        for (let i = 0; i < 6; i += 1) { for (let j = 0; j < 8; j += 1) await Promise.resolve(); clock.advance(400); }
+        failed = await attempt;
+      } finally { release(); }
+      expect(failed.ok).toBe(false);
+      if (failed.ok) throw new Error('unreachable');
+      expect(failed.error.code).toBe('document.replace');
+      expect(failed.error.detail).toContain('after 5 attempt(s)');
+      // The previous export is byte-identical and no staged leftover sits beside it.
+      expect(readFileSync(target, 'utf8')).toBe(before);
+      expect(readdirSync(join(dir, 'exports'))).toEqual(['previous.json']);
+    });
+
+    it('A9 / REQ-EVENTS-145: a destination whose parent cannot be created is a recoverable refusal, not a raised exception', async () => {
+      // A file standing where the export's parent directory would go: the create fails, and the caller must still get a Result.
+      const blocked = join(dir, 'blocked');
+      writeFileSync(blocked, 'not a directory');
+      const r = await writeExport(join(blocked, 'nested', 'export.json'), { a: 1 } as unknown as JsonValue, clock.timers);
+      expect(r.ok).toBe(false);
+      if (r.ok) throw new Error('unreachable');
+      expect(r.error.code).toBe('document.parent');
+      expect(readFileSync(blocked, 'utf8')).toBe('not a directory');
     });
 
     it('a capped history reports its drop count and the warning; a batch keeps selection order under the three-key wrapper', async () => {

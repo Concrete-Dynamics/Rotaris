@@ -50,7 +50,7 @@ the target.*
 | `<workspace>/.gitignore` | the user's own repository root | `REQ-CONFIG-013`: atomic, idempotent, and **every** failure swallowed |
 | `<provider_id>.json` | per-user credential directory | `REQ-PROVIDER-018` fixes the temporary file's **name** (starts with the provider id, ends `.tmp`), its mode `0600`, its location inside the credential directory, and its deletion on failure; `REQ-PROVIDER-016` applies `0700`/`0600` on POSIX and an explicit Windows access-control list with inheritance disabled, **reads the protection back**, and refuses to write at all when it cannot be applied |
 | `access-token` and `api-key.json` | `<workspace>/.rotaris/copilot-gateway/` | `REQ-PROVIDER-063`, on `REQ-PROVIDER-016`'s protection terms, each written so a reader sees the previous or the complete new content, each on disk before staging reports success |
-| the generated requirement-symbol artifact, the three debt baselines, the retired-identifier log | the user's own repository | `REQ-TRACE-061`: temporary file in the target's **own parent directory**, UTF-8 with LF endings, parent created when missing, atomic replacement, temporary file removed best-effort on failure and **the failure re-raised**; adopted whole by `REQ-TRACE-126` and `REQ-TRACE-137`; `REQ-TRACE-513` now states as a boundary that these stay files |
+| the generated requirement-symbol artifact, the three debt baselines, the retired-identifier log | the user's own repository | `REQ-TRACE-061`: temporary file in the target's **own parent directory**, UTF-8 with LF endings, parent created when missing, atomic replacement, temporary file removed best-effort on failure, and — since the OQ-41 amendment of 2026-09-06 — **the bounded ladder of five attempts at 0.05 / 0.1 / 0.2 / 0.4 s, exhaustion producing a recoverable error with the previous file retained** (it formerly said "the failure re-raised", which named a delivery mechanism rather than an outcome); adopted whole by `REQ-TRACE-126` and `REQ-TRACE-137`; `REQ-TRACE-513` now states as a boundary that these stay files |
 | `summary.md` | with the store, machine-local | `REQ-SESSION-006` derived and unread by the application; `REQ-SESSION-028` rebuilt on every save, "the one part written as a file"; `REQ-SESSION-033` **states the one retry ladder**; `REQ-SESSION-140` "never sees it half-written" |
 | **an export document, at a destination the user names** | wherever the user's save dialog points | `REQ-EVENTS-145`: parents created, pretty-printed JSON with sorted keys and a trailing newline, and it **MUST become visible at its destination in one step** — "the only place this document requires a file to be replaced in one step" |
 
@@ -280,6 +280,15 @@ declares it may be missing (`REQ-TRACE-061`); write; `fsync` the staged file; re
 staged file on every failure path; apply the store's declared mode, and where the store declares one,
 **read the protection back** before reporting success (`REQ-PROVIDER-016`). **The staged file's own
 descriptor need not be closed first** — measured: a handle on the rename's source does not block it.
+
+*Corrected 2026-09-13, by A9's destination-failure coverage.* **Creating the parent is inside the
+primitive's contract, not beside it.** The implementation created it before the `try`, so a parent that
+cannot be created — a file standing where the folder would go, a folder the account may not write into —
+**raised** rather than returning the `Result` every other failure here returns. The shape that made it
+reachable is exactly the one this primitive exists for: `REQ-EVENTS-145`'s export writes to a destination
+the *user* chose in a save dialog, so the parent is not the product's own directory and its refusal is an
+ordinary outcome rather than a programming error. The failure is now reported as `document.parent`,
+alongside `document.stage`, `document.replace` and `document.mode`.
 
 **Write side — exclusive create.** Create the target with exclusive-create semantics; on success the caller
 minted it; on an already-exists failure **read what is there and use it**, which is not an error. This shape

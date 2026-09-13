@@ -206,8 +206,13 @@ export interface RunResult {
   readonly error: string | null;
   readonly execution_status: string;
   readonly severity: 'information' | 'warning' | 'error';
-  /** Present for the in-memory outcome when terminal persistence could not be confirmed. */
-  readonly persistence?: { readonly confirmed: false; readonly lastEventOrdinal: number };
+  /**
+   * REQ-EVENTS-088 (OQ-42): present for the in-memory outcome when terminal persistence could not be confirmed,
+   * and absent otherwise. It is snake-cased like every other field here because this value crosses the process
+   * boundary as it stands (ADR-0044's `run.result`): a caller must be able to READ the uncertainty rather than
+   * recognise a sentence, which is what "caller outcomes disclose that uncertainty" asks for.
+   */
+  readonly persistence?: { readonly confirmed: false; readonly last_event_ordinal: number };
 }
 
 /** ADR-0014 rule 1: the one 30 s allowance, shared by the cancellation grace and the force-exit backstop. */
@@ -233,6 +238,12 @@ export class Run {
   private tokenSamples: [string, number][];
   private sampler: TimerHandle | null = null;
   private result: RunResult | null = null;
+  /**
+   * OQ-8 (REQ-EVENTS-053): the cumulative totals the last `usage.update` carried, so identical totals are not
+   * re-emitted. Seeded from the rehydrated aggregates, so a request that reports nothing raises nothing and a
+   * resumed run does not republish the totals it opened with.
+   */
+  private lastUsageEmitted: string;
   private recordingFailure: { reason: string; lastEventOrdinal: number } | null = null;
   private readonly unsubscribeRecordingFailure: () => void;
   private readonly dispatched = new Map<string, string>();
@@ -280,6 +291,7 @@ export class Run {
     this.todo = deps.resumeTodo ? Todo.fromDocument(deps.resumeTodo, deps.config.consecutiveRetryLimit) : Todo.fresh(deps.taskId, deps.taskLabel ?? deps.task, deps.config.consecutiveRetryLimit);
     if (deps.resumeTodo) this.todo.appendTask('Continued Prompts', deps.taskId, deps.taskLabel ?? deps.task);
     this.aggregates = Aggregates.rehydrate(stored);
+    this.lastUsageEmitted = usageTotals(this.aggregates.usagePayload());
     this.tokenSamples = parseTokenSamples(stored?.token_samples ?? '[]');
     this.iterationsCompleted = stored?.iterations_completed ?? 0;
     this.initialIterations = this.iterationsCompleted;
@@ -301,6 +313,14 @@ export class Run {
       this.deps.notice?.({
         severity: 'error', headline: 'Run recording failed; completion is unconfirmed',
         detail: `In-memory status: cancellation requested. Last durable event ordinal: ${lastEventOrdinal}. ${reason}. Restore writable storage, then reopen the session to inspect its saved boundary before continuing.`,
+        /**
+         * OQ-42: the recovery is an ACTION and not only a sentence. Reopening the session is the product's own
+         * recovery path — it waits for every affected run to settle, runs the rolled-back write probe, and
+         * rebuilds this session's writer and projection (`Sessions.resume`) — so the notice offers exactly that,
+         * against exactly this session. The identifier is REQ-NOTIFY-223's; main maps it to the member of
+         * REQ-NOTIFY-044's closed vocabulary that focuses a named session, and adds nothing to that vocabulary.
+         */
+        action: 'session.reopen',
         sessionId: this.sessionId, key: `recording-failure:${this.sessionId}`,
       });
     });
@@ -480,11 +500,6 @@ export class Run {
       const modelTask = this.deps.continuation && task.id === this.deps.taskId ? this.deps.task : task.text;
       const report = await this.turnWithRetry(modelTask);
       summary = report.text.slice(0, 200);
-      if (report.usage.input + report.usage.output > 0) {
-        this.aggregates.addTurnUsage(report.usage);
-        // REQ-EVENTS-053: never empty; cumulative, the newest supersedes.
-        writer.recordEvent('usage.update', this.aggregates.usagePayload(), iteration);
-      }
       if (this.stop.requested) {
         // REQ-ORCH-135: an iteration cancelled mid-run closes as cancelled; the task stays anchored.
         outcome = 'cancelled';
@@ -592,6 +607,29 @@ export class Run {
     };
   };
 
+  /**
+   * OQ-8 (REQ-EVENTS-053): the emission trigger. One `usage.update` per COMPLETED provider request that
+   * contributes new usage — the successful ones and the failed or partial ones the ladder retried past, whose
+   * reported tokens are spent whatever became of the response. Identical cumulative totals are skipped, so a
+   * request the provider reported no figures for raises nothing. REQ-MONITOR-166's sparkline sampling is a
+   * separate cadence and is not driven from here; REQ-SESSION-094's terminal `session.end` carries the final
+   * cumulative totals whether or not the last request moved them.
+   *
+   * The falsified reading, kept beside its replacement: this was one event per ITERATION, computed from the
+   * turn's returned report. That report carries only the usage of the attempts that survived — `resilientStep`
+   * discards the report of every attempt it retries past, and `runWithChildren` returns the LAST parent turn —
+   * so a run that retried a transient failure or resumed its parent spent tokens the session's own totals never
+   * counted.
+   */
+  private readonly onRequestUsage = (u: { readonly input: number; readonly output: number }): void => {
+    this.aggregates.addTurnUsage(u);
+    const payload = this.aggregates.usagePayload();
+    const totals = usageTotals(payload);
+    if (totals === this.lastUsageEmitted) return;
+    this.lastUsageEmitted = totals;
+    this.deps.writer.recordEvent('usage.update', payload, this.iterationsCompleted + 1);
+  };
+
   /** REQ-MONITOR-084 (4): the run-level plan as lines, for the entry agent's own compression. */
   private plannerTodoLines(): readonly string[] {
     return this.todo.toDocument().phases.flatMap((phase) => phase.tasks.map((task) => `[${task.state}] ${phase.name} — ${task.text}`));
@@ -666,6 +704,8 @@ export class Run {
       ...(compression ? { compression } : {}),
       // REQ-ORCH-093: after the first call this turn resumes the parent with its children's reports.
       parentResume: !initialCall,
+      // OQ-8: the entry agent's provider requests, each counted and published as it completes.
+      onRequestUsage: this.onRequestUsage,
       }, text, history, this.abort.signal, content);
     };
     try {
@@ -1046,12 +1086,17 @@ export class Run {
       this.result = {
         ...result, status: 'error', execution_status: 'unknown', severity: 'error',
         stop_reason: 'agent_session_aborted', summary: 'Run completion is unconfirmed because durable recording failed.',
-        error: failure.reason, persistence: { confirmed: false, lastEventOrdinal: failure.lastEventOrdinal },
+        error: failure.reason, persistence: { confirmed: false, last_event_ordinal: failure.lastEventOrdinal },
       };
       return this.result;
     }
     return result;
   }
+}
+
+/** OQ-8: the comparable form of a cumulative usage payload — two requests whose totals agree raise one event. */
+function usageTotals(p: { tokens: { input: number; output: number }; cost: { total: string } }): string {
+  return `${p.tokens.input}/${p.tokens.output}/${p.cost.total}`;
 }
 
 /** REQ-MONITOR-166: every 10 s while the session's status claims a live run; the most recent 120 samples kept. */

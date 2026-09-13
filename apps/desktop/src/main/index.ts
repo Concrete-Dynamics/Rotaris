@@ -300,13 +300,50 @@ async function main(): Promise<void> {
    * ESC-34: the review action carries the workspace whose hooks it concerns, so the caller supplies one; with no
    * workspace there is nothing to review and the notice is raised without an action rather than with an empty one.
    */
-  const recoveryFor = (action: string | undefined, workspace?: string): Recovery =>
+  const recoveryFor = (action: string | undefined, workspace?: string, sessionId?: string): Recovery =>
     action === 'hooks.review'
       ? (workspace === undefined || workspace === '' || workspace === '(no workspace)' ? [] : [{ label: 'Review hooks', action: { kind: 'open-hook-review', workspace } }])
       : action === 'hooks.settings' ? [{ label: 'Open hook settings', action: { kind: 'open-settings', category: 'hooks' } }]
         : action === 'config.models' ? [{ label: 'Open Models settings', action: { kind: 'open-settings', category: 'models' } }]
           : action === 'providers.add' ? [{ label: 'Add a provider', action: { kind: 'open-provider-sign-in' } }]
-            : [];
+            /**
+             * OQ-42: the durable-store failure's recovery. Reopening the session is what waits for every affected
+             * run to settle, probes the store with a rolled-back write and rebuilds the session's writer and
+             * projection (`Sessions.resume`) — so the action focuses the session the notice names, through
+             * REQ-NOTIFY-044's existing `focus-session` member. A notice with no session to name carries no
+             * action rather than one pointing nowhere, on the same terms as the hook review above.
+             */
+            : action === 'session.reopen' ? (sessionId === undefined || sessionId === '' ? [] : [{ label: 'Reopen the session', action: { kind: 'focus-session', sessionId } }])
+              : [];
+  /**
+   * REQ-SHELL-155 / REQ-SESSION-062, OQ-46 (accepted 2026-09-06): the repair is ANNOUNCED, and the failure it
+   * reports is plural. ADR-0002 accepts the run-host crash as a consequence, and it stales one session per
+   * in-flight run — so three or five sessions needing repair at once is the realistic shape, and five notices
+   * saying the same thing about five ids is not a report of it.
+   *
+   * One repaired session keeps the singular title REQ-SHELL-155 fixes, word for word. A batch is announced
+   * ONCE: how many were repaired, their ids in the detail, and a route to the surface the affected-session list
+   * is reached from — Overview, whose "List sessions" control opens it (REQ-SHELL-023's first view). The route
+   * is deliberately an existing member of REQ-NOTIFY-044's closed vocabulary rather than a new one; widening
+   * that vocabulary is the escalation OQ-46's own entry says this answer becomes if it needs one, and it does
+   * not need one. Every repaired session still gets its own timeline entry (REQ-SESSION-062): this is what the
+   * user is shown, not what is recorded.
+   */
+  const announceRepairs = (repaired: readonly { readonly sessionId: string; readonly from: string; readonly reason: string }[]): void => {
+    if (repaired.length === 0) return;
+    if (repaired.length === 1) {
+      const one = repaired[0]!;
+      raiseNotice('warning', 'Session marked interrupted', `This session was still marked '${one.from}', but ${one.reason}. Rotaris marked it interrupted, so its checkpoints can be restored again.`);
+      log(`notice: Session marked interrupted (${one.sessionId}: was '${one.from}', ${one.reason})`);
+      return;
+    }
+    raiseNotice(
+      'warning', 'Sessions marked interrupted',
+      `${repaired.length} sessions were still marked as running with no process behind them. Rotaris marked them interrupted, so their checkpoints can be restored again. Open Overview and choose "List sessions" to see them: ${repaired.map((r) => r.sessionId).join(', ')}.`,
+      [{ label: 'Open Overview', action: { kind: 'open-view', view: 'overview' } }],
+    );
+    log(`notice: Sessions marked interrupted (${repaired.length}: ${repaired.map((r) => r.sessionId).join(', ')})`);
+  };
   /** REQ-WORKSPACE-152 (3): the first-launch notice — persistent, informational, dismissible, gating nothing. */
   const NO_PROVIDER_HEADLINE = 'No model provider is authenticated yet';
   /**
@@ -608,10 +645,11 @@ async function main(): Promise<void> {
       // REQ-NOTIFY-028: the run host names the session its notice concerns, so a notice about one run survives the
       // start of another (REQ-NOTIFY-029). No timer clears anything here any more: REQ-NOTIFY-040 allows a notice to
       // leave only by replacement, a run-start clear, or the user's dismissal.
+      const recovery = recoveryFor(e.action, activeWindow()?.workspace, e.sessionId);
       void notices.report({
         severity: e.severity, title: e.title, message: e.message, detail: e.detail, persistent: e.persistent, sessionId: e.sessionId,
         ...(e.key === undefined ? {} : { key: e.key }),
-        ...(recoveryFor(e.action, activeWindow()?.workspace).length === 0 ? {} : { action: recoveryFor(e.action, activeWindow()?.workspace)[0]! }),
+        ...(recovery.length === 0 ? {} : { action: recovery[0]! }),
       });
       log(`notice from the run host: ${e.title}${e.action ? ` [${e.action}]` : ''}${e.sessionId === '' ? '' : ` (session ${e.sessionId})`}`);
     }
@@ -632,7 +670,17 @@ async function main(): Promise<void> {
       // recoveries — is the third class: the provider limit was reached, the session is preserved, another model or a retry once
       // the provider resets, the failure text as detail, the action opening model settings. (REQ-NOTIFY-062's hosted-credit
       // branch is not built: no hosted provider exists.) The authentication and sandbox classes ahead of it are not built either.
-      if (e.result.error !== null && /rate.?limit|quota|429|too many requests/i.test(e.result.error)) {
+      /**
+       * REQ-EVENTS-088 (OQ-42): a run whose terminal persistence could not be confirmed has ALREADY been
+       * reported — the run host published one failure notice carrying the last durable ordinal and the reopen
+       * action, which is the "exactly one failure notification per affected run" that requirement allows. A
+       * second notice here would be the same failure told twice, so this outcome is logged and not raised.
+       * The condition is read from the structured field rather than from the summary sentence, so the
+       * suppression cannot be lost by rewording.
+       */
+      if (e.result.persistence !== undefined) {
+        log(`run ${e.sessionId}: completion unconfirmed, last durable event ordinal ${e.result.persistence.last_event_ordinal} — the recording-failure notice already carries it (REQ-EVENTS-088)`);
+      } else if (e.result.error !== null && /rate.?limit|quota|429|too many requests/i.test(e.result.error)) {
         raiseNotice('error', 'The provider limit was reached; the session is preserved', `${e.result.error}\n\nChoose another model, or retry once the provider resets.`, recoveryFor('config.models'));
       } else {
         raiseNotice(sev, e.result.summary, e.result.error ?? undefined);
@@ -1026,11 +1074,9 @@ async function main(): Promise<void> {
       // REQ-GIT-095: a store that cannot be read is an empty listing behind the error dialog.
       return { ok: false, code: 'checkpoint.store', headline: "Could not read this session's checkpoints", detail: r.kind === 'refused' ? `${CHECKPOINTS_STORE_UNREADABLE} (${r.headline})` : CHECKPOINTS_STORE_UNREADABLE };
     }
-    // REQ-GIT-094: the repair is announced as a warning notice.
-    if (r.listing.repaired) {
-      raiseNotice('warning', 'Session marked interrupted', `This session was still marked '${r.listing.repaired.previous}', but ${r.listing.repaired.reason}. Rotaris marked it interrupted, so its checkpoints can be restored again.`);
-      log(`notice: Session marked interrupted (${sessionId}: was '${r.listing.repaired.previous}', ${r.listing.repaired.reason})`);
-    }
+    // REQ-GIT-094: the repair is announced as a warning notice. One session here, always — this path repairs the
+    // session whose listing was asked for and no other (OQ-46 governs the batch the explicit repair produces).
+    if (r.listing.repaired) announceRepairs([{ sessionId, from: r.listing.repaired.previous, reason: r.listing.repaired.reason }]);
     return r.listing;
   };
   const isOutcome = (x: unknown): x is CommandOutcome => typeof x === 'object' && x !== null && 'ok' in x;
@@ -1570,6 +1616,13 @@ async function main(): Promise<void> {
         if (r.kind !== 'session.repaired') return refusal(r, 'The repair could not be carried out');
         for (const x of r.report.repaired) log(`session ${x.sessionId} repaired: '${x.from}' → interrupted (${x.reason})`);
         if (r.report.nothingStale) log(`session repair: nothing was stale`);
+        /**
+         * OQ-46: the whole batch is settled before this reply exists — the run host repairs every stale session
+         * of the workspace inside the one request — so the announcement, and the browser's refreshed list behind
+         * it, describe a settled batch and never a partly repaired one. That is what makes continuation safe to
+         * offer here rather than after a later re-check.
+         */
+        announceRepairs(r.report.repaired);
         return { ok: true, value: { report: r.report } };
       }
       case 'session.delete': {

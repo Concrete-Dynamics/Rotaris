@@ -15,9 +15,11 @@
 //
 // Shared by the build and by vitest's globalSetup, so the two cannot drift.
 
-import { readdirSync, readFileSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
+import { readdirSync, readFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+// REQ-TRACE-061 / REQ-TRACE-502 (OQ-41): the artifact is replaced atomically, under the requirement's ladder.
+import { replaceAtomically } from './replace.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, '..', '..');
@@ -243,7 +245,7 @@ ${emitMap(extendedBy)}} as const satisfies Partial<Record<RequirementId, Directi
 
 mkdirSync(outDir, { recursive: true });
 const unchanged = existsSync(outFile) && readFileSync(outFile, 'utf8') === src;
-if (!unchanged) writeFileSync(outFile, src);
+if (!unchanged) replaceAtomically(outFile, src);
 if (!process.env.SYMBOLS_QUIET) {
   console.log(
     `symbol artifact: ${sorted.length} identifiers (${withdrawn} withdrawn), ${directivesSorted.length} directives (${supersededBy.size} superseded, ${narrowedBy.size} narrowed, ${extendedBy.size} extended) → ${outFile}${unchanged ? ' (unchanged)' : ''}`,

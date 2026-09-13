@@ -45,6 +45,17 @@ export const RunResultSchema = z.object({
   error: z.string().nullable(),
   execution_status: z.string(),
   severity: z.enum(['information', 'warning', 'error']),
+  /**
+   * REQ-EVENTS-088 (OQ-42): present only when terminal persistence could not be confirmed, and then always
+   * `confirmed: false` with the last durable event ordinal beside it. Absent means the outcome is confirmed —
+   * there is no third state, which is why `confirmed` is a literal rather than a boolean.
+   *
+   * It crosses this boundary because the receiving process must be able to ACT on the uncertainty: main
+   * suppresses its own terminal notice for such a run, since REQ-EVENTS-088 allows exactly one failure
+   * notification per affected run and the run host has already published it with the ordinal and the recovery
+   * action. Recognising the condition from the summary sentence would make that suppression depend on wording.
+   */
+  persistence: z.object({ confirmed: z.literal(false), last_event_ordinal: z.number().int().nonnegative() }).optional(),
 });
 export type RunResultPayload = z.infer<typeof RunResultSchema>;
 export type ProcessKind = z.infer<typeof ProcessKindSchema>;

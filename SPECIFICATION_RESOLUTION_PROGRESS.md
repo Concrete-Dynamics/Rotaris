@@ -40,7 +40,7 @@ Each item requires current evidence for its operative specification, dependent c
 
 | Package | Accepted items | State |
 |---|---|---|
-| Session lifecycle, durability and exports | A3, A6, A9, OQ-8, OQ-12, OQ-41, OQ-42, OQ-46 | In progress |
+| Session lifecycle, durability and exports | A3, A6, A9, OQ-8, OQ-12, OQ-41, OQ-42, OQ-46 | **Delivered 2026-09-13**, with one explicitly recorded evidence debt (OQ-12's power-loss measurement) |
 | Permissions, orchestration and terminal | A2, A4, OQ-4, OQ-5, OQ-7, OQ-9, OQ-10, OQ-13, OQ-15, OQ-16, OQ-17, OQ-35, OQ-36, OQ-37, OQ-38, OQ-39 | Pending |
 | Providers and MCP | A5, A7, A8, OQ-6, OQ-18, OQ-19, OQ-20, OQ-21, OQ-22, OQ-50 | Pending |
 | Services, stores and recovery | OQ-1, OQ-2, OQ-43, OQ-45, OQ-47, OQ-48 | Pending |
@@ -78,3 +78,103 @@ Each item requires current evidence for its operative specification, dependent c
 - OQ-19: updated REQ-PROVIDER-018/063 and ADR-0029 to permit adjacent coordination locks and scope staging cleanup per operation. Inventory diagnostics now accept locks; a regression verifies another active lock survives a completed credential write and stays outside credential enumeration.
 - OQ-20: updated REQ-PROVIDER-012/057 and ADR-0030 to name the pre-contact exception. Removed last-error mutation from unsupported sign-in-method refusal. Regression verifies an actionable failure with zero provider contact, credential writes or diagnostics and unchanged last-error state.
 - Both register entries are closed as decisions with historical questions preserved. `pnpm exec vitest run packages/providers/src/credentials.test.ts packages/providers/src/signin.test.ts` passed, 2 files / 26 tests.
+
+### 2026-09-13 — the work package closed
+
+Branch `session-lifecycle-exports`, merged to `main`. Every item was audited
+against the code and the evidence rather than against this document, and the
+audit is the reason six of the findings below exist: four items the summary above
+did not list as outstanding were unapplied or non-conformant.
+
+**A3 — verified, and given the evidence it lacked.** `REQ-SESSION-094`'s order
+holds in the code: the terminal transaction runs under the held lock and the
+release is in guaranteed cleanup after the sink is detached. The coverage asserted
+the pipeline but not the ownership, so a blocking consumer now observes the lock
+held at every delivered event, the terminal pair included, and gone once the run
+has ended. The runtime view and `codebase.md` still described the **old** order —
+the lock released inside the terminal transaction — and are corrected.
+
+**A6 — dependent contracts reconciled, and a defect found doing it.**
+`REQ-SESSION-153` now states the two scopes one document carries and cites
+`REQ-EVENTS-138` as the owner of the derivation; `REQ-SESSION-193`'s inventory
+needed no change; no ADR states a competing derivation. `duration_seconds` was
+read off the segment's last `session.end` whatever it carried, so an end with the
+figure and no status exported a non-zero duration beside `status: unknown`, and a
+`result` that supplied the outcome had its own duration discarded. The duration is
+now the outcome's own and zero when neither terminal event supplied a status.
+
+**A9 — destination-failure coverage added, and it found a hole in the contract.**
+A real refusal — a reader's open descriptor on Windows, a write-denied parent
+elsewhere — drives the ladder to exhaustion; the regression asserts the recoverable
+failure, the previous export byte-identical and no staging leftover.
+`replaceDocument` created the destination's parent outside its own `try`, so a
+parent that cannot be created **raised** out of `writeExport` instead of returning
+a `Result`. Reachable because an export's destination is one the user picked in a
+save dialog. Reported as `document.parent` now; ADR-0004 records the correction.
+
+**OQ-8 — decided, applied and built.** `REQ-EVENTS-053` names the completed
+provider request as the emission trigger, counts the usage a failed or partial
+request reported, and skips a request that leaves the cumulative totals unchanged.
+ADR-0009 consequence 8 and the register are reconciled. Building it found that the
+event was raised once per iteration from the turn's returned report — which carries
+only the attempts that survived — so a run that retried a transient failure or
+resumed its parent spent tokens the session's totals, its terminal event and its
+cost never counted.
+
+**OQ-12 — the wording closes; the measurement does not.** `REQ-SESSION-034` is now
+the product's single definition of durability in three levels: process-crash
+atomicity for every successful write; operating-system and power-loss survival for
+an acknowledged terminal commit and a completed backup artifact, subject to the
+device honouring the flushes the product issues; and a stated permitted loss of
+intermediate updates. `REQ-LIBRARY-138`'s "flushed to disk" and `REQ-LIBRARY-043`'s
+"readable after a crash or loss of power" cite which level they mean.
+**Evidence debt, unchanged and explicitly recorded**: no power-loss test has been
+run on any supported platform. The harness exists; its fault half is a physical act
+— a forced power-off or a kernel crash — that only the machine's owner can perform.
+Tracked per platform in `docs/architecture/implementation-conditions.md`: owed on
+Windows, blocked on Linux and macOS while IC-3 stands.
+
+**OQ-41 — applied, and three findings.** `REQ-TRACE-061` states its bounded ladder
+and the recoverable-error-with-old-file-retained outcome; `REQ-TRACE-502` keeps the
+complete-file guarantee whole and scopes independence to invocations and view
+freshness; `REQ-TRACE-182`'s catch covers the whole regeneration. The ladder had
+been ruled under OQ-44 on 2026-09-02 and **its amendment never reached the
+requirement**. The generator a test session runs replaced the artifact with a
+single `writeFileSync` over the target — no staging, no rename, no ladder. And the
+test adapter did not catch, so a failed regeneration would have failed the whole
+run before collection. The contended case the register recorded as unstaged is now
+staged and passing.
+
+**OQ-42 — delivery completed.** The notice gained the recovery **action** it was
+missing, mapped onto `REQ-NOTIFY-044`'s existing `focus-session` member with no
+member added. The cross-process audit establishes that the run host is the only
+process opening a workspace store for writing, so propagation is `notice.publish`
+and `run.result` — and `run.result` was lossy: `persistence` had no field in the
+contract, so main recognised an unconfirmed completion only from a sentence and
+raised a **second** notice for a failure `REQ-EVENTS-088` allows exactly one
+notification for. The dependent-spec scan found two continue-on-recording-failure
+clauses still standing, `REQ-CLI-067` and `REQ-SESSION-145`, both amended in place.
+
+**OQ-46 — applied, driven in the built app, and one defect.** `REQ-SHELL-155`
+keeps its singular title and requires one aggregate warning for a batch;
+`REQ-SESSION-062` keeps one entry per repaired session. The entry itself was
+non-conformant on four of its five fixed fields. `pnpm app:drive` against three
+planted stale sessions showed the built app raising one warning, "Sessions marked
+interrupted", naming all three with "Open Overview" as its action, and the route
+reaching the list; one stale session showed "Session marked interrupted" unchanged
+and without an action.
+
+**Verification.** `pnpm check` (symbols, typecheck, lint, the whole suite) and
+`pnpm build` green on merged `main`. Focused suites were run after each coherent
+change. `pnpm live-run` was **not** run: it spends the owner's money and no
+approval was given.
+
+**Remaining evidence debt in this package.** Two, both stated rather than worked
+around. OQ-12's power-loss measurement, above. And the **rendered** form of OQ-42's
+recording-failure notice in the built app: provoking a sticky durable-store failure
+behind the built run host needs a fault-injection seam that does not exist, and no
+evidence was fabricated for it. The path that notice travels — a `notice.publish`
+carrying an action identifier, mapped in main to a member of the closed vocabulary,
+rendered with its label and dispatched by the renderer — **is** exercised end to end
+in the built app by the OQ-46 drive above; what is unexercised is the trigger for
+this one identifier.

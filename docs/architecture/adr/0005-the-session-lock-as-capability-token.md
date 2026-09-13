@@ -555,7 +555,7 @@ shared by the session browser's Repair and Repair-all-stale (`REQ-SESSION-182`, 
 host) and by `REQ-GIT-094`'s open-time repair in `checkpointListing`, which now calls it instead of carrying its own
 copy. The unit re-checks liveness through the one predicate, reads the state (unreadable → nothing to do,
 `REQ-SESSION-041`), requires an active status, writes `interrupted` through the writer's terminal-status path (the
-stronger durability setting), files the `session_marked_interrupted` timeline entry, and the writer releases the lock
+stronger durability setting), files the `session.interrupted_recovered` timeline entry (REQ-SESSION-062's fixed shape, corrected under OQ-46), and the writer releases the lock
 last. Per session repaired it reports the id, the stuck status, `interrupted` and the reason, which names which of
 `REQ-SESSION-059`'s two conditions applied — "no process holds a lock for it", or "the lock names this machine and its
 process (pid N) is gone" — plus the one this process produces itself, "this application holds its lock but runs nothing

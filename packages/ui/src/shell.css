@@ -128,7 +128,10 @@
  * above the composer" — it had no grid area and was auto-placed BELOW it) and the composer with its divider.
  */
 .workspace { display: grid; grid-template-rows: auto auto minmax(180px, 1fr) auto auto minmax(min-content, var(--rt-composer-height, 150px)); height: 100%; min-height: 0; }
-.run-header { display: flex; align-items: center; gap: var(--rt-space-3, 12px); padding: var(--rt-space-2, 8px) var(--rt-space-5, 24px); border-bottom: var(--rt-hairline-width) solid var(--rt-border); background: var(--rt-chrome); }
+/* Density review 2026-09-13 (post PD-CHAT-003): the mockup carries the run's controls in ONE 40 px band;
+   the run header's content is REQ-CHAT-008/158's, whose figures fix nothing vertical. 4 px vertical
+   padding keeps the band at hairline + content instead of a padded bar. */
+.run-header { display: flex; align-items: center; gap: var(--rt-space-3, 12px); padding: var(--rt-space-1, 4px) var(--rt-space-5, 24px); border-bottom: var(--rt-hairline-width) solid var(--rt-border); background: var(--rt-chrome); }
 /* The run state is a design Tag now (`RUN_STATE_TAGS` picks the tone), so the four colour overrides that used to
    sit here are gone — the tone is the tag's, and restating it per state is how the two drift apart. The dot takes
    the tag's own ink so it reads on every fill. */
@@ -279,9 +282,12 @@
 .rows-proof { display: grid; grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); height: 100vh; overflow: auto; }
 .rows-proof__controls { display: flex; gap: var(--rt-space-2, 8px); padding: var(--rt-space-2, 8px); }
 .rows-proof__surface { min-height: 0; overflow: auto; border-top: 1px solid var(--rt-border); }
-/* REQ-CHAT-010: minimum 110 px for the block, 48 px for the widget; the block scrolls rather than clipping a control. */
+/* REQ-CHAT-010: minimum 110 px for the block, 48 px for the widget; the block scrolls rather than clipping a control.
+   Density review 2026-09-13: the widget's flex-grow let the divider's surplus inflate it to 80 px (the mockup
+   draws 52 px and grows on the user's resize, not on layout). The cap keeps the divider-driven growth bounded;
+   the block minimum and the widget minimum below are the requirement's own figures and are untouched. */
 .composer { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); min-height: 110px; overflow: auto; padding: var(--rt-space-3, 12px) var(--rt-space-5, 24px); background: var(--rt-chrome); }
-.composer__input { min-height: 48px; resize: none; flex: 1 1 auto; }
+.composer__input { min-height: 48px; max-height: 120px; resize: none; flex: 1 1 auto; }
 /* The chips wrap onto several lines when the transcript column is narrow; without this the send button, being a
    flex item under the default `stretch`, grew to the height of all of them. The design draws it at button height
    whatever sits beside it. */
@@ -289,9 +295,18 @@
    the segmented control, Stash and Start run landed on four unrelated bands, with the primary action
    — the only accent surface on the view — at the far left under the persona select, diagonally
    opposite the button it belongs beside. The chips take the first row and may wrap among themselves;
-   the actions hold the second, trailing-aligned, at every width. */
+   the actions hold the second, trailing-aligned, at every width.
+   Density review 2026-09-13 (below): UIR-009's finding was measured at 1000x680 — the only width
+   where the two-row composition is load-bearing. At ≥1180 px everything fits one band and the mockup
+   draws it there, so the forced `flex: 1 1 100%` on the chips is lifted and the band is one row
+   where it fits, two rows where it does not. The primary action's alignment rule is untouched. */
 .composer__actions { display: flex; justify-content: flex-start; align-items: center; flex-wrap: wrap; min-width: 0; }
 .composer__error { font-size: var(--rt-text-xs, 12px); color: var(--rt-danger-300); }
+@media (min-width: 1180px) {
+  .composer__actions { flex-wrap: nowrap; }
+  .composer__chips { flex: 0 1 auto; }
+  .composer__actions .composer__hint { flex: 1 1 auto; text-align: right; }
+}
 
 /* ── Rows by kind, and a row still being written (REQ-CHAT-011, REQ-MONITOR-219) ──
  * An agent's message is the transcript's ground state and carries no chrome at all; the design distinguishes it
@@ -304,7 +319,9 @@
 @media (prefers-reduced-motion: reduce) { .row__streaming { animation: none; } }
 .composer__hint { align-self: center; margin-right: auto; font-size: var(--rt-text-xs, 12px); color: var(--rt-text-tertiary); }
 .composer__actions { gap: var(--rt-space-2, 8px); }
-.composer__chips { display: flex; align-items: center; gap: var(--rt-space-2, 8px); flex: 1 1 100%; min-width: 0; flex-wrap: wrap; }
+/* The chips' `flex: 1 1 100%` (UIR-009's forced first band) is gone: the rules at line ~307 and the media query
+   above govern — one band at wide widths, the chips wrapping among themselves below the breakpoint. */
+.composer__chips { display: flex; align-items: center; gap: var(--rt-space-2, 8px); min-width: 0; flex-wrap: wrap; }
 .composer__actions > :not(.composer__chips):not(.composer__hint) { flex: 0 0 auto; }
 .composer__actions > .composer__hint { flex: 1 1 auto; }
 
@@ -502,8 +519,13 @@
 .workspace > .queue { grid-area: queue; }
 .workspace > .composer__divider { grid-area: divider; }
 .agents { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); padding: var(--rt-space-3, 12px); border-right: 1px solid var(--rt-border); background: var(--rt-chrome); overflow: auto; }
-.agents__header { display: flex; align-items: center; justify-content: space-between; gap: var(--rt-space-2, 8px); }
-.agents__title { font-size: var(--rt-text-2xs, 10px); letter-spacing: var(--rt-tracking-label, .06em); text-transform: uppercase; color: var(--rt-text-tertiary); }
+/* Density review 2026-09-13: the mockup draws a 40 px header BAR with a bottom hairline — title, tag and
+   counts inline — not a bare kicker line. The bar escapes the panel's own padding by negative margins so
+   the hairline runs the panel's full width, as the mockup's does. */
+.agents__header { display: flex; align-items: center; justify-content: flex-start; gap: var(--rt-space-2, 8px); height: 40px; flex: none; margin: calc(-1 * var(--rt-space-3, 12px)) calc(-1 * var(--rt-space-3, 12px)) 0; padding: 0 14px; border-bottom: 1px solid var(--rt-divider); }
+.agents__title { font-size: var(--rt-text-sm, 13px); font-weight: var(--rt-weight-medium, 500); color: var(--rt-text); letter-spacing: 0; text-transform: none; }
+.agents__count { font-size: var(--rt-text-2xs, 10px); color: var(--rt-text-tertiary); }
+.agents__spacer { flex: 1; }
 .agent-tree { display: flex; flex-direction: column; gap: 2px; outline: none; }
 .agent-tree:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); border-radius: var(--rt-radius-sm, 4px); }
 
@@ -597,7 +619,7 @@
 .hook-review__entry { margin: 0; padding: var(--rt-space-3, 12px); background: var(--rt-chrome); border: 1px solid var(--rt-border); border-radius: var(--rt-radius-sm, 4px); font-size: var(--rt-text-xs, 12px); white-space: pre; overflow-x: auto; user-select: text; }
 
 /* ── The intent status (REQ-ORCH-014): text, replaced in place ── */
-.intent-status { position: sticky; top: 0; z-index: 1; margin: 0 0 var(--rt-space-2, 8px); padding: var(--rt-space-1, 4px) var(--rt-space-3, 12px); font-size: var(--rt-text-xs, 12px); color: var(--rt-text-secondary); background: var(--rt-bg); border-left: 2px solid var(--rt-border); }
+.intent-status { position: sticky; top: 0; z-index: 1; margin: 0 0 var(--rt-space-1, 4px); padding: var(--rt-space-1, 4px) var(--rt-space-3, 12px); font-size: var(--rt-text-xs, 12px); color: var(--rt-text-secondary); background: var(--rt-bg); border-left: 2px solid var(--rt-border); }
 .intent-status[data-phase='classified'] { border-left-color: var(--rt-accent-300); }
 /* ── The wait header (REQ-NOTIFY-263): waiting, never failed, never idle — the wait tone, text for every state ── */
 .wait-header { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--rt-space-2, 8px) var(--rt-space-3, 12px); margin: 0 0 var(--rt-space-2, 8px); padding: var(--rt-space-2, 8px) var(--rt-space-3, 12px); background: var(--rt-surface); border: var(--rt-hairline-width) solid var(--rt-border); border-left: 3px solid var(--rt-wait); border-radius: var(--rt-radius-md, 6px); font-size: var(--rt-text-sm, 13px); }
@@ -1015,8 +1037,12 @@
 .inspector { display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); width: 300px; padding: var(--rt-space-3, 12px); border-left: 1px solid var(--rt-border); background: var(--rt-chrome); overflow: auto; font-size: var(--rt-text-xs, 12px); }
 .inspector__head { display: flex; align-items: center; gap: var(--rt-space-2, 8px); flex-wrap: wrap; }
 .inspector__tag { font-size: var(--rt-text-2xs, 10px); }
-.inspector__tabs { flex-wrap: wrap; gap: var(--rt-space-3, 12px); }
-.inspector__tabs .tab { background: none; border-top: 0; border-left: 0; border-right: 0; }
+/* Density review 2026-09-13: the persona TAB STRIP is gone — one wrapping row of 32 px tabs per configured
+   persona cost 161 px before any content. A press-revealed picker (PD-CHAT-001's pattern) stands in its place;
+   the falsified reading is kept: "one tab per persona" was read as a tab-strip WIDGET when REQ-MONITOR-050
+   fixes the grouping (one selector per configured persona), and the mockup draws no tab grid. */
+.inspector__picker { display: flex; align-items: center; }
+.inspector__picker .chip-menu { max-width: 100%; }
 .inspector__instances { display: flex; flex-wrap: wrap; gap: var(--rt-space-1, 4px); }
 .inspector__instance.is-active { color: var(--rt-accent-200); border-color: var(--rt-accent-300); }
 .inspector__body { display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); }
@@ -1152,7 +1178,7 @@
 .stash-dialog__list { max-height: 240px; }
 
 /* REQ-LIBRARY-140: the transcript toolbar — one row above the rows, holding the stash opener. */
-.transcript__toolbar { display: flex; align-items: center; gap: var(--rt-space-2, 8px); padding-bottom: var(--rt-space-2, 8px); }
+.transcript__toolbar { display: flex; align-items: center; gap: var(--rt-space-2, 8px); padding-bottom: var(--rt-space-1, 4px); }
 /* ---- Part Y: the Library's Artifacts tab, the artifact inspector, and ADR-0051's Markdown rendering ---- */
 /* Craft from the adopted design language (docs/design): the card and table patterns every other view draws,
    every value a token by name. Structure is docs/spec's (REQ-LIBRARY-108, REQ-LIBRARY-131..135). */

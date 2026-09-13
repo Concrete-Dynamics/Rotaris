@@ -5,6 +5,7 @@ import { elapsedLabel } from './AgentTree.js';
 import { ContextRing } from './ContextRing.js';
 import { markMotionStart } from './motion.js';
 import { Button as DesignButton, Select as DesignSelect } from './design-system/index.js';
+import { PopoverMenu } from './design-system/overlays.js';
 
 /**
  * REQ-MONITOR-050..067 (Part R): the per-agent inspector. One tab per configured persona (050); the selected
@@ -89,10 +90,23 @@ export function Inspector(props: InspectorProps) {
         {pinned && <DesignButton type="button" className="btn btn-ghost btn-compact" onClick={() => onSelect(null)} title="Drop the selection; the panel returns to tracking whichever agent wrote last.">Unpin</DesignButton>}
         {onCloseDrawer && <DesignButton type="button" className="btn btn-ghost btn-compact" aria-label="Close the inspector" onClick={onCloseDrawer}>×</DesignButton>}
       </div>
-      <div className="tabs inspector__tabs" role="tablist" aria-label="Personas">
-        {personas.map((p) => (
-          <DesignButton key={p.role} type="button" role="tab" className={`tab${activeTab === p.role ? ' is-active' : ''}`} aria-selected={activeTab === p.role} data-persona={p.role} onClick={() => setTab(p.role)}>{p.role}</DesignButton>
-        ))}
+      {/*
+        * Density review 2026-09-13: the persona strip drew one 32 px `.tab` per configured persona, and a
+        * twelve-persona configuration wrapped it into four rows — 161 px of chrome before any content. The
+        * mockup draws no tab grid at all; the picker is PD-CHAT-001's press-revealed popover, which keeps
+        * REQ-MONITOR-050's "one selector per configured persona" (the grouping is the persona set, not a
+        * tab-strip widget) and carries PopoverMenu's own keyboard model in place of REQ-SHELL-152's strip
+        * rule. The instance row beneath is unchanged.
+        */}
+      <div className="inspector__picker" data-testid="inspector-picker">
+        <PopoverMenu
+          ariaLabel="Persona"
+          icon="ph-users-three"
+          value={activeTab ?? '—'}
+          title="Group the inspector by persona."
+          options={personas.map((p) => ({ value: p.role, label: p.role }))}
+          onChoose={(role) => setTab(role)}
+        />
       </div>
       {activeTab && (
         <div className="inspector__instances" aria-label={`${activeTab} instances`}>

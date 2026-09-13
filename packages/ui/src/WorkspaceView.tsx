@@ -1088,6 +1088,8 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
         <aside className={`agents${narrow ? ' agents--drawer' : ''}`} aria-label="Delegation">
           {(!narrow || drawer === 'agents') && <><div className="agents__header">
             <span className="agents__title">Agents</span>
+            <span className="agents__count mono" data-testid="agents-count">{agents.length} agent{agents.length === 1 ? '' : 's'}</span>
+            <div className="agents__spacer" />
             {selected && !['done', 'failed', 'cancelled'].includes(selected.presentationState) && onSteer && runActive && (
               <DesignButton type="button" className="btn btn-ghost agents__cancel" onClick={() => setSteering({ id: selected.id, name: selected.name })}>Steer {selected.name}</DesignButton>
             )}

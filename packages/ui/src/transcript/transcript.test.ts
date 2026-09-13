@@ -128,8 +128,16 @@ describe('ADR-0045 — the pool, its capacity and its geometry', () => {
     expect(cache.stats.hits).toBe(before);
   });
 
-  it('a height estimate never falls below REQ-CHAT-057\'s 30 px minimum', () => {
+  it('a height estimate never falls below the 30 px unit (PD-CHAT-003: the one-line row, the slot floor)', () => {
     expect(estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: '' }) })).toBeGreaterThanOrEqual(ROW_MIN_HEIGHT);
+  });
+
+  it('PD-CHAT-003: a one-line row estimates content height, not the old padding-box 46 px', () => {
+    // A one-line row is one ~17 px text line over the 30 px unit — NOT the old 34 px padding-box term.
+    const oneLine = estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: 'one line' }) });
+    expect(oneLine).toBe(ROW_MIN_HEIGHT);
+    // Multi-line rows still grow per line.
+    expect(estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: 'a\nb\nc' }) })).toBeGreaterThan(oneLine);
   });
 
   it('a collapsed thinking row estimates its one-line summary, never its hidden body (REQ-CHAT-062/167)', () => {

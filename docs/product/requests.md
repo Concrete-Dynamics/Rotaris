@@ -20,7 +20,7 @@ and answered differently, and nobody can see that it happened. The reason is par
 
 ## Count
 
-**Eleven.** The count is the number of rows below.
+**Twelve.** The count is the number of rows below.
 
 ---
 
@@ -37,6 +37,7 @@ and answered differently, and nobody can see that it happened. The reason is par
 | <a id="r-009"></a>R-009 | 2026-09-13 | "go ahead and do that refactoring. verify after your done by running focused tests" — isolate board launch permissions and capture configuration once across credential preparation | covered | REQ-TRACE-470, REQ-TRACE-471 require both permission grants confined to the board run; REQ-CONFIG-263 and REQ-SESSION-138 govern the captured configuration and launch audit. Implements the per-run start field recorded in ADR-0041's Part AP execution |
 | <a id="r-010"></a>R-010 | 2026-09-13 | "in the workspace view … hiding some functionality between a dialog that opens when the user presses on it, for instance the thinking level, or the autonomous level. also we can omit the explanatory text everywhere and add tooltips instead … also using icons instead of short buzzwords" | directive (labels); covered (tooltips, icons) | The tooltip and iconography halves are craft the adopted language already governs — `docs/design/README.md` §1.9 (Phosphor icons, icon-colour meanings), §1.11 (copy voice), §7 (fidelity loop) — and REQ-CHAT-007 already obliges every disabled control to publish its reason through tooltip **and** accessible description, which is the two-channel rule the hint migration follows. The chip-labelling half changes what REQ-CHAT-009 fixes — its selector chips state their choice in an always-visible `reasoning: <level>` / `mode: <name>` label — so it is a directive: [`PD-CHAT-001`](directives.md#pd-chat-001) narrows REQ-CHAT-009 to a value chip whose alternatives open in a press-revealed popover, and leaves the enablement rule of REQ-CHAT-006, the dual-channel reason rule of REQ-CHAT-006/007 and the autonomous confirmation of REQ-CHAT-009 untouched. *(Logged in conversation on 2026-09-13 before R-009 below was assigned; renumbered to R-010 in the merge, and the directive's "Raised by" line cites this row.)* |
 | <a id="r-011"></a>R-011 | 2026-09-13 | "the ask question tool in the codebase doesnt present the user with a rendered form yet. there should be specs for that. plan it out.", followed by "auto open the modal stepper but have it glued inside the transcript at the bottom. similar how copitlot does it or claude code or codex" with all-in-one scrollable form and rendered summary for settled rows | directive | [`PD-CHAT-002`](directives.md#pd-chat-002) |
+| <a id="r-012"></a>R-012 | 2026-09-13 | "issue a PD. because the spacing is too large between the messages. i want how claude design proposed it. the screenshot shows the current status with the large spacing that make it hard to read." — transcript row density to follow the mockup's compact flow | directive | [`PD-CHAT-003`](directives.md#pd-chat-003) |
 
 <!--
 Row shape:

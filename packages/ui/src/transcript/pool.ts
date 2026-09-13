@@ -23,14 +23,15 @@ import type { DisplayRow } from './types.js';
  * estimate; live tool rows draw their one-line preview, which the per-line term already covers.
  */
 export function estimateHeight(d: DisplayRow, expanded = false): number {
-  if (d.shape === 'trailer') return 44;
-  if (d.shape === 'group') return 44;
+  if (d.shape === 'trailer') return 36;
+  if (d.shape === 'group') return 36;
   const row = d.row;
   // REQ-CHAT-062: a collapsed reasoning row draws exactly one summary line, whatever the hidden body holds.
-  if (isReasoningRow(row) && !expanded) return Math.max(ROW_MIN_HEIGHT, 34);
+  if (isReasoningRow(row) && !expanded) return ROW_MIN_HEIGHT;
+  // PD-CHAT-003: a row sizes to its content — one ~17 px text line per body line, no padding box.
   const lines = row.body === '' ? 1 : row.body.split('\n').length;
   const extra = (row.input !== undefined && row.input !== '' ? 1 : 0) + (row.output !== undefined && row.output !== '' ? 1 : 0);
-  return Math.max(ROW_MIN_HEIGHT, 34 + (lines - 1) * 18 + extra * 20);
+  return Math.max(ROW_MIN_HEIGHT, (lines - 1) * 18 + extra * 20 + ROW_MIN_HEIGHT);
 }
 
 export interface OffsetTable {

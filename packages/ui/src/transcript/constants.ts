@@ -22,7 +22,11 @@
  */
 export const H_MAX = 4320;
 
-/** REQ-CHAT-057 fixes the minimum row height normatively, in pixels. */
+/**
+ * REQ-CHAT-057 fixes the minimum row height normatively, in pixels; PD-CHAT-003 narrows it to a
+ * one-line ROW's rendered height (the estimate floor and the slot-size arithmetic's conservative
+ * unit), not a padding-box minimum the stylesheet enforces on every row.
+ */
 export const ROW_MIN_HEIGHT = 30;
 
 /** Slots above and below the visible span, so an ordinary scroll rebinds rather than reveals blank space. */

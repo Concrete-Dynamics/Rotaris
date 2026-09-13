@@ -467,6 +467,8 @@ export function Row(p: RowProps) {
     surface.openMenu({ x: event.clientX, y: event.clientY, rowKey: display.key, entries: rowMenuEntries(display) });
   };
   const common = { onContextMenu: menu, tabIndex: -1, 'data-key': display.key, 'data-shape': display.shape } as const;
+  /** PD-CHAT-003: blocks separate by 12 px; the class rides the reuse key's `b` flag so a moved row is redrawn. */
+  const blockStartClass = place.blockStart ? ' row--block-start' : '';
 
   // REQ-CHAT-065: the folded tool group — one header row drawn from the DisplayRow, its members beneath it when open.
   if (display.shape === 'group') {
@@ -478,7 +480,7 @@ export function Row(p: RowProps) {
       // REQ-CHAT-065: the header carries the number of members, so it is observable rather than only readable
       // out of the summary string. Part Z's placeholder published it and the proof reads it; the real row did
       // not, which is what the merge found.
-      <article {...common} className={`row row--group tool tool--${severity}`} data-family={display.family} data-severity={severity} data-members={display.members.length} data-testid="row-group">
+      <article {...common} className={`row row--group tool tool--${severity}${blockStartClass}`} data-family={display.family} data-severity={severity} data-members={display.members.length} data-testid="row-group">
         <div className="row__grid">
           <time className="row__time mono" dateTime={display.startedAt}>{rowTime(display.startedAt)}</time>
           <span className="row__attribution"><span className="row__role">{display.family}</span></span>
@@ -520,7 +522,7 @@ export function Row(p: RowProps) {
   if (display.shape === 'trailer') {
     const t = display.trailer;
     return (
-      <article {...common} className={`row row--${t.sort}`} data-request-id={t.requestId} data-testid={`row-${t.sort}`}>
+      <article {...common} className={`row row--${t.sort}${blockStartClass}`} data-request-id={t.requestId} data-testid={`row-${t.sort}`}>
         <div className="row__grid">
           <time className="row__time mono" />
           <span className="row__attribution"><span className="row__role">{t.role}</span></span>
@@ -551,7 +553,7 @@ export function Row(p: RowProps) {
     // for the row's stream, expanded or not, so it stays visible; the card's INPUT/OUTPUT sit beneath it when open.
     const preview = stream !== null && !row.settled ? (surface.terminalPreview?.(stream) ?? null) : null;
     return (
-      <article {...common} className={`row row--tool tool tool--${outcome.state}${live ? ' row--streaming' : ''}`} data-index={row.index} data-settled={row.settled} data-call-key={row.callKey} data-agent={row.name} data-collapsed={collapsedToName ? 'name' : undefined}>
+      <article {...common} className={`row row--tool tool tool--${outcome.state}${live ? ' row--streaming' : ''}${blockStartClass}`} data-index={row.index} data-settled={row.settled} data-call-key={row.callKey} data-agent={row.name} data-collapsed={collapsedToName ? 'name' : undefined}>
         <div className="row__grid">
           <Attribution row={row} place={place} personaBar={personaColourToken(row.persona ?? row.name ?? '')} />
           <div className="row__main">
@@ -599,7 +601,7 @@ export function Row(p: RowProps) {
   if (isReasoningRow(row)) {
     const summary = reasoningSummary(row, surface.nowMs, surface.runActive);
     return (
-      <article {...common} className={`row row--thinking tool${summary.live ? ' row--streaming' : ''}`} data-index={row.index} data-settled={row.settled} data-agent={row.name} data-testid="row-thinking">
+      <article {...common} className={`row row--thinking tool${summary.live ? ' row--streaming' : ''}${blockStartClass}`} data-index={row.index} data-settled={row.settled} data-agent={row.name} data-testid="row-thinking">
         <div className="row__grid">
           <Attribution row={row} place={place} personaBar={personaColourToken(row.persona ?? row.name ?? '')} />
           <div className="row__main">
@@ -622,7 +624,7 @@ export function Row(p: RowProps) {
   // Every other category. REQ-CHAT-056's Markdown on the agent-message category only.
   const markdown = isMessageRow(row);
   return (
-    <article {...common} className={`row row--${row.kind}${live ? ' row--streaming' : ''}`} data-index={row.index} data-settled={row.settled} data-agent={row.name} data-testid={`row-${row.kind}`}>
+    <article {...common} className={`row row--${row.kind}${live ? ' row--streaming' : ''}${blockStartClass}`} data-index={row.index} data-settled={row.settled} data-agent={row.name} data-testid={`row-${row.kind}`}>
       <div className="row__grid">
         <Attribution row={row} place={place} personaBar={personaColourToken(row.persona ?? row.name ?? '')} />
         <div className="row__main">

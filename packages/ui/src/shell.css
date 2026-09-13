@@ -198,9 +198,12 @@
 .transcript__page-error { padding: var(--rt-space-2, 8px); font-size: var(--rt-text-xs, 12px); color: var(--rt-danger-300); }
 .transcript__oldest { padding: var(--rt-space-2, 8px); font-size: var(--rt-text-2xs, 10px); color: var(--rt-text-tertiary); text-align: center; }
 .transcript .empty-state { margin: auto; max-width: 420px; width: 100%; }
-/* Part AA — REQ-CHAT-057's stated geometry. The four figures below (52, 112, 30, 8pt) and the 10/5 px margins are
-   SPECIFICATION values, written as the requirement writes them; every colour and every spacing CHOICE beside them
-   is a token by name. The list wrapper carries the rows so the transcript's own gap cannot add to the 5 px. */
+/* Part AA — REQ-CHAT-057's stated geometry, as narrowed by PD-CHAT-003 (docs/product/directives.md):
+   the columns (52/112) and the 8 pt monospace timestamps are SPECIFICATION values, written as the
+   requirement writes them; the 10 px horizontal margin stands, and the vertical rhythm is the
+   design material's — a row sizes to its content (no per-row vertical padding, no box minimum),
+   blocks separate by 12 px and consecutive rows of one block by 4 px. The block-start class is
+   in the render cache's reuse key (Row.tsx `place`), so a row whose place changed is redrawn. */
 .rowlist { display: flex; flex-direction: column; gap: 0; }
 /*
  * Part AI — the container, which no source ever asked for (docs/design/README.md §7.1).
@@ -216,7 +219,10 @@
  * The border stays declared at `transparent` so the box model is identical to what `rows-proof` measures and
  * so a variant that earns a border adds no layout shift.
  */
-.row { display: block; margin: 5px 10px; min-height: 30px; padding: var(--rt-space-2, 8px) var(--rt-space-3, 12px); border: 1px solid transparent; border-radius: var(--rt-radius-md, 6px); }
+.row { display: block; margin: 4px 10px 0; padding: 0 var(--rt-space-3, 12px); border: 1px solid transparent; border-radius: var(--rt-radius-md, 6px); }
+/* PD-CHAT-003: the mockup's 12 px between blocks; the first row of the transcript carries none. */
+.row--block-start { margin-top: var(--rt-space-3, 12px); }
+.rowlist .row:first-child { margin-top: 0; }
 .row__grid { display: grid; grid-template-columns: 52px 112px minmax(0, 1fr); align-items: baseline; column-gap: var(--rt-space-2, 8px); }
 .row__main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .row__attribution { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -227,8 +233,9 @@
 .row:hover { background: var(--rt-hover); }
 .row:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
 .row__match { background: var(--rt-fill-accent); color: var(--rt-fill-accent-ink); border-radius: var(--rt-radius-sm, 4px); }
-/* The one fill a person's own words earn, so they stay findable while scrolling past a thousand rows. */
-.row--user { background: var(--rt-accent-tint-07); border-color: var(--rt-accent-800); }
+/* The one fill a person's own words earn, so they stay findable while scrolling past a thousand rows;
+   the bubble is padded inside the tinted box (PD-CHAT-003). */
+.row--user { padding: var(--rt-space-2, 8px) var(--rt-space-3, 12px); background: var(--rt-accent-tint-07); border-color: var(--rt-accent-800); }
 .row--user:hover { background: var(--rt-accent-tint-10); }
 .row__head { display: flex; align-items: baseline; gap: var(--rt-space-2, 8px); }
 .row__role { font-size: var(--rt-text-2xs, 10px); font-weight: var(--rt-weight-medium, 500); letter-spacing: var(--rt-tracking-label, .06em); text-transform: uppercase; color: var(--rt-accent-300); overflow: hidden; text-overflow: ellipsis; }

@@ -317,7 +317,7 @@ describe('store — v3: what a run records (REQ-SESSION-138, REQ-SESSION-168, RE
    * never captured for it and cannot be recovered. REQ-LIBRARY-090 then omits the section entirely, so an old
    * artifact renders exactly as it did rather than growing a heading that would claim the child ran nothing.
    */
-  it('PD-LIBRARY-001: a v15 store migrates to v16; an artifact written before it keeps its row and reads no commands', () => {
+  it('PD-LIBRARY-001: a v15 store migrates forward; an artifact written before it keeps its row and reads no commands', () => {
     const id = mintWorkspaceId('000000000000000000000000000000f1');
     const r = openWorkspaceStore(root, id, 'C:/ws');
     expect(r.migration).toEqual({ kind: 'migrated', from: 0, to: CURRENT_SCHEMA_VERSION });
@@ -327,15 +327,63 @@ describe('store — v3: what a run records (REQ-SESSION-138, REQ-SESSION-168, RE
     // The DAL prepares every statement at construction, so the column goes only after one exists — a DAL built
     // against the v15 shape could not be built at all, which is the point the ALTER is here to cover.
     r.db.exec('ALTER TABLE artifacts DROP COLUMN commands');
+    // v17's objects go with it: a store stopped at v15 has neither, and the run replays both migrations in order.
+    r.db.exec('DROP TABLE plan_cycles');
+    r.db.exec('ALTER TABLE sessions DROP COLUMN plan_cycle');
+    r.db.exec('ALTER TABLE sessions DROP COLUMN plan_released');
     r.db.pragma('user_version = 15');
     r.db.prepare(`INSERT INTO artifacts (session_id, id, slug, title, kind, source_task_id, canonical_name, source_persona, status, summary, key_findings,
       highlight_paths, snippets, edited_files, created_files, tags, supersedes, superseded_by, created_by, consumed_by, timeline_event_id, conversation_id, importance, created_at, edited_at, body_file)
       VALUES (?, 'art_oldAAAAA', 'old', 't', 'child_report', 'bg_1', 'tester-1', 'tester', 'succeeded', 's', 'k', '[]', '[]', '[]', '[]', '[]', NULL, NULL, 'a', '[]', NULL, NULL, 'normal', 't', NULL, 'artifact-old.md')`).run(sid);
-    expect(migrateStore(r.db)).toEqual({ kind: 'migrated', from: 15, to: 16 });
+    expect(migrateStore(r.db)).toEqual({ kind: 'migrated', from: 15, to: CURRENT_SCHEMA_VERSION });
     const after = new StoreDal(r.db).artifactsOf(sid);
     expect(after).toHaveLength(1);
     expect(after[0]!.id).toBe('art_oldAAAAA');
     expect(after[0]!.commands).toBe('[]');
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+  /**
+   * REQ-ORCH-153/154 (ADR-0062). The plan gate's durable half, tested from a store stopped at v16: the table and
+   * the two session columns arrive, a session that predates them survives with no gate held and no release, and
+   * the round trip a park-and-answer performs works over the migrated shape — insert a cycle, edit it, decide it,
+   * and see the edit refused once the cycle is decided (REQ-ORCH-154: an answered gate takes no further edit).
+   */
+  it('REQ-ORCH-153/154: a v16 store migrates to v17; an older session reads no plan gate and no release', () => {
+    const id = mintWorkspaceId('000000000000000000000000000000f2');
+    const r = openWorkspaceStore(root, id, 'C:/ws');
+    expect(r.migration).toEqual({ kind: 'migrated', from: 0, to: CURRENT_SCHEMA_VERSION });
+    const sid = asSessionId('S-v17');
+    new StoreDal(r.db).upsertSession({ session_id: sid, execution_status: 'idle', workspace_root: 'C:/ws', created_at: 't', updated_at: 't' });
+    r.db.exec('DROP TABLE plan_cycles');
+    r.db.exec('ALTER TABLE sessions DROP COLUMN plan_cycle');
+    r.db.exec('ALTER TABLE sessions DROP COLUMN plan_released');
+    r.db.pragma('user_version = 16');
+    expect(migrateStore(r.db)).toEqual({ kind: 'migrated', from: 16, to: 17 });
+    const dal = new StoreDal(r.db);
+    const before = dal.getSession(sid)!;
+    expect(before.plan_cycle).toBeNull();
+    expect(before.plan_released).toBe(0);
+    expect(dal.planCyclesOf(sid)).toEqual([]);
+
+    dal.insertPlanCycle(sid, 1, 't0', 'the plan, verbatim', 'small_feature', '', '');
+    dal.setPlanGate(sid, 'awaiting_plan_decision', 1, 't1');
+    expect(dal.getSession(sid)!.plan_cycle).toBe(1);
+    expect(dal.editPlanCycle(sid, 1, 'the user edited it')).toBe(true);
+    const held = dal.planCycle(sid, 1)!;
+    // The role's text is never rewritten; the edit is beside it.
+    expect(held.plan).toBe('the plan, verbatim');
+    expect(held.edited).toBe('the user edited it');
+    expect(dal.decidePlanCycle(sid, 1, 'approve', 't2')).toBe(true);
+    // Recorded once: a second answer for the same cycle changes nothing.
+    expect(dal.decidePlanCycle(sid, 1, 'cancel', 't3')).toBe(false);
+    expect(dal.editPlanCycle(sid, 1, 'too late')).toBe(false);
+    dal.setPlanGate(sid, 'idle', null, 't4');
+    dal.setPlanReleased(sid, true, 't4');
+    const after = dal.getSession(sid)!;
+    expect(after.plan_cycle).toBeNull();
+    expect(after.plan_released).toBe(1);
+    expect(dal.planCycle(sid, 1)).toMatchObject({ decision: 'approve', decided_at: 't2', edited: 'the user edited it' });
     r.db.close();
     forgetSpelling(r.dir);
   });
@@ -503,9 +551,9 @@ describe('store — v5: the child ledger (ADR-0012, REQ-ORCH-043/049/050/151)', 
     session_id: asSessionId(sid), task_id: taskId, canonical_name: taskId, given_name: taskId, persona: 'coding-agent', state, parent_id: 'root', depth: 1, iteration: 1,
     model_key: 'm', category: '', background: 1, task: 'do it', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't',
   });
-  it('the schema is v16; a child row round-trips with its defaults; the claim is one conditional update that wins exactly once', () => {
+  it('the schema is v17; a child row round-trips with its defaults; the claim is one conditional update that wins exactly once', () => {
     const { r, dal, sid } = open('96');
-    expect(CURRENT_SCHEMA_VERSION).toBe(16); // PD-LIBRARY-001: v16 adds `artifacts.commands`; v15 was Part AK's delivery tables
+    expect(CURRENT_SCHEMA_VERSION).toBe(17); // REQ-ORCH-153/154: v17 adds `plan_cycles` and the two session columns; v16 added `artifacts.commands`
     dal.insertChild(child(sid, 'bg_00000001'));
     const c = dal.getChild(sid, 'bg_00000001')!;
     expect(c).toMatchObject({ state: 'queued', launch_generation: 0, report_stored: 0, observed: 0, context_injected: 0, tool_calls: 0, completed_at: null, report: null });
@@ -785,12 +833,12 @@ describe('store — v11: the saved prompts (Part X; REQ-LIBRARY-137/138/139, REQ
     forgetSpelling(r.dir);
   });
 
-  it('is v16, and the migration list is append-only with nothing renumbered', () => {
+  it('is v17, and the migration list is append-only with nothing renumbered', () => {
     // Part X reserved v11, Part Y v12, Part AB v13, Part AE v14 and Part AK v15 (plan Reservations, ruled 2026-09-09: the ladder and
     // the pin ride with the v15 reservation) before any of them was written; PD-LIBRARY-001 appended v16. The ladder is
     // asserted whole rather than at its top, so a later part that renumbers an earlier entry fails here and not on a user's disk.
-    expect(MIGRATIONS.map((m) => m.to)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
-    expect(CURRENT_SCHEMA_VERSION).toBe(16);
+    expect(MIGRATIONS.map((m) => m.to)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]);
+    expect(CURRENT_SCHEMA_VERSION).toBe(17);
   });
 });
 

@@ -80,6 +80,9 @@ export function runtimeFromConfiguration(cfg: LoadedConfiguration): RuntimeFromC
     loopClassificationTimeoutS: r.loop_classification_timeout,
     // REQ-ORCH-088: `runtime.child_timeout` reaches the run (it was read by the loader and never handed over before Part Q).
     childTimeoutMs: Math.round(r.child_timeout * 1000),
+    // REQ-ORCH-152 / REQ-CONFIG-476: the run-start mode reaches the run. The loader validated the key from Part I
+    // and nothing read it until the plan gate was built (ADR-0062).
+    runStartMode: r.run_start_mode,
   };
 }
 

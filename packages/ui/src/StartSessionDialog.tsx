@@ -15,6 +15,13 @@ export interface LaunchOptions {
   readonly isolation: { readonly branch: string } | null;
   readonly attach: { readonly path: string; readonly branch: string } | null;
   readonly sandboxMode: SandboxModeName;
+  /**
+   * REQ-ORCH-152: the run-start mode the accepted session starts under. It is a PERSISTENT setting and not a
+   * per-launch option — the dialog writes `runtime.run_start_mode` through the caller exactly as the composer's
+   * control does (REQ-CONFIG-476), so the value chosen here governs the next run started in this workspace
+   * wherever it is started from.
+   */
+  readonly runStartMode: 'auto' | 'plan';
 }
 
 export interface StartSessionDialogProps {
@@ -22,6 +29,8 @@ export interface StartSessionDialogProps {
   readonly sessionId: string;
   readonly runActive: boolean;
   readonly defaultSandboxMode: SandboxModeName;
+  /** REQ-ORCH-152 / REQ-CONFIG-476: the persisted run-start mode, preselected; `auto` by default. */
+  readonly defaultRunStartMode?: 'auto' | 'plan' | undefined;
   /** Whether this host can confine anything (ADR-0022: false on Windows). */
   readonly confinementAvailable: boolean;
   readonly onChooseAttach: () => Promise<{ ok: true; path: string; branch: string } | { ok: true; cancelled: true } | { ok: false; reason: string }>;
@@ -39,7 +48,7 @@ export function defaultSessionBranch(sessionId: string): string {
   return `rotaris/session/${sessionId}`;
 }
 
-export function StartSessionDialog({ sessionId, runActive, defaultSandboxMode, confinementAvailable, onChooseAttach, onAccept, onCancel }: StartSessionDialogProps) {
+export function StartSessionDialog({ sessionId, runActive, defaultSandboxMode, defaultRunStartMode = 'auto', confinementAvailable, onChooseAttach, onAccept, onCancel }: StartSessionDialogProps) {
   const titleId = useId();
   const [isolation, setIsolation] = useState(runActive);
   const [branch, setBranch] = useState(() => defaultSessionBranch(sessionId));
@@ -47,6 +56,7 @@ export function StartSessionDialog({ sessionId, runActive, defaultSandboxMode, c
   const [attachError, setAttachError] = useState<string | null>(null);
   const [choosing, setChoosing] = useState(false);
   const [sandboxMode, setSandboxMode] = useState<SandboxModeName>(defaultSandboxMode);
+  const [runStartMode, setRunStartMode] = useState<'auto' | 'plan'>(defaultRunStartMode);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape' && !choosing) { event.preventDefault(); onCancel(); } };
     window.addEventListener('keydown', onKey);
@@ -66,7 +76,7 @@ export function StartSessionDialog({ sessionId, runActive, defaultSandboxMode, c
   };
   const accept = () => {
     if (branchError !== null || choosing) return;
-    onAccept({ isolation: isolation && branchCheck?.ok ? { branch: branchCheck.name } : null, attach, sandboxMode });
+    onAccept({ isolation: isolation && branchCheck?.ok ? { branch: branchCheck.name } : null, attach, sandboxMode, runStartMode });
   };
   const isolationLocked = runActive || attach !== null;
   return (
@@ -100,6 +110,15 @@ export function StartSessionDialog({ sessionId, runActive, defaultSandboxMode, c
             {SANDBOX_MODE_NAMES.map((mode) => <option key={mode} value={mode}>{mode}</option>)}
           </DesignSelect>
           {!confinementAvailable && <p className="start-session__disclosure text-secondary" data-testid="start-session-disclosure">{NO_CONFINEMENT_DISCLOSURE}</p>}
+        </section>
+        {/* REQ-ORCH-152: the second of the two places the mode is offered; REQ-ORCH-153 states what `plan` does. */}
+        <section className="card start-session__group">
+          <div className="card-kicker">Run-start mode</div>
+          <DesignSelect className="input select start-session__select" aria-label="Run-start mode" data-testid="start-session-run-start-mode" value={runStartMode} onChange={(event) => setRunStartMode(event.currentTarget.value as 'auto' | 'plan')}>
+            <option value="auto">auto — start work straight away</option>
+            <option value="plan">plan — produce a plan and wait for a decision</option>
+          </DesignSelect>
+          <p className="start-session__hint text-secondary" data-testid="start-session-run-start-hint">In <code>plan</code> mode nothing that writes files or runs commands happens until you approve the plan. Questions and exploration are never held.</p>
         </section>
         <div className="dialog-actions">
           <DesignButton type="button" className="btn btn-secondary" disabled={choosing} onClick={onCancel}>Cancel</DesignButton>

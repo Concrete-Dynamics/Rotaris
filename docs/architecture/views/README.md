@@ -24,7 +24,14 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-13** — **the session-lifecycle work package (A3, A6, A9, OQ-8, OQ-12,
+Last reconciled with the code: **2026-09-13** — **the plan gate (REQ-ORCH-152 to REQ-ORCH-154, ADR-0062)**: the
+runtime view's run-start order gains the hold, a new paragraph covers the plan cycle and the park, its
+session-command paragraph gains the two answers and the one-way release, and its store section moves to **v17** with
+`plan_cycles` beside two new `sessions` columns; the process view's renderer → main family gains `session.planEdit`
+and `session.planDecision`, stated as session commands and **not** control operations. **No package, edge, process
+or window role moves, and `CONTROL_OPS` is untouched.**
+
+Earlier the same day — **the session-lifecycle work package (A3, A6, A9, OQ-8, OQ-12,
 OQ-41, OQ-42, OQ-46)**: the runtime view's teardown paragraph is corrected — it still put **the lock release inside
 the terminal transaction**, which A3 moved to the end of guaranteed cleanup, and the code had not done that since A3
 was applied; it also now records that main does not present `run.result` as a notice when that result carries

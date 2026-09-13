@@ -64,6 +64,28 @@ A run coming to rest because it reached its message limit, carried as the sessio
 status and never as a marker on disk, so it survives the application closing. — `REQ-ORCH-087`,
 `REQ-SESSION-107`
 
+**Plan**:
+The text the entry role produces when the plan gate holds, carried verbatim as that role wrote it —
+never summarized, truncated, or re-rendered into another form — and editable by the user, whose edited
+text is then the plan the run carries out. — `REQ-ORCH-153`, `REQ-ORCH-154`
+
+**Plan cycle**:
+One production of a plan and the decision taken on it. A plan cycle is **not an iteration**: it selects
+no task, judges no completion and closes none of the three iteration outcomes. Revise starts a further
+cycle with the plan as it stands and the changes the user stated, without limit. — `REQ-ORCH-154`
+
+**Plan gate**:
+The hold a `plan`-mode run takes before any file-modifying work is done, where it waits indefinitely for
+one of exactly three answers — approve, revise, cancel. It withholds capability rather than preventing
+the run from starting, and approval installs the run's execution grants for the remainder of that run. —
+`REQ-ORCH-153`, `REQ-ORCH-154`
+_Avoid_: plan mode dialog, plan approval prompt
+
+**Planning grants**:
+The tool set every agent of a held run holds: the set it would otherwise hold, less every tool the public
+tool-name registry declares as writing workspace files or running commands, with an undeclared name
+counting as declaring all three. — `REQ-ORCH-153`, `REQ-TOOLS-001`
+
 ### Roles and children
 
 **Role**:

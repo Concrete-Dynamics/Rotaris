@@ -1110,6 +1110,84 @@ export class SessionWriter {
   }
 
   /**
+   * REQ-ORCH-153/154 (ADR-0062): the gate opened — the cycle's record, the held status with the cycle awaiting an
+   * answer, and the `plan_gate_opened` timeline entry, in ONE durable transaction before the run parks. Durable
+   * for the same reason the message-limit pause is: the decision must survive a restart of the application
+   * (REQ-ORCH-153), and a gate held only in memory would be lost with the process that held it.
+   */
+  openPlanGate(cycle: number, plan: string, intent: string, todo: string, changes: string, patch: SessionRunPatch): Result<number, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    const at = toIsoUtc(wall.instant());
+    const generation = this.generation + 1;
+    try {
+      dal.durableTransaction(() => {
+        dal.updateSessionRun(sessionId, patch);
+        dal.insertPlanCycle(sessionId, cycle, at, plan, intent, todo, changes);
+        dal.setPlanGate(sessionId, 'awaiting_plan_decision', cycle, at);
+        dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'plan_gate_opened', 'rotaris', `The run is holding at the plan gate for a decision on plan cycle ${cycle}.`, JSON.stringify({ cycle, intent }), timelineId(), 'info');
+      });
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    this.status = 'awaiting_plan_decision';
+    this.generation = generation;
+    this.deps.onCommitted({ kind: 'save' });
+    return ok(generation);
+  }
+
+  /**
+   * REQ-ORCH-154: the user's text over a plan awaiting a decision. It APPROVES NOTHING — the status, the pending
+   * cycle and the released flag are all untouched here, which is the requirement's "editing alone never approves
+   * it" expressed as the set of columns this statement can reach. False means the cycle is unknown or decided.
+   */
+  recordPlanEdit(cycle: number, text: string): Result<boolean, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId } = this.deps;
+    let edited = false;
+    try {
+      dal.transaction(() => { edited = dal.editPlanCycle(sessionId, cycle, text); });
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    if (edited) this.deps.onCommitted({ kind: 'save' });
+    return ok(edited);
+  }
+
+  /**
+   * REQ-ORCH-154: the answer, recorded with a `plan_gate_resolved` entry NAMING it, and the gate cleared in the
+   * same durable act. `released` is approval's one-way flag; on revise the next cycle re-opens the gate and on
+   * cancel the run comes to rest, so both leave it as it was. The status written is the one the session takes
+   * next: `idle` for approve and revise (a run launches immediately after), `paused` for cancel.
+   */
+  resolvePlanGate(cycle: number, decision: string, status: 'idle' | 'paused', released: boolean, stopReason: string | null): Result<number, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    const at = toIsoUtc(wall.instant());
+    const generation = this.generation + 1;
+    try {
+      dal.durableTransaction(() => {
+        dal.decidePlanCycle(sessionId, cycle, decision, at);
+        dal.setPlanGate(sessionId, status, null, at);
+        if (released) dal.setPlanReleased(sessionId, true, at);
+        if (stopReason !== null) dal.updateSessionRun(sessionId, { stop_reason: stopReason });
+        dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'plan_gate_resolved', 'user', `The plan gate was resolved: ${decision} (cycle ${cycle}).`, JSON.stringify({ cycle, decision }), timelineId(), 'info');
+      });
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    this.status = status;
+    this.generation = generation;
+    this.deps.onCommitted({ kind: 'save' });
+    return ok(generation);
+  }
+
+  /** REQ-ORCH-154: a fresh user prompt is the next run, which the mode governs again — so the release is cleared. */
+  clearPlanRelease(): void {
+    try { this.deps.dal.setPlanReleased(this.deps.sessionId, false, toIsoUtc(this.deps.wall.instant())); } catch (cause) { this.deps.warn(`clearing the plan release on ${this.deps.sessionId} failed: ${String(cause)}`); }
+  }
+
+  /**
    * ADR-0039 "Persist before publish", REQ-GIT-048/049: ONE transaction — the checkpoint row, the trim to `keep`
    * (REQ-GIT-049's retention over the rows), the `checkpoint_created` timeline entry with its fixed actor, message
    * and metadata, and the `checkpoint.created` event (REQ-GIT-067's five fields, no others). The trimmed rows come

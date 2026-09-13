@@ -8,6 +8,7 @@
  */
 export const AGENT_TOOLS_PACKAGE = '@rotaris/agent-tools' as const;
 export * from './registry.js';
+export * from './planning-grants.js';
 export * from './scanner.js';
 export * from './egress.js';
 export * from './policy.js';

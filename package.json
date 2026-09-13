@@ -22,6 +22,7 @@
     "theme-proof": "node apps/desktop/scripts/theme-proof.mjs",
     "part-h-proof": "node apps/desktop/scripts/part-h-proof.mjs",
     "config-proof": "node apps/desktop/scripts/config-proof.mjs",
+    "plan-gate-proof": "node apps/desktop/scripts/plan-gate-proof.mjs",
     "part-j-proof": "node apps/desktop/scripts/part-j-proof.mjs",
     "slice-proof": "node apps/desktop/scripts/slice-proof.mjs",
     "overview-proof": "node apps/desktop/scripts/overview-proof.mjs",

@@ -1,4 +1,4 @@
-import { PAUSE_RESOLUTIONS, PausePayloadSchema } from './control.js';
+import { PAUSE_RESOLUTIONS, PausePayloadSchema, PLAN_DECISIONS } from './control.js';
 import { CONFIG_SCOPES, DesktopSaveSchema, LiveStateSchema } from './config.js';
 import { z } from 'zod';
 import { ControlRequestSchema } from './control.js';
@@ -126,6 +126,14 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('session.readAttachment'), sessionId: z.string().min(1), path: z.string().min(1), digest: z.string().regex(/^[0-9a-f]{64}$/) }),
   /** REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause or continue a paused session. */
   z.object({ kind: z.literal('session.continue'), sessionId: z.string().min(1), action: z.enum(PAUSE_RESOLUTIONS) }),
+  /**
+   * REQ-ORCH-153/154 (ADR-0062): the plan gate's two entries. A session command and not a control operation —
+   * the run is PARKED at the gate, so there is no live run to control and the answer must reach a session whose
+   * hosting process may have exited since. `planEdit` writes the user's text and approves nothing; `planDecision`
+   * carries one of exactly three answers, with the stated changes `revise` hands to the next cycle.
+   */
+  z.object({ kind: z.literal('session.planEdit'), sessionId: z.string().min(1), text: z.string() }),
+  z.object({ kind: z.literal('session.planDecision'), sessionId: z.string().min(1), decision: z.enum(PLAN_DECISIONS), changes: z.string().optional() }),
   /** REQ-SESSION-109: a surface attached to a session paused at the limit asks main for the dialog; the dialog window reads its payload. */
   z.object({ kind: z.literal('pause.present'), payload: PausePayloadSchema }),
   z.object({ kind: z.literal('pause.payload') }),

@@ -615,6 +615,39 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE artifacts ADD COLUMN commands TEXT NOT NULL DEFAULT '[]';
     `,
   },
+  {
+    to: 17,
+    /*
+     * REQ-ORCH-154 (ADR-0062): "Every plan cycle, the decision taken, and the text that was approved MUST be
+     * recorded in the session's durable record." One row per cycle, never rewritten in place: `plan` is the text
+     * the producing role wrote, VERBATIM, and `edited` is the user's own, NULL until they edit one — the two kept
+     * apart is what makes REQ-ORCH-154's "editing alone never approves it" structural, and what lets a window
+     * closed mid-edit reopen on both.
+     *
+     * On the session: `plan_cycle` names the cycle awaiting an answer (NULL = none), which together with
+     * `execution_status = 'awaiting_plan_decision'` is what survives a restart on the same terms as
+     * `paused_at_count` does for a message-limit pause (REQ-ORCH-087). `plan_released` is REQ-ORCH-154's one-way
+     * approval across a process boundary: set once approval releases execution, read at every launch, cleared
+     * only by the next user prompt — because a change to the mode setting "takes effect only for the next run".
+     */
+    sql: `
+      CREATE TABLE plan_cycles (
+        session_id TEXT NOT NULL,
+        cycle      INTEGER NOT NULL,
+        opened_at  TEXT NOT NULL,
+        plan       TEXT NOT NULL,
+        intent     TEXT NOT NULL,
+        todo       TEXT NOT NULL DEFAULT '',
+        changes    TEXT NOT NULL DEFAULT '',
+        edited     TEXT,
+        decision   TEXT,
+        decided_at TEXT,
+        PRIMARY KEY (session_id, cycle)
+      );
+      ALTER TABLE sessions ADD COLUMN plan_cycle    INTEGER;
+      ALTER TABLE sessions ADD COLUMN plan_released INTEGER NOT NULL DEFAULT 0;
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

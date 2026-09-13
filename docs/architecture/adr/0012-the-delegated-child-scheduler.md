@@ -102,9 +102,21 @@ actor model would be a way of *driving* the ledger, not a replacement for it.
 
 ## Decision
 
-The **ledger is the primary representation**: one **row per child**, carrying the fields `REQ-ORCH-043`
-and `REQ-MONITOR-022` enumerate, in the workspace database of ADR-0058, written through the session
-writer of ADR-0008. SR-4's table names "the delegated-child ledger" among the session data a row holds,
+The **ledger is the primary representation**: one **row per delegated child**, carrying the fields
+`REQ-ORCH-043` and `REQ-MONITOR-022` enumerate, in the workspace database of ADR-0058, written through
+the session writer of ADR-0008.
+
+**The run's root execution record is not a row here, and that is a decision rather than an omission**
+(recorded 2026-09-13, when `REQ-ORCH-072` was amended for item A4 of the accepted review). The ledger's
+membership is what a `delegate` call created; the root is what the run created for itself. Keeping it out
+is what makes the counters mean what they say — `REQ-ORCH-046`'s depth, total and active limits count
+delegated work, and `REQ-ORCH-050`'s per-model slots are held by agents the scheduler admits — and a root
+row would silently consume one of each on every iteration of every run, a `single` run included, where
+`REQ-ORCH-025` promises exactly zero delegated children. The surfaces already read it that way:
+`REQ-MONITOR-043` and `REQ-MONITOR-089` call it the run's synthetic root and `REQ-CHAT-068` withholds the
+delegation-context header from it. What the root does carry is an identity of the same shape — a
+canonical name and a task id in this namespace — so a lookup naming it resolves rather than reporting it
+unknown, with the parent-scoping of `REQ-TOOLS-155` and `REQ-TOOLS-156` unchanged. SR-4's table names "the delegated-child ledger" among the session data a row holds,
 and the ledger meets that ruling's own principle exactly: only the application reads a child record, and
 the record is queried and transactional. Nothing about the ledger's *contents* changes —
 `REQ-MONITOR-022` requires the record to expose its fields "to monitoring surfaces" and fixes no medium.

@@ -205,3 +205,25 @@ application log, which widens the guarantee rather than narrowing it.
 > **What was deliberately not done.** Whether the variable should exist at all was not reopened. It has
 > a stated purpose in this domain, it was not raised by any ruling, and withdrawing a capability nobody
 > escalated is not this round's to do. The amendment adds a boundary and removes no behaviour.
+
+
+> ## Amendment, 2026-09-13 — a second skip reason, for the plan gate
+>
+> **Why this was touched at all.** Item **A4** of the accepted review settled the planning execution
+> path: while a run is held at the plan gate of `REQ-ORCH-153`, no tool that writes workspace files or
+> runs commands is executed, and no hook command runs. A hook the gate withheld needs to be
+> distinguishable in the stream from one that ran and had no effect — which is the reason
+> `REQ-HOOKS-126` already gives for emitting a `hook.finish` at all — and the only reason that
+> requirement defined was `"untrusted_workspace"`.
+>
+> **What the amendment says.** `REQ-HOOKS-126` now defines exactly two reasons. `"plan_gate"` is emitted
+> **once per withheld invocation**, not once per session as `REQ-HOOKS-127` requires of the trust gate's
+> announcement: the two holds are different in kind. The trust gate's verdict stands for the session, so
+> announcing it once is complete; the plan gate's hold ends the moment the user answers, after which the
+> same hook runs normally for the rest of the run. A hook withheld at the gate is **not** run late and
+> never runs twice for one moment that passed while the gate was held.
+>
+> **What was deliberately not done.** No hook event was added, removed or re-timed, and `REQ-HOOKS-004`'s
+> order — policy before hooks, so a refused call starts no hook process — is what already keeps the tool
+> hooks of a refused call from firing. That order is the reason this amendment needed to reach only the
+> reason vocabulary and not the invocation rules.

@@ -1,0 +1,169 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { asSessionId, FakeClock, mintMachineId } from '@rotaris/kernel';
+import { CommandRequestSchema, RunHostRequestSchema } from '@rotaris/contracts';
+import type { LiveState } from '@rotaris/config';
+import { Sessions } from '@rotaris/engine';
+import { answer, DefaultAgentBackend, ScriptedModelClient } from '@rotaris/model';
+import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
+import type { ConfiguredRun, ConfigureDeps } from './configuration.js';
+import { launchSession, type LaunchRequest } from './launch.js';
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
+describe('launch configuration ownership (REQ-TRACE-470/471, REQ-SESSION-138)', () => {
+  let dir: string;
+  let dal: StoreDal;
+  let sessions: Sessions;
+  let configuration: ConfigureDeps;
+  let live: LiveState;
+  let holdPreflight: Promise<void>;
+  const setups = new Map<string, ConfiguredRun>();
+  const file = (root: string) => join(root, '.rotaris', 'agents.yaml');
+  const save = (root: string, model = 'first', mode = 'ask') => {
+    mkdirSync(join(root, '.rotaris'), { recursive: true });
+    writeFileSync(file(root), `models:\n  selected:\n    provider: openai\n    model_id: ${model}\n    auth_provider: provider-one\nlarge_model: selected\nmedium_model: selected\nsmall_model: selected\nruntime:\n  permission_mode: ${mode}\n  max_iterations: 1\n  allow_unsandboxed_autonomous: false\n`);
+  };
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'rotaris-launch-'));
+    const db = openStore(join(dir, 'workspace.db'));
+    migrateStore(db);
+    dal = new StoreDal(db);
+    const clocks = new FakeClock();
+    live = { runtime: { permission_mode: 'ask', max_iterations: 17 } };
+    setups.clear();
+    holdPreflight = Promise.resolve();
+    configuration = { clocks, globalDir: join(dir, 'global'), env: {}, scriptedClient: () => { throw new Error('unexpected scripted configuration'); }, onRequest: () => {}, log: () => {}, liveState: () => live, bearers: () => ({}) };
+    sessions = new Sessions({
+      clocks, pid: 500, host: mintMachineId('0000000000000000000000000000000a'), retentionCap: 20_000,
+      warn: () => {}, mintSessionId: () => 'unused', model: null,
+      configure: () => { throw new Error('a prepared launch reloaded configuration'); },
+      attended: () => false,
+      preflight: async () => {
+        await holdPreflight;
+        return { intent: { category: 'moderate_feature', confidence: null, reason: 'scripted', fallback: true, carried_over: false }, grant: 'none', route: 'work', resolvedPlaybooks: {}, playbookFor: () => '', budgetCell: null, warnings: [] };
+      },
+      publisher: { increment: () => {}, snapshot: () => {} },
+      sessionFilesDir: (_store, id) => join(dir, 'sessions', id),
+    });
+    save(dir);
+  });
+  afterEach(async () => {
+    await Promise.all([...setups.keys()].map((id) => sessions.running(asSessionId(id))));
+    dal.db.close();
+    forgetSpelling(dir);
+    rmSync(dir, { recursive: true, force: true });
+  });
+  const launch = (id: string, leaseCredentials: (providers: readonly string[]) => Promise<Readonly<Record<string, string>>>, board = false, root = dir) => {
+    const req: LaunchRequest = { kind: 'session.start', workspaceId: root, sessionId: id, prompt: 'answer', ...(board ? { boardPermissions: 'permissive' } : {}) };
+    return launchSession(req, {
+      workspaceRoot: root, attended: true, configuration, leaseCredentials,
+      start: (setup) => {
+        setups.set(id, setup);
+        // The production configuration and session writer run; the provider adapter answers locally.
+        return sessions.start(dal, root, req.prompt, { sessionId: id, setup: { ...setup, model: { ...setup.model, backend: new DefaultAgentBackend(new ScriptedModelClient([answer('done')])) } } });
+      },
+    });
+  };
+
+  it('overlapping board and composer starts retain their captured settings across a delayed lease', async () => {
+    const waiting = deferred<Readonly<Record<string, string>>>();
+    const lease = vi.fn(() => waiting.promise);
+    const saved = readFileSync(file(dir), 'utf8');
+    const board = launch('board', lease, true);
+    expect(lease).toHaveBeenCalledWith(['provider-one']);
+    expect(live).toEqual({ runtime: { permission_mode: 'ask', max_iterations: 17 } });
+    live = { runtime: { permission_mode: 'restricted', max_iterations: 23 } };
+    save(dir, 'second');
+    expect(await launch('composer', async () => ({ 'provider-one': 'composer-bearer' }))).toMatchObject({ kind: 'session.started' });
+    waiting.resolve({ 'provider-one': 'board-bearer' });
+    expect(await board).toMatchObject({ kind: 'session.started' });
+    const b = setups.get('board')!;
+    const c = setups.get('composer')!;
+    expect(b.runtime).toMatchObject({ permissionMode: 'autonomous', allowUnsandboxedAutonomous: true, iterationLimit: 17 });
+    expect(c.runtime).toMatchObject({ permissionMode: 'restricted', allowUnsandboxedAutonomous: false, iterationLimit: 23 });
+    expect(b.model.config.model.modelId).toBe('first');
+    expect(c.model.config.model.modelId).toBe('second');
+    expect(await b.model.config.credentialFor(b.model.config.model)()).toBe('board-bearer');
+    expect(await c.model.config.credentialFor(c.model.config.model)()).toBe('composer-bearer');
+    expect(b.resilience?.catalogue.find((entry) => entry.key === 'selected')?.usable).toBe(true);
+    await Promise.all([sessions.running(asSessionId('board')), sessions.running(asSessionId('composer'))]);
+    expect(dal.getSession(asSessionId('board'))?.permission_mode).toBe('autonomous');
+    expect(dal.getSession(asSessionId('composer'))?.permission_mode).toBe('restricted');
+    expect(JSON.parse(dal.getLaunchAudit(asSessionId('board'))!.payload)).toMatchObject({ permission_mode: 'autonomous', config_snapshot: { runtime: { permission_mode: 'autonomous', allow_unsandboxed_autonomous: true, max_iterations: 17 } } });
+    expect(JSON.parse(dal.getLaunchAudit(asSessionId('composer'))!.payload)).toMatchObject({ permission_mode: 'restricted', config_snapshot: { runtime: { permission_mode: 'restricted', allow_unsandboxed_autonomous: false, max_iterations: 23 } } });
+    expect(dal.getLaunchAudit(asSessionId('board'))!.payload).not.toContain('board-bearer');
+    expect(live).toEqual({ runtime: { permission_mode: 'restricted', max_iterations: 23 } });
+    expect(readFileSync(file(dir), 'utf8')).toBe(saved.replace('first', 'second'));
+  });
+
+  it('two workspaces retain their model and permission configuration when leases finish in reverse order', async () => {
+    const other = join(dir, 'other');
+    save(other, 'other-model');
+    const waiting = deferred<Readonly<Record<string, string>>>();
+    const board = launch('board', () => waiting.promise, true);
+    await launch('other', async () => ({ 'provider-one': 'other-bearer' }), false, other);
+    waiting.resolve({ 'provider-one': 'board-bearer' });
+    await board;
+    expect(setups.get('other')?.runtime.permissionMode).toBe('ask');
+    expect(setups.get('other')?.model.config.model.modelId).toBe('other-model');
+    expect(setups.get('board')?.runtime.permissionMode).toBe('autonomous');
+  });
+
+  it.each(['missing', 'throwing'] as const)('a %s credential lease refuses the board launch and preserves settings for the next run', async (failure) => {
+    const saved = readFileSync(file(dir), 'utf8');
+    const reply = await launch('refused', async () => { if (failure === 'throwing') throw new Error('lease failed'); return {}; }, true);
+    expect(reply).toMatchObject({ kind: 'refused', code: 'session.provider-auth' });
+    expect(setups.size).toBe(0);
+    expect(dal.getSession(asSessionId('refused'))).toBeUndefined();
+    await launch('next', async () => ({ 'provider-one': 'next-bearer' }));
+    expect(setups.get('next')?.runtime).toMatchObject({ permissionMode: 'ask', allowUnsandboxedAutonomous: false, iterationLimit: 17 });
+    expect(live).toEqual({ runtime: { permission_mode: 'ask', max_iterations: 17 } });
+    expect(readFileSync(file(dir), 'utf8')).toBe(saved);
+  });
+
+  it('a thrown session start preserves live settings and saved configuration', async () => {
+    const saved = readFileSync(file(dir), 'utf8');
+    await expect(launchSession({ kind: 'session.start', workspaceId: dir, prompt: 'answer', boardPermissions: 'permissive' }, {
+      workspaceRoot: dir, attended: true, configuration,
+      leaseCredentials: async () => ({ 'provider-one': 'bearer' }),
+      start: () => { throw new Error('store failed'); },
+    })).rejects.toThrow('store failed');
+    expect(live).toEqual({ runtime: { permission_mode: 'ask', max_iterations: 17 } });
+    expect(readFileSync(file(dir), 'utf8')).toBe(saved);
+  });
+
+  it('a prompt rejected during an active run preserves its prepared setup', async () => {
+    const waiting = deferred<void>();
+    holdPreflight = waiting.promise;
+    try {
+      await launch('active', async () => ({ 'provider-one': 'bearer' }), true);
+      // The configure adapter throws if a refused prompt attempts another load.
+      expect(sessions.prompt(asSessionId('active'), 'another prompt')).toMatchObject({ ok: false, error: { code: 'run-active' } });
+    } finally {
+      waiting.resolve();
+    }
+  });
+
+  it('fatal configuration refuses before requesting credentials or creating a session', async () => {
+    writeFileSync(file(dir), 'runtime: [invalid]\n');
+    const lease = vi.fn(async () => ({ 'provider-one': 'bearer' }));
+    expect(await launch('invalid', lease, true)).toMatchObject({ kind: 'refused', code: 'session.configuration' });
+    expect(lease).not.toHaveBeenCalled();
+    expect(setups.size).toBe(0);
+    expect(live).toEqual({ runtime: { permission_mode: 'ask', max_iterations: 17 } });
+  });
+
+  it('the grant crosses the main-to-host contract and is stripped from a renderer start', () => {
+    const request = { kind: 'session.start', workspaceId: dir, prompt: 'answer', boardPermissions: 'permissive' };
+    expect(RunHostRequestSchema.parse(request)).toHaveProperty('boardPermissions', 'permissive');
+    expect(CommandRequestSchema.parse(request)).not.toHaveProperty('boardPermissions');
+    expect(RunHostRequestSchema.safeParse({ ...request, boardPermissions: 'anything' }).success).toBe(false);
+  });
+});

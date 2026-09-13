@@ -191,17 +191,19 @@ export interface SessionsDeps {
   /** REQ-ORCH-005: the pre-flight, built by the root; absent means the fallback intent and no playbook. */
   readonly preflight?: (ctx: PreflightContext) => Promise<Preflight>;
   /** REQ-ORCH-107: absence means supervision was intentionally disabled and constructs nothing. */
-  readonly supervisor?: ((workspaceRoot: string) => { readonly config: SupervisorConfig; readonly classifier: LoopClassifier } | null) | undefined;
+  readonly supervisor?: ((workspaceRoot: string, sessionId: SessionId) => { readonly config: SupervisorConfig; readonly classifier: LoopClassifier } | null) | undefined;
   readonly isProcessAlive?: ((pid: number) => boolean) | undefined;
   /**
    * ADR-0036/0037: the run's configuration, resolved at run start from the files with the live state on top
    * (Tier B). Present, it supplies the model and the runtime for that run; absent, `model` and `runtime` stand.
    */
-  readonly configure?: ((workspaceRoot: string, ctx: { readonly attended: boolean }) => Result<RunSetup, { readonly reason: string }>) | undefined;
+  readonly configure?: ((workspaceRoot: string, ctx: { readonly attended: boolean; readonly sessionId: SessionId }) => Result<RunSetup, { readonly reason: string }>) | undefined;
 }
 
 /** What a run starts with once configuration resolves it. */
 export interface RunSetup {
+  /** Secret-free launch facts captured by the host (REQ-SESSION-138). */
+  readonly configurationSnapshot?: Readonly<Record<string, unknown>>;
   readonly model: ModelSetup;
   readonly runtime: RuntimePosture;
   readonly retentionCap?: number | undefined;
@@ -416,6 +418,8 @@ export function relativeTime(updatedAt: string, now: number): string {
 
 /** REQ-GIT-022 / REQ-SHELL-125: what the host settled before asking for the session — the id, the binding, the sandbox mode. */
 export interface StartOptions {
+  /** Captured by the host before credential preparation (REQ-TRACE-470/471). */
+  readonly setup?: RunSetup;
   readonly sessionId?: string | undefined;
   readonly worktree?: WorktreeBinding | undefined;
   readonly sandboxMode?: string | undefined;
@@ -752,14 +756,14 @@ export class Sessions {
     const storeFailure = SessionWriter.storeFailure(dal);
     if (storeFailure) return err({ code: 'store-failed', reason: `The workspace store requires recovery before starting work: ${storeFailure}` });
     const attendedNow = this.deps.attended?.() ?? false;
-    const setup = this.setupFor(workspaceRoot, attendedNow);
+    const sessionId = asSessionId(opts.sessionId ?? this.deps.mintSessionId());
+    const setup = opts.setup ? ok(opts.setup) : this.setupFor(workspaceRoot, attendedNow, sessionId);
     if (!setup.ok) return err(setup.error);
     const { model, runtime } = setup.value;
     const inputs = opts.attachments ?? [];
     if (inputs.length > 0 && model.config.model.acceptsImageInput !== true) return err({ code: 'image-input-unsupported', reason: 'The selected model does not declare image input support.' });
     const checkedAttachments = validateAttachmentInputs(inputs);
     if (!checkedAttachments.ok) return err({ code: 'attachment-invalid', reason: checkedAttachments.reason });
-    const sessionId = asSessionId(opts.sessionId ?? this.deps.mintSessionId());
     const effectiveRoot = opts.worktree?.worktree_path ?? workspaceRoot;
     const permission = postureAtStart(runtime, attendedNow);
     // REQ-SESSION-142: the session's log, opened before anything else the run says; closed at run end.
@@ -801,7 +805,7 @@ export class Sessions {
     if (!row.ok) return err({ code: row.error.code, reason: 'reason' in row.error ? row.error.reason : String(row.error.code) });
 
     const summary = new SummaryWriter({ file: `${this.deps.sessionFilesDir(dal, sessionId)}/summary.md`, timers: this.deps.clocks.timers, warn });
-    const supervisorSetup = this.deps.supervisor?.(workspaceRoot) ?? null;
+    const supervisorSetup = this.deps.supervisor?.(workspaceRoot, sessionId) ?? null;
     const supervisors = supervisorSetup
       ? new SupervisorRegistry(sessionId, supervisorSetup.config, supervisorSetup.classifier, this.deps.clocks.timers)
       : null;
@@ -836,7 +840,7 @@ export class Sessions {
       messageLimit: runtime?.messageLimit ?? null, onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),
       // REQ-ORCH-152/153: the plan gate as a launch input; the run settles the hold itself once the intent is known.
       ...(this.planLaunchFor(dal, sessionId, runtime) ?? {}),
-      backend: model.backend, config: model.config, tools, permission, pid: this.deps.pid, host: this.deps.host,
+      backend: model.backend, config: model.config, tools, permission, configurationSnapshot: setup.value.configurationSnapshot, pid: this.deps.pid, host: this.deps.host,
       // Part AH (ADR-0060): the configuration's half joined to the session's backend, timers and credentials. It sits
       // at the top level and NOT inside the tools block: an agent with no tool port still holds a conversation.
       ...(model.compression ? { compression: { backend: model.backend, timers: this.deps.clocks.timers, credentialFor: model.config.credentialFor, model: model.compression.model, timeoutMs: millis(model.compression.timeoutMs), charsPerToken: model.compression.charsPerToken, preserveRecentTurns: model.compression.preserveRecentTurns, triggerFor: model.compression.triggerFor } } : {}),
@@ -869,10 +873,10 @@ export class Sessions {
     if (!s) return err({ code: 'not-live', reason: `${sessionId} is not a live session` });
     const storeFailure = SessionWriter.storeFailure(s.dal) ?? s.writer.failed;
     if (storeFailure) return err({ code: 'store-failed', reason: `The workspace store requires recovery before continuing work: ${storeFailure}` });
-    const setup = this.setupFor(s.dal.getSession(sessionId)?.workspace_root ?? '', this.deps.attended?.() ?? false);
+    if (s.run && !s.run.isEnded) return err({ code: 'run-active', reason: 'A run is already active.' });
+    const setup = this.setupFor(s.dal.getSession(sessionId)?.workspace_root ?? '', this.deps.attended?.() ?? false, sessionId);
     if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
     if (inputs.length > 0 && setup.value.model.config.model.acceptsImageInput !== true) return err({ code: 'image-input-unsupported', reason: 'The selected model does not declare image input support.' });
-    if (s.run && !s.run.isEnded) return err({ code: 'run-active', reason: 'A run is already active.' });
     const stored = s.dal.getSession(sessionId);
     if (!stored) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
     const gone = missingWorktree(stored);
@@ -898,10 +902,10 @@ export class Sessions {
   }
 
   /** The run's setup: the root's `configure` (files + live state, ADR-0037 Tier B) or the process-wide model and runtime. */
-  private setupFor(workspaceRoot: string, attended: boolean): Result<RunSetup, StartRefusal> {
+  private setupFor(workspaceRoot: string, attended: boolean, sessionId: SessionId): Result<RunSetup, StartRefusal> {
     const refused = (code: string, summary: string): StartRefusal => ({ code, reason: summary, failedBeforeStart: true, result: { status: 'error', session_id: '', stop_reason: '', summary, error: summary } });
     if (this.deps.configure) {
-      const r = this.deps.configure(workspaceRoot, { attended });
+      const r = this.deps.configure(workspaceRoot, { attended, sessionId });
       // REQ-EVENTS-021 / REQ-CONFIG-478: refused before it starts, carrying the report.
       return r.ok ? ok(r.value) : err(refused('configuration', r.error.reason));
     }
@@ -940,7 +944,7 @@ export class Sessions {
     s.tools = null;
     const stale = settleStaleChildren(s.dal, s.writer, sessionId, warn);
     if (stale > 0) warn(`${stale} child record(s) from a previous run were settled cancelled before the first continuation iteration (REQ-ORCH-053)`);
-    const supervisorSetup = this.deps.supervisor?.(workspaceRoot) ?? null;
+    const supervisorSetup = this.deps.supervisor?.(workspaceRoot, sessionId) ?? null;
     const supervisors = supervisorSetup ? new SupervisorRegistry(sessionId, supervisorSetup.config, supervisorSetup.classifier, this.deps.clocks.timers) : null;
     const budget = runtime?.childBudget ?? DEFAULT_BUDGET;
     const cap = runtime?.modelConcurrencyCap ?? null;
@@ -962,7 +966,7 @@ export class Sessions {
       // REQ-ORCH-152/153/154: a continuation holds again unless approval already released this run, and a revise
       // cycle passes its own number and the changes the user stated.
       ...(this.planLaunchFor(s.dal, sessionId, runtime, plan) ?? {}),
-      writer: s.writer, owner: s.owner, bus: this.bus, clocks: this.deps.clocks, backend: model.backend, config: model.config,
+      writer: s.writer, owner: s.owner, bus: this.bus, clocks: this.deps.clocks, backend: model.backend, config: model.config, configurationSnapshot: setupIn.configurationSnapshot,
       // Part AH (ADR-0060): the configuration's half joined to the session's backend, timers and credentials. It sits
       // at the top level and NOT inside the tools block: an agent with no tool port still holds a conversation.
       ...(model.compression ? { compression: { backend: model.backend, timers: this.deps.clocks.timers, credentialFor: model.config.credentialFor, model: model.compression.model, timeoutMs: millis(model.compression.timeoutMs), charsPerToken: model.compression.charsPerToken, preserveRecentTurns: model.compression.preserveRecentTurns, triggerFor: model.compression.triggerFor } } : {}),
@@ -1295,7 +1299,7 @@ export class Sessions {
       return ok({ resumed: false, messageLimit: limit });
     }
     // The continuation: the last user request stands, nothing new is appended (REQ-MONITOR-125's "resumed from the composer").
-    const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false);
+    const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId);
     if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
     const lastPrompt = [...s.dal.residentRows(sessionId)].reverse().find((row) => row.kind === 'user')?.body ?? stored.session_id;
     const todo = parseTodoDocument(stored);
@@ -1383,7 +1387,7 @@ export class Sessions {
       s.owner.reconcile();
       return ok({ relaunched: false, cycle });
     }
-    const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false);
+    const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId);
     if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
     const gone = missingWorktree(stored);
     if (gone) return err(gone);

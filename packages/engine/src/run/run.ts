@@ -116,6 +116,8 @@ export interface PermissionPosture {
 }
 
 export interface RunDeps {
+  /** Secret-free configuration captured for this run's launch audit (REQ-SESSION-138). */
+  readonly configurationSnapshot?: Readonly<Record<string, unknown>> | undefined;
   readonly sessionId: SessionId;
   /** The base workspace — the record's anchor, named in the launch audit and the timeline (REQ-GIT-019). */
   readonly workspaceRoot: string;
@@ -456,7 +458,7 @@ export class Run {
       const auditPayload = {
         session_id: this.sessionId, workspace_root: this.deps.workspaceRoot, created_at: this.deps.readSession()?.created_at ?? null,
         run_intent: this.preflight?.intent ?? NO_PREFLIGHT_INTENT, intent_grant: this.preflight?.grant ?? 'none',
-        permission_mode: 'default', check_suite: null, resolved_playbooks: this.preflight?.resolvedPlaybooks ?? {}, hooks: this.hooks?.auditSnapshot() ?? [], config_snapshot: {},
+        permission_mode: this.deps.permission.effective, check_suite: null, resolved_playbooks: this.preflight?.resolvedPlaybooks ?? {}, hooks: this.hooks?.auditSnapshot() ?? [], config_snapshot: this.deps.configurationSnapshot ?? {},
       };
       if (this.deps.continuation) writer.appendTimeline('run_continuation_intent', 'rotaris', `Continuation intent: ${auditPayload.run_intent.category}.`, auditPayload);
       else {

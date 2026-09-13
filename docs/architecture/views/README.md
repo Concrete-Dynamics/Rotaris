@@ -24,7 +24,11 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-13** — **the plan gate (REQ-ORCH-152 to REQ-ORCH-154, ADR-0062)**: the
+Last reconciled with the code: **2026-09-13** — **run-local launch permissions (R-009, REQ-TRACE-470/471)**:
+the process and runtime views record the per-launch board grant, configuration capture before credentials,
+session-owned run ports, and runtime launch-audit evidence.
+
+Earlier the same day — **the plan gate (REQ-ORCH-152 to REQ-ORCH-154, ADR-0062)**: the
 runtime view's run-start order gains the hold, a new paragraph covers the plan cycle and the park, its
 session-command paragraph gains the two answers and the one-way release, and its store section moves to **v17** with
 `plan_cycles` beside two new `sessions` columns; the process view's renderer → main family gains `session.planEdit`

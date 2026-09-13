@@ -382,13 +382,29 @@ export interface ConfigureDeps {
  */
 export type ConfigureRefusal = { readonly reason: string; readonly cfg?: LoadedConfiguration; readonly code?: 'no-model' };
 
+/** Captured inputs and the credential boundary for one launch (REQ-TRACE-470/471). */
+export interface PreparedRun {
+  readonly authProviders: readonly string[];
+  readonly entryAuthProvider: string | null;
+  readonly complete: (bearers: Readonly<Record<string, string>>) => ConfiguredRun;
+}
+
 export function configureRun(workspaceRoot: string, attended: boolean, deps: ConfigureDeps): Result<ConfiguredRun, ConfigureRefusal> {
+  const prepared = prepareRun(workspaceRoot, attended, deps);
+  return prepared.ok ? ok(prepared.value.complete(deps.bearers(workspaceRoot))) : prepared;
+}
+
+/** Load and validate once, before the asynchronous credential lease. */
+export function prepareRun(workspaceRoot: string, attended: boolean, deps: ConfigureDeps, boardPermissions?: 'permissive'): Result<PreparedRun, ConfigureRefusal> {
   const loaded = loadConfiguration({ globalDir: deps.globalDir, workspaceRoot, now: () => deps.clocks.monotonic.now(), builtinLaunch: deps.codeIntelligenceLaunch ?? null });
   // REQ-CONFIG-478 names the first problem; REQ-MCP-002 requires EVERY defect reported, so the rest follow it.
   if (!loaded.ok) return err({ reason: `The configuration could not be loaded: ${renderFatal(loaded.error)}${loaded.error.lines.length > 1 ? ` All problems: ${loaded.error.lines.join(' | ')}` : ''}` });
   const live = overlayLiveState(loaded.value, deps.liveState());
   if (!live.ok) return err({ reason: `The configuration could not be applied with the current settings: ${renderFatal(live.error)}`, cfg: loaded.value });
-  const cfg = live.value;
+  // REQ-TRACE-470: this grant is confined to the launch and includes the Tier C opt-in.
+  const cfg: LoadedConfiguration = boardPermissions === 'permissive'
+    ? { ...live.value, runtime: { ...live.value.runtime, permission_mode: 'autonomous', allow_unsandboxed_autonomous: true } }
+    : live.value;
   const warnings: string[] = [...cfg.warnings.map((w) => `configuration: ${w}`)];
   if (cfg.referential.length > 0) {
     const lines = cfg.referential.map((m) => `configuration: ${m}`);
@@ -407,54 +423,57 @@ export function configureRun(workspaceRoot: string, attended: boolean, deps: Con
     const why = entryModelName === null ? `role ${cfg.defaultPersona} names no model` : !entry ? `model '${entryModelName}' is not a configured model` : `model '${entryModelName}' (provider ${entry.provider}) has no base_url and this build knows no endpoint for that provider`;
     return err({ reason: `No usable model is configured for the entry role, so the run was refused before it started: ${why}.`, cfg, code: 'no-model' });
   }
-  const runtime = runtimeFromConfiguration(cfg);
-  const isScripted = scripted || model.providerId === SCRIPTED_PROVIDER;
-  // The adapter's idle bound (REQ-CONFIG-115) is re-armed from the run host's own timer port, never a global.
-  const client: ModelClient = isScripted ? deps.scriptedClient() : new AiSdkModelClient({ baseUrl: model.baseUrl ?? PROVIDER_BASE_URLS['openai']!, onRequest: (i) => deps.onRequest(i), timers: deps.clocks.timers });
-  const backend: AgentBackend = new DefaultAgentBackend(client);
-  const entryCredential = isScripted ? async () => '' : credentialResolver(entry, deps.env, () => deps.bearers(workspaceRoot));
-  const setup: ModelSetup = {
-    backend,
-    summariser: summariserOf(cfg, scripted),
-    // Part AH (ADR-0060): the compressing pass's model; the section's figures travel beside it on the setup.
-    compression: {
-      model: compressorOf(cfg, scripted), timeoutMs: cfg.compressor.timeout_seconds * 1000,
-      charsPerToken: cfg.compressor.chars_per_token, preserveRecentTurns: cfg.compressor.preserve_recent_turns,
-      triggerFor: compressionTriggerFor(cfg),
-    },
-    config: {
-      ...RUN_CONFIG_DEFAULTS,
-      persona: cfg.defaultPersona,
-      systemPrompt: entryRole.persona.systemPrompt,
-      model,
-      thinking: entryRole.persona.thinking ?? thinkingOf(entry),
-      modelTimeoutMs: Math.round((entry?.timeout ?? runtime.modelTimeoutS) * 1000),
-      modelRetries: entry?.num_retries ?? RUN_CONFIG_DEFAULTS.modelRetries,
-      iterationLimit: runtime.iterationLimit,
-      transientRetries: runtime.transientRetries,
-      validationRetries: runtime.validationRetries,
-      llmResponseTimeoutMs: Math.round(runtime.llmResponseTimeoutS * 1000),
-      consecutiveRetryLimit: runtime.consecutiveRetryLimit,
-      credentialFor: credentialFactory(cfg, scripted, deps.env, () => deps.bearers(workspaceRoot), entryCredential, (m) => warnings.push(m)),
-    },
-  };
-  const authProviders = authProvidersOf(cfg);
-  const tier = entryTierOf(cfg);
-  // Part Q: the catalogue the same-tier rule reads, with the snapshot's per-provider picks as the discovered roles.
   const snapshotRead = readProjectSnapshot(join(deps.globalDir, PROJECT_SETTINGS_FILE), () => undefined);
-  const catalogue = catalogueOf(cfg, scripted, deps.bearers(workspaceRoot), snapshotRead.ok ? snapshotRead.value : null);
-  const fallbackName = cfg.slots.fallback_model;
-  const fallbackRef = modelRefOf(cfg, fallbackName, scripted);
-  const fallbackModel: ModelChoice | null = fallbackRef && fallbackName ? { model: fallbackRef, thinking: thinkingOf(cfg.models[fallbackName]), ...settingsOf(cfg.models[fallbackName]) } : null;
-  deps.log(`configuration: loaded in ${cfg.loadMs === null ? '?' : cfg.loadMs.toFixed(1)} ms; entry ${cfg.defaultPersona} on ${model.providerId}/${model.modelId}${model.baseUrl ? ` at ${model.baseUrl}` : ''}; auth_provider=${entry?.auth_provider ?? 'none'}; tier=${tier ?? 'undetermined'}; slots: small=${cfg.slots.small_model ?? '-'} fallback=${cfg.slots.fallback_model ?? '-'} summary=${cfg.slots.default_summary_model ?? '-'}; permission_mode=${runtime.permissionMode}; strategy=${cfg.delegationStrategy}; breaker=${cfg.circuitBreaker.enabled ? 'on' : 'off'}; catalogue=${catalogue.map((c) => `${c.key}[${c.provider}:${c.roles.map((r) => r[0]).join('') || '-'}${c.usable ? '' : ',unleased'}]`).join(' ')}; llm_response_timeout=${runtime.llmResponseTimeoutS} s; child_timeout=${(runtime.childTimeoutMs ?? 0) / 1000} s`);
-  // REQ-MONITOR-142 / REQ-ORCH-091 (d): a mid-run switch resolves a `models:` key the same way the entry model was, or says why not.
-  const models = (key: string): ModelLookup => {
-    const e = cfg.models[key];
-    if (!e) return { ok: false, reason: `'${key}' is not a configured model` };
-    const ref = modelRefOf(cfg, key, scripted);
-    if (!ref) return { ok: false, reason: `model '${key}' (provider ${e.provider}) has no base_url and this build knows no endpoint for that provider` };
-    if (!isScripted && e.auth_provider && !deps.bearers(workspaceRoot)[e.auth_provider]) return { ok: false, reason: `provider ${e.auth_provider} is not authenticated for this run` };
-    return { ok: true, key, choice: { model: ref, thinking: thinkingOf(e), ...settingsOf(e) } };
-  };
-  return ok({ cfg, model: setup, runtime, retentionCap: runtime.retentionCap, personas, models, warnings, scripted: isScripted, authProviders, entryAuthProvider: isScripted ? null : entry?.auth_provider ?? null, tier, resilience: { catalogue, fallbackModel }, contextLimits: contextLimitsOf(cfg) });
+  const authProviders = authProvidersOf(cfg);
+  const isScripted = scripted || model.providerId === SCRIPTED_PROVIDER;
+  const entryAuthProvider = isScripted ? null : entry?.auth_provider ?? null;
+  return ok({ authProviders, entryAuthProvider, complete: (bearers) => {
+    const runtime = runtimeFromConfiguration(cfg);
+    // The adapter's idle bound (REQ-CONFIG-115) is re-armed from the run host's own timer port, never a global.
+    const client: ModelClient = isScripted ? deps.scriptedClient() : new AiSdkModelClient({ baseUrl: model.baseUrl ?? PROVIDER_BASE_URLS['openai']!, onRequest: (i) => deps.onRequest(i), timers: deps.clocks.timers });
+    const backend: AgentBackend = new DefaultAgentBackend(client);
+    const entryCredential = isScripted ? async () => '' : credentialResolver(entry, deps.env, () => bearers);
+    const setup: ModelSetup = {
+      backend,
+      summariser: summariserOf(cfg, scripted),
+      // Part AH (ADR-0060): the compressing pass's model; the section's figures travel beside it on the setup.
+      compression: {
+        model: compressorOf(cfg, scripted), timeoutMs: cfg.compressor.timeout_seconds * 1000,
+        charsPerToken: cfg.compressor.chars_per_token, preserveRecentTurns: cfg.compressor.preserve_recent_turns,
+        triggerFor: compressionTriggerFor(cfg),
+      },
+      config: {
+        ...RUN_CONFIG_DEFAULTS,
+        persona: cfg.defaultPersona,
+        systemPrompt: entryRole.persona.systemPrompt,
+        model,
+        thinking: entryRole.persona.thinking ?? thinkingOf(entry),
+        modelTimeoutMs: Math.round((entry?.timeout ?? runtime.modelTimeoutS) * 1000),
+        modelRetries: entry?.num_retries ?? RUN_CONFIG_DEFAULTS.modelRetries,
+        iterationLimit: runtime.iterationLimit,
+        transientRetries: runtime.transientRetries,
+        validationRetries: runtime.validationRetries,
+        llmResponseTimeoutMs: Math.round(runtime.llmResponseTimeoutS * 1000),
+        consecutiveRetryLimit: runtime.consecutiveRetryLimit,
+        credentialFor: credentialFactory(cfg, scripted, deps.env, () => bearers, entryCredential, (m) => warnings.push(m)),
+      },
+    };
+    const tier = entryTierOf(cfg);
+    // Part Q: the catalogue the same-tier rule reads, with the snapshot's per-provider picks as the discovered roles.
+    const catalogue = catalogueOf(cfg, scripted, bearers, snapshotRead.ok ? snapshotRead.value : null);
+    const fallbackName = cfg.slots.fallback_model;
+    const fallbackRef = modelRefOf(cfg, fallbackName, scripted);
+    const fallbackModel: ModelChoice | null = fallbackRef && fallbackName ? { model: fallbackRef, thinking: thinkingOf(cfg.models[fallbackName]), ...settingsOf(cfg.models[fallbackName]) } : null;
+    deps.log(`configuration: loaded in ${cfg.loadMs === null ? '?' : cfg.loadMs.toFixed(1)} ms; entry ${cfg.defaultPersona} on ${model.providerId}/${model.modelId}${model.baseUrl ? ` at ${model.baseUrl}` : ''}; auth_provider=${entry?.auth_provider ?? 'none'}; tier=${tier ?? 'undetermined'}; slots: small=${cfg.slots.small_model ?? '-'} fallback=${cfg.slots.fallback_model ?? '-'} summary=${cfg.slots.default_summary_model ?? '-'}; permission_mode=${runtime.permissionMode}; strategy=${cfg.delegationStrategy}; breaker=${cfg.circuitBreaker.enabled ? 'on' : 'off'}; catalogue=${catalogue.map((c) => `${c.key}[${c.provider}:${c.roles.map((r) => r[0]).join('') || '-'}${c.usable ? '' : ',unleased'}]`).join(' ')}; llm_response_timeout=${runtime.llmResponseTimeoutS} s; child_timeout=${(runtime.childTimeoutMs ?? 0) / 1000} s`);
+    // REQ-MONITOR-142 / REQ-ORCH-091 (d): a mid-run switch resolves a `models:` key the same way the entry model was, or says why not.
+    const models = (key: string): ModelLookup => {
+      const e = cfg.models[key];
+      if (!e) return { ok: false, reason: `'${key}' is not a configured model` };
+      const ref = modelRefOf(cfg, key, scripted);
+      if (!ref) return { ok: false, reason: `model '${key}' (provider ${e.provider}) has no base_url and this build knows no endpoint for that provider` };
+      if (!isScripted && e.auth_provider && !bearers[e.auth_provider]) return { ok: false, reason: `provider ${e.auth_provider} is not authenticated for this run` };
+      return { ok: true, key, choice: { model: ref, thinking: thinkingOf(e), ...settingsOf(e) } };
+    };
+    return { cfg, model: setup, runtime, configurationSnapshot: { runtime: { ...cfg.runtime } }, retentionCap: runtime.retentionCap, personas, models, warnings, scripted: isScripted, authProviders, entryAuthProvider, tier, resilience: { catalogue, fallbackModel }, contextLimits: contextLimitsOf(cfg) };
+  } });
 }

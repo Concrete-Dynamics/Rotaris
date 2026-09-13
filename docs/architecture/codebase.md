@@ -1566,6 +1566,55 @@ The second cycle's file was destroyed by a re-capture minutes after it was writt
 only in the session transcript and in this paragraph. `ui-review` refuses an iteration that already holds a
 critique now, and `--reshoot` is how you say the loss is intended. **Found by running the loop, again.**
 
+**The refusal was not enough, because the wrapper is not the only way in.** The same critique was destroyed a
+second time on 2026-09-13 — the directory that held it now carries one 1400x900 Overview capture where the
+pack had twenty-six images — and the refusal had nothing to say about it, because a refusal in `ui-review`
+guards the door while the deletion lives in `ui-audit`, which anyone may run directly with `--output=` aimed
+anywhere. So the tool preserves rather than refuses now: emptying the output directory carries `critique.json`
+across the wipe, and `--discard-critique` (which `ui-review --reshoot` passes) is the one way to lose it on
+purpose. **Preserving beats refusing when the thing being protected is not reproducible**: every other file in
+a pack comes back by capturing again, and a reading does not. The skill says so too — a critique is the least
+durable file in the pack, `.ui-review/` is ignored by git, and the findings belong in the report the critic
+hands back, not only at a path.
+
+### UIR-014 was `flex-shrink`, and the guard that now catches its whole class
+
+The one finding carried out of the second cycle is repaired. It read as a wrapping defect and was not: every
+view is a `flex-direction: column` box, so its header is a flex **item** carrying the default `flex-shrink: 1`.
+When a short window's content exceeds it the column takes the difference out of whichever child will give, and
+`min-height` — which reads like a floor — only says how far. At 1000x680 the Git header's actions wrap to a
+second line, its content stands 76 px tall, and the column shrank the **box** to 56 while the content kept its
+size. Nothing was clipped, because a header does not scroll: the second line paid out below the box and the
+worktrees card, painted later, covered it. That is why "Merge selected" ended at y 231.25 beneath a card border
+at y 227 with its own bottom border never drawn at all. `.page-header { flex: 0 0 auto }` is the whole repair —
+a header shows its content or the view scrolls; it is never the thing that gives way. It is the second cycle's
+own lesson mirrored: the bound was on the header, and what the header needed was to refuse to shrink.
+
+**An ancestor's scroll is no excuse, which is why the check is strict.** `.git` is itself `overflow: auto`, so
+the overflowing content did extend the view's scroll height — and scrolling never revealed it, because the next
+card paints over that region. A box that cannot show its own content is a finding even inside a scroll
+container. `shrunkBoxes` in `lib/layout-relations.mjs` is that verdict, pure and unit-tested in both directions,
+and `ui-audit` reports it as **`SHRUNK`**: a marked box whose content exceeds it on an axis whose `overflow` is
+`visible`. It is not `text-fit`, which is opt-in and published by a component about itself — and which caught
+nothing here, because nobody thought to publish it on a header. This asks the question of every marked box.
+
+**It was proved against the defect before being trusted.** With the repair reverted the sweep reports
+`client height 56 holds content 76 and does not scroll` on `.page-header.git__header` — the critic's two numbers,
+reached deterministically — and with it in place the header measures 830 by 830 and the finding is gone. Across
+fourteen captures the new check is quiet: one finding, and a real one the critic missed.
+
+**That finding is open, and it is the fixed-layout table's bill coming due.** `table-layout: fixed` fitted the
+worktrees table to its card, which is what UIR-002 asked for; what `SHRUNK` measured is the cost. Seven columns
+share 342 px at 1000x680 — 48.56 px each — and **six of the seven hold content wider than their column**:
+heading "Branch" 59, `mainbase` 71 (elided), `idle · ready` 59, `+0 -0 / 0` 73, the Delete button 58. Each one
+with `overflow: visible` paints across its neighbour, and because only the last column can overflow the table
+itself, the table reports 350 inside 340. Two repairs were tried and **measured afterwards rather than
+announced**: confining the heading cells did not move the 350 (their overflow lands on the next heading, inside
+the table), and letting the action cell wrap did not either (a 58 px button cannot wrap below its own width).
+Neither was kept. What the numbers say is that `.git__body` hands the checkpoint column its full 480 px and the
+seven-column table the remainder, and choosing between a narrower checkpoint column, a stacked layout and fewer
+columns at the minimum size is the design material's call — not a CSS nudge at the end of a repair round.
+
 ## Verifying a part runs the WHOLE proof suite, not its neighbours
 
 Every part until now named a handful of proofs to keep green — its own, and the two or three whose surfaces it

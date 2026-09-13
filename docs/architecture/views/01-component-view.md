@@ -209,3 +209,10 @@ serialised into `data-ui` / `data-ui-contract` and evaluated by `ui-audit` again
 animation settle (nine relations — `align-x`, `align-y`, `equal-width`, `equal-height`, `spacing-token`,
 `containment`, `text-fit`, `hit-test`, `viewport-scroll`). Nothing in the product reads it, so a contract can
 neither move a pixel nor hide a defect; it can only be wrong in public.
+
+The nine relations are **opt-in**, and one question is asked of every marked box whether or not it published
+anything: `shrunkBoxes` reports a box standing smaller than the content inside it on an axis whose `overflow` is
+`visible` — the case where nothing is clipped, because the box does not scroll, and the remainder simply pays out
+past the edge under whatever paints next. It exists because `text-fit` says the same thing on request and no
+header had ever been asked (UIR-014). The verdict is pure and lives beside the relations in
+`apps/desktop/scripts/lib/layout-relations.mjs`; the probe measures, `ui-audit` reports it as `SHRUNK`.

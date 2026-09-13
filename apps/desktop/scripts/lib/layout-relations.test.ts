@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the audit library is plain ESM beside the scripts that run it.
-import { DEFAULT_TOLERANCE, RELATION_KINDS, evaluateContracts, evaluateRelation } from './layout-relations.mjs';
+import { DEFAULT_TOLERANCE, RELATION_KINDS, evaluateContracts, evaluateRelation, shrunkBoxes } from './layout-relations.mjs';
 
 const box = (x: number, y: number, width: number, height: number) => ({
   x, y, width, height, left: x, top: y, right: x + width, bottom: y + height,
@@ -172,6 +172,54 @@ describe('layout-contract relations', () => {
       expect(evaluateContracts([{ id: 'broken', unreadable: true, relations: [] }])).toEqual([
         { id: 'broken', kind: 'schema', target: null, pass: false, detail: 'contract JSON is unreadable' },
       ]);
+    });
+  });
+
+  /**
+   * UIR-014's numbers are the fixtures: a header measured 56 tall around content standing 76, on an
+   * axis whose overflow was `visible`, so the twenty pixels paid out under the card below it.
+   */
+  describe('shrunkBoxes', () => {
+    const geometry = (element: string, clientHeight: number, scrollHeight: number, clientWidth = 916, scrollWidth = 916) => ({
+      id: null, component: 'PageHeader', element, x: 0, y: 0, width: clientWidth, height: clientHeight,
+      clientWidth, clientHeight, scrollWidth, scrollHeight,
+    });
+    const style = (overflowY = 'visible', overflowX = 'visible') => ({ id: null, component: 'PageHeader', element: 'x', overflowX, overflowY });
+
+    it('reports a box standing shorter than the content it holds', () => {
+      const rows = shrunkBoxes([geometry('div.page-header.git__header', 56, 76)], [style()]);
+      expect(rows).toEqual([{
+        element: 'div.page-header.git__header', id: null, component: 'PageHeader', axis: 'y',
+        detail: 'client height 56 holds content 76 and does not scroll',
+      }]);
+    });
+
+    it('says nothing about the same box once it takes its content', () => {
+      expect(shrunkBoxes([geometry('div.page-header.git__header', 76, 76)], [style()])).toEqual([]);
+    });
+
+    it('excuses a box that scrolls, on the axis that scrolls', () => {
+      expect(shrunkBoxes([geometry('div.git__table-body', 300, 900)], [style('auto')])).toEqual([]);
+      expect(shrunkBoxes([geometry('div.git__table-body', 300, 900)], [style('hidden')])).toEqual([]);
+      // Scrolling on one axis is no excuse on the other.
+      expect(shrunkBoxes([geometry('div.card', 300, 900, 400, 1200)], [style('auto', 'visible')])
+        .map((row) => row.axis)).toEqual(['x']);
+    });
+
+    it('holds its peace inside one pixel, and reports both axes when both give way', () => {
+      expect(shrunkBoxes([geometry('div.card', 56, 57)], [style()])).toEqual([]);
+      expect(shrunkBoxes([geometry('div.card', 56, 76, 400, 500)], [style()]).map((row) => row.axis)).toEqual(['y', 'x']);
+    });
+
+    it('reports the audit itself when the two probes disagree on how many boxes there were', () => {
+      const rows = shrunkBoxes([geometry('div.card', 56, 76)], []);
+      expect(rows).toHaveLength(1);
+      expect(rows[0].element).toBe('(audit)');
+      expect(rows[0].detail).toContain('read pairwise');
+    });
+
+    it('ignores a box with no height rather than dividing by its absence', () => {
+      expect(shrunkBoxes([geometry('div.collapsed', 0, 76)], [style()])).toEqual([]);
     });
   });
 });

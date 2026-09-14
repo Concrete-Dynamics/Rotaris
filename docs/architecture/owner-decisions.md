@@ -1255,3 +1255,45 @@ that false. The configuration key is **not rejected** — it remains available o
   citing this ruling. No other bound moves — `REQ-ORCH-113`'s completion classifier stays at 15 s and
   `runtime.loop_classification_timeout` (`REQ-CONFIG-467`) stays at 2.0 s; they bound different calls.
 - The count is unchanged: no identifier was minted or withdrawn.
+
+### ESC-36 — the provider row visibility: REQ-PROVIDER-140's union against REQ-CONFIG-389's authenticated-only list
+
+**Raised 2026-09-14, not yet ruled.** Raised by R-016, the Settings Models overhaul, while planning which
+rows the rebuilt providers card may draw. The two requirements state disjoint populations and no document
+between them narrows either.
+
+- **REQ-PROVIDER-140** (domain 04) fixes the listed set: "the union of the ids holding a stored credential,
+  the built-in catalog ids, and the snapshot ids, each appearing exactly once, ordered by id." Every
+  built-in provider therefore appears whether or not it is authenticated — the screenshot the request
+  arrived with shows OpenAI Codex, GitHub Copilot, DeepSeek and OpenAI-compatible rows reading "Not
+  authenticated", and `packages/providers/src/signin.ts` `list()` implements exactly this union.
+- **REQ-CONFIG-389** (domain 15) fixes the same set differently: "The provider list shows **no** built-in or
+  merely-referenced provider by default; a row appears only once a provider is authenticated. The one
+  exception is the managed-cloud provider … A provider that is only referenced by a model slot — a deleted
+  custom endpoint included — must **not** cause a row to reappear."
+
+REQ-CONFIG-440's withdrawal routes the withdrawn text-mode provider list at "REQ-CONFIG-329 and
+REQ-CONFIG-367 to REQ-CONFIG-389", and REQ-PROVIDER-103's withdrawal routes the command-line list at
+REQ-PROVIDER-140 — so each withdrawal redirected the same capability at a requirement that now disagrees
+with the other about who gets a row. Both were amended since (3e87bb2, b982f50) without either text
+changing on this point. REQ-NOTIFY-200 governs the state vocabulary a row shows, not who gets a row, and
+cites no side. `packages/contracts/src/providers.ts` (`ProviderRowSchema`) and the renderer card
+(`packages/ui/src/settings/Providers.tsx`) follow REQ-PROVIDER-140 today.
+
+**Why this is an escalation and not a defect found by building.** The specification is not silent and the
+build is not wrong against one of its requirements; two live requirements cannot both hold. That is
+`docs/product/README.md`'s table's third row: an amendment round decides, and until it does, the surface
+stays on the side it was already built — REQ-PROVIDER-140's union — rather than an agent choosing a
+winner by rebuilding.
+
+**What the ruling decides.** Which of the two texts governs, or what third population both are amended to
+state. The visual overhaul itself (row anatomy, actions, confirmations, empty state) does not wait on it:
+every requirement it implements is common to both readings, and the ESC-36 row keeps today's visibility.
+
+*The alternatives, for the ruling's convenience:* **REQ-PROVIDER-140 stands** — every provider is always
+listed, which makes the settings the product's one place to *start* authentication for anything, matches
+the mockup's fourth row (GitHub Copilot, "not authenticated", an Authenticate action) and is what is
+built; or **REQ-CONFIG-389 stands** — rows appear on authentication, managed-cloud excepted, which makes
+the list a shorter, state-first inventory but leaves unauthenticated built-ins reachable only through the
+add-provider dialog's chooser. A third shape (unauthenticated built-ins grouped under a collapsed
+section) would need minting in both domains and is named only to be complete.

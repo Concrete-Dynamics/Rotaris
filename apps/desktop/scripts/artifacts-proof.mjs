@@ -384,8 +384,15 @@ let edited = null;
     // canonical instance name, and the scripted task IS that name) — so `commands` is a stable ref.
     ROTARIS_SCRIPT_ARTIFACT_ARGS: JSON.stringify({ commands: { id_or_slug: 'commands', sections: ['commands'] } }),
     ROTARIS_INTENT_SCRIPT: 'moderate_feature',
-    ROTARIS_CAPTURE_VIEWS: '6@24000', ROTARIS_CAPTURE_CLICKS: `${ARTIFACTS_TAB}@24400`, ROTARIS_CAPTURE_PROBE: PROBES.join(';;'),
-    ROTARIS_CAPTURE_AFTER_MS: '26000',
+    ROTARIS_CAPTURE_VIEWS: '6@24000',
+    ROTARIS_CAPTURE_CLICKS: [`${ARTIFACTS_TAB}@24400`, `${PROBE_ROWS}@24800`, '[data-testid="library-artifacts-inspect"]@25200'].join(';;'),
+    ROTARIS_CAPTURE_PROBE_AT: [
+      '[data-testid="artifact-inspector"]@25800',
+      '[data-testid="artifact-preview"] h2@25800',
+      '[data-testid="artifact-preview"] li@25800',
+    ].join(';;'),
+    ROTARIS_CAPTURE_PROBE: PROBES.join(';;'),
+    ROTARIS_CAPTURE_AFTER_MS: '27000',
   }, { files: { workspace: WORKSPACE_ORCHESTRATOR }, timeout: 240_000 });
   const db = new Database(oneDatabase(), { readonly: true });
   const s = latestSession(db);
@@ -414,8 +421,7 @@ let edited = null;
     '- `node -e "process.exit(7)"` — **failed, exit 7**',
     '- `rm -rf build` — exit status not recorded',
   ].join('\n');
-  if (!readText.includes(EXPECTED_SECTION)) throw new Error(`the filtered tool read is not the Commands section: ${JSON.stringify(readText.slice(0, 400))}`);
-  if (readText.includes('## Key Findings') || readText.includes('## Summary')) throw new Error(`the section filter did not filter — the whole document came back: ${JSON.stringify(readText.slice(0, 400))}`);
+  if (readText !== EXPECTED_SECTION) throw new Error(`the filtered tool read is not exactly the Commands section: ${JSON.stringify(readText.slice(0, 400))}`);
   db.close();
   // The sidecar, through the stock parser: the Commands section sits between Snippets and Edited Files.
   const directory = filesDir(s.session_id);
@@ -431,12 +437,20 @@ let edited = null;
   for (const line of ['- `node --version`', '- `node -e "process.exit(7)"` — **failed, exit 7**', '- `rm -rf build` — exit status not recorded']) {
     if (!commandsBody.includes(line)) throw new Error(`the sidecar's Commands section lacks "${line}"`);
   }
-  // The rendered inspector: the row for the child report is listed with its id and status.
+  // The rendered inspector: the child report opens and its Preview renders the same command ledger.
   const rowsShown = probe(r.log, PROBE_ROWS);
   const shown = rowsShown.find((x) => x.data['data-artifact-id'] === record.id);
   if (!shown) throw new Error(`the child-report row was not listed: ${JSON.stringify(rowsShown)}`);
+  const inspector = probe(r.log, '[data-testid="artifact-inspector"]', 25800);
+  const previewHeadings = probe(r.log, '[data-testid="artifact-preview"] h2', 25800).map((x) => x.text);
+  const previewItems = probe(r.log, '[data-testid="artifact-preview"] li', 25800).map((x) => x.text);
+  if (inspector.length !== 1) throw new Error(`the child-report inspector did not open: ${JSON.stringify(inspector)}`);
+  if (!previewHeadings.includes('Commands')) throw new Error(`the child-report Preview lacks its Commands heading: ${JSON.stringify(previewHeadings)}`);
+  const expectedPreviewItems = ['node --version', 'node -e "process.exit(7)" — failed, exit 7', 'rm -rf build — exit status not recorded'];
+  if (JSON.stringify(previewItems.slice(-3)) !== JSON.stringify(expectedPreviewItems)) throw new Error(`the rendered command ledger is not the ordered truth: ${JSON.stringify(previewItems)}`);
   results.commands = {
-    ledger, sidecarHeadings: parsed.headings, toolFilteredRead: EXPECTED_SECTION,
+    ledger, sidecarHeadings: parsed.headings, toolFilteredRead: readText,
+    inspectorPreview: { headings: previewHeadings, commandItems: previewItems.slice(-3) },
     row: { id: record.id, slug: record.slug, status: record.status, importance: record.importance, persona: record.source_persona, task: record.source_task_id },
   };
 }

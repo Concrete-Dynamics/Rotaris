@@ -1023,9 +1023,9 @@ disabled and the failure stated once; and PD-LIBRARY-001's launch (2026-09-14) r
 terminal calls — success, exit 7, and one the permission gate denies — and holds the whole command-ledger path at
 once: the ledger in SQLite in the exact run order with the denied command carrying no exit status, the orchestrator
 reading the report back through `artifact_read` with `sections: ['commands']` and receiving **only** the Commands
-section (the tool path whose private allow-list the first execution of this launch found predated the directive and
-silently returned the whole document), and the sidecar carrying the same statuses in words. The scripted dialect
-gained a verification-only `terminal:<key>` step for it, its arguments from `ROTARIS_SCRIPT_TERMINAL_ARGS` in the
+section (the tool path whose private allow-list closeout planning found predated the directive and silently returned
+the whole document), the sidecar carrying the same statuses in words, and the inspector rendering that ledger. The
+scripted dialect gained a verification-only `terminal:<key>` step for it, its arguments from `ROTARIS_SCRIPT_TERMINAL_ARGS` in the
 shape of the artifact and MCP argument maps. Evidence under `.proof/artifacts-proof/`. Every launch clicks the Artifacts tab after
 switching view — the Library opens on Prompts, REQ-LIBRARY-103's first tab.
 
@@ -1727,8 +1727,9 @@ vocabulary asks for — the port imports contracts' `ARTIFACT_SECTIONS` and no l
 regression through `artifactOps.read` and held shut by `pnpm artifacts-proof`'s sixth launch, which drives the
 whole path in the built app: a child runs three ordered terminal calls (success, exit 7, one the gate denies),
 and the ledger lands in SQLite in the exact run order, comes back through the real filtered tool read as **only**
-the Commands section, and sits in the sidecar with the same statuses in words. The scripted dialect gained a
-verification-only `terminal:<key>` step for it. Recorded in `docs/defects/artifact-read-section-allow-list-omits-commands.md`;
+the Commands section, sits in the sidecar with the same statuses in words, and renders in the inspector. The scripted dialect gained a
+verification-only `terminal:<key>` step for it. `REQ-TOOLS-148` now takes that widened vocabulary through the
+directive too. Recorded in `docs/defects/artifact-read-section-allow-list-omits-commands.md`;
 the first execution is in `docs/architecture/first-executions.md` and the directive's own record.
 
 ## Verifying a part runs the WHOLE proof suite, not its neighbours

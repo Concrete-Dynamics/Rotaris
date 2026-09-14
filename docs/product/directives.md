@@ -110,9 +110,9 @@ terms REQ-ORCH-108's schema already fixes for the report this record materialise
 ran no command the record SHALL carry an empty list, and the document SHALL show no section for it.
 
 The Markdown document of REQ-LIBRARY-090 SHALL render the list as a **Commands** section placed
-immediately before **Edited Files**, and REQ-LIBRARY-099's section filter SHALL offer it under the
-section name `commands`. Each entry SHALL render the command in a code span and SHALL state its exit
-status in words rather than as a bare number, so that a reader who has never seen a shell exit code
+immediately before **Edited Files**, and the section filters of REQ-LIBRARY-099 and REQ-TOOLS-148
+SHALL offer it under the section name `commands`. Each entry SHALL render the command in a code span
+and SHALL state its exit status in words rather than as a bare number, so that a reader who has never seen a shell exit code
 can tell a command that failed from one that did not: a zero status renders as the command alone, a
 non-zero status names the code, and an absent status says so. Ordering SHALL be the order the child
 ran them and SHALL NOT be sorted, grouped or de-duplicated — a command run twice with two outcomes is
@@ -139,15 +139,15 @@ its earliest calls, and the list is of what survived in the transcript the repor
 bound is stated in the record rather than hidden, and closing it needs the durable tool-call evidence
 of REQ-SESSION-136, which this directive does not require and does not forbid.
 
-> **Extends:** REQ-LIBRARY-088, REQ-LIBRARY-090, REQ-LIBRARY-099
+> **Extends:** REQ-LIBRARY-088, REQ-LIBRARY-090, REQ-LIBRARY-099, REQ-TOOLS-148
 
 *Raised by the owner, 2026-09-12; logged as [R-006](requests.md#r-006).*
 
 > **First execution, 2026-09-14:** the built-app proof (`pnpm artifacts-proof`'s sixth launch) ran a child
 > through three ordered terminal calls — success, exit 7, and one the permission gate denies — and read the
-> report back through `artifact_read` with `sections: ['commands']`. It found the tool path still filtering
-> through a private section list that predated the directive: the store's own filter was correct and its test
-> green, but every model-facing filtered read returned the full document. Repaired against contracts'
+> report back through `artifact_read` with `sections: ['commands']`. Closeout planning had found the tool path
+> still filtering through a private section list that predated the directive: the store's own filter was correct
+> and its test green, but every model-facing filtered read returned the full document. Repaired against contracts'
 > `ARTIFACT_SECTIONS`; the ledger itself behaved exactly as this record fixes it — order preserved, statuses
 > in words, the denied command carrying no exit status. The full account is in
 > `docs/architecture/first-executions.md` and `docs/defects/artifact-read-section-allow-list-omits-commands.md`.

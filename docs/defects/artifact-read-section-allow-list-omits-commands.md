@@ -22,6 +22,10 @@ holds a second, narrower copy instead of citing the vocabulary. The directive's 
 (`docs/product/directives.md`) describes the `artifact_read` section filter as part of the delivered
 mechanism, so the delivered mechanism does not match its record.
 
+Closeout review found the same pre-directive five-member wording in `REQ-TOOLS-148`. The directive
+now extends that requirement too, and its back-pointer takes the widened vocabulary from
+`REQ-LIBRARY-099` instead of creating another current definition.
+
 ## Relevant files
 
 - `packages/engine/src/artifacts/port.ts` — `SECTION_NAMES`, the stale private copy; the repair is to
@@ -31,3 +35,5 @@ mechanism, so the delivered mechanism does not match its record.
   which is why the drift is invisible at the schema boundary.
 - `packages/engine/src/artifacts/artifacts.test.ts` — the existing tests exercise `store.sections`
   directly; a regression through `artifactOps.read(ref, ['commands'])` is what pins the tool path.
+- `docs/spec/05-tools-permissions-approvals.md` — `REQ-TOOLS-148` now carries the directive's
+  extension and points to the Library-owned vocabulary.

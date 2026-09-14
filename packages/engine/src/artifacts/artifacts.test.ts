@@ -233,13 +233,13 @@ describe('engine/artifacts — the session artifact store', () => {
     const read = ops.read(r.value.record.id, ['commands']);
     expect(read.ok).toBe(true);
     if (!read.ok) return;
-    expect(read.text).toContain('## Commands');
-    expect(read.text).toContain('- `pnpm check`\n');
-    expect(read.text).toContain('- `node -e "process.exit(7)"` — **failed, exit 7**');
-    expect(read.text).toContain('- `tail -f log` — exit status not recorded');
-    // The filter is a filter: nothing outside the requested section may ride along.
-    expect(read.text).not.toContain('the body line that must NOT come back');
-    expect(read.text).not.toContain('## Key Findings');
+    expect(read.text).toBe([
+      '## Commands',
+      '',
+      '- `pnpm check`',
+      '- `node -e "process.exit(7)"` — **failed, exit 7**',
+      '- `tail -f log` — exit status not recorded',
+    ].join('\n'));
     // The filtered read is still a read: the reader is marked a consumer (REQ-LIBRARY-099).
     expect(store.lookup(r.value.record.id)!.consumedBy).toContain('orchestrator');
   });

@@ -27,9 +27,10 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 Last reconciled with the code: **2026-09-14** — **`PD-LIBRARY-001`'s closeout (the hundredth defect)**: the engine
 artifact port's private section list is replaced by contracts' `ARTIFACT_SECTIONS` (an internal definition, not a
 new edge — the port already imported `@rotaris/contracts`), and `pnpm artifacts-proof` gains its sixth launch with
-a verification-only `terminal:<key>` scripted-dialect step. **No package, edge, process, message kind, store table,
-run-loop step or control operation moves**; the `artifacts` table's `commands` column (v16) is already recorded in
-the runtime view and the diagrams are unchanged.
+a verification-only `terminal:<key>` scripted-dialect step. The closeout follow-up makes the model-facing filtered
+read byte-exact, records the observed value, opens the report in the inspector, and reconciles REQ-TOOLS-148 with
+the directive. **No package, edge, process, message kind, store table, run-loop step or control operation moves**;
+the `artifacts` table's `commands` column (v16) is already recorded in the runtime view and the diagrams are unchanged.
 
 Previous reconciliation: **2026-09-13** — **the workspace chrome density pass**: the Inspector's persona
 tab strip is replaced by a `PopoverMenu` picker (the design-system's `overlays.tsx` unchanged, one more consumer;

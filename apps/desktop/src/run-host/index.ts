@@ -14,7 +14,7 @@ import { McpHost } from './mcp.js';
 import { deleteSession, exportRecords, exportTrajectories, repairSessions, sessionFiles } from './session-actions.js';
 import { CHECKPOINTS_DEFAULTS, RUNTIME_DEFAULTS, type LiveState, CODE_INTELLIGENCE_TOKEN } from '@rotaris/config';
 import { classifierSlotsOf, configureRun, egressReader, improvementCollectorOf, modelRefOf, type ConfiguredRun } from './configuration.js';
-import { launchSession } from './launch.js';
+import { launchSession, leaseForContinuation } from './launch.js';
 import { type ModelClient, type ModelRequest, type StreamPart } from '@rotaris/model';
 import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
@@ -368,6 +368,8 @@ let liveState: LiveState = {};
 const configured = new Map<string, ConfiguredRun>();
 // ADR-0030: latest workspace lease for continuation loads. Active launches capture their own lease.
 const leased = new Map<string, Readonly<Record<string, string>>>();
+// The workspace root a session was started or resumed under — the key a continuation's lease refresh reads.
+const sessionRoots = new Map<string, string>();
 // Each active run retains its setup through deferred preflight and tool creation.
 const configuredRuns = new Map<string, ConfiguredRun>();
 const runBearers = new Map<string, Readonly<Record<string, string>>>();
@@ -397,6 +399,32 @@ const configure = (workspaceRoot: string, attended: boolean) => {
   const r = configureRun(workspaceRoot, attended, configurationDeps);
   if (r.ok) { configured.set(workspaceRoot, r.value); mcp.newConfiguration(r.value.cfg); }
   return r;
+};
+/**
+ * ADR-0030 / REQ-PROVIDER-066 for the continuation paths: a paused or resumed session's run reads
+ * the bearers of the LAST launch's lease (`leased`), which an application restart empties — the
+ * 401 recorded in `docs/defects/continue-run-sends-no-authorization-header.md`. Every continuation
+ * launch therefore re-asks main first (`leaseForContinuation`), publishes the fresh map under the
+ * workspace root, and only then lets the engine resolve the setup. The user notices nothing; the
+ * one refusal is an entry provider main cannot resolve, the same sentence a launch gives. A
+ * session this process never started or resumed has no root to lease under — nothing is known
+ * about it here, and the engine's own refusals (`not-live`, `no-session`) answer it instead.
+ */
+const continuationLeaseForSession = async (sessionId: string): Promise<ProcessReply | null> => {
+  const workspaceRoot = sessionRoots.get(sessionId);
+  if (workspaceRoot === undefined) return null;
+  const r = await leaseForContinuation(workspaceRoot, {
+    workspaceRoot, attended: presenters.attended, configuration: configurationDeps,
+    leaseCredentials: async (providers) => {
+      const answer = await ask({ kind: 'credentials.lease', providerIds: [...providers] }, millis(5_000)).catch((e: Error) => { log(`credentials: main did not answer the lease (${e.message})`, 'warn'); return null; });
+      const bearers = answer?.kind === 'credentials.leased' ? answer.bearers : {};
+      log(`credentials: re-leased for ${Object.keys(bearers).join(', ') || 'no provider'} (continuation, workspace ${workspaceRoot})`);
+      return bearers;
+    },
+  });
+  if (r.kind === 'refused') return r.reply;
+  leased.set(workspaceRoot, r.bearers);
+  return null;
 };
 /** Only a tool port built outside a run start reaches this; the run path always configures first. */
 const configureRunFallback = () => {
@@ -608,6 +636,7 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
       if (sessions.activeRunCount() > 0) return { kind: 'refused', code: 'session.run-active', headline: 'Finish or cancel the active run before switching sessions.' };
       const s = stores.get(req.workspaceId);
       if (!s?.dal) return { kind: 'refused', code: 'workspace.not-open', headline: 'No store is open for this workspace' };
+      sessionRoots.set(req.sessionId, s.root);
       const resumed = sessions.resume(s.dal, s.root, asSessionId(req.sessionId));
       if (!resumed.ok) return { kind: 'refused', code: `session.${resumed.error.code}`, headline: 'The session could not be loaded', detail: resumed.error.reason };
       return { kind: 'session.resumed', sessionId: resumed.value.sessionId, settledChildren: resumed.value.settledChildren };
@@ -631,6 +660,7 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
         start: (setup, bearers) => {
           // Publish the setup only when its credential lease has settled. Deferred run ports use the session key.
           const sessionId = req.sessionId ?? randomUUID();
+          sessionRoots.set(sessionId, s.root);
           const previousSetup = configuredRuns.get(sessionId);
           const previousBearers = runBearers.get(sessionId);
           const restore = () => {
@@ -679,6 +709,9 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
   }
     case 'session.continue': {
       // REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause or continue a paused session; nothing is appended.
+      // REQ-PROVIDER-066 (the continuation lease): refresh the bearers before the run resolves its setup.
+      const leaseRefusal = await continuationLeaseForSession(req.sessionId);
+      if (leaseRefusal) return leaseRefusal;
       const r = sessions.continueSession(asSessionId(req.sessionId), req.action);
       if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: 'The session could not be continued', detail: r.error.reason };
       log(`session ${req.sessionId} ${req.action}: ${r.value.resumed ? 'a continuation run is executing' : 'left paused'}${r.value.messageLimit === null ? '' : ` (message limit ${r.value.messageLimit})`}`);
@@ -692,12 +725,18 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
     }
     case 'session.planDecision': {
       // REQ-ORCH-153: the three answers, exactly; approve and revise launch the next segment, cancel launches nothing.
+      // REQ-PROVIDER-066 (the continuation lease): an approve or revise launches a segment — refresh first.
+      const leaseRefusal = await continuationLeaseForSession(req.sessionId);
+      if (leaseRefusal) return leaseRefusal;
       const r = sessions.planDecision(asSessionId(req.sessionId), req.decision, req.changes ?? '');
       if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: 'The plan decision could not be applied', detail: r.error.reason };
       log(`session ${req.sessionId} plan cycle ${r.value.cycle}: ${req.decision}${r.value.relaunched ? ' — a further segment is executing' : ' — the run came to rest'}`);
       return { kind: 'session.planResolved', sessionId: req.sessionId, cycle: r.value.cycle, relaunched: r.value.relaunched };
     }
     case 'session.prompt': {
+      // REQ-PROVIDER-066 (the continuation lease): a prompt on a resumed session launches a run — refresh first.
+      const leaseRefusal = await continuationLeaseForSession(req.sessionId);
+      if (leaseRefusal) return leaseRefusal;
       const r = sessions.prompt(asSessionId(req.sessionId), req.prompt, req.attachments ?? []);
       if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: r.error.code === 'run-active' ? r.error.reason : 'The prompt could not be recorded', detail: r.error.reason };
       return { kind: 'ack' };

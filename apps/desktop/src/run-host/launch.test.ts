@@ -9,7 +9,7 @@ import { Sessions } from '@rotaris/engine';
 import { answer, DefaultAgentBackend, ScriptedModelClient } from '@rotaris/model';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import type { ConfiguredRun, ConfigureDeps } from './configuration.js';
-import { launchSession, type LaunchRequest } from './launch.js';
+import { launchSession, leaseForContinuation, type LaunchRequest } from './launch.js';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -165,5 +165,47 @@ describe('launch configuration ownership (REQ-TRACE-470/471, REQ-SESSION-138)', 
     expect(RunHostRequestSchema.parse(request)).toHaveProperty('boardPermissions', 'permissive');
     expect(CommandRequestSchema.parse(request)).not.toHaveProperty('boardPermissions');
     expect(RunHostRequestSchema.safeParse({ ...request, boardPermissions: 'anything' }).success).toBe(false);
+  });
+});
+
+describe('the continuation lease (REQ-PROVIDER-066; docs/defects/continue-run-sends-no-authorization-header.md)', () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'rotaris-lease-'));
+    mkdirSync(join(dir, '.rotaris'), { recursive: true });
+    writeFileSync(join(dir, '.rotaris', 'agents.yaml'), `models:\n  selected:\n    provider: openai\n    model_id: m\n    auth_provider: provider-one\nlarge_model: selected\n`);
+  });
+  afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
+
+  const deps = (leaseCredentials: (providers: readonly string[]) => Promise<Readonly<Record<string, string>>>) => ({
+    workspaceRoot: dir, attended: true, configuration: {
+      clocks: new FakeClock(), globalDir: join(dir, 'global'), env: {}, scriptedClient: () => { throw new Error('not scripted'); },
+      onRequest: () => {}, log: () => {}, liveState: () => ({}), bearers: () => ({}),
+    }, leaseCredentials,
+  });
+
+  it('a lease main resolves publishes the fresh bearers the continuation run will read per request', async () => {
+    const seen: string[][] = [];
+    const r = await leaseForContinuation(dir, deps(async (providers) => { seen.push([...providers]); return { 'provider-one': 'fresh-bearer' }; }));
+    expect(r).toEqual({ kind: 'leased', bearers: { 'provider-one': 'fresh-bearer' } });
+    expect(seen).toEqual([['provider-one']]);
+  });
+
+  it('an entry provider main cannot resolve refuses with REQ-WORKSPACE-137\'s sentence, as a launch does', async () => {
+    const r = await leaseForContinuation(dir, deps(async () => ({})));
+    expect(r).toMatchObject({ kind: 'refused', reply: { kind: 'refused', code: 'session.provider-auth' } });
+  });
+
+  it('a lease main does not answer refuses, as a launch does — the entry provider is unresolved', async () => {
+    const r = await leaseForContinuation(dir, deps(async () => { throw new Error('main did not answer'); }));
+    expect(r).toMatchObject({ kind: 'refused', reply: { kind: 'refused', code: 'session.provider-auth' } });
+  });
+
+  it('a configuration that will not load leases nothing — setupFor refuses with its real report instead', async () => {
+    writeFileSync(join(dir, '.rotaris', 'agents.yaml'), 'runtime: [invalid]\n');
+    const lease = vi.fn(async () => ({ 'provider-one': 'fresh-bearer' }));
+    const r = await leaseForContinuation(dir, deps(lease));
+    expect(r).toEqual({ kind: 'leased', bearers: {} });
+    expect(lease).not.toHaveBeenCalled();
   });
 });

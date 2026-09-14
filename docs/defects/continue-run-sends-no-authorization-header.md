@@ -57,3 +57,25 @@ channel), or they refuse the continuation with `session.provider-auth` when the 
 `auth_provider` is absent from the resolved bearer map. The silent `''` credential is the
 mechanism that turns the missing lease into an unauthenticated request; surfacing it is the
 smaller fix and the honest one.
+
+## Repaired — 2026-09-14
+
+The repair takes the first shape: the three run-launching continuation commands — `session.continue`,
+`session.prompt`, `session.planDecision` — re-ask main for the credential lease before the engine
+resolves the continuation's setup. `leaseForContinuation` (`apps/desktop/src/run-host/launch.ts`)
+captures the current configuration's `authProviders` and entry provider, takes the same bounded
+`credentials.lease` ask a launch takes, and the run host publishes the fresh bearers under the
+session's workspace root (`sessionRoots`, recorded at `session.start` and `session.resume`, since the
+continuation requests carry only a session id). The user notices nothing; a credential resolved per
+request now finds its bearer on every launch path. The one refusal is an entry provider main cannot
+resolve — lease unanswered included — worded as REQ-WORKSPACE-137's sentence, exactly as a launch
+refuses; a configuration that will not load leases nothing and is refused by `setupFor` with its real
+report. A session this process never started or resumed leases nothing (no root is known); the
+engine's own `not-live` / `no-session` refusals answer it.
+
+The adapter's silent `''` credential (`packages/model/src/ai-sdk-client.ts`,
+`if (credential) headers.set(...)`) is left as it is: with the lease repaired, every launch path
+carries a bearer, and the scripted dialect legitimately sends none. The regression evidence is in
+`apps/desktop/src/run-host/launch.test.ts` (fresh lease published; unresolved entry provider refused;
+unanswered lease refused; unloadable configuration leases nothing). The runtime view's run-start
+section gained the continuation-lease paragraph in the same commit.

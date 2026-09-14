@@ -327,10 +327,17 @@ describe('store — v3: what a run records (REQ-SESSION-138, REQ-SESSION-168, RE
     // The DAL prepares every statement at construction, so the column goes only after one exists — a DAL built
     // against the v15 shape could not be built at all, which is the point the ALTER is here to cover.
     r.db.exec('ALTER TABLE artifacts DROP COLUMN commands');
-    // v17's objects go with it: a store stopped at v15 has neither, and the run replays both migrations in order.
+    // v17's and v18's objects go with it: a store stopped at v15 has none of them, and the run replays
+    // the migrations in order. v18 (ADR-0061) added the two typed-run session columns and the two
+    // improvement tables — the improvements tables are dropped whole; the session columns go the way
+    // plan_cycle's did, with the CHECK-bearing run_type dropped first.
+    r.db.exec('DROP TABLE improvement_artifact_versions');
+    r.db.exec('DROP TABLE improvement_artifacts');
     r.db.exec('DROP TABLE plan_cycles');
     r.db.exec('ALTER TABLE sessions DROP COLUMN plan_cycle');
     r.db.exec('ALTER TABLE sessions DROP COLUMN plan_released');
+    r.db.exec('ALTER TABLE sessions DROP COLUMN run_type');
+    r.db.exec('ALTER TABLE sessions DROP COLUMN improvement_artifact_ids');
     r.db.pragma('user_version = 15');
     r.db.prepare(`INSERT INTO artifacts (session_id, id, slug, title, kind, source_task_id, canonical_name, source_persona, status, summary, key_findings,
       highlight_paths, snippets, edited_files, created_files, tags, supersedes, superseded_by, created_by, consumed_by, timeline_event_id, conversation_id, importance, created_at, edited_at, body_file)
@@ -355,11 +362,19 @@ describe('store — v3: what a run records (REQ-SESSION-138, REQ-SESSION-168, RE
     expect(r.migration).toEqual({ kind: 'migrated', from: 0, to: CURRENT_SCHEMA_VERSION });
     const sid = asSessionId('S-v17');
     new StoreDal(r.db).upsertSession({ session_id: sid, execution_status: 'idle', workspace_root: 'C:/ws', created_at: 't', updated_at: 't' });
+    // v18's objects go with it: a store stopped at v16 has none of them, and the run replays the
+    // migrations in order (see the v15 test above for why the session columns drop last).
+    r.db.exec('DROP TABLE improvement_artifact_versions');
+    r.db.exec('DROP TABLE improvement_artifacts');
     r.db.exec('DROP TABLE plan_cycles');
     r.db.exec('ALTER TABLE sessions DROP COLUMN plan_cycle');
     r.db.exec('ALTER TABLE sessions DROP COLUMN plan_released');
+    r.db.exec('ALTER TABLE sessions DROP COLUMN run_type');
+    r.db.exec('ALTER TABLE sessions DROP COLUMN improvement_artifact_ids');
     r.db.pragma('user_version = 16');
-    expect(migrateStore(r.db)).toEqual({ kind: 'migrated', from: 16, to: 17 });
+    // The migration ladder is append-only and runs to the build's own top, so the store stopped at
+    // v16 climbs every appended rung — 17 and then 18 — not a v16→17 hop that never existed alone.
+    expect(migrateStore(r.db)).toEqual({ kind: 'migrated', from: 16, to: CURRENT_SCHEMA_VERSION });
     const dal = new StoreDal(r.db);
     const before = dal.getSession(sid)!;
     expect(before.plan_cycle).toBeNull();
@@ -551,9 +566,11 @@ describe('store — v5: the child ledger (ADR-0012, REQ-ORCH-043/049/050/151)', 
     session_id: asSessionId(sid), task_id: taskId, canonical_name: taskId, given_name: taskId, persona: 'coding-agent', state, parent_id: 'root', depth: 1, iteration: 1,
     model_key: 'm', category: '', background: 1, task: 'do it', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't',
   });
-  it('the schema is v17; a child row round-trips with its defaults; the claim is one conditional update that wins exactly once', () => {
+  it('the schema is v18; a child row round-trips with its defaults; the claim is one conditional update that wins exactly once', () => {
     const { r, dal, sid } = open('96');
-    expect(CURRENT_SCHEMA_VERSION).toBe(17); // REQ-ORCH-153/154: v17 adds `plan_cycles` and the two session columns; v16 added `artifacts.commands`
+    // REQ-ORCH-153/154: v17 adds `plan_cycles` and the two session columns; v16 added `artifacts.commands`;
+    // v18 (ADR-0061) added the typed-run session columns and the improvement tables.
+    expect(CURRENT_SCHEMA_VERSION).toBe(18);
     dal.insertChild(child(sid, 'bg_00000001'));
     const c = dal.getChild(sid, 'bg_00000001')!;
     expect(c).toMatchObject({ state: 'queued', launch_generation: 0, report_stored: 0, observed: 0, context_injected: 0, tool_calls: 0, completed_at: null, report: null });
@@ -833,12 +850,13 @@ describe('store — v11: the saved prompts (Part X; REQ-LIBRARY-137/138/139, REQ
     forgetSpelling(r.dir);
   });
 
-  it('is v17, and the migration list is append-only with nothing renumbered', () => {
+  it('is v18, and the migration list is append-only with nothing renumbered', () => {
     // Part X reserved v11, Part Y v12, Part AB v13, Part AE v14 and Part AK v15 (plan Reservations, ruled 2026-09-09: the ladder and
-    // the pin ride with the v15 reservation) before any of them was written; PD-LIBRARY-001 appended v16. The ladder is
-    // asserted whole rather than at its top, so a later part that renumbers an earlier entry fails here and not on a user's disk.
-    expect(MIGRATIONS.map((m) => m.to)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]);
-    expect(CURRENT_SCHEMA_VERSION).toBe(17);
+    // the pin ride with the v15 reservation) before any of them was written; PD-LIBRARY-001 appended v16; the plan gate appended
+    // v17; ADR-0061 appended v18. The ladder is asserted whole rather than at its top, so a later part that renumbers an earlier
+    // entry fails here and not on a user's disk.
+    expect(MIGRATIONS.map((m) => m.to)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]);
+    expect(CURRENT_SCHEMA_VERSION).toBe(18);
   });
 });
 

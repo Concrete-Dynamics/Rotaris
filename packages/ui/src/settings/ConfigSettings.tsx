@@ -82,8 +82,6 @@ export function ModelsSettings(props: ConfigSettingsProps) {
           <ul className="card-body">{snapshot.referential.map((m) => <li key={m}>{m}</li>)}</ul>
         </DesignCard>
       )}
-      <h2 className="settings__heading">Model slots</h2>
-      <p className="text-secondary">Each slot names a configured model; a role may target a slot instead of a model. Edits are written to this workspace's configuration on Save.</p>
       <DesignTable className="table settings__grid" aria-label="Model slots">
         <thead><tr><th>Slot</th><th>Model</th><th>Reasoning strength</th></tr></thead>
         <tbody>
@@ -114,7 +112,6 @@ export function ModelsSettings(props: ConfigSettingsProps) {
           })}
         </tbody>
       </DesignTable>
-      <h2 className="settings__heading">Providers</h2>
       {props.providersCard ?? <p className="text-secondary">The provider list is not available in this window.</p>}
     </div>
   );

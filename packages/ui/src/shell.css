@@ -778,9 +778,23 @@
 /* Providers (REQ-CONFIG-329, REQ-PROVIDER-116/117/140/141): the card, its rows, the authentication window. */
 .providers-card__head { display: flex; align-items: center; justify-content: space-between; gap: var(--rt-space-3, 12px); }
 .providers-card__actions { display: flex; gap: var(--rt-space-2, 8px); }
-.providers-card__table td { font-size: var(--rt-text-sm, 13px); }
-.provider-settings__fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--rt-space-3, 12px); margin-bottom: var(--rt-space-3, 12px); }
-.provider-settings__opt { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--rt-space-2, 8px); font-size: var(--rt-text-sm, 13px); }
+.providers-card__table td { font-size: var(--rt-text-sm, 13px); vertical-align: top; }
+/* REQ-CONFIG-367's row: the status line (indicator, label, status word), the detail line beneath, actions right. */
+.provider-row__status { display: flex; align-items: center; gap: var(--rt-space-2, 8px); min-width: 0; }
+.provider-row__dot { width: var(--rt-status-dot-size); height: var(--rt-status-dot-size); border-radius: 50%; flex: none; display: inline-block; }
+.provider-row__dot[data-state="checking"] { animation: rt-pulse var(--rt-duration-slow, 900ms) ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .provider-row__dot[data-state="checking"] { animation: none; } }
+.provider-row__name { font-weight: var(--rt-weight-medium, 500); color: var(--rt-text); white-space: nowrap; }
+.provider-row__word { font-size: var(--rt-text-xs, 12px); margin-left: auto; padding-left: var(--rt-space-2, 8px); white-space: nowrap; }
+.provider-row__detail { margin-top: var(--rt-space-1, 4px); font-size: var(--rt-text-xs, 12px); max-width: 46ch; overflow-wrap: anywhere; }
+.provider-row__actions { display: flex; align-items: center; gap: var(--rt-space-2, 8px); justify-content: flex-end; }
+/* The expanded per-row settings: a form region, not a nested card. */
+.provider-settings > td { padding-top: 0; }
+.provider-settings__panel { display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); padding: var(--rt-space-3, 12px); margin: var(--rt-space-2, 8px) 0; background: var(--rt-surface); border: 1px solid var(--rt-border); border-radius: var(--rt-radius-md, 8px); }
+.provider-settings__fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--rt-space-3, 12px); }
+.provider-settings__opt { grid-column: 1 / -1; }
+.provider-settings__actions { display: flex; align-items: center; gap: var(--rt-space-2, 8px); flex-wrap: wrap; }
+.provider-settings__actions .btn-danger { margin-left: auto; }
 .provider-dialog { max-width: 640px; margin: 0 auto; }
 .provider-dialog__field { display: flex; flex-direction: column; gap: var(--rt-space-1, 4px); }
 .provider-dialog__field .input { width: 100%; }

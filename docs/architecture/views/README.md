@@ -24,7 +24,14 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-13** — **the composer declutter (R-010, PD-CHAT-001)**: the component
+Last reconciled with the code: **2026-09-14** — **`PD-LIBRARY-001`'s closeout (the hundredth defect)**: the engine
+artifact port's private section list is replaced by contracts' `ARTIFACT_SECTIONS` (an internal definition, not a
+new edge — the port already imported `@rotaris/contracts`), and `pnpm artifacts-proof` gains its sixth launch with
+a verification-only `terminal:<key>` scripted-dialect step. **No package, edge, process, message kind, store table,
+run-loop step or control operation moves**; the `artifacts` table's `commands` column (v16) is already recorded in
+the runtime view and the diagrams are unchanged.
+
+Previous reconciliation: **2026-09-13** — **the composer declutter (R-010, PD-CHAT-001)**: the component
 view's `ui/design-system` section gains `overlays.tsx` (`PopoverMenu`, the press-revealed value chip), taking the
 brief count to twenty-nine; the Workspace view's reasoning-effort, run-start-mode and permission-mode chips present
 through it, the persona and model selects gain leading icons, and the explanatory hints of the composer's

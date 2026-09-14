@@ -216,6 +216,34 @@ describe('engine/artifacts — the session artifact store', () => {
     expect(store.sections(bare.value.record, ['commands'])).toBe('');
   });
 
+  it('PD-LIBRARY-001: the TOOL path filters `commands` too — artifactOps.read returns the Commands section, not the whole document', () => {
+    // The store-level test above passes while the tool path drifts: the port held its own section
+    // allow-list that omitted `commands`, so a filtered read fell through to the full body. This pins
+    // the interface a model actually reaches (docs/defects/artifact-read-section-allow-list-omits-commands.md).
+    const store = storeFor();
+    const r = store.materialiseChildReport({
+      taskId: 'bg_cmd_tool', canonicalName: 'coding-agent-1', persona: 'coding-agent', status: 'succeeded', summary: 's',
+      keyFindings: ['the body line that must NOT come back'], editedFiles: [], createdFiles: [],
+      commands: [{ command: 'pnpm check', exitCode: 0 }, { command: 'node -e "process.exit(7)"', exitCode: 7 }, { command: 'tail -f log', exitCode: null }],
+      highlightPaths: [], snippets: [], tags: [], conversationId: 'bg_cmd_tool',
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const ops = artifactOps(store, { canonicalName: 'orchestrator', persona: 'orchestrator' });
+    const read = ops.read(r.value.record.id, ['commands']);
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    expect(read.text).toContain('## Commands');
+    expect(read.text).toContain('- `pnpm check`\n');
+    expect(read.text).toContain('- `node -e "process.exit(7)"` — **failed, exit 7**');
+    expect(read.text).toContain('- `tail -f log` — exit status not recorded');
+    // The filter is a filter: nothing outside the requested section may ride along.
+    expect(read.text).not.toContain('the body line that must NOT come back');
+    expect(read.text).not.toContain('## Key Findings');
+    // The filtered read is still a read: the reader is marked a consumer (REQ-LIBRARY-099).
+    expect(store.lookup(r.value.record.id)!.consumedBy).toContain('orchestrator');
+  });
+
   it('REQ-LIBRARY-094/133: an edit moves the body and `edited_at` and NOTHING else', () => {
     const store = storeFor();
     const r = publish(store);

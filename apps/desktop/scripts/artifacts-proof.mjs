@@ -18,6 +18,11 @@
  *                  (REQ-LIBRARY-131/132/133).
  *   5. missing   — the body file is deleted underneath a stored session; on a relaunch that resumes it the
  *                  record is still listed and the inspector reports the failure (REQ-LIBRARY-091, 134).
+ *   6. commands  — PD-LIBRARY-001: a child runs three ordered terminal calls (success, exit 7, one the
+ *                  permission gate denies) and its child report carries the command ledger — exact order and
+ *                  statuses — checked in SQLite, through the `artifact_read` sections filter (the tool path
+ *                  the port's drifted allow-list broke), in the Markdown sidecar via the stock parser, and
+ *                  rendered in the artifact inspector.
  *
  * Evidence under `.proof/artifacts-proof/`: one log and PNG per launch, `results.json`. `--skip-build` skips the build.
  */
@@ -179,7 +184,7 @@ const results = {};
     'const body = text.slice(m[0].length);',
     'const headings = [...body.matchAll(/^## (.+)$/gm)].map((x) => x[1]);',
     'const title = /^# (.+)$/m.exec(body);',
-    'console.log(JSON.stringify({ ok: true, front, title: title ? title[1] : null, headings }));',
+    'console.log(JSON.stringify({ ok: true, front, title: title ? title[1] : null, headings, body }));',
   ].join('\n'));
   const read = spawnSync(process.execPath, [checker, join(directory, record.body_file), join(repo, 'package.json')], { encoding: 'utf8', timeout: 20_000, env: { PATH: process.env.PATH } });
   const parsed = JSON.parse((read.stdout ?? '').trim() || '{"ok":false,"why":"no output"}');
@@ -355,6 +360,85 @@ let edited = null;
   // reason and the surface prefixed it again), which is the defect this assertion now holds shut.
   if (/Could not load artifact: Could not load artifact:/.test(status)) throw new Error(`the load failure is worded twice: ${status}`);
   results.missingBody = { stillListed: listed.length, status, saveDisabled: true, resumedSession: edited.sessionId };
+}
+
+// ---- 6. PD-LIBRARY-001: the child's command ledger, end to end -------------------------------------------------
+{
+  // The delegating run's child takes three ordered terminal steps. The third names `rm -rf build`: the
+  // `starter:deny-recursive-delete` rule denies it even in `autonomous` mode, the call never executes, and
+  // the denial text carries no `[terminal_diagnostic]` block — which is exactly how "exit status not
+  // recorded" reaches the ledger (REQ-TOOLS-100 drops the null key; `commandsFrom` records null).
+  // After the wait, the orchestrator reads the report back through the TOOL path with the section filter —
+  // the interface the port's private allow-list silently widened to the whole document (the defect this
+  // launch exists to hold shut).
+  const r = launch('commands', {
+    ROTARIS_CAPTURE_PROMPT: 'delegate one child that runs commands', ROTARIS_CAPTURE_PROMPT_MS: '1200',
+    ROTARIS_SCRIPT: 'delegate:coding-agent:commands,wait:15000,artifact:artifact_read:commands,answer',
+    ROTARIS_CHILD_SCRIPT: 'terminal:ok,terminal:fail,terminal:denied,answer',
+    ROTARIS_SCRIPT_TERMINAL_ARGS: JSON.stringify({
+      ok: { command: 'node --version' },
+      fail: { command: 'node -e "process.exit(7)"' },
+      denied: { command: 'rm -rf build' },
+    }),
+    // The child report's slug is the kebab of its task name (REQ-LIBRARY-088: the slug comes from the
+    // canonical instance name, and the scripted task IS that name) — so `commands` is a stable ref.
+    ROTARIS_SCRIPT_ARTIFACT_ARGS: JSON.stringify({ commands: { id_or_slug: 'commands', sections: ['commands'] } }),
+    ROTARIS_INTENT_SCRIPT: 'moderate_feature',
+    ROTARIS_CAPTURE_VIEWS: '6@24000', ROTARIS_CAPTURE_CLICKS: `${ARTIFACTS_TAB}@24400`, ROTARIS_CAPTURE_PROBE: PROBES.join(';;'),
+    ROTARIS_CAPTURE_AFTER_MS: '26000',
+  }, { files: { workspace: WORKSPACE_ORCHESTRATOR }, timeout: 240_000 });
+  const db = new Database(oneDatabase(), { readonly: true });
+  const s = latestSession(db);
+  const rows = artifacts(db, s.session_id);
+  const reports = rows.filter((x) => x.kind === 'child_report');
+  if (reports.length !== 1) throw new Error(`expected one child-report artifact, found ${reports.length} of ${rows.length}`);
+  const record = reports[0];
+  const ledger = JSON.parse(record.commands);
+  const EXPECTED = [
+    { command: 'node --version', exit_code: 0 },
+    { command: 'node -e "process.exit(7)"', exit_code: 7 },
+    { command: 'rm -rf build', exit_code: null },
+  ];
+  if (JSON.stringify(ledger) !== JSON.stringify(EXPECTED)) throw new Error(`the command ledger is not the ordered truth: ${JSON.stringify(ledger)}`);
+  // The TOOL path, in the orchestrator's own recorded observation: `artifact_read` with
+  // sections: ['commands'] returned EXACTLY the Commands section, not the whole document. This is the
+  // interface the port's drifted allow-list broke — with it, this read came back carrying the Key
+  // Findings and everything else, which is the false green the regression test above closes.
+  const reads = toolRows(db, s.session_id, 'artifact_read');
+  if (reads.length !== 1) throw new Error(`expected one artifact_read call, found ${reads.length}`);
+  const readText = String(reads[0].entry.result ?? '');
+  const EXPECTED_SECTION = [
+    '## Commands',
+    '',
+    '- `node --version`',
+    '- `node -e "process.exit(7)"` — **failed, exit 7**',
+    '- `rm -rf build` — exit status not recorded',
+  ].join('\n');
+  if (!readText.includes(EXPECTED_SECTION)) throw new Error(`the filtered tool read is not the Commands section: ${JSON.stringify(readText.slice(0, 400))}`);
+  if (readText.includes('## Key Findings') || readText.includes('## Summary')) throw new Error(`the section filter did not filter — the whole document came back: ${JSON.stringify(readText.slice(0, 400))}`);
+  db.close();
+  // The sidecar, through the stock parser: the Commands section sits between Snippets and Edited Files.
+  const directory = filesDir(s.session_id);
+  const sidecarRead = spawnSync(process.execPath, [join(output, 'read-sidecar.mjs'), join(directory, record.body_file), join(repo, 'package.json')], { encoding: 'utf8', timeout: 20_000, env: { PATH: process.env.PATH } });
+  const parsed = JSON.parse((sidecarRead.stdout ?? '').trim() || '{"ok":false}');
+  if (!parsed.ok) throw new Error(`the sidecar did not parse: ${JSON.stringify(parsed)} ${sidecarRead.stderr}`);
+  // Empty sections are omitted entirely (REQ-LIBRARY-090), so this report — with no highlights,
+  // snippets or files — carries Summary, Key Findings, then Commands LAST among the present headings.
+  if (parsed.headings.filter((h) => h === 'Commands').length !== 1) throw new Error(`the sidecar does not carry exactly one Commands section: ${JSON.stringify(parsed.headings)}`);
+  if (parsed.headings[parsed.headings.length - 1] !== 'Commands') throw new Error(`Commands is not the last section present: ${JSON.stringify(parsed.headings)}`);
+  if (parsed.headings[parsed.headings.length - 2] !== 'Key Findings') throw new Error(`the heading before Commands is not Key Findings: ${JSON.stringify(parsed.headings)}`);
+  const commandsBody = parsed.body.slice(parsed.body.indexOf('## Commands'));
+  for (const line of ['- `node --version`', '- `node -e "process.exit(7)"` — **failed, exit 7**', '- `rm -rf build` — exit status not recorded']) {
+    if (!commandsBody.includes(line)) throw new Error(`the sidecar's Commands section lacks "${line}"`);
+  }
+  // The rendered inspector: the row for the child report is listed with its id and status.
+  const rowsShown = probe(r.log, PROBE_ROWS);
+  const shown = rowsShown.find((x) => x.data['data-artifact-id'] === record.id);
+  if (!shown) throw new Error(`the child-report row was not listed: ${JSON.stringify(rowsShown)}`);
+  results.commands = {
+    ledger, sidecarHeadings: parsed.headings, toolFilteredRead: EXPECTED_SECTION,
+    row: { id: record.id, slug: record.slug, status: record.status, importance: record.importance, persona: record.source_persona, task: record.source_task_id },
+  };
 }
 
 writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);

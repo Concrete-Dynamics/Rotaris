@@ -1011,7 +1011,7 @@ tab. Evidence under `.proof/library-proof/`. Two of its assertions were rewritte
 recorded there: the store version is asserted as "at least v11" (the ladder is asserted whole in `store.test.ts`) and
 the Artifacts tab's body is now the real tab rather than the placeholder Part X supplied.
 
-**What `pnpm artifacts-proof` does.** It launches the app five times: a scripted run publishes through
+**What `pnpm artifacts-proof` does.** It launches the app six times: a scripted run publishes through
 `artifact_write` and the row appears on the next refresh with no restart, its body file sits in the session's files
 directory, and its sidecar is parsed by a **stock YAML parser in a separate node process** — frontmatter, then the
 sections REQ-LIBRARY-090 names, in its order, with the empty ones absent; a two-child run materialises exactly two
@@ -1019,7 +1019,14 @@ sections REQ-LIBRARY-090 names, in its order, with the empty ones absent; a two-
 an invalid tag refuses the publish whole, leaving no row and no file, in REQ-LIBRARY-089's own words; the inspector
 opens on the selected row, saves, and the status cell reads `published · edited`, and re-opening the same id
 re-raises the one dialog rather than a second; a body file deleted underneath leaves the record listed with Save
-disabled and the failure stated once. Evidence under `.proof/artifacts-proof/`. Every launch clicks the Artifacts tab after
+disabled and the failure stated once; and PD-LIBRARY-001's launch (2026-09-14) runs a child through three ordered
+terminal calls — success, exit 7, and one the permission gate denies — and holds the whole command-ledger path at
+once: the ledger in SQLite in the exact run order with the denied command carrying no exit status, the orchestrator
+reading the report back through `artifact_read` with `sections: ['commands']` and receiving **only** the Commands
+section (the tool path whose private allow-list the first execution of this launch found predated the directive and
+silently returned the whole document), and the sidecar carrying the same statuses in words. The scripted dialect
+gained a verification-only `terminal:<key>` step for it, its arguments from `ROTARIS_SCRIPT_TERMINAL_ARGS` in the
+shape of the artifact and MCP argument maps. Evidence under `.proof/artifacts-proof/`. Every launch clicks the Artifacts tab after
 switching view — the Library opens on Prompts, REQ-LIBRARY-103's first tab.
 
 ## The driver — a step that waits instead of guessing (2026-09-11)
@@ -1706,6 +1713,23 @@ own), UIR-019 (the session browser's empty message inherits a column's alignment
 kind tag is not a column) and UIR-021 (the composer's kickers carry values the controls already state). Four want
 a decision from the design material; three are drawable but touch spec-owned surfaces, and none should be guessed
 at from a pack that no longer exists.
+
+**The hundredth defect — the artifact port's private section list, found by planning a directive's closeout.**
+`PD-LIBRARY-001` widened the section vocabulary with `commands`, and the store's own filter took the widening the
+day the directive landed — its test has been green since. What nobody had tested is the only path a model reaches:
+`artifactOps.read` in the engine port filtered every `artifact_read` request through its own `SECTION_NAMES`
+list, which predated the directive and never gained the section, so a filtered read for `commands` matched
+nothing and **fell through to the full document**. A model asking for the command ledger received the whole
+artifact and every request read as success — the falsest kind of green, because the store test proves the
+mechanism and the drift lived one seam above it. Found while planning the directive's built-app evidence, not by
+a red check: the unit suite could not see it because the tool path had no test. The repair is the one the
+vocabulary asks for — the port imports contracts' `ARTIFACT_SECTIONS` and no longer holds a copy — pinned by a
+regression through `artifactOps.read` and held shut by `pnpm artifacts-proof`'s sixth launch, which drives the
+whole path in the built app: a child runs three ordered terminal calls (success, exit 7, one the gate denies),
+and the ledger lands in SQLite in the exact run order, comes back through the real filtered tool read as **only**
+the Commands section, and sits in the sidecar with the same statuses in words. The scripted dialect gained a
+verification-only `terminal:<key>` step for it. Recorded in `docs/defects/artifact-read-section-allow-list-omits-commands.md`;
+the first execution is in `docs/architecture/first-executions.md` and the directive's own record.
 
 ## Verifying a part runs the WHOLE proof suite, not its neighbours
 

@@ -1,4 +1,4 @@
-import type { ArtifactSection } from '@rotaris/contracts';
+import { ARTIFACT_SECTIONS, type ArtifactSection } from '@rotaris/contracts';
 import type { ArtifactStore } from './store.js';
 
 /**
@@ -33,7 +33,11 @@ export interface ActingAgent {
   readonly conversationId?: string | null | undefined;
 }
 
-const SECTION_NAMES: readonly string[] = ['summary', 'key_findings', 'snippets', 'highlights', 'files'];
+// REQ-LIBRARY-099 as widened by PD-LIBRARY-001: the section filter is defined over the contracts
+// vocabulary — the single definition — and never a second copy of it. A private list here drifted
+// from `ARTIFACT_SECTIONS` once already (docs/defects/artifact-read-section-allow-list-omits-commands.md),
+// so the vocabulary is imported rather than restated.
+const SECTION_NAMES: readonly string[] = ARTIFACT_SECTIONS;
 
 /** REQ-LIBRARY-099/100/101 rendered as operations; the tool executors own the wording of the observations. */
 export function artifactOps(store: ArtifactStore, agent: ActingAgent): ArtifactOps {

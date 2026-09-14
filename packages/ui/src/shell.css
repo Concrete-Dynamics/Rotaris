@@ -775,6 +775,17 @@
 .pause__figures dd { margin: 0; }
 .steer { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); }
 
+/* REQ-CONFIG-367: the provider row's indicator carries its detail in a tooltip (UIR sweep, 2026-09-14).
+   The closed bubble is opacity-0 but still painted, so on a tiny trigger — the 6 px status dot — its
+   nowrap text pays out as 43 px of scrollable overflow the trigger cannot reach, which the SHRUNK sweep
+   reports. Visibility does not remove it (a hidden box still contributes to scrollable overflow);
+   only display does. The fade-in is kept through @starting-style; the fade-out is the one loss. */
+.tooltip .tooltip-bubble { display: none; }
+.tooltip:hover .tooltip-bubble, .tooltip:focus-within .tooltip-bubble {
+  display: inline-flex;
+  @starting-style { opacity: 0; transform: translate(-50%, var(--rt-shift)); }
+}
+
 /* Providers (REQ-CONFIG-329, REQ-PROVIDER-116/117/140/141): the card, its rows, the authentication window. */
 .providers-card__head { display: flex; align-items: center; justify-content: space-between; gap: var(--rt-space-3, 12px); }
 .providers-card__actions { display: flex; gap: var(--rt-space-2, 8px); }

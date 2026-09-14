@@ -206,10 +206,36 @@ that depended on it.
 **The repair** is decision 4: the fence travels with the tool, the state holds the read record and the
 undo stacks. The falsified comment is kept beside its replacement in `run-host/tools.ts`.
 
-Recorded as a defect note in `docs/defects/` and as the hundred-and-first entry in `codebase.md`'s
-ledger.
+Recorded as a defect note in `docs/defects/file-tool-fence-frozen-at-first-run.md` and as the
+hundred-and-first entry in `codebase.md`'s ledger.
 
-**What it did not find.** The context-unit ordering, the sparse policy write, the shadowing rule and the
-manifest's three shapes were all built as written and held on the first run. The proof's six launches
-pass, and the repository's own three skills are discovered, listed and invocable — the claim `AGENTS.md`
-has made since 2026-09-12 is now observable rather than asserted.
+**It found a second, in the surface — and the proof found it, not a test.** The Settings selectors were
+bound to `state`, the run host's projection of what the *files* say, rather than to the pending settings.
+A user could choose a policy, the change would reach the pending state and dirty the form correctly, and
+the control would **snap back to the file's value** on the next render. The proof's log recorded all
+three selections as "chosen" and every row still read its saved value, which is what made it visible;
+no unit test would have, because the pure setters were right and the wiring was what was wrong.
+
+It is the same rule the Display category already follows and states — *what is drawn follows the screen,
+and Save decides what the file says* (REQ-CONFIG-472's note in `run-host`'s Tier C paragraph). Repaired
+by passing the pending block into `SkillsSettings` and preferring it; the row now publishes both values
+(`data-load` and `data-saved-load`) so the proof can tell a control that responded from one that did not.
+The hundred-and-second entry in the ledger.
+
+**Two toolchain facts the proof establishes, recorded because the next proof will want them.**
+
+1. **Overriding `HOME`/`USERPROFILE` kills the Electron process before it paints** on Windows — exit
+   `0x80000003`, two log lines in. A control run with the identical environment minus those two variables
+   exited 0. User-scope discovery is therefore pointed at a scratch tree by a capture seam
+   (`ROTARIS_CAPTURE_SKILLS_HOME`), not by the environment.
+2. **The command registrar mounts with the transcript toolbar**, which the Workspace view draws only once
+   there is a transcript. A launch that sits in Settings has no composer at all, and one with no session
+   has no toolbar — so the proof submits a prompt before probing the commands, and probes the table and
+   the commands in separate launches.
+
+**What it did not find.** The search order including the `.git` file that ends a linked worktree's walk,
+the manifest's three shapes, the shadowing rule, the context-unit ordering, the sparse policy write with
+its baseline-over-a-lower-layer case, and the master switch were all built as written and held on the
+first run. `pnpm skills-proof` passes at **8 checks over 7 launches**, and the repository's own three
+skills are discovered, listed and invocable — the claim `AGENTS.md` has made since 2026-09-12 is now
+observable rather than asserted, and a test in `packages/config/src/skills/skills.test.ts` keeps it so.

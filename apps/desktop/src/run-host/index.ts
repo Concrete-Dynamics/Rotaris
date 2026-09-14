@@ -407,6 +407,15 @@ const configurationDeps = {
 const skills = new SkillHost({
   log: (m, level) => log(m, level ?? 'info'),
   monotonic: clocks.monotonic,
+  /*
+   * Verification only — `ROTARIS_CAPTURE_SKILLS_HOME` points user-scope discovery at a scratch tree, so a proof
+   * exercises `~/.agents/skills` and the OpenHands manifest without reading the operator's own skills.
+   *
+   * It is a seam rather than an override of `HOME`/`USERPROFILE` because overriding those **kills the Electron
+   * process before it paints** on Windows (measured on this proof's first run, 2026-09-14). A user-driven launch
+   * never sets it and takes `homedir()`.
+   */
+  ...(process.env['ROTARIS_CAPTURE_SKILLS_HOME'] ? { home: process.env['ROTARIS_CAPTURE_SKILLS_HOME'] } : {}),
   section: (workspaceRoot) => {
     const loaded = loadConfiguration({ globalDir: configDir, workspaceRoot });
     if (loaded.ok) return loaded.value.skills;

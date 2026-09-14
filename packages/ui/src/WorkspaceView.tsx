@@ -201,6 +201,12 @@ export interface SlashHost {
   readonly forceLoadSkill?: ((name: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
   /** REQ-CHAT-034: bumped after a rescan or a hand-loaded skill, so the typeable commands list exactly the rescanned set. */
   readonly skillsRevision?: number | undefined;
+  /**
+   * REQ-CHAT-162: `/skill <path>` — loading a skill from a typed path, on REQ-WORKSPACE-057's rules. It is also
+   * where that requirement's DIRECTORY form stays reachable, since REQ-WORKSPACE-151's chooser cannot offer both
+   * on Windows or Linux (OQ-59).
+   */
+  readonly loadSkillFile?: ((path: string) => Promise<{ ok: true; name: string } | { ok: false; reason: string }>) | undefined;
 }
 
 /** REQ-LIBRARY-140: the toolbar control's exact label, with its live count. */
@@ -1145,7 +1151,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
             {/* Part AO — REQ-CHAT-073/082/083/084: "Clear transcript" beside "Apply stash", and the binding of the chat-controls host
               * (`slash/host.ts`) from this closure; `/compress`, `/clear` and the prompt-file commands (REQ-CHAT-160) register on
               * the catalogue's registry here. The toolbar's own condition is not widened: the renderer always passes `onOpenStash`. */}
-            <ClearTranscriptControl runState={runState} rowCount={rows.length} control={slash?.control} onAcknowledge={onAcknowledge} registry={registry} configKey={personas} skillsRevision={slash?.skillsRevision} onError={setError} />
+            <ClearTranscriptControl runState={runState} rowCount={rows.length} control={slash?.control} onAcknowledge={onAcknowledge} registry={registry} configKey={personas} skillsRevision={slash?.skillsRevision} loadSkillFile={slash?.loadSkillFile} onError={setError} />
             {/* Part AA — REQ-CHAT-069: the scope toggle, naming the agent "This task" refers to and showing its state and live elapsed time. */}
             {agents.length > 0 && <ScopeToggle scope={scope} agent={selected} nowIso={nowIso} onScope={setScope} />}
             {/* Part AL2 — REQ-SHELL-080/108: the toolbar's terminal control with its counts, always enabled; the counts and the opener come from the renderer's terminal host (`terminal/host.tsx`), so this view's props do not change. The toolbar renders whenever `onOpenStash` is given, which the product always gives, so the control is reachable from a cold start; the condition above is not widened. */}

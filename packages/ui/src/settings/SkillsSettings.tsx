@@ -27,6 +27,20 @@ import { collapseHome, elideMiddle } from '../workspace-label.js';
 export interface SkillsSettingsProps {
   readonly state: SkillsState | null;
   readonly workspace: string | null;
+  /**
+   * REQ-CONFIG-279/472 — the PENDING policy, as the screen holds it. The selectors are bound to this and not
+   * to `state`, which is the run host's projection of what the FILES say: a choice the user has not saved yet
+   * has changed no file, so a control reading the projection snaps back the moment it is redrawn.
+   *
+   * Found by building (ADR-0063's first execution, finding 2): the proof chose three policies, the log recorded
+   * all three as chosen, and every row still read its file value. It is the same rule the Display category
+   * already follows — what is drawn follows the screen, and Save decides what the file says.
+   */
+  readonly pending?: {
+    readonly enabled: boolean;
+    readonly overrides: Readonly<Record<string, SkillLoadModeName>>;
+    readonly invocationOverrides: Readonly<Record<string, SkillInvocationModeName>>;
+  } | undefined;
   /** The user's home, for REQ-WORKSPACE-149's collapsing of a path shown in the interface. */
   readonly home?: string | undefined;
   /** REQ-WORKSPACE-068: a policy change joins the pending settings; Save writes it (REQ-CONFIG-256/258). */
@@ -59,13 +73,13 @@ function pathLabel(path: string, home: string | undefined): string {
   return collapsed.length <= 64 ? collapsed : elideMiddle(collapsed, 64, (s) => s.length) ?? collapsed;
 }
 
-function SkillRowView({ row, home, onLoadMode, onInvocationMode }: { row: SkillRow; home: string | undefined } & Pick<SkillsSettingsProps, 'onLoadMode' | 'onInvocationMode'>) {
+function SkillRowView({ row, home, load, invocation, onLoadMode, onInvocationMode }: { row: SkillRow; home: string | undefined; load: SkillLoadModeName; invocation: SkillInvocationModeName } & Pick<SkillsSettingsProps, 'onLoadMode' | 'onInvocationMode'>) {
   const full = row.path;
   const shown = pathLabel(full, home);
   const shadowTitle = row.shadowed.length === 0 ? undefined : `${SHADOW_TOOLTIP}\n${row.shadowed.join('\n')}`;
   const triggers = row.triggers.join(', ');
   return (
-    <tr data-testid="skill-row" data-name={row.name} data-scope={row.scope} data-load={row.loadMode} data-invocation={row.invocationMode} data-forced={row.forcedThisSession ? 'yes' : 'no'}>
+    <tr data-testid="skill-row" data-name={row.name} data-scope={row.scope} data-load={load} data-invocation={invocation} data-saved-load={row.loadMode} data-forced={row.forcedThisSession ? 'yes' : 'no'}>
       <td className="mono">{row.name}</td>
       <td className="text-secondary" title={shadowTitle} aria-description={shadowTitle}>
         {row.scope}
@@ -79,7 +93,7 @@ function SkillRowView({ row, home, onLoadMode, onInvocationMode }: { row: SkillR
         <Select
           className="input select settings__skill-select"
           aria-label={`Invocation policy for ${row.name}`}
-          value={row.invocationMode}
+          value={invocation}
           onChange={(event) => onInvocationMode(row.name, event.currentTarget.value as SkillInvocationModeName)}
         >
           {SKILL_INVOCATION_MODE_NAMES.map((mode) => <option key={mode} value={mode}>{SKILL_INVOCATION_MODE_LABELS[mode]}</option>)}
@@ -94,7 +108,7 @@ function SkillRowView({ row, home, onLoadMode, onInvocationMode }: { row: SkillR
         <Select
           className="input select settings__skill-select"
           aria-label={`Load policy for ${row.name}`}
-          value={row.loadMode}
+          value={load}
           onChange={(event) => onLoadMode(row.name, event.currentTarget.value as SkillLoadModeName)}
         >
           {(['name-only', 'on', 'user-invocable-only', 'off'] as const).map((mode) => <option key={mode} value={mode}>{SKILL_LOAD_MODE_LABELS[mode]}</option>)}
@@ -105,11 +119,12 @@ function SkillRowView({ row, home, onLoadMode, onInvocationMode }: { row: SkillR
   );
 }
 
-export function SkillsSettings({ state, workspace, home, onLoadMode, onInvocationMode, onEnabled, onRescan, onLoadFile }: SkillsSettingsProps) {
+export function SkillsSettings({ state, workspace, home, pending, onLoadMode, onInvocationMode, onEnabled, onRescan, onLoadFile }: SkillsSettingsProps) {
   const [busy, setBusy] = useState<'rescan' | 'load' | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const skills = state?.skills ?? [];
-  const enabled = state?.enabled ?? true;
+  // The pending value where the screen holds one, else what the files resolved to.
+  const enabled = pending?.enabled ?? state?.enabled ?? true;
   const noWorkspace = workspace === null;
 
   const rescan = async () => {
@@ -172,7 +187,14 @@ export function SkillsSettings({ state, workspace, home, onLoadMode, onInvocatio
           <Table className="table settings__grid" aria-label="Portable skills">
             <thead><tr><th>Skill</th><th>Source</th><th>Path</th><th>Trigger</th><th>Invocation</th><th>Load</th><th>Description</th></tr></thead>
             <tbody>
-              {skills.map((row) => <SkillRowView key={row.name} row={row} home={home} onLoadMode={onLoadMode} onInvocationMode={onInvocationMode} />)}
+              {skills.map((row) => (
+                <SkillRowView
+                  key={row.name} row={row} home={home}
+                  load={pending?.overrides[row.name] ?? row.loadMode}
+                  invocation={pending?.invocationOverrides[row.name] ?? row.invocationMode}
+                  onLoadMode={onLoadMode} onInvocationMode={onInvocationMode}
+                />
+              ))}
             </tbody>
           </Table>
         )}

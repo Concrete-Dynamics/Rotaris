@@ -24,7 +24,16 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-14** — **the post-run improvement analyst**: the run host captures a fixed,
+Last reconciled with the code: **2026-09-15** — **portable skill discovery** (ADR-0063): the pure discovery
+library in `config/src/skills/` (the run host may not import `workspace`, and injection happens at agent
+construction), the catalog the run host owns because REQ-WORKSPACE-058 clears it at session creation rather
+than per run, skills as ordered context units composed at every agent construction, the cataloged directories
+as additional read roots, the four `skills.*` commands renderer→main→run-host, and one native chooser. The
+component view carries the package and the responsibility row, the process view the run-host ownership and the
+message family, the runtime view the system prompt's composition and the `skills:` block's place among the
+tiers. **No package, no allowed edge, no process, no channel, no store table and no control operation moves.**
+
+Earlier — **2026-09-14** — **the post-run improvement analyst**: the run host captures a fixed,
 bounded terminal-state snapshot and executes a no-tools analyst; main owns one application-wide FIFO, cancellation and
 the activity publication; the workspace service remains the single improvement writer. Schema v18 carries the immutable
 session run type, durable session-to-artifact association, current records, immutable versions and both gap counters.

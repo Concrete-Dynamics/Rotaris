@@ -5,7 +5,7 @@ import type { RunState } from '../composer.js';
 import { NO_RUN_ACTIVE, TRANSCRIPT_EMPTY } from './catalogue.js';
 import { bindChatControls, chatControls, CLEAR_DESCRIPTION, CLEAR_DIALOG_BODY, CLEAR_DIALOG_CONFIRM, CLEAR_DIALOG_IMPACT, CLEAR_DIALOG_TITLE, CLEAR_LABEL, compressNow, NOTHING_TO_COMPRESS_TOAST, TRANSCRIPT_ALREADY_EMPTY_TOAST, type ChatAcknowledger, type ControlAnswer } from './host.js';
 import { cachedPromptRoots, readPromptRoots, registerPromptCommands } from './prompts.js';
-import { cachedSkills, readSkills, registerSkillCommands } from './skills.js'; // ADR-0063
+import { cachedSkills, readSkills, registerSkillCommands, skillPathCommand } from './skills.js'; // ADR-0063
 import type { Availability, SlashContext, SlashOutcome, SlashRegistry } from './types.js';
 import { Button as DesignButton } from '../design-system/index.js';
 
@@ -31,6 +31,8 @@ export interface ClearTranscriptControlProps {
    * which simply means the catalog is re-read on the other triggers alone.
    */
   readonly skillsRevision?: number | undefined;
+  /** REQ-CHAT-162: `/skill <path>`'s loader, answered by the run host through main. Absent means the command is not offered. */
+  readonly loadSkillFile?: ((path: string) => Promise<{ ok: true; name: string } | { ok: false; reason: string }>) | undefined;
   readonly onError?: ((reason: string) => void) | undefined;
 }
 
@@ -41,7 +43,7 @@ export interface ClearTranscriptControlProps {
  * this row's controls as text since Part X's stash opener (the icon font exists — `ph ph-*` — and is not the reason), the
  * label is the specification's, and REQ-CHAT-082 fixes the accessible description.
  */
-export function ClearTranscriptControl({ runState, rowCount, control, onAcknowledge, registry, configKey, skillsRevision, onError }: ClearTranscriptControlProps) {
+export function ClearTranscriptControl({ runState, rowCount, control, onAcknowledge, registry, configKey, skillsRevision, loadSkillFile, onError }: ClearTranscriptControlProps) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const acknowledge: ChatAcknowledger = onAcknowledge ?? (() => undefined);
@@ -172,6 +174,16 @@ export function ClearTranscriptControl({ runState, rowCount, control, onAcknowle
    * does not need to know which of the two happened, only that the catalog moved.
    */
   useEffect(() => { reloadSkills(); }, [skillsRevision]);
+  /*
+   * REQ-CHAT-162 — `/skill <path>`: loading a skill by hand from a typed path, on REQ-WORKSPACE-057's rules.
+   * Registered separately from the generated per-skill commands because it is a fixed command rather than one
+   * the catalog produces, and re-registering it on every rescan would be pointless churn. Its own `onLoaded`
+   * re-reads the catalog, so the loaded skill's command appears without waiting for another trigger.
+   */
+  useEffect(() => {
+    if (!loadSkillFile) return;
+    registry.register(skillPathCommand(loadSkillFile, () => { reloadSkills(); }));
+  }, [registry, loadSkillFile]);
 
   useEffect(() => {
     // The composer's `onFocus` is not this part's to add; the focus is observed as it bubbles.

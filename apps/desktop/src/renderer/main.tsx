@@ -621,6 +621,17 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
       const r = await bridge.command({ kind: 'skills.forceLoad', name });
       return r.ok ? { ok: true as const } : { ok: false as const, reason: r.detail ?? r.headline };
     },
+    /*
+     * REQ-CHAT-162 — `/skill <path>`. The same command main answers for the Settings action, with the path
+     * supplied rather than chosen, so no dialog opens and REQ-WORKSPACE-057's directory form stays reachable
+     * on every platform (OQ-59).
+     */
+    loadSkillFile: async (path) => {
+      const r = await bridge.command({ kind: 'skills.loadFile', path });
+      if (!r.ok) return { ok: false as const, reason: r.detail ?? r.headline };
+      const outcome = r.value as { cancelled: boolean; name?: string };
+      return outcome.name === undefined ? { ok: false as const, reason: 'The skill was not loaded.' } : { ok: true as const, name: outcome.name };
+    },
     // REQ-CHAT-034: a rescan or a hand-loaded skill in Settings re-registers the typeable commands.
     skillsRevision,
   }), [providerRows, git.state, skillsRevision]);
@@ -1075,6 +1086,8 @@ function Settings({ workspace, home, theme, reducedMotion, settingsCategory, onT
   const skills = useMemo(() => ({
     state: skillsState,
     home,
+    // REQ-CONFIG-279: the selectors show what the SCREEN holds, so an unsaved choice does not snap back.
+    ...(config.pending ? { pending: config.pending.skills } : {}),
     onEnabled: (value: boolean) => config.onChange({ kind: 'skillsEnabled', value }),
     onLoadMode: (name: string, value: SkillLoadModeName) => config.onChange({ kind: 'skillLoad', name, value }),
     onInvocationMode: (name: string, value: SkillInvocationModeName) => config.onChange({ kind: 'skillInvocation', name, value }),

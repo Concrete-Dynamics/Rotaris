@@ -46,6 +46,16 @@ sequenceDiagram
   end
 ```
 
+**What an agent's system prompt is made of (ADR-0063).** At every agent construction — the entry turn and each
+child — the role's instructions take its playbook (`withPlaybook`, REQ-ORCH-019) and then the session's
+**always-active context units** (`withContextUnits`, REQ-WORKSPACE-060), in that requirement's order: workspace
+context → the skill catalog → the force-loaded skill bodies → persona memory. **Two of the four are not built**
+(workspace-context injection, REQ-WORKSPACE-041..050, and persona memory) and are empty slots in the list rather
+than a shape a later part must re-cut. The units arrive as a **getter**, called at construction and never
+captured, so a skill invoked between prompts reaches the next agent built while one already running keeps the
+context it was built with (REQ-CONFIG-166). Because the list is a property of the session and not of the role,
+REQ-WORKSPACE-065's "every agent built for a session sees the same catalog" holds by construction.
+
 `Run.start()` in order (REQ-SESSION-087): save `starting` → the pre-flight (intent classification through the
 small slot's rung ladder; the grant; the playbooks; the BUDGET cell) → **the plan gate's hold settled** → the
 launch audit (once per session, REQ-SESSION-138) → `run_start` timeline entry → hook trust announced → the
@@ -410,6 +420,13 @@ of §5 and none a channel: each is a request answered once.
   part that consumes them validates them. `execution.branch_template` is checked at load against REQ-GIT-138's two
   forbidden namespaces on a **rendered** example rather than a literal prefix, so a template that would collide by
   construction is refused before anything is created from it.
+- **The `skills:` block (ADR-0063)** — registered for the first time (`packages/config/src/sections/skills.ts`)
+  and read at load onto `LoadedConfiguration.skills`. It is **Tier C with one Tier A writer** (the Settings Skills
+  tab's Save), but the thing it governs has a lifetime of its own: the **catalog** is the run host's, cached per
+  resolved workspace root and cleared at **session creation** (REQ-WORKSPACE-058), which is neither Tier B's
+  per-run-start nor Tier C's next-load. `skills.enabled` is read from the SAVED files at each force-load gesture
+  rather than from a run's captured snapshot, on the `fetch` tool's precedent below, because REQ-WORKSPACE-073
+  gates a gesture happening now and not a run that started earlier.
 - **The one per-call read** — the `fetch` tool's egress policy and `tool_call_timeout` are loaded from the saved
   files at every call, without the live state (REQ-SANDBOX-038/118): a saved edit to the host lists reaches the
   next fetch of a running session with no restart, an unsaved settings edit reaches nothing.

@@ -159,6 +159,51 @@ export function readSkills(): Promise<SkillsState> | null {
  * With `skills.enabled` false the state carries no user-invocable skill, so nothing registers: REQ-CHAT-034's
  * "skills are turned off" case needs no branch here.
  */
+/**
+ * REQ-CHAT-162's second half — `/skill <path>`, loading a skill from a path. It follows REQ-WORKSPACE-057's
+ * rules, surfaces a load failure without registering anything, and on success re-registers the skill commands
+ * and reports the loaded skill's name.
+ *
+ * **It is also where REQ-WORKSPACE-057's DIRECTORY form stays reachable.** REQ-WORKSPACE-151's chooser is a
+ * file chooser on Windows and Linux because no platform dialog there offers "a file or a directory" (OQ-59);
+ * a typed path needs no dialog, so the capability the specification states is not lost — only the dialog is
+ * narrower on two of three hosts.
+ *
+ * REQ-CHAT-162's FIRST half — a `/skills` command listing the catalog into the transcript as one saved system
+ * row — is **not built**, and `SKILLS_LISTING_NOT_BUILT` says so where it would be registered. It needs a row
+ * written through the session writer, which is the run host's and reaches no renderer today; every fact that
+ * listing would carry is in the Settings Skills tab, which REQ-CHAT-162 requires anyway ("Both capabilities
+ * MUST also be reachable from the settings surface that manages skills").
+ */
+export const SKILLS_LISTING_NOT_BUILT = 'The /skills listing (REQ-CHAT-162) is not built: it writes a saved system row, which only the run host can do and no renderer command reaches. The same catalog is read in Settings › Skills, which that requirement requires as well.';
+
+export const SKILL_COMMAND_NAME = 'skill';
+export const skillLoadUsage = (): string => 'Usage: /skill <path to a SKILL.md file or a directory containing one>';
+
+export function skillPathCommand(load: (path: string) => Promise<{ ok: true; name: string } | { ok: false; reason: string }>, onLoaded: () => void): SlashCommand {
+  return {
+    name: SKILL_COMMAND_NAME,
+    description: 'Load a skill from a path for this session',
+    argumentHint: '<path>',
+    kind: 'skill',
+    availability: () => ({ ok: true }),
+    run: async (argument: string, ctx: SlashContext): Promise<SlashOutcome> => {
+      // REQ-CHAT-159's pattern: no argument fails with a usage message naming the command and its argument.
+      if (argument.trim() === '') return { kind: 'failed', message: skillLoadUsage() };
+      try {
+        const r = await load(argument.trim());
+        // REQ-CHAT-162: a failure surfaces the reason and registers nothing.
+        if (!r.ok) return { kind: 'failed', message: r.reason };
+        onLoaded();
+        ctx.notify(`Skill loaded for this session: ${r.name}`);
+        return { kind: 'executed' };
+      } catch (cause) {
+        return { kind: 'failed', message: cause instanceof Error ? cause.message : String(cause) };
+      }
+    },
+  };
+}
+
 export function registerSkillCommands(registry: SlashRegistry, state: SkillsState, previouslyRegistered: ReadonlySet<string> = new Set()): { names: string[]; skipped: { name: string; reason: string }[] } {
   const { registrations, skipped } = skillRegistrations(state.skills, (name) => {
     const holder = registry.lookup(name);

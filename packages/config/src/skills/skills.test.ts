@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { join } from 'node:path';
+import { existsSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { mergeLayers } from '../merge.js';
 import { readSkillsSection } from '../sections/skills.js';
 import type { ProblemSink } from '../sections/field.js';
@@ -228,6 +229,24 @@ describe('REQ-WORKSPACE-051/054 — discovery, precedence and shadowing', () => 
     expect(roots).toEqual([...roots].sort());
     expect(new Set(roots).size).toBe(roots.length);
     expect(roots).toContain('/repo/ws/.agents/skills/alpha');
+  });
+});
+
+describe('this repository is its own fixture (AGENTS.md, REQ-WORKSPACE-051)', () => {
+  it('discovers its own three portable skills from .agents/skills, against the real filesystem', () => {
+    // `AGENTS.md` has claimed since 2026-09-12 that "three portable workflows live under `.agents/skills/`,
+    // where REQ-WORKSPACE-051 makes them discoverable from this repository". Until this feature existed
+    // nothing could observe that. The walk starts inside `packages/config`, so it exercises the ancestor climb
+    // and the `.git` **file** that ends it in a worktree — this repository's own working shape.
+    const d = discoverSkills({
+      workspaceRoot: resolve(import.meta.dirname, '..', '..'),
+      // A home that does not exist, so user scope contributes nothing and this asserts about the repository alone.
+      home: resolve('/nonexistent-home-for-this-check'),
+      platform: process.platform,
+      exists: (p) => existsSync(p),
+    });
+    const project = d.skills.filter((s) => s.scope === 'project').map((s) => s.name);
+    expect(project).toEqual(expect.arrayContaining(['build-ui', 'debug-ui', 'review-ui']));
   });
 });
 

@@ -469,6 +469,11 @@ The first execution's "not built, said so" list named five categories; four of t
 sixth (Skills, Plugins) still wait on a mechanism rather than on drawing — portable-skill discovery
 (REQ-WORKSPACE-056/062/063/064, cited nowhere in this tree) and REQ-TOOLS-161's plugin loader (ADR-0025).
 
+> **Skills is drawn since 2026-09-15** (ADR-0063). The sentence above is kept as it was written, because what it
+> records is what was true at the third execution; `skills:` is now a registered section with a reader behind it
+> (`sections/skills.ts`), the desktop save writes its three keys sparsely (REQ-CONFIG-256/258), and the category
+> is a surface. **Plugins is the one that still waits.**
+
 **It found a defect, in the reader Part Z built.** REQ-CONFIG-172 fixes the section's keys as
 `tool_result_max_lines` and `tool_input_max_lines` and states that a cap of **`0` means no limit**.
 `display-section.ts` read `tool_result_lines` and `tool_input_lines` — key names no requirement states — and passed

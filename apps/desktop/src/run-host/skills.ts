@@ -220,6 +220,17 @@ export class SkillHost {
       units.push(skillBodyBlock(r.skill.name, r.skill.path, parsed.ok ? parsed.skill.body : body));
     }
     // [slot] persona memory (REQ-WORKSPACE-060) — not built.
+    /*
+     * What this agent is actually being given, at the moment it is given it. It names the skills rather than
+     * carrying any body text: a log is not a place to put a document, and REQ-WORKSPACE-066 is about what
+     * reaches a MODEL, not what reaches an operator reading a session log. Without this line the only evidence
+     * that injection happened at all is the model's own behaviour, which is not evidence.
+     */
+    if (units.length > 0) {
+      const forced = resolved.filter((r) => r.forceLoaded).map((r) => r.skill.name);
+      const catalogued = resolved.filter((r) => r.inCatalog).map((r) => r.skill.name);
+      this.deps.log(`skills: context units for ${sessionId ?? workspaceRoot}: catalog ${catalogued.length === 0 ? '(none)' : catalogued.join(', ')}; force-loaded ${forced.length === 0 ? '(none)' : forced.join(', ')}`);
+    }
     return units;
   }
 }

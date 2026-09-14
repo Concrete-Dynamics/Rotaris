@@ -20,12 +20,25 @@ export const READ_CAP = 30_000;
 export const DEFAULT_LIMIT = 2000;
 export const UNDO_DEPTH = 10;
 
+/**
+ * REQ-TOOLS-132/133/137 — the read record and the undo stacks, shared by every run in one workspace, which
+ * is what those requirements say is shared.
+ *
+ * **It no longer holds the fence, and that repair is ADR-0063's first execution.** `run-host/tools.ts`
+ * builds a fence per tool port from the run's own configuration but caches this state per workspace ROOT,
+ * so the state kept the first fence it ever saw and every later port's file tools resolved against it. The
+ * comment on the line above it said so — read as a property of the read record rather than as what it also
+ * was: `runtime.additional_read_only_roots` (REQ-CONFIG-468) silently ceasing to take effect after the
+ * first run in a process, with `grep` and `glob` honouring the fresh fence while `read_file`, `write_file`
+ * and the two `haet` tools honoured a stale one. It was invisible because the key's default is empty, so
+ * the two fences were equal on every machine that had never set it; the first value that differs is the
+ * cataloged skill directories of REQ-WORKSPACE-059, which change on a rescan.
+ */
 export class FileToolState {
   /** REQ-TOOLS-133: the paths (real, lower-cased) read through this workspace's tools. */
   readonly read = new Set<string>();
   /** REQ-TOOLS-132: the 10 most recent previous contents per path; `null` = the file did not exist. */
   readonly undo = new Map<string, (string | null)[]>();
-  constructor(readonly fence: FenceConfig) {}
   key(resolved: string): string {
     return resolved.replace(/\\/g, '/').toLowerCase();
   }
@@ -144,8 +157,8 @@ function renderRead(rel: string, content: string, offset: number, limit: number,
   return { text: `${header}\n${text}${hint}`, hash, totalLines };
 }
 
-function readTarget(state: FileToolState, path: string, access: 'read' | 'write'): { ok: true; resolved: string; rel: string } | { ok: false; obs: Observation } {
-  const v = checkFence(state.fence, path, access);
+function readTarget(fence: FenceConfig, path: string, access: 'read' | 'write'): { ok: true; resolved: string; rel: string } | { ok: false; obs: Observation } {
+  const v = checkFence(fence, path, access);
   if (!v.ok) return { ok: false, obs: errorObservation(v.message) };
   return { ok: true, resolved: v.resolved, rel: v.rel };
 }
@@ -159,9 +172,9 @@ const readSchema = z.object({
   grep_context: z.number().int().min(0).default(3),
 }).refine((a) => a.path !== undefined || a.file_path !== undefined, { message: 'path is required' });
 
-function doRead(state: FileToolState, args: z.infer<typeof readSchema>, hashHeader: boolean): Observation {
+function doRead(state: FileToolState, fence: FenceConfig, args: z.infer<typeof readSchema>, hashHeader: boolean): Observation {
   const path = (args.path ?? args.file_path) as string;
-  const t = readTarget(state, path, 'read');
+  const t = readTarget(fence, path, 'read');
   if (!t.ok) return t.obs;
   if (!existsSync(t.resolved)) return errorObservation(missingPathMessage(t.resolved, t.rel));
   const st = statSync(t.resolved);
@@ -175,23 +188,23 @@ function doRead(state: FileToolState, args: z.infer<typeof readSchema>, hashHead
   return observation(r.text);
 }
 
-export function readFileTool(state: FileToolState): ToolExecutor<z.infer<typeof readSchema>> {
+export function readFileTool(state: FileToolState, fence: FenceConfig): ToolExecutor<z.infer<typeof readSchema>> {
   return {
     name: 'read_file',
     description: 'Read a workspace file (line-numbered; offset/limit; optional grep filter) or list a directory. Paths are relative to the workspace root.',
     schema: readSchema,
     label: (a) => `read_file ${a.path ?? a.file_path ?? ''}`,
-    execute: async (a) => doRead(state, a, false),
+    execute: async (a) => doRead(state, fence, a, false),
   };
 }
 
-export function haetReadTool(state: FileToolState): ToolExecutor<z.infer<typeof readSchema>> {
+export function haetReadTool(state: FileToolState, fence: FenceConfig): ToolExecutor<z.infer<typeof readSchema>> {
   return {
     name: 'haet_read',
     description: 'Read a workspace file and receive its content_hash (SHA-256 of the exact bytes) for a hash-anchored edit with haet_edit.',
     schema: readSchema,
     label: (a) => `haet_read ${a.path ?? a.file_path ?? ''}`,
-    execute: async (a) => doRead(state, a, true),
+    execute: async (a) => doRead(state, fence, a, true),
   };
 }
 
@@ -259,7 +272,7 @@ const writeSchema = z.object({
   insert_line: z.number().int().min(0).optional(),
 }).refine((a) => a.path !== undefined || a.file_path !== undefined, { message: 'path is required' });
 
-export function writeFileTool(state: FileToolState): ToolExecutor<z.infer<typeof writeSchema>> {
+export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExecutor<z.infer<typeof writeSchema>> {
   return {
     name: 'write_file',
     description: 'Create, edit (old_string → new_string), overwrite, insert into, or undo the last write of a workspace file. Read a file before editing it.',
@@ -267,7 +280,7 @@ export function writeFileTool(state: FileToolState): ToolExecutor<z.infer<typeof
     label: (a) => `write_file ${a.operation} ${a.path ?? a.file_path ?? ''}`,
     execute: async (a) => {
       const path = (a.path ?? a.file_path) as string;
-      const t = readTarget(state, path, 'write');
+      const t = readTarget(fence, path, 'write');
       if (!t.ok) return t.obs;
       const { resolved, rel } = t;
       const exists = existsSync(resolved);
@@ -349,7 +362,7 @@ const haetEditSchema = z.object({
   replace_all: z.boolean().default(false),
 }).refine((a) => a.path !== undefined || a.file_path !== undefined, { message: 'path is required' });
 
-export function haetEditTool(state: FileToolState, name: 'haet_edit' | 'haet' = 'haet_edit'): ToolExecutor<z.infer<typeof haetEditSchema>> {
+export function haetEditTool(state: FileToolState, fence: FenceConfig, name: 'haet_edit' | 'haet' = 'haet_edit'): ToolExecutor<z.infer<typeof haetEditSchema>> {
   return {
     name,
     description: 'Hash-anchored exact edit: replace old_string with new_string in a file whose current SHA-256 equals content_hash (from haet_read). Reports the new content_hash.',
@@ -357,7 +370,7 @@ export function haetEditTool(state: FileToolState, name: 'haet_edit' | 'haet' = 
     label: (a) => `${name} ${a.path ?? a.file_path ?? ''}`,
     execute: async (a) => {
       const path = (a.path ?? a.file_path) as string;
-      const t = readTarget(state, path, 'write');
+      const t = readTarget(fence, path, 'write');
       if (!t.ok) return t.obs;
       const { resolved, rel } = t;
       if (!existsSync(resolved)) return errorObservation(`File does not exist: ${rel}.`);

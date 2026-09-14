@@ -16,6 +16,7 @@ import { CHECKPOINT_KINDS, CheckpointListSchema, PreviewEntrySchema } from './ch
 import { PromptListSchema, PromptStateSchema } from './library.js';
 import { ActorSchema, RequirementsCommandSchema } from './requirements.js'; // Part AK
 import { PromptsRootsResultSchema } from './slash.js'; // Part AO
+import { SkillsStateSchema } from './skills.js'; // ADR-0063
 import { ImprovementAnalysisJobSchema, ImprovementArtifactSchema, ImprovementCommandSchema, RunTypeSchema } from './improvements.js';
 
 /**
@@ -187,6 +188,19 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
    * REQ-SHELL-107's entry through the live session writer, redacted, and answers `ack`.
    */
   ...TERMINAL_COMMAND_SCHEMAS,
+  /**
+   * ADR-0063 — portable skills. The run host answers because it owns the catalog: it is cached per
+   * workspace root and cleared at SESSION CREATION (REQ-WORKSPACE-058), which is a lifetime only the
+   * process that creates sessions can honour, and the units it feeds are composed at agent construction.
+   *
+   * `sessionId` is optional on the three that touch session state: a gesture made from a window showing
+   * no session lands in that root's pending bucket and is adopted by the next session created for it
+   * (OQ-58 — "the current session" has no referent while a workspace has several).
+   */
+  z.object({ kind: z.literal('skills.read'), workspaceRoot: z.string(), sessionId: z.string().optional() }),
+  z.object({ kind: z.literal('skills.rescan'), workspaceRoot: z.string(), sessionId: z.string().optional() }),
+  z.object({ kind: z.literal('skills.forceLoad'), workspaceRoot: z.string(), sessionId: z.string().optional(), name: z.string().min(1) }),
+  z.object({ kind: z.literal('skills.loadFile'), workspaceRoot: z.string(), sessionId: z.string().optional(), path: z.string().min(1) }),
 ]);
 export type RunHostRequest = z.infer<typeof RunHostRequestSchema>;
 
@@ -456,6 +470,12 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   // Part AO
   /** REQ-CHAT-160 (Part AO): the files of the three prompt roots and the ones skipped with their reasons. */
   z.object({ kind: z.literal('prompts.roots'), result: PromptsRootsResultSchema }),
+  /**
+   * ADR-0063: the skill catalog as a surface reads it. One shape for all four commands — a force-load and
+   * a manual load answer with the state they produced, so no caller has to ask again to redraw, and
+   * `loaded` names the skill for the toast (REQ-WORKSPACE-073/151).
+   */
+  z.object({ kind: z.literal('skills.state'), state: SkillsStateSchema, loaded: z.string().optional() }),
 ]);
 export type ProcessReply = z.infer<typeof ProcessReplySchema>;
 

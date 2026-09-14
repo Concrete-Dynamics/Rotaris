@@ -12,6 +12,7 @@ import { RequirementsCommandSchema } from './requirements.js'; // Part AK
 import { RequirementsRunsCommandSchema } from './requirements.js'; // Part AP
 import { TERMINAL_COMMAND_SCHEMAS, TERMINAL_WINDOW_COMMAND_SCHEMAS } from './terminal.js';
 import { PROMPTS_COMMAND_SCHEMAS } from './slash.js'; // Part AO
+import { SKILLS_COMMAND_SCHEMAS } from './skills.js'; // ADR-0063
 import { NoticeSeveritySchema } from './notices.js'; // Part AO
 
 /**
@@ -276,6 +277,9 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   // needed it). `sessionId` absent or empty means the focused run (REQ-NOTIFY-028); the record of REQ-NOTIFY-268 follows.
   ...PROMPTS_COMMAND_SCHEMAS,
   z.object({ kind: z.literal('notice.report'), severity: NoticeSeveritySchema, title: z.string().min(1), message: z.string().optional(), detail: z.string().optional(), persistent: z.boolean(), sessionId: z.string().optional() }),
+  // ADR-0063 — portable skills (REQ-WORKSPACE-051..073, 151). None carries a workspace or a session: main names
+  // the window's open workspace and the session it follows, and relays to the run host, which owns the catalog.
+  ...SKILLS_COMMAND_SCHEMAS,
 ]);
 export type CommandRequest = z.infer<typeof CommandRequestSchema>;
 export type CommandKind = CommandRequest['kind'];

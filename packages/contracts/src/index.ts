@@ -25,3 +25,4 @@ export * from './requirements.js'; // Part AK
 export * from './terminal.js';
 export * from './terminal-keys.js';
 export * from './slash.js'; // Part AO
+export * from './skills.js'; // ADR-0063

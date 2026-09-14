@@ -27,6 +27,7 @@ const bridge: RendererBridge = Object.freeze({
   onLibraryChanged: subscribe(CHANNEL.libraryChanged),
   // Part AK — channel 10, the requirements board's generation (REQ-TRACE-374).
   onRequirementsChanged: subscribe(CHANNEL.requirementsChanged),
+  onImprovementActivity: subscribe(CHANNEL.improvementActivity),
 });
 
 contextBridge.exposeInMainWorld(BRIDGE_KEY, bridge);

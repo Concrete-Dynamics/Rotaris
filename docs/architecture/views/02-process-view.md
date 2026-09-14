@@ -2,7 +2,7 @@
 
 One Electron instance (SR-1; ADR-0055's claim), five kinds of process (ADR-0002). Every message crossing a
 boundary is a Zod schema in `packages/contracts/src/` — `commands.ts` (renderer ↔ main), `channels.ts`
-(main → renderer, five named channels), `process-protocol.ts` (main ↔ run host, main ↔ workspace service,
+(main → renderer, eleven named channels), `process-protocol.ts` (main ↔ run host, main ↔ workspace service,
 and the service's narrow asks back to main).
 
 ```mermaid
@@ -37,7 +37,7 @@ flowchart LR
   RPE --> P
   RT --> P
   P -- "CHANNEL.command<br/>CommandRequest / CommandOutcome" --> M
-  M -- "transcript:increment · session:snapshot<br/>terminal:frames · notice:current<br/>acknowledgement:publish · library:changed<br/>theme:changed · config:changed" --> P
+  M -- "transcript:increment · session:snapshot<br/>terminal:frames · notice:current<br/>acknowledgement:publish · library:changed<br/>requirements:changed · improvement:activity<br/>theme:changed · config:changed" --> P
   M -- "RunHostRequest → ProcessReply<br/>ProcessEvent ←<br/>credentials.lease ask ← · credentials.leased →" --> RHst
   M -- "WorkspaceServiceRequest → ProcessReply<br/>ServiceAsk ← (forwarded to the run host)" --> WS
   RHst --> DB
@@ -185,6 +185,16 @@ move and re-reads when it is next shown. Main bumps it for exactly the four thin
 `bump` takes a member of that union, so a settings write has no way to reach it. A `prompts.take` that KEPT the
 entry writes nothing and bumps nothing. `prefs.set` gains `panels/library` (REQ-SHELL-069, no arrangement suffix).
 Verification seam: `ROTARIS_CAPTURE_PROMPTS="history>>text@ms;;stash>>{n}text @ms"` pushes through the real command.
+
+**The post-run improvement analyst (REQ-LIBRARY-015..035/125..131/165).** The run host publishes `run.result` first,
+then captures a frozen, bounded job from the persisted task run: progress, todo, child reports, transcript, gate evidence
+and at most five prior artifacts, with unavailable sources represented explicitly. Skipped terminal reasons and
+`improvement_run` sessions produce no job. Main queues `improvement.job` in one application-wide FIFO and asks the run
+host to execute `improvement.analyze`; the analyst receives no tools, retries malformed JSON once and has a hard configured
+timeout. Main then relays `save-collected` to the workspace service, rereads the canonical record, bumps
+`improvement-artifacts`, and publishes the ready notice. `improvement:activity` carries only workspace identity, active
+state, queued count and source session. Workspace close or application shutdown sends `improvement.cancel`, aborts active
+analysis and discards queued jobs before any artifact or notice is written.
 
 **The session artifact store (Part Y; REQ-LIBRARY-087..101, REQ-ORCH-149).** Renderer → main: `artifacts.list` (the
 Library's Artifacts tab), `artifacts.body {ref}` (the inspector's load), `artifacts.save {ref, body}` (REQ-LIBRARY-133's

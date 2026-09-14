@@ -16,7 +16,7 @@ import { CHECKPOINT_KINDS, CheckpointListSchema, PreviewEntrySchema } from './ch
 import { PromptListSchema, PromptStateSchema } from './library.js';
 import { ActorSchema, RequirementsCommandSchema } from './requirements.js'; // Part AK
 import { PromptsRootsResultSchema } from './slash.js'; // Part AO
-import { ImprovementCommandSchema, RunTypeSchema } from './improvements.js';
+import { ImprovementAnalysisJobSchema, ImprovementArtifactSchema, ImprovementCommandSchema, RunTypeSchema } from './improvements.js';
 
 /**
  * The message protocols between main and its two utility processes
@@ -175,6 +175,9 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('artifacts.list'), workspaceId: z.string() }),
   z.object({ kind: z.literal('artifacts.body'), workspaceId: z.string(), ref: z.string().min(1) }),
   z.object({ kind: z.literal('artifacts.save'), workspaceId: z.string(), ref: z.string().min(1), body: z.string() }),
+  /** REQ-LIBRARY-024/035: main schedules a captured job back onto the run host's analyst. */
+  z.object({ kind: z.literal('improvement.analyze'), job: ImprovementAnalysisJobSchema }),
+  z.object({ kind: z.literal('improvement.cancel'), artifactId: z.string().regex(/^impart_[0-9A-Za-z]{8}$/) }),
   z.object({ kind: z.literal('shutdown'), deadlineMs: z.number().int().positive() }),
   /**
    * Part AL — the live terminal (ADR-0021): main relays the seven `terminal.*` commands as they arrive, shape for shape,
@@ -347,6 +350,8 @@ export const ServiceAskSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('checkpoint.prune'), workspaceRoot: z.string(), treeRoot: z.string(), sessionId: z.string().min(1), refs: z.array(z.object({ ref: z.string(), commit: z.string() })) }),
   /** Part U / REQ-SESSION-166 step 2: the delete's ref cleanup, relayed like the other three (ADR-0002 c.4). */
   z.object({ kind: z.literal('checkpoint.deleteNamespace'), workspaceRoot: z.string(), treeRoot: z.string(), sessionId: z.string().min(1) }),
+  /** REQ-LIBRARY-034: run host freezes bounded workspace history before publishing a job. */
+  z.object({ kind: z.literal('improvements.command'), workspaceRoot: z.string(), command: ImprovementCommandSchema }),
 ]);
 export type ServiceAsk = z.infer<typeof ServiceAskSchema>;
 export const ServiceAskEnvelopeSchema = z.object({ v, ask: id, request: ServiceAskSchema });
@@ -441,6 +446,7 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   // publishes on channel 10 AFTER the reply (persist before publish, ADR-0041).
   z.object({ kind: z.literal('requirements.result'), value: z.unknown(), changed: z.object({ generation: z.number().int().nonnegative(), affected: z.array(z.string()).nullable() }).optional() }),
   z.object({ kind: z.literal('improvements.result'), value: z.unknown(), changed: z.boolean().optional() }),
+  z.object({ kind: z.literal('improvement.analyzed'), artifact: ImprovementArtifactSchema }),
   // Part AJ
   /** ADR-0040 (Part AJ): one operation's `Result<…, TraceabilityFailure>` as the seam types it; `cancelled` is REQ-TRACE-226's boolean. */
   z.object({ kind: z.literal('traceability.result'), operation: z.enum(['check', 'regenerate', 'baselines', 'compare']), root: z.string(), elapsedMs: z.number().nonnegative(), result: z.object({ ok: z.boolean(), value: z.unknown().optional(), error: z.unknown().optional() }) }),
@@ -465,6 +471,8 @@ export const ProcessEventSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('publish.snapshot'), payload: SessionSnapshotSchema }),
   /** REQ-SESSION-186: the terminal result, presented once. Carried from the bus's in-process consumer (REQ-EVENTS-178). */
   z.object({ kind: z.literal('run.result'), sessionId: z.string(), result: RunResultSchema }),
+  /** REQ-ORCH-137: emitted after run.result, already detached from the terminal path. */
+  z.object({ kind: z.literal('improvement.job'), job: ImprovementAnalysisJobSchema }),
   /** REQ-ORCH-085: the host told the run paused at the message limit, with the count and the limit in force. */
   z.object({ kind: z.literal('run.paused'), sessionId: z.string(), count: z.number().int(), limit: z.number().int().nullable(), tokens: z.object({ input: z.number().int(), output: z.number().int() }) }),
   /** ADR-0019: the gate posts a present-request; main owns the per-window dialog queue and nothing else. */

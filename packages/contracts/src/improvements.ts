@@ -163,6 +163,20 @@ export const ImprovementActivitySchema = z.object({
 });
 export type ImprovementActivity = z.infer<typeof ImprovementActivitySchema>;
 
+/** REQ-LIBRARY-017..019/033/165: one frozen, bounded source in a captured job. */
+export const ImprovementCapturedSourceSchema = z.object({ available: z.boolean(), entries: z.array(z.string()) });
+export type ImprovementCapturedSource = z.infer<typeof ImprovementCapturedSourceSchema>;
+
+/** REQ-ORCH-137 / REQ-LIBRARY-032..034: the host-to-coordinator handoff. */
+export const ImprovementAnalysisJobSchema = z.object({
+  artifact_id: z.string().regex(/^impart_[0-9A-Za-z]{8}$/), workspace_id: z.string().min(1), workspace_root: z.string().min(1), source_session_id: z.string().min(1), generated_at: utc,
+  timeout_seconds: z.number().int().positive(), collector_model: z.string().min(1), considered_session_ids: z.array(z.string().min(1)),
+  progress: ImprovementCapturedSourceSchema, todo: ImprovementCapturedSourceSchema, child_reports: ImprovementCapturedSourceSchema,
+  transcript: ImprovementCapturedSourceSchema, gate: ImprovementCapturedSourceSchema, prior_artifacts_available: z.boolean(),
+  prior_artifacts: z.array(ImprovementArtifactSchema).max(5),
+});
+export type ImprovementAnalysisJob = z.infer<typeof ImprovementAnalysisJobSchema>;
+
 /** Workspace-service command surface; the service owns every mutation (REQ-LIBRARY-158). */
 export const ImprovementCommandSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('list') }),

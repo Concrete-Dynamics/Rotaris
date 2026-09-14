@@ -15,6 +15,7 @@ import { REQUIREMENT_FOLDS_PREFERENCE_KEY } from '@rotaris/contracts';
 import { requirementColumnFoldsKey, type PreferenceKey } from '@rotaris/platform';
 // Part AP — the board's run coordinator (spec 08 §Runs Started from the Board; ADR-0041).
 import { createRequirementsRuns } from './requirements-runs.js';
+import { createImprovementCoordinator } from './improvements.js';
 import { homedir, userInfo } from 'node:os';
 import { FrameDeliveryLimiter, relayTerminalCommand } from './terminal.js';
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, screen, shell, utilityProcess, type UtilityProcess } from 'electron';
@@ -130,7 +131,7 @@ async function main(): Promise<void> {
   // ADR-0039 / ADR-0002 c.4: the run host's three checkpoint asks are relayed to the workspace service of that root and answered back.
   runHost.onAsk(async (a) => {
     // Part U: `checkpoint.deleteNamespace` is the delete's ref cleanup (REQ-SESSION-166 step 2), relayed like the other three.
-    if (a.kind === 'checkpoint.capture' || a.kind === 'checkpoint.refs' || a.kind === 'checkpoint.prune' || a.kind === 'checkpoint.deleteNamespace') {
+    if (a.kind === 'checkpoint.capture' || a.kind === 'checkpoint.refs' || a.kind === 'checkpoint.prune' || a.kind === 'checkpoint.deleteNamespace' || a.kind === 'improvements.command') {
       const svc = services.get(canonicalPath(a.workspaceRoot));
       if (!svc) return { kind: 'refused', code: 'workspace.none', headline: `no workspace service is running for ${a.workspaceRoot}` };
       return svc.link.request(a, millis(a.kind === 'checkpoint.capture' ? 320_000 : 60_000));
@@ -143,6 +144,7 @@ async function main(): Promise<void> {
   runHostChild.on('exit', (code) => log(`run host exited (${code}); NOT re-forked — every in-flight run is lost and settles through stale detection (ADR-0002)`));
 
   const services = new Map<string, { child: UtilityProcess; link: ProcessLink<WorkspaceServiceRequest> }>();
+  let cancelImprovementWorkspace = (_workspaceRoot: string): void => undefined;
   /**
    * Step A1 of the window builder (ADR-0048's registry over main windows; ADR-0055 consequences 5 and 6).
    *
@@ -202,7 +204,7 @@ async function main(): Promise<void> {
       const child = utilityProcess.fork(join(__dirname, 'workspace-service.js'), [], { serviceName: `rotaris-workspace:${key}` });
       svc = { child, link: new ProcessLink<WorkspaceServiceRequest>(portOf(child), clocks.timers) };
       services.set(key, svc);
-      child.on('exit', (code) => { log(`workspace service for ${key} exited (${code})`); services.delete(key); });
+      child.on('exit', (code) => { log(`workspace service for ${key} exited (${code})`); services.delete(key); cancelImprovementWorkspace(key); });
       // The service's log lines reach main's log too (Part P: the checkpoint capture, preview and restore lines the proof reads).
       svc.link.onEvent((e) => { if (e.kind === 'log') log(`workspace service ${e.level}: ${e.message}`); });
       // ADR-0002 c.7 / ADR-0058: the service's narrow requests back to main are forwarded to the run host, bounded.
@@ -615,10 +617,26 @@ async function main(): Promise<void> {
     }
   };
 
+  const improvementCoordinator = createImprovementCoordinator({
+    analyze: (request, bound) => runHost.request(request, bound),
+    cancel: (artifactId) => { void runHost.request({ kind: 'improvement.cancel', artifactId }, millis(1_000)).catch(() => undefined); },
+    service: (workspaceRoot, request, bound) => services.get(canonicalPath(workspaceRoot))?.link.request(request, bound),
+    activity: (activity) => {
+      for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(CHANNEL.improvementActivity, { v: CONTRACT_SCHEMA_VERSION, ...activity });
+    },
+    stored: (record) => {
+      libraryRevision.bump('improvement-artifacts');
+      raiseNotice('info', 'Improvement proposals are ready', `${record.artifact.proposals.length} proposal${record.artifact.proposals.length === 1 ? '' : 's'} collected in ${record.artifact.artifact_id}.`, undefined, record.artifact.source_session_id);
+    },
+    log,
+  });
+  cancelImprovementWorkspace = (workspaceRoot) => improvementCoordinator.cancelWorkspace(workspaceRoot);
+
   // ADR-0044: main RELAYS a publication unchanged; the number on it is the run host's.
   runHost.onEvent((e) => {
     if (e.kind === 'publish.increment') relay.relaySequenced(CHANNEL.transcriptIncrement, e.payload);
     else if (e.kind === 'publish.snapshot') relay.relaySequenced(CHANNEL.sessionSnapshot, e.payload);
+    else if (e.kind === 'improvement.job') improvementCoordinator.enqueue(e.job);
     else if (e.kind === 'presenter.poll') {
       // ADR-0019: the reply carries the windows main holds; answered at once, never from a blocked loop.
       void runHost.request({ kind: 'presenter.pollReply', seq: e.seq, windows: [...parentWindowIds] }, millis(5_000)).catch(() => undefined);
@@ -1754,6 +1772,19 @@ async function main(): Promise<void> {
         const svc = services.get(canonicalPath(w.workspace));
         if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
         const root = canonicalPath(w.workspace);
+        const runtimePatch = req.kind === 'config.save' ? req.save.runtime : req.patch['runtime'];
+        const explicitCollectorEnable = runtimePatch !== null && typeof runtimePatch === 'object'
+          && (runtimePatch as Record<string, unknown>)['improvement_collector_enabled'] === true;
+        if (explicitCollectorEnable) {
+          const current = await svc.link.request({ kind: 'config.read', workspaceRoot: root }, millis(10_000));
+          if (current.kind === 'config.snapshot') {
+            const slots = new Map<string, string | null>(current.snapshot.slots.map((slot) => [slot.slot, slot.value]));
+            if (req.kind === 'config.save') for (const [slot, value] of Object.entries(req.save.slots ?? {})) slots.set(slot, value);
+            if (!slots.get('improvement_collector_model') && !slots.get('medium_model')) {
+              return { ok: false, code: 'config.improvement-model', headline: 'medium_model must be configured to enable the post-run improvement collector.' };
+            }
+          }
+        }
         const r = await svc.link.request(req.kind === 'config.save' ? { kind: 'config.save', workspaceRoot: root, save: req.save } : { kind: 'config.setField', workspaceRoot: root, ...(req.scope ? { scope: req.scope } : {}), patch: req.patch }, millis(30_000));
         if (r.kind !== 'config.snapshot') { if (r.kind === 'refused') raiseNotice('error', r.headline, r.detail); return refusal(r, 'The configuration could not be written'); }
         for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(CHANNEL.configChanged, { v: CONTRACT_SCHEMA_VERSION, snapshot: r.snapshot });
@@ -2667,6 +2698,7 @@ async function main(): Promise<void> {
 
   app.on('window-all-closed', () => {
     // ADR-0014: quit is main-driven, run-host-executed. The skeleton asks and waits, bounded.
+    improvementCoordinator.shutdown();
     void (async () => {
       // REQ-GIT-101: a desktop checkpoint operation in flight finishes first — bounded only by REQ-GIT-033's limits.
       if (checkpointOp) { log('quit: waiting for the in-flight checkpoint operation (REQ-GIT-101)'); await checkpointOp.catch(() => undefined); }

@@ -24,11 +24,11 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-14** — **the improvement artifact store foundation (ADR-0061)**:
-schema v18 adds the immutable session run type, durable session-to-artifact association, current improvement rows,
-immutable version rows and the two gap counters. The workspace service gains the reader/writer capability split,
-legacy import and `improvements.command`; the run host stamps `runType` at session creation. The component, process
-and runtime views carry the new package responsibilities, message and tables.
+Last reconciled with the code: **2026-09-14** — **the post-run improvement analyst**: the run host captures a fixed,
+bounded terminal-state snapshot and executes a no-tools analyst; main owns one application-wide FIFO, cancellation and
+the activity publication; the workspace service remains the single improvement writer. Schema v18 carries the immutable
+session run type, durable session-to-artifact association, current records, immutable versions and both gap counters.
+The component, process and runtime views carry the package responsibilities, messages, channel and tables.
 
 Earlier the same day — **`PD-LIBRARY-001`'s closeout (the hundredth defect)**: the engine
 artifact port's private section list is replaced by contracts' `ARTIFACT_SECTIONS` (an internal definition, not a

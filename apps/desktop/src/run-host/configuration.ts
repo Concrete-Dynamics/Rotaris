@@ -346,6 +346,20 @@ export function summariserOf(cfg: LoadedConfiguration, scripted: boolean): { mod
   return { model: ref, thinking: slot && slot !== 'auto' ? slot : thinkingOf(cfg.models[name]) };
 }
 
+/** REQ-LIBRARY-037/040: explicit collector slot, then the medium-tier slot. */
+export function improvementCollectorOf(cfg: LoadedConfiguration, scripted: boolean): { key: string; model: ModelRef; thinking: ThinkingLevel } | null {
+  const slot = cfg.slots.improvement_collector_model ? 'improvement_collector_model' : 'medium_model';
+  const name = cfg.slots[slot];
+  const model = modelRefOf(cfg, name, scripted);
+  if (!name || !model) return null;
+  const configuredThinking = cfg.slotThinking[slot];
+  return {
+    key: name,
+    model,
+    thinking: configuredThinking && configuredThinking !== 'auto' ? configuredThinking : thinkingOf(cfg.models[name]),
+  };
+}
+
 export interface ConfiguredRun extends RunSetup {
   readonly cfg: LoadedConfiguration;
   readonly runtime: RuntimeFromConfiguration;

@@ -295,5 +295,7 @@ export interface RendererBridge {
   readonly onLibraryChanged: (fn: (p: unknown) => void) => () => void;
   /** Channel 10 (Part AK): the requirements board's generation moved (REQ-TRACE-374) — the window re-reads the board. */
   readonly onRequirementsChanged: (fn: (p: unknown) => void) => () => void;
+  /** REQ-LIBRARY-125: app-wide post-run analyst queue activity. */
+  readonly onImprovementActivity: (fn: (p: unknown) => void) => () => void;
 }
 export const BRIDGE_KEY = 'rotaris' as const;

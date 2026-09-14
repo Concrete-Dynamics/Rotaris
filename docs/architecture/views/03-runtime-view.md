@@ -414,6 +414,15 @@ of §5 and none a channel: each is a request answered once.
   files at every call, without the live state (REQ-SANDBOX-038/118): a saved edit to the host lists reaches the
   next fetch of a running session with no restart, an unsaved settings edit reaches nothing.
 
+### Post-run improvement state
+
+The run host retains only the captured job's configured model context while it waits in main's application-wide FIFO.
+Main holds the ordered queue and one active marker in memory; neither belongs to a session lock or delays the terminal
+result. `improvement:activity` mirrors the queue shape to every renderer. The workspace service remains the single writer:
+analysis output becomes visible only after `save-collected` commits and a canonical `get` rereads it. Workspace close and
+application shutdown cancel both queued and active contexts. The durable state remains the v18
+`improvement_artifacts` / `improvement_artifact_versions` pair and the session association described above.
+
 ## 9. What a surface does with a publication (ADR-0046, ADR-0045; Part Z)
 
 The run host publishes; this is the other end of the same numbered stream, in the renderer, and it is where the

@@ -1,8 +1,8 @@
-import { CONTRACT_SCHEMA_VERSION, ProcessRequestEnvelopeSchema, RunHostRequestSchema, ServiceAnswerEnvelopeSchema, type ProcessMessage, type ProcessReply, type RunHostRequest, type ServiceAsk, type ServiceAskEnvelope } from '@rotaris/contracts';
+import { CONTRACT_SCHEMA_VERSION, ProcessRequestEnvelopeSchema, RunHostRequestSchema, ServiceAnswerEnvelopeSchema, type ImprovementArtifactRecord, type ProcessMessage, type ProcessReply, type RunHostRequest, type ServiceAsk, type ServiceAskEnvelope } from '@rotaris/contracts';
 import { asSessionId, millis, ok, toIsoUtc, type Clocks, type Millis, type WorkspaceId } from '@rotaris/kernel';
 import { dataLayout, nodeClocks, probePid, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
 import { openStore, StoreDal, forgetSpelling, type PromptLists, type StoreHandle } from '@rotaris/store';
-import { CATALOGUE, RefusalLease, relativeTime, RungMemory, Sessions, SUPERVISOR_DEFAULTS, timelineId } from '@rotaris/engine';
+import { analyzeImprovement, captureImprovementJob, CATALOGUE, RefusalLease, relativeTime, RungMemory, Sessions, SUPERVISOR_DEFAULTS, timelineId } from '@rotaris/engine';
 import { PresenterRegistry, STREAM_SETTINGS_DEFAULTS, withheldUnderPlanGate, type FileToolState, type TerminalManager } from '@rotaris/agent-tools';
 import { createToolPort, fileAppender, RunHostPresenter, terminalManagerFromHost } from './tools.js';
 import { createTerminalHost } from './terminal.js';
@@ -13,7 +13,7 @@ import { createCheckpointPort, REFS_ASK_BOUND } from './checkpoints.js';
 import { McpHost } from './mcp.js';
 import { deleteSession, exportRecords, exportTrajectories, repairSessions, sessionFiles } from './session-actions.js';
 import { CHECKPOINTS_DEFAULTS, RUNTIME_DEFAULTS, type LiveState, CODE_INTELLIGENCE_TOKEN } from '@rotaris/config';
-import { classifierSlotsOf, configureRun, egressReader, modelRefOf, type ConfiguredRun } from './configuration.js';
+import { classifierSlotsOf, configureRun, egressReader, improvementCollectorOf, modelRefOf, type ConfiguredRun } from './configuration.js';
 import { launchSession } from './launch.js';
 import { type ModelClient, type ModelRequest, type StreamPart } from '@rotaris/model';
 import { randomUUID } from 'node:crypto';
@@ -371,6 +371,9 @@ const leased = new Map<string, Readonly<Record<string, string>>>();
 // Each active run retains its setup through deferred preflight and tool creation.
 const configuredRuns = new Map<string, ConfiguredRun>();
 const runBearers = new Map<string, Readonly<Record<string, string>>>();
+const improvementContexts = new Map<string, { run: ConfiguredRun }>();
+const missingCollectorNotified = new Set<string>();
+const improvementControllers = new Map<string, AbortController>();
 // ADR-0034 (Part S): the one MCP holder of the application — discovery memo, probes, session connections, the override, the sink.
 const mcp = new McpHost({
   clocks, log: (m, level) => log(m, level ?? 'info'), parentEnv: hostEnv,
@@ -434,7 +437,35 @@ const sessions = new Sessions({
     increment: (payload) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'publish.increment', payload } }),
     snapshot: (payload) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'publish.snapshot', payload } }),
   },
-  onRunResult: (sessionId, result) => { configuredRuns.delete(sessionId); runBearers.delete(sessionId); send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'run.result', sessionId, result } }); },
+  onRunResult: (sessionId, result) => {
+    const run = configuredRuns.get(sessionId);
+    configuredRuns.delete(sessionId);
+    runBearers.delete(sessionId);
+    send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'run.result', sessionId, result } });
+    if (!run || !run.cfg.runtime.improvement_collector_enabled) return;
+    const collector = improvementCollectorOf(run.cfg, run.scripted);
+    if (collector === null) {
+      if (!missingCollectorNotified.has(run.cfg.workspaceRoot)) {
+        missingCollectorNotified.add(run.cfg.workspaceRoot);
+        send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'notice.publish', severity: 'info', title: 'Improvement analysis needs a model', message: 'Improvement analysis is switched on. Choose an improvement collector or medium model to produce proposals.', detail: '', action: 'config.models', key: `improvement-model:${run.cfg.workspaceRoot}`, sessionId, persistent: true } });
+      }
+      return;
+    }
+    const locatedStore = [...stores.entries()].find(([, candidate]) => candidate.root === run.cfg.workspaceRoot && candidate.dal !== null);
+    if (!locatedStore?.[1].dal) return;
+    const [workspaceId, store] = locatedStore;
+    void (async () => {
+      const historyReply = await ask({ kind: 'improvements.command', workspaceRoot: run.cfg.workspaceRoot, command: { action: 'list' } }, millis(10_000)).catch((cause: Error) => {
+        log(`improvements: history capture failed for ${sessionId}: ${cause.message}`, 'warn');
+        return null;
+      });
+      const prior = historyReply?.kind === 'improvements.result' ? (historyReply.value as ImprovementArtifactRecord[]).map((record) => record.artifact) : [];
+      const job = captureImprovementJob(store.dal!, { workspaceId, workspaceRoot: run.cfg.workspaceRoot, sessionId, generatedAt: toIsoUtc(clocks.wall.instant()), timeoutSeconds: run.cfg.runtime.improvement_collector_timeout, collectorModel: collector.key, priorArtifactsAvailable: historyReply?.kind === 'improvements.result', priorArtifacts: prior });
+      if (job === null) return;
+      improvementContexts.set(job.artifact_id, { run });
+      send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'improvement.job', job } });
+    })();
+  },
   // REQ-ORCH-085: the host told the run paused at the message limit.
   onRunPaused: (sessionId, info) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'run.paused', sessionId, count: info.count, limit: info.limit, tokens: info.tokens } }),
   // REQ-ORCH-153 (ADR-0062): the registry predicate the plan gate's child-admission check reads; the engine holds
@@ -547,6 +578,12 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
     }
     case 'workspace.closing': {
       const s = stores.get(req.workspaceId);
+      if (s) for (const [artifactId, context] of improvementContexts) {
+        if (context.run.cfg.workspaceRoot !== s.root) continue;
+        improvementControllers.get(artifactId)?.abort();
+        improvementControllers.delete(artifactId);
+        improvementContexts.delete(artifactId);
+      }
       if (s?.db) { s.db.close(); forgetSpelling(s.file); }
       stores.delete(req.workspaceId);
       return { kind: 'workspace.ack', workspaceId: req.workspaceId };
@@ -619,6 +656,27 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
         },
       });
     }
+  case 'improvement.analyze': {
+      const context = improvementContexts.get(req.job.artifact_id);
+      if (context === undefined) return { kind: 'refused', code: 'improvement.expired', headline: 'The captured improvement job is no longer available' };
+      const collector = improvementCollectorOf(context.run.cfg, context.run.scripted);
+      if (collector === null) return { kind: 'refused', code: 'improvement.no-model', headline: 'No improvement analyst is configured' };
+      const controller = new AbortController();
+      improvementControllers.set(req.job.artifact_id, controller);
+      try {
+        const artifact = await analyzeImprovement(req.job, { backend: context.run.model.backend, model: collector.model, thinking: collector.thinking, timers: clocks.timers, credentialFor: context.run.model.config.credentialFor, warn: (message) => log(message, 'warn') }, controller.signal);
+        return { kind: 'improvement.analyzed', artifact };
+      } finally {
+        improvementControllers.delete(req.job.artifact_id);
+      improvementContexts.delete(req.job.artifact_id);
+    }
+  }
+  case 'improvement.cancel': {
+    improvementControllers.get(req.artifactId)?.abort();
+    improvementControllers.delete(req.artifactId);
+    improvementContexts.delete(req.artifactId);
+    return { kind: 'ack' };
+  }
     case 'session.continue': {
       // REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause or continue a paused session; nothing is appended.
       const r = sessions.continueSession(asSessionId(req.sessionId), req.action);
@@ -904,6 +962,9 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
       return terminalHost.handle(req);
     case 'shutdown': {
       // ADR-0014 / REQ-MONITOR-255: every run asked to stop before any is waited on; the reply follows their terminal results.
+      for (const controller of improvementControllers.values()) controller.abort();
+      improvementControllers.clear();
+      improvementContexts.clear();
       presenters.stop();
       // REQ-MCP-053: an outstanding discovery never delays exit — its children are killed first, so a port waiting on it proceeds at once.
       void mcp.discovery.closeAll();

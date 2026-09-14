@@ -8,7 +8,7 @@ import { ConfigSnapshotSchema } from './config.js';
 import { AcknowledgementActionSchema, AcknowledgementKindSchema, NoticeSchema } from './notices.js';
 import { RequirementsChangedSchema } from './requirements.js'; // Part AK
 import { TerminalStreamMetaSchema } from './terminal.js';
-import { RunTypeSchema } from './improvements.js';
+import { ImprovementActivitySchema, RunTypeSchema } from './improvements.js';
 
 /**
  * REQ-SESSION-134's severity vocabulary for a timeline entry, ascending, `info` where an entry names none. It is the
@@ -22,7 +22,7 @@ export const TimelineSeveritySchema = z.enum(TIMELINE_SEVERITIES);
 export type TimelineSeverity = z.infer<typeof TimelineSeveritySchema>;
 
 /**
- * The five named, typed IPC channels of ADR-0044.
+ * The named, typed IPC channels of ADR-0044.
  *
  *  1. transcript:increment — session id, SEQUENCE, earliest-changed index, rows, diffs, personas
  *  2. session:snapshot     — session id, SEQUENCE, the whole-session update
@@ -35,6 +35,8 @@ export type TimelineSeverity = z.infer<typeof TimelineSeveritySchema>;
  *     REQ-LIBRARY-105 closes a "library change" to and for nothing else (Part X)
  * 10. requirements:changed — main → every window: the board's generation moved, with the affected identifiers or
  *     null for a whole pass (Part AK; REQ-TRACE-348/374 — the value is re-read, never carried)
+ * 11. improvement:activity — main → every window: app-wide analyst activity and the queued-job count
+ *     (REQ-LIBRARY-024/035/131; proposals are re-read through the workspace service)
  *
  * Channels 1 and 2 share ONE per-session counter (REQ-MONITOR-214), stamped in
  * the run host by the projection owner at publication. Main relays it
@@ -56,6 +58,7 @@ export const CHANNEL = {
   acknowledgementPublish: 'acknowledgement:publish',
   libraryChanged: 'library:changed',
   requirementsChanged: 'requirements:changed', // Part AK
+  improvementActivity: 'improvement:activity',
   command: 'command',
 } as const;
 export type ChannelName = (typeof CHANNEL)[keyof typeof CHANNEL];
@@ -356,6 +359,9 @@ export type ConfigChanged = z.infer<typeof ConfigChangedSchema>;
 export const LibraryChangedSchema = z.object({ v: schemaVersion, revision: z.number().int().nonnegative() });
 export type LibraryChanged = z.infer<typeof LibraryChangedSchema>;
 
+export const ImprovementActivityPublishSchema = ImprovementActivitySchema.extend({ v: schemaVersion });
+export type ImprovementActivityPublish = z.infer<typeof ImprovementActivityPublishSchema>;
+
 export const CHANNEL_SCHEMAS = {
   [CHANNEL.transcriptIncrement]: TranscriptIncrementSchema,
   [CHANNEL.sessionSnapshot]: SessionSnapshotSchema,
@@ -366,6 +372,7 @@ export const CHANNEL_SCHEMAS = {
   [CHANNEL.acknowledgementPublish]: AcknowledgementPublishSchema,
   [CHANNEL.libraryChanged]: LibraryChangedSchema,
   [CHANNEL.requirementsChanged]: RequirementsChangedSchema, // Part AK
+  [CHANNEL.improvementActivity]: ImprovementActivityPublishSchema,
 } as const;
 
 /** The two channels that share one per-session counter. Order across BOTH must be preserved by the relay. */

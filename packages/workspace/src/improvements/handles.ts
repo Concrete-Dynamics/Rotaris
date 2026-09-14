@@ -452,7 +452,7 @@ export function createImprovementWriter(
           throw new Error(IMPROVEMENT_NOT_FOUND(artifactId));
         return transform(current);
       },
-      { expectedVersionsDue },
+      expectedVersionsDue === undefined ? {} : { expectedVersionsDue },
     );
 
   return Object.freeze({

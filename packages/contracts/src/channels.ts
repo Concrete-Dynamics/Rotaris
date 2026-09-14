@@ -8,6 +8,7 @@ import { ConfigSnapshotSchema } from './config.js';
 import { AcknowledgementActionSchema, AcknowledgementKindSchema, NoticeSchema } from './notices.js';
 import { RequirementsChangedSchema } from './requirements.js'; // Part AK
 import { TerminalStreamMetaSchema } from './terminal.js';
+import { RunTypeSchema } from './improvements.js';
 
 /**
  * REQ-SESSION-134's severity vocabulary for a timeline entry, ascending, `info` where an entry names none. It is the
@@ -201,6 +202,9 @@ export const SessionRecordSchema = z.object({
   cost: z.string(),
   /** REQ-SESSION-095 / REQ-ORCH-147: what the run recorded; null before any run ended. */
   stopReason: z.string().nullable(),
+  /** REQ-SESSION-021 / REQ-LIBRARY-002/036: immutable persisted run classification and produced artifacts. */
+  runType: RunTypeSchema,
+  improvementArtifactIds: z.array(z.string()),
   /** REQ-MONITOR-164/171: when the current run started; null before any run. */
   runStartedAt: z.string().nullable(),
   iterationsCompleted: z.number().int().nonnegative(),

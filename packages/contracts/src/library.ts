@@ -36,8 +36,8 @@ export type PromptState = z.infer<typeof PromptStateSchema>;
  * counter that bumps the revision, so a settings write cannot bump it by mistake.
  *
  * Part X writes the first two. `session-artifacts` is Part Y's to bump and `improvement-artifacts`
- * belongs to the Proposals part that is not yet authorised; both are declared here because the set is
- * the requirement's and is closed by it, not by how much of it has been built.
+ * belongs to the improvement-artifact lifecycle; both are declared here because the set is the
+ * requirement's and is closed by it, not by how much of it has been built.
  */
 export const LIBRARY_CHANGES = ['prompt-history', 'prompt-stash', 'session-artifacts', 'improvement-artifacts'] as const;
 export type LibraryChange = (typeof LIBRARY_CHANGES)[number];

@@ -193,11 +193,20 @@ save, the body ONLY). Main relays each to the run host as `artifacts.list {works
 status, producer, persona, edited, body, fallback}`, `artifacts.save {workspaceId, ref, body}` → `artifacts.saved {id,
 editedAt}`. **No session id crosses**: REQ-LIBRARY-136 scopes the tab to the LOADED session, so the run host answers for
 the session it holds and reports none when it holds none, rather than letting a renderer name a session that is not
+
 loaded. A refusal carries REQ-LIBRARY-134's and REQ-LIBRARY-136's own sentences as its headline (`Unknown artifact:
 '<id>'`, `Artifact not found in the loaded session.`, the load failure's reason). The bodies themselves never cross a
 boundary as files: the run host reads and writes them beside the store (REQ-SESSION-002) and the renderer sees text. The
 scripted client's step `artifact:<tool>[:<key>]` calls one of the three artifact tools with arguments from
 `ROTARIS_SCRIPT_ARTIFACT_ARGS` (verification only).
+
+**The improvement artifact store (ADR-0061; REQ-LIBRARY-002/036/042..058).** Main → workspace service:
+`improvements.command {workspaceRoot, command}` → `improvements.result {value, changed?}`. The command union carries
+list, detail, history, approved-proposal, collected-save, review, edit and delete operations. The workspace service
+constructs `ImprovementReader` from its writable store handle and `ImprovementWriter` from that reader plus the
+mutation path, runs the legacy import on first construction, and remains the sole process with the write capability.
+Session creation crosses `runType` to the run host; existing callers default to `task_run`, and the session row keeps
+the first value across resume.
 
 **The transcript's row renderer and the one command it needed (Part AA; ADR-0051's second execution).** Renderer →
 main: **`shell.openExternal {url}`** → `{url}` | a refusal. `REQ-CHAT-076` opens an `http(s)` link from transcript text

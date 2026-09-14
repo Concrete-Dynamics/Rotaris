@@ -16,6 +16,7 @@ import { CHECKPOINT_KINDS, CheckpointListSchema, PreviewEntrySchema } from './ch
 import { PromptListSchema, PromptStateSchema } from './library.js';
 import { ActorSchema, RequirementsCommandSchema } from './requirements.js'; // Part AK
 import { PromptsRootsResultSchema } from './slash.js'; // Part AO
+import { ImprovementCommandSchema, RunTypeSchema } from './improvements.js';
 
 /**
  * The message protocols between main and its two utility processes
@@ -78,7 +79,7 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
    * the base workspace (REQ-GIT-019). `sandboxMode` is REQ-SHELL-125's choice, recorded on the row (ADR-0022: not honoured here).
    * REQ-TRACE-470/471: boardPermissions carries the authorized board grant for this launch.
    */
-  z.object({ kind: z.literal('session.start'), workspaceId: z.string(), prompt: z.string(), attachments: z.array(ImageAttachmentInputSchema).max(10).optional(), sessionId: z.string().min(1).optional(), effectiveRoot: z.string().optional(), worktree: WorktreeBindingSchema.optional(), boardPermissions: z.literal('permissive').optional(), sandboxMode: z.enum(SANDBOX_MODE_NAMES).optional() }).refine((v) => v.prompt.trim() !== '' || (v.attachments?.length ?? 0) > 0, { message: 'A prompt or attachment is required.' }),
+  z.object({ kind: z.literal('session.start'), workspaceId: z.string(), prompt: z.string(), attachments: z.array(ImageAttachmentInputSchema).max(10).optional(), sessionId: z.string().min(1).optional(), effectiveRoot: z.string().optional(), worktree: WorktreeBindingSchema.optional(), boardPermissions: z.literal('permissive').optional(), sandboxMode: z.enum(SANDBOX_MODE_NAMES).optional(), runType: RunTypeSchema.optional() }).refine((v) => v.prompt.trim() !== '' || (v.attachments?.length ?? 0) > 0, { message: 'A prompt or attachment is required.' }),
   z.object({ kind: z.literal('circuit_breaker.status'), workspaceId: z.string() }),
   /** ADR-0037 Tier B: the settings store's current values, handed to the run host ahead of the next run start. */
   z.object({ kind: z.literal('config.liveState'), state: z.record(z.string(), z.unknown()) }),
@@ -318,6 +319,8 @@ export const WorkspaceServiceRequestSchema = z.discriminatedUnion('kind', [
    * renderer's. The home and the user-global configuration directory are the service's own resolution of them.
    */
   z.object({ kind: z.literal('prompts.roots.read'), workspaceRoot: z.string() }),
+  /** ADR-0061: workspace-scoped improvement rows are served by the one writable store owner. */
+  z.object({ kind: z.literal('improvements.command'), workspaceRoot: z.string(), command: ImprovementCommandSchema }),
 ]);
 export type WorkspaceServiceRequest = z.infer<typeof WorkspaceServiceRequestSchema>;
 
@@ -437,6 +440,7 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   // transition result) and, after a write, the generation it moved to and the identifiers it touched, which main
   // publishes on channel 10 AFTER the reply (persist before publish, ADR-0041).
   z.object({ kind: z.literal('requirements.result'), value: z.unknown(), changed: z.object({ generation: z.number().int().nonnegative(), affected: z.array(z.string()).nullable() }).optional() }),
+  z.object({ kind: z.literal('improvements.result'), value: z.unknown(), changed: z.boolean().optional() }),
   // Part AJ
   /** ADR-0040 (Part AJ): one operation's `Result<…, TraceabilityFailure>` as the seam types it; `cancelled` is REQ-TRACE-226's boolean. */
   z.object({ kind: z.literal('traceability.result'), operation: z.enum(['check', 'regenerate', 'baselines', 'compare']), root: z.string(), elapsedMs: z.number().nonnegative(), result: z.object({ ok: z.boolean(), value: z.unknown().optional(), error: z.unknown().optional() }) }),

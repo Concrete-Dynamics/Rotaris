@@ -608,7 +608,7 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
           void mcp.prepare(setup.cfg, s.root).catch((e: unknown) => log(`mcp: discovery ahead of the run failed: ${String(e)}`, 'warn'));
           if (req.effectiveRoot !== undefined && req.effectiveRoot !== s.root) log(`session ${sessionId} is isolated: the run works in ${req.effectiveRoot}${req.worktree ? ` on branch ${req.worktree.branch}` : ''}; the record stays under ${s.root}`);
           try {
-            const r = sessions.start(s.dal!, s.root, req.prompt, { setup, sessionId, ...(req.worktree === undefined ? {} : { worktree: req.worktree }), ...(req.sandboxMode === undefined ? {} : { sandboxMode: req.sandboxMode }), ...(req.attachments === undefined ? {} : { attachments: req.attachments }) });
+        const r = sessions.start(s.dal!, s.root, req.prompt, { setup, sessionId, runType: req.runType ?? 'task_run', ...(req.worktree === undefined ? {} : { worktree: req.worktree }), ...(req.sandboxMode === undefined ? {} : { sandboxMode: req.sandboxMode }), ...(req.attachments === undefined ? {} : { attachments: req.attachments }) });
             if (r.ok) log(`session ${r.value} started; row 0 recorded; the run is executing`);
             else restore();
             return r;

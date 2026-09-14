@@ -43,5 +43,6 @@ export * from './git/checkpoints.js';
 export * from './backup.js';
 export * from './restore.js';
 export * from './delivery/index.js'; // Part AK
+export * from './improvements/index.js';
 // Part AJ
 export * from './traceability/index.js';

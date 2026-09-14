@@ -7,6 +7,15 @@ status: resolved
 
 # Resolution Record — Domain 14, Library, Artifacts, and Improvement Proposals
 
+> ## Amendment, 2026-09-14 — history states gaps truthfully
+>
+> REQ-LIBRARY-168's statement that every artifact history is nonempty is superseded for an artifact
+> whose ADR-0061 best-effort version operation failed. REQ-LIBRARY-051 continues to synthesize version
+> 1 only for a pre-history artifact whose `versions_due` is zero. Once a write allocated a due version,
+> an absent row is reported through `versions_never_recorded`; the history surface may therefore contain
+> zero retained rows while stating the gap count. This keeps the inspection surface and REQ-LIBRARY-176's
+> export aligned with REQ-LIBRARY-047's successful artifact write.
+
 
 > ## Superseded by the storage rulings (2026-09-01)
 >

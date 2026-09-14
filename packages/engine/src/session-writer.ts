@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { err, maskArguments, ok, redactRowString, toIsoUtc, type Instant, type MachineId, type Result, type SessionId, type WallClock } from '@rotaris/kernel';
 import { RELEASE_PAGE_SIZE, RESIDENT_ROW_CAP, type CheckpointRow, type QueuedPromptRow, type ChildInsert, type ChildRow, type RowToolFields, type SessionRunPatch, type StoreDal, type TranscriptRowRecord } from '@rotaris/store';
-import { isLegalChildMove, isTerminalChildState, type ChildState, type ImageAttachment, type SettlingPath, type TimelineSeverity, type TranscriptRow } from '@rotaris/contracts';
+import { isLegalChildMove, isTerminalChildState, type ChildState, type ImageAttachment, type RunType, type SettlingPath, type TimelineSeverity, type TranscriptRow } from '@rotaris/contracts';
 import { EVENT_SCHEMA_VERSION, locator, serializeEvent, type EventKind, type WireEvent } from './events.js';
 import { isActiveStatus } from './run/stop-conditions.js';
 import { AgentActivity } from './children/activity.js';
@@ -249,6 +249,7 @@ export interface OpenSessionArgs {
   /** REQ-GIT-022: the binding (REQ-GIT-015) as JSON, saved WITH the session record; REQ-SHELL-125's chosen sandbox mode. */
   readonly worktree?: string | null;
   readonly sandboxMode?: string;
+  readonly runType?: RunType;
 }
 
 export interface OpenExistingSessionArgs {
@@ -392,7 +393,7 @@ export class SessionWriter {
     const now = toIsoUtc(wall.instant());
     try {
       const outcome = dal.transaction(() => {
-        dal.upsertSession({ session_id: sessionId, execution_status: 'idle', workspace_root: args.workspaceRoot, created_at: now, updated_at: now, worktree: args.worktree ?? null, ...(args.sandboxMode ? { sandbox_mode: args.sandboxMode } : {}) });
+        dal.upsertSession({ session_id: sessionId, execution_status: 'idle', workspace_root: args.workspaceRoot, created_at: now, updated_at: now, worktree: args.worktree ?? null, run_type: args.runType ?? 'task_run', ...(args.sandboxMode ? { sandbox_mode: args.sandboxMode } : {}) });
         const lock = dal.claimLock(sessionId, args.pid, args.host, now);
         if (!lock.claimed) return lock;
         dal.openHistory(sessionId);

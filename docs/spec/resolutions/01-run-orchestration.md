@@ -7,6 +7,17 @@ status: resolved
 
 # Resolution Record — Domain 01, Multi-Agent Run Orchestration
 
+> ## Amendment, 2026-09-14 — one persisted run vocabulary
+>
+> The two-value `task` / `maintenance` clause in disposition 31 and REQ-ORCH-137 is superseded by
+> the persisted marker owned by REQ-SESSION-021 and made exact by REQ-LIBRARY-002:
+> `task_run`, `improvement_run`, and `integration_run`. Ordinary user runs carry `task_run` and are
+> eligible for post-run collection. Library-launched application runs carry `improvement_run`, and
+> hidden worktree-integration runs carry `integration_run`; both are analysis-ineligible. The
+> gate-authoring work of REQ-ORCH-126 remains a detached internal task and creates no durable session,
+> so it introduces no fourth run type. This amendment preserves disposition 31's behavioural boundary
+> while removing its duplicate vocabulary.
+
 
 > ## Superseded by the storage rulings (2026-09-01)
 >

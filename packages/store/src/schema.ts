@@ -648,6 +648,47 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE sessions ADD COLUMN plan_released INTEGER NOT NULL DEFAULT 0;
     `,
   },
+  {
+    to: 18,
+    /*
+     * ADR-0061 / REQ-LIBRARY-002, 036, 042..054. The artifact row is the current workspace-scoped
+     * state. `versions_due` is allocated in the same transaction as every current-state write, while
+     * immutable version rows and `versions_pruned` are committed together by the following best-effort
+     * operation. A gap between due and retained+pruned rows is therefore a version that was never recorded.
+     *
+     * Session association stays on the durable session snapshot. The source session column on the artifact
+     * remains deliberately free of a foreign key because REQ-LIBRARY-042 says the workspace artifact outlives
+     * the session that produced it.
+     */
+    sql: `
+      ALTER TABLE sessions ADD COLUMN run_type TEXT NOT NULL DEFAULT 'task_run'
+        CHECK (run_type IN ('task_run', 'improvement_run', 'integration_run'));
+      ALTER TABLE sessions ADD COLUMN improvement_artifact_ids TEXT NOT NULL DEFAULT '[]';
+
+      CREATE TABLE improvement_artifacts (
+        artifact_id       TEXT PRIMARY KEY,
+        source_session_id TEXT NOT NULL,
+        source_run_type   TEXT NOT NULL,
+        generated_at      TEXT NOT NULL,
+        body              TEXT NOT NULL,
+        versions_due      INTEGER NOT NULL DEFAULT 0 CHECK (versions_due >= 0),
+        versions_pruned   INTEGER NOT NULL DEFAULT 0 CHECK (versions_pruned >= 0)
+      );
+      CREATE INDEX improvement_artifacts_newest
+        ON improvement_artifacts(generated_at DESC, artifact_id ASC);
+      CREATE INDEX improvement_artifacts_by_session
+        ON improvement_artifacts(source_session_id, generated_at DESC, artifact_id ASC);
+
+      CREATE TABLE improvement_artifact_versions (
+        artifact_id TEXT NOT NULL REFERENCES improvement_artifacts(artifact_id) ON DELETE CASCADE,
+        version     INTEGER NOT NULL CHECK (version >= 1),
+        recorded_at TEXT NOT NULL,
+        cause       TEXT NOT NULL,
+        body        TEXT NOT NULL,
+        PRIMARY KEY (artifact_id, version)
+      );
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

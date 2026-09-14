@@ -7,6 +7,7 @@ import { bootstrapConfigFile, commitConfigFields, commitDesktopSave, readSnapsho
 import { mkdirSync } from 'node:fs';
 import { deliveryServiceFor } from './delivery.js'; // Part AK
 import { promptsRootsRead } from './prompts.js'; // Part AO
+import { improvementServiceFor } from './improvements.js';
 
 /**
  * WORKSPACE SERVICE — one utilityProcess per open workspace, keyed by
@@ -250,6 +251,11 @@ async function handle(req: WorkspaceServiceRequest): Promise<ProcessReply> {
     // Part AO — REQ-CHAT-160: the three prompt roots, read here because this is the process that reads the user's files.
     case 'prompts.roots.read':
       return promptsRootsRead({ workspaceRoot: req.workspaceRoot, configDir: dirs.config }, log);
+    case 'improvements.command': {
+      if (!open) return { kind: 'refused', code: 'workspace.none', headline: 'Open a workspace before reading improvement artifacts' };
+      const result = improvementServiceFor(open, { workspaceRoot: req.workspaceRoot, clocks, log }).handle(req.command);
+      return { kind: 'improvements.result', value: result.value, ...(result.changed === undefined ? {} : { changed: result.changed }) };
+    }
     case 'shutdown': {
       // REQ-GIT-101: an in-flight checkpoint Git operation finishes first; the wait is bounded by REQ-GIT-033's limits alone.
       if (inFlight.size > 0) { log(`shutdown: waiting for ${inFlight.size} in-flight checkpoint operation(s)`); await Promise.allSettled([...inFlight]); }

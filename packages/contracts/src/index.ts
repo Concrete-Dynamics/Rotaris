@@ -19,6 +19,7 @@ export * from './git.js';
 export * from './checkpoints.js';
 export * from './mcp.js';
 export * from './library.js';
+export * from './improvements.js';
 export * from './artifacts.js';
 export * from './requirements.js'; // Part AK
 export * from './terminal.js';

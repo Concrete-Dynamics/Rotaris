@@ -20,7 +20,7 @@ and answered differently, and nobody can see that it happened. The reason is par
 
 ## Count
 
-**Twelve.** The count is the number of rows below.
+**Fourteen.** The count is the number of rows below.
 
 ---
 
@@ -40,6 +40,7 @@ and answered differently, and nobody can see that it happened. The reason is par
 | <a id="r-012"></a>R-012 | 2026-09-13 | "issue a PD. because the spacing is too large between the messages. i want how claude design proposed it. the screenshot shows the current status with the large spacing that make it hard to read." — transcript row density to follow the mockup's compact flow | directive | [`PD-CHAT-003`](directives.md#pd-chat-003) |
 
 | <a id="r-013"></a>R-013 | 2026-09-14 | "the transcript in the workspace looks a little blurry, the text and persona names and so on. identify the issue and propose a fix." followed by "Go ahead and implement this plan." | covered | The adopted typography and fidelity workflow govern rendered text (`docs/design/README.md` section 1.4 and section 7); PD-CHAT-003 requires readable compact rows; REQ-CHAT-057 and ADR-0045 govern the pooled Workspace transcript. The repair preserves the fixed slot pool and its translated coordinates while returning text-layer selection to the browser. |
+| <a id="r-014"></a>R-014 | 2026-09-14 | "go ahead and plan out this big delivery scope for the library", selecting the full lifecycle and the three persisted run types, followed by "Yes implement the plan." | covered, with cross-domain reconciliation | REQ-LIBRARY-001..078, REQ-LIBRARY-102..130 and REQ-LIBRARY-156..176 govern the improvement-artifact lifecycle, review surface, execution, rollback and export. REQ-SESSION-021 and REQ-GIT-131 own the persisted run marker. REQ-ORCH-137's earlier two-value wording and REQ-LIBRARY-051/168's history wording are reconciled with that owned vocabulary and ADR-0061 before their implementation lands. |
 
 <!--
 Row shape:

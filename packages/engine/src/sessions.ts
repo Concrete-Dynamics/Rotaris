@@ -1,5 +1,5 @@
 import { asSessionId, err, millis, ok, type Clocks, type MachineId, type Millis, type Result, type SessionId } from '@rotaris/kernel';
-import { APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type CheckpointKind, type CheckpointListPayload, type ControlRequest, type ControlResult, type ImageAttachmentInput, type PermissionPreset, type QuestionAnswers, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding } from '@rotaris/contracts';
+import { APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type CheckpointKind, type CheckpointListPayload, type ControlRequest, type ControlResult, type ImageAttachmentInput, type PermissionPreset, type QuestionAnswers, type RunType, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding } from '@rotaris/contracts';
 import { existsSync, rmSync } from 'node:fs';
 import { RELEASE_PAGE_SIZE, type CheckpointRow, type SessionRow, type StoreDal } from '@rotaris/store';
 import type { AgentBackend, ContentPart } from '@rotaris/model';
@@ -424,6 +424,7 @@ export interface StartOptions {
   readonly worktree?: WorktreeBinding | undefined;
   readonly sandboxMode?: string | undefined;
   readonly attachments?: readonly ImageAttachmentInput[] | undefined;
+  readonly runType?: RunType | undefined;
 }
 
 /** REQ-SESSION-082 / REQ-EVENTS-021: a refusal before the run starts is one `result` of status error, marked as such. */
@@ -471,6 +472,8 @@ export function toSessionRecord(r: SessionRow, queued: readonly { id: string; co
     tokenUsage: { input: r.tokens_input, output: r.tokens_output },
     cost: r.cost,
     stopReason: r.stop_reason,
+    runType: r.run_type,
+    improvementArtifactIds: parseList(r.improvement_artifact_ids),
     runStartedAt: r.run_started_at,
     iterationsCompleted: r.iterations_completed,
     summary: r.summary_status && r.summary_severity && r.summary_text ? { status: r.summary_status, severity: r.summary_severity, message: r.summary_text } : null,
@@ -782,7 +785,7 @@ export class Sessions {
       {
         workspaceRoot, pid: this.deps.pid, host: this.deps.host, task: prompt, persona: model.config.persona, maxIterations: model.config.iterationLimit,
         permissionMode: permission.effective, sandboxed: permission.sandboxed, sandboxBackend: permission.sandboxBackend,
-        worktree: opts.worktree ? JSON.stringify(opts.worktree) : null, ...(opts.sandboxMode ? { sandboxMode: opts.sandboxMode } : {}),
+        worktree: opts.worktree ? JSON.stringify(opts.worktree) : null, runType: opts.runType ?? 'task_run', ...(opts.sandboxMode ? { sandboxMode: opts.sandboxMode } : {}),
       },
     );
     if (!created.ok) {

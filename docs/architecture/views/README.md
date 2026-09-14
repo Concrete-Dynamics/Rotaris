@@ -24,7 +24,13 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-14** — **`PD-LIBRARY-001`'s closeout (the hundredth defect)**: the engine
+Last reconciled with the code: **2026-09-14** — **the improvement artifact store foundation (ADR-0061)**:
+schema v18 adds the immutable session run type, durable session-to-artifact association, current improvement rows,
+immutable version rows and the two gap counters. The workspace service gains the reader/writer capability split,
+legacy import and `improvements.command`; the run host stamps `runType` at session creation. The component, process
+and runtime views carry the new package responsibilities, message and tables.
+
+Earlier the same day — **`PD-LIBRARY-001`'s closeout (the hundredth defect)**: the engine
 artifact port's private section list is replaced by contracts' `ARTIFACT_SECTIONS` (an internal definition, not a
 new edge — the port already imported `@rotaris/contracts`), and `pnpm artifacts-proof` gains its sixth launch with
 a verification-only `terminal:<key>` scripted-dialect step. The closeout follow-up makes the model-facing filtered

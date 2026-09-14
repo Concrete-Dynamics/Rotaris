@@ -1,6 +1,6 @@
 # ADR-0061 — The improvement artifact store's write path: rows, one indivisible mutation, two counters
 
-- **Status:** proposed
+- **Status:** accepted and first executed
 - **Date:** 2026-09-11
 - **Origin:** OQ-45, which this record closes. The question was never the product's — ESC-30 ruled the
   product half on 2026-09-02 and it was applied the same day. What remained was a decision record nobody
@@ -34,10 +34,9 @@ only the export, because `REQ-LIBRARY-176` and `REQ-TRACE-514` were minted by on
 guarantee and splitting them would have produced two divergent implementations of it. It declined the
 write path in terms. This record takes what it declined.
 
-**Nothing of this store is built.** The `improvement-artifacts` token of `LIBRARY_CHANGES`
-(`contracts/src/library.ts`) is declared and is nobody's to bump; `REQ-LIBRARY-105` closes that set at
-four and the comment there says so. No table, no handle, no write path exists. The Library's Proposals
-tab is unbuilt and has been blocked on this record's absence.
+**The store and its service boundary were built on 2026-09-14.** The `improvement-artifacts` token of
+`LIBRARY_CHANGES` (`contracts/src/library.ts`) now has a writer in the workspace service. The Library's
+Proposals tab follows in the surface slice of the same delivery.
 
 ### What this record is not
 
@@ -77,9 +76,8 @@ the contention that ladder existed for.
 
 ## Decision
 
-**1. Rows in the per-workspace database, at schema v16.** The ladder tops at v15 (ADR-0041's delivery
-store). The plan that built waves 1–3 reserved v16 conditionally for Part AP and AP shipped without it,
-so the reservation lapsed unused and v16 is free. Three things are stored: the artifact row, its version
+**1. Rows in the per-workspace database, at schema v18.** Schema v16 subsequently carried
+PD-LIBRARY-001's command ledger and v17 carried ADR-0062's plan cycles. Three things are stored: the artifact row, its version
 rows, and the two counters, which are **columns on the artifact row** rather than a table of their own so
 that each is written by the transaction that owns the fact it counts.
 
@@ -138,13 +136,23 @@ operation: the version is an audit of a change, not a further change.
    requirement that withdrew it.
 3. **The export stops depending on an unwritten store.** ADR-0041 owns `REQ-LIBRARY-176` and names the
    fix; the two figures it must carry are now produced by a path that exists on paper and can be built.
-4. **One migration is owed** (v16) and one integer is paid on every artifact write, for a figure most
+4. **One migration landed** (v18) and one integer is paid on every artifact write, for a figure most
    users never look at. Constraint W-26 exists to keep that cost alive in the record rather than have an
    implementer find two unexplained counters and delete them.
 5. **A first execution will report back here**, including if it finds nothing — standing policy. Every
    mechanism in this record's corpus that has gone from paper to first execution has held a defect no
    reading caught, and a store with two counters written by two different transactions is exactly the
    shape where a reading is likely to be wrong about ordering.
+
+## First execution — 2026-09-14
+
+The v18 migration, contracts, reader/writer capability split, workspace-service command, immutable run
+type, legacy import and the two-operation version path were first executed through thirteen focused tests.
+The tests drove two writable connections against one store, a forced history-write failure, thirty
+mutations through retention, a pre-history row, a malformed legacy file and a close/reopen. The artifact
+transaction remained committed when the version operation failed; `versions_never_recorded` read 1,
+the warning named the failure, and a stale compare-and-set write was refused. Retention kept version 1
+and the newest 24 and counted six pruned versions. **The execution found no defect in this mechanism.**
 
 ## Revisit if
 

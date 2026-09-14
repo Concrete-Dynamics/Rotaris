@@ -2,7 +2,7 @@
 reference: ROTARIS-CRW-001
 domain: event-history-replay-export
 date: 2026-08-29
-status: draft
+status: approved (Specification Gate closed 2026-08-31; amendments land as dated rounds in resolutions/)
 ---
 
 # Machine-Readable Event Stream, Replay, and Trajectory Export

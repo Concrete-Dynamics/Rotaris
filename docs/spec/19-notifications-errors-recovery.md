@@ -2,7 +2,7 @@
 reference: ROTARIS-CRW-001
 domain: notifications-errors-recovery
 date: 2026-08-29
-status: draft
+status: approved (Specification Gate closed 2026-08-31; amendments land as dated rounds in resolutions/)
 ---
 
 # Notifications, Error Handling, and Recovery

@@ -28,3 +28,19 @@ the operational half of `docs/design/README.md` §2/§7; the baseline it compare
   strip from `.tsx`, where the inline-metric scan has the same shape and the same exposure.
 - `tools/ui-language-debt.mjs` — `compareDebt`, which turns the miscount into a failed `pnpm check`.
 - `packages/ui/src/shell.css` — the `.plan-gate` block whose comment triggered it.
+
+## Repaired — 2026-09-14
+
+The `.css` branch now strips `/* … */` blocks before both scans, as the note proposed. The repair
+is deliberately confined to `.css`: the `.tsx` inline-metric pattern is anchored on quotes within
+its own match, so a JS/TSX comment cannot reach past its end the way an unterminated CSS value
+did, and stripping from `.tsx` would open the opposite hazard (a metric literal quoted inside a
+prose comment going uncounted).
+
+No re-baseline was needed: the committed baseline agrees with the corrected counts exactly
+("163 normalized legacy debt entries at the baseline", and the debt-ratchet unit suite — which
+asserts the committed file against a fresh measurement — passes 8/8). The ratchet's own
+invariants are what make this a safe repair: since the miscount could only ever over-count, every
+entry the baseline carries was reserved against at least the true count, so correcting downward
+either changes nothing or would have surfaced as a `stale` entry demanding a lower baseline —
+neither happened.

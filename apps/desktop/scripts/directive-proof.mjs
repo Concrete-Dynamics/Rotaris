@@ -96,7 +96,23 @@ try {
       carried === declared,
       `${carried} PD symbols, DIRECTIVE_COUNT ${declared}`,
     );
-    assert('the template inside the HTML comment is not parsed as a directive', !/'PD-CHAT-001':/.test(art));
+    // Found on the first execution of this register with real PD-CHAT-001 entries in it (2026-09-14,
+    // docs/defects/directive-proof-template-check-fails-on-main.md): this used to assert that
+    // 'PD-CHAT-001' appeared nowhere in the artifact — true while the only PD-CHAT-001 in existence
+    // was the example inside the register's HTML comment, and unsatisfiable from the day the owner
+    // minted a real PD-CHAT-001 (the composer's popover chips). What the comment promises is that
+    // its content is SKIPPED, which is checkable exactly: the parse of the register with its
+    // comments removed must be byte-identical to the parse of the register as committed.
+    const artCommitted = art;
+    const stripped = original.replace(/<!--[\s\S]*?-->/g, '');
+    assert('the committed register carries an HTML-comment template', stripped !== original);
+    writeFileSync(register, stripped);
+    const strippedRun = generate();
+    assert(
+      "the template inside the HTML comment is not parsed as a directive — the parse is identical with the comment gone",
+      strippedRun.ok && readFileSync(artifact, 'utf8') === artCommitted,
+      strippedRun.ok ? 'the artifact changed when the comment was removed' : strippedRun.out,
+    );
   }
 
   console.log('\n2. a well-formed directive reaches the corpus');

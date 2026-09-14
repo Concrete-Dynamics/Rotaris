@@ -38,3 +38,23 @@ that calls that value the only one defined. An amendment should keep the first a
 - `packages/contracts/src/hooks.ts` — `HOOK_SKIP_REASONS`, the product's single copy, now two members.
 - `packages/hooks/src/engine.ts` — `announceWithheld` emits the first reason once per session; `runOne`
   emits the second once per withheld invocation.
+
+## Repaired — 2026-09-14
+
+Both restatements in `docs/spec/20-event-history-replay-export.md` were amended
+in place, keeping what was correct and repairing what was stale. `REQ-EVENTS-047`
+keeps its restriction of the trust-gate case to `skip_reason` exactly
+`untrusted_workspace` — that sentence governs a hook REQ-HOOKS-090 withheld, and
+only that hook — and its parenthetical now says that value is *one of the two*
+REQ-HOOKS-126 defines, naming `plan_gate` and pointing at REQ-ORCH-153 for the
+separate case. The `hook.finish` row of the payload table names both values and
+cites REQ-HOOKS-126 for their meanings, delegating the vocabulary instead of
+copying it — the pattern the table's neighbouring rows already follow.
+
+The amendment round's record is appended to
+`docs/spec/resolutions/20-event-history-replay-export.md`, which closes the
+obligation the plan gate's row in `docs/architecture/first-executions.md`
+carried. No code changed: `REQ-HOOKS-126`, `HOOK_SKIP_REASONS` in
+`packages/contracts/src/hooks.ts`, and both emission sites in
+`packages/hooks/src/engine.ts` were already conformant, which is why this was a
+stale restatement rather than a contradiction the build had to resolve.

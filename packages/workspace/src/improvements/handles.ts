@@ -452,6 +452,8 @@ export function createImprovementWriter(
           throw new Error(IMPROVEMENT_NOT_FOUND(artifactId));
         return transform(current);
       },
+      // exactOptionalPropertyTypes: an explicit `undefined` is not assignable to an optional
+      // property, so the key is included only when the caller supplied a value.
       expectedVersionsDue === undefined ? {} : { expectedVersionsDue },
     );
 

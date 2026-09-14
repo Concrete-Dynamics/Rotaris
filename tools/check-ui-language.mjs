@@ -52,8 +52,17 @@ for (const path of drawingRoots.flatMap((drawingRoot) => walk(drawingRoot))) {
     for (const match of text.matchAll(/\b(gap|padding(?:-(?:top|right|bottom|left))?|margin(?:-(?:top|right|bottom|left))?|borderRadius|fontSize|width|height|minWidth|minHeight|maxWidth|maxHeight)\s*:\s*['"]?(-?\d+(?:\.\d+)?(?:px|pt|ms)?)/g)) addDebt(path, 'inline-metric', `${match[1]}:${match[2]}`);
   }
   if (extension === '.css') {
-    for (const match of text.matchAll(/\b(gap|row-gap|column-gap|padding(?:-(?:top|right|bottom|left))?|margin(?:-(?:top|right|bottom|left))?|inset|top|right|bottom|left|width|min-width|max-width|height|min-height|max-height|font-size|border-radius)\s*:\s*([^;}]*?)(-?\d+(?:\.\d+)?(?:px|pt))\b/g)) addDebt(path, 'css-metric', `${match[1]}:${match[3]}`);
-    for (const match of text.matchAll(/\b(transition(?:-duration)?|animation(?:-duration)?)\s*:\s*([^;}]*?)(\d+(?:\.\d+)?ms)\b/g)) addDebt(path, 'css-motion', `${match[1]}:${match[3]}`);
+    // Found while writing the plan gate's styles (2026-09-13,
+    // docs/defects/ui-language-checker-reads-css-comments.md): these scans ran over raw text, so a
+    // property name in prose inside a `/* … */` block was read as a declaration — and because the
+    // value pattern runs to the next `;` or `}` and a comment holds neither, the match continued
+    // PAST the comment's end and attributed the first literal of the next rule to the sentence.
+    // The false positive is safe in direction (it can only over-count), but it failed `pnpm check`
+    // naming a metric nowhere near the change. Strip comments before scanning; `.tsx` keeps its
+    // raw-text scan, where the inline-metric pattern is anchored on quotes and has no such reach.
+    const css = text.replace(/\/\*[\s\S]*?\*\//g, '');
+    for (const match of css.matchAll(/\b(gap|row-gap|column-gap|padding(?:-(?:top|right|bottom|left))?|margin(?:-(?:top|right|bottom|left))?|inset|top|right|bottom|left|width|min-width|max-width|height|min-height|max-height|font-size|border-radius)\s*:\s*([^;}]*?)(-?\d+(?:\.\d+)?(?:px|pt))\b/g)) addDebt(path, 'css-metric', `${match[1]}:${match[3]}`);
+    for (const match of css.matchAll(/\b(transition(?:-duration)?|animation(?:-duration)?)\s*:\s*([^;}]*?)(\d+(?:\.\d+)?ms)\b/g)) addDebt(path, 'css-motion', `${match[1]}:${match[3]}`);
   }
 }
 

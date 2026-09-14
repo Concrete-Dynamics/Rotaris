@@ -245,6 +245,26 @@ function scriptedClient(c: Clocks): ModelClient {
         }
         log(`scripted: the step ${step} names no callable tool (the listing holds ${(req.tools ?? []).map((t) => t.name).join(', ')}); answering instead`);
       }
+      // terminal:<key> — PD-LIBRARY-001's proof: one `terminal` call, with the arguments taken from
+      // ROTARIS_SCRIPT_TERMINAL_ARGS by key (a JSON map) or the `git status` default below. Verification only,
+      // in the shape of the artifact and MCP argument maps above: the proof needs a child that runs ordered
+      // terminal commands whose exit statuses the command ledger can record, and the scripted dialect had no
+      // deterministic terminal step.
+      const terminalStep = /^terminal:([\w-]+)$/.exec(step);
+      if (terminalStep) {
+        if ((req.tools ?? []).some((t) => t.name === 'terminal')) {
+          let scripted: Record<string, unknown> = {};
+          try { scripted = JSON.parse(process.env['ROTARIS_SCRIPT_TERMINAL_ARGS'] ?? '{}') as Record<string, unknown>; } catch { scripted = {}; }
+          const key = terminalStep[1]!;
+          const args = key in scripted ? scripted[key] : { command: 'git status' };
+          yield ok<StreamPart>({ kind: 'text', delta: `Running the terminal command for ${key}. ` });
+          yield ok<StreamPart>({ kind: 'tool-call', callId: `call-${call}`, name: 'terminal', argsDelta: JSON.stringify(args) });
+          yield ok<StreamPart>({ kind: 'usage', usage: { input: 30, output: 12 } });
+          yield ok<StreamPart>({ kind: 'finish', reason: 'other' });
+          return;
+        }
+        log(`scripted: the step ${step} names no callable tool (the listing holds ${(req.tools ?? []).map((t) => t.name).join(', ')}); answering instead`);
+      }
       // ask[:<key>] — Part AC's step: one `ask_questions` call, with the steps taken from ROTARIS_SCRIPT_QUESTIONS by
       // key (a JSON map) or the two-step default below. Verification only.
       const askStep = /^ask(?::([\w-]+))?$/.exec(step);

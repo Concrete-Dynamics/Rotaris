@@ -143,6 +143,15 @@ of REQ-SESSION-136, which this directive does not require and does not forbid.
 
 *Raised by the owner, 2026-09-12; logged as [R-006](requests.md#r-006).*
 
+> **First execution, 2026-09-14:** the built-app proof (`pnpm artifacts-proof`'s sixth launch) ran a child
+> through three ordered terminal calls — success, exit 7, and one the permission gate denies — and read the
+> report back through `artifact_read` with `sections: ['commands']`. It found the tool path still filtering
+> through a private section list that predated the directive: the store's own filter was correct and its test
+> green, but every model-facing filtered read returned the full document. Repaired against contracts'
+> `ARTIFACT_SECTIONS`; the ledger itself behaved exactly as this record fixes it — order preserved, statuses
+> in words, the denied command carrying no exit status. The full account is in
+> `docs/architecture/first-executions.md` and `docs/defects/artifact-read-section-allow-list-omits-commands.md`.
+
 <a id="pd-chat-001"></a>
 
 ### PD-CHAT-001 — the composer's selector chips open their alternatives in a press-revealed popover

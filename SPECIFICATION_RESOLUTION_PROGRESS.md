@@ -41,7 +41,7 @@ Each item requires current evidence for its operative specification, dependent c
 | Package | Accepted items | State |
 |---|---|---|
 | Session lifecycle, durability and exports | A3, A6, A9, OQ-8, OQ-12, OQ-41, OQ-42, OQ-46 | **Delivered 2026-09-13**, with one explicitly recorded evidence debt (OQ-12's power-loss measurement) |
-| Permissions, orchestration and terminal | A2, A4, OQ-4, OQ-5, OQ-7, OQ-9, OQ-10, OQ-13, OQ-15, OQ-16, OQ-17, OQ-35, OQ-36, OQ-37, OQ-38, OQ-39 | In progress — **A2 and A4 delivered 2026-09-13** (A4's plan gate built and proven under REQ-ORCH-152..154 / ADR-0062) |
+| Permissions, orchestration and terminal | A2, A4, OQ-4, OQ-5, OQ-7, OQ-9, OQ-10, OQ-13, OQ-15, OQ-16, OQ-17, OQ-35, OQ-36, OQ-37, OQ-38, OQ-39 | In progress — **A2 and A4 delivered 2026-09-13** (A4's plan gate built and proven under REQ-ORCH-152..154 / ADR-0062); A4's found-by-building amendment round (hook skip-reason vocabulary) discharged 2026-09-14 |
 | Providers and MCP | A5, A7, A8, OQ-6, OQ-18, OQ-19, OQ-20, OQ-21, OQ-22, OQ-50 | Pending |
 | Services, stores and recovery | OQ-1, OQ-2, OQ-43, OQ-45, OQ-47, OQ-48 | Pending |
 | Traceability, presentation and benchmarks | OQ-24, OQ-25, OQ-29, OQ-32, OQ-33, OQ-34, OQ-40 | Pending |
@@ -294,11 +294,12 @@ its enforcement points) belongs to the Part that builds it. Two defects found wh
 recorded in `docs/defects/` without being repaired here: the root execution record carries no
 resolvable identity, which is REQ-ORCH-072's own clause and the first thing that Part will need; and
 `presentationStatus` maps `interrupted` onto `paused` where REQ-NOTIFY-049 says `idle`, which is
-unrelated to A4 and wants its own commit.
+unrelated to A4 and wants its own commit. *Update 2026-09-14: both were repaired — see the entry at
+the end of this document.*
 
 ### 2026-09-13 — A4 delivered: the plan gate built and proven (REQ-ORCH-152..154, ADR-0062)
 
-The mechanism of A4 is built, proven in the built app, and merged (`part-plan-gate`, commit `d9738ece8`).
+The mechanism of A4 is built, proven in the built app, and merged (`part-plan-gate`, commit `d9738ec`).
 
 **Delivered mechanism.**
 - **Park, do not block (ADR-0062):** A plan-mode run is a sequence of run segments, launched through `SessionManager.launchContinuation`. In `plan` mode, unless classified in the answer group of REQ-ORCH-021 (`question`, `exploration`), iteration 0 runs a single turn of the entry role to produce the plan verbatim, parks at `awaiting_plan_decision` with `plan_cycle = 1`, and raises no terminal result or stop reason.
@@ -308,3 +309,29 @@ The mechanism of A4 is built, proven in the built app, and merged (`part-plan-ga
 - **Session commands:** Direct user plan editing via `session.planEdit` persists user edits without approving. Three-way decision via `session.planDecision` handles `approve` (one-way execution release), `revise` (launches next plan cycle with specified changes), and `cancel` (marks session paused with `user_cancelled`).
 - **Surface:** Hosted inside `WorkspaceView` (`PlanGate.tsx`) per `REQ-SHELL-168` with verbatim monospace presentation, inline editing, and sticky keyboard-accessible decision buttons. Composer is locked while gate holds. Mode is offered and persists via `runtime.run_start_mode` in both composer chip and start session dialog.
 - **Verification:** Unit and integration coverage in `packages/engine/src/run/plan-gate.test.ts` (10 tests), `packages/agent-tools/src/gate.test.ts`, `packages/agent-tools/src/planning-grants.test.ts`, `packages/hooks/src/engine.test.ts`, and `packages/store/src/store.test.ts`. Full end-to-end built-app proof executed in `apps/desktop/scripts/plan-gate-proof.mjs` and recorded in `docs/architecture/first-executions.md`.
+
+### 2026-09-14 — A4's amendment round discharged, and both recorded defects repaired
+
+Three closures this document did not yet record, verified against git history on `main` before writing:
+
+- **The hook skip-reason amendment round (the defect found by building the plan gate).**
+  `docs/spec/20-event-history-replay-export.md`'s two stale restatements — `REQ-EVENTS-047`'s
+  "the only defined value" parenthetical and the `hook.finish` row of the event-payload table — were
+  amended to name both members of `REQ-HOOKS-126`'s closed set, keeping the restriction to
+  `untrusted_workspace` where the sentence describes the trust-gate case. Commit `644bca0`, merged as
+  `6e7fb6f` (`fix-plan-gate-hook-skip-reason-spec`). The round the defect owed is discharged; the
+  defect note records the repair.
+- **`interrupted` presents as `idle`.** The unrelated mapping defect was repaired in
+  `packages/contracts/src/status.ts` with its own arm and the REQ-NOTIFY-049/160 citation, plus the
+  regression in `packages/contracts/src/contracts.test.ts` asserting one stated arm per member of
+  REQ-SESSION-073's fourteen. The "wants its own commit" note above is satisfied.
+- **The root execution record's identity.** The second defect recorded during A4's reading round
+  also carries its Repaired section as of 2026-09-13. The identity REQ-ORCH-072 asks for — the
+  canonical name and task id that make a lookup naming the root resolve — exists in the record now,
+  and the note's own text describes what was delivered.
+
+One correction to this document made while verifying: the A4 entry below cited the plan-gate merge
+as `d9738ece8`; the commit's actual short hash on `main` is `d9738ec`, and it now reads so. The rest
+of that entry's claims were confirmed against history rather than taken from it: the merge exists,
+its message names REQ-ORCH-152/153/154 and ADR-0062, and the entry's predecessor commits (`70a12c3`,
+`60ff8c5`) are the A4-specification and A2-audit rounds this document narrates.

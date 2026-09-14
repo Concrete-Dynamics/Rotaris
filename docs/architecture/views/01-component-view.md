@@ -219,3 +219,7 @@ anything: `shrunkBoxes` reports a box standing smaller than the content inside i
 past the edge under whatever paints next. It exists because `text-fit` says the same thing on request and no
 header had ever been asked (UIR-014). The verdict is pure and lives beside the relations in
 `apps/desktop/scripts/lib/layout-relations.mjs`; the probe measures, `ui-audit` reports it as `SHRUNK`.
+
+### Transcript rendering note
+
+The Workspace transcript keeps ADR-0045's fixed recycled slot pool and positions each bound slot with its measured `translateY` offset. Browser-selected text layers preserve native glyph rasterization during steady-state reading; `rows-proof` verifies the default layer hint and live coordinate transform.

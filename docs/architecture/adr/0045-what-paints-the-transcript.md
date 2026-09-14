@@ -547,3 +547,11 @@ different layout: it changes where a row sits in the element tree and how it is 
 against "the rows are my children", and any component that reads context, has to be re-checked against the pool
 rather than assumed to carry over. That is a consequence of this decision and belongs here rather than in the
 part that tripped over it.
+
+### Rendering finding — 2026-09-14
+
+The fixed pool originally declared `will-change: transform` on every one of its 154 text-bearing slots. The browser then held each slot in a compositor layer across ordinary scrolling; on Windows, the fractionally translated layers rasterized transcript text and persona labels more softly than the same `Row` renderer in the persona list.
+
+The coordinate contract remains `translateY(measuredOffset)`: offsets retain their measured fractional values, and the pool retains its fixed slot count. The stylesheet leaves `will-change` at the browser default, which returns text-layer selection to Chromium during steady-state reading.
+
+`rows-proof` records the contract in the built renderer: bound Workspace slots expose `willChange: "auto"` and a live coordinate transform. Its density assertion follows PD-CHAT-003's content-sized one-line rows.

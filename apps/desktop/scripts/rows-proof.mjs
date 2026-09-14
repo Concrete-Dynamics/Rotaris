@@ -159,6 +159,7 @@ const r = launch('rows', {
     `${W} [data-call-key="call-ok"]@7600`,
     `${W} .rowlist@8100`, `${W} .rowlist@8500`,
   ].join(';;'),
+  ROTARIS_CAPTURE_EVAL_AT: `(() => [...document.querySelectorAll('${W} .transcript__slot[data-bound]')].map((slot) => { const style = getComputedStyle(slot); return { transform: style.transform, willChange: style.willChange }; }))()@1500`,
   ROTARIS_CAPTURE_DRAG_AT: `${W} [data-testid="row-markdown"] .md__p@5400`,
   // The acknowledgement stack is transient (REQ-NOTIFY-011: 4200 ms), so each outcome is read beside the click that
   // raised it rather than at the end, where the requirement's own lifetime would have removed it.
@@ -175,6 +176,10 @@ const r = launch('rows', {
   ROTARIS_CAPTURE_KEYS: 'Down@8300',
   ROTARIS_CAPTURE_AFTER_MS: '8900',
 });
+
+const rasterCapture = new RegExp('capture: eval-at 1500 .*? \\u2192 (.*)\\s*$', 'm').exec(r.log);
+let rasterSlots = [];
+try { rasterSlots = rasterCapture ? JSON.parse(rasterCapture[1]) : []; } catch { rasterSlots = []; }
 
 // REQ-CHAT-056: no image is EVER loaded from a Markdown image reference — measured from the main process, with
 // the harness's own control request proving the observer was watching.
@@ -219,7 +224,10 @@ const roleWidths = [...new Set(attribution.matches.map((m) => Math.round(m.rect.
 const minRowHeight = Math.min(...rowRects.matches.map((m) => m.rect.height));
 expect(timeWidths.length === 1 && timeWidths[0] === 52, `the timestamp column measured ${JSON.stringify(timeWidths)} px, not 52`);
 expect(roleWidths.length === 1 && roleWidths[0] === 112, `the role column measured ${JSON.stringify(roleWidths)} px, not 112`);
-expect(minRowHeight >= 30, `a row was ${minRowHeight} px high, below the 30 px minimum`);
+expect(minRowHeight >= 16 && minRowHeight <= 22, `the compact one-line row measured ${minRowHeight} px; PD-CHAT-003 expects its content line`);
+expect(rasterSlots.length > 0, 'the Workspace yielded no bound transcript slots for the rasterization check');
+expect(rasterSlots.every((slot) => slot.willChange === 'auto'), `Workspace slots requested persistent compositor promotion: ${JSON.stringify(rasterSlots)}`);
+expect(rasterSlots.every((slot) => slot.transform !== 'none'), `Workspace slots lost their recycler coordinate transform: ${JSON.stringify(rasterSlots)}`);
 const fontSize = times.matches[0].attrs.class.includes('mono');
 expect(fontSize, 'the timestamp is not drawn in the monospace stack');
 // Attribution on the first row of a block only; a continuation shows the 2 px persona bar instead.
@@ -231,6 +239,7 @@ const rowCount = text(r.probes, `${W} .row`).length;
 expect(roleCount < rowCount, `every row drew attribution (${roleCount} of ${rowCount}); continuation rows must not`);
 expect(text(r.probes, `${W} [data-testid="row-task"]`).includes('helper'), 'the task line did not name the row\'s task');
 results.geometry = { timestampColumnPx: timeWidths[0], roleColumnPx: roleWidths[0], minRowHeightPx: Math.round(minRowHeight), personaBarPx: barWidths[0], rows: rowCount, attributionRows: roleCount, continuationBars: bars.matches.length };
+results.rasterization = { boundSlots: rasterSlots.length, defaultWillChange: true, transformedSlots: true };
 
 // REQ-CHAT-060: the four outcomes, and a glyph already in the text drawn once.
 const okRow = (r.probes[`${W} [data-call-key="call-ok"]`] ?? [])[0] ?? { text: '' };

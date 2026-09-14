@@ -192,7 +192,9 @@
 .transcript__scroll .empty-state { position: absolute; inset: 0; margin: auto; max-width: 420px; height: max-content; }
 /* The pool: a constant number of slots, positioned from the measured offset table rather than from document flow. */
 .transcript__pool { position: relative; width: 100%; }
-.transcript__slot { position: absolute; inset-inline: 0; top: 0; will-change: transform; }
+/* The recycler positions slots with translateY. Persistent compositor promotion softens Windows text
+   rasterization across the pool, so Chromium selects a layer only when its current paint work needs one. */
+.transcript__slot { position: absolute; inset-inline: 0; top: 0; }
 .slot--empty { pointer-events: none; }
 .transcript__new { position: absolute; align-self: center; z-index: 2; }
 .transcript__search { display: flex; align-items: center; gap: var(--rt-space-2, 8px); padding: var(--rt-space-2, 8px); border: var(--rt-hairline-width) solid var(--rt-border); border-radius: var(--rt-radius-md, 6px); background: var(--rt-chrome); }

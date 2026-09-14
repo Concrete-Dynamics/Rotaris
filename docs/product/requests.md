@@ -39,6 +39,8 @@ and answered differently, and nobody can see that it happened. The reason is par
 | <a id="r-011"></a>R-011 | 2026-09-13 | "the ask question tool in the codebase doesnt present the user with a rendered form yet. there should be specs for that. plan it out.", followed by "auto open the modal stepper but have it glued inside the transcript at the bottom. similar how copitlot does it or claude code or codex" with all-in-one scrollable form and rendered summary for settled rows | directive | [`PD-CHAT-002`](directives.md#pd-chat-002) |
 | <a id="r-012"></a>R-012 | 2026-09-13 | "issue a PD. because the spacing is too large between the messages. i want how claude design proposed it. the screenshot shows the current status with the large spacing that make it hard to read." — transcript row density to follow the mockup's compact flow | directive | [`PD-CHAT-003`](directives.md#pd-chat-003) |
 
+| <a id="r-013"></a>R-013 | 2026-09-14 | "the transcript in the workspace looks a little blurry, the text and persona names and so on. identify the issue and propose a fix." followed by "Go ahead and implement this plan." | covered | The adopted typography and fidelity workflow govern rendered text (`docs/design/README.md` section 1.4 and section 7); PD-CHAT-003 requires readable compact rows; REQ-CHAT-057 and ADR-0045 govern the pooled Workspace transcript. The repair preserves the fixed slot pool and its translated coordinates while returning text-layer selection to the browser. |
+
 <!--
 Row shape:
 

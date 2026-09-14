@@ -54,6 +54,9 @@ export * from './requirements/index.js';
 export * from './requirements/panes/index.js'; // Part AP
 // Part AO
 export * from './slash/prompts.js';
+// ADR-0063 — the skill commands' reader and registrar, and the Settings Skills tab.
+export * from './slash/skills.js';
+export * from './settings/SkillsSettings.js';
 // REQ-SHELL-128..160: shared adopted-language primitives use explicit aliases
 // where the behavior-rich Shell component already owns the inventory name.
 export {

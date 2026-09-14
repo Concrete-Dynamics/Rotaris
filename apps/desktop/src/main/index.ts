@@ -938,6 +938,32 @@ async function main(): Promise<void> {
     const r = await dialog.showOpenDialog(parent, opts);
     return r.canceled || r.filePaths.length === 0 ? null : r.filePaths[0]!;
   };
+  /*
+   * REQ-WORKSPACE-151 (ADR-0063) — the "Load skill file…" chooser. The product is answerable for what it hands
+   * the host (REQ-SHELL-164): the title, the initial location, the restriction, and interpreting every answer
+   * the dialog can return; a dismissal by any host-offered means returns no selection and changes nothing.
+   *
+   * **`openFile` on win32 and linux, both properties on darwin.** The requirement asks for a chooser restricted
+   * to "a SKILL.md file **or** a directory containing one", and Electron's two properties are mutually exclusive
+   * on those two hosts — only macOS honours both at once. Logged as OQ-59. Nothing the specification states is
+   * unreachable: the directory form of REQ-WORKSPACE-057 is still accepted through the typed `/skill <path>`
+   * command, which needs no dialog at all.
+   *
+   * `ROTARIS_CAPTURE_SKILL_FILE` takes `;;`-separated answers consumed in order, so one launch can exercise a
+   * selection and a dismissal; the literal `(cancel)` is a dismissal. Verification only.
+   */
+  const scriptedSkillFiles = (capturing ? process.env['ROTARIS_CAPTURE_SKILL_FILE'] ?? '' : '').split(';;').map((s) => s.trim()).filter((s) => s !== '');
+  const chooseSkillFile = async (parent: BrowserWindow, startAt: string): Promise<string | null> => {
+    const forced = scriptedSkillFiles.shift();
+    if (forced) { log(`capture: skill file chooser → ${forced}`); return forced === '(cancel)' ? null : forced; }
+    const r = await dialog.showOpenDialog(parent, {
+      title: 'Load a skill file',
+      defaultPath: startAt,
+      properties: process.platform === 'darwin' ? ['openFile', 'openDirectory'] : ['openFile'],
+      filters: [{ name: 'Skill document', extensions: ['md'] }],
+    });
+    return r.canceled || r.filePaths.length === 0 ? null : r.filePaths[0]!;
+  };
   // A3: REQ-GIT-118's "id the launch dialog last showed" is a field of the window record — the dialog belongs
   // to one window, and a second window's launch dialog must not consume the first window's minted id.
   const askBox = async (parent: BrowserWindow, opts: Electron.MessageBoxOptions): Promise<number> => {
@@ -1373,6 +1399,45 @@ async function main(): Promise<void> {
         if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
         const r = await runHost.request({ kind: 'mcp.setup', workspaceId: w.workspaceId, action: req.action }, millis(15_000));
         return r.kind === 'mcp.setup' ? { ok: true, value: r.status } : refusal(r, 'The code-intelligence setup could not be started');
+      }
+      /*
+       * ADR-0063 — portable skills (REQ-WORKSPACE-051..073, 151). The run host answers because it owns the
+       * catalog; main names the window's open workspace and the session it follows, as it does for every
+       * workspace-scoped command. A window following no session sends none, and the run host puts the
+       * gesture in that workspace's pending bucket for the next session to adopt (OQ-58).
+       */
+      case 'skills.read':
+      case 'skills.rescan': {
+        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reading its portable skills' };
+        const r = await runHost.request({ kind: req.kind, workspaceRoot: canonicalPath(w.workspace), ...(w.followedSessionId === null ? {} : { sessionId: w.followedSessionId }) }, millis(15_000));
+        return r.kind === 'skills.state' ? { ok: true, value: r.state } : refusal(r, 'The portable skills could not be read');
+      }
+      case 'skills.forceLoad': {
+        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
+        const r = await runHost.request({ kind: 'skills.forceLoad', workspaceRoot: canonicalPath(w.workspace), name: req.name, ...(w.followedSessionId === null ? {} : { sessionId: w.followedSessionId }) }, millis(10_000));
+        // REQ-WORKSPACE-073: the refusal text is the run host's — "Skills are disabled. Enable them in Settings."
+        return r.kind === 'skills.state' ? { ok: true, value: { name: r.loaded, state: r.state } } : refusal(r, 'The skill could not be loaded');
+      }
+      /*
+       * REQ-WORKSPACE-151 — "Load skill file…". With no path the platform's own chooser opens on REQ-SHELL-164's
+       * terms and a dismissal by any means returns no selection and changes nothing; with one the caller already
+       * has the path (the typed `/skill <path>` of REQ-CHAT-162, which needs no dialog).
+       *
+       * **The dialog is a FILE chooser on Windows and Linux** and both properties on macOS. The requirement asks
+       * for a chooser "restricted to selecting a SKILL.md file or a directory containing one", which no platform
+       * dialog offers on those two hosts — logged as OQ-59. The directory form of REQ-WORKSPACE-057 stays
+       * reachable through the typed command, so no capability is lost; only the dialog is narrower.
+       */
+      case 'skills.loadFile': {
+        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
+        let path = req.path;
+        if (path === undefined) {
+          const chosen = await chooseSkillFile(w.win, canonicalPath(w.workspace));
+          if (chosen === null) return { ok: true, value: { cancelled: true } };
+          path = chosen;
+        }
+        const r = await runHost.request({ kind: 'skills.loadFile', workspaceRoot: canonicalPath(w.workspace), path, ...(w.followedSessionId === null ? {} : { sessionId: w.followedSessionId }) }, millis(10_000));
+        return r.kind === 'skills.state' ? { ok: true, value: { cancelled: false, name: r.loaded, state: r.state } } : refusal(r, 'The skill file could not be loaded');
       }
       case 'shell.hello': {
         const cb = w.workspaceId

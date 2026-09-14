@@ -61,6 +61,7 @@ describe('slash/prompts — registration on the catalogue\'s registry', () => {
     runState: 'idle', rowCount: 0, hasGit: false, models: [], personas: [], themes: [], providers: [],
     setModel: async () => undefined, setPersona: async () => undefined, setTheme: async () => undefined, logout: async () => undefined,
     control: async () => ({ ok: true, value: undefined }), open: () => undefined, stash: () => undefined, notify: () => undefined,
+    forceLoadSkill: async () => ({ ok: true }),
     submitAsPrompt: async (text) => { submitted.push(text); },
   });
 

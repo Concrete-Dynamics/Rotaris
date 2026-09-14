@@ -1,5 +1,6 @@
 import { homedir } from 'node:os';
 import type { SkillsState, SkillRow } from '@rotaris/contracts';
+import type { MonotonicClock } from '@rotaris/kernel';
 import {
   discoverSkills, loadManualSkill, NODE_DISCOVERY_PORTS, parseSkill, resolveSkills,
   skillBodyBlock, skillCatalogBlock, skillReadRoots,
@@ -30,8 +31,10 @@ export interface SkillHostDeps {
   readonly home?: string;
   readonly platform?: NodeJS.Platform;
   readonly ports?: DiscoveryPorts;
-  /** The SAVED `skills:` section for a workspace — see `enabledFor` on why it is read per gesture. */
+  /** The SAVED `skills:` section for a workspace — see `forceLoad` on why it is read per gesture. */
   readonly section: (workspaceRoot: string) => SkillsSection;
+  /** ADR-0006: the monotonic clock port. Absent means the discovery log carries no duration, never a global read. */
+  readonly monotonic?: MonotonicClock | undefined;
   readonly log: (message: string, level?: 'info' | 'warn') => void;
 }
 
@@ -75,7 +78,7 @@ export class SkillHost {
   catalog(workspaceRoot: string): SkillDiscovery {
     const held = this.catalogs.get(workspaceRoot);
     if (held) return held;
-    const started = Date.now();
+    const started = this.deps.monotonic?.now() ?? null;
     const discovery = discoverSkills(
       { workspaceRoot, home: this.home, platform: this.deps.platform ?? process.platform, exists: (p) => this.ports.isDirectory(p) || this.ports.isFile(p) },
       this.ports,
@@ -83,7 +86,8 @@ export class SkillHost {
     this.catalogs.set(workspaceRoot, discovery);
     for (const warning of discovery.warnings) this.deps.log(`skills: ${warning}`, 'warn');
     for (const skipped of discovery.skipped) this.deps.log(`skills: skipped ${skipped.path} — ${skipped.reason}`, 'warn');
-    this.deps.log(`skills: ${discovery.skills.length} discovered in ${Date.now() - started} ms (${workspaceRoot})${discovery.skipped.length > 0 ? `; ${discovery.skipped.length} skipped` : ''}`);
+    const took = started === null ? '' : ` in ${((this.deps.monotonic!.now() as number) - (started as number)).toFixed(1)} ms`;
+    this.deps.log(`skills: ${discovery.skills.length} discovered${took} (${workspaceRoot})${discovery.skipped.length > 0 ? `; ${discovery.skipped.length} skipped` : ''}`);
     return discovery;
   }
 

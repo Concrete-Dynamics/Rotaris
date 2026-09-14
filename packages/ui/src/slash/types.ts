@@ -42,6 +42,12 @@ export interface SlashContext {
   notify(text: string): void;
   /** REQ-CHAT-161's delivery: the expanded body goes exactly where typed text would have gone. */
   submitAsPrompt(text: string): Promise<void>;
+  /**
+   * REQ-WORKSPACE-073 / REQ-CHAT-034 (ADR-0063): force-load a skill for the current session. The refusal text
+   * comes back from the process that read the SAVED configuration, so the composer never decides whether
+   * skills are switched off and a stale snapshot cannot make the wrong claim.
+   */
+  forceLoadSkill(name: string): Promise<{ ok: true } | { ok: false; reason: string }>;
 }
 
 export interface SlashCommand {
@@ -56,6 +62,12 @@ export interface SlashCommand {
 /** REQ-CHAT-022's semantics: `registry.ts`. */
 export interface SlashRegistry {
   register(command: SlashCommand): void;
+  /**
+   * REQ-CHAT-034 (ADR-0063): a rescan must leave the catalogue listing **exactly** the rescanned set, which a
+   * registry that can only replace cannot do — a skill deleted from disk would keep its command. Answers
+   * whether there was a command to remove.
+   */
+  unregister(name: string): boolean;
   lookup(name: string): SlashCommand | undefined;
   filter(text: string): readonly SlashCommand[];
   list(): readonly SlashCommand[];

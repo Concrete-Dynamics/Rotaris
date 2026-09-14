@@ -22,7 +22,7 @@ function tree(): { root: string; home: string; cleanup: () => void } {
   return { root, home, cleanup: () => rmSync(base, { recursive: true, force: true }) };
 }
 
-const host = (root: string, home: string, section: SkillsSection = SKILLS_DEFAULTS) =>
+const host = (_root: string, home: string, section: SkillsSection = SKILLS_DEFAULTS) =>
   new SkillHost({ home, section: () => section, log: () => undefined });
 
 describe('the skill catalog (REQ-WORKSPACE-058, 069, 073, 057)', () => {
@@ -161,7 +161,6 @@ describe('the per-port fence (REQ-CONFIG-468, REQ-WORKSPACE-059 — ADR-0063 fir
       const outside = join(base, 'outside');
       mkdirSync(root, { recursive: true });
       mkdirSync(outside, { recursive: true });
-      writeFileSync(join(root, 'in.txt'), 'inside\n');
       writeFileSync(join(outside, 'SKILL.md'), '---\nname: x\ndescription: d.\n---\nOUTSIDE BODY\n');
 
       // The shared state, as `executorsFor` caches it per workspace root across runs (REQ-TOOLS-137).

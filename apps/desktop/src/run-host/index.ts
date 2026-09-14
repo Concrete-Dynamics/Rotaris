@@ -406,6 +406,7 @@ const configurationDeps = {
  */
 const skills = new SkillHost({
   log: (m, level) => log(m, level ?? 'info'),
+  monotonic: clocks.monotonic,
   section: (workspaceRoot) => {
     const loaded = loadConfiguration({ globalDir: configDir, workspaceRoot });
     if (loaded.ok) return loaded.value.skills;

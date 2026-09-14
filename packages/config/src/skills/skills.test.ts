@@ -276,13 +276,13 @@ describe('REQ-WORKSPACE-062/063/064 — what a policy resolves to', () => {
     expect(r).toMatchObject({ inCatalog: false, forceLoaded: true, userInvocable: true });
   });
   it('"manual only" leaves it invocable and out of the catalog; "hidden" removes it everywhere', () => {
-    expect(resolveSkills([skill('a')], { ...section, overrides: { a: 'user-invocable-only' } })[0]).toMatchObject({ inCatalog: false, forceLoaded: false, userInvocable: true });
-    expect(resolveSkills([skill('a')], { ...section, overrides: { a: 'off' } })[0]).toMatchObject({ inCatalog: false, forceLoaded: false, userInvocable: false });
+    expect(resolveSkills([skill('a')], { ...section, overrides: { a: 'user-invocable-only' } })[0]!).toMatchObject({ inCatalog: false, forceLoaded: false, userInvocable: true });
+    expect(resolveSkills([skill('a')], { ...section, overrides: { a: 'off' } })[0]!).toMatchObject({ inCatalog: false, forceLoaded: false, userInvocable: false });
   });
   it('REQ-WORKSPACE-063: a workspace invocation override beats the frontmatter, and each mode removes one reach', () => {
-    expect(resolveSkills([skill('a', 'auto-only')], section)[0]).toMatchObject({ userInvocable: false, inCatalog: true });
-    expect(resolveSkills([skill('a', 'manual-only')], section)[0]).toMatchObject({ userInvocable: true, inCatalog: false });
-    expect(resolveSkills([skill('a', 'auto-only')], { ...section, invocation_overrides: { a: 'default' } })[0]).toMatchObject({ userInvocable: true, inCatalog: true });
+    expect(resolveSkills([skill('a', 'auto-only')], section)[0]!).toMatchObject({ userInvocable: false, inCatalog: true });
+    expect(resolveSkills([skill('a', 'manual-only')], section)[0]!).toMatchObject({ userInvocable: true, inCatalog: false });
+    expect(resolveSkills([skill('a', 'auto-only')], { ...section, invocation_overrides: { a: 'default' } })[0]!).toMatchObject({ userInvocable: true, inCatalog: true });
   });
   it('REQ-WORKSPACE-064: the master switch off means no catalog, no body and nothing invocable', () => {
     const r = resolveSkills([skill('a'), skill('b')], { enabled: false, overrides: { b: 'on' }, invocation_overrides: {} });
@@ -295,8 +295,8 @@ describe('REQ-WORKSPACE-062/063/064 — what a policy resolves to', () => {
   it('REQ-WORKSPACE-057: a manual skill overrides a discovered one of the same name and carries the manual label', () => {
     const manual = { ...skill('a'), scope: 'manual' as const, path: '/elsewhere/SKILL.md' };
     const [r] = resolveSkills([skill('a')], section, { forced: new Set(), manual: new Map([['a', manual]]) });
-    expect(r.skill.scope).toBe('manual');
-    expect(r.skill.path).toBe('/elsewhere/SKILL.md');
+    expect(r!.skill.scope).toBe('manual');
+    expect(r!.skill.path).toBe('/elsewhere/SKILL.md');
   });
 });
 

@@ -12,6 +12,9 @@ import { Acknowledgements, type AboutInfo, applyChange, applyTheme, AppShell, SE
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls, and the shape it answers.
 import { bindPromptRootsReader, ToggleSwitch } from '@rotaris/ui';
 import type { PromptsRootsResult } from '@rotaris/contracts';
+// ADR-0063 — portable skills: the catalog reader, the Settings tab's props and the composer's commands.
+import { bindSkillsReader } from '@rotaris/ui';
+import { EMPTY_SKILLS_STATE, type SkillInvocationModeName, type SkillLoadModeName, type SkillsState } from '@rotaris/contracts';
 import './design.css';
 // The mockup loads these two stylesheets from @phosphor-icons/web@2.1.1; the design assets
 // carry the same two fonts byte for byte (REQ-SHELL-027, a distinct icon per view).
@@ -527,6 +530,14 @@ bindPromptRootsReader(async () => {
   return r.ok ? (r.value as PromptsRootsResult) : { files: [], skipped: [{ path: '', reason: r.detail ?? r.headline }] };
 });
 
+// ADR-0063 — REQ-CHAT-034 / REQ-WORKSPACE-072: the skill catalog, read through the bridge (main names the open
+// workspace and the followed session and relays to the run host, which owns it). Bound once for the window, on the
+// prompt roots' terms; a window with no workspace gets an empty catalog and registers no skill command.
+bindSkillsReader(async () => {
+  const r = await bridge.command({ kind: 'skills.read' });
+  return r.ok ? (r.value as SkillsState) : EMPTY_SKILLS_STATE;
+});
+
 // Stage C — PD-SHELL-001's palette entry ("Open project folder in a new window") acts through this. The registry
 // runs against a `CommandContext` that carries no command channel, and `packages/ui` never holds the bridge, so
 // the window binds the opener once at module scope. The command carries no folder: main opens the chooser,
@@ -575,6 +586,8 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
   const providerRows = useProviders().rows;
   const git = useGitState(workspace);
   const [worktreeOpen, setWorktreeOpen] = useState(false);
+  // ADR-0063: the Settings Skills tab bumps this after a rescan or a hand-loaded skill (REQ-CHAT-034).
+  const skillsRevision = useShellState((s) => s.skillsRevision);
   const slashHost = useMemo<SlashHost>(() => ({
     themes: THEMES.map((t) => t.name),
     setTheme: async (name) => {
@@ -599,7 +612,29 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
     hasGit: git.state?.gitAvailable === true && git.state.isRepository,
     // Part AO — REQ-CHAT-021's persistent notice through main's one slot (`notice.report`, ADR-0049 defect fifty-seven).
     raiseNotice: (n) => { void bridge.command({ kind: 'notice.report', severity: 'warning', title: n.title, message: n.message, persistent: true }); },
-  }), [providerRows, git.state]);
+    /*
+     * ADR-0063 — REQ-WORKSPACE-073: the typed skill command's effect. Main names the open workspace and the
+     * followed session; the run host reads the SAVED configuration and answers the refusal, so "Skills are
+     * disabled. Enable them in Settings." reaches the composer from the process that can tell.
+     */
+    forceLoadSkill: async (name) => {
+      const r = await bridge.command({ kind: 'skills.forceLoad', name });
+      return r.ok ? { ok: true as const } : { ok: false as const, reason: r.detail ?? r.headline };
+    },
+    /*
+     * REQ-CHAT-162 — `/skill <path>`. The same command main answers for the Settings action, with the path
+     * supplied rather than chosen, so no dialog opens and REQ-WORKSPACE-057's directory form stays reachable
+     * on every platform (OQ-59).
+     */
+    loadSkillFile: async (path) => {
+      const r = await bridge.command({ kind: 'skills.loadFile', path });
+      if (!r.ok) return { ok: false as const, reason: r.detail ?? r.headline };
+      const outcome = r.value as { cancelled: boolean; name?: string };
+      return outcome.name === undefined ? { ok: false as const, reason: 'The skill was not loaded.' } : { ok: true as const, name: outcome.name };
+    },
+    // REQ-CHAT-034: a rescan or a hand-loaded skill in Settings re-registers the typeable commands.
+    skillsRevision,
+  }), [providerRows, git.state, skillsRevision]);
   const worktrees = git.state?.worktrees ?? [];
   return <>
     {worktreeOpen && (
@@ -957,7 +992,7 @@ function useConfiguration(workspace: string | null) {
   return { config: { snapshot, pending, dirty, loading, error, serviceAvailable: workspace !== null, onChange, onSave, onDiscard, onSetField }, guardDialog };
 }
 
-function Settings({ workspace, theme, reducedMotion, settingsCategory, onTheme, onMotion, popOut, onPopOut }: { workspace: string | null; popOut: boolean; onPopOut: (value: boolean) => void } & AppearanceProps) {
+function Settings({ workspace, home, theme, reducedMotion, settingsCategory, onTheme, onMotion, popOut, onPopOut }: { workspace: string | null; home: string | undefined; popOut: boolean; onPopOut: (value: boolean) => void } & AppearanceProps) {
   const session = useStore(replica, (s) => s.session);
   const sessionId = useStore(replica, (s) => s.sessionId);
   const { config, guardDialog } = useConfiguration(workspace);
@@ -1031,6 +1066,50 @@ function Settings({ workspace, theme, reducedMotion, settingsCategory, onTheme, 
       return r.ok ? { ok: true as const, cancelled: (r.value as { cancelled?: boolean } | null)?.cancelled === true } : { ok: false as const, reason: r.detail ?? r.headline };
     },
   }), [workspace]);
+  /*
+   * ADR-0063 — the Skills category. The catalog is the run host's (`skills.read`); the POLICY is configuration
+   * and joins the pending settings like every other destination-1 value, so Save writes it through Tier A
+   * (REQ-CONFIG-256/258) and the save bar governs it. Rescan and Load-file are neither: REQ-WORKSPACE-069 and
+   * REQ-WORKSPACE-151 both say they change no policy and mark nothing dirty, so they call the run host directly
+   * and bump the shell's `skillsRevision` so the composer re-registers its commands (REQ-CHAT-034).
+   */
+  const [skillsState, setSkillsState] = useState<SkillsState | null>(null);
+  const skillsChanged = useShellState((s) => s.skillsChanged);
+  const readSkillsState = useCallback(async () => {
+    if (workspace === null) { setSkillsState(null); return; }
+    const r = await bridge.command({ kind: 'skills.read' });
+    if (r.ok) setSkillsState(r.value as SkillsState);
+  }, [workspace]);
+  // Re-read on a configuration change too: `skills.enabled` and both override maps are configuration, so a Save
+  // must put the resolved policy back on the rows rather than leaving the screen's own copy standing.
+  useEffect(() => { queueMicrotask(() => { void readSkillsState(); }); }, [readSkillsState, config.snapshot]);
+  const skills = useMemo(() => ({
+    state: skillsState,
+    home,
+    // REQ-CONFIG-279: the selectors show what the SCREEN holds, so an unsaved choice does not snap back.
+    ...(config.pending ? { pending: config.pending.skills } : {}),
+    onEnabled: (value: boolean) => config.onChange({ kind: 'skillsEnabled', value }),
+    onLoadMode: (name: string, value: SkillLoadModeName) => config.onChange({ kind: 'skillLoad', name, value }),
+    onInvocationMode: (name: string, value: SkillInvocationModeName) => config.onChange({ kind: 'skillInvocation', name, value }),
+    onRescan: async () => {
+      const r = await bridge.command({ kind: 'skills.rescan' });
+      if (!r.ok) return { ok: false as const, reason: r.detail ?? r.headline };
+      const state = r.value as SkillsState;
+      setSkillsState(state);
+      skillsChanged();
+      return { ok: true as const, count: state.skills.length };
+    },
+    onLoadFile: async () => {
+      const r = await bridge.command({ kind: 'skills.loadFile' });
+      if (!r.ok) return { ok: false as const, reason: r.detail ?? r.headline };
+      const outcome = r.value as { cancelled: boolean; name?: string; state?: SkillsState };
+      // REQ-WORKSPACE-151: a dismissal returns no selection and changes nothing — not the list, not the commands.
+      if (outcome.cancelled) return { ok: true as const, cancelled: true };
+      if (outcome.state) setSkillsState(outcome.state);
+      skillsChanged();
+      return { ok: true as const, cancelled: false, ...(outcome.name === undefined ? {} : { name: outcome.name }) };
+    },
+  }), [skillsState, home, config, skillsChanged]);
   const initialCategory = settingsCategory === 'models' || settingsCategory === 'personas' || settingsCategory === 'runtime' || settingsCategory === 'interface' || settingsCategory === 'display' || settingsCategory === 'skills' || settingsCategory === 'instructions' || settingsCategory === 'hooks' || settingsCategory === 'mcp' || settingsCategory === 'plugins' || settingsCategory === 'tools' || settingsCategory === 'project' || settingsCategory === 'about' ? settingsCategory : 'models';
   return (<>
     <SettingsView
@@ -1058,6 +1137,7 @@ function Settings({ workspace, theme, reducedMotion, settingsCategory, onTheme, 
       about={{ info: about, onOpenExternal: openExternal, onOpenThirdPartyLicenses: openThirdPartyLicenses }}
       interfaceExtras={<AgentPopOutToggle on={popOut} onChange={onPopOut} />}
       traceability={traceability /* Part AJ2 */}
+      skills={skills /* ADR-0063 */}
     />
     {guardDialog}
   </>);
@@ -1339,7 +1419,7 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
         git: <Git workspace={workspace} git={git} layout={gitLayout} onLayout={onGitLayout} />,
         library: <Library prompts={prompts} layout={libraryLayout} onLayout={onLibraryLayout} />,
         requirements: <RequirementsBoard bridge={bridge} workspace={workspace} onOpenSession={openRequirementSession} />, // Part AK2 — the fourth view of REQ-SHELL-023 (REQ-TRACE-230/381): the board over the bridge; the host lives in `ui/requirements/host.tsx`.
-        settings: <Settings workspace={workspace === '(no workspace)' ? null : workspace} theme={theme} reducedMotion={reducedMotion} settingsCategory={settingsCategory} onTheme={changeTheme} onMotion={changeMotion} popOut={popOut} onPopOut={changePopOut} />,
+        settings: <Settings workspace={workspace === '(no workspace)' ? null : workspace} home={home} theme={theme} reducedMotion={reducedMotion} settingsCategory={settingsCategory} onTheme={changeTheme} onMotion={changeMotion} popOut={popOut} onPopOut={changePopOut} />,
       }}
       notice={notice}
       onAcknowledge={(noticeId) => { void bridge.command({ kind: 'notice.acknowledge', noticeId }); }}

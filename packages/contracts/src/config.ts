@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SKILL_INVOCATION_MODE_NAMES, SKILL_LOAD_MODE_NAMES } from './skills.js'; // ADR-0063
 
 /**
  * What the Settings screen reads and writes for destination 1 — workspace and global configuration
@@ -87,6 +88,19 @@ export function displayCapFromFile(stored: number): number | null {
   return stored === 0 ? null : stored;
 }
 
+/**
+ * REQ-CONFIG-166..169: the `skills:` section as the layered load resolves it. Both maps are keyed by
+ * REQ-WORKSPACE-054's normalized skill name and hold only the skills some layer states a policy for —
+ * REQ-CONFIG-258 keeps the baselines out of the file, so an absent key means the default.
+ */
+export const SkillsConfigViewSchema = z.object({
+  enabled: z.boolean(),
+  overrides: z.record(z.string(), z.enum(SKILL_LOAD_MODE_NAMES)),
+  invocation_overrides: z.record(z.string(), z.enum(SKILL_INVOCATION_MODE_NAMES)),
+});
+export type SkillsConfigView = z.infer<typeof SkillsConfigViewSchema>;
+export const SKILLS_CONFIG_DEFAULT: SkillsConfigView = Object.freeze({ enabled: true, overrides: {}, invocation_overrides: {} });
+
 export const ConfigSnapshotSchema = z.object({
   workspaceRoot: z.string(),
   /** False when the files could not be loaded; `fatal` then carries REQ-CONFIG-478's report and every other field is the built-in default. */
@@ -111,6 +125,13 @@ export const ConfigSnapshotSchema = z.object({
    * check, not a read: this says which files the agent's instructions would come from, never what they say.
    */
   instructions: z.array(z.object({ name: z.string(), path: z.string() })),
+  /**
+   * REQ-CONFIG-166..169 (ADR-0063): the `skills:` section as the files resolve it — the master switch and
+   * the two override maps keyed by normalized skill name. The DISCOVERED skills are not here: they are the
+   * run host's catalog, answered over `skills.read`, because they are read from disk on a different
+   * schedule (REQ-WORKSPACE-058) and are not configuration.
+   */
+  skills: SkillsConfigViewSchema,
   delegationStrategy: z.enum(DELEGATION_STRATEGY_NAMES),
   referential: z.array(z.string()),
   warnings: z.array(z.string()),
@@ -141,6 +162,24 @@ export const DisplaySaveSchema = z.object({
 });
 export type DisplaySavePayload = z.infer<typeof DisplaySaveSchema>;
 
+/**
+ * REQ-CONFIG-256/258 (ADR-0063): the three `skills` keys the desktop save writes, into the **workspace**
+ * file only and with no per-field scope of their own.
+ *
+ * A map value of `null` **removes** that skill's key. The screen sends one where the chosen mode is the
+ * baseline (`name-only` / `default`) and no lower layer states a policy for that skill, which is
+ * REQ-CONFIG-258's sparse rule; where a lower layer does state one, it sends the baseline explicitly
+ * instead, so returning one skill to the baseline is possible from the screen at all. Because `skills` is
+ * section-class and both maps overlay per skill name (REQ-CONFIG-042/048), writing them this way overlays
+ * exactly the skills the workspace names and never discards the global scope's policy for any other.
+ */
+export const SkillsSaveSchema = z.object({
+  enabled: z.boolean().optional(),
+  overrides: z.record(z.string(), z.enum(SKILL_LOAD_MODE_NAMES).nullable()).optional(),
+  invocationOverrides: z.record(z.string(), z.enum(SKILL_INVOCATION_MODE_NAMES).nullable()).optional(),
+});
+export type SkillsSavePayload = z.infer<typeof SkillsSaveSchema>;
+
 /** REQ-CONFIG-256: the desktop save's enumerable key set. */
 export const DesktopSaveSchema = z.object({
   slots: z.partialRecord(z.enum(MODEL_SLOT_NAMES), z.string().nullable()).optional(),
@@ -152,6 +191,8 @@ export const DesktopSaveSchema = z.object({
   roles: z.record(z.string(), RoleEditSchema).optional(),
   /** REQ-CONFIG-472 (Part AG): destination 1's four tool-row display fields. */
   display: DisplaySaveSchema.optional(),
+  /** REQ-CONFIG-256/258 (ADR-0063): the three `skills` keys. Written SPARSELY — see `SkillsSaveSchema`. */
+  skills: SkillsSaveSchema.optional(),
 });
 export type DesktopSavePayload = z.infer<typeof DesktopSaveSchema>;
 

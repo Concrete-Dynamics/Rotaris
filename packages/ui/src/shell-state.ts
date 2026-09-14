@@ -52,6 +52,17 @@ export interface ShellState {
    */
   readonly overlays: Readonly<Record<OverlayKind, OverlayCloser | null>>;
   registerOverlay(kind: OverlayKind, close: OverlayCloser | null): void;
+  /**
+   * REQ-CHAT-034 (ADR-0063): a counter the Settings Skills tab bumps after a rescan or a hand-loaded skill, so
+   * the composer's catalogue lists **exactly** the rescanned set. It lives in this store because the two
+   * surfaces are siblings in the view map — Settings replaces Workspace among REQ-SHELL-023's seven views —
+   * and a counter is the smallest thing that can cross between them without one owning the other's data.
+   *
+   * It carries no payload by design: the composer re-reads the catalog itself, so a rescan and a hand-loaded
+   * skill need no separate signal and nothing here can go stale against what the run host actually holds.
+   */
+  readonly skillsRevision: number;
+  skillsChanged(): void;
 }
 
 export interface ComposerRegistration {
@@ -146,5 +157,9 @@ export const useShellState = create<ShellState>((set, get) => ({
   overlays: { slashPopup: null, searchPanel: null, drawers: null },
   registerOverlay(kind, close) {
     set({ overlays: { ...get().overlays, [kind]: close } });
+  },
+  skillsRevision: 0,
+  skillsChanged() {
+    set({ skillsRevision: get().skillsRevision + 1 });
   },
 }));

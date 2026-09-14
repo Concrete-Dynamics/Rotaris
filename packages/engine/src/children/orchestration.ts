@@ -14,7 +14,7 @@ import { BUILT_IN_PERSONAS, type Persona, type PersonaResolver, type RoleName } 
 import { produceReport, type SummariserDeps } from './report.js';
 import { Scheduler } from './scheduler.js';
 import type { HookPort } from '../hooks-port.js';
-import { withPlaybook } from '../run/run.js';
+import { withContextUnits, withPlaybook } from '../run/run.js';
 import type { LoopSupervisor } from '../run/supervisor.js';
 import type { TurnResilience } from '../run/ladder.js';
 import { providerIdentity, type ModelChoice } from '../run/resilience.js';
@@ -64,6 +64,13 @@ export interface ChildrenDeps {
   readonly hooks?: HookPort | null | undefined;
   /** REQ-ORCH-019: the rendered playbook per role; null or '' means no playbook. */
   readonly playbookFor?: ((role: string) => string) | null | undefined;
+  /**
+   * REQ-WORKSPACE-060 (ADR-0063): the session's always-active context units — the skill catalog and any
+   * force-loaded bodies. The run passes its own getter through unchanged, so every agent of a session sees
+   * one catalog (REQ-WORKSPACE-065 forbids per-persona scoping) and a mid-session force-load reaches the
+   * next child built without touching one already running.
+   */
+  readonly contextUnits?: (() => readonly string[]) | undefined;
   /** REQ-ORCH-015: on the answer route the answered category is accepted at once. */
   readonly route?: 'answer' | 'work' | undefined;
   readonly supervisorFor?: ((conversationId: string) => LoopSupervisor) | undefined;
@@ -302,7 +309,9 @@ export class IterationChildren implements DelegationOps {
       let firstCall = true;
       const turn = (task: string, history: readonly ChatMessage[]) => { const wasFirst = firstCall; firstCall = false; return runTurn({
         writer: deps.writer, owner: deps.owner, backend: deps.backend, tools, clocks: deps.clocks, persona: row.persona, agentName: row.canonical_name,
-        systemPrompt: withPlaybook(persona?.systemPrompt ?? '', deps.playbookFor?.(row.persona) ?? ''), model: persona?.modelRef ?? deps.model, thinking: persona?.thinking ?? deps.thinking, modelTimeoutMs: deps.modelTimeoutMs, modelRetries: deps.modelRetries,
+        // REQ-WORKSPACE-060 (ADR-0063): the session's context units follow the role's instructions and its playbook,
+        // read at THIS construction so a skill force-loaded since the last child reaches this one.
+        systemPrompt: withContextUnits(withPlaybook(persona?.systemPrompt ?? '', deps.playbookFor?.(row.persona) ?? ''), deps.contextUnits?.() ?? []), model: persona?.modelRef ?? deps.model, thinking: persona?.thinking ?? deps.thinking, modelTimeoutMs: deps.modelTimeoutMs, modelRetries: deps.modelRetries,
         credentialFor: deps.credentialFor, maxStepsPerTurn: deps.maxStepsPerTurn, warn: deps.warn, dispatched,
         ...(deps.supervisorFor ? { supervisor: deps.supervisorFor(row.task_id) } : {}),
         ...(deps.steeringFor ? { steering: deps.steeringFor(row.task_id) } : {}),

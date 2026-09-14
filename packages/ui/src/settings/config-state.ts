@@ -1,4 +1,4 @@
-import { displayCapToFile, EDITABLE_SLOTS, type ConfigSnapshot, type DesktopSavePayload, type DisplaySavePayload, type DisplayView, type LiveStatePayload, type ModelSlotName } from '@rotaris/contracts';
+import { displayCapToFile, EDITABLE_SLOTS, type ConfigSnapshot, type DesktopSavePayload, type DisplaySavePayload, type DisplayView, type LiveStatePayload, type ModelSlotName, type SkillInvocationModeName, type SkillLoadModeName, type SkillsSavePayload } from '@rotaris/contracts';
 
 /**
  * The pending settings state (REQ-CONFIG-279..287, 417..426): destination 1's values as the screen holds
@@ -28,6 +28,17 @@ export interface PendingSettings {
    * drawn follows the pending value while Save decides what the file says.
    */
   readonly display: DisplayView;
+  /**
+   * REQ-CONFIG-166..169 (ADR-0063): the `skills:` section as the screen holds it — the master switch and both
+   * override maps, keyed by REQ-WORKSPACE-054's normalized skill name. The maps hold only skills SOME layer
+   * states a policy for, which is what makes REQ-CONFIG-258's sparse write computable: a name present in
+   * `saved` and absent from a higher layer is the case where a baseline must be written out explicitly.
+   */
+  readonly skills: {
+    readonly enabled: boolean;
+    readonly overrides: Readonly<Record<string, SkillLoadModeName>>;
+    readonly invocationOverrides: Readonly<Record<string, SkillInvocationModeName>>;
+  };
   /** Role edits keyed by role, per field scoped (REQ-CONFIG-259); an entry exists only once the user touched the role. */
   readonly roles: Readonly<Record<string, { readonly scope: 'workspace' | 'global'; readonly model?: string | null; readonly thinking?: string | null; readonly unsetModel?: boolean; readonly unsetThinking?: boolean }>>;
 }
@@ -54,6 +65,7 @@ export function pendingFrom(snapshot: ConfigSnapshot): PendingSettings {
     compressorThresholdPercentage: snapshot.compressorThresholdPercentage,
     delegationStrategy: snapshot.delegationStrategy,
     display: { ...snapshot.display },
+    skills: { enabled: snapshot.skills.enabled, overrides: { ...snapshot.skills.overrides }, invocationOverrides: { ...snapshot.skills.invocation_overrides } },
     roles: {},
   };
 }
@@ -78,8 +90,12 @@ export function rebasePending(previousSaved: PendingSettings, pending: PendingSe
   for (const key of Object.keys(runtime) as (keyof PendingSettings['runtime'])[]) if (pending.runtime[key] !== previousSaved.runtime[key]) (runtime as Record<string, unknown>)[key] = pending.runtime[key];
   const display = { ...fresh.display };
   for (const key of Object.keys(display) as (keyof DisplayView)[]) if (pending.display[key] !== previousSaved.display[key]) (display as Record<string, unknown>)[key] = pending.display[key];
+  // ADR-0063: the skills block rebases as a whole rather than per key. A per-key rebase would need a third
+  // state per skill ("the user removed an override"), which nothing produces: the screen only ever sets a
+  // mode, and the sparse write below is what turns a baseline choice into a removal.
   return {
     slots, slotThinking: thinking, runtime, display,
+    skills: sameValue(pending.skills, previousSaved.skills) ? fresh.skills : pending.skills,
     circuitBreakerEnabled: pending.circuitBreakerEnabled !== previousSaved.circuitBreakerEnabled ? pending.circuitBreakerEnabled : fresh.circuitBreakerEnabled,
     compressorThresholdPercentage: pending.compressorThresholdPercentage !== previousSaved.compressorThresholdPercentage ? pending.compressorThresholdPercentage : fresh.compressorThresholdPercentage,
     delegationStrategy: pending.delegationStrategy !== previousSaved.delegationStrategy ? pending.delegationStrategy : fresh.delegationStrategy,
@@ -100,6 +116,9 @@ export type PendingChange =
   | { readonly kind: 'compressorThreshold'; readonly value: number }
   | { readonly kind: 'delegationStrategy'; readonly value: PendingSettings['delegationStrategy'] }
   | { readonly kind: 'display'; readonly key: keyof DisplayView; readonly value: DisplayView[keyof DisplayView] }
+  | { readonly kind: 'skillsEnabled'; readonly value: boolean }
+  | { readonly kind: 'skillLoad'; readonly name: string; readonly value: SkillLoadModeName }
+  | { readonly kind: 'skillInvocation'; readonly name: string; readonly value: SkillInvocationModeName }
   | { readonly kind: 'role'; readonly role: string; readonly scope: 'workspace' | 'global'; readonly model?: string | null; readonly thinking?: string | null; readonly unsetModel?: boolean; readonly unsetThinking?: boolean };
 
 /** Apply one change; returns the same object when nothing changed (the equality guard). */
@@ -123,6 +142,15 @@ export function applyChange(pending: PendingSettings, change: PendingChange): Pe
     case 'display':
       // REQ-CONFIG-419: repopulating a control from the stored value emits no change and cannot dirty the form.
       return pending.display[change.key] === change.value ? pending : { ...pending, display: { ...pending.display, [change.key]: change.value } };
+    // ADR-0063 — REQ-WORKSPACE-068: a policy change marks settings dirty and is written by Save. The setters do
+    // not validate the value: `SkillLoadModeName` is a closed type, and the run host and the writer both reject an
+    // unsupported one with REQ-WORKSPACE-068's own sentences, so a bad value cannot reach a file through here.
+    case 'skillsEnabled':
+      return pending.skills.enabled === change.value ? pending : { ...pending, skills: { ...pending.skills, enabled: change.value } };
+    case 'skillLoad':
+      return pending.skills.overrides[change.name] === change.value ? pending : { ...pending, skills: { ...pending.skills, overrides: { ...pending.skills.overrides, [change.name]: change.value } } };
+    case 'skillInvocation':
+      return pending.skills.invocationOverrides[change.name] === change.value ? pending : { ...pending, skills: { ...pending.skills, invocationOverrides: { ...pending.skills.invocationOverrides, [change.name]: change.value } } };
     case 'role': {
       const current = pending.roles[change.role] ?? { scope: change.scope };
       const next = { ...current, scope: change.scope, ...(change.model !== undefined ? { model: change.model, unsetModel: false } : {}), ...(change.thinking !== undefined ? { thinking: change.thinking, unsetThinking: false } : {}), ...(change.unsetModel ? { unsetModel: true } : {}), ...(change.unsetThinking ? { unsetThinking: true } : {}) };
@@ -159,6 +187,34 @@ export function savePayload(saved: PendingSettings, pending: PendingSettings): D
   if (pending.display.tool_result_lines !== saved.display.tool_result_lines) display.tool_result_max_lines = displayCapToFile(pending.display.tool_result_lines);
   if (pending.display.tool_input_lines !== saved.display.tool_input_lines) display.tool_input_max_lines = displayCapToFile(pending.display.tool_input_lines);
   if (Object.keys(display).length > 0) out.display = display;
+  /*
+   * REQ-CONFIG-256/258 (ADR-0063): the three `skills` keys, written SPARSELY. Only a mode differing from the
+   * baseline lands in a map — EXCEPT where a lower layer states a policy for that skill, in which case the
+   * baseline is written out explicitly so the choice the user made in the higher scope is what the merge
+   * produces. Omitting it there would silently leave the lower layer's override winning and make returning one
+   * skill to the baseline impossible from this screen.
+   *
+   * `saved` holding a key is exactly "a lower layer states a policy", because the snapshot's maps are the
+   * MERGED result: a name present there came from some file. `null` is the writer's delete.
+   */
+  const skills: SkillsSavePayload = {};
+  if (pending.skills.enabled !== saved.skills.enabled) skills.enabled = pending.skills.enabled;
+  const overrides: Record<string, SkillLoadModeName | null> = {};
+  for (const [name, mode] of Object.entries(pending.skills.overrides)) {
+    if (mode === saved.skills.overrides[name]) continue;
+    overrides[name] = mode === 'name-only' && saved.skills.overrides[name] === undefined ? null : mode;
+  }
+  // A skill the file stated and the screen no longer holds: its key is removed.
+  for (const name of Object.keys(saved.skills.overrides)) if (pending.skills.overrides[name] === undefined) overrides[name] = null;
+  const invocation: Record<string, SkillInvocationModeName | null> = {};
+  for (const [name, mode] of Object.entries(pending.skills.invocationOverrides)) {
+    if (mode === saved.skills.invocationOverrides[name]) continue;
+    invocation[name] = mode === 'default' && saved.skills.invocationOverrides[name] === undefined ? null : mode;
+  }
+  for (const name of Object.keys(saved.skills.invocationOverrides)) if (pending.skills.invocationOverrides[name] === undefined) invocation[name] = null;
+  if (Object.keys(overrides).length > 0) skills.overrides = overrides;
+  if (Object.keys(invocation).length > 0) skills.invocationOverrides = invocation;
+  if (Object.keys(skills).length > 0) out.skills = skills;
   if (Object.keys(pending.roles).length > 0) {
     out.roles = Object.fromEntries(Object.entries(pending.roles).map(([role, e]) => [role, {
       scope: e.scope,

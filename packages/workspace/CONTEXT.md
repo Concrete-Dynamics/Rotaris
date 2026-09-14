@@ -65,6 +65,37 @@ How much of a skill reaches the model — `off`, `name-only`, `user-invocable-on
 Putting a skill's body in front of the model for the session, which is what invoking its slash
 command does. — `REQ-WORKSPACE-062`, `REQ-WORKSPACE-073`
 
+**Skill scope**:
+Where a skill was found — `project` (the workspace and its ancestors up to the repository root) or
+`user` (the home-relative roots and, where the platform has one, the machine-wide root). Every project
+location outranks every user one. — `REQ-WORKSPACE-051`
+_Avoid_: local/global (the configuration layers are already those two words and are a different thing)
+
+**Manual skill**:
+A skill loaded by hand from a path, for the current session only, persisting nothing. It carries the
+scope label `manual` and overrides a discovered skill of the same normalised name. — `REQ-WORKSPACE-057`,
+`REQ-WORKSPACE-151`
+_Avoid_: temporary skill, session skill
+
+**Shadowed skill**:
+A `SKILL.md` a higher-priority one beat to a normalised name. It is recorded against the winner and
+reportable per name rather than dropped. — `REQ-WORKSPACE-054`
+_Avoid_: duplicate (the ignored file is not a copy; it is a different file with the same name)
+
+**Invocation mode**:
+Who may reach a skill — `default`, `manual-only` (the user alone) or `auto-only` (the model alone).
+Derived from the frontmatter unless the workspace states one. — `REQ-WORKSPACE-056`, `REQ-WORKSPACE-063`
+
+**Rescan**:
+Re-reading the skill files from disk for a workspace. It changes no policy and marks nothing dirty; it
+governs agents constructed afterwards and leaves those already built alone. — `REQ-WORKSPACE-069`
+_Avoid_: refresh, reload
+
+**Context unit**:
+One always-active block on an agent's system prompt. The order is fixed: workspace context, the skill
+catalog, the force-loaded skill bodies, persona memory. — `REQ-WORKSPACE-060`
+_Avoid_: system prompt (the role's instructions are a different thing), injection
+
 ### Onboarding
 
 **Project initialization**:

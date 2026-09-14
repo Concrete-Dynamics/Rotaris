@@ -17,6 +17,20 @@ export function createSlashRegistry(): SlashRegistry {
       if (!byName.has(name)) order.push(name);
       byName.set(name, command.name === name ? command : { ...command, name });
     },
+    /**
+     * REQ-CHAT-034 (ADR-0063): "After a skill rescan, the catalogue MUST list exactly the rescanned set." A
+     * registry that can only replace cannot meet that — a skill deleted from disk would keep its command —
+     * so removal is here rather than in the registrar, and it is the only way a name leaves the catalogue.
+     * Removing frees the name: a later registration takes the position a new registration takes, not the one
+     * the removed command held, because the order is "the order names were FIRST registered" and this name
+     * is no longer one of them.
+     */
+    unregister(name) {
+      const key = normalise(name);
+      if (!byName.delete(key)) return false;
+      order.splice(order.indexOf(key), 1);
+      return true;
+    },
     lookup(name) {
       return byName.get(normalise(name));
     },

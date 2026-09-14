@@ -20,7 +20,7 @@ and answered differently, and nobody can see that it happened. The reason is par
 
 ## Count
 
-**Fourteen.** The count is the number of rows below.
+**Fifteen.** The count is the number of rows below.
 
 ---
 
@@ -41,6 +41,7 @@ and answered differently, and nobody can see that it happened. The reason is par
 
 | <a id="r-013"></a>R-013 | 2026-09-14 | "the transcript in the workspace looks a little blurry, the text and persona names and so on. identify the issue and propose a fix." followed by "Go ahead and implement this plan." | covered | The adopted typography and fidelity workflow govern rendered text (`docs/design/README.md` section 1.4 and section 7); PD-CHAT-003 requires readable compact rows; REQ-CHAT-057 and ADR-0045 govern the pooled Workspace transcript. The repair preserves the fixed slot pool and its translated coordinates while returning text-layer selection to the browser. |
 | <a id="r-014"></a>R-014 | 2026-09-14 | "go ahead and plan out this big delivery scope for the library", selecting the full lifecycle and the three persisted run types, followed by "Yes implement the plan." | covered, with cross-domain reconciliation | REQ-LIBRARY-001..078, REQ-LIBRARY-102..130 and REQ-LIBRARY-156..176 govern the improvement-artifact lifecycle, review surface, execution, rollback and export. REQ-SESSION-021 and REQ-GIT-131 own the persisted run marker. REQ-ORCH-137's earlier two-value wording and REQ-LIBRARY-051/168's history wording are reconciled with that owned vocabulary and ADR-0061 before their implementation lands. |
+| <a id="r-015"></a>R-015 | 2026-09-14 | "do we already have a spec that lets the user select the tools for a persona in the UI? imagine the user adds an mcp server or activates one and this server provides tools. then the user wants to select per persona, which tools it should have access to. like for instance in the screenshot." followed by "go ahead and write this product directive." | directive | The grant mechanism is fully specified and stays untouched: REQ-CONFIG-101/102 fix `mcp_servers` and `mcp_tools`, REQ-MCP-055..056 fix grant resolution, REQ-MCP-061 fixes the run's observation of it. What the specification draws read-only on purpose is the settings surface over those fields (REQ-CONFIG-338: the Tools column is "a comma-joined read-only list"; REQ-CONFIG-464: the screen "never edits a role's tool … lists"). The owner wants that surface interactive, against a faithful requirement, so it is a directive: [`PD-CONFIG-001`](directives.md#pd-config-001) narrows both and extends REQ-CONFIG-336's edit-scope selector to settle where grant edits are recorded.
 
 <!--
 Row shape:

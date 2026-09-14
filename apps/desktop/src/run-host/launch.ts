@@ -13,6 +13,37 @@ export interface LaunchDeps {
   readonly start: (setup: ConfiguredRun, bearers: Readonly<Record<string, string>>) => ReturnType<Sessions['start']>;
 }
 
+/** What a continuation's lease refresh resolved to: the fresh bearers, or the refusal that stands in the run's place. */
+export type ContinuationLease = { readonly kind: 'leased'; readonly bearers: Readonly<Record<string, string>> } | { readonly kind: 'refused'; readonly reply: ProcessReply };
+
+/** What the lease refresh needs: the capture inputs and the one bounded ask — no `start`, it launches nothing itself. */
+export type ContinuationLeaseDeps = Pick<LaunchDeps, 'workspaceRoot' | 'attended' | 'configuration' | 'leaseCredentials'>;
+
+/**
+ * ADR-0030 / REQ-PROVIDER-066 for the CONTINUATION paths (`session.continue`, `session.prompt`,
+ * `session.planDecision`): a paused or resumed session launches its run through `setupFor` →
+ * `configure`, which reads the bearers of the LAST launch's lease — empty after an application
+ * restart, so the continuation's first model call went out with no `Authorization` header at all
+ * (the 401 recorded in `docs/defects/continue-run-sends-no-authorization-header.md`). The repair
+ * takes the same lease a launch takes, per continuation: main answers with the stored credential
+ * for the providers the current configuration names, and the caller publishes the map so the run's
+ * per-request resolvers read it. The user notices nothing. One refusal: an entry provider main
+ * cannot resolve — including a lease main did not answer, the same outcome a launch gives
+ * (REQ-WORKSPACE-137) — worded as that requirement's sentence.
+ */
+export async function leaseForContinuation(workspaceRoot: string, deps: ContinuationLeaseDeps): Promise<ContinuationLease> {
+  const prepared = prepareRun(workspaceRoot, deps.attended, deps.configuration);
+  // A configuration that will not load is refused by `setupFor` with its real report; lease nothing here.
+  if (!prepared.ok) return { kind: 'leased', bearers: {} };
+  const bearers = prepared.value.authProviders.length > 0
+    ? await deps.leaseCredentials(prepared.value.authProviders).catch(() => ({} as Readonly<Record<string, string>>))
+    : {};
+  if (prepared.value.entryAuthProvider !== null && !bearers[prepared.value.entryAuthProvider]) {
+    return { kind: 'refused', reply: { kind: 'refused', code: 'session.provider-auth', headline: 'Provider authentication required', detail: 'Authenticate at least one configured provider before continuing this run.' } };
+  }
+  return { kind: 'leased', bearers };
+}
+
 /** REQ-TRACE-470/471, REQ-PROVIDER-066: one request owns capture, lease and start. */
 export async function launchSession(req: LaunchRequest, deps: LaunchDeps): Promise<ProcessReply> {
   const prepared = prepareRun(deps.workspaceRoot, deps.attended, deps.configuration, req.boardPermissions);

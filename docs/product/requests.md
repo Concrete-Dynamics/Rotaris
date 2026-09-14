@@ -20,9 +20,13 @@ and answered differently, and nobody can see that it happened. The reason is par
 
 ## Count
 
-**Fifteen.** The count is the number of rows below.
+**Sixteen.** The count is the number of rows below.
 
 ---
+
+| # | Date | The request, in the owner's terms | Classification | Disposition |
+|---|---|---|---|---|
+| <a id="r-016"></a>R-016 | 2026-09-14 | "Yes i want the user to be able to just continue with the new model. he shoudlt even notice anything. that would be good UX." — after the continue-run 401 was diagnosed as a missing credential lease on the continuation paths | defect | The diagnosis is recorded as [`docs/defects/continue-run-sends-no-authorization-header.md`](../defects/continue-run-sends-no-authorization-header.md): a continued session launched through the previous launch's lease — empty after a restart — and sent no `Authorization` header. The request is that requirement's behaviour on the continuation paths too, so it is covered by REQ-PROVIDER-066 (a run's models authenticate with the leased bearer) and REQ-WORKSPACE-137 (an unauthenticated entry provider refuses): `session.continue`, `session.prompt` and `session.planDecision` now take the same lease a launch takes, invisibly, refusing only where a launch refuses |
 
 | # | Date | The request, in the owner's terms | Classification | Disposition |
 |---|---|---|---|---|

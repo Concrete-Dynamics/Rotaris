@@ -78,6 +78,17 @@ and supervision resolve their configuration by session identifier. A refused pro
 returns before another configuration load. Launch audits record effective permission and the captured
 runtime section; the other configuration sections remain outside this snapshot implementation.
 
+**The continuation lease (2026-09-14, REQ-PROVIDER-066).** The three run-launching continuation commands —
+`session.continue`, `session.prompt`, `session.planDecision` — re-ask main for the credential lease
+(`leaseForContinuation`) before the engine resolves the run's setup, and publish the fresh bearers under
+the session's workspace root (`sessionRoots`, recorded at `session.start` and `session.resume`). Before the
+repair, a resumed session's continuation read the previous launch's lease — empty after an application
+restart — and its first model call went out with **no `Authorization` header** (the 401 recorded in
+`docs/defects/continue-run-sends-no-authorization-header.md`). The refresh is invisible when main answers;
+an entry provider main cannot resolve refuses with REQ-WORKSPACE-137's sentence, exactly as a launch does.
+A session this process never started or resumed leases nothing — the engine's own `not-live` / `no-session`
+refusals answer it.
+
 ## 2. The loop and one iteration
 
 ```mermaid

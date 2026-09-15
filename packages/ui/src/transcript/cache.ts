@@ -91,7 +91,10 @@ export function createMeasurementCache(): LruCache<number> {
 /** The source text a displayed row is rendered from — REQ-UIBENCH-086's "characters" and the cache's content part. */
 export function sourceTextOf(d: DisplayRow): string {
   if (d.shape === 'trailer') return `${d.trailer.role} ${d.trailer.text}`;
-  if (d.shape === 'group') return `${d.family} ${d.blob} ${d.counts.ok}/${d.counts.failed}/${d.counts.blocked}/${d.counts.running} ${d.durationMs} ${d.inFlight ?? ''}`;
+  // PD-CHAT-004: the SEGMENTS are what the line draws, so they are what its rendering is keyed on — a run
+  // that gains a member changes a segment's counts, and a rendering keyed on the family word alone would
+  // be reused for a line that now says something else.
+  if (d.shape === 'group') return `${d.role} ${d.segments.map((s) => `${s.label}:${s.members}:${s.counts.ok}/${s.counts.failed}/${s.counts.blocked}/${s.counts.running}:${s.durationMs}:${s.tokens}`).join('|')} ${d.blob} ${d.durationMs} ${d.inFlight ?? ''} ${d.inFlightLabel ?? ''}`;
   const r = d.row;
   return `${r.kind} ${r.persona ?? ''} ${r.name ?? ''} ${r.ts} ${r.body} ${r.toolName ?? ''} ${r.toolStatus ?? ''} ${r.input ?? ''} ${r.output ?? ''} ${r.diff ?? ''} ${r.stalledSince ?? ''} ${r.chars ?? ''}`;
 }

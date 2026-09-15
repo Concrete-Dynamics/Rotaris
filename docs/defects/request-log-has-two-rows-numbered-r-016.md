@@ -42,5 +42,24 @@ which row keeps `R-016`. That choice is not made here.
 - `docs/product/directives.md` — every "Raised by … logged as [R-NNN](requests.md#r-nnn)" line
   depends on the anchors being unique; none currently cites `#r-016`, so nothing is mis-linking yet.
 
-*Noticed 2026-09-15 while logging [R-017](../product/requests.md#r-017). Recorded, not repaired —
-resolving it needs a decision about which row keeps the number.*
+## The cause, confirmed the same day
+
+**The log has no allocator.** An identifier is unique only against the `main` the session that wrote it
+last read, and the repository's own workflow puts every change on a temporary branch in a temporary
+worktree — which is exactly the case where that is not the `main` the row will land on.
+
+It happened again within hours: two sessions working in parallel worktrees on 2026-09-15 each appended an
+`R-018`, neither able to see the other's. That one was **caught at the merge and repaired**, because
+neither row had reached `main` yet: the row that landed first kept the number, and the second was
+renumbered to `R-019` along with the two documents citing it, before the merge commit was made. The
+`R-016` pair below was not caught, and by the rule that a row is never rewritten it can no longer be
+repaired the same way.
+
+Two things follow for anyone appending here. **Re-read `main`'s log immediately before committing**, not
+when the work began — the agent workflow already says to re-read `main` before merging, and this is one of
+the things that reading is for. And **a collision found before the row reaches `main` is renumbered, not
+logged as a second defect**: the never-rewritten rule protects the published record, and an unpublished
+row on a topic branch is not yet part of it.
+
+*Noticed 2026-09-15 while logging [R-017](../product/requests.md#r-017). The `R-016` pair is recorded, not
+repaired — resolving it needs a decision about which row keeps the number.*

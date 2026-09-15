@@ -185,7 +185,10 @@ describe('rows — REQ-CHAT-075, what each context-menu entry copies', () => {
   it('REQ-CHAT-065: copying a group yields the summary and never raw tool input or output', () => {
     const group: DisplayRow = {
       shape: 'group', key: 'g', family: 'reading', members: [row({ kind: 'tool', input: 'SECRET-INPUT', output: 'SECRET-OUTPUT' })],
-      counts: { ok: 1, failed: 0, blocked: 0, running: 0 }, durationMs: 10, startedAt: AT, inFlight: null, blob: 'SECRET-OUTPUT',
+      segments: [{ label: 'reading', reasoning: false, members: 1, counts: { ok: 1, failed: 0, blocked: 0, running: 0 }, durationMs: 10, tokens: 0 }],
+      role: 'orchestrator', persona: 'orchestrator',
+      counts: { ok: 1, failed: 0, blocked: 0, running: 0 }, durationMs: 10, startedAt: AT, endedAt: AT,
+      inFlight: null, inFlightLabel: null, blob: 'SECRET-OUTPUT',
     };
     const entries = rowMenuEntries(group);
     expect(entries).toHaveLength(1);

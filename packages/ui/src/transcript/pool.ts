@@ -24,7 +24,9 @@ import type { DisplayRow } from './types.js';
  */
 export function estimateHeight(d: DisplayRow, expanded = false): number {
   if (d.shape === 'trailer') return 36;
-  if (d.shape === 'group') return 36;
+  // PD-CHAT-004: an activity line is one line, plus the `⤷` preview line it draws while a call is in
+  // flight — the same per-line term a collapsed tool row's preview gets below.
+  if (d.shape === 'group') return d.inFlight === null ? 36 : 56;
   const row = d.row;
   // REQ-CHAT-062: a collapsed reasoning row draws exactly one summary line, whatever the hidden body holds.
   if (isReasoningRow(row) && !expanded) return ROW_MIN_HEIGHT;

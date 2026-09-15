@@ -24,7 +24,16 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-15** — **the search pattern dialect**: `grep` and `read_file`'s
+Last reconciled with the code: **2026-09-15** — **the activity line** (`PD-CHAT-004`, first executed): one
+agent's uninterrupted run of tool and streamed-reasoning rows is a single displayed row that **changes rather
+than grows**, so a working agent appends nothing and two working agents cannot contend for the tail. The change
+is confined to the `ui` package's transcript module and adds **no edge and no message**: `project.ts` decides
+the run boundary from the agent and `display/showReasoning`, `types.ts` gains `ActivitySegment`, and `Row.tsx`
+draws the segments and the one continuous persona rule the revealed members hang from. Only the **component
+view** is affected; the process and runtime views are unchanged, because no process, file or message moved. The
+same change repairs `docs/defects/group-header-claims-the-role-gutter.md`: a folded run's role is now its agent.
+
+Also **2026-09-15** — **the search pattern dialect**: `grep` and `read_file`'s
 `grep` filter compile through one helper that reads leading `(?flags)` groups, so a pattern the pinned
 accelerator accepts is not refused in process (`docs/defects/grep-refuses-an-inline-flag-group.md`,
 [R-018](../../product/requests.md#r-018)). The runtime view carries it beside the executor list; no package

@@ -5,7 +5,7 @@ import { linkifyBare, type Span } from '../markdown/parse.js';
 import { markMotionStart } from '../motion.js';
 import { TerminalPreviewBlock } from '../terminal/TerminalPreviewBlock.js';
 import type { TerminalPreview } from '../terminal/streams.js';
-import { groupSeverity, groupSummary, type Severity } from './project.js';
+import { activitySpanMs, activitySummary, groupSeverity, groupSummary, isLive, isReasoningRow, reasoningChars, segmentSummary, type Severity } from './project.js';
 
 /**
  * Part AA — **the ONE row renderer** (ADR-0051's second execution). What one row looks like once a slot is
@@ -54,8 +54,15 @@ export interface RowPlace {
   readonly blockStart: boolean;
   /** REQ-CHAT-067: within the most recent tool-call/result pair — the last two tool rows — so auto-collapse spares it. */
   readonly recentTool: boolean;
+  /**
+   * PD-CHAT-004: this row is a MEMBER revealed beneath an expanded activity line. The line's continuous
+   * rule is the attribution for the whole run, so a member draws no bar of its own — but it does draw its
+   * own timestamp, because the per-step instants are precisely what expanding the line is for.
+   */
+  readonly member?: boolean | undefined;
 }
 const FIRST_OF_BLOCK: RowPlace = { blockStart: true, recentTool: true };
+const MEMBER_OF_RUN: RowPlace = { blockStart: false, recentTool: true, member: true };
 
 export interface RowProps extends RowRenderProps {
   readonly place?: RowPlace | undefined;
@@ -158,9 +165,13 @@ export function rowTask(row: Pick<TranscriptRow, 'kind' | 'persona' | 'name'>): 
   return name;
 }
 
-/** REQ-CHAT-062: reasoning rows. Both spellings are accepted; `thinking` is REQ-CHAT-047's display kind. */
-const REASONING_KINDS = new Set(['thinking', 'reasoning']);
-export function isReasoningRow(row: Pick<TranscriptRow, 'kind'>): boolean { return REASONING_KINDS.has(row.kind); }
+/**
+ * REQ-CHAT-062: reasoning rows. Both spellings are accepted; `thinking` is REQ-CHAT-047's display kind.
+ * The definition moved into `project.ts` when PD-CHAT-004 made it part of step 4's run boundary — this
+ * file already imports that module, and declaring it here and importing it back would close a cycle. It
+ * is re-exported so every caller (`pool.ts`, `TranscriptPane.tsx`, the tests) still reaches it by name.
+ */
+export { isReasoningRow, reasoningChars };
 
 /**
  * REQ-CHAT-060: a row persisted with a ✓, ✗ or ! glyph already written into its text renders WITHOUT it, so
@@ -200,7 +211,14 @@ export function toolOutcome(
 export type GroupSeverity = Severity;
 export { groupSeverity, groupSummary };
 
-/** REQ-CHAT-065: the summed duration, counting upward while any member is still running. */
+/**
+ * REQ-CHAT-065's summed duration, counting upward while any member is still running.
+ *
+ * **PD-CHAT-004 narrowed this and the activity line no longer draws it** — `activitySpanMs` in
+ * `project.ts` is what the header shows. It is kept, exported and tested because it is still the honest
+ * answer to "how much time did the work itself take", which the expanded members' own durations state
+ * and which a later surface may want to state in one figure.
+ */
 export function groupDurationMs(members: readonly TranscriptRow[], settledSum: number, nowMs: number): number {
   let live = 0;
   for (const m of members) {
@@ -222,10 +240,6 @@ export const THINKING_LIVE_CUTOFF_MS = 3_600_000;
  * streamed character count for a reasoning row, which is what the field will carry, so the figure is right
  * either way and becomes exact rather than equivalent at the merge.
  */
-export function reasoningChars(row: TranscriptRow): number {
-  const declared = (row as { chars?: number }).chars;
-  return typeof declared === 'number' && declared >= 0 ? declared : row.body.length;
-}
 export function reasoningSummary(row: TranscriptRow, nowMs: number, runActive = true): { text: string; marker: string; label: string; live: boolean; seconds: number; tokens: number } {
   const started = row.startedAt === undefined ? Number.NaN : Date.parse(row.startedAt);
   /**
@@ -290,7 +304,9 @@ export function delegationSummary(agent: { name?: string; persona?: string; dele
  */
 export function rowMenuEntries(display: DisplayRow): readonly RowMenuEntry[] {
   if (display.shape === 'group') {
-    return [{ key: 'message', label: 'Copy message', text: groupSummary(display.family, display.counts, display.members.length), disabled: false }];
+    // PD-CHAT-004: the per-segment summary, which for a run of one family and no reasoning is still
+    // REQ-CHAT-065's own string. Raw tool input and output are never emitted, as that requirement says.
+    return [{ key: 'message', label: 'Copy message', text: activitySummary(display.segments), disabled: false }];
   }
   if (display.shape === 'trailer') {
     return [{ key: 'message', label: 'Copy message', text: trailerText(display.trailer), disabled: false }];
@@ -322,17 +338,25 @@ export function trailerText(t: TrailerRow): string {
  * about itself. Part Z's pool calls this once per projection; `RowList` calls it for the plain-list surfaces.
  *
  * `blockStart`: the first row of a block, a block beginning at every row whose role differs from the row above.
- * A group and a trailer are always block starts; a group's role is its family.
+ * **An activity line's role is its AGENT's, and a trailer always starts a block.**
  * `recentTool`: within the last two tool rows of the array — REQ-CHAT-067's "most recent tool-call/result
  * pair"; with fewer than two tool rows in the array none is collapsed, so every one of them is recent.
+ *
+ * **The falsified reason, kept beside its replacement.** This function took a group's role to be its
+ * FAMILY and forced a block start on every shape that is not a plain row. Both were inventions:
+ * REQ-CHAT-064 gives the family word as the header's *label*, which the header already draws, and
+ * REQ-CHAT-057 breaks a block on the *role*. Together they drew one agent thinking and reading in turn as
+ * `ORCHESTRATOR / READING / ORCHESTRATOR / READING`, four blocks at PD-CHAT-003's full 12 px separation,
+ * with the persona continuation bar never drawn — reported by the owner as two speakers where there was
+ * one agent, and recorded as `docs/defects/group-header-claims-the-role-gutter.md`.
  */
 export function placements(displays: readonly DisplayRow[]): readonly RowPlace[] {
-  const roles = displays.map((d) => (d.shape === 'row' ? rowRole(d.row) : d.shape === 'group' ? d.family : `trailer:${d.trailer.sort}`));
+  const roles = displays.map((d) => (d.shape === 'row' ? rowRole(d.row) : d.shape === 'group' ? d.role : `trailer:${d.trailer.sort}`));
   const toolIndexes: number[] = [];
   displays.forEach((d, i) => { if (d.shape === 'row' && d.row.kind === 'tool') toolIndexes.push(i); });
   const recent = new Set(toolIndexes.length < 2 ? toolIndexes : toolIndexes.slice(-2));
   return displays.map((d, i) => ({
-    blockStart: i === 0 || roles[i] !== roles[i - 1] || d.shape !== 'row',
+    blockStart: i === 0 || roles[i] !== roles[i - 1] || d.shape === 'trailer',
     recentTool: recent.has(i),
   }));
 }
@@ -415,6 +439,9 @@ function PlainText({ text, match, onOpenLink }: { text: string; match: RowRender
 /** REQ-CHAT-057: the timestamp column, then the role column — attribution on a block's first row, a persona bar on a continuation. */
 function Attribution({ row, place, personaBar }: { row: TranscriptRow; place: RowPlace; personaBar: string }) {
   const task = rowTask(row);
+  // PD-CHAT-004: a member of an expanded run keeps its own timestamp and draws no bar — the line's single
+  // continuous rule is the attribution for every row beneath it.
+  if (place.member === true) return <><time className="row__time mono" dateTime={row.at}>{row.ts || rowTime(row.at)}</time><span aria-hidden="true" /></>;
   return (
     <>
       <time className="row__time mono" dateTime={row.at}>{place.blockStart ? (row.ts || rowTime(row.at)) : ''}</time>
@@ -470,33 +497,56 @@ export function Row(p: RowProps) {
   /** PD-CHAT-003: blocks separate by 12 px; the class rides the reuse key's `b` flag so a moved row is redrawn. */
   const blockStartClass = place.blockStart ? ' row--block-start' : '';
 
-  // REQ-CHAT-065: the folded tool group — one header row drawn from the DisplayRow, its members beneath it when open.
+  // PD-CHAT-004: the ACTIVITY LINE — one agent's run of tool and reasoning work, stated on one line that
+  // changes rather than grows, with its members beneath it when open. REQ-CHAT-065 still fixes the counts,
+  // the severity ordering, the in-flight text and "expanding keeps the header on screen".
   if (display.shape === 'group') {
     const severity = groupSeverity(display.counts);
-    const summary = groupSummary(display.family, display.counts, display.members.length);
-    const durationMs = groupDurationMs(display.members, display.durationMs, surface.nowMs);
-    const running = (display.counts.running ?? 0) > 0;
+    const summary = activitySummary(display.segments);
+    const live = isLive(display) && surface.runActive;
+    const durationMs = activitySpanMs(display, surface.nowMs, surface.runActive);
+    const rail = personaColourToken(display.persona);
     return (
       // REQ-CHAT-065: the header carries the number of members, so it is observable rather than only readable
       // out of the summary string. Part Z's placeholder published it and the proof reads it; the real row did
-      // not, which is what the merge found.
-      <article {...common} className={`row row--group tool tool--${severity}${blockStartClass}`} data-family={display.family} data-severity={severity} data-members={display.members.length} data-testid="row-group">
+      // not, which is what the merge found. `data-segments` is PD-CHAT-004's equivalent for the run's shape.
+      <article {...common} className={`row row--group tool tool--${severity}${live ? ' row--streaming' : ''}${blockStartClass}`}
+        data-family={display.family} data-severity={severity} data-members={display.members.length}
+        data-segments={display.segments.length} data-agent={display.role} data-testid="row-group">
         <div className="row__grid">
           <time className="row__time mono" dateTime={display.startedAt}>{rowTime(display.startedAt)}</time>
-          <span className="row__attribution"><span className="row__role">{display.family}</span></span>
+          {/* PD-CHAT-004 / REQ-CHAT-057: the role gutter names the AGENT. The family words are in the line. */}
+          {place.blockStart
+            ? <span className="row__attribution"><span className="row__role">{display.role}</span></span>
+            : <span className="row__bar" data-testid="row-bar" style={{ background: `var(${rail}, var(--rt-border))` }} aria-hidden="true" />}
           <div className="row__main">
             <DesignButton type="button" className="tool__header mono" onClick={p.onToggle} aria-expanded={expanded} aria-description={summary} data-testid="group-header">
-              <span className="tool__chevron" aria-hidden="true">{expanded ? '▾' : '▸'}</span>
-              <span className="tool__name">{summary}</span>
-              <span
-                ref={(element) => { if (element && running) markMotionStart(element); }}
-                className={`tool__outcome tool__outcome--${severity}${running ? ' row__pulse' : ''}`}
-              >{(durationMs / 1000).toFixed(1)}s</span>
+              <span className="tool__chevron" aria-hidden="true">{expanded ? '▾' : live ? '◉' : '▸'}</span>
+              {/* Each segment is its own element so the line wraps between segments and never inside one. */}
+              <span className="activity__segments">
+                {display.segments.map((segment, index) => (
+                  <span key={`${segment.label}-${index}`} className={`activity__segment${segment.reasoning ? ' activity__segment--reasoning' : ''}`} data-segment={segment.label}>
+                    {segmentSummary(segment)}
+                  </span>
+                ))}
+                {/* PD-CHAT-004: the activity word of the segment in flight, marked as continuing, so "what is
+                    it doing" stays answerable at a glance on a line that now names several things. */}
+                {display.inFlightLabel !== null && (
+                  <span
+                    ref={(element) => { if (element && live) markMotionStart(element); }}
+                    className={`activity__now${live ? ' row__pulse' : ''}`}
+                    data-testid="activity-now"
+                  >{display.inFlightLabel}…</span>
+                )}
+              </span>
+              <span className={`tool__outcome tool__outcome--${severity}`}>{(durationMs / 1000).toFixed(1)}s</span>
             </DesignButton>
             {/* REQ-CHAT-065: while a member is in flight the header carries that call's text. */}
             {!expanded && display.inFlight !== null && <div className="tool__preview text-secondary mono">⤷ {display.inFlight}</div>}
             {expanded && (
-              <div className="row__members" data-testid="group-members">
+              // PD-CHAT-004: the revealed members hang from a SINGLE continuous rule in the agent's persona
+              // colour spanning the whole run — one line for one agent's callings, rather than a rule per row.
+              <div className="row__members" data-testid="group-members" style={{ borderInlineStartColor: `var(${rail}, var(--rt-border))` }}>
                 {display.members.map((m) => {
                   const key = m.callKey ?? `${m.index}`;
                   return (
@@ -506,7 +556,7 @@ export function Row(p: RowProps) {
                       expanded={surface.memberExpanded?.(key) ?? false}
                       onToggle={() => surface.toggleMember?.(key)}
                       match={null}
-                      place={{ blockStart: false, recentTool: true }}
+                      place={MEMBER_OF_RUN}
                     />
                   );
                 })}

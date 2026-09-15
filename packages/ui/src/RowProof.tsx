@@ -4,6 +4,7 @@ import { PersonaWindow } from './PersonaWindow.js';
 import { WorkspaceView } from './WorkspaceView.js';
 import { RowList, type Acknowledger } from './TranscriptSurface.js';
 import type { DisplayRow } from './transcript/Row.js';
+import { CAP_DEFAULTS, projectDisplay } from './transcript/project.js';
 import { Button as DesignButton } from './design-system/index.js';
 
 /**
@@ -91,11 +92,15 @@ export function rowProofRows(): readonly TranscriptRow[] {
     row(1, { kind: 'agent', persona: 'orchestrator', name: 'orchestrator', body: ROW_PROOF_MARKDOWN }),
     row(2, { kind: 'thinking', persona: 'orchestrator', name: 'orchestrator', body: 'A reasoning body that stays hidden until the preference or a click asks for it.', startedAt: at(2), durationMs: 4_000 }),
     row(3, { kind: 'tool', persona: 'coding-agent', name: 'helper', body: '✓ read_file README.md', toolName: 'read_file', toolStatus: 'ok', callKey: 'call-ok', durationMs: 3_200, startedAt: at(3), input: '{ "path": "README.md" }', output: 'line one of the untruncated output\nline two\nline three' }),
-    // REQ-CHAT-064: the four outcome rows carry FOUR DIFFERENT families on purpose — reading, searching, running,
-    // editing — so that no two consecutive rows fold and each outcome can be measured on a row of its own. Two of
-    // them shared a family while this fixture was written against a surface that did not project; the merge with
-    // Part Z applied the projection and folded them, which is the requirement working rather than a defect. The
-    // fold itself is measured on the `proof-groups` surface below, which exists for it.
+    // The four outcome rows are measured one at a time, which is what the Workspace surface below asks the
+    // projection for by passing `groupTools={false}`.
+    //
+    // **The falsified reason, kept beside its replacement.** They carried FOUR DIFFERENT families on purpose —
+    // reading, searching, running, editing — because REQ-CHAT-064 ended a run at a change of family, so four
+    // families meant four rows. PD-CHAT-004 bounds a run by the AGENT instead, and all four belong to `helper`:
+    // under the directive they fold into one activity line and no outcome can be read on a row of its own. The
+    // family spread is no longer what keeps them apart, and picking four more families would not have helped.
+    // The fold itself is measured on the `proof-groups` and `proof-activity` surfaces, which exist for it.
     row(4, { kind: 'tool', persona: 'coding-agent', name: 'helper', body: 'grep MISSING.md', toolName: 'grep', toolStatus: 'failed', callKey: 'call-failed', durationMs: 120, startedAt: at(4), input: '{ "path": "MISSING.md" }', output: 'no such file' }),
     row(5, { kind: 'tool', persona: 'coding-agent', name: 'helper', body: 'terminal rm -rf build', toolName: 'terminal', toolStatus: 'blocked', callKey: 'call-blocked', durationMs: 0, startedAt: at(5), input: '{ "command": "rm -rf build" }', blockedReason: 'a recursive delete is denied by the starter rules' }),
     row(6, { kind: 'tool', persona: 'coding-agent', name: 'helper', body: 'write_file NOTES.md', toolName: 'write_file', toolStatus: 'running', settled: false, callKey: 'call-running', startedAt: at(6), output: 'On branch main' }),
@@ -144,13 +149,49 @@ export function rowProofDisplays(): readonly DisplayRow[] {
   }));
   return [
     {
+      // One family, no reasoning — PD-CHAT-004's degenerate case, whose summary is REQ-CHAT-065's own
+      // example unchanged. The mixed run the directive is for is the `proof-activity` surface below.
       shape: 'group', key: 'group-call-0', family: 'reading', members,
-      counts: { ok: 3, failed: 1, blocked: 0, running: 0 }, durationMs: 2_500, startedAt: at(20), inFlight: null,
+      segments: [{ label: 'reading', reasoning: false, members: 4, counts: { ok: 3, failed: 1, blocked: 0, running: 0 }, durationMs: 2_500, tokens: 0 }],
+      role: 'coding-agent', persona: 'coding-agent',
+      counts: { ok: 3, failed: 1, blocked: 0, running: 0 }, durationMs: 2_500, startedAt: at(20), endedAt: at(23),
+      inFlight: null, inFlightLabel: null,
       blob: members.map((m) => m.output ?? '').join('\n').slice(0, 2_000),
     },
     { shape: 'trailer', key: 'question:q-1', trailer: { sort: 'question', requestId: 'q-1', role: 'helper', steps: 3, text: '3 steps — Choose a branch' } },
     { shape: 'trailer', key: 'question:q-2', trailer: { sort: 'question', requestId: 'q-2', role: 'helper', steps: 1, text: '1 step — Confirm the target' } },
   ];
+}
+
+/**
+ * PD-CHAT-004's fixture: the sequence the owner reported — one agent thinking and reading in turn — plus a
+ * second agent's run beside it, and a live third run. It is projected through the **real** `projectDisplay`
+ * rather than written out as `DisplayRow` literals, so what the proof measures is step 4's own output and
+ * not a hand-built stand-in for it.
+ */
+export function activityProofRows(): readonly TranscriptRow[] {
+  const think = (i: number, chars: number, ms: number) => row(30 + i, { kind: 'thinking', persona: 'orchestrator', name: 'orchestrator', body: `deliberation ${i}`, chars, durationMs: ms, startedAt: at(30 + i), settled: true });
+  const call = (i: number, toolName: string, over: Partial<TranscriptRow> = {}) => row(30 + i, {
+    kind: 'tool', persona: 'orchestrator', name: 'orchestrator', body: `${toolName} file-${i}.ts`, toolName,
+    toolStatus: 'ok', callKey: `activity-${i}`, durationMs: 120, startedAt: at(30 + i), input: `{ "path": "file-${i}.ts" }`,
+    output: `ACTIVITY-OUTPUT-${i} must never appear in the line's copy or description`, ...over,
+  });
+  return [
+    think(0, 2216, 16_000), call(1, 'read_file'), call(2, 'glob'),
+    think(3, 132, 1_000), call(4, 'read_file'), call(5, 'list_dir'),
+    call(6, 'grep', { toolStatus: 'failed' }),
+    // A message ends the run; the second agent's run follows and must be a line of its own.
+    row(37, { kind: 'agent', persona: 'orchestrator', name: 'orchestrator', body: 'The ladder has four rungs.' }),
+    row(38, { kind: 'thinking', persona: 'coding-agent', name: 'helper', body: 'the child deliberates', chars: 400, durationMs: 3_000, startedAt: at(38), settled: true }),
+    row(39, { kind: 'tool', persona: 'coding-agent', name: 'helper', body: 'bash pnpm test', toolName: 'bash', toolStatus: 'running', settled: false, callKey: 'activity-live', startedAt: at(39), output: 'running the suite' }),
+  ];
+}
+
+export function activityProofDisplays(expanded: ReadonlySet<string>): readonly DisplayRow[] {
+  return projectDisplay({
+    rows: activityProofRows(), running: true, groupTools: true, showReasoning: false, caps: CAP_DEFAULTS,
+    expanded, pendingQuestions: [], pendingApprovals: [],
+  });
 }
 
 export interface RowProofProps {
@@ -187,6 +228,7 @@ export function RowProof({ onOpenLink, onAcknowledge }: RowProofProps) {
           session={session} rows={rows} nowIso={at(12)}
           onSubmit={async () => REFUSED} onStop={async () => REFUSED}
           entry={{ persona: 'orchestrator', model: 'scripted', reasoning: 'high', tools: [] }}
+          groupTools={false}
           {...shared}
         />
       </div>
@@ -202,6 +244,22 @@ export function RowProof({ onOpenLink, onAcknowledge }: RowProofProps) {
         <RowList
           rows={[]} displays={groups} label="Folded groups and question trailers" acknowledge={onAcknowledge}
           surface={{ showReasoning, autoCollapseTools, runActive: true, nowMs: Date.parse(at(30)), openLink: onOpenLink }}
+        />
+      </div>
+      {/* PD-CHAT-004: the same run twice, so the collapsed line's text and the rule beneath the expanded one are
+          two live DOM subtrees the proof reads rather than two runs it has to sequence. The second is opened by a
+          CLICK (`ROTARIS_CAPTURE_CLICKS`) and not by a seeded set: `RowList` owns its own expansion state, exactly
+          as the product's pane does, and seeding the projection alone would draw member rows no `Row` revealed. */}
+      <div className="rows-proof__surface transcript" data-testid="proof-activity">
+        <RowList
+          rows={[]} displays={activityProofDisplays(new Set())} label="Activity lines, collapsed" acknowledge={onAcknowledge}
+          surface={{ showReasoning: false, autoCollapseTools: false, runActive: true, nowMs: Date.parse(at(45)), openLink: onOpenLink }}
+        />
+      </div>
+      <div className="rows-proof__surface transcript" data-testid="proof-activity-open">
+        <RowList
+          rows={[]} displays={activityProofDisplays(new Set())} label="Activity line, expanded" acknowledge={onAcknowledge}
+          surface={{ showReasoning: false, autoCollapseTools: false, runActive: true, nowMs: Date.parse(at(45)), openLink: onOpenLink }}
         />
       </div>
     </div>

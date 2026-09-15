@@ -149,7 +149,13 @@ the visible span, the anchor, REQ-CHAT-053's four update shapes, pure), `cache.t
 caches and the four-part reuse predicate), `search.ts` (REQ-CHAT-074, incremental), `TranscriptPane.tsx` (the fixed
 slot pool and step 5) and `Row.tsx` (Part AA's renderer, which the pane binds into each slot; Part Z's
 `PlaceholderRow.tsx` stood in for it until the two branches merged and is gone). **Edges unchanged** —
-`ui -> kernel, contracts, ui-core`. `ui-core`'s replica gains ADR-0046 step 3 (`classifyRows` and the six row-level
+`ui -> kernel, contracts, ui-core`. **`PD-CHAT-004` (2026-09-15) moved one decision inside this module and added
+no edge:** the third display shape is the **activity line**, a run of one agent's tool *and* streamed-reasoning
+rows, so `project.ts` now decides the run boundary from the agent plus `display/showReasoning` rather than from
+the tool family, and `types.ts` gains `ActivitySegment` beside `DisplayRow`. `isReasoningRow` moved from `Row.tsx`
+into `project.ts` and is re-exported — `Row.tsx` already depended on `project.ts`, and declaring the run boundary's
+own predicate in the file that consumes step 4 would have closed a cycle inside the module. `ui-core`'s replica
+gains ADR-0046 step 3 (`classifyRows` and the six row-level
 counters `REQ-UIBENCH-064` fixes, distinct from the seven publication classes it already had). `config` gains
 `display-section.ts`, the reader `SECTION_KEYS` had declared and nothing stood behind; `model` gains `reasoning.ts`,
 the pure normaliser for REQ-CHAT-163's three provider shapes.

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { QuestionPrompt, TranscriptRow } from '@rotaris/contracts';
 import { classifyRows } from '@rotaris/ui-core';
-import { capLines, capDiff, familyOf, groupSeverity, groupSummary, projectDisplay, rowKey, trailerRows, type ProjectOptions } from './project.js';
+import {
+  activitySpanMs, activitySummary, capLines, capDiff, familyOf, groupSeverity, groupSummary, isLive, projectDisplay, rowKey, trailerRows,
+  FACT_SEPARATOR, SEGMENT_SEPARATOR, type ProjectOptions,
+} from './project.js';
 import type { DisplayRow } from './types.js';
 import { buildOffsets, captureAnchor, estimateHeight, indexAt, newUpdatesLabel, restoreAnchor, updateShape, visibleRange } from './pool.js';
 import { countLabel, indexAll, indexSuffix, matchRow, step } from './search.js';
@@ -35,10 +38,16 @@ const question = (titles: readonly string[]): QuestionPrompt => ({
 });
 
 const options = (rows: readonly TranscriptRow[], over: Partial<ProjectOptions> = {}): ProjectOptions => ({
-  rows, running: true, groupTools: true,
+  // PD-CHAT-004: `showReasoning` defaults OFF here exactly as REQ-CHAT-167 defaults it in the product, so a
+  // test that says nothing about it is testing the shipped configuration.
+  rows, running: true, groupTools: true, showReasoning: false,
   caps: { show_tool_results: true, show_tool_inputs: true, tool_result_lines: 10, tool_input_lines: 2 },
   expanded: new Set<string>(), pendingQuestions: [], pendingApprovals: [], ...over,
 });
+
+/** A reasoning row of the same agent, so a run can be built out of both categories (PD-CHAT-004). */
+const thinking = (index: number, over: Partial<TranscriptRow> = {}): TranscriptRow =>
+  row(index, { kind: 'thinking', body: `deliberation ${index}`, durationMs: 2_000, chars: 400, startedAt: `2026-09-06T09:00:0${index % 10}.000Z`, ...over });
 
 describe('ADR-0045 — the pool, its capacity and its geometry', () => {
   it('capacity is a declared product constant, not a function of the window (ADR-0045)', () => {
@@ -214,15 +223,19 @@ describe('ADR-0046 step 4 — the projection', () => {
     expect(projectDisplay(options(terminal)).every((d) => d.shape === 'row')).toBe(true);
   });
 
-  it('REQ-CHAT-065: the header carries the counts, the summed duration, the earliest start and the capped blob', () => {
+  it('REQ-CHAT-065 / PD-CHAT-004: the header carries the counts, the elapsed SPAN, the earliest start and the capped blob', () => {
     const rows = [
-      tool(0, 'read_file', { toolStatus: 'ok', durationMs: 100, startedAt: '2026-09-06T09:00:05.000Z', output: 'a' }),
-      tool(1, 'read_file', { toolStatus: 'failed', durationMs: 250, startedAt: '2026-09-06T09:00:01.000Z', output: 'b'.repeat(3000) }),
+      tool(0, 'read_file', { toolStatus: 'ok', durationMs: 100, startedAt: '2026-09-06T09:00:05.000Z', at: '2026-09-06T09:00:05.100Z', output: 'a' }),
+      tool(1, 'read_file', { toolStatus: 'failed', durationMs: 250, startedAt: '2026-09-06T09:00:01.000Z', at: '2026-09-06T09:00:09.000Z', output: 'b'.repeat(3000) }),
     ];
     const group = asGroup(projectDisplay(options(rows))[0]);
     expect(group.counts).toEqual({ ok: 1, failed: 1, blocked: 0, running: 0 });
-    expect(group.durationMs).toBe(350);
+    // PD-CHAT-004 narrows REQ-CHAT-065's summed duration to the run's SPAN: 09:00:01 → 09:00:09 is 8 s, not
+    // the 350 ms of work inside it. The per-segment figure below still sums, which is where the sum lives now.
+    expect(group.durationMs).toBe(8_000);
+    expect(group.segments[0]!.durationMs).toBe(350);
     expect(group.startedAt).toBe('2026-09-06T09:00:01.000Z');
+    expect(group.endedAt).toBe('2026-09-06T09:00:09.000Z');
     expect(group.blob.length).toBe(2000);
     // REQ-CHAT-065: the severity ordering, and a summary that never emits raw tool output.
     expect(groupSeverity(group.counts)).toBe('failed');
@@ -242,19 +255,26 @@ describe('ADR-0046 step 4 — the projection', () => {
   it('REQ-CHAT-048: an unstamped thinking row equal to the previous one projects to zero rows', () => {
     const think = (i: number, body: string, over: Partial<TranscriptRow> = {}) => row(i, { kind: 'thinking', body, ...over });
     const rows = [think(0, 'the same'), think(1, 'the same'), think(2, 'different')];
-    expect(projectDisplay(options(rows)).length).toBe(2);
+    // PD-CHAT-004 folds the two SURVIVING reasoning rows into one activity line, so the dedup is counted in
+    // its MEMBERS rather than in the displayed length — the rule under test is which rows survive hygiene.
+    expect(asGroup(projectDisplay(options(rows))[0]).members.length).toBe(2);
+    expect(projectDisplay(options(rows, { groupTools: false })).length).toBe(2);
     // A stamped duplicate is a real second burst and is kept.
-    expect(projectDisplay(options([think(0, 'x'), think(1, 'x', { durationMs: 10 })])).length).toBe(2);
-    // The rule is per agent.
-    expect(projectDisplay(options([think(0, 'x'), think(1, 'x', { name: 'other' })])).length).toBe(2);
+    expect(projectDisplay(options([think(0, 'x'), think(1, 'x', { durationMs: 10 })], { groupTools: false })).length).toBe(2);
+    // The rule is per agent — and so is PD-CHAT-004's run, so two agents' rows never fold together either.
+    expect(projectDisplay(options([think(0, 'x'), think(1, 'x', { name: 'other', persona: 'other' })])).length).toBe(2);
   });
 
   it('REQ-CHAT-049: with no run in progress nothing presents as live', () => {
     const rows = [row(0, { kind: 'tool', toolName: 'read_file', toolStatus: 'running', settled: false }), row(1, { kind: 'thinking', settled: false, startedAt: '2026-09-06T09:00:00.000Z' })];
-    const display = projectDisplay(options(rows, { running: false }));
+    // Grouping off, so the two rows are measured one at a time; PD-CHAT-004 would otherwise fold them into
+    // one activity line, which is tested on its own below.
+    const display = projectDisplay(options(rows, { running: false, groupTools: false }));
     expect(asRow(display[0]).row.toolStatus).toBeUndefined();
     expect(asRow(display[0]).row.settled).toBe(true);
     expect(asRow(display[1]).row.startedAt).toBeUndefined();
+    // PD-CHAT-004: and the activity line they fold into is not live either, so nothing in it counts upward.
+    expect(isLive(asGroup(projectDisplay(options(rows, { running: false }))[0]))).toBe(false);
   });
 
   it('REQ-CHAT-050: an edit-diff row is displayed at most once however often the transcript is re-projected', () => {
@@ -309,11 +329,108 @@ describe('ADR-0046 step 4 — the projection', () => {
     expect(rowKey(row(3, { kind: 'tool', body: 'x' }))).toBe(rowKey(row(9, { kind: 'tool', body: 'x' })));
   });
 
-  it('REQ-CHAT-067: grouping off leaves every tool row its own row', () => {
+  it('REQ-CHAT-067 / PD-CHAT-004: grouping off leaves every tool row its own row, and forms no run', () => {
     const rows = [tool(0, 'read_file'), tool(1, 'read_file'), tool(2, 'read_file')];
     expect(projectDisplay(options(rows, { groupTools: false })).map((d) => d.shape)).toEqual(['row', 'row', 'row']);
+    const mixed = [thinking(0), tool(1, 'read_file'), thinking(2), tool(3, 'grep')];
+    expect(projectDisplay(options(mixed, { groupTools: false })).map((d) => d.shape)).toEqual(['row', 'row', 'row', 'row']);
+  });
+});
+
+describe('PD-CHAT-004 — the activity line', () => {
+  /** The sequence the owner reported: one agent thinking and reading in turn, drawn as two alternating speakers. */
+  const alternating = [
+    thinking(0, { body: 'first', chars: 2216, durationMs: 16_000, at: '2026-09-06T09:00:16.000Z' }),
+    tool(1, 'read_file', { at: '2026-09-06T09:00:17.000Z' }),
+    tool(2, 'glob', { at: '2026-09-06T09:00:18.000Z' }),
+    thinking(3, { body: 'second', chars: 132, durationMs: 1_000, at: '2026-09-06T09:00:19.000Z' }),
+    tool(4, 'read_file', { at: '2026-09-06T09:00:20.000Z' }),
+    tool(5, 'list_dir', { at: '2026-09-06T09:00:21.000Z' }),
+  ];
+
+  it('one agent\'s tool and reasoning rows fold into ONE line across families and across reasoning', () => {
+    const display = projectDisplay(options(alternating));
+    expect(display.map((d) => d.shape)).toEqual(['group']);
+    const line = asGroup(display[0]);
+    expect(line.members.length).toBe(6);
+    // The role gutter names WHO. The defect this repairs put `reading` here.
+    expect(line.role).toBe('orchestrator');
+    // Four segments, in first-appearance order — the same family reached again forms a SECOND segment.
+    expect(line.segments.map((s) => s.label)).toEqual(['reasoning', 'reading', 'reasoning', 'reading']);
+    expect(line.segments.map((s) => s.members)).toEqual([1, 2, 1, 2]);
   });
 
+  it('a further row extends the line and appends NO displayed row — the anti-flicker property', () => {
+    const before = projectDisplay(options(alternating));
+    const after = projectDisplay(options([...alternating, tool(6, 'grep', { at: '2026-09-06T09:00:22.000Z' })]));
+    expect(before.length).toBe(1);
+    expect(after.length).toBe(1);
+    // REQ-CHAT-059: and it is still the same row, so the reader's expansion and the pool's slot survive it.
+    expect(after[0]!.key).toBe(before[0]!.key);
+    expect(asGroup(after[0]).segments.map((s) => s.label)).toEqual(['reasoning', 'reading', 'reasoning', 'reading', 'searching']);
+  });
+
+  it('a message, another agent and REQ-CHAT-066\'s exempt rows all end a run', () => {
+    const message = [thinking(0), tool(1, 'read_file'), row(2), thinking(3), tool(4, 'read_file')];
+    expect(projectDisplay(options(message)).map((d) => d.shape)).toEqual(['group', 'row', 'group']);
+    const other = [thinking(0), tool(1, 'read_file'), thinking(2, { name: 'helper', persona: 'helper' }), tool(3, 'read_file', { name: 'helper', persona: 'helper' })];
+    const split = projectDisplay(options(other));
+    expect(split.map((d) => d.shape)).toEqual(['group', 'group']);
+    expect(split.map((d) => asGroup(d).role)).toEqual(['orchestrator', 'helper']);
+    const exempt = [thinking(0), tool(1, 'ask_questions'), thinking(2), tool(3, 'terminal', { streamId: 's', settled: false, toolStatus: 'running' })];
+    expect(projectDisplay(options(exempt)).map((d) => d.shape)).toEqual(['row', 'row', 'row', 'row']);
+  });
+
+  it('REQ-CHAT-167 on keeps reasoning OUT of the run, which is what keeps TranscriptPane\'s expansion shortcut sound', () => {
+    const display = projectDisplay(options(alternating, { showReasoning: true }));
+    expect(display.map((d) => d.shape)).toEqual(['row', 'group', 'row', 'group']);
+    expect(display.filter((d) => d.shape === 'group').every((d) => asGroup(d).segments.every((s) => !s.reasoning))).toBe(true);
+  });
+
+  it('the summary is per segment, and a single-family run still reads exactly as REQ-CHAT-065 writes it', () => {
+    const single = [tool(0, 'read_file'), tool(1, 'glob'), tool(2, 'view'), tool(3, 'list_dir', { toolStatus: 'failed' })];
+    expect(activitySummary(asGroup(projectDisplay(options(single))[0]).segments)).toBe('reading ×4 · 3 ok · 1 failed');
+    const line = asGroup(projectDisplay(options(alternating))[0]);
+    expect(activitySummary(line.segments)).toBe('reasoning ×1 · 16s · ~554 tok, reading ×2 · 2 ok, reasoning ×1 · 1s · ~33 tok, reading ×2 · 2 ok');
+    // The two separators are never the same one, so a segment boundary is readable in the copied text.
+    expect(FACT_SEPARATOR).not.toBe(SEGMENT_SEPARATOR);
+    // REQ-CHAT-065: and no raw tool output reaches it, however long the members' output was.
+    expect(activitySummary(asGroup(projectDisplay(options([tool(0, 'grep', { output: 'SECRET' }), tool(1, 'grep', { output: 'SECRET' })]))[0]).segments)).not.toContain('SECRET');
+  });
+
+  it('a reasoning segment sums its characters ONCE before dividing, and a reasoning-only run is never coloured failed', () => {
+    const thought = [thinking(0, { chars: 7, durationMs: 1_000 }), thinking(1, { body: 'b', chars: 7, durationMs: 2_000 })];
+    const line = asGroup(projectDisplay(options(thought))[0]);
+    // 14 ÷ 4 = 3, where rounding each member first would give 1 + 1 = 2.
+    expect(line.segments[0]!.tokens).toBe(3);
+    expect(line.segments[0]!.durationMs).toBe(3_000);
+    expect(line.counts).toEqual({ ok: 0, failed: 0, blocked: 0, running: 0 });
+    expect(groupSeverity(line.counts)).toBe('ok');
+  });
+
+  it('the line is live while reasoning streams, and its span counts up from the earliest start', () => {
+    const streaming = [tool(0, 'read_file', { at: '2026-09-06T09:00:01.000Z' }), thinking(1, { settled: false, durationMs: undefined, startedAt: '2026-09-06T09:00:02.000Z', at: '2026-09-06T09:00:02.000Z' })];
+    const line = asGroup(projectDisplay(options(streaming))[0]);
+    expect(line.counts.running).toBe(0);
+    // The second arm: no tool is running, and the agent is plainly still thinking.
+    expect(isLive(line)).toBe(true);
+    expect(line.inFlightLabel).toBe('reasoning');
+    // The span counts from the earliest member's START (09:00:00), not from its recorded end.
+    expect(line.startedAt).toBe('2026-09-06T09:00:00.000Z');
+    expect(activitySpanMs(line, Date.parse('2026-09-06T09:00:30.000Z'))).toBe(30_000);
+    // REQ-CHAT-049: with no run in progress it neither presents as live nor counts upward.
+    expect(activitySpanMs(line, Date.parse('2026-09-06T09:00:30.000Z'), false)).toBe(line.durationMs);
+  });
+
+  it('the incremental path and the whole-state path agree on a mixed run', () => {
+    const whole = projectDisplay(options(alternating));
+    const seeded = projectDisplay(options(alternating.slice(0, 3)));
+    const incremental = projectDisplay(options(alternating), { previous: seeded, from: 3 });
+    expect(JSON.stringify(incremental)).toBe(JSON.stringify(whole));
+  });
+});
+
+describe('ADR-0046 step 4 — scope and the incremental bound', () => {
   it('REQ-CHAT-069: the scope filter keeps user, system and verifier rows plus the named agent\'s', () => {
     const rows = [row(0, { kind: 'user' }), row(1, { name: 'alpha' }), row(2, { name: 'beta' }), row(3, { kind: 'verifier', name: 'beta' })];
     const display = projectDisplay(options(rows, { scopeAgent: 'alpha', groupTools: false }));

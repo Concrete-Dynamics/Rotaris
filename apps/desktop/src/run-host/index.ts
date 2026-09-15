@@ -1,9 +1,9 @@
 import { CONTRACT_SCHEMA_VERSION, ProcessRequestEnvelopeSchema, RunHostRequestSchema, ServiceAnswerEnvelopeSchema, SKILLS_DISABLED_MESSAGE, type ImprovementArtifactRecord, type ProcessMessage, type ProcessReply, type RunHostRequest, type ServiceAsk, type ServiceAskEnvelope } from '@rotaris/contracts';
 import { asSessionId, millis, ok, toIsoUtc, type Clocks, type Millis, type WorkspaceId } from '@rotaris/kernel';
-import { dataLayout, nodeClocks, probePid, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
+import { dataLayout, environmentWithout, nodeClocks, probePid, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
 import { openStore, StoreDal, forgetSpelling, type PromptLists, type StoreHandle } from '@rotaris/store';
 import { analyzeImprovement, captureImprovementJob, CATALOGUE, RefusalLease, relativeTime, RungMemory, Sessions, SUPERVISOR_DEFAULTS, timelineId } from '@rotaris/engine';
-import { PresenterRegistry, STREAM_SETTINGS_DEFAULTS, withheldUnderPlanGate, type FileToolState, type TerminalManager } from '@rotaris/agent-tools';
+import { ConfinementService, PresenterRegistry, renderUnavailability, spawnTrial, type AvailabilityVerdict, STREAM_SETTINGS_DEFAULTS, withheldUnderPlanGate, type FileToolState, type TerminalManager } from '@rotaris/agent-tools';
 import { createToolPort, fileAppender, RunHostPresenter, terminalManagerFromHost } from './tools.js';
 import { createTerminalHost } from './terminal.js';
 import { clearHooksDecision, createHookPort, decideHooks, hooksSummaryFor, setHookToggle } from './hooks.js';
@@ -390,11 +390,42 @@ const mcp = new McpHost({
 const packaged = import.meta.dirname.includes('app.asar');
 const codeIntelligenceLaunch = { command: process.execPath, args: packaged ? [CODE_INTELLIGENCE_TOKEN, '--'] : [join(import.meta.dirname, 'index.js'), CODE_INTELLIGENCE_TOKEN, '--'] };
 log(`mcp: the reserved token launches ${codeIntelligenceLaunch.command} ${codeIntelligenceLaunch.args.join(' ')} (${packaged ? 'packaged' : 'development'})`);
+/**
+ * ADR-0022's availability service, owned at application lifetime (REQ-SANDBOX-067): one probe per
+ * process, cached, cleared only by REQ-SANDBOX-129's explicit re-check. It lives in the RUN HOST and
+ * not in main because this is the process that executes commands — the verdict that gates a session
+ * and the mechanism that would confine its commands are then one reading, and no message between
+ * processes can land between them (REQ-SANDBOX-094).
+ */
+const confinement = new ConfinementService({
+  platform: process.platform,
+  env: process.env,
+  clocks,
+  runTrial: spawnTrial(clocks, environmentWithout([], process.env)),
+});
+/**
+ * REQ-SANDBOX-071 names the application log as one of the surfaces that presents the verdict's own
+ * text, on the same terms as the settings label, the launch dialog and the run-refusal record.
+ *
+ * ADR-0022's first execution found this logged from the LAUNCH path only, so on a machine where the
+ * user opened Settings and never started a run — which on this platform is the machine of anyone who
+ * read the disclosure and left confinement alone — the log recorded nothing about why confinement was
+ * unavailable. The falsified reason, kept beside its replacement: "the launch is where the verdict
+ * first matters". It is where it first *gates* something; it is not where it is first *taken*.
+ * Every path that settles the verdict now comes through here, and the line is written once.
+ */
+const settleConfinement = async (): Promise<AvailabilityVerdict> => {
+  const first = confinement.peek() === null;
+  const verdict = await confinement.verdict();
+  if (first) log(`confinement: ${verdict.available ? `available (${verdict.backend})` : `unavailable — ${renderUnavailability(verdict).replace(/\n/g, ' ')}`}`);
+  return verdict;
+};
 const configurationDeps = {
   clocks, globalDir: configDir, env: process.env, scriptedClient: () => scriptedClient(clocks), codeIntelligenceLaunch,
   onRequest: (i: { method: string; url: string; headers: Record<string, string> }) => log(`model request ${i.method} ${i.url}${i.headers['authorization'] ? '' : ' (no authorization header)'}`),
   log: (m: string) => log(m), liveState: () => liveState, bearers: (root: string) => leased.get(root) ?? {},
   mcpEvidence: (cfg: ConfiguredRun['cfg'], root: string, role: string) => mcp.evidenceFor(cfg, root, role),
+  confinement: () => confinement.peek(),
 };
 /**
  * ADR-0063 — the portable-skill catalog. The run host owns it because REQ-WORKSPACE-058 clears it at
@@ -715,7 +746,7 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
       const s = stores.get(req.workspaceId);
       if (!s?.dal) return { kind: 'refused', code: 'workspace.not-open', headline: 'No store is open for this workspace' };
       return launchSession(req, {
-        workspaceRoot: s.root, attended: presenters.attended, configuration: configurationDeps,
+        workspaceRoot: s.root, attended: presenters.attended, configuration: configurationDeps, settleConfinement,
         leaseCredentials: async (providers) => {
           const answer = await ask({ kind: 'credentials.lease', providerIds: [...providers] }, millis(5_000)).catch((e: Error) => { log(`credentials: main did not answer the lease (${e.message})`, 'warn'); return null; });
           const bearers = answer?.kind === 'credentials.leased' ? answer.bearers : {};
@@ -1056,6 +1087,20 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
       const run = configuredFor(s.root);
       if (!run) return { kind: 'refused', code: 'mcp.configuration', headline: 'The configuration could not be loaded' };
       return { kind: 'mcp.secrets', view: mcp.secrets(run.cfg, req.server ?? null) };
+    }
+    /**
+     * ADR-0022 / REQ-SANDBOX-129: the settings label's read, and its re-check. The probe runs here,
+     * in the run host, off every interface thread; the label enters its checking state the moment
+     * the request is sent and shows the new verdict when this reply arrives, so neither the settings
+     * surface nor any other view blocks for the up-to-5.0-second trial. A fresh verdict governs
+     * sessions started AFTERWARDS and never changes the confinement fact recorded for a session
+     * already running (REQ-SANDBOX-094, REQ-SANDBOX-096).
+     */
+    case 'confinement.status': {
+      if (req.recheck !== true) return { kind: 'confinement.status', verdict: await settleConfinement() };
+      const verdict = await confinement.recheck();
+      log(`confinement: re-checked — ${verdict.available ? `available (${verdict.backend})` : `unavailable — ${renderUnavailability(verdict).replace(/\n/g, ' ')}`}`);
+      return { kind: 'confinement.status', verdict };
     }
     // ADR-0035 (Part T) / REQ-MCP-099/112: the project setup — the steps run here; the reply is the status as it stands.
     case 'mcp.setup': {

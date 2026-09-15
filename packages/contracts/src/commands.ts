@@ -222,6 +222,13 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('mcp.probe'), name: z.string().min(1).optional() }),
   z.object({ kind: z.literal('mcp.setEnabled'), name: z.string().min(1), enabled: z.boolean() }),
   z.object({ kind: z.literal('mcp.secrets'), server: z.string().optional() }),
+  /**
+   * ADR-0022 (Part AR) / REQ-SANDBOX-116, REQ-SANDBOX-129: the availability verdict the runtime
+   * section's label shows, and the re-check control beside it. `recheck` discards the cached verdict
+   * so a user who has just installed the launcher or lifted a namespace restriction can make the
+   * product see it without restarting the application.
+   */
+  z.object({ kind: z.literal('confinement.status'), recheck: z.boolean().optional() }),
   /** ADR-0035 (Part T) / REQ-MCP-099/112: the code-intelligence project-setup action — start, cancel, or read its status; the run host runs the steps. */
   z.object({ kind: z.literal('mcp.setup'), action: z.enum(['start', 'cancel', 'status']) }),
   /**

@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useState } from 'react';
-import { SANDBOX_MODE_NAMES, validateBranchName, type SandboxModeName } from '@rotaris/contracts';
+import { confinementMessage, NO_CONFINEMENT_DISCLOSURE, SANDBOX_MODE_NAMES, validateBranchName, type ConfinementVerdict, type SandboxModeName } from '@rotaris/contracts';
 import { Button as DesignButton, Checkbox as DesignCheckbox, Input as DesignInput, Select as DesignSelect } from './design-system/index.js';
 
 /**
@@ -31,8 +31,21 @@ export interface StartSessionDialogProps {
   readonly defaultSandboxMode: SandboxModeName;
   /** REQ-ORCH-152 / REQ-CONFIG-476: the persisted run-start mode, preselected; `auto` by default. */
   readonly defaultRunStartMode?: 'auto' | 'plan' | undefined;
-  /** Whether this host can confine anything (ADR-0022: false on Windows). */
-  readonly confinementAvailable: boolean;
+  /**
+   * ADR-0022 (Part AR): this HOST's own availability verdict, not a hardcoded answer. `null` while
+   * the probe has not returned — the dialog then behaves as it does for an unavailable host, the
+   * fail-closed side (REQ-SANDBOX-068).
+   *
+   * REQ-SANDBOX-119: on a host where the probe reports unavailable, the control is disabled and
+   * cleared, and the mechanism's reason AND remediation appear both in the tooltip and as text
+   * visible WITHOUT hovering, since a tooltip alone does not count as informing the user.
+   * REQ-SANDBOX-120: where the workspace CONFIGURATION itself demands confinement on such a host, the
+   * control stays at the configured value and disabled, so the host never appears to switch the
+   * setting off; the run then fails before the agent loop begins.
+   */
+  readonly confinement: ConfinementVerdict | null;
+  /** REQ-SANDBOX-107's corrective sentence, or empty when such work can proceed. */
+  readonly advisory?: string | undefined;
   readonly onChooseAttach: () => Promise<{ ok: true; path: string; branch: string } | { ok: true; cancelled: true } | { ok: false; reason: string }>;
   readonly onAccept: (options: LaunchOptions) => void;
   readonly onCancel: () => void;
@@ -41,14 +54,32 @@ export interface StartSessionDialogProps {
 export const ISOLATION_HINT = 'Choose an isolated Git worktree when this task may run beside other sessions.';
 export const ISOLATION_REQUIRED_HINT = 'Another run is already active, so this session gets its own Git worktree. Two runs sharing one working tree would overwrite each other\'s edits.';
 export const ISOLATION_REQUIRED_TOOLTIP = 'Required while another run is active.';
-/** REQ-SANDBOX-130: the one fact, in the product's own words, as text — never a colour or a disabled control. */
-export const NO_CONFINEMENT_DISCLOSURE = 'This host cannot confine anything: every command an agent runs executes with the same operating-system privileges as the account running Rotaris, reaching whatever that account can read and whatever it can write, and no value of the sandbox mode changes that here. That is a stated limit of the product on this platform, not a fault to fix; the answer changes only when the workspace runs on a host Rotaris can confine.';
+/**
+ * REQ-SANDBOX-130's disclosure, re-exported from its one home in `@rotaris/contracts`. It was
+ * declared here first, when this dialog was the only surface that carried it; REQ-SANDBOX-130 names
+ * TWO surfaces and requires the fact be "a single one and the same on both", so a second literal in
+ * the settings card would have been two texts one edit apart.
+ */
+export { NO_CONFINEMENT_DISCLOSURE };
+
+/**
+ * REQ-SANDBOX-107: the advisory the dialog produces before launch whenever the session being started
+ * would be unattended. Empty when such work can proceed — confinement active, or the permissive mode
+ * opted into. It ADVISES rather than blocks: `ask` is the shipped default, so blocking would block
+ * every workspace that has not been configured.
+ */
+export function unattendedAdvisory(input: { readonly permissionMode: string; readonly confinementActive: boolean; readonly allowUnsandboxedAutonomous: boolean }): string {
+  if (input.permissionMode !== 'autonomous') return '';
+  if (input.confinementActive || input.allowUnsandboxedAutonomous) return '';
+  return `This session would start unattended in 'autonomous' mode with no confinement active, so it is tightened to 'ask' — and because nothing can answer an approval prompt for it, every tool call would then be refused. To let it proceed, either set runtime.permission_mode: autonomous together with runtime.allow_unsandboxed_autonomous: true, or enable runtime.sandbox_mode on a host that can confine.`;
+}
 
 export function defaultSessionBranch(sessionId: string): string {
   return `rotaris/session/${sessionId}`;
 }
 
-export function StartSessionDialog({ sessionId, runActive, defaultSandboxMode, defaultRunStartMode = 'auto', confinementAvailable, onChooseAttach, onAccept, onCancel }: StartSessionDialogProps) {
+export function StartSessionDialog({ sessionId, runActive, defaultSandboxMode, defaultRunStartMode = 'auto', confinement, advisory = '', onChooseAttach, onAccept, onCancel }: StartSessionDialogProps) {
+  const confinementAvailable = confinement?.available === true;
   const titleId = useId();
   const [isolation, setIsolation] = useState(runActive);
   const [branch, setBranch] = useState(() => defaultSessionBranch(sessionId));
@@ -106,10 +137,25 @@ export function StartSessionDialog({ sessionId, runActive, defaultSandboxMode, d
         </section>
         <section className="card start-session__group">
           <div className="card-kicker">Sandbox mode</div>
-          <DesignSelect className="input select start-session__select" aria-label="Sandbox mode" data-testid="start-session-sandbox" value={sandboxMode} onChange={(event) => setSandboxMode(event.currentTarget.value as SandboxModeName)}>
+          <DesignSelect
+            className="input select start-session__select" aria-label="Sandbox mode" data-testid="start-session-sandbox"
+            value={sandboxMode} disabled={!confinementAvailable}
+            // REQ-SANDBOX-119: the reason AND the remediation in the tooltip...
+            title={confinementAvailable || confinement === null ? undefined : confinementMessage(confinement)}
+            // ...and in the accessible description, so the two channels agree (REQ-CHAT-007).
+            aria-description={confinementAvailable || confinement === null ? undefined : confinementMessage(confinement)}
+            onChange={(event) => setSandboxMode(event.currentTarget.value as SandboxModeName)}
+          >
             {SANDBOX_MODE_NAMES.map((mode) => <option key={mode} value={mode}>{mode}</option>)}
           </DesignSelect>
+          {/* REQ-SANDBOX-119: ...and as text visible WITHOUT hovering, a tooltip alone not counting as informing the user. */}
+          {!confinementAvailable && confinement !== null && confinement.reason !== '' && (
+            <p className="start-session__hint text-secondary" data-testid="start-session-sandbox-reason">{confinementMessage(confinement)}</p>
+          )}
+          {/* REQ-SANDBOX-130: shown for attended and unattended sessions alike, and whatever mode is selected. */}
           {!confinementAvailable && <p className="start-session__disclosure text-secondary" data-testid="start-session-disclosure">{NO_CONFINEMENT_DISCLOSURE}</p>}
+          {/* REQ-SANDBOX-107: the advisory, beside the disclosure and never suppressing it. */}
+          {advisory !== '' && <p className="start-session__hint text-secondary" role="status" data-testid="start-session-advisory">{advisory}</p>}
         </section>
         {/* REQ-ORCH-152: the second of the two places the mode is offered; REQ-ORCH-153 states what `plan` does. */}
         <section className="card start-session__group">

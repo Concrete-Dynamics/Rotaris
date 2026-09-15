@@ -2,13 +2,13 @@ import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'r
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
-import { BRIDGE_KEY, isBusy, isViewId, LIBRARY_TABS, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type ImageAttachmentInput, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type DisplayView, type PausePayload, type PauseResolution, type PlanDecision, type HookAgentId, type HooksSummary, type McpHealth, type McpListing, type McpSecretsView, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload, type QuestionAnswers } from '@rotaris/contracts';
+import { BRIDGE_KEY, isBusy, isViewId, LIBRARY_TABS, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type ImageAttachmentInput, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type ConfinementVerdict, type DisplayView, type PausePayload, type PauseResolution, type PlanDecision, type HookAgentId, type HooksSummary, type McpHealth, type McpListing, type McpSecretsView, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload, type QuestionAnswers } from '@rotaris/contracts';
 import { createAcknowledgementStore, createNoticeStore, createReplicaStore, type AcknowledgementStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
 // Part AL2 — the terminal in this window (ADR-0021's subscription point, ADR-0047's window; REQ-SHELL-079..111): the
 // preview registry every transcript surface reads, the host that carries it, and the terminal window's own registry.
 import { TERMINAL_REFUSALS, TERMINAL_WINDOW_ROLE, type TerminalFrame, type TerminalRefusal, type TerminalWindowPayload } from '@rotaris/contracts';
 import { createTerminalWindowStreams, headlessEmulator, TerminalHostProvider, TerminalStreamSet, TerminalWindow, terminalWindowTitle, type TerminalActionResult, type TerminalActions, type TerminalHost } from '@rotaris/ui';
-import { Acknowledgements, type AboutInfo, applyChange, applyTheme, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, readTranscriptCounts, RowProof, type TrailerRow, WorktreeDialog, type SlashHost, RequirementsBoard } from '@rotaris/ui';
+import { Acknowledgements, type AboutInfo, applyChange, applyTheme, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, readTranscriptCounts, RowProof, type TrailerRow, WorktreeDialog, type SlashHost, RequirementsBoard } from '@rotaris/ui';
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls, and the shape it answers.
 import { bindPromptRootsReader, ToggleSwitch } from '@rotaris/ui';
 import type { PromptsRootsResult } from '@rotaris/contracts';
@@ -992,10 +992,29 @@ function useConfiguration(workspace: string | null) {
   return { config: { snapshot, pending, dirty, loading, error, serviceAvailable: workspace !== null, onChange, onSave, onDiscard, onSetField }, guardDialog };
 }
 
+/**
+ * ADR-0022 (Part AR) / REQ-SANDBOX-116, REQ-SANDBOX-129: the availability verdict, read once and
+ * re-read only on the explicit re-check. The probe runs in the run host, off this thread, so nothing
+ * here blocks for the up-to-5.0-second trial (REQ-SANDBOX-069). No workspace is required: whether
+ * this HOST can confine anything is a property of the machine, and REQ-SANDBOX-130's disclosure is
+ * owed before any workspace question is settled.
+ */
+function useConfinement() {
+  const [verdict, setVerdict] = useState<ConfinementVerdict | null>(null);
+  const ask = useCallback(async (recheck: boolean) => {
+    const r = await bridge.command({ kind: 'confinement.status', ...(recheck ? { recheck: true } : {}) });
+    if (r.ok) setVerdict(r.value as ConfinementVerdict);
+  }, []);
+  useEffect(() => { queueMicrotask(() => { void ask(false); }); }, [ask]);
+  const onRecheck = useCallback(() => ask(true), [ask]);
+  return { verdict, onRecheck };
+}
+
 function Settings({ workspace, home, theme, reducedMotion, settingsCategory, onTheme, onMotion, popOut, onPopOut }: { workspace: string | null; home: string | undefined; popOut: boolean; onPopOut: (value: boolean) => void } & AppearanceProps) {
   const session = useStore(replica, (s) => s.session);
   const sessionId = useStore(replica, (s) => s.sessionId);
   const { config, guardDialog } = useConfiguration(workspace);
+  const confinement = useConfinement();
   const providers = useProviders();
   const mcp = useMcp();
   const providersCard = <ProvidersCard {...providers} />;
@@ -1126,7 +1145,7 @@ function Settings({ workspace, home, theme, reducedMotion, settingsCategory, onT
       onTheme={onTheme}
       onReducedMotion={onMotion}
       onCategory={(id) => { void bridge.command({ kind: 'prefs.set', key: 'interface/settingsTab', value: id }); }}
-      config={{ ...config, providersCard }}
+      config={{ ...config, providersCard, confinement: confinement.verdict, onRecheckConfinement: confinement.onRecheck }}
       mcp={mcp}
       display={{
         autoCollapseTools: display.autoCollapseTools,
@@ -1250,7 +1269,9 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
    * active on this single-run host; accepting holds the choices for the composer's next submission, releases the
    * followed session, empties the composer and shows Workspace.
    */
-  const [launch, setLaunch] = useState<{ sessionId: string; sandboxMode: SandboxModeName; runStartMode: 'auto' | 'plan'; runActive: boolean } | null>(null);
+  const [launch, setLaunch] = useState<{ sessionId: string; sandboxMode: SandboxModeName; runStartMode: 'auto' | 'plan'; runActive: boolean; permissionMode: string; allowUnsandboxedAutonomous: boolean } | null>(null);
+  // REQ-SANDBOX-119/120/130: the dialog shows this host's own verdict, never a hardcoded answer.
+  const launchConfinement = useConfinement();
   const openStartDialog = useCallback(async (): Promise<{ ok: true } | { ok: false; reason: string }> => {
     const current = replica.getState();
     if (current.session && isBusy(current.session.executionStatus)) return { ok: false, reason: 'Finish or cancel the active run before starting a new session.' };
@@ -1259,7 +1280,14 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
     const sandboxMode = config.ok ? (config.value as ConfigSnapshot).runtime.sandbox_mode : 'off';
     // REQ-ORCH-152: the persisted mode is what the dialog preselects; it holds none of its own.
     const runStartMode = config.ok ? (config.value as ConfigSnapshot).runtime.run_start_mode : 'auto';
-    setLaunch({ sessionId: (id.value as { sessionId: string }).sessionId, sandboxMode, runStartMode, runActive: false });
+    /*
+     * REQ-SANDBOX-107: the advisory's three inputs, read from the same snapshot the modes come from.
+     * `allow_unsandboxed_autonomous` is not on the settings snapshot — it is not a key this screen
+     * edits — so an absent value reads as its shipped default, `false`, which is the side that
+     * produces the advisory rather than suppresses it.
+     */
+    const permissionMode = config.ok ? (config.value as ConfigSnapshot).runtime.permission_mode : 'ask';
+    setLaunch({ sessionId: (id.value as { sessionId: string }).sessionId, sandboxMode, runStartMode, runActive: false, permissionMode, allowUnsandboxedAutonomous: false });
     return { ok: true };
   }, []);
   const acceptLaunch = useCallback(async (options: LaunchOptions) => {
@@ -1446,7 +1474,7 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
         onTake={(index, remove) => { void prompts.take('stash', index, remove).then(loadIntoComposer); }} />
     )}
     {launch && (
-      <StartSessionDialog sessionId={launch.sessionId} runActive={launch.runActive} defaultSandboxMode={launch.sandboxMode} defaultRunStartMode={launch.runStartMode} confinementAvailable={false}
+      <StartSessionDialog sessionId={launch.sessionId} runActive={launch.runActive} defaultSandboxMode={launch.sandboxMode} defaultRunStartMode={launch.runStartMode} confinement={launchConfinement.verdict} advisory={unattendedAdvisory({ permissionMode: launch.permissionMode, confinementActive: launchConfinement.verdict?.available === true && launch.sandboxMode !== 'off', allowUnsandboxedAutonomous: launch.allowUnsandboxedAutonomous })}
         onChooseAttach={async () => { const r = await bridge.command({ kind: 'worktree.chooseAttach' }); if (!r.ok) return { ok: false, reason: r.detail ?? r.headline }; const v = r.value as { cancelled?: boolean; path?: string; branch?: string }; return v.cancelled || !v.path ? { ok: true, cancelled: true } : { ok: true, path: v.path, branch: v.branch ?? '' }; }}
         onAccept={(options) => { void acceptLaunch(options); }} onCancel={() => setLaunch(null)} />
     )}

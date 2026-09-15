@@ -117,6 +117,30 @@ implementation, but the behaviour is confinement
 **Confinement mode**:
 `off`, `workspace-write`, or `read-only`. — `REQ-SANDBOX-048`
 
+**Availability verdict**:
+The four-field answer the confinement service gives — `available`, a backend name, one sentence of
+reason, one of remediation — demonstrated by a trial launch rather than inferred, taken at most once
+per process and cached. Every surface that reports availability presents this same text. —
+`REQ-SANDBOX-067`, `REQ-SANDBOX-071`
+_Avoid_: "sandbox check", or "probe result" for the value; the probe is the act, the verdict is what it returns
+
+**Confinement specification**:
+What a confinement would be, computed once and identically on every platform: the effective writable
+roots, the carve-outs for the protected names, and the network flag. The per-platform renderers
+consume it and decide nothing, which is where backend parity comes from. — `REQ-SANDBOX-058`,
+`REQ-SANDBOX-061`
+_Avoid_: "sandbox config" — the configuration is the six keys; this is what they resolve to for one command
+
+**Carve-out**:
+A protected name (`.git`, `.rotaris`) made unwritable inside a writable root. Which of three forms it
+takes turns on whether the name exists when the invocation is rendered, and no form leaves anything on
+the host filesystem. — `REQ-SANDBOX-056`, `REQ-SANDBOX-077`
+
+**Effective writable root**:
+A directory writable inside an active confinement: the session's actual execution directory first,
+then each configured additional root, duplicates removed and missing ones skipped. — `REQ-SANDBOX-058`
+_Avoid_: "allowed path" — that is the file tools' fence (`REQ-TOOLS-132`), a different boundary
+
 **Egress policy**:
 The per-host disposition applied to the `fetch` tool — `allow`, `ask` or `deny` — with allow and
 deny host lists. An unclassifiable host is denied. — `REQ-SANDBOX-001`

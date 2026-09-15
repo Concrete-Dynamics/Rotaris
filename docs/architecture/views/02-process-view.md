@@ -258,7 +258,20 @@ server per request so the category probes sequentially under main's bound), `mcp
 override, REQ-MCP-094; never on disk), `mcp.secrets {server?}` (the read side: server, key, the `***` mask, scope). Main
 relays each to the run host as `mcp.list {workspaceId}` → `mcp.list {listing}`, `mcp.probe {workspaceId, name?}` →
 `mcp.probe {results}`, `mcp.setEnabled` → `ack`, `mcp.secrets {workspaceId, server?}` → `mcp.secrets {view}`. The run
-host's `notice.publish` event gains `ttlMs` (REQ-MCP-044's 8 s auto-dismiss on the one notice slot). **The MCP child
+host's `notice.publish` event gains `ttlMs` (REQ-MCP-044's 8 s auto-dismiss on the one notice slot).
+
+**Confinement (Part AR; ADR-0022's first execution).** Renderer → main: `confinement.status {recheck?}`; main relays it
+to the run host unchanged and answers with `{available, backend, reason, remediation}` — REQ-SANDBOX-071's four fields,
+which every surface presents as the same text. **No workspace is required**: whether this HOST can confine anything is a
+property of the machine, and REQ-SANDBOX-130's disclosure is owed on the settings surface before any workspace question
+is settled. The verdict lives in the **run host** and nowhere else, because that is the process that executes commands —
+the verdict that gates a session and the mechanism that would confine its commands are then one reading, and no message
+between processes can land between them (REQ-SANDBOX-094). One probe per process, cached for the life of the
+application, cleared only by `recheck: true` (REQ-SANDBOX-067, REQ-SANDBOX-129); bounded at 5.0 s and never retried
+(REQ-SANDBOX-069), so no surface blocks on it. The run host writes the verdict's own text to the application log once,
+on whichever path settles it first — the settings read or a launch.
+
+**The MCP child
 processes** live under the run host: one per stdio server per session (`SessionConnections`), one transient per discovery
 or probe, all through `OwnedStdioTransport` (three piped streams, hidden window, `.cmd`/`.bat` runners through
 `cmd.exe`), killed by `terminateTree` (terminate, 5 s, force, the tree). The fixture server the proof and the tests speak

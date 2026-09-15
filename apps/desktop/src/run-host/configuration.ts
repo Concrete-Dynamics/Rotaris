@@ -2,9 +2,9 @@ import { readFileSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 import type { Clocks, Result } from '@rotaris/kernel';
 import { err, ok } from '@rotaris/kernel';
-import { resolvePreset, type HeadlessPolicy, type ModelTier } from '@rotaris/contracts';
+import { resolvePreset, SANDBOX_MODE_NAMES, type HeadlessPolicy, type ModelTier, type SandboxModeName } from '@rotaris/contracts';
 import { compressionTrigger, isPlainMap, loadConfiguration, overlayLiveState, PROJECT_SETTINGS_FILE, readProjectSnapshot, renderFatal, type BuiltinLaunch, type LiveState, type LoadedConfiguration, type ModelEntry, type ProjectSnapshot } from '@rotaris/config';
-import type { PolicyRead } from '@rotaris/agent-tools';
+import { renderUnavailability, type AvailabilityVerdict, type PolicyRead } from '@rotaris/agent-tools';
 import { BUILT_IN_PERSONAS, parseLogLevel, resolveRole, RUN_CONFIG_DEFAULTS, TIER_ROLES, type CatalogueEntry, type ClassifierSlots, type McpGrantEvidence, type ModelChoice, type ModelLookup, type ModelSetup, type Persona, type PersonaResolver, type ResolvedTrigger, type RoleName, type RunSetup, type RuntimePosture, type TierRole } from '@rotaris/engine';
 import { AiSdkModelClient, DefaultAgentBackend, type AgentBackend, type ModelClient, type ModelRef, type ThinkingLevel } from '@rotaris/model';
 
@@ -49,15 +49,36 @@ export interface RuntimeFromConfiguration extends RuntimePosture {
   /** REQ-CONFIG-114: `llm_response_timeout`, floored at 30 s here whatever the file says. */
   readonly llmResponseTimeoutS: number;
   readonly loopClassificationTimeoutS: number;
+  /**
+   * ADR-0022: what the terminal enforcement point needs to render this run's confinement afresh for
+   * each call (REQ-SANDBOX-093) — the mode in force (the layered key with the launch dialog's
+   * override already folded in, REQ-SANDBOX-122), the configured additional writable roots
+   * (REQ-SANDBOX-050/058), the network opt-in (REQ-SANDBOX-051/059), and the verdict that governed
+   * whether this run was allowed to start at all (REQ-SANDBOX-094).
+   */
+  readonly confinement: {
+    readonly mode: SandboxModeName;
+    readonly writableRoots: readonly string[];
+    readonly allowNetwork: boolean;
+    readonly verdict: AvailabilityVerdict | null;
+  };
 }
 
-export function runtimeFromConfiguration(cfg: LoadedConfiguration): RuntimeFromConfiguration {
+export function runtimeFromConfiguration(cfg: LoadedConfiguration, verdict: AvailabilityVerdict | null = null): RuntimeFromConfiguration {
   const r = cfg.runtime;
   return {
     permissionMode: resolvePreset(r.permission_mode).preset,
     allowUnsandboxedAutonomous: r.allow_unsandboxed_autonomous,
-    // ADR-0022: no confinement backend exists on this platform; a requested mode is recorded, never honoured.
-    sandbox: { requested: r.sandbox_mode !== 'off', available: false, backend: '' },
+    /*
+     * ADR-0022 / REQ-SANDBOX-093: the pair the run records. `requested` is the selection;
+     * `available` is the probe's VERDICT, never the selection restated. REQ-SANDBOX-098: the input
+     * to permission-mode resolution requires both, and selection alone must never count as present
+     * — treating it as present would remove the tightening while commands executed unconfined.
+     * A run that asked for confinement this host cannot deliver never reaches here at all: the gate
+     * in `prepareRun` refuses it before the session exists (REQ-SANDBOX-095).
+     */
+    sandbox: { requested: r.sandbox_mode !== 'off', available: verdict?.available ?? false, backend: verdict?.available === true ? verdict.backend : '' },
+    confinement: { mode: r.sandbox_mode, writableRoots: r.sandbox_writable_roots, allowNetwork: r.sandbox_allow_network, verdict },
     sessionLogLevel: parseLogLevel(r.session_log_level).level,
     modelConcurrencyCap: null,
     modelCapFor: (modelKey) => cfg.models[modelKey]?.max_parallel ?? null,
@@ -387,6 +408,19 @@ export interface ConfigureDeps {
   readonly bearers: (workspaceRoot: string) => Readonly<Record<string, string>>;
   /** ADR-0034 (Part S): the spawn-time MCP evidence per role, from the run host's memoised surface. */
   readonly mcpEvidence?: ((cfg: LoadedConfiguration, workspaceRoot: string, role: string) => McpGrantEvidence) | undefined;
+  /**
+   * ADR-0022 / REQ-SANDBOX-067: the CACHED availability verdict, owned at application lifetime by the
+   * run host's one `ConfinementService`. Read synchronously and never probed from here — the launch
+   * has already awaited the probe, and a continuation reads what that launch settled. `null` — no
+   * probe has completed — is read as unavailable, the fail-closed side of REQ-SANDBOX-068.
+   */
+  readonly confinement?: (() => AvailabilityVerdict | null) | undefined;
+}
+
+/** REQ-SANDBOX-122: the mode has exactly two sources — the layered key, and the launch dialog's override. */
+export interface PrepareOptions {
+  readonly boardPermissions?: 'permissive' | undefined;
+  readonly sandboxMode?: string | undefined;
 }
 
 /**
@@ -408,17 +442,57 @@ export function configureRun(workspaceRoot: string, attended: boolean, deps: Con
   return prepared.ok ? ok(prepared.value.complete(deps.bearers(workspaceRoot))) : prepared;
 }
 
+/**
+ * REQ-SANDBOX-090: configuration that sets no confinement mode means `off`, but a value the session
+ * layer cannot RECOGNISE is an error and must never be treated as "no confinement" — such a value
+ * means validation did not run, and quietly settling on `off` there would be exactly the unannounced
+ * downgrade this domain rules out.
+ *
+ * REQ-SANDBOX-122: exactly two sources, the layered key and the launch dialog's per-session override.
+ */
+export function effectiveSandboxMode(configured: string, override: string | undefined): Result<SandboxModeName, string> {
+  const raw = (override ?? configured ?? '').trim().toLowerCase();
+  if (raw === '') return ok('off');
+  const found = SANDBOX_MODE_NAMES.find((m) => m === raw);
+  return found === undefined
+    ? err(`The confinement mode '${override ?? configured}' is not one of ${SANDBOX_MODE_NAMES.join(', ')}, so this run was refused rather than started without confinement.`)
+    : ok(found);
+}
+
 /** Load and validate once, before the asynchronous credential lease. */
-export function prepareRun(workspaceRoot: string, attended: boolean, deps: ConfigureDeps, boardPermissions?: 'permissive'): Result<PreparedRun, ConfigureRefusal> {
+export function prepareRun(workspaceRoot: string, attended: boolean, deps: ConfigureDeps, boardPermissions?: 'permissive', options?: PrepareOptions): Result<PreparedRun, ConfigureRefusal> {
   const loaded = loadConfiguration({ globalDir: deps.globalDir, workspaceRoot, now: () => deps.clocks.monotonic.now(), builtinLaunch: deps.codeIntelligenceLaunch ?? null });
   // REQ-CONFIG-478 names the first problem; REQ-MCP-002 requires EVERY defect reported, so the rest follow it.
   if (!loaded.ok) return err({ reason: `The configuration could not be loaded: ${renderFatal(loaded.error)}${loaded.error.lines.length > 1 ? ` All problems: ${loaded.error.lines.join(' | ')}` : ''}` });
   const live = overlayLiveState(loaded.value, deps.liveState());
   if (!live.ok) return err({ reason: `The configuration could not be applied with the current settings: ${renderFatal(live.error)}`, cfg: loaded.value });
   // REQ-TRACE-470: this grant is confined to the launch and includes the Tier C opt-in.
-  const cfg: LoadedConfiguration = boardPermissions === 'permissive'
+  const granted: LoadedConfiguration = boardPermissions === 'permissive'
     ? { ...live.value, runtime: { ...live.value.runtime, permission_mode: 'autonomous', allow_unsandboxed_autonomous: true } }
     : live.value;
+  /*
+   * ADR-0022's start-time gate (REQ-SANDBOX-094, -095, -097). It sits HERE — before the credential
+   * lease, before the session row, before the session lock — because REQ-SANDBOX-097 requires the
+   * availability decision be settled before the run does anything else, and REQ-SANDBOX-095 requires
+   * that no usable session and no shell able to run a command outside confinement be left behind.
+   * Refusing here leaves nothing to clean up, which is the strongest form of that.
+   *
+   * The refusal travels as REQ-EVENTS-021's reason, so it becomes the run's one `result` of status
+   * error, carrying the backend's own reason AND remediation as unaltered substrings
+   * (REQ-EVENTS-024, REQ-SANDBOX-126). Mode `off` is not a failure (REQ-SANDBOX-092) and does no
+   * probing at all (REQ-SANDBOX-074).
+   */
+  const mode = effectiveSandboxMode(granted.runtime.sandbox_mode, options?.sandboxMode);
+  if (!mode.ok) return err({ reason: mode.error, cfg: granted });
+  const verdict = deps.confinement?.() ?? null;
+  if (mode.value !== 'off' && verdict?.available !== true) {
+    return err({ reason: renderUnavailability(verdict ?? { available: false, backend: 'unavailable', reason: '', remediation: '' }), cfg: granted });
+  }
+  // The override is folded into the captured configuration, so the run, its snapshot and its audit
+  // all read one mode rather than the file's and the dialog's separately (REQ-SANDBOX-104, -122).
+  const cfg: LoadedConfiguration = granted.runtime.sandbox_mode === mode.value
+    ? granted
+    : { ...granted, runtime: { ...granted.runtime, sandbox_mode: mode.value } };
   const warnings: string[] = [...cfg.warnings.map((w) => `configuration: ${w}`)];
   if (cfg.referential.length > 0) {
     const lines = cfg.referential.map((m) => `configuration: ${m}`);
@@ -442,7 +516,7 @@ export function prepareRun(workspaceRoot: string, attended: boolean, deps: Confi
   const isScripted = scripted || model.providerId === SCRIPTED_PROVIDER;
   const entryAuthProvider = isScripted ? null : entry?.auth_provider ?? null;
   return ok({ authProviders, entryAuthProvider, complete: (bearers) => {
-    const runtime = runtimeFromConfiguration(cfg);
+    const runtime = runtimeFromConfiguration(cfg, verdict);
     // The adapter's idle bound (REQ-CONFIG-115) is re-armed from the run host's own timer port, never a global.
     const client: ModelClient = isScripted ? deps.scriptedClient() : new AiSdkModelClient({ baseUrl: model.baseUrl ?? PROVIDER_BASE_URLS['openai']!, onRequest: (i) => deps.onRequest(i), timers: deps.clocks.timers });
     const backend: AgentBackend = new DefaultAgentBackend(client);

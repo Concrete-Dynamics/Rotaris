@@ -7,6 +7,7 @@
  * Accepted OQ-36: REQ-SANDBOX-006 owns unbracketed canonical IPv6. URL authorities use brackets.
  */
 import { isIP } from 'node:net';
+import { hostPatternProblem } from '@rotaris/contracts';
 export type Disposition = 'allow' | 'ask' | 'deny';
 
 export interface EgressPolicy {
@@ -38,12 +39,11 @@ export function canonicalizeHost(input: string): string {
 /** REQ-TOOLS-085: exact host, or one leading `*.`; any other `*` is an error naming the pattern. */
 export function compileHostPattern(pattern: string): { readonly exact: string | null; readonly suffix: string | null } {
   const p = pattern.trim().toLowerCase();
-  if (p.startsWith('*.')) {
-    const rest = p.slice(2);
-    if (rest.includes('*') || rest === '') throw new Error(`Host pattern '${pattern}' is not supported: the only wildcard form is a single leading '*.' as in '*.example.com'`);
-    return { exact: null, suffix: rest };
-  }
-  if (p.includes('*')) throw new Error(`Host pattern '${pattern}' is not supported: the only wildcard form is a single leading '*.' as in '*.example.com'`);
+  // REQ-SANDBOX-114: the sentence is defined once, in contracts, so the settings control's problem
+  // label and this refusal cannot drift apart.
+  const problem = hostPatternProblem(pattern);
+  if (problem !== null) throw new Error(problem);
+  if (p.startsWith('*.')) return { exact: null, suffix: p.slice(2) };
   return { exact: canonicalizeHost(p) || p, suffix: null };
 }
 

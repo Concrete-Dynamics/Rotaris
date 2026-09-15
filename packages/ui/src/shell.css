@@ -263,10 +263,31 @@
 /* REQ-CHAT-051 / REQ-CHAT-076: a trailer row is a control — clicking it opens the stepper or the approval dialog. */
 .row__trailer { font: inherit; font-size: var(--rt-text-sm, 13px); color: var(--rt-text); background: none; border: 0; padding: 0; text-align: left; cursor: pointer; }
 .row__trailer:disabled { cursor: default; color: var(--rt-text); }
-/* REQ-CHAT-065: an expanded group reveals its members BENEATH the header, which stays where it is. */
-.row__members { display: flex; flex-direction: column; gap: 0; margin-top: var(--rt-space-2, 8px); }
-/* Members are indented under the header and marked by the divider they hang from, not by a nested box. */
-.row__members .row { margin-left: 0; margin-right: 0; padding-left: var(--rt-space-3, 12px); border-left: 1px solid var(--rt-divider); border-radius: 0; }
+/* REQ-CHAT-065: an expanded group reveals its members BENEATH the header, which stays where it is.
+   PD-CHAT-004: they hang from ONE continuous rule in the agent's persona colour, spanning the whole run —
+   the rule is on the container, not on each row, so it does not break at the gap between two members. The
+   colour arrives as an inline custom value from `personaColourToken`; a surface that supplies none keeps
+   the border token, so the rail is never invisible. */
+.row__members { display: flex; flex-direction: column; gap: 0; margin-top: var(--rt-space-2, 8px);
+  border-inline-start: 2px solid var(--rt-border); padding-inline-start: var(--rt-space-3); }
+/* The falsified reason, kept: a 1 px divider PER ROW read as a dashed line rather than one agent's thread,
+   and told the reader nothing about whose run it was. */
+.row__members .row { margin-left: 0; margin-right: 0; padding-left: 0; border-left: 0; border-radius: 0; }
+/* PD-CHAT-004: the activity line's segments. Each is one unbroken phrase, so the line wraps BETWEEN
+   segments and never inside one — `reading ×2` and `2 ok` may not end up on different lines. */
+/* The spacing tokens are named WITHOUT a literal fallback here: `tokens/spacing.css` always loads ahead of
+   this sheet, and a fallback is a raw metric the UI-language check counts as debt. */
+.activity__segments { display: flex; flex-wrap: wrap; align-items: baseline; row-gap: 0; column-gap: var(--rt-space-2); min-width: 0; }
+.activity__segment { white-space: nowrap; color: var(--rt-accent-300); }
+.activity__segment + .activity__segment::before { content: '·'; margin-inline-end: var(--rt-space-2); color: var(--rt-text-tertiary); }
+/* A reasoning segment is drawn in the hue the mockup gives an agent's own deliberation, so the three kinds
+   of one-liner stay told apart by wording AND hue (docs/design §1.3: colour never carries a fact alone). */
+.activity__segment--reasoning { color: var(--rt-accent-300); }
+.row--group .activity__segment:not(.activity__segment--reasoning) { color: var(--rt-axis-y-300); }
+/* PD-CHAT-004: the activity word of the segment in flight — what the agent is doing NOW, at a glance. */
+.activity__now { white-space: nowrap; color: var(--rt-run); }
+.tool--failed > .row__grid > .row__main > .tool__header .activity__segment,
+.tool--blocked > .row__grid > .row__main > .tool__header .activity__segment { color: var(--rt-danger-300); }
 /* REQ-CHAT-068: the delegation-context header's expanded detail. */
 .row__delegation { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px var(--rt-space-2, 8px); margin: var(--rt-space-2, 8px) 0 0; font-size: var(--rt-text-xs, 12px); }
 .row__delegation dt { color: var(--rt-text-tertiary); }

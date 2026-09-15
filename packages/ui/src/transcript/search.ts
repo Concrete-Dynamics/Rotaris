@@ -29,7 +29,9 @@ export function bodyOf(d: DisplayRow): string {
 /** The text a hit is DETECTED in (REQ-CHAT-074's four fields, and a group's three). */
 export function haystackOf(d: DisplayRow): string {
   if (d.shape === 'trailer') return `${d.trailer.role}\n${d.trailer.text}`;
-  if (d.shape === 'group') return `${d.members[0]?.name ?? ''}\n${d.family}\n${d.blob}`;
+  // PD-CHAT-004: every segment's activity word is searchable, not only the first — a run that read and then
+  // ran a command must be findable by either word, and its family field carries only the first.
+  if (d.shape === 'group') return `${d.role}\n${d.members[0]?.name ?? ''}\n${d.segments.map((s) => s.label).join('\n')}\n${d.blob}`;
   const r = d.row;
   return `${r.persona ?? r.name ?? r.kind}\n${r.body}\n${r.toolName ?? ''}\n${r.output ?? ''}`;
 }

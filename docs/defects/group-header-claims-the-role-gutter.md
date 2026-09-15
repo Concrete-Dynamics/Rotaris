@@ -60,5 +60,11 @@ implementation rather than a disagreement between requirements.
   persona bar; its `proof-groups` surface draws a group in isolation, which is why no existing
   evidence shows the alternation.
 
-*Noticed 2026-09-15 while answering a request about transcript turn grouping ([R-017](../product/requests.md#r-017)).
-Recorded, not repaired.*
+*Noticed 2026-09-15 while answering a request about transcript turn grouping ([R-017](../product/requests.md#r-017)).*
+
+**Repaired 2026-09-15** ([R-018](../product/requests.md#r-018)), in the same change that built
+[`PD-CHAT-004`](../product/directives.md#pd-chat-004). `placements()` now takes a group's role from its
+**agent** and forces a block start on a trailer only; the falsified reason is kept beside its replacement
+in that function. Measured in the built product by `pnpm rows-proof`'s `proof-activity` surface: three
+displayed rows carry **two** attributions — `orchestrator`, then `coding-agent` — with no activity word in
+the gutter, where this defect drew an attribution on every row and never a continuation bar.

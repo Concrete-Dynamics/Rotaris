@@ -55,6 +55,9 @@ const expect = (cond, message) => { if (!cond) throw new Error(message); };
 const W = '[data-testid="proof-workspace"]';
 const P = '[data-testid="proof-persona"]';
 const G = '[data-testid="proof-groups"]';
+/** PD-CHAT-004's two surfaces: the same run drawn collapsed and drawn expanded. */
+const A = '[data-testid="proof-activity"]';
+const AO = '[data-testid="proof-activity-open"]';
 const PROBES = [
   'img',
   `${W} [data-testid="row-markdown"]`, `${P} [data-testid="row-markdown"]`,
@@ -72,6 +75,11 @@ const PROBES = [
   `${W} [data-testid="row-approval"] .row__trailer`, `${W} [data-testid="scope-toggle"]`,
   `${G} [data-testid="group-header"]`, `${G} [data-testid="group-members"] .row`, `${G} [data-testid="row-question"] .row__trailer`,
   `${G} [data-testid="group-members"] [data-testid="tool-input"]`,
+  // PD-CHAT-004: the run's shape, its role gutter, its segments, its live word, and the expanded rule.
+  `${A} [data-testid="row-group"]`, `${A} .row__role`, `${A} .activity__segment`, `${A} [data-testid="activity-now"]`,
+  `${A} .row`, `${A} [data-testid="row-thinking"]`, `${A} .tool__preview`,
+  `${AO} [data-testid="group-members"]`, `${AO} [data-testid="group-members"] .row`, `${AO} [data-testid="group-members"] .row__time`,
+  `${AO} [data-testid="group-members"] .row__bar`,
   '[data-testid="acknowledgement"]', '[data-testid="acknowledgement-title"]',
 ].join(';;');
 
@@ -110,6 +118,11 @@ const dragged = (log, at) => {
   const m = new RegExp(`capture: drag-at ${at} .* → ("(?:[^"\\\\]|\\\\.)*")\\s*$`, 'm').exec(log);
   return m ? JSON.parse(m[1]) : null;
 };
+/** One `eval-at` reading, found by a key the expression itself puts in the object it returns. */
+const evalAt = (log, key) => {
+  const m = new RegExp(`capture: eval-at \\d+ .*?${key}.*? → (\\{.*\\})\\s*$`, 'm').exec(log);
+  return m ? JSON.parse(m[1]) : null;
+};
 /** Every request the MAIN process saw this window's session make. */
 const requests = (log) => [...log.matchAll(/capture: net (\S+) (\S+) (\S+)\s*$/gm)].map((m) => ({ method: m[1], resourceType: m[2], url: m[3] }));
 
@@ -146,6 +159,9 @@ const r = launch('rows', {
     `${W} [data-image-href^="file:"]@3000`,
     `${W} [data-call-key="call-ok"] [data-testid="tool-header"]@3600`,
     `${G} [data-testid="group-header"]@4200`,
+    // PD-CHAT-004: open the FIRST activity line on the second surface, so the continuous rule and the
+    // members' own timestamps are measured in the product rather than seeded into the projection.
+    `${AO} [data-testid="group-header"]@4400`,
     '[data-testid="proof-show-reasoning"]@6000',
     '[data-testid="proof-auto-collapse"]@7000',
     // REQ-CHAT-077: a row taking focus from a pointer, so the arrow keys have a current row to move from. The system
@@ -155,11 +171,19 @@ const r = launch('rows', {
   ROTARIS_CAPTURE_INSPECT_AT: [
     `${W} .row__time@1500`, `${W} .row__attribution@1500`, `${W} .row@1500`, `${W} .row__bar@1500`,
     `${G} [data-testid="group-header"]@5000`, `${G} [data-testid="row-group"]@5000`,
+    `${A} [data-testid="group-header"]@5000`, `${A} [data-testid="row-group"]@5000`,
+    `${AO} [data-testid="group-members"]@5000`,
     `${W} [data-call-key="call-blocked"] [data-testid="tool-header"]@5000`,
     `${W} [data-call-key="call-ok"]@7600`,
     `${W} .rowlist@8100`, `${W} .rowlist@8500`,
   ].join(';;'),
-  ROTARIS_CAPTURE_EVAL_AT: `(() => [...document.querySelectorAll('${W} .transcript__slot[data-bound]')].map((slot) => { const style = getComputedStyle(slot); return { transform: style.transform, willChange: style.willChange }; }))()@1500`,
+  ROTARIS_CAPTURE_EVAL_AT: [
+    `(() => [...document.querySelectorAll('${W} .transcript__slot[data-bound]')].map((slot) => { const style = getComputedStyle(slot); return { transform: style.transform, willChange: style.willChange }; }))()@1500`,
+    // PD-CHAT-004's rail is a COMPUTED border on the container, which `inspect-at` does not report; it is read
+    // here, from the live layout, together with the two facts that make it "one continuous rule": that the
+    // members draw no bar of their own, and that they all hang from this one element.
+    `(() => { const el = document.querySelector('${AO} [data-testid="group-members"]'); if (!el) return { activityRail: null }; const s = getComputedStyle(el); return { activityRail: s.borderInlineStartWidth, railColour: s.borderInlineStartColor, railPad: s.paddingInlineStart, memberBars: el.querySelectorAll('.row__bar').length, members: el.children.length }; })()@5000`,
+  ].join(';;'),
   ROTARIS_CAPTURE_DRAG_AT: `${W} [data-testid="row-markdown"] .md__p@5400`,
   // The acknowledgement stack is transient (REQ-NOTIFY-011: 4200 ms), so each outcome is read beside the click that
   // raised it rather than at the end, where the requirement's own lifetime would have removed it.
@@ -279,6 +303,64 @@ expect(groupClass.includes('tool--failed') && groupArticle.matches[0].attrs['dat
 const questions = text(r.probes, `${G} [data-testid="row-question"] .row__trailer`);
 expect(questions.includes('3 steps — Choose a branch') && questions.includes('1 step — Confirm the target'), `the question trailers read ${JSON.stringify(questions)}`);
 results.group = { summary, membersRevealed: members.length, memberCardsOpened: memberCards.length, severityClass: groupClass, questionTrailers: questions };
+
+// ── PD-CHAT-004 — the activity line, in the product ───────────────────────────────────────────────────────
+// The fixture is ONE agent thinking and reading in turn — the sequence the owner reported as two alternating
+// speakers — then a message, then a second agent's live run.
+const activityRows = (r.probes[`${A} [data-testid="row-group"]`] ?? []);
+expect(activityRows.length === 2, `the fixture drew ${activityRows.length} activity lines, not 2 (one per agent)`);
+// (a) The alternation is gone: seven rows of one agent's work are ONE displayed row, and the whole surface is
+//     three rows — line, message, line — where the defect drew nine.
+const activityAll = text(r.probes, `${A} .row`);
+expect(activityAll.length === 3, `the surface drew ${activityAll.length} rows, not 3 (line, message, line)`);
+// (b) The role gutter names the AGENT and never an activity word — the defect this repairs put `reading` here.
+const activityRoles = text(r.probes, `${A} .row__role`);
+expect(!activityRoles.some((role) => ['reading', 'searching', 'editing', 'running', 'reasoning'].includes(role)),
+  `an activity word reached the role gutter: ${JSON.stringify(activityRoles)}`);
+// TWO attributions for THREE rows, which is the repair working: the orchestrator's line and the message that
+// follows it are one block, so REQ-CHAT-057 draws the role once and a persona bar on the continuation. Under
+// the defect this surface drew an attribution on every row and never a bar.
+expect(activityRoles.length === 2 && activityRoles[0] === 'orchestrator' && activityRoles[1] === 'coding-agent',
+  `the lines named ${JSON.stringify(activityRoles)}`);
+// (c) No reasoning row survives as a row of its own inside a run — they are members of the line.
+const looseThinking = r.probes[`${A} [data-testid="row-thinking"]`] ?? [];
+expect(looseThinking.length === 0, `${looseThinking.length} reasoning rows were drawn beside the line rather than inside it`);
+// (d) The line's segments, in first-appearance order, with the same family forming a second segment.
+const segments = text(r.probes, `${A} .activity__segment`);
+const firstLine = inspect(r.log, 5000, `${A} [data-testid="group-header"]`);
+const activitySummary = firstLine?.matches?.[0]?.attrs?.['aria-description'] ?? '';
+expect(activitySummary === 'reasoning ×1 · 16s · ~554 tok, reading ×2 · 2 ok, reasoning ×1 · 1s · ~33 tok, reading ×2 · 2 ok, searching ×1 · 1 failed',
+  `the line's accessible description read ${JSON.stringify(activitySummary)}`);
+expect(!activitySummary.includes('ACTIVITY-OUTPUT'), 'the activity summary carried raw tool output');
+// (e) One failed tool member colours the whole line, by REQ-CHAT-065's ordering, which PD-CHAT-004 keeps.
+const firstArticle = inspect(r.log, 5000, `${A} [data-testid="row-group"]`);
+const firstClass = firstArticle?.matches?.[0]?.attrs?.class ?? '';
+expect(firstClass.includes('tool--failed'), `the line did not take the most severe outcome's colour: ${JSON.stringify(firstClass)}`);
+expect(firstArticle?.matches?.[0]?.attrs?.['data-segments'] === '5', `the line published ${firstArticle?.matches?.[0]?.attrs?.['data-segments']} segments, not 5`);
+// (f) The live run states what it is doing NOW and carries that call's text on the preview line.
+const now = text(r.probes, `${A} [data-testid="activity-now"]`);
+expect(now.length === 1 && now[0] === 'running…', `the in-flight activity word read ${JSON.stringify(now)}`);
+const preview = text(r.probes, `${A} .tool__preview`);
+expect(preview.some((line) => line.includes('bash pnpm test')), `the in-flight call's text was not on the preview line: ${JSON.stringify(preview)}`);
+// (g) Expanded: ONE continuous rule in the agent's persona colour, the members hanging from it, each keeping
+//     its own timestamp and drawing no bar of its own. C's contribution, measured rather than asserted.
+const rail = evalAt(r.log, 'activityRail');
+const railWidth = Number.parseFloat(String(rail?.activityRail ?? '0'));
+expect(railWidth >= 2, `the expanded run's rule measured ${JSON.stringify(rail?.activityRail)}, not the 2 px continuous rail`);
+// It is ONE rule, in the agent's persona colour: every member hangs from this single element and none draws a
+// bar of its own, which is the difference between a continuous line and a dashed column of per-row borders.
+expect(rail?.memberBars === 0, `${rail?.memberBars} members drew a persona bar of their own beside the continuous rule`);
+expect(rail?.members === 7, `the rule spanned ${rail?.members} members, not the run's 7`);
+const openMembers = text(r.probes, `${AO} [data-testid="group-members"] .row`);
+expect(openMembers.length === 7, `expanding the run revealed ${openMembers.length} members, not 7`);
+const memberTimes = text(r.probes, `${AO} [data-testid="group-members"] .row__time`).filter((t) => t !== '');
+expect(memberTimes.length === 7, `${memberTimes.length} of 7 revealed members carried a timestamp — the per-step instants are what expanding is for`);
+results.activityLine = {
+  lines: activityRows.length, rowsDrawn: activityAll.length, roles: activityRoles, looseReasoningRows: looseThinking.length,
+  summary: activitySummary, segments, severityClass: firstClass, inFlightWord: now[0] ?? null,
+  railWidthPx: railWidth, railColour: rail?.railColour ?? null, membersRevealed: openMembers.length,
+  memberTimestamps: memberTimes.length, memberBars: rail?.memberBars ?? null,
+};
 
 // REQ-CHAT-076: the two opens, both acknowledged; the `file:` reference refused by its scheme.
 const opened = [...r.log.matchAll(/capture: open-external (\S+)/g)].map((m) => m[1]);

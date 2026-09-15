@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Seven.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Eight.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale.
 
 ---
@@ -317,6 +317,87 @@ selecting rather than the unset whole-surface state the first checkbox state del
 > **Extends:** REQ-CONFIG-336
 
 *Raised by the owner, 2026-09-14; logged as [R-015](requests.md#r-015).*
+
+<a id="pd-chat-004"></a>
+
+### PD-CHAT-004 — an agent's uninterrupted work draws as one activity line that updates in place
+
+**The run.** A *run* is a maximal sequence of consecutive transcript rows that belong to **one agent**
+and are of the `tool call` or `streamed reasoning` categories. A run of **two or more** rows SHALL be
+displayed as a single row — the **activity line**; a run of one row SHALL be displayed as that row,
+drawn as its own category states. Neither a change of tool family nor an intervening reasoning row
+SHALL end a run. A row of any other category, a row of a different agent, and an exempt row SHALL end
+it.
+
+**What never enters a run.** The structured-questions tool row and an unsettled live-terminal row
+(REQ-CHAT-066), and — while `display/showReasoning` is on (REQ-CHAT-167) — any streamed-reasoning
+row, so that switching the preference on reveals reasoning without a second expansion to reach it.
+
+**What the collapsed line states.** In the agent's own role gutter, at the run's earliest member start
+time, on one line:
+
+- the run's **segments**, in the order they first appear. A reasoning segment reads
+  `reasoning ×N · <S>s · ~<T> tok`, its seconds the summed duration of its members and its token
+  figure their summed streamed-character count divided by 4 (REQ-CHAT-062's arithmetic). A tool
+  segment reads `<family> ×N` followed by the per-outcome counts of REQ-CHAT-065 — `3 ok`, `1 failed`
+  — omitting an outcome with no members. Consecutive rows of one family form one segment; the same
+  family reached again after another segment forms a second segment of that family.
+- while a call is in flight, the activity word of the segment in flight marked as continuing, and that
+  call's text on the dimmed `⤷` preview line REQ-CHAT-061 gives a collapsed tool row;
+- the run's **elapsed span** — from the earliest member's start to the last member's end — counting
+  upward from the earliest start while the run is live.
+
+The line SHALL take its colour from the most severe outcome among its **tool** members, by
+REQ-CHAT-065's ordering; a run holding only reasoning is never coloured as failed.
+
+**It never appends.** Extending a live run — a further tool call, a further reasoning phase — SHALL
+change what the activity line states and SHALL NOT add a displayed row. While one agent works, only a
+row of another category may lengthen the transcript.
+
+**Expanded.** Expanding the line SHALL keep it on screen and reveal its members beneath it in their
+recorded order, hanging from a **single continuous rule in the agent's persona colour** that spans the
+whole revealed run. Each member keeps the identity (REQ-CHAT-059), the expansion state and the drawing
+its own category gives it.
+
+**Attribution.** The activity line's role is the **agent's**, never an activity word; family words
+appear only inside the line's own text. This is REQ-CHAT-057's own rule applied to the new row and adds
+nothing to it.
+
+**Copy, and the accessible description.** Both SHALL yield the readable summary above, segments
+separated by `, ` and the facts inside one segment by ` · `, and SHALL NOT emit raw tool input or
+output. A run of exactly one tool family and no reasoning therefore still reads
+`reading ×4 · 3 ok · 1 failed`, which is REQ-CHAT-065's own example unchanged.
+
+**The switch.** REQ-CHAT-067's tool-grouping display setting governs the activity line: with it off,
+every row draws as its own category states and no run is formed. Its auto-collapse setting acts on tool
+rows drawn as rows; the members revealed beneath an expanded line are exempt, as a folded group's members
+already were, because a reader who opened the run asked to see its steps.
+
+**Why, and what it costs.** The owner read a live transcript in which one agent thinking and reading
+in turn drew as `ORCHESTRATOR / READING / ORCHESTRATOR / READING`, and reported two faults: the role
+column appeared to name two participants where there was one agent, and two agents writing at once
+competed for the newest row, which flickered. The first fault is a defect against REQ-CHAT-057 and
+REQ-CHAT-064 and is repaired as one
+(`docs/defects/group-header-claims-the-role-gutter.md`); **this directive is the second.** Flicker is
+a consequence of the shape of the record, not of the painting: a run of an agent's work appends a row
+per step, every append moves the tail, and two agents appending at once move it twice as often. A row
+that changes rather than grows removes the cause — each working agent owns exactly one line, and two
+of them cannot contend for a position that neither is taking.
+
+Three things are given up, and all are real. **Per-step timestamps go behind one expansion**: the
+collapsed line carries the run's earliest start and its span, not the instant of each call, so reading
+when a particular call happened now costs a click. **REQ-CHAT-065's summed duration becomes a span**,
+which is the larger figure wherever an agent idled between calls — it answers "how long has this agent
+been at this", which is the question the line is drawn to answer, at the cost of no longer answering
+"how much time did the work itself take" without expanding. And **a mixed run no longer states one
+activity word**, so the glanceable "what is it doing" is a list rather than a word; the in-flight
+segment is drawn as continuing precisely to keep that answer available at a glance.
+
+> **Narrows:** REQ-CHAT-046, REQ-CHAT-062, REQ-CHAT-064, REQ-CHAT-065
+> **Extends:** REQ-CHAT-067
+
+*Raised by the owner, 2026-09-15; logged as [R-017](requests.md#r-017) and chosen from four drawn
+approaches as [R-018](requests.md#r-018).*
 
 ---
 

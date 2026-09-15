@@ -439,3 +439,48 @@ network blocked is the server's own error result, not a host failure (`REQ-MCP-1
 **After ESC-32 (2026-09-06).** The three ways above are kept as written because the owner chose between
 them; the second is in force. What remains to discharge the entry is one artifact — the notices file's
 section — and it is named in ADR-0054 beside the generator that will produce it.
+
+## IC-8 — the confinement backends are written but not proven; the rendering is not the contract (PROPOSED 2026-09-15)
+
+**Raised by:** ADR-0022's first execution (Part AR, 2026-09-15). **Binds:** the two per-platform
+renderers and any claim that OS-level confinement works.
+
+`REQ-SANDBOX-127` states it in terms that leave no room to read them down:
+
+> The rendered invocation is a means, not the contract. A confinement backend SHALL be judged
+> conformant only by the observable effect on a live process on a real host of the platform
+> concerned, and a rendering that matches `REQ-SANDBOX-075` to `REQ-SANDBOX-079` word for word but
+> does not produce that effect is non-conformant. … No backend may be reported `available` on the
+> strength of a rendered string alone, and no substitute or emulated backend may satisfy this check
+> on behalf of an absent one.
+
+The six effects it enumerates, each to be demonstrated on **each** supported platform under an active
+mode: a write inside an effective writable root succeeds; a write outside every writable root and
+outside the platform's temporary locations is refused; a write under `<root>/.git` or
+`<root>/.rotaris` is refused **whether or not the subpath existed beforehand**; a read outside every
+writable root succeeds; an outbound socket is refused while `runtime.sandbox_allow_network` is false
+and succeeds while it is true; and the working directory the command observes is unchanged.
+
+**None of the six has been demonstrated.** The build host is `win32`, which `REQ-SANDBOX-065` places
+outside the closed two-member platform set, so the product on this machine correctly reports
+`available: false` and every run that asks for confinement is refused before it starts. That path
+**is** proven — `pnpm sandbox-proof`, five scenarios — and it is the path ESC-6 ruled the first
+release accepts. What is not proven is the other path.
+
+**What has been done instead, stated plainly so it is not mistaken for the check.** The shared
+specification, the quoting and both renderers carry unit tests over their exact output: the bubblewrap
+option sequence including all three carve-out cases of `REQ-SANDBOX-077`, the Seatbelt profile
+including the denials-after-allowances rule of `REQ-SANDBOX-075`, both trial invocations including
+`REQ-SANDBOX-070`'s final `-- /bin/sh -c 'true'`, and property tests over hostile paths for
+`REQ-SANDBOX-064`. These establish that the product renders what the specification says to render.
+`REQ-SANDBOX-127` says in advance that this is not the same claim.
+
+**This condition binds the work it names.** The two renderers may not be reported complete, and no
+conformance claim may be made for either backend, until the six effects have been run on a real macOS
+host and a real Linux host and **the result recorded here whether or not it passed**. No agent may
+downgrade it while doing the work.
+
+**Its shape is IC-3's.** Both wait on hosts this project does not have; ESC-6 option 2 already named
+extending `REQ-SANDBOX-127`'s obligation to a further continuous-integration platform as the real
+cost of admitting one. If the owner wants the renderers proven rather than written, that is the same
+hardware decision, and it is theirs.

@@ -263,10 +263,31 @@
 /* REQ-CHAT-051 / REQ-CHAT-076: a trailer row is a control — clicking it opens the stepper or the approval dialog. */
 .row__trailer { font: inherit; font-size: var(--rt-text-sm, 13px); color: var(--rt-text); background: none; border: 0; padding: 0; text-align: left; cursor: pointer; }
 .row__trailer:disabled { cursor: default; color: var(--rt-text); }
-/* REQ-CHAT-065: an expanded group reveals its members BENEATH the header, which stays where it is. */
-.row__members { display: flex; flex-direction: column; gap: 0; margin-top: var(--rt-space-2, 8px); }
-/* Members are indented under the header and marked by the divider they hang from, not by a nested box. */
-.row__members .row { margin-left: 0; margin-right: 0; padding-left: var(--rt-space-3, 12px); border-left: 1px solid var(--rt-divider); border-radius: 0; }
+/* REQ-CHAT-065: an expanded group reveals its members BENEATH the header, which stays where it is.
+   PD-CHAT-004: they hang from ONE continuous rule in the agent's persona colour, spanning the whole run —
+   the rule is on the container, not on each row, so it does not break at the gap between two members. The
+   colour arrives as an inline custom value from `personaColourToken`; a surface that supplies none keeps
+   the border token, so the rail is never invisible. */
+.row__members { display: flex; flex-direction: column; gap: 0; margin-top: var(--rt-space-2, 8px);
+  border-inline-start: 2px solid var(--rt-border); padding-inline-start: var(--rt-space-3); }
+/* The falsified reason, kept: a 1 px divider PER ROW read as a dashed line rather than one agent's thread,
+   and told the reader nothing about whose run it was. */
+.row__members .row { margin-left: 0; margin-right: 0; padding-left: 0; border-left: 0; border-radius: 0; }
+/* PD-CHAT-004: the activity line's segments. Each is one unbroken phrase, so the line wraps BETWEEN
+   segments and never inside one — `reading ×2` and `2 ok` may not end up on different lines. */
+/* The spacing tokens are named WITHOUT a literal fallback here: `tokens/spacing.css` always loads ahead of
+   this sheet, and a fallback is a raw metric the UI-language check counts as debt. */
+.activity__segments { display: flex; flex-wrap: wrap; align-items: baseline; row-gap: 0; column-gap: var(--rt-space-2); min-width: 0; }
+.activity__segment { white-space: nowrap; color: var(--rt-accent-300); }
+.activity__segment + .activity__segment::before { content: '·'; margin-inline-end: var(--rt-space-2); color: var(--rt-text-tertiary); }
+/* A reasoning segment is drawn in the hue the mockup gives an agent's own deliberation, so the three kinds
+   of one-liner stay told apart by wording AND hue (docs/design §1.3: colour never carries a fact alone). */
+.activity__segment--reasoning { color: var(--rt-accent-300); }
+.row--group .activity__segment:not(.activity__segment--reasoning) { color: var(--rt-axis-y-300); }
+/* PD-CHAT-004: the activity word of the segment in flight — what the agent is doing NOW, at a glance. */
+.activity__now { white-space: nowrap; color: var(--rt-run); }
+.tool--failed > .row__grid > .row__main > .tool__header .activity__segment,
+.tool--blocked > .row__grid > .row__main > .tool__header .activity__segment { color: var(--rt-danger-300); }
 /* REQ-CHAT-068: the delegation-context header's expanded detail. */
 .row__delegation { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px var(--rt-space-2, 8px); margin: var(--rt-space-2, 8px) 0 0; font-size: var(--rt-text-xs, 12px); }
 .row__delegation dt { color: var(--rt-text-tertiary); }
@@ -705,6 +726,39 @@
  * record (REQ-CHAT-084).
  */
 .dialog-backdrop { z-index: 50; }
+/**
+ * Part AS (ADR-0064) — the project setup dialog, and a defect only the pixels could report.
+ *
+ * REQ-WORKSPACE-106 asks for a **non-modal, window-level** dialog: the rest of the application stays
+ * navigable. Every other dialog here is positioned by its `.dialog-backdrop`, which is `position: fixed;
+ * inset: 0` — and a backdrop is precisely what a non-modal surface may not have, because it would swallow
+ * the clicks that must keep working. Drawn as `.dialog` alone the panel took part in normal flow at the
+ * end of the body, below the shell's own full-height grid: it was in the DOM, its headline, its intro and
+ * its task cards all readable by a script, **and invisible on screen**. The DOM assertions of
+ * `pnpm init-proof` passed on it; the screenshot is what found it. Same class as UIR-014 — a box that
+ * exists and cannot be seen — and no unit test in 1,870 could have caught it.
+ *
+ * So it is positioned here, by hand, and the positioning IS the requirement: fixed, its own corner of the
+ * window, above the shell (40, below an application-modal backdrop at 50 — a modal opened on top of it
+ * must cover it), scrollable when its progress log grows, and never covering the composer it gates, so the
+ * user can read the reason and the control it refers to at the same time. No colour and no size literal:
+ * every value is a token or a bound REQ-WORKSPACE-153 already states.
+ */
+.project-setup {
+  position: fixed;
+  top: var(--rt-space-4);
+  right: var(--rt-space-4);
+  z-index: 40;
+  /* The width is `.dialog`'s own — the adopted language decides it, and this rule states no second figure. */
+  max-width: calc(100vw - 2 * var(--rt-space-4));
+  max-height: calc(100vh - 2 * var(--rt-space-4));
+  overflow: auto;
+  border: var(--rt-hairline-width) solid var(--rt-border);
+}
+.project-setup__tasks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--rt-space-2); }
+.project-setup__task { padding: var(--rt-space-3); }
+.project-setup__task-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--rt-space-3); }
+.project-setup__task-label { font-weight: var(--rt-weight-medium); }
 .session-browser { width: min(920px, 100%); max-height: min(720px, calc(100vh - 2 * var(--rt-space-4))); }
 .session-browser__head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--rt-space-4); }
 .session-browser__head .dialog-title, .session-browser__head .dialog-body { margin: 0; }
@@ -775,12 +829,37 @@
 .pause__figures dd { margin: 0; }
 .steer { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); }
 
+/* REQ-CONFIG-367: the provider row's indicator carries its detail in a tooltip (UIR sweep, 2026-09-14).
+   The closed bubble is opacity-0 but still painted, so on a tiny trigger — the 6 px status dot — its
+   nowrap text pays out as 43 px of scrollable overflow the trigger cannot reach, which the SHRUNK sweep
+   reports. Visibility does not remove it (a hidden box still contributes to scrollable overflow);
+   only display does. The fade-in is kept through @starting-style; the fade-out is the one loss. */
+.tooltip .tooltip-bubble { display: none; }
+.tooltip:hover .tooltip-bubble, .tooltip:focus-within .tooltip-bubble {
+  display: inline-flex;
+  @starting-style { opacity: 0; transform: translate(-50%, var(--rt-shift)); }
+}
+
 /* Providers (REQ-CONFIG-329, REQ-PROVIDER-116/117/140/141): the card, its rows, the authentication window. */
 .providers-card__head { display: flex; align-items: center; justify-content: space-between; gap: var(--rt-space-3, 12px); }
 .providers-card__actions { display: flex; gap: var(--rt-space-2, 8px); }
-.providers-card__table td { font-size: var(--rt-text-sm, 13px); }
-.provider-settings__fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--rt-space-3, 12px); margin-bottom: var(--rt-space-3, 12px); }
-.provider-settings__opt { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--rt-space-2, 8px); font-size: var(--rt-text-sm, 13px); }
+.providers-card__table td { font-size: var(--rt-text-sm, 13px); vertical-align: top; }
+/* REQ-CONFIG-367's row: the status line (indicator, label, status word), the detail line beneath, actions right. */
+.provider-row__status { display: flex; align-items: center; gap: var(--rt-space-2, 8px); min-width: 0; }
+.provider-row__dot { width: var(--rt-status-dot-size); height: var(--rt-status-dot-size); border-radius: 50%; flex: none; display: inline-block; }
+.provider-row__dot[data-state="checking"] { animation: rt-pulse var(--rt-duration-slow, 900ms) ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .provider-row__dot[data-state="checking"] { animation: none; } }
+.provider-row__name { font-weight: var(--rt-weight-medium, 500); color: var(--rt-text); white-space: nowrap; }
+.provider-row__word { font-size: var(--rt-text-xs, 12px); margin-left: auto; padding-left: var(--rt-space-2, 8px); white-space: nowrap; }
+.provider-row__detail { margin-top: var(--rt-space-1, 4px); font-size: var(--rt-text-xs, 12px); max-width: 46ch; overflow-wrap: anywhere; }
+.provider-row__actions { display: flex; align-items: center; gap: var(--rt-space-2, 8px); justify-content: flex-end; }
+/* The expanded per-row settings: a form region, not a nested card. */
+.provider-settings > td { padding-top: 0; }
+.provider-settings__panel { display: flex; flex-direction: column; gap: var(--rt-space-3, 12px); padding: var(--rt-space-3, 12px); margin: var(--rt-space-2, 8px) 0; background: var(--rt-surface); border: 1px solid var(--rt-border); border-radius: var(--rt-radius-md, 8px); }
+.provider-settings__fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--rt-space-3, 12px); }
+.provider-settings__opt { grid-column: 1 / -1; }
+.provider-settings__actions { display: flex; align-items: center; gap: var(--rt-space-2, 8px); flex-wrap: wrap; }
+.provider-settings__actions .btn-danger { margin-left: auto; }
 .provider-dialog { max-width: 640px; margin: 0 auto; }
 .provider-dialog__field { display: flex; flex-direction: column; gap: var(--rt-space-1, 4px); }
 .provider-dialog__field .input { width: 100%; }

@@ -4,7 +4,7 @@ import { toIsoUtc, type Clocks } from '@rotaris/kernel';
 import { resolvePreset, type ApprovalPayload, type PermissionPreset, type ToolStatus } from '@rotaris/contracts';
 import {
   askQuestionsTool, buildPolicy, directWorkBundle, effectiveMode, fetchTool, FileToolState, findShell, Gate, globTool, grepTool, haetEditTool, haetReadTool, nodePtyFactory, PendingApprovals, PendingQuestions, PolicyContext, readFileTool, realPathOf,
-  resolveToolSet, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, withheldUnderPlanGate, writeFileTool, type GateSink, type PolicyRead, type PresenterPort, type ToolExecutor,
+  resolveToolSet, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, withheldUnderPlanGate, writeFileTool, type ConfinementPort, type GateSink, type PolicyRead, type PresenterPort, type ToolExecutor,
 } from '@rotaris/agent-tools';
 import { BUILT_IN_PERSONAS, type ModeChange, type PersonaResolver, type PortToolCall, type PortToolResult, type RoleName, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
 import type { ConfiguredRun, RuntimeFromConfiguration } from './configuration.js';
@@ -63,8 +63,14 @@ export interface ToolPortDeps {
   readonly personas: (workspaceRoot: string) => PersonaResolver | null;
   readonly presenter: PresenterPort;
   readonly nextSequence: () => number;
-  /** Shared per workspace root: the read record and the undo stacks (REQ-TOOLS-137). */
+  /** Shared per workspace root: the read record and the undo stacks (REQ-TOOLS-137). NOT the fence — see `executorsFor`. */
   readonly fileStates: Map<string, FileToolState>;
+  /**
+   * REQ-WORKSPACE-059 (ADR-0063): the cataloged skill directories for this workspace, as additional READ
+   * roots. Absent in a test or a build with no skill host, which is the same as discovering none. Read per
+   * port, so a rescan governs agents constructed afterwards (REQ-WORKSPACE-069) and leaves built ones alone.
+   */
+  readonly skillReadRoots?: ((workspaceRoot: string) => readonly string[]) | undefined;
   /** ADR-0020: one manager for the run host; null when no shell is present (REQ-TOOLS-104) and the tool is removed. */
   readonly terminal: TerminalManager | null;
   /** ADR-0023 / REQ-SANDBOX-038: the egress policy and `tool_call_timeout`, read from the workspace's SAVED configuration at each fetch call. */
@@ -98,18 +104,47 @@ function writerSink(writer: SessionWriter, sessionId: string, clocks: Clocks, wa
 
 /** The executors this build registers (decision 3 of the plan, plus `fetch` since Part N); the registry removes any other declared name (REQ-TOOLS-004). */
 function executorsFor(root: string, deps: ToolPortDeps, runtime: RuntimeFromConfiguration, todoExecutor: ToolExecutor): Map<string, ToolExecutor> {
-  // REQ-CONFIG-468: the additional read-only roots reach the fence; the file-tool state is per workspace root and keeps the first fence it saw.
-  const fence = { workspaceRoot: root, allowOutsideWorkspace: runtime.allowOutsideWorkspace, additionalReadOnlyRoots: [...runtime.additionalReadOnlyRoots] };
+  /*
+   * REQ-CONFIG-468 and REQ-WORKSPACE-059: the additional read-only roots and the cataloged skill directories
+   * reach the fence, which is built PER PORT from this run's configuration.
+   *
+   * The falsified reason, kept beside its replacement (ADR-0063's first execution, 2026-09-14): this line
+   * read "the file-tool state is per workspace root and keeps the first fence it saw", which was true and
+   * was read as a property of the read record. It was also `runtime.additional_read_only_roots` ceasing to
+   * take effect after the first run in this process — `grep` and `glob` took the fresh fence while
+   * `read_file`, `write_file` and the two `haet` tools took the stale one, so two tools in one bundle
+   * disagreed about where the boundary was. The state now holds only what REQ-TOOLS-132/137 say it holds
+   * (the read record and the undo stacks, shared across runs in a workspace) and the fence travels with the
+   * tool. Invisible until now because the key's default is empty; the first value that differs is the skill
+   * directories, which a rescan changes and which REQ-WORKSPACE-069 requires to govern agents built after it.
+   */
+  const fence = { workspaceRoot: root, allowOutsideWorkspace: runtime.allowOutsideWorkspace, additionalReadOnlyRoots: [...runtime.additionalReadOnlyRoots, ...(deps.skillReadRoots?.(root) ?? [])] };
   let state = deps.fileStates.get(root);
-  if (!state) { state = new FileToolState(fence); deps.fileStates.set(root, state); }
+  if (!state) { state = new FileToolState(); deps.fileStates.set(root, state); }
   const list: ToolExecutor[] = [
-    readFileTool(state) as ToolExecutor, writeFileTool(state) as ToolExecutor, haetReadTool(state) as ToolExecutor,
-    haetEditTool(state, 'haet_edit') as ToolExecutor, haetEditTool(state, 'haet') as ToolExecutor,
+    readFileTool(state, fence) as ToolExecutor, writeFileTool(state, fence) as ToolExecutor, haetReadTool(state, fence) as ToolExecutor,
+    haetEditTool(state, fence, 'haet_edit') as ToolExecutor, haetEditTool(state, fence, 'haet') as ToolExecutor,
     grepTool(fence) as ToolExecutor, globTool(fence) as ToolExecutor, todoExecutor,
     // ADR-0023: the policy is read per call from the saved files (REQ-SANDBOX-038); the gate resolved any `ask` before execution (REQ-TOOLS-091).
     fetchTool({ policy: deps.egress(root), timers: deps.clocks.timers }) as ToolExecutor,
   ];
-  if (deps.terminal) list.push(terminalTool(deps.terminal, { ...TERMINAL_DEFAULTS, commandTimeoutS: runtime.shellCommandTimeoutS }) as ToolExecutor);
+  /*
+   * ADR-0022's terminal enforcement point. REQ-SANDBOX-093: the specification is resolved AFRESH for
+   * each call, from the issuing run's configuration and the conversation's actual working directory,
+   * worktree-aware — which is why the port is a function of the execution root the call presents
+   * rather than a value fixed when the port was built. REQ-SANDBOX-096: the commands of each live
+   * run follow the setting in force when THAT run began, which this per-run closure gives.
+   * REQ-SANDBOX-088: mode `off` returns null, so the shell receives exactly what was submitted.
+   * REQ-SANDBOX-123: verification checks and probes come through this same point, unmodified.
+   */
+  const confinement: ConfinementPort = {
+    resolve: (executionRoot) => {
+      const c = runtime.confinement;
+      if (c.mode === 'off') return null;
+      return { spec: { mode: c.mode, executionRoot, writableRoots: c.writableRoots, allowNetwork: c.allowNetwork }, verdict: c.verdict ?? { available: false, backend: 'unavailable', reason: '', remediation: '' } };
+    },
+  };
+  if (deps.terminal) list.push(terminalTool(deps.terminal, { ...TERMINAL_DEFAULTS, commandTimeoutS: runtime.shellCommandTimeoutS }, confinement) as ToolExecutor);
   return new Map(list.map((e) => [e.name, e]));
 }
 

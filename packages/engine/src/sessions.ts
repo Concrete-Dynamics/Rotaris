@@ -216,6 +216,17 @@ export interface RunSetup {
   readonly resilience?: { readonly catalogue: readonly CatalogueEntry[]; readonly fallbackModel: ModelChoice | null } | undefined;
   /** REQ-MONITOR-049 / REQ-CONFIG-085 (Part AH): each configured model's own maximum input tokens, by `models:` key. */
   readonly contextLimits?: Readonly<Record<string, number>> | undefined;
+  /**
+   * REQ-WORKSPACE-060 (ADR-0063): the always-active context units every agent of this session receives, in
+   * that requirement's order — workspace context, the skill catalog, the force-loaded skill bodies, persona
+   * memory. A **getter**: it is called at each agent construction, so a skill loaded mid-session reaches the
+   * next agent built and never retracts one already running (REQ-CONFIG-166).
+   *
+   * Two of the four are not built in this release (workspace context, REQ-WORKSPACE-041..050, and persona
+   * memory), so the list a host supplies today holds the middle two and the ordering is the seam where the
+   * others will sit.
+   */
+  readonly contextUnits?: (() => readonly string[]) | undefined;
 }
 
 /** REQ-TOOLS-067/070: the posture at run start; attendedness is taken once here (REQ-SANDBOX-101's "at the moment its mode is resolved"). */
@@ -840,6 +851,9 @@ export class Sessions {
       sessionId, workspaceRoot, effectiveRoot, task: prompt, taskContent: [...(prompt === '' ? [] : [{ kind: 'text' as const, text: prompt }]), ...storedAttachments.content], taskId: `${sessionId}:main:1`, writer, owner, bus: this.bus, clocks: this.deps.clocks,
       ...(setup.value.personas ? { personas: setup.value.personas } : {}),
       ...(setup.value.models ? { models: setup.value.models } : {}),
+      // REQ-WORKSPACE-060 (ADR-0063): the session's always-active context units, as a getter the run calls at
+      // every agent construction (REQ-CONFIG-166 reads the policy at creation, never mid-agent).
+      ...(setup.value.contextUnits ? { contextUnits: setup.value.contextUnits } : {}),
       resilience: { memory: live.memory!, catalogue: setup.value.resilience?.catalogue ?? [], fallbackModel: setup.value.resilience?.fallbackModel ?? null },
       ...(runtime?.childTimeoutMs === undefined ? {} : { childTimeoutMs: runtime.childTimeoutMs as Millis }),
       messageLimit: runtime?.messageLimit ?? null, onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),
@@ -966,6 +980,9 @@ export class Sessions {
       sessionId, workspaceRoot, effectiveRoot, task: payload, taskContent: [{ kind: 'text', text: payload }, ...attachmentContent], taskLabel: prompt, taskId: `${sessionId}:continued:${s.dal.getSession(sessionId)!.iterations_completed + 1}`,
       ...(setupIn.personas ? { personas: setupIn.personas } : {}),
       ...(setupIn.models ? { models: setupIn.models } : {}),
+      // REQ-WORKSPACE-073 (ADR-0063): a continuation is where an invoked skill first reaches a model — the
+      // command is typed between prompts, so the units MUST be re-read here and not carried from the launch.
+      ...(setupIn.contextUnits ? { contextUnits: setupIn.contextUnits } : {}),
       resilience: { memory: s.memory, catalogue: setupIn.resilience?.catalogue ?? [], fallbackModel: setupIn.resilience?.fallbackModel ?? null },
       ...(runtime?.childTimeoutMs === undefined ? {} : { childTimeoutMs: runtime.childTimeoutMs as Millis }),
       messageLimit: runtime?.messageLimit ?? null, onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),

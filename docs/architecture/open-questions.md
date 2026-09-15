@@ -25,7 +25,15 @@ separates them into the three groups the gate actually turns on.
 were raised by building the thing that met the requirement: **OQ-50** (Part K, the public model catalogue),
 **OQ-51** (Part AB, the unscoped queued prompt), **OQ-52** (Part AC, whether a delegated child may ask) and
 **OQ-53** (Part AH, which event reports a compression), **OQ-54** (Part AL, the user-terminal audit entry outside the closed permission vocabularies) and **OQ-55** (Part AL, `shell_max_background_sessions` without a maximum). That is **fifty-three specification questions**. **Twelve are now resolved, leaving forty-one open**, and none
-blocks a named ADR. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+blocks a named ADR.
+
+**Two more were raised on 2026-09-14 by planning portable-skill discovery (ADR-0063), before any code:
+OQ-58** (whose session a skill's session-scoped state belongs to, once `PD-WORKSPACE-001` made a second
+session on one workspace ordinary) **and OQ-59** (a chooser restricted to a file *or* a directory, which
+no platform dialog offers). **Three escalations were raised in the same pass** — **ESC-37** (per-prompt
+attachment against a session-long force-loaded block), **ESC-38** (the Skills table's five columns
+against its seven) and **ESC-39** (a taken command name skipped against suffixed) — each stating the
+reading the build proceeds under, all three in `owner-decisions.md`. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -2505,6 +2513,56 @@ checkbox (and the shared layer gains the component that transcribes it, with the
 semantics), or the product states that these three choices are drawn as `ToggleSwitch`, which the language **does**
 define. The layout half is not waiting on the answer and can be repaired under either: a control and its label belong on
 one line, adjacent.
+
+**OQ-58 — "the current session" has no referent while a workspace has several.** *(REQ-WORKSPACE-057, REQ-WORKSPACE-058, REQ-WORKSPACE-073 against `PD-WORKSPACE-001`; raised 2026-09-14 while planning portable-skill discovery, ADR-0063.)*
+
+Three requirements scope skill state to "the current session": a manually loaded skill "applies to the
+current session only" (057), the catalog cache is "cleared on every session creation" (058), and an
+invoked skill's load mode becomes `on` "for the current session only" and is discarded by session
+creation (073). Each was written when a workspace had one. `PD-WORKSPACE-001` has since made a second
+session on one workspace an offered route — it is the directive's whole subject — and `REQ-STARTUP-162`
+makes several windows ordinary. Two sessions on one workspace can therefore be live at once, and none
+of the three requirements says whether a skill forced in one is forced in the other, or whether the
+*second* session's creation clears a cache the *first* still depends on.
+
+The gestures that set the state also have no session to name at the moment they happen. A user loads a
+skill file or types its command from a window that may be showing no session at all, and the sentence
+"applies to the current session" then has no referent rather than an ambiguous one.
+
+**What the build proceeds under.** State is keyed by **session id**, with one `pending:<root>` bucket
+per workspace root that the next session created for that root adopts. A gesture with no session
+follows the pending bucket; a gesture with one is that session's alone. Session creation clears the
+**catalog cache** for its root (058's literal rule, which is about re-reading disk and is harmless when
+shared) and adopts the pending bucket, leaving any other live session's forced set untouched. That is
+the reading under which no requirement is violated for a single session and no session can silently
+change another's context.
+
+**What the ruling decides.** Whether skill session-state is per session (built) or per workspace, and
+whether a second session's creation may clear the first's forced skills. The second reading is cheaper
+to implement and worse to use: a colleague starting a second session in the same folder would silently
+drop a skill out of the first session's agents mid-run. Stated here rather than chosen quietly.
+
+**OQ-59 — REQ-WORKSPACE-151's chooser asks for a file **or** a directory, which no platform dialog offers.** *(REQ-WORKSPACE-151 with REQ-WORKSPACE-057 and REQ-SHELL-164; raised 2026-09-14 by the same planning pass.)*
+
+REQ-WORKSPACE-151 requires the "Load skill file…" action to open "the platform's own file chooser,
+**restricted to selecting a `SKILL.md` file or a directory containing one**", applying REQ-WORKSPACE-057
+— which accepts either. On Windows and Linux the host dialog cannot offer both: Electron's
+`openFile` and `openDirectory` properties are mutually exclusive there and only macOS honours both at
+once. The requirement asks for a restriction the platform does not have, so a product cannot be
+answerable for it in REQ-SHELL-164's terms, which make the product answerable only for what it supplies
+to the host.
+
+**What the build proceeds under.** A **file** chooser filtered to `SKILL.md` on win32 and linux, both
+properties on darwin. The file form is the one the requirement names first, it is what the mockup's
+action implies, and a directory holding a `SKILL.md` is reachable by selecting that file. The
+**directory** form of REQ-WORKSPACE-057 stays reachable through the typed `/skill <path>` command
+(REQ-CHAT-162), so no capability the specification states is lost — only the dialog is narrower on two
+of three platforms, and REQ-WORKSPACE-057's own directory-path error message stays reachable and is
+still produced by the path resolver.
+
+**What the ruling decides.** Whether REQ-WORKSPACE-151 is amended to name a file chooser (what is
+built), or whether the action becomes two — "Load skill file…" and "Load skill folder…" — which is the
+only way to offer both on every platform and adds a header action the requirement does not state.
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

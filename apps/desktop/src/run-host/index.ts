@@ -1,9 +1,9 @@
-import { CONTRACT_SCHEMA_VERSION, ProcessRequestEnvelopeSchema, RunHostRequestSchema, ServiceAnswerEnvelopeSchema, type ImprovementArtifactRecord, type ProcessMessage, type ProcessReply, type RunHostRequest, type ServiceAsk, type ServiceAskEnvelope } from '@rotaris/contracts';
+import { CONTRACT_SCHEMA_VERSION, ProcessRequestEnvelopeSchema, RunHostRequestSchema, ServiceAnswerEnvelopeSchema, SKILLS_DISABLED_MESSAGE, type ImprovementArtifactRecord, type ProcessMessage, type ProcessReply, type RunHostRequest, type ServiceAsk, type ServiceAskEnvelope } from '@rotaris/contracts';
 import { asSessionId, millis, ok, toIsoUtc, type Clocks, type Millis, type WorkspaceId } from '@rotaris/kernel';
-import { dataLayout, nodeClocks, probePid, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
+import { dataLayout, environmentWithout, nodeClocks, probePid, readOrMintMachineId, resolveUserDirs } from '@rotaris/platform';
 import { openStore, StoreDal, forgetSpelling, type PromptLists, type StoreHandle } from '@rotaris/store';
 import { analyzeImprovement, captureImprovementJob, CATALOGUE, RefusalLease, relativeTime, RungMemory, Sessions, SUPERVISOR_DEFAULTS, timelineId } from '@rotaris/engine';
-import { PresenterRegistry, STREAM_SETTINGS_DEFAULTS, withheldUnderPlanGate, type FileToolState, type TerminalManager } from '@rotaris/agent-tools';
+import { ConfinementService, PresenterRegistry, renderUnavailability, spawnTrial, type AvailabilityVerdict, STREAM_SETTINGS_DEFAULTS, withheldUnderPlanGate, type FileToolState, type TerminalManager } from '@rotaris/agent-tools';
 import { createToolPort, fileAppender, RunHostPresenter, terminalManagerFromHost } from './tools.js';
 import { createTerminalHost } from './terminal.js';
 import { clearHooksDecision, createHookPort, decideHooks, hooksSummaryFor, setHookToggle } from './hooks.js';
@@ -12,9 +12,10 @@ import { createLoopClassifier } from './loop.js';
 import { createCheckpointPort, REFS_ASK_BOUND } from './checkpoints.js';
 import { McpHost } from './mcp.js';
 import { deleteSession, exportRecords, exportTrajectories, repairSessions, sessionFiles } from './session-actions.js';
-import { CHECKPOINTS_DEFAULTS, RUNTIME_DEFAULTS, type LiveState, CODE_INTELLIGENCE_TOKEN } from '@rotaris/config';
+import { CHECKPOINTS_DEFAULTS, loadConfiguration, RUNTIME_DEFAULTS, SKILLS_DEFAULTS, type LiveState, CODE_INTELLIGENCE_TOKEN } from '@rotaris/config';
+import { SkillHost } from './skills.js'; // ADR-0063
 import { classifierSlotsOf, configureRun, egressReader, improvementCollectorOf, modelRefOf, type ConfiguredRun } from './configuration.js';
-import { launchSession } from './launch.js';
+import { launchSession, leaseForContinuation } from './launch.js';
 import { type ModelClient, type ModelRequest, type StreamPart } from '@rotaris/model';
 import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
@@ -368,6 +369,8 @@ let liveState: LiveState = {};
 const configured = new Map<string, ConfiguredRun>();
 // ADR-0030: latest workspace lease for continuation loads. Active launches capture their own lease.
 const leased = new Map<string, Readonly<Record<string, string>>>();
+// The workspace root a session was started or resumed under — the key a continuation's lease refresh reads.
+const sessionRoots = new Map<string, string>();
 // Each active run retains its setup through deferred preflight and tool creation.
 const configuredRuns = new Map<string, ConfiguredRun>();
 const runBearers = new Map<string, Readonly<Record<string, string>>>();
@@ -379,6 +382,8 @@ const mcp = new McpHost({
   clocks, log: (m, level) => log(m, level ?? 'info'), parentEnv: hostEnv,
   // Part V: REQ-MCP-044's warning is a transient on the acknowledgement channel (REQ-NOTIFY-040 forbids the timed clear it had) — and the issue record it also writes.
   acknowledge: (a) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'acknowledgement.publish', kindOf: a.kind, title: a.title, ...(a.body === undefined ? {} : { body: a.body }) } }),
+  // Part AS (ADR-0064): every step and the end, pushed — what ADR-0064's task runner follows instead of a cadence.
+  publishSetup: (status) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'mcp.setupStatus', status } }),
 });
 // REQ-MCP-033 / ADR-0035 (Part T): what the reserved token launches — THIS application's own executable (a utility process
 // runs the same binary) with the token first and `--` second (the branch's separator, measured in
@@ -387,16 +392,103 @@ const mcp = new McpHost({
 const packaged = import.meta.dirname.includes('app.asar');
 const codeIntelligenceLaunch = { command: process.execPath, args: packaged ? [CODE_INTELLIGENCE_TOKEN, '--'] : [join(import.meta.dirname, 'index.js'), CODE_INTELLIGENCE_TOKEN, '--'] };
 log(`mcp: the reserved token launches ${codeIntelligenceLaunch.command} ${codeIntelligenceLaunch.args.join(' ')} (${packaged ? 'packaged' : 'development'})`);
+/**
+ * ADR-0022's availability service, owned at application lifetime (REQ-SANDBOX-067): one probe per
+ * process, cached, cleared only by REQ-SANDBOX-129's explicit re-check. It lives in the RUN HOST and
+ * not in main because this is the process that executes commands — the verdict that gates a session
+ * and the mechanism that would confine its commands are then one reading, and no message between
+ * processes can land between them (REQ-SANDBOX-094).
+ */
+const confinement = new ConfinementService({
+  platform: process.platform,
+  env: process.env,
+  clocks,
+  runTrial: spawnTrial(clocks, environmentWithout([], process.env)),
+});
+/**
+ * REQ-SANDBOX-071 names the application log as one of the surfaces that presents the verdict's own
+ * text, on the same terms as the settings label, the launch dialog and the run-refusal record.
+ *
+ * ADR-0022's first execution found this logged from the LAUNCH path only, so on a machine where the
+ * user opened Settings and never started a run — which on this platform is the machine of anyone who
+ * read the disclosure and left confinement alone — the log recorded nothing about why confinement was
+ * unavailable. The falsified reason, kept beside its replacement: "the launch is where the verdict
+ * first matters". It is where it first *gates* something; it is not where it is first *taken*.
+ * Every path that settles the verdict now comes through here, and the line is written once.
+ */
+const settleConfinement = async (): Promise<AvailabilityVerdict> => {
+  const first = confinement.peek() === null;
+  const verdict = await confinement.verdict();
+  if (first) log(`confinement: ${verdict.available ? `available (${verdict.backend})` : `unavailable — ${renderUnavailability(verdict).replace(/\n/g, ' ')}`}`);
+  return verdict;
+};
 const configurationDeps = {
   clocks, globalDir: configDir, env: process.env, scriptedClient: () => scriptedClient(clocks), codeIntelligenceLaunch,
   onRequest: (i: { method: string; url: string; headers: Record<string, string> }) => log(`model request ${i.method} ${i.url}${i.headers['authorization'] ? '' : ' (no authorization header)'}`),
   log: (m: string) => log(m), liveState: () => liveState, bearers: (root: string) => leased.get(root) ?? {},
   mcpEvidence: (cfg: ConfiguredRun['cfg'], root: string, role: string) => mcp.evidenceFor(cfg, root, role),
+  confinement: () => confinement.peek(),
 };
+/**
+ * ADR-0063 — the portable-skill catalog. The run host owns it because REQ-WORKSPACE-058 clears it at
+ * SESSION creation, a lifetime only the process that creates sessions can honour, and because the units it
+ * feeds are composed at agent construction, which is also here.
+ *
+ * The `skills:` section is read from the SAVED configuration at each ask rather than from a run's captured
+ * Tier B snapshot: REQ-WORKSPACE-073 gates a user gesture happening now, not a run that started earlier, and
+ * the `fetch` tool's per-call policy read (REQ-SANDBOX-038) is the existing precedent for that. A load that
+ * fails leaves the shipped defaults standing — a broken configuration must not silently switch skills off.
+ */
+const skills = new SkillHost({
+  log: (m, level) => log(m, level ?? 'info'),
+  monotonic: clocks.monotonic,
+  /*
+   * Verification only — `ROTARIS_CAPTURE_SKILLS_HOME` points user-scope discovery at a scratch tree, so a proof
+   * exercises `~/.agents/skills` and the OpenHands manifest without reading the operator's own skills.
+   *
+   * It is a seam rather than an override of `HOME`/`USERPROFILE` because overriding those **kills the Electron
+   * process before it paints** on Windows (measured on this proof's first run, 2026-09-14). A user-driven launch
+   * never sets it and takes `homedir()`.
+   */
+  ...(process.env['ROTARIS_CAPTURE_SKILLS_HOME'] ? { home: process.env['ROTARIS_CAPTURE_SKILLS_HOME'] } : {}),
+  section: (workspaceRoot) => {
+    const loaded = loadConfiguration({ globalDir: configDir, workspaceRoot });
+    if (loaded.ok) return loaded.value.skills;
+    log(`skills: the configuration could not be read for ${workspaceRoot}; the shipped defaults stand`, 'warn');
+    return SKILLS_DEFAULTS;
+  },
+});
+
 const configure = (workspaceRoot: string, attended: boolean) => {
   const r = configureRun(workspaceRoot, attended, configurationDeps);
   if (r.ok) { configured.set(workspaceRoot, r.value); mcp.newConfiguration(r.value.cfg); }
   return r;
+};
+/**
+ * ADR-0030 / REQ-PROVIDER-066 for the continuation paths: a paused or resumed session's run reads
+ * the bearers of the LAST launch's lease (`leased`), which an application restart empties — the
+ * 401 recorded in `docs/defects/continue-run-sends-no-authorization-header.md`. Every continuation
+ * launch therefore re-asks main first (`leaseForContinuation`), publishes the fresh map under the
+ * workspace root, and only then lets the engine resolve the setup. The user notices nothing; the
+ * one refusal is an entry provider main cannot resolve, the same sentence a launch gives. A
+ * session this process never started or resumed has no root to lease under — nothing is known
+ * about it here, and the engine's own refusals (`not-live`, `no-session`) answer it instead.
+ */
+const continuationLeaseForSession = async (sessionId: string): Promise<ProcessReply | null> => {
+  const workspaceRoot = sessionRoots.get(sessionId);
+  if (workspaceRoot === undefined) return null;
+  const r = await leaseForContinuation(workspaceRoot, {
+    workspaceRoot, attended: presenters.attended, configuration: configurationDeps,
+    leaseCredentials: async (providers) => {
+      const answer = await ask({ kind: 'credentials.lease', providerIds: [...providers] }, millis(5_000)).catch((e: Error) => { log(`credentials: main did not answer the lease (${e.message})`, 'warn'); return null; });
+      const bearers = answer?.kind === 'credentials.leased' ? answer.bearers : {};
+      log(`credentials: re-leased for ${Object.keys(bearers).join(', ') || 'no provider'} (continuation, workspace ${workspaceRoot})`);
+      return bearers;
+    },
+  });
+  if (r.kind === 'refused') return r.reply;
+  leased.set(workspaceRoot, r.bearers);
+  return null;
 };
 /** Only a tool port built outside a run start reaches this; the run path always configures first. */
 const configureRunFallback = () => {
@@ -422,7 +514,10 @@ const sessions = new Sessions({
   configure: (workspaceRoot, ctx) => {
     const r = configure(workspaceRoot, ctx.attended);
     if (r.ok) { configuredRuns.set(ctx.sessionId, r.value); runBearers.set(ctx.sessionId, leased.get(workspaceRoot) ?? {}); }
-    return r.ok ? r : { ok: false as const, error: { reason: r.error.reason } };
+    // REQ-WORKSPACE-060: the units as a GETTER, read at every agent construction, so a skill invoked between
+    // prompts reaches the next agent built and never retracts one already running (REQ-CONFIG-166).
+    // REQ-WORKSPACE-050: from the base workspace, which is what `configure` is called with.
+    return r.ok ? { ok: true as const, value: { ...r.value, contextUnits: () => skills.contextUnits(workspaceRoot, ctx.sessionId) } } : { ok: false as const, error: { reason: r.error.reason } };
   },
   /**
    * REQ-MONITOR-049 / REQ-CONFIG-085 (Part AH): a model's own maximum input tokens, from the configuration
@@ -475,6 +570,10 @@ const sessions = new Sessions({
     clocks, presenter, nextSequence: () => ++approvalSequence, fileStates, terminal, mcp, configured: () => configuredRuns.get(ctx.sessionId) ?? null,
     runtime: () => configuredRuns.get(ctx.sessionId)?.runtime ?? configureRunFallback(),
     personas: () => configuredRuns.get(ctx.sessionId)?.personas ?? null,
+    // REQ-WORKSPACE-059 (ADR-0063): the cataloged skill directories as additional READ roots, so an agent can
+    // read a SKILL.md and its siblings even outside the workspace; writes stay refused by the fence itself.
+    // REQ-WORKSPACE-050: from the BASE workspace, never a worktree's effective root.
+    skillReadRoots: () => skills.readRoots(ctx.workspaceRoot, ctx.sessionId),
     // ADR-0023 / REQ-SANDBOX-038: the saved files at each fetch call, never the live state; the read's cost logged.
     egress: (workspaceRoot) => {
       const read = egressReader(configDir, workspaceRoot, clocks);
@@ -557,7 +656,38 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
       stores.set(req.workspaceId, { file: req.storeFile, root: req.workspaceRoot, db, dal });
       const t = dal.totals();
       log(`opened ${req.storeFile} (${t.sessions} sessions, ${t.rows} rows)`);
+      // REQ-WORKSPACE-058 (ADR-0063): "discovery runs automatically on workspace open with no user action".
+      // Warmed off the reply so it cannot delay the open; a failure here is logged and costs nothing, because
+      // the next ask discovers on a cold cache anyway.
+      queueMicrotask(() => { try { skills.catalog(req.workspaceRoot); } catch (cause) { log(`skills: discovery on workspace open failed: ${String(cause)}`, 'warn'); } });
       return { kind: 'workspace.ack', workspaceId: req.workspaceId };
+    }
+    /*
+     * ADR-0063 — portable skills. All four answer with the same `skills.state` shape, so no caller has to ask
+     * again to redraw, and `loaded` names the skill for the toast. None persists anything: REQ-WORKSPACE-073
+     * and REQ-WORKSPACE-151 both scope their effect to the session and leave `skills.overrides` exactly as it
+     * was, which is why the row a surface draws keeps showing the PERSISTED policy.
+     */
+    case 'skills.read':
+      return { kind: 'skills.state', state: skills.state(req.workspaceRoot, req.sessionId) };
+    case 'skills.rescan': {
+      // REQ-WORKSPACE-069: re-read from disk, re-project, change no policy, mark nothing dirty.
+      const before = skills.state(req.workspaceRoot, req.sessionId).skills.length;
+      skills.rescan(req.workspaceRoot);
+      const state = skills.state(req.workspaceRoot, req.sessionId);
+      log(`skills: rescanned ${req.workspaceRoot} — ${before} → ${state.skills.length}`);
+      return { kind: 'skills.state', state };
+    }
+    case 'skills.forceLoad': {
+      const r = skills.forceLoad(req.workspaceRoot, req.sessionId, req.name);
+      if (!r.ok) return { kind: 'refused', code: r.reason === 'disabled' ? 'skills.disabled' : 'skills.unknown', headline: r.reason === 'disabled' ? SKILLS_DISABLED_MESSAGE : r.reason };
+      return { kind: 'skills.state', state: skills.state(req.workspaceRoot, req.sessionId), loaded: r.name };
+    }
+    case 'skills.loadFile': {
+      const r = skills.loadFile(req.workspaceRoot, req.sessionId, req.path);
+      // REQ-WORKSPACE-151: a failure is reported with the reason REQ-WORKSPACE-057 gives and leaves the catalog unchanged.
+      if (!r.ok) return { kind: 'refused', code: 'skills.load-failed', headline: r.reason };
+      return { kind: 'skills.state', state: skills.state(req.workspaceRoot, req.sessionId), loaded: r.name };
     }
     case 'workspace.refuseRuns':
       lease.refuse(req.workspaceId as WorkspaceId, millis(req.leaseMs));
@@ -608,6 +738,7 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
       if (sessions.activeRunCount() > 0) return { kind: 'refused', code: 'session.run-active', headline: 'Finish or cancel the active run before switching sessions.' };
       const s = stores.get(req.workspaceId);
       if (!s?.dal) return { kind: 'refused', code: 'workspace.not-open', headline: 'No store is open for this workspace' };
+      sessionRoots.set(req.sessionId, s.root);
       const resumed = sessions.resume(s.dal, s.root, asSessionId(req.sessionId));
       if (!resumed.ok) return { kind: 'refused', code: `session.${resumed.error.code}`, headline: 'The session could not be loaded', detail: resumed.error.reason };
       return { kind: 'session.resumed', sessionId: resumed.value.sessionId, settledChildren: resumed.value.settledChildren };
@@ -617,7 +748,7 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
       const s = stores.get(req.workspaceId);
       if (!s?.dal) return { kind: 'refused', code: 'workspace.not-open', headline: 'No store is open for this workspace' };
       return launchSession(req, {
-        workspaceRoot: s.root, attended: presenters.attended, configuration: configurationDeps,
+        workspaceRoot: s.root, attended: presenters.attended, configuration: configurationDeps, settleConfinement,
         leaseCredentials: async (providers) => {
           const answer = await ask({ kind: 'credentials.lease', providerIds: [...providers] }, millis(5_000)).catch((e: Error) => { log(`credentials: main did not answer the lease (${e.message})`, 'warn'); return null; });
           const bearers = answer?.kind === 'credentials.leased' ? answer.bearers : {};
@@ -631,6 +762,7 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
         start: (setup, bearers) => {
           // Publish the setup only when its credential lease has settled. Deferred run ports use the session key.
           const sessionId = req.sessionId ?? randomUUID();
+          sessionRoots.set(sessionId, s.root);
           const previousSetup = configuredRuns.get(sessionId);
           const previousBearers = runBearers.get(sessionId);
           const restore = () => {
@@ -641,11 +773,21 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
           runBearers.set(sessionId, bearers);
           configured.set(s.root, setup);
           leased.set(s.root, bearers);
+          /*
+           * REQ-WORKSPACE-058 (ADR-0063): **session creation** clears the catalog cache, so skills are
+           * re-discovered from disk at each new session, and adopts any gesture the user made before this
+           * session existed (OQ-58's pending bucket). It sits HERE and not in `configure`, which also runs for
+           * every continuation: a continuation is a further run of an existing session, not a new one, and
+           * clearing the cache there would re-read the tree on every prompt for no rule that asks for it.
+           */
+          skills.onSessionCreated(s.root, sessionId);
           mcp.newConfiguration(setup.cfg);
           void mcp.prepare(setup.cfg, s.root).catch((e: unknown) => log(`mcp: discovery ahead of the run failed: ${String(e)}`, 'warn'));
           if (req.effectiveRoot !== undefined && req.effectiveRoot !== s.root) log(`session ${sessionId} is isolated: the run works in ${req.effectiveRoot}${req.worktree ? ` on branch ${req.worktree.branch}` : ''}; the record stays under ${s.root}`);
           try {
-        const r = sessions.start(s.dal!, s.root, req.prompt, { setup, sessionId, runType: req.runType ?? 'task_run', ...(req.worktree === undefined ? {} : { worktree: req.worktree }), ...(req.sandboxMode === undefined ? {} : { sandboxMode: req.sandboxMode }), ...(req.attachments === undefined ? {} : { attachments: req.attachments }), ...(req.initialTodo === undefined ? {} : { initialTodo: req.initialTodo }) });
+            // REQ-WORKSPACE-060 (ADR-0063): the session's context units reach the launch as a getter, read at every
+            // agent construction. REQ-WORKSPACE-050: against the BASE workspace even when the run works in a worktree.
+            const r = sessions.start(s.dal!, s.root, req.prompt, { setup: { ...setup, contextUnits: () => skills.contextUnits(s.root, sessionId) }, sessionId, runType: req.runType ?? 'task_run', ...(req.worktree === undefined ? {} : { worktree: req.worktree }), ...(req.sandboxMode === undefined ? {} : { sandboxMode: req.sandboxMode }), ...(req.attachments === undefined ? {} : { attachments: req.attachments }), ...(req.initialTodo === undefined ? {} : { initialTodo: req.initialTodo }) });
             if (r.ok) log(`session ${r.value} started; row 0 recorded; the run is executing`);
             else restore();
             return r;
@@ -679,6 +821,9 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
   }
     case 'session.continue': {
       // REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause or continue a paused session; nothing is appended.
+      // REQ-PROVIDER-066 (the continuation lease): refresh the bearers before the run resolves its setup.
+      const leaseRefusal = await continuationLeaseForSession(req.sessionId);
+      if (leaseRefusal) return leaseRefusal;
       const r = sessions.continueSession(asSessionId(req.sessionId), req.action);
       if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: 'The session could not be continued', detail: r.error.reason };
       log(`session ${req.sessionId} ${req.action}: ${r.value.resumed ? 'a continuation run is executing' : 'left paused'}${r.value.messageLimit === null ? '' : ` (message limit ${r.value.messageLimit})`}`);
@@ -692,12 +837,18 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
     }
     case 'session.planDecision': {
       // REQ-ORCH-153: the three answers, exactly; approve and revise launch the next segment, cancel launches nothing.
+      // REQ-PROVIDER-066 (the continuation lease): an approve or revise launches a segment — refresh first.
+      const leaseRefusal = await continuationLeaseForSession(req.sessionId);
+      if (leaseRefusal) return leaseRefusal;
       const r = sessions.planDecision(asSessionId(req.sessionId), req.decision, req.changes ?? '');
       if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: 'The plan decision could not be applied', detail: r.error.reason };
       log(`session ${req.sessionId} plan cycle ${r.value.cycle}: ${req.decision}${r.value.relaunched ? ' — a further segment is executing' : ' — the run came to rest'}`);
       return { kind: 'session.planResolved', sessionId: req.sessionId, cycle: r.value.cycle, relaunched: r.value.relaunched };
     }
     case 'session.prompt': {
+      // REQ-PROVIDER-066 (the continuation lease): a prompt on a resumed session launches a run — refresh first.
+      const leaseRefusal = await continuationLeaseForSession(req.sessionId);
+      if (leaseRefusal) return leaseRefusal;
       const r = sessions.prompt(asSessionId(req.sessionId), req.prompt, req.attachments ?? []);
       if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: r.error.code === 'run-active' ? r.error.reason : 'The prompt could not be recorded', detail: r.error.reason };
       return { kind: 'ack' };
@@ -939,13 +1090,28 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
       if (!run) return { kind: 'refused', code: 'mcp.configuration', headline: 'The configuration could not be loaded' };
       return { kind: 'mcp.secrets', view: mcp.secrets(run.cfg, req.server ?? null) };
     }
+    /**
+     * ADR-0022 / REQ-SANDBOX-129: the settings label's read, and its re-check. The probe runs here,
+     * in the run host, off every interface thread; the label enters its checking state the moment
+     * the request is sent and shows the new verdict when this reply arrives, so neither the settings
+     * surface nor any other view blocks for the up-to-5.0-second trial. A fresh verdict governs
+     * sessions started AFTERWARDS and never changes the confinement fact recorded for a session
+     * already running (REQ-SANDBOX-094, REQ-SANDBOX-096).
+     */
+    case 'confinement.status': {
+      if (req.recheck !== true) return { kind: 'confinement.status', verdict: await settleConfinement() };
+      const verdict = await confinement.recheck();
+      log(`confinement: re-checked — ${verdict.available ? `available (${verdict.backend})` : `unavailable — ${renderUnavailability(verdict).replace(/\n/g, ' ')}`}`);
+      return { kind: 'confinement.status', verdict };
+    }
     // ADR-0035 (Part T) / REQ-MCP-099/112: the project setup — the steps run here; the reply is the status as it stands.
     case 'mcp.setup': {
-      if (req.action === 'status') return { kind: 'mcp.setup', status: mcp.setupStatus() };
-      if (req.action === 'cancel') return { kind: 'mcp.setup', status: mcp.cancelSetup() };
       const s = stores.get(req.workspaceId);
       if (!s) return { kind: 'refused', code: 'workspace.unknown', headline: 'That workspace is not open in the run host' };
       const run = configuredFor(s.root) ?? (configure(s.root, true).ok ? configuredFor(s.root) : null);
+      // Part AS: `applicable` (REQ-WORKSPACE-090) is read off the same resolution every other answer is.
+      if (req.action === 'status') return { kind: 'mcp.setup', status: mcp.setupStatus(run?.cfg ?? null) };
+      if (req.action === 'cancel') return { kind: 'mcp.setup', status: mcp.cancelSetup() };
       if (!run) return { kind: 'refused', code: 'mcp.configuration', headline: 'The configuration could not be loaded' };
       const started = mcp.startSetup(run.cfg, s.root);
       if (!started.ok) return { kind: 'refused', code: 'mcp.setup.running', headline: started.reason };

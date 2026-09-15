@@ -24,13 +24,67 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-15** — **the complete reviewed-improvement lifecycle**: the Library and
+Also reconciled with the code on **2026-09-15** — **the complete reviewed-improvement lifecycle**: the Library and
 Overview read one proposal store; review, edit, delete, export and Undo flow through main to the workspace service;
 approved proposals become an `improvement_run` todo; verifier blocks use the shared configuration writer; dedicated Git
 checkpoints provide previewed, confirmed rollback with a pre-rollback safety point. The process view carries the new
 renderer commands, run-host `initialTodo`, workspace-service actions, revision bumps and outcome notices. Schema v18
 continues to carry the immutable session run type, durable session-to-artifact association, current records, immutable
 versions and both gap counters.
+Last reconciled with the code: **2026-09-15** — **project initialization** (ADR-0064, first executed): the
+task registry, the persisted marker and the five set derivations in `config/src/init/`, the coordinator in
+**main** because the marker's one writer is the workspace service and the one shipped task's work is the run
+host's and neither may import the other, `initialization.*`'s five commands and the run host's new
+`mcp.setupStatus` push, channel **12** carrying REQ-WORKSPACE-105's nine values to every window, and the
+`initialization:`/`project_init:` pair read **outside the layered merge** because REQ-WORKSPACE-078 names one
+file. The component view carries the module and the placement reason, the process view the commands and the
+channel, the runtime view the pair's place among the configuration tiers and why the execution re-reads before
+each recording. **No implementation condition is raised or discharged**: every behaviour is demonstrable on
+`win32` and was demonstrated there (`pnpm init-proof`, five scenarios).
+
+Previously reconciled: **2026-09-15** — **the activity line** (`PD-CHAT-004`, first executed): one
+agent's uninterrupted run of tool and streamed-reasoning rows is a single displayed row that **changes rather
+than grows**, so a working agent appends nothing and two working agents cannot contend for the tail. The change
+is confined to the `ui` package's transcript module and adds **no edge and no message**: `project.ts` decides
+the run boundary from the agent and `display/showReasoning`, `types.ts` gains `ActivitySegment`, and `Row.tsx`
+draws the segments and the one continuous persona rule the revealed members hang from. Only the **component
+view** is affected; the process and runtime views are unchanged, because no process, file or message moved. The
+same change repairs `docs/defects/group-header-claims-the-role-gutter.md`: a folded run's role is now its agent.
+
+Also **2026-09-15** — **the search pattern dialect**: `grep` and `read_file`'s
+`grep` filter compile through one helper that reads leading `(?flags)` groups, so a pattern the pinned
+accelerator accepts is not refused in process (`docs/defects/grep-refuses-an-inline-flag-group.md`,
+[R-018](../../product/requests.md#r-018)). The runtime view carries it beside the executor list; no package
+edge, message or process changed.
+
+Previously reconciled: **2026-09-15** — **OS-level confinement** (ADR-0022, first executed): the
+`confinement/` module inside `agent-tools` (the shared specification, the two thin renderers, the single-purpose
+quoting, the availability probe), the probe settled in the **run host** before a launch does anything else and
+the gate that refuses such a run before the lease, the session row or the lock exist, `confinement.status` as the
+one message the settings label and the launch dialog both read, and the store row's stale "recorded, not
+honoured" note corrected. The component view carries the module, the process view the message and where the
+verdict lives, the runtime view the gate's place in the start sequence. **IC-8 is open**: the renderers are
+written and unit-tested, and `REQ-SANDBOX-127`'s six observable effects have been demonstrated on neither
+supported platform.
+
+Before that: **2026-09-15** — **portable skill discovery** (ADR-0063): the pure discovery
+library in `config/src/skills/` (the run host may not import `workspace`, and injection happens at agent
+construction), the catalog the run host owns because REQ-WORKSPACE-058 clears it at session creation rather
+than per run, skills as ordered context units composed at every agent construction, the cataloged directories
+as additional read roots, the four `skills.*` commands renderer→main→run-host, and one native chooser. The
+component view carries the package and the responsibility row, the process view the run-host ownership and the
+message family, the runtime view the system prompt's composition and the `skills:` block's place among the
+tiers. **No package, no allowed edge, no process, no channel, no store table and no control operation moves.**
+
+Earlier — **2026-09-14** — **the continuation lease**: `session.continue`, `session.prompt`
+and `session.planDecision` re-ask main for the credential lease before the continuation run resolves its setup
+(REQ-PROVIDER-066), so a resumed session's first model call no longer goes out without a bearer after an
+application restart; the runtime view carries the mechanism. Earlier the same day: **the post-run improvement
+analyst** — the run host captures a fixed, bounded terminal-state snapshot and executes a no-tools analyst; main
+owns one application-wide FIFO, cancellation and the activity publication; the workspace service remains the
+single improvement writer. Schema v18 carries the immutable session run type, durable session-to-artifact
+association, current records, immutable versions and both gap counters. The component, process and runtime views
+carry the package responsibilities, messages, channel and tables.
 
 Earlier the same day — **`PD-LIBRARY-001`'s closeout (the hundredth defect)**: the engine
 artifact port's private section list is replaced by contracts' `ARTIFACT_SECTIONS` (an internal definition, not a

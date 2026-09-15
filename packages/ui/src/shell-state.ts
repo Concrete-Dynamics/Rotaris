@@ -18,6 +18,17 @@ export interface ShellState {
   openSettings(category: string): void;
   takeSettingsCategory(): void;
   /**
+   * Part AS — ADR-0064 / REQ-WORKSPACE-106: the project setup dialog is a WINDOW-level surface, so its
+   * open state lives here rather than inside a view; navigating away does not dismiss a decision the
+   * product is waiting on. `auto` marks the one automatic opening a workspace open may make
+   * (REQ-WORKSPACE-105); `manual` is whenever the user asked, and REQ-WORKSPACE-107 turns on the
+   * difference — a manually opened dialog is never auto-closed.
+   */
+  readonly projectSetup: 'auto' | 'manual' | null;
+  openProjectSetup(): void;
+  autoOpenProjectSetup(): void;
+  closeProjectSetup(): void;
+  /**
    * REQ-LIBRARY-102 / REQ-SHELL-115 (Part X): a Library tab a notice action asked for, consumed once — the same
    * shape `settingsCategory` takes for REQ-NOTIFY-223. REQ-LIBRARY-103 closes the tab names and says activating
    * an unknown one is ignored, so `openLibrary` switches the view but records no tab it does not recognise.
@@ -54,6 +65,17 @@ export interface ShellState {
    */
   readonly overlays: Readonly<Record<OverlayKind, OverlayCloser | null>>;
   registerOverlay(kind: OverlayKind, close: OverlayCloser | null): void;
+  /**
+   * REQ-CHAT-034 (ADR-0063): a counter the Settings Skills tab bumps after a rescan or a hand-loaded skill, so
+   * the composer's catalogue lists **exactly** the rescanned set. It lives in this store because the two
+   * surfaces are siblings in the view map — Settings replaces Workspace among REQ-SHELL-023's seven views —
+   * and a counter is the smallest thing that can cross between them without one owning the other's data.
+   *
+   * It carries no payload by design: the composer re-reads the catalog itself, so a rescan and a hand-loaded
+   * skill need no separate signal and nothing here can go stale against what the run host actually holds.
+   */
+  readonly skillsRevision: number;
+  skillsChanged(): void;
 }
 
 export interface ComposerRegistration {
@@ -106,6 +128,16 @@ export const useShellState = create<ShellState>((set, get) => ({
   takeSettingsCategory() {
     set({ settingsCategory: null });
   },
+  projectSetup: null,
+  openProjectSetup() {
+    set({ projectSetup: 'manual' });
+  },
+  autoOpenProjectSetup() {
+    set({ projectSetup: 'auto' });
+  },
+  closeProjectSetup() {
+    set({ projectSetup: null });
+  },
   libraryTab: null,
   libraryProposalId: null,
   openLibrary(tab, proposalId) {
@@ -152,5 +184,9 @@ export const useShellState = create<ShellState>((set, get) => ({
   overlays: { slashPopup: null, searchPanel: null, drawers: null },
   registerOverlay(kind, close) {
     set({ overlays: { ...get().overlays, [kind]: close } });
+  },
+  skillsRevision: 0,
+  skillsChanged() {
+    set({ skillsRevision: get().skillsRevision + 1 });
   },
 }));

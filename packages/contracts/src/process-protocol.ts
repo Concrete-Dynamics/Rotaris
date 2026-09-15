@@ -3,6 +3,7 @@ import { AcknowledgementKindSchema, NoticeSeveritySchema } from './notices.js';
 import { z } from 'zod';
 import { HOOK_AGENT_IDS, HooksSummarySchema } from './hooks.js';
 import { McpHealthSchema, McpListingSchema, McpSecretsViewSchema, McpSetupStatusSchema } from './mcp.js';
+import { ConfinementVerdictSchema } from './confinement.js';
 import { PlaybookCatalogueSchema } from './intent.js';
 import { CONTRACT_SCHEMA_VERSION } from './version.js';
 import { ImageAttachmentInputSchema, SessionSnapshotSchema, TerminalFrameSchema, TimelineSeveritySchema, TranscriptIncrementSchema, TranscriptRowSchema } from './channels.js';
@@ -16,6 +17,7 @@ import { CHECKPOINT_KINDS, CheckpointListSchema, PreviewEntrySchema } from './ch
 import { PromptListSchema, PromptStateSchema } from './library.js';
 import { ActorSchema, RequirementsCommandSchema } from './requirements.js'; // Part AK
 import { PromptsRootsResultSchema } from './slash.js'; // Part AO
+import { SkillsStateSchema } from './skills.js'; // ADR-0063
 import { ImprovementAnalysisJobSchema, ImprovementArtifactSchema, ImprovementCommandSchema, RunTypeSchema } from './improvements.js';
 
 /**
@@ -145,6 +147,14 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('mcp.setEnabled'), name: z.string().min(1), enabled: z.boolean() }),
   z.object({ kind: z.literal('mcp.secrets'), workspaceId: z.string(), server: z.string().optional() }),
   /**
+   * ADR-0022 (Part AR): the confinement availability verdict, and REQ-SANDBOX-129's explicit re-check.
+   * The run host answers because it owns the one `ConfinementService` (REQ-SANDBOX-067) — the verdict a
+   * surface shows and the verdict that gates a session are then the same reading (REQ-SANDBOX-094).
+   * `recheck` discards the cached verdict and probes afresh; the probe is bounded at 5.0 s and runs off
+   * every interface thread, so no surface waits on it (REQ-SANDBOX-069, REQ-SANDBOX-129).
+   */
+  z.object({ kind: z.literal('confinement.status'), recheck: z.boolean().optional() }),
+  /**
    * Part U — the session browser's actions, answered by the run host because the rows and the lock are its (ADR-0005,
    * ADR-0058). `session.repair` without an id repairs every stale session; `session.delete` runs REQ-SESSION-166's order
    * (state → refs through the `checkpoint.deleteNamespace` ask → one transaction → files); the two exports READ in one
@@ -202,6 +212,19 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
    * REQ-SHELL-107's entry through the live session writer, redacted, and answers `ack`.
    */
   ...TERMINAL_COMMAND_SCHEMAS,
+  /**
+   * ADR-0063 — portable skills. The run host answers because it owns the catalog: it is cached per
+   * workspace root and cleared at SESSION CREATION (REQ-WORKSPACE-058), which is a lifetime only the
+   * process that creates sessions can honour, and the units it feeds are composed at agent construction.
+   *
+   * `sessionId` is optional on the three that touch session state: a gesture made from a window showing
+   * no session lands in that root's pending bucket and is adopted by the next session created for it
+   * (OQ-58 — "the current session" has no referent while a workspace has several).
+   */
+  z.object({ kind: z.literal('skills.read'), workspaceRoot: z.string(), sessionId: z.string().optional() }),
+  z.object({ kind: z.literal('skills.rescan'), workspaceRoot: z.string(), sessionId: z.string().optional() }),
+  z.object({ kind: z.literal('skills.forceLoad'), workspaceRoot: z.string(), sessionId: z.string().optional(), name: z.string().min(1) }),
+  z.object({ kind: z.literal('skills.loadFile'), workspaceRoot: z.string(), sessionId: z.string().optional(), path: z.string().min(1) }),
 ]);
 export type RunHostRequest = z.infer<typeof RunHostRequestSchema>;
 
@@ -416,6 +439,8 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('mcp.list'), listing: McpListingSchema }),
   z.object({ kind: z.literal('mcp.probe'), results: z.array(z.object({ name: z.string(), health: McpHealthSchema })) }),
   z.object({ kind: z.literal('mcp.secrets'), view: McpSecretsViewSchema }),
+  /** REQ-SANDBOX-071: the four fields are the complete answer, and every surface presents this same text. */
+  z.object({ kind: z.literal('confinement.status'), verdict: ConfinementVerdictSchema }),
   /** ADR-0035 (Part T): the setup's status after the action was applied. */
   z.object({ kind: z.literal('mcp.setup'), status: McpSetupStatusSchema }),
   /**
@@ -471,6 +496,12 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   // Part AO
   /** REQ-CHAT-160 (Part AO): the files of the three prompt roots and the ones skipped with their reasons. */
   z.object({ kind: z.literal('prompts.roots'), result: PromptsRootsResultSchema }),
+  /**
+   * ADR-0063: the skill catalog as a surface reads it. One shape for all four commands — a force-load and
+   * a manual load answer with the state they produced, so no caller has to ask again to redraw, and
+   * `loaded` names the skill for the toast (REQ-WORKSPACE-073/151).
+   */
+  z.object({ kind: z.literal('skills.state'), state: SkillsStateSchema, loaded: z.string().optional() }),
 ]);
 export type ProcessReply = z.infer<typeof ProcessReplySchema>;
 
@@ -514,6 +545,13 @@ export const ProcessEventSchema = z.discriminatedUnion('kind', [
    * stream's frames into a larger step (REQ-SHELL-103) — never by dropping one (`main/terminal.ts`).
    */
   z.object({ kind: z.literal('publish.terminal'), payload: TerminalFrameSchema }),
+  /**
+   * Part AS / ADR-0064: the code-intelligence setup's status, pushed on every step and at the end.
+   * ADR-0064's task runner follows the setup through this rather than on a cadence — the run host and
+   * main can talk, and SR-3 withdrew polling exactly where they can. REQ-WORKSPACE-109 is what needs
+   * it: a step must be visible "at the moment that step finishes", which a poll can only approximate.
+   */
+  z.object({ kind: z.literal('mcp.setupStatus'), status: McpSetupStatusSchema }),
 ]);
 export type ProcessEvent = z.infer<typeof ProcessEventSchema>;
 export const ProcessEventEnvelopeSchema = z.object({ v, event: ProcessEventSchema });

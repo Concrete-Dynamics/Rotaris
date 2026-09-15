@@ -192,6 +192,17 @@ export interface DesktopSave {
   readonly compressorThresholdPercentage?: number;
   readonly delegationStrategy?: DelegationStrategy;
   readonly display?: PlainMap;
+  /**
+   * REQ-CONFIG-256/258 (ADR-0063): the three `skills` keys, into the WORKSPACE file only. A map value of
+   * `null` removes that skill's key, which is how REQ-CONFIG-258's sparse rule reaches the document — the
+   * screen decides which of the two a baseline choice is, because only it knows whether a lower layer
+   * states a policy for that skill.
+   */
+  readonly skills?: {
+    readonly enabled?: boolean | undefined;
+    readonly overrides?: Readonly<Record<string, string | null>> | undefined;
+    readonly invocationOverrides?: Readonly<Record<string, string | null>> | undefined;
+  };
   readonly roles?: Readonly<Record<string, RoleEdit>>;
 }
 
@@ -269,6 +280,25 @@ export async function saveDesktop(files: { workspace: string; global: string }, 
     // REQ-CONFIG-256: written per field, so a display key this screen does not offer stays as the file states it.
     const display = ensureMapping(root, 'display', doc);
     for (const [key, value] of Object.entries(save.display)) display.set(key, doc.createNode(value));
+  }
+  // REQ-CONFIG-256/258 (ADR-0063): the three `skills` keys, per field and per skill name. A null value
+  // DELETES that skill's entry, which is REQ-CONFIG-258's sparse rule reaching the document; a map left
+  // empty by the deletions is removed with it, so a workspace that states no policy carries no `skills:`.
+  if (save.skills && Object.keys(save.skills).length > 0) {
+    const skills = ensureMapping(root, 'skills', doc);
+    if (save.skills.enabled !== undefined) skills.set('enabled', doc.createNode(save.skills.enabled));
+    const writeMap = (key: 'overrides' | 'invocation_overrides', entries: Readonly<Record<string, string | null>> | undefined): void => {
+      if (!entries || Object.keys(entries).length === 0) return;
+      const map = ensureMapping(skills, key, doc);
+      for (const [name, mode] of Object.entries(entries)) {
+        if (mode === null) map.delete(name);
+        else map.set(name, doc.createNode(mode));
+      }
+      if (map.items.length === 0) skills.delete(key);
+    };
+    writeMap('overrides', save.skills.overrides);
+    writeMap('invocation_overrides', save.skills.invocationOverrides);
+    if (skills.items.length === 0) root.delete('skills');
   }
   for (const [role, edit] of Object.entries(save.roles ?? {})) if (edit.scope === 'workspace') applyRoleEdit(doc, root, role, edit);
   if (global) for (const [role, edit] of globalEdits) applyRoleEdit(global.doc, rootOf(global.doc), role, edit);

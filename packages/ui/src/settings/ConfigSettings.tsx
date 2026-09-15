@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
-import { DELEGATION_STRATEGY_NAMES, EDITABLE_SLOTS, PERMISSION_PRESETS, REASONING_LEVEL_NAMES, ROLE_REASONING_NAMES, RUN_START_MODE_NAMES, type ConfigSnapshot, type ModelSlotName } from '@rotaris/contracts';
+import { DELEGATION_STRATEGY_NAMES, EDITABLE_SLOTS, PERMISSION_PRESETS, REASONING_LEVEL_NAMES, ROLE_REASONING_NAMES, RUN_START_MODE_NAMES, type ConfigSnapshot, type ConfinementVerdict, type ModelSlotName } from '@rotaris/contracts';
 import { clampForDisplay, type PendingChange, type PendingSettings } from './config-state.js';
+import { SecurityPolicy } from './SecurityPolicy.js';
 import { Button as DesignButton, Card as DesignCard, Input as DesignInput, Select as DesignSelect, Table as DesignTable } from '../design-system/index.js';
 
 /**
@@ -30,6 +31,13 @@ export interface ConfigSettingsProps {
   readonly onSetField: (scope: 'workspace' | 'global', patch: Record<string, unknown>) => Promise<{ ok: true } | { ok: false; reason: string }>;
   /** REQ-CONFIG-329: the providers card, owned by the renderer root (main answers its commands). */
   readonly providersCard?: ReactNode;
+  /**
+   * ADR-0022 / REQ-SANDBOX-116: the availability verdict the runtime section's label shows, and
+   * REQ-SANDBOX-129's re-check beside it. `null` means no verdict has arrived yet; the probe runs in
+   * the run host, off this thread, so the label says so rather than blocking.
+   */
+  readonly confinement?: ConfinementVerdict | null;
+  readonly onRecheckConfinement?: (() => Promise<void>) | undefined;
 }
 
 type Outcome = { ok: true } | { ok: false; reason: string };
@@ -82,8 +90,6 @@ export function ModelsSettings(props: ConfigSettingsProps) {
           <ul className="card-body">{snapshot.referential.map((m) => <li key={m}>{m}</li>)}</ul>
         </DesignCard>
       )}
-      <h2 className="settings__heading">Model slots</h2>
-      <p className="text-secondary">Each slot names a configured model; a role may target a slot instead of a model. Edits are written to this workspace's configuration on Save.</p>
       <DesignTable className="table settings__grid" aria-label="Model slots">
         <thead><tr><th>Slot</th><th>Model</th><th>Reasoning strength</th></tr></thead>
         <tbody>
@@ -114,7 +120,6 @@ export function ModelsSettings(props: ConfigSettingsProps) {
           })}
         </tbody>
       </DesignTable>
-      <h2 className="settings__heading">Providers</h2>
       {props.providersCard ?? <p className="text-secondary">The provider list is not available in this window.</p>}
     </div>
   );
@@ -189,8 +194,8 @@ export function Toggle({ id, label, hint, on, onChange, disabled, testId }: { id
   );
 }
 
-/** REQ-CONFIG-327: a warning prompt with Yes and Cancel, Cancel as the default. */
-function Confirm({ title, body, onYes, onCancel }: { title: string; body: string; onYes: () => void; onCancel: () => void }) {
+/** REQ-CONFIG-327: a warning prompt with Yes and Cancel, Cancel as the default. Shared with the Security policy card (REQ-SANDBOX-117). */
+export function Confirm({ title, body, onYes, onCancel }: { title: string; body: string; onYes: () => void; onCancel: () => void }) {
   return (
     <div className="dialog-backdrop" role="presentation">
       <div className="dialog" role="alertdialog" aria-modal="true" aria-labelledby="settings-confirm-title">
@@ -272,7 +277,7 @@ export function RuntimeSettings(props: ConfigSettingsProps) {
         <p className="text-tertiary settings__hint">Secret redaction is always active; there is no way to disable it from this screen.</p>
       </DesignCard>
       <h2 className="settings__heading">Security policy</h2>
-      <p className="text-secondary">No confinement backend exists on this platform, so the six confinement and egress values are read from the file and not edited here.</p>
+      <SecurityPolicy runtime={pending.runtime} onChange={onChange} confinement={props.confinement ?? null} onRecheck={props.onRecheckConfinement} dirty={props.dirty} />
       <h2 className="settings__heading">Advanced runtime</h2>
       <DesignCard className="card settings__card">
         <div className="settings__action">

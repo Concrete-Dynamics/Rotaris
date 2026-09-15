@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync, type Dirent } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { z } from 'zod';
+import { ignoredBy, loadRules, parseGitignore, type IgnoreRule } from '@rotaris/config';
 import { checkFence, isInside, realPathOf, type FenceConfig } from './fence.js';
 import { errorObservation, observation, type ToolExecutor } from './types.js';
 
@@ -16,43 +17,57 @@ export const IGNORE_COMPONENTS: ReadonlySet<string> = new Set([
 ]);
 export const MAX_FILE_BYTES = 2 * 1024 * 1024;
 
+/**
+ * ADR-0064 moved the gitignore grammar to `@rotaris/config` (`init/gitignore.ts`) and these three names
+ * are re-exported so every caller keeps reading one definition. The reader that stood here was a
+ * deliberate subset — its own comment said so — and REQ-WORKSPACE-100 requires the full grammar of the
+ * walk that classifies a workspace. Two readers would have meant `grep` and the classifier disagreeing
+ * about which files the repository says are part of it.
+ */
+export { ignoredBy, loadRules, parseGitignore };
+export type { IgnoreRule };
+
+/** The glob compiler below has its own escaping; gitignore's lives with the grammar it serves. */
 const escapeRe = (s: string): string => s.replace(/[.+^${}()|[\]\\]/g, '\\$&');
 
-interface IgnoreRule { readonly re: RegExp; readonly negated: boolean; readonly dirOnly: boolean }
+/** Read off the leading `(?flags)` groups, one after another, so that `(?i)(?m)x` sets both. */
+const INLINE_FLAG_GROUP = /^\(\?([A-Za-z]+)\)/;
+const ANY_FLAG_GROUP = /\(\?[A-Za-z]+\)/;
+const TRANSLATABLE_FLAGS: Readonly<Record<string, string>> = { i: 'i', m: 'm', s: 's', u: 'u' };
 
-/** A small gitignore reader: `*`, `**`, `?`, a leading `/` anchors, a trailing `/` is directories only, `!` negates. */
-export function parseGitignore(text: string): IgnoreRule[] {
-  const rules: IgnoreRule[] = [];
-  for (const raw of text.split(/\r?\n/)) {
-    let line = raw.replace(/\s+$/, '');
-    if (line === '' || line.startsWith('#')) continue;
-    let negated = false;
-    if (line.startsWith('!')) { negated = true; line = line.slice(1); }
-    let dirOnly = false;
-    if (line.endsWith('/')) { dirOnly = true; line = line.slice(0, -1); }
-    const anchored = line.startsWith('/') || line.includes('/');
-    if (line.startsWith('/')) line = line.slice(1);
-    let re = '';
-    for (let i = 0; i < line.length; i += 1) {
-      const ch = line[i] as string;
-      if (ch === '*' && line[i + 1] === '*') { re += '.*'; i += 1; if (line[i + 1] === '/') i += 1; }
-      else if (ch === '*') re += '[^/]*';
-      else if (ch === '?') re += '[^/]';
-      else re += escapeRe(ch);
+/**
+ * The dialect a caller's `pattern` is written in (REQ-TOOLS-134, REQ-TOOLS-138). The product's declared
+ * search accelerator is ripgrep — REQ-STARTUP-058 pins it for the `search` capability — and REQ-TOOLS-141
+ * holds observable results identical whether or not it is present on the host, so a pattern that
+ * accelerator accepts may not be refused by the in-process path. That dialect sets flags with a leading
+ * group (`(?i)needle`), which the host engine rejects outright as `Invalid group`; the leading groups are
+ * read off here and translated into RegExp flags. Scoped modifiers (`(?i:needle)`) the host engine already
+ * accepts and are left exactly where they stand.
+ *
+ * A flag with no counterpart is refused rather than dropped: `(?x)` changes what the rest of the pattern
+ * means, and a silently ignored flag returns matches the caller did not ask for, which is worse than the
+ * error. Never compiled with `g` — the result is reused across lines and `lastIndex` would carry between them.
+ */
+export function compileSearchPattern(pattern: string): RegExp {
+  let rest = pattern;
+  const flags = new Set<string>();
+  for (let m = INLINE_FLAG_GROUP.exec(rest); m !== null; m = INLINE_FLAG_GROUP.exec(rest)) {
+    for (const letter of m[1] as string) {
+      const mapped = TRANSLATABLE_FLAGS[letter];
+      if (mapped === undefined) throw new SyntaxError(`Inline flag '${letter}' is not supported. The supported inline flags are i, m, s and u.`);
+      flags.add(mapped);
     }
-    const pattern = anchored ? `^${re}(/.*)?$` : `(^|/)${re}(/.*)?$`;
-    rules.push({ re: new RegExp(pattern), negated, dirOnly });
+    rest = rest.slice(m[0].length);
   }
-  return rules;
-}
-
-export function ignoredBy(rules: readonly IgnoreRule[], relPosix: string, isDir: boolean): boolean {
-  let ignored = false;
-  for (const r of rules) {
-    if (r.dirOnly && !isDir) continue;
-    if (r.re.test(relPosix)) ignored = !r.negated;
+  try {
+    return new RegExp(rest, [...flags].sort().join(''));
+  } catch (cause) {
+    const detail = cause instanceof Error ? cause.message : String(cause);
+    // The failure that brought a caller here twice is a flag group part-way through the pattern. Saying so
+    // is what lets the next attempt differ from the last one; the bare engine message did not.
+    const hint = ANY_FLAG_GROUP.test(rest) ? ' Inline flags are read only at the start of the pattern — write (?i)needle, or scope them as (?i:needle).' : '';
+    throw new SyntaxError(`${detail}${hint}`);
   }
-  return ignored;
 }
 
 export interface WalkOptions {
@@ -95,16 +110,6 @@ export function walkFiles(o: WalkOptions, onFile: (relPosix: string, abs: string
   visit(o.base);
 }
 
-export function loadRules(root: string): IgnoreRule[] {
-  const f = join(root, '.gitignore');
-  if (!existsSync(f)) return [];
-  try {
-    return parseGitignore(readFileSync(f, 'utf8'));
-  } catch {
-    return [];
-  }
-}
-
 function probablyBinary(bytes: Buffer): boolean {
   return bytes.subarray(0, 1024).includes(0);
 }
@@ -145,7 +150,7 @@ export function grepTool(fence: FenceConfig): ToolExecutor<z.infer<typeof grepSc
     execute: async (a) => {
       let re: RegExp;
       try {
-        re = new RegExp(a.pattern);
+        re = compileSearchPattern(a.pattern);
       } catch (cause) {
         return errorObservation(`Invalid regex pattern: ${String(cause instanceof Error ? cause.message : cause)}`);
       }

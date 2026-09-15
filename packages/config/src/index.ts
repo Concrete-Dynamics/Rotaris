@@ -19,8 +19,11 @@ export * from './sections/personas.js';
 export * from './sections/compressor.js';
 export * from './sections/checkpoints.js';
 export * from './sections/requirements.js'; // Part AP
+export * from './sections/skills.js'; // ADR-0063
 export * from './sections/mcp-servers.js';
 export * from './mcp/index.js';
+export * from './skills/index.js'; // ADR-0063
+export * from './init/index.js'; // ADR-0064
 export * from './writers.js';
 export * from './tiers.js';
 export * from './preferences.js';

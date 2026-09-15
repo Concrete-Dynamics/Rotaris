@@ -1,6 +1,7 @@
 import { COMMANDS, slashDescription, slashName, type Command } from '../commands/registry.js';
 import { defaultUnavailableReason } from './parse.js';
 import { cachedPromptRoots, registerPromptCommands } from './prompts.js'; // Part AO
+import { cachedSkills, registerSkillCommands } from './skills.js'; // ADR-0063
 import { createSlashRegistry } from './registry.js';
 import type { Availability, SlashCommand, SlashContext, SlashOutcome, SlashRegistry } from './types.js';
 
@@ -12,16 +13,15 @@ import type { Availability, SlashCommand, SlashContext, SlashOutcome, SlashRegis
  * the transcript, the configured models) is read from the context at the moment it is asked, so no rebuild is needed
  * for those to be right.
  *
- * **What is NOT here, and why.**
- * - Skill commands (REQ-CHAT-034, REQ-CHAT-162 — a command per user-invocable skill, `/skills`, `/skill <path>`)
- *   are not built: skill discovery (REQ-WORKSPACE-056..064) does not exist, so there is no set to list, no invocation
- *   mode to derive and no `skills.enabled` switch to consult. `SKILL_COMMANDS_NOT_BUILT` states it where the entries
- *   would be registered. The `skill` kind badge exists so nothing needs to change in the popup when they arrive.
- * - Prompt-file commands (REQ-CHAT-160/161) are Part AO's and register through `SlashRegistry.register` with the
- *   `prompt` kind, after the built-ins, so a stem colliding with a built-in name is skipped by the caller as REQ-CHAT-160
- *   says ("the command already holding it keeps it").
+ * **The two generated families, and why they register in different orders.**
+ * - Skill commands (REQ-CHAT-034, REQ-WORKSPACE-072 — one per user-invocable skill; ADR-0063) register after the
+ *   palette mirrors. A name a built-in or a mirror holds stays with its holder and the skill takes REQ-SHELL-056's
+ *   `-2`, `-3` suffix instead, because that requirement forbids a skill being silently unreachable. They carry the
+ *   `skill` kind badge, which has existed since Part AN for exactly this.
+ * - Prompt-file commands (REQ-CHAT-160/161) are Part AO's and register **last**, and a colliding stem IS skipped —
+ *   REQ-CHAT-160 says "the command already holding it keeps it" and states no rescue. The two families differ here
+ *   deliberately; neither rule was invented to match the other.
  */
-export const SKILL_COMMANDS_NOT_BUILT = 'Skill commands (REQ-CHAT-034, REQ-CHAT-162) are not built: skill discovery (REQ-WORKSPACE-056..064) does not exist yet, so the catalogue lists no skill and offers no /skills or /skill.';
 
 /** What the composer cannot answer from its own props, and therefore states as reachable or not when it builds the catalogue. */
 export interface CatalogueOptions {
@@ -192,7 +192,6 @@ export function builtInCommands(options: CatalogueOptions): readonly SlashComman
       values: (ctx) => ctx.providers, reachable: (ctx) => reach('logout', 'logout', ctx.providers.length === 0 ? unavailable(NO_PROVIDERS) : ok),
       apply: (value, ctx) => ctx.logout(value), report: (value) => `Signed out of ${value}.`,
     }),
-    // REQ-CHAT-034 / REQ-CHAT-162 would register here. See SKILL_COMMANDS_NOT_BUILT.
   ];
 }
 
@@ -221,11 +220,18 @@ export function mirrorPalette(registry: SlashRegistry, options: CatalogueOptions
 /** The names REQ-CHAT-029..031 and REQ-CHAT-159 define — the ones a mirror may never displace (REQ-CHAT-028). */
 export const BUILT_IN_NAMES: ReadonlySet<string> = new Set(['stop', 'pause', 'compress', 'clear', 'search', 'new', 'resume', 'sessions', 'worktree', 'stash', 'pop', 'model', 'persona', 'theme', 'logout']);
 
-/** The catalogue: the built-ins in their order, then the palette mirrors. Later parts add to the returned registry. */
+/** The catalogue: the built-ins in their order, the palette mirrors, then the two generated families. */
 export function buildCatalogue(options: CatalogueOptions): SlashRegistry {
   const registry = createSlashRegistry();
   for (const command of builtInCommands(options)) registry.register(command);
   mirrorPalette(registry, options);
+  // ADR-0063 — the skill commands join HERE, from the answer kept beside the reader in `slash/skills.ts`, for the
+  // same reason the prompt files do (defect AO-2): the popup's list is a memo of the text and THIS registry, and
+  // this registry is rebuilt whenever the stash count, the reachable set or the command context changes — a command
+  // registered only by an effect is invisible until the next keystroke. Registered BEFORE the prompt files, so a
+  // skill's name outranks a prompt file's stem; both stay behind the built-ins and the mirrors.
+  const skills = cachedSkills();
+  if (skills !== null) registerSkillCommands(registry, skills);
   // Part AO — defect AO-2: the prompt-file commands (REQ-CHAT-160) join the catalogue HERE, from the answer kept beside
   // the reader in `slash/prompts.ts`, and not only from the registrar's effect. The composer's popup list is a memo of the
   // text and THIS registry, and this registry is rebuilt whenever the stash count, the reachable set or the command

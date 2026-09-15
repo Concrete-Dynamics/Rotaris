@@ -145,6 +145,28 @@ A request that is **declined** or **deferred** stays in the log with the reason.
 of logging refusals: without it the same request can be asked again in three weeks and get a
 different answer, and nobody can see that it ever happened.
 
+**The log has no allocator, and that is now gated rather than hoped about.** An `R-NNN` is unique only
+against the `main` the session that chose it last read, and `CLAUDE.md` puts every change in a temporary
+worktree — precisely the case where that is not the `main` the row lands on. It collided twice on
+consecutive days. The second time it was caught at the merge by an agent who happened to re-read `main`;
+the first time two rows numbered `R-016` both merged and sat in the log for a day, in two different
+tables, never once adjacent. [`tools/check-request-log.mjs`](../../tools/check-request-log.mjs) runs in
+`pnpm lint` and refuses a duplicate, a gap, an anchor disagreeing with the number printed beside it, a
+declared count that is not the count, and a `requests.md#r-nnn` citation reaching no row. The rule the
+gate leaves to people is the one it cannot decide: **the row that reaches `main` first keeps the number**,
+and the other takes the next free one at the merge, keeping every word and saying in its own cell that it
+moved. Recorded as
+[`../defects/request-log-has-two-rows-numbered-r-016.md`](../defects/request-log-has-two-rows-numbered-r-016.md),
+repaired 2026-09-15.
+
+Two things about that gate belong here rather than only in the defect note. It measures **identifiers, not
+prose** — the count declares a range (`R-001 to R-020`) the gate can read, because the version written in
+words is what let seventeen rows sit under the heading "Sixteen". And on its first run it reported three
+duplicates that were not duplicates: the `Row shape:` examples at the foot of the log carry real-looking
+anchors inside an HTML comment, which renders nothing and therefore defines no anchor. A checker that is
+confidently wrong about its own document's template is a checker somebody switches off, so it strips
+comments before reading and keeps the reason beside the fix.
+
 ## What binds a change
 
 - **Consult before building.** A request is classified against the table above *before* code is

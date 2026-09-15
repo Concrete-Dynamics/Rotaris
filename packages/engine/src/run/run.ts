@@ -189,6 +189,15 @@ export interface RunDeps {
   readonly models?: ((key: string) => ModelLookup) | undefined;
   /** Part Q: the session-wide memory, the catalogue the candidate rule reads, the run-level fallback slot. Absent: fresh memory, no candidate, no fallback. */
   readonly resilience?: RunResilience | undefined;
+  /**
+   * REQ-WORKSPACE-060 (ADR-0063): the session's always-active context units, in that requirement's order.
+   * A **getter**, not a value — it is called at every agent construction, so a skill force-loaded mid-session
+   * reaches the next agent built while an agent already running keeps the context it was built with, which is
+   * REQ-CONFIG-166's rule and the reason the seam is not a captured array.
+   *
+   * Absent means no unit, which is what a run with no skills, no workspace context and no persona memory gets.
+   */
+  readonly contextUnits?: (() => readonly string[]) | undefined;
 }
 
 /** REQ-ORCH-091 (d): a change-model choice resolves to a model, or to the reason it cannot be applied (the user is told). */
@@ -764,6 +773,10 @@ export class Run {
         // REQ-MONITOR-102: a child's tool calls are the session's too; the entry agent's own are added at the turn below.
         countToolCalls: (n) => this.aggregates.addToolCalls(n),
         summariser: this.deps.summariser ?? null, hooks: this.hooks, playbookFor: this.preflight?.playbookFor ?? null, route: this.preflight?.route ?? 'work', ...(this.deps.childTimeoutMs === undefined ? {} : { childTimeoutMs: this.deps.childTimeoutMs }), runSignal: this.abort.signal, warn: this.deps.warn,
+        // REQ-WORKSPACE-060/065 (ADR-0063): a child is an agent, so it receives the SAME units the entry agent
+        // does — the getter is passed through, not a copy, which is what makes "a skill can never be visible to
+        // one persona and hidden from another" true by construction rather than by two call sites agreeing.
+        ...(this.deps.contextUnits ? { contextUnits: this.deps.contextUnits } : {}),
         ...(this.deps.supervisorFor ? { supervisorFor: this.deps.supervisorFor } : {}),
         ...(this.deps.personas ? { personas: this.deps.personas } : {}),
         steeringFor: (id: string) => this.steeringFor(id), shouldPause: () => this.pauseRequested,
@@ -785,7 +798,9 @@ export class Run {
       return runTurn({
       writer, owner, backend, tools, clocks: this.deps.clocks, persona: config.persona, agentName: config.persona,
       // REQ-ORCH-019: the rendered playbook is part of the instructions the role is given.
-      systemPrompt: withPlaybook(config.systemPrompt, this.preflight?.playbookFor(config.persona) ?? ''), model: this.entryOverride.model ?? config.model, thinking: this.entryOverride.thinking ?? config.thinking, modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries,
+      // REQ-WORKSPACE-060 (ADR-0063): then the session's always-active context units, read at THIS construction
+      // so a skill force-loaded since the last turn reaches this agent (REQ-CONFIG-166).
+      systemPrompt: withContextUnits(withPlaybook(config.systemPrompt, this.preflight?.playbookFor(config.persona) ?? ''), this.deps.contextUnits?.() ?? []), model: this.entryOverride.model ?? config.model, thinking: this.entryOverride.thinking ?? config.thinking, modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries,
       credentialFor: config.credentialFor, maxStepsPerTurn: config.maxStepsPerTurn, warn: this.deps.warn, dispatched: this.dispatched,
       ...(this.deps.supervisorFor ? { supervisor: this.deps.supervisorFor(this.rootId) } : {}),
       steering: this.steeringFor('root'), shouldPause: () => this.pauseRequested,
@@ -1262,6 +1277,26 @@ export function parseTokenSamples(json: string): [string, number][] {
 /** REQ-ORCH-019/020: the playbook after the role's own instructions, once. */
 export function withPlaybook(systemPrompt: string, playbook: string): string {
   return playbook === '' ? systemPrompt : `${systemPrompt}\n\n${playbook}`;
+}
+
+/**
+ * REQ-WORKSPACE-047/060 (ADR-0063) — the always-active context units, after the role's instructions and its
+ * playbook, in the order the caller supplies. REQ-WORKSPACE-060 fixes that order as **workspace context →
+ * skill catalog → force-loaded skill bodies → persona memory**, and the caller is the one place that knows
+ * all four; this composes what it is given and adds nothing.
+ *
+ * It is deliberately a **list** rather than four parameters: two of the four units are not built in this
+ * release (workspace-context injection, REQ-WORKSPACE-041..050, and persona memory), and a signature naming
+ * them would have to change when they arrive. An empty unit contributes nothing, so a slot that is not
+ * filled costs no separator.
+ *
+ * Applied at the two places a role's prompt becomes an agent's — the entry turn and a child's construction —
+ * so REQ-WORKSPACE-065's "every agent built for a session sees the same catalog" holds by construction: the
+ * units are a property of the session, composed onto whatever prompt the role resolved.
+ */
+export function withContextUnits(systemPrompt: string, units: readonly string[]): string {
+  const present = units.filter((u) => u.trim() !== '');
+  return present.length === 0 ? systemPrompt : [systemPrompt, ...present].join('\n\n');
 }
 
 function describe(e: ModelError): string {

@@ -1255,3 +1255,151 @@ that false. The configuration key is **not rejected** — it remains available o
   citing this ruling. No other bound moves — `REQ-ORCH-113`'s completion classifier stays at 15 s and
   `runtime.loop_classification_timeout` (`REQ-CONFIG-467`) stays at 2.0 s; they bound different calls.
 - The count is unchanged: no identifier was minted or withdrawn.
+
+### ESC-36 — the provider row visibility: REQ-PROVIDER-140's union against REQ-CONFIG-389's authenticated-only list
+
+**Raised 2026-09-14, not yet ruled.** Raised by R-016, the Settings Models overhaul, while planning which
+rows the rebuilt providers card may draw. The two requirements state disjoint populations and no document
+between them narrows either.
+
+- **REQ-PROVIDER-140** (domain 04) fixes the listed set: "the union of the ids holding a stored credential,
+  the built-in catalog ids, and the snapshot ids, each appearing exactly once, ordered by id." Every
+  built-in provider therefore appears whether or not it is authenticated — the screenshot the request
+  arrived with shows OpenAI Codex, GitHub Copilot, DeepSeek and OpenAI-compatible rows reading "Not
+  authenticated", and `packages/providers/src/signin.ts` `list()` implements exactly this union.
+- **REQ-CONFIG-389** (domain 15) fixes the same set differently: "The provider list shows **no** built-in or
+  merely-referenced provider by default; a row appears only once a provider is authenticated. The one
+  exception is the managed-cloud provider … A provider that is only referenced by a model slot — a deleted
+  custom endpoint included — must **not** cause a row to reappear."
+
+REQ-CONFIG-440's withdrawal routes the withdrawn text-mode provider list at "REQ-CONFIG-329 and
+REQ-CONFIG-367 to REQ-CONFIG-389", and REQ-PROVIDER-103's withdrawal routes the command-line list at
+REQ-PROVIDER-140 — so each withdrawal redirected the same capability at a requirement that now disagrees
+with the other about who gets a row. Both were amended since (3e87bb2, b982f50) without either text
+changing on this point. REQ-NOTIFY-200 governs the state vocabulary a row shows, not who gets a row, and
+cites no side. `packages/contracts/src/providers.ts` (`ProviderRowSchema`) and the renderer card
+(`packages/ui/src/settings/Providers.tsx`) follow REQ-PROVIDER-140 today.
+
+**Why this is an escalation and not a defect found by building.** The specification is not silent and the
+build is not wrong against one of its requirements; two live requirements cannot both hold. That is
+`docs/product/README.md`'s table's third row: an amendment round decides, and until it does, the surface
+stays on the side it was already built — REQ-PROVIDER-140's union — rather than an agent choosing a
+winner by rebuilding.
+
+**What the ruling decides.** Which of the two texts governs, or what third population both are amended to
+state. The visual overhaul itself (row anatomy, actions, confirmations, empty state) does not wait on it:
+every requirement it implements is common to both readings, and the ESC-36 row keeps today's visibility.
+
+*The alternatives, for the ruling's convenience:* **REQ-PROVIDER-140 stands** — every provider is always
+listed, which makes the settings the product's one place to *start* authentication for anything, matches
+the mockup's fourth row (GitHub Copilot, "not authenticated", an Authenticate action) and is what is
+built; or **REQ-CONFIG-389 stands** — rows appear on authentication, managed-cloud excepted, which makes
+the list a shorter, state-first inventory but leaves unauthenticated built-ins reachable only through the
+add-provider dialog's chooser. A third shape (unauthenticated built-ins grouped under a collapsed
+section) would need minting in both domains and is named only to be complete.
+
+### ESC-37 — what invoking a skill delivers: REQ-CHAT-034/162's attached payload against REQ-WORKSPACE-062/073's force-loaded block
+
+**Raised 2026-09-14, not yet ruled.** Raised while planning portable-skill discovery (ADR-0063), on
+reading what happens after a user invokes a skill's command. Two live requirements describe two
+different mechanisms, and the difference is observable to a user.
+
+- **REQ-CHAT-034** (domain 03): the skill "MUST be **attached to the next prompt** the user submits …
+  in the payload shape REQ-CHAT-162 fixes". **REQ-CHAT-162** fixes that payload — it "MUST identify
+  itself as the body of a skill document, name the skill, name the absolute path it was read from, and
+  carry the skill file's body verbatim" — and adds that "**attaching a skill MUST mark it as in
+  context**", with the listing carrying a per-skill "whether it is already in context" column.
+- **REQ-WORKSPACE-073** (domain 13): invoking the command makes the skill's **load mode `on` for the
+  current session**, so "the agent constructed for the next prompt receives that skill's body as a
+  **force-loaded context block** per REQ-WORKSPACE-062" — an always-active block introduced by an
+  activation statement, present for every agent of the session and not attached to one prompt.
+  **REQ-WORKSPACE-067** states the opposite of CHAT-162's indicator in as many words: the tab "SHALL
+  show **no** per-agent in-context indicator and SHALL offer **no** composer chip".
+
+The two differ in lifetime (one prompt against the session), in scope (the next prompt's agent against
+every agent constructed afterwards), and in what the user is shown. Domain 13's resolution record
+settled this deliberately — its OQ 5 rules the in-context indicator and the composer chip out of scope
+with reasons, and its OQ 21 rules the session-only lifetime — and the shared toast both requirements
+quote, "Skill loaded for the next prompt: {name}", reads naturally under either.
+
+**Why this is an escalation and not a defect found by building.** Neither text is wrong against the
+behavioural target; two live requirements state different mechanisms for one gesture, and domain 03's
+own withdrawal note routes the withdrawn terminal payload at REQ-CHAT-162 while domain 13's routes the
+same capability at REQ-WORKSPACE-073 and REQ-WORKSPACE-062. Each withdrawal redirected one capability
+at a requirement that now disagrees with the other.
+
+**What the build proceeds under, and why it is the conservative side.** Domain 13 owns portable skills
+— the vocabulary, the discovery, the load modes and the settings surface are all its — so the
+**force-loaded block** is built, with the body reaching the model carrying REQ-CHAT-162's three
+identifying facts (it says it is a skill document, it names the skill, it names the absolute path) and
+the body verbatim below the frontmatter. That satisfies everything REQ-CHAT-162 fixes about the
+*payload* while delivering it as domain 13 fixes the *lifetime*. The in-context indicator and the
+composer chip are **not** built, because REQ-WORKSPACE-067 forbids them by name and a ruling for
+domain 03 can add a column far more cheaply than a ruling for domain 13 could remove one.
+
+**What the ruling decides.** Whether a skill invocation is per-prompt or per-session, and whether the
+Settings tab carries an in-context column. *The alternatives:* **domain 13 stands** — what is built;
+one lifetime, readable from the Load column, and REQ-CHAT-162's in-context sentence is amended to cite
+it. Or **domain 03 stands** — the body rides one prompt, which needs a per-prompt attachment path the
+engine does not have (nothing today puts content in front of one turn and removes it after), a new
+in-context column, and REQ-WORKSPACE-067's two prohibitions amended.
+
+### ESC-38 — the Skills table's columns: REQ-CONFIG-343's five against REQ-WORKSPACE-067's amended seven
+
+**Raised 2026-09-14, not yet ruled.** Raised by the same planning pass. Both requirements fix the
+column set of one table and neither cites the other.
+
+- **REQ-CONFIG-343** (domain 15): "The skill table has **five** columns: Skill, Source, Trigger, Load,
+  Description."
+- **REQ-WORKSPACE-067** (domain 13, amended by that domain's resolution round, OQ 4): "a table with
+  columns **Skill, Source, Path, Trigger, Load, Description**", plus "a per-row **invocation** selector
+  (accessible name 'Invocation policy for {name}')" and two header actions. The `Path` column is the
+  amendment's own subject — its resolution table records REQ-WORKSPACE-074's withdrawal as rescued by
+  "the Settings Skills tab table, **which now also shows each skill's `SKILL.md` path**".
+
+Domain 15 was not amended alongside, so its count is stale rather than contradictory in intent. The
+invocation selector is a further difference: REQ-WORKSPACE-067 requires one per row without saying
+whether it is a column, and the approved mockup's Skills card draws Invocation as a column between
+Skill and Load.
+
+**What the build proceeds under.** **Seven columns** — Skill, Source, Path, Trigger, Invocation, Load,
+Description — which is REQ-WORKSPACE-067's set with the selector it requires drawn as the mockup draws
+it. Every column either requirement names is present; the disagreement is only about how many there
+are. **What the ruling decides** is whether REQ-CONFIG-343's count is amended to match domain 13 (the
+cheap reading, and what is built) or whether domain 13's Path column is dropped — which would undo an
+amendment made three weeks earlier for a stated reason.
+
+### ESC-39 — a skill whose command name is taken: REQ-CHAT-034 skips it, REQ-SHELL-056 renames it
+
+**Raised 2026-09-14, not yet ruled.** Raised by the same planning pass, on the one rule that decides
+whether a discovered skill can be silently unreachable.
+
+- **REQ-CHAT-034** (domain 03): "Where such a name is already taken, the command already holding it
+  keeps it and **the skill's registration for that name is skipped**."
+- **REQ-SHELL-056** (domain 12): a generated entry whose name collides with a built-in "**SHALL be
+  offered under the first free name formed by appending `-2`, `-3`, …**, and its description SHALL
+  additionally name the skill it came from — so **a skill is never silently unreachable** from the
+  composer and a built-in command never changes meaning because a skill was installed."
+- **REQ-WORKSPACE-072** (domain 13) names domain 12's rule as the one that governs and forbids a
+  parallel one: collision handling is "exactly those REQ-SHELL-056 fixes … and this domain SHALL NOT
+  define a parallel normalization or a first-registration-wins rule of its own."
+
+Two domains therefore point at each other's opposite: domain 13 routes the question to domain 12's
+suffixing, and domain 03 states skipping. The same pair of texts also disagree about **normalisation**
+— REQ-CHAT-034 and REQ-WORKSPACE-072 say "normalized name", which REQ-WORKSPACE-054 defines as
+collapsing every run outside `[a-z0-9]`, while REQ-SHELL-056's catalogue normal form collapses
+whitespace and underscores to `-` and *removes* every other character, so `c++/build` normalises to
+`c-build` under one and `cbuild` under the other.
+
+**What the build proceeds under.** REQ-SHELL-056's rule, for both halves: **catalogue normal form** for
+the command name, and **`-2`, `-3` suffixing** on collision with the description naming the skill.
+REQ-WORKSPACE-072 explicitly defers to it, REQ-SHELL-056 states its reason in the requirement text, and
+the two readings are reconcilable in one direction only — under suffixing, the command holding the name
+does keep it, which is REQ-CHAT-034's first clause; under skipping, REQ-SHELL-056's "never silently
+unreachable" is simply false. The skill's **normalized name** (REQ-WORKSPACE-054) remains the identity
+everywhere else: the policy map keys, the catalog block, the table, the shadowing rule. Only the
+*command* takes catalogue normal form, which is what REQ-SHELL-056 says it contributes.
+
+**What the ruling decides.** Whether REQ-CHAT-034's skipping clause is amended to cite REQ-SHELL-056,
+and whether the two normal forms are one form or deliberately two. They can stay two — a skill's
+identity and its typed command are different things — but nothing currently says so.

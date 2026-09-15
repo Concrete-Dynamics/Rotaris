@@ -21,7 +21,7 @@ beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'rotaris-tools-'));
   outside = mkdtempSync(join(tmpdir(), 'rotaris-outside-'));
   fence = { workspaceRoot: root, allowOutsideWorkspace: false, additionalReadOnlyRoots: [] };
-  state = new FileToolState(fence);
+  state = new FileToolState();
   mkdirSync(join(root, 'src'));
   mkdirSync(join(root, 'node_modules', 'x'), { recursive: true });
   writeFileSync(join(root, 'src', 'a.ts'), 'const a = 1;\nconst b = 2;\nexport { a, b };\n');
@@ -47,7 +47,7 @@ describe('the path fence (REQ-TOOLS-129/130/132)', () => {
 
 describe('read_file (REQ-TOOLS-134)', () => {
   it('line-numbered content with the header; offset/limit; grep with context; a directory lists; binary is rejected', async () => {
-    const t = readFileTool(state);
+    const t = readFileTool(state, fence);
     const r = await t.execute({ path: 'src/a.ts', offset: 1, limit: 2000, grep_context: 3 }, ctx());
     expect(r.text.split('\n')[0]).toBe('[path: src/a.ts | total_lines: 4 | shown: lines 1-4 | truncated: false]');
     expect(r.text).toContain('2: const b = 2;');
@@ -67,14 +67,14 @@ describe('read_file (REQ-TOOLS-134)', () => {
     expect(bin).toMatchObject({ isError: true, text: 'Binary file (4 bytes). Cannot display content.' });
   });
   it('a missing path returns the parent listing and close matches at ≥ 0.45, highest first', async () => {
-    const r = await readFileTool(state).execute({ path: 'src/a.tsx', offset: 1, limit: 2000, grep_context: 3 }, ctx());
+    const r = await readFileTool(state, fence).execute({ path: 'src/a.tsx', offset: 1, limit: 2000, grep_context: 3 }, ctx());
     expect(r.isError).toBe(true);
     expect(r.text).toContain('Contents of src:');
     expect(r.text).toContain('Did you mean: a.ts, b.ts?');
   });
   it('the 30,000-character cap carries a continuation hint', async () => {
     writeFileSync(join(root, 'big.txt'), Array.from({ length: 3000 }, (_, i) => `line ${i + 1} ${'x'.repeat(20)}`).join('\n'));
-    const r = await readFileTool(state).execute({ path: 'big.txt', offset: 1, limit: 5000, grep_context: 3 }, ctx());
+    const r = await readFileTool(state, fence).execute({ path: 'big.txt', offset: 1, limit: 5000, grep_context: 3 }, ctx());
     expect(r.text.length).toBeLessThan(30_300);
     expect(r.text).toMatch(/\(Output capped at ~30000 chars\. \d+ more lines\. Use offset=\d+ to continue\.\)$/);
   });
@@ -82,8 +82,8 @@ describe('read_file (REQ-TOOLS-134)', () => {
 
 describe('write_file (REQ-TOOLS-132/133/135/136) and the diff row (REQ-CHAT-050)', () => {
   it('create refuses an existing file; edit needs a prior read; edits match at four levels; multiple occurrences are reported; undo pops', async () => {
-    const w = writeFileTool(state);
-    const r = readFileTool(state);
+    const w = writeFileTool(state, fence);
+    const r = readFileTool(state, fence);
     expect(await w.execute({ operation: 'create', path: 'src/a.ts', content: 'x', replace_all: false }, ctx())).toMatchObject({ isError: true, text: "File already exists: src/a.ts. Use 'overwrite' or 'edit'." });
     const gated = await w.execute({ operation: 'edit', path: 'src/a.ts', old_string: 'const a = 1;', new_string: 'const a = 10;', replace_all: false }, ctx());
     expect(gated.text).toBe('You must read src/a.ts before editing it. Call read_file(path="src/a.ts") first, then retry your edit.');
@@ -116,7 +116,7 @@ describe('write_file (REQ-TOOLS-132/133/135/136) and the diff row (REQ-CHAT-050)
     expect(await w.execute({ operation: 'undo', path: 'dup.txt', replace_all: false }, ctx())).toMatchObject({ isError: true, text: 'No edit history for dup.txt.' });
   });
   it('create, insert, overwrite; an escape is refused; the diff row is capped at 50 changed lines', async () => {
-    const w = writeFileTool(state);
+    const w = writeFileTool(state, fence);
     const c = await w.execute({ operation: 'create', path: 'new/n.txt', content: 'one\ntwo', replace_all: false }, ctx());
     expect(c.text).toMatch(/^Created new\/n\.txt: 2 line\(s\) created\./);
     expect(c.diff).toBe('new/n.txt [Created] +2 -0\n[1]+ one\n[2]+ two');
@@ -137,8 +137,8 @@ describe('write_file (REQ-TOOLS-132/133/135/136) and the diff row (REQ-CHAT-050)
 
 describe('haet_read / haet_edit (REQ-TOOLS-137/189)', () => {
   it('the read carries content_hash; an edit with a stale hash is refused without quoting content; a matching hash satisfies read-before-write; level 1 only', async () => {
-    const hr = haetReadTool(state);
-    const he = haetEditTool(state);
+    const hr = haetReadTool(state, fence);
+    const he = haetEditTool(state, fence);
     const r = await hr.execute({ path: 'src/b.ts', offset: 1, limit: 2000, grep_context: 3 }, ctx());
     const hash = /content_hash: ([0-9a-f]{64})/.exec(r.text)![1]!;
     expect(hash).toBe(sha256(readFileSync(join(root, 'src/b.ts'))));
@@ -146,8 +146,8 @@ describe('haet_read / haet_edit (REQ-TOOLS-137/189)', () => {
     expect(stale).toMatchObject({ isError: true });
     expect(stale.text).toMatch(/changed since the hash you hold was taken/);
     expect(stale.text).not.toContain('import { a }');
-    const fresh = new FileToolState(fence);
-    const ok = await haetEditTool(fresh).execute({ path: 'src/b.ts', content_hash: hash, old_string: 'import { a }', new_string: 'import { a, b }', replace_all: false }, ctx());
+    const fresh = new FileToolState();
+    const ok = await haetEditTool(fresh, fence).execute({ path: 'src/b.ts', content_hash: hash, old_string: 'import { a }', new_string: 'import { a, b }', replace_all: false }, ctx());
     expect(ok.isError).toBe(false);
     expect(ok.text).toMatch(/content_hash: [0-9a-f]{64}$/);
     const fuzzy = await he.execute({ path: 'src/b.ts', content_hash: sha256(readFileSync(join(root, 'src/b.ts'))), old_string: 'import { a, b }   ', new_string: 'x', replace_all: false }, ctx());
@@ -171,6 +171,29 @@ describe('grep and glob (REQ-TOOLS-138..141)', () => {
     // paths outside the workspace are skipped, never served
     writeFileSync(join(outside, 'o.ts'), 'const a = 9;');
     expect((await g.execute({ pattern: 'const a', paths: [outside], max_matches: 100 }, ctx())).text).toBe('No matches found');
+  });
+  it('a leading inline flag group sets the flag instead of failing to parse (REQ-TOOLS-141: the accelerator dialect)', async () => {
+    writeFileSync(join(root, 'src', 'case.ts'), 'const Needle = 1;\nconst other = 2;\n');
+    const g = grepTool(fence);
+    expect((await g.execute({ pattern: 'needle', max_matches: 100 }, ctx())).text).toBe('No matches found');
+    expect((await g.execute({ pattern: '(?i)needle', max_matches: 100 }, ctx())).text).toBe('src/case.ts:1:const Needle = 1;');
+    // several groups, several letters, and a scoped modifier the host engine already understands
+    expect((await g.execute({ pattern: '(?i)(?m)^const needle', max_matches: 100 }, ctx())).text).toBe('src/case.ts:1:const Needle = 1;');
+    expect((await g.execute({ pattern: '(?im)^const needle', max_matches: 100 }, ctx())).text).toBe('src/case.ts:1:const Needle = 1;');
+    expect((await g.execute({ pattern: '(?i:needle)', max_matches: 100 }, ctx())).text).toBe('src/case.ts:1:const Needle = 1;');
+    // the flag is consumed, not matched as text: `(?i)` alone is every line, not a literal
+    expect((await g.execute({ pattern: '(?i)', max_matches: 1 }, ctx())).text).not.toBe('No matches found');
+    // a flag with no counterpart is refused rather than dropped, and a misplaced group says where it belongs
+    const unsupported = await g.execute({ pattern: '(?x) needle', max_matches: 100 }, ctx());
+    expect(unsupported).toMatchObject({ isError: true });
+    expect(unsupported.text).toBe("Invalid regex pattern: Inline flag 'x' is not supported. The supported inline flags are i, m, s and u.");
+    const misplaced = await g.execute({ pattern: 'const(?i)needle', max_matches: 100 }, ctx());
+    expect(misplaced).toMatchObject({ isError: true });
+    expect(misplaced.text).toMatch(/^Invalid regex pattern: .*Inline flags are read only at the start of the pattern/);
+    // read_file's grep filter is written in the same dialect (REQ-TOOLS-134)
+    const rf = readFileTool(state, fence);
+    expect((await rf.execute({ path: 'src/case.ts', offset: 1, limit: 2000, grep: '(?i)needle', grep_context: 0 }, ctx())).text).toContain('>1: const Needle = 1;');
+    expect((await rf.execute({ path: 'src/case.ts', offset: 1, limit: 2000, grep: 'const(?i)needle', grep_context: 0 }, ctx())).text).toMatch(/Inline flags are read only at the start/);
   });
   it('glob returns sorted workspace-relative POSIX paths; a bad base_path is ignored; absolute patterns are relativised or dropped', async () => {
     const gl = globTool(fence);

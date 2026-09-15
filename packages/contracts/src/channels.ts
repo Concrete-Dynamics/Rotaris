@@ -9,6 +9,7 @@ import { AcknowledgementActionSchema, AcknowledgementKindSchema, NoticeSchema } 
 import { RequirementsChangedSchema } from './requirements.js'; // Part AK
 import { TerminalStreamMetaSchema } from './terminal.js';
 import { ImprovementActivitySchema, RunTypeSchema } from './improvements.js';
+import { InitializationStateSchema } from './initialization.js'; // Part AS
 
 /**
  * REQ-SESSION-134's severity vocabulary for a timeline entry, ascending, `info` where an entry names none. It is the
@@ -37,6 +38,10 @@ export type TimelineSeverity = z.infer<typeof TimelineSeveritySchema>;
  *     null for a whole pass (Part AK; REQ-TRACE-348/374 — the value is re-read, never carried)
  * 11. improvement:activity — main → every window: app-wide analyst activity and the queued-job count
  *     (REQ-LIBRARY-024/035/131; proposals are re-read through the workspace service)
+ * 12. initialization:state — main → every window: the nine values, their labels and the live run report
+ *     (Part AS, ADR-0064). Pushed rather than polled: REQ-WORKSPACE-109 wants a step visible "at the
+ *     moment that step finishes", and SR-3 withdrew polling wherever two processes CAN talk — these two
+ *     can, so a cadence here would be the fossil that ruling names.
  *
  * Channels 1 and 2 share ONE per-session counter (REQ-MONITOR-214), stamped in
  * the run host by the projection owner at publication. Main relays it
@@ -59,6 +64,7 @@ export const CHANNEL = {
   libraryChanged: 'library:changed',
   requirementsChanged: 'requirements:changed', // Part AK
   improvementActivity: 'improvement:activity',
+  initializationState: 'initialization:state', // Part AS (ADR-0064)
   command: 'command',
 } as const;
 export type ChannelName = (typeof CHANNEL)[keyof typeof CHANNEL];
@@ -362,6 +368,10 @@ export type LibraryChanged = z.infer<typeof LibraryChangedSchema>;
 export const ImprovementActivityPublishSchema = ImprovementActivitySchema.extend({ v: schemaVersion });
 export type ImprovementActivityPublish = z.infer<typeof ImprovementActivityPublishSchema>;
 
+/** Channel 12 (Part AS, ADR-0064): the whole initialization state, whichever view a window is showing. */
+export const InitializationStatePublishSchema = InitializationStateSchema.extend({ v: schemaVersion });
+export type InitializationStatePublish = z.infer<typeof InitializationStatePublishSchema>;
+
 export const CHANNEL_SCHEMAS = {
   [CHANNEL.transcriptIncrement]: TranscriptIncrementSchema,
   [CHANNEL.sessionSnapshot]: SessionSnapshotSchema,
@@ -373,6 +383,7 @@ export const CHANNEL_SCHEMAS = {
   [CHANNEL.libraryChanged]: LibraryChangedSchema,
   [CHANNEL.requirementsChanged]: RequirementsChangedSchema, // Part AK
   [CHANNEL.improvementActivity]: ImprovementActivityPublishSchema,
+  [CHANNEL.initializationState]: InitializationStatePublishSchema, // Part AS
 } as const;
 
 /** The two channels that share one per-session counter. Order across BOTH must be preserved by the relay. */

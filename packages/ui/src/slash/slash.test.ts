@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { contrastRatio, oklchToSrgb, parseOklch, srgbToHex, THEMES, type ControlOp } from '@rotaris/contracts';
 import { err, ok, type Result } from '@rotaris/kernel';
 import { COMMANDS, slashDescription, slashName } from '../commands/registry.js';
-import { BUILT_IN_NAMES, buildCatalogue, mirrorPalette, NO_GIT_SERVICE, NO_MODELS, NO_RUN_ACTIVE, SKILL_COMMANDS_NOT_BUILT, STASH_EMPTY, TRANSCRIPT_EMPTY, unknownValueMessage, usageMessage, type CatalogueOptions } from './catalogue.js';
+import { BUILT_IN_NAMES, buildCatalogue, mirrorPalette, NO_GIT_SERVICE, NO_MODELS, NO_RUN_ACTIVE, STASH_EMPTY, TRANSCRIPT_EMPTY, unknownValueMessage, usageMessage, type CatalogueOptions } from './catalogue.js';
 import { blendToward, ensureContrast, slashRoleColours, slashRoleContrast, slashTokenSplit, slashTokenState } from './highlight.js';
 import { COMMAND_NOT_RUN_TITLE, defaultUnavailableReason, parseSlash, slashNameToken, slashOutcomeMessage, slashPopupShouldOpen } from './parse.js';
 import { createSlashRegistry } from './registry.js';
@@ -142,6 +142,7 @@ function fakeContext(overrides: Partial<SlashContext> & { readonly refuse?: Part
     setPersona: async (name) => { log.push(`setPersona ${name}`); },
     setTheme: async (name) => { log.push(`setTheme ${name}`); },
     logout: async (provider) => { log.push(`logout ${provider}`); },
+    forceLoadSkill: async (name) => { log.push(`forceLoadSkill ${name}`); return { ok: true }; },
     control: async (op): Promise<Result<unknown, string>> => { log.push(`control ${op}`); const refusal = refuse[op]; return refusal === undefined ? ok(undefined) : err(refusal); },
     open: (dialog) => { log.push(`open ${dialog}`); },
     stash: (text) => { log.push(`stash ${text}`); },
@@ -175,9 +176,9 @@ describe('slash — REQ-CHAT-028..033, REQ-CHAT-159: the catalogue', () => {
     expect(registry.list().filter((c) => c.name === 'open-settings')).toHaveLength(1);
     expect(registry.lookup('open-settings')?.description).toBe('Open Settings (Ctrl+,)');
     expect(names.length).toBe(15 + new Set(COMMANDS.map((c) => slashName(c.label))).size);
-    // Every entry carries a kind from the closed set, and none is a skill: REQ-CHAT-034/162 are not built, and the catalogue says so.
+    // Every entry carries a kind from the closed set, and none is a skill: no skills reader is bound in a test,
+    // so `buildCatalogue` finds no cached catalog and registers none (ADR-0063).
     expect(registry.list().every((c) => c.kind === 'action')).toBe(true);
-    expect(SKILL_COMMANDS_NOT_BUILT).toContain('REQ-CHAT-034');
   });
   it('REQ-CHAT-028: a mirror runs the palette command through the caller and takes the caller’s availability', async () => {
     const ran: string[] = [];

@@ -11,7 +11,7 @@ import { startDriver } from './driver.js';
 // Part AK — the requirements relay and the OS account the actor is stamped with (REQ-CONFIG-198).
 import { createRequirementsRelay } from './requirements.js';
 // Part AK2 — the fold key's placeholder and its resolution (see `requirementsPreferenceKey`, which reads the window's workspace).
-import { REQUIREMENT_FOLDS_PREFERENCE_KEY } from '@rotaris/contracts';
+import { REQUIREMENT_FOLDS_PREFERENCE_KEY, SKIP_WRITE_FAILED } from '@rotaris/contracts';
 import { requirementColumnFoldsKey, type PreferenceKey } from '@rotaris/platform';
 // Part AP — the board's run coordinator (spec 08 §Runs Started from the Board; ADR-0041).
 import { createRequirementsRuns } from './requirements-runs.js';
@@ -29,7 +29,8 @@ import { type AcknowledgementAction, CHANNEL, CHECKPOINT_BUSY_TOAST, CHECKPOINTS
 import { claimInstance, composerDraftKey, dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, type HandOver } from '@rotaris/platform';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from '@rotaris/shell';
 import { CATALOGUE, createProtector, CredentialStore, destinationHint, METHOD_LABELS, ProjectSettingsStore, ProviderService, validateCatalog } from '@rotaris/providers';
-import { PROJECT_SETTINGS_FILE } from '@rotaris/config';
+import { PROJECT_SETTINGS_FILE, scopeFiles } from '@rotaris/config';
+import { InitializationCoordinator } from './initialization.js'; // Part AS (ADR-0064)
 
 /**
  * MAIN — the composition root for the Electron main process (ADR-0002 #1).
@@ -230,7 +231,11 @@ async function main(): Promise<void> {
     // other project's window — and every workspace-scoped command resolves its window through that field.
     // REQ-NOTIFY-224 / REQ-SHELL-016: the unreviewed-hooks notice is raised after the window exists, never a dialog by itself.
     if (ack.kind === 'workspace.ack') {
+      // REQ-WORKSPACE-141: initialization resolution takes the same slot as the hook-review notice — once
+      // the window is interactive, never during its construction and never as a dialog opened unbidden.
+      initialization.open(key, scopeFiles(resolveUserDirs().config, key).workspace.agents);
       clocks.timers.after(millis(process.env['ROTARIS_CAPTURE_RESUME'] ? 1_800 : 800), () => {
+        void initialization.resolve(true).catch((cause: unknown) => log(`initialization: resolve failed (${String(cause)})`));
         void runHost.request({ kind: 'hooks.summary', workspaceId: opened.workspaceId }, millis(10_000)).then((r) => {
           if (r.kind === 'hooks.summary' && r.summary.status === 'review') { raiseNoticeKeyed(`hooks.review:${r.summary.workspace}:${r.summary.fingerprint}`, 'warning', 'Workspace hooks need review', r.summary.notice, recoveryFor('hooks.review', r.summary.workspace)); return; }
           // REQ-WORKSPACE-152 (3): once the window is interactive, never as a dialog; the only run-time consequence is REQ-WORKSPACE-137's refusal.
@@ -728,6 +733,72 @@ async function main(): Promise<void> {
   // REQ-MONITOR-306's per-window bound, merged into larger steps rather than dropped (REQ-SHELL-103) — `main/terminal.ts`.
   const terminalFrames = new FrameDeliveryLimiter({ relay, clocks, log });
   runHost.onEvent((e) => { if (e.kind === 'publish.terminal') terminalFrames.deliver(e.payload); });
+  /**
+   * Part AS — ADR-0064's project-initialization coordinator. It lives here because the marker's one
+   * writer is the workspace service and the one task's work runs in the run host, and neither may
+   * import the other (REQ-WORKSPACE-085; `eslint.config.js`). Channel 12 carries the nine values of
+   * REQ-WORKSPACE-105 to every live window, whichever view it is showing.
+   */
+  const initialization = new InitializationCoordinator({
+    clocks,
+    log: (m) => log(m),
+    writeMarker: async (root, patch) => {
+      const svc = services.get(root);
+      if (!svc) return { ok: false, reason: 'the workspace service is not running' };
+      const r = await svc.link.request({ kind: 'config.setField', workspaceRoot: root, scope: 'workspace', patch }, millis(30_000));
+      return r.kind === 'config.snapshot' ? { ok: true } : { ok: false, reason: r.kind === 'refused' ? r.headline : `the service answered ${r.kind}` };
+    },
+    setup: {
+      start: async () => {
+        const id = activeWindow()?.workspaceId;
+        if (!id) return { ok: false, reason: 'no workspace is open' };
+        const r = await runHost.request({ kind: 'mcp.setup', workspaceId: id, action: 'start' }, millis(15_000));
+        return r.kind === 'mcp.setup' ? { ok: true, status: r.status } : { ok: false, reason: r.kind === 'refused' ? r.headline : `the run host answered ${r.kind}` };
+      },
+      cancel: async () => {
+        const id = activeWindow()?.workspaceId;
+        if (id) await runHost.request({ kind: 'mcp.setup', workspaceId: id, action: 'cancel' }, millis(15_000));
+      },
+      status: async () => {
+        const id = activeWindow()?.workspaceId;
+        if (!id) return null;
+        const r = await runHost.request({ kind: 'mcp.setup', workspaceId: id, action: 'status' }, millis(15_000));
+        return r.kind === 'mcp.setup' ? r.status : null;
+      },
+    },
+    publish: (state) => {
+      for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(CHANNEL.initializationState, { v: CONTRACT_SCHEMA_VERSION, ...state });
+    },
+    banner: (headline, detail) => raiseNotice('error', headline, detail),
+    modelReachable: () => providers.list().some((row) => row.authenticated),
+  });
+  runHost.onEvent((e) => { if (e.kind === 'mcp.setupStatus') initialization.onSetupStatus(e.status); });
+  /**
+   * Verification only — `ROTARIS_INIT_TEST_TASK=consent|fail`. REQ-WORKSPACE-080's last sentence is what
+   * this exercises and it is the only way to exercise it: "a setup task added after the fact SHALL
+   * participate in the prompt and in the setup UI under exactly the rules stated here, with no additional
+   * behavior of its own". The product's own default set requires no consent (REQ-WORKSPACE-088), so
+   * REQ-WORKSPACE-104 is exactly right that a fresh workspace prompts for nothing — and the consent dialog
+   * and the composer gate would therefore be unreachable by any launch of the shipped product. This seam
+   * registers an ordinary task through the ordinary registry; it adds no code path of its own.
+   */
+  const testTask = process.env['ROTARIS_INIT_TEST_TASK'];
+  if (testTask === 'consent' || testTask === 'fail') {
+    initialization.registry.register({
+      id: `verification-${testTask}`,
+      label: testTask === 'consent' ? 'Verification consent task' : 'Verification failing task',
+      description: 'Registered by ROTARIS_INIT_TEST_TASK for the initialization proof; not part of the product.',
+      requiresConsent: testTask === 'consent',
+      applicable: () => true,
+      run: async (ctx) => {
+        ctx.onStep({ name: 'Verification step', status: testTask === 'fail' ? 'failed' : 'success', detail: 'the seam reporting a step' });
+        return testTask === 'fail'
+          ? { status: 'failure', steps: [], classification: null, error: 'The verification task failed on purpose.', retryable: true, summary: 'Nothing was recorded; it can be run again.' }
+          : { status: 'success', steps: [], classification: null, error: '', retryable: false, summary: 'The verification task finished.' };
+      },
+    });
+    log(`initialization: verification task 'verification-${testTask}' registered (ROTARIS_INIT_TEST_TASK)`);
+  }
   const processes: ProcessKind[] = ['run-host'];
   // A1: the resolved workspace is a field of the window record built below. Nothing outside a window may
   // assume there is one, so every reader above that point goes through `mainWindow`.
@@ -952,6 +1023,32 @@ async function main(): Promise<void> {
     const forced = capturing ? process.env['ROTARIS_CAPTURE_DIRECTORY'] : undefined;
     if (forced) { log(`capture: folder chooser "${opts.title}" → ${forced}`); return forced; }
     const r = await dialog.showOpenDialog(parent, opts);
+    return r.canceled || r.filePaths.length === 0 ? null : r.filePaths[0]!;
+  };
+  /*
+   * REQ-WORKSPACE-151 (ADR-0063) — the "Load skill file…" chooser. The product is answerable for what it hands
+   * the host (REQ-SHELL-164): the title, the initial location, the restriction, and interpreting every answer
+   * the dialog can return; a dismissal by any host-offered means returns no selection and changes nothing.
+   *
+   * **`openFile` on win32 and linux, both properties on darwin.** The requirement asks for a chooser restricted
+   * to "a SKILL.md file **or** a directory containing one", and Electron's two properties are mutually exclusive
+   * on those two hosts — only macOS honours both at once. Logged as OQ-59. Nothing the specification states is
+   * unreachable: the directory form of REQ-WORKSPACE-057 is still accepted through the typed `/skill <path>`
+   * command, which needs no dialog at all.
+   *
+   * `ROTARIS_CAPTURE_SKILL_FILE` takes `;;`-separated answers consumed in order, so one launch can exercise a
+   * selection and a dismissal; the literal `(cancel)` is a dismissal. Verification only.
+   */
+  const scriptedSkillFiles = (capturing ? process.env['ROTARIS_CAPTURE_SKILL_FILE'] ?? '' : '').split(';;').map((s) => s.trim()).filter((s) => s !== '');
+  const chooseSkillFile = async (parent: BrowserWindow, startAt: string): Promise<string | null> => {
+    const forced = scriptedSkillFiles.shift();
+    if (forced) { log(`capture: skill file chooser → ${forced}`); return forced === '(cancel)' ? null : forced; }
+    const r = await dialog.showOpenDialog(parent, {
+      title: 'Load a skill file',
+      defaultPath: startAt,
+      properties: process.platform === 'darwin' ? ['openFile', 'openDirectory'] : ['openFile'],
+      filters: [{ name: 'Skill document', extensions: ['md'] }],
+    });
     return r.canceled || r.filePaths.length === 0 ? null : r.filePaths[0]!;
   };
   // A3: REQ-GIT-118's "id the launch dialog last showed" is a field of the window record — the dialog belongs
@@ -1384,11 +1481,81 @@ async function main(): Promise<void> {
         const r = await runHost.request({ kind: 'mcp.secrets', workspaceId: w.workspaceId, ...(req.server === undefined ? {} : { server: req.server }) }, millis(10_000));
         return r.kind === 'mcp.secrets' ? { ok: true, value: r.view } : refusal(r, 'The stored secrets could not be read');
       }
+      /**
+       * ADR-0022 (Part AR): main relays; the run host owns the verdict because it is the process that
+       * executes commands (REQ-SANDBOX-067, REQ-SANDBOX-094). No workspace is required — whether this
+       * HOST can confine anything is a property of the machine, and REQ-SANDBOX-130's disclosure is
+       * owed on the settings surface before any workspace question is settled. The bound is the
+       * probe's own 5.0 s (REQ-SANDBOX-069) plus the round trip.
+       */
+      case 'confinement.status': {
+        const r = await runHost.request({ kind: 'confinement.status', ...(req.recheck === undefined ? {} : { recheck: req.recheck }) }, millis(10_000));
+        return r.kind === 'confinement.status' ? { ok: true, value: r.verdict } : refusal(r, 'The confinement availability could not be read');
+      }
       // ADR-0035 (Part T) / REQ-MCP-099/112: the code-intelligence project setup runs in the run host; main relays the action and the status.
       case 'mcp.setup': {
         if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
         const r = await runHost.request({ kind: 'mcp.setup', workspaceId: w.workspaceId, action: req.action }, millis(15_000));
         return r.kind === 'mcp.setup' ? { ok: true, value: r.status } : refusal(r, 'The code-intelligence setup could not be started');
+      }
+      /*
+       * Part AS — ADR-0064 (REQ-WORKSPACE-102, 105, 110, 111, 109, 115). Every answer is the whole state,
+       * and the coordinator publishes on channel 12 besides, so a window that did not ask still catches up.
+       */
+      case 'initialization.read':
+        return { ok: true, value: await initialization.read() };
+      case 'initialization.resolve':
+        // REQ-WORKSPACE-102: a user-requested check is additional to the one automatic resolution per open.
+        return { ok: true, value: await initialization.resolve(false) };
+      case 'initialization.start': {
+        const r = await initialization.start();
+        return r.ok ? { ok: true, value: await initialization.read() } : { ok: false, code: 'initialization.refused', headline: r.headline, ...(r.detail === '' ? {} : { detail: r.detail }) };
+      }
+      case 'initialization.skip': {
+        const r = await initialization.skip(req.ids);
+        return r.ok ? { ok: true, value: await initialization.read() } : { ok: false, code: 'initialization.write', headline: SKIP_WRITE_FAILED(r.reason) };
+      }
+      case 'initialization.cancel':
+        await initialization.cancel();
+        return { ok: true, value: await initialization.read() };
+      /*
+       * ADR-0063 — portable skills (REQ-WORKSPACE-051..073, 151). The run host answers because it owns the
+       * catalog; main names the window's open workspace and the session it follows, as it does for every
+       * workspace-scoped command. A window following no session sends none, and the run host puts the
+       * gesture in that workspace's pending bucket for the next session to adopt (OQ-58).
+       */
+      case 'skills.read':
+      case 'skills.rescan': {
+        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reading its portable skills' };
+        const r = await runHost.request({ kind: req.kind, workspaceRoot: canonicalPath(w.workspace), ...(w.followedSessionId === null ? {} : { sessionId: w.followedSessionId }) }, millis(15_000));
+        return r.kind === 'skills.state' ? { ok: true, value: r.state } : refusal(r, 'The portable skills could not be read');
+      }
+      case 'skills.forceLoad': {
+        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
+        const r = await runHost.request({ kind: 'skills.forceLoad', workspaceRoot: canonicalPath(w.workspace), name: req.name, ...(w.followedSessionId === null ? {} : { sessionId: w.followedSessionId }) }, millis(10_000));
+        // REQ-WORKSPACE-073: the refusal text is the run host's — "Skills are disabled. Enable them in Settings."
+        return r.kind === 'skills.state' ? { ok: true, value: { name: r.loaded, state: r.state } } : refusal(r, 'The skill could not be loaded');
+      }
+      /*
+       * REQ-WORKSPACE-151 — "Load skill file…". With no path the platform's own chooser opens on REQ-SHELL-164's
+       * terms and a dismissal by any means returns no selection and changes nothing; with one the caller already
+       * has the path (the typed `/skill <path>` of REQ-CHAT-162, which needs no dialog).
+       *
+       * **The dialog is a FILE chooser on Windows and Linux** and both properties on macOS. The requirement asks
+       * for a chooser "restricted to selecting a SKILL.md file or a directory containing one", which no platform
+       * dialog offers on those two hosts — logged as OQ-59. The directory form of REQ-WORKSPACE-057 stays
+       * reachable through the typed command, so no capability is lost; only the dialog is narrower.
+       */
+      case 'skills.loadFile': {
+        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
+        let path = req.path;
+        if (path === undefined) {
+          const chosen = await chooseSkillFile(w.win, canonicalPath(w.workspace));
+          if (chosen === null) return { ok: true, value: { cancelled: true } };
+          path = chosen;
+        }
+        const r = await runHost.request({ kind: 'skills.loadFile', workspaceRoot: canonicalPath(w.workspace), path, ...(w.followedSessionId === null ? {} : { sessionId: w.followedSessionId }) }, millis(10_000));
+        return r.kind === 'skills.state' ? { ok: true, value: { cancelled: false, name: r.loaded, state: r.state } } : refusal(r, 'The skill file could not be loaded');
       }
       case 'shell.hello': {
         const cb = w.workspaceId

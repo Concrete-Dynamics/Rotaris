@@ -13,6 +13,7 @@ import { RequirementsCommandSchema } from './requirements.js'; // Part AK
 import { RequirementsRunsCommandSchema } from './requirements.js'; // Part AP
 import { TERMINAL_COMMAND_SCHEMAS, TERMINAL_WINDOW_COMMAND_SCHEMAS } from './terminal.js';
 import { PROMPTS_COMMAND_SCHEMAS } from './slash.js'; // Part AO
+import { SKILLS_COMMAND_SCHEMAS } from './skills.js'; // ADR-0063
 import { NoticeSeveritySchema } from './notices.js'; // Part AO
 
 /**
@@ -229,8 +230,31 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('mcp.probe'), name: z.string().min(1).optional() }),
   z.object({ kind: z.literal('mcp.setEnabled'), name: z.string().min(1), enabled: z.boolean() }),
   z.object({ kind: z.literal('mcp.secrets'), server: z.string().optional() }),
+  /**
+   * ADR-0022 (Part AR) / REQ-SANDBOX-116, REQ-SANDBOX-129: the availability verdict the runtime
+   * section's label shows, and the re-check control beside it. `recheck` discards the cached verdict
+   * so a user who has just installed the launcher or lifted a namespace restriction can make the
+   * product see it without restarting the application.
+   */
+  z.object({ kind: z.literal('confinement.status'), recheck: z.boolean().optional() }),
   /** ADR-0035 (Part T) / REQ-MCP-099/112: the code-intelligence project-setup action — start, cancel, or read its status; the run host runs the steps. */
   z.object({ kind: z.literal('mcp.setup'), action: z.enum(['start', 'cancel', 'status']) }),
+  /**
+   * ADR-0064 (Part AS) — project initialization, the five things a surface may ask of it.
+   *
+   * `read` is the refresh of REQ-WORKSPACE-115: the persisted section as it is on disk right now, and
+   * nothing else disturbed. `resolve` is REQ-WORKSPACE-102's "Check again" — a user-requested
+   * resolution that is additional to, and does not consume, the one automatic resolution per workspace
+   * open. `start` re-reads the runnable list first (REQ-WORKSPACE-110), so a retry after a partly
+   * successful run offers only what is outstanding. `skip` records every listed id (REQ-WORKSPACE-111),
+   * and an empty list is still a skip that stamps the marker (REQ-WORKSPACE-086). `cancel` asks a live
+   * run to stop; the task already under way still reaches its own conclusion (REQ-WORKSPACE-109).
+   */
+  z.object({ kind: z.literal('initialization.read') }),
+  z.object({ kind: z.literal('initialization.resolve') }),
+  z.object({ kind: z.literal('initialization.start') }),
+  z.object({ kind: z.literal('initialization.skip'), ids: z.array(z.string()) }),
+  z.object({ kind: z.literal('initialization.cancel') }),
   /**
    * ADR-0048's window registry, first executed (Part R; REQ-SHELL-072/073/076/078, REQ-MONITOR-072/073): open or raise the
    * persona window for an agent — reuse per persona, the instance's tab selected, a raise as a request (REQ-SHELL-161);
@@ -284,6 +308,9 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   // needed it). `sessionId` absent or empty means the focused run (REQ-NOTIFY-028); the record of REQ-NOTIFY-268 follows.
   ...PROMPTS_COMMAND_SCHEMAS,
   z.object({ kind: z.literal('notice.report'), severity: NoticeSeveritySchema, title: z.string().min(1), message: z.string().optional(), detail: z.string().optional(), persistent: z.boolean(), sessionId: z.string().optional() }),
+  // ADR-0063 — portable skills (REQ-WORKSPACE-051..073, 151). None carries a workspace or a session: main names
+  // the window's open workspace and the session it follows, and relays to the run host, which owns the catalog.
+  ...SKILLS_COMMAND_SCHEMAS,
 ]);
 export type CommandRequest = z.infer<typeof CommandRequestSchema>;
 export type CommandKind = CommandRequest['kind'];
@@ -305,5 +332,7 @@ export interface RendererBridge {
   readonly onRequirementsChanged: (fn: (p: unknown) => void) => () => void;
   /** REQ-LIBRARY-125: app-wide post-run analyst queue activity. */
   readonly onImprovementActivity: (fn: (p: unknown) => void) => () => void;
+  /** Channel 12 (Part AS, ADR-0064): the nine values of REQ-WORKSPACE-105 and REQ-WORKSPACE-109's live run report. */
+  readonly onInitializationState: (fn: (p: unknown) => void) => () => void;
 }
 export const BRIDGE_KEY = 'rotaris' as const;

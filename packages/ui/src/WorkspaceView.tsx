@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
-import { isBusy, PERMISSION_PRESETS, resolveTheme, RUN_AGENT_ID, THEME_NAMES, type AgentRecord, type ControlOp, type ImageAttachment, type ImageAttachmentInput, type Notice, type PermissionPreset, type PlanDecision, type QuestionAnswers, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
+import { isBusy, PERMISSION_PRESETS, resolveTheme, RUN_AGENT_ID, THEME_NAMES, type AgentRecord, type ControlOp, type ImageAttachment, type ImageAttachmentInput, PROJECT_SETUP_SEND_REASON, PROJECT_SETUP_SUBMIT_DETAIL, PROJECT_SETUP_SUBMIT_HEADLINE, type InitializationStateView, type Notice, type PermissionPreset, type PlanDecision, type QuestionAnswers, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
+import { projectSidebarSection } from './settings/project-init.js'; // Part AS
 import { err, ok } from '@rotaris/kernel';
 import {
   clampComposerHeight, composerChipReason, composerPlaceholderFor, COMPOSER_DEFAULT_HEIGHT, COMPOSER_MIN_HEIGHT, DEFAULT_REASONING,
@@ -135,6 +136,9 @@ export interface WorkspaceViewProps {
    * a settings-category action that gates nothing. The refusal is implemented and unreachable, and that is recorded.
    */
   readonly projectSetupPending?: boolean | undefined;
+  /** Part AS — REQ-WORKSPACE-113: the nine values the Project section reads, and the one control that opens the dialog. */
+  readonly initialization?: InitializationStateView | null | undefined;
+  readonly onOpenProjectSetup?: (() => void) | undefined;
   /** Part AB — REQ-CHAT-009: whether the model options have arrived, which is not the same as there being any. */
   readonly modelsLoaded?: boolean | undefined;
   /**
@@ -193,6 +197,20 @@ export interface SlashHost {
    * `NoticeBanner` (see `runSlash`). Given this, it is routed there instead.
    */
   readonly raiseNotice?: ((notice: { readonly title: string; readonly message: string }) => void) | undefined;
+  /**
+   * REQ-WORKSPACE-073 (ADR-0063): force-load a skill for the current session. Answered by the run host through
+   * main, so the refusal "Skills are disabled. Enable them in Settings." comes from the process that read the
+   * saved configuration rather than from a projection the composer happens to hold.
+   */
+  readonly forceLoadSkill?: ((name: string) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
+  /** REQ-CHAT-034: bumped after a rescan or a hand-loaded skill, so the typeable commands list exactly the rescanned set. */
+  readonly skillsRevision?: number | undefined;
+  /**
+   * REQ-CHAT-162: `/skill <path>` — loading a skill from a typed path, on REQ-WORKSPACE-057's rules. It is also
+   * where that requirement's DIRECTORY form stays reachable, since REQ-WORKSPACE-151's chooser cannot offer both
+   * on Windows or Linux (OQ-59).
+   */
+  readonly loadSkillFile?: ((path: string) => Promise<{ ok: true; name: string } | { ok: false; reason: string }>) | undefined;
 }
 
 /** REQ-LIBRARY-140: the toolbar control's exact label, with its live count. */
@@ -588,7 +606,7 @@ function ModeSelector({ current, enabled, onSetMode }: { current: PermissionPres
   );
 }
 
-export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onPlanEdit, onPlanDecision, runStartMode = 'auto', onSetRunStartMode, onSteer, onSetModel, onSetReasoning, models = [], imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight, onOpenTrailer, onAnswerQuestions, onCancelQuestions, slash}: WorkspaceViewProps) {
+export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onPlanEdit, onPlanDecision, runStartMode = 'auto', onSetRunStartMode, onSteer, onSetModel, onSetReasoning, models = [], imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, initialization = null, onOpenProjectSetup, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight, onOpenTrailer, onAnswerQuestions, onCancelQuestions, slash}: WorkspaceViewProps) {
   const [text, setText] = useState(draft ?? '');
   // REQ-CHAT-069: the transcript's scope. "This task" needs a selected agent, so it falls back to "All activity".
   const [scope, setScope] = useState<'all' | 'task'>('all');
@@ -618,6 +636,9 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
   const chipReason = composerChipReason(runState);
   /** REQ-CHAT-007: the two refusals, decided before anything is sent. */
   const refusal = sendRefusal(runState, projectSetupPending);
+  // Part AS — REQ-WORKSPACE-113: derived once, read by the Project section below.
+  const projectSection = initialization === null ? null : projectSidebarSection(initialization.view, initialization.labels);
+  const sendReasonId = useId();
   const acceptsImages = entry !== undefined && imageInputModels.includes(entry.model);
   const attachmentReason = acceptsImages ? null : 'The selected model does not declare image input support.';
   const estimate = composerTokenEstimate(text, attachments);
@@ -767,6 +788,13 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
     // REQ-CHAT-032's "Model set to <name>." is a notice: this window's transient stack where it exists (REQ-NOTIFY-013), else the composer's status line.
     notify: (message) => { if (onAcknowledge) onAcknowledge('ok', message); else setStatus(message); },
     submitAsPrompt: async (value) => { await submitPrompt(value); },
+    /*
+     * REQ-WORKSPACE-073 / REQ-CHAT-034 (ADR-0063): force-load for the session. The host reaches the run host,
+     * which reads the SAVED configuration and answers the refusal itself — the composer never decides whether
+     * skills are switched off, so a stale snapshot here cannot make the wrong claim. Without a host the command
+     * fails with the reason rather than pretending to have loaded anything.
+     */
+    forceLoadSkill: async (name) => (slash?.forceLoadSkill ? slash.forceLoadSkill(name) : { ok: false as const, reason: 'Skills are not available in this window.' }),
   };
   /** REQ-CHAT-021: the persistent notice, routed to the host where it can publish one, else drawn by the composer. */
   const raiseCommandNotice = (message: string) => {
@@ -851,7 +879,14 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
   };
   /** The ordinary submission — a queue during a run, else a start or a continue — of `value`, which is the composer's text or a prompt file's expanded body. */
   const submitPrompt = async (value: string) => {
-    // REQ-CHAT-007: refused with its reason readable, and nothing sent; the typed text is untouched.
+    /*
+     * REQ-CHAT-007: refused with its reason readable, and nothing sent; the typed text is untouched.
+     * Part AS — REQ-WORKSPACE-112: the KEYBOARD submit path is caught separately, with its own two
+     * sentences and an action that opens the setup window. The Send control is disabled for this limb,
+     * so the only way to arrive here with the gate on is Ctrl+Enter, which is exactly what the
+     * requirement means by "caught separately".
+     */
+    if (projectSetupPending) { setText(value); setError(`${PROJECT_SETUP_SUBMIT_HEADLINE}. ${PROJECT_SETUP_SUBMIT_DETAIL}`); area.current?.focus(); return; }
     if (refusal !== null) { setText(value); setError(refusal); area.current?.focus(); return; }
     setWalk(null);
     setBusy(true);
@@ -1100,6 +1135,19 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
           <AgentTree agents={agents} selected={selectedAgent} onSelect={select} nowIso={nowIso} />
           </>}
           {(!narrow || drawer === 'plan') && <TodoPane plan={todoPlan} onEdit={onEditTodo} onError={setError} />}
+          {/*
+            * Part AS — REQ-WORKSPACE-113's Project section, one of exactly two places manual re-initialization is
+            * exposed (the other is Settings › Project) and both opening the same dialog. It never triggers
+            * automatically, and it is HIDDEN when everything is resolved or nothing applies: a section offering
+            * nothing to do is worse than no section.
+            */}
+          {projectSection !== null && !projectSection.hidden && onOpenProjectSetup && (
+            <div className="agents__project" data-testid="project-section">
+              <div className="agents__header"><span className="agents__title">Project</span></div>
+              <DesignButton type="button" className="btn btn-secondary btn-compact" disabled={projectSection.disabled} title={projectSection.hint} onClick={onOpenProjectSetup} data-action="project-initialize">{projectSection.label}</DesignButton>
+              <p className="text-tertiary settings__hint" data-testid="project-section-hint">{projectSection.hint}</p>
+            </div>
+          )}
         </aside>
       )}
       {/*
@@ -1130,7 +1178,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
             {/* Part AO — REQ-CHAT-073/082/083/084: "Clear transcript" beside "Apply stash", and the binding of the chat-controls host
               * (`slash/host.ts`) from this closure; `/compress`, `/clear` and the prompt-file commands (REQ-CHAT-160) register on
               * the catalogue's registry here. The toolbar's own condition is not widened: the renderer always passes `onOpenStash`. */}
-            <ClearTranscriptControl runState={runState} rowCount={rows.length} control={slash?.control} onAcknowledge={onAcknowledge} registry={registry} configKey={personas} onError={setError} />
+            <ClearTranscriptControl runState={runState} rowCount={rows.length} control={slash?.control} onAcknowledge={onAcknowledge} registry={registry} configKey={personas} skillsRevision={slash?.skillsRevision} loadSkillFile={slash?.loadSkillFile} onError={setError} />
             {/* Part AA — REQ-CHAT-069: the scope toggle, naming the agent "This task" refers to and showing its state and live elapsed time. */}
             {agents.length > 0 && <ScopeToggle scope={scope} agent={selected} nowIso={nowIso} onScope={setScope} />}
             {/* Part AL2 — REQ-SHELL-080/108: the toolbar's terminal control with its counts, always enabled; the counts and the opener come from the renderer's terminal host (`terminal/host.tsx`), so this view's props do not change. The toolbar renders whenever `onOpenStash` is given, which the product always gives, so the control is reachable from a cold start; the condition above is not widened. */}
@@ -1321,8 +1369,15 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
               <DesignButton type="submit" className="btn btn-secondary" disabled={busy}>Continue with a message</DesignButton>
             </>
           ) : (
-            <DesignButton type="submit" className="btn btn-primary" disabled={busy}>{composerAction(session, runActive)}</DesignButton>
+            /*
+             * Part AS — REQ-WORKSPACE-112: while the setup prompt is unanswered the Send control is
+             * DISABLED and names its reason, on both channels REQ-CHAT-007 requires (the tooltip and the
+             * accessible description — the lesson of PD-CHAT-001's first execution). Only that limb
+             * disables: REQ-CHAT-007's cancelling refusal is still raised on submit, unchanged.
+             */
+            <DesignButton type="submit" className="btn btn-primary" disabled={busy || projectSetupPending} title={projectSetupPending ? PROJECT_SETUP_SEND_REASON : undefined} aria-describedby={projectSetupPending ? sendReasonId : undefined} data-testid="composer-send">{composerAction(session, runActive)}</DesignButton>
           )}
+          {projectSetupPending && <span id={sendReasonId} className="visually-hidden">{PROJECT_SETUP_SEND_REASON}</span>}
           {planGate && <span id="plan-gate-hint" className="composer__hint">A plan is waiting for your decision above. Approve, revise, or cancel the run to continue.</span>}
           {paused && !planGate && <span className="composer__hint">Paused. Run controls need the run continued before they can be used.</span>}
         </div>

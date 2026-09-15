@@ -25,9 +25,11 @@ sequenceDiagram
     WS-->>M: worktree.created {path, branch, baseBranch, baseRevision} | worktree.attachable | refused → "Error: could not create or attach the requested worktree: <detail>"; NO session exists (REQ-GIT-023 by construction)
   end
   M->>RH: session.start {workspaceId, prompt, sessionId?, effectiveRoot?, worktree?, sandboxMode?, boardPermissions?}
+  RH->>RH: settleConfinement() — ADR-0022's probe, awaited BEFORE the run does anything else (REQ-SANDBOX-097); one per process, cached, bounded at 5.0 s, cleared only by the settings re-check (REQ-SANDBOX-067, -129). On win32 the platform check settles it and no subprocess is spawned (REQ-SANDBOX-066)
   RH->>CFG: configure(workspaceRoot): load the snapshot (layer 3) and both scopes' four files, overlay live state (Tier B), resolve — from the BASE workspace even for an isolated run (REQ-GIT-019)
-  CFG-->>RH: RunSetup {model, runtime, personas, models, authProviders, tier} — or a fatal report / no entry model
-  alt refused before it starts (REQ-EVENTS-021, REQ-CONFIG-478, REQ-WORKSPACE-137 "No model configured")
+  CFG->>CFG: the confinement gate — the effective mode is the layered key with the dialog's override folded in (REQ-SANDBOX-122); a non-off mode whose verdict is not `available` REFUSES here, before the lease, before the session row and before the lock, so nothing is left to clean up (REQ-SANDBOX-094/095)
+  CFG-->>RH: RunSetup {model, runtime, personas, models, authProviders, tier} — or a fatal report / no entry model / the availability reason and remediation
+  alt refused before it starts (REQ-EVENTS-021, REQ-EVENTS-024, REQ-CONFIG-478, REQ-SANDBOX-126, REQ-WORKSPACE-137 "No model configured")
     RH-->>M: refused {headline, detail}
     M-->>W: {ok:false} and a notice; nothing was recorded
   else
@@ -45,6 +47,16 @@ sequenceDiagram
     M-->>W: {ok:true}; the window subscribes → attach → snapshot then the resident rows (REQ-MONITOR-214)
   end
 ```
+
+**What an agent's system prompt is made of (ADR-0063).** At every agent construction — the entry turn and each
+child — the role's instructions take its playbook (`withPlaybook`, REQ-ORCH-019) and then the session's
+**always-active context units** (`withContextUnits`, REQ-WORKSPACE-060), in that requirement's order: workspace
+context → the skill catalog → the force-loaded skill bodies → persona memory. **Two of the four are not built**
+(workspace-context injection, REQ-WORKSPACE-041..050, and persona memory) and are empty slots in the list rather
+than a shape a later part must re-cut. The units arrive as a **getter**, called at construction and never
+captured, so a skill invoked between prompts reaches the next agent built while one already running keeps the
+context it was built with (REQ-CONFIG-166). Because the list is a property of the session and not of the role,
+REQ-WORKSPACE-065's "every agent built for a session sees the same catalog" holds by construction.
 
 `Run.start()` in order (REQ-SESSION-087): save `starting` → the pre-flight (intent classification through the
 small slot's rung ladder; the grant; the playbooks; the BUDGET cell) → **the plan gate's hold settled** → the
@@ -77,6 +89,17 @@ setup and authenticated catalogue from those captured inputs. Active tool ports,
 and supervision resolve their configuration by session identifier. A refused prompt for an active run
 returns before another configuration load. Launch audits record effective permission and the captured
 runtime section; the other configuration sections remain outside this snapshot implementation.
+
+**The continuation lease (2026-09-14, REQ-PROVIDER-066).** The three run-launching continuation commands —
+`session.continue`, `session.prompt`, `session.planDecision` — re-ask main for the credential lease
+(`leaseForContinuation`) before the engine resolves the run's setup, and publish the fresh bearers under
+the session's workspace root (`sessionRoots`, recorded at `session.start` and `session.resume`). Before the
+repair, a resumed session's continuation read the previous launch's lease — empty after an application
+restart — and its first model call went out with **no `Authorization` header** (the 401 recorded in
+`docs/defects/continue-run-sends-no-authorization-header.md`). The refresh is invisible when main answers;
+an entry provider main cannot resolve refuses with REQ-WORKSPACE-137's sentence, exactly as a launch does.
+A session this process never started or resumed leases nothing — the engine's own `not-live` / `no-session`
+refusals answer it.
 
 ## 2. The loop and one iteration
 
@@ -141,7 +164,10 @@ The executors a port registers (`run-host/tools.ts`): `read_file`, `write_file`,
 `glob`, `todo`, `terminal` (by shell presence, REQ-TOOLS-104), the three delegation tools when delegation is available,
 **`ask_questions`** (Part AC — its `userPromptChannel` prerequisite is now attendedness, REQ-TOOLS-053/069, and the
 orchestrator is the one built-in persona declaring it, REQ-CHAT-094's one conversation), the three artifact tools when
-the session has an artifact store, and **`fetch`** (ADR-0023, Part N). `fetch` is the one executor that **reads configuration per call**: each call loads
+the session has an artifact store, and **`fetch`** (ADR-0023, Part N). `grep` and `read_file`'s `grep` filter share one
+pattern dialect (`compileSearchPattern`, `tools/search.ts`): the accelerator's, not the host engine's — leading
+`(?flags)` groups are read off and translated, because REQ-STARTUP-058 pins ripgrep and REQ-TOOLS-141 holds results
+identical whether or not it is present. `fetch` is the one executor that **reads configuration per call**: each call loads
 the workspace's **saved** files and the discovery snapshot (`egressReader`, no live state — REQ-SANDBOX-038/118,
 REQ-TOOLS-089; measured at 1.7–2.5 ms behind the run host, 3–4 ms median in the unit test), maps
 `runtime.network_*` to the egress policy and `runtime.tool_call_timeout` to the run-level deadline, classifies the
@@ -351,7 +377,7 @@ of §5 and none a channel: each is a request answered once.
 
 | Table | Holds | Written by |
 |---|---|---|
-| `sessions` | the session record: status (**`waiting`** while an agent is parked on a provider limit, Part Q — REQ-SESSION-073's arm, presented as `running`; the wait's own fields live on the record's `wait`, not in a column; **pending question prompts likewise live on the record's `pendingQuestions`**, derived from the live run at every snapshot — Part AC, so REQ-SESSION-025's persistence limb is owed), workspace, run columns (stop reason, iterations, tokens, cost, summary, todo, progress, permission mode, pending approvals, message limit, paused-at count, **`token_samples`** — v7, REQ-MONITOR-166's history the run samples every 10 s and once at the end, 120 kept), truncation facts, **`worktree`** (v8, REQ-GIT-015's binding as JSON; NULL = no worktree, REQ-GIT-017), **`sandbox_mode`** (v8, REQ-SHELL-125's choice; recorded, not honoured — ADR-0022) and **`last_restored_sequence`** (v9, REQ-SESSION-195 / REQ-GIT-155: NULL until a restore succeeds, written in that restore's transaction, untouched by every refusal), and **`plan_cycle` / `plan_released`** (v17, REQ-ORCH-153/154: the cycle awaiting an answer, NULL when none, and approval's one-way release, cleared only by the next user prompt) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, `recordRestore`, **`openPlanGate`/`resolvePlanGate`**; the binding and the mode at `create` only |
+| `sessions` | the session record: status (**`waiting`** while an agent is parked on a provider limit, Part Q — REQ-SESSION-073's arm, presented as `running`; the wait's own fields live on the record's `wait`, not in a column; **pending question prompts likewise live on the record's `pendingQuestions`**, derived from the live run at every snapshot — Part AC, so REQ-SESSION-025's persistence limb is owed), workspace, run columns (stop reason, iterations, tokens, cost, summary, todo, progress, permission mode, pending approvals, message limit, paused-at count, **`token_samples`** — v7, REQ-MONITOR-166's history the run samples every 10 s and once at the end, 120 kept), truncation facts, **`worktree`** (v8, REQ-GIT-015's binding as JSON; NULL = no worktree, REQ-GIT-017), **`sandbox_mode`** (v8, REQ-SHELL-125's choice; honoured since Part AR — ADR-0022: the mode gates the run at start and wraps every new command string, and the recorded `sandboxed`/`sandbox_backend` always agree with the verdict that governed whether the run was allowed to start, REQ-SANDBOX-094) and **`last_restored_sequence`** (v9, REQ-SESSION-195 / REQ-GIT-155: NULL until a restore succeeds, written in that restore's transaction, untouched by every refusal), and **`plan_cycle` / `plan_released`** (v17, REQ-ORCH-153/154: the cycle awaiting an answer, NULL when none, and approval's one-way release, cleared only by the next user prompt) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, `recordRestore`, **`openPlanGate`/`resolvePlanGate`**; the binding and the mode at `create` only |
 | `plan_cycles` (**v17**, REQ-ORCH-154) | one row per plan cycle: `opened_at`, the role's `plan` VERBATIM (never rewritten after the insert), the classified `intent`, the `todo` the plan implies, the `changes` the user stated when choosing revise into it, the user's `edited` text (NULL until they edit � which is what makes "editing alone never approves it" structural), and the `decision` with `decided_at`. Keyed `(session_id, cycle)`, so an answer is recorded once and a second answer for the same cycle changes nothing | `openPlanGate` (one durable transaction with the status and the `plan_gate_opened` entry), `recordPlanEdit`, `resolvePlanGate` |
 | `checkpoints` (v9) | REQ-GIT-016's record, one row per checkpoint keyed `(session_id, sequence)` — ref, commit, created_at, iteration, child_name, `files` as one JSON list, `kind` from REQ-GIT-067's vocabulary; `checkpoint_count` is a count over these rows, never stored (ADR-0039); the listing is `ORDER BY sequence` under the primary key (a plan the store test asserts) | `recordCheckpoint` (insert + the trim to `max_per_session`, one transaction with the timeline entry and the event) |
 | `session_locks` | `(session_id, pid, host, acquired_at)` — the capability token (ADR-0005) | `create`/`open` (INSERT OR IGNORE), `endRun`, release |
@@ -410,6 +436,24 @@ of §5 and none a channel: each is a request answered once.
   part that consumes them validates them. `execution.branch_template` is checked at load against REQ-GIT-138's two
   forbidden namespaces on a **rendered** example rather than a literal prefix, so a template that would collide by
   construction is refused before anything is created from it.
+- **The `skills:` block (ADR-0063)** — registered for the first time (`packages/config/src/sections/skills.ts`)
+  and read at load onto `LoadedConfiguration.skills`. It is **Tier C with one Tier A writer** (the Settings Skills
+  tab's Save), but the thing it governs has a lifetime of its own: the **catalog** is the run host's, cached per
+  resolved workspace root and cleared at **session creation** (REQ-WORKSPACE-058), which is neither Tier B's
+  per-run-start nor Tier C's next-load. `skills.enabled` is read from the SAVED files at each force-load gesture
+  rather than from a run's captured snapshot, on the `fetch` tool's precedent below, because REQ-WORKSPACE-073
+  gates a gesture happening now and not a run that started earlier.
+- **The `initialization:` and `project_init:` blocks (ADR-0064)** — registered for the first time, and the one
+  pair in the file that is **not read through the layered merge at all**. REQ-WORKSPACE-078 names
+  `<workspace>/.rotaris/agents.yaml` and only that file, so `readInitializationState` opens it directly: read
+  through the merge, a *global* `agents.yaml` could declare one machine's marker for every workspace on it. That
+  is also what lets REQ-WORKSPACE-115's refresh promise to show "the values the persisted section holds at that
+  moment" while disturbing nothing else — it is one file, read on its own, on demand. Writes go the ordinary
+  Tier A way (`config.setField` → `writeConfigFields`), and `overlaySection` replaces both id lists wholesale
+  (REQ-CONFIG-050) while every other top-level key stays put. Because the lists are replaced wholesale, the
+  execution re-reads the section immediately before each recording: a skip answered while a background task ran
+  was otherwise erased by that task's own outcome, which is the second defect ADR-0064's first execution found.
+  `project_init.source_extensions` is read from the same file and decides classification (REQ-WORKSPACE-099).
 - **The one per-call read** — the `fetch` tool's egress policy and `tool_call_timeout` are loaded from the saved
   files at every call, without the live state (REQ-SANDBOX-038/118): a saved edit to the host lists reaches the
   next fetch of a running session with no restart, an unsaved settings edit reaches nothing.

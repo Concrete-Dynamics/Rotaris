@@ -1,6 +1,6 @@
 import { statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import type { ConfigSnapshot, DesktopSavePayload } from '@rotaris/contracts';
+import { SKILLS_CONFIG_DEFAULT, type ConfigSnapshot, type DesktopSavePayload } from '@rotaris/contracts';
 import type { Timers } from '@rotaris/kernel';
 import { PERSONA_SYNTHETIC_PREFIX, STARTUP_SLOT_PREFIX } from './keys.js';
 import { isPlainMap, type PlainMap } from './merge.js';
@@ -55,7 +55,11 @@ export function snapshotOf(cfg: LoadedConfiguration): ConfigSnapshot {
       max_depth: cfg.runtime.max_depth, max_active_children: cfg.runtime.max_active_children, max_iterations: cfg.runtime.max_iterations,
       allow_outside_workspace: cfg.runtime.allow_outside_workspace, permission_mode: cfg.runtime.permission_mode,
       improvement_collector_enabled: cfg.runtime.improvement_collector_enabled, improvement_collector_timeout: cfg.runtime.improvement_collector_timeout, keep_going: cfg.runtime.keep_going, run_start_mode: cfg.runtime.run_start_mode,
-      memory_diagnostics_enabled: cfg.runtime.memory_diagnostics_enabled, sandbox_mode: cfg.runtime.sandbox_mode,
+      memory_diagnostics_enabled: cfg.runtime.memory_diagnostics_enabled,
+      // REQ-SANDBOX-113 (Part AR): all six, so the runtime section can edit them.
+      sandbox_mode: cfg.runtime.sandbox_mode, sandbox_writable_roots: [...cfg.runtime.sandbox_writable_roots],
+      sandbox_allow_network: cfg.runtime.sandbox_allow_network, network_egress_policy: cfg.runtime.network_egress_policy,
+      network_allowed_hosts: [...cfg.runtime.network_allowed_hosts], network_denied_hosts: [...cfg.runtime.network_denied_hosts],
     },
     rawRuntime: { workspace: rawRuntimeOf(cfg.raw.workspace.agents), global: rawRuntimeOf(cfg.raw.global.agents) },
     circuitBreakerEnabled: cfg.circuitBreaker.enabled,
@@ -63,6 +67,9 @@ export function snapshotOf(cfg: LoadedConfiguration): ConfigSnapshot {
     // REQ-CHAT-166 (Part Z): the transcript reads its caps from the same snapshot the settings screen does.
     display: { ...cfg.display },
     instructions: instructionFiles(cfg.workspaceRoot),
+    // REQ-CONFIG-166..169 (ADR-0063): the policy the Settings selectors edit. The discovered skills ride a
+    // different answer (`skills.read`), because they are read from disk on a different schedule.
+    skills: { enabled: cfg.skills.enabled, overrides: { ...cfg.skills.overrides }, invocation_overrides: { ...cfg.skills.invocation_overrides } },
     delegationStrategy: cfg.delegationStrategy,
     referential: [...cfg.referential],
     warnings: [...cfg.warnings],
@@ -79,10 +86,13 @@ export function fatalSnapshot(globalDir: string, workspaceRoot: string, report: 
       max_depth: RUNTIME_DEFAULTS.max_depth, max_active_children: RUNTIME_DEFAULTS.max_active_children, max_iterations: RUNTIME_DEFAULTS.max_iterations,
       allow_outside_workspace: RUNTIME_DEFAULTS.allow_outside_workspace, permission_mode: RUNTIME_DEFAULTS.permission_mode,
       improvement_collector_enabled: RUNTIME_DEFAULTS.improvement_collector_enabled, improvement_collector_timeout: RUNTIME_DEFAULTS.improvement_collector_timeout, keep_going: RUNTIME_DEFAULTS.keep_going, run_start_mode: RUNTIME_DEFAULTS.run_start_mode,
-      memory_diagnostics_enabled: RUNTIME_DEFAULTS.memory_diagnostics_enabled, sandbox_mode: RUNTIME_DEFAULTS.sandbox_mode,
+      memory_diagnostics_enabled: RUNTIME_DEFAULTS.memory_diagnostics_enabled,
+      sandbox_mode: RUNTIME_DEFAULTS.sandbox_mode, sandbox_writable_roots: [...RUNTIME_DEFAULTS.sandbox_writable_roots],
+      sandbox_allow_network: RUNTIME_DEFAULTS.sandbox_allow_network, network_egress_policy: RUNTIME_DEFAULTS.network_egress_policy,
+      network_allowed_hosts: [...RUNTIME_DEFAULTS.network_allowed_hosts], network_denied_hosts: [...RUNTIME_DEFAULTS.network_denied_hosts],
     },
     rawRuntime: { workspace: null, global: null },
-    circuitBreakerEnabled: true, compressorThresholdPercentage: 60, display: { ...DISPLAY_DEFAULTS }, delegationStrategy: 'orchestrator', referential: [], warnings: [],
+    circuitBreakerEnabled: true, compressorThresholdPercentage: 60, display: { ...DISPLAY_DEFAULTS }, skills: { ...SKILLS_CONFIG_DEFAULT }, delegationStrategy: 'orchestrator', referential: [], warnings: [],
     // The instruction files exist or do not whatever the configuration says, so the inventory stands in a fatal snapshot too.
     instructions: instructionFiles(workspaceRoot),
     files: { workspace: files.workspace.agents, global: files.global.agents },
@@ -107,6 +117,8 @@ function toDesktopSave(save: DesktopSavePayload): DesktopSave {
     ...(save.delegationStrategy !== undefined ? { delegationStrategy: save.delegationStrategy } : {}),
     // REQ-CONFIG-256/472: the four `display:` fields, already spelled as the file spells them (REQ-CONFIG-172).
     ...(save.display && Object.keys(save.display).length > 0 ? { display: save.display } : {}),
+    // REQ-CONFIG-256/258 (ADR-0063): the three `skills` keys, already sparse — a null value removes a key.
+    ...(save.skills && Object.keys(save.skills).length > 0 ? { skills: save.skills } : {}),
     ...(Object.keys(roles).length > 0 ? { roles } : {}),
   };
 }

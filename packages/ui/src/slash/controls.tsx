@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import type { PromptsRootsResult } from '@rotaris/contracts';
+import type { PromptsRootsResult, SkillsState } from '@rotaris/contracts';
 import { ConfirmDialog } from '../ConfirmDialog.js';
 import type { RunState } from '../composer.js';
 import { NO_RUN_ACTIVE, TRANSCRIPT_EMPTY } from './catalogue.js';
 import { bindChatControls, chatControls, CLEAR_DESCRIPTION, CLEAR_DIALOG_BODY, CLEAR_DIALOG_CONFIRM, CLEAR_DIALOG_IMPACT, CLEAR_DIALOG_TITLE, CLEAR_LABEL, compressNow, NOTHING_TO_COMPRESS_TOAST, TRANSCRIPT_ALREADY_EMPTY_TOAST, type ChatAcknowledger, type ControlAnswer } from './host.js';
 import { cachedPromptRoots, readPromptRoots, registerPromptCommands } from './prompts.js';
+import { cachedSkills, readSkills, registerSkillCommands, skillPathCommand } from './skills.js'; // ADR-0063
 import type { Availability, SlashContext, SlashOutcome, SlashRegistry } from './types.js';
 import { Button as DesignButton } from '../design-system/index.js';
 
@@ -24,6 +25,14 @@ export interface ClearTranscriptControlProps {
   readonly registry: SlashRegistry;
   /** REQ-CHAT-028/160: a value that changes on a configuration change — the roots are read again when it does. */
   readonly configKey: unknown;
+  /**
+   * REQ-CHAT-034 (ADR-0063): a counter the Settings Skills tab bumps after a rescan or a hand-loaded skill, so
+   * the typeable commands list exactly the rescanned set. Undefined in a window that has no Settings surface,
+   * which simply means the catalog is re-read on the other triggers alone.
+   */
+  readonly skillsRevision?: number | undefined;
+  /** REQ-CHAT-162: `/skill <path>`'s loader, answered by the run host through main. Absent means the command is not offered. */
+  readonly loadSkillFile?: ((path: string) => Promise<{ ok: true; name: string } | { ok: false; reason: string }>) | undefined;
   readonly onError?: ((reason: string) => void) | undefined;
 }
 
@@ -34,7 +43,7 @@ export interface ClearTranscriptControlProps {
  * this row's controls as text since Part X's stash opener (the icon font exists — `ph ph-*` — and is not the reason), the
  * label is the specification's, and REQ-CHAT-082 fixes the accessible description.
  */
-export function ClearTranscriptControl({ runState, rowCount, control, onAcknowledge, registry, configKey, onError }: ClearTranscriptControlProps) {
+export function ClearTranscriptControl({ runState, rowCount, control, onAcknowledge, registry, configKey, skillsRevision, loadSkillFile, onError }: ClearTranscriptControlProps) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const acknowledge: ChatAcknowledger = onAcknowledge ?? (() => undefined);
@@ -132,9 +141,53 @@ export function ClearTranscriptControl({ runState, rowCount, control, onAcknowle
    */
   useEffect(() => { const cached = cachedPromptRoots(); if (cached !== null) apply(cached); else reload(); }, [registry]); // eslint-disable-line react-hooks/exhaustive-deps -- `apply`/`reload` close over refs.
   useEffect(() => { reload(); }, [configKey]);
+
+  /*
+   * ADR-0063 — the skill commands (REQ-CHAT-034, REQ-WORKSPACE-072), on exactly the prompt files' terms above and
+   * for exactly their two reasons: a rebuilt registry re-applies the cached answer synchronously (AO-1, so a
+   * rebuild costs no IPC), and a read in flight lands through the newest `apply` rather than the closure that
+   * started it (AO-2, so a late answer reaches the LIVE registry).
+   *
+   * Re-read on a configuration change too, because `skills.enabled` and both override maps ARE configuration:
+   * switching skills off in Settings must empty the popup without a restart (REQ-CONFIG-166).
+   */
+  const appliedSkills = useRef<{ registry: SlashRegistry | null; names: readonly string[] }>({ registry: null, names: [] });
+  const [skillNames, setSkillNames] = useState<readonly string[]>([]);
+  const applySkills = (state: SkillsState) => {
+    const previous = appliedSkills.current.registry === registry ? new Set(appliedSkills.current.names) : new Set<string>();
+    const r = registerSkillCommands(registry, state, previous);
+    appliedSkills.current = { registry, names: r.names };
+    setSkillNames(r.names);
+  };
+  const applySkillsLatest = useRef(applySkills);
+  useEffect(() => { applySkillsLatest.current = applySkills; });
+  const reloadSkills = () => {
+    const p = readSkills();
+    if (p === null) return;
+    void p.then((state) => applySkillsLatest.current(state), () => undefined);
+  };
+  useEffect(() => { const cached = cachedSkills(); if (cached !== null) applySkills(cached); else reloadSkills(); }, [registry]); // eslint-disable-line react-hooks/exhaustive-deps -- `applySkills`/`reloadSkills` close over refs.
+  useEffect(() => { reloadSkills(); }, [configKey]);
+  /*
+   * REQ-CHAT-034: "After a skill rescan, the catalogue MUST list exactly the rescanned set." The Settings tab
+   * bumps this counter after a rescan or a hand-loaded skill (REQ-WORKSPACE-069, REQ-WORKSPACE-151); the composer
+   * does not need to know which of the two happened, only that the catalog moved.
+   */
+  useEffect(() => { reloadSkills(); }, [skillsRevision]);
+  /*
+   * REQ-CHAT-162 — `/skill <path>`: loading a skill by hand from a typed path, on REQ-WORKSPACE-057's rules.
+   * Registered separately from the generated per-skill commands because it is a fixed command rather than one
+   * the catalog produces, and re-registering it on every rescan would be pointless churn. Its own `onLoaded`
+   * re-reads the catalog, so the loaded skill's command appears without waiting for another trigger.
+   */
+  useEffect(() => {
+    if (!loadSkillFile) return;
+    registry.register(skillPathCommand(loadSkillFile, () => { reloadSkills(); }));
+  }, [registry, loadSkillFile]);
+
   useEffect(() => {
     // The composer's `onFocus` is not this part's to add; the focus is observed as it bubbles.
-    const onFocus = (e: FocusEvent) => { if (e.target instanceof HTMLElement && e.target.classList.contains('composer__input')) reload(); };
+    const onFocus = (e: FocusEvent) => { if (e.target instanceof HTMLElement && e.target.classList.contains('composer__input')) { reload(); reloadSkills(); } };
     document.addEventListener('focusin', onFocus);
     return () => document.removeEventListener('focusin', onFocus);
   }, []);
@@ -151,6 +204,9 @@ export function ClearTranscriptControl({ runState, rowCount, control, onAcknowle
         * after a registration rather than at a fixed millisecond. Hidden: evidence, not a surface — it draws nothing and
         * reaches neither the accessibility tree nor the design. */}
       <span hidden data-testid="prompt-commands" data-count={registered.length} data-roots={cachedPromptRoots() === null ? 'unread' : 'read'} />
+      {/* ADR-0063: the same evidence for the skill commands, for the same reason — a proof must act after a
+        * registration rather than at a fixed millisecond. Hidden; it draws nothing and reaches no accessibility tree. */}
+      <span hidden data-testid="skill-commands" data-count={skillNames.length} data-names={skillNames.join(',')} data-catalog={cachedSkills() === null ? 'unread' : 'read'} />
       {confirming && (
         <ConfirmDialog title={CLEAR_DIALOG_TITLE} body={CLEAR_DIALOG_BODY} lines={[CLEAR_DIALOG_IMPACT]} confirmLabel={CLEAR_DIALOG_CONFIRM} destructive busy={busy} testId="clear-transcript-dialog"
           onCancel={() => { if (!busy) setConfirming(false); }} onConfirm={() => { void confirmClear(); }} />

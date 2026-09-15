@@ -143,9 +143,15 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
    * It is computed from `rows` rather than from the projection, which would be circular — step 4 reads the
    * expansion (REQ-CHAT-061: an expanded row shows its untruncated value whatever REQ-CHAT-166's caps say) and
    * the default reads the projection. The cycle breaks because `defaultExpanded` is true for **reasoning rows
-   * only**, and a reasoning row is never folded into a group (REQ-CHAT-064 folds tool rows), so its display key
-   * equals `rowKey(row)` and is knowable before step 4 runs. **If `defaultExpanded` ever answers true for a
-   * shape step 4 can create, this shortcut stops being sound and the projection has to hand back its own keys.**
+   * only**, and a reasoning row is never folded into a group, so its display key equals `rowKey(row)` and is
+   * knowable before step 4 runs. **If `defaultExpanded` ever answers true for a shape step 4 can create, this
+   * shortcut stops being sound and the projection has to hand back its own keys.**
+   *
+   * PD-CHAT-004 folds reasoning rows into the activity line and so came within one rule of breaking exactly
+   * that. It does not, and deliberately: a reasoning row enters a run **only while `display/showReasoning` is
+   * off** (`runnable` in `project.ts`), and `defaultExpanded` answers true only while it is on. The two are the
+   * same switch read from opposite sides, so no row is ever both folded and defaulted open. The condition this
+   * note states is met by that rule and by nothing else — change one and this shortcut has to go.
    */
   const expanded = ((): ReadonlySet<string> => {
     const set = new Set<string>();
@@ -161,7 +167,7 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
   })();
 
   // ---- ADR-0046 step 4 ------------------------------------------------------------------------------------
-  const display = projectDisplay({ rows, running, groupTools, caps, expanded, pendingQuestions, pendingApprovals, questionAgent, scopeAgent });
+  const display = projectDisplay({ rows, running, groupTools, showReasoning, caps, expanded, pendingQuestions, pendingApprovals, questionAgent, scopeAgent });
 
   /**
    * The services and preferences every row in THIS pane shares (Part AA's `TranscriptSurface`). One value per

@@ -13,7 +13,7 @@ flowchart TB
     main["main<br/>windows, dialogs, relay, preferences,<br/>process supervision, capture seams"]
     preload["preload<br/>the one frozen bridge"]
     renderer["renderer<br/>React root; role by route:<br/>main / approval / pause / hook-review /<br/>provider / persona / rows-proof (verification)"]
-    runhost["run-host<br/>sessions, runs, tools, hooks,<br/>configuration per run"]
+    runhost["run-host<br/>sessions, runs, tools, hooks,<br/>configuration per run,<br/>the skill catalog (ADR-0063)"]
     wsservice["workspace-service<br/>identifier, store open/migrate,<br/>backup, restore, config Tier A,<br/>delivery, improvements, traceability (+ worker)"]
   end
 
@@ -25,7 +25,7 @@ flowchart TB
 
   subgraph domain["Domain packages"]
     engine["engine<br/>Sessions, SessionWriter, ProjectionOwner,<br/>Run, turn loop, todo, supervisor,<br/>children (ledger, scheduler, orchestration, personas),<br/>artifacts (store, sidecar, context blocks, tool port),<br/>intent classifier, playbooks, event bus"]
-    tools["agent-tools<br/>registry, policy, gate, approvals,<br/>egress, tools/* (files, search, todo, fetch,<br/>delegation, artifacts), terminal (node-pty,<br/>the stream registry over @xterm/headless)"]
+    tools["agent-tools<br/>registry, policy, gate, approvals,<br/>egress, confinement (ADR-0022: spec, the two<br/>renderers, quoting, the availability probe),<br/>tools/* (files, search, todo, fetch,<br/>delegation, artifacts), terminal (node-pty,<br/>the stream registry over @xterm/headless)"]
     hooks["hooks<br/>matcher, runner, trust, policy,<br/>external import, HookEngine"]
     providers["providers<br/>catalogue (six frozen records), credential store<br/>(protection adapter, adjacent lock), discovery,<br/>slot assignment, project_settings.yaml, ProviderService"]
     workspace["workspace<br/>backup, restore,<br/>traceability/ (ADR-0040), delivery/ (ADR-0041)"]
@@ -33,7 +33,7 @@ flowchart TB
   end
 
   subgraph foundation["Foundation packages"]
-    config["config<br/>loader (merge classes, sections,<br/>slots, validate), writers, tiers,<br/>preferences, snapshot"]
+    config["config<br/>loader (merge classes, sections,<br/>slots, validate), writers, tiers,<br/>preferences, snapshot,<br/>skills/ (ADR-0063: discovery, policy, blocks),<br/>init/ (ADR-0064: the marker, the registry,<br/>the sets, classification, the gitignore grammar)"]
     model["model<br/>ports, DefaultAgentBackend,<br/>AiSdkModelClient, ScriptedModelClient"]
     store["store<br/>schema (v16), delivery/, StoreDal, open/migrate,<br/>lock, rings,<br/>saved prompts, session artifacts"]
     platform["platform<br/>dirs, document (ADR-0004), instance,<br/>machine id, liveness, clocks, preferences"]
@@ -94,6 +94,14 @@ Edges worth knowing the reason for:
 - **`engine` does not import `agent-tools`** and `agent-tools` does not import `engine`: the run-host root fills
   the engine's `ToolPort` with the gate (`run-host/tools.ts`), so both stay structural.
 - **`config` takes no database handle** (ADR-0036's guard) and cannot import `store`.
+- **portable skills live in `config`, not in `workspace`** (ADR-0063), although `workspace/CONTEXT.md` owns the
+  vocabulary: the matrix gives the run host no `workspace` edge, and skill injection happens at agent
+  construction, which is the run host's. Contexts follow **spec domains**, not packages (`CONTEXT-MAP.md`).
+- **project initialization lives in `config` too, and its coordinator in `main`** (ADR-0064): the marker's one
+  writer is the workspace service and the one shipped task's work is the run host's, and the matrix gives
+  neither of those two an edge to the other. `config` is the one package all three roots may read, and it
+  already owns the YAML document model the marker is a section of and the code-intelligence binding the task
+  is built from.
 - **`main` cannot import `ui`/`ui-core`**: theme data the main process needs before first paint lives in
   `contracts/src/theme/`; the persona vocabulary the loader and the engine share lives in `contracts/src/roles.ts`.
 - **`providers` lives in main and only main** (ADR-0030): the credential store, sign-in and discovery run in the
@@ -132,6 +140,8 @@ Edges worth knowing the reason for:
 | The terminal stream: one emulator per stream, the frames, the flush, the controls, the audit line (ADR-0021, REQ-TOOLS-126/127/128, REQ-SHELL-103..107) | `agent-tools/src/terminal/streams.ts` (+ `engine` for the row's `streamId`) | run-host (`terminal.ts`, `tools.ts`); main (`terminal.ts` — the delivery bound across every window taken together, Part T″ 2026-09-11: one budget the windows share, never one each) |
 | The terminal display: the emulator port and its two adapters, the stream set, the input rules, the window and the preview (ADR-0047, REQ-SHELL-079..107); the renderer's third-party emulator is `@xterm/xterm` + `@xterm/headless` 6.0.0, pinned (agent-tools takes headless + `@xterm/addon-serialize`) | `ui/src/terminal/` (+ `host.tsx`, Part AL′: the per-renderer terminal host the pane, the persona card, the toolbar control and the palette entry read) | renderer (the main window's and each persona window's previews; the terminal window, `role=terminal` — Part AL′) |
 | The composer's slash catalogue: the parser, the registry, the built-ins and the palette mirror, the highlighting, the popup (REQ-CHAT-018..034, 159) | `ui/src/slash/`, `ui/src/RunHeader.tsx` | renderer (`main.tsx` passes the `slash` host) |
+| Portable skills: the two-scope search, the disable manifest, the `SKILL.md` grammar, the name normal form, the policy resolution, the two model-facing blocks (ADR-0063, REQ-WORKSPACE-051..066) | `config/src/skills/` (+ `config/src/sections/skills.ts`, `contracts/skills.ts`) | run-host (`run-host/skills.ts`, the `SkillHost`: the per-root cache cleared at session creation, the session state, the context units, the read roots); ui (`settings/SkillsSettings.tsx`, `slash/skills.ts`) |
+| Project initialization: the persisted marker and its outcome patch, the task registry, the five set derivations, the nine values and their set-wise equality, one execution, and `code`/`non-code` classification with the full gitignore grammar (ADR-0064, REQ-WORKSPACE-078..115) | `config/src/init/` (+ `contracts/initialization.ts`); `agent-tools/src/tools/search.ts` re-exports the grammar and keeps no second reader | main (`main/initialization.ts`: one resolution per open, the ONE marker write through `config.setField`, the `code-intelligence-setup` runner over `mcp.setup`); run-host (classification and `McpSetupStatus.applicable`); ui (`ProjectSetupDialog.tsx`, `settings/project-init.ts`, the Project card, the sidebar section, the composer gate) |
 | The adopted design language, drawn once: the twenty-eight component briefs, their typed props, and the verification-only layout contracts (`docs/design/README.md` §2, §7) | `ui/src/design-system/` | renderer (every view and window imports through `@rotaris/ui`; nothing else in `ui` writes a design-equivalent control — `tools/check-ui-language.mjs` fails `pnpm lint` on one) |
 
 ### `ui/transcript` (Parts Z and AA, 2026-09-07; ADR-0045's first execution, ADR-0046 steps 3-5, ADR-0051's second)
@@ -145,7 +155,13 @@ the visible span, the anchor, REQ-CHAT-053's four update shapes, pure), `cache.t
 caches and the four-part reuse predicate), `search.ts` (REQ-CHAT-074, incremental), `TranscriptPane.tsx` (the fixed
 slot pool and step 5) and `Row.tsx` (Part AA's renderer, which the pane binds into each slot; Part Z's
 `PlaceholderRow.tsx` stood in for it until the two branches merged and is gone). **Edges unchanged** —
-`ui -> kernel, contracts, ui-core`. `ui-core`'s replica gains ADR-0046 step 3 (`classifyRows` and the six row-level
+`ui -> kernel, contracts, ui-core`. **`PD-CHAT-004` (2026-09-15) moved one decision inside this module and added
+no edge:** the third display shape is the **activity line**, a run of one agent's tool *and* streamed-reasoning
+rows, so `project.ts` now decides the run boundary from the agent plus `display/showReasoning` rather than from
+the tool family, and `types.ts` gains `ActivitySegment` beside `DisplayRow`. `isReasoningRow` moved from `Row.tsx`
+into `project.ts` and is re-exported — `Row.tsx` already depended on `project.ts`, and declaring the run boundary's
+own predicate in the file that consumes step 4 would have closed a cycle inside the module. `ui-core`'s replica
+gains ADR-0046 step 3 (`classifyRows` and the six row-level
 counters `REQ-UIBENCH-064` fixes, distinct from the seven publication classes it already had). `config` gains
 `display-section.ts`, the reader `SECTION_KEYS` had declared and nothing stood behind; `model` gains `reasoning.ts`,
 the pure normaliser for REQ-CHAT-163's three provider shapes.

@@ -37,3 +37,14 @@ now extends that requirement too, and its back-pointer takes the widened vocabul
   directly; a regression through `artifactOps.read(ref, ['commands'])` is what pins the tool path.
 - `docs/spec/05-tools-permissions-approvals.md` — `REQ-TOOLS-148` now carries the directive's
   extension and points to the Library-owned vocabulary.
+
+## Repaired — 2026-09-14 (pointer)
+
+The repair landed the same day the note was written, in commit `c6a691e`; its full account —
+the port filtering against `ARTIFACT_SECTIONS` from `@rotaris/contracts`, the regression through
+`artifactOps.read`, the sixth artifacts-proof launch driving the real filtered tool read in the
+built app, and the record updates (first-executions, directives, views) — is the first-execution
+note on [`PD-LIBRARY-001`](../product/directives.md#pd-library-001) and its row in
+`docs/architecture/first-executions.md`. This section exists so the note itself, like every
+other note in this directory, states that its defect is closed rather than leaving the repair
+discoverable only from the directive's side.

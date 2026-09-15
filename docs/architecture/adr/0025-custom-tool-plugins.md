@@ -1,6 +1,13 @@
 # ADR-0025 — Custom tool plugins: the specified language and the chosen runtime are incompatible
 
-- **Status:** proposed — **ESCALATION, not a decision**
+- **Status:** proposed — **the escalation this record raised is DECIDED: `owner-decisions.md` ESC-7
+  (2026-09-02) takes this record's alternative 2** — plugins become modules the host genuinely imports
+  in-process, the `*.py` extension is withdrawn, and the specification was amended to match:
+  `REQ-TOOLS-161` now states in its own text that "no programming language, runtime, packaging form or
+  file extension is fixed here or anywhere else in this specification", and the restatements of the
+  `*.py` layout in `REQ-TOOLS-165`'s Plugins tab and in this record's Context read against that owner
+  rather than against the withdrawn requirement. This header said the decision was pending long after it
+  was taken; corrected 2026-09-14 under A1 of the accepted specification review.
 - **Date:** 2026-08-31
 - **Origin:** EXEC (ADR-EXEC-12)
 - **Depends on:** ADR-0001, ADR-0002, ADR-0016, ADR-0017

@@ -22,6 +22,10 @@ import type { ApprovalPayload, TranscriptRow } from '@rotaris/contracts';
  *   delegation-context header    | shape 'row', row.kind 'delegation'         (computed, not recorded)
  *   verifier output              | shape 'row', row.kind 'verifier'
  *   folded tool group            | shape 'group'                              (computed, not recorded)
+ *
+ * PD-CHAT-004 narrows the SCOPE of the last of the twelve and mints no thirteenth: `shape: 'group'` is
+ * the **activity line**, a run of ONE agent's tool and streamed-reasoning rows across families rather
+ * than a same-family run of tool rows alone. The vocabulary is still exactly twelve.
  */
 
 /**
@@ -54,12 +58,54 @@ export type TrailerRow =
  * The discriminant is `shape` and NOT `kind`, because `TranscriptRow.kind` already carries
  * REQ-CHAT-047's display kind and a second `kind` on the wrapper is how the two get confused.
  */
+export type Outcome = 'ok' | 'failed' | 'blocked' | 'running';
+export type OutcomeCounts = Readonly<Record<Outcome, number>>;
+
+/**
+ * PD-CHAT-004: one stretch of a run that states one fact — a reasoning phase, or consecutive tool calls
+ * of one family. The segments ARE the activity line's text, in the order they first appear, and the same
+ * family reached again after another segment forms a second segment of that family rather than rejoining
+ * the first: the line reads as a sequence of things done, which is what a reader follows.
+ */
+export interface ActivitySegment {
+  /** `reasoning`, or REQ-CHAT-064's family word — which that requirement's table still decides. */
+  readonly label: string;
+  readonly reasoning: boolean;
+  readonly members: number;
+  /** REQ-CHAT-065's per-outcome counts. A reasoning segment carries zeroes; it has no tool outcome. */
+  readonly counts: OutcomeCounts;
+  /** The segment's SUMMED member durations — REQ-CHAT-062's seconds for a reasoning segment. */
+  readonly durationMs: number;
+  /** Reasoning segments only: REQ-CHAT-062's summed streamed characters divided by 4. */
+  readonly tokens: number;
+}
+
 export type DisplayRow =
   | { readonly shape: 'row'; readonly key: string; readonly row: TranscriptRow }
-  | { readonly shape: 'group'; readonly key: string; readonly family: string; readonly members: readonly TranscriptRow[];
-      /** REQ-CHAT-065: per-outcome counts, the summed duration, the earliest start, the in-flight member's text. */
-      readonly counts: Readonly<Record<'ok' | 'failed' | 'blocked' | 'running', number>>;
-      readonly durationMs: number; readonly startedAt: string; readonly inFlight: string | null;
+  | { readonly shape: 'group'; readonly key: string; readonly members: readonly TranscriptRow[];
+      /**
+       * REQ-CHAT-064's family word for the run's FIRST segment. Retained because REQ-CHAT-074 indexes a
+       * group on it and because a single-family run's whole summary is still this word plus counts.
+       */
+      readonly family: string;
+      /** PD-CHAT-004: the run's segments, in first-appearance order. The line's text is built from these. */
+      readonly segments: readonly ActivitySegment[];
+      /**
+       * PD-CHAT-004 / REQ-CHAT-057: the run's agent and persona — what the role gutter names and what the
+       * expanded rail is coloured by. Never an activity word: putting the family here is the defect
+       * `docs/defects/group-header-claims-the-role-gutter.md` records.
+       */
+      readonly role: string; readonly persona: string;
+      /** REQ-CHAT-065's per-outcome counts over the run's TOOL members; reasoning has no outcome. */
+      readonly counts: OutcomeCounts;
+      /**
+       * PD-CHAT-004: the run's elapsed SPAN — `endedAt` minus `startedAt` — and NOT REQ-CHAT-065's sum of
+       * member durations, which that requirement's back-pointer records as narrowed. While the run is live
+       * the drawn figure counts up from `startedAt` instead (`activitySpanMs`).
+       */
+      readonly durationMs: number; readonly startedAt: string; readonly endedAt: string;
+      /** REQ-CHAT-065: the in-flight member's text, and PD-CHAT-004's activity word for its segment. */
+      readonly inFlight: string | null; readonly inFlightLabel: string | null;
       /** REQ-CHAT-065: the members' searchable text, capped at 2000 characters, so search matches inside a fold. */
       readonly blob: string }
   | { readonly shape: 'trailer'; readonly key: string; readonly trailer: TrailerRow };

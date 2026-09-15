@@ -6,7 +6,8 @@ import { DisplaySettings, type DisplaySettingsProps } from './settings/DisplaySe
 import { InstructionsSettings, ToolsSettings } from './settings/Inventories.js';
 import { AboutSettings, type AboutSettingsProps } from './settings/About.js';
 import { McpSettings, type McpSettingsProps } from './settings/McpSettings.js';
-import { TraceabilitySettings, type TraceabilitySettingsProps } from './settings/ProjectSettings.js'; // Part AJ2
+import { SkillsSettings, type SkillsSettingsProps } from './settings/SkillsSettings.js'; // ADR-0063
+import { ProjectInitSettings, TraceabilitySettings, type ProjectInitSettingsProps, type TraceabilitySettingsProps } from './settings/ProjectSettings.js'; // Part AJ2, Part AS
 import type { PlaybookCatalogue } from '@rotaris/contracts';
 import { useShellState } from './shell-state.js';
 import { Button as DesignButton, Select as DesignSelect } from './design-system/index.js';
@@ -26,14 +27,15 @@ import { Button as DesignButton, Select as DesignSelect } from './design-system/
  * from inside Models, Personas and Runtime.
  *
  * Part AG draws Display (REQ-CONFIG-403/472), Instructions and Tools
- * (REQ-CONFIG-276/277) and About (REQ-CONFIG-398, REQ-SHELL-138..143). Two
- * categories are still the placeholder and each waits on a mechanism, not on
- * drawing: **Skills** on portable-skill discovery (REQ-WORKSPACE-056, 062,
- * 063, 064 — cited nowhere in this tree), whose absence would make
- * REQ-CONFIG-343's "no portable skills were discovered" a false statement
- * rather than an empty state; and **Plugins** on REQ-TOOLS-161's loader
- * (ADR-0025), without which REQ-TOOLS-165's rule that the tab list exactly
- * what the loader accepts cannot be kept.
+ * (REQ-CONFIG-276/277) and About (REQ-CONFIG-398, REQ-SHELL-138..143);
+ * ADR-0063 draws **Skills** (REQ-WORKSPACE-067, 068, 069, 151).
+ *
+ * **Plugins** is the one category still the placeholder, and it waits on a
+ * mechanism rather than on drawing: REQ-TOOLS-161's loader (ADR-0025), without
+ * which REQ-TOOLS-165's rule that the tab list exactly what the loader accepts
+ * can never be kept. Listing the folder without the loader would advertise
+ * files the loader might reject, which that requirement forbids in as many
+ * words.
  */
 export const SETTINGS_CATEGORIES = [
   { id: 'models', label: 'Models' },
@@ -80,9 +82,13 @@ export interface SettingsViewProps {
   readonly interfaceExtras?: ReactNode;
   /** Part AJ2: the Project category's traceability card (REQ-TRACE-508..511), its two commands supplied by the renderer root. */
   readonly traceability?: TraceabilitySettingsProps | undefined;
+  /** ADR-0063: the Skills category — the catalog the run host answered and the four things the tab can do. */
+  readonly skills?: Omit<SkillsSettingsProps, 'workspace'> | undefined;
+  /** Part AS: the Project category's initialization card (REQ-WORKSPACE-114/115). */
+  readonly projectInit?: ProjectInitSettingsProps | undefined;
 }
 
-export function SettingsView({ session, workspace, onBackup, onRestore, hooks, playbooks, themes = [], activeTheme, onTheme, reducedMotion = false, onReducedMotion, initialCategory = 'models', onCategory, config, mcp, display, about, interfaceExtras, traceability /* Part AJ2 */ }: SettingsViewProps) {
+export function SettingsView({ session, workspace, onBackup, onRestore, hooks, playbooks, themes = [], activeTheme, onTheme, reducedMotion = false, onReducedMotion, initialCategory = 'models', onCategory, config, mcp, display, about, interfaceExtras, traceability /* Part AJ2 */, skills /* ADR-0063 */, projectInit /* Part AS */ }: SettingsViewProps) {
   const [chosen, setChosen] = useState<SettingsCategoryId>(initialCategory);
   // A category a notice action asked for (REQ-NOTIFY-223) selects itself until the user picks another; no effect, no cascade.
   const wanted = useShellState((s) => s.settingsCategory);
@@ -194,6 +200,9 @@ export function SettingsView({ session, workspace, onBackup, onRestore, hooks, p
               </div>
             </div>
             {message && <div className="composer__error" role="alert">{message}</div>}
+            {/* Part AS — REQ-WORKSPACE-114's "Project initialization" card, above the traceability one: it is the
+                state a user comes to this category to see, and REQ-WORKSPACE-101's classification sentence lives on it. */}
+            {projectInit ? <ProjectInitSettings {...projectInit} /> : null}
             {/* Part AJ2 — the traceability card (REQ-TRACE-508..511), a card of this category as REQ-CONFIG-390 shapes one. */}
             {traceability ? <TraceabilitySettings {...traceability} /> : null}
           </div>
@@ -201,6 +210,8 @@ export function SettingsView({ session, workspace, onBackup, onRestore, hooks, p
           <HooksSettings {...hooks} />
         ) : category === 'mcp' && mcp ? (
           <McpSettings {...mcp} />
+        ) : category === 'skills' && skills ? (
+          <SkillsSettings {...skills} workspace={workspace} />
         ) : category === 'models' && config ? (
           <ModelsSettings {...config} />
         ) : category === 'runtime' && config ? (
@@ -233,13 +244,11 @@ export function SettingsView({ session, workspace, onBackup, onRestore, hooks, p
         ) : (
           <div className="view__empty">
             <h1 className="display">{SETTINGS_CATEGORIES.find((c) => c.id === category)!.label}</h1>
-            {/* Each of the two says what it is waiting for, because neither is waiting to be drawn. */}
+            {/* Plugins says what it is waiting for, because it is not waiting to be drawn. */}
             <p className="text-secondary">
-              {category === 'skills'
-                ? 'This build discovers no portable skills yet, so there is nothing here to list or to set a policy for. The category appears with skill discovery.'
-                : category === 'plugins'
-                  ? 'This build loads no tool plugins yet. The inventory lists what the host process would load, so it appears with the plugin loader — a list of files nothing can load would say less than nothing.'
-                  : 'Not drawn yet. Structure from REQ-CONFIG-268; language from docs/design/system.'}
+              {category === 'plugins'
+                ? 'This build loads no tool plugins yet. The inventory lists what the host process would load, so it appears with the plugin loader — a list of files nothing can load would say less than nothing.'
+                : 'Not drawn yet. Structure from REQ-CONFIG-268; language from docs/design/system.'}
             </p>
           </div>
         )}

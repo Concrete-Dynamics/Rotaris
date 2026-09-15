@@ -164,7 +164,10 @@ own predicate in the file that consumes step 4 would have closed a cycle inside 
 gains ADR-0046 step 3 (`classifyRows` and the six row-level
 counters `REQ-UIBENCH-064` fixes, distinct from the seven publication classes it already had). `config` gains
 `display-section.ts`, the reader `SECTION_KEYS` had declared and nothing stood behind; `model` gains `reasoning.ts`,
-the pure normaliser for REQ-CHAT-163's three provider shapes.
+the pure normaliser for REQ-CHAT-163's three provider shapes. **`PD-CHAT-004` revision 2 (2026-09-15) added no
+module and no edge:** `project.ts` gains `segmentFacts` beside `segmentSummary` — the segment's drawable parts,
+each carrying the outcome it states — and the summary becomes the join of them, so the text `Row.tsx` draws and
+the text copy emits have one definition and cannot drift. Nothing moved between files.
 
 ### `mcp` (Part S, 2026-09-05)
 

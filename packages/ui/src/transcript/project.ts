@@ -65,13 +65,32 @@ export function groupSeverity(counts: Readonly<Record<Severity, number>>): Sever
  */
 export function groupSummary(family: string, counts: OutcomeCounts, members?: number): string {
   const total = members ?? SEVERITY_ORDER.reduce((n, s) => n + counts[s], 0);
-  // The ORDER is the requirement's own example, `reading × 4 · 3 ok · 1 failed` — ok first, then failed, blocked,
-  // running. It is NOT `SEVERITY_ORDER`, which is the severity ranking REQ-CHAT-065 gives for the header's COLOUR
-  // and is deliberately the opposite way round. The first form here reused the colour ranking and produced
-  // `reading × 4 · 1 failed · 3 ok`; the two halves of this batch disagreed on the string and the requirement's
-  // example settled it. Kept beside its replacement rather than repaired quietly.
-  const parts = SUMMARY_ORDER.filter((s) => counts[s] > 0).map((s) => `${counts[s]} ${s}`);
-  return [`${family} ×${total}`, ...parts].join(FACT_SEPARATOR);
+  return [`${family} ×${total}`, ...outcomeFacts(counts).map((f) => f.text)].join(FACT_SEPARATOR);
+}
+
+/**
+ * REQ-CHAT-065's per-outcome counts, each still carrying the outcome it counts.
+ *
+ * The ORDER is the requirement's own example, `reading × 4 · 3 ok · 1 failed` — ok first, then failed, blocked,
+ * running. It is NOT `SEVERITY_ORDER`, which is the severity ranking REQ-CHAT-065 gives for the header's COLOUR
+ * and is deliberately the opposite way round. The first form here reused the colour ranking and produced
+ * `reading × 4 · 1 failed · 3 ok`; the two halves of that batch disagreed on the string and the requirement's
+ * example settled it. Kept beside its replacement rather than repaired quietly.
+ *
+ * **PD-CHAT-006 is why the outcome rides along.** The fail colour belongs to `1 failed` and to nothing else on
+ * the line, so the renderer needs the parts rather than the joined string — and it needs them from the same walk
+ * that produces the string, or the text a reader copies and the text a reader sees could drift.
+ */
+function outcomeFacts(counts: OutcomeCounts): SegmentFact[] {
+  const facts: SegmentFact[] = [];
+  for (const s of SUMMARY_ORDER) if (counts[s] > 0) facts.push({ text: `${counts[s]} ${s}`, outcome: s });
+  return facts;
+}
+
+/** One drawable part of a segment: its text, and the outcome it states — `null` where it states none. */
+export interface SegmentFact {
+  readonly text: string;
+  readonly outcome: Severity | null;
 }
 
 /** PD-CHAT-004: facts inside one segment, and segments from one another. Two separators, never one. */
@@ -85,13 +104,25 @@ export function reasoningChars(row: TranscriptRow): number {
 }
 
 /**
- * PD-CHAT-004: one segment's own text. A tool segment is REQ-CHAT-065's string **unchanged**, which is why
- * `groupSummary` above is still the single definition of it; a reasoning segment states REQ-CHAT-062's two
- * figures instead of outcomes, because reasoning has no tool outcome to count.
+ * PD-CHAT-004: one segment's own parts. A tool segment is REQ-CHAT-065's string **unchanged** — `outcomeFacts`
+ * above is the single definition of the counts, so this and `groupSummary` cannot disagree; a reasoning segment
+ * states REQ-CHAT-062's two figures instead of outcomes, because reasoning has no tool outcome to count, and
+ * every one of its facts therefore carries `null`. PD-CHAT-006 draws from this.
  */
+export function segmentFacts(s: ActivitySegment): readonly SegmentFact[] {
+  if (s.reasoning) {
+    return [
+      { text: `${s.label} ×${s.members}`, outcome: null },
+      { text: `${Math.floor(s.durationMs / 1000)}s`, outcome: null },
+      { text: `~${s.tokens} tok`, outcome: null },
+    ];
+  }
+  return [{ text: `${s.label} ×${s.members}`, outcome: null }, ...outcomeFacts(s.counts)];
+}
+
+/** PD-CHAT-004: one segment's own text — the facts above, joined. Copy and the accessible description read this. */
 export function segmentSummary(s: ActivitySegment): string {
-  if (!s.reasoning) return groupSummary(s.label, s.counts, s.members);
-  return [`${s.label} ×${s.members}`, `${Math.floor(s.durationMs / 1000)}s`, `~${s.tokens} tok`].join(FACT_SEPARATOR);
+  return segmentFacts(s).map((f) => f.text).join(FACT_SEPARATOR);
 }
 
 /**

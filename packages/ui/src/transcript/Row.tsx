@@ -5,7 +5,7 @@ import { linkifyBare, type Span } from '../markdown/parse.js';
 import { markMotionStart } from '../motion.js';
 import { TerminalPreviewBlock } from '../terminal/TerminalPreviewBlock.js';
 import type { TerminalPreview } from '../terminal/streams.js';
-import { activitySpanMs, activitySummary, groupSeverity, groupSummary, isLive, isReasoningRow, reasoningChars, segmentSummary, type Severity } from './project.js';
+import { FACT_SEPARATOR, activitySpanMs, activitySummary, groupSeverity, groupSummary, isLive, isReasoningRow, reasoningChars, segmentFacts, type Severity } from './project.js';
 
 /**
  * Part AA — **the ONE row renderer** (ADR-0051's second execution). What one row looks like once a slot is
@@ -526,7 +526,22 @@ export function Row(p: RowProps) {
               <span className="activity__segments">
                 {display.segments.map((segment, index) => (
                   <span key={`${segment.label}-${index}`} className={`activity__segment${segment.reasoning ? ' activity__segment--reasoning' : ''}`} data-segment={segment.label}>
-                    {segmentSummary(segment)}
+                    {/* PD-CHAT-004 rev 2: the fail colour belongs to `1 failed` and to nothing else on the line, so
+                        the facts are drawn one element each rather than as one string. The separator is its own
+                        element rather than part of the fact behind it, so the dot between `3 ok` and `1 failed`
+                        stays the colour every other separator on the line is. The segment keeps `nowrap`, so
+                        splitting it changes where it may break not at all: it still may not break anywhere. */}
+                    {segmentFacts(segment).flatMap((fact, at) => {
+                      const drawn = (
+                        <span
+                          key={fact.text}
+                          className={fact.outcome === null ? undefined : `activity__fact activity__fact--${fact.outcome}`}
+                          data-outcome={fact.outcome ?? undefined}
+                        >{fact.text}</span>
+                      );
+                      if (at === 0) return [drawn];
+                      return [<span key={`${fact.text}-sep`} className="activity__sep">{FACT_SEPARATOR}</span>, drawn];
+                    })}
                   </span>
                 ))}
                 {/* PD-CHAT-004: the activity word of the segment in flight, marked as continuing, so "what is
@@ -539,7 +554,10 @@ export function Row(p: RowProps) {
                   >{display.inFlightLabel}…</span>
                 )}
               </span>
-              <span className={`tool__outcome tool__outcome--${severity}`}>{(durationMs / 1000).toFixed(1)}s</span>
+              {/* PD-CHAT-006: the run's elapsed span is a fact about the run, not about the failure — it keeps its
+                  ordinary colour. `data-severity` on the article above is still where the line PUBLISHES the
+                  ordering REQ-CHAT-065 fixes, which the directive leaves untouched. */}
+              <span className="tool__outcome" data-severity={severity}>{(durationMs / 1000).toFixed(1)}s</span>
             </DesignButton>
             {/* REQ-CHAT-065: while a member is in flight the header carries that call's text. */}
             {!expanded && display.inFlight !== null && <div className="tool__preview text-secondary mono">⤷ {display.inFlight}</div>}
@@ -695,8 +713,11 @@ export function Row(p: RowProps) {
               ))}
             </ol>
           )}
-          {/* REQ-CHAT-164: the animated indicator is REPLACED by the stalled one, and reverts as soon as any output arrives. */}
-          {live && stalled === null && <span ref={(element) => { if (element) markMotionStart(element); }} className="row__streaming" aria-label="still being written">…</span>}
+          {/* PD-CHAT-005: a row still being written draws NO animated indicator of its own — the pulsing `…` that
+              stood here is gone and nothing replaces it. The falsified line, kept beside its replacement:
+                {live && stalled === null && <span className="row__streaming" aria-label="still being written">…</span>}
+              REQ-CHAT-164's stalled indicator is untouched and now appears where nothing was drawn; reverting
+              when output arrives means drawing nothing again, which is what `stalled === null` now renders. */}
           {live && stalled !== null && <span className="row__stalled" data-testid="row-stalled" aria-description={stalledLabel(stalled)}>{stalledLabel(stalled)}</span>}
         </div>
       </div>

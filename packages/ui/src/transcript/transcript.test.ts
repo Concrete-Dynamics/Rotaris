@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { QuestionPrompt, TranscriptRow } from '@rotaris/contracts';
 import { classifyRows } from '@rotaris/ui-core';
 import {
-  activitySpanMs, activitySummary, capLines, capDiff, familyOf, groupSeverity, groupSummary, isLive, projectDisplay, rowKey, trailerRows,
+  activitySpanMs, activitySummary, capLines, capDiff, familyOf, groupSeverity, groupSummary, isLive, projectDisplay, rowKey,
+  segmentFacts, segmentSummary, trailerRows,
   FACT_SEPARATOR, SEGMENT_SEPARATOR, type ProjectOptions,
 } from './project.js';
 import type { DisplayRow } from './types.js';
@@ -449,6 +450,41 @@ describe('PD-CHAT-004 — the activity line', () => {
     expect(FACT_SEPARATOR).not.toBe(SEGMENT_SEPARATOR);
     // REQ-CHAT-065: and no raw tool output reaches it, however long the members' output was.
     expect(activitySummary(asGroup(projectDisplay(options([tool(0, 'grep', { output: 'SECRET' }), tool(1, 'grep', { output: 'SECRET' })]))[0]).segments)).not.toContain('SECRET');
+  });
+
+  it("PD-CHAT-004 rev 2: a segment's facts carry their outcome, and joining them IS the summary", () => {
+    const single = [tool(0, 'read_file'), tool(1, 'glob'), tool(2, 'view'), tool(3, 'list_dir', { toolStatus: 'failed' })];
+    const segment = asGroup(projectDisplay(options(single))[0]).segments[0]!;
+    const facts = segmentFacts(segment);
+    // The one property that keeps the drawn line and the copied line from drifting: the renderer walks these
+    // parts, copy joins them, and there is one definition of both.
+    expect(facts.map((f) => f.text).join(FACT_SEPARATOR)).toBe(segmentSummary(segment));
+    expect(segmentSummary(segment)).toBe('reading ×4 · 3 ok · 1 failed');
+    // The failure is ONE fact of four. The family word and the ok count state no outcome, so nothing but
+    // `1 failed` can take the fail colour — which is the whole of what the revision changes.
+    expect(facts.map((f) => [f.text, f.outcome])).toEqual([
+      ['reading ×4', null],
+      ['3 ok', 'ok'],
+      ['1 failed', 'failed'],
+    ]);
+    expect(facts.filter((f) => f.outcome === 'failed' || f.outcome === 'blocked')).toHaveLength(1);
+  });
+
+  it('PD-CHAT-004 rev 2: a reasoning segment states no outcome at all, so no part of it can be coloured as failed', () => {
+    const line = asGroup(projectDisplay(options(alternating))[0]);
+    const reasoning = line.segments.find((s) => s.reasoning)!;
+    // The severity ordering is untouched and still says the run failed where a member did; what may not happen
+    // is a reasoning fact taking that colour, because reasoning has no outcome to have failed at.
+    expect(segmentFacts(reasoning).every((f) => f.outcome === null)).toBe(true);
+    expect(segmentFacts(reasoning).map((f) => f.text).join(FACT_SEPARATOR)).toBe(segmentSummary(reasoning));
+  });
+
+  it('PD-CHAT-004 rev 2: a blocked member is a fact of its own, and a clean segment carries no colourable fact', () => {
+    const mixed = [tool(0, 'read_file'), tool(1, 'glob', { toolStatus: 'blocked' })];
+    const blocked = segmentFacts(asGroup(projectDisplay(options(mixed))[0]).segments[0]!);
+    expect(blocked.find((f) => f.outcome === 'blocked')?.text).toBe('1 blocked');
+    const clean = segmentFacts(asGroup(projectDisplay(options([tool(0, 'read_file'), tool(1, 'glob')]))[0]).segments[0]!);
+    expect(clean.some((f) => f.outcome === 'failed' || f.outcome === 'blocked')).toBe(false);
   });
 
   it('a reasoning segment sums its characters ONCE before dividing, and a reasoning-only run is never coloured failed', () => {

@@ -1,5 +1,5 @@
 import { OVERSCAN, ROW_MIN_HEIGHT } from './constants.js';
-import { FACT_SEPARATOR, segmentSummary } from './project.js';
+import { FACT_SEPARATOR, segmentFacts } from './project.js';
 import { isReasoningRow } from './Row.js';
 import type { DisplayRow } from './types.js';
 
@@ -74,10 +74,13 @@ export function estimateHeight(d: DisplayRow, expanded = false, width = 0): numb
     // PD-CHAT-004: the activity line is one line only while its segments FIT. `.activity__segments` is
     // `flex-wrap: wrap`, so a long run draws two, three or four of them — and the constant that used to be here
     // drew a twelve-segment run into a 36 px allocation, through the row beneath it.
-    // The summary's LENGTH, without building the summary: the drawn string is the one `Row` renders, and
-    // allocating a copy of it per row per paint is the cost REQ-CHAT-055's bound cannot absorb.
+    // The summary's LENGTH, without joining the summary: the drawn text is what `Row` renders fact by fact
+    // (PD-CHAT-006), and allocating a joined copy of it per row per paint is the cost REQ-CHAT-055's bound
+    // cannot absorb. Summing the facts gives the same figure — the segment's own text plus one separator.
     let width = 0;
-    for (const segment of d.segments) width += segmentSummary(segment).length + FACT_SEPARATOR.length;
+    for (const segment of d.segments) {
+      for (const fact of segmentFacts(segment)) width += fact.text.length + FACT_SEPARATOR.length;
+    }
     const lines = Math.max(main <= 0 ? 1 : Math.max(1, Math.ceil((width * CHARACTER) / main)), roleLines);
     // The `⤷` preview line drawn while a call is in flight.
     const flight = d.inFlight === null ? 0 : 20;

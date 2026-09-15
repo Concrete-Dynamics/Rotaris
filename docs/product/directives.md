@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Eight.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Nine.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale.
 
 ---
@@ -322,6 +322,11 @@ selecting rather than the unset whole-surface state the first checkbox state del
 
 ### PD-CHAT-004 — an agent's uninterrupted work draws as one activity line that updates in place
 
+*Revision 2 (2026-09-15, [R-023](requests.md#r-023)) — **the line's colour**, below. Revision 1
+(2026-09-15, [R-019](requests.md#r-019)) is quoted in place beside it. A changed directive takes a
+revision and never a new number ([`README.md`](README.md)); this is the register's first, so the form
+is fixed there.*
+
 **The run.** A *run* is a maximal sequence of consecutive transcript rows that belong to **one agent**
 and are of the `tool call` or `streamed reasoning` categories. A run of **two or more** rows SHALL be
 displayed as a single row — the **activity line**; a run of one row SHALL be displayed as that row,
@@ -347,8 +352,25 @@ time, on one line:
 - the run's **elapsed span** — from the earliest member's start to the last member's end — counting
   upward from the earliest start while the run is live.
 
-The line SHALL take its colour from the most severe outcome among its **tool** members, by
-REQ-CHAT-065's ordering; a run holding only reasoning is never coloured as failed.
+**The line's colour — revision 2.** The line SHALL NOT take one colour from the most severe outcome
+among its members. Within the line:
+
+- The **failure facts** of a segment — the `N failed` and `N blocked` counts REQ-CHAT-065 puts in it —
+  SHALL be drawn in the theme's fail state text colour.
+- Everything else on the line SHALL keep its ordinary colour: the family word and the `×N` total, the
+  `N ok` and `N running` counts, every reasoning segment, the chevron, the in-flight activity word, and
+  the run's elapsed span.
+
+REQ-CHAT-065's **severity ordering is untouched** and is still what the line computes and publishes —
+it is what the copy summary and the accessible description state, and what a reader of the drawn
+surface can still see, now located at the segment that holds it. What stops is that ordering selecting
+one colour for the whole line. A tool row drawn as its **own** row keeps REQ-CHAT-060's colouring in
+full, because that row **is** the call that failed; and expanding the line is untouched, each member
+being drawn as its own category states, which already colours the failed member and only it.
+
+> *Revision 1 said, and no longer governs:* "The line SHALL take its colour from the most severe
+> outcome among its **tool** members, by REQ-CHAT-065's ordering; a run holding only reasoning is never
+> coloured as failed." Kept in place beside its replacement rather than repaired quietly.
 
 **It never appends.** Extending a live run — a further tool call, a further reasoning phase — SHALL
 change what the activity line states and SHALL NOT add a displayed row. While one agent works, only a
@@ -393,11 +415,63 @@ been at this", which is the question the line is drawn to answer, at the cost of
 activity word**, so the glanceable "what is it doing" is a list rather than a word; the in-flight
 segment is drawn as continuing precisely to keep that answer available at a glance.
 
+**Why revision 2, and what it costs.** The owner read a run in which one agent thought, read and called
+tools, one call failed, and the whole line — reasoning included — turned red. Revision 1 said that
+should happen, because REQ-CHAT-065 says it, and REQ-CHAT-065 says it for a reason: a collapsed group
+hides its members, so a reader who cannot see the failure inside it needs to see it on the header. This
+directive changed the premise that reason rested on and revision 1 did not notice. The line is no longer
+one family word with counts behind it; it states its segments, and each segment already carries its own
+outcomes **as text**. The place to mark the failure therefore exists on the collapsed line, and marking
+the whole line instead reports reasoning as having failed when reasoning has no outcome at all. The cost
+is that the failure is now a smaller mark — two words rather than a line — so a reader skimming a long
+transcript for a red line will not find it as fast. That is the trade: precision over salience, on a
+surface that now has somewhere precise to put it.
+
 > **Narrows:** REQ-CHAT-046, REQ-CHAT-062, REQ-CHAT-064, REQ-CHAT-065
 > **Extends:** REQ-CHAT-067
 
 *Raised by the owner, 2026-09-15; logged as [R-017](requests.md#r-017) and chosen from four drawn
-approaches as [R-019](requests.md#r-019).*
+approaches as [R-019](requests.md#r-019). Revised by the owner, 2026-09-15; logged as
+[R-023](requests.md#r-023).*
+
+<a id="pd-chat-005"></a>
+
+### PD-CHAT-005 — a row still being written draws no animated indicator of its own
+
+A transcript row that is still being written SHALL NOT draw an animated indicator of its own. The
+pulsing `…` an agent-message row — and every other row of a category that is neither a tool call nor
+streamed reasoning — drew while live SHALL be removed, and SHALL NOT be replaced by another animated
+or blinking mark. The row's own growth is what says it is being written.
+
+**What is untouched, and why each survives.** This directive removes a mark that states nothing its
+row does not already show. It does not remove a mark that carries a fact:
+
+- REQ-CHAT-164's **stalled indicator** stands exactly as that requirement states it — at ten seconds
+  with no provider output the live row states that the model is not producing output and shows the
+  elapsed seconds, and reverts as soon as any further output arrives. What changes is only that it now
+  appears where nothing was drawn rather than replacing an animation. A stall is not visible in the
+  row's growth, which is precisely why it is drawn.
+- A tool row's `◉ running…` (REQ-CHAT-060), a reasoning row's `◉ reasoning… <N>s · ~<T> tok`
+  (REQ-CHAT-062) and the activity line's in-flight activity word (PD-CHAT-004) are **untouched,
+  animation included**. Each names which call, which phase, or how long — facts that appear nowhere
+  else on those rows, and on rows whose text does not grow as the answer arrives. Removing them was
+  considered and refused for that reason; a later directive may take them, and would say so here.
+- REQ-CHAT-063's refresh cadence is untouched. Live rows still repaint so their elapsed times advance;
+  what a repaint draws is what this directive fixes.
+
+**Why, and what it costs.** The owner read the built transcript and reported the mark as noise: it is
+on screen for the whole of every answer, it blinks the entire time, and it restates what the arriving
+text already shows. The specification is not wrong — an indicator that a row is live is a reasonable
+thing to have drawn, and REQ-CHAT-164 needs a name for the form it replaces — but the owner wants the
+transcript quieter. The cost is real and is at the start of an answer: a live message row that has
+produced no text yet, and has not yet been streaming for ten seconds, now draws nothing at all. For up
+to that long, a row exists with nothing in it, and a reader cannot tell a slow first token from an
+empty row. That window is exactly the one REQ-CHAT-164's threshold was chosen to bound, so it closes
+itself; it is stated here rather than discovered later.
+
+> **Narrows:** REQ-CHAT-164
+
+*Raised by the owner, 2026-09-15; logged as [R-022](requests.md#r-022).*
 
 ---
 

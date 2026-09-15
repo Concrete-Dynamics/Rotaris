@@ -93,6 +93,40 @@ describe('engine/run — the run loop end to end against a real store and a scri
     expect(readFileSync(summary, 'utf8')).toContain('completed');
   });
 
+  it('starts an improvement run from its supplied approved-proposal todo and persists that plan', async () => {
+    const { backend } = scripted([answer('Applied the first proposal.'), answer('Applied the second proposal.')]);
+    const { sessions } = sessionsWith(backend);
+    const started = sessions.start(dal, 'C:/ws', 'Apply the reviewed improvements.', {
+      runType: 'improvement_run',
+      initialTodo: {
+        schema_version: 1,
+        phases: [{
+          name: 'improvement_run',
+          tasks: [
+            { id: 'imp_1', text: 'Apply improvement imp_1: first', state: 'pending', consecutiveRetries: 0 },
+            { id: 'imp_2', text: 'Apply improvement imp_2: second', state: 'pending', consecutiveRetries: 0 },
+          ],
+        }],
+      },
+    });
+    if (!started.ok) throw new Error(JSON.stringify(started.error));
+
+    await sessions.running(started.value)!;
+
+    const session = dal.getSession(started.value)!;
+    expect(session.run_type).toBe('improvement_run');
+    expect(JSON.parse(session.todo!)).toEqual({
+      schema_version: 1,
+      phases: [{
+        name: 'improvement_run',
+        tasks: [
+          { id: 'imp_1', text: 'Apply improvement imp_1: first', state: 'complete', consecutiveRetries: 0 },
+          { id: 'imp_2', text: 'Apply improvement imp_2: second', state: 'complete', consecutiveRetries: 0 },
+        ],
+      }],
+    });
+  });
+
   it('A3: holds ownership through terminal inserts and delivery, releasing after detachment', async () => {
     const { backend } = scripted([answer('ok')]);
     const { sessions } = sessionsWith(backend);

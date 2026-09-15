@@ -12,8 +12,8 @@ export const CONFIG_ORIGINS = ['workspace', 'global', 'discovered', 'built-in'] 
 
 export const MODEL_SLOT_NAMES = ['default_summary_model', 'improvement_collector_model', 'gatekeeper_model', 'small_model', 'medium_model', 'large_model', 'fallback_model'] as const;
 export type ModelSlotName = (typeof MODEL_SLOT_NAMES)[number];
-/** REQ-CONFIG-256/329: the five slots the screen edits. */
-export const EDITABLE_SLOTS = ['large_model', 'medium_model', 'small_model', 'fallback_model', 'default_summary_model'] as const;
+/** REQ-CONFIG-256/329 and REQ-LIBRARY-040: the startup slots the screen edits. */
+export const EDITABLE_SLOTS = ['large_model', 'medium_model', 'small_model', 'fallback_model', 'default_summary_model', 'improvement_collector_model'] as const;
 export const REASONING_LEVEL_NAMES = ['auto', 'low', 'medium', 'high', 'max'] as const;
 export const ROLE_REASONING_NAMES = ['default', 'provider_default', ...REASONING_LEVEL_NAMES] as const;
 export const DELEGATION_STRATEGY_NAMES = ['orchestrator', 'swarm', 'single'] as const;
@@ -48,6 +48,7 @@ export const RuntimeViewSchema = z.object({
   allow_outside_workspace: z.boolean(),
   permission_mode: z.string(),
   improvement_collector_enabled: z.boolean(),
+  improvement_collector_timeout: z.number().int().min(1),
   keep_going: z.boolean(),
   run_start_mode: z.enum(RUN_START_MODE_NAMES),
   memory_diagnostics_enabled: z.boolean(),

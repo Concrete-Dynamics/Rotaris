@@ -7,6 +7,7 @@ import { PROVIDER_DIALOG_MODES } from './providers.js';
 import { PaneLayoutSchema } from './repository.js';
 import { SANDBOX_MODE_NAMES } from './config.js';
 import { PromptListSchema } from './library.js';
+import { ImprovementCommandSchema } from './improvements.js';
 import { ImageAttachmentInputSchema } from './channels.js';
 import { RequirementsCommandSchema } from './requirements.js'; // Part AK
 import { RequirementsRunsCommandSchema } from './requirements.js'; // Part AP
@@ -99,6 +100,13 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('artifacts.list') }),
   z.object({ kind: z.literal('artifacts.body'), ref: z.string().min(1) }),
   z.object({ kind: z.literal('artifacts.save'), ref: z.string().min(1), body: z.string() }),
+  /** REQ-LIBRARY-109..120/166..176: workspace-scoped improvement review and user-chosen exports. */
+  z.object({ kind: z.literal('improvements'), command: ImprovementCommandSchema }),
+  z.object({ kind: z.literal('improvements.export'), artifactId: z.string().min(1).optional() }),
+  z.object({ kind: z.literal('improvements.undoReview'), id: z.string().min(1) }),
+  z.object({ kind: z.literal('improvements.start'), artifactId: z.string().min(1) }),
+  z.object({ kind: z.literal('improvements.rollbackPreview'), artifactId: z.string().min(1) }),
+  z.object({ kind: z.literal('improvements.rollback'), artifactId: z.string().min(1), force: z.boolean() }),
   /** REQ-MONITOR-168 / REQ-GIT-102: the repository card's reads, relayed to the workspace service (ADR-0038). */
   z.object({ kind: z.literal('repository.read') }),
   /** REQ-GIT-105: the Git view's refresh, relayed to the workspace service; a missing Git raises REQ-GIT-104's notice in main. */

@@ -167,6 +167,7 @@ export interface RunDeps {
   readonly onSaved?: (generation: number) => void;
   readonly supervisorFor?: ((conversationId: string) => LoopSupervisor) | undefined;
   readonly resumeTodo?: TodoDocument | undefined;
+  readonly initialTodo?: TodoDocument | undefined;
   readonly continuation?: boolean | undefined;
   /** ADR-0036: the configured personas over the built-in table. */
   readonly personas?: PersonaResolver | undefined;
@@ -324,7 +325,11 @@ export class Run {
     this.waits = new WaitRegistry({ clocks: deps.clocks, onChange: () => this.publishWait() });
     const stored = deps.readSession();
     this.agentTodo = decodeStoredTodo(stored?.todo ?? null).agent;
-    this.todo = deps.resumeTodo ? Todo.fromDocument(deps.resumeTodo, deps.config.consecutiveRetryLimit) : Todo.fresh(deps.taskId, deps.taskLabel ?? deps.task, deps.config.consecutiveRetryLimit);
+    this.todo = deps.initialTodo
+      ? Todo.fromDocument(deps.initialTodo, deps.config.consecutiveRetryLimit)
+      : deps.resumeTodo
+        ? Todo.fromDocument(deps.resumeTodo, deps.config.consecutiveRetryLimit)
+        : Todo.fresh(deps.taskId, deps.taskLabel ?? deps.task, deps.config.consecutiveRetryLimit);
     if (deps.resumeTodo) this.todo.appendTask('Continued Prompts', deps.taskId, deps.taskLabel ?? deps.task);
     this.aggregates = Aggregates.rehydrate(stored);
     this.lastUsageEmitted = usageTotals(this.aggregates.usagePayload());

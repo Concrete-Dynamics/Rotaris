@@ -16,6 +16,7 @@ function context(): CommandContext & { readonly calls: string[] } {
     calls,
     activeView: 'overview',
     switchView: (id) => { calls.push(`switchView:${id}`); },
+    openLibrary: (tab) => { calls.push(`openLibrary:${tab}`); },
     openSettings: (category) => { calls.push(`openSettings:${category}`); },
     openPalette: () => { calls.push('openPalette'); },
     openKeyboardHelp: () => { calls.push('openKeyboardHelp'); },
@@ -37,6 +38,7 @@ describe('the command registry — REQ-SHELL-048/049, the ONE vocabulary', () =>
       ['run.submit', 'Start or continue run', 'Ctrl+Return'],
       ['help.keyboard', 'Show keyboard help', 'F1'],
       ['about.open', 'About & Legal', null],
+      ['library.proposals', 'Improvement proposals', null],
       // Part AK2 — REQ-TRACE-390's move control, registered here rather than bound privately by the board (the pin rides with the entry).
       ['requirements.move', 'Move requirement', 'Ctrl+M'],
       ['terminal.open', 'Open terminal', 'Ctrl+Shift+T'], // Part AL2 — the sixth chord, back from the omitted list
@@ -79,7 +81,7 @@ describe('the command registry — REQ-SHELL-048/049, the ONE vocabulary', () =>
       'openPalette', 'switchView:settings',
       'switchView:workspace', 'focusComposer',
       'switchView:workspace', 'submitRun',
-      'openKeyboardHelp', 'openSettings:about',
+      'openKeyboardHelp', 'openSettings:about', 'openLibrary:proposals',
       'switchView:requirements', // Part AK2 — the chord shows the view and places focus on the move control (REQ-TRACE-390).
     ]);
   });

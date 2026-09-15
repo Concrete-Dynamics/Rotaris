@@ -212,11 +212,24 @@ scripted client's step `artifact:<tool>[:<key>]` calls one of the three artifact
 
 **The improvement artifact store (ADR-0061; REQ-LIBRARY-002/036/042..058).** Main → workspace service:
 `improvements.command {workspaceRoot, command}` → `improvements.result {value, changed?}`. The command union carries
-list, detail, history, approved-proposal, collected-save, review, edit and delete operations. The workspace service
+list, detail, history, approved-proposal, collected-save, review, edit, delete, run preparation, applied-checkpoint,
+rollback-preview and rollback operations. The workspace service
 constructs `ImprovementReader` from its writable store handle and `ImprovementWriter` from that reader plus the
 mutation path, runs the legacy import on first construction, and remains the sole process with the write capability.
 Session creation crosses `runType` to the run host; existing callers default to `task_run`, and the session row keeps
 the first value across resume.
+
+**Reviewed improvement execution and rollback (REQ-LIBRARY-059..078/169..176).** Renderer → main:
+`improvements.start {artifactId}` prepares the approved-only todo, applies approved verifier blocks through the shared
+configuration writer, records or reuses the dedicated `pre_improvement` checkpoint, then starts a normal run-host
+session with `runType: improvement_run` and `initialTodo`. A terminal result asks the workspace service to record the
+`applied` checkpoint. `improvements.rollbackPreview {artifactId}` is read-only and returns sorted path actions plus any
+post-run work at risk; `improvements.rollback {artifactId, force}` first records `pre_rollback`, restores through Git,
+and records proposal reversal through the improvement writer. Improvement refs live under
+`refs/rotaris/improvements/<artifactId>/<sequence>` with independent retention. Every successful mutation bumps the
+`improvement-artifacts` library revision, while main publishes the persistent start, refusal, success, or discrepancy
+notice. Export is assembled from the same current records and retained history and written only after the desktop file
+chooser returns a destination.
 
 **The transcript's row renderer and the one command it needed (Part AA; ADR-0051's second execution).** Renderer →
 main: **`shell.openExternal {url}`** → `{url}` | a refusal. `REQ-CHAT-076` opens an `http(s)` link from transcript text

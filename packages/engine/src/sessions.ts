@@ -425,6 +425,8 @@ export interface StartOptions {
   readonly sandboxMode?: string | undefined;
   readonly attachments?: readonly ImageAttachmentInput[] | undefined;
   readonly runType?: RunType | undefined;
+  /** REQ-LIBRARY-059/060: a reviewed run may arrive with its approved proposal tasks already shaped as the todo. */
+  readonly initialTodo?: TodoDocument | undefined;
 }
 
 /** REQ-SESSION-082 / REQ-EVENTS-021: a refusal before the run starts is one `result` of status error, marked as such. */
@@ -857,6 +859,7 @@ export class Sessions {
         summariser: { backend: model.backend, model: model.summariser?.model ?? model.config.model, thinking: model.summariser?.thinking ?? model.config.thinking, timers: this.deps.clocks.timers, credentialFor: model.config.credentialFor },
       } : {}),
       ...(runtime?.drainTimeoutMs === undefined ? {} : { drainTimeoutMs: runtime.drainTimeoutMs as Millis }),
+      ...(opts.initialTodo === undefined ? {} : { initialTodo: opts.initialTodo }),
     });
     runRef.run = run;
     for (const c of entry.held.splice(0)) run.onCommitted(c);

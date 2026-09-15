@@ -253,7 +253,7 @@ async function handle(req: WorkspaceServiceRequest): Promise<ProcessReply> {
       return promptsRootsRead({ workspaceRoot: req.workspaceRoot, configDir: dirs.config }, log);
     case 'improvements.command': {
       if (!open) return { kind: 'refused', code: 'workspace.none', headline: 'Open a workspace before reading improvement artifacts' };
-      const result = improvementServiceFor(open, { workspaceRoot: req.workspaceRoot, clocks, log }).handle(req.command);
+      const result = await improvementServiceFor(open, { workspaceRoot: req.workspaceRoot, configFile: scopeFiles(dirs.config, req.workspaceRoot).workspace.agents, clocks, log }).handle(req.command);
       return { kind: 'improvements.result', value: result.value, ...(result.changed === undefined ? {} : { changed: result.changed }) };
     }
     case 'shutdown': {

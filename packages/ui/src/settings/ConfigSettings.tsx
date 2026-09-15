@@ -247,7 +247,12 @@ export function RuntimeSettings(props: ConfigSettingsProps) {
       <DesignCard className="card settings__card">
         <Toggle id="cb" label="Circuit breaker" hint="Watches every agent for repeated work and redirects it; escalates after three activations." on={pending.circuitBreakerEnabled} onChange={(v) => onChange({ kind: 'circuitBreaker', value: v })} />
         <Toggle id="outside" label="Allow outside workspace" hint="Lets agents read and change files outside the chosen workspace." on={rt.allow_outside_workspace} onChange={(v) => { if (v) setConfirm('outside'); else onChange({ kind: 'runtime', key: 'allow_outside_workspace', value: false }); }} />
-        <Toggle id="improvement" label="Improvement loop" hint="One collection pass follows each finished run. Stored; the pass itself is not built in this version." on={rt.improvement_collector_enabled} onChange={(v) => onChange({ kind: 'runtime', key: 'improvement_collector_enabled', value: v })} />
+        <Toggle id="improvement" label="Improvement loop" hint="Runs one bounded background analysis after each completed task run and stores reviewable proposals in the Library." on={rt.improvement_collector_enabled} onChange={(v) => onChange({ kind: 'runtime', key: 'improvement_collector_enabled', value: v })} />
+        <div className="settings__action">
+          <label htmlFor="improvement-timeout">Improvement analysis timeout</label>
+          <DesignInput id="improvement-timeout" className="input settings__number" type="number" min={1} value={Math.max(1, rt.improvement_collector_timeout)} onChange={(e) => onChange({ kind: 'runtime', key: 'improvement_collector_timeout', value: Math.max(1, Number(e.currentTarget.value) || 1) })} />
+          <span className="text-secondary settings__hint">seconds before the collector records its bounded timeout result</span>
+        </div>
         <Toggle id="keep-going" label="Keep going" hint="A run holds itself open while the last verification suite still has a failing or timed-out check; no budget is extended." on={rt.keep_going} onChange={(v) => onChange({ kind: 'runtime', key: 'keep_going', value: v })} />
         <div className="settings__action">
           <span>Permission mode</span>

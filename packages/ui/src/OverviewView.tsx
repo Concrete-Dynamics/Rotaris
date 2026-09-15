@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
-import { isBusy, presentationChildState, presentationStatus, STATUS_LABELS, type AgentRecord, type PaneLayout, type RepositoryState, type SessionListItemPayload, type SessionRecord } from '@rotaris/contracts';
+import { PROPOSAL_STATUSES, isBusy, presentationChildState, presentationStatus, STATUS_LABELS, type AgentRecord, type ImprovementArtifactRecord, type ImprovementProposal, type PaneLayout, type ProposalStatus, type RepositoryState, type SessionListItemPayload, type SessionRecord } from '@rotaris/contracts';
 import { AgentTree } from './AgentTree.js';
+import { categoryLabel, ProposalDecisionDialog, statusLabel } from './library/ProposalsTab.js';
 import { Button as DesignButton, EmptyState as DesignEmptyState, PageHeader as DesignPageHeader, Tag as DesignTag } from './design-system/index.js';
 
 /**
@@ -36,6 +37,9 @@ export interface OverviewProps {
   readonly onOpenSession: (sessionId: string) => void;
   readonly onContinueSession: (sessionId: string) => void;
   readonly onGoTo: (view: 'workspace' | 'mission' | 'library') => void;
+  readonly improvements: readonly ImprovementArtifactRecord[];
+  readonly onOpenProposal: (proposalId?: string) => void;
+  readonly onReviewProposal: (artifactId: string, proposalId: string, status: ProposalStatus, expectedVersionsDue: number) => Promise<{ ok: true } | { ok: false; reason: string }>;
   readonly reducedMotion?: boolean | undefined;
 }
 
@@ -156,6 +160,9 @@ export function OverviewView(props: OverviewProps) {
   const path = useMemo(() => (session ? sparklinePath(session.usageHistory, 160, 36) : null), [session]);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [newSessionError, setNewSessionError] = useState<string | null>(null);
+  const [proposalDecision, setProposalDecision] = useState<{ artifactId: string; versionsDue: number; proposal: ImprovementProposal; status: ProposalStatus } | null>(null);
+  const proposalRows = useMemo(() => props.improvements.flatMap((record) => record.artifact.proposals.map((proposal) => ({ artifactId: record.artifact.artifact_id, versionsDue: record.versions_due, proposal }))), [props.improvements]);
+  const pendingProposals = proposalRows.filter((row) => row.proposal.status === 'pending_review').length;
   const newSession = async () => { const r = await props.onNewSession(); setNewSessionError(r.ok ? null : r.reason); };
 
   return (
@@ -248,12 +255,19 @@ export function OverviewView(props: OverviewProps) {
             <Card kicker="Agents" className="ov-card--tree" actions={<DesignButton type="button" className="btn btn-link" onClick={() => props.onGoTo('mission')}>Open Mission</DesignButton>}>
               <AgentTree agents={session?.agents ?? []} selected={selectedAgent} onSelect={setSelectedAgent} nowIso={nowIso} />
             </Card>
-            <Card kicker="Improvement proposals" actions={<DesignTag className="tag tag-neutral">0 pending</DesignTag>}>
-              <div className="card-body">No proposals exist yet. <DesignButton type="button" className="btn btn-link" onClick={() => props.onGoTo('library')}>Open Library</DesignButton></div>
+            <Card kicker="Improvement proposals" className="ov-card--proposals" actions={<><DesignTag className="tag tag-accent">{pendingProposals} new</DesignTag><DesignButton type="button" className="btn btn-link" onClick={() => props.onOpenProposal()}>Open in Library →</DesignButton></>}>
+              {proposalRows.length === 0 ? <DesignEmptyState className="empty-state library__empty"><span className="empty-state-title">No proposals</span><span className="empty-state-hint">Run improvement analysis to produce reviewable suggestions.</span></DesignEmptyState>
+                : <ul className="ov-proposals">{proposalRows.slice(0, 4).map((row) => <li key={`${row.artifactId}:${row.proposal.id}`} className="ov-proposal">
+                  <DesignButton type="button" className="btn btn-link ov-proposal__summary" title="Open in Library → Improvement proposals" onClick={() => props.onOpenProposal(row.proposal.id)}>{row.proposal.summary}</DesignButton>
+                  <DesignTag className={`tag ${row.proposal.status === 'approved' ? 'tag-accent' : row.proposal.status === 'pending_review' ? 'tag-outline' : 'tag-neutral'}`}>{statusLabel(row.proposal.status)}</DesignTag>
+                  <span className="card-meta ov-proposal__category">{categoryLabel(row.proposal.category)}</span>
+                  <span className="ov-proposal__actions">{PROPOSAL_STATUSES.filter((status) => status !== row.proposal.status).map((status) => <DesignButton key={status} type="button" className="btn btn-link btn-compact" onClick={() => setProposalDecision({ ...row, status })}>{status === 'approved' ? 'Approve' : status === 'rejected' ? 'Reject' : status === 'deferred' ? 'Defer' : 'Reset to pending'}</DesignButton>)}</span>
+                </li>)}</ul>}
             </Card>
           </aside>
         </div>
       )}
+      {proposalDecision && <ProposalDecisionDialog proposal={proposalDecision.proposal} status={proposalDecision.status} onCancel={() => setProposalDecision(null)} onConfirm={() => { const decision = proposalDecision; setProposalDecision(null); void props.onReviewProposal(decision.artifactId, decision.proposal.id, decision.status, decision.versionsDue); }} />}
     </div>
   );
 }

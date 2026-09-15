@@ -2,13 +2,13 @@ import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'r
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
-import { BRIDGE_KEY, isBusy, isViewId, LIBRARY_TABS, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type ImageAttachmentInput, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type DisplayView, type PausePayload, type PauseResolution, type PlanDecision, type HookAgentId, type HooksSummary, type McpHealth, type McpListing, type McpSecretsView, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload, type QuestionAnswers } from '@rotaris/contracts';
+import { BRIDGE_KEY, isBusy, isViewId, LIBRARY_TABS, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type ImageAttachmentInput, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type DisplayView, type PausePayload, type PauseResolution, type PlanDecision, type HookAgentId, type HooksSummary, type ImprovementArtifactRecord, type ImprovementRollbackPreview, type ImprovementRollbackResult, type ProposalStatus, type McpHealth, type McpListing, type McpSecretsView, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload, type QuestionAnswers } from '@rotaris/contracts';
 import { createAcknowledgementStore, createNoticeStore, createReplicaStore, type AcknowledgementStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
 // Part AL2 — the terminal in this window (ADR-0021's subscription point, ADR-0047's window; REQ-SHELL-079..111): the
 // preview registry every transcript surface reads, the host that carries it, and the terminal window's own registry.
 import { TERMINAL_REFUSALS, TERMINAL_WINDOW_ROLE, type TerminalFrame, type TerminalRefusal, type TerminalWindowPayload } from '@rotaris/contracts';
 import { createTerminalWindowStreams, headlessEmulator, TerminalHostProvider, TerminalStreamSet, TerminalWindow, terminalWindowTitle, type TerminalActionResult, type TerminalActions, type TerminalHost } from '@rotaris/ui';
-import { Acknowledgements, type AboutInfo, applyChange, applyTheme, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, readTranscriptCounts, RowProof, type TrailerRow, WorktreeDialog, type SlashHost, RequirementsBoard } from '@rotaris/ui';
+import { Acknowledgements, type AboutInfo, applyChange, applyTheme, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, readTranscriptCounts, RowProof, type TrailerRow, WorktreeDialog, type SlashHost, RequirementsBoard } from '@rotaris/ui';
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls, and the shape it answers.
 import { bindPromptRootsReader, ToggleSwitch } from '@rotaris/ui';
 import type { PromptsRootsResult } from '@rotaris/contracts';
@@ -697,18 +697,28 @@ function Mission({ workspace, popOut }: { workspace: string; popOut: boolean }) 
  * run reaches a terminal state; the configured caps come from the configuration snapshot (REQ-MONITOR-169).
  */
 const UNREAD_REPOSITORY: RepositoryState = { gitAvailable: false, isRepository: false, branch: null, base: null, ahead: 0, behind: 0, touched: 0, uncommitted: 0, failed: ['request'], readMs: 0 };
-function Overview({ workspace, layout, onLayout, reducedMotion, onListSessions, onOpenSession, onNewSession }: { workspace: string; layout: PaneLayout | undefined; onLayout: (l: PaneLayout) => void; reducedMotion: boolean; onListSessions: () => void; onOpenSession: (id: string) => Promise<{ ok: true } | { ok: false; reason: string }>; onNewSession: () => Promise<{ ok: true } | { ok: false; reason: string }> }) {
+function Overview({ workspace, layout, onLayout, reducedMotion, onListSessions, onOpenSession, onNewSession, libraryRevision }: { workspace: string; layout: PaneLayout | undefined; onLayout: (l: PaneLayout) => void; reducedMotion: boolean; onListSessions: () => void; onOpenSession: (id: string) => Promise<{ ok: true } | { ok: false; reason: string }>; onNewSession: () => Promise<{ ok: true } | { ok: false; reason: string }>; libraryRevision: number }) {
   const session = useStore(replica, (s) => s.session);
   const [sessions, setSessions] = useState<readonly SessionListItemPayload[]>([]);
   const [sessionsState, setSessionsState] = useState<'idle' | 'loading' | 'error'>('idle');
   const [sessionsError, setSessionsError] = useState<string | null>(null);
   const [repository, setRepository] = useState<RepositoryState | null>(null);
   const [caps, setCaps] = useState<{ depth: number; fanOut: number } | null>(null);
+  const [improvements, setImprovements] = useState<readonly ImprovementArtifactRecord[]>([]);
   const [nowIso, setNowIso] = useState(() => new Date().toISOString());
   const hasWorkspace = workspace !== '(no workspace)';
   const status = session?.executionStatus ?? null;
   // Changes when a session is followed, and when the followed run stops being busy — the refresh triggers of REQ-MONITOR-174.
   const refreshKey = session ? (isBusy(session.executionStatus) ? `${session.id}:busy` : `${session.id}:${status}`) : 'none';
+  useEffect(() => {
+    let live = true;
+    queueMicrotask(() => {
+      if (!live) return;
+      if (!hasWorkspace) { setImprovements([]); return; }
+      void bridge.command({ kind: 'improvements', command: { action: 'list' } }).then((result) => { if (live) setImprovements(result.ok ? result.value as ImprovementArtifactRecord[] : []); });
+    });
+    return () => { live = false; };
+  }, [hasWorkspace, libraryRevision]);
   const refresh = useCallback(async () => {
     if (!hasWorkspace) { setRepository(UNREAD_REPOSITORY); return; }
     setSessionsState('loading');
@@ -735,6 +745,12 @@ function Overview({ workspace, layout, onLayout, reducedMotion, onListSessions, 
     onListSessions={onListSessions} onNewSession={onNewSession}
     onOpenSession={(id) => { void onOpenSession(id); }} onContinueSession={(id) => { void onOpenSession(id); }}
     onGoTo={(view) => useShellState.getState().switchView(view)}
+    improvements={improvements}
+    onOpenProposal={(proposalId) => useShellState.getState().openLibrary('proposals', proposalId)}
+    onReviewProposal={async (artifactId, proposalId, proposalStatus, expectedVersionsDue) => {
+      const result = await bridge.command({ kind: 'improvements', command: { action: 'review', request: { artifact_id: artifactId, proposal_id: proposalId, status: proposalStatus, expected_versions_due: expectedVersionsDue } } });
+      return result.ok ? { ok: true } : { ok: false, reason: result.detail ?? result.headline };
+    }}
   />;
 }
 
@@ -747,14 +763,6 @@ function Overview({ workspace, layout, onLayout, reducedMotion, onListSessions, 
  * empty table that would read as "there is nothing", which is a different claim: no ADR owns the improvement artifact
  * store's write path (OQ-45), so the tab behind it is a part of its own and has not been authorised.
  */
-function TabPlaceholder({ testId, title, body }: { testId: string; title: string; body: string }) {
-  return (
-    <div className="empty-state library__placeholder" data-testid={testId}>
-      <span className="empty-state-title">{title}</span>
-      <span className="empty-state-hint">{body}</span>
-    </div>
-  );
-}
 function Library({ prompts, layout, onLayout }: { prompts: PromptsApi; layout: PaneLayout | undefined; onLayout: (l: PaneLayout) => void }) {
   // REQ-LIBRARY-105: the query lives above the tabs, so a refresh replaces the lists and never the typed text.
   const [query, setQuery] = useState('');
@@ -782,6 +790,48 @@ function Library({ prompts, layout, onLayout }: { prompts: PromptsApi; layout: P
       ? current.map((x) => (x.id === id ? { id, raised: x.raised + 1 } : x))
       : [...current, { id, raised: 1 }]));
   }, []);
+  const focusedProposalId = useShellState((state) => state.libraryProposalId);
+  const readImprovements = useCallback(async () => {
+    const result = await bridge.command({ kind: 'improvements', command: { action: 'list' } });
+    return result.ok ? { ok: true as const, records: result.value as ImprovementArtifactRecord[] } : { ok: false as const, reason: result.detail ?? result.headline };
+  }, []);
+  const readImprovementHistory = useCallback(async (artifactId: string) => {
+    const result = await bridge.command({ kind: 'improvements', command: { action: 'history', artifact_id: artifactId } });
+    return result.ok ? { ok: true as const, history: result.value as ImprovementHistoryPayload } : { ok: false as const, reason: result.detail ?? result.headline };
+  }, []);
+  const reviewProposal = useCallback(async (artifactId: string, proposalId: string, status: ProposalStatus, expectedVersionsDue: number) => {
+    const result = await bridge.command({ kind: 'improvements', command: { action: 'review', request: { artifact_id: artifactId, proposal_id: proposalId, status, expected_versions_due: expectedVersionsDue } } });
+    return result.ok ? { ok: true as const, result: result.value as ProposalReviewResult } : { ok: false as const, reason: result.detail ?? result.headline };
+  }, []);
+  const editProposal = useCallback(async (artifactId: string, proposalId: string, summary: string, recommendedAction: string, expectedVersionsDue: number) => {
+    const result = await bridge.command({ kind: 'improvements', command: { action: 'edit', request: { artifact_id: artifactId, proposal_id: proposalId, summary, recommended_action: recommendedAction, expected_versions_due: expectedVersionsDue } } });
+    return result.ok ? { ok: true as const, result: result.value as ProposalMutationResult } : { ok: false as const, reason: result.detail ?? result.headline };
+  }, []);
+  const deleteProposal = useCallback(async (artifactId: string, proposalId: string, expectedVersionsDue: number) => {
+    const result = await bridge.command({ kind: 'improvements', command: { action: 'delete', request: { artifact_id: artifactId, proposal_id: proposalId, expected_versions_due: expectedVersionsDue } } });
+    return result.ok ? { ok: true as const, result: result.value as ProposalMutationResult } : { ok: false as const, reason: result.detail ?? result.headline };
+  }, []);
+  const exportImprovements = useCallback(async (artifactId?: string) => {
+    const result = await bridge.command({ kind: 'improvements.export', ...(artifactId === undefined ? {} : { artifactId }) });
+    if (!result.ok) return { ok: false as const, reason: result.detail ?? result.headline };
+    const value = result.value as { cancelled: boolean; destination?: string };
+    return { ok: true as const, ...value };
+  }, []);
+  const startImprovement = useCallback(async (artifactId: string) => {
+    const result = await bridge.command({ kind: 'improvements.start', artifactId });
+    if (!result.ok) return { ok: false as const, reason: result.detail ?? result.headline };
+    const sessionId = (result.value as { sessionId: string | null }).sessionId;
+    if (sessionId !== null) focusSession?.(sessionId);
+    return { ok: true as const };
+  }, []);
+  const previewImprovementRollback = useCallback(async (artifactId: string) => {
+    const result = await bridge.command({ kind: 'improvements.rollbackPreview', artifactId });
+    return result.ok ? { ok: true as const, preview: result.value as ImprovementRollbackPreview } : { ok: false as const, reason: result.detail ?? result.headline };
+  }, []);
+  const rollbackImprovement = useCallback(async (artifactId: string, force: boolean) => {
+    const result = await bridge.command({ kind: 'improvements.rollback', artifactId, force });
+    return result.ok ? { ok: true as const, result: result.value as ImprovementRollbackResult } : { ok: false as const, reason: result.detail ?? result.headline };
+  }, []);
   return (<>
     <LibraryView
       query={query}
@@ -789,8 +839,9 @@ function Library({ prompts, layout, onLayout }: { prompts: PromptsApi; layout: P
       prompts={<PromptsTab query={foldLibraryQuery(query)} revision={prompts.revision} history={prompts.history} stash={prompts.stash} layout={layout} onLayout={onLayout}
         onUse={(list, index, remove) => { void prompts.take(list, index, remove).then(loadIntoComposer); }} />}
       artifacts={<ArtifactsTab query={foldLibraryQuery(query)} revision={prompts.revision} onRead={read} onInspect={inspect} />}
-      proposals={<TabPlaceholder testId="library-proposals-placeholder" title="No improvement proposals yet"
-        body="Proposals come from the post-run improvement analyst, and neither the analyst nor the store that would hold its artifacts is built in this version. This tab is not saying a run produced no suggestions." />}
+      proposals={<ProposalsTab query={foldLibraryQuery(query)} revision={prompts.revision} focusedProposalId={focusedProposalId} onConsumeFocusedProposal={() => useShellState.getState().takeLibraryProposalId()}
+        onRead={readImprovements} onHistory={readImprovementHistory} onReview={reviewProposal} onEdit={editProposal} onDelete={deleteProposal} onExport={exportImprovements}
+        onStart={startImprovement} onRollbackPreview={previewImprovementRollback} onRollback={rollbackImprovement} />}
     />
     {open.map((entry) => (
       // ADR-0051: a link is an element that requests an external open THROUGH THE COMMAND CHANNEL. No such
@@ -1115,12 +1166,14 @@ function dispatchNoticeAction(action: NoticeAction): void {
       if (!(LIBRARY_TABS as readonly string[]).includes(action.tab)) { console.warn(`notice action named a Library tab outside REQ-LIBRARY-103: ${action.tab}`); return; }
       shell.openLibrary(action.tab);
       return;
+    case 'revert-proposal-review':
+      void bridge.command({ kind: 'improvements.undoReview', id: action.id });
+      return;
     case 'install-update':
     case 'restart':
     case 'open-cloud-account':
     case 'open-project-init':
     case 'retry-run':
-    case 'revert-proposal-review':
     case 'save-settings':
       // Each is a member REQ-NOTIFY-044 fixes whose target does not exist in this build (no updater, no hosted cloud,
       // no project-initialization surface, no proposal store). Nothing is dispatched and the attempt is recorded.
@@ -1332,7 +1385,7 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
       onChooseWorkspace={chooseWorkspace}
       statusItems={status}
       views={{
-        overview: <Overview workspace={workspace} layout={layout} onLayout={onLayout} reducedMotion={reducedMotion} onListSessions={() => { void loadSessions(); }} onOpenSession={openSession} onNewSession={openStartDialog} />,
+        overview: <Overview workspace={workspace} layout={layout} onLayout={onLayout} reducedMotion={reducedMotion} onListSessions={() => { void loadSessions(); }} onOpenSession={openSession} onNewSession={openStartDialog} libraryRevision={prompts.revision} />,
         // Part AL2: the terminal host around the Workspace — the row previews, the pop-out click and the toolbar control read it (REQ-SHELL-079/080/108).
         workspace: <TerminalHostProvider host={terminalHost}><Workspace models={models} modelsLoaded={modelsLoaded} workspace={workspace} popOut={popOut} prompts={prompts} onOpenStash={() => setStashOpen(true)} groupTools={groupTools} layout={workspaceLayout} onLayout={onWorkspaceLayout} onOpenTrailer={openTrailer} /></TerminalHostProvider>,
         mission: <Mission workspace={workspace} popOut={popOut} />,

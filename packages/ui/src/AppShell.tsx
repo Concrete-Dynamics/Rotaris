@@ -97,6 +97,7 @@ export function useCommandContext(): CommandContext {
     activeView,
     switchView: (id) => useShellState.getState().switchView(id),
     openSettings: (category) => useShellState.getState().openSettings(category),
+    openLibrary: (tab) => useShellState.getState().openLibrary(tab),
     openPalette: () => useShellState.getState().openPalette(),
     openKeyboardHelp: () => useShellState.getState().openKeyboardHelp(),
     focusComposer: () => nowOrAfterMount(() => { const input = composerInput(); if (!input) return false; input.focus(); return true; }),

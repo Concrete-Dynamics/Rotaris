@@ -20,6 +20,7 @@ export interface CommandContext {
   readonly activeView: ViewId;
   switchView(id: ViewId): void;
   openSettings(category: string): void;
+  openLibrary(tab: 'proposals'): void;
   openPalette(): void;
   openKeyboardHelp(): void;
   /** REQ-CHAT-002 / REQ-SHELL-049: after the switch to Workspace, put the caret in the composer once it is mounted. */
@@ -80,6 +81,8 @@ export const COMMANDS: readonly Command[] = [
   { id: 'help.keyboard', label: 'Show keyboard help', shortcut: 'F1', keywords: ['shortcuts', 'keys', 'hotkeys', 'bindings', 'keyboard'], available: always, run: (ctx) => ctx.openKeyboardHelp() },
   // REQ-SHELL-138 / REQ-SHELL-049: "About & Legal" is palette-only, no shortcut; it opens Settings on the About tab.
   { id: 'about.open', label: 'About & Legal', keywords: ['version', 'licence', 'license', 'legal', 'credits', 'notices', 'diagnostics'], available: always, run: (ctx) => ctx.openSettings('about') },
+  // REQ-LIBRARY-174: the durable route to proposals appears in every surface backed by this one vocabulary.
+  { id: 'library.proposals', label: 'Improvement proposals', keywords: ['review', 'post-run', 'suggestions', 'library'], available: always, run: (ctx) => ctx.openLibrary('proposals') },
   // Part AK2 — REQ-TRACE-390: the board's move control is reached by the platform's primary modifier with M, registered
   // HERE rather than bound privately by the view, so a collision is settled in one place and the chord stays
   // re-bindable; every sentence that names it reads `commandById('requirements.move').shortcut`. The command does

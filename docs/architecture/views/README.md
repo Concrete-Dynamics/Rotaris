@@ -24,11 +24,13 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-14** — **the post-run improvement analyst**: the run host captures a fixed,
-bounded terminal-state snapshot and executes a no-tools analyst; main owns one application-wide FIFO, cancellation and
-the activity publication; the workspace service remains the single improvement writer. Schema v18 carries the immutable
-session run type, durable session-to-artifact association, current records, immutable versions and both gap counters.
-The component, process and runtime views carry the package responsibilities, messages, channel and tables.
+Last reconciled with the code: **2026-09-15** — **the complete reviewed-improvement lifecycle**: the Library and
+Overview read one proposal store; review, edit, delete, export and Undo flow through main to the workspace service;
+approved proposals become an `improvement_run` todo; verifier blocks use the shared configuration writer; dedicated Git
+checkpoints provide previewed, confirmed rollback with a pre-rollback safety point. The process view carries the new
+renderer commands, run-host `initialTodo`, workspace-service actions, revision bumps and outcome notices. Schema v18
+continues to carry the immutable session run type, durable session-to-artifact association, current records, immutable
+versions and both gap counters.
 
 Earlier the same day — **`PD-LIBRARY-001`'s closeout (the hundredth defect)**: the engine
 artifact port's private section list is replaced by contracts' `ARTIFACT_SECTIONS` (an internal definition, not a

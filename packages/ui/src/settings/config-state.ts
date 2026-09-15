@@ -16,6 +16,7 @@ export interface PendingSettings {
     readonly allow_outside_workspace: boolean;
     readonly permission_mode: string;
     readonly improvement_collector_enabled: boolean;
+    readonly improvement_collector_timeout: number;
     readonly keep_going: boolean;
     readonly run_start_mode: 'auto' | 'plan';
   };
@@ -48,7 +49,7 @@ export function pendingFrom(snapshot: ConfigSnapshot): PendingSettings {
     runtime: {
       max_depth: snapshot.runtime.max_depth, max_active_children: snapshot.runtime.max_active_children, max_iterations: snapshot.runtime.max_iterations,
       allow_outside_workspace: snapshot.runtime.allow_outside_workspace, permission_mode: snapshot.runtime.permission_mode,
-      improvement_collector_enabled: snapshot.runtime.improvement_collector_enabled, keep_going: snapshot.runtime.keep_going, run_start_mode: snapshot.runtime.run_start_mode,
+      improvement_collector_enabled: snapshot.runtime.improvement_collector_enabled, improvement_collector_timeout: snapshot.runtime.improvement_collector_timeout, keep_going: snapshot.runtime.keep_going, run_start_mode: snapshot.runtime.run_start_mode,
     },
     circuitBreakerEnabled: snapshot.circuitBreakerEnabled,
     compressorThresholdPercentage: snapshot.compressorThresholdPercentage,

@@ -4,3 +4,4 @@ export * from './PromptsTab.js';
 export * from './StashDialog.js';
 export * from './ArtifactsTab.js';
 export * from './ArtifactInspector.js';
+export * from './ProposalsTab.js';

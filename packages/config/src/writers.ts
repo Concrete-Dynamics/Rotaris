@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { isMap, isNode, type Document, type Node, type YAMLMap } from 'yaml';
-import { LEGACY_ROLE_ALIASES } from '@rotaris/contracts';
+import { LEGACY_ROLE_ALIASES, VerifierSectionSchema, type VerifierSection } from '@rotaris/contracts';
 import { err, millis, ok, type Result, type Timers } from '@rotaris/kernel';
 import { replaceDocument, replaceDocumentSync, type RetryLadder } from '@rotaris/platform';
 import { parseConfig, plainOf } from './document.js';
@@ -153,6 +153,23 @@ export async function writeConfigFields(file: string, patch: PlainMap, deps: Wri
   }
   overlayDocument(opened.value.doc, patch);
   return commit(file, opened.value.doc, deps.timers);
+}
+
+/** REQ-LIBRARY-009/063: gate proposals use the running verifier-section schema and the scoped config writer. */
+export async function writeVerifierSection(file: string, section: unknown, deps: WriterDeps = {}): Promise<Result<WriteOutcome & { changed: boolean }, WriteRefusal>> {
+  const parsed = VerifierSectionSchema.safeParse(section);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0]!;
+    return err({ code: 'invalid', file, fault: `verifier.${issue.path.join('.')}: ${issue.message}` });
+  }
+  const opened = openDocument(file);
+  if (!opened.ok) return opened;
+  const before = plainOf(opened.value.doc.contents) as PlainMap;
+  const current = before['verifier'];
+  const currentParsed = VerifierSectionSchema.safeParse(current);
+  if (currentParsed.success && JSON.stringify(currentParsed.data) === JSON.stringify(parsed.data)) return ok({ file, text: opened.value.doc.toString({ lineWidth: 0 }), changed: false });
+  const written = await writeConfigFields(file, { verifier: parsed.data as VerifierSection }, deps);
+  return written.ok ? ok({ ...written.value, changed: true }) : written;
 }
 
 export type RoleEditScope = 'workspace' | 'global';

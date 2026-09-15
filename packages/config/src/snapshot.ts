@@ -54,7 +54,7 @@ export function snapshotOf(cfg: LoadedConfiguration): ConfigSnapshot {
     runtime: {
       max_depth: cfg.runtime.max_depth, max_active_children: cfg.runtime.max_active_children, max_iterations: cfg.runtime.max_iterations,
       allow_outside_workspace: cfg.runtime.allow_outside_workspace, permission_mode: cfg.runtime.permission_mode,
-      improvement_collector_enabled: cfg.runtime.improvement_collector_enabled, keep_going: cfg.runtime.keep_going, run_start_mode: cfg.runtime.run_start_mode,
+      improvement_collector_enabled: cfg.runtime.improvement_collector_enabled, improvement_collector_timeout: cfg.runtime.improvement_collector_timeout, keep_going: cfg.runtime.keep_going, run_start_mode: cfg.runtime.run_start_mode,
       memory_diagnostics_enabled: cfg.runtime.memory_diagnostics_enabled, sandbox_mode: cfg.runtime.sandbox_mode,
     },
     rawRuntime: { workspace: rawRuntimeOf(cfg.raw.workspace.agents), global: rawRuntimeOf(cfg.raw.global.agents) },
@@ -78,7 +78,7 @@ export function fatalSnapshot(globalDir: string, workspaceRoot: string, report: 
     runtime: {
       max_depth: RUNTIME_DEFAULTS.max_depth, max_active_children: RUNTIME_DEFAULTS.max_active_children, max_iterations: RUNTIME_DEFAULTS.max_iterations,
       allow_outside_workspace: RUNTIME_DEFAULTS.allow_outside_workspace, permission_mode: RUNTIME_DEFAULTS.permission_mode,
-      improvement_collector_enabled: RUNTIME_DEFAULTS.improvement_collector_enabled, keep_going: RUNTIME_DEFAULTS.keep_going, run_start_mode: RUNTIME_DEFAULTS.run_start_mode,
+      improvement_collector_enabled: RUNTIME_DEFAULTS.improvement_collector_enabled, improvement_collector_timeout: RUNTIME_DEFAULTS.improvement_collector_timeout, keep_going: RUNTIME_DEFAULTS.keep_going, run_start_mode: RUNTIME_DEFAULTS.run_start_mode,
       memory_diagnostics_enabled: RUNTIME_DEFAULTS.memory_diagnostics_enabled, sandbox_mode: RUNTIME_DEFAULTS.sandbox_mode,
     },
     rawRuntime: { workspace: null, global: null },

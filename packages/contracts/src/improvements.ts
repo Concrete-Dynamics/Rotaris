@@ -40,6 +40,43 @@ export type ImprovementCheckpointKind = z.infer<typeof ImprovementCheckpointKind
 const utc = z.string().datetime({ offset: true });
 const nullableId = z.string().min(1).nullable().default(null);
 
+export const VERIFIER_ROLES = ['test', 'typecheck', 'lint', 'other'] as const;
+export const VERIFIER_SEVERITIES = ['blocking', 'advisory'] as const;
+export const VerifierCheckSchema = z.object({
+  name: z.string().trim().min(1),
+  command: z.string().trim().min(1),
+  timeout: z.number().int().min(1).max(600).default(600),
+  severity: z.enum(VERIFIER_SEVERITIES).default('blocking'),
+  role: z.enum(VERIFIER_ROLES).optional(),
+  cwd: z.string().trim().min(1).optional(),
+  failure_pattern: z.string().optional(),
+}).strict().superRefine((check, ctx) => {
+  if (check.cwd !== undefined) {
+    const pieces = check.cwd.replaceAll('\\', '/').split('/');
+    if (/^(?:[A-Za-z]:[\\/]|[\\/])/.test(check.cwd) || pieces.includes('..')) {
+      ctx.addIssue({ code: 'custom', path: ['cwd'], message: 'cwd must be a workspace-relative directory without parent traversal' });
+    }
+  }
+  if (check.failure_pattern !== undefined) {
+    try { new RegExp(check.failure_pattern); } catch { ctx.addIssue({ code: 'custom', path: ['failure_pattern'], message: `invalid regular expression: ${check.failure_pattern}` }); }
+  }
+});
+export const VerifierSectionSchema = z.object({
+  checks: z.array(VerifierCheckSchema).optional(),
+  gate_completion: z.boolean().optional(),
+  suite_timeout: z.number().int().min(1).nullable().optional(),
+  author_gate: z.boolean().optional(),
+  probe_timeout: z.number().int().min(1).optional(),
+  max_repair_attempts: z.number().int().min(0).optional(),
+}).strict().superRefine((section, ctx) => {
+  const seen = new Set<string>();
+  for (const [index, check] of (section.checks ?? []).entries()) {
+    if (seen.has(check.name)) ctx.addIssue({ code: 'custom', path: ['checks', index, 'name'], message: `duplicate check name: ${check.name}` });
+    seen.add(check.name);
+  }
+});
+export type VerifierSection = z.infer<typeof VerifierSectionSchema>;
+
 export const ImprovementEvidenceSchema = z.object({
   kind: z.string().trim().min(1),
   text: z.string().trim().min(1),
@@ -59,7 +96,7 @@ export const ImprovementProposalSchema = z.object({
   risk: ImprovementRiskSchema.default('low'),
   status: ProposalStatusSchema.default('pending_review'),
   target_persona: z.string().trim().min(1).nullable().default(null),
-  proposed_verifier_section: z.record(z.string(), z.unknown()).nullable().default(null),
+  proposed_verifier_section: VerifierSectionSchema.nullable().default(null),
   created_at: utc,
 }).superRefine((proposal, ctx) => {
   if (proposal.category === 'persona_memory_update' && proposal.target_persona === null) {
@@ -177,6 +214,41 @@ export const ImprovementAnalysisJobSchema = z.object({
 });
 export type ImprovementAnalysisJob = z.infer<typeof ImprovementAnalysisJobSchema>;
 
+export const IMPROVEMENT_GATE_OUTCOMES = ['applied', 'unchanged', 'invalid', 'failed'] as const;
+export const ImprovementGateResultSchema = z.object({ proposal_id: z.string(), outcome: z.enum(IMPROVEMENT_GATE_OUTCOMES), detail: z.string().nullable() });
+export type ImprovementGateResult = z.infer<typeof ImprovementGateResultSchema>;
+export const ImprovementRunTaskSchema = z.object({ proposal_id: z.string(), name: z.string(), payload: z.string() });
+export type ImprovementRunTask = z.infer<typeof ImprovementRunTaskSchema>;
+export const ImprovementRunPlanSchema = z.object({ artifact_id: z.string(), phases: z.array(z.object({ name: z.literal('improvement_run'), tasks: z.array(ImprovementRunTaskSchema) })).max(1) });
+export type ImprovementRunPlan = z.infer<typeof ImprovementRunPlanSchema>;
+export const ImprovementPreparationSchema = z.object({
+  artifact: ImprovementArtifactRecordSchema,
+  plan: ImprovementRunPlanSchema,
+  prompt: z.string().min(1),
+  gate_results: z.array(ImprovementGateResultSchema),
+  checkpoint: ImprovementCheckpointSchema.nullable(),
+  checkpoint_reason: z.string().nullable(),
+});
+export type ImprovementPreparation = z.infer<typeof ImprovementPreparationSchema>;
+export const IMPROVEMENT_ROLLBACK_ACTIONS = ['delete', 'restore', 'revert'] as const;
+export const ImprovementRollbackPreviewSchema = z.object({
+  artifact_id: z.string(),
+  entries: z.array(z.object({ path: z.string(), action: z.enum(IMPROVEMENT_ROLLBACK_ACTIONS) })),
+  dirty: z.array(z.string()),
+  blocked_reason: z.string().nullable(),
+  dirty_only: z.boolean(),
+});
+export type ImprovementRollbackPreview = z.infer<typeof ImprovementRollbackPreviewSchema>;
+export const ImprovementRollbackResultSchema = z.object({
+  restored: z.boolean(),
+  changed_files: z.number().int().nonnegative(),
+  reset_proposal_ids: z.array(z.string()),
+  safety_checkpoint: ImprovementCheckpointSchema.nullable(),
+  blocked_reason: z.string().nullable(),
+  warning: z.string().nullable(),
+});
+export type ImprovementRollbackResult = z.infer<typeof ImprovementRollbackResultSchema>;
+
 /** Workspace-service command surface; the service owns every mutation (REQ-LIBRARY-158). */
 export const ImprovementCommandSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('list') }),
@@ -187,5 +259,9 @@ export const ImprovementCommandSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('review'), request: ProposalReviewRequestSchema }),
   z.object({ action: z.literal('edit'), request: ProposalEditRequestSchema }),
   z.object({ action: z.literal('delete'), request: ProposalDeleteRequestSchema }),
+  z.object({ action: z.literal('prepare'), artifact_id: z.string(), dry_run: z.boolean().optional() }),
+  z.object({ action: z.literal('record-applied'), artifact_id: z.string() }),
+  z.object({ action: z.literal('rollback-preview'), artifact_id: z.string() }),
+  z.object({ action: z.literal('rollback'), artifact_id: z.string(), force: z.boolean().default(false) }),
 ]);
 export type ImprovementCommand = z.infer<typeof ImprovementCommandSchema>;

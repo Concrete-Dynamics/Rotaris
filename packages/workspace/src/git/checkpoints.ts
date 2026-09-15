@@ -34,7 +34,7 @@ export interface CheckpointDeps {
   readonly treeTimeoutMs?: Millis;
 }
 
-export const checkpointRef = (sessionId: string, sequence: number): string => `${CHECKPOINT_NAMESPACE}/${sessionId}/${sequence}`;
+export const checkpointRef = (sessionId: string, sequence: number, namespace = CHECKPOINT_NAMESPACE): string => `${namespace}/${sessionId}/${sequence}`;
 
 /** REQ-GIT-036: the character set, non-empty, not starting `.`, not ending `.lock` — before any Git call; null when usable. */
 export function refCheck(sessionId: string): string | null {
@@ -113,8 +113,8 @@ export function previewText(sequence: number, entries: readonly PreviewEntry[], 
 }
 
 /** `for-each-ref --format=%(refname)%00%(objectname)`: one record per line; only numeric suffixes under the namespace count (REQ-GIT-037). */
-export function parseRefListing(text: string, sessionId: string): { sequence: number; commit: string; ref: string }[] {
-  const prefix = `${CHECKPOINT_NAMESPACE}/${sessionId}/`;
+export function parseRefListing(text: string, sessionId: string, namespace = CHECKPOINT_NAMESPACE): { sequence: number; commit: string; ref: string }[] {
+  const prefix = `${namespace}/${sessionId}/`;
   const out: { sequence: number; commit: string; ref: string }[] = [];
   for (const line of text.split(/\r?\n/)) {
     const [ref, commit] = line.split('\0');
@@ -265,20 +265,20 @@ export async function available(treeRoot: string, deps: CheckpointDeps): Promise
 export type RefListing = { readonly ok: true; readonly entries: readonly { sequence: number; commit: string; ref: string }[]; readonly invocations: number } | { readonly ok: false; readonly detail: string; readonly invocations: number };
 
 /** REQ-GIT-037: only this session's namespace (the trailing slash), numeric suffixes only, numeric order. */
-export async function listRefs(treeRoot: string, sessionId: string, deps: CheckpointDeps): Promise<RefListing> {
+export async function listRefs(treeRoot: string, sessionId: string, deps: CheckpointDeps, namespace = CHECKPOINT_NAMESPACE): Promise<RefListing> {
   const bad = refCheck(sessionId);
   if (bad) return { ok: false, detail: bad, invocations: 0 };
   const s = new Session(treeRoot, sessionId, deps);
-  const r = await s.text(['for-each-ref', '--format=%(refname)%00%(objectname)', `${CHECKPOINT_NAMESPACE}/${sessionId}/`], 'ref');
+  const r = await s.text(['for-each-ref', '--format=%(refname)%00%(objectname)', `${namespace}/${sessionId}/`], 'ref');
   if (!r.ok) return { ok: false, detail: r.detail, invocations: s.invocations };
-  return { ok: true, entries: parseRefListing(r.text, sessionId), invocations: s.invocations };
+  return { ok: true, entries: parseRefListing(r.text, sessionId, namespace), invocations: s.invocations };
 }
 
 /** REQ-GIT-038: the ref's commit, or null when the ref is gone (never an error for that). */
-export async function resolveRef(treeRoot: string, sessionId: string, sequence: number, deps: CheckpointDeps): Promise<string | null> {
+export async function resolveRef(treeRoot: string, sessionId: string, sequence: number, deps: CheckpointDeps, namespace = CHECKPOINT_NAMESPACE): Promise<string | null> {
   if (refCheck(sessionId) || sequenceCheck(sequence)) return null;
   const s = new Session(treeRoot, sessionId, deps);
-  const r = await s.git(['rev-parse', '--verify', '--quiet', `${checkpointRef(sessionId, sequence)}^{commit}`], 'ref');
+  const r = await s.git(['rev-parse', '--verify', '--quiet', `${checkpointRef(sessionId, sequence, namespace)}^{commit}`], 'ref');
   return r.result.outcome === 'exited' && r.result.status === 0 ? r.result.stdout.trim() : null;
 }
 
@@ -286,6 +286,9 @@ export interface CaptureInput {
   readonly sessionId: string;
   readonly sequence: number;
   readonly includeUntracked: boolean;
+  readonly namespace?: string;
+  /** Improvement rollback points record a clean committed tree as a durable ref too. */
+  readonly recordClean?: boolean;
   /** REQ-GIT-047 / REQ-GIT-058 gate 5: the caller renders the message; this layer commits it verbatim. */
   readonly message: string;
 }
@@ -318,11 +321,11 @@ export async function capture(treeRoot: string, input: CaptureInput, deps: Check
     } else {
       const filtered = await s.filteredHeadTree(head);
       if (!filtered.ok) return done({ outcome: 'failed', detail: filtered.detail });
-      if (filtered.tree === staged.tree) return done({ outcome: 'nothing-to-record' });
+      if (filtered.tree === staged.tree && input.recordClean !== true) return done({ outcome: 'nothing-to-record' });
     }
     const commit = await s.text(['commit-tree', staged.tree, ...(head === null ? [] : ['-p', head]), '-m', input.message], 'tree', { identity: true });
     if (!commit.ok) return done({ outcome: 'failed', detail: commit.detail });
-    const ref = checkpointRef(input.sessionId, input.sequence);
+    const ref = checkpointRef(input.sessionId, input.sequence, input.namespace);
     // REQ-GIT-046: the empty old value makes the update refuse an existing ref rather than clobber it.
     const created = await s.text(['update-ref', ref, commit.text.trim(), ''], 'ref');
     if (!created.ok) return done({ outcome: 'failed', detail: created.detail });
@@ -345,6 +348,7 @@ export interface PreviewInput {
   readonly includeUntracked: boolean;
   /** REQ-GIT-056: the drift candidates, newest first — the caller's 10 most recent recorded plus the last restored. */
   readonly candidates: readonly { readonly sequence: number; readonly commit: string }[];
+  readonly namespace?: string;
 }
 export interface PreviewOutcome {
   /** `ok` | `unmanaged` (gate 2's first sentence) | `ref-gone` (its second) | `inspect-failed` (gate 3). */
@@ -370,7 +374,7 @@ export async function preview(treeRoot: string, input: PreviewInput, deps: Check
   if (bad) return refuse('inspect-failed', `Git could not inspect checkpoint ${input.sequence}: ${bad}`);
   try {
     if (!(await s.inside())) return refuse('unmanaged', `${treeRoot} is not inside a Git working tree, so checkpoint ${input.sequence} cannot be restored.`);
-    const live = await s.git(['rev-parse', '--verify', '--quiet', `${checkpointRef(input.sessionId, input.sequence)}^{commit}`], 'ref');
+    const live = await s.git(['rev-parse', '--verify', '--quiet', `${checkpointRef(input.sessionId, input.sequence, input.namespace)}^{commit}`], 'ref');
     if (!(live.result.outcome === 'exited' && live.result.status === 0)) return refuse('ref-gone', `Checkpoint ${input.sequence} is recorded for session ${input.sessionId} but its Git snapshot is gone, so it can no longer be restored.`);
     const target = await s.text(['rev-parse', `${input.commit}^{tree}`], 'ref');
     if (!target.ok) return refuse('inspect-failed', `Git could not inspect checkpoint ${input.sequence}: ${target.detail}`);
@@ -473,14 +477,14 @@ export async function deleteRefs(treeRoot: string, sessionId: string, refs: read
 }
 
 /** REQ-GIT-041: every ref of the session except its `keep` most recent (`keep <= 0` removes all); idempotent. */
-export async function prune(treeRoot: string, sessionId: string, keep: number, deps: CheckpointDeps): Promise<{ deleted: number; detail?: string }> {
-  const listed = await listRefs(treeRoot, sessionId, deps);
+export async function prune(treeRoot: string, sessionId: string, keep: number, deps: CheckpointDeps, namespace = CHECKPOINT_NAMESPACE): Promise<{ deleted: number; detail?: string }> {
+  const listed = await listRefs(treeRoot, sessionId, deps, namespace);
   if (!listed.ok) return { deleted: 0, detail: listed.detail };
   const victims = keep <= 0 ? [...listed.entries] : listed.entries.slice(0, Math.max(0, listed.entries.length - keep));
   const r = await deleteRefs(treeRoot, sessionId, victims, deps);
   return r.failed.length > 0 ? { deleted: r.deleted, detail: r.failed.map((f) => `${f.ref}: ${f.detail}`).join('; ') } : { deleted: r.deleted };
 }
-export const deleteNamespace = (treeRoot: string, sessionId: string, deps: CheckpointDeps): Promise<{ deleted: number; detail?: string }> => prune(treeRoot, sessionId, 0, deps);
+export const deleteNamespace = (treeRoot: string, sessionId: string, deps: CheckpointDeps, namespace = CHECKPOINT_NAMESPACE): Promise<{ deleted: number; detail?: string }> => prune(treeRoot, sessionId, 0, deps, namespace);
 
 /** A tree root that exists on disk; the Git question (REQ-GIT-042) is asked separately. */
 export const treeRootExists = (path: string): boolean => existsSync(path);

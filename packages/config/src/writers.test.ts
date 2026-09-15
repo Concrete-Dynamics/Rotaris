@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { bootstrapConfigFile, saveDesktop, starterDocument, writeConfigFields, writeModelPreferences } from './writers.js';
+import { bootstrapConfigFile, saveDesktop, starterDocument, writeConfigFields, writeModelPreferences, writeVerifierSection } from './writers.js';
 import { loadConfiguration } from './load.js';
 import { overlayLiveState } from './tiers.js';
 import { rolePreferences, slotPreferences, followRawSlot } from './preferences.js';
@@ -134,6 +134,29 @@ describe('REQ-CONFIG-441..444 the scoped per-field write path', () => {
     expect(!coerced.ok && coerced.error.code).toBe('invalid');
     const r = await writeConfigFields(s.wsFile, { runtime: { memory_diagnostics_enabled: true } });
     expect(r.ok && r.value.text).toBe('runtime:\n  memory_diagnostics_enabled: true\n');
+  });
+});
+
+describe('REQ-LIBRARY verifier gate writer', () => {
+  it('writes the shared verifier shape while preserving unrelated content and reports an exact replay unchanged', async () => {
+    const s = scope();
+    writeFileSync(s.wsFile, '# keep\nruntime:\n  max_depth: 4\nverifier:\n  gate_completion: false\n');
+    const section = { gate_completion: true, checks: [{ name: 'suite', command: 'pnpm test', role: 'test' as const }] };
+    const first = await writeVerifierSection(s.wsFile, section);
+    expect(first.ok && first.value.changed).toBe(true);
+    const text = readFileSync(s.wsFile, 'utf8');
+    expect(text).toContain('# keep\nruntime:\n  max_depth: 4\n');
+    expect(text).toContain('verifier:\n  gate_completion: true\n  checks:\n    - name: suite\n      command: pnpm test\n      timeout: 600\n      severity: blocking\n      role: test\n');
+    const second = await writeVerifierSection(s.wsFile, section);
+    expect(second.ok && second.value.changed).toBe(false);
+  });
+
+  it('rejects an unsafe verifier section before touching the file', async () => {
+    const s = scope();
+    writeFileSync(s.wsFile, 'runtime:\n  max_depth: 4\n');
+    const result = await writeVerifierSection(s.wsFile, { checks: [{ name: 'suite', command: 'pnpm test', cwd: '..' }] });
+    expect(!result.ok && result.error.code).toBe('invalid');
+    expect(readFileSync(s.wsFile, 'utf8')).toBe('runtime:\n  max_depth: 4\n');
   });
 });
 

@@ -23,8 +23,10 @@ export interface ShellState {
    * an unknown one is ignored, so `openLibrary` switches the view but records no tab it does not recognise.
    */
   readonly libraryTab: string | null;
-  openLibrary(tab: string): void;
+  readonly libraryProposalId: string | null;
+  openLibrary(tab: string, proposalId?: string): void;
   takeLibraryTab(): void;
+  takeLibraryProposalId(): void;
   /** REQ-CONFIG-286/287: the unsaved-settings guard; asked before a view switch away from Settings while dirty. */
   readonly navigationGuard: ((next: ViewId) => Promise<boolean>) | null;
   setNavigationGuard(guard: ((next: ViewId) => Promise<boolean>) | null): void;
@@ -105,12 +107,16 @@ export const useShellState = create<ShellState>((set, get) => ({
     set({ settingsCategory: null });
   },
   libraryTab: null,
-  openLibrary(tab) {
+  libraryProposalId: null,
+  openLibrary(tab, proposalId) {
     // REQ-LIBRARY-103: an unknown tab name is ignored — the Library still opens, on whichever tab it was showing.
-    set({ activeView: 'library', ...(LIBRARY_TABS.includes(tab as (typeof LIBRARY_TABS)[number]) ? { libraryTab: tab } : {}) });
+    set({ activeView: 'library', ...(LIBRARY_TABS.includes(tab as (typeof LIBRARY_TABS)[number]) ? { libraryTab: tab, libraryProposalId: proposalId ?? null } : {}) });
   },
   takeLibraryTab() {
     set({ libraryTab: null });
+  },
+  takeLibraryProposalId() {
+    set({ libraryProposalId: null });
   },
   launchOptions: null,
   setLaunchOptions(options) {

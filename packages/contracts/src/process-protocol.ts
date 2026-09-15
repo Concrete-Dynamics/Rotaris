@@ -61,6 +61,21 @@ export const RunResultSchema = z.object({
 export type RunResultPayload = z.infer<typeof RunResultSchema>;
 export type ProcessKind = z.infer<typeof ProcessKindSchema>;
 
+/** REQ-LIBRARY-059/060: an approved improvement plan enters the ordinary run as its initial todo. */
+export const InitialTodoSchema = z.object({
+  schema_version: z.literal(1),
+  phases: z.array(z.object({
+    name: z.string().min(1),
+    tasks: z.array(z.object({
+      id: z.string().min(1),
+      text: z.string().min(1),
+      state: z.literal('pending'),
+      consecutiveRetries: z.literal(0),
+    })).min(1),
+  })).min(1),
+});
+export type InitialTodo = z.infer<typeof InitialTodoSchema>;
+
 export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('hello') }),
   z.object({ kind: z.literal('ping') }),
@@ -79,7 +94,7 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
    * the base workspace (REQ-GIT-019). `sandboxMode` is REQ-SHELL-125's choice, recorded on the row (ADR-0022: not honoured here).
    * REQ-TRACE-470/471: boardPermissions carries the authorized board grant for this launch.
    */
-  z.object({ kind: z.literal('session.start'), workspaceId: z.string(), prompt: z.string(), attachments: z.array(ImageAttachmentInputSchema).max(10).optional(), sessionId: z.string().min(1).optional(), effectiveRoot: z.string().optional(), worktree: WorktreeBindingSchema.optional(), boardPermissions: z.literal('permissive').optional(), sandboxMode: z.enum(SANDBOX_MODE_NAMES).optional(), runType: RunTypeSchema.optional() }).refine((v) => v.prompt.trim() !== '' || (v.attachments?.length ?? 0) > 0, { message: 'A prompt or attachment is required.' }),
+  z.object({ kind: z.literal('session.start'), workspaceId: z.string(), prompt: z.string(), attachments: z.array(ImageAttachmentInputSchema).max(10).optional(), sessionId: z.string().min(1).optional(), effectiveRoot: z.string().optional(), worktree: WorktreeBindingSchema.optional(), boardPermissions: z.literal('permissive').optional(), sandboxMode: z.enum(SANDBOX_MODE_NAMES).optional(), runType: RunTypeSchema.optional(), initialTodo: InitialTodoSchema.optional() }).refine((v) => v.prompt.trim() !== '' || (v.attachments?.length ?? 0) > 0, { message: 'A prompt or attachment is required.' }),
   z.object({ kind: z.literal('circuit_breaker.status'), workspaceId: z.string() }),
   /** ADR-0037 Tier B: the settings store's current values, handed to the run host ahead of the next run start. */
   z.object({ kind: z.literal('config.liveState'), state: z.record(z.string(), z.unknown()) }),

@@ -164,7 +164,10 @@ The executors a port registers (`run-host/tools.ts`): `read_file`, `write_file`,
 `glob`, `todo`, `terminal` (by shell presence, REQ-TOOLS-104), the three delegation tools when delegation is available,
 **`ask_questions`** (Part AC — its `userPromptChannel` prerequisite is now attendedness, REQ-TOOLS-053/069, and the
 orchestrator is the one built-in persona declaring it, REQ-CHAT-094's one conversation), the three artifact tools when
-the session has an artifact store, and **`fetch`** (ADR-0023, Part N). `fetch` is the one executor that **reads configuration per call**: each call loads
+the session has an artifact store, and **`fetch`** (ADR-0023, Part N). `grep` and `read_file`'s `grep` filter share one
+pattern dialect (`compileSearchPattern`, `tools/search.ts`): the accelerator's, not the host engine's — leading
+`(?flags)` groups are read off and translated, because REQ-STARTUP-058 pins ripgrep and REQ-TOOLS-141 holds results
+identical whether or not it is present. `fetch` is the one executor that **reads configuration per call**: each call loads
 the workspace's **saved** files and the discovery snapshot (`egressReader`, no live state — REQ-SANDBOX-038/118,
 REQ-TOOLS-089; measured at 1.7–2.5 ms behind the run host, 3–4 ms median in the unit test), maps
 `runtime.network_*` to the egress policy and `runtime.tool_call_timeout` to the run-level deadline, classifies the

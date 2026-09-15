@@ -18,6 +18,46 @@ export const MAX_FILE_BYTES = 2 * 1024 * 1024;
 
 const escapeRe = (s: string): string => s.replace(/[.+^${}()|[\]\\]/g, '\\$&');
 
+/** Read off the leading `(?flags)` groups, one after another, so that `(?i)(?m)x` sets both. */
+const INLINE_FLAG_GROUP = /^\(\?([A-Za-z]+)\)/;
+const ANY_FLAG_GROUP = /\(\?[A-Za-z]+\)/;
+const TRANSLATABLE_FLAGS: Readonly<Record<string, string>> = { i: 'i', m: 'm', s: 's', u: 'u' };
+
+/**
+ * The dialect a caller's `pattern` is written in (REQ-TOOLS-134, REQ-TOOLS-138). The product's declared
+ * search accelerator is ripgrep — REQ-STARTUP-058 pins it for the `search` capability — and REQ-TOOLS-141
+ * holds observable results identical whether or not it is present on the host, so a pattern that
+ * accelerator accepts may not be refused by the in-process path. That dialect sets flags with a leading
+ * group (`(?i)needle`), which the host engine rejects outright as `Invalid group`; the leading groups are
+ * read off here and translated into RegExp flags. Scoped modifiers (`(?i:needle)`) the host engine already
+ * accepts and are left exactly where they stand.
+ *
+ * A flag with no counterpart is refused rather than dropped: `(?x)` changes what the rest of the pattern
+ * means, and a silently ignored flag returns matches the caller did not ask for, which is worse than the
+ * error. Never compiled with `g` — the result is reused across lines and `lastIndex` would carry between them.
+ */
+export function compileSearchPattern(pattern: string): RegExp {
+  let rest = pattern;
+  const flags = new Set<string>();
+  for (let m = INLINE_FLAG_GROUP.exec(rest); m !== null; m = INLINE_FLAG_GROUP.exec(rest)) {
+    for (const letter of m[1] as string) {
+      const mapped = TRANSLATABLE_FLAGS[letter];
+      if (mapped === undefined) throw new SyntaxError(`Inline flag '${letter}' is not supported. The supported inline flags are i, m, s and u.`);
+      flags.add(mapped);
+    }
+    rest = rest.slice(m[0].length);
+  }
+  try {
+    return new RegExp(rest, [...flags].sort().join(''));
+  } catch (cause) {
+    const detail = cause instanceof Error ? cause.message : String(cause);
+    // The failure that brought a caller here twice is a flag group part-way through the pattern. Saying so
+    // is what lets the next attempt differ from the last one; the bare engine message did not.
+    const hint = ANY_FLAG_GROUP.test(rest) ? ' Inline flags are read only at the start of the pattern — write (?i)needle, or scope them as (?i:needle).' : '';
+    throw new SyntaxError(`${detail}${hint}`);
+  }
+}
+
 interface IgnoreRule { readonly re: RegExp; readonly negated: boolean; readonly dirOnly: boolean }
 
 /** A small gitignore reader: `*`, `**`, `?`, a leading `/` anchors, a trailing `/` is directories only, `!` negates. */
@@ -145,7 +185,7 @@ export function grepTool(fence: FenceConfig): ToolExecutor<z.infer<typeof grepSc
     execute: async (a) => {
       let re: RegExp;
       try {
-        re = new RegExp(a.pattern);
+        re = compileSearchPattern(a.pattern);
       } catch (cause) {
         return errorObservation(`Invalid regex pattern: ${String(cause instanceof Error ? cause.message : cause)}`);
       }

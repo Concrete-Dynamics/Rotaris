@@ -24,7 +24,13 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-15** — **OS-level confinement** (ADR-0022, first executed): the
+Last reconciled with the code: **2026-09-15** — **the search pattern dialect**: `grep` and `read_file`'s
+`grep` filter compile through one helper that reads leading `(?flags)` groups, so a pattern the pinned
+accelerator accepts is not refused in process (`docs/defects/grep-refuses-an-inline-flag-group.md`,
+[R-017](../../product/requests.md#r-017)). The runtime view carries it beside the executor list; no package
+edge, message or process changed.
+
+Previously reconciled: **2026-09-15** — **OS-level confinement** (ADR-0022, first executed): the
 `confinement/` module inside `agent-tools` (the shared specification, the two thin renderers, the single-purpose
 quoting, the availability probe), the probe settled in the **run host** before a launch does anything else and
 the gate that refuses such a run before the lease, the session row or the lock exist, `confinement.status` as the

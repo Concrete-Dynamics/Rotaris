@@ -172,6 +172,29 @@ describe('grep and glob (REQ-TOOLS-138..141)', () => {
     writeFileSync(join(outside, 'o.ts'), 'const a = 9;');
     expect((await g.execute({ pattern: 'const a', paths: [outside], max_matches: 100 }, ctx())).text).toBe('No matches found');
   });
+  it('a leading inline flag group sets the flag instead of failing to parse (REQ-TOOLS-141: the accelerator dialect)', async () => {
+    writeFileSync(join(root, 'src', 'case.ts'), 'const Needle = 1;\nconst other = 2;\n');
+    const g = grepTool(fence);
+    expect((await g.execute({ pattern: 'needle', max_matches: 100 }, ctx())).text).toBe('No matches found');
+    expect((await g.execute({ pattern: '(?i)needle', max_matches: 100 }, ctx())).text).toBe('src/case.ts:1:const Needle = 1;');
+    // several groups, several letters, and a scoped modifier the host engine already understands
+    expect((await g.execute({ pattern: '(?i)(?m)^const needle', max_matches: 100 }, ctx())).text).toBe('src/case.ts:1:const Needle = 1;');
+    expect((await g.execute({ pattern: '(?im)^const needle', max_matches: 100 }, ctx())).text).toBe('src/case.ts:1:const Needle = 1;');
+    expect((await g.execute({ pattern: '(?i:needle)', max_matches: 100 }, ctx())).text).toBe('src/case.ts:1:const Needle = 1;');
+    // the flag is consumed, not matched as text: `(?i)` alone is every line, not a literal
+    expect((await g.execute({ pattern: '(?i)', max_matches: 1 }, ctx())).text).not.toBe('No matches found');
+    // a flag with no counterpart is refused rather than dropped, and a misplaced group says where it belongs
+    const unsupported = await g.execute({ pattern: '(?x) needle', max_matches: 100 }, ctx());
+    expect(unsupported).toMatchObject({ isError: true });
+    expect(unsupported.text).toBe("Invalid regex pattern: Inline flag 'x' is not supported. The supported inline flags are i, m, s and u.");
+    const misplaced = await g.execute({ pattern: 'const(?i)needle', max_matches: 100 }, ctx());
+    expect(misplaced).toMatchObject({ isError: true });
+    expect(misplaced.text).toMatch(/^Invalid regex pattern: .*Inline flags are read only at the start of the pattern/);
+    // read_file's grep filter is written in the same dialect (REQ-TOOLS-134)
+    const rf = readFileTool(state, fence);
+    expect((await rf.execute({ path: 'src/case.ts', offset: 1, limit: 2000, grep: '(?i)needle', grep_context: 0 }, ctx())).text).toContain('>1: const Needle = 1;');
+    expect((await rf.execute({ path: 'src/case.ts', offset: 1, limit: 2000, grep: 'const(?i)needle', grep_context: 0 }, ctx())).text).toMatch(/Inline flags are read only at the start/);
+  });
   it('glob returns sorted workspace-relative POSIX paths; a bad base_path is ignored; absolute patterns are relativised or dropped', async () => {
     const gl = globTool(fence);
     expect((await gl.execute({ pattern: '**/*.ts' }, ctx())).text).toBe('src/a.ts\nsrc/b.ts');

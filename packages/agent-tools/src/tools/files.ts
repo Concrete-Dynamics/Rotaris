@@ -6,7 +6,7 @@ import { similarity } from '@rotaris/kernel';
 import { renderDiff } from './diff.js';
 import { checkFence, relPosix, realPathOf, type FenceConfig } from './fence.js';
 import { errorObservation, observation, type Observation, type ToolExecutor } from './types.js';
-import { IGNORE_COMPONENTS } from './search.js';
+import { compileSearchPattern, IGNORE_COMPONENTS } from './search.js';
 
 /**
  * The workspace file tools (REQ-TOOLS-132..137, REQ-TOOLS-188, REQ-TOOLS-189): `read_file`,
@@ -117,7 +117,7 @@ function renderRead(rel: string, content: string, offset: number, limit: number,
   if (grep !== undefined) {
     let re: RegExp;
     try {
-      re = new RegExp(grep);
+      re = compileSearchPattern(grep);
     } catch (cause) {
       return { text: `Invalid regex pattern: ${String(cause instanceof Error ? cause.message : cause)}`, hash, totalLines };
     }

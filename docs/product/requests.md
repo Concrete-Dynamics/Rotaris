@@ -20,9 +20,13 @@ and answered differently, and nobody can see that it happened. The reason is par
 
 ## Count
 
-**Sixteen.** The count is the number of rows below.
+**Seventeen.** The count is the number of rows below.
 
 ---
+
+| # | Date | The request, in the owner's terms | Classification | Disposition |
+|---|---|---|---|---|
+| <a id="r-017"></a>R-017 | 2026-09-15 | "this error reoccurs each session indicating a bug. identify where it comes from and fix it." — with a screenshot of an orchestrator state line reading "inline flag rejected 5× — same error, no change attempted between calls. Engine disallows inline flag groups" | defect | Recorded as [`docs/defects/grep-refuses-an-inline-flag-group.md`](../defects/grep-refuses-an-inline-flag-group.md): `grep` and `read_file`'s `grep` filter compiled the caller's pattern with the host engine, which has no inline flag-setter group, so `(?i)needle` was refused with a message naming no remedy — and neither tool carries a case-insensitivity parameter, so the search could not be run at all. Nothing is minted. REQ-STARTUP-058 pins **ripgrep** as the search accelerator and REQ-TOOLS-141 holds observable results identical whether or not it is present, so a pattern the accelerator accepts may not be refused by the in-process path; REQ-TOOLS-138's `Invalid regex pattern: <detail>` shape is unchanged and the guidance lands in `<detail>`; REQ-TOOLS-134 carries the same filter. One dialect helper now serves both tools |
 
 | # | Date | The request, in the owner's terms | Classification | Disposition |
 |---|---|---|---|---|

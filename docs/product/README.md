@@ -72,7 +72,14 @@ specification's own, deliberately:
 
 - Identifiers are **stable and permanent**. Once assigned, never renumbered and never reused.
 - Numbering runs **contiguously from 1 within each domain**, with no gap and no duplicate.
-- A changed directive gets a **new revision**, not a new number.
+- A changed directive gets a **new revision**, not a new number. Written in place: a line under the
+  heading naming the current revision, its date and the `R-NNN` that asked for it; the clause it
+  changes marked `— revision N`; and the text it replaces **quoted beside it** in a blockquote reading
+  *"Revision N−1 said, and no longer governs: …"*, which is the same discipline as a falsified reason
+  kept beside its replacement. `PD-CHAT-004` is the first and is the worked example. The back-pointer
+  at the requirement is **amended in place** rather than a second note added, and the reason is also
+  why this is a revision rather than a new directive beside the old one: the symbol generator refuses
+  two directives narrowing one requirement, because **precedence must be unambiguous**.
 - A directive that no longer applies is **withdrawn in place** — it keeps its number, carries no
   behaviour, and states what replaced it. Withdrawing a directive does **not** silently restore the
   requirement it superseded; the withdrawal says explicitly whether that requirement governs again.

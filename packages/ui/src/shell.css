@@ -293,8 +293,16 @@
 .row--group .activity__segment:not(.activity__segment--reasoning) { color: var(--rt-axis-y-300); }
 /* PD-CHAT-004: the activity word of the segment in flight — what the agent is doing NOW, at a glance. */
 .activity__now { white-space: nowrap; color: var(--rt-run); }
-.tool--failed > .row__grid > .row__main > .tool__header .activity__segment,
-.tool--blocked > .row__grid > .row__main > .tool__header .activity__segment { color: var(--rt-danger-300); }
+/* PD-CHAT-006: the fail colour is on the FACT that states the failure and on nothing else on the line. The
+   falsified rules, kept beside their replacement — they coloured every segment of a run holding one failed
+   member, reasoning included, which is REQ-CHAT-065's own text and is exactly what the directive narrows:
+     .tool--failed  > .row__grid > .row__main > .tool__header .activity__segment,
+     .tool--blocked > .row__grid > .row__main > .tool__header .activity__segment { color: var(--rt-danger-300); }
+   `--rt-danger-300` is the fail state's readable-TEXT token (4.5:1), which is what these two words are. */
+.activity__fact--failed, .activity__fact--blocked { color: var(--rt-danger-300); }
+/* The separator between two facts of one segment, drawn like the one between two segments: it belongs to neither
+   side, so it takes neither side's colour — including the fail colour of the fact it introduces. */
+.activity__sep { color: var(--rt-text-tertiary); }
 /* REQ-CHAT-068: the delegation-context header's expanded detail. */
 .row__delegation { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px var(--rt-space-2, 8px); margin: var(--rt-space-2, 8px) 0 0; font-size: var(--rt-text-xs, 12px); }
 .row__delegation dt { color: var(--rt-text-tertiary); }
@@ -344,9 +352,13 @@
  * pattern the design already fixed (§1, G1: a rule and a glyph, never a filled background). */
 .row--system { border-left: var(--rt-notice-rule-width, 2px) solid var(--rt-border-strong); border-radius: 0; color: var(--rt-text-secondary); }
 .row--system .row__body { color: var(--rt-text-secondary); font-size: var(--rt-text-xs, 12px); }
-.row__streaming { color: var(--rt-accent-300); font-size: var(--rt-text-2xs, 10px); animation: rt-pulse var(--rt-duration-slow, 900ms) ease-in-out infinite; }
+/* PD-CHAT-005: a row still being written draws no animated indicator of its own. The falsified rules, kept beside
+   their replacement — there is no replacement, which is the point; the row's own growth says it is being written:
+     .row__streaming { color: var(--rt-accent-300); font-size: var(--rt-text-2xs, 10px); animation: rt-pulse …; }
+     @media (prefers-reduced-motion: reduce) { .row__streaming { animation: none; } }
+   `rt-pulse` itself stays: REQ-CHAT-060's `◉ running…`, REQ-CHAT-062's `◉ reasoning…` and PD-CHAT-004's in-flight
+   word keep their animation, and the directive records that each was considered and left. */
 @keyframes rt-pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .row__streaming { animation: none; } }
 .composer__hint { align-self: center; margin-right: auto; font-size: var(--rt-text-xs, 12px); color: var(--rt-text-tertiary); }
 .composer__actions { gap: var(--rt-space-2, 8px); }
 /* The chips' `flex: 1 1 100%` (UIR-009's forced first band) is gone: the rules at line ~307 and the media query
@@ -467,16 +479,21 @@
    text is what this is. REQ-CHAT-065: a group takes its colour from the most severe member outcome. */
 .tool__outcome--failed, .tool__outcome--blocked { color: var(--rt-danger-300); }
 /* The child combinators are load-bearing: a group coloured `failed` reveals its members INSIDE its own element, and a
-   descendant selector tints the names of the ok members too — found by looking at an expanded group. */
-.tool--blocked > .row__grid > .row__main > .tool__header > .tool__name,
-.tool--failed > .row__grid > .row__main > .tool__header > .tool__name,
-.tool--blocked > .row__grid > .row__main > .tool__header > .tool__chevron,
-.tool--failed > .row__grid > .row__main > .tool__header > .tool__chevron { color: var(--rt-danger-300); }
+   descendant selector tints the names of the ok members too — found by looking at an expanded group.
+   PD-CHAT-006 adds `.row--tool`, which is what confines these to a row that IS the call that failed. Without it they
+   also caught the activity line, whose header carries a `.tool__chevron` of its own: the chevron of a whole run went
+   red for one failed member, which is the half of the owner's report the segment rules above do not cover. */
+.row--tool.tool--blocked > .row__grid > .row__main > .tool__header > .tool__name,
+.row--tool.tool--failed > .row__grid > .row__main > .tool__header > .tool__name,
+.row--tool.tool--blocked > .row__grid > .row__main > .tool__header > .tool__chevron,
+.row--tool.tool--failed > .row__grid > .row__main > .tool__header > .tool__chevron { color: var(--rt-danger-300); }
 .tool__preview { font-size: var(--rt-text-xs, 12px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* REQ-CHAT-061's expansion IS the design's revealed card, and now carries the surface the row gave up: a panel
    with a 2 px rail in the tool axis, which is where the design puts a border it means. */
 .tool__card { display: flex; flex-direction: column; gap: var(--rt-space-1, 4px); margin-top: var(--rt-space-2, 8px); max-width: 620px; padding: var(--rt-space-2, 8px) var(--rt-space-3, 12px); background: var(--rt-surface); border: 1px solid var(--rt-border); border-left: 2px solid var(--rt-axis-y-500); border-radius: var(--rt-radius-md, 6px); }
-.tool--failed .tool__card, .tool--blocked .tool__card { border-left-color: var(--rt-danger-300); }
+/* PD-CHAT-006: `.row--tool` again, and here the DESCENDANT combinator is why it is needed — an expanded member's
+   card sits inside the group element, so a run coloured `failed` gave every open member a red rail. */
+.row--tool.tool--failed .tool__card, .row--tool.tool--blocked .tool__card { border-left-color: var(--rt-danger-300); }
 .tool__caption { font-size: var(--rt-text-2xs, 10px); letter-spacing: var(--rt-tracking-label, .06em); color: var(--rt-text-tertiary); }
 .tool__pre { margin: 0; padding: var(--rt-space-2, 8px); max-height: 320px; overflow: auto; background: var(--rt-chrome); border-radius: var(--rt-radius-sm, 4px); font-size: var(--rt-text-xs, 12px); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
 .tool__blocked { font-size: var(--rt-text-xs, 12px); color: var(--rt-danger-300); }

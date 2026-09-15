@@ -31,7 +31,15 @@ checkpoints provide previewed, confirmed rollback with a pre-rollback safety poi
 renderer commands, run-host `initialTodo`, workspace-service actions, revision bumps and outcome notices. Schema v18
 continues to carry the immutable session run type, durable session-to-artifact association, current records, immutable
 versions and both gap counters.
-Last reconciled with the code: **2026-09-15** — **project initialization** (ADR-0064, first executed): the
+Last reconciled with the code: **2026-09-15** — **`PD-CHAT-004` revision 2 and `PD-CHAT-005`**: the activity
+line's colour moves from the whole line to the `N failed` / `N blocked` facts inside the segment that holds them,
+and a row still being written draws no animated indicator of its own. One module gains one export
+(`segmentFacts` in `ui/src/transcript/project.ts`, the summary becoming its join); no module, edge, process,
+channel or file on disk changes, so only the component view has a line to add. Measured in the built product by
+`pnpm rows-proof` — one fact red of twelve, the chevron and the run's span not, two reasoning segments not, and
+zero animated indicators beside one live message row. **No implementation condition is raised or discharged.**
+
+Previously reconciled: **2026-09-15** — **project initialization** (ADR-0064, first executed): the
 task registry, the persisted marker and the five set derivations in `config/src/init/`, the coordinator in
 **main** because the marker's one writer is the workspace service and the one shipped task's work is the run
 host's and neither may import the other, `initialization.*`'s five commands and the run host's new

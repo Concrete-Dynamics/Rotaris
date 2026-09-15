@@ -80,6 +80,11 @@ const PROBES = [
   `${A} .row`, `${A} [data-testid="row-thinking"]`, `${A} .tool__preview`,
   `${AO} [data-testid="group-members"]`, `${AO} [data-testid="group-members"] .row`, `${AO} [data-testid="group-members"] .row__time`,
   `${AO} [data-testid="group-members"] .row__bar`,
+  // PD-CHAT-004 rev 2: the facts the line is now drawn from, and the one of them that states a failure.
+  `${A} .activity__fact`, `${A} .activity__fact--failed`, `${A} .activity__fact--blocked`,
+  // PD-CHAT-005: the indicator that is gone, and the live row it used to sit on — the second selector is what
+  // keeps the first from proving nothing, because an absence on a surface with no live row is not a measurement.
+  '.row__streaming', `${W} [data-testid="row-agent"][data-settled="false"]`,
   '[data-testid="acknowledgement"]', '[data-testid="acknowledgement-title"]',
 ].join(';;');
 
@@ -183,6 +188,15 @@ const r = launch('rows', {
     // here, from the live layout, together with the two facts that make it "one continuous rule": that the
     // members draw no bar of their own, and that they all hang from this one element.
     `(() => { const el = document.querySelector('${AO} [data-testid="group-members"]'); if (!el) return { activityRail: null }; const s = getComputedStyle(el); return { activityRail: s.borderInlineStartWidth, railColour: s.borderInlineStartColor, railPad: s.paddingInlineStart, memberBars: el.querySelectorAll('.row__bar').length, members: el.children.length }; })()@5000`,
+    // PD-CHAT-004 rev 2: the COLOURS of a line whose severity is `failed`, read from the live layout. A colour is
+    // not in the DOM attributes `inspect-at` reports and a screenshot cannot be asserted on, so this is the only
+    // place "only the failed fact is red" can be measured rather than argued. ONE line: the log parser's regex
+    // for an `eval-at` reading cannot span newlines, which cost a null probe once already.
+    `(() => { const line = document.querySelector('${A} [data-testid="row-group"][data-severity="failed"]'); if (!line) return { parts: [], chevron: null, span: null, reasoningSegments: -1 }; const read = (el) => ({ text: el.textContent.trim(), marked: /--failed|--blocked/.test(el.getAttribute('class') || ''), colour: getComputedStyle(el).color }); const parts = [...line.querySelectorAll('.activity__segment > span:not(.activity__sep)')].map(read); const seps = [...line.querySelectorAll('.activity__sep')].map((el) => getComputedStyle(el).color); const c = (sel) => { const el = line.querySelector(sel); return el === null ? null : getComputedStyle(el).color; }; return { parts, seps, chevron: c('.tool__chevron'), span: c('.tool__outcome'), reasoningSegments: line.querySelectorAll('.activity__segment--reasoning').length }; })()@5000`,
+    // The OTHER half of the owner's sentence — "only the tool call that failed" is two claims, and the negative
+    // one above proves nothing on its own: a build that coloured nothing red would pass it. This reads the
+    // expanded run's failed member and an ok member beside it, so the positive claim is measured too.
+    `(() => { const at = (sel) => document.querySelector('${AO} [data-testid="group-members"] ' + sel); const c = (el, inner) => { if (!el) return null; const t = el.querySelector(inner); return t === null ? null : getComputedStyle(t).color; }; const bad = at('.row--tool.tool--failed'); const good = at('.row--tool.tool--ok'); const fact = document.querySelector('${A} .activity__fact--failed'); return { failedMemberName: c(bad, '.tool__name'), failedMemberOutcome: c(bad, '.tool__outcome'), okMemberName: c(good, '.tool__name'), okMemberOutcome: c(good, '.tool__outcome'), lineFactColour: fact === null ? null : getComputedStyle(fact).color }; })()@5000`,
   ].join(';;'),
   ROTARIS_CAPTURE_DRAG_AT: `${W} [data-testid="row-markdown"] .md__p@5400`,
   // The acknowledgement stack is transient (REQ-NOTIFY-011: 4200 ms), so each outcome is read beside the click that
@@ -332,11 +346,41 @@ const activitySummary = firstLine?.matches?.[0]?.attrs?.['aria-description'] ?? 
 expect(activitySummary === 'reasoning ×1 · 16s · ~554 tok, reading ×2 · 2 ok, reasoning ×1 · 1s · ~33 tok, reading ×2 · 2 ok, searching ×1 · 1 failed',
   `the line's accessible description read ${JSON.stringify(activitySummary)}`);
 expect(!activitySummary.includes('ACTIVITY-OUTPUT'), 'the activity summary carried raw tool output');
-// (e) One failed tool member colours the whole line, by REQ-CHAT-065's ordering, which PD-CHAT-004 keeps.
+// (e) REQ-CHAT-065's severity ordering is still what the line PUBLISHES — PD-CHAT-004 rev 2 leaves the ordering
+//     untouched and takes only its power to colour the whole line.
 const firstArticle = inspect(r.log, 5000, `${A} [data-testid="row-group"]`);
 const firstClass = firstArticle?.matches?.[0]?.attrs?.class ?? '';
-expect(firstClass.includes('tool--failed'), `the line did not take the most severe outcome's colour: ${JSON.stringify(firstClass)}`);
+expect(firstClass.includes('tool--failed'), `the line did not publish the most severe outcome: ${JSON.stringify(firstClass)}`);
 expect(firstArticle?.matches?.[0]?.attrs?.['data-segments'] === '5', `the line published ${firstArticle?.matches?.[0]?.attrs?.['data-segments']} segments, not 5`);
+// (e2) PD-CHAT-004 rev 2: and the failure is coloured WHERE IT HAPPENED. Read from the live layout, because a
+//      colour is in neither the attributes nor a screenshot anything can be asserted against.
+const colours = evalAt(r.log, 'reasoningSegments');
+const parts = colours?.parts ?? [];
+const marked = parts.filter((p) => p.marked);
+const plain = parts.filter((p) => !p.marked);
+// Anti-vacuity, both ways: the line must actually hold a failure, and must actually hold facts that are not one.
+// Without these the assertions below pass on a line that states nothing, which is a finding and not a proof.
+expect(marked.length === 1 && marked[0].text === '1 failed', `the line's failure facts read ${JSON.stringify(marked)}`);
+expect(plain.length >= 8, `the line drew only ${plain.length} facts that state no failure, so "everything else keeps its colour" is untested`);
+expect(colours?.reasoningSegments >= 1, `the line held ${colours?.reasoningSegments} reasoning segments, so "reasoning is never coloured as failed" is untested`);
+const failColour = marked[0].colour;
+const sameAsFail = plain.filter((p) => p.colour === failColour);
+expect(sameAsFail.length === 0, `${sameAsFail.length} facts that state no failure took the fail colour ${failColour}: ${JSON.stringify(sameAsFail)}`);
+// The chevron and the run's elapsed span are the two parts of the line outside the segments; under revision 1
+// both went red with the run, and the chevron is the half the segment rules alone never reached.
+expect(colours?.chevron !== null && colours.chevron !== failColour, `the line's chevron took the fail colour ${failColour}`);
+expect(colours?.span !== null && colours.span !== failColour, `the run's elapsed span took the fail colour ${failColour}`);
+// The dot before `1 failed` belongs to neither fact, so it takes neither's colour.
+const sepsFail = (colours?.seps ?? []).filter((c) => c === failColour);
+expect(sepsFail.length === 0, `${sepsFail.length} fact separators took the fail colour ${failColour}`);
+// (e3) And the call that DID fail is still coloured — REQ-CHAT-060 governs a tool row drawn as its own row, and
+//      revision 2 leaves it in full. Without this the assertions above pass on a build that colours nothing.
+const memberColours = evalAt(r.log, 'failedMemberName');
+expect(memberColours?.lineFactColour === failColour, `the two readings disagreed on the fail colour: ${JSON.stringify(memberColours)}`);
+expect(memberColours?.failedMemberName === failColour, `the failed member's name did not take the fail colour: ${JSON.stringify(memberColours)}`);
+expect(memberColours?.failedMemberOutcome === failColour, `the failed member's outcome did not take the fail colour: ${JSON.stringify(memberColours)}`);
+expect(memberColours?.okMemberName !== null && memberColours.okMemberName !== failColour, `an ok member's name took the fail colour: ${JSON.stringify(memberColours)}`);
+expect(memberColours?.okMemberOutcome !== null && memberColours.okMemberOutcome !== failColour, `an ok member's outcome took the fail colour: ${JSON.stringify(memberColours)}`);
 // (f) The live run states what it is doing NOW and carries that call's text on the preview line.
 const now = text(r.probes, `${A} [data-testid="activity-now"]`);
 expect(now.length === 1 && now[0] === 'running…', `the in-flight activity word read ${JSON.stringify(now)}`);
@@ -355,9 +399,19 @@ const openMembers = text(r.probes, `${AO} [data-testid="group-members"] .row`);
 expect(openMembers.length === 7, `expanding the run revealed ${openMembers.length} members, not 7`);
 const memberTimes = text(r.probes, `${AO} [data-testid="group-members"] .row__time`).filter((t) => t !== '');
 expect(memberTimes.length === 7, `${memberTimes.length} of 7 revealed members carried a timestamp — the per-step instants are what expanding is for`);
+// PD-CHAT-005: a row still being written draws no animated indicator of its own. The absence is only a
+// measurement beside the live row it used to sit on, so both are counted.
+const liveMessageRows = (r.probes[`${W} [data-testid="row-agent"][data-settled="false"]`] ?? []).length;
+const streamingMarks = (r.probes['.row__streaming'] ?? []).length;
+expect(liveMessageRows >= 1, 'no live message row was drawn, so the absence of the animated indicator proves nothing');
+expect(streamingMarks === 0, `${streamingMarks} animated "…" indicators were drawn on rows still being written`);
 results.activityLine = {
   lines: activityRows.length, rowsDrawn: activityAll.length, roles: activityRoles, looseReasoningRows: looseThinking.length,
   summary: activitySummary, segments, severityClass: firstClass, inFlightWord: now[0] ?? null,
+  failColour, factsColouredFail: marked.length, factsPlain: plain.length, reasoningSegments: colours?.reasoningSegments ?? null,
+  chevronColour: colours?.chevron ?? null, spanColour: colours?.span ?? null,
+  failedMemberName: memberColours?.failedMemberName ?? null, okMemberName: memberColours?.okMemberName ?? null,
+  liveMessageRows, streamingMarks,
   railWidthPx: railWidth, railColour: rail?.railColour ?? null, membersRevealed: openMembers.length,
   memberTimestamps: memberTimes.length, memberBars: rail?.memberBars ?? null,
 };

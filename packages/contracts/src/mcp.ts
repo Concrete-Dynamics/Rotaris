@@ -111,6 +111,14 @@ export const McpSetupStatusSchema = z.object({
   /** The invocation the steps were derived from (REQ-MCP-036), for the log line the category shows; empty when none could be derived. */
   invocation: z.string(),
   startedAt: z.string().nullable(),
+  /**
+   * Part AS (ADR-0064) / REQ-WORKSPACE-090: whether a `code_intelligence` server is configured AND
+   * launchable on this machine, judged by the one availability rule REQ-MCP-037 fixes for every
+   * surface. It is `code-intelligence-setup`'s applicability predicate, and it rides the status so
+   * this domain asks the question through the surface that already answers it rather than declaring
+   * a second rule of its own — which REQ-WORKSPACE-090 forbids in terms.
+   */
+  applicable: z.boolean(),
 });
 export type McpSetupStatus = z.infer<typeof McpSetupStatusSchema>;
 export type McpSecretsView = z.infer<typeof McpSecretsViewSchema>;

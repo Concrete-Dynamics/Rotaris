@@ -18,6 +18,17 @@ export interface ShellState {
   openSettings(category: string): void;
   takeSettingsCategory(): void;
   /**
+   * Part AS — ADR-0064 / REQ-WORKSPACE-106: the project setup dialog is a WINDOW-level surface, so its
+   * open state lives here rather than inside a view; navigating away does not dismiss a decision the
+   * product is waiting on. `auto` marks the one automatic opening a workspace open may make
+   * (REQ-WORKSPACE-105); `manual` is whenever the user asked, and REQ-WORKSPACE-107 turns on the
+   * difference — a manually opened dialog is never auto-closed.
+   */
+  readonly projectSetup: 'auto' | 'manual' | null;
+  openProjectSetup(): void;
+  autoOpenProjectSetup(): void;
+  closeProjectSetup(): void;
+  /**
    * REQ-LIBRARY-102 / REQ-SHELL-115 (Part X): a Library tab a notice action asked for, consumed once — the same
    * shape `settingsCategory` takes for REQ-NOTIFY-223. REQ-LIBRARY-103 closes the tab names and says activating
    * an unknown one is ignored, so `openLibrary` switches the view but records no tab it does not recognise.
@@ -114,6 +125,16 @@ export const useShellState = create<ShellState>((set, get) => ({
   },
   takeSettingsCategory() {
     set({ settingsCategory: null });
+  },
+  projectSetup: null,
+  openProjectSetup() {
+    set({ projectSetup: 'manual' });
+  },
+  autoOpenProjectSetup() {
+    set({ projectSetup: 'auto' });
+  },
+  closeProjectSetup() {
+    set({ projectSetup: null });
   },
   libraryTab: null,
   openLibrary(tab) {

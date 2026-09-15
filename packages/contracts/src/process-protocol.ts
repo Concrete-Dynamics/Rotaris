@@ -530,6 +530,13 @@ export const ProcessEventSchema = z.discriminatedUnion('kind', [
    * stream's frames into a larger step (REQ-SHELL-103) — never by dropping one (`main/terminal.ts`).
    */
   z.object({ kind: z.literal('publish.terminal'), payload: TerminalFrameSchema }),
+  /**
+   * Part AS / ADR-0064: the code-intelligence setup's status, pushed on every step and at the end.
+   * ADR-0064's task runner follows the setup through this rather than on a cadence — the run host and
+   * main can talk, and SR-3 withdrew polling exactly where they can. REQ-WORKSPACE-109 is what needs
+   * it: a step must be visible "at the moment that step finishes", which a poll can only approximate.
+   */
+  z.object({ kind: z.literal('mcp.setupStatus'), status: McpSetupStatusSchema }),
 ]);
 export type ProcessEvent = z.infer<typeof ProcessEventSchema>;
 export const ProcessEventEnvelopeSchema = z.object({ v, event: ProcessEventSchema });

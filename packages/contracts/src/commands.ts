@@ -232,6 +232,22 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   /** ADR-0035 (Part T) / REQ-MCP-099/112: the code-intelligence project-setup action — start, cancel, or read its status; the run host runs the steps. */
   z.object({ kind: z.literal('mcp.setup'), action: z.enum(['start', 'cancel', 'status']) }),
   /**
+   * ADR-0064 (Part AS) — project initialization, the five things a surface may ask of it.
+   *
+   * `read` is the refresh of REQ-WORKSPACE-115: the persisted section as it is on disk right now, and
+   * nothing else disturbed. `resolve` is REQ-WORKSPACE-102's "Check again" — a user-requested
+   * resolution that is additional to, and does not consume, the one automatic resolution per workspace
+   * open. `start` re-reads the runnable list first (REQ-WORKSPACE-110), so a retry after a partly
+   * successful run offers only what is outstanding. `skip` records every listed id (REQ-WORKSPACE-111),
+   * and an empty list is still a skip that stamps the marker (REQ-WORKSPACE-086). `cancel` asks a live
+   * run to stop; the task already under way still reaches its own conclusion (REQ-WORKSPACE-109).
+   */
+  z.object({ kind: z.literal('initialization.read') }),
+  z.object({ kind: z.literal('initialization.resolve') }),
+  z.object({ kind: z.literal('initialization.start') }),
+  z.object({ kind: z.literal('initialization.skip'), ids: z.array(z.string()) }),
+  z.object({ kind: z.literal('initialization.cancel') }),
+  /**
    * ADR-0048's window registry, first executed (Part R; REQ-SHELL-072/073/076/078, REQ-MONITOR-072/073): open or raise the
    * persona window for an agent — reuse per persona, the instance's tab selected, a raise as a request (REQ-SHELL-161);
    * `focusSteer` when the inspector's Steer opened it (REQ-MONITOR-137). An unknown agent id is a silent no-op.
@@ -308,5 +324,7 @@ export interface RendererBridge {
   readonly onRequirementsChanged: (fn: (p: unknown) => void) => () => void;
   /** REQ-LIBRARY-125: app-wide post-run analyst queue activity. */
   readonly onImprovementActivity: (fn: (p: unknown) => void) => () => void;
+  /** Channel 12 (Part AS, ADR-0064): the nine values of REQ-WORKSPACE-105 and REQ-WORKSPACE-109's live run report. */
+  readonly onInitializationState: (fn: (p: unknown) => void) => () => void;
 }
 export const BRIDGE_KEY = 'rotaris' as const;

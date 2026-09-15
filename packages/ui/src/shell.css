@@ -726,6 +726,39 @@
  * record (REQ-CHAT-084).
  */
 .dialog-backdrop { z-index: 50; }
+/**
+ * Part AS (ADR-0064) — the project setup dialog, and a defect only the pixels could report.
+ *
+ * REQ-WORKSPACE-106 asks for a **non-modal, window-level** dialog: the rest of the application stays
+ * navigable. Every other dialog here is positioned by its `.dialog-backdrop`, which is `position: fixed;
+ * inset: 0` — and a backdrop is precisely what a non-modal surface may not have, because it would swallow
+ * the clicks that must keep working. Drawn as `.dialog` alone the panel took part in normal flow at the
+ * end of the body, below the shell's own full-height grid: it was in the DOM, its headline, its intro and
+ * its task cards all readable by a script, **and invisible on screen**. The DOM assertions of
+ * `pnpm init-proof` passed on it; the screenshot is what found it. Same class as UIR-014 — a box that
+ * exists and cannot be seen — and no unit test in 1,870 could have caught it.
+ *
+ * So it is positioned here, by hand, and the positioning IS the requirement: fixed, its own corner of the
+ * window, above the shell (40, below an application-modal backdrop at 50 — a modal opened on top of it
+ * must cover it), scrollable when its progress log grows, and never covering the composer it gates, so the
+ * user can read the reason and the control it refers to at the same time. No colour and no size literal:
+ * every value is a token or a bound REQ-WORKSPACE-153 already states.
+ */
+.project-setup {
+  position: fixed;
+  top: var(--rt-space-4);
+  right: var(--rt-space-4);
+  z-index: 40;
+  /* The width is `.dialog`'s own — the adopted language decides it, and this rule states no second figure. */
+  max-width: calc(100vw - 2 * var(--rt-space-4));
+  max-height: calc(100vh - 2 * var(--rt-space-4));
+  overflow: auto;
+  border: var(--rt-hairline-width) solid var(--rt-border);
+}
+.project-setup__tasks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--rt-space-2); }
+.project-setup__task { padding: var(--rt-space-3); }
+.project-setup__task-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--rt-space-3); }
+.project-setup__task-label { font-weight: var(--rt-weight-medium); }
 .session-browser { width: min(920px, 100%); max-height: min(720px, calc(100vh - 2 * var(--rt-space-4))); }
 .session-browser__head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--rt-space-4); }
 .session-browser__head .dialog-title, .session-browser__head .dialog-body { margin: 0; }

@@ -2,13 +2,13 @@ import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'r
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
 import { createStore } from 'zustand/vanilla';
-import { BRIDGE_KEY, isBusy, isViewId, LIBRARY_TABS, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type ImageAttachmentInput, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type ConfinementVerdict, type DisplayView, type PausePayload, type PauseResolution, type PlanDecision, type HookAgentId, type HooksSummary, type McpHealth, type McpListing, type McpSecretsView, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload, type QuestionAnswers } from '@rotaris/contracts';
+import { BRIDGE_KEY, isBusy, isViewId, LIBRARY_TABS, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type ImageAttachmentInput, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type ConfinementVerdict, type InitializationStateView, type DisplayView, type PausePayload, type PauseResolution, type PlanDecision, type HookAgentId, type HooksSummary, type McpHealth, type McpListing, type McpSecretsView, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload, type QuestionAnswers } from '@rotaris/contracts';
 import { createAcknowledgementStore, createNoticeStore, createReplicaStore, type AcknowledgementStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
 // Part AL2 — the terminal in this window (ADR-0021's subscription point, ADR-0047's window; REQ-SHELL-079..111): the
 // preview registry every transcript surface reads, the host that carries it, and the terminal window's own registry.
 import { TERMINAL_REFUSALS, TERMINAL_WINDOW_ROLE, type TerminalFrame, type TerminalRefusal, type TerminalWindowPayload } from '@rotaris/contracts';
 import { createTerminalWindowStreams, headlessEmulator, TerminalHostProvider, TerminalStreamSet, TerminalWindow, terminalWindowTitle, type TerminalActionResult, type TerminalActions, type TerminalHost } from '@rotaris/ui';
-import { Acknowledgements, type AboutInfo, applyChange, applyTheme, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, readTranscriptCounts, RowProof, type TrailerRow, WorktreeDialog, type SlashHost, RequirementsBoard } from '@rotaris/ui';
+import { Acknowledgements, type AboutInfo, applyChange, applyTheme, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, readTranscriptCounts, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, type SlashHost, RequirementsBoard } from '@rotaris/ui';
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls, and the shape it answers.
 import { bindPromptRootsReader, ToggleSwitch } from '@rotaris/ui';
 import type { PromptsRootsResult } from '@rotaris/contracts';
@@ -636,6 +636,15 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
     skillsRevision,
   }), [providerRows, git.state, skillsRevision]);
   const worktrees = git.state?.worktrees ?? [];
+  /*
+   * Part AS — ADR-0064. The gate is REQ-WORKSPACE-112's and it is a COMPOSER gate only: no other view is
+   * blocked, and the dialog beside it is non-modal, so the rest of the application stays navigable
+   * (REQ-WORKSPACE-106, REQ-WORKSPACE-142). The dialog opens by itself **at most once per workspace open**
+   * (REQ-WORKSPACE-105) and otherwise only when the user asks for it from the sidebar's Project section.
+   */
+  const init = useInitialization();
+  const promptDue = init.state !== null && init.state.view.consentPending.length > 0 && !init.state.view.running;
+  const openProjectSetup = useShellState((s) => s.openProjectSetup);
   return <>
     {worktreeOpen && (
       <WorktreeDialog workspaceRoot={workspace} existingBranches={worktrees.flatMap((r) => (r.branch === null ? [] : [r.branch]))} existingPaths={worktrees.map((r) => r.path)}
@@ -646,6 +655,7 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
     <WorkspaceView slash={slashHost}
     onOpenLink={openLink} onReadAttachment={async (attachment) => { if (!session) return null; const r = await bridge.command({ kind: 'session.readAttachment', sessionId: session.id, path: attachment.path, digest: attachment.digest }); return r.ok ? `data:${attachment.mediaType};base64,${(r.value as { base64: string }).base64}` : null; }} onAcknowledge={acknowledge} showReasoning={display.showReasoning} autoCollapseTools={display.autoCollapseTools}
     needsRecovery={needsRecovery} modelsLoaded={modelsLoaded} history={prompts.history} configuredMode={snapshot?.runtime.permission_mode}
+    projectSetupPending={promptDue} initialization={init.state} onOpenProjectSetup={openProjectSetup}
     draft={drafts.draft} onPublishDraft={drafts.publish} onWriteDraft={drafts.write}
     composerHeight={layout?.sizes[1]} onComposerHeight={(sizes) => onLayout({ version: 1, panes: 2, sizes: [...sizes] })}
     onSetNextPersona={(persona) => setField({ default_persona: persona })}
@@ -1010,6 +1020,30 @@ function useConfinement() {
   return { verdict, onRecheck };
 }
 
+/**
+ * ADR-0064 (Part AS) — the initialization state, read once and then PUSHED on channel 12. Nothing here
+ * asks on a cadence: REQ-WORKSPACE-109 wants a step visible at the moment it finishes, and main and this
+ * window can talk, which is exactly where SR-3 withdrew polling. The four commands answer with the whole
+ * state too, so a surface that acts is never a frame behind the one that listens.
+ */
+function useInitialization() {
+  const [state, setState] = useState<InitializationStateView | null>(null);
+  useEffect(() => bridge.onInitializationState((p) => setState(p as InitializationStateView)), []);
+  useEffect(() => { queueMicrotask(() => { void bridge.command({ kind: 'initialization.read' }).then((r) => { if (r.ok) setState(r.value as InitializationStateView); }); }); }, []);
+  const send = useCallback(async (req: Parameters<typeof bridge.command>[0]) => {
+    const r = await bridge.command(req);
+    if (r.ok) { setState(r.value as InitializationStateView); return { ok: true as const }; }
+    return { ok: false as const, message: r.detail ? `${r.headline} ${r.detail}` : r.headline };
+  }, []);
+  return {
+    state,
+    onInitialize: useCallback(() => send({ kind: 'initialization.start' }), [send]),
+    onSkip: useCallback((ids: readonly string[]) => send({ kind: 'initialization.skip', ids: [...ids] }), [send]),
+    onRefresh: useCallback(async () => { await send({ kind: 'initialization.read' }); }, [send]),
+    onCheckAgain: useCallback(async () => { await send({ kind: 'initialization.resolve' }); }, [send]),
+  };
+}
+
 function Settings({ workspace, home, theme, reducedMotion, settingsCategory, onTheme, onMotion, popOut, onPopOut }: { workspace: string | null; home: string | undefined; popOut: boolean; onPopOut: (value: boolean) => void } & AppearanceProps) {
   const session = useStore(replica, (s) => s.session);
   const sessionId = useStore(replica, (s) => s.sessionId);
@@ -1085,6 +1119,9 @@ function Settings({ workspace, home, theme, reducedMotion, settingsCategory, onT
       return r.ok ? { ok: true as const, cancelled: (r.value as { cancelled?: boolean } | null)?.cancelled === true } : { ok: false as const, reason: r.detail ?? r.headline };
     },
   }), [workspace]);
+  // Part AS — REQ-WORKSPACE-114/115: the Project category's initialization card and its two controls.
+  const init = useInitialization();
+  const projectInit = useMemo(() => ({ state: init.state, onInitialize: init.onInitialize, onRefresh: init.onRefresh, onCheckAgain: init.onCheckAgain }), [init.state, init.onInitialize, init.onRefresh, init.onCheckAgain]);
   /*
    * ADR-0063 — the Skills category. The catalog is the run host's (`skills.read`); the POLICY is configuration
    * and joins the pending settings like every other destination-1 value, so Save writes it through Tier A
@@ -1156,6 +1193,7 @@ function Settings({ workspace, home, theme, reducedMotion, settingsCategory, onT
       about={{ info: about, onOpenExternal: openExternal, onOpenThirdPartyLicenses: openThirdPartyLicenses }}
       interfaceExtras={<AgentPopOutToggle on={popOut} onChange={onPopOut} />}
       traceability={traceability /* Part AJ2 */}
+      projectInit={projectInit /* Part AS */}
       skills={skills /* ADR-0063 */}
     />
     {guardDialog}
@@ -1430,6 +1468,21 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
    */
   const chooseWorkspace = useCallback((newWindow: boolean) => { void bridge.command({ kind: 'workspace.choose', ...(newWindow ? { newWindow: true } : {}) }); }, []);
   const openRequirementSession = useCallback((id: string) => { void openSession(id); }, [openSession]); // Part AK2 — REQ-TRACE-266/269: the board's session opener is the window's own, memoised so the host is built once.
+  /*
+   * Part AS — ADR-0064. The window owns the setup dialog, and the automatic opening is made HERE so it
+   * happens once per workspace open whichever view the user is on (REQ-WORKSPACE-105: "the dialog SHALL be
+   * opened automatically at most once per workspace open"). The composer gate keeps its own reading of the
+   * same pushed state; both read, neither invents.
+   */
+  const initialization = useInitialization();
+  const projectSetup = useShellState((s) => s.projectSetup);
+  const autoOpenProjectSetup = useShellState((s) => s.autoOpenProjectSetup);
+  const closeProjectSetup = useShellState((s) => s.closeProjectSetup);
+  const setupPromptDue = initialization.state !== null && initialization.state.view.consentPending.length > 0 && !initialization.state.view.running;
+  const autoOpened = useRef(false);
+  useEffect(() => {
+    if (setupPromptDue && !autoOpened.current) { autoOpened.current = true; autoOpenProjectSetup(); }
+  }, [setupPromptDue, autoOpenProjectSetup]);
   return (<>
     <AppShell
       onModality={onModality}
@@ -1455,6 +1508,16 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
       acknowledgements={acknowledgements}
       onOpenSessions={() => { void loadSessions(); }}
     />
+    {/*
+      * Part AS — ADR-0064 / REQ-WORKSPACE-106: a WINDOW-level dialog, mounted beside the shell rather than
+      * inside a view, so navigating elsewhere does not dismiss a decision the product is waiting on and
+      * the rest of the application stays navigable while it is open. It opens by itself at most once per
+      * workspace open (REQ-WORKSPACE-105), and otherwise only when the user asks — from the Workspace
+      * sidebar's Project section or from Settings › Project (REQ-WORKSPACE-113).
+      */}
+    {projectSetup !== null && initialization.state !== null && (
+      <ProjectSetupDialog state={initialization.state} auto={projectSetup === 'auto'} onInitialize={initialization.onInitialize} onSkip={initialization.onSkip} onClose={closeProjectSetup} />
+    )}
     {browserOpen && (
       <SessionBrowser sessions={browserSessions} loading={browserLoading} error={browserError} onOpen={openSession} onDismiss={() => setBrowserOpen(false)}
         onRefresh={refreshSessions}

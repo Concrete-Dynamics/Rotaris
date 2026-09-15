@@ -28,6 +28,13 @@ Abandoning a branch because the merge is hard is not an outcome an agent may cho
 
 - **Re-read `main` before merging.** It moves. A trailer-less commit on `main` authored by
   the owner is theirs — surface a collision with it, never reset it.
+- **A register identifier you took while you worked may have been taken on `main` too.** The
+  request log, the open questions and the owner decisions have no allocator, and a worktree is
+  exactly where that bites. `tools/check-request-log.mjs` fails `pnpm lint` on a duplicate
+  `R-NNN`; the others are still read by hand. The settlement is the same either way: **the row
+  that reached `main` first keeps the number**, yours takes the next free one, keeps every word,
+  and says in its own cell that it moved — renumbering the documents that cite it in the same
+  commit. A collision caught before your row reaches `main` is renumbered, not logged as a defect.
 - **Resolve every conflict by reading both sides.** The five shapes seen here: disjoint
   blocks in one file (concatenate); a shared array or object literal both sides extended
   (merge the entries); a shared import line naming different symbols (the wider form wins,

@@ -1,4 +1,4 @@
-import { presentationStatus, type PresentationStatus } from '@rotaris/contracts';
+import { presentationStatus, PROJECT_SETUP_SEND_REASON, type PresentationStatus } from '@rotaris/contracts';
 
 /**
  * Part AB — the composer's and the run header's rules, as values rather than as markup, so each is checkable
@@ -105,14 +105,20 @@ export function runHeaderControlReason(state: RunState): string | null {
  * wording is left to the implementation and must convey exactly two facts — that the project-setup prompt has
  * to be answered first, and that nothing else in the application is blocked meanwhile.
  *
- * **The second limb is vacuous in this build and is written anyway.** The only project setup that exists is
- * Part T's code-intelligence setup (REQ-MCP-099/112), which is a settings-category action and gates nothing;
- * the onboarding prompt that would gate execution arrives with REQ-MCP-045/098's task registry. Nothing can
- * currently pass `true` here — which is recorded rather than hidden, and is why the flag is a parameter and
- * not a state this file invents.
+ * **The second limb was vacuous until Part AS and is no longer.** It was written with the note that nothing
+ * could pass `true`: the only project setup that existed was Part T's code-intelligence setup, a
+ * settings-category action gating nothing. ADR-0064's task registry supplies the value, and the renderer now
+ * passes it.
+ *
+ * **Its wording changed with it, and the reason is a disagreement between two requirements.** REQ-CHAT-007
+ * leaves this text to the implementation; REQ-WORKSPACE-112 fixes it, word for word, and differently. The
+ * more specific statement is followed — its text conveys both facts REQ-CHAT-007 requires — and the
+ * disagreement is recorded at `docs/defects/two-requirements-fix-the-composer-setup-refusal-differently.md`
+ * rather than settled here. The string itself lives in `contracts` beside the keyboard path's two, so the
+ * gate and the error a submit raises cannot drift apart.
  */
 export const CANCELLING_REFUSAL = 'Wait for the current run to finish cancelling.';
-export const PROJECT_SETUP_REFUSAL = 'Answer the project setup prompt before sending a prompt. Nothing else in the application is blocked while it waits.';
+export const PROJECT_SETUP_REFUSAL = PROJECT_SETUP_SEND_REASON;
 export function sendRefusal(state: RunState, projectSetupPending: boolean): string | null {
   if (state === 'cancelling') return CANCELLING_REFUSAL;
   if (projectSetupPending) return PROJECT_SETUP_REFUSAL;

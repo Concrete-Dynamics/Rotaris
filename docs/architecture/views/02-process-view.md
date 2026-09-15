@@ -300,11 +300,26 @@ run host as children of the derived invocation (`Rotaris.exe builtin:code-intell
 terminate then tree-killed after 5 s on cancel or timeout; the category polls the status every 500 ms while it runs.
 `ROTARIS_SCRIPT_MCP_ARGS` (verification only) hands the scripted client the arguments of an MCP step.
 
+**`initialization.*` (Part AS, ADR-0064).** Five commands, renderer → main and no further: `initialization.read`
+(REQ-WORKSPACE-115's refresh — the persisted section as it is on disk, nothing else disturbed),
+`initialization.resolve` (REQ-WORKSPACE-102's "Check again", additional to the one automatic resolution per
+workspace open), `initialization.start`, `initialization.skip {ids}` and `initialization.cancel`. Each answers with
+the whole state. Main is the coordinator because REQ-WORKSPACE-085 gives the marker **one writer** and that file
+is the workspace service's (`config.setField`, Tier A) while the one shipped task's work is the run host's
+(`mcp.setup`) — and the matrix gives neither of those two an edge to the other. The run host gained one event,
+`mcp.setupStatus`, pushed on every change of the setup's status: the task follows a live setup through it rather
+than on a cadence, because REQ-WORKSPACE-109 wants a step visible at the moment it finishes and SR-3 withdrew
+polling wherever two processes can talk. `ROTARIS_INIT_TEST_TASK=consent|fail` (verification only) registers an
+ordinary task through the ordinary registry, which is the only way to reach the consent dialog and the composer
+gate: the shipped set requires no consent (REQ-WORKSPACE-088, REQ-WORKSPACE-104).
+
 **Main → renderer (`CHANNEL`).** Since 2026-09-09 channel 3 has a producer and a delivery bound (Part AL, above), which since 2026-09-11 is one budget across every window rather than one per window (Part T″, above), and channel 10 carries the board's generation (Part AK, above). `transcript:increment` and `session:snapshot` share one per-session
 sequence stamped in the run host and relayed unchanged (REQ-MONITOR-214); `terminal:frames` has its own
 per-stream sequence; `notice:current` is the single notice or null; `acknowledgement:publish` (channel 8, Part V) is a transient for ONE
 window's own stack — the stack is per window and is not the notice store (ADR-0049); `library:changed` (channel 9,
-Part X) is the library revision, to every live window; `theme:changed` and `config:changed`
+Part X) is the library revision, to every live window; `initialization:state` (channel 12, Part AS) is
+the nine values of REQ-WORKSPACE-105, their labels and descriptions, and the live run report, to every live
+window whichever view it is showing; `theme:changed` and `config:changed`
 repaint or repopulate every live window.
 
 **Main ↔ run host (`RunHostRequestSchema` / `ProcessReplySchema` / `ProcessEventSchema`).** Since 2026-09-09 (Part AL): the seven `terminal.*` requests, the `terminal.streams` reply and the `publish.terminal` event, listed above. Requests:

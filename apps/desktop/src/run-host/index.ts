@@ -382,6 +382,8 @@ const mcp = new McpHost({
   clocks, log: (m, level) => log(m, level ?? 'info'), parentEnv: hostEnv,
   // Part V: REQ-MCP-044's warning is a transient on the acknowledgement channel (REQ-NOTIFY-040 forbids the timed clear it had) — and the issue record it also writes.
   acknowledge: (a) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'acknowledgement.publish', kindOf: a.kind, title: a.title, ...(a.body === undefined ? {} : { body: a.body }) } }),
+  // Part AS (ADR-0064): every step and the end, pushed — what ADR-0064's task runner follows instead of a cadence.
+  publishSetup: (status) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'mcp.setupStatus', status } }),
 });
 // REQ-MCP-033 / ADR-0035 (Part T): what the reserved token launches — THIS application's own executable (a utility process
 // runs the same binary) with the token first and `--` second (the branch's separator, measured in
@@ -1104,11 +1106,12 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
     }
     // ADR-0035 (Part T) / REQ-MCP-099/112: the project setup — the steps run here; the reply is the status as it stands.
     case 'mcp.setup': {
-      if (req.action === 'status') return { kind: 'mcp.setup', status: mcp.setupStatus() };
-      if (req.action === 'cancel') return { kind: 'mcp.setup', status: mcp.cancelSetup() };
       const s = stores.get(req.workspaceId);
       if (!s) return { kind: 'refused', code: 'workspace.unknown', headline: 'That workspace is not open in the run host' };
       const run = configuredFor(s.root) ?? (configure(s.root, true).ok ? configuredFor(s.root) : null);
+      // Part AS: `applicable` (REQ-WORKSPACE-090) is read off the same resolution every other answer is.
+      if (req.action === 'status') return { kind: 'mcp.setup', status: mcp.setupStatus(run?.cfg ?? null) };
+      if (req.action === 'cancel') return { kind: 'mcp.setup', status: mcp.cancelSetup() };
       if (!run) return { kind: 'refused', code: 'mcp.configuration', headline: 'The configuration could not be loaded' };
       const started = mcp.startSetup(run.cfg, s.root);
       if (!started.ok) return { kind: 'refused', code: 'mcp.setup.running', headline: started.reason };

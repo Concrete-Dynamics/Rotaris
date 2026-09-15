@@ -27,3 +27,4 @@ export * from './terminal.js';
 export * from './terminal-keys.js';
 export * from './slash.js'; // Part AO
 export * from './skills.js'; // ADR-0063
+export * from './initialization.js'; // Part AS (ADR-0064)

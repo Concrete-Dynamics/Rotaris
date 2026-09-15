@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync, type Dirent } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { z } from 'zod';
+import { ignoredBy, loadRules, parseGitignore, type IgnoreRule } from '@rotaris/config';
 import { checkFence, isInside, realPathOf, type FenceConfig } from './fence.js';
 import { errorObservation, observation, type ToolExecutor } from './types.js';
 
@@ -16,44 +17,18 @@ export const IGNORE_COMPONENTS: ReadonlySet<string> = new Set([
 ]);
 export const MAX_FILE_BYTES = 2 * 1024 * 1024;
 
+/**
+ * ADR-0064 moved the gitignore grammar to `@rotaris/config` (`init/gitignore.ts`) and these three names
+ * are re-exported so every caller keeps reading one definition. The reader that stood here was a
+ * deliberate subset — its own comment said so — and REQ-WORKSPACE-100 requires the full grammar of the
+ * walk that classifies a workspace. Two readers would have meant `grep` and the classifier disagreeing
+ * about which files the repository says are part of it.
+ */
+export { ignoredBy, loadRules, parseGitignore };
+export type { IgnoreRule };
+
+/** The glob compiler below has its own escaping; gitignore's lives with the grammar it serves. */
 const escapeRe = (s: string): string => s.replace(/[.+^${}()|[\]\\]/g, '\\$&');
-
-interface IgnoreRule { readonly re: RegExp; readonly negated: boolean; readonly dirOnly: boolean }
-
-/** A small gitignore reader: `*`, `**`, `?`, a leading `/` anchors, a trailing `/` is directories only, `!` negates. */
-export function parseGitignore(text: string): IgnoreRule[] {
-  const rules: IgnoreRule[] = [];
-  for (const raw of text.split(/\r?\n/)) {
-    let line = raw.replace(/\s+$/, '');
-    if (line === '' || line.startsWith('#')) continue;
-    let negated = false;
-    if (line.startsWith('!')) { negated = true; line = line.slice(1); }
-    let dirOnly = false;
-    if (line.endsWith('/')) { dirOnly = true; line = line.slice(0, -1); }
-    const anchored = line.startsWith('/') || line.includes('/');
-    if (line.startsWith('/')) line = line.slice(1);
-    let re = '';
-    for (let i = 0; i < line.length; i += 1) {
-      const ch = line[i] as string;
-      if (ch === '*' && line[i + 1] === '*') { re += '.*'; i += 1; if (line[i + 1] === '/') i += 1; }
-      else if (ch === '*') re += '[^/]*';
-      else if (ch === '?') re += '[^/]';
-      else re += escapeRe(ch);
-    }
-    const pattern = anchored ? `^${re}(/.*)?$` : `(^|/)${re}(/.*)?$`;
-    rules.push({ re: new RegExp(pattern), negated, dirOnly });
-  }
-  return rules;
-}
-
-export function ignoredBy(rules: readonly IgnoreRule[], relPosix: string, isDir: boolean): boolean {
-  let ignored = false;
-  for (const r of rules) {
-    if (r.dirOnly && !isDir) continue;
-    if (r.re.test(relPosix)) ignored = !r.negated;
-  }
-  return ignored;
-}
 
 export interface WalkOptions {
   readonly root: string;
@@ -93,16 +68,6 @@ export function walkFiles(o: WalkOptions, onFile: (relPosix: string, abs: string
     return true;
   };
   visit(o.base);
-}
-
-export function loadRules(root: string): IgnoreRule[] {
-  const f = join(root, '.gitignore');
-  if (!existsSync(f)) return [];
-  try {
-    return parseGitignore(readFileSync(f, 'utf8'));
-  } catch {
-    return [];
-  }
 }
 
 function probablyBinary(bytes: Buffer): boolean {

@@ -24,7 +24,18 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-15** — **OS-level confinement** (ADR-0022, first executed): the
+Last reconciled with the code: **2026-09-15** — **project initialization** (ADR-0064, first executed): the
+task registry, the persisted marker and the five set derivations in `config/src/init/`, the coordinator in
+**main** because the marker's one writer is the workspace service and the one shipped task's work is the run
+host's and neither may import the other, `initialization.*`'s five commands and the run host's new
+`mcp.setupStatus` push, channel **12** carrying REQ-WORKSPACE-105's nine values to every window, and the
+`initialization:`/`project_init:` pair read **outside the layered merge** because REQ-WORKSPACE-078 names one
+file. The component view carries the module and the placement reason, the process view the commands and the
+channel, the runtime view the pair's place among the configuration tiers and why the execution re-reads before
+each recording. **No implementation condition is raised or discharged**: every behaviour is demonstrable on
+`win32` and was demonstrated there (`pnpm init-proof`, five scenarios).
+
+Previously reconciled: **2026-09-15** — **OS-level confinement** (ADR-0022, first executed): the
 `confinement/` module inside `agent-tools` (the shared specification, the two thin renderers, the single-purpose
 quoting, the availability probe), the probe settled in the **run host** before a launch does anything else and
 the gate that refuses such a run before the lease, the session row or the lock exist, `confinement.status` as the
@@ -34,7 +45,7 @@ verdict lives, the runtime view the gate's place in the start sequence. **IC-8 i
 written and unit-tested, and `REQ-SANDBOX-127`'s six observable effects have been demonstrated on neither
 supported platform.
 
-Previously reconciled: **2026-09-15** — **portable skill discovery** (ADR-0063): the pure discovery
+Before that: **2026-09-15** — **portable skill discovery** (ADR-0063): the pure discovery
 library in `config/src/skills/` (the run host may not import `workspace`, and injection happens at agent
 construction), the catalog the run host owns because REQ-WORKSPACE-058 clears it at session creation rather
 than per run, skills as ordered context units composed at every agent construction, the cataloged directories

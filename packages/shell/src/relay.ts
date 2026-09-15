@@ -32,6 +32,7 @@ export class UpdateRelay {
     [CHANNEL.requirementsChanged]: 0, // Part AK — channel 10's counter; the record is total over ChannelName (plan Reservations, ruled 2026-09-09: a new channel's counter line rides with the channel reservation)
     [CHANNEL.command]: 0,
     [CHANNEL.improvementActivity]: 0,
+    [CHANNEL.initializationState]: 0, // Part AS — channel 12's counter, on the same reservation rule
   };
 
   attach(sink: RendererSink): void {

@@ -98,3 +98,38 @@ change takes effect
 **Widening confirmation**:
 The explicit confirmation demanded before a change that widens what an agent may reach. —
 `REQ-CONFIG` settings screen: security policy controls and confirmations
+
+### Project initialization
+
+**Initialization task**: One-time work a workspace owes, described by an id, a display label, a
+description, an applicability predicate, a runner and a consent flag. The product ships exactly one.
+— `REQ-WORKSPACE-080`, `REQ-WORKSPACE-088`
+_Avoid_: setup step (that is one stage **inside** a task, `REQ-WORKSPACE-091`), onboarding step
+
+**Applicable / pending / runnable / background / consent task**: Five readings of the same set and
+not synonyms. *Applicable* is the predicate satisfied whatever is recorded; *pending* is applicable
+and in neither persisted list; *runnable* is applicable and not completed, so a **skipped task stays
+runnable**; *background* is pending and needing no consent; *consent* is pending and needing it.
+— `REQ-WORKSPACE-081`
+_Avoid_: outstanding, due, owed — each collapses two of the five
+
+**Initialization marker**: The `initialization:` section of the workspace `agents.yaml` — the
+completed list, the skipped list, `last_run` and `classification` — with exactly one writer.
+— `REQ-WORKSPACE-078`, `REQ-WORKSPACE-085`
+_Avoid_: initialization state (that is the nine values a surface works from, `REQ-WORKSPACE-105`),
+flag, sentinel
+
+**Never initialized**: No `last_run` **and** both lists empty. A `last_run` stamp alone has left the
+state, which is what stops a workspace where no task applied from prompting again.
+— `REQ-WORKSPACE-078`, `REQ-WORKSPACE-079`
+
+**Classification**: The verdict `code` or `non-code`, decided by whether any file beneath the
+workspace root carries an extension from the configured source-extension set, the root `.gitignore`
+honoured. One reading serves both the recorded value and the setup stages' skip.
+— `REQ-WORKSPACE-098`, `REQ-WORKSPACE-101`
+_Avoid_: project type, language detection — neither is what is decided or why
+
+**Setup prompt**: The consent question, owed exactly when a consent-requiring task is pending. It is
+the only thing in this domain that gates agent execution, and it gates only the composer.
+— `REQ-WORKSPACE-082`, `REQ-WORKSPACE-112`, `REQ-WORKSPACE-142`
+_Avoid_: onboarding dialog, first-run wizard

@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import type { ChangeEntry, Finding, ParseError, TraceabilityFailure, VerificationReport } from '@rotaris/contracts';
+import type { ChangeEntry, Finding, InitializationStateView, ParseError, TraceabilityFailure, VerificationReport } from '@rotaris/contracts';
+import { RESOLUTION_FAILED_DETAIL, RESOLUTION_FAILED_HEADLINE } from '@rotaris/contracts';
 import { Button as DesignButton, Card as DesignCard, Input as DesignInput } from '../design-system/index.js';
+import { projectInitCard } from './project-init.js';
 
 /**
  * Part AJ2 — the Project category's traceability card: the four toolchain operations of spec 08 §Toolchain
@@ -147,6 +149,54 @@ function describeCompare(value: { readonly entries: readonly ChangeEntry[]; read
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
+
+/**
+ * ADR-0064 — REQ-WORKSPACE-114's "Project initialization" card: exactly one of six states at a time,
+ * chosen in the fixed order *running, failed, pending, deferred, completed, empty*. The reading is
+ * `projectInitCard`, a pure function of REQ-WORKSPACE-105's nine values, so this component decides
+ * nothing and the proof can assert every sentence without a window.
+ *
+ * REQ-WORKSPACE-115's refresh is the `initialization.read` behind the "Refresh" control: it shows the
+ * persisted section as it is on disk at that moment and disturbs nothing else — a setting edited and
+ * not yet saved is still there afterwards, because nothing here touches the settings store.
+ */
+export interface ProjectInitSettingsProps {
+  readonly state: InitializationStateView | null;
+  readonly onInitialize: () => Promise<{ readonly ok: true } | { readonly ok: false; readonly message: string }>;
+  readonly onRefresh: () => Promise<void>;
+  /** REQ-WORKSPACE-102: "Check again" resolves once more; it does not consume the automatic resolution. */
+  readonly onCheckAgain: () => Promise<void>;
+}
+
+export function ProjectInitSettings({ state, onInitialize, onRefresh, onCheckAgain }: ProjectInitSettingsProps) {
+  const [message, setMessage] = useState<string | null>(null);
+  if (state === null) return null;
+  const card = projectInitCard(state.view, state.labels);
+  const start = async () => { setMessage(null); const r = await onInitialize(); if (!r.ok) setMessage(r.message); };
+  return (
+    <DesignCard className="card settings__card" data-project-init data-init-state={card.state}>
+      <div className="providers-card__head">
+        <div className="card-kicker">Project initialization</div>
+        <div className="providers-card__actions">
+          <DesignButton type="button" className="btn btn-secondary btn-compact" onClick={() => { void onRefresh(); }} data-action="init-refresh">Refresh</DesignButton>
+          <DesignButton type="button" className="btn btn-primary btn-compact" disabled={card.buttonDisabled} title={card.buttonReason === '' ? undefined : card.buttonReason} onClick={() => { void start(); }} data-action="init-run">{card.button}</DesignButton>
+        </div>
+      </div>
+      <p role="status" data-init-headline><strong>{card.headline}</strong></p>
+      {card.busy ? <p className="text-secondary" role="status" aria-busy="true" data-init-progress>Running the pending setup tasks. Each step is reported in the setup window.</p> : null}
+      {card.lines.map((line, i) => <p key={i} className="text-secondary" data-init-detail>{line}</p>)}
+      {card.buttonDisabled && card.buttonReason !== '' ? <p className="text-tertiary settings__hint" data-init-reason>{card.buttonReason}</p> : null}
+      {state.resolutionFailed ? (
+        <div data-init-resolution-failed>
+          <p role="alert" className="composer__error">{RESOLUTION_FAILED_HEADLINE}</p>
+          <p className="text-secondary">{RESOLUTION_FAILED_DETAIL}</p>
+          <DesignButton type="button" className="btn btn-secondary btn-compact" onClick={() => { void onCheckAgain(); }} data-action="init-check-again">Check again</DesignButton>
+        </div>
+      ) : null}
+      {message !== null ? <p className="composer__error" role="alert" data-init-refused>{message}</p> : null}
+    </DesignCard>
+  );
+}
 
 /** The one pure mapping from an operation's reply to the sentences a surface must be able to state (§1481). */
 export function describeOperation(operation: TraceabilityOperation, reply: unknown): OperationStatement {

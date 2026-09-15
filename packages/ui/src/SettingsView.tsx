@@ -7,7 +7,7 @@ import { InstructionsSettings, ToolsSettings } from './settings/Inventories.js';
 import { AboutSettings, type AboutSettingsProps } from './settings/About.js';
 import { McpSettings, type McpSettingsProps } from './settings/McpSettings.js';
 import { SkillsSettings, type SkillsSettingsProps } from './settings/SkillsSettings.js'; // ADR-0063
-import { TraceabilitySettings, type TraceabilitySettingsProps } from './settings/ProjectSettings.js'; // Part AJ2
+import { ProjectInitSettings, TraceabilitySettings, type ProjectInitSettingsProps, type TraceabilitySettingsProps } from './settings/ProjectSettings.js'; // Part AJ2, Part AS
 import type { PlaybookCatalogue } from '@rotaris/contracts';
 import { useShellState } from './shell-state.js';
 import { Button as DesignButton, Select as DesignSelect } from './design-system/index.js';
@@ -84,9 +84,11 @@ export interface SettingsViewProps {
   readonly traceability?: TraceabilitySettingsProps | undefined;
   /** ADR-0063: the Skills category — the catalog the run host answered and the four things the tab can do. */
   readonly skills?: Omit<SkillsSettingsProps, 'workspace'> | undefined;
+  /** Part AS: the Project category's initialization card (REQ-WORKSPACE-114/115). */
+  readonly projectInit?: ProjectInitSettingsProps | undefined;
 }
 
-export function SettingsView({ session, workspace, onBackup, onRestore, hooks, playbooks, themes = [], activeTheme, onTheme, reducedMotion = false, onReducedMotion, initialCategory = 'models', onCategory, config, mcp, display, about, interfaceExtras, traceability /* Part AJ2 */, skills /* ADR-0063 */ }: SettingsViewProps) {
+export function SettingsView({ session, workspace, onBackup, onRestore, hooks, playbooks, themes = [], activeTheme, onTheme, reducedMotion = false, onReducedMotion, initialCategory = 'models', onCategory, config, mcp, display, about, interfaceExtras, traceability /* Part AJ2 */, skills /* ADR-0063 */, projectInit /* Part AS */ }: SettingsViewProps) {
   const [chosen, setChosen] = useState<SettingsCategoryId>(initialCategory);
   // A category a notice action asked for (REQ-NOTIFY-223) selects itself until the user picks another; no effect, no cascade.
   const wanted = useShellState((s) => s.settingsCategory);
@@ -198,6 +200,9 @@ export function SettingsView({ session, workspace, onBackup, onRestore, hooks, p
               </div>
             </div>
             {message && <div className="composer__error" role="alert">{message}</div>}
+            {/* Part AS — REQ-WORKSPACE-114's "Project initialization" card, above the traceability one: it is the
+                state a user comes to this category to see, and REQ-WORKSPACE-101's classification sentence lives on it. */}
+            {projectInit ? <ProjectInitSettings {...projectInit} /> : null}
             {/* Part AJ2 — the traceability card (REQ-TRACE-508..511), a card of this category as REQ-CONFIG-390 shapes one. */}
             {traceability ? <TraceabilitySettings {...traceability} /> : null}
           </div>

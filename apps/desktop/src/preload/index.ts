@@ -28,6 +28,8 @@ const bridge: RendererBridge = Object.freeze({
   // Part AK — channel 10, the requirements board's generation (REQ-TRACE-374).
   onRequirementsChanged: subscribe(CHANNEL.requirementsChanged),
   onImprovementActivity: subscribe(CHANNEL.improvementActivity),
+  // Part AS — channel 12, the nine values and the live run report (ADR-0064, REQ-WORKSPACE-105/109).
+  onInitializationState: subscribe(CHANNEL.initializationState),
 });
 
 contextBridge.exposeInMainWorld(BRIDGE_KEY, bridge);

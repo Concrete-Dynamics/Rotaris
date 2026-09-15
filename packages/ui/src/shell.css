@@ -243,7 +243,14 @@
 .row--user { padding: var(--rt-space-2, 8px) var(--rt-space-3, 12px); background: var(--rt-accent-tint-07); border-color: var(--rt-accent-800); }
 .row--user:hover { background: var(--rt-accent-tint-10); }
 .row__head { display: flex; align-items: baseline; gap: var(--rt-space-2, 8px); }
-.row__role { font-size: var(--rt-text-2xs, 10px); font-weight: var(--rt-weight-medium, 500); letter-spacing: var(--rt-tracking-label, .06em); text-transform: uppercase; color: var(--rt-accent-300); overflow: hidden; text-overflow: ellipsis; }
+/* The falsified rule, kept beside its replacement: this asked for `text-overflow: ellipsis`, which acts only on
+   content that overflows on ONE line, and never set `white-space: nowrap` — so the declaration did nothing and a
+   name wider than the 112 px column wrapped anyway. Making it work as written would truncate
+   `REQUIREMENTS-ENGINEER` to `REQUIREMENTS-EN…`, and an agent's name is the one fact REQ-CHAT-057's attribution
+   exists to carry. The truncation half goes and the wrapping half stays, deliberately now: a name breaks at its
+   hyphen, an unbroken one breaks anywhere rather than clipping mid-glyph, and `estimateHeight` models the second
+   line it costs (docs/defects/role-gutter-truncation-rule-is-inert.md). */
+.row__role { font-size: var(--rt-text-2xs, 10px); font-weight: var(--rt-weight-medium, 500); letter-spacing: var(--rt-tracking-label, .06em); text-transform: uppercase; color: var(--rt-accent-300); overflow-wrap: anywhere; }
 /* REQ-CHAT-057: timestamps in the monospace stack at 8 pt — the requirement's own unit, not a token's. */
 .row__time { font-family: var(--rt-font-mono); font-size: 8pt; color: var(--rt-text-tertiary); }
 /* The design gives prose a measure — nothing in the mockup's transcript runs the full width of a wide window;

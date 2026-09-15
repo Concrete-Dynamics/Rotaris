@@ -8,7 +8,7 @@ import {
 import type { DisplayRow } from './types.js';
 import { buildOffsets, captureAnchor, estimateHeight, indexAt, newUpdatesLabel, restoreAnchor, updateShape, visibleRange } from './pool.js';
 import { countLabel, indexAll, indexSuffix, matchRow, step } from './search.js';
-import { LruCache, reuseKey } from './cache.js';
+import { LruCache, identityOf, measureKey, reuseKey } from './cache.js';
 import { H_MAX, POOL_CAPACITY, ROW_MIN_HEIGHT, capacityFor } from './constants.js';
 
 const row = (index: number, over: Partial<TranscriptRow> = {}): TranscriptRow => ({
@@ -161,6 +161,59 @@ describe('ADR-0045 — the pool, its capacity and its geometry', () => {
     // Other shapes are unaffected by the flag.
     expect(estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: 'a\nb\nc' }) }, false))
       .toBe(estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: 'a\nb\nc' }) }, true));
+  });
+
+  // ---- the estimate models WRAPPING (docs/defects/live-rows-are-never-measured.md) ------------------------
+  // The three below are the regression for the constant that used to sit in `estimateHeight`: a group was 36 px
+  // however many segments it drew, a body line was a `\n` rather than a drawn line, and the role gutter's own
+  // wrapping was not modelled at all. Each one put the row beneath through the middle of the text.
+
+  it('an activity line grows with the segments it draws, because they wrap (PD-CHAT-004, REQ-CHAT-058)', () => {
+    const short = asGroup(projectDisplay(options([tool(0, 'read'), tool(1, 'read')]))[0]);
+    const many = asGroup(projectDisplay(options(
+      Array.from({ length: 16 }, (_, i) => tool(i, ['read', 'search', 'edit', 'bash'][i % 4]!)),
+    ))[0]);
+    const WIDTH = 900;
+    const one = estimateHeight(short, false, WIDTH);
+    const wrapped = estimateHeight(many, false, WIDTH);
+    expect(many.segments.length).toBeGreaterThan(short.segments.length);
+    // The falsified behaviour: both of these answered 36.
+    expect(wrapped).toBeGreaterThan(one);
+    expect(wrapped).toBeGreaterThan(36);
+    // Narrower means more lines for the same content — the width has to reach the answer for it to be a wrap.
+    expect(estimateHeight(many, false, 420)).toBeGreaterThan(wrapped);
+  });
+
+  it('a body line is a DRAWN line, not a newline (REQ-CHAT-058)', () => {
+    // One paragraph, no newline in it at all, far wider than the 78 % prose measure at this width.
+    const paragraph = 'x'.repeat(1_200);
+    const drawn = estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: paragraph }) }, false, 900);
+    expect(drawn).toBeGreaterThan(ROW_MIN_HEIGHT * 3);
+    // With no width known nothing can be predicted, so the old width-blind count is what is left.
+    expect(estimateHeight({ shape: 'row', key: 'k', row: row(0, { body: paragraph }) }, false)).toBe(ROW_MIN_HEIGHT);
+  });
+
+  it('a long agent name costs the row a second line, because the role gutter wraps (REQ-CHAT-057)', () => {
+    const short = estimateHeight({ shape: 'row', key: 'k', row: row(0, { name: 'planner', body: 'hi' }) }, false, 900);
+    const long = estimateHeight({ shape: 'row', key: 'k', row: row(0, { name: 'requirements-engineer', body: 'hi' }) }, false, 900);
+    expect(long).toBeGreaterThan(short);
+  });
+
+  it('a LIVE row has a measurement key even though it has no rendering-reuse key (REQ-CHAT-058)', () => {
+    const live: DisplayRow = { shape: 'row', key: 'k', row: tool(0, 'bash', { toolStatus: 'running', settled: false }) };
+    expect(isLive(live)).toBe(true);
+    // Reusing its DRAWING would freeze its clock, so that stays refused...
+    expect(reuseKey(live, 900, false, null)).toBeNull();
+    // ...but its height is a fact about a node that is on the screen, and refusing to read it was the defect.
+    const key = measureKey(live, 900, false, null);
+    expect(key).not.toBe('');
+    expect(identityOf(key)).toBe('k');
+    // The identity survives a content change, which is what lets a streaming row keep the height it just drew
+    // instead of falling back to an estimate on every chunk.
+    const grown: DisplayRow = { shape: 'row', key: 'k', row: tool(0, 'bash', { toolStatus: 'running', settled: false, body: 'more output' }) };
+    const grownKey = measureKey(grown, 900, false, null);
+    expect(grownKey).not.toBe(key);
+    expect(identityOf(grownKey)).toBe(identityOf(key));
   });
 });
 

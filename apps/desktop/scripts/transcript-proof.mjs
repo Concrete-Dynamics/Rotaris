@@ -11,6 +11,9 @@
  *                   header still on screen, a search that matches inside the collapsed group, paging older rows in
  *                   with the reader's position undisturbed and the returned row identical to the released one, and
  *                   a burst of gapped publications producing exactly one `refused` and one `reset`.
+ *   3b. geometry   — a planted run whose activity line MUST wrap and whose agent name is too long for the role
+ *                   column, with a scripted run appended so that something is live while it is sampled: every
+ *                   bound slot carries a measurement key, and no slot is drawn through its neighbour.
  *   4/5. append-empty / append-loaded — the same scripted run appended to an empty transcript and to a 1200-row
  *                   one, timed at REQ-CHAT-055's stated point: after the frame showing the update has been
  *                   painted, never a synchronous figure.
@@ -171,9 +174,46 @@ function plant(sid, total, opts = {}) {
     return sid;
   });
 }
+/**
+ * docs/defects/live-rows-are-never-measured.md: one agent, a name too long for the 112 px role column, and a run
+ * long enough that `.activity__segments` MUST wrap — with the last call still `running`, so the activity line is
+ * LIVE. That combination is the one the pool used to position by `estimateHeight` for the whole time it was live,
+ * drawing three wrapped lines into a 36 px allocation and through the row beneath it.
+ */
+function plantLiveRun(sid) {
+  return withDb((db) => {
+    const wsRoot = db.prepare('SELECT workspace_root FROM sessions LIMIT 1').get()?.workspace_root ?? workspace;
+    db.prepare('INSERT INTO sessions (session_id, execution_status, workspace_root, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
+      .run(sid, 'running', wsRoot, '2026-09-06T09:00:00.000Z', '2026-09-06T09:05:00.000Z');
+    const insert = db.prepare(`INSERT INTO transcript_rows
+      (session_id, row_index, kind, settled, body, at, persona, name, ts, page, tool_name, tool_status, call_key, duration_ms, started_at, input, output)
+      VALUES (@sid, @i, @kind, @settled, @body, @at, @persona, @name, @ts, NULL, @toolName, @toolStatus, @callKey, @durationMs, @startedAt, NULL, @output)`);
+    const families = ['read_file', 'grep', 'apply_patch', 'bash'];
+    const planned = [];
+    const CALLS = 24;
+    for (let i = 0; i < CALLS; i += 1) {
+      const at = new Date(Date.UTC(2026, 8, 6, 9, 0, Math.min(59, i), 0)).toISOString();
+      const toolName = families[i % families.length];
+      planned.push({
+        sid, i, kind: 'tool', settled: i === CALLS - 1 ? 0 : 1, body: toolName, at, ts: at.slice(11, 19),
+        persona: 'requirements-engineer', name: 'requirements-engineer',
+        toolName, toolStatus: i === CALLS - 1 ? 'running' : 'ok', callKey: `live-${i}`,
+        durationMs: 120, startedAt: at, output: `done ${i}`,
+      });
+    }
+    // A row after the run, so an activity line that overruns its allocation has something to overrun INTO. The
+    // defect is invisible in a transcript whose last row is the group.
+    const last = new Date(Date.UTC(2026, 8, 6, 9, 1, 0, 0)).toISOString();
+    planned.push({ sid, i: CALLS, kind: 'agent', settled: 1, body: 'the row the activity line used to be drawn through', at: last, ts: last.slice(11, 19), persona: 'requirements-engineer', name: 'requirements-engineer', toolName: null, toolStatus: null, callKey: null, durationMs: null, startedAt: null, output: null });
+    db.transaction((batch) => { for (const row of batch) insert.run(row); })(planned);
+    return sid;
+  });
+}
+
 plant('S1', 1);
 plant('S601', 601);
 plant('S1200', 1200, { released: 200, foldAt: 400, longAt: 420 });
+plantLiveRun('SLIVE');
 plant('S0', 1);
 
 // ── 2. invariance ───────────────────────────────────────────────────────────────────────────────────────────
@@ -318,6 +358,45 @@ const behaviour = launch('behaviour', {
     burst: { refused: dRefused, reset: dReset, dropped: after.counters.dropped - before.counters.dropped, before: before.rowOps, after: after.rowOps },
     png: behaviour.png,
   };
+}
+
+// ── 3b. geometry: nothing is drawn through anything else ────────────────────────────────────────────────────
+// REQ-CHAT-058 says heights are MEASURED rather than assumed, and the pool positions every slot from the prefix
+// sum of those heights. The property that makes the sum right is the one a reader actually sees: no two slots
+// overlap. This reads boxes rather than attributes, because a row drawn through another row is in the DOM,
+// focusable, carrying every identifier it should — and unreadable (docs/defects/live-rows-are-never-measured.md).
+{
+  // One line, deliberately: the log reader's `capture: eval-at (\d+) (.*?) → (.*)$` cannot span newlines, and a
+  // multi-line expression parses as no result at all rather than as an error.
+  const SAMPLE_AT = Array.from({ length: 26 }, (_, i) => 3000 + i * 300);
+  const OVERLAP = `(() => { const boxes = [...document.querySelectorAll('.transcript__slot')].filter((n) => n.dataset.bound).map((n) => { const r = n.getBoundingClientRect(); return { key: n.dataset.bound, top: r.top, bottom: r.bottom, keyed: n.dataset.measure !== '' }; }).sort((a, b) => a.top - b.top); let worst = 0; let pair = null; for (let i = 1; i < boxes.length; i += 1) { const o = boxes[i - 1].bottom - boxes[i].top; if (o > worst) { worst = o; pair = [boxes[i - 1].key, boxes[i].key]; } } const seg = document.querySelector('[data-shape="group"] .activity__segments'); const segmentLines = seg ? new Set([...seg.querySelectorAll('.activity__segment')].map((e) => Math.round(e.getBoundingClientRect().top))).size : 0; const roles = [...document.querySelectorAll('.row__role')].map((e) => Math.round(e.getBoundingClientRect().height)); const g = document.querySelector('[data-shape="group"]'); return { bound: boxes.length, unkeyed: boxes.filter((b) => !b.keyed).length, worstOverlapPx: Math.round(worst * 10) / 10, pair, segmentLines, tallestRolePx: Math.max(0, ...roles), live: document.querySelectorAll('.activity__now').length, summaryTail: g ? g.innerText.replace(/\\s+/g, ' ').trim().slice(-90) : null }; })()`;
+  const geometry = launch('geometry', {
+    // A PLANTED running tool cannot stay running: a resumed session settles its in-flight calls through stale
+    // detection (ADR-0002), which is correct and is why the fixture alone cannot produce a live line. The wrap
+    // and the long name come from the planted run; the LIVENESS comes from a scripted run appended to it.
+    ROTARIS_CAPTURE_RESUME: 'SLIVE',
+    ROTARIS_SCRIPT: 'think,read,answer',
+    ROTARIS_CAPTURE_PROMPT: 'Say something about the notes.',
+    ROTARIS_CAPTURE_EVAL_AT: SAMPLE_AT.map((ms) => `${OVERLAP}@${ms}`).join(';;'),
+    ROTARIS_CAPTURE_AFTER_MS: '11000',
+  }, 240_000);
+  const samples = SAMPLE_AT.map((ms) => ({ ms, ...(evalAt(geometry, ms) ?? {}) })).filter((s) => typeof s.bound === 'number');
+  expect(samples.length >= 4, `the geometry stage took ${samples.length} readable samples, not enough to say anything`);
+  expect(samples.every((s) => s.bound > 1), `a sample bound one slot or none, so nothing could overlap: ${JSON.stringify(samples)}`);
+  // The two guards that keep the assertions below from being satisfied by construction. The line has to actually
+  // WRAP — a one-line activity line is the case the old constant happened to be right about — and at least one
+  // sample has to catch a row while it is LIVE, which is the state whose height was never read at all.
+  const wrapped = Math.max(...samples.map((s) => s.segmentLines));
+  const liveSamples = samples.filter((s) => s.live >= 1);
+  expect(wrapped >= 2, `the activity line never wrapped, so the estimate was never asked the question: ${JSON.stringify(samples)}`);
+  expect(liveSamples.length >= 1, `no sample caught a live line, so the state this repairs was never drawn: ${JSON.stringify(samples)}`);
+  // The repair: a live row carries a measurement key now, and no slot is drawn through its neighbour at any
+  // sample — while wrapping, while streaming, and while the run settles.
+  const unkeyed = samples.filter((s) => s.unkeyed > 0);
+  expect(unkeyed.length === 0, `bound slots carried no measurement key, so their height was assumed: ${JSON.stringify(unkeyed)}`);
+  const worst = samples.reduce((a, b) => (b.worstOverlapPx > a.worstOverlapPx ? b : a));
+  expect(worst.worstOverlapPx <= 1, `two rows overlap by ${worst.worstOverlapPx} px ${JSON.stringify(worst.pair)}: ${JSON.stringify(worst)}`);
+  results.geometry = { samples, wrappedToLines: wrapped, liveSamples: liveSamples.length, worstOverlapPx: worst.worstOverlapPx, tallestRolePx: Math.max(...samples.map((s) => s.tallestRolePx)), png: geometry.png };
 }
 
 // ── 4/5. the append comparison ──────────────────────────────────────────────────────────────────────────────

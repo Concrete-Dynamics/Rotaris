@@ -114,6 +114,32 @@ export function reuseKey(
   place?: { readonly blockStart: boolean; readonly recentTool: boolean } | undefined,
 ): string | null {
   if (isLive(d)) return null;
+  return measureKey(d, width, expanded, match, place);
+}
+
+/**
+ * The same four-part key, for a row in ANY state. This is what a HEIGHT is recorded under.
+ *
+ * **Measuring a row and reusing its drawing are different questions, and they were one key.** Rendering reuse
+ * must refuse a live row: its elapsed time advances every second, so a cached drawing would freeze the clock,
+ * which is REQ-CHAT-058's rule and is right. Measurement has no such reason — the row is in the DOM with a real
+ * height, and refusing to read it does not keep anything fresh, it throws away the only accurate number there
+ * is. Sharing one key meant a running group was positioned by `estimateHeight` for its whole life and drew three
+ * wrapped segment lines into a 36 px allocation (docs/defects/live-rows-are-never-measured.md).
+ *
+ * The identity is everything before the first `|`, which is what lets a layout recover "whatever this row last
+ * measured" from a key whose content part has since changed — the streaming case, where every chunk mints a key.
+ */
+export function measureKey(
+  d: DisplayRow, width: number, expanded: boolean, match: { start: number; end: number } | null,
+  place?: { readonly blockStart: boolean; readonly recentTool: boolean } | undefined,
+): string {
   const p = place === undefined ? '' : `${place.blockStart ? 'b' : ''}${place.recentTool ? 'r' : ''}`;
   return `${d.key}|${hash(sourceTextOf(d))}|${Math.round(width)}|${expanded ? 'o' : 'c'}|${match === null ? '' : `${match.start}-${match.end}`}|${p}`;
+}
+
+/** The identity part of a `measureKey` — everything before the first separator. */
+export function identityOf(key: string): string {
+  const at = key.indexOf('|');
+  return at === -1 ? key : key.slice(0, at);
 }

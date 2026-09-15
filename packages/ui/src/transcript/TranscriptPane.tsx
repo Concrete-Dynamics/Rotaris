@@ -3,7 +3,7 @@ import type { ApprovalPayload, ImageAttachment, QuestionPrompt, TranscriptRow } 
 import {
   LIVE_REFRESH_MS, PAGE_OLDER_THRESHOLD, POOL_CAPACITY, TAIL_EPSILON, capacityFor, countUiObjects, countWidgets,
 } from './constants.js';
-import { createMeasurementCache, createRenderCache, reuseKey, sourceTextOf, type TranscriptCacheStats } from './cache.js';
+import { createMeasurementCache, createRenderCache, identityOf, measureKey, reuseKey, sourceTextOf, type TranscriptCacheStats } from './cache.js';
 import { CAP_DEFAULTS, isLive, projectDisplay, rowKey, type DisplayCaps } from './project.js';
 import { buildOffsets, captureAnchor, estimateHeight, newUpdatesLabel, restoreAnchor, updateShape, visibleRange, type Anchor } from './pool.js';
 import { countLabel, indexAll, step as stepMatch, type Match } from './search.js';
@@ -95,6 +95,17 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
   // REQ-CHAT-058's two bounded caches, and the slot nodes, held as VALUES rather than as refs so that reading a
   // measurement while laying out is an ordinary read of state rather than a ref read during render.
   const [measurements] = useState(createMeasurementCache);
+  /**
+   * The last height each row IDENTITY measured, whatever its content was at the time. It is the fallback between
+   * an exact measurement and an estimate, and it exists for the two cases where an exact one cannot arrive in
+   * time: a row whose key changes on every streamed chunk, and a live row that has only just begun.
+   *
+   * A row that grew by one token is within a line of the height it had a moment ago; an estimate recomputed from
+   * scratch is not. Falling back to the estimate on every chunk is what made the rows below a streaming message
+   * jump twice per chunk — estimate, paint, observe, paint — and made two producing agents flicker against each
+   * other (docs/defects/live-rows-are-never-measured.md).
+   */
+  const [lastByIdentity] = useState(createMeasurementCache);
   const [renderings] = useState(createRenderCache<ReactElement>);
   const [attachmentBodies, setAttachmentBodies] = useState<ReadonlyMap<string, string>>(() => new Map());
   useEffect(() => {
@@ -201,10 +212,13 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
   // pure read that moves no recency and counts no hit, which is what makes it safe to do while laying out.
   // The expansion state rides to `estimateHeight` because a collapsed thinking row draws only its one-line
   // summary (REQ-CHAT-167 / REQ-CHAT-062) and is never measured while live — the estimate is all it has.
+  // Three answers in order of how much they are worth: what this exact content measured; what this row last
+  // measured under any content; what a width-aware estimate says. A LIVE row reaches the first of those now —
+  // it never used to, because the measurement key was the rendering-reuse key, which refuses one.
   const heights = display.map((d) => {
     const open = expanded.has(d.key);
-    const key = reuseKey(d, viewport.width, open, null);
-    return (key === null ? undefined : measurements.peek(key)) ?? estimateHeight(d, open);
+    const key = measureKey(d, viewport.width, open, null);
+    return measurements.peek(key) ?? lastByIdentity.peek(d.key) ?? estimateHeight(d, open, viewport.width);
   });
   const table = buildOffsets(heights);
 
@@ -276,6 +290,11 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
         if (key === undefined || key === '' || height <= 0) continue;
         const held = measurements.peek(key);
         if (held === undefined || Math.abs(held - height) > 0.5) { measurements.set(key, height, 0); changed = true; }
+        // The same reading, filed under the row's identity, so the next content this row carries starts from
+        // what it actually drew rather than from an estimate.
+        const identity = identityOf(key);
+        const previous = lastByIdentity.peek(identity);
+        if (previous === undefined || Math.abs(previous - height) > 0.5) { lastByIdentity.set(identity, height, 0); changed = true; }
       }
       if (changed) setMeasuredVersion((v) => v + 1);
     });
@@ -468,14 +487,16 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
             {Array.from({ length: capacity }, (_, slot) => {
               const d = bind(slot);
               const at = range.first + slot;
-              const measureKey = d === null ? '' : reuseKey(d, viewport.width, expanded.has(d.key), null) ?? '';
+              // Every bound slot is measured, live or settled: REQ-CHAT-058 says heights are measured rather
+              // than assumed, and a row in the DOM that carries no key is assumed.
+              const measured = d === null ? '' : measureKey(d, viewport.width, expanded.has(d.key), null);
               return (
                 <div
                   key={slot}
                   ref={(node) => { if (node) slotNodes.set(slot, node); else slotNodes.delete(slot); }}
                   className={`transcript__slot slot${d === null ? ' slot--empty' : ''}`}
                   data-slot={slot}
-                  data-measure={measureKey}
+                  data-measure={measured}
                   data-bound={d === null ? '' : d.key}
                   style={{ transform: `translateY(${d === null ? 0 : table.offsets[at] ?? 0}px)`, visibility: d === null ? 'hidden' : 'visible' }}
                 >

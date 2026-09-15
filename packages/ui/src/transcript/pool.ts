@@ -1,4 +1,5 @@
 import { OVERSCAN, ROW_MIN_HEIGHT } from './constants.js';
+import { FACT_SEPARATOR, segmentSummary } from './project.js';
 import { isReasoningRow } from './Row.js';
 import type { DisplayRow } from './types.js';
 
@@ -22,18 +23,76 @@ import type { DisplayRow } from './types.js';
  * already holds, and a collapsed reasoning row estimates its header. Expanded reasoning rows keep the body-based
  * estimate; live tool rows draw their one-line preview, which the per-line term already covers.
  */
-export function estimateHeight(d: DisplayRow, expanded = false): number {
+/**
+ * `.row__grid` spends `52px` on the timestamp and `112px` on the role before the main column begins, with a
+ * `--rt-space-2` gap either side. The estimate models WRAPPING now, so it has to know the width there is to
+ * wrap in; a caller that has not measured its viewport yet passes nothing and gets a one-line answer, which the
+ * first measurement corrects like any other estimate.
+ */
+const TIME_COLUMN = 52;
+const ROLE_COLUMN = 112;
+const COLUMN_GAPS = 16;
+const GUTTER = TIME_COLUMN + ROLE_COLUMN + COLUMN_GAPS;
+/** Rough advances: `--rt-text-sm` body, and the `2xs` uppercase label, which is tracked and so wider per glyph. */
+const CHARACTER = 6.2;
+const LABEL_CHARACTER = 6.6;
+const TEXT_LINE = 18;
+/** `.row__body` takes a prose measure of 78 %; a diff, a table and a code fence opt out, which this does not model. */
+const PROSE_MEASURE = 0.78;
+
+/**
+ * How many lines `text` draws at `width`, never fewer than one.
+ *
+ * This walks the string rather than splitting it. `estimateHeight` runs for every displayed row that has no
+ * measurement yet, which on a 1200-row transcript is every row of the first paint — and REQ-CHAT-055 bounds
+ * appending there to within one frame of appending to an empty one, a bound a per-row array allocation is
+ * enough to miss.
+ */
+function wrappedLines(text: string, width: number, advance = CHARACTER): number {
+  let lines = 0;
+  let start = 0;
+  for (;;) {
+    const brk = text.indexOf('\n', start);
+    const length = (brk === -1 ? text.length : brk) - start;
+    // No width known yet — no wrapping can be predicted, so this is the old width-blind count and nothing more.
+    lines += width <= 0 ? 1 : Math.max(1, Math.ceil((length * advance) / width));
+    if (brk === -1) break;
+    start = brk + 1;
+  }
+  return Math.max(1, lines);
+}
+
+export function estimateHeight(d: DisplayRow, expanded = false, width = 0): number {
   if (d.shape === 'trailer') return 36;
-  // PD-CHAT-004: an activity line is one line, plus the `⤷` preview line it draws while a call is in
-  // flight — the same per-line term a collapsed tool row's preview gets below.
-  if (d.shape === 'group') return d.inFlight === null ? 36 : 56;
+  const main = width > GUTTER ? width - GUTTER : 0;
+  // REQ-CHAT-057's attribution shares the row's height: `.row__role` wraps inside its 112 px column rather than
+  // truncating (docs/defects/role-gutter-truncation-rule-is-inert.md), so a long agent name costs a second line
+  // even when the main column needs only one.
+  const role = (d.shape === 'group' ? d.role : d.row.name ?? '').toUpperCase();
+  const roleLines = wrappedLines(role, ROLE_COLUMN, LABEL_CHARACTER);
+  if (d.shape === 'group') {
+    // PD-CHAT-004: the activity line is one line only while its segments FIT. `.activity__segments` is
+    // `flex-wrap: wrap`, so a long run draws two, three or four of them — and the constant that used to be here
+    // drew a twelve-segment run into a 36 px allocation, through the row beneath it.
+    // The summary's LENGTH, without building the summary: the drawn string is the one `Row` renders, and
+    // allocating a copy of it per row per paint is the cost REQ-CHAT-055's bound cannot absorb.
+    let width = 0;
+    for (const segment of d.segments) width += segmentSummary(segment).length + FACT_SEPARATOR.length;
+    const lines = Math.max(main <= 0 ? 1 : Math.max(1, Math.ceil((width * CHARACTER) / main)), roleLines);
+    // The `⤷` preview line drawn while a call is in flight.
+    const flight = d.inFlight === null ? 0 : 20;
+    return Math.max(ROW_MIN_HEIGHT, (lines - 1) * TEXT_LINE + ROW_MIN_HEIGHT + flight);
+  }
   const row = d.row;
   // REQ-CHAT-062: a collapsed reasoning row draws exactly one summary line, whatever the hidden body holds.
-  if (isReasoningRow(row) && !expanded) return ROW_MIN_HEIGHT;
-  // PD-CHAT-003: a row sizes to its content — one ~17 px text line per body line, no padding box.
-  const lines = row.body === '' ? 1 : row.body.split('\n').length;
+  if (isReasoningRow(row) && !expanded) return Math.max(ROW_MIN_HEIGHT, (roleLines - 1) * TEXT_LINE + ROW_MIN_HEIGHT);
+  // PD-CHAT-003: a row sizes to its content — one ~17 px line per DRAWN line, no padding box. A body line is not
+  // a drawn line: one 400-character paragraph is a single `\n`-delimited line and five on screen, and counting
+  // the first was half of why a streaming message shifted every row below it twice per chunk.
+  const bodyLines = row.body === '' ? 1 : wrappedLines(row.body, Math.round(main * PROSE_MEASURE));
+  const lines = Math.max(bodyLines, roleLines);
   const extra = (row.input !== undefined && row.input !== '' ? 1 : 0) + (row.output !== undefined && row.output !== '' ? 1 : 0);
-  return Math.max(ROW_MIN_HEIGHT, (lines - 1) * 18 + extra * 20 + ROW_MIN_HEIGHT);
+  return Math.max(ROW_MIN_HEIGHT, (lines - 1) * TEXT_LINE + extra * 20 + ROW_MIN_HEIGHT);
 }
 
 export interface OffsetTable {

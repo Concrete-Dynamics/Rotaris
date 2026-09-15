@@ -18,6 +18,7 @@ export * from './repository.js';
 export * from './git.js';
 export * from './checkpoints.js';
 export * from './mcp.js';
+export * from './confinement.js'; // Part AR (ADR-0022)
 export * from './library.js';
 export * from './improvements.js';
 export * from './artifacts.js';

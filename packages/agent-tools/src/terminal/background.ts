@@ -35,6 +35,8 @@ export class BackgroundSession {
   readonly startedAt: string;
   status: BackgroundStatus = 'running';
   exitCode: number | null = null;
+  /** REQ-SANDBOX-085: this spawn was confined, so its failure may be the launcher's rather than the command's. */
+  confined = false;
   private buffer = '';
   /** How many characters have been dropped from the oldest end; the read cursor is relative to the whole stream. */
   private dropped = 0;
@@ -142,8 +144,12 @@ export class BackgroundManager {
     this.maxOverride = Math.max(1, Math.floor(n));
   }
 
-  /** REQ-TOOLS-107/108. */
-  start(command: string, timeoutS: number): { ok: true; session: BackgroundSession } | { ok: false; error: string } {
+  /**
+   * REQ-TOOLS-107/108. `command` is the command AS SUBMITTED — it names the session, and
+   * REQ-SANDBOX-086 requires every observation show it rather than the confining invocation.
+   * `options.line` is what the shell actually receives; absent, the two are the same string.
+   */
+  start(command: string, timeoutS: number, options?: { readonly line?: string; readonly confined?: boolean }): { ok: true; session: BackgroundSession } | { ok: false; error: string } {
     if (this.running >= this.max) return { ok: false, error: `Maximum background terminal sessions (${this.max}) reached. Kill or wait for existing sessions before starting new ones.` };
     const stamp = String(this.deps.monotonic.now());
     let id = '';
@@ -152,7 +158,8 @@ export class BackgroundManager {
       if (!this.sessions.has(id)) break;
     }
     const { backend } = this.deps;
-    const args = backend.kind === 'powershell' ? ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', command] : ['-c', command];
+    const line = options?.line ?? command;
+    const args = backend.kind === 'powershell' ? ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', line] : ['-c', line];
     let child: ChildProcess;
     try {
       child = spawnChild({ command: backend.file, args, cwd: this.deps.cwd, env: this.deps.env, stdio: ['pipe', 'pipe', 'pipe'] });
@@ -160,6 +167,10 @@ export class BackgroundManager {
       return { ok: false, error: `The background command could not be started: ${String(cause)}` };
     }
     const s = new BackgroundSession(command, child, id, toIsoUtc(this.deps.wall.instant()), Math.max(1, timeoutS) * 1000, this.deps);
+    // REQ-SANDBOX-085: the relabelling applies to the result of polling or terminating a background
+    // command too, since a spawn returns before the failure is visible and it first shows at the
+    // next poll. The session remembers that it was confined so that poll can make the test.
+    if (options?.confined === true) s.confined = true;
     this.sessions.set(id, s);
     return { ok: true, session: s };
   }

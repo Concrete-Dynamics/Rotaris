@@ -18,6 +18,18 @@ export interface PendingSettings {
     readonly improvement_collector_enabled: boolean;
     readonly keep_going: boolean;
     readonly run_start_mode: 'auto' | 'plan';
+    /**
+     * REQ-SANDBOX-113 (Part AR): the six sandbox and egress settings the runtime section edits, so
+     * that no YAML has to be edited by hand. They defer to Save like every other runtime key, which
+     * is REQ-SANDBOX-118's rule made structural: unsaved edits reach NOTHING, and a run started while
+     * they are unsaved uses the configuration persisted on disk.
+     */
+    readonly sandbox_mode: string;
+    readonly sandbox_writable_roots: readonly string[];
+    readonly sandbox_allow_network: boolean;
+    readonly network_egress_policy: string;
+    readonly network_allowed_hosts: readonly string[];
+    readonly network_denied_hosts: readonly string[];
   };
   readonly circuitBreakerEnabled: boolean;
   readonly compressorThresholdPercentage: number;
@@ -60,6 +72,9 @@ export function pendingFrom(snapshot: ConfigSnapshot): PendingSettings {
       max_depth: snapshot.runtime.max_depth, max_active_children: snapshot.runtime.max_active_children, max_iterations: snapshot.runtime.max_iterations,
       allow_outside_workspace: snapshot.runtime.allow_outside_workspace, permission_mode: snapshot.runtime.permission_mode,
       improvement_collector_enabled: snapshot.runtime.improvement_collector_enabled, keep_going: snapshot.runtime.keep_going, run_start_mode: snapshot.runtime.run_start_mode,
+      sandbox_mode: snapshot.runtime.sandbox_mode, sandbox_writable_roots: snapshot.runtime.sandbox_writable_roots,
+      sandbox_allow_network: snapshot.runtime.sandbox_allow_network, network_egress_policy: snapshot.runtime.network_egress_policy,
+      network_allowed_hosts: snapshot.runtime.network_allowed_hosts, network_denied_hosts: snapshot.runtime.network_denied_hosts,
     },
     circuitBreakerEnabled: snapshot.circuitBreakerEnabled,
     compressorThresholdPercentage: snapshot.compressorThresholdPercentage,

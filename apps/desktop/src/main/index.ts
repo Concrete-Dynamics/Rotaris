@@ -1394,6 +1394,17 @@ async function main(): Promise<void> {
         const r = await runHost.request({ kind: 'mcp.secrets', workspaceId: w.workspaceId, ...(req.server === undefined ? {} : { server: req.server }) }, millis(10_000));
         return r.kind === 'mcp.secrets' ? { ok: true, value: r.view } : refusal(r, 'The stored secrets could not be read');
       }
+      /**
+       * ADR-0022 (Part AR): main relays; the run host owns the verdict because it is the process that
+       * executes commands (REQ-SANDBOX-067, REQ-SANDBOX-094). No workspace is required — whether this
+       * HOST can confine anything is a property of the machine, and REQ-SANDBOX-130's disclosure is
+       * owed on the settings surface before any workspace question is settled. The bound is the
+       * probe's own 5.0 s (REQ-SANDBOX-069) plus the round trip.
+       */
+      case 'confinement.status': {
+        const r = await runHost.request({ kind: 'confinement.status', ...(req.recheck === undefined ? {} : { recheck: req.recheck }) }, millis(10_000));
+        return r.kind === 'confinement.status' ? { ok: true, value: r.verdict } : refusal(r, 'The confinement availability could not be read');
+      }
       // ADR-0035 (Part T) / REQ-MCP-099/112: the code-intelligence project setup runs in the run host; main relays the action and the status.
       case 'mcp.setup': {
         if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };

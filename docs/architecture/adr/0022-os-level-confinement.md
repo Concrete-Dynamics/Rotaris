@@ -1,6 +1,6 @@
 # ADR-0022 — OS-level confinement: a shared specification core with thin per-platform renderers
 
-- **Status:** proposed
+- **Status:** accepted — first executed 2026-09-15 (Part AR); see the execution note at the end
 - **Date:** 2026-08-31
 - **Origin:** EXEC (ADR-EXEC-08)
 - **Depends on:** ADR-0002, ADR-0017, ADR-0020
@@ -175,3 +175,69 @@ remediation string. **This is a product decision.**
 The Windows escalation is decided; or macOS removes `sandbox-exec`; or a requirement asks for read
 restriction inside confinement, which `REQ-SANDBOX-060` currently forbids and which would change the
 profile and the bind set fundamentally.
+
+
+## First execution — 2026-09-15 (Part AR)
+
+Built as decided: option **C**, a shared core that computes the specification and two thin renderers
+that turn it into a command string and decide nothing. The four pieces landed where the decision put
+them, in `packages/agent-tools/src/confinement/` — `spec.ts`, `render-seatbelt.ts`, `render-bwrap.ts`,
+`quote.ts`, `availability.ts` — with the enforcement point in `terminal/index.ts`, the start-time gate
+in `run-host/configuration.ts`, and the two surfaces in `packages/ui`. `pnpm sandbox-proof` drives the
+built application through five scenarios; all five passed. `pnpm check` is green.
+
+**Three findings. Two were correct-and-buildable; the third only the proof could reach.**
+
+**1 — the shared core was not platform-independent, because `node:path` is not.** `computeConfinement`
+joined each protected name onto its root with `join` from `node:path`. On the build host that returns
+`\ws\.git` for `/ws` + `.git` — a path meaningless to Seatbelt and to bubblewrap alike, and precisely
+the "separator rewriting" `REQ-SANDBOX-050` forbids by name. The decision above says the shared part
+is shared *because* it is the part most likely to diverge; the host's own path module is exactly such a
+divergence, hidden inside a function whose whole purpose was to be identical on both platforms.
+Latent in production, since the renderers only ever run where `join` is already POSIX — and not latent
+in the corpus: `REQ-SANDBOX-061`'s parity would have been broken by the host that *rendered* rather
+than the host that ran, which is a defect no conformance test on either supported platform could see.
+The falsified reason is kept beside its replacement in `spec.ts`.
+
+**2 — `await` on an absent optional dependency is not free.** The start-time gate needs the verdict
+settled first (`REQ-SANDBOX-097`), written as `await deps.settleConfinement?.()` at the top of
+`launchSession`. Optional chaining short-circuits the *call*; the `await` still yields a microtask, and
+the credential lease moved across a turn — enough to break the overlapping-launch test's synchronous
+expectation, for a suspension that buys nothing when no service is wired. Guarded with an `if`.
+
+**3 — the verdict reached every surface except the one that records it.** `REQ-SANDBOX-071` names the
+application log alongside the settings label, the launch dialog and the run-refusal record: all four
+present the same text. The log line was written from the launch path, on the reasoning that "the launch
+is where the verdict first matters". It is where it first *gates* something; it is not where it is
+first *taken*. On this platform the user who reads `REQ-SANDBOX-130`'s disclosure and leaves
+confinement alone never starts a run at all, so on the one platform where the answer is always "this
+host cannot", the log said nothing about why. Every path that settles the verdict now goes through one
+function that writes the line once. **No unit test could have found this**: each surface was correct in
+isolation, and what was missing was a surface nothing asserted on.
+
+**Found nothing** in the platform map and its closure at two members, the probe's cost ladder and its
+refusal to spawn after an earlier failure, the four readings of `REQ-SANDBOX-068`, the writable-root
+computation for either mode, the three bubblewrap carve-out cases, the Seatbelt denial ordering, the
+quoting property tests, or the wrap-exclusion set of `REQ-SANDBOX-081`.
+
+**Two readings settled while building.**
+
+- **`REQ-SANDBOX-119` and `REQ-SANDBOX-120` are not in conflict; they are two cases of one control.**
+  119 says the control is "disabled and cleared" on an unavailable host; 120 says it "remains CHECKED
+  and disabled" where the configuration itself demands confinement. The dialog offers the three-value
+  selector `REQ-SANDBOX-048` fixes rather than a checkbox, and preselecting the configured value and
+  disabling satisfies both: configured `off` shows `off` disabled (cleared), configured non-`off`
+  shows that mode disabled (the host never appears to switch the setting off).
+- **`REQ-SANDBOX-073`'s "Seatbelt selected on a host that is not macOS" branch is unreachable**, the
+  way ADR-0058's case (b) was. The mechanism follows from the platform alone (`REQ-SANDBOX-065`), so
+  Seatbelt is selected only on `darwin`. The launcher-not-found text covers what remains of the case
+  and quotes what that requirement fixes; no separate branch was written for a state that cannot arise.
+
+**What this execution did NOT establish, and may not be read as establishing.** `REQ-SANDBOX-127` binds
+conformance to the observable effect of an active confinement on a live process on a real host of the
+platform concerned, and says in advance that a rendering matching `REQ-SANDBOX-075` to
+`REQ-SANDBOX-079` word for word is non-conformant if it does not produce that effect. This host is
+`win32`. **The six effects have not been demonstrated on either supported platform**, the renderers'
+unit tests do not discharge that check, and this note is not a claim that they do. Raised as **IC-8**
+in `../implementation-conditions.md`, whose shape is IC-3's: both wait on hosts this project does not
+have, and ESC-6 option 2 already priced that extension.

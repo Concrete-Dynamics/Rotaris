@@ -4,7 +4,7 @@ import { toIsoUtc, type Clocks } from '@rotaris/kernel';
 import { resolvePreset, type ApprovalPayload, type PermissionPreset, type ToolStatus } from '@rotaris/contracts';
 import {
   askQuestionsTool, buildPolicy, directWorkBundle, effectiveMode, fetchTool, FileToolState, findShell, Gate, globTool, grepTool, haetEditTool, haetReadTool, nodePtyFactory, PendingApprovals, PendingQuestions, PolicyContext, readFileTool, realPathOf,
-  resolveToolSet, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, withheldUnderPlanGate, writeFileTool, type GateSink, type PolicyRead, type PresenterPort, type ToolExecutor,
+  resolveToolSet, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, withheldUnderPlanGate, writeFileTool, type ConfinementPort, type GateSink, type PolicyRead, type PresenterPort, type ToolExecutor,
 } from '@rotaris/agent-tools';
 import { BUILT_IN_PERSONAS, type ModeChange, type PersonaResolver, type PortToolCall, type PortToolResult, type RoleName, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
 import type { ConfiguredRun, RuntimeFromConfiguration } from './configuration.js';
@@ -128,7 +128,23 @@ function executorsFor(root: string, deps: ToolPortDeps, runtime: RuntimeFromConf
     // ADR-0023: the policy is read per call from the saved files (REQ-SANDBOX-038); the gate resolved any `ask` before execution (REQ-TOOLS-091).
     fetchTool({ policy: deps.egress(root), timers: deps.clocks.timers }) as ToolExecutor,
   ];
-  if (deps.terminal) list.push(terminalTool(deps.terminal, { ...TERMINAL_DEFAULTS, commandTimeoutS: runtime.shellCommandTimeoutS }) as ToolExecutor);
+  /*
+   * ADR-0022's terminal enforcement point. REQ-SANDBOX-093: the specification is resolved AFRESH for
+   * each call, from the issuing run's configuration and the conversation's actual working directory,
+   * worktree-aware — which is why the port is a function of the execution root the call presents
+   * rather than a value fixed when the port was built. REQ-SANDBOX-096: the commands of each live
+   * run follow the setting in force when THAT run began, which this per-run closure gives.
+   * REQ-SANDBOX-088: mode `off` returns null, so the shell receives exactly what was submitted.
+   * REQ-SANDBOX-123: verification checks and probes come through this same point, unmodified.
+   */
+  const confinement: ConfinementPort = {
+    resolve: (executionRoot) => {
+      const c = runtime.confinement;
+      if (c.mode === 'off') return null;
+      return { spec: { mode: c.mode, executionRoot, writableRoots: c.writableRoots, allowNetwork: c.allowNetwork }, verdict: c.verdict ?? { available: false, backend: 'unavailable', reason: '', remediation: '' } };
+    },
+  };
+  if (deps.terminal) list.push(terminalTool(deps.terminal, { ...TERMINAL_DEFAULTS, commandTimeoutS: runtime.shellCommandTimeoutS }, confinement) as ToolExecutor);
   return new Map(list.map((e) => [e.name, e]));
 }
 

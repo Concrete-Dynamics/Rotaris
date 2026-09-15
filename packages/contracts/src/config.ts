@@ -52,8 +52,20 @@ export const RuntimeViewSchema = z.object({
   keep_going: z.boolean(),
   run_start_mode: z.enum(RUN_START_MODE_NAMES),
   memory_diagnostics_enabled: z.boolean(),
-  /** REQ-SHELL-125: the launch dialog preselects the effective configured value (REQ-TOOLS-114). Read here, not edited here. */
+  /**
+   * REQ-SANDBOX-113 (Part AR): all SIX sandbox and egress settings, so that no YAML has to be edited
+   * by hand. `sandbox_mode` was carried here alone, read for the launch dialog's preselection
+   * (REQ-SHELL-125, REQ-TOOLS-114), while the surface told the user the six were "read from the file
+   * and not edited here" (`docs/defects/settings-surface-refuses-the-six-security-keys.md`).
+   * All six round-trip: REQ-SANDBOX-054 requires the configuration loaded after a save be the same
+   * effective configuration that was saved, and a further save-and-load change nothing again.
+   */
   sandbox_mode: z.enum(SANDBOX_MODE_NAMES),
+  sandbox_writable_roots: z.array(z.string()),
+  sandbox_allow_network: z.boolean(),
+  network_egress_policy: z.enum(['allow', 'ask', 'deny']),
+  network_allowed_hosts: z.array(z.string()),
+  network_denied_hosts: z.array(z.string()),
 });
 /**
  * REQ-CHAT-166's four display caps as the transcript reads them — workspace configuration, written to and read back

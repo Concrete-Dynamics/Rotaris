@@ -24,7 +24,17 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-15** — **portable skill discovery** (ADR-0063): the pure discovery
+Last reconciled with the code: **2026-09-15** — **OS-level confinement** (ADR-0022, first executed): the
+`confinement/` module inside `agent-tools` (the shared specification, the two thin renderers, the single-purpose
+quoting, the availability probe), the probe settled in the **run host** before a launch does anything else and
+the gate that refuses such a run before the lease, the session row or the lock exist, `confinement.status` as the
+one message the settings label and the launch dialog both read, and the store row's stale "recorded, not
+honoured" note corrected. The component view carries the module, the process view the message and where the
+verdict lives, the runtime view the gate's place in the start sequence. **IC-8 is open**: the renderers are
+written and unit-tested, and `REQ-SANDBOX-127`'s six observable effects have been demonstrated on neither
+supported platform.
+
+Previously reconciled: **2026-09-15** — **portable skill discovery** (ADR-0063): the pure discovery
 library in `config/src/skills/` (the run host may not import `workspace`, and injection happens at agent
 construction), the catalog the run host owns because REQ-WORKSPACE-058 clears it at session creation rather
 than per run, skills as ordered context units composed at every agent construction, the cataloged directories

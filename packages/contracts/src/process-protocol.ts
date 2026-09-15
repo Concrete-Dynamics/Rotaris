@@ -3,6 +3,7 @@ import { AcknowledgementKindSchema, NoticeSeveritySchema } from './notices.js';
 import { z } from 'zod';
 import { HOOK_AGENT_IDS, HooksSummarySchema } from './hooks.js';
 import { McpHealthSchema, McpListingSchema, McpSecretsViewSchema, McpSetupStatusSchema } from './mcp.js';
+import { ConfinementVerdictSchema } from './confinement.js';
 import { PlaybookCatalogueSchema } from './intent.js';
 import { CONTRACT_SCHEMA_VERSION } from './version.js';
 import { ImageAttachmentInputSchema, SessionSnapshotSchema, TerminalFrameSchema, TimelineSeveritySchema, TranscriptIncrementSchema, TranscriptRowSchema } from './channels.js';
@@ -130,6 +131,14 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('mcp.probe'), workspaceId: z.string(), name: z.string().min(1).optional() }),
   z.object({ kind: z.literal('mcp.setEnabled'), name: z.string().min(1), enabled: z.boolean() }),
   z.object({ kind: z.literal('mcp.secrets'), workspaceId: z.string(), server: z.string().optional() }),
+  /**
+   * ADR-0022 (Part AR): the confinement availability verdict, and REQ-SANDBOX-129's explicit re-check.
+   * The run host answers because it owns the one `ConfinementService` (REQ-SANDBOX-067) — the verdict a
+   * surface shows and the verdict that gates a session are then the same reading (REQ-SANDBOX-094).
+   * `recheck` discards the cached verdict and probes afresh; the probe is bounded at 5.0 s and runs off
+   * every interface thread, so no surface waits on it (REQ-SANDBOX-069, REQ-SANDBOX-129).
+   */
+  z.object({ kind: z.literal('confinement.status'), recheck: z.boolean().optional() }),
   /**
    * Part U — the session browser's actions, answered by the run host because the rows and the lock are its (ADR-0005,
    * ADR-0058). `session.repair` without an id repairs every stale session; `session.delete` runs REQ-SESSION-166's order
@@ -415,6 +424,8 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('mcp.list'), listing: McpListingSchema }),
   z.object({ kind: z.literal('mcp.probe'), results: z.array(z.object({ name: z.string(), health: McpHealthSchema })) }),
   z.object({ kind: z.literal('mcp.secrets'), view: McpSecretsViewSchema }),
+  /** REQ-SANDBOX-071: the four fields are the complete answer, and every surface presents this same text. */
+  z.object({ kind: z.literal('confinement.status'), verdict: ConfinementVerdictSchema }),
   /** ADR-0035 (Part T): the setup's status after the action was applied. */
   z.object({ kind: z.literal('mcp.setup'), status: McpSetupStatusSchema }),
   /**

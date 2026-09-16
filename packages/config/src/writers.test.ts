@@ -166,6 +166,16 @@ describe('REQ-CONFIG-256..260 the desktop save', () => {
     expect(readFileSync(s.wsFile, 'utf8')).toBe('runtime:\n  max_depth: 2\npersonas:\n  codebase-analyst:\n    model: gpt-4o-mini\n');
     expect(readFileSync(s.gFile, 'utf8')).toBe('{}\n');
   });
+  // Found live 2026-09-16: the model selector's baseline option reaches the writer as model: null,
+  // which was written literally — an entry the persona reader rejects (REQ-CONFIG-098) and a fatal
+  // load on the next read. A null role model is the unset spelling at the edited scope.
+  it('a role model edit carrying null removes the key instead of writing model: null (REQ-CONFIG-041, REQ-CONFIG-098)', async () => {
+    const s = scope();
+    writeFileSync(s.gFile, 'personas:\n  orchestrator:\n    thinking: default\n    model: gpt-4o\n');
+    const r = await saveDesktop({ workspace: s.wsFile, global: s.gFile }, { roles: { orchestrator: { scope: 'global', model: null } } });
+    expect(r.ok).toBe(true);
+    expect(readFileSync(s.gFile, 'utf8')).toBe('personas:\n  orchestrator:\n    thinking: default\n');
+  });
 });
 
 describe('REQ-CONFIG-248..255 the model-preference path and its read-back', () => {

@@ -211,7 +211,11 @@ function applyRoleEdit(doc: Document, root: YAMLMap, role: string, edit: RoleEdi
   // REQ-CONFIG-251: a legacy alias key whose canonical name is now present is deleted.
   for (const [alias, target] of Object.entries(LEGACY_ROLE_ALIASES)) if (target === canonical && personas.has(alias)) personas.delete(alias);
   const entry = ensureMapping(personas, canonical, doc);
-  if (edit.unsetModel) entry.delete('model');
+  // A written null overrides nothing (REQ-CONFIG-041): a role-model edit carrying null — the model
+  // selector's baseline option — is the unset spelling at the edited scope and removes the key, the
+  // same discipline as unsetModel. Writing `model: null` literally would produce an entry the persona
+  // reader rejects (REQ-CONFIG-098 requires name and model as strings) and fail the whole load.
+  if (edit.unsetModel || edit.model === null) entry.delete('model');
   else if (edit.model !== undefined) entry.set('model', doc.createNode(edit.model));
   if (edit.unsetThinking) entry.delete('thinking');
   else if (edit.thinking !== undefined) entry.set('thinking', doc.createNode(edit.thinking));

@@ -6,7 +6,7 @@ import { FakeClock } from '@rotaris/kernel';
 import { checkFence, type FenceConfig } from './fence.js';
 import { renderDiff } from './diff.js';
 import { FileToolState, haetEditTool, haetReadTool, matchEdit, readFileTool, sha256, writeFileTool } from './files.js';
-import { globTool, grepTool, parseGitignore, ignoredBy } from './search.js';
+import { globToRegExp, globTool, grepTool, parseGitignore, ignoredBy } from './search.js';
 import { TodoList, todoTool } from './todo.js';
 import type { ToolContext } from './types.js';
 
@@ -203,6 +203,33 @@ describe('grep and glob (REQ-TOOLS-138..141)', () => {
     expect((await gl.execute({ pattern: '**/*.py' }, ctx())).text).toBe('No files found');
     expect((await gl.execute({ pattern: `${outside.replace(/\\/g, '/')}/*` }, ctx())).text).toBe('No files found');
   });
+  it('glob brace alternatives are globs, not literals (REQ-TOOLS-141): what ripgrep accepts is not refused here', async () => {
+    /*
+     * The shape that found this: `packages/*` + a `{*.json,*.ts}` group. Each alternative used to be escaped as a
+     * literal, so its leading star survived into the regex source and the engine refused the whole pattern with
+     * `Nothing to repeat` — a message quoting a regex the caller never wrote.
+     */
+    const gl = globTool(fence);
+    expect((await gl.execute({ pattern: '{src,docs}/*.ts' }, ctx())).text).toBe('src/a.ts\nsrc/b.ts');
+    expect((await gl.execute({ pattern: '**/{*.ts,*.md}' }, ctx())).text).toBe('README.md\nsrc/a.ts\nsrc/b.ts');
+    // Nested groups split at their own level, and a `/` inside an alternative stays a path separator.
+    expect(globToRegExp('{a,{b,c}}.ts').test('c.ts')).toBe(true);
+    expect(globToRegExp('{x/y,z}.md').test('x/y.md')).toBe(true);
+    expect(globToRegExp('{x/y,z}.md').test('z.md')).toBe(true);
+    // An unclosed brace is the literal a caller who typed one meant.
+    expect(globToRegExp('a{b').test('a{b')).toBe(true);
+    /*
+     * REQ-TOOLS-138: whatever the caller writes, the answer is an observation. The compiler escapes everything it
+     * does not translate, so no pattern should reach the RegExp constructor invalid any more — and the guard at the
+     * call site is what makes that a property of the tool rather than of this reading of the compiler.
+     */
+    for (const pattern of ['packages/*/{*.json,*.js,*.ts,*.cjs,*.mjs}', '[unterminated', '{', '}', '{,}', '**/{a,{b,}}', '*{']) {
+      const r = await gl.execute({ pattern }, ctx());
+      expect(r.text).not.toContain('Invalid regular expression');
+      expect(r.isError ?? false).toBe(false);
+    }
+  });
+
   it('the gitignore reader: anchors, directories, negation, whole labels', () => {
     const rules = parseGitignore('/build\nlogs/\n*.tmp\n!keep.tmp\nsrc/**/gen\n');
     expect(ignoredBy(rules, 'build', true)).toBe(true);

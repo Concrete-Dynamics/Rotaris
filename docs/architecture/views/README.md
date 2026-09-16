@@ -17,6 +17,7 @@ the *picture* — what exists, how it is cut, how it runs, and where an addition
 
 | You are about to | Read |
 |---|---|
+| find where something already lives, or which file to open first | [`../../module-map.md`](../../module-map.md) — packages, roots, entry files, test globs; it holds no edges and no edit paths |
 | add a command, a channel, a store column, a tool, a configuration key, a notice or a preference | [`04-seams.md`](04-seams.md) — the ordered edit path, then the view it names |
 | add a package, or an import that crosses one | [`01-component-view.md`](01-component-view.md) — the allowed-edge matrix is the lint rule verbatim |
 | change what crosses a process boundary | [`02-process-view.md`](02-process-view.md) |

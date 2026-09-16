@@ -89,16 +89,49 @@ repair it quietly in the code that meets it.
 
 ## The codebase
 
-`docs/architecture/codebase.md` is the map: packages follow **process boundaries**, arrows point
-downward only, and `eslint-plugin-boundaries` fails `pnpm lint` on a violation. Composition roots are
-`apps/desktop/src/{main,preload,renderer,run-host,workspace-service}` and are the only places
-`electron` is imported. Engine code takes time from the clock ports, never from globals
-(`rotaris/no-bare-timers`). `pnpm check` runs the symbol generator, typecheck, lint and tests; all four
-must be green before a commit. `pnpm build` then `electron apps/desktop/out/main/index.js` runs the app.
+Rotaris is **one Electron desktop application**: a pnpm workspace of TypeScript packages (Node ≥ 24,
+React in the renderer, SQLite for the session record, electron-vite for the build, Vitest for the tests)
+over five composition roots in `apps/desktop/src/`.
 
-`AGENTS.md` covers the one check `pnpm check` does not reach: **`pnpm live-run`** — the built product against a
-real OpenRouter key in a throwaway workspace, bounded by the provider's own accounting. It spends the owner's
-money, it is never automatic, and an agent asks before running it.
+Two routers answer the two questions worth asking before an edit, and neither costs more than a page:
+
+- **Where does a thing live, and what do I open first?** → [`docs/module-map.md`](docs/module-map.md) —
+  packages, roots, entry files, test globs, and the placements that are not where you would guess.
+- **Where does *this edit* land, in what order?** → the router at the top of
+  `docs/architecture/views/README.md`, then the view it names (`04-seams.md` for the eight additions
+  this product makes most often).
+
+`docs/architecture/codebase.md` is the deeper map — what landed, what stands in, what is owed. Packages
+follow **process boundaries**, arrows point downward only, and `eslint-plugin-boundaries` fails
+`pnpm lint` on a violation. `apps/desktop/src/{main,preload,renderer,run-host,workspace-service}` are
+the only places `electron` is imported. Engine code takes time from the clock ports, never from globals
+(`rotaris/no-bare-timers`). A design-equivalent control exists only in `packages/ui/src/design-system/`
+(`tools/check-ui-language.mjs` fails `pnpm lint` on one written elsewhere). A store migration is
+**appended**, never edited once shipped. Nothing in `packages/kernel/src/generated/` is written by hand
+— `pnpm symbols` writes it.
+
+### Commands
+
+```
+pnpm install --prefer-offline                 # a fresh worktree also needs: node node_modules/electron/install.js
+pnpm check                                    # symbols + typecheck + lint + tests — all four green before a commit
+pnpm vitest run <path>                        # the narrowest verification; tests sit beside the unit they cover
+pnpm typecheck | pnpm lint | pnpm symbols     # the pieces, when the whole gate is too slow
+pnpm build && electron apps/desktop/out/main/index.js
+pnpm dev                                      # electron-vite, against the workspace source
+pnpm <area>-proof                             # the built app measuring one mechanism — AGENTS.md indexes all of them
+pnpm app:drive start|shot|inspect|stop        # drive the built app, free, no provider
+pnpm mockup                                   # the design material, before drawing a surface
+```
+
+`AGENTS.md` covers the two checks `pnpm check` does not reach: **`pnpm app:drive`** (free) and
+**`pnpm live-run`** — the built product against a real key in a throwaway workspace, bounded by the
+endpoint's own accounting. It spends the owner's money, it is never automatic, and an agent asks before
+running it.
+
+`docs/module-map.md` is maintained on the same terms as the views, on the narrower trigger it states: a
+package that appears, moves or changes what it owns, or an entry point named there that moves. An
+ordinary fix, or a refactor that moves nothing another agent would navigate by, changes nothing in it.
 
 ## Where the work happens — a temporary branch in a temporary worktree
 

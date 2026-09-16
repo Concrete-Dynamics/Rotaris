@@ -7,6 +7,10 @@ state, the architecture views and the design language. Read it first — nothing
 term derived from `docs/spec/` and citing the requirement that owns it. Read it before naming anything new,
 and prefer its word over a synonym you would otherwise reach for.
 
+[`docs/module-map.md`](docs/module-map.md) is the shallowest map — which package owns a thing, the file to
+open first, and where its tests are. Read it when the question is *where*; the proof index below answers
+*what re-verifies it*.
+
 This file covers the two checks `CLAUDE.md` does not spell out: **`pnpm app:drive`** (free, interactive
 debugging of the built app) and **`pnpm live-run`** (the only check that spends real money) — and indexes the
 proof scripts, so the evidence for an area can be found without reading forty script headers.

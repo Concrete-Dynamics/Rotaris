@@ -317,15 +317,25 @@ describe('Part U — repair, delete and the exports', () => {
     /**
      * A9 / REQ-EVENTS-145 / REQ-TRACE-061: the destination-failure half. The refusal is REAL — a reader's open
      * descriptor on Windows (constraint D-06, the condition the ladder exists for), a write-denied parent
-     * elsewhere — never a stubbed `fs`, because what is under test is that the ladder exhausts and the previous
-     * export survives the exhaustion, and a stub proves nothing about either.
+     * elsewhere — never a stubbed `fs`, because what is under test is that the previous export survives the
+     * refusal and that the refusal is recoverable, and a stub proves nothing about either.
+     *
+     * The two refusals do not land in the same place, and the test says which rather than pretending they do.
+     * An open descriptor leaves ADR-0004's STAGING write untouched and refuses only the rename, which is the
+     * ladder's own condition, so the exhaustion is observable. A write-denied parent refuses BOTH, and the
+     * staging write is the first to be refused — `document.stage`, ADR-0004's own separate outcome, reached
+     * before any rename is attempted. No POSIX permission can deny the rename while allowing the staging write
+     * into the same directory, so the ladder is not reachable that way (found on Linux, 2026-09-16).
      */
-    const refuseReplacement = (target: string): (() => void) => {
-      if (process.platform === 'win32') { const fd = fs.openSync(target, 'r'); return () => fs.closeSync(fd); }
+    const refuseReplacement = (target: string): { readonly release: () => void; readonly code: string; readonly laddered: boolean } => {
+      if (process.platform === 'win32') {
+        const fd = fs.openSync(target, 'r');
+        return { release: () => fs.closeSync(fd), code: 'document.replace', laddered: true };
+      }
       const parent = join(target, '..');
       const before = fs.statSync(parent).mode;
       fs.chmodSync(parent, 0o555);
-      return () => fs.chmodSync(parent, before);
+      return { release: () => fs.chmodSync(parent, before), code: 'document.stage', laddered: false };
     };
 
     it('A9 / REQ-EVENTS-145 / REQ-TRACE-061: a destination that cannot be replaced exhausts the ladder, reports recoverably and leaves the previous export exactly as it was', async () => {
@@ -333,18 +343,18 @@ describe('Part U — repair, delete and the exports', () => {
       const first = await writeExport(target, { generation: 1 } as unknown as JsonValue, clock.timers);
       expect(first.ok).toBe(true);
       const before = readFileSync(target, 'utf8');
-      const release = refuseReplacement(target);
+      const refusal = refuseReplacement(target);
       let failed;
       try {
         const attempt = writeExport(target, { generation: 2 } as unknown as JsonValue, clock.timers);
         // REQ-TRACE-061's ladder: four waits of 0.05 / 0.1 / 0.2 / 0.4 s behind five attempts in total.
         for (let i = 0; i < 6; i += 1) { for (let j = 0; j < 8; j += 1) await Promise.resolve(); clock.advance(400); }
         failed = await attempt;
-      } finally { release(); }
+      } finally { refusal.release(); }
       expect(failed.ok).toBe(false);
       if (failed.ok) throw new Error('unreachable');
-      expect(failed.error.code).toBe('document.replace');
-      expect(failed.error.detail).toContain('after 5 attempt(s)');
+      expect(failed.error.code).toBe(refusal.code);
+      if (refusal.laddered) expect(failed.error.detail).toContain('after 5 attempt(s)');
       // The previous export is byte-identical and no staged leftover sits beside it.
       expect(readFileSync(target, 'utf8')).toBe(before);
       expect(readdirSync(join(dir, 'exports'))).toEqual(['previous.json']);

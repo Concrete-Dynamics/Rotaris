@@ -15,6 +15,13 @@ import { ENGINE_NOT_MERGED, createDeliveryService, deliveryServiceFor, type Deli
 const A = mintWorkspaceId('000000000000000000000000000000ae');
 const USER: Actor = { kind: 'user', person: 'owner' };
 let root: string;
+/**
+ * The workspace root is a REAL directory of this test's own, not a spelling. It was the literal `C:\ws`, and
+ * the service writes a scheduling change into `<workspace>/.rotaris/agents.yaml` — so the suite left `C:\ws`
+ * behind on whatever machine ran it: at the drive root on Windows, and as a directory literally named `C:\ws`
+ * inside the checkout on Linux and macOS, where a backslash is an ordinary filename character (found 2026-09-16).
+ */
+let ws: string;
 let r: ResolvedStore;
 let clock: FakeClock;
 let parses = 0;
@@ -25,11 +32,11 @@ const engine: TraceabilityEngine = {
   verify: async () => ok(fixtureReport()),
 };
 // Part AP: a release now provisions a worktree inside the writer's `beforeCommit` (REQ-TRACE-464); this suite's workspace is no repository, so Git is faked here.
-const FAKE_GIT: RunGitPort = { checkRepository: async () => ({ ok: true, head: 'abc123' }), provision: async (a) => ok({ ref: `${a.id}/${a.unit}`, path: `C:\\ws\\.rotaris\\requirements\\worktrees\\${a.unit}`, branch: `rotaris/req/${a.id.toLowerCase()}/${a.unit}`, baseBranch: 'main', baseRevision: 'abc123' }) };
-const service = (e: TraceabilityEngine = engine): DeliveryService => createDeliveryService({ db: r.db, workspaceRoot: 'C:\\ws', engine: e, clocks: clock, log: () => undefined, configDir: root, git: FAKE_GIT });
+const FAKE_GIT: RunGitPort = { checkRepository: async () => ({ ok: true, head: 'abc123' }), provision: async (a) => ok({ ref: `${a.id}/${a.unit}`, path: join(ws, '.rotaris', 'requirements', 'worktrees', a.unit), branch: `rotaris/req/${a.id.toLowerCase()}/${a.unit}`, baseBranch: 'main', baseRevision: 'abc123' }) };
+const service = (e: TraceabilityEngine = engine): DeliveryService => createDeliveryService({ db: r.db, workspaceRoot: ws, engine: e, clocks: clock, log: () => undefined, configDir: root, git: FAKE_GIT });
 
-beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'rotaris-svc-')); r = openWorkspaceStore(root, A, 'C:\\ws'); clock = new FakeClock(); parses = 0; });
-afterEach(() => { r.db.close(); forgetSpelling(r.dir); rmSync(root, { recursive: true, force: true }); });
+beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'rotaris-svc-')); ws = mkdtempSync(join(tmpdir(), 'rotaris-svc-ws-')); r = openWorkspaceStore(root, A, ws); clock = new FakeClock(); parses = 0; });
+afterEach(() => { r.db.close(); forgetSpelling(r.dir); rmSync(root, { recursive: true, force: true }); rmSync(ws, { recursive: true, force: true }); });
 
 describe('createDeliveryService', () => {
   it('REQ-TRACE-348/349: two board reads of one generation return the same value; a cold board reads the source once', async () => {
@@ -39,7 +46,7 @@ describe('createDeliveryService', () => {
     expect(parses).toBe(1);
     const board = a.value as BoardProjection;
     expect(board.generation).toBe(1);
-    expect(board.workspace).toBe('C:\\ws');
+    expect(board.workspace).toBe(ws);
     expect(board.cards).toHaveLength(7);
     expect(a.changed).toBeUndefined();
   });
@@ -89,7 +96,7 @@ describe('createDeliveryService', () => {
     // reply's one shape: this fake's `check` fails as ENGINE_NOT_MERGED does, stated, with the generation unmoved; and a
     // fake without a cancel has nothing to stop. (This test file is outside Part AJ′'s row: handoff §8, a ruling request.)
     const op = await s.handle({ name: 'requirements.operation', workspace: 'x', operation: 'check' }, USER);
-    expect(op.value).toMatchObject({ kind: 'traceability.result', operation: 'check', root: 'C:\\ws', result: { ok: false, error: { kind: 'failed', cause: 'Part AJ is not merged into this build' } } });
+    expect(op.value).toMatchObject({ kind: 'traceability.result', operation: 'check', root: ws, result: { ok: false, error: { kind: 'failed', cause: 'Part AJ is not merged into this build' } } });
     expect(op.changed).toBeUndefined();
     const cancel = await s.handle({ name: 'requirements.cancel', workspace: 'x', operation: 'check' }, USER);
     expect(cancel.value).toEqual({ kind: 'traceability.cancelled', cancelled: false });
@@ -115,7 +122,7 @@ describe('createDeliveryService', () => {
     expect(c.run?.interrupted).toBe(true);
   });
   it('deliveryServiceFor keeps one service per open store', () => {
-    const deps = { workspaceRoot: 'C:\\ws', engine, clocks: clock, log: () => undefined };
+    const deps = { workspaceRoot: ws, engine, clocks: clock, log: () => undefined };
     expect(deliveryServiceFor(r, deps)).toBe(deliveryServiceFor(r, deps));
   });
   it('REQ-TRACE-402: a writer without the declaration is refused with the comparison named — proven on the guard, not here, since the composition is fixed', () => {

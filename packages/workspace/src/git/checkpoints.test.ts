@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { millis } from '@rotaris/kernel';
+import { millis, type Clocks } from '@rotaris/kernel';
 import { nodeClocks } from '@rotaris/platform';
 import {
   available, capture, checkpointRef, deleteRefs, dirtyReason, isNetworkSubcommand, listRefs, parseDiffTree, parseRefListing, preview, previewText, prune, refCheck, renderGitCommand, resolveRef, restore, sequenceCheck, subcommandIndex, verbFor,
@@ -13,6 +13,23 @@ import {
  * ADR-0039's first execution, unit half: the Git side against scratch repositories this test creates (REQ-GIT-003/004/
  * 029..043/046/055..057/063/064). The pure pieces — the ref-name check, the letters, the two texts — need no repository.
  */
+/**
+ * REQ-GIT-033's bound reaches Git through ADR-0006's timer port, so a test that wants the bound REACHED fires it
+ * rather than racing it. A zero bound is fired at once here; every other delay keeps the real timer. The falsified
+ * form, kept: a 1 ms bound, which on a warm filesystem lost the race — Git exited first and the sentence named a
+ * LATER invocation than the one the proof is about (found on Linux, 2026-09-16, where the same test had passed on
+ * Windows for the same reason in reverse). A bound decided by how fast the host's disk is proves nothing.
+ */
+function firesZeroAtOnce(real: Clocks): Clocks {
+  return {
+    monotonic: real.monotonic,
+    wall: real.wall,
+    timers: {
+      after: (delay, fn) => (Number(delay) === 0 ? (queueMicrotask(fn), { cancel: () => undefined }) : real.timers.after(delay, fn)),
+      every: (period, fn) => real.timers.every(period, fn),
+    },
+  };
+}
 const clocks = nodeClocks();
 let gitPresent = true;
 try { execFileSync('git', ['--version'], { stdio: 'ignore' }); } catch { gitPresent = false; }
@@ -332,8 +349,11 @@ describe.skipIf(!gitPresent)('ADR-0039 against scratch repositories', () => {
   it('REQ-GIT-033: an invocation past its limit is the fixed sentence with the applicable limit and the rendered command', async () => {
     seed();
     writeFileSync(join(ws, 'src.txt'), 'x\n');
-    const r = await capture(ws, { sessionId: SID, sequence: 1, includeUntracked: true, message: 'm' }, { clocks, treeTimeoutMs: millis(1) });
+    // The TREE bound is zero and is fired at once through the timer port, so the first invocation it applies to is
+    // the one abandoned; the REF bound keeps its default, so the two `rev-parse` calls before it still run for real.
+    // `Math.ceil(0 / 1000)` is the applicable limit, rendered as the sentence requires.
+    const r = await capture(ws, { sessionId: SID, sequence: 1, includeUntracked: true, message: 'm' }, { clocks: firesZeroAtOnce(clocks), treeTimeoutMs: millis(0) });
     expect(r.outcome).toBe('failed');
-    if (r.outcome === 'failed') expect(r.detail).toMatch(/^Git timed out after 1s: ls-files -z$/);
+    if (r.outcome === 'failed') expect(r.detail).toMatch(/^Git timed out after 0s: ls-files -z$/);
   });
 });

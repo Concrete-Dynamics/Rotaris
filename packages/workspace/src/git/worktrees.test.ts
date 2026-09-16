@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { millis } from '@rotaris/kernel';
+import { millis, type Clocks } from '@rotaris/kernel';
 import { nodeClocks } from '@rotaris/platform';
 import { checkAttach, createWorktree, derivedWorktreeDirectory, gitFailureText, isBranchCollision, longPathText, needsForceText, removeWorktree, sessionWorktreePath, validateBranchName } from '../index.js';
 
@@ -12,6 +12,23 @@ import { checkAttach, createWorktree, derivedWorktreeDirectory, gitFailureText, 
  * one replacement and REQ-GIT-010's three phrases as pure functions; then creation, collision suffixes, removal with
  * Git's own refusal, and the attach check against a scratch repository.
  */
+/**
+ * REQ-GIT-033's bound reaches Git through ADR-0006's timer port, so a test that wants the bound REACHED fires it
+ * rather than racing it. A zero bound is fired at once here; every other delay keeps the real timer. The falsified
+ * form, kept: a 1 ms bound, which on a warm filesystem lost the race — Git exited first and the sentence named a
+ * LATER invocation than the one the proof is about (found on Linux, 2026-09-16, where the same test had passed on
+ * Windows for the same reason in reverse). A bound decided by how fast the host's disk is proves nothing.
+ */
+function firesZeroAtOnce(real: Clocks): Clocks {
+  return {
+    monotonic: real.monotonic,
+    wall: real.wall,
+    timers: {
+      after: (delay, fn) => (Number(delay) === 0 ? (queueMicrotask(fn), { cancel: () => undefined }) : real.timers.after(delay, fn)),
+      every: (period, fn) => real.timers.every(period, fn),
+    },
+  };
+}
 const clocks = nodeClocks();
 let gitPresent = true;
 try { execFileSync('git', ['--version'], { stdio: 'ignore' }); } catch { gitPresent = false; }
@@ -174,8 +191,9 @@ describe.skipIf(!gitPresent)('the writes against a repository this test creates'
 
   it('REQ-GIT-013: a timed-out invocation reports the fixed sentence with the rendered command', async () => {
     seed();
-    // A 1 ms bound abandons the invocation; the text is the timeout sentence, never Git's partial output.
-    const r = await createWorktree({ root: ws, branch: 'slow', path: join(root, 'slow'), collisionSafe: false, route: 'manual' }, { clocks, timeoutMs: millis(1) });
+    // A bound of zero, fired at once through the timer port, abandons the FIRST invocation on every host; the text
+    // is the timeout sentence, never Git's partial output.
+    const r = await createWorktree({ root: ws, branch: 'slow', path: join(root, 'slow'), collisionSafe: false, route: 'manual' }, { clocks: firesZeroAtOnce(clocks), timeoutMs: millis(0) });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toMatch(/^Git timed out after 30s: rev-parse --show-toplevel$/);
   });

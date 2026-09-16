@@ -1,5 +1,5 @@
 import { realpathSync } from 'node:fs';
-import { resolve, sep } from 'node:path';
+import { posix, win32 } from 'node:path';
 
 /**
  * Constraint W-27 / OQ-49 — what makes two directory strings the same
@@ -20,6 +20,9 @@ import { resolve, sep } from 'node:path';
  * store on a share is refused for other reasons (ESC-15).
  */
 export function canonicalPath(p: string, platform: NodeJS.Platform = process.platform): string {
+  // The platform is a PARAMETER: `C:\\ws\\alpha` and `c:/ws/ALPHA/` are one directory under the Windows rule
+  // whatever host asks the question, so the separator and the resolver come from the parameter, not from the host.
+  const { resolve, sep } = platform === 'win32' ? win32 : posix;
   let abs = resolve(p);
   try {
     abs = realpathSync.native(abs);

@@ -1,4 +1,4 @@
-import { millis, toIsoUtc, type Clocks, type Millis, type SessionId } from '@rotaris/kernel';
+import { millis, toIsoUtc, type Clocks, type Millis, type SessionId, type TimerHandle } from '@rotaris/kernel';
 import { isTerminalChildState, reportStatusToState, TASK_ID_PATTERN, type RootExecutionRecord } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ModelRef, ThinkingLevel } from '@rotaris/model';
 import type { ChildRow, StoreDal } from '@rotaris/store';
@@ -15,6 +15,7 @@ import { produceReport, type SummariserDeps } from './report.js';
 import { Scheduler } from './scheduler.js';
 import type { HookPort } from '../hooks-port.js';
 import { withContextUnits, withPlaybook } from '../run/run.js';
+import { STOP_GRACE } from '../run/grace.js';
 import type { LoopSupervisor } from '../run/supervisor.js';
 import type { TurnResilience } from '../run/ladder.js';
 import { providerIdentity, type ModelChoice } from '../run/resilience.js';
@@ -30,6 +31,20 @@ import { todoLinesFromStored } from '../todo-view.js';
  * loop serves the root and a child that delegated).
  */
 export const CHILD_TIMEOUT_MS: Millis = millis(1_200_000);
+
+/**
+ * REQ-ORCH-088 says the expiry GRACEFULLY PAUSES the child, and the hard abort that stood here alone
+ * is not that: it cut the child off inside a tool call, which is why the report it then produced carried
+ * no last response at all. The pause is `turn.ts`'s own — the turn stops before its next model step with
+ * its text intact — and the abort stays behind it as the backstop, so a child that cannot land inside the
+ * window is still cut off and REQ-CONFIG-113's ceiling keeps its meaning.
+ *
+ * The window is the run's own `STOP_GRACE` rather than a second figure derived here: ADR-0014 rule 1
+ * calls it "the one 30 s allowance" and this is a third reader of it, not a second figure. It is taken
+ * from `run/grace.js` and never from `run/run.js`, for the reason that file gives. Should 30 s prove
+ * wrong for a landing, that is reported back beside this reason rather than repaired quietly.
+ */
+export const CHILD_LANDING_GRACE: Millis = STOP_GRACE;
 
 export interface ChildrenDeps {
   readonly sessionId: SessionId;
@@ -297,6 +312,7 @@ export class IterationChildren implements DelegationOps {
     let outcome: TurnOutcome | null = null;
     let error: { type: string; message: string } | null = null;
     let timedOut = false;
+    let landing = false;
     let childSignal: AbortSignal = deps.runSignal;
     // REQ-ORCH-088: the child runs under the hard timeout; on expiry, once, it is retried on the role's fallback when one is untried.
     for (;;) {
@@ -305,7 +321,19 @@ export class IterationChildren implements DelegationOps {
       const onRunAbort = () => controller.abort();
       deps.runSignal.addEventListener('abort', onRunAbort, { once: true });
       timedOut = false;
-      const timer = deps.clocks.timers.after(childTimeoutMs, () => { timedOut = true; controller.abort(); });
+      landing = false;
+      // REQ-ORCH-088: expiry asks the child to land — the turn stops before its next model step — and only
+      // the backstop CHILD_LANDING_GRACE later cuts it off. `timedOut` is set at the ceiling, not at the
+      // backstop, so the fallback-retry limb below and the report's `Child timed out after <N>s` are
+      // reached by a child that landed gracefully exactly as by one that had to be cut.
+      // A box rather than a `let`: the assignment happens inside the ceiling's callback, which the compiler
+      // cannot see, and the cast that would otherwise be needed in the `finally` says less than this does.
+      const backstop: { handle: TimerHandle | null } = { handle: null };
+      const timer = deps.clocks.timers.after(childTimeoutMs, () => {
+        timedOut = true;
+        landing = true;
+        backstop.handle = deps.clocks.timers.after(CHILD_LANDING_GRACE, () => { controller.abort(); });
+      });
       let firstCall = true;
       const turn = (task: string, history: readonly ChatMessage[]) => { const wasFirst = firstCall; firstCall = false; return runTurn({
         writer: deps.writer, owner: deps.owner, backend: deps.backend, tools, clocks: deps.clocks, persona: row.persona, agentName: row.canonical_name,
@@ -315,7 +343,8 @@ export class IterationChildren implements DelegationOps {
         credentialFor: deps.credentialFor, maxStepsPerTurn: deps.maxStepsPerTurn, warn: deps.warn, dispatched,
         ...(deps.supervisorFor ? { supervisor: deps.supervisorFor(row.task_id) } : {}),
         ...(deps.steeringFor ? { steering: deps.steeringFor(row.task_id) } : {}),
-        ...(deps.shouldPause ? { shouldPause: deps.shouldPause } : {}),
+        // REQ-MONITOR-123's pause and REQ-ORCH-088's landing are the same act, so they are the same flag here.
+        shouldPause: () => landing || (deps.shouldPause?.() ?? false),
         ...(resilience ? { resilience } : {}),
         ...(compression ? { compression } : {}),
         // REQ-ORCH-093: the resume limb — a child's turn after its first is a parent being resumed with reports.
@@ -336,6 +365,7 @@ export class IterationChildren implements DelegationOps {
         deps.writer.recordIssue({ kind: 'child_exception', severity: 'error', actor: row.canonical_name, message: `Child ${row.canonical_name} raised: ${error.message}` });
       } finally {
         timer.cancel();
+        backstop.handle?.cancel();
         deps.runSignal.removeEventListener('abort', onRunAbort);
       }
       const fb = resilience?.cell.fallback ?? null;
@@ -365,9 +395,23 @@ export class IterationChildren implements DelegationOps {
     const persistedTodo = deps.dal.childrenOf(deps.sessionId).find((child) => child.task_id === row.task_id)?.todo ?? null;
     deps.dal.setChildTodo(deps.sessionId, row.task_id, persistedTodo, toolCalls);
     const messages = outcome?.messages ?? [];
-    const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant');
-    const lastText = lastAssistant ? lastAssistant.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') : '';
-    const finalIsFinal = lastAssistant !== undefined && messages[messages.length - 1] === lastAssistant;
+    const textOf = (m: ChatMessage): string => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('');
+    const reversed = [...messages].reverse();
+    const lastAssistant = reversed.find((m) => m.role === 'assistant');
+    /**
+     * REQ-ORCH-088: the timeout report carries "the last/final response extracted from the transcript".
+     * The last assistant message is very often the one that OPENED a tool call and said nothing, which is
+     * how a whole child's work reported an empty last response: the extraction stopped at the first
+     * assistant message it met rather than at the last one that spoke. It now falls back to the last
+     * assistant message carrying text.
+     *
+     * `finalIsFinal` is deliberately still decided on the plain last assistant message: REQ-ORCH-110 fixes
+     * the final-response field to text "not followed by further tool activity", and text found further back
+     * WAS followed by it. So a landed child's words reach `last_response` and never `final_response`.
+     */
+    const lastSpoken = reversed.find((m) => m.role === 'assistant' && textOf(m).trim() !== '');
+    const lastText = lastAssistant ? (textOf(lastAssistant).trim() !== '' ? textOf(lastAssistant) : (lastSpoken ? textOf(lastSpoken) : '')) : '';
+    const finalIsFinal = lastAssistant !== undefined && messages[messages.length - 1] === lastAssistant && textOf(lastAssistant).trim() !== '';
     let status: 'succeeded' | 'failed' | 'cancelled';
     const errors: { type: string; message: string }[] = [];
     if (cancelled) status = 'cancelled';

@@ -199,9 +199,16 @@ the record's `wait` published with every snapshot. The wait resolves by the time
 session-wide, the `model_override` timeline entry, the agent re-run at once; a key that cannot be applied → `model_override_rejected`
 and the header names why, the wait continues). **Unresponsive model:** while a role fallback is untried and `llm_response_timeout`
 (≥ 30 s) sits below the agent's bound (the child timeout; the model timeout for the root), a timer on the clock port aborts a call
-that produced no event of any kind and the step re-runs on the fallback (`unresponsive_model_fallback`). **Hard child timeout:**
-on expiry with a role fallback untried, the child runs once more on it (`child_timeout_fallback`); else it fails with
-`Child timed out after <N>s`. Per-model `timeout` / `num_retries` ride the choice (REQ-ORCH-145). On resume the memory is
+that produced no event of any kind and the step re-runs on the fallback (`unresponsive_model_fallback`). **Child timeout:**
+expiry does not cut the child off — it **asks the child to land** (REQ-ORCH-088), by raising the same per-child flag
+`runTurn` reads for REQ-MONITOR-123's pause, so the turn stops before its next model step with the step in flight
+finished and its text intact. A hard-abort **backstop** is armed `STOP_GRACE` (30 s, `run/grace.ts`, ADR-0014 rule 1's
+one allowance) behind it, for the child that cannot land inside the window; REQ-CONFIG-113's ceiling therefore still
+bounds the child. Then, with a role fallback untried, the child runs once more on it (`child_timeout_fallback`); else
+it fails with `Child timed out after <N>s` and a report carrying what the child last **said** — the last assistant
+message with text, not the last assistant message, which is usually the one that opened a tool call and spoke
+nothing. Those words reach `last_response`; `final_response` stays empty, because REQ-ORCH-110's final response is
+text no further tool activity followed. Per-model `timeout` / `num_retries` ride the choice (REQ-ORCH-145). On resume the memory is
 rehydrated from the timeline (`ResilienceMemory.rehydrate`), so a continuation never returns to an exhausted pair and keeps the
 user's choice (REQ-SESSION-196).
 

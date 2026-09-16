@@ -24,7 +24,16 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-16** — **one activity line per working agent** (`PD-CHAT-004`
+Last reconciled with the code: **2026-09-16** — **a timed-out child is asked to land** (REQ-ORCH-088's
+graceful-pause arm, first executed): the ceiling no longer aborts the child mid-tool-call, it raises the same
+flag REQ-MONITOR-123's pause raises, so the turn stops before its next model step and the step in flight keeps
+its words; a hard-abort backstop 30 s behind it (`run/grace.ts`, ADR-0014 rule 1's one allowance) still bounds
+REQ-CONFIG-113's ceiling for the child that cannot land. The timeout report carries the last assistant message
+that SPOKE, rather than the last one, which is usually the one that opened a tool call. Only the **runtime
+view** is affected — the resilience paragraph says what expiry now does. No package, edge, message kind or
+store table moved.
+
+Previously reconciled, the same day: **one activity line per working agent** (`PD-CHAT-004`
 revision 2 and `PD-CHAT-005`, first executed): a run is bounded by its agent alone, so concurrent agents
 interleave two lines instead of chopping each other's into fragments; the collapsed line carries one segment
 per tool family with that family's totals; the role line takes the persona's colour and a delegated agent's

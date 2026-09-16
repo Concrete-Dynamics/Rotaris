@@ -129,6 +129,29 @@ describe('engine/children/report — every construction site carries them', () =
     expect(r.errors.some((e) => e.type === 'summary_failure')).toBe(true);
   });
 
+  it('the fallback report of a SILENT child states what it did, rather than the two words it used to (REQ-ORCH-088/108)', () => {
+    // The shape the autopsy found: a child with a long transcript, cut off by its ceiling before it spoke.
+    // `lastText` is empty, so the old fallback's whole summary was `Tools used: write_file, terminal` and
+    // its key findings were `[]` — from which a parent could only conclude the work had not happened.
+    const r = fallbackReport(
+      input({ messages, toolCallCount: 96, toolsUsed: ['write_file', 'terminal'], lastText: '', finalTextIsFinal: false, status: 'failed', errors: [{ type: 'timeout', message: 'Child timed out after 1200s' }] }),
+      'two attempts produced no usable report',
+    );
+    expect(r.summary).toContain('Child timed out after 1200s');
+    expect(r.summary).toContain('96 tool call(s)');
+    expect(r.summary).toContain('docs/a.md');
+    expect(r.summary).toContain('two attempts produced no usable report');
+    expect(r.key_findings).toHaveLength(1);
+    // REQ-ORCH-110 is untouched: a child that never concluded has no final response.
+    expect(r.final_response).toBe('');
+  });
+
+  it("a fallback for a child that DID speak still leads with the child's own words", () => {
+    const r = fallbackReport(input({ messages, toolCallCount: 2 }), 'no summariser is configured');
+    expect(r.summary).toBe('wrote the documents');
+    expect(r.key_findings).toEqual([]);
+  });
+
   it('the deterministic tester path (REQ-ORCH-111) carries them with no model call', () => {
     const r = deterministicTesterReport(input({ role: 'tester', messages, toolCallCount: 2, lastText: 'all green' }));
     expect(r).not.toBeNull();

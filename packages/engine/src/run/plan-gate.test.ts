@@ -5,8 +5,9 @@ import { join } from 'node:path';
 import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import type { IntentCategory } from '@rotaris/contracts';
-import { answer, DefaultAgentBackend, ScriptedModelClient, type AgentBackend, type ScriptedCall } from '@rotaris/model';
-import { RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type RunConfig, type RuntimePosture } from '../index.js';
+import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type AgentBackend, type ScriptedCall } from '@rotaris/model';
+import { SUPERVISOR_DEFAULTS, type LoopClassifier } from './supervisor.js';
+import { RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type RunConfig, type RuntimePosture, type ToolPort } from '../index.js';
 
 /**
  * REQ-ORCH-152/153/154 (ADR-0062): the plan gate end to end through the session manager — the park, what it
@@ -45,7 +46,14 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     return { client, backend: new DefaultAgentBackend(client) as AgentBackend };
   }
 
-  function sessionsWith(backend: AgentBackend, opts: { mode?: 'auto' | 'plan'; intent?: IntentCategory } = {}) {
+  /** A one-tool port, so a turn can take several steps — which is what it takes for a loop to exist at all. */
+  const grepPort = (): ToolPort => ({
+    specs: () => [{ name: 'grep', description: 'search', parameters: { type: 'object' } }],
+    dispatch: async () => ({ text: 'packages/a/yarn.lock:1: yaml@2.4.5', isError: false, status: 'ok', durationMs: 1, label: 'grep', args: {} }),
+    cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
+  });
+
+  function sessionsWith(backend: AgentBackend, opts: { mode?: 'auto' | 'plan'; intent?: IntentCategory; classifier?: LoopClassifier } = {}) {
     const runtime: RuntimePosture = {
       permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' },
       sessionLogLevel: 'WARNING', runStartMode: opts.mode ?? 'plan',
@@ -58,6 +66,9 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
       // The registry predicate the run host injects; here just enough to exercise the child-admission refusal.
       planWithholds: (tool) => ['write_file', 'terminal', 'haet', 'haet_edit', 'git_commit'].includes(tool),
       ...(opts.intent ? { preflight: async () => preflightOf(opts.intent!) } : {}),
+      // PD-ORCH-001: supervision is only constructed when this dependency answers, which is how the directive's
+      // "no supervisor is attached" is observable at all — a run without it looks the same from the outside.
+      ...(opts.classifier ? { supervisor: () => ({ config: { ...SUPERVISOR_DEFAULTS, repetitionThreshold: 3 }, classifier: opts.classifier! }), tools: () => grepPort() } : {}),
     });
     return sessions;
   }
@@ -216,6 +227,39 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     expect(again).toContain('The plan as it currently stands:');
     expect(again).toContain('plan one');
     expect(again).toContain('smaller steps');
+  });
+
+  /**
+   * PD-ORCH-001. A held run has every writing tool withheld, so the only work it can do is read and search —
+   * and a plan for an unfamiliar codebase is written by doing that over the same region, which is
+   * REQ-ORCH-101's first trigger firing on the gate's own side effect. Run `a26918e8` then read the
+   * supervisor's `role: 'user'` injection as an instruction from the person it was waiting for and spent
+   * 3 min 12 s reconciling it with what it remembered being asked.
+   */
+  it('PD-ORCH-001: supervision does not fire while the gate holds, and fires again once it has resolved', async () => {
+    const circling = (): ScriptedCall => toolCalls([{ callId: 'g1', name: 'grep', args: { pattern: 'yaml', path: 'packages' } }]);
+    let classifications = 0;
+    const classifier: LoopClassifier = {
+      classify: async () => { classifications += 1; return { loop_detected: true, reason: 'circling', corrective_message: 'Pause and reassess the grep call.' }; },
+    };
+    const s = scripted([
+      circling(), circling(), circling(), circling(), answer('a plan'),
+      circling(), circling(), circling(), circling(), answer('carried out'),
+    ]);
+    const sessions = sessionsWith(s.backend, { classifier });
+    const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+
+    // The held segment circled four times over the same call and nothing supervised it.
+    expect(dal.getSession(sid)!.execution_status).toBe('awaiting_plan_decision');
+    expect(classifications).toBe(0);
+    expect(dal.timelineOf(sid).map((t) => t.name)).not.toContain('loop_supervisor_activation');
+
+    sessions.planDecision(sid, 'approve');
+    await sessions.running(sid)!;
+    // Released, the same circling is supervised exactly as it always was.
+    expect(classifications).toBeGreaterThan(0);
+    expect(dal.timelineOf(sid).map((t) => t.name)).toContain('loop_supervisor_activation');
   });
 
   it('cancel stops the run with `user_cancelled` and launches nothing (REQ-ORCH-153)', async () => {

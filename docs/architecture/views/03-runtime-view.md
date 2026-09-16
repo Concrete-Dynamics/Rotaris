@@ -72,7 +72,7 @@ place — so a segment's grants are constant and the model's listing and callabl
 **iteration 0** (`root:0`) because a plan cycle is not an iteration, and then `parkAtPlanGate()` mirrors
 `pauseAtLimit` exactly: status `awaiting_plan_decision` with the cycle, the cycle's row written in the same
 durable transaction with a `plan_gate_opened` entry, **no terminal pair**, and an EMPTY stop reason
-(REQ-MONITOR-301's set names no hold). The turn's report text IS the plan, verbatim — and the turn is TOLD so: `planRequestSection` (`run/plan-text.ts`, beside the `planSection` a decided cycle is handed back) prefixes both the task string and the initial content parts, because an initial turn built from `taskContent` never reads the string. Before 2026-09-16 the first cycle's turn received the user's bare prompt and read it as work to do. Both sections name the **product** as their speaker: they are delivered inside a `role: 'user'` payload, and `planSection` opened "The user approved this plan" until the same date — a user-role turn narrating the user.
+(REQ-MONITOR-301's set names no hold). The turn's report text IS the plan, verbatim — and the turn is TOLD so: `planRequestSection` (`run/plan-text.ts`, beside the `planSection` a decided cycle is handed back) prefixes both the task string and the initial content parts, because an initial turn built from `taskContent` never reads the string. Before 2026-09-16 the first cycle's turn received the user's bare prompt and read it as work to do. Both sections name the **product** as their speaker: they are delivered inside a `role: 'user'` payload, and `planSection` opened "The user approved this plan" until the same date — a user-role turn narrating the user. A held segment's turn also carries **no loop supervisor** (`PD-ORCH-001`, which narrows REQ-ORCH-099 and REQ-ORCH-101): `Run` attaches the supervisor per turn, and while the hold stands it attaches none. A run whose write and execute tools are withheld can only grep and read, which is REQ-ORCH-101's repetition trigger read literally; the corrective it injects is an unmarked `role: 'user'` message, so the run reads a user instruction no user gave while waiting for the decision of the actual user. Supervision attaches again on the first turn after the gate resolves, and the classifier keeps no state across the hold.
 
 While the hold stands, three places enforce the planning grants of REQ-ORCH-153 — the port's narrowing
 (`createToolPort`, which only removes, and which hands the gate the set of names it removed), `Gate.dispatch`
@@ -148,7 +148,8 @@ is main's orchestration over the same three processes and is drawn in the proces
 Before every model step, in this order: `shouldPause()` (a graceful pause stops here, the task stays pending) →
 pending **steering** injected as a marked user message (`steering_injected`, the supervisor's counter reset) →
 the **loop supervisor**'s `check()` (`continue` | `inject` a corrective user message | `escalate` — the turn
-fails with `circuit_breaker_escalation`) → the 100-step belt → **context compression when the agent has reached
+fails with `circuit_breaker_escalation`; no supervisor is attached at all for the turn a plan-gate hold covers,
+`PD-ORCH-001`) → the 100-step belt → **context compression when the agent has reached
 its threshold** (Part AH, below) → the model step (streamed into its own `agent`
 row, and — from Part Z — into a **`thinking` row** for anything the provider marks as deliberation; the sink
 discarded every reasoning delta before that, so no streamed-reasoning row had ever existed, REQ-CHAT-163).

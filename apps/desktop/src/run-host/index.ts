@@ -15,7 +15,7 @@ import { deleteSession, exportRecords, exportTrajectories, repairSessions, sessi
 import { CHECKPOINTS_DEFAULTS, loadConfiguration, RUNTIME_DEFAULTS, SKILLS_DEFAULTS, type LiveState, CODE_INTELLIGENCE_TOKEN } from '@rotaris/config';
 import { SkillHost } from './skills.js'; // ADR-0063
 import { classifierSlotsOf, configureRun, egressReader, improvementCollectorOf, modelRefOf, type ConfiguredRun } from './configuration.js';
-import { launchSession, leaseForContinuation } from './launch.js';
+import { launchSession, leaseForContinuation, LeaseReportLog } from './launch.js';
 import { type ModelClient, type ModelRequest, type StreamPart } from '@rotaris/model';
 import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
@@ -474,6 +474,7 @@ const configure = (workspaceRoot: string, attended: boolean) => {
  * session this process never started or resumed has no root to lease under — nothing is known
  * about it here, and the engine's own refusals (`not-live`, `no-session`) answer it instead.
  */
+const leaseReports = new LeaseReportLog();
 const continuationLeaseForSession = async (sessionId: string): Promise<ProcessReply | null> => {
   const workspaceRoot = sessionRoots.get(sessionId);
   if (workspaceRoot === undefined) return null;
@@ -482,7 +483,8 @@ const continuationLeaseForSession = async (sessionId: string): Promise<ProcessRe
     leaseCredentials: async (providers) => {
       const answer = await ask({ kind: 'credentials.lease', providerIds: [...providers] }, millis(5_000)).catch((e: Error) => { log(`credentials: main did not answer the lease (${e.message})`, 'warn'); return null; });
       const bearers = answer?.kind === 'credentials.leased' ? answer.bearers : {};
-      log(`credentials: re-leased for ${Object.keys(bearers).join(', ') || 'no provider'} (continuation, workspace ${workspaceRoot})`);
+      // The re-lease itself stays: it is what fixed the continuation's 401. Only the report is quieted.
+      leaseReports.report(workspaceRoot, answer?.kind === 'credentials.leased' ? answer.report : null, (m) => log(m));
       return bearers;
     },
   });
@@ -752,11 +754,8 @@ async function handle(req: RunHostRequest): Promise<ProcessReply> {
         leaseCredentials: async (providers) => {
           const answer = await ask({ kind: 'credentials.lease', providerIds: [...providers] }, millis(5_000)).catch((e: Error) => { log(`credentials: main did not answer the lease (${e.message})`, 'warn'); return null; });
           const bearers = answer?.kind === 'credentials.leased' ? answer.bearers : {};
-          log(`credentials: leased for ${Object.keys(bearers).join(', ') || 'no provider'} (workspace ${s.root})`);
-          if (answer?.kind === 'credentials.leased') {
-            const u = Object.entries(answer.report.unresolved);
-            log(`credentials: ${answer.report.authenticated.length} provider(s) authenticated${u.length > 0 ? `; unresolved: ${u.map(([id, why]) => `${id} (${why})`).join(', ')}` : ''}`);
-          }
+          // REQ-PROVIDER-068's opening report, said once per workspace root and then only when it changes.
+          leaseReports.report(s.root, answer?.kind === 'credentials.leased' ? answer.report : null, (m) => log(m));
           return bearers;
         },
         start: (setup, bearers) => {

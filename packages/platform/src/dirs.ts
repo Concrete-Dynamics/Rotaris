@@ -1,5 +1,5 @@
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, posix, win32 } from 'node:path';
 
 /**
  * REQ-STARTUP-145 — per-user directories for the application name `rotaris`.
@@ -30,6 +30,10 @@ export interface DirEnv {
 
 export function resolveUserDirs(e: DirEnv = { platform: process.platform, env: process.env, home: homedir() }): UserDirs {
   const name = 'rotaris';
+  // The platform is a PARAMETER, so the separator is decided by IT and never by the host the code happens to run
+  // on. Reading `node:path`'s host-bound `join` here made the Windows answer depend on whether the caller was
+  // running Windows, which is the one thing a platform parameter exists to take out of the question.
+  const { join } = e.platform === 'win32' ? win32 : posix;
   switch (e.platform) {
     case 'win32': {
       const local = e.env['LOCALAPPDATA'] ?? join(e.home, 'AppData', 'Local');

@@ -254,6 +254,50 @@ line terminator rather than swallowing it, so `sh` should read a multi-line comm
 but that is reasoning, no POSIX shell runs on the host this was built on, and `REQ-TOOLS-104` sends Windows to
 PowerShell. It is owed on the first host that can run it.
 
+**Paid, 2026-09-16, on Linux — and the reading above is FALSIFIED. It is kept, as the standing policy
+requires, beside what replaced it.** The line discipline does pass the newlines through; that is the defect
+and not the remedy. A multi-line command whose first physical line does not parse to completion puts `sh` on
+its **continuation prompt**, and the pty then ECHOES every remaining line back onto the screen the capture is
+read from. The line carrying the START marker is one of them, so the echo lands INSIDE the captured region.
+Measured against `/bin/sh` at the session's own 240×50: the here-string equivalent
+`t="LINE ONE\nLINE TWO"\nprintf '%s\n' "$t"` reached the agent as
+
+```text
+LINE TWO"
+> __rot_904046598035310821ca0bc9_s
+$ LINE ONE
+LINE TWO
+```
+
+where `LINE ONE\nLINE TWO` is the whole of the output. The `>` is the continuation prompt and the `$` is the
+echo of the third line; neither is anything the command wrote.
+
+So **the posix branch now does what the PowerShell branch does, for the same reason**: a multi-line command is
+carried across as ONE physical line and rebuilt on the far side, where its newlines are intact. The carrier is
+`printf '%b'` — POSIX printf's own escape-expanding conversion, so nothing outside the shell is needed — and
+the payload is run with `eval`, in THIS shell rather than a subshell, which is what keeps the persistence the
+tool promises (the same property dot-sourcing buys on the PowerShell side). `$?` after `eval` is the payload's
+own status, so the exit-status expression is unchanged and consequence 1's forgery argument is untouched. The
+single-line path keeps today's wrapper byte for byte.
+
+**A second defect, from the same first execution, in the CLEANING rather than the wrapper.** `cleanLines`
+found the start of the captured region by looking for a row that was **exactly** the marker. The marker's row
+can carry the shell's PROMPT in front of it: the line discipline echoes what we write as soon as it arrives,
+and the shell prints its prompt when it reads, so when the write lands first the screen reads `<echo>` on one
+row and `$ <marker>` on the next. No row was then exactly the marker, the whole screen was kept, and the agent
+was handed `$ __rot_…_s` as though the command had printed it. Load-dependent — about one call in six with a
+second suite running beside it, and never once on an idle machine, which is why 24 proofs passed before it was
+seen. The echoed wrapper is now dropped **before** the marker is looked for rather than only after it, and a
+row that ENDS with the marker is the marker's row whatever stands in front of it. The marker is a per-call
+nonce, so consequence 1's forgery argument is unchanged: no command can spell one to cut its own capture short.
+
+**What the same first execution found nothing in**, all measured against `/bin/sh` through a real pty: the
+marker protocol and its cleaning, the emulated-screen capture (the tab stop, the screen clear, the empty write
+between two non-empty ones), stderr in the merged stream, the soft pause and its poll, the hard timeout's tree
+kill and session reset, `runtime.shell_command_timeout` bounding a call that names no timeout of its own, the
+background session's start/query/list/kill and its cap, and state persisting across calls. Twenty-four proofs,
+two defects.
+
 **Found — defect C: the agent's capture was VT-STRIPPED where every other surface was EMULATED.** Deleting a
 control sequence is not applying it. Measured against the real shell at the session's own 240×50: ConPTY
 expresses a tab stop as `ESC[7C`, and `Write-Host ('a' + [char]9 + 'b')` reached the agent as **`ab`** where

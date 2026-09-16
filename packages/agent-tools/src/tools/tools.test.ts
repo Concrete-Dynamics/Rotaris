@@ -257,7 +257,11 @@ describe('todo (REQ-TOOLS-144..147)', () => {
   it('operations, ids, the single IN_PROGRESS invariant, replace protection, hints, no-op update', async () => {
     const list = new TodoList();
     const t = todoTool(list);
-    expect((await t.execute({ operation: 'bogus' }, ctx())).text).toBe('Unsupported operation: bogus');
+    // REQ-TOOLS-144's five are the schema's now, so a wrong operation is refused BEFORE `execute` — which is
+    // where the mandated words have to be, or the gate answers with its generic schema message instead.
+    expect(t.schema.safeParse({ operation: 'bogus' }).success).toBe(false);
+    expect(t.validationError!({ operation: 'bogus' }, 'operation: invalid option').text).toMatch(/^Unsupported operation: bogus\./);
+    expect(t.validationError!({ operation: 'bogus' }, 'operation: invalid option').isError).toBe(true);
     const p = await t.execute({ operation: 'add_phase', name: 'main' }, ctx());
     const phaseId = /\(([0-9a-f]{8})\)/.exec(p.text)![1]!;
     expect(p.text).toContain('Todo state:');
@@ -283,5 +287,47 @@ describe('todo (REQ-TOOLS-144..147)', () => {
     expect(list.phases[0]!.tasks.map((x) => `${x.name}:${x.state}`)).toEqual(['first:COMPLETED', 'fresh:PENDING']);
     expect((await t.execute({ operation: 'remove_task', task_id: t1 }, ctx())).text).toMatch(/^Removed task first/);
     expect(list.render()).toContain('[PENDING] fresh');
+  });
+
+  /**
+   * Observed live 2026-09-16 (run `a26918e8`): a run sent five phases to `add_phase` — a call the advertised
+   * schema accepts, since `phases` is one of its fields — and read back the six words `add_phase requires a
+   * name.` It retried with `name` AND `phases` together, which adds one empty phase and drops the rest.
+   * REQ-TOOLS-147 mandates a hint for a missing id and says nothing about a missing name; that silence is what
+   * the string filled.
+   */
+  it('a batch sent to add_phase is refused by naming the operation that takes one (REQ-TOOLS-013/147)', async () => {
+    const list = new TodoList();
+    const t = todoTool(list);
+    const r = await t.execute({ operation: 'add_phase', phases: [{ name: 'Discovery', tasks: [] }, { name: 'Build', tasks: [] }] }, ctx());
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain('add_phase requires a name.');
+    expect(r.text).toContain('2 phase(s) sent here were not added');
+    expect(r.text).toContain('call replace with the whole `phases` array');
+    expect(list.phases).toEqual([]);
+
+    // The same fault in `add_task`, which had no hint at all where its siblings all have one.
+    const withPhase = await t.execute({ operation: 'add_phase', name: 'main' }, ctx());
+    const phaseId = /\(([0-9a-f]{8})\)/.exec(withPhase.text)![1]!;
+    const task = await t.execute({ operation: 'add_task', phase_id: phaseId, phases: [{ name: 'Build', tasks: [] }] }, ctx());
+    expect(task.text).toContain('add_task requires a task name (or title).');
+    expect(task.text).toContain('call replace with the whole `phases` array');
+    expect(task.text).toContain('Available phases: main');
+
+    // A plain miss keeps its hint and says nothing about a batch nobody sent.
+    const bare = await t.execute({ operation: 'add_phase' }, ctx());
+    expect(bare.text).toContain('Available phases: main');
+    expect(bare.text).not.toContain('replace');
+  });
+
+  it('the description names the fields each operation reads, which is the only per-operation guidance there is', () => {
+    const d = todoTool(new TodoList()).description;
+    expect(d).toContain('replace {phases: [{name, tasks: [{name, description, state}]}]}');
+    expect(d).toContain('the only operation that takes a batch');
+    expect(d).toContain('add_phase {name}');
+    expect(d).toContain('it does not read `phases`');
+    expect(d).toContain('add_task {phase_id, name, description, state}');
+    expect(d).toContain('update {task_id, name, description, state}');
+    expect(d).toContain('remove_task {task_id}');
   });
 });

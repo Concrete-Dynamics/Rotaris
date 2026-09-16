@@ -24,7 +24,16 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-16** — **a timed-out child is asked to land** (REQ-ORCH-088's
+Last reconciled with the code: **2026-09-16** — **what the model is told about a tool, and who is
+speaking to it**: the advertised parameter schema is now the INPUT form, so a field with a default is
+advertised optional as the parser treats it, and `todo`'s five operations reach the model as an enum;
+`todo`'s refusals name the operation that takes a batch instead of six words that name nothing; and the
+plan gate's resume section names the product as its speaker rather than narrating the user inside a
+`role: 'user'` payload. Only the **runtime view** is affected — the executors paragraph says what
+`toolSpec` hands over, and the plan-gate paragraph says whose voice the two sections are in. No package,
+edge, message kind or store table moved.
+
+Previously reconciled, the same day: **a timed-out child is asked to land** (REQ-ORCH-088's
 graceful-pause arm, first executed): the ceiling no longer aborts the child mid-tool-call, it raises the same
 flag REQ-MONITOR-123's pause raises, so the turn stops before its next model step and the step in flight keeps
 its words; a hard-abort backstop 30 s behind it (`run/grace.ts`, ADR-0014 rule 1's one allowance) still bounds

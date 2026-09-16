@@ -37,13 +37,25 @@ export function planRequestSection(): string {
  * carries out, carried whole and unedited by the product (the user's own text where they edited it). On **revise**
  * it is "the plan as it currently stands together with the changes the user stated" — both, and in that order, so
  * the producing role revises rather than starts again.
+ *
+ * The section names the PRODUCT as its speaker, as `planRequestSection` above does. It is delivered inside a
+ * `role: 'user'` payload, and it used to open "The user approved this plan" — a user-role turn narrating the user
+ * in the third person, which leaves the model to work out for itself whether a person just spoke to it. Nothing
+ * requires this wording; the run that prompted the change (`a26918e8`, 2026-09-16) showed the cost of the same
+ * shape elsewhere, where a product-authored steering message read as a user instruction and the run spent three
+ * minutes reconciling it with what it remembered the user asking for.
  */
 export function planSection(decision: PlanDecision, plan: string, changes: string): string {
   if (decision === 'approve') {
-    return ['The user approved this plan. Carry it out; every tool the plan gate withheld is now available.', '', 'Approved plan:', plan].join('\n');
+    return [
+      'The plan gate has resolved (REQ-ORCH-153): the user approved this plan in the product. This section is the product handing the plan back, not the user speaking again.',
+      'Carry it out; every tool the gate withheld is now available.',
+      '', 'Approved plan:', plan,
+    ].join('\n');
   }
   return [
-    'The user asked for a revision of this plan. Produce a fresh plan that answers what they said; do not begin the work.',
+    'The plan gate has resolved (REQ-ORCH-153): the user chose revise in the product. This section is the product opening the next plan cycle, not the user speaking again.',
+    'Produce a fresh plan that answers what they asked for; do not begin the work.',
     '', 'The plan as it currently stands:', plan,
     '', 'The changes the user stated:', changes.trim() === '' ? '(the user stated no specific changes)' : changes,
   ].join('\n');

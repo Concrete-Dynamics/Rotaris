@@ -367,6 +367,20 @@ replaceable by this module alone, so the build-time registration and the registr
 each skipping the other's work as a holder it must respect. One banner block and one import in `slash/catalogue.ts`,
 declared in the handoff as a ruling request.
 
+**Found later — AO-3, in AO-1's own repair, by a launch log rather than by the proof.** AO-1's paragraph above says the
+disk is read "once when nothing is cached". It was read twice: two effects start a read as a window settles — the
+registrar's, when nothing is cached, and the configuration key's, which always reloads — and neither can see the other,
+so before the first answer there is nothing for the second to find. The repair kept the reader's last ANSWER and not the
+read still in flight, which is the whole of the gap. A launch on 2026-09-16 shows two `prompts.roots.read` round trips in
+the same millisecond and two more within 16 ms (`/tmp/rotaris-launch.log`, lines 20–23), each an IPC and three directory
+listings. `readPromptRoots` now holds the in-flight read beside the cached answer, so a second caller in the same window
+joins it; the handle is cleared when the read settles, so focus and configuration changes still read afresh, and binding a
+reader drops both. The correction is written here rather than in place, and AO-1's sentence stands as it was measured.
+The skill catalog's reader, modelled on this one (ADR-0063 §5), had the gap verbatim and with three starters rather than
+two, so it joins reads now as well. The note is
+`docs/defects/fixed/the-prompt-roots-are-read-twice-as-a-window-settles.md`; the coalescing itself has a regression test
+on both readers and has not yet been seen in a launch of the built app.
+
 **Readings recorded.**
 
 - The scripted compressor answers in ~20 ms, so REQ-CHAT-079's "Compressing…" is invisible to any timed probe; the

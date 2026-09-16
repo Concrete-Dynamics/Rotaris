@@ -111,6 +111,30 @@ describe('slash/prompts — the reader and the answer it keeps (defect AO-2)', (
     expect(cachedPromptRoots()).toBeNull();
     expect(readPromptRoots()).toBeNull();
   });
+
+  it('defect AO-3: two callers in the same tick join one read, and a later one reads again', async () => {
+    const result: PromptsRootsResult = { files: [file('workspace', 'Greet Me', 'hello')], skipped: [] };
+    let reads = 0;
+    let release: (() => void) | null = null;
+    bindPromptRootsReader(async () => { reads += 1; await new Promise<void>((r) => { release = r; }); return result; });
+    // The registrar's effect and the configuration key's effect, both at window start, neither with an answer to find.
+    const first = readPromptRoots();
+    const second = readPromptRoots();
+    expect(reads).toBe(1);
+    expect(second).toBe(first);
+    release!();
+    expect(await Promise.all([first, second])).toEqual([result, result]);
+    // Settled: a focus or a configuration change still reads the disk.
+    const third = readPromptRoots();
+    expect(reads).toBe(2);
+    expect(third).not.toBe(first);
+    release!();
+    await third;
+    // Binding a reader (a new window, a new workspace) drops an in-flight read as well as the answer.
+    bindPromptRootsReader(async () => { reads += 1; return result; });
+    await readPromptRoots();
+    expect(reads).toBe(3);
+  });
 });
 
 describe('slash/prompts — the catalogue carries what the reader answered (defect AO-2)', () => {

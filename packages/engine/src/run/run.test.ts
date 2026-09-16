@@ -6,7 +6,7 @@ import { asSessionId, FakeClock, mintMachineId, type MachineId, type SessionId }
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import type { SessionSnapshot, TranscriptIncrement } from '@rotaris/contracts';
 import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, type AgentBackend, type ScriptedCall, type TurnReport } from '@rotaris/model';
-import { parseEventLine, ProjectionOwner, Run, RUN_CONFIG_DEFAULTS, SequenceCounters, Sessions, SessionWriter, toSessionRecord, toTranscriptRow, type Publisher, type RunConfig, type RunNotice, type RunResult } from '../index.js';
+import { costLabelOf, parseEventLine, ProjectionOwner, Run, RUN_CONFIG_DEFAULTS, SequenceCounters, Sessions, SessionWriter, toSessionRecord, toTranscriptRow, type Publisher, type RunConfig, type RunNotice, type RunResult } from '../index.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
@@ -270,6 +270,31 @@ describe('engine/run — the run loop end to end against a real store and a scri
     expect(dal.getSession(sid)).toMatchObject({ tokens_input: 31, tokens_output: 9 });
     expect(payload(sid, 'session.end')).toMatchObject({ tokens: { input: 31, output: 9, total: 40 } });
     expect(result.tokens).toEqual({ input: 31, output: 9, total: 40 });
+  });
+
+  it('PD-MONITOR-001: a cost the provider reported for each request is summed exactly and reaches the session, the event and the label', async () => {
+    // Two completed requests, each answering with its own cost — the figures a rate would have had to be
+    // multiplied for, stated by the provider instead (OQ-62's second branch, ruled rather than waited on).
+    // The first request failed after reporting its figures and the ladder retried past it: the provider
+    // charged for it, so its cost is counted exactly as REQ-EVENTS-053 counts its tokens.
+    const failedWithCost: ScriptedCall = { parts: [{ part: { kind: 'usage', usage: { input: 10, output: 5, cost: '0.0012' } } }, { error: modelError({ code: 'http', status: 503, headline: 'overloaded' }) }] };
+    const { backend } = scripted([failedWithCost, answer('priced', { input: 20, output: 6, cost: '0.00034' })]);
+    const { sessions } = sessionsWith(backend);
+    const sid = (sessions.start(dal, 'C:/ws', 'priced') as { value: SessionId }).value;
+    await new Promise((r) => setTimeout(r, 5));
+    clock.advance(1_000);
+    const result = await sessions.running(sid)!;
+    expect(result.status).toBe('completed');
+    const updates = dal.eventsOfKind(sid, 'usage.update').map((e) => (JSON.parse(e.payload) as { cost: { total: string } }).cost.total);
+    // Exact decimal addition at the wider scale: a double would have made the second figure 0.00154000000000000002.
+    expect(updates).toEqual(['0.0012', '0.00154']);
+    expect(dal.getSession(sid)).toMatchObject({ cost: '0.00154' });
+    expect(payload(sid, 'session.end')).toMatchObject({ cost: { total: '0.00154' } });
+    // REQ-MONITOR-166's fourth qualifier, and REQ-PROVIDER-121's four places below one hundredth, so a
+    // cost that is small but not nothing is never rendered as a zero.
+    expect(costLabelOf('0.00154')).toEqual({ text: '0.0015 reported by the provider', qualifier: 'reported' });
+    // A run no provider priced still reads as it did: the three routes through a rate are still blocked (OQ-21).
+    expect(costLabelOf('0')).toEqual({ text: 'price not established', qualifier: 'unknown' });
   });
 
   it('OQ-8 / REQ-EVENTS-053: a request that reports no figures moves no total and raises no event', async () => {

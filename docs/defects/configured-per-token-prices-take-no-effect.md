@@ -13,6 +13,13 @@ mutator for it — the class comment says so ("zero until pricing exists"). `cos
 `unknown` qualifier unconditionally, which is truthful today and cannot become `configured` while
 nothing computes a figure.
 
+> **Narrowed by the build, 2026-09-16 (`PD-MONITOR-001`).** The paragraph above is kept as written and is
+> now half true. `Aggregates` has a mutator — `addCost` — and `costLabelOf` has a second answer, but both
+> are reached only by a figure a **provider reported** for a request it completed. Nothing about the
+> configured rates changed: `effectivePricing()` still has no callers, `configured` still has no producer,
+> and a user who sets both figures still gets the same `"0"` as a user who sets neither. This note stays
+> open for that reason, and the label such a user sees is still `price not established`.
+
 Observed on 2026-09-16, session `6696f6ed`: a whole run against a priced provider, `cost` = `"0"`.
 
 ## Specs
@@ -39,7 +46,7 @@ a provider-reported per-request cost — are not covered at all; they are **OQ-6
 ## Relevant files
 
 - `packages/config/src/sections/models.ts` — `effectivePricing`, correct and uncalled.
-- `packages/engine/src/run/aggregates.ts` — `cost`, carried and never changed.
+- `packages/engine/src/run/aggregates.ts` — `cost`, changed by `addCost` and by nothing a rate reaches.
 - `packages/engine/src/sessions.ts` — `costLabelOf`, the `unknown` qualifier hardcoded.
 - `packages/providers/src/discovery.ts` — `pricing: {}` for every provider but `concrete-cloud`
   (REQ-PROVIDER-072, pinned by `discovery.test.ts`).

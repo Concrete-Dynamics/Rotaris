@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Ten.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Eleven.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 2.
 
@@ -568,6 +568,92 @@ possible way: by the supervisor not firing at all.
 > is "no supervisor attached for this turn" rather than an instance discarded — and because nothing is observed
 > while held, the released segment begins from an untouched record without anything having to reset it.
 > The account is in `docs/architecture/first-executions.md`.
+
+<a id="pd-monitor-001"></a>
+
+### PD-MONITOR-001 — a cost the provider reported is carried and shown under its own qualifier
+
+**The rule.** Where a provider's own protocol defines a way for a request to ask for the cost of that
+request, the product SHALL ask, and SHALL carry the figure the provider answers with. A run's cost
+total is the **exact decimal sum** of the per-request figures it received and of nothing else: no rate
+is multiplied, no figure is estimated, and no figure is invented for a request the provider priced at
+nothing it reported. `REQ-MONITOR-166`'s cost label SHALL carry a fourth qualifier, **`reported`**,
+for a total reached this way, and a run holding no reported figure SHALL keep the `unknown` qualifier
+and the label it has today.
+
+A figure whose currency the provider does not name SHALL be rendered as the amount alone, under the
+rounding of `REQ-PROVIDER-121` — half-up, two decimal places, four below one hundredth — and SHALL NOT
+be given a currency symbol the product chose for it.
+
+**Why.** Observed live 2026-09-16, run `a26918e8` (logged as [R-026](requests.md#r-026)): a whole run
+against a metered provider, `cost` = `"0"`, the label reading *"price not established"*. That is
+[OQ-62](../architecture/open-questions.md), which names four routes to a figure. Three of them are
+blocked and stay blocked: each one **multiplies** a per-token price by a token count, `REQ-PROVIDER-121`
+forbids computing an amount in binary floating point, and the representation that would make the
+multiplication exact is ADR-0031's — proposed, unspiked, and blocked by OQ-21, which changes a
+persisted format.
+
+The fourth route is not blocked, and the difference is arithmetic rather than appetite: a figure the
+provider computed needs **addition only**. Adding two decimal strings exactly says nothing about what
+a price is, chooses no representation for a rate, and pre-empts neither OQ-21 nor the spike ADR-0031
+requires. The one route that was always available was left unbuilt because it sat in the same open
+question as the three that were not.
+
+The corpus had already assumed this figure exists. `REQ-SHELL-045` fixes the workspace strip's cost
+item as *"the model provider's reported cost for this workspace's runs so far"*, with a tooltip that
+says *"Reported by the model provider"* — a requirement written for a figure nothing in the product
+could produce and no qualifier could describe.
+
+**Why a directive and not a repair.** `REQ-MONITOR-166`'s qualifier set is a closed three — *"an
+unknown price, an incomplete price, and a price derived from configured rates"* — and a figure the
+provider computed is none of them. Naming a fourth is a change to a requirement that is not wrong,
+which is a directive rather than an escalation (`README.md`: a request contradicting a faithful
+requirement is a directive). `REQ-PROVIDER-121` is narrowed for the same reason and no further: its
+symbol table is written for an amount whose currency is known, and an amount reported without one is
+outside what it decides rather than in conflict with it.
+
+Two requirements the mechanism touches are **not** governed, and reading them is what settled that.
+`REQ-EVENTS-053`'s `usage.update` already carries `cost.total` and already fires on the completed
+provider request — the payload gains a figure where it carried `"0"`, and not one clause of the
+requirement changes. `REQ-ORCH-142` says provider-reported totals *"are cumulative and MUST be
+replaced, never summed"*, which reads at first like a prohibition on adding them: it is about a total
+a provider reports **for the run**, and what is added here is what a provider reports **for one
+request**. Two requests are two purchases. Within a single request the rule is honoured literally —
+where a provider repeats the field mid-stream, the last reading replaces the earlier one rather than
+adding to it.
+
+**What it costs.**
+
+- **One endpoint today.** The ask is a body field the endpoint defines, and sending it to an endpoint
+  that does not define it is not free: a strict OpenAI-shaped API answers an unrecognised field with a
+  400. So the product asks only where the protocol says to, which today is OpenRouter's `usage.include`
+  — one entry in a table of hosts, data rather than code. Every other provider's cost keeps reading
+  `"0"` under the `unknown` qualifier, exactly as before.
+- **The figure crosses JSON as a number.** It arrives as a double whatever the provider computed it
+  in. That is the protocol's doing and it is where this product's exactness begins: nothing rounds,
+  scales or multiplies it, and it is added to the total as the decimal it reads back as.
+- **No currency.** The product has no currency type anywhere, and this directive does not introduce
+  one. A total is shown bare rather than under a symbol the product guessed. Where a provider names a
+  currency, carrying it is ordinary future work against `REQ-PROVIDER-121`'s own table.
+- **Not per agent.** `REQ-MONITOR-102` persists a per-agent cost. This carries the run's total only;
+  the per-agent figure stays as it is, owed rather than quietly filled.
+
+> **Narrows:** REQ-MONITOR-166, REQ-PROVIDER-121
+
+*Raised by the owner, 2026-09-16; logged as [R-026](requests.md#r-026).*
+
+> **First execution, 2026-09-16, the day it was raised:** it found the reading half harder than the
+> asking half, and the corpus friendlier than expected. The SDK's usage mapping keeps the token fields
+> and **drops every other**, so `usage.cost` reaches nothing above it however the request is made —
+> `metadataExtractor`, the seam the SDK provides for exactly this, is what carries the raw chunk over
+> before that mapping happens, and the figure rides out on the port's existing `usage` part rather than
+> on a new channel. Two nearby requirements looked like obstacles and were not: `REQ-ORCH-142`'s
+> "replaced, never summed" is about a run total and not a request's own figure, and `REQ-SHELL-045`
+> turned out to require the provider-reported cost outright, which is a requirement the product could
+> not meet until this directive. The exact-decimal addition is thirty lines of `bigint` in
+> `packages/engine/src/money.ts`, scale-free so no place is truncated, and it is reported into ADR-0031
+> in place: it is not that decision's `Money` type, its library or its lint rule, all of which stay
+> blocked on OQ-21. The account is in `docs/architecture/first-executions.md`.
 
 ---
 

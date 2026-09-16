@@ -2680,6 +2680,12 @@ figure at all — which cannot be built until OQ-21 says what a price is.
 > rates, which stay unbuilt. The paragraph "What the build proceeds under" continues to hold for both: cost
 > reads `"0"` under the `unknown` qualifier wherever no provider-reported figure exists, which after the
 > ruling is every provider but OpenRouter.
+>
+> **Built the same day.** The ruled branch is no longer only ruled: the adapter asks OpenRouter for the figure
+> and reads it back, `Aggregates.addCost` adds it in exact decimal arithmetic, and the label carries the fourth
+> qualifier. The two open branches were not touched by that work and are not unblocked by it — what made this
+> one buildable was addition, and neither of theirs is addition. The account is in
+> `docs/architecture/first-executions.md`, and the arithmetic is reported back into ADR-0031 in place.
 
 **OQ-63 — What level threshold, if any, governs the application log?** *(REQ-TOOLS-171, REQ-HOOKS-102/138, REQ-SANDBOX-071, REQ-LIBRARY-035/047/124, with REQ-CONFIG-121 and REQ-SESSION-142; raised 2026-09-16 from run `a26918e8`'s launch log.)*
 

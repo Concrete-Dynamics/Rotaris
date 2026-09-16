@@ -47,3 +47,20 @@ task's authority.
 - `packages/engine/src/intent/classifier.ts` — names `persona: 'intent-classifier'`.
 - `apps/desktop/src/run-host/tools.ts` — the silent `?? BUILT_IN_PERSONAS.orchestrator`
   fallback that absorbs the unknown persona.
+
+## Repaired — 2026-09-16
+
+The repair landed the same day the note was written, in commit `cf2289f`: the default layer
+ships `personas.intent-classifier` with `model: small_model` (the classifier's own first
+choice, REQ-ORCH-009) and an empty `mcp_servers` per REQ-MCP-014's row. Two regression tests
+in `packages/config/src/load.test.ts` — the entry on a bare load, and the partial override
+merging onto it and loading (the override's stated thinking synthesising the reserved model
+name, unwrapped in the assertion). Consequence 2 — the classifier resolving to null and
+silently presenting as the orchestrator persona — is NOT closed by this repair: with the
+default entry present the resolver now returns a persona for `intent-classifier`, but
+`apps/desktop/src/run-host/tools.ts`'s silent `?? BUILT_IN_PERSONAS.orchestrator` fallback
+remains for genuinely unknown names and deserves a warning. That narrower defect stays open
+against this note's file list.
+
+The user's own global `agents.yaml` carried the partial override that exposed this; it loads
+cleanly against the new default entry and needed no edit.

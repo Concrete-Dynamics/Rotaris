@@ -40,3 +40,18 @@ role path has no equivalent guard.
   `null`; unchanged (the mapping is right — the writer's interpretation was wrong).
 - `packages/contracts/src/config.ts` — `RoleEditSchema` permits `model: null`; unchanged, as
   null is now a meaningful edit carrying "unset".
+
+## Repaired — 2026-09-16
+
+The repair landed the same day the note was written, in commit `3c51c53`: `applyRoleEdit`
+treats `model: null` as the unset spelling at the edited scope and removes the key, matching
+`unsetModel` and REQ-CONFIG-041's discipline. A regression test in
+`packages/config/src/writers.test.ts` drives the exact null-model save and asserts the key's
+removal. The user's global `agents.yaml` was repaired by hand (the `model: null` line
+deleted; backup beside the file); `thinking: null` is legal and stayed.
+
+The broader pattern — three same-day instances of a strict reader meeting a written value it
+rejects (this note, the intent-classifier defect of the same day, and a stale
+`project_settings.yaml` carrying `display_name: null` rows that blocked provider sign-in) —
+is recorded here rather than raised as a request. A systematic audit of every writer against
+every reader's schema remains an option if the pattern recurs.

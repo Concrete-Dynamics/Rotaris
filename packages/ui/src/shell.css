@@ -570,8 +570,8 @@
  * at every height, which is what REQ-SHELL-048 asks of every action and REQ-ORCH-153 of these three in particular. Nothing here applies when no gate holds, so REQ-CHAT-010's 180 px floor is untouched
  * for every other run.
  */
-.workspace[data-plan-gate='1'] { grid-template-rows: auto minmax(0, auto) minmax(0, 1fr) auto auto minmax(min-content, var(--rt-composer-height, 150px)); }
-.workspace--narrow[data-plan-gate='1'] { grid-template-rows: auto auto minmax(0, auto) minmax(0, 1fr) auto auto minmax(min-content, var(--rt-composer-height, 150px)); }
+.workspace[data-plan-gate='1'] { grid-template-rows: auto minmax(0, auto) minmax(220px, 1fr) auto auto minmax(min-content, var(--rt-composer-height, 150px)); }
+.workspace--narrow[data-plan-gate='1'] { grid-template-rows: auto auto minmax(0, auto) minmax(220px, 1fr) auto auto minmax(min-content, var(--rt-composer-height, 150px)); }
 .workspace > .queue { grid-area: queue; }
 .workspace > .composer__divider { grid-area: divider; }
 .agents { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); padding: var(--rt-space-3, 12px); border-right: 1px solid var(--rt-border); background: var(--rt-chrome); overflow: auto; }
@@ -715,23 +715,38 @@
  * scrolling — REQ-SHELL-048's obligation on every action, and what REQ-SHELL-168 means by hosting the gate inside
  * the view that carries the run.
  */
-.plan-gate { display: flex; flex-direction: column; min-height: 0; overflow: auto; gap: var(--rt-space-2); margin: 0 var(--rt-space-5) var(--rt-space-3); padding: var(--rt-space-3); background: var(--rt-surface); border: var(--rt-hairline-width) solid var(--rt-border); border-left: calc(var(--rt-hairline-width) * 3) solid var(--rt-accent); border-radius: var(--rt-radius-md); }
-.plan-gate__header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--rt-space-2); }
+.plan-gate { display: flex; flex-direction: column; min-height: 0; max-height: 52vh; overflow: auto; gap: var(--rt-space-2); margin: 0 var(--rt-space-5) var(--rt-space-3); padding: var(--rt-space-3); background: var(--rt-surface); border: var(--rt-hairline-width) solid var(--rt-border); border-left: calc(var(--rt-hairline-width) * 3) solid var(--rt-accent); border-radius: var(--rt-radius-md); }
+.plan-gate__header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--rt-space-2); }
+.plan-gate__header-left { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--rt-space-3); }
+.plan-gate__view-toggle { display: flex; gap: var(--rt-space-1); }
 .plan-gate__title { margin: 0; font-size: var(--rt-text-md); font-weight: var(--rt-weight-medium); color: var(--rt-text); }
 .plan-gate__facts { display: flex; gap: var(--rt-space-3); margin: 0; font-size: var(--rt-text-xs); }
 .plan-gate__facts > div { display: flex; gap: var(--rt-space-1); }
 .plan-gate__facts dt { color: var(--rt-text-secondary); }
-.plan-gate__facts dd { margin: 0; color: var(--rt-text); }
+.plan-gate__facts dd { margin: 0; color: var(--rt-text); font-weight: var(--rt-weight-medium); }
 .plan-gate__body { margin: 0; font-size: var(--rt-text-sm); color: var(--rt-text-secondary); }
-.plan-gate__prior { margin: 0; font-size: var(--rt-text-xs); }
+.plan-gate__prior { margin: 0; font-size: var(--rt-text-xs); color: var(--rt-accent-300); }
 .plan-gate > * { flex: 0 0 auto; }
-.plan-gate__plan { flex: 1 1 0; width: 100%; min-height: 0; resize: vertical; white-space: pre; overflow-wrap: normal; overflow: auto; line-height: var(--rt-leading-body); }
-.plan-gate__todo { display: flex; flex-direction: column; gap: var(--rt-space-1); }
-.plan-gate__todo-label { font-size: var(--rt-text-xs); color: var(--rt-text-secondary); }
+.plan-gate__preview-wrap { flex: 1 1 auto; min-height: 0; max-height: calc(var(--rt-space-24) * 3); overflow: auto; padding: var(--rt-space-2) var(--rt-space-3); background: var(--rt-surface-2); border: var(--rt-hairline-width) solid var(--rt-border); border-radius: var(--rt-radius-sm); }
+.plan-gate__markdown { font-size: var(--rt-text-sm); line-height: var(--rt-leading-body); }
+.plan-gate__markdown .md__table { width: 100%; margin: var(--rt-space-1) 0; }
+.plan-gate__plan { flex: 1 1 0; width: 100%; min-height: 0; max-height: calc(var(--rt-space-24) * 3); resize: vertical; white-space: pre; overflow-wrap: normal; overflow: auto; line-height: var(--rt-leading-body); }
+.plan-gate__todo { display: flex; flex-direction: column; gap: var(--rt-space-1); padding: var(--rt-space-2); background: color-mix(in oklch, var(--rt-surface-2) 60%, transparent); border-radius: var(--rt-radius-sm); }
+.plan-gate__todo-label { font-size: var(--rt-text-xs); font-weight: var(--rt-weight-medium); color: var(--rt-text-secondary); }
 .plan-gate__todo-list { margin: 0; padding-left: var(--rt-space-4); font-size: var(--rt-text-xs); color: var(--rt-text); }
-.plan-gate__changes-label { font-size: var(--rt-text-xs); color: var(--rt-text-secondary); }
+.plan-gate__changes-details { margin-top: var(--rt-space-1); }
+.plan-gate__changes-summary { font-size: var(--rt-text-xs); font-weight: var(--rt-weight-medium); cursor: pointer; user-select: none; margin-bottom: var(--rt-space-1); list-style: none; }
+.plan-gate__changes-summary::-webkit-details-marker { display: none; }
+.plan-gate__changes-group { display: flex; flex-direction: column; gap: var(--rt-space-1); }
+.plan-gate__changes-label { font-size: var(--rt-text-xs); font-weight: var(--rt-weight-medium); color: var(--rt-text-secondary); }
 .plan-gate__changes { width: 100%; resize: vertical; }
-.plan-gate__actions { position: sticky; bottom: 0; justify-content: flex-end; padding-top: var(--rt-space-2); background: var(--rt-surface); }
+.plan-gate__actions { position: sticky; bottom: 0; justify-content: flex-end; padding-top: var(--rt-space-2); background: var(--rt-surface); border-top: var(--rt-hairline-width) solid var(--rt-divider); }
+
+/* De-emphasis of composer while plan gate holds (PD-ORCH-002) */
+.composer--locked { opacity: 0.65; filter: grayscale(20%); }
+.composer--locked .composer__input { opacity: 0.6; pointer-events: none; }
+.composer--locked .composer__hint { color: var(--rt-accent-300); font-weight: var(--rt-weight-medium); }
+
 .tag-wait { border-color: var(--rt-wait); color: var(--rt-wait); }
 .playbooks__slot { margin: var(--rt-space-3, 12px) 0 0; }
 .playbooks__variant { display: grid; grid-template-columns: 140px 1fr; gap: var(--rt-space-2, 8px); padding: var(--rt-space-1, 4px) 0; border-bottom: 1px solid var(--rt-divider); font-size: var(--rt-text-sm, 13px); }

@@ -1180,7 +1180,8 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
       {planGate && onPlanEdit && onPlanDecision && (
         <PlanGate key={planGate.cycle} gate={planGate}
           onEdit={(t) => onPlanEdit(t)}
-          onDecide={(d, c) => onPlanDecision(d, c)} />
+          onDecide={(d, c) => onPlanDecision(d, c)}
+          onOpenLink={onOpenLink} />
       )}
       <div className="transcript" role="log" aria-label="Transcript" aria-live="polite">
         {/* REQ-LIBRARY-140 (Part X): the transcript toolbar and, so far, its one control — the stash opener with its live count. */}
@@ -1250,7 +1251,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
       <div className="composer__divider" role="separator" aria-orientation="horizontal" aria-label="Resize the composer" tabIndex={0}
         aria-valuemin={COMPOSER_MIN_HEIGHT} aria-valuemax={Math.max(COMPOSER_MIN_HEIGHT, box - 188)} aria-valuenow={height} data-testid="composer-divider"
         onPointerDown={onDividerDown} onPointerMove={onDividerMove} onPointerUp={onDividerUp} onKeyDown={onDividerKey} />
-      <form className="composer" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
+      <form className={`composer${planGate ? ' composer--locked' : ''}`} onSubmit={(e) => { e.preventDefault(); void submit(); }}>
         {/*
           * Part AN — REQ-CHAT-021: the PERSISTENT notice titled "Command not run", not a transient toast. ADR-0049
           * keeps the one persistent notice in main and gives a renderer no command to publish into it, so until that

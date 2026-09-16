@@ -643,6 +643,21 @@ possible way: by the supervisor not firing at all.
 > while held, the released segment begins from an untouched record without anything having to reset it.
 > The account is in `docs/architecture/first-executions.md`.
 
+<a id="pd-orch-002"></a>
+
+### PD-ORCH-002 — the plan gate renders Markdown by default with inline editing and progressive revision feedback
+
+**The rule.** `REQ-ORCH-153`'s presentation clause — *"The plan MUST be presented verbatim as the producing role wrote it — never summarized, truncated, or re-rendered into another form"* — is narrowed: the plan awaiting a decision SHALL be presented formatted as rendered Markdown by default, using the synchronous Markdown dialect of `REQ-CHAT-056`. The user SHALL be provided an immediate toggle or mode switch to edit the source directly in a monospace editing field, preserving the edit path of `REQ-ORCH-154`.
+
+The plan gate surface SHALL deduplicate identical implied tasks produced by the run, presenting them with status indicators. The revision feedback field ("Changes to ask for") SHALL be disclosed progressively (expanding or focusing when revision is intended) rather than occupying prominent fixed vertical space by default. The workspace grid holding the plan gate SHALL preserve a readable floor for the transcript (`minmax(220px, 1fr)`) and cap the gate's maximum height, so conversation history remains visible and accessible while a decision is pending. While the gate is held, the disabled message composer SHALL be visually de-emphasized to eliminate input ambiguity.
+
+**Why.** When reviewing a plan produced in tabular Markdown syntax, verbatim monospace presentation in a fixed-height textarea forces tedious horizontal and vertical scrolling across raw pipes, obscuring the plan's substance. Simultaneously, an empty revision feedback textarea and a locked main composer present three competing text-entry surfaces on screen, while the transcript is compressed into an unreadable strip. Rendering Markdown with a quick edit-source switch gives immediate readability while preserving `REQ-ORCH-154`'s full inline editing guarantee.
+
+> **Supersedes:** REQ-ORCH-153
+> **Narrows:** REQ-ORCH-154, REQ-SHELL-168
+
+*Raised by the owner, 2026-09-16; logged as [R-030](requests.md#r-030).*
+
 <a id="pd-monitor-001"></a>
 
 ### PD-MONITOR-001 — a cost the provider reported is carried and shown under its own qualifier

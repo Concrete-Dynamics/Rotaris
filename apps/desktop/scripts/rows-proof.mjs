@@ -58,6 +58,8 @@ const G = '[data-testid="proof-groups"]';
 /** PD-CHAT-004's two surfaces: the same run drawn collapsed and drawn expanded. */
 const A = '[data-testid="proof-activity"]';
 const AO = '[data-testid="proof-activity-open"]';
+/** PD-CHAT-004 rev. 2 / PD-CHAT-005: two agents working at once, the second delegated by the first. */
+const IL = '[data-testid="proof-interleave"]';
 const PROBES = [
   'img',
   `${W} [data-testid="row-markdown"]`, `${P} [data-testid="row-markdown"]`,
@@ -80,6 +82,8 @@ const PROBES = [
   `${A} .row`, `${A} [data-testid="row-thinking"]`, `${A} .tool__preview`,
   `${AO} [data-testid="group-members"]`, `${AO} [data-testid="group-members"] .row`, `${AO} [data-testid="group-members"] .row__time`,
   `${AO} [data-testid="group-members"] .row__bar`,
+  // PD-CHAT-004 rev. 2 / PD-CHAT-005: one line per agent, the role in the persona's colour, the child indented.
+  `${IL} [data-testid="row-group"]`, `${IL} .row`, `${IL} .row__role`, `${IL} .activity__segment`,
   '[data-testid="acknowledgement"]', '[data-testid="acknowledgement-title"]',
 ].join(';;');
 
@@ -183,6 +187,10 @@ const r = launch('rows', {
     // here, from the live layout, together with the two facts that make it "one continuous rule": that the
     // members draw no bar of their own, and that they all hang from this one element.
     `(() => { const el = document.querySelector('${AO} [data-testid="group-members"]'); if (!el) return { activityRail: null }; const s = getComputedStyle(el); return { activityRail: s.borderInlineStartWidth, railColour: s.borderInlineStartColor, railPad: s.paddingInlineStart, memberBars: el.querySelectorAll('.row__bar').length, members: el.children.length }; })()@5000`,
+    // PD-CHAT-005 is a geometry and a colour, so both are read from the LIVE layout rather than asserted from
+    // the class list: the left edge of each line's grid, which the indent moves, and the ink of each role
+    // label, which must differ between the two agents and must be neither of them a status colour.
+    `(() => { const probe = document.createElement('span'); document.body.appendChild(probe); const resolve = (t) => { probe.style.color = 'var(' + t + ')'; return getComputedStyle(probe).color; }; const status = ['--rt-ok', '--rt-run', '--rt-warn', '--rt-fail'].map(resolve); probe.remove(); const lines = [...document.querySelectorAll('${IL} [data-testid="row-group"]')]; return { status, interleave: lines.map((line) => { const grid = line.querySelector('.row__grid'); const role = line.querySelector('.row__role'); return { agent: line.getAttribute('data-agent'), depth: getComputedStyle(line).getPropertyValue('--rt-row-depth').trim(), pad: getComputedStyle(grid).paddingInlineStart, left: Math.round(grid.getBoundingClientRect().left), ink: role ? getComputedStyle(role).color : null, roleLeft: role ? Math.round(role.getBoundingClientRect().left) : null, timeWidth: Math.round(line.querySelector('.row__time').getBoundingClientRect().width), timeLeft: Math.round(line.querySelector('.row__time').getBoundingClientRect().left) }; }) }; })()@5000`,
   ].join(';;'),
   ROTARIS_CAPTURE_DRAG_AT: `${W} [data-testid="row-markdown"] .md__p@5400`,
   // The acknowledgement stack is transient (REQ-NOTIFY-011: 4200 ms), so each outcome is read beside the click that
@@ -325,18 +333,21 @@ expect(activityRoles.length === 2 && activityRoles[0] === 'orchestrator' && acti
 // (c) No reasoning row survives as a row of its own inside a run — they are members of the line.
 const looseThinking = r.probes[`${A} [data-testid="row-thinking"]`] ?? [];
 expect(looseThinking.length === 0, `${looseThinking.length} reasoning rows were drawn beside the line rather than inside it`);
-// (d) The line's segments, in first-appearance order, with the same family forming a second segment.
+// (d) PD-CHAT-004 revision 2: ONE segment per activity word, carrying that word's totals, in the order the
+//     words first appear. Revision 1 read `reasoning ×1 …, reading ×2 …, reasoning ×1 …, reading ×2 …,
+//     searching ×1 …` for this same fixture — five segments for seven rows, which is the line growing with
+//     the work exactly as the appended rows it replaced did.
 const segments = text(r.probes, `${A} .activity__segment`);
 const firstLine = inspect(r.log, 5000, `${A} [data-testid="group-header"]`);
 const activitySummary = firstLine?.matches?.[0]?.attrs?.['aria-description'] ?? '';
-expect(activitySummary === 'reasoning ×1 · 16s · ~554 tok, reading ×2 · 2 ok, reasoning ×1 · 1s · ~33 tok, reading ×2 · 2 ok, searching ×1 · 1 failed',
+expect(activitySummary === 'reasoning ×2 · 17s · ~587 tok, reading ×4 · 4 ok, searching ×1 · 1 failed',
   `the line's accessible description read ${JSON.stringify(activitySummary)}`);
 expect(!activitySummary.includes('ACTIVITY-OUTPUT'), 'the activity summary carried raw tool output');
 // (e) One failed tool member colours the whole line, by REQ-CHAT-065's ordering, which PD-CHAT-004 keeps.
 const firstArticle = inspect(r.log, 5000, `${A} [data-testid="row-group"]`);
 const firstClass = firstArticle?.matches?.[0]?.attrs?.class ?? '';
 expect(firstClass.includes('tool--failed'), `the line did not take the most severe outcome's colour: ${JSON.stringify(firstClass)}`);
-expect(firstArticle?.matches?.[0]?.attrs?.['data-segments'] === '5', `the line published ${firstArticle?.matches?.[0]?.attrs?.['data-segments']} segments, not 5`);
+expect(firstArticle?.matches?.[0]?.attrs?.['data-segments'] === '3', `the line published ${firstArticle?.matches?.[0]?.attrs?.['data-segments']} segments, not 3`);
 // (f) The live run states what it is doing NOW and carries that call's text on the preview line.
 const now = text(r.probes, `${A} [data-testid="activity-now"]`);
 expect(now.length === 1 && now[0] === 'running…', `the in-flight activity word read ${JSON.stringify(now)}`);
@@ -360,6 +371,57 @@ results.activityLine = {
   summary: activitySummary, segments, severityClass: firstClass, inFlightWord: now[0] ?? null,
   railWidthPx: railWidth, railColour: rail?.railColour ?? null, membersRevealed: openMembers.length,
   memberTimestamps: memberTimes.length, memberBars: rail?.memberBars ?? null,
+};
+
+// ── PD-CHAT-004 rev. 2 / PD-CHAT-005 — two agents at once ─────────────────────────────────────────────────
+// The fixture is the owner's screenshot of 2026-09-16: ten rows of two agents' work, alternating in the
+// record, under one user prompt. Revision 1 drew five lines of two and re-stated a timestamp and a role on
+// every one of them, because a row of a different agent ended the run.
+const weaveLines = r.probes[`${IL} [data-testid="row-group"]`] ?? [];
+expect(weaveLines.length === 2, `the interleaved fixture drew ${weaveLines.length} activity lines, not 2 (one per agent)`);
+const weaveRows = text(r.probes, `${IL} .row`);
+expect(weaveRows.length === 3, `the surface drew ${weaveRows.length} rows, not 3 (the prompt and one line per agent)`);
+// Each agent's whole run is on its own line, so the words are totals rather than one segment per step.
+const weaveSegments = text(r.probes, `${IL} .activity__segment`);
+expect(weaveSegments.length === 4, `the two lines carried ${weaveSegments.length} segments, not 4 (reasoning + reading, reasoning + searching)`);
+// PD-CHAT-004 rev. 2: each agent thought twice with tool calls BETWEEN the two, and each line states that as ONE
+// reasoning segment carrying the totals. Revision 1 drew `reasoning ×1 · … · reasoning ×1`, which is the growth
+// the owner's screenshot showed. The families themselves still differ per agent, so nothing was merged across them.
+expect(weaveSegments.filter((t) => /^reasoning ×2 · /.test(t)).length === 2,
+  `the two split thinking runs were not each stated as one segment with totals: ${JSON.stringify(weaveSegments)}`);
+expect(weaveSegments.some((t) => /^reading ×3 /.test(t)) && weaveSegments.some((t) => /^searching ×3 · 2 ok · 1 running/.test(t)),
+  `the per-agent families or the in-flight word did not survive the fold: ${JSON.stringify(weaveSegments)}`);
+const weave = evalAt(r.log, 'interleave')?.interleave ?? [];
+expect(weave.length === 2, `the live layout reported ${weave.length} lines, not 2`);
+const [parentLine, childLine] = weave;
+// (a) PD-CHAT-005: the delegated agent's rows are indented one step, and the root's are not. Measured from
+//     the live boxes, so a rule that did not apply cannot pass by being declared.
+expect(parentLine.pad === '0px' || parentLine.pad === '', `the root agent's line was indented by ${parentLine.pad}`);
+expect(childLine.depth === '1', `the delegated agent's line published depth ${JSON.stringify(childLine.depth)}, not 1`);
+expect(Number.parseFloat(childLine.pad) === 16, `the delegated agent's line indented by ${childLine.pad}, not the language's 16 px step`);
+expect(childLine.roleLeft - parentLine.roleLeft === 16, `the two role labels sat ${childLine.roleLeft - parentLine.roleLeft} px apart, not one 16 px step`);
+// (b) REQ-CHAT-057's columns are UNTOUCHED by the indent — it moves the grid, it does not resize it. The
+//     movement is the directive's fourth declared cost, so it is measured rather than assumed: the child's
+//     timestamp starts one step right of the parent's, which is what makes the time gutter a stepped column.
+expect(parentLine.timeWidth === childLine.timeWidth, `the indent resized the timestamp column: ${parentLine.timeWidth} vs ${childLine.timeWidth}`);
+expect(childLine.timeLeft - parentLine.timeLeft === 16, `the timestamps stepped by ${childLine.timeLeft - parentLine.timeLeft} px, not the one step PD-CHAT-005 declares`);
+// (c) PD-CHAT-005: the role label carries the persona's own colour, and the two agents differ in it.
+expect(parentLine.ink && childLine.ink && parentLine.ink !== childLine.ink,
+  `the two agents' role labels were drawn in the same ink: ${JSON.stringify([parentLine.ink, childLine.ink])}`);
+// The ramp is categorical and none of it is a status colour — the falsified palette named the outcome tokens,
+// two of which resolve to ONE value, so a persona could read as a verdict. The status colours are resolved from
+// the running theme rather than written here, so the check cannot drift from the theme data it is about.
+const statusInks = evalAt(r.log, 'interleave')?.status ?? [];
+expect(statusInks.length === 4, `the status tokens did not resolve in the live theme: ${JSON.stringify(statusInks)}`);
+for (const ink of [parentLine.ink, childLine.ink]) {
+  expect(!statusInks.includes(ink), `a status colour was used as a persona ink: ${ink} is one of ${JSON.stringify(statusInks)}`);
+}
+results.interleave = {
+  lines: weaveLines.length, rowsDrawn: weaveRows.length, segments: weaveSegments,
+  depths: weave.map((l) => ({ agent: l.agent, depth: l.depth, pad: l.pad, ink: l.ink })),
+  roleStepPx: childLine.roleLeft - parentLine.roleLeft, timestampColumnPx: parentLine.timeWidth,
+  timestampStepPx: childLine.timeLeft - parentLine.timeLeft,
+  statusInks,
 };
 
 // REQ-CHAT-076: the two opens, both acknowledged; the `file:` reference refused by its scheme.

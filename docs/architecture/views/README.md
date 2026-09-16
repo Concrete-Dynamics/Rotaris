@@ -24,7 +24,14 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-16** — **the catalogue readers' duplicate read** (defect AO-3):
+Last reconciled with the code: **2026-09-16** — **one activity line per working agent** (`PD-CHAT-004`
+revision 2 and `PD-CHAT-005`, first executed): a run is bounded by its agent alone, so concurrent agents
+interleave two lines instead of chopping each other's into fragments; the collapsed line carries one segment
+per tool family with that family's totals; the role line takes the persona's colour and a delegated agent's
+rows indent one step per level. Only the **component view** is affected — the `ui/transcript` note says what
+`project.ts` now decides and where the depth comes from. No package, edge, message kind or store table moved.
+
+Previously reconciled, the same day: **the catalogue readers' duplicate read** (defect AO-3):
 a `prompts.roots.read` or a `skills.read` still in flight is the window's answer, so a second caller joins it
 instead of starting another; a launch had put two identical reads on the wire in the same millisecond, because
 the registrar's effect and the configuration key's both start one before either has an answer to find. Only the

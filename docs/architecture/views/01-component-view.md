@@ -166,6 +166,18 @@ counters `REQ-UIBENCH-064` fixes, distinct from the seven publication classes it
 `display-section.ts`, the reader `SECTION_KEYS` had declared and nothing stood behind; `model` gains `reasoning.ts`,
 the pure normaliser for REQ-CHAT-163's three provider shapes.
 
+**`PD-CHAT-004` revision 2 and `PD-CHAT-005` (2026-09-16) changed two decisions inside the same module and added
+no edge:** the run boundary is now the **agent alone** — `project.ts` holds one open run per agent in a map
+instead of scanning strictly consecutive rows, so two agents working at once yield two activity lines that
+interleave, each drawn at its own earliest member. That makes the incremental boundary harder than a walk
+backwards: `cleanCut` takes the earliest first-member index of any run still open at the update point, because a
+cut *inside* a run would drop members the reused prefix no longer holds and the re-projected suffix never sees
+(REQ-MONITOR-223 forbids re-projecting the whole state). `buildSegments` now accumulates **one segment per
+family** carrying that family's totals, ordered by first appearance, rather than one per switch. On the drawing
+side, `Row.tsx` takes the persona's colour for the role line and an indent by delegation depth; the depth arrives
+as `agentDepth` on `TranscriptSurface`, supplied by `WorkspaceView` from `session.agents`. Display-only: no new
+edge, no new message, nothing reaches a model.
+
 ### `mcp` (Part S, 2026-09-05)
 
 No longer a placeholder: ADR-0033's `OwnedStdioTransport` over `platform`'s one spawn helper, the client factory over

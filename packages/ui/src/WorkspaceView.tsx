@@ -999,7 +999,8 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
   const selectedAgent = useShellState((st) => st.selectedAgentId);
   const selectAgentShared = useShellState((st) => st.selectAgent);
   const select = (id: string | null, source?: 'click' | 'key') => { selectAgentShared(id); onSelectAgent?.(id, source); };
-  const agents = session?.agents ?? [];
+  // Memoised so the derivations below (REQ-CHAT-069's scope, PD-CHAT-005's depth) do not see a new array every render.
+  const agents = useMemo(() => session?.agents ?? [], [session]);
   const runLevel = useMemo(() => (entry ? runLevelAgent(session, entry) : null), [session, entry]);
   const selected = selectedAgent === RUN_AGENT_ID ? runLevel : agents.find((a) => a.id === selectedAgent) ?? null;
   /** REQ-CHAT-088: the engine has already resolved each source; scope chooses the matching published plan. */
@@ -1007,6 +1008,20 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
   // REQ-CHAT-069: "This task" keeps the run-owned kinds plus the selected agent's rows; with no agent selected it is
   // unavailable with that as its stated reason, so the transcript is never filtered to nothing.
   const shownRows = useMemo(() => (scope === 'task' && selected !== null ? scopedRows(rows, selected) : rows), [scope, selected, rows]);
+  /**
+   * PD-CHAT-005: how deep a row's agent sits in the delegation tree, which is what indents a delegated agent's
+   * rows in the transcript. The tree is the run's (REQ-MONITOR-036/037) and the record already carries the
+   * depth per agent, so this reads it rather than walking `parentId` a second time. An agent the record does
+   * not name — the run-level persona, a row written before its agent was announced — sits at depth 0.
+   */
+  const agentDepth = useMemo(() => {
+    const byName = new Map<string, number>();
+    for (const a of agents) {
+      byName.set(a.name, a.depth);
+      if (!byName.has(a.persona)) byName.set(a.persona, a.depth);
+    }
+    return (name: string, persona: string): number => byName.get(name) ?? byName.get(persona) ?? 0;
+  }, [agents]);
   // REQ-MONITOR-051: below 1180 px the agents panel and the inspector are overlay drawers, mutually exclusive; choosing an agent opens the inspector's.
   const narrow = useNarrow();
   const [drawer, setDrawer] = useState<'agents' | 'plan' | 'inspector' | null>(null);
@@ -1207,6 +1222,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
           pendingQuestions={session?.pendingQuestions ?? []}
           pendingApprovals={pending}
           questionAgent={session?.agents[0]?.name}
+          agentDepth={agentDepth}
           onPageOlder={onPageOlder}
           reachedOldest={reachedOldest}
           onFocusComposer={() => area.current?.focus()}

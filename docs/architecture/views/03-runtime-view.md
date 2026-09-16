@@ -7,6 +7,20 @@ transaction. Controls, queued prompts, steering, the supervisor and the pause re
 points. The store is written by one ordered writer per session (ADR-0008); every event is recorded before it
 is forwarded (ADR-0009/0010).
 
+| Read this section when you are | Section |
+|---|---|
+| changing what happens before the first model call | [§1 Start](#1-start) |
+| changing the run loop or an iteration boundary | [§2 The loop and one iteration](#2-the-loop-and-one-iteration) |
+| changing a model step, a tool dispatch or a hook slot | [§3 Inside a turn](#3-inside-a-turn-runturn-one-agent-conversation) |
+| touching delegation | [§4 Children](#4-children-adr-0012) |
+| adding or changing a control operation | [§5 Controls reaching in](#5-controls-reaching-in-adr-0010-1-sessionscontrol) |
+| changing teardown, or acting on a session no run holds | [§6 End](#6-end) and [§6a](#6a-the-session-browsers-actions-reaching-a-record-no-run-holds-part-u) |
+| adding a table or a column | [§7 The store the run writes](#7-the-store-the-run-writes-packagesstoresrcschemats-v18) |
+| adding a configuration key | [§8 Configuration's three tiers](#8-configurations-three-tiers-adr-0037-as-they-touch-the-run) |
+| drawing something from a publication | [§9 What a surface does with a publication](#9-what-a-surface-does-with-a-publication-adr-0046-adr-0045-part-z) |
+
+Flows this view does **not** own — startup, approval, the board — are in [`06-sequences.md`](06-sequences.md).
+
 ## 1. Start
 
 ```mermaid

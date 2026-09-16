@@ -5,6 +5,17 @@ boundary is a Zod schema in `packages/contracts/src/` — `commands.ts` (rendere
 (main → renderer, eleven named channels), `process-protocol.ts` (main ↔ run host, main ↔ workspace service,
 and the service's narrow asks back to main).
 
+| Read this section when you are | Section |
+|---|---|
+| asking which process may do a thing at all | [What each process owns](#what-each-process-owns) |
+| adding or changing a message, a command or a channel | [Message families](#message-families) |
+| reaching into a live run from outside it | [The control channel](#the-control-channel-adr-0010-1-across-the-boundaries) |
+| touching what the run host publishes internally | [The wire bus](#the-wire-bus-adr-0010-2-stays-in-the-run-host) |
+| writing, reading or relocating a file | [Files and directories on disk](#files-and-directories-on-disk) |
+
+The ordered edit path for a new command, channel or message is [`04-seams.md`](04-seams.md); who owns a fact
+once it exists is [`05-state-ownership.md`](05-state-ownership.md).
+
 ```mermaid
 flowchart LR
   subgraph rendererWin["Renderer processes (sandboxed, contextIsolation)"]

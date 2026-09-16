@@ -133,6 +133,12 @@ running it.
 package that appears, moves or changes what it owns, or an entry point named there that moves. An
 ordinary fix, or a refactor that moves nothing another agent would navigate by, changes nothing in it.
 
+`.claude/rules/` holds the invariants that bind **one subtree** — surfaces, the store, what crosses a
+boundary, inside a run, tests and proofs. Each carries `paths:` frontmatter, so it reaches context only
+when a file it names is read, which is why they are not in this file. They are repository content for the
+same reason `.claude/skills/` is; `.claude/rules/README.md` states what may be written there. A rule that
+outlives its convention is deleted, not annotated.
+
 ## Where the work happens — a temporary branch in a temporary worktree
 
 **Every change is built on a temporary branch in its own temporary worktree, and lands on `main` by a merge

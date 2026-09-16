@@ -1,10 +1,12 @@
 .proof/
-# Agent tooling is local, with one exception: the skills under `.claude/skills/` are repository content —
-# procedures the work depends on, which a fresh clone must carry. The directory itself is listed as
-# `.claude/*` rather than `.claude/`, because git will not descend into an excluded directory and a
-# negation inside one is never read.
+# Agent tooling is local, with two exceptions: the skills under `.claude/skills/` and the path-scoped
+# rules under `.claude/rules/` are repository content — procedures and invariants the work depends on,
+# which a fresh clone must carry. A rule carries `paths:` frontmatter and so costs context only when a
+# file it names is read. The directory itself is listed as `.claude/*` rather than `.claude/`, because
+# git will not descend into an excluded directory and a negation inside one is never read.
 .claude/*
 !.claude/skills/
+!.claude/rules/
 .serena/
 .tokensave/
 

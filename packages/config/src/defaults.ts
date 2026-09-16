@@ -40,10 +40,19 @@ const DEFAULT_LAYER: PlainMap = {
   // REQ-MCP-014: the servers each built-in persona carries (a list, replaced wholesale by an override — REQ-CONFIG-101), and its
   // `code_intelligence` grant: exactly the union of its tiers, the names read from the manifest (ADR-0035, Part T); no
   // `mcp_tools` entry for `browser` or `web_search` (the whole discovered surface, REQ-MCP-007).
-  personas: Object.fromEntries(BUILT_IN_ROLE_NAMES.map((role) => {
-    const tiers = BUILT_IN_PERSONA_CODE_INTELLIGENCE_TIERS[role];
-    return [role, { name: role, model: BUILT_IN_ROLE_TIERS[role], mcp_servers: [...(BUILT_IN_PERSONA_MCP_SERVERS[role] ?? [])], ...(tiers ? { mcp_tools: { [CODE_INTELLIGENCE_SERVER_NAME]: grantForTiers(tiers) } } : {}) }];
-  })),
+  personas: Object.fromEntries([
+    ...BUILT_IN_ROLE_NAMES.map((role) => {
+      const tiers = BUILT_IN_PERSONA_CODE_INTELLIGENCE_TIERS[role];
+      return [role, { name: role, model: BUILT_IN_ROLE_TIERS[role], mcp_servers: [...(BUILT_IN_PERSONA_MCP_SERVERS[role] ?? [])], ...(tiers ? { mcp_tools: { [CODE_INTELLIGENCE_SERVER_NAME]: grantForTiers(tiers) } } : {}) }];
+    }),
+    // REQ-MCP-014's `intent-classifier` row: a built-in persona outside the delegation vocabulary
+    // (REQ-ORCH-028's thirteen), carrying no servers. The classifier selects its model from the slots
+    // itself (REQ-ORCH-009) and the engine names it as a persona (`intent/classifier.ts`), so the default
+    // layer must declare it — without an entry, a partial `personas:` override for the role has nothing
+    // to merge onto and the required `name`/`model` (REQ-CONFIG-098) fail the whole load. Its model names
+    // the small slot, which is the classifier's own first choice.
+    ['intent-classifier', { name: 'intent-classifier', model: 'small_model', mcp_servers: [] }],
+  ]),
   // REQ-MCP-010 / REQ-CONFIG-181: the three shipped tool-server entries (see mcp/defaults.ts for the identities and the enabled deviation).
   mcp_servers: SHIPPED_MCP_SERVERS,
 };

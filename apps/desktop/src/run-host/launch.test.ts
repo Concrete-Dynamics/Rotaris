@@ -28,7 +28,9 @@ describe('launch configuration ownership (REQ-TRACE-470/471, REQ-SESSION-138)', 
   const file = (root: string) => join(root, '.rotaris', 'agents.yaml');
   const save = (root: string, model = 'first', mode = 'ask') => {
     mkdirSync(join(root, '.rotaris'), { recursive: true });
-    writeFileSync(file(root), `models:\n  selected:\n    provider: openai\n    model_id: ${model}\n    auth_provider: provider-one\nlarge_model: selected\nmedium_model: selected\nsmall_model: selected\nruntime:\n  permission_mode: ${mode}\n  max_iterations: 1\n  allow_unsandboxed_autonomous: false\n`);
+    mkdirSync(join(root, 'prompts'), { recursive: true });
+    writeFileSync(join(root, 'prompts', 'coding.md'), 'Resolved coding prompt.');
+    writeFileSync(file(root), `default_persona: coding-agent\nmodels:\n  selected:\n    provider: openai\n    model_id: ${model}\n    api_key: config-secret\n    auth_provider: provider-one\nlarge_model: selected\nmedium_model: selected\nsmall_model: selected\npersonas:\n  coding-agent:\n    name: Coding agent\n    model: selected\n    system_prompt_file: prompts/coding.md\nruntime:\n  permission_mode: ${mode}\n  max_iterations: 1\n  allow_unsandboxed_autonomous: false\ncompressor:\n  threshold_percentage: 71\nhooks:\n  - event: session_end\n    command: notify --token hook-secret\nmcp_servers:\n  remote:\n    type: http\n    url: https://user:url-secret@example.test/mcp\n    headers:\n      Authorization: Bearer header-secret\n`);
   };
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'rotaris-launch-'));
@@ -96,9 +98,21 @@ describe('launch configuration ownership (REQ-TRACE-470/471, REQ-SESSION-138)', 
     await Promise.all([sessions.running(asSessionId('board')), sessions.running(asSessionId('composer'))]);
     expect(dal.getSession(asSessionId('board'))?.permission_mode).toBe('autonomous');
     expect(dal.getSession(asSessionId('composer'))?.permission_mode).toBe('restricted');
-    expect(JSON.parse(dal.getLaunchAudit(asSessionId('board'))!.payload)).toMatchObject({ permission_mode: 'autonomous', config_snapshot: { runtime: { permission_mode: 'autonomous', allow_unsandboxed_autonomous: true, max_iterations: 17 } } });
+    expect(JSON.parse(dal.getLaunchAudit(asSessionId('board'))!.payload)).toMatchObject({ permission_mode: 'autonomous', config_snapshot: {
+      default_persona: 'coding-agent',
+      runtime: { permission_mode: 'autonomous', allow_unsandboxed_autonomous: true, max_iterations: 17 },
+      compressor: { threshold_percentage: 71 },
+      models: { selected: { api_key: '[redacted]' } },
+      personas: { 'coding-agent': { system_prompt_file: 'prompts/coding.md', resolved_system_prompt: 'Resolved coding prompt.' } },
+      hooks: { entries: [{ command: 'notify --token ***' }] },
+      mcp_servers: { remote: { headers: { Authorization: '[redacted]' } } },
+    } });
     expect(JSON.parse(dal.getLaunchAudit(asSessionId('composer'))!.payload)).toMatchObject({ permission_mode: 'restricted', config_snapshot: { runtime: { permission_mode: 'restricted', allow_unsandboxed_autonomous: false, max_iterations: 23 } } });
     expect(dal.getLaunchAudit(asSessionId('board'))!.payload).not.toContain('board-bearer');
+    expect(dal.getLaunchAudit(asSessionId('board'))!.payload).not.toContain('config-secret');
+    expect(dal.getLaunchAudit(asSessionId('board'))!.payload).not.toContain('hook-secret');
+    expect(dal.getLaunchAudit(asSessionId('board'))!.payload).not.toContain('header-secret');
+    expect(dal.getLaunchAudit(asSessionId('board'))!.payload).not.toContain('url-secret');
     expect(live).toEqual({ runtime: { permission_mode: 'restricted', max_iterations: 23 } });
     expect(readFileSync(file(dir), 'utf8')).toBe(saved.replace('first', 'second'));
   });

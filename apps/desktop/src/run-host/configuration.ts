@@ -3,7 +3,7 @@ import { isAbsolute, join } from 'node:path';
 import type { Clocks, Result } from '@rotaris/kernel';
 import { err, ok } from '@rotaris/kernel';
 import { resolvePreset, SANDBOX_MODE_NAMES, type HeadlessPolicy, type ModelTier, type SandboxModeName } from '@rotaris/contracts';
-import { compressionTrigger, isPlainMap, loadConfiguration, overlayLiveState, PROJECT_SETTINGS_FILE, readProjectSnapshot, renderFatal, type BuiltinLaunch, type LiveState, type LoadedConfiguration, type ModelEntry, type ProjectSnapshot } from '@rotaris/config';
+import { compressionTrigger, isPlainMap, launchConfigurationSnapshot, loadConfiguration, overlayLiveState, PROJECT_SETTINGS_FILE, readProjectSnapshot, renderFatal, type BuiltinLaunch, type LiveState, type LoadedConfiguration, type ModelEntry, type ProjectSnapshot } from '@rotaris/config';
 import { renderUnavailability, type AvailabilityVerdict, type PolicyRead } from '@rotaris/agent-tools';
 import { BUILT_IN_PERSONAS, parseLogLevel, resolveRole, RUN_CONFIG_DEFAULTS, TIER_ROLES, type CatalogueEntry, type ClassifierSlots, type McpGrantEvidence, type ModelChoice, type ModelLookup, type ModelSetup, type Persona, type PersonaResolver, type ResolvedTrigger, type RoleName, type RunSetup, type RuntimePosture, type TierRole } from '@rotaris/engine';
 import { AiSdkModelClient, DefaultAgentBackend, type AgentBackend, type ModelClient, type ModelRef, type ThinkingLevel } from '@rotaris/model';
@@ -547,6 +547,8 @@ export function prepareRun(workspaceRoot: string, attended: boolean, deps: Confi
       },
     };
     const tier = entryTierOf(cfg);
+    const resolvedSystemPrompts = Object.fromEntries(Object.keys(cfg.personas).map((role) => [role, personas.resolve(role)?.persona.systemPrompt ?? '']));
+    const configurationSnapshot = launchConfigurationSnapshot(cfg, resolvedSystemPrompts);
     // Part Q: the catalogue the same-tier rule reads, with the snapshot's per-provider picks as the discovered roles.
     const catalogue = catalogueOf(cfg, scripted, bearers, snapshotRead.ok ? snapshotRead.value : null);
     const fallbackName = cfg.slots.fallback_model;
@@ -562,6 +564,6 @@ export function prepareRun(workspaceRoot: string, attended: boolean, deps: Confi
       if (!isScripted && e.auth_provider && !bearers[e.auth_provider]) return { ok: false, reason: `provider ${e.auth_provider} is not authenticated for this run` };
       return { ok: true, key, choice: { model: ref, thinking: thinkingOf(e), ...settingsOf(e) } };
     };
-    return { cfg, model: setup, runtime, configurationSnapshot: { runtime: { ...cfg.runtime } }, retentionCap: runtime.retentionCap, personas, models, warnings, scripted: isScripted, authProviders, entryAuthProvider, tier, resilience: { catalogue, fallbackModel }, contextLimits: contextLimitsOf(cfg) };
+    return { cfg, model: setup, runtime, configurationSnapshot, retentionCap: runtime.retentionCap, personas, models, warnings, scripted: isScripted, authProviders, entryAuthProvider, tier, resilience: { catalogue, fallbackModel }, contextLimits: contextLimitsOf(cfg) };
   } });
 }

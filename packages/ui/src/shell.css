@@ -332,6 +332,7 @@
    where it fits, two rows where it does not. The primary action's alignment rule is untouched. */
 .composer__actions { display: flex; justify-content: flex-start; align-items: center; flex-wrap: wrap; min-width: 0; }
 .composer__error { font-size: var(--rt-text-xs, 12px); color: var(--rt-danger-300); }
+.composer__error--action { display: flex; align-items: center; justify-content: space-between; gap: var(--rt-space-3); flex-wrap: wrap; }
 @media (min-width: 1180px) {
   .composer__actions { flex-wrap: nowrap; }
   .composer__chips { flex: 0 1 auto; }

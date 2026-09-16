@@ -28,4 +28,5 @@ export * from './writers.js';
 export * from './tiers.js';
 export * from './preferences.js';
 export * from './snapshot.js';
+export * from './launch-snapshot.js';
 export * from './project-settings.js';

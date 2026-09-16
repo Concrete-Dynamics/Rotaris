@@ -87,8 +87,9 @@ unsandboxed opt-in together to the captured runtime. Settings files and live sta
 The configuration is loaded and validated before the credential wait; completing it builds the model
 setup and authenticated catalogue from those captured inputs. Active tool ports, preflight, checkpoints
 and supervision resolve their configuration by session identifier. A refused prompt for an active run
-returns before another configuration load. Launch audits record effective permission and the captured
-runtime section; the other configuration sections remain outside this snapshot implementation.
+returns before another configuration load. Launch audits record effective permission and the complete
+effective configuration snapshot: slots, redacted models, personas with prompt files resolved inline,
+runtime and every other typed section, plus redacted MCP server declarations.
 
 **The continuation lease (2026-09-14, REQ-PROVIDER-066).** The three run-launching continuation commands —
 `session.continue`, `session.prompt`, `session.planDecision` — re-ask main for the credential lease

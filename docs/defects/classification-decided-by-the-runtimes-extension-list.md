@@ -64,3 +64,7 @@ implement is the rest of the grammar that requirement calls "full": character cl
   diff-checked by `pnpm package`. It is simply not this domain's classification set.
 - `packages/config/src/keys.ts:27` — `project_init` declared and unread.
 - `packages/agent-tools/src/tools/search.ts` — `parseGitignore`, `ignoredBy`, `loadRules`.
+
+## Repaired — 2026-09-16
+
+Commit `fccfad0` introduced one `classifyWorkspaceRoot` path used by project initialization and the MCP setup gate. It reads the exact 23 default suffixes or normalized `project_init.source_extensions`, and delegates exclusions to the full last-match-wins gitignore matcher. `packages/config/src/init/init.test.ts` covers the exact set, case normalization, overrides, negation, `**`, character classes, escapes and trailing whitespace. Current `pnpm check`: 1,886 passed, 25 skipped.

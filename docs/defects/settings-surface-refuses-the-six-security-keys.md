@@ -46,3 +46,7 @@ before the work that will repair it starts.
   indication of `REQ-SANDBOX-118` would hang from.
 - `packages/ui/src/StartSessionDialog.tsx:45`: `NO_CONFINEMENT_DISCLOSURE`, the `REQ-SANDBOX-130`
   text the launch surface already carries and the settings surface does not.
+
+## Repaired — 2026-09-16
+
+Commit `f0f6e8d` added `SecurityPolicy.tsx` to Settings with all six controls, per-list problem labels, deny-precedence and wildcard guidance, confirmation before `allow`, availability recheck, unconditional native-Windows disclosure and unsaved-change state. Values round-trip through the shared runtime pending state and writer. Current `sandbox-proof` passed; current `pnpm check`: 1,886 passed, 25 skipped.

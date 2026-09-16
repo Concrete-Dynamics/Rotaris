@@ -55,3 +55,7 @@ not something to resolve by editing either requirement here.
 - `packages/ui/src/composer.test.ts` — the test pinning the current wording.
 - `packages/ui/src/WorkspaceView.tsx` — `projectSetupPending`, the parameter no caller
   supplied.
+
+## Repaired — 2026-09-16
+
+The requirements compose directly: REQ-CHAT-007 defines two facts; REQ-WORKSPACE-112 fixes copy that conveys both facts and adds the keyboard-path recovery. Send remains disabled with its exact tooltip and accessible description. Ctrl+Enter now raises the separate exact headline/detail and renders an `Open project setup` action wired to the same setup dialog. Current `pnpm check`: 1,886 passed, 25 skipped.

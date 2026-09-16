@@ -611,6 +611,8 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
   // REQ-CHAT-069: the transcript's scope. "This task" needs a selected agent, so it falls back to "All activity".
   const [scope, setScope] = useState<'all' | 'task'>('all');
   const [error, setError] = useState<string | null>(null);
+  /** REQ-WORKSPACE-112: a keyboard refusal carries its recovery control beside the two-sentence error. */
+  const [setupSubmitRefused, setSetupSubmitRefused] = useState(false);
   const [busy, setBusy] = useState(false);
   const [attachments, setAttachments] = useState<ImageAttachmentInput[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -879,6 +881,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
   };
   /** The ordinary submission — a queue during a run, else a start or a continue — of `value`, which is the composer's text or a prompt file's expanded body. */
   const submitPrompt = async (value: string) => {
+    setSetupSubmitRefused(false);
     /*
      * REQ-CHAT-007: refused with its reason readable, and nothing sent; the typed text is untouched.
      * Part AS — REQ-WORKSPACE-112: the KEYBOARD submit path is caught separately, with its own two
@@ -886,7 +889,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
      * so the only way to arrive here with the gate on is Ctrl+Enter, which is exactly what the
      * requirement means by "caught separately".
      */
-    if (projectSetupPending) { setText(value); setError(`${PROJECT_SETUP_SUBMIT_HEADLINE}. ${PROJECT_SETUP_SUBMIT_DETAIL}`); area.current?.focus(); return; }
+    if (projectSetupPending) { setText(value); setSetupSubmitRefused(true); setError(`${PROJECT_SETUP_SUBMIT_HEADLINE}. ${PROJECT_SETUP_SUBMIT_DETAIL}`); area.current?.focus(); return; }
     if (refusal !== null) { setText(value); setError(refusal); area.current?.focus(); return; }
     setWalk(null);
     setBusy(true);
@@ -1246,7 +1249,14 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
             <NoticeBanner notice={{ id: commandNotice.id, severity: 'warning', title: COMMAND_NOT_RUN_TITLE, message: commandNotice.message, detail: '', persistent: true, sessionId: '' } satisfies Notice} onAcknowledge={() => setCommandNotice(null)} />
           </div>
         )}
-        {error && <div className="composer__error" role="alert">{error}</div>}
+        {error && (
+          <div className={`composer__error${setupSubmitRefused ? ' composer__error--action' : ''}`} role="alert">
+            <span>{error}</span>
+            {setupSubmitRefused && projectSetupPending && onOpenProjectSetup && (
+              <DesignButton type="button" className="btn btn-secondary btn-compact" onClick={onOpenProjectSetup}>Open project setup</DesignButton>
+            )}
+          </div>
+        )}
         {status && !error && <div className="composer__hint" role="status">{status}</div>}
         {/*
           * Part AN — REQ-CHAT-027: the field, the highlighting overlay and the popup share one box. While the text is a

@@ -907,7 +907,8 @@ proof passed, and the fourth and fifth failed together on one cause.
   The first focused execution found an additional defect: `Run.start` wrote `permission_mode: default` and
   an empty configuration snapshot into every launch audit. The session record already held the effective
   permission. The audit now records that effective permission and the captured runtime section, including both
-  board grant fields. Other configuration sections in the launch snapshot remain outside this refactoring.
+  board grant fields. The 2026-09-16 defect closeout completed every effective configuration section, inline
+  resolved persona prompts and deterministic credential redaction.
   `launch.test.ts` exercises real configuration loads and session records with scripted provider responses:
   overlapping board/composer starts, reversed lease completion across workspaces, failed credential leases,
   a thrown session start, and renderer contract isolation. The snapshot assertion failed against the literal

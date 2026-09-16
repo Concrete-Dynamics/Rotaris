@@ -104,3 +104,23 @@ persisted format.** See OQ-21.
 OQ-21 is resolved toward floats; or a provider begins reporting prices in a form the decimal parser
 cannot accept without loss, which would be a `REQ-PROVIDER-151` read failure rather than a silent
 conversion.
+
+## Asked for by a run — 2026-09-16
+
+*Not a first execution: nothing here has been built. Recorded because the decision now blocks something a
+user can see, which it did not when it was written.*
+
+A full run against a priced provider (OpenRouter, session `6696f6ed`) persisted `cost = "0"` and showed
+"price not established" from start to finish. Reading back to why: `effectivePricing()` — `REQ-CONFIG-088`'s
+both-or-neither rule, correctly implemented — has **no callers**, `Aggregates` has no mutator for cost, and
+`costLabelOf` returns the `unknown` qualifier unconditionally. `REQ-MONITOR-166`'s `configured` qualifier has
+no producer anywhere in the product.
+
+So the question this decision is blocked on is no longer only about a persisted format. Until OQ-21 answers,
+**a user who configures both per-token prices gets the same zero as a user who configures neither**, and the
+product cannot say the rates were ignored, because no surface has a way to say it.
+
+The gap is recorded as an open defect note (`docs/defects/configured-per-token-prices-take-no-effect.md`) and
+not built around, which is what consequence 1 above rules for exactly this case. The two routes that are not
+covered at all — a price read from any provider's discovery payload, and a provider-reported per-request cost
+with no qualifier in `REQ-MONITOR-166`'s closed set — are **OQ-62**, raised the same day.

@@ -24,7 +24,15 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-16** — **the MCP child's stderr, measured after its repair**:
+Last reconciled with the code: **2026-09-16** — **no loop supervision while the plan gate holds**
+(`PD-ORCH-001`, minted this day): a held run has its write and execute tools withheld, so it greps and reads,
+which is REQ-ORCH-101's repetition trigger read literally — and the corrective goes in as an unmarked user
+message, so the run reconciles an instruction no user gave while it waits for the user's decision. `Run` now
+attaches no supervisor for the turn the hold covers, and attaches one again on the first turn after the gate
+resolves. Only the **runtime view** is affected — the plan-gate paragraph and the turn's step order say where
+the supervisor is and is not. No package, edge, message kind or store table moved.
+
+Previously reconciled, the same day: **the MCP child's stderr, measured after its repair**:
 a child server's stderr does reach the log at `debug` and never at `info` (141 lines against 0 in one
 driven launch), and `debug` is a label rather than a filter, because the application log reads no level
 at all — raised as OQ-63. Only the **process view** is affected — the MCP-child paragraph says what the

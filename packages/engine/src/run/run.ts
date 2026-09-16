@@ -800,7 +800,12 @@ export class Run {
       // so a skill force-loaded since the last turn reaches this agent (REQ-CONFIG-166).
       systemPrompt: withContextUnits(withPlaybook(config.systemPrompt, this.preflight?.playbookFor(config.persona) ?? ''), this.deps.contextUnits?.() ?? []), model: this.entryOverride.model ?? config.model, thinking: this.entryOverride.thinking ?? config.thinking, modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries,
       credentialFor: config.credentialFor, maxStepsPerTurn: config.maxStepsPerTurn, warn: this.deps.warn, dispatched: this.dispatched,
-      ...(this.deps.supervisorFor ? { supervisor: this.deps.supervisorFor(this.rootId) } : {}),
+      // PD-ORCH-001: no supervision while the plan gate holds the run. The hold withholds every writing tool,
+      // so the only work left is reading the same region repeatedly — REQ-ORCH-101's first trigger, fired by the
+      // gate's own side effect — and the corrective message goes in as the user, to a run that is waiting for
+      // the user. Read here rather than captured once because `turnFn` is built once per segment and called per
+      // turn; the hold itself is settled once and never cleared in place (REQ-ORCH-153), so the two agree.
+      ...(this.deps.supervisorFor && !this.planHeld ? { supervisor: this.deps.supervisorFor(this.rootId) } : {}),
       steering: this.steeringFor('root'), shouldPause: () => this.pauseRequested,
       resilience: this.rootResilience(),
       // Part AH: the entry agent compresses against its own model's capacity, carrying the run-level plan.

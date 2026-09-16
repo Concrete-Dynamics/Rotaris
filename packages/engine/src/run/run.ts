@@ -9,6 +9,7 @@ import { Aggregates } from './aggregates.js';
 import { classifyStop, statusForResult, stopCondition, summarise, type StopReason, type TerminalResult } from './stop-conditions.js';
 import { StopRequest } from './stop-request.js';
 import { Todo, type TodoDocument } from './todo.js';
+import { planRequestSection } from './plan-text.js';
 import { runTurn, type ToolPort } from './turn.js';
 import { IterationChildren } from '../children/orchestration.js';
 import type { DelegationOps } from '../children/delegation.js';
@@ -734,7 +735,7 @@ export class Run {
    * (REQ-ORCH-153's owner ruling), so it numbers itself 0 and leaves `root:1` upwards to the execution segment —
    * `isEntryPort` reads `root:0` as the entry by depth and by spelling alike.
    */
-  private async turn(task: string, iterationOverride?: number): Promise<TurnReport> {
+  private async turn(task: string, iterationOverride?: number, contentOverride?: readonly ContentPart[]): Promise<TurnReport> {
     const { writer, owner, backend, config } = this.deps;
     const iteration = iterationOverride ?? this.iterationsCompleted + 1;
     this.rootIterationId = `root:${iteration}`;
@@ -787,7 +788,7 @@ export class Run {
     let initial = true;
     const compression = this.compressionFor(this.rootResilience().cell.model, () => this.plannerTodoLines());
     const turnFn = (text: string, history: readonly ChatMessage[]) => {
-      const content = initial ? this.deps.taskContent : undefined;
+      const content = initial ? (contentOverride ?? this.deps.taskContent) : undefined;
       const initialCall = initial;
       initial = false;
       return runTurn({
@@ -1024,7 +1025,20 @@ export class Run {
     const intent = (this.preflight?.intent ?? NO_PREFLIGHT_INTENT).category;
     let plan = '';
     try {
-      const report = await this.turn(this.deps.task, 0);
+      /*
+       * REQ-ORCH-153: "the run MUST produce a plan". The producing role is TOLD that here, and nowhere else —
+       * the turn below is the only one a held run takes, and on the first cycle its task is the user's own
+       * prompt, which asks for the work rather than for a plan. The preamble reaches the model through the
+       * content parts as well as the task string, because an initial turn built from `taskContent` (a prompt
+       * with attachments — always, since `Sessions.start` builds one) never reads the task string at all.
+       * The root execution record carries what the model was given (REQ-ORCH-072), which is why both are wrapped.
+       */
+      const preamble = planRequestSection();
+      const content: readonly ContentPart[] = [
+        { kind: 'text', text: preamble },
+        ...(this.deps.taskContent ?? [{ kind: 'text' as const, text: this.deps.task }]),
+      ];
+      const report = await this.turn(`${preamble}\n\n${this.deps.task}`, 0, content);
       plan = report.status === 'failed' ? '' : report.text.trim();
       if (report.status === 'failed') this.lastFailure = describe(report.error);
     } catch (cause) {

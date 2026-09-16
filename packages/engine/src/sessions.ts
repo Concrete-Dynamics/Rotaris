@@ -9,6 +9,8 @@ import { SessionWriter, toTranscriptRow, type CheckpointRecordInput, type Commit
 import type { CheckpointPort, CheckpointPortContext } from './checkpoint-port.js';
 import { EventBus } from './run/event-bus.js';
 import { parseTokenSamples, Run, type ModelLookup, type PermissionPosture, type RunConfig, type RunResult } from './run/run.js';
+import { planSection } from './run/plan-text.js';
+export { planRequestSection, planSection } from './run/plan-text.js';
 import { ResilienceMemory, type CatalogueEntry, type ModelChoice } from './run/resilience.js';
 import type { ResolvedTrigger } from './run/compression.js';
 import { SessionLog, type LogLevel } from './session-log.js';
@@ -392,22 +394,6 @@ export function buildContinuationPayload(dal: StoreDal, row: SessionRow, prompt:
   ].join('\n');
 }
 
-/**
- * REQ-ORCH-154: what the next segment is told about the plan it inherits. On **approve** it is the plan the run
- * carries out, carried whole and unedited by the product (the user's own text where they edited it). On **revise**
- * it is "the plan as it currently stands together with the changes the user stated" — both, and in that order, so
- * the producing role revises rather than starts again.
- */
-export function planSection(decision: PlanDecision, plan: string, changes: string): string {
-  if (decision === 'approve') {
-    return ['The user approved this plan. Carry it out; every tool the plan gate withheld is now available.', '', 'Approved plan:', plan].join('\n');
-  }
-  return [
-    'The user asked for a revision of this plan. Produce a fresh plan that answers what they said; do not begin the work.',
-    '', 'The plan as it currently stands:', plan,
-    '', 'The changes the user stated:', changes.trim() === '' ? '(the user stated no specific changes)' : changes,
-  ].join('\n');
-}
 
 /** REQ-MONITOR-171: the run's duration as `m:ss` / `h:mm:ss`; empty before any run. */
 export function durationLabel(startedAt: string | null, until: string): string {

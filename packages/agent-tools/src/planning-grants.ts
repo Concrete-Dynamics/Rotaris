@@ -17,7 +17,14 @@ export function withheldUnderPlanGate(name: string): boolean {
   return withholdsOn(name, 'writesWorkspaceFiles') || withholdsOn(name, 'runsCommands');
 }
 
-/** The refusal the model reads when a withheld call is dispatched anyway (REQ-TOOLS-013's shape, this gate's reason). */
+/**
+ * The refusal the model reads when a withheld call is dispatched anyway (REQ-TOOLS-013's shape, this gate's reason).
+ *
+ * The remedy names the act, not the state. It read "Finish the plan" until 2026-09-16, which a role that had
+ * already written one could only read as an instruction to keep going: the run that found this spent its hold
+ * re-trying withheld calls and then asking for approval with `ask_questions`, a tool no plan gate reads. What
+ * ends the hold is a message — the turn's last one — and then a decision the user takes in the product.
+ */
 export function planGateRefusal(name: string): string {
-  return `The '${name}' call was refused: this run is held at the plan gate, so every tool that writes workspace files or runs commands is withheld until the plan is approved (REQ-ORCH-153). Finish the plan; the user's approval releases these tools for the rest of the run.`;
+  return `The '${name}' call was refused: this run is held at the plan gate, so every tool that writes workspace files or runs commands is withheld until the plan is approved (REQ-ORCH-153). Write the plan as the final message of this turn and stop; the product presents it to the user, and their approval releases these tools for the rest of the run.`;
 }

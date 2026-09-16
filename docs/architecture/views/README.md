@@ -24,7 +24,16 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-15** — **project initialization** (ADR-0064, first executed): the
+Last reconciled with the code: **2026-09-16** — **the plan gate's three repairs** (REQ-ORCH-153,
+REQ-ORCH-082, REQ-TOOLS-032): the held segment's one turn now carries `planRequestSection` on both the task
+string and the initial content parts, so the producing role is told a plan is what is wanted; the dispatch
+check refuses a name that IS a tool and lets a name that is no tool reach the unknown-tool answer, for which
+`createToolPort` hands the gate the set of names it removed at the gate; and a cancel taken at the gate writes
+REQ-ORCH-082's first arm in the same durable act that resolves the cycle. Only the **runtime view** is
+affected — no package, edge, process, message kind, command or store table moved, and the new module sits
+inside `engine`'s existing `run/` directory. Three defect notes, each archived on landing.
+
+Previously reconciled: **2026-09-15** — **project initialization** (ADR-0064, first executed): the
 task registry, the persisted marker and the five set derivations in `config/src/init/`, the coordinator in
 **main** because the marker's one writer is the workspace service and the one shipped task's work is the run
 host's and neither may import the other, `initialization.*`'s five commands and the run host's new

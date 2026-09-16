@@ -139,7 +139,7 @@ export class IterationChildren implements DelegationOps {
     if (gate?.held() === true) {
       const withheld = (persona?.tools ?? []).filter((t) => gate.withholds(t));
       if (withheld.length > 0) {
-        return { status: 'rejected', canonicalName: req.taskName, message: `The '${req.persona}' role was not started: this run is held at the plan gate, and that role holds ${withheld.join(', ')} — tools that write workspace files or run commands (REQ-ORCH-153). Delegate to a role that only reads, or finish the plan and let the user's approval release execution.` };
+        return { status: 'rejected', canonicalName: req.taskName, message: `The '${req.persona}' role was not started: this run is held at the plan gate, and that role holds ${withheld.join(', ')} — tools that write workspace files or run commands (REQ-ORCH-153). Delegate to a role that only reads, or write the plan as the final message of this turn and let the user's approval release execution.` };
       }
     }
     const r = this.ledger.spawn({

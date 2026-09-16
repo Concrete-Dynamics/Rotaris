@@ -90,6 +90,28 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     expect(dal.eventsOfKind(sid, 'iteration.start')).toEqual([]);
   });
 
+  it('the producing role is told what a plan cycle is: the task carries the request, and so does the content', async () => {
+    /*
+     * REQ-ORCH-153, found by building: the held run takes ONE turn, and on the first cycle its task is the
+     * user's own prompt. Nothing in it said a plan was what was wanted, that the final message IS the plan, or
+     * that approval is taken in the product — so the role tried to do the work, collected refusals and asked
+     * for approval with a question tool. The preamble has to reach the model through the CONTENT parts, which
+     * are what an initial turn actually sends (`Sessions.start` always builds them).
+     */
+    const s = scripted([answer('a plan')]);
+    const sessions = sessionsWith(s.backend);
+    const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    const first = s.client.requests[0]!;
+    const sent = first.messages.flatMap((m) => [...m.content] as { kind: string; text?: string }[]).map((c) => (c.kind === 'text' ? c.text ?? '' : '')).join('\n');
+    expect(sent).toContain('held at the plan gate');
+    expect(sent).toContain('Write the plan as the final message of this turn');
+    expect(sent).toContain('Do not ask for approval in the conversation');
+    // The user's own prompt still reaches the model, after the request and unaltered.
+    expect(sent).toContain('change the thing');
+    expect(sent.indexOf('held at the plan gate')).toBeLessThan(sent.indexOf('change the thing'));
+  });
+
   it('the answer group is never held (REQ-ORCH-021): a question runs straight through in plan mode', async () => {
     const sessions = sessionsWith(scripted([answer('42.')]).backend, { mode: 'plan', intent: 'question' });
     const sid = (sessions.start(dal, 'C:/ws', 'what is it?') as { value: SessionId }).value;
@@ -165,6 +187,15 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     expect(row.plan_cycle).toBeNull();
     expect(row.plan_released).toBe(0);
     expect(dal.planCycle(sid, 1)).toMatchObject({ decision: 'cancel' });
+    /*
+     * REQ-ORCH-082, rule 1: a cancel at the gate is a run that came to rest because a person stopped it, and it
+     * is summarised by the one definition the product has. Before this, the three summary columns were written
+     * only by `Run.teardown`, which a cancel at the gate never reaches — so the session read back with a NULL
+     * outcome and no reader could say why it stopped.
+     */
+    expect(row.summary_status).toBe('paused');
+    expect(row.summary_severity).toBe('warning');
+    expect(row.summary_text).toBe('The run came to rest because a person stopped it.');
   });
 
   it('a fresh user prompt is the next run, which the mode governs again (REQ-ORCH-154)', async () => {

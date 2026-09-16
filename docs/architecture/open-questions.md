@@ -33,7 +33,9 @@ session on one workspace ordinary) **and OQ-59** (a chooser restricted to a file
 no platform dialog offers). **Three escalations were raised in the same pass** — **ESC-37** (per-prompt
 attachment against a session-long force-loaded block), **ESC-38** (the Skills table's five columns
 against its seven) and **ESC-39** (a taken command name skipped against suffixed) — each stating the
-reading the build proceeds under, all three in `owner-decisions.md`. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+reading the build proceeds under, all three in `owner-decisions.md`. **One more was raised on 2026-09-16
+by repairing the plan gate: OQ-60** (what summary a session carries when the run that owned it died
+without a teardown, which REQ-ORCH-082's five stop-reason arms cannot select). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -2563,6 +2565,29 @@ still produced by the path resolver.
 **What the ruling decides.** Whether REQ-WORKSPACE-151 is amended to name a file chooser (what is
 built), or whether the action becomes two — "Load skill file…" and "Load skill folder…" — which is the
 only way to offer both on every platform and adds a header action the requirement does not state.
+
+**OQ-60 — What summary does a session carry when the run that owned it died without a teardown?** *(REQ-ORCH-082 with REQ-SESSION-060/062 and REQ-SESSION-093; raised 2026-09-16 while repairing the plan gate's cancel path.)*
+
+`REQ-ORCH-082` is "the single definition of end-of-run summarization for the whole product", and all
+five of its arms are selected by a **stop reason**. A run whose host process died recorded none: the
+session is corrected by `Sessions.repairOne` under REQ-SESSION-060/062, which fixes exactly what that
+correction writes — its type, severity, actor, message and metadata keys — and says nothing about the
+three summary columns. So a recovered session reads back with `summary_text` NULL, and three readers
+show the absence: the session record presents no summary at all, `summary.md` omits its Outcome block,
+and the agents view's activity line is empty.
+
+**What the build proceeds under.** Nothing: the repair path leaves the columns as it found them, which
+is what it has always done. The sibling case that *is* decidable was fixed in the same pass — a cancel
+taken at the plan gate comes to rest through `resolvePlanGate` rather than through the run's teardown,
+and it records a stop reason of `user_cancelled`, so REQ-ORCH-082's first arm selects itself and is now
+written there.
+
+**What a ruling decides.** Whether REQ-ORCH-082 gains a sixth arm for a run that ended without ending
+(and therefore whether an interruption is an outcome the product summarises at all), or whether
+REQ-SESSION-062's correction entry is the whole of what a recovered session says about itself, in which
+case the three NULL columns are correct and the readers should present that entry instead. The build
+must not choose: a second place deciding a summary would contradict REQ-ORCH-082's own claim to be the
+only one.
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

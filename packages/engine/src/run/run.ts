@@ -238,8 +238,10 @@ export interface RunResult {
   readonly persistence?: { readonly confirmed: false; readonly last_event_ordinal: number };
 }
 
-/** ADR-0014 rule 1: the one 30 s allowance, shared by the cancellation grace and the force-exit backstop. */
-export const STOP_GRACE: Millis = millis(30_000);
+/** ADR-0014 rule 1: the one 30 s allowance. Declared in `grace.ts` and re-exported here, where its two
+ * oldest readers look for it; `grace.ts` says why it may not be declared in this file. */
+export { STOP_GRACE } from './grace.js';
+import { STOP_GRACE } from './grace.js';
 
 export class Run {
   readonly stop = new StopRequest();

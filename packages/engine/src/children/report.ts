@@ -165,12 +165,32 @@ export function editedFilesFrom(messages: readonly ChatMessage[], reported: read
   return out;
 }
 
+/**
+ * The last line of defence, and it used to give a parent almost nothing: a child that had made ninety-six
+ * tool calls and then timed out reported the words `Tools used: …` and an empty findings list, so the
+ * parent's only reading was that the work had not happened and its next act was to delegate it again.
+ * What the child DID is derivable from the transcript without a model — `editedFilesFrom` and
+ * `commandsFrom` below already derive two thirds of it — so the fallback now states why the report is a
+ * fallback, what ended the child, and what it touched. Nothing here is fixed by a requirement; the
+ * fields it fills are REQ-ORCH-108's, and it fills them from evidence rather than leaving them blank.
+ */
 export function fallbackReport(input: ReportInput, why: string): ChildReport {
-  const summary = input.lastText ? cut(input.lastText, SUMMARY_CAP) : `Tools used: ${input.toolsUsed.join(', ') || '(none)'}`;
+  const edited = editedFilesFrom(input.messages);
+  const ran = commandsFrom(input.messages);
+  const ended = (input.errors ?? []).map((e) => e.message).join('; ');
+  const derived = [
+    ended ? `Ended: ${ended}.` : '',
+    `${input.toolCallCount} tool call(s); tools used: ${input.toolsUsed.join(', ') || '(none)'}.`,
+    edited.length > 0 ? `Files touched: ${edited.join(', ')}.` : '',
+    ran.length > 0 ? `Commands run: ${ran.length}.` : '',
+    `No summary was produced (${why}).`,
+  ].filter((s) => s !== '').join(' ');
+  const summary = input.lastText ? cut(input.lastText, SUMMARY_CAP) : cut(derived, SUMMARY_CAP);
+  const key_findings = input.lastText ? [] : [derived];
   return {
-    agent_name: input.agentName, role: input.role, status: input.status, summary, key_findings: [],
+    agent_name: input.agentName, role: input.role, status: input.status, summary, key_findings,
     last_response: input.lastText, final_response: input.finalTextIsFinal ? input.lastText : '',
-    edited_files: editedFilesFrom(input.messages), commands: commandsFrom(input.messages),
+    edited_files: edited, commands: ran,
     errors: [...(input.errors ?? []), { type: 'summary_failure', message: why }], next_actions: [], tags: [],
   };
 }

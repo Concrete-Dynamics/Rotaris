@@ -248,8 +248,12 @@ export const SessionRecordSchema = z.object({
   planGate: PlanGateSchema.nullable(),
   /** REQ-MONITOR-166: the token history the run sampled — [at, cumulative total], oldest first, at most 120 (named without the word the secret test forbids). */
   usageHistory: z.array(z.tuple([z.string(), z.number().int().nonnegative()])),
-  /** REQ-MONITOR-166: the pre-rendered cost label with its qualifier, so no view invents one. */
-  costLabel: z.object({ text: z.string(), qualifier: z.enum(['unknown', 'incomplete', 'configured']) }),
+  /**
+   * REQ-MONITOR-166: the pre-rendered cost label with its qualifier, so no view invents one. The fourth
+   * qualifier is PD-MONITOR-001's: a figure the PROVIDER computed and reported, which is none of the
+   * first three — it rests on no configured rate, and it is neither unknown nor partial.
+   */
+  costLabel: z.object({ text: z.string(), qualifier: z.enum(['unknown', 'incomplete', 'configured', 'reported']) }),
   /** REQ-MONITOR-167: the session-wide tool-call total, the agents it spans, and per-tool counts most-called first. */
   toolCalls: z.object({ total: z.number().int().nonnegative(), agents: z.number().int().nonnegative(), byTool: z.array(z.object({ tool: z.string(), count: z.number().int().nonnegative() })) }),
   /** REQ-GIT-122/161: the session's worktree branch (from its binding, REQ-GIT-015) for the status strip; null without a binding. */

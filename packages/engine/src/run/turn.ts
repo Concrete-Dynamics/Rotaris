@@ -3,7 +3,7 @@ import { millis, toIsoUtc, type Clocks, type TimerHandle } from '@rotaris/kernel
 /** REQ-CHAT-164: ten seconds of provider silence on a call in flight. */
 const STALL_AFTER = millis(10_000);
 import { terminalRowStreamId, type ApprovalOption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt } from '@rotaris/contracts';
-import type { AgentBackend, ChatMessage, ContentPart, ModelRef, ThinkingLevel, ToolSpec, TurnReport } from '@rotaris/model';
+import type { AgentBackend, ChatMessage, ContentPart, ModelRef, ThinkingLevel, ToolSpec, TurnReport, Usage } from '@rotaris/model';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { SessionWriter } from '../session-writer.js';
 import type { LoopSupervisor, SupervisorEscalation } from './supervisor.js';
@@ -121,7 +121,7 @@ export interface TurnDeps {
    * cumulative figures takes them from here rather than from `TurnOutcome.report.usage`, which carries only what
    * one turn's surviving attempts spent.
    */
-  readonly onRequestUsage?: ((usage: { readonly input: number; readonly output: number }) => void) | undefined;
+  readonly onRequestUsage?: ((usage: Usage) => void) | undefined;
 }
 
 export interface SteeringPrompt {
@@ -168,7 +168,7 @@ export async function runTurn(deps: TurnDeps, task: string, history: readonly Ch
    * cumulative figures both come from here, so a request the ladder retried past is counted exactly once rather
    * than dropped with the report it belonged to.
    */
-  const observeRequestUsage = (u: { readonly input: number; readonly output: number }): void => {
+  const observeRequestUsage = (u: Usage): void => {
     usage = { input: usage.input + u.input, output: usage.output + u.output };
     deps.onRequestUsage?.(u);
   };
@@ -343,7 +343,7 @@ async function step(deps: TurnDeps, choice: ModelChoice, messages: readonly Chat
    * REQ-CHAT-062's settled form carries FINAL figures, so the settle stamps `durationMs` — the wall span from the
    * row's `startedAt` to this settle, on the clock port. Without the stamp the renderer's settled branch falls
    * through to `nowMs - startedAt` against its once-a-second tick and the seconds keep rising after the row is
-   * finished (docs/defects/settled-reasoning-row-counts-forever.md).
+   * finished (a defect note, removed once repaired).
    */
   const settleReasoning = (): void => {
     if (reasoningIndex === null) return;

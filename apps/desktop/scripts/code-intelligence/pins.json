@@ -9,6 +9,10 @@
       "win32-x64": {
         "file": "uv-x86_64-pc-windows-msvc.zip",
         "sha256": "4c4d49d8738847d9b71ba319e49a5688c93eac0fe6204b1df24e98528dddf39a"
+      },
+      "linux-x64": {
+        "file": "uv-x86_64-unknown-linux-gnu.tar.gz",
+        "sha256": "68a509da24b06b4223a1c0175fb5eb5bc79342b76cbeff0cfe51ac3f5b17b6b2"
       }
     }
   },

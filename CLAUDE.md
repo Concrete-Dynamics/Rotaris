@@ -52,7 +52,8 @@ contradicts (or none), and the relevant files. Record it whether or not it is in
 Recording is not repairing and not classifying. Writing the note does not authorize the fix, and it does
 not substitute for the paths above: a **defect found by building** still owes its amendment round and its
 row in `docs/architecture/first-executions.md`, and a change the owner asks for is still classified in
-`docs/product/requests.md` before code.
+`docs/product/requests.md` before code. When a noted defect is repaired, move its note to `docs/defects/fixed/`
+rather than deleting it.
 
 ## Process state
 
@@ -112,9 +113,13 @@ Steps, merge-conflict shapes, and the LF line-ending rule live in
 
 `docs/architecture/views/` holds the system as built: **component** (packages, allowed edges),
 **process** (processes, messages, files on disk), **runtime** (run flow, controls, store,
-configuration). Two obligations bind every change:
+configuration), **seams** (the ordered edit path for a command, a channel, a store column, a tool,
+a configuration key, a notice, a preference, a surface), **state ownership** (which process owns a
+fact and who may write it) and **sequences** (launch, an approval, the board). Two obligations bind
+every change:
 
-- **Consult before modifying code** — read the view that covers the area.
+- **Consult before modifying code** — read the view that covers the area; the router at the top of
+  `views/README.md` chooses it, and each view carries its own section index.
 - **Maintain after modifying code** — update the affected view **in the same commit**, plus the
   "last reconciled" date in `docs/architecture/views/README.md`. A view that disagrees with the
   code is a defect of the change that made it so.

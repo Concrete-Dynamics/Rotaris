@@ -136,9 +136,17 @@ let skillsReader: (() => Promise<SkillsState>) | null = null;
  * again. Binding a reader is what says the window or its workspace changed, and is therefore what clears it.
  */
 let lastSkills: SkillsState | null = null;
+/**
+ * Defect AO-3's shape, applied here for the same reason: THREE effects start a read while a window settles — the
+ * registrar's, when nothing is cached, the configuration key's, and the rescan counter's — and none can see the
+ * others. Before the first answer there is nothing to find, so each reads. The comment below used to claim a read in
+ * flight was already this window's answer; it was not, because the read was never handed back. It is now.
+ */
+let skillsInFlight: Promise<SkillsState> | null = null;
 export function bindSkillsReader(reader: (() => Promise<SkillsState>) | null): void {
   skillsReader = reader;
   lastSkills = null;
+  skillsInFlight = null;
 }
 export function cachedSkills(): SkillsState | null {
   return lastSkills;
@@ -147,7 +155,11 @@ export function readSkills(): Promise<SkillsState> | null {
   if (skillsReader === null) return null;
   // Cached HERE, not by the caller: a read still in flight when the registrar is rebuilt is this window's
   // answer all the same, and the rebuilt registrar takes it rather than asking the run host again.
-  return skillsReader().then((state) => { lastSkills = state; return state; });
+  if (skillsInFlight !== null) return skillsInFlight;
+  const answered = skillsReader().then((state) => { lastSkills = state; return state; });
+  const p: Promise<SkillsState> = answered.finally(() => { if (skillsInFlight === p) skillsInFlight = null; });
+  skillsInFlight = p;
+  return p;
 }
 
 /**

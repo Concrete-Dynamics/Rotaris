@@ -81,3 +81,4 @@ apps/desktop/.cache/
 # the token proxy's local history database — a tool artifact, never repository content
 rtk/
 .workspace-proof/
+.rotaris/

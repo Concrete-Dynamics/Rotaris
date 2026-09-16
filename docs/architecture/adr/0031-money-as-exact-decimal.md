@@ -104,3 +104,53 @@ persisted format.** See OQ-21.
 OQ-21 is resolved toward floats; or a provider begins reporting prices in a form the decimal parser
 cannot accept without loss, which would be a `REQ-PROVIDER-151` read failure rather than a silent
 conversion.
+
+## Asked for by a run — 2026-09-16
+
+*Not a first execution: nothing here has been built. Recorded because the decision now blocks something a
+user can see, which it did not when it was written.*
+
+A full run against a priced provider (OpenRouter, session `6696f6ed`) persisted `cost = "0"` and showed
+"price not established" from start to finish. Reading back to why: `effectivePricing()` — `REQ-CONFIG-088`'s
+both-or-neither rule, correctly implemented — has **no callers**, `Aggregates` has no mutator for cost, and
+`costLabelOf` returns the `unknown` qualifier unconditionally. `REQ-MONITOR-166`'s `configured` qualifier has
+no producer anywhere in the product.
+
+So the question this decision is blocked on is no longer only about a persisted format. Until OQ-21 answers,
+**a user who configures both per-token prices gets the same zero as a user who configures neither**, and the
+product cannot say the rates were ignored, because no surface has a way to say it.
+
+The gap is recorded as an open defect note (`docs/defects/configured-per-token-prices-take-no-effect.md`) and
+not built around, which is what consequence 1 above rules for exactly this case. The two routes that are not
+covered at all — a price read from any provider's discovery payload, and a provider-reported per-request cost
+with no qualifier in `REQ-MONITOR-166`'s closed set — are **OQ-62**, raised the same day.
+
+## Part of it was built without it — 2026-09-16 (`PD-MONITOR-001`)
+
+*The first execution of this decision's arithmetic, and not of this decision. Reported in place, as the
+standing policy requires, including what it did not settle.*
+
+The owner ruled one branch of OQ-62 the same day: a cost the **provider** computed is carried and shown
+under a fourth qualifier (`PD-MONITOR-001`). Carrying it needs addition and never multiplication, so it is
+buildable while OQ-21 is open — nothing has to decide what a price *is* to add two amounts a provider
+stated. What was built is `packages/engine/src/money.ts`: decimal strings parsed to a scaled `bigint`,
+added at the wider of the two scales with no scale fixed in advance, and rendered by `REQ-PROVIDER-121`'s
+rule for an amount — half-up, two places, four below one hundredth.
+
+**What that does and does not settle for this decision.**
+
+- **The representation question is untouched.** No library is chosen, no spike is discharged, and nothing
+  is persisted in a new format: the `cost` column and `usage.update`'s `cost.total` were already decimal
+  strings, which is this decision's own persistence clause and the reason the figure fits at all.
+- **Alternative C's objection is respected rather than reopened.** The scale is the operands', never a
+  scale picked in advance, so a provider reporting more places than expected loses none — which is why
+  fixed minor units were refused.
+- **The lint rule is still owed, and the risk it names is now real.** There is a money path in the product
+  and no rule guarding it. Consequence 2 stands; `money.ts` is the one place arithmetic on an amount may
+  live until the branded type exists, and it does no multiplication at all.
+- **The float typing is untouched.** Consequence 1 still rules the three routes through a rate, which stay
+  unbuilt and still read `"0"` under the `unknown` qualifier.
+
+One reading in the section above is falsified by the build and kept beside its replacement: *"`Aggregates`
+has no mutator for cost"*. It has one — `addCost` — reached only by a figure a provider reported. The
+sentence was true of every route this decision was blocking and was never true of the route it was not.

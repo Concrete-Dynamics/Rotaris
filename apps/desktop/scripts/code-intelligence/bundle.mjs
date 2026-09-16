@@ -27,7 +27,7 @@
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -46,10 +46,11 @@ const t0 = Date.now();
 
 /** What is removed from the interpreter tree: nothing the runtime imports, everything a developer's install carries for building against Python. */
 const TRIM = [
-  'Scripts',            // console-script launchers — each embeds the absolute path it was built at, so none could work after the move
+  'Scripts',            // console-script launchers on Windows
   'include', 'libs',    // C headers and import libraries: building extensions, not running them
   'Lib/test', 'Lib/idlelib', 'Lib/turtledemo',
   'Lib/site-packages/PyWin32.chm',
+  'share/man', 'share/doc', // unix documentation
 ];
 
 function log(m) { process.stdout.write(`[code-intel:bundle] ${m}\n`); }
@@ -72,6 +73,32 @@ function sizeOf(dir) {
 }
 const python = () => join(RUNTIME, process.platform === 'win32' ? 'python.exe' : 'bin/python3');
 
+function findSitePackages(root) {
+  const win = join(root, 'Lib', 'site-packages');
+  if (existsSync(win)) return win;
+  const lib = join(root, 'lib');
+  if (existsSync(lib)) {
+    const py = readdirSync(lib).find((e) => e.startsWith('python3.'));
+    if (py && existsSync(join(lib, py, 'site-packages'))) {
+      return join(lib, py, 'site-packages');
+    }
+  }
+  return null;
+}
+
+function findLibDir(root) {
+  const win = join(root, 'Lib');
+  if (existsSync(win)) return win;
+  const lib = join(root, 'lib');
+  if (existsSync(lib)) {
+    const py = readdirSync(lib).find((e) => e.startsWith('python3.'));
+    if (py && existsSync(join(lib, py))) {
+      return join(lib, py);
+    }
+  }
+  return null;
+}
+
 function upToDate() {
   if (!existsSync(MARKER) || !existsSync(python())) return false;
   try { return JSON.parse(readFileSync(MARKER, 'utf8')).pinsHash === pinsHash; } catch { return false; }
@@ -82,7 +109,7 @@ if (check) {
   fail(`the bundle is absent or stale at ${TARGET}; run pnpm code-intel:bundle`);
 }
 if (!force && upToDate()) { log(`up to date — marker ${MARKER} carries the pins' hash; --force rebuilds`); process.exit(0); }
-if (process.platform !== 'win32') fail('IC-3: only the Windows bundle is built until the other build hosts exist (implementation-conditions.md)');
+if (process.platform !== 'win32' && process.platform !== 'linux') fail('only Windows and Linux bundles are currently supported');
 
 // ---- uv: the machine's own when its version equals the pin, else the pinned release by hash ---------------------
 function obtainUv() {
@@ -92,22 +119,29 @@ function obtainUv() {
   const key = `${process.platform}-${process.arch}`;
   const asset = PINS.uv.assets[key];
   if (!asset) fail(`no uv asset pinned for ${key}`);
-  const dir = join(CACHE, `uv-${PINS.uv.version}`);
-  const exe = join(dir, 'uv.exe');
+  const dir = join(CACHE, `uv-${PINS.uv.version}-${key}`);
+  const exe = join(dir, process.platform === 'win32' ? 'uv.exe' : 'uv');
   if (existsSync(exe)) { log(`uv ${PINS.uv.version} from the build cache ${dir}`); return exe; }
   const url = `https://github.com/astral-sh/uv/releases/download/${PINS.uv.version}/${asset.file}`;
-  const zip = join(CACHE, asset.file);
+  const archive = join(CACHE, asset.file);
   mkdirSync(CACHE, { recursive: true });
   log(`uv on PATH is ${version ?? 'absent'}, the pin is ${PINS.uv.version}: downloading ${url}`);
-  run('curl.exe', ['-sSL', '--fail', '-o', zip, url]);
-  const got = sha256(zip);
-  if (got !== asset.sha256) { rmSync(zip, { force: true }); fail(`uv download hash ${got} differs from the pinned ${asset.sha256}`); }
+  const curlCmd = process.platform === 'win32' ? 'curl.exe' : 'curl';
+  run(curlCmd, ['-sSL', '--fail', '-o', archive, url]);
+  const got = sha256(archive);
+  if (got !== asset.sha256) { rmSync(archive, { force: true }); fail(`uv download hash ${got} differs from the pinned ${asset.sha256}`); }
   mkdirSync(dir, { recursive: true });
-  run('tar', ['-xf', zip, '-C', dir]);
-  if (!existsSync(exe)) fail(`the uv archive held no uv.exe (${dir})`);
-  const v = run(exe, ['--version']).stdout.trim();
+  run('tar', ['-xf', archive, '-C', dir]);
+  let resolvedExe = exe;
+  if (!existsSync(resolvedExe)) {
+    // Some archives extract into a nested folder, e.g. uv-x86_64-unknown-linux-gnu/uv
+    const found = readdirSync(dir, { withFileTypes: true }).find((e) => e.isDirectory() && existsSync(join(dir, e.name, 'uv')));
+    if (found) resolvedExe = join(dir, found.name, 'uv');
+  }
+  if (!existsSync(resolvedExe)) fail(`the uv archive held no uv executable (${dir})`);
+  const v = run(resolvedExe, ['--version']).stdout.trim();
   if (!v.includes(PINS.uv.version)) fail(`the downloaded uv answers '${v}', not ${PINS.uv.version}`);
-  return exe;
+  return resolvedExe;
 }
 
 let uv;
@@ -141,12 +175,20 @@ for (const rel of TRIM) { const p = join(RUNTIME, ...rel.split('/')); if (exists
 // Byte-compile once here: the artifact lands where a user cannot write, so an interpreter that compiles on import would
 // pay the cost on every launch and write nothing. Measured beside the marker.
 let compiled = false;
-try { run(python(), ['-m', 'compileall', '-q', '-j', '0', join(RUNTIME, 'Lib')], { env: { ...process.env, PYTHONUTF8: '1' } }); compiled = true; } catch (e) { log(`compileall did not complete (${e.message.split('\n')[0]}); the tree runs uncompiled`); }
+const libDir = findLibDir(RUNTIME);
+try {
+  if (libDir) {
+    run(python(), ['-m', 'compileall', '-q', '-j', '0', libDir], { env: { ...process.env, PYTHONUTF8: '1' } });
+    compiled = true;
+  }
+} catch (e) { log(`compileall did not complete (${e.message.split('\n')[0]}); the tree runs uncompiled`); }
 
 // ---- evidence about the artifact --------------------------------------------------------------------------------
 let answers;
 try {
-  const r = run(python(), ['-I', '-c', 'import importlib.metadata as m, sys, json; print(json.dumps({"python": sys.version.split()[0], "distribution": m.version("serena-agent"), "executable": sys.executable}))'], { env: { PYTHONUTF8: '1', SYSTEMROOT: process.env['SYSTEMROOT'] ?? 'C:\\Windows' } });
+  const env = { PYTHONUTF8: '1' };
+  if (process.platform === 'win32') env.SYSTEMROOT = process.env['SYSTEMROOT'] ?? 'C:\\Windows';
+  const r = run(python(), ['-I', '-c', 'import importlib.metadata as m, sys, json; print(json.dumps({"python": sys.version.split()[0], "distribution": m.version("serena-agent"), "executable": sys.executable}))'], { env });
   answers = JSON.parse(r.stdout.trim());
 } catch (e) {
   fail(`the interpreter under runtime/ does not answer: ${e.message}`);
@@ -154,9 +196,12 @@ try {
 if (answers.python !== PINS.python) fail(`the interpreter answers Python ${answers.python}, the pin is ${PINS.python}`);
 if (answers.distribution !== PINS.version) fail(`the tree answers ${PINS.distribution} ${answers.distribution}, the pin is ${PINS.version}`);
 // REQ-STARTUP-015 / REQ-STARTUP-142: exactly one copy of the bundled tool server's licence text inside the bundle.
-const distInfo = readdirSync(join(RUNTIME, 'Lib', 'site-packages')).find((n) => n.startsWith('serena_agent-') && n.endsWith('.dist-info'));
-const licenseFile = distInfo ? join('Lib', 'site-packages', distInfo, 'licenses', 'LICENSE') : null;
-if (!licenseFile || !existsSync(join(RUNTIME, licenseFile))) fail(`the distribution's licence text was not found under its dist-info (${distInfo ?? 'no dist-info'})`);
+const sitePackages = findSitePackages(RUNTIME);
+if (!sitePackages) fail(`site-packages not found under ${RUNTIME}`);
+const distInfo = readdirSync(sitePackages).find((n) => n.startsWith('serena_agent-') && n.endsWith('.dist-info'));
+const fullLicense = distInfo ? join(sitePackages, distInfo, 'licenses', 'LICENSE') : null;
+const licenseFile = fullLicense && existsSync(fullLicense) ? relative(RUNTIME, fullLicense) : null;
+if (!licenseFile) fail(`the distribution's licence text was not found under its dist-info (${distInfo ?? 'no dist-info'})`);
 
 const final = sizeOf(RUNTIME);
 const marker = {

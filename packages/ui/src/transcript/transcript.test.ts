@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { QuestionPrompt, TranscriptRow } from '@rotaris/contracts';
 import { classifyRows } from '@rotaris/ui-core';
 import {
-  activitySpanMs, activitySummary, capLines, capDiff, familyOf, groupSeverity, groupSummary, isLive, projectDisplay, rowKey, trailerRows,
+  activitySpanMs, activitySummary, capLines, capDiff, familyOf, groupSeverity, groupSummary, isLive, projectDisplay, rowKey,
+  segmentFacts, segmentSummary, trailerRows,
   FACT_SEPARATOR, SEGMENT_SEPARATOR, type ProjectOptions,
 } from './project.js';
 import type { DisplayRow } from './types.js';
@@ -170,8 +171,11 @@ describe('ADR-0045 — the pool, its capacity and its geometry', () => {
 
   it('an activity line grows with the segments it draws, because they wrap (PD-CHAT-004, REQ-CHAT-058)', () => {
     const short = asGroup(projectDisplay(options([tool(0, 'read'), tool(1, 'read')]))[0]);
+    // PD-CHAT-004 revision 2 folds a family reached again into its own segment, so sixteen calls over four
+    // families draw FOUR segments and fit one line. Sixteen distinct names are sixteen segments — the shape
+    // this regression is about is the number of segments the line draws, not the number of calls behind them.
     const many = asGroup(projectDisplay(options(
-      Array.from({ length: 16 }, (_, i) => tool(i, ['read', 'search', 'edit', 'bash'][i % 4]!)),
+      Array.from({ length: 16 }, (_, i) => tool(i, `inspect-${i}`)),
     ))[0]);
     const WIDTH = 900;
     const one = estimateHeight(short, false, WIDTH);
@@ -249,9 +253,13 @@ describe('ADR-0046 step 4 — the projection', () => {
     expect(group.family).toBe('reading');
     // REQ-CHAT-059: a group is keyed by the FIRST member's key, so it stays open while the group grows.
     expect(group.key).toBe(`group:${rowKey(rows[1]!)}`);
-    // REQ-CHAT-065: expanding a group keeps the header and REVEALS its members beneath it.
+    // REQ-CHAT-065's "reveal its members beneath it" is `Row.tsx`'s to draw, hanging them from PD-CHAT-004's
+    // one continuous rule. Step 4 emits the header ALONE and carries the members on it: emitting them a second
+    // time as top-level rows drew every member twice the moment a line was opened
+    // (`docs/defects/fixed/an-expanded-activity-line-draws-its-members-twice.md`).
     const open = projectDisplay(options(rows, { expanded: new Set([group.key]) }));
-    expect(open.map((d) => d.shape)).toEqual(['row', 'group', 'row', 'row', 'row', 'row']);
+    expect(open.map((d) => d.shape)).toEqual(['row', 'group', 'row']);
+    expect(asGroup(open[1]).members.map((m) => m.index)).toEqual([1, 2, 3]);
   });
 
   it('REQ-CHAT-064: an intervening row of another kind ends the run and prevents folding across it', () => {
@@ -408,9 +416,11 @@ describe('PD-CHAT-004 — the activity line', () => {
     expect(line.members.length).toBe(6);
     // The role gutter names WHO. The defect this repairs put `reading` here.
     expect(line.role).toBe('orchestrator');
-    // Four segments, in first-appearance order — the same family reached again forms a SECOND segment.
-    expect(line.segments.map((s) => s.label)).toEqual(['reasoning', 'reading', 'reasoning', 'reading']);
-    expect(line.segments.map((s) => s.members)).toEqual([1, 2, 1, 2]);
+    // PD-CHAT-004 revision 2: ONE segment per activity word, carrying that word's totals, in the order the
+    // words first appear. Revision 1 formed a second `reasoning` and a second `reading` here, which is how a
+    // thirty-step run drew a thirty-segment line.
+    expect(line.segments.map((s) => s.label)).toEqual(['reasoning', 'reading']);
+    expect(line.segments.map((s) => s.members)).toEqual([2, 4]);
   });
 
   it('a further row extends the line and appends NO displayed row — the anti-flicker property', () => {
@@ -420,18 +430,73 @@ describe('PD-CHAT-004 — the activity line', () => {
     expect(after.length).toBe(1);
     // REQ-CHAT-059: and it is still the same row, so the reader's expansion and the pool's slot survive it.
     expect(after[0]!.key).toBe(before[0]!.key);
-    expect(asGroup(after[0]).segments.map((s) => s.label)).toEqual(['reasoning', 'reading', 'reasoning', 'reading', 'searching']);
+    // A NEW word extends the line by one segment; a word already on it only moves that segment's totals.
+    expect(asGroup(after[0]).segments.map((s) => s.label)).toEqual(['reasoning', 'reading', 'searching']);
+    const again = projectDisplay(options([...alternating, tool(6, 'view', { at: '2026-09-06T09:00:22.000Z' })]));
+    expect(asGroup(again[0]).segments.map((s) => s.label)).toEqual(['reasoning', 'reading']);
+    expect(asGroup(again[0]).segments.map((s) => s.members)).toEqual([2, 5]);
   });
 
-  it('a message, another agent and REQ-CHAT-066\'s exempt rows all end a run', () => {
+  it('the agent\'s own message, a user prompt and REQ-CHAT-066\'s exempt rows end that agent\'s run', () => {
     const message = [thinking(0), tool(1, 'read_file'), row(2), thinking(3), tool(4, 'read_file')];
     expect(projectDisplay(options(message)).map((d) => d.shape)).toEqual(['group', 'row', 'group']);
-    const other = [thinking(0), tool(1, 'read_file'), thinking(2, { name: 'helper', persona: 'helper' }), tool(3, 'read_file', { name: 'helper', persona: 'helper' })];
-    const split = projectDisplay(options(other));
-    expect(split.map((d) => d.shape)).toEqual(['group', 'group']);
-    expect(split.map((d) => asGroup(d).role)).toEqual(['orchestrator', 'helper']);
+    // PD-CHAT-004 revision 2: a USER prompt ends every open run whatever it names — it is the turn boundary
+    // the reader drew — and so does a row that names no agent at all.
+    const turn = [thinking(0), tool(1, 'read_file'), row(2, { kind: 'user', name: undefined, persona: undefined }), thinking(3), tool(4, 'read_file')];
+    expect(projectDisplay(options(turn)).map((d) => d.shape)).toEqual(['group', 'row', 'group']);
+    const notice = [thinking(0), tool(1, 'read_file'), row(2, { kind: 'system', name: undefined, persona: undefined }), thinking(3), tool(4, 'read_file')];
+    expect(projectDisplay(options(notice)).map((d) => d.shape)).toEqual(['group', 'row', 'group']);
     const exempt = [thinking(0), tool(1, 'ask_questions'), thinking(2), tool(3, 'terminal', { streamId: 's', settled: false, toolStatus: 'running' })];
     expect(projectDisplay(options(exempt)).map((d) => d.shape)).toEqual(['row', 'row', 'row', 'row']);
+  });
+
+  /** The screenshot of 2026-09-16: two agents working at once, their rows alternating in the record. */
+  const helper = { name: 'helper', persona: 'coding-agent' } as const;
+  const interleaved = [
+    thinking(0), tool(1, 'read_file'),
+    thinking(2, helper), tool(3, 'grep', helper),
+    thinking(4), tool(5, 'glob'),
+    thinking(6, helper), tool(7, 'codebase_search', helper),
+    thinking(8), tool(9, 'read_file'),
+  ];
+
+  it('PD-CHAT-004 rev. 2: a second agent\'s row no longer ends a run — two agents draw TWO lines', () => {
+    const display = projectDisplay(options(interleaved));
+    // Revision 1 cut these ten rows into five lines of two. Each agent now owns exactly one.
+    expect(display.map((d) => d.shape)).toEqual(['group', 'group']);
+    expect(display.map((d) => asGroup(d).role)).toEqual(['orchestrator', 'coding-agent']);
+    expect(display.map((d) => asGroup(d).members.length)).toEqual([6, 4]);
+    // Each line sits where its EARLIEST member does — R-017's "display them according to sent first".
+    expect(display.map((d) => asGroup(d).members[0]!.index)).toEqual([0, 2]);
+    expect(asGroup(display[0]).segments.map((s) => s.label)).toEqual(['reasoning', 'reading']);
+    expect(asGroup(display[1]).segments.map((s) => s.label)).toEqual(['reasoning', 'searching']);
+  });
+
+  it('PD-CHAT-004 rev. 2: either agent\'s next row extends its own line and appends NO displayed row', () => {
+    const before = projectDisplay(options(interleaved));
+    const after = projectDisplay(options([...interleaved, tool(10, 'list_dir')]));
+    expect(after.length).toBe(before.length);
+    expect(after.map((d) => d.key)).toEqual(before.map((d) => d.key));
+    expect(asGroup(after[0]).members.length).toBe(7);
+    expect(asGroup(after[1]).members.length).toBe(4);
+    // And the SECOND agent's next row lengthens the second line, not the tail.
+    const child = projectDisplay(options([...interleaved, tool(10, 'grep', helper)]));
+    expect(child.length).toBe(before.length);
+    expect(asGroup(child[1]).members.length).toBe(5);
+  });
+
+  it('PD-CHAT-004 rev. 2: the incremental path finds a clean cut across interleaved runs', () => {
+    const whole = projectDisplay(options(interleaved));
+    for (const from of [1, 2, 3, 5, 8, 9]) {
+      const seeded = projectDisplay(options(interleaved.slice(0, from)));
+      const bounded = projectDisplay(options(interleaved), { previous: seeded, from });
+      expect(JSON.stringify(bounded)).toBe(JSON.stringify(whole));
+    }
+    // A run that began before a cut and reaches past it drags the cut below its first member, so no member
+    // is left neither reused nor re-projected — the failure a per-pair walk-back would have produced here.
+    const grown = [...interleaved, tool(10, 'read_file')];
+    expect(JSON.stringify(projectDisplay(options(grown), { previous: whole, from: 10 })))
+      .toBe(JSON.stringify(projectDisplay(options(grown))));
   });
 
   it('REQ-CHAT-167 on keeps reasoning OUT of the run, which is what keeps TranscriptPane\'s expansion shortcut sound', () => {
@@ -444,11 +509,48 @@ describe('PD-CHAT-004 — the activity line', () => {
     const single = [tool(0, 'read_file'), tool(1, 'glob'), tool(2, 'view'), tool(3, 'list_dir', { toolStatus: 'failed' })];
     expect(activitySummary(asGroup(projectDisplay(options(single))[0]).segments)).toBe('reading ×4 · 3 ok · 1 failed');
     const line = asGroup(projectDisplay(options(alternating))[0]);
-    expect(activitySummary(line.segments)).toBe('reasoning ×1 · 16s · ~554 tok, reading ×2 · 2 ok, reasoning ×1 · 1s · ~33 tok, reading ×2 · 2 ok');
+    // 2216 + 132 characters summed ONCE before dividing by 4, and 16 s + 1 s of reasoning — the totals the
+    // whole run reached, not one figure per switch between words.
+    expect(activitySummary(line.segments)).toBe('reasoning ×2 · 17s · ~587 tok, reading ×4 · 4 ok');
     // The two separators are never the same one, so a segment boundary is readable in the copied text.
     expect(FACT_SEPARATOR).not.toBe(SEGMENT_SEPARATOR);
     // REQ-CHAT-065: and no raw tool output reaches it, however long the members' output was.
     expect(activitySummary(asGroup(projectDisplay(options([tool(0, 'grep', { output: 'SECRET' }), tool(1, 'grep', { output: 'SECRET' })]))[0]).segments)).not.toContain('SECRET');
+  });
+
+  it("PD-CHAT-004 rev 3: a segment's facts carry their outcome, and joining them IS the summary", () => {
+    const single = [tool(0, 'read_file'), tool(1, 'glob'), tool(2, 'view'), tool(3, 'list_dir', { toolStatus: 'failed' })];
+    const segment = asGroup(projectDisplay(options(single))[0]).segments[0]!;
+    const facts = segmentFacts(segment);
+    // The one property that keeps the drawn line and the copied line from drifting: the renderer walks these
+    // parts, copy joins them, and there is one definition of both.
+    expect(facts.map((f) => f.text).join(FACT_SEPARATOR)).toBe(segmentSummary(segment));
+    expect(segmentSummary(segment)).toBe('reading ×4 · 3 ok · 1 failed');
+    // The failure is ONE fact of four. The family word and the ok count state no outcome, so nothing but
+    // `1 failed` can take the fail colour — which is the whole of what the revision changes.
+    expect(facts.map((f) => [f.text, f.outcome])).toEqual([
+      ['reading ×4', null],
+      ['3 ok', 'ok'],
+      ['1 failed', 'failed'],
+    ]);
+    expect(facts.filter((f) => f.outcome === 'failed' || f.outcome === 'blocked')).toHaveLength(1);
+  });
+
+  it('PD-CHAT-004 rev 3: a reasoning segment states no outcome at all, so no part of it can be coloured as failed', () => {
+    const line = asGroup(projectDisplay(options(alternating))[0]);
+    const reasoning = line.segments.find((s) => s.reasoning)!;
+    // The severity ordering is untouched and still says the run failed where a member did; what may not happen
+    // is a reasoning fact taking that colour, because reasoning has no outcome to have failed at.
+    expect(segmentFacts(reasoning).every((f) => f.outcome === null)).toBe(true);
+    expect(segmentFacts(reasoning).map((f) => f.text).join(FACT_SEPARATOR)).toBe(segmentSummary(reasoning));
+  });
+
+  it('PD-CHAT-004 rev 3: a blocked member is a fact of its own, and a clean segment carries no colourable fact', () => {
+    const mixed = [tool(0, 'read_file'), tool(1, 'glob', { toolStatus: 'blocked' })];
+    const blocked = segmentFacts(asGroup(projectDisplay(options(mixed))[0]).segments[0]!);
+    expect(blocked.find((f) => f.outcome === 'blocked')?.text).toBe('1 blocked');
+    const clean = segmentFacts(asGroup(projectDisplay(options([tool(0, 'read_file'), tool(1, 'glob')]))[0]).segments[0]!);
+    expect(clean.some((f) => f.outcome === 'failed' || f.outcome === 'blocked')).toBe(false);
   });
 
   it('a reasoning segment sums its characters ONCE before dividing, and a reasoning-only run is never coloured failed', () => {

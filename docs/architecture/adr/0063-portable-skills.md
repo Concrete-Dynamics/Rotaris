@@ -133,8 +133,11 @@ noticed.
 ### 5. Naming and collisions follow REQ-SHELL-056, in the renderer
 
 `packages/ui/src/slash/skills.ts`, modelled on `slash/prompts.ts` — the same bind-reader /
-cached-answer / register-after-the-built-ins shape, and the same two defects apply verbatim (AO-1: a
-registry rebuilt by its memo must not re-read; AO-2: a read in flight must land on the live registry).
+cached-answer / register-after-the-built-ins shape, and the same three defects apply verbatim (AO-1: a
+registry rebuilt by its memo must not re-read; AO-2: a read in flight must land on the live registry;
+AO-3, found in a launch log on 2026-09-16: a read in flight is the window's answer and a second caller
+joins it rather than starting another — here there are THREE starters, the registrar's effect, the
+configuration key's and the rescan counter's, where the prompt files have two).
 Naming, suffixing and collision are the renderer's because the catalogue that holds the other names
 lives there, which is the reason `REQ-CHAT-160`'s equivalent rules live there too.
 
@@ -206,7 +209,7 @@ that depended on it.
 **The repair** is decision 4: the fence travels with the tool, the state holds the read record and the
 undo stacks. The falsified comment is kept beside its replacement in `run-host/tools.ts`.
 
-Recorded as a defect note in `docs/defects/file-tool-fence-frozen-at-first-run.md` and as the
+Recorded as a defect note in a defect note (removed once repaired) and as the
 hundred-and-first entry in `codebase.md`'s ledger.
 
 **It found a second, in the surface — and the proof found it, not a test.** The Settings selectors were

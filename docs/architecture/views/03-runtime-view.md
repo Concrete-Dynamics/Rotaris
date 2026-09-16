@@ -7,6 +7,20 @@ transaction. Controls, queued prompts, steering, the supervisor and the pause re
 points. The store is written by one ordered writer per session (ADR-0008); every event is recorded before it
 is forwarded (ADR-0009/0010).
 
+| Read this section when you are | Section |
+|---|---|
+| changing what happens before the first model call | [§1 Start](#1-start) |
+| changing the run loop or an iteration boundary | [§2 The loop and one iteration](#2-the-loop-and-one-iteration) |
+| changing a model step, a tool dispatch or a hook slot | [§3 Inside a turn](#3-inside-a-turn-runturn-one-agent-conversation) |
+| touching delegation | [§4 Children](#4-children-adr-0012) |
+| adding or changing a control operation | [§5 Controls reaching in](#5-controls-reaching-in-adr-0010-1-sessionscontrol) |
+| changing teardown, or acting on a session no run holds | [§6 End](#6-end) and [§6a](#6a-the-session-browsers-actions-reaching-a-record-no-run-holds-part-u) |
+| adding a table or a column | [§7 The store the run writes](#7-the-store-the-run-writes-packagesstoresrcschemats-v18) |
+| adding a configuration key | [§8 Configuration's three tiers](#8-configurations-three-tiers-adr-0037-as-they-touch-the-run) |
+| drawing something from a publication | [§9 What a surface does with a publication](#9-what-a-surface-does-with-a-publication-adr-0046-adr-0045-part-z) |
+
+Flows this view does **not** own — startup, approval, the board — are in [`06-sequences.md`](06-sequences.md).
+
 ## 1. Start
 
 ```mermaid
@@ -72,11 +86,13 @@ place — so a segment's grants are constant and the model's listing and callabl
 **iteration 0** (`root:0`) because a plan cycle is not an iteration, and then `parkAtPlanGate()` mirrors
 `pauseAtLimit` exactly: status `awaiting_plan_decision` with the cycle, the cycle's row written in the same
 durable transaction with a `plan_gate_opened` entry, **no terminal pair**, and an EMPTY stop reason
-(REQ-MONITOR-301's set names no hold). The turn's report text IS the plan, verbatim.
+(REQ-MONITOR-301's set names no hold). The turn's report text IS the plan, verbatim — and the turn is TOLD so: `planRequestSection` (`run/plan-text.ts`, beside the `planSection` a decided cycle is handed back) prefixes both the task string and the initial content parts, because an initial turn built from `taskContent` never reads the string. Before 2026-09-16 the first cycle's turn received the user's bare prompt and read it as work to do. Both sections name the **product** as their speaker: they are delivered inside a `role: 'user'` payload, and `planSection` opened "The user approved this plan" until the same date — a user-role turn narrating the user. A held segment's turn also carries **no loop supervisor** (`PD-ORCH-001`, which narrows REQ-ORCH-099 and REQ-ORCH-101): `Run` attaches the supervisor per turn, and while the hold stands it attaches none. A run whose write and execute tools are withheld can only grep and read, which is REQ-ORCH-101's repetition trigger read literally; the corrective it injects is an unmarked `role: 'user'` message, so the run reads a user instruction no user gave while waiting for the decision of the actual user. Supervision attaches again on the first turn after the gate resolves, and the classifier keeps no state across the hold.
 
 While the hold stands, three places enforce the planning grants of REQ-ORCH-153 — the port's narrowing
-(`createToolPort`, which only removes), `Gate.dispatch` ahead of the permission resolution (so a refused call's
-tool hooks never fire, REQ-HOOKS-004), and child admission (`IterationChildren.delegate`) — and the hook engine
+(`createToolPort`, which only removes, and which hands the gate the set of names it removed), `Gate.dispatch`
+ahead of the permission resolution (so a refused call's tool hooks never fire, REQ-HOOKS-004 — and which refuses
+a name that is a tool, letting a name that is no tool reach REQ-TOOLS-032's unknown-tool answer instead of a
+promise no approval can keep), and child admission (`IterationChildren.delegate`) — and the hook engine
 starts no process, emitting one `hook.finish` with `skip_reason: 'plan_gate'` per withheld invocation
 (REQ-HOOKS-126). The check suite is unreachable rather than guarded: a held segment never enters the loop.
 
@@ -97,7 +113,7 @@ runtime and every other typed section, plus redacted MCP server declarations.
 the session's workspace root (`sessionRoots`, recorded at `session.start` and `session.resume`). Before the
 repair, a resumed session's continuation read the previous launch's lease — empty after an application
 restart — and its first model call went out with **no `Authorization` header** (the 401 recorded in
-`docs/defects/continue-run-sends-no-authorization-header.md`). The refresh is invisible when main answers;
+a defect note, removed once repaired). The refresh is invisible when main answers;
 an entry provider main cannot resolve refuses with REQ-WORKSPACE-137's sentence, exactly as a launch does.
 A session this process never started or resumed leases nothing — the engine's own `not-live` / `no-session`
 refusals answer it.
@@ -147,7 +163,8 @@ is main's orchestration over the same three processes and is drawn in the proces
 Before every model step, in this order: `shouldPause()` (a graceful pause stops here, the task stays pending) →
 pending **steering** injected as a marked user message (`steering_injected`, the supervisor's counter reset) →
 the **loop supervisor**'s `check()` (`continue` | `inject` a corrective user message | `escalate` — the turn
-fails with `circuit_breaker_escalation`) → the 100-step belt → **context compression when the agent has reached
+fails with `circuit_breaker_escalation`; no supervisor is attached at all for the turn a plan-gate hold covers,
+`PD-ORCH-001`) → the 100-step belt → **context compression when the agent has reached
 its threshold** (Part AH, below) → the model step (streamed into its own `agent`
 row, and — from Part Z — into a **`thinking` row** for anything the provider marks as deliberation; the sink
 discarded every reasoning delta before that, so no streamed-reasoning row had ever existed, REQ-CHAT-163).
@@ -160,6 +177,26 @@ message; each tool call is observed, written as a running `tool` row, dispatched
 approval when needed → executor; hooks in its two slots), settled with its outcome (and a `diff` row for an
 edit); the results go back as one tool message; hook feedback follows as a user message. A reply with no tool call ends the turn — unless a steer is pending, in which case
 the agent takes another round; an empty reply with no call is the runtime's stuck report to the supervisor.
+
+**What a step costs (PD-MONITOR-001; `model/reported-cost.ts`, `engine/money.ts`, `run/aggregates.ts`).** A
+completed provider request carries its tokens and, where the endpoint's protocol defines a field for it,
+the cost that provider computed for that request. The ask is a body field the endpoint owns, sent only to
+endpoints that define one (`COST_REPORTING_HOSTS`, today OpenRouter's `usage.include`), because a strict
+OpenAI-shaped API answers an unrecognised body key with a 400. The reading is the SDK's `metadataExtractor`,
+which sees the raw chunk before the SDK's usage mapping keeps the token fields and drops the rest; the figure
+leaves the adapter on the port's own `usage` part. `Aggregates.addCost` adds it to the run's total in exact
+decimal arithmetic on `bigint`, at whatever scale the operands carry — the only money arithmetic in the
+product, and addition only, which is why it does not wait on OQ-21 or ADR-0031's spike the way every route
+through a per-token **rate** does. The total reaches `usage.update` and `session.end` in the payload's
+existing `cost.total`, and the label reads it back under REQ-MONITOR-166's fourth qualifier, `reported`,
+rendered half-up to two places or four below one hundredth and with no currency symbol, because the provider
+named no currency and the product picks none.
+
+What the model is handed for each of them is `toolSpec` (`run-host/tools.ts`): an MCP tool's own input schema where
+ADR-0034 supplies one, otherwise the zod schema converted **as an input** (`io: 'input'`) — the shape of a call about to
+be made, in which a field carrying a `.default()` is optional as the parser treats it. Converted as an output, which was
+the default until 2026-09-16, such a field is advertised as required and the product states a contract it does not
+enforce.
 
 The executors a port registers (`run-host/tools.ts`): `read_file`, `write_file`, `haet_read`, `haet_edit`/`haet`, `grep`,
 `glob`, `todo`, `terminal` (by shell presence, REQ-TOOLS-104), the three delegation tools when delegation is available,
@@ -198,9 +235,16 @@ the record's `wait` published with every snapshot. The wait resolves by the time
 session-wide, the `model_override` timeline entry, the agent re-run at once; a key that cannot be applied → `model_override_rejected`
 and the header names why, the wait continues). **Unresponsive model:** while a role fallback is untried and `llm_response_timeout`
 (≥ 30 s) sits below the agent's bound (the child timeout; the model timeout for the root), a timer on the clock port aborts a call
-that produced no event of any kind and the step re-runs on the fallback (`unresponsive_model_fallback`). **Hard child timeout:**
-on expiry with a role fallback untried, the child runs once more on it (`child_timeout_fallback`); else it fails with
-`Child timed out after <N>s`. Per-model `timeout` / `num_retries` ride the choice (REQ-ORCH-145). On resume the memory is
+that produced no event of any kind and the step re-runs on the fallback (`unresponsive_model_fallback`). **Child timeout:**
+expiry does not cut the child off — it **asks the child to land** (REQ-ORCH-088), by raising the same per-child flag
+`runTurn` reads for REQ-MONITOR-123's pause, so the turn stops before its next model step with the step in flight
+finished and its text intact. A hard-abort **backstop** is armed `STOP_GRACE` (30 s, `run/grace.ts`, ADR-0014 rule 1's
+one allowance) behind it, for the child that cannot land inside the window; REQ-CONFIG-113's ceiling therefore still
+bounds the child. Then, with a role fallback untried, the child runs once more on it (`child_timeout_fallback`); else
+it fails with `Child timed out after <N>s` and a report carrying what the child last **said** — the last assistant
+message with text, not the last assistant message, which is usually the one that opened a tool call and spoke
+nothing. Those words reach `last_response`; `final_response` stays empty, because REQ-ORCH-110's final response is
+text no further tool activity followed. Per-model `timeout` / `num_retries` ride the choice (REQ-ORCH-145). On resume the memory is
 rehydrated from the timeline (`ResilienceMemory.rehydrate`), so a continuation never returns to an exhausted pair and keeps the
 user's choice (REQ-SESSION-196).
 
@@ -322,7 +366,8 @@ text and moves nothing else; `session.planDecision {decision, changes?}` carries
 (REQ-ORCH-153) and, in one durable act, decides the cycle, clears `sessions.plan_cycle` and writes
 `plan_gate_resolved`. **approve** sets `plan_released = 1` and launches the execution segment with the approved
 text (the edit where one exists); **revise** launches a further plan cycle with the plan as it stands and the
-changes stated, without limit; **cancel** comes to rest with stop reason `user_cancelled` and launches nothing.
+changes stated, without limit; **cancel** comes to rest with stop reason `user_cancelled`, writes the summary REQ-ORCH-082's first arm gives
+(the same `summarise` the run's teardown calls, in the same transaction) and launches nothing.
 `plan_released` is read at every launch and cleared only by the next user prompt, which is REQ-ORCH-154's one-way
 approval across the process boundary the park introduces.
 

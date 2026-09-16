@@ -219,7 +219,7 @@ describe('engine/artifacts — the session artifact store', () => {
   it('PD-LIBRARY-001: the TOOL path filters `commands` too — artifactOps.read returns the Commands section, not the whole document', () => {
     // The store-level test above passes while the tool path drifts: the port held its own section
     // allow-list that omitted `commands`, so a filtered read fell through to the full body. This pins
-    // the interface a model actually reaches (docs/defects/artifact-read-section-allow-list-omits-commands.md).
+    // the interface a model actually reaches (a defect note, removed once repaired).
     const store = storeFor();
     const r = store.materialiseChildReport({
       taskId: 'bg_cmd_tool', canonicalName: 'coding-agent-1', persona: 'coding-agent', status: 'succeeded', summary: 's',

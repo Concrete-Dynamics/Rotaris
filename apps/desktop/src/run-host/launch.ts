@@ -30,7 +30,7 @@ export type ContinuationLeaseDeps = Pick<LaunchDeps, 'workspaceRoot' | 'attended
  * `session.planDecision`): a paused or resumed session launches its run through `setupFor` →
  * `configure`, which reads the bearers of the LAST launch's lease — empty after an application
  * restart, so the continuation's first model call went out with no `Authorization` header at all
- * (the 401 recorded in `docs/defects/continue-run-sends-no-authorization-header.md`). The repair
+ * (the 401 recorded in a defect note, removed once repaired). The repair
  * takes the same lease a launch takes, per continuation: main answers with the stored credential
  * for the providers the current configuration names, and the caller publishes the map so the run's
  * per-request resolvers read it. The user notices nothing. One refusal: an entry provider main
@@ -48,6 +48,44 @@ export async function leaseForContinuation(workspaceRoot: string, deps: Continua
     return { kind: 'refused', reply: { kind: 'refused', code: 'session.provider-auth', headline: 'Provider authentication required', detail: 'Authenticate at least one configured provider before continuing this run.' } };
   }
   return { kind: 'leased', bearers };
+}
+
+/** What a lease answered about the providers a run names: REQ-PROVIDER-067's report, as the wire carries it. */
+export interface LeaseReport {
+  readonly authenticated: readonly string[];
+  readonly unresolved: Readonly<Record<string, string>>;
+}
+
+/**
+ * REQ-PROVIDER-068: an unresolved credential "is reported once in the opening report instead of producing a
+ * warning at every check". The continuation re-lease above is this product's standing substitute for that
+ * requirement's keep-fresh timer, and it runs on `session.continue`, `session.prompt` AND `session.planDecision`
+ * — so one prompt wrote the whole report three times over state that had not moved, naming the same expired
+ * credential each time (measured 2026-09-16, session `6696f6ed`).
+ *
+ * The opening report per workspace root is kept whole: it is the report REQ-PROVIDER-068 requires. After it,
+ * only what CHANGED is said, and a report identical to the last one says nothing at all. A change that is
+ * neither a provider gained nor a reason changed — the set itself moved, because the configuration did — falls
+ * back to the full sentence rather than to silence.
+ */
+export class LeaseReportLog {
+  private readonly seen = new Map<string, { fingerprint: string; authenticated: ReadonlySet<string>; unresolved: ReadonlyMap<string, string> }>();
+
+  report(workspaceRoot: string, report: LeaseReport | null, log: (message: string) => void): void {
+    if (report === null) return;
+    const authenticated = [...report.authenticated].sort();
+    const unresolved = Object.entries(report.unresolved).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    const fingerprint = `${authenticated.join(',')}|${unresolved.map(([id, why]) => `${id}=${why}`).join(',')}`;
+    const previous = this.seen.get(workspaceRoot);
+    this.seen.set(workspaceRoot, { fingerprint, authenticated: new Set(authenticated), unresolved: new Map(unresolved) });
+    const whole = `credentials: leased for ${authenticated.join(', ') || 'no provider'} (workspace ${workspaceRoot})${unresolved.length > 0 ? `; unresolved: ${unresolved.map(([id, why]) => `${id} (${why})`).join(', ')}` : ''}`;
+    if (previous === undefined) { log(whole); return; }
+    if (previous.fingerprint === fingerprint) return;
+    const gained = authenticated.filter((id) => !previous.authenticated.has(id) && previous.unresolved.has(id));
+    const changed = unresolved.filter(([id, why]) => previous.unresolved.get(id) !== why);
+    const delta = [...gained.map((id) => `${id} is authenticated`), ...changed.map(([id, why]) => `${id} is unresolved — ${why}`)];
+    log(delta.length > 0 ? `credentials (workspace ${workspaceRoot}): ${delta.join('; ')}` : whole);
+  }
 }
 
 /** REQ-TRACE-470/471, REQ-PROVIDER-066: one request owns capture, lease and start. */

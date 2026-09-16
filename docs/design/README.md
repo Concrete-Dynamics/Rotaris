@@ -719,3 +719,23 @@ sites and renders identically to it; changing it is a refactor with no visible e
 about what the interface looks like, not about which class name reaches it. `REQ-CHAT-057`'s columns still win over
 the mockup's right-aligned user bubble and card-less assistant prose, exactly as §2 requires — the repair changed
 what neither source asked for and nothing that either one did.
+
+### 7.3 Telling two working agents apart — 2026-09-16 (`PD-CHAT-004` rev. 2, `PD-CHAT-005`)
+
+The owner read a live transcript in which an orchestrator and a code analyst worked at the same time, and could
+not tell whose row was whose. Three things the material already decides were being ignored, and the repair takes
+each from the material rather than inventing one.
+
+1. **The collapsed line states totals, not a sequence.** The WORKSPACE artboard writes an agent's finished work
+   as `▸ reading · searching · 6 calls · ok · 8.4s` — one word per kind of work, then what it came to. That is
+   the craft source for the one-segment-per-family line. The alternating `reasoning ×1 · reading ×2 · reasoning
+   ×1 · …` the code drew instead is nowhere in the material, and it grows without bound while the agent works.
+2. **The role line takes the persona's own colour.** The design language declares `--rt-viz-1` … `--rt-viz-6` a
+   **categorical** ramp — "use in order; never invent chart colours outside this set" — which is exactly the job
+   a persona palette does. The status tokens are not available for it: `--rt-ok` and `--rt-run` resolve to the
+   same value, so a persona bar drawn from them reads as an outcome. Contrast was checked rather than assumed —
+   the worst pair in the ramp on the row hover wash is 5.28:1, above the 4.54:1 `--rt-warn` already carries.
+3. **A delegated agent's rows indent.** The agents panel already draws the delegation tree by indentation; the
+   transcript drew the same tree flat. The indent is `var(--rt-space-4)` per level, capped at two, applied as
+   padding inside the row box — `REQ-CHAT-057`'s 52 px and 112 px columns and its margins are untouched, which
+   is why `PD-CHAT-005` extends that requirement rather than narrowing it.

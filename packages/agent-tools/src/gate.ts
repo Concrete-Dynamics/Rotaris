@@ -4,7 +4,7 @@ import type { MonotonicClock, Timers, WallClock } from '@rotaris/kernel';
 import { APPROVAL_RESOLUTION_SOURCES, denialText, type ApprovalPayload, type HeadlessPolicy, type ToolStatus } from '@rotaris/contracts';
 import type { ApprovalOutcome, PendingApprovals, PresenterPort } from './approvals.js';
 import { argumentSummary, permissionRequest, requestSummary, type DecisionRecord, type PermissionRequest, type PolicyContext } from './policy.js';
-import { META_TOOL_NAMES } from './registry.js';
+import { canonicalToolName, isPublicToolName, META_TOOL_NAMES } from './registry.js';
 import { planGateRefusal, withheldUnderPlanGate } from './planning-grants.js';
 import type { Observation, ToolExecutor } from './tools/types.js';
 
@@ -113,6 +113,13 @@ export interface GateDeps {
    * the RUN, and a port built while it held must stop refusing the moment the run's own state says so.
    */
   readonly planGateHeld?: (() => boolean) | undefined;
+  /**
+   * REQ-ORCH-153: the names this port removed BECAUSE the gate is held — the MCP and plugin tools that carry no
+   * declaration and so are withheld by the fail-closed predicate. Read LIVE, because an MCP surface resolves after
+   * the port is built. It exists to tell a withheld name apart from one that was never a tool at all; see the
+   * dispatch check for why that distinction is worth a dependency.
+   */
+  readonly planGateWithheldNames?: (() => ReadonlySet<string>) | undefined;
 }
 
 /** REQ-TOOLS-032's first repair: close the strings, objects and arrays still open at the cut. */
@@ -198,8 +205,11 @@ export class Gate {
      * executor lookup, the schema parse and the permission resolution — for three reasons the requirement states
      * or implies:
      *  - "by whatever route the tool reached that role": a name the port's narrowing never saw (an MCP tool
-     *    registered late, a plugin, a name the model invented) is refused with the gate's reason rather than
-     *    reported unknown, and the fail-closed predicate withholds exactly those;
+     *    registered late, a plugin) is refused with the gate's reason rather than reported unknown, and the
+     *    fail-closed predicate withholds exactly those. The falsified clause, kept beside its replacement: this
+     *    read "a plugin, a name the model invented" until 2026-09-16, and the last of the three was wrong. No
+     *    approval can make an invented name exist, so the gate's remedy is a promise the product cannot keep;
+     *    what the requirement binds is the dispatch of a TOOL, and a name that is no tool dispatches nothing;
      *  - "MUST NOT run a hook command": REQ-HOOKS-004's order puts `pre_tool` hooks after the permission
      *    resolution, so refusing before it means a withheld call's tool hooks never fire at all — the hooks
      *    amendment (REQ-HOOKS-126) then reaches only the lifecycle points, which is the whole of what it must;
@@ -208,8 +218,21 @@ export class Gate {
      * Meta tools are never gated (REQ-TOOLS-014, ADR-0016 c.4) and are checked first; they touch no workspace.
      */
     if (!isMeta && deps.planGateHeld?.() === true && withheldUnderPlanGate(call.name)) {
-      const reason = planGateRefusal(call.name);
-      return finish({ text: reason, isError: true, status: 'blocked', decision: null, observation: null, blockedReason: reason }, { failure_kind: 'plan_gate_withheld', error: 'withheld while the run is held at the plan gate' });
+      /*
+       * …of a name that IS a tool. The fail-closed predicate answers `true` for every name outside the
+       * registry, which is what the requirement asks for and also what made a misspelling read as a promise:
+       * the run that found this called `read_path`, a name this product has never had, and was told the call
+       * was withheld until the plan is approved — so it waited for an approval that could never make that name
+       * exist. A name is a tool here when an executor holds it (whatever route registered it), when the public
+       * registry declares it, or when THIS port removed it at the gate. Anything else falls through to
+       * REQ-TOOLS-032's unknown-tool refusal below, which is the true answer and the actionable one. Nothing is
+       * relaxed: a name with an executor is still refused before the schema parse, the permission and the hooks.
+       */
+      const isTool = executor !== undefined || isPublicToolName(canonicalToolName(call.name)) || deps.planGateWithheldNames?.().has(call.name) === true;
+      if (isTool) {
+        const reason = planGateRefusal(call.name);
+        return finish({ text: reason, isError: true, status: 'blocked', decision: null, observation: null, blockedReason: reason }, { failure_kind: 'plan_gate_withheld', error: 'withheld while the run is held at the plan gate' });
+      }
     }
 
     // REQ-TOOLS-032: a payload still unreadable or schema-invalid after repair is a recoverable error, not executed.

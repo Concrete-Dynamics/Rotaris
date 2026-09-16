@@ -1,11 +1,11 @@
-import { createContext, useContext, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
+import { createContext, useContext, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import type { ImageAttachment, TranscriptRow } from '@rotaris/contracts';
 import { Markdown } from '../markdown/Markdown.js';
 import { linkifyBare, type Span } from '../markdown/parse.js';
 import { markMotionStart } from '../motion.js';
 import { TerminalPreviewBlock } from '../terminal/TerminalPreviewBlock.js';
 import type { TerminalPreview } from '../terminal/streams.js';
-import { activitySpanMs, activitySummary, groupSeverity, groupSummary, isLive, isReasoningRow, reasoningChars, segmentSummary, type Severity } from './project.js';
+import { FACT_SEPARATOR, activitySpanMs, activitySummary, groupSeverity, groupSummary, isLive, isReasoningRow, reasoningChars, segmentFacts, type Severity } from './project.js';
 
 /**
  * Part AA — **the ONE row renderer** (ADR-0051's second execution). What one row looks like once a slot is
@@ -121,6 +121,12 @@ export interface TranscriptSurface {
   readonly toggleMember?: ((key: string) => void) | undefined;
   /** The surface's clock for the live figures — never a global; REQ-CHAT-063's refresh moves it. */
   readonly nowMs: number;
+  /**
+   * PD-CHAT-005: how deep the named agent sits in the delegation tree (REQ-MONITOR-036/037), from which the row
+   * takes its indentation. One function for the whole pane, exactly as the clock and the link opener are —
+   * a row cannot know it from itself. Absent leaves every row at depth 0, which is what a plain list does.
+   */
+  readonly agentDepth?: ((name: string, persona: string) => number) | undefined;
   /**
    * REQ-CHAT-164's drawing half: the whole seconds a live call's provider has been silent, or null. **Detecting
    * the ten seconds is stream-side and is Part Z's** (Z3b); drawing what it found is this file's.
@@ -436,7 +442,13 @@ function PlainText({ text, match, onOpenLink }: { text: string; match: RowRender
     : <span key={i}>{span.kind === 'text' ? span.text : ''}</span>));
 }
 
-/** REQ-CHAT-057: the timestamp column, then the role column — attribution on a block's first row, a persona bar on a continuation. */
+/**
+ * REQ-CHAT-057: the timestamp column, then the role column — attribution on a block's first row, a persona bar
+ * on a continuation. PD-CHAT-005: the role label is drawn in the SAME persona colour as the bar and the
+ * expanded rail, so one agent reads as one colour wherever it appears and two agents working at once are told
+ * apart before a word of either is read. A row naming no persona — the reader's own, a system notice — keeps
+ * the stylesheet's accent and takes no inline colour at all.
+ */
 function Attribution({ row, place, personaBar }: { row: TranscriptRow; place: RowPlace; personaBar: string }) {
   const task = rowTask(row);
   // PD-CHAT-004: a member of an expanded run keeps its own timestamp and draws no bar — the line's single
@@ -447,7 +459,7 @@ function Attribution({ row, place, personaBar }: { row: TranscriptRow; place: Ro
       <time className="row__time mono" dateTime={row.at}>{place.blockStart ? (row.ts || rowTime(row.at)) : ''}</time>
       {place.blockStart ? (
         <span className="row__attribution">
-          <span className="row__role">{rowRole(row)}</span>
+          <span className="row__role" style={personaInk(row)}>{rowRole(row)}</span>
           {task !== null && <span className="row__task mono" data-testid="row-task">{task}</span>}
         </span>
       ) : (
@@ -458,15 +470,48 @@ function Attribution({ row, place, personaBar }: { row: TranscriptRow; place: Ro
 }
 
 /**
- * REQ-SHELL-075 (a): a persona's assigned colour — one of six named tokens of the adopted language, by a stable
- * hash of the name, never a literal colour. Declared here because REQ-CHAT-057's continuation bar is the second
- * place that needs it; `PersonaWindow` re-exports it so nothing that named it there breaks.
+ * REQ-SHELL-075 (a) / PD-CHAT-005: a persona's assigned colour — a named token of the adopted language by a
+ * stable hash of the name, never a literal colour. Declared here because REQ-CHAT-057's continuation bar and
+ * PD-CHAT-005's role label are the two places that need it; `PersonaWindow` re-exports it.
+ *
+ * **The ramp is the design language's own answer to this question.** `docs/design/system/tokens/colors.css`
+ * declares `--rt-viz-1` … `--rt-viz-6` as the categorical set — "built from the three axes and their hue
+ * midpoints. Use in order; never invent chart colors outside this set" — which is exactly what telling one
+ * agent from another is. Nothing here is invented and no literal is written.
+ *
+ * **The falsified list, kept beside its replacement.** It was
+ * `['--rt-accent-300', '--rt-axis-y-300', '--rt-axis-x-300', '--rt-ok', '--rt-warn', '--rt-run']`. Two faults,
+ * both measured on 2026-09-16: `--rt-ok` and `--rt-run` are the SAME colour (both `var(--rt-axis-y-500)`), so
+ * six slots yielded five hues and one sixth of personas collided outright; and three of the six were STATUS
+ * tokens, so a persona bar could read as an outcome beside a row whose outcome it was not. Contrast on this
+ * theme's three transcript grounds — page, surface and hover — is 5.28:1 at worst (`--rt-viz-1` on `--rt-hover`),
+ * against 4.54:1 for the `--rt-warn` it replaces.
+ *
+ * Beyond six personas the hues repeat, which is the ramp's own declared behaviour and PD-CHAT-005's stated cost.
  */
-const PERSONA_TOKENS = ['--rt-accent-300', '--rt-axis-y-300', '--rt-axis-x-300', '--rt-ok', '--rt-warn', '--rt-run'] as const;
+const PERSONA_TOKENS = ['--rt-viz-1', '--rt-viz-2', '--rt-viz-3', '--rt-viz-4', '--rt-viz-5', '--rt-viz-6'] as const;
 export function personaColourToken(persona: string): string {
   let h = 0;
   for (const ch of persona) h = (h * 31 + ch.codePointAt(0)!) % PERSONA_TOKENS.length;
   return PERSONA_TOKENS[h]!;
+}
+
+/** PD-CHAT-005: the persona's colour as the label's ink, and nothing at all where the row names no persona. */
+function personaInk(row: Pick<TranscriptRow, 'name' | 'persona'>): { color: string } | undefined {
+  const persona = row.persona ?? row.name ?? '';
+  return persona === '' ? undefined : { color: `var(${personaColourToken(persona)}, var(--rt-accent-300))` };
+}
+
+/**
+ * PD-CHAT-005: a delegated agent's rows are indented one step per level of the delegation tree, so the
+ * transcript says who reports to whom in the same place the Agents panel does. The depth is a custom property
+ * and the step is a token: `shell.css` multiplies the two, and this file writes no pixel.
+ *
+ * REQ-CHAT-057's 52 px and 112 px columns are UNTOUCHED — the indent moves the grid, it does not resize it.
+ */
+function depthStyle(surface: TranscriptSurface, row: Pick<TranscriptRow, 'name' | 'persona'> | undefined): CSSProperties | undefined {
+  const depth = row === undefined ? 0 : surface.agentDepth?.(row.name ?? '', row.persona ?? '') ?? 0;
+  return depth > 0 ? ({ '--rt-row-depth': String(depth) } as CSSProperties) : undefined;
 }
 
 /**
@@ -511,13 +556,14 @@ export function Row(p: RowProps) {
       // out of the summary string. Part Z's placeholder published it and the proof reads it; the real row did
       // not, which is what the merge found. `data-segments` is PD-CHAT-004's equivalent for the run's shape.
       <article {...common} className={`row row--group tool tool--${severity}${live ? ' row--streaming' : ''}${blockStartClass}`}
+        style={depthStyle(surface, display.members[0])}
         data-family={display.family} data-severity={severity} data-members={display.members.length}
         data-segments={display.segments.length} data-agent={display.role} data-testid="row-group">
         <div className="row__grid">
           <time className="row__time mono" dateTime={display.startedAt}>{rowTime(display.startedAt)}</time>
           {/* PD-CHAT-004 / REQ-CHAT-057: the role gutter names the AGENT. The family words are in the line. */}
           {place.blockStart
-            ? <span className="row__attribution"><span className="row__role">{display.role}</span></span>
+            ? <span className="row__attribution"><span className="row__role" style={personaInk({ persona: display.persona, name: display.role })}>{display.role}</span></span>
             : <span className="row__bar" data-testid="row-bar" style={{ background: `var(${rail}, var(--rt-border))` }} aria-hidden="true" />}
           <div className="row__main">
             <DesignButton type="button" className="tool__header mono" onClick={p.onToggle} aria-expanded={expanded} aria-description={summary} data-testid="group-header">
@@ -526,7 +572,22 @@ export function Row(p: RowProps) {
               <span className="activity__segments">
                 {display.segments.map((segment, index) => (
                   <span key={`${segment.label}-${index}`} className={`activity__segment${segment.reasoning ? ' activity__segment--reasoning' : ''}`} data-segment={segment.label}>
-                    {segmentSummary(segment)}
+                    {/* PD-CHAT-004 rev 3: the fail colour belongs to `1 failed` and to nothing else on the line, so
+                        the facts are drawn one element each rather than as one string. The separator is its own
+                        element rather than part of the fact behind it, so the dot between `3 ok` and `1 failed`
+                        stays the colour every other separator on the line is. The segment keeps `nowrap`, so
+                        splitting it changes where it may break not at all: it still may not break anywhere. */}
+                    {segmentFacts(segment).flatMap((fact, at) => {
+                      const drawn = (
+                        <span
+                          key={fact.text}
+                          className={fact.outcome === null ? undefined : `activity__fact activity__fact--${fact.outcome}`}
+                          data-outcome={fact.outcome ?? undefined}
+                        >{fact.text}</span>
+                      );
+                      if (at === 0) return [drawn];
+                      return [<span key={`${fact.text}-sep`} className="activity__sep">{FACT_SEPARATOR}</span>, drawn];
+                    })}
                   </span>
                 ))}
                 {/* PD-CHAT-004: the activity word of the segment in flight, marked as continuing, so "what is
@@ -539,7 +600,10 @@ export function Row(p: RowProps) {
                   >{display.inFlightLabel}…</span>
                 )}
               </span>
-              <span className={`tool__outcome tool__outcome--${severity}`}>{(durationMs / 1000).toFixed(1)}s</span>
+              {/* PD-CHAT-004 rev 3: the run's elapsed span is a fact about the run, not about the failure — it keeps its
+                  ordinary colour. `data-severity` on the article above is still where the line PUBLISHES the
+                  ordering REQ-CHAT-065 fixes, which the directive leaves untouched. */}
+              <span className="tool__outcome" data-severity={severity}>{(durationMs / 1000).toFixed(1)}s</span>
             </DesignButton>
             {/* REQ-CHAT-065: while a member is in flight the header carries that call's text. */}
             {!expanded && display.inFlight !== null && <div className="tool__preview text-secondary mono">⤷ {display.inFlight}</div>}
@@ -603,7 +667,7 @@ export function Row(p: RowProps) {
     // for the row's stream, expanded or not, so it stays visible; the card's INPUT/OUTPUT sit beneath it when open.
     const preview = stream !== null && !row.settled ? (surface.terminalPreview?.(stream) ?? null) : null;
     return (
-      <article {...common} className={`row row--tool tool tool--${outcome.state}${live ? ' row--streaming' : ''}${blockStartClass}`} data-index={row.index} data-settled={row.settled} data-call-key={row.callKey} data-agent={row.name} data-collapsed={collapsedToName ? 'name' : undefined}>
+      <article {...common} className={`row row--tool tool tool--${outcome.state}${live ? ' row--streaming' : ''}${blockStartClass}`} style={depthStyle(surface, row)} data-index={row.index} data-settled={row.settled} data-call-key={row.callKey} data-agent={row.name} data-collapsed={collapsedToName ? 'name' : undefined}>
         <div className="row__grid">
           <Attribution row={row} place={place} personaBar={personaColourToken(row.persona ?? row.name ?? '')} />
           <div className="row__main">
@@ -651,7 +715,7 @@ export function Row(p: RowProps) {
   if (isReasoningRow(row)) {
     const summary = reasoningSummary(row, surface.nowMs, surface.runActive);
     return (
-      <article {...common} className={`row row--thinking tool${summary.live ? ' row--streaming' : ''}${blockStartClass}`} data-index={row.index} data-settled={row.settled} data-agent={row.name} data-testid="row-thinking">
+      <article {...common} className={`row row--thinking tool${summary.live ? ' row--streaming' : ''}${blockStartClass}`} style={depthStyle(surface, row)} data-index={row.index} data-settled={row.settled} data-agent={row.name} data-testid="row-thinking">
         <div className="row__grid">
           <Attribution row={row} place={place} personaBar={personaColourToken(row.persona ?? row.name ?? '')} />
           <div className="row__main">
@@ -674,7 +738,7 @@ export function Row(p: RowProps) {
   // Every other category. REQ-CHAT-056's Markdown on the agent-message category only.
   const markdown = isMessageRow(row);
   return (
-    <article {...common} className={`row row--${row.kind}${live ? ' row--streaming' : ''}${blockStartClass}`} data-index={row.index} data-settled={row.settled} data-agent={row.name} data-testid={`row-${row.kind}`}>
+    <article {...common} className={`row row--${row.kind}${live ? ' row--streaming' : ''}${blockStartClass}`} style={depthStyle(surface, row)} data-index={row.index} data-settled={row.settled} data-agent={row.name} data-testid={`row-${row.kind}`}>
       <div className="row__grid">
         <Attribution row={row} place={place} personaBar={personaColourToken(row.persona ?? row.name ?? '')} />
         <div className="row__main">
@@ -695,8 +759,11 @@ export function Row(p: RowProps) {
               ))}
             </ol>
           )}
-          {/* REQ-CHAT-164: the animated indicator is REPLACED by the stalled one, and reverts as soon as any output arrives. */}
-          {live && stalled === null && <span ref={(element) => { if (element) markMotionStart(element); }} className="row__streaming" aria-label="still being written">…</span>}
+          {/* PD-CHAT-006: a row still being written draws NO animated indicator of its own — the pulsing `…` that
+              stood here is gone and nothing replaces it. The falsified line, kept beside its replacement:
+                {live && stalled === null && <span className="row__streaming" aria-label="still being written">…</span>}
+              REQ-CHAT-164's stalled indicator is untouched and now appears where nothing was drawn; reverting
+              when output arrives means drawing nothing again, which is what `stalled === null` now renders. */}
           {live && stalled !== null && <span className="row__stalled" data-testid="row-stalled" aria-description={stalledLabel(stalled)}>{stalledLabel(stalled)}</span>}
         </div>
       </div>

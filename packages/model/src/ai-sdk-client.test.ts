@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Timers } from '@rotaris/kernel';
-import { AiSdkModelClient, redactHeaders, type FetchLike } from './ai-sdk-client.js';
+import { AiSdkModelClient, outputDowngrade, redactHeaders, type FetchLike } from './ai-sdk-client.js';
 import type { ModelRequest, StreamPart } from './ports.js';
 
 /**
@@ -64,6 +64,56 @@ describe('model — the AI SDK adapter (ADR-0027) through one decorated fetch', 
     expect(parts.filter((p) => p.kind === 'text').map((p) => (p as { delta: string }).delta).join('')).toBe('Hello');
     expect(parts.find((p) => p.kind === 'usage')).toEqual({ kind: 'usage', usage: { input: 7, output: 2 } });
     expect(parts.at(-1)).toEqual({ kind: 'finish', reason: 'stop' });
+  });
+  it('PD-MONITOR-001: the endpoint that reports a cost is asked for one, and the figure it answers rides out on the usage part', async () => {
+    const seen: string[] = [];
+    const costChunk = JSON.stringify({ id: 'c1', object: 'chat.completion.chunk', created: 0, model: 'm', choices: [{ index: 0, delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 7, completion_tokens: 2, total_tokens: 9, cost: 0.0123 } });
+    const fake: FetchLike = async (_input, init) => {
+      seen.push(String(init?.body ?? ''));
+      return sse([chatChunk('done', null), costChunk, '[DONE]']);
+    };
+    const client = new AiSdkModelClient({ timers: realTimers, baseUrl: 'https://openrouter.ai/api/v1', fetch: fake });
+    const { parts, error } = await collect(client.stream(request('chat')));
+    expect(error).toBeNull();
+    // The ask, in the endpoint's own field — the SDK has no option for it, so it goes through `transformRequestBody`.
+    expect(JSON.parse(seen[0]!)).toMatchObject({ usage: { include: true } });
+    // The SDK's usage mapping keeps the token fields and drops the rest; the figure survives as metadata.
+    expect(parts.find((p) => p.kind === 'usage')).toEqual({ kind: 'usage', usage: { input: 7, output: 2, cost: '0.0123' } });
+  });
+  it('PD-MONITOR-001: an endpoint whose protocol defines no cost field is asked nothing, and its usage carries none', async () => {
+    const seen: string[] = [];
+    const fake: FetchLike = async (_input, init) => {
+      seen.push(String(init?.body ?? ''));
+      return sse([chatChunk('done', 'stop', { prompt_tokens: 3, completion_tokens: 1 }), '[DONE]']);
+    };
+    const client = new AiSdkModelClient({ timers: realTimers, baseUrl: 'https://api.openai.com/v1', fetch: fake });
+    const { parts, error } = await collect(client.stream(request('chat')));
+    expect(error).toBeNull();
+    // A strict OpenAI-shaped API rejects an unrecognised body key with a 400, so the ask is never sent to one.
+    expect(JSON.parse(seen[0]!)).not.toHaveProperty('usage');
+    expect(parts.find((p) => p.kind === 'usage')).toEqual({ kind: 'usage', usage: { input: 3, output: 1 } });
+  });
+  it('REQ-ORCH-010: the strict rung leaves as a schema, and a rung the SDK drops is read back as a rejection', async () => {
+    const seen: string[] = [];
+    const fake: FetchLike = async (_input, init) => {
+      seen.push(String(init?.body ?? ''));
+      return sse([chatChunk('{"intent":"question"}', 'stop', { prompt_tokens: 3, completion_tokens: 4 }), '[DONE]']);
+    };
+    const client = new AiSdkModelClient({ timers: realTimers, baseUrl: 'https://acme.example/v1', fetch: fake });
+    const schema = { type: 'object', properties: { intent: { type: 'string' } }, required: ['intent'], additionalProperties: false };
+    const { error } = await collect(client.stream(request('chat', { output: { kind: 'json_schema', name: 'intent_classification', schema } })));
+    expect(error).toBeNull();
+    const body = JSON.parse(seen[0]!) as { response_format?: { type?: string; json_schema?: { schema?: unknown } } };
+    // Without `supportsStructuredOutputs` this was `{ type: 'json_object' }` with the schema discarded.
+    expect(body.response_format?.type).toBe('json_schema');
+    expect(body.response_format?.json_schema?.schema).toMatchObject({ properties: { intent: { type: 'string' } } });
+    // And the warning that reported the discard, had it happened, is a rung rejection rather than nothing.
+    const schemaOut = { kind: 'json_schema', name: 'intent_classification', schema } as const;
+    expect(outputDowngrade([{ type: 'unsupported', feature: 'responseFormat', details: 'JSON response format schema is only supported with structuredOutputs' }], schemaOut))
+      .toMatchObject({ code: 'unsupported_output', transient: false });
+    expect(outputDowngrade([{ type: 'unsupported-setting', setting: 'responseFormat' }], schemaOut)).toMatchObject({ code: 'unsupported_output' });
+    expect(outputDowngrade([{ type: 'unsupported', feature: 'topK' }], schemaOut)).toBeNull();
+    expect(outputDowngrade([{ type: 'unsupported', feature: 'responseFormat' }], { kind: 'json_object' })).toBeNull();
   });
   it('responses: the same base URL reaches <base>/responses through the vendor constructor; a 401 keeps its status and body', async () => {
     const seen: string[] = [];

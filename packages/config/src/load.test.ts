@@ -6,7 +6,7 @@ import { canonicaliseRoles, mergeLayers, overlaySection, PLAIN_OPS } from './mer
 import { loadConfiguration, readDelegationStrategy, type LoadedConfiguration } from './load.js';
 import { parseConfig } from './document.js';
 import { referentialMessages, renderFatal, renderProblems } from './validate.js';
-import { resolveSlotsAndReasoning, registeredAliases, resolveSlotBase } from './slots.js';
+import { resolveSlotsAndReasoning, registeredAliases, resolveSlotBase, unwrapSynthetic } from './slots.js';
 import { readRuntimeSection, validateRuntimeField, RUNTIME_DEFAULTS } from './sections/runtime.js';
 import { readModelEntry, providerEffort } from './sections/models.js';
 import { readCircuitBreakerSection, CIRCUIT_BREAKER_DEFAULTS } from './circuit-breaker-section.js';
@@ -141,6 +141,23 @@ describe('REQ-CONFIG-051 the end-to-end two-scope fixture', () => {
     expect(c.slots.small_model).toBe('gpt-4o-mini');
     expect(c.defaultPersona).toBe('orchestrator');
     expect(c.personas['orchestrator']?.model).toBe('gpt-4o');
+    expect(c.warnings).toEqual([]);
+  });
+  it('REQ-MCP-014: the intent-classifier persona ships in the defaults, carrying no servers', () => {
+    const c = loaded(null, null);
+    const p = c.personas['intent-classifier'];
+    expect(p).toMatchObject({ name: 'intent-classifier', model: 'gpt-4o-mini', mcp_servers: [] });
+    expect(c.warnings).toEqual([]);
+  });
+  // Found live 2026-09-16: a global file's leftover partial override for a persona the defaults
+  // did not declare failed the whole load. The default entry is what makes the merge contract hold.
+  it('a partial personas override for intent-classifier merges onto its default entry and loads (REQ-CONFIG-031, REQ-CONFIG-098)', () => {
+    const c = loaded('personas:\n  intent-classifier:\n    thinking: low\n', null);
+    const entry = c.personas['intent-classifier'];
+    // The stated thinking synthesises the reserved model name (REQ-CONFIG-079); the underlying
+    // model is the entry's own default, the small slot's base.
+    expect(entry).toMatchObject({ name: 'intent-classifier', mcp_servers: [] });
+    expect(unwrapSynthetic(entry!.model, c.models)).toBe('gpt-4o-mini');
     expect(c.warnings).toEqual([]);
   });
 });

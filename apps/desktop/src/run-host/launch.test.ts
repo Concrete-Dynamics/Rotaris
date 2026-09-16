@@ -9,7 +9,7 @@ import { Sessions } from '@rotaris/engine';
 import { answer, DefaultAgentBackend, ScriptedModelClient } from '@rotaris/model';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import type { ConfiguredRun, ConfigureDeps } from './configuration.js';
-import { launchSession, leaseForContinuation, type LaunchRequest } from './launch.js';
+import { launchSession, leaseForContinuation, LeaseReportLog, type LaunchRequest } from './launch.js';
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -182,7 +182,7 @@ describe('launch configuration ownership (REQ-TRACE-470/471, REQ-SESSION-138)', 
   });
 });
 
-describe('the continuation lease (REQ-PROVIDER-066; docs/defects/continue-run-sends-no-authorization-header.md)', () => {
+describe('the continuation lease (REQ-PROVIDER-066; a defect note, removed once repaired)', () => {
   let dir: string;
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'rotaris-lease-'));
@@ -213,6 +213,33 @@ describe('the continuation lease (REQ-PROVIDER-066; docs/defects/continue-run-se
   it('a lease main does not answer refuses, as a launch does — the entry provider is unresolved', async () => {
     const r = await leaseForContinuation(dir, deps(async () => { throw new Error('main did not answer'); }));
     expect(r).toMatchObject({ kind: 'refused', reply: { kind: 'refused', code: 'session.provider-auth' } });
+  });
+
+  it('REQ-PROVIDER-068: the opening report is whole, an unchanged one is silent, and only a change is said', () => {
+    const lines: string[] = [];
+    const reports = new LeaseReportLog();
+    const unresolved = { authenticated: ['openrouter'], unresolved: { codex: 'Authentication expired; re-authentication required.', copilot: 'Authentication required' } };
+    // The launch: the whole report, which is the one REQ-PROVIDER-068 requires.
+    reports.report(dir, unresolved, (m) => lines.push(m));
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('leased for openrouter');
+    expect(lines[0]).toContain('codex (Authentication expired; re-authentication required.)');
+    // Three continuations over state that has not moved: a prompt, a plan decision and a continue.
+    for (let i = 0; i < 3; i += 1) reports.report(dir, unresolved, (m) => lines.push(m));
+    expect(lines).toHaveLength(1);
+    // A provider that authenticated since is said, and only it.
+    reports.report(dir, { authenticated: ['openrouter', 'codex'], unresolved: { copilot: 'Authentication required' } }, (m) => lines.push(m));
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toBe(`credentials (workspace ${dir}): codex is authenticated`);
+    // A reason that changed is said too; another workspace root keeps its own opening report.
+    reports.report(dir, { authenticated: ['openrouter', 'codex'], unresolved: { copilot: 'Authentication expired; re-authentication required.' } }, (m) => lines.push(m));
+    expect(lines[2]).toContain('copilot is unresolved — Authentication expired');
+    reports.report(`${dir}-other`, unresolved, (m) => lines.push(m));
+    expect(lines[3]).toContain(`(workspace ${dir}-other)`);
+    expect(lines[3]).toContain('leased for openrouter');
+    // A lease main did not answer reports nothing at all, and leaves the remembered report alone.
+    reports.report(dir, null, (m) => lines.push(m));
+    expect(lines).toHaveLength(4);
   });
 
   it('a configuration that will not load leases nothing — setupFor refuses with its real report instead', async () => {

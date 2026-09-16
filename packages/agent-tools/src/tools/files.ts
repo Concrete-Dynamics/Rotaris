@@ -90,6 +90,22 @@ function listing(dir: string): string {
   return entries.map((e) => (e.isDirectory() ? `${e.name}/` : e.name)).join('\n');
 }
 
+/**
+ * Why REQ-TOOLS-134's parent listing could not be taken, read from the filesystem rather than assumed.
+ * A linked worktree's `.git` is a file, not a directory, and answering `read_file .git/HEAD` with "its
+ * parent directory does not exist either" sent an agent hunting for a path that was there all along.
+ */
+function unlistableParent(parent: string, relParent: string): string {
+  if (!existsSync(parent)) return 'Its parent directory does not exist either.';
+  const name = relParent === '' || relParent === '.' ? 'The workspace root' : `'${relParent}'`;
+  try {
+    if (!statSync(parent).isDirectory()) return `${name} is a file, not a directory.`;
+  } catch {
+    return `${name} could not be read.`;
+  }
+  return `${name} could not be listed.`;
+}
+
 /** REQ-TOOLS-134: the parent listing and up to five close matches at ≥ 0.45 under REQ-TOOLS-188. */
 function missingPathMessage(resolved: string, rel: string): string {
   const parent = dirname(resolved);
@@ -98,7 +114,7 @@ function missingPathMessage(resolved: string, rel: string): string {
   try {
     names = readdirSync(parent);
   } catch {
-    return `File not found: ${rel}. Its parent directory does not exist either.`;
+    return `File not found: ${rel}. ${unlistableParent(parent, dirname(rel))}`;
   }
   const scored = names.map((n) => ({ n, s: similarity(wanted, n.toLowerCase()) })).filter((x) => x.s >= 0.45).sort((a, b) => b.s - a.s || a.n.localeCompare(b.n)).slice(0, 5);
   const suggestions = scored.length ? `\nDid you mean: ${scored.map((x) => x.n).join(', ')}?` : '';
@@ -191,7 +207,11 @@ function doRead(state: FileToolState, fence: FenceConfig, args: z.infer<typeof r
 export function readFileTool(state: FileToolState, fence: FenceConfig): ToolExecutor<z.infer<typeof readSchema>> {
   return {
     name: 'read_file',
-    description: 'Read a workspace file (line-numbered; offset/limit; optional grep filter) or list a directory. Paths are relative to the workspace root.',
+    // The re-read rule is stated here because the corpus already answers it and nothing was telling the model:
+    // REQ-TOOLS-189 makes a current `content_hash` satisfy REQ-TOOLS-133's read-before-write rule, "so a caller
+    // holding a current hash never has to read a file twice". Run `a26918e8` read one lockfile four times in
+    // five minutes; every read was a true read of the disk, which is why the repair is guidance and not a cache.
+    description: 'Read a workspace file (line-numbered; offset/limit; optional grep filter) or list a directory. Paths are relative to the workspace root. A file you have already read is unchanged unless you or a command changed it: re-read it to see an edit you did not make yourself, not to recall what it said. To edit, prefer haet_read, whose content_hash is what a later haet_edit needs.',
     schema: readSchema,
     label: (a) => `read_file ${a.path ?? a.file_path ?? ''}`,
     execute: async (a) => doRead(state, fence, a, false),
@@ -201,7 +221,7 @@ export function readFileTool(state: FileToolState, fence: FenceConfig): ToolExec
 export function haetReadTool(state: FileToolState, fence: FenceConfig): ToolExecutor<z.infer<typeof readSchema>> {
   return {
     name: 'haet_read',
-    description: 'Read a workspace file and receive its content_hash (SHA-256 of the exact bytes) for a hash-anchored edit with haet_edit.',
+    description: 'Read a workspace file and receive its content_hash (SHA-256 of the exact bytes) for a hash-anchored edit with haet_edit. Holding a current hash is what satisfies the read-before-write rule, so a file does not have to be read twice; and haet_edit reports the file\'s new content_hash, so consecutive edits chain without a read in between.',
     schema: readSchema,
     label: (a) => `haet_read ${a.path ?? a.file_path ?? ''}`,
     execute: async (a) => doRead(state, fence, a, true),

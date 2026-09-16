@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync, readdirSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, win32 } from 'node:path';
 import { millis, mintMachineId, FakeClock, type MachineId } from '@rotaris/kernel';
 import { replaceDocument, exclusiveCreate, guardedRead, probePid, isLockLive, isLockForeign, canonicalPath, samePath, readOrMintMachineId, resolveUserDirs, claimInstance, nodeClocks, findExecutable, environmentWithout, PreferenceStore, resolvePreferenceRoot, coercePaneLayout, composerDraftKey } from './index.js';
 
@@ -21,8 +21,11 @@ describe('platform — per-user directories (REQ-STARTUP-145)', () => {
   });
   it('on Linux the XDG variables govern', () => {
     const d = resolveUserDirs({ platform: 'linux', env: { XDG_CONFIG_HOME: '/x/cfg', XDG_DATA_HOME: '/x/data' }, home: '/home/me' });
-    expect(d.config).toBe(join('/x/cfg', 'rotaris'));
-    expect(d.data).toBe(join('/x/data', 'rotaris'));
+    // The expectation is spelled the way the PLATFORM PARAMETER spells it. `join` is the host's, so on Windows
+    // it answered `\x\cfg\rotaris` and the proof disagreed with the repaired code rather than with the defect —
+    // the same class the code was repaired for, in the assertion that measures it.
+    expect(d.config).toBe('/x/cfg/rotaris');
+    expect(d.data).toBe('/x/data/rotaris');
   });
 });
 
@@ -180,7 +183,7 @@ describe('platform — FakeClock drives the document ladder without real waiting
 describe('platform — desktop preferences (ADR-0042)', () => {
   it('uses the private proof root first and the machine-local application pair on Windows', () => {
     expect(resolvePreferenceRoot({ platform: 'win32', env: { ROTARIS_PREFERENCES_ROOT: 'X:\\proof', LOCALAPPDATA: 'X:\\local' }, home: 'X:\\home' })).toBe('X:\\proof');
-    expect(resolvePreferenceRoot({ platform: 'win32', env: { LOCALAPPDATA: 'X:\\local' }, home: 'X:\\home' })).toBe(join('X:\\local', 'Rotaris', 'Rotaris'));
+    expect(resolvePreferenceRoot({ platform: 'win32', env: { LOCALAPPDATA: 'X:\\local' }, home: 'X:\\home' })).toBe(win32.join('X:\\local', 'Rotaris', 'Rotaris'));
   });
 
   it('reads defaults without creating a file, preserves a stale theme, and flushes a theme write synchronously', () => {
@@ -248,11 +251,18 @@ describe('findExecutable on Windows (REQ-MCP-037; the merge of Parts R and S, 20
       // Node's own directory holds `npx` (a POSIX shell script) beside `npx.cmd`; only the latter starts on Windows.
       writeFileSync(join(dir, 'npx'), '#!/bin/sh');
       writeFileSync(join(dir, 'npx.cmd'), '@echo off');
+      // PATHEXT names the extension in UPPER case and Windows matches it without regard to case, so on Windows
+      // this second write lands on the SAME file. On a case-sensitive filesystem it is a second name, and it is
+      // what makes the Windows rule decidable here at all: without it the lookup below found nothing (Linux, 2026-09-16).
+      writeFileSync(join(dir, 'npx.CMD'), '@echo off');
       const env = { PATH: dir, PATHEXT: '.COM;.EXE;.BAT;.CMD' };
       // PATHEXT's own spelling of the extension comes back (`.CMD`); the wrap compares without regard to case.
       expect(findExecutable('npx', env, 'win32')?.toLowerCase()).toBe(join(dir, 'npx.cmd').toLowerCase());
       expect(findExecutable('npx.cmd', env, 'win32')).toBe(join(dir, 'npx.cmd'));
-      expect(findExecutable('npx', env, 'linux')).toBe(join(dir, 'npx'));
+      // The POSIX leg needs a POSIX-spelled PATH: this one holds the host's temporary directory, and on Windows
+      // that carries a drive letter, which the POSIX rule splits on as an entry separator. The rule under test is
+      // the platform parameter's, so the leg runs where the host can spell an input it accepts.
+      if (!dir.includes(':')) expect(findExecutable('npx', env, 'linux')).toBe(join(dir, 'npx'));
       expect(findExecutable('nothing-here', env, 'win32')).toBeNull();
     } finally { rmSync(dir, { recursive: true, force: true }); }
   });

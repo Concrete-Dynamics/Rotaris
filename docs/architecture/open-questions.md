@@ -33,7 +33,15 @@ session on one workspace ordinary) **and OQ-59** (a chooser restricted to a file
 no platform dialog offers). **Three escalations were raised in the same pass** — **ESC-37** (per-prompt
 attachment against a session-long force-loaded block), **ESC-38** (the Skills table's five columns
 against its seven) and **ESC-39** (a taken command name skipped against suffixed) — each stating the
-reading the build proceeds under, all three in `owner-decisions.md`. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+reading the build proceeds under, all three in `owner-decisions.md`. **Two more were raised on 2026-09-16
+by repairing what one plan-mode run hit: OQ-60** (what summary a session carries when the run that owned
+it died without a teardown, which REQ-ORCH-082's five stop-reason arms cannot select) **and OQ-61**
+(whether an isolated run may read the repository metadata of the worktree it works in, which neither of
+the fence's two designators covers), **and OQ-62** (whether a price may come from a provider's discovery
+payload, and whether a provider-reported cost has a qualifier — the reason every run's cost reads zero), of
+which **one branch was ruled on 2026-09-16** by `PD-MONITOR-001` and two stay open. **One more was raised on
+2026-09-16 by reading a launch log: OQ-63** (what level threshold, if any, governs the **application** log —
+every level requirement in the corpus governs the per-session log instead). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -2563,6 +2571,158 @@ still produced by the path resolver.
 **What the ruling decides.** Whether REQ-WORKSPACE-151 is amended to name a file chooser (what is
 built), or whether the action becomes two — "Load skill file…" and "Load skill folder…" — which is the
 only way to offer both on every platform and adds a header action the requirement does not state.
+
+**OQ-60 — What summary does a session carry when the run that owned it died without a teardown?** *(REQ-ORCH-082 with REQ-SESSION-060/062 and REQ-SESSION-093; raised 2026-09-16 while repairing the plan gate's cancel path.)*
+
+`REQ-ORCH-082` is "the single definition of end-of-run summarization for the whole product", and all
+five of its arms are selected by a **stop reason**. A run whose host process died recorded none: the
+session is corrected by `Sessions.repairOne` under REQ-SESSION-060/062, which fixes exactly what that
+correction writes — its type, severity, actor, message and metadata keys — and says nothing about the
+three summary columns. So a recovered session reads back with `summary_text` NULL, and three readers
+show the absence: the session record presents no summary at all, `summary.md` omits its Outcome block,
+and the agents view's activity line is empty.
+
+**What the build proceeds under.** Nothing: the repair path leaves the columns as it found them, which
+is what it has always done. The sibling case that *is* decidable was fixed in the same pass — a cancel
+taken at the plan gate comes to rest through `resolvePlanGate` rather than through the run's teardown,
+and it records a stop reason of `user_cancelled`, so REQ-ORCH-082's first arm selects itself and is now
+written there.
+
+**What a ruling decides.** Whether REQ-ORCH-082 gains a sixth arm for a run that ended without ending
+(and therefore whether an interruption is an outcome the product summarises at all), or whether
+REQ-SESSION-062's correction entry is the whole of what a recovered session says about itself, in which
+case the three NULL columns are correct and the readers should present that entry instead. The build
+must not choose: a second place deciding a summary would contradict REQ-ORCH-082's own claim to be the
+only one.
+
+**OQ-61 — May an isolated run read the repository metadata of the worktree it is working in?** *(REQ-TOOLS-132 with REQ-GIT-019/021/022 and REQ-TOOLS-001/142; raised 2026-09-16 while repairing what an isolated plan-mode run hit.)*
+
+An isolated run works in a linked worktree under `<workspace>/.rotaris/worktrees/<id>`, which
+REQ-GIT-019 makes its effective root. A linked worktree's `.git` is a **file** holding a
+`gitdir:` pointer, so HEAD, the refs and the worktree's own administrative directory all live
+under `<workspace>/.git/`, above the fence. Every repository-metadata path the run reached for in
+session `6696f6ed` — `.git/HEAD`, `.git/refs/heads/<branch>`, `<workspace>/.git/worktrees/<id>/HEAD`
+and a bare `../` — was refused by REQ-TOOLS-129's boundary check, and the run recorded its own git
+state as unverifiable.
+
+The fence admits a read outside the root only from a **designated additional read-only root**
+(REQ-TOOLS-132), and the corpus designates exactly two things: `runtime.additional_read_only_roots`
+(REQ-CONFIG-468) and the catalogued skill directories (REQ-WORKSPACE-059). A repository's git
+directory is not among them. Nor is there a read-only git tool to ask instead: REQ-TOOLS-001 and
+REQ-TOOLS-142 declare `git_commit` and nothing else.
+
+**What the build proceeds under.** Nothing changes: an isolated run still cannot read the metadata
+of the worktree it occupies. What *was* repaired in this pass is only the answer it received —
+`read_file .git/HEAD` replied `Its parent directory does not exist either.` about a `.git` that
+exists and is a file, which sent the run looking for a path that was there all along.
+
+**What a ruling decides.** Which of three shapes the capability takes, if it is wanted at all:
+the run-host designates the base repository's git directory as an additional read-only root for an
+isolated port, which needs no new tool but adds a read root the corpus does not name; or
+REQ-TOOLS-001 gains a read-only git member, which is a new tool with its own contract and its own
+permission facet; or the run is *told* its branch and base commit in the opening context it already
+receives and never reads metadata at all, which is a message the specification does not have. The
+build must not choose between them: each one adds product behaviour, and the third would put the
+git state in a place no requirement says it appears.
+
+**OQ-62 — May a price come from a provider's discovery payload, and may a provider-reported cost be shown under its own qualifier? PARTLY RULED 2026-09-16 — the second half is answered, the first is not.** *(REQ-PROVIDER-072, REQ-MONITOR-166, REQ-CONFIG-088, with ADR-0031 and OQ-21; raised 2026-09-16 from a run whose cost read `0` throughout.)*
+
+Every run's `cost` column reads `"0"` and every cost label reads "price not established". That is not a
+defect of the aggregate: `Aggregates` has no mutator for cost because there is nothing to feed one.
+Four routes to a figure exist and three of them need a ruling.
+
+**Discovery drops the prices it is given.** `REQ-PROVIDER-072` admits pricing "only for
+`concrete-cloud`", so `describeModel` returns `pricing: {}` for every other provider and a test pins
+it. OpenRouter publishes per-token prices in the same payload, as decimal strings, and they are
+discarded on the way past.
+
+**A provider-reported per-request cost has nowhere to land.** OpenRouter answers `usage.cost` when the
+request asks for it; the adapter neither asks nor reads it. `REQ-MONITOR-166` fixes the cost label's
+qualifier as one of three — `unknown`, `incomplete`, `configured` — and a figure the provider itself
+computed is none of them. A fourth would have to be named.
+
+**Configured rates are covered in principle and blocked in practice.** `REQ-CONFIG-088`'s
+`input_cost_per_token` / `output_cost_per_token` take effect only when both are set — and today they
+take effect never: `effectivePricing()` has no callers at all. Multiplying them is where this stops.
+`REQ-PROVIDER-121` states the one money rule, that no amount is computed in binary floating point
+anywhere; ADR-0031 is the decision that carries it out, and it is **proposed**, names a spike it has
+not had, and is blocked by **OQ-21** — the same two fields are float-typed at their source
+(`REQ-CONFIG-088`, `REQ-PROVIDER-072`) and exact in the rule that consumes them. ADR-0031's first
+accepted consequence settles what to do meanwhile in terms: if the float typing stands, the exactness
+is unattainable and "that is a specification defect to be recorded rather than a design to be built
+around".
+
+**What the build proceeds under.** Nothing was built for this, deliberately. Cost stays `"0"` and the
+label stays `price not established` under the `unknown` qualifier, which `REQ-MONITOR-166` provides
+for. Writing the arithmetic now would choose ADR-0031's representation before OQ-21 answers and before
+the spike that decision requires, and a second money path is precisely what the lint rule in that
+decision exists to prevent. The gap is recorded as an open defect note instead.
+
+**What a ruling decides.** Whether discovery carries per-token prices for every provider (as decimal
+strings, extending OQ-21's own recommended reading, which would amend `REQ-PROVIDER-072`'s
+`concrete-cloud` clause); whether `REQ-MONITOR-166`'s qualifier set gains a fourth member for a price
+the provider computed rather than the product; and whether configured rates are meant to produce a
+figure at all — which cannot be built until OQ-21 says what a price is.
+
+> **Disposition, 2026-09-16 (R-026).** One of the three is ruled and the other two are not, so the paragraphs
+> above stay as written rather than being edited to match the answer.
+>
+> **Ruled:** the provider-reported cost. `REQ-MONITOR-166`'s qualifier set gains a fourth member for a figure
+> the provider computed, and the adapter asks for and reads it — `PD-MONITOR-001`, a directive rather than an
+> amendment round, because the owner is choosing to narrow a requirement that is not wrong. The sentence above
+> that says "a fourth would have to be named" is **falsified and kept**: it is what the record said before the
+> owner named one. What made this branch rulable while the other two are blocked is that carrying a figure the
+> provider computed is exact decimal **addition** and never a multiplication, so `REQ-PROVIDER-121`'s money
+> rule is met without saying what a price is. See `owner-decisions.md`, "OQ-62 — a provider-reported cost,
+> ruled".
+>
+> **Still open:** discovery pricing, which is blocked behind OQ-21 for the reason stated above, and configured
+> rates, which stay unbuilt. The paragraph "What the build proceeds under" continues to hold for both: cost
+> reads `"0"` under the `unknown` qualifier wherever no provider-reported figure exists, which after the
+> ruling is every provider but OpenRouter.
+>
+> **Built the same day.** The ruled branch is no longer only ruled: the adapter asks OpenRouter for the figure
+> and reads it back, `Aggregates.addCost` adds it in exact decimal arithmetic, and the label carries the fourth
+> qualifier. The two open branches were not touched by that work and are not unblocked by it — what made this
+> one buildable was addition, and neither of theirs is addition. The account is in
+> `docs/architecture/first-executions.md`, and the arithmetic is reported back into ADR-0031 in place.
+
+**OQ-63 — What level threshold, if any, governs the application log?** *(REQ-TOOLS-171, REQ-HOOKS-102/138, REQ-SANDBOX-071, REQ-LIBRARY-035/047/124, with REQ-CONFIG-121 and REQ-SESSION-142; raised 2026-09-16 from run `a26918e8`'s launch log.)*
+
+Reading one launch log for R-026's sixth finding: about eighty lines of one MCP server's handshake
+validation stood in it, and the repair that landed an hour after that run (`15414d7`) moved a child's
+stderr from `info` to `debug` and stopped the run host flattening `debug` into `info`. The lines are now
+*distinguishable*, which is what the repair claimed. They are not *absent*, and nothing in the corpus
+says whether they should be.
+
+**There is no threshold in the main process at all.** `apps/desktop/src/main/index.ts` logs through one
+closure — `const log = (m: string) => console.log(...)` — and the two places that forward a child
+process's diagnostics into it (`run host ${e.level}: ${e.message}`, `workspace service ${e.level}:
+${e.message}`) print the level as **text inside the message**. Nothing reads it. A `debug` line and an
+`error` line reach the application log identically, and the only way to lose a line is not to send it.
+
+**Every level requirement in the corpus governs the per-session log.** `REQ-CONFIG-121`'s
+`session_log_level` and `REQ-SESSION-142`'s application of it name `<session_dir>/evidence/debug.log`
+and nothing else. The application log **is** a named surface elsewhere — `REQ-TOOLS-171`,
+`REQ-HOOKS-102/138`, `REQ-SANDBOX-071` and `REQ-LIBRARY-035/047/124` all say that something is written
+to it — but every one of them fixes *what* is written, never at what level or subject to what filter.
+
+**Measured, 2026-09-16.** The built app, driven against a throwaway workspace with one scripted run
+(`pnpm app:drive`): 195 lines of application log, **141** of them `run host debug: mcp code_intelligence
+stderr:` and **0** at `info`. The MCP repair did exactly what it claimed and the volume is unchanged — the
+lines are distinguishable now, and nothing distinguishes on them.
+
+**What the build proceeds under.** The application log keeps every level, as today. Nothing is filtered
+in this pass, because choosing a threshold is choosing what a packaged build's diagnostics are worth
+after an incident, and that is the owner's call rather than a detail of the MCP repair that surfaced it.
+What the build assumes, and what a ruling would confirm or replace: that the honest interim is a log
+that keeps everything, since a line not written cannot be recovered, and that the filtering question is
+about **packaged** builds specifically, where nobody is watching a terminal.
+
+**What a ruling decides.** Whether the application log takes a threshold at all; if it does, whether the
+key is `session_log_level`'s (which would make one key govern two logs of different audiences) or its
+own; and whether a packaged build suppresses `debug` with an environment switch to restore it — which is
+the shape every other desktop product settles on and which no requirement here states.
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

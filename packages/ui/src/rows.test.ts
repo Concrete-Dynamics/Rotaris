@@ -3,7 +3,7 @@ import type { AgentRecord, QuestionPrompt, TranscriptRow } from '@rotaris/contra
 import { trailerRows } from './transcript/project.js';
 import {
   compactTask, defaultExpanded, delegationSummary, groupDurationMs, groupSeverity, groupSummary, isLiveTerminalRow,
-  placements, reasoningSummary, rowMenuEntries, rowRole, rowTask, rowTime, stalledLabel, stripOutcomeGlyph,
+  personaColourToken, placements, reasoningSummary, rowMenuEntries, rowRole, rowTask, rowTime, stalledLabel, stripOutcomeGlyph,
   THINKING_LIVE_CUTOFF_MS, toolOutcome, trailerText, type DisplayRow,
 } from './transcript/Row.js';
 import { RUN_OWNED_KINDS, SCOPE_NO_AGENT, scopedRows } from './TranscriptSurface.js';
@@ -45,6 +45,22 @@ describe('rows — REQ-CHAT-047/057, the role and the attribution', () => {
     expect(rowTask(row({ kind: 'tool', persona: 'coding-agent', name: 'helper' }))).toBe('helper');
     expect(rowTask(row({ kind: 'agent', persona: 'orchestrator', name: 'orchestrator' }))).toBeNull();
     expect(rowTask(row({ kind: 'user' }))).toBeNull();
+  });
+
+  it('PD-CHAT-005: a persona colour is the design language\'s categorical ramp, never a status token', () => {
+    // The ramp `docs/design/system/tokens/colors.css` declares for categorical data, which is what telling
+    // one agent from another is. Six entries, six DISTINCT hues.
+    const personas = ['orchestrator', 'coding-agent', 'helper', 'reviewer', 'librarian', 'scribe', 'verifier'];
+    const tokens = personas.map(personaColourToken);
+    for (const token of tokens) expect(token).toMatch(/^--rt-viz-[1-6]$/);
+    // The falsified list this replaces: `--rt-ok` and `--rt-run` are both `var(--rt-axis-y-500)`, so six slots
+    // yielded five hues; and a status token beside a row whose outcome it was not reads as that outcome.
+    for (const status of ['--rt-ok', '--rt-warn', '--rt-run', '--rt-fail', '--rt-danger-300']) {
+      expect(tokens).not.toContain(status);
+    }
+    // REQ-SHELL-075 (a): stable for a name, so an agent keeps its colour across a reload and across windows.
+    expect(personaColourToken('coding-agent')).toBe(personaColourToken('coding-agent'));
+    expect(new Set(['a', 'b', 'c', 'd', 'e', 'f'].map(personaColourToken)).size).toBeGreaterThan(1);
   });
 
   it('REQ-CHAT-067: only the last two tool rows are spared by auto-collapse, and fewer than two spares them all', () => {

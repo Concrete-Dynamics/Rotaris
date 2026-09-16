@@ -129,6 +129,7 @@ async function main(): Promise<void> {
   // ADR-0002: one run host for the application's lifetime; one workspace service per open workspace.
   const runHostChild = utilityProcess.fork(join(__dirname, 'run-host.js'), [], { serviceName: 'rotaris-run-host' });
   const runHost = new ProcessLink<RunHostRequest>(portOf(runHostChild), clocks.timers);
+  let lastLeaseLine = '';
   // ADR-0030: the run host's one ask — the bearers for the providers a run names. Never logged.
   // ADR-0039 / ADR-0002 c.4: the run host's three checkpoint asks are relayed to the workspace service of that root and answered back.
   runHost.onAsk(async (a) => {
@@ -140,7 +141,13 @@ async function main(): Promise<void> {
     }
     if (a.kind !== 'credentials.lease') return { kind: 'refused', code: 'ask.unhandled', headline: `main does not answer ${a.kind} from the run host` };
     const { bearers, report } = providers.lease(a.providerIds);
-    log(`credentials leased: ${report.authenticated.join(', ') || 'none'}${Object.keys(report.unresolved).length > 0 ? `; unresolved ${Object.entries(report.unresolved).map(([id, why]) => `${id} (${why})`).join(', ')}` : ''}`);
+    /**
+     * REQ-PROVIDER-068: an unresolved credential is reported once, not at every check. Every continuation
+     * re-leases (ADR-0030, the standing substitute for the keep-fresh timer), so this answered three times a
+     * prompt and said the same sentence each time. The same sentence twice running is one fact, not two.
+     */
+    const line = `credentials leased: ${report.authenticated.join(', ') || 'none'}${Object.keys(report.unresolved).length > 0 ? `; unresolved ${Object.entries(report.unresolved).map(([id, why]) => `${id} (${why})`).join(', ')}` : ''}`;
+    if (line !== lastLeaseLine) { lastLeaseLine = line; log(line); }
     return { kind: 'credentials.leased', bearers, report: { authenticated: [...report.authenticated], renewed: [...report.renewed], unresolved: { ...report.unresolved } } };
   });
   runHostChild.on('exit', (code) => log(`run host exited (${code}); NOT re-forked — every in-flight run is lost and settles through stale detection (ADR-0002)`));

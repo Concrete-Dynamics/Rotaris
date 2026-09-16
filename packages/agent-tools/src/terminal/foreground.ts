@@ -172,10 +172,22 @@ export function wrapCommand(backend: ShellBackend, command: string, start: strin
     // `$?` says whether the last statement succeeded; a native command's status is in $LASTEXITCODE.
     return `$global:LASTEXITCODE = $null; Write-Output '${start}'; ${command}; Write-Output ('${end}:' + ${powershellExit('$?')})`;
   }
-  // The posix branch is left as it stands: a real pty's line discipline passes a newline through as a line
-  // terminator rather than swallowing it, so `sh` reads a multi-line command across lines as written. That is
-  // reasoning, not measurement — no POSIX shell runs on the host this was built on, and REQ-TOOLS-104 sends
-  // Windows to PowerShell — and it is recorded as owed in ADR-0020's note.
+  // FALSIFIED, kept beside its replacement (ADR-0020's note, POSIX first execution 2026-09-16): "a real pty's
+  // line discipline passes a newline through as a line terminator rather than swallowing it, so `sh` reads a
+  // multi-line command across lines as written". The line discipline does pass the newlines — and that is the
+  // problem, not the remedy. A command whose first line does not parse to completion puts the shell on its
+  // continuation prompt, so the pty ECHOES the remaining lines, and the echo of the line carrying the start
+  // marker then lands INSIDE the captured region. Measured: a here-string's capture came back
+  // `LINE TWO"\n> <marker>\n$ LINE ONE\nLINE TWO` where `LINE ONE\nLINE TWO` was the whole of the output.
+  //
+  // So the posix branch does what the PowerShell branch does, for the same reason: a multi-line command is
+  // carried across as ONE physical line and rebuilt on the far side, where its newlines are intact. `%b` is
+  // POSIX printf's own escape-expanding conversion, `eval` runs the result in THIS shell — not a subshell, so
+  // what the command sets persists into the next call — and `$?` after it is the payload's own status.
+  if (command.includes('\n')) {
+    const payload = command.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/'/g, `'\\''`);
+    return `printf '%s\\n' '${start}'; eval "$(printf '%b' '${payload}')"; printf '${end}:%s\\n' "$?"`;
+  }
   return `printf '%s\\n' '${start}'; ${command}; printf '${end}:%s\\n' "$?"`;
 }
 
@@ -282,9 +294,16 @@ export class ForegroundSession {
   }
 
   private static cleanLines(screenText: string, start: string, end: string): string[] {
-    const lines = screenText.split('\n');
-    // Everything up to and including the line that is exactly the start marker is echo/prompt.
-    const startAt = lines.findIndex((l) => l.trim() === start);
+    // The echoed wrapper is dropped BEFORE the start marker is looked for, not only after it. The marker's own
+    // line can carry the shell's PROMPT in front of it: the line discipline echoes what we wrote as soon as it
+    // arrives, and the shell prints its prompt when it reads — so when the write lands first, the screen reads
+    // `<echo>` on one row and `$ <marker>` on the next. The old reading required a row that was EXACTLY the
+    // marker, found none, kept the whole screen, and handed the agent `$ <marker>` as though the command had
+    // printed it. Rare, load-dependent and real: measured under a concurrently running suite on Linux,
+    // 2026-09-16. A row that ENDS with the marker is the marker's row whatever stands in front of it, and the
+    // marker is a per-call nonce, so no command can spell one to cut its own capture short (consequence 1).
+    const lines = screenText.split('\n').filter((l) => !l.includes('Write-Output (') && !l.includes("printf '%s"));
+    const startAt = lines.findIndex((l) => l.trimEnd().endsWith(start));
     let body = (startAt >= 0 ? lines.slice(startAt + 1) : lines).join('\n');
     // The end frame is cut at its FIRST occurrence, wherever it sits. Removing whole LINES that began with it
     // left the marker in what the agent read whenever the command's last write had no trailing newline and the
@@ -292,8 +311,7 @@ export class ForegroundSession {
     // in `onData` has always been unanchored; this is its sibling on the removal side (ADR-0020's note).
     const at = body.search(new RegExp(`${end}:-?\\d+`));
     if (at >= 0) body = body.slice(0, at);
-    // The echoed wrapper can spill after the start marker when the line wrapped: drop lines that are fragments of it.
-    return body.split('\n').filter((l) => !l.includes('Write-Output (') && !l.includes("printf '%s"));
+    return body.split('\n');
   }
 
   /** ADR-0021's emulator for one call's capture, sized by REQ-TOOLS-097's cap (`FOREGROUND_SCREEN_LINES`). */

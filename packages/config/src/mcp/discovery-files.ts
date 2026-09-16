@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { dirname, join, normalize, resolve } from 'node:path';
+import { posix, win32 } from 'node:path';
 import { isPlainMap } from '../merge.js';
 import { typeName } from '../sections/field.js';
 import { warn, type Diagnostic, type Staged } from './diagnostics.js';
@@ -17,7 +17,18 @@ export interface DiscoveryLocations {
   readonly user: string | null;
 }
 
+/**
+ * The platform is a PARAMETER throughout this module, so the separators come from IT and never from the host the
+ * code happens to run on: `node:path`'s host-bound exports resolved a Windows `envFile` against the POSIX rule
+ * whenever the host was not Windows, and the file was then looked for at a path no Windows machine would spell
+ * (found on Linux, 2026-09-16).
+ */
+function pathsFor(platform: NodeJS.Platform) {
+  return platform === 'win32' ? win32 : posix;
+}
+
 export function discoveryLocations(workspaceRoot: string, platform: NodeJS.Platform, env: Readonly<Record<string, string | undefined>>, home: string): DiscoveryLocations {
+  const { join } = pathsFor(platform);
   const project = join(workspaceRoot, '.mcp.json');
   if (platform === 'win32') {
     const appData = env['APPDATA'];
@@ -67,7 +78,8 @@ function substitutePlaceholders(value: string, workspaceRoot: string, env: Reado
 
 interface FileRead { readonly file: string; readonly origin: McpOrigin; readonly servers: Record<string, McpServerEntry>; readonly stated: Record<string, Record<string, unknown>>; readonly diagnostics: Diagnostic[] }
 
-function readOneFile(file: string, origin: McpOrigin, workspaceRoot: string, env: Readonly<Record<string, string | undefined>>, read: (path: string) => string | null): FileRead {
+function readOneFile(file: string, origin: McpOrigin, workspaceRoot: string, platform: NodeJS.Platform, env: Readonly<Record<string, string | undefined>>, read: (path: string) => string | null): FileRead {
+  const { dirname, normalize, resolve } = pathsFor(platform);
   const diagnostics: Diagnostic[] = [];
   const servers: Record<string, McpServerEntry> = {};
   const stated: Record<string, Record<string, unknown>> = {};
@@ -143,8 +155,8 @@ function readOnly(path: string): string | null {
 export function readDiscoveryFiles(input: DiscoveryInput): Staged<DiscoveredServers> {
   const locations = discoveryLocations(input.workspaceRoot, input.platform, input.env, input.home);
   const read = input.read ?? readOnly;
-  const user = locations.user === null ? null : readOneFile(locations.user, 'discovered-user', input.workspaceRoot, input.env, read);
-  const project = readOneFile(locations.project, 'discovered-project', input.workspaceRoot, input.env, read);
+  const user = locations.user === null ? null : readOneFile(locations.user, 'discovered-user', input.workspaceRoot, input.platform, input.env, read);
+  const project = readOneFile(locations.project, 'discovered-project', input.workspaceRoot, input.platform, input.env, read);
   const servers: Record<string, McpServerEntry> = {};
   const stated: Record<string, Record<string, unknown>> = {};
   const origins: Record<string, McpOrigin> = {};

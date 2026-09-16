@@ -14,8 +14,9 @@ that writes it.
 
 ## Count
 
-**Eight.** The count here is the number of entries below, written nowhere else so that it cannot go
-stale.
+**Twelve.** The count here is the number of entries below, written nowhere else so that it cannot go
+stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
+directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
 ---
 
@@ -150,7 +151,7 @@ of REQ-SESSION-136, which this directive does not require and does not forbid.
 > and its test green, but every model-facing filtered read returned the full document. Repaired against contracts'
 > `ARTIFACT_SECTIONS`; the ledger itself behaved exactly as this record fixes it — order preserved, statuses
 > in words, the denied command carrying no exit status. The full account is in
-> `docs/architecture/first-executions.md` and `docs/defects/artifact-read-section-allow-list-omits-commands.md`.
+> `docs/architecture/first-executions.md` and a defect note (removed once repaired).
 
 <a id="pd-chat-001"></a>
 
@@ -322,12 +323,36 @@ selecting rather than the unset whole-surface state the first checkbox state del
 
 ### PD-CHAT-004 — an agent's uninterrupted work draws as one activity line that updates in place
 
-**The run.** A *run* is a maximal sequence of consecutive transcript rows that belong to **one agent**
-and are of the `tool call` or `streamed reasoning` categories. A run of **two or more** rows SHALL be
-displayed as a single row — the **activity line**; a run of one row SHALL be displayed as that row,
-drawn as its own category states. Neither a change of tool family nor an intervening reasoning row
-SHALL end a run. A row of any other category, a row of a different agent, and an exempt row SHALL end
-it.
+*Revision 3 (2026-09-15, [R-029](requests.md#r-029)) — **the line's colour**, below. It was raised the
+day before revision 2 and reached `main` after it, so it takes the next free revision under the rule the
+`R-016` collision settled: the one that lands first keeps its number. Revision 2, 2026-09-16
+([R-025](requests.md#r-025)) — the run's boundary and the segment's shape. Revision 1 (2026-09-15,
+[R-019](requests.md#r-019)) is quoted where it is replaced, never deleted. A changed directive takes a
+revision and never a new number ([`README.md`](README.md)).*
+
+**The run.** A *run* is a maximal sequence of transcript rows that belong to **one agent** and are of
+the `tool call` or `streamed reasoning` categories. A run of **two or more** rows SHALL be displayed as
+a single row — the **activity line**; a run of one row SHALL be displayed as that row, drawn as its own
+category states. Neither a change of tool family nor an intervening reasoning row SHALL end a run.
+
+**Runs interleave, and a run is bounded by its agent alone (revision 2).** A row of a **different**
+agent SHALL NOT end a run. What ends one is: a row of any other category **belonging to that agent**, a
+row belonging to **no** agent, a **user prompt**, and an exempt row. A row belonging to no agent and a
+user prompt each end **every** open run — the first because it belongs to the run rather than to a
+participant, the second because it is the turn boundary the reader drew themselves. Each activity line
+SHALL be displayed at the position of its **earliest** member, and a later member SHALL lengthen that
+line where it already stands rather than move it.
+
+> **Revision 1 said:** "A *run* is a maximal sequence of **consecutive** transcript rows … A row of any
+> other category, **a row of a different agent**, and an exempt row SHALL end it."
+>
+> **Why it was wrong, measured 2026-09-16.** The rule solves the single-agent case and re-creates the
+> problem in the concurrent one. Two agents working at once interleave in the record, so each agent's
+> run is cut at every turn-taking: the owner's screenshot drew ten rows of two agents' work as **five**
+> lines of two, each re-stating a timestamp and a full role, with three of them runs of one row that
+> were not lines at all. The directive was raised because "two agents writing at once competed for the
+> newest row"; under revision 1 they stopped competing for it and started fragmenting each other
+> instead. The cost of the repair is stated below.
 
 **What never enters a run.** The structured-questions tool row and an unsettled live-terminal row
 (REQ-CHAT-066), and — while `display/showReasoning` is on (REQ-CHAT-167) — any streamed-reasoning
@@ -336,19 +361,48 @@ row, so that switching the preference on reveals reasoning without a second expa
 **What the collapsed line states.** In the agent's own role gutter, at the run's earliest member start
 time, on one line:
 
-- the run's **segments**, in the order they first appear. A reasoning segment reads
-  `reasoning ×N · <S>s · ~<T> tok`, its seconds the summed duration of its members and its token
-  figure their summed streamed-character count divided by 4 (REQ-CHAT-062's arithmetic). A tool
-  segment reads `<family> ×N` followed by the per-outcome counts of REQ-CHAT-065 — `3 ok`, `1 failed`
-  — omitting an outcome with no members. Consecutive rows of one family form one segment; the same
-  family reached again after another segment forms a second segment of that family.
+- the run's **segments — one per activity word, carrying that word's totals** — in the order the words
+  first appear (revision 2). A reasoning segment reads `reasoning ×N · <S>s · ~<T> tok`, its seconds the
+  summed duration of its members and its token figure their summed streamed-character count divided by 4
+  (REQ-CHAT-062's arithmetic). A tool segment reads `<family> ×N` followed by the per-outcome counts of
+  REQ-CHAT-065 — `3 ok`, `1 failed` — omitting an outcome with no members. A family reached again after
+  another word SHALL rejoin its own segment rather than open a second one, so the number of segments on
+  a line is the number of distinct words in the run and never the number of steps in it.
+
+  > **Revision 1 said:** "Consecutive rows of one family form one segment; the same family reached again
+  > after another segment forms a second segment of that family", reasoning that the line should read as
+  > a sequence of things done and that merging "would state a total nobody watched happen".
+  >
+  > **Why it was wrong, measured 2026-09-16.** An agent alternating reasoning and reading — which is what
+  > an agent does — produces one segment per **step**. The owner's screenshot carries a single line of
+  > more than thirty segments, wrapped over seven rows of text: the line grew with the work exactly as
+  > the appended rows it replaced did, which is the one property the directive exists to remove. The
+  > sequence is not summarised away and not lost. It is the expansion, in recorded order, one row per
+  > step, which is where a reader who wants the order already goes.
 - while a call is in flight, the activity word of the segment in flight marked as continuing, and that
   call's text on the dimmed `⤷` preview line REQ-CHAT-061 gives a collapsed tool row;
 - the run's **elapsed span** — from the earliest member's start to the last member's end — counting
   upward from the earliest start while the run is live.
 
-The line SHALL take its colour from the most severe outcome among its **tool** members, by
-REQ-CHAT-065's ordering; a run holding only reasoning is never coloured as failed.
+**The line's colour — revision 3.** The line SHALL NOT take one colour from the most severe outcome
+among its members. Within the line:
+
+- The **failure facts** of a segment — the `N failed` and `N blocked` counts REQ-CHAT-065 puts in it —
+  SHALL be drawn in the theme's fail state text colour.
+- Everything else on the line SHALL keep its ordinary colour: the family word and the `×N` total, the
+  `N ok` and `N running` counts, every reasoning segment, the chevron, the in-flight activity word, and
+  the run's elapsed span.
+
+REQ-CHAT-065's **severity ordering is untouched** and is still what the line computes and publishes —
+it is what the copy summary and the accessible description state, and what a reader of the drawn
+surface can still see, now located at the segment that holds it. What stops is that ordering selecting
+one colour for the whole line. A tool row drawn as its **own** row keeps REQ-CHAT-060's colouring in
+full, because that row **is** the call that failed; and expanding the line is untouched, each member
+being drawn as its own category states, which already colours the failed member and only it.
+
+> *Revision 1 said, and no longer governs (replaced by revision 3):* "The line SHALL take its colour from the most severe
+> outcome among its **tool** members, by REQ-CHAT-065's ordering; a run holding only reasoning is never
+> coloured as failed." Kept in place beside its replacement rather than repaired quietly.
 
 **It never appends.** Extending a live run — a further tool call, a further reasoning phase — SHALL
 change what the activity line states and SHALL NOT add a displayed row. While one agent works, only a
@@ -378,7 +432,7 @@ in turn drew as `ORCHESTRATOR / READING / ORCHESTRATOR / READING`, and reported 
 column appeared to name two participants where there was one agent, and two agents writing at once
 competed for the newest row, which flickered. The first fault is a defect against REQ-CHAT-057 and
 REQ-CHAT-064 and is repaired as one
-(`docs/defects/group-header-claims-the-role-gutter.md`); **this directive is the second.** Flicker is
+(a defect note, removed once repaired); **this directive is the second.** Flicker is
 a consequence of the shape of the record, not of the painting: a run of an agent's work appends a row
 per step, every append moves the tail, and two agents appending at once move it twice as often. A row
 that changes rather than grows removes the cause — each working agent owns exactly one line, and two
@@ -393,11 +447,302 @@ been at this", which is the question the line is drawn to answer, at the cost of
 activity word**, so the glanceable "what is it doing" is a list rather than a word; the in-flight
 segment is drawn as continuing precisely to keep that answer available at a glance.
 
+**What revision 2 gives up, and it is real.** **A live line no longer sits at the tail.** A run is drawn
+where its earliest member is, so an agent that has been working since before another agent's rows keeps
+its line above them and updates it there; a reader watching the bottom of the transcript sees the other
+agent's line move and must look up for the first one's. That is the direct price of "display them
+according to sent first" and of a row that changes rather than grows — the two cannot both be satisfied
+at the tail. **The order in which one agent used its tools is one expansion away**, where revision 1 put
+it on the line; what the line answers instead is how much of each thing the agent has done, which is the
+question a reader glancing at two working agents is actually asking. **A word's totals span the whole
+run**, so `reading ×22 · 22 ok` may cover calls made minutes apart and the per-call instants are, again,
+the expansion's.
+
+**Why revision 3, and what it costs.** The owner read a run in which one agent thought, read and called
+tools, one call failed, and the whole line — reasoning included — turned red. Revision 1 said that
+should happen, because REQ-CHAT-065 says it, and REQ-CHAT-065 says it for a reason: a collapsed group
+hides its members, so a reader who cannot see the failure inside it needs to see it on the header. This
+directive changed the premise that reason rested on and revision 1 did not notice. The line is no longer
+one family word with counts behind it; it states its segments, and each segment already carries its own
+outcomes **as text**. The place to mark the failure therefore exists on the collapsed line, and marking
+the whole line instead reports reasoning as having failed when reasoning has no outcome at all. The cost
+is that the failure is now a smaller mark — two words rather than a line — so a reader skimming a long
+transcript for a red line will not find it as fast. That is the trade: precision over salience, on a
+surface that now has somewhere precise to put it.
+
 > **Narrows:** REQ-CHAT-046, REQ-CHAT-062, REQ-CHAT-064, REQ-CHAT-065
 > **Extends:** REQ-CHAT-067
 
 *Raised by the owner, 2026-09-15; logged as [R-017](requests.md#r-017) and chosen from four drawn
-approaches as [R-019](requests.md#r-019).*
+approaches as [R-019](requests.md#r-019). **Revised** at the owner's request, 2026-09-16; logged as
+[R-025](requests.md#r-025). Revised again, 2026-09-15 and landed after it; logged as
+[R-029](requests.md#r-029).*
+
+---
+
+<a id="pd-chat-005"></a>
+
+### PD-CHAT-005 — a row names its agent by colour, and a delegated agent's rows sit one step in
+
+**The colour.** A transcript row's **role label** SHALL be drawn in its persona's assigned colour —
+the same colour REQ-CHAT-057's continuation bar and PD-CHAT-004's expanded rail already take, so one
+agent reads as one colour everywhere it appears. A row that names no persona — the reader's own row, a
+system notice — SHALL keep the surface's accent and take no persona colour.
+
+The assigned colours SHALL be taken from the **categorical set the adopted design language already
+declares** for data whose values are names rather than magnitudes, in that set's own order, assigned by
+a stable function of the persona's name. No persona colour SHALL be a **state** colour: a colour the
+product uses to say `ok`, `running`, `waiting` or `failed` may not also say *who*, because the two would
+then be indistinguishable on a row that carries both.
+
+**The place.** A row belonging to an agent at depth *N* in the run's delegation tree
+(REQ-MONITOR-036/037) SHALL be drawn indented *N* steps, one step being the design language's base
+spacing step, with the run's own entry persona at depth 0. The indent SHALL move the row's columns and
+SHALL NOT resize them: REQ-CHAT-057's 52 px timestamp column and 112 px role column are untouched, as
+are its margins and its minimum height. That is why this directive **extends** that requirement rather
+than narrowing it — every figure REQ-CHAT-057 fixes still holds on an indented row, and the indent is a
+new fact drawn beside them. (`PD-CHAT-003` already narrows REQ-CHAT-057, and one requirement may be
+narrowed by one directive only, so a second claim on it would have had to be settled rather than
+declared; there is nothing to settle, because nothing here disagrees with it.) A surface that does
+not know the delegation tree SHALL draw every row at depth 0, which is what every surface did before
+this directive.
+
+**Why, and what it costs.** The owner read a live two-agent transcript and reported that "agents can be
+barely distinguished". They were not: the role label was drawn in one accent colour for every agent, the
+persona colour reached only a 2 px continuation bar and an expanded rail, and nothing in the transcript
+said which agent had delegated to which — that fact lived only in the Agents panel, which indents its
+children. Two agents alternating therefore read as one column of identical labels.
+
+The palette this replaces was six tokens of which `--rt-ok` and `--rt-run` are the **same** colour, so
+six slots yielded five hues and one persona in six collided outright; and three of the six were state
+colours, so a persona bar could be read as an outcome beside a row whose outcome it was not. The
+language's categorical ramp is six distinct hues declared for exactly this purpose.
+
+The costs are four. **Beyond six personas the hues repeat**, which is the ramp's own declared behaviour
+and is not fixed here; two agents deep in one run may share a colour, and the label, the indent and the
+task line still tell them apart. **An indented row's columns move with it**: the first evidence shows
+a child's timestamp starting one step right of its parent's, so the time gutter reads as a stepped
+column rather than one straight edge. The alternative — indenting from the role label and leaving
+the times aligned — puts the step inside the row and breaks the block the row is, which is worse for
+the fact being drawn. **Depth costs horizontal room**: a row at depth 2 gives up 32 px of
+measure, and REQ-CHAT-057's columns do not shrink to pay for it, so a deep delegation narrows the text
+rather than the gutter. **The transcript now depends on the delegation tree** to draw a row in its
+place, where it depended on the row alone; a row whose agent the record does not yet name is drawn at
+depth 0 and moves in when the record catches up.
+
+> **Extends:** REQ-CHAT-057, REQ-CHAT-068, REQ-CHAT-069, REQ-SHELL-075
+
+*Raised by the owner, 2026-09-16; logged as [R-025](requests.md#r-025).*
+
+
+<a id="pd-chat-006"></a>
+
+### PD-CHAT-006 — a row still being written draws no animated indicator of its own
+
+A transcript row that is still being written SHALL NOT draw an animated indicator of its own. The
+pulsing `…` an agent-message row — and every other row of a category that is neither a tool call nor
+streamed reasoning — drew while live SHALL be removed, and SHALL NOT be replaced by another animated
+or blinking mark. The row's own growth is what says it is being written.
+
+**What is untouched, and why each survives.** This directive removes a mark that states nothing its
+row does not already show. It does not remove a mark that carries a fact:
+
+- REQ-CHAT-164's **stalled indicator** stands exactly as that requirement states it — at ten seconds
+  with no provider output the live row states that the model is not producing output and shows the
+  elapsed seconds, and reverts as soon as any further output arrives. What changes is only that it now
+  appears where nothing was drawn rather than replacing an animation. A stall is not visible in the
+  row's growth, which is precisely why it is drawn.
+- A tool row's `◉ running…` (REQ-CHAT-060), a reasoning row's `◉ reasoning… <N>s · ~<T> tok`
+  (REQ-CHAT-062) and the activity line's in-flight activity word (PD-CHAT-004) are **untouched,
+  animation included**. Each names which call, which phase, or how long — facts that appear nowhere
+  else on those rows, and on rows whose text does not grow as the answer arrives. Removing them was
+  considered and refused for that reason; a later directive may take them, and would say so here.
+- REQ-CHAT-063's refresh cadence is untouched. Live rows still repaint so their elapsed times advance;
+  what a repaint draws is what this directive fixes.
+
+**Why, and what it costs.** The owner read the built transcript and reported the mark as noise: it is
+on screen for the whole of every answer, it blinks the entire time, and it restates what the arriving
+text already shows. The specification is not wrong — an indicator that a row is live is a reasonable
+thing to have drawn, and REQ-CHAT-164 needs a name for the form it replaces — but the owner wants the
+transcript quieter. The cost is real and is at the start of an answer: a live message row that has
+produced no text yet, and has not yet been streaming for ten seconds, now draws nothing at all. For up
+to that long, a row exists with nothing in it, and a reader cannot tell a slow first token from an
+empty row. That window is exactly the one REQ-CHAT-164's threshold was chosen to bound, so it closes
+itself; it is stated here rather than discovered later.
+
+> **Narrows:** REQ-CHAT-164
+
+*Raised by the owner, 2026-09-15; logged as [R-028](requests.md#r-028). Minted as `PD-CHAT-005`, which reached `main` first under another directive; renumbered under the rule the `R-016` collision settled, with not one word of what was asked changed.*
+
+<a id="pd-orch-001"></a>
+
+### PD-ORCH-001 — loop supervision does not fire while a run is held at the plan gate
+
+**The rule.** While `REQ-ORCH-153`'s plan gate holds a run, loop supervision SHALL NOT be active for
+that run's entry agent: no trigger is evaluated, no classification call is made, and no corrective
+message is placed in the conversation. Supervision SHALL resume for the segment that follows the
+decision — approval or revision — with its counters at zero, exactly as `REQ-ORCH-105` leaves them
+after an activation.
+
+The suppression is a property of **the hold**, not of the turn's contents or of the entry role: it
+begins when the gate is settled and ends when the gate resolves. A run that never reaches the gate is
+supervised as before, and every agent of a released segment is supervised as before.
+
+**Why.** Observed live 2026-09-16, run `a26918e8` (logged as [R-026](requests.md#r-026)). A held run
+has every tool that writes a file or runs a command withheld from it, so the only work it can do is
+read, search and fetch. A plan for a codebase it has not seen is written by doing exactly that, many
+times, over the same region — which is `REQ-ORCH-101`'s first trigger, "the same action observed four
+times in a row", firing on the one behaviour the gate leaves available. The supervisor then did what it
+is built to do: it placed, as a `role: 'user'` message carrying no marker, *"Pause and reassess the
+`grep` call around `<path>`…"*. The run read it as an instruction from the person who had asked for a
+plan, said so in its own words — "The user asks me to pause and reassess the grep call" — and spent
+**three minutes and twelve seconds** reconciling it with what it remembered being asked. No user had
+said anything. The run was held, waiting for one.
+
+So the mechanism fires on the gate's own side effect and answers it in the voice of the person the gate
+is waiting for. Neither half is wrong on its own; together, at the gate, they produce an instruction
+nobody gave.
+
+**Why a directive and not a repair.** Settled in writing before the code, because the classification
+turns on it. Supervision as specified is **session-scoped and agent-scoped, not child-scoped**:
+`REQ-NOTIFY-102` speaks of "a run with supervision enabled", `REQ-NOTIFY-103` of "the session's own
+context" and "the agent", `REQ-NOTIFY-107` of state belonging to one session. `REQ-ORCH-101`'s "each
+observed child event" is the event of a supervised agent — the entry agent has an execution record
+like any other — and **no requirement exempts the entry agent, and none exempts a held segment**. The
+product therefore does what the corpus says when it supervises the plan-gate turn. Suppressing it is a
+change to specified behaviour, which is a directive.
+
+**Why not the wider rule.** The impersonation itself — a product-authored message written to read as a
+user's — is *required*: `REQ-ORCH-099` demands corrective messages that "read as natural user
+instructions that never mention monitoring, detection, or injection", and `REQ-ORCH-103` demands a
+"natural user voice". A directive making every product-authored message name itself would supersede
+that clause and would have to name `REQ-HOOKS-074` as well, which mandates the user role for hook
+feedback. It was drafted and **declined for now**, recorded in [R-026](requests.md#r-026) as
+`PD-ORCH-002` so the decline is visible. This directive is the narrow half: it removes the one place
+the product speaks as the user to a run that is *waiting for the user*.
+
+**What it costs.** A genuine loop during a plan cycle is no longer caught. That is a real loss and it
+is accepted for a stated reason: the held segment is **one turn of one agent** (`REQ-ORCH-153`), its
+tools cannot change the workspace, and the user is already at the surface deciding — so the loop's
+usual cost, unbounded work on the wrong thing, is bounded here by the gate itself. The escalation path
+is unchanged for every other segment. `REQ-ORCH-099`'s invisibility is preserved in the strongest
+possible way: by the supervisor not firing at all.
+
+> **Narrows:** REQ-ORCH-099, REQ-ORCH-101
+
+*Raised by the owner, 2026-09-16; logged as [R-026](requests.md#r-026).*
+
+> **First execution, 2026-09-16, the day it was raised:** the risk was the classification, not the code.
+> The draft allowed that `REQ-ORCH-099`..`105` might be child-scoped — `REQ-ORCH-101` opens "on each observed
+> child event" and the gate holds the **root** — in which case supervising a held root was never required and
+> this was covered work rather than a directive. Read against `REQ-NOTIFY-102`..`109`, it settles the other way,
+> and the reasoning is above under "Why a directive and not a repair". The code is one condition at the
+> supervisor's attachment site, checked against its own negation: with the condition removed the new test fails
+> and the corrective fires while the hold stands. Supervisors are memoized per conversation, so the suppression
+> is "no supervisor attached for this turn" rather than an instance discarded — and because nothing is observed
+> while held, the released segment begins from an untouched record without anything having to reset it.
+> The account is in `docs/architecture/first-executions.md`.
+
+<a id="pd-orch-002"></a>
+
+### PD-ORCH-002 — the plan gate renders Markdown by default with inline editing and progressive revision feedback
+
+**The rule.** `REQ-ORCH-153`'s presentation clause — *"The plan MUST be presented verbatim as the producing role wrote it — never summarized, truncated, or re-rendered into another form"* — is narrowed: the plan awaiting a decision SHALL be presented formatted as rendered Markdown by default, using the synchronous Markdown dialect of `REQ-CHAT-056`. The user SHALL be provided an immediate toggle or mode switch to edit the source directly in a monospace editing field, preserving the edit path of `REQ-ORCH-154`.
+
+The plan gate surface SHALL deduplicate identical implied tasks produced by the run, presenting them with status indicators. The revision feedback field ("Changes to ask for") SHALL be disclosed progressively (expanding or focusing when revision is intended) rather than occupying prominent fixed vertical space by default. The workspace grid holding the plan gate SHALL preserve a readable floor for the transcript (`minmax(220px, 1fr)`) and cap the gate's maximum height, so conversation history remains visible and accessible while a decision is pending. While the gate is held, the disabled message composer SHALL be visually de-emphasized to eliminate input ambiguity.
+
+**Why.** When reviewing a plan produced in tabular Markdown syntax, verbatim monospace presentation in a fixed-height textarea forces tedious horizontal and vertical scrolling across raw pipes, obscuring the plan's substance. Simultaneously, an empty revision feedback textarea and a locked main composer present three competing text-entry surfaces on screen, while the transcript is compressed into an unreadable strip. Rendering Markdown with a quick edit-source switch gives immediate readability while preserving `REQ-ORCH-154`'s full inline editing guarantee.
+
+> **Supersedes:** REQ-ORCH-153
+> **Narrows:** REQ-ORCH-154, REQ-SHELL-168
+
+*Raised by the owner, 2026-09-16; logged as [R-030](requests.md#r-030).*
+
+<a id="pd-monitor-001"></a>
+
+### PD-MONITOR-001 — a cost the provider reported is carried and shown under its own qualifier
+
+**The rule.** Where a provider's own protocol defines a way for a request to ask for the cost of that
+request, the product SHALL ask, and SHALL carry the figure the provider answers with. A run's cost
+total is the **exact decimal sum** of the per-request figures it received and of nothing else: no rate
+is multiplied, no figure is estimated, and no figure is invented for a request the provider priced at
+nothing it reported. `REQ-MONITOR-166`'s cost label SHALL carry a fourth qualifier, **`reported`**,
+for a total reached this way, and a run holding no reported figure SHALL keep the `unknown` qualifier
+and the label it has today.
+
+A figure whose currency the provider does not name SHALL be rendered as the amount alone, under the
+rounding of `REQ-PROVIDER-121` — half-up, two decimal places, four below one hundredth — and SHALL NOT
+be given a currency symbol the product chose for it.
+
+**Why.** Observed live 2026-09-16, run `a26918e8` (logged as [R-026](requests.md#r-026)): a whole run
+against a metered provider, `cost` = `"0"`, the label reading *"price not established"*. That is
+[OQ-62](../architecture/open-questions.md), which names four routes to a figure. Three of them are
+blocked and stay blocked: each one **multiplies** a per-token price by a token count, `REQ-PROVIDER-121`
+forbids computing an amount in binary floating point, and the representation that would make the
+multiplication exact is ADR-0031's — proposed, unspiked, and blocked by OQ-21, which changes a
+persisted format.
+
+The fourth route is not blocked, and the difference is arithmetic rather than appetite: a figure the
+provider computed needs **addition only**. Adding two decimal strings exactly says nothing about what
+a price is, chooses no representation for a rate, and pre-empts neither OQ-21 nor the spike ADR-0031
+requires. The one route that was always available was left unbuilt because it sat in the same open
+question as the three that were not.
+
+The corpus had already assumed this figure exists. `REQ-SHELL-045` fixes the workspace strip's cost
+item as *"the model provider's reported cost for this workspace's runs so far"*, with a tooltip that
+says *"Reported by the model provider"* — a requirement written for a figure nothing in the product
+could produce and no qualifier could describe.
+
+**Why a directive and not a repair.** `REQ-MONITOR-166`'s qualifier set is a closed three — *"an
+unknown price, an incomplete price, and a price derived from configured rates"* — and a figure the
+provider computed is none of them. Naming a fourth is a change to a requirement that is not wrong,
+which is a directive rather than an escalation (`README.md`: a request contradicting a faithful
+requirement is a directive). `REQ-PROVIDER-121` is narrowed for the same reason and no further: its
+symbol table is written for an amount whose currency is known, and an amount reported without one is
+outside what it decides rather than in conflict with it.
+
+Two requirements the mechanism touches are **not** governed, and reading them is what settled that.
+`REQ-EVENTS-053`'s `usage.update` already carries `cost.total` and already fires on the completed
+provider request — the payload gains a figure where it carried `"0"`, and not one clause of the
+requirement changes. `REQ-ORCH-142` says provider-reported totals *"are cumulative and MUST be
+replaced, never summed"*, which reads at first like a prohibition on adding them: it is about a total
+a provider reports **for the run**, and what is added here is what a provider reports **for one
+request**. Two requests are two purchases. Within a single request the rule is honoured literally —
+where a provider repeats the field mid-stream, the last reading replaces the earlier one rather than
+adding to it.
+
+**What it costs.**
+
+- **One endpoint today.** The ask is a body field the endpoint defines, and sending it to an endpoint
+  that does not define it is not free: a strict OpenAI-shaped API answers an unrecognised field with a
+  400. So the product asks only where the protocol says to, which today is OpenRouter's `usage.include`
+  — one entry in a table of hosts, data rather than code. Every other provider's cost keeps reading
+  `"0"` under the `unknown` qualifier, exactly as before.
+- **The figure crosses JSON as a number.** It arrives as a double whatever the provider computed it
+  in. That is the protocol's doing and it is where this product's exactness begins: nothing rounds,
+  scales or multiplies it, and it is added to the total as the decimal it reads back as.
+- **No currency.** The product has no currency type anywhere, and this directive does not introduce
+  one. A total is shown bare rather than under a symbol the product guessed. Where a provider names a
+  currency, carrying it is ordinary future work against `REQ-PROVIDER-121`'s own table.
+- **Not per agent.** `REQ-MONITOR-102` persists a per-agent cost. This carries the run's total only;
+  the per-agent figure stays as it is, owed rather than quietly filled.
+
+> **Narrows:** REQ-MONITOR-166, REQ-PROVIDER-121
+
+*Raised by the owner, 2026-09-16; logged as [R-026](requests.md#r-026).*
+
+> **First execution, 2026-09-16, the day it was raised:** it found the reading half harder than the
+> asking half, and the corpus friendlier than expected. The SDK's usage mapping keeps the token fields
+> and **drops every other**, so `usage.cost` reaches nothing above it however the request is made —
+> `metadataExtractor`, the seam the SDK provides for exactly this, is what carries the raw chunk over
+> before that mapping happens, and the figure rides out on the port's existing `usage` part rather than
+> on a new channel. Two nearby requirements looked like obstacles and were not: `REQ-ORCH-142`'s
+> "replaced, never summed" is about a run total and not a request's own figure, and `REQ-SHELL-045`
+> turned out to require the provider-reported cost outright, which is a requirement the product could
+> not meet until this directive. The exact-decimal addition is thirty lines of `bigint` in
+> `packages/engine/src/money.ts`, scale-free so no place is truncated, and it is reported into ADR-0031
+> in place: it is not that decision's `Money` type, its library or its lint rule, all of which stay
+> blocked on OQ-21. The account is in `docs/architecture/first-executions.md`.
 
 ---
 

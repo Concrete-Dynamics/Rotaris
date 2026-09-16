@@ -8,7 +8,67 @@ term derived from `docs/spec/` and citing the requirement that owns it. Read it 
 and prefer its word over a synonym you would otherwise reach for.
 
 This file covers the two checks `CLAUDE.md` does not spell out: **`pnpm app:drive`** (free, interactive
-debugging of the built app) and **`pnpm live-run`** (the only check that spends real money).
+debugging of the built app) and **`pnpm live-run`** (the only check that spends real money) — and indexes the
+proof scripts, so the evidence for an area can be found without reading forty script headers.
+
+## The proof scripts — which one covers what
+
+`pnpm check` (symbols, typecheck, lint, tests) is the gate every commit passes. Beside it sit the **proof
+scripts**: each launches the **built** application against a scratch profile and measures a mechanism in the
+product rather than in a unit test. Every one is a first execution's evidence, and the area it covers is the
+area it re-verifies.
+
+Two rules about them. **Run the whole suite a part touches, not the one script named after it** — a change
+that moves a shared seam breaks a neighbour's proof, and that is the point of having them. And a proof is
+**evidence, not a test of the harness**: a red is a defect of the product until the harness is shown to be
+wrong.
+
+| Area | Script | What it measures |
+|---|---|---|
+| **The run** | `part-h-proof` | the loop supervisor and `continue` (ADR-0059) |
+| | `part-j-proof` | the control channel: a queued message at the iteration boundary, a steer, a graceful pause, the message-limit pause |
+| | `plan-gate-proof` | the plan gate held, edited, answered (ADR-0062) |
+| | `resilience-proof` | the model ladder, the waits, the fallbacks, against scripted faults |
+| | `compression-proof` | context compression and its timeline entries (ADR-0060) |
+| | `checkpoint-proof` | the capture at iteration close through to the desktop restore (ADR-0039) |
+| | `sessions-proof` | the session browser's actions: repair, delete with ref cleanup, the exports |
+| **Tools** | `fetch-proof` | `fetch` and its egress policy, read from saved configuration at **every** call |
+| | `questions-proof` | `ask_questions`, the trailer row, the stepper, the two control operations |
+| | `todo-proof` | the todo source priority, write-through edits, the pane |
+| | `attachments-proof` | content validation, ceilings, the capability gate, durable metadata |
+| | `artifacts-proof` | the session artifact store, the Artifacts tab, the inspector |
+| | `mcp-proof` | MCP declared three ways, against a real fixture server (ADR-0033/0034) |
+| | `code-intel-proof` | the bundled code-intelligence runtime and its manifest (ADR-0035) |
+| | `skills-proof` | portable skill discovery, with a scratch home (ADR-0063) |
+| | `sandbox-proof` | OS-level confinement (ADR-0022) — **`win32` is outside the platform set; read what it says it cannot prove** |
+| | `terminal-stream-proof` | the stream in the run host against a **real PTY** (ADR-0021) |
+| **Configuration and startup** | `config-proof` | hand-authored, commented files surviving every write (ADR-0036/0037) |
+| | `init-proof` | project initialization resolved once per workspace open (ADR-0064) |
+| | `workspace-proof` | reaching a project folder from inside the application: resolution, gates, switch |
+| | `settings-proof` | the Settings categories and the save bar |
+| **Surfaces** | `overview-proof` | the Overview painted from the run and the store |
+| | `transcript-proof` | the projection, the caches, the empty state (ADR-0045/0046) |
+| | `rows-proof` | the one row renderer, in both of its surfaces at once |
+| | `composer-proof` | the composer's chips, drafts, history recall and run header |
+| | `slash-proof` | the composer's slash-command catalogue |
+| | `chat-controls-proof` | manual compression, the transcript clear, the prompt-file commands |
+| | `palette-proof` | one action vocabulary reaching the screen three ways |
+| | `notice-proof` | the notice store and its chain (ADR-0049) |
+| | `library-proof` | the Library shell and its Prompts tab |
+| | `mission-proof` | the Mission view, the per-agent inspector, the persona windows |
+| | `git-proof` | the Git view and the worktrees |
+| | `terminal-proof` | the terminal grid, the pop-out window, the transcript preview (ADR-0047) |
+| | `improvements-proof` | the reviewed-improvement lifecycle end to end |
+| | `theme-proof` | the themes and scales, rendered — plus two counterfactuals that must stay red |
+| | `layout-proof` | the Workspace view's grid, **measured** at the sizes the specification names |
+| **Requirements** | `requirements-proof` | the delivery store and the board (ADR-0041) |
+| | `requirements-runs-proof` | runs started from the board, against a real scratch repository |
+| | `traceability-proof` | the traceability engine, including spike 7's scale store (ADR-0040) |
+| **The record itself** | `directive-proof` | that a directive's precedence over a requirement is machine-checked, not asserted in prose |
+| **Whole product** | `slice-proof` | sign-in through the product and one run on a real model |
+| | `driver-proof` | the driver seam `pnpm app:drive` depends on |
+| | `ui-audit` / `ui-review` | what the browser **built** at every size; the deterministic pack a report-only critic reads |
+| | `live-run` | the built product against a real endpoint and a real key — **money; never automatic** |
 
 ## Repository UI skills
 

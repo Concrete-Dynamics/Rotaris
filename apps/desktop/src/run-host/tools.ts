@@ -159,6 +159,19 @@ function executorsFor(root: string, deps: ToolPortDeps, runtime: RuntimeFromConf
  * and every child with its parent's depth plus one (`ledger.ts`) — with the id spellings kept for a caller that
  * carries no depth.
  */
+/**
+ * What a tool looks like to the model: ADR-0034 gives an MCP tool its server's own input schema, and everything
+ * else is the zod schema's JSON form.
+ *
+ * `io: 'input'` is the schema of a call about to be MADE. Zod's default is `'output'`, under which a field with a
+ * `.default()` is emitted as **required** — `todo`'s `tasks` was advertised as required inside every phase while
+ * the parser accepted it omitted, so the product advertised a contract it did not enforce, in the one place a
+ * batch call is built. Exported so that shape can be asserted; the closure it replaced could not be.
+ */
+export function toolSpec(e: ToolExecutor): { name: string; description: string; parameters: Record<string, unknown> } {
+  return { name: e.name, description: e.description, parameters: (e.parameters ? { ...e.parameters } : z.toJSONSchema(e.schema, { io: 'input' })) as Record<string, unknown> };
+}
+
 export function isEntryPort(ctx: Pick<ToolPortContext, 'parentId' | 'depth'>): boolean {
   if (ctx.depth !== undefined) return ctx.depth === 0;
   return ctx.parentId === undefined || /^root(:\d+)?$/.test(ctx.parentId);
@@ -207,6 +220,12 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
    */
   const planGateHeld = ctx.planGateHeld ?? (() => false);
   const declared = planGateHeld() ? granted.filter((t) => !withheldUnderPlanGate(t)) : granted;
+  /*
+   * REQ-ORCH-153: the names this point and the MCP one below REMOVE because the gate is held. The gate reads it to
+   * tell a withheld tool apart from a name that is no tool at all — the public names it can check against the
+   * registry itself, but an MCP or plugin name exists only here. Filled as the surface resolves, read live.
+   */
+  const withheldAtPlanGate = new Set<string>(planGateHeld() ? granted.filter((t) => withheldUnderPlanGate(t)) : []);
   const delegationAvailable = ctx.delegation !== undefined && !single;
   if (delegationAvailable && ctx.delegation) {
     const parentId = ctx.parentId ?? 'root';
@@ -253,8 +272,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   for (const r of resolved.removals) ctx.warn(`tool '${r.tool}' removed from ${ctx.persona} by ${r.control}${r.reason ? ` (${r.reason})` : ''} (REQ-TOOLS-004/006)`);
   const callable = new Map<string, ToolExecutor>();
   for (const n of resolved.tools) { const e = executors.get(n); if (e) callable.set(n, e); }
-  const specOf = (e: ToolExecutor) => ({ name: e.name, description: e.description, parameters: (e.parameters ? { ...e.parameters } : z.toJSONSchema(e.schema)) as Record<string, unknown> });
-  const specs = [...callable.values()].map(specOf);
+  const specs = [...callable.values()].map(toolSpec);
 
   let mode: PermissionPreset = ctx.requestedMode;
   const policy = new PolicyContext(buildPolicy({ preset: mode, workspaceRoot: root }));
@@ -269,6 +287,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     // REQ-ORCH-153, enforcement point 2: the authoritative one — refused whichever role issues the call and by
     // whatever route the tool reached it, including a name this port's narrowing never saw.
     planGateHeld,
+    planGateWithheldNames: () => withheldAtPlanGate,
   });
 
   // ADR-0034 (Part S): the persona's MCP surface — demanded on `ready()`, after the discovery the run start kicked off, and
@@ -301,10 +320,10 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
         // REQ-ORCH-153: an MCP tool carries no declaration, so the fail-closed predicate withholds it while the
         // gate is held (ADR-0016's reading, the same one `restricted` and `read_only` already take above). The
         // gate's dispatch check would refuse it anyway; removing it here keeps the listing honest.
-        if (planGateHeld() && withheldUnderPlanGate(e.name)) { ctx.warn(`mcp: '${e.name}' is withheld while this run is held at the plan gate (REQ-ORCH-153)`); continue; }
+        if (planGateHeld() && withheldUnderPlanGate(e.name)) { withheldAtPlanGate.add(e.name); ctx.warn(`mcp: '${e.name}' is withheld while this run is held at the plan gate (REQ-ORCH-153)`); continue; }
         if (callable.has(e.name)) { ctx.warn(`mcp: the tool name '${e.name}' collides with a native tool of ${ctx.persona}; the MCP tool is not offered`); continue; }
         callable.set(e.name, e);
-        specs.push(specOf(e));
+        specs.push(toolSpec(e));
       }
       mcpSection = mcp.section(surface);
     })();

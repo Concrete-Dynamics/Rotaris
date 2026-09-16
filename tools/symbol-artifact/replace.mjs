@@ -43,9 +43,14 @@ function sleepSync(ms) {
  */
 export function replaceAtomically(target, text) {
   const staged = join(dirname(target), `.${basename(target)}.staging-${process.pid}-${Math.random().toString(36).slice(2, 8)}`);
-  writeFileSync(staged, text);
   for (let attempt = 1; ; attempt += 1) {
     try {
+      // The STAGING write is inside the ladder, not before it. This function declares ONE failure shape — the
+      // sentence below, naming the code and the attempts — and a staging refusal used to escape it raw, as
+      // `EACCES: permission denied, open '<staged>'`. It is the same condition the ladder exists for: on a
+      // write-denied parent the refusal lands here, and on Windows against an open handle it lands on the
+      // rename. Re-writing the same bytes on a later attempt is idempotent (defect, found on Linux, 2026-09-16).
+      writeFileSync(staged, text);
       renameSync(staged, target);
       return attempt;
     } catch (e) {

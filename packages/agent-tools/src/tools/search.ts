@@ -114,9 +114,42 @@ function probablyBinary(bytes: Buffer): boolean {
   return bytes.subarray(0, 1024).includes(0);
 }
 
-/** Glob patterns (double-star, star, question mark, braces) to a regex over POSIX relative paths. */
-export function globToRegExp(pattern: string): RegExp {
-  const p = pattern.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\//, '');
+/** The index of the `}` that closes the `{` at `start`, or -1 when the group is never closed. */
+function closingBrace(p: string, start: number): number {
+  let depth = 0;
+  for (let i = start; i < p.length; i += 1) {
+    if (p[i] === '{') depth += 1;
+    else if (p[i] === '}') { depth -= 1; if (depth === 0) return i; }
+  }
+  return -1;
+}
+
+/** A brace group's alternatives: split on the commas at ITS level, so `{a,{b,c}}` is two, not three. */
+function braceAlternatives(body: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let from = 0;
+  for (let i = 0; i < body.length; i += 1) {
+    if (body[i] === '{') depth += 1;
+    else if (body[i] === '}') depth -= 1;
+    else if (body[i] === ',' && depth === 0) { out.push(body.slice(from, i)); from = i + 1; }
+  }
+  out.push(body.slice(from));
+  return out;
+}
+
+/**
+ * One glob, translated. Recursive, and that recursion is the whole point of the function existing apart from
+ * `globToRegExp`: a brace alternative is a glob like any other, and until 2026-09-16 each one was passed through
+ * `escapeRe` instead — which escapes `.` but leaves `*` alone, so `{*.json,*.ts}` compiled to `(?:*\.json|*\.ts)`
+ * and the engine refused it as `Nothing to repeat`. The alternative that reached a user was
+ * a `{*.json,*.js,*.ts,*.cjs,*.mjs}` group under a `packages` wildcard step — a shape ripgrep and every shell
+ * accept, and REQ-TOOLS-141 holds that what an accelerator accepts the in-process path may not refuse.
+ *
+ * Character classes (`[abc]`) are still literal here, as they have always been; that is a separate gap and is
+ * recorded as one rather than widened into silently.
+ */
+function translateGlob(p: string): string {
   let re = '';
   for (let i = 0; i < p.length; i += 1) {
     const ch = p[i] as string;
@@ -126,12 +159,19 @@ export function globToRegExp(pattern: string): RegExp {
     } else if (ch === '*') re += '[^/]*';
     else if (ch === '?') re += '[^/]';
     else if (ch === '{') {
-      const end = p.indexOf('}', i);
-      if (end > i) { re += `(?:${p.slice(i + 1, end).split(',').map(escapeRe).join('|')})`; i = end; }
+      const end = closingBrace(p, i);
+      // An unclosed `{` is a literal brace, which is what a caller who typed one meant.
+      if (end > i) { re += `(?:${braceAlternatives(p.slice(i + 1, end)).map(translateGlob).join('|')})`; i = end; }
       else re += '\\{';
     } else re += escapeRe(ch);
   }
-  return new RegExp(`^${re}$`);
+  return re;
+}
+
+/** Glob patterns (double-star, star, question mark, braces) to a regex over POSIX relative paths. */
+export function globToRegExp(pattern: string): RegExp {
+  const p = pattern.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\//, '');
+  return new RegExp(`^${translateGlob(p)}$`);
 }
 
 const grepSchema = z.object({
@@ -209,7 +249,17 @@ export function globTool(fence: FenceConfig): ToolExecutor<z.infer<typeof globSc
         if (!isInside(rootReal, abs)) return observation('No files found');
         pattern = pattern.slice(rootReal.replace(/\\/g, '/').length).replace(/^\//, '');
       }
-      const re = globToRegExp(pattern);
+      /*
+       * REQ-TOOLS-138: a pattern the compiler cannot read is a recoverable error naming what was wrong, the same
+       * answer `grep` gives. Unguarded, the RegExp constructor's own message escaped to the model instead — it
+       * quoted the generated regex source, which is an internal the caller never wrote and cannot correct.
+       */
+      let re: RegExp;
+      try {
+        re = globToRegExp(pattern);
+      } catch (cause) {
+        return errorObservation(`Invalid glob pattern: ${String(cause instanceof Error ? cause.message : cause)}. The pattern supports *, **, ? and {a,b} alternatives over workspace-relative POSIX paths.`);
+      }
       const baseRel = relative(rootReal, base).split(sep).join('/');
       const rules = loadRules(fence.workspaceRoot);
       const found = new Set<string>();

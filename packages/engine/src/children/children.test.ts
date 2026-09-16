@@ -327,6 +327,65 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     expect(dal.issuesOf(sid).map((i) => i.kind)).toContain('timeout');
   });
 
+  it('REQ-ORCH-088: the ceiling asks the child to land, so the step in flight finishes and its words reach the report', async () => {
+    let releaseChild!: () => void;
+    const hold = new Promise<void>((r) => { releaseChild = r; });
+    const { sessions } = sessionsWith((persona, turn) => {
+      if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'slow', task: 'TASK: be slow' } }]) : answer('finished after the timeout');
+      if (persona === 'summariser') return answer('not json');
+      return { parts: [{ hold }, { part: { kind: 'text', delta: 'I surveyed nine files and found the lockfile pins yaml twice' } }, { part: { kind: 'finish', reason: 'stop' } }] };
+    });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    await new Promise((r) => setTimeout(r, 10));
+    clock.advance(1_200_000);
+    // The ceiling has passed and the child has NOT been cut: the step in flight is still allowed to answer.
+    releaseChild();
+    const result = await sessions.running(sid)!;
+    expect(result.status).toBe('completed');
+    const c = children(sid)[0]!;
+    expect(c.state).toBe('failed');
+    const report = JSON.parse(c.report!) as { last_response: string; final_response: string; errors: { type: string }[] };
+    // REQ-ORCH-088: "carrying the last/final response extracted from the transcript" — before the landing
+    // this read '' for both, because the abort killed the child inside the step that was about to speak.
+    expect(report.last_response).toContain('the lockfile pins yaml twice');
+    expect(report.errors.map((e) => e.type)).toContain('timeout');
+    // REQ-ORCH-110: it is the LAST response, never the final one — the child was stopped, it did not conclude.
+    expect(report.final_response).toBe('');
+  });
+
+  it('REQ-ORCH-088 / REQ-CONFIG-113: a child that cannot land inside the grace is still cut off by the backstop', async () => {
+    // Nothing in this test ever resolves the hold: the point is that a child which CANNOT land is
+    // still ended by the product rather than by the test.
+    const hold = new Promise<void>(() => undefined);
+    const { sessions } = sessionsWith((persona, turn) => {
+      if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'stuck', task: 'TASK: never answer' } }]) : answer('finished after the backstop');
+      if (persona === 'summariser') return answer('not json');
+      return { parts: [{ hold }, { part: { kind: 'text', delta: 'never said' } }, { part: { kind: 'finish', reason: 'stop' } }] };
+    });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    await new Promise((r) => setTimeout(r, 10));
+    clock.advance(1_200_000);
+    await new Promise((r) => setTimeout(r, 10));
+    expect(children(sid)[0]!.state).toBe('running'); // asked to land; not cut, because nothing has spoken yet
+    // Past the grace, and past a second ceiling too: REQ-ORCH-088's fallback retry may take one more
+    // attempt, and it is bounded by the same ladder. The run must end on its own either way.
+    for (let i = 0; i < 4 && sessions.running(sid) !== undefined && children(sid)[0]!.state === 'running'; i += 1) {
+      clock.advance(30_000);
+      await new Promise((r) => setTimeout(r, 10));
+      clock.advance(1_200_000);
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    const result = await sessions.running(sid)!;
+    expect(result.status).toBe('completed');
+    const c = children(sid)[0]!;
+    expect(c.state).toBe('failed');
+    const report = JSON.parse(c.report!) as { last_response: string; errors: { type: string }[] };
+    expect(report.errors.map((e) => e.type)).toContain('timeout');
+    // Cut before it could speak — the grace is a chance to land, not an extension of the ceiling.
+    expect(report.last_response).toBe('');
+    expect(dal.issuesOf(sid).map((i) => i.kind)).toContain('timeout');
+  });
+
   it('REQ-ORCH-052 / REQ-ORCH-133: a stop while a child runs settles it cancelled through the normal path with a report, and the run ends interrupted', async () => {
     let releaseChild!: () => void;
     const hold = new Promise<void>((r) => { releaseChild = r; });

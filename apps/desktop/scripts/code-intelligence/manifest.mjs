@@ -19,7 +19,7 @@
  * from the server's listing while the runtime still owns the name. Both listings are recorded in the module.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -27,7 +27,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const APP = resolve(HERE, '..', '..');
 const REPO = resolve(APP, '..', '..');
 const RUNTIME = join(APP, 'resources', 'code-intelligence', 'runtime');
-const PYTHON = join(RUNTIME, 'python.exe');
+const PYTHON = join(RUNTIME, process.platform === 'win32' ? 'python.exe' : 'bin/python3');
 const MODULE = join(REPO, 'packages', 'config', 'src', 'mcp', 'code-intelligence-manifest.generated.ts');
 const PINS = JSON.parse(readFileSync(join(HERE, 'pins.json'), 'utf8'));
 const ENTRY = 'from serena.cli import top_level; top_level()';
@@ -74,13 +74,28 @@ const CARDINALITY = { read: 10, edit: 7, memoryWrite: 2, onboard: 1 };
 
 function fail(m) { process.stderr.write(`[code-intel:manifest] REFUSED — ${m}\n`); process.exit(1); }
 function log(m) { process.stdout.write(`[code-intel:manifest] ${m}\n`); }
+function findSitePackages(root) {
+  const win = join(root, 'Lib', 'site-packages');
+  if (existsSync(win)) return win;
+  const lib = join(root, 'lib');
+  if (existsSync(lib)) {
+    const py = readdirSync(lib).find((e) => e.startsWith('python3.'));
+    if (py && existsSync(join(lib, py, 'site-packages'))) {
+      return join(lib, py, 'site-packages');
+    }
+  }
+  return null;
+}
+
 if (!existsSync(PYTHON)) fail(`the bundle is absent at ${RUNTIME}; run pnpm code-intel:bundle first`);
 const env = { ...process.env, PYTHONUTF8: '1', PYTHONDONTWRITEBYTECODE: '1', SERENA_HOME: join(APP, '.cache', 'code-intelligence', 'manifest-home') };
 mkdirSync(env.SERENA_HOME, { recursive: true });
 // The generator's own home carries the runtime's template with the interface off — the same three values the product's branch seeds.
 const seed = join(env.SERENA_HOME, 'serena_config.yml');
 if (!existsSync(seed)) {
-  const template = readFileSync(join(RUNTIME, 'Lib', 'site-packages', 'serena', 'resources', 'serena_config.template.yml'), 'utf8');
+  const sitePkgs = findSitePackages(RUNTIME);
+  if (!sitePkgs) fail(`site-packages is absent under ${RUNTIME}`);
+  const template = readFileSync(join(sitePkgs, 'serena', 'resources', 'serena_config.template.yml'), 'utf8');
   writeFileSync(seed, template.replace(/^gui_log_window:.*$/m, 'gui_log_window: False').replace(/^web_dashboard:.*$/m, 'web_dashboard: False').replace(/^web_dashboard_open_on_launch:.*$/m, 'web_dashboard_open_on_launch: False'));
 }
 

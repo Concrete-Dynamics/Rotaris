@@ -9,6 +9,9 @@ import { SessionWriter, toTranscriptRow, type CheckpointRecordInput, type Commit
 import type { CheckpointPort, CheckpointPortContext } from './checkpoint-port.js';
 import { EventBus } from './run/event-bus.js';
 import { parseTokenSamples, Run, type ModelLookup, type PermissionPosture, type RunConfig, type RunResult } from './run/run.js';
+import { planSection } from './run/plan-text.js';
+import { formatAmount, isZeroAmount } from './money.js';
+export { planRequestSection, planSection } from './run/plan-text.js';
 import { ResilienceMemory, type CatalogueEntry, type ModelChoice } from './run/resilience.js';
 import type { ResolvedTrigger } from './run/compression.js';
 import { SessionLog, type LogLevel } from './session-log.js';
@@ -392,22 +395,6 @@ export function buildContinuationPayload(dal: StoreDal, row: SessionRow, prompt:
   ].join('\n');
 }
 
-/**
- * REQ-ORCH-154: what the next segment is told about the plan it inherits. On **approve** it is the plan the run
- * carries out, carried whole and unedited by the product (the user's own text where they edited it). On **revise**
- * it is "the plan as it currently stands together with the changes the user stated" — both, and in that order, so
- * the producing role revises rather than starts again.
- */
-export function planSection(decision: PlanDecision, plan: string, changes: string): string {
-  if (decision === 'approve') {
-    return ['The user approved this plan. Carry it out; every tool the plan gate withheld is now available.', '', 'Approved plan:', plan].join('\n');
-  }
-  return [
-    'The user asked for a revision of this plan. Produce a fresh plan that answers what they said; do not begin the work.',
-    '', 'The plan as it currently stands:', plan,
-    '', 'The changes the user stated:', changes.trim() === '' ? '(the user stated no specific changes)' : changes,
-  ].join('\n');
-}
 
 /** REQ-MONITOR-171: the run's duration as `m:ss` / `h:mm:ss`; empty before any run. */
 export function durationLabel(startedAt: string | null, until: string): string {
@@ -448,9 +435,25 @@ export interface StartRefusal {
   readonly result: { status: 'error'; session_id: string; stop_reason: ''; summary: string; error: string };
 }
 
-/** REQ-MONITOR-166: the cost label carries its own qualifier; no rate is configured in this build, so the price is unknown. */
+/**
+ * REQ-MONITOR-166: the cost label carries its own qualifier, so no view has to invent a description for a
+ * run whose price could not be established.
+ *
+ * PD-MONITOR-001 gives the qualifier set a fourth member. A figure in the run's total got there one way —
+ * a provider reported it for a request it had completed (`Aggregates.addCost`) — so a total that is not
+ * zero is a **reported** price, rendered under REQ-PROVIDER-121's rule for an amount: half-up, two decimal
+ * places, four below one hundredth, and **no currency symbol**, because the provider named no currency and
+ * the product does not pick one for it (the directive's narrowing).
+ *
+ * The falsified reason, kept beside its replacement: "no rate is configured in this build, so the price is
+ * unknown". The three routes through a *rate* are still blocked on OQ-21 and ADR-0031 and still render
+ * `unknown`; the sentence was wrong only in treating a rate as the sole route to a figure.
+ */
 export function costLabelOf(cost: string): SessionRecord['costLabel'] {
-  return { text: cost === '0' || cost === '' ? 'price not established' : `${cost} (price not established)`, qualifier: 'unknown' };
+  if (cost === '' || isZeroAmount(cost)) return { text: 'price not established', qualifier: 'unknown' };
+  const amount = formatAmount(cost);
+  if (amount === null) return { text: `${cost} (price not established)`, qualifier: 'unknown' };
+  return { text: `${amount} reported by the provider`, qualifier: 'reported' };
 }
 
 /**

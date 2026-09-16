@@ -172,7 +172,9 @@ costs the full 5.0 s grace and reports empty output**; the invocation returned a
 bound. This is the specification's design, not a defect, but this record's "kill the started process only"
 did not say that on this platform the started process is never the command. Recorded so nobody "fixes" it
 with a tree kill, which REQ-HOOKS-033 forbids in terms and which the terminal path (ADR-0020) does on
-purpose. OQ-9 is reading (a) by construction: no Job Object exists in this codebase yet, so nothing reaches
+purpose. **The clauses of this paragraph are true and the conclusion drawn from them — that this
+is a Windows cost — is falsified; it is kept as written, and what replaces it is in the 2026-09-16 first
+execution below.** OQ-9 is reading (a) by construction: no Job Object exists in this codebase yet, so nothing reaches
 a hook's descendants at application exit; the question stays open for the day one does.
 
 **Found — and it was not in this mechanism.** REQ-HOOKS-139's bound of 10 ms for a 100 KB payload exposed
@@ -204,3 +206,49 @@ under vitest on this workstation, not under a benchmark harness (ADR-0053).
 **2026-09-05, the hooks section inside the one configuration load.** ADR-0036's loader now reads `hooks:` as a
 section of the whole load (a hook fault is fatal to the load, REQ-CONFIG-233); the run's hook port and the
 Hooks category's summary keep `loadHooksConfig` for the per-file states they show. **Found: nothing.**
+
+## First execution — 2026-09-16, the runner against `/bin/sh`
+
+*Recorded under GD-10. The second first execution of this record, because the first measured one of the two
+interpreters `REQ-HOOKS-030` fixes. `packages/hooks/src/runner.test.ts` gated its whole invocation block on
+`describe.skipIf(!win)`, so until the suite ran on a POSIX host for the first time (`first-executions.md`,
+2026-09-16) the `/bin/sh -c` half of the requirement, and every mechanic this record rests on, were executed
+by nothing on Linux or macOS.*
+
+**Run:** `packages/hooks/src/runner.test.ts` on Linux, `/bin/sh` being dash. The invocation proofs are now
+written once and spelled twice — a per-interpreter table holds the command text and the two expectations the
+shell itself decides, and every outcome assertion is shared.
+
+**The three mechanics held on this interpreter too, and one sentence of the record above is corrected — the
+platform attribution.** That record explained the full 5.0 s grace on a timed-out hook as a cost of Windows:
+`cmd.exe /c` runs the command as its own child, so `ChildProcess.kill()` terminates `cmd.exe` and nothing
+else. Every clause is true; the conclusion is not. **dash forks the command as well** — 5,306 ms for the same
+60 s sleep under the same 0.3 s budget, against cmd.exe's 5,334 ms, with the same empty output for the same
+reason. The general statement is that **the interpreter is always the started process and the command is
+always its child**, on every platform; whether killing the one reaches the other is the *shell's* choice and
+not the platform's, since a `/bin/sh` that execs a simple command rather than forking it dies with the
+command and resolves at once, keeping whatever the command had already written. So a timed-out hook's cost,
+and whether its partial output survives, both vary with which shell `/bin/sh` is — inside `REQ-HOOKS-033`'s
+bound and permitted by it in terms. The proof therefore asserts the bound and not the cost, and says so.
+
+**Reached for the first time anywhere: `REQ-HOOKS-039`'s signal path.** A hook spelled `kill -KILL $$` ends
+the *started* process rather than its child, which is the outcome that requirement describes and which no
+Windows command can produce — `child.kill()` there is a `TerminateProcess` and is the timeout path, a
+different outcome. Measured: no exit status (`-1`), `signalled`, `timed_out = false`, and
+`REQ-HOOKS-052`'s abnormal-termination warning. It is this file's one platform-specific proof, and the reason
+is the platform's rather than a skip. A shell whose *command* dies by a signal is a different case and was
+already correct: dash reports 137 as its own exit status, so the hook exited 137 and did not signal — the
+same consequence of "the interpreter is the started process" as the paragraph above.
+
+**`REQ-HOOKS-031`'s own example, executed on the platform it is written in.** The requirement illustrates the
+no-injection rule with "a tool argument containing `; rm -rf /`", a POSIX sentence that until now could only
+run under `cmd.exe`. A payload carrying a `;` separator and a `$(…)` substitution for this shell arrives whole
+on stdin, byte for byte, with the marker file it would have created absent and no environment variable
+carrying any of it.
+
+**Found: nothing in this mechanism.** Interpreter selection, byte-exact stdin with `}` as the last byte,
+`REQ-HOOKS-035`'s launch failure on a missing working directory (`spawn /bin/sh ENOENT`), `REQ-HOOKS-037`'s
+16,384-byte per-stream cut with the total in the marker, and mechanic 1's grandchild holding the pipes open
+all behaved on dash as they had on `cmd.exe`. `REQ-HOOKS-030`'s executable lookup is the interpreter's and
+not this runner's: an unknown name is an exit status from a process that started, never `REQ-HOOKS-035`'s
+launch failure, which is reserved for a process that never did.

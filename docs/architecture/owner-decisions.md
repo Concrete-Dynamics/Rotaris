@@ -1403,3 +1403,68 @@ everywhere else: the policy map keys, the catalog block, the table, the shadowin
 **What the ruling decides.** Whether REQ-CHAT-034's skipping clause is amended to cite REQ-SHELL-056,
 and whether the two normal forms are one form or deliberately two. They can stay two — a skill's
 identity and its typed command are different things — but nothing currently says so.
+
+## Rulings and escalations after the gate — 2026-09-16
+
+### ESC-40 — `session_log_level`'s default and vocabulary: REQ-CLI-065's lowercase `info` against three requirements' uppercase `WARNING`
+
+**Raised 2026-09-16, not yet ruled.** Found while reading the application log for R-026's sixth
+finding: four live requirements fix the same configuration key, and one of them fixes it differently
+in every part.
+
+- **REQ-CONFIG-121** (domain 15): "`session_log_level` (string, default `WARNING`) … The documented
+  vocabulary is `DEBUG`/`INFO`/`WARNING`/`ERROR`; the value is **not** validated against that list."
+- **REQ-SESSION-142** (domain 07): "at the configured session log level (default WARNING; the strings
+  DEBUG/INFO/WARNING/ERROR **and integer levels** accepted; an unknown string falls back to WARNING
+  **and logs a warning**)".
+- **REQ-MONITOR-238** (domain 02): "written at the configured session log level, **defaulting to
+  warning**."
+- **REQ-CLI-065** (domain 18): "`runtime.session_log_level`, whose value is one of `debug`, `info`,
+  `warning`, and `error`, whose **default is `info`**, and whose **unrecognized values are treated as
+  `info`**."
+
+Three disagreements in one key, not one: the **default** (`WARNING` against `info`), the **vocabulary**
+(uppercase with integers accepted against a lowercase closed set), and what an **unrecognised value**
+does (fall back to `WARNING` with a warning against silently reading as `info`). The last is the one a
+user would notice: under domain 18 a typo is quietly one level more verbose than intended; under domain
+07 it is one level quieter and says so.
+
+**What the build proceeds under.** Domain 07's reading, which is also domain 15's and domain 02's: the
+default is `WARNING`, the parse is case-insensitive (`WARN` included), integer levels are accepted, and
+an unknown string falls back to `WARNING` with a warning (`packages/engine/src/session-log.ts`,
+`parseLogLevel`; `apps/desktop/src/run-host/configuration.ts`). Three requirements against one, and the
+one is the CLI domain describing a key the desktop run host owns. **REQ-CLI-065's default of `info` is
+not implemented and is not treated as a defect of the code** — it is treated as this escalation.
+
+**What the ruling decides.** Whether the key's vocabulary is the uppercase set the other three name
+(with domain 18 amended to cite it) or the lowercase closed set domain 18 states; and whether a
+headless run is meant to default to a *more* verbose log than an attended one, which is the only
+reading under which both defaults stand. If it is, the key needs two defaults and a requirement saying
+which context selects which — nothing currently says so.
+
+### OQ-62 — a provider-reported cost, ruled; the other two branches stated and left open
+
+**Ruled 2026-09-16, one branch of three.** OQ-62 asked three separable questions and the owner's answer
+to R-026 settles exactly one of them.
+
+- **A provider-reported cost — RULED.** `REQ-MONITOR-166`'s qualifier set gains a fourth member for a
+  figure the provider itself computed, and the adapter asks for and reads OpenRouter's `usage.cost`.
+  The disposition is **`PD-MONITOR-001`** (`docs/product/directives.md`), not an amendment round,
+  because it narrows a requirement the owner is choosing to govern rather than correcting one that is
+  wrong. What makes this branch rulable ahead of the other two: carrying a figure the provider computed
+  needs **exact decimal addition only and never a multiplication**, so `REQ-PROVIDER-121`'s one money
+  rule is met without deciding what a *price* is — which is OQ-21's question and ADR-0031's spike. **Built
+  the same day it was ruled** (`packages/model/src/reported-cost.ts`, `packages/engine/src/money.ts`); the
+  first execution is reported into the directive and into ADR-0031 in place.
+- **Discovery pricing — stated, not ruled.** `REQ-PROVIDER-072` admits pricing "only for
+  `concrete-cloud`" and `discovery.ts` returns `pricing: {}` unconditionally, with a test pinning it.
+  An amendment would land there. It stays blocked behind **OQ-21**, because carrying a per-token price
+  is deciding what a price is.
+- **Configured rates — unchanged, and deliberately unbuilt.** `effectivePricing()` has no call sites
+  and keeps none until OQ-21 answers and ADR-0031 has had the spike it names. ADR-0031's first accepted
+  consequence already rules the interim: if the float typing stands, the exactness is unattainable and
+  that is "a specification defect to be recorded rather than a design to be built around".
+
+**What this ruling does not do.** It does not make every run's cost non-zero. A provider that reports no
+cost still yields `unknown`, which is what `REQ-MONITOR-166` provides for, and a configured rate still
+produces nothing at all. The `0` the owner saw is closed for OpenRouter and open everywhere else.

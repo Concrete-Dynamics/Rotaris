@@ -163,7 +163,7 @@ declared count that is not the count, and a `requests.md#r-nnn` citation reachin
 gate leaves to people is the one it cannot decide: **the row that reaches `main` first keeps the number**,
 and the other takes the next free one at the merge, keeping every word and saying in its own cell that it
 moved. Recorded as
-[`../defects/request-log-has-two-rows-numbered-r-016.md`](../defects/request-log-has-two-rows-numbered-r-016.md),
+a defect note (removed once repaired),
 repaired 2026-09-15.
 
 Two things about that gate belong here rather than only in the defect note. It measures **identifiers, not

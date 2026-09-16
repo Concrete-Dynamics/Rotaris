@@ -140,7 +140,8 @@ export function resolvePersonaMcp(input: PersonaMcpInput): Staged<PersonaMcpSurf
     if (!entry.enabled || input.sessionDisabled.has(name)) {
       // REQ-MCP-040: informational, no warning, no issue.
       const by = !entry.enabled ? "its configured 'enabled: false' (REQ-CONFIG-465)" : 'the session override of the MCP settings category (REQ-MCP-094)';
-      diagnostics.push(info(`persona ${persona}: MCP server '${name}' is disabled by ${by}; skipped (REQ-MCP-040)`, 'process', '', { persona, server: name }));
+      // Keyed, so the run start and every later load repeat neither half of REQ-MCP-040's pair (it had no key at all).
+      diagnostics.push(info(`persona ${persona}: MCP server '${name}' is disabled by ${by}; skipped (REQ-MCP-040)`, 'process', `mcp.disabled.${persona}.${name}`, { persona, server: name }));
       dropped.push({ name, transport: entry.type, origin, reason: 'disabled', detail: `disabled by ${by}` });
       continue;
     }

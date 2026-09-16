@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -169,6 +169,9 @@ describe('the protection adapter (REQ-PROVIDER-016; spikes/credential-protection
     expect(calls.some((c) => c.includes('*S-1-5-18:(OI)(CI)F'))).toBe(true);
     expect(calls.some((c) => c[0]!.endsWith('whoami.exe'))).toBe(false);
   });
+  // REQ-PROVIDER-016 has two halves and the adapter picks between them by platform, so each half is proved on
+  // the host that has it. Until 2026-09-16 only the Windows half had a real-filesystem proof, which left the
+  // POSIX branch — the one that protects every stored credential on Linux and macOS — executed by nothing.
   it.skipIf(process.platform !== 'win32')('on this machine: a foreign explicit ACE planted before a save does not survive it (the spike\'s finding)', async () => {
     const s = new CredentialStore({ dir: join(dir, 'tokens'), protector: createProtector({ scratchDir: dir }), lock: lockDeps(), random: () => 'live', warn: () => {}, info: () => {} });
     expect((await s.ensureDirectory()).ok).toBe(true);
@@ -180,6 +183,33 @@ describe('the protection adapter (REQ-PROVIDER-016; spikes/credential-protection
     const p = createProtector({ scratchDir: dir });
     // The saved file is a renamed temp: protected before it was written, so a second protect is a no-op that must still read back exact.
     expect(await p.protect(target, 'file')).toEqual({ ok: true, value: undefined });
+    expect(s.strayEntries()).toEqual([]);
+  });
+  it.skipIf(process.platform === 'win32')('on this machine: 0700 on the directory and 0600 on the file, applied explicitly over a loose mode and read back', async () => {
+    const p = createProtector({ scratchDir: dir });
+    const loose = join(dir, 'loose.json');
+    writeFileSync(loose, '{}', { mode: 0o666 });
+    chmodSync(loose, 0o666); // `mode:` is masked by the umask; this is the condition the requirement forbids inheriting
+    expect(await p.protect(loose, 'file')).toEqual({ ok: true, value: undefined });
+    expect(statSync(loose).mode & 0o777).toBe(0o600);
+    const sub = join(dir, 'sub');
+    mkdirSync(sub, { mode: 0o777 });
+    chmodSync(sub, 0o777);
+    expect(await p.protect(sub, 'directory')).toEqual({ ok: true, value: undefined });
+    expect(statSync(sub).mode & 0o777).toBe(0o700);
+    // REQ-PROVIDER-016: protection that cannot be applied is a refusal on this code, never a silent pass.
+    const missing = await p.protect(join(dir, 'not-here.json'), 'file');
+    expect(missing.ok).toBe(false);
+    if (!missing.ok) expect(missing.error.code).toBe('credential.protect');
+  });
+  it.skipIf(process.platform === 'win32')('on this machine: a real save leaves the directory 0700, the credential 0600 and no staged file behind', async () => {
+    const s = new CredentialStore({ dir: join(dir, 'tokens'), protector: createProtector({ scratchDir: dir }), lock: lockDeps(), random: () => 'live', warn: () => {}, info: () => {} });
+    expect((await s.ensureDirectory()).ok).toBe(true);
+    expect(statSync(s.directory).mode & 0o777).toBe(0o700);
+    expect(await s.save('deepseek', cred)).toEqual({ ok: true, value: undefined });
+    // REQ-PROVIDER-018: the file is a renamed staging file, so the mode has to survive the rename rather than be set on the target afterwards.
+    expect(statSync(join(s.directory, 'deepseek.json')).mode & 0o777).toBe(0o600);
+    expect(readdirSync(s.directory).filter((f) => f.endsWith('.tmp'))).toEqual([]);
     expect(s.strayEntries()).toEqual([]);
   });
 });

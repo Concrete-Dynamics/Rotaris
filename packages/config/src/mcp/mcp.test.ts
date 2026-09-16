@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
 import { mkdtempSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, posix, win32 } from 'node:path';
 import { loadConfiguration } from '../load.js';
 import { availability, findOnPath, resolveCommand } from './commands.js';
 import { describeForRuntime, REMOTE_DESCRIPTION_KEYS, STDIO_DESCRIPTION_KEYS } from './describe.js';
@@ -48,9 +48,9 @@ describe('REQ-MCP-001/002/003/005 — the entry schema from a YAML scope', () =>
 describe('REQ-MCP-017..024, 027 — the discovery files', () => {
   it('locates the two files per platform and skips user-level discovery when APPDATA is unset', () => {
     expect(discoveryLocations('C:/ws', 'win32', {}, 'C:/home').user).toBeNull();
-    expect(discoveryLocations('C:/ws', 'win32', { APPDATA: 'C:/roam' }, 'C:/home').user).toBe(join('C:/roam', 'mcp.json'));
-    expect(discoveryLocations('/ws', 'darwin', {}, '/home/u').user).toBe(join('/home/u', 'Library', 'Application Support', 'mcp.json'));
-    expect(discoveryLocations('/ws', 'linux', {}, '/home/u').user).toBe(join('/home/u', '.config', 'mcp.json'));
+    expect(discoveryLocations('C:/ws', 'win32', { APPDATA: 'C:/roam' }, 'C:/home').user).toBe(win32.join('C:/roam', 'mcp.json'));
+    expect(discoveryLocations('/ws', 'darwin', {}, '/home/u').user).toBe(posix.join('/home/u', 'Library', 'Application Support', 'mcp.json'));
+    expect(discoveryLocations('/ws', 'linux', {}, '/home/u').user).toBe(posix.join('/home/u', '.config', 'mcp.json'));
   });
   it('parses envFile lines, strips quotes, lets explicit env win, resolves the two placeholders and warns on another', () => {
     expect(parseEnvFile('# c\nA=1\nB="two"\nC=\'3\'\n\nbad\n')).toEqual({ A: '1', B: 'two', C: '3' });
@@ -61,7 +61,7 @@ describe('REQ-MCP-017..024, 027 — the discovery files', () => {
     const r = readDiscoveryFiles({ workspaceRoot: 'C:/ws', platform: 'win32', env: { HOME_X: 'hx' }, home: 'C:/home', read: (p) => files[p.replace(/\\/g, '/')] ?? null });
     const g = r.value.servers['g']!;
     expect(g.env).toEqual({ A: 'explicit', B: 'filed', W: 'C:/ws', E: 'hx', U: '${other}' });
-    expect(g.cwd).toBe(join('C:/ws', 'sub'));
+    expect(g.cwd).toBe(win32.join('C:/ws', 'sub'));
     expect(r.value.origins['g']).toBe('discovered-project');
     const msgs = r.diagnostics.map((d) => d.message);
     expect(msgs.some((m) => /custom_key.*ignored \(REQ-MCP-027\)/.test(m))).toBe(true);
@@ -83,6 +83,9 @@ describe('REQ-MCP-017..024, 027 — the discovery files', () => {
     expect(r.value.servers['t']!.type).toBe('sse');
   });
   it('a real discovery file is byte-identical after several loads (REQ-MCP-027) and its entries merge under the defaults with the origin map (REQ-MCP-025/026)', () => {
+    // These three read REAL files off the host's own filesystem, so the platform they name is the HOST's: the
+    // discovery layer spells its paths by the platform it is given, and naming a foreign one here would send it
+    // looking for `ws\\.mcp.json` on a machine that has just written `ws/.mcp.json` (found on Linux, 2026-09-16).
     const root = mkdtempSync(join(tmpdir(), 'rotaris-mcp-disc-'));
     const ws = join(root, 'ws');
     mkdirSync(join(ws, '.rotaris'), { recursive: true });
@@ -96,7 +99,7 @@ describe('REQ-MCP-017..024, 027 — the discovery files', () => {
     const before = hash();
     let cfg;
     for (let i = 0; i < 3; i += 1) {
-      const r = loadConfiguration({ globalDir, workspaceRoot: ws, env: {}, platform: 'win32', home: root, snapshotPath: null, keepIgnored: false, onPath: () => true });
+      const r = loadConfiguration({ globalDir, workspaceRoot: ws, env: {}, platform: process.platform, home: root, snapshotPath: null, keepIgnored: false, onPath: () => true });
       expect(r.ok).toBe(true);
       if (r.ok) cfg = r.value;
     }
@@ -121,7 +124,7 @@ describe('REQ-MCP-017..024, 027 — the discovery files', () => {
     const globalDir = join(root, 'global');
     mkdirSync(globalDir, { recursive: true });
     writeFileSync(join(ws, '.rotaris', 'agents.yaml'), 'mcp_servers:\n  nocmd: { type: stdio }\n  badtimeout: { command: node, request_timeout: -1 }\n');
-    const r = loadConfiguration({ globalDir, workspaceRoot: ws, env: {}, platform: 'win32', home: root, snapshotPath: null, keepIgnored: false, onPath: () => true });
+    const r = loadConfiguration({ globalDir, workspaceRoot: ws, env: {}, platform: process.platform, home: root, snapshotPath: null, keepIgnored: false, onPath: () => true });
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.error.lines.some((l) => /mcp_servers\.nocmd\.command/.test(l))).toBe(true);
@@ -130,7 +133,7 @@ describe('REQ-MCP-017..024, 027 — the discovery files', () => {
     writeFileSync(join(ws, '.rotaris', 'agents.yaml'), '');
     // `request_timeout` is not a discovery-file key (REQ-MCP-020): it is IGNORED with the unknown-key warning and the entry loads on its remaining keys (REQ-MCP-027) — so the second dropped entry is one with no command at all.
     writeFileSync(join(ws, '.mcp.json'), JSON.stringify({ mcpServers: { nocmd: { type: 'stdio' }, badtimeout: { command: 'node', request_timeout: -1 }, empty: { command: '' }, fine: { command: 'node' } } }));
-    const ok = loadConfiguration({ globalDir, workspaceRoot: ws, env: {}, platform: 'win32', home: root, snapshotPath: null, keepIgnored: false, onPath: () => true });
+    const ok = loadConfiguration({ globalDir, workspaceRoot: ws, env: {}, platform: process.platform, home: root, snapshotPath: null, keepIgnored: false, onPath: () => true });
     expect(ok.ok).toBe(true);
     if (ok.ok) {
       expect(Object.keys(ok.value.mcp.servers).sort()).toEqual(['badtimeout', 'browser', 'code_intelligence', 'fine', 'web_search']);
@@ -210,6 +213,12 @@ describe('REQ-MCP-082/083/087/088/090 — secrets and the environment', () => {
     const u = resolveRemoteUrl('web_search', 'https://x/?k=${MISSING}', {}, {});
     expect(u.value).toEqual({ url: 'https://x/?k=${MISSING}', unresolved: ['MISSING'] });
     expect(u.diagnostics[0]!.message).toMatch(/could not be resolved/);
+    expect(u.diagnostics[0]).toMatchObject({ severity: 'warning', scope: 'load', channels: 'user' });
+    // REQ-MCP-040: a server turned off is a choice. Its unresolved placeholder is a state, said once per process.
+    const d = resolveRemoteUrl('web_search', 'https://x/?k=${MISSING}', {}, {}, false);
+    expect(d.value.unresolved).toEqual(['MISSING']);
+    expect(d.diagnostics[0]).toMatchObject({ severity: 'info', scope: 'process', channels: 'log', key: 'mcp.url-unresolved.web_search.MISSING' });
+    expect(d.diagnostics.filter((x) => x.severity === 'warning')).toEqual([]);
   });
 });
 

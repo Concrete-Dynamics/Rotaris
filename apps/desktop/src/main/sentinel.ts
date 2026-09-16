@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync, writeSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, writeSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { resolveUserDirs } from '@rotaris/platform';
 
 /**
@@ -35,11 +35,30 @@ const CODE_INTELLIGENCE_TOKEN = 'builtin:code-intelligence';
 const RUNTIME_ENTRY = 'from serena.cli import top_level; top_level()';
 
 function runtimeExecutable(): string | null {
+  const exe = process.platform === 'win32' ? 'python.exe' : 'bin/python3';
   const candidates: string[] = [];
   const resources = (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath;
-  if (resources) candidates.push(join(resources, 'code-intelligence', 'runtime', 'python.exe'));
-  candidates.push(join(__dirname, '..', '..', 'resources', 'code-intelligence', 'runtime', 'python.exe'));
+  if (resources) candidates.push(join(resources, 'code-intelligence', 'runtime', exe));
+  candidates.push(join(__dirname, '..', '..', 'resources', 'code-intelligence', 'runtime', exe));
   return candidates.find((c) => existsSync(c)) ?? null;
+}
+
+function findSitePackages(python: string): string | null {
+  const win = join(python, '..', 'Lib', 'site-packages');
+  if (existsSync(win)) return win;
+  const runtime = dirname(dirname(python));
+  const lib = join(runtime, 'lib');
+  if (existsSync(lib)) {
+    try {
+      const py = readdirSync(lib).find((e: string) => e.startsWith('python3.'));
+      if (py && existsSync(join(lib, py, 'site-packages'))) {
+        return join(lib, py, 'site-packages');
+      }
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 /**
@@ -57,7 +76,8 @@ function runtimeHome(python: string): string {
     mkdirSync(home, { recursive: true });
     let text = '';
     try {
-      const template = join(python, '..', 'Lib', 'site-packages', 'serena', 'resources', 'serena_config.template.yml');
+      const sitePkgs = findSitePackages(python);
+      const template = sitePkgs ? join(sitePkgs, 'serena', 'resources', 'serena_config.template.yml') : '';
       text = readFileSync(template, 'utf8')
         .replace(/^gui_log_window:.*$/m, 'gui_log_window: False')
         .replace(/^web_dashboard:.*$/m, 'web_dashboard: False')

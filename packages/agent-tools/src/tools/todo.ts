@@ -62,8 +62,19 @@ const taskInput = z.object({
 });
 const phaseInput = z.object({ id: z.string().optional(), name: z.string(), tasks: z.array(taskInput).default([]) });
 
+/**
+ * REQ-TOOLS-144's five, closed. The set was `z.string()` until 2026-09-16, so the advertised schema told the
+ * model nothing about which operations exist and the refusal for a wrong one arrived only from `execute`.
+ * Tightening it moves that refusal ahead of `execute`, which is why `validationError` below exists: the
+ * requirement mandates the words `Unsupported operation: <op>`, and a schema refusal would otherwise answer
+ * with the gate's generic "do not match its schema" and make the mandated string unreachable — the same
+ * ordering fault `docs/defects/fixed/a-misspelled-tool-reads-as-withheld-at-the-plan-gate.md` records.
+ */
+const OPERATIONS = ['replace', 'add_phase', 'add_task', 'update', 'remove_task'] as const;
+const unsupported = (op: string): string => `Unsupported operation: ${op}. The operations are ${OPERATIONS.join(', ')}.`;
+
 const todoSchema = z.object({
-  operation: z.string(),
+  operation: z.enum(OPERATIONS),
   phases: z.array(phaseInput).optional(),
   phase_id: z.string().optional(),
   task_id: z.string().optional(),
@@ -76,6 +87,22 @@ const todoSchema = z.object({
 
 const PROTECTED: ReadonlySet<TodoState> = new Set(['COMPLETED', 'ABANDONED', 'IN_PROGRESS']);
 
+/**
+ * REQ-TOOLS-013 / REQ-TOOLS-147's shape: a refusal says what to do instead. A call carrying `phases` to an
+ * operation that adds one thing is the batch the schema's own `phases` field invites, so the refusal names
+ * the operation that takes it and says what became of what was sent.
+ */
+const batchRemedy = (phases: number, what: string): string =>
+  phases === 0 ? '' : ` ${what} at a time and does not read \`phases\`, so the ${phases} phase(s) sent here were not added; call replace with the whole \`phases\` array to create them in one call.`;
+
+const fieldsFor = (op: string): string => ({
+  replace: 'replace reads `phases`: [{name, tasks: [{name, description, state}]}].',
+  add_phase: 'add_phase reads `name`.',
+  add_task: 'add_task reads `phase_id` and `name`, and optionally `description` and `state` (or a nested `task`).',
+  update: 'update reads `task_id`, and whichever of `name`, `description` and `state` is to change.',
+  remove_task: 'remove_task reads `task_id`.',
+}[op] ?? `The operations are ${OPERATIONS.join(', ')}.`);
+
 export function todoTool(list: TodoList): ToolExecutor<z.infer<typeof todoSchema>> {
   const hint = () => {
     const phases = list.phases.map((p) => `${p.name} (${p.id})`).join(', ') || '(none)';
@@ -85,7 +112,17 @@ export function todoTool(list: TodoList): ToolExecutor<z.infer<typeof todoSchema
   const done = (msg: string) => observation(`${msg}\n${list.render()}`);
   return {
     name: 'todo',
-    description: 'Maintain the task list: replace, add_phase, add_task, update, remove_task. Phases and tasks carry stable ids; target by id. At most one task IN_PROGRESS.',
+    // Each operation names the fields it reads. Before 2026-09-16 this line listed the five names and nothing
+    // else, and a run read `add_phase` as the way to send a whole plan's phases — the shape only `replace` takes.
+    description: [
+      'Maintain the task list. One operation per call, and each reads its own fields:',
+      'replace {phases: [{name, tasks: [{name, description, state}]}]} — the WHOLE list at once, and the only operation that takes a batch; COMPLETED, ABANDONED and IN_PROGRESS tasks are kept by id whatever the incoming list says.',
+      'add_phase {name} — ONE empty phase; it does not read `phases`.',
+      'add_task {phase_id, name, description, state} — ONE task in an existing phase.',
+      'update {task_id, name, description, state} — one task; a change that changes nothing is an error.',
+      'remove_task {task_id}.',
+      'Phases and tasks carry stable 8-hex ids; target by id, never by name. At most one task IN_PROGRESS.',
+    ].join(' '),
     schema: todoSchema,
     label: (a) => `todo ${a.operation}`,
     execute: async (a) => {
@@ -119,7 +156,7 @@ export function todoTool(list: TodoList): ToolExecutor<z.infer<typeof todoSchema
         }
         case 'add_phase': {
           const name = a.name ?? a.title;
-          if (!name) return errorObservation('add_phase requires a name.');
+          if (!name) return errorObservation(`add_phase requires a name.${batchRemedy(a.phases?.length ?? 0, 'add_phase adds one phase')} ${hint()}`);
           const phase: TodoPhase = { id: hexId(), name, tasks: [] };
           list.phases.push(phase);
           return done(`Added phase ${name} (${phase.id}).`);
@@ -127,7 +164,7 @@ export function todoTool(list: TodoList): ToolExecutor<z.infer<typeof todoSchema
         case 'add_task': {
           const flat = a.task ?? { name: a.name, title: a.title, description: a.description, state: a.state };
           const name = flat.name ?? flat.title;
-          if (!name) return errorObservation('add_task requires a task name (or title).');
+          if (!name) return errorObservation(`add_task requires a task name (or title).${batchRemedy(a.phases?.length ?? 0, 'add_task adds one task')} ${hint()}`);
           if (!a.phase_id) return errorObservation(`add_task requires phase_id. ${hint()}`);
           const phase = list.findPhase(a.phase_id);
           if (!phase) return errorObservation(`Unknown phase id '${a.phase_id}'. ${hint()}`);
@@ -164,8 +201,21 @@ export function todoTool(list: TodoList): ToolExecutor<z.infer<typeof todoSchema
           return done(`Removed task ${found.task.name} (${found.task.id}).`);
         }
         default:
-          return errorObservation(`Unsupported operation: ${a.operation}`);
+          // Unreachable through the gate — the schema refuses an operation outside the five before `execute`
+          // is called, and `validationError` answers it in REQ-TOOLS-144's words. Kept for a direct caller.
+          return errorObservation(unsupported(String(a.operation)));
       }
+    },
+    /**
+     * REQ-TOOLS-144's mandated refusal, raised where the operation is now refused: at the schema. Anything
+     * else the schema rejects keeps the gate's own detail and gains the per-operation fields, which is the
+     * only place a caller that sent the wrong shape will read them.
+     */
+    validationError: (args, detail) => {
+      const op = args['operation'];
+      if (typeof op === 'string' && !(OPERATIONS as readonly string[]).includes(op)) return errorObservation(unsupported(op));
+      if (typeof op !== 'string') return errorObservation(`todo requires an operation: one of ${OPERATIONS.join(', ')}.`);
+      return errorObservation(`The arguments for '${op}' do not match the todo schema (${detail}). ${fieldsFor(op)}`);
     },
   };
 }

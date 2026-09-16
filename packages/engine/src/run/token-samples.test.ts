@@ -95,6 +95,11 @@ describe('REQ-MONITOR-166 the run samples the token history', () => {
     expect(durationLabel('2026-09-05T10:00:00.000Z', '2026-09-05T10:00:42.000Z')).toBe('0:42');
     expect(durationLabel('2026-09-05T10:00:00.000Z', '2026-09-05T11:05:03.000Z')).toBe('1:05:03');
     expect(costLabelOf('0')).toEqual({ text: 'price not established', qualifier: 'unknown' });
-    expect(costLabelOf('0.12')).toEqual({ text: '0.12 (price not established)', qualifier: 'unknown' });
+    // PD-MONITOR-001: a figure in the total got there one way — a provider reported it — so the label
+    // says so and renders it under REQ-PROVIDER-121's rule. It read "0.12 (price not established)" while
+    // the only route to a figure was a configured rate, which is still blocked (OQ-21).
+    expect(costLabelOf('0.12')).toEqual({ text: '0.12 reported by the provider', qualifier: 'reported' });
+    expect(costLabelOf('0.00154')).toEqual({ text: '0.0015 reported by the provider', qualifier: 'reported' });
+    expect(costLabelOf('nonsense')).toEqual({ text: 'nonsense (price not established)', qualifier: 'unknown' });
   });
 });

@@ -313,7 +313,12 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     const sid = (withFallback.sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
     await tick();
     expect(dal.childrenOf(sid)[0]!.state).toBe('running');
+    // REQ-ORCH-088: the ceiling asks the child to land rather than cutting it; this child holds on NEVER and
+    // cannot, so it is the backstop 30 s behind the ceiling (`CHILD_LANDING_GRACE`) that ends it and lets the
+    // fallback retry begin. Both figures are advanced here because both are now on the path.
     clock.advance(10_000);
+    await tick();
+    clock.advance(30_000);
     const result = await withFallback.sessions.running(sid)!;
     expect(result.status).toBe('completed');
     const child = dal.childrenOf(sid)[0]!;
@@ -329,6 +334,8 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     const sid2 = (without.sessions.start(dal, 'C:/ws', 'y') as { value: SessionId }).value;
     await tick();
     clock.advance(10_000);
+    await tick();
+    clock.advance(30_000);
     const r2 = await without.sessions.running(sid2)!;
     expect(r2.status).toBe('completed');
     const c2 = dal.childrenOf(sid2)[0]!;

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, posix, win32 } from 'node:path';
 import { pathKey } from './canonical.js';
 import { guardedRead, replaceDocument, replaceDocumentSync } from './document.js';
 
@@ -167,6 +167,9 @@ export interface PreferenceRootEnv { readonly platform: NodeJS.Platform; readonl
 
 /** ADR-0042: benchmark override, configuration home, then the platform's machine-local settings location. */
 export function resolvePreferenceRoot(e: PreferenceRootEnv = { platform: process.platform, env: process.env, home: homedir() }): string {
+  // The platform is a PARAMETER, so the separator comes from IT and not from the host — the same rule
+  // `canonicalPath` and `resolveUserDirs` follow, and for the same reason.
+  const { join } = e.platform === 'win32' ? win32 : posix;
   const overridden = e.env['ROTARIS_PREFERENCES_ROOT'];
   if (overridden) return overridden;
   const configHome = e.env['XDG_CONFIG_HOME'];

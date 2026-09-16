@@ -144,7 +144,11 @@ describe('chords — REQ-SHELL-057, REQ-SHELL-058, REQ-SHELL-165', () => {
     expect(detectPlatform('MacIntel')).toBe('mac');
     expect(detectPlatform('Linux x86_64')).toBe('linux');
     expect(detectPlatform('Win32')).toBe('windows');
-    expect(detectPlatform(undefined)).toBe('windows');
+    // A host string it does not recognise — absent, empty, or a platform this product does not name — is the
+    // Ctrl-writing default. Passing `undefined` here read the HOST's own `navigator.platform` through the
+    // parameter default instead, so the assertion was about the machine running the test (found on Linux, 2026-09-16).
+    expect(detectPlatform('')).toBe('windows');
+    expect(detectPlatform('SunOS')).toBe('windows');
   });
 
   it('appends the platform-formatted chord to a tooltip sentence, and leaves a shortcut-less one alone (REQ-SHELL-058)', () => {

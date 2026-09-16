@@ -406,7 +406,7 @@ a run is held at the plan gate — and the event document was not amended with i
 said `untrusted_workspace` was the only defined value, so a reader validating
 `hook.finish` against this document alone would have rejected a conformant
 `plan_gate` event. Recorded as
-`docs/defects/hook-skip-reason-vocabulary-stale-in-events-spec.md`.
+a defect note (removed once repaired).
 
 `REQ-HOOKS-126` remains the sole owner of the vocabulary and is unchanged; both
 sentences here restate it and now restate it correctly. `REQ-EVENTS-047` keeps

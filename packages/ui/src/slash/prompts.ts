@@ -101,9 +101,20 @@ let promptRootsReader: (() => Promise<PromptsRootsResult>) | null = null;
  * therefore what clears this.
  */
 let lastRoots: PromptsRootsResult | null = null;
+/**
+ * Defect AO-3 — the read IN FLIGHT, for the same reason the answer above is kept here. Two effects start a
+ * read as a window settles: the registrar's, when nothing is cached yet, and the configuration key's, which
+ * always reloads. Neither can see the other, and at start neither has an answer to find, so both read — one
+ * launch produced two `prompts.roots.read` round trips in the same millisecond and two more just after,
+ * each listing three directories (measured 2026-09-16, `/tmp/rotaris-launch.log`). A read already running is
+ * this window's answer, so a second caller joins it rather than starting another; the handle is cleared when
+ * it settles, so a later focus or configuration change still reads the disk afresh.
+ */
+let inFlight: Promise<PromptsRootsResult> | null = null;
 export function bindPromptRootsReader(reader: (() => Promise<PromptsRootsResult>) | null): void {
   promptRootsReader = reader;
   lastRoots = null;
+  inFlight = null;
 }
 /** What the reader last answered, for a caller that must register on a new registry without waiting; null until the first answer. */
 export function cachedPromptRoots(): PromptsRootsResult | null {
@@ -113,7 +124,11 @@ export function readPromptRoots(): Promise<PromptsRootsResult> | null {
   if (promptRootsReader === null) return null;
   // Cached HERE, not by the caller: a read still in flight when the registrar is rebuilt is this window's answer all the
   // same, and the rebuilt registrar takes it synchronously instead of reading three directories again.
-  return promptRootsReader().then((result) => { lastRoots = result; return result; });
+  if (inFlight !== null) return inFlight;
+  const answered = promptRootsReader().then((result) => { lastRoots = result; return result; });
+  const p: Promise<PromptsRootsResult> = answered.finally(() => { if (inFlight === p) inFlight = null; });
+  inFlight = p;
+  return p;
 }
 
 /** What a prompt file registers as: the two names (the second only when free), the description, the hint. */

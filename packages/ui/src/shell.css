@@ -229,6 +229,11 @@
 .row--block-start { margin-top: var(--rt-space-3, 12px); }
 .rowlist .row:first-child { margin-top: 0; }
 .row__grid { display: grid; grid-template-columns: 52px 112px minmax(0, 1fr); align-items: baseline; column-gap: var(--rt-space-2, 8px); }
+/* PD-CHAT-005: a delegated agent's rows indent one step per level of the delegation tree, so the transcript
+   says who reports to whom in the same place the Agents panel does. `Row.tsx` sets `--rt-row-depth` from the
+   tree and writes no pixel; the step is the language's own 16 px. REQ-CHAT-057's 52 px and 112 px columns are
+   UNTOUCHED — the indent MOVES the grid, it does not resize it, so `rows-proof` measures the same two widths. */
+.row[style*='--rt-row-depth'] > .row__grid { padding-inline-start: calc(var(--rt-row-depth, 0) * var(--rt-space-4, 16px)); }
 .row__main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .row__attribution { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .row__task { font-size: var(--rt-text-2xs, 10px); color: var(--rt-text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -243,7 +248,11 @@
 .row--user { padding: var(--rt-space-2, 8px) var(--rt-space-3, 12px); background: var(--rt-accent-tint-07); border-color: var(--rt-accent-800); }
 .row--user:hover { background: var(--rt-accent-tint-10); }
 .row__head { display: flex; align-items: baseline; gap: var(--rt-space-2, 8px); }
-/* The falsified rule, kept beside its replacement: this asked for `text-overflow: ellipsis`, which acts only on
+/* PD-CHAT-005: the accent is the ink of a row that names NO persona — the reader's own row, a system notice.
+   A row that names one carries its assigned colour inline, from `personaColourToken`, so one agent reads as one
+   colour in the label, the continuation bar and the expanded rail alike.
+ *
+ * The falsified rule, kept beside its replacement: this asked for `text-overflow: ellipsis`, which acts only on
    content that overflows on ONE line, and never set `white-space: nowrap` — so the declaration did nothing and a
    name wider than the 112 px column wrapped anyway. Making it work as written would truncate
    `REQUIREMENTS-ENGINEER` to `REQUIREMENTS-EN…`, and an agent's name is the one fact REQ-CHAT-057's attribution
@@ -293,7 +302,7 @@
 .row--group .activity__segment:not(.activity__segment--reasoning) { color: var(--rt-axis-y-300); }
 /* PD-CHAT-004: the activity word of the segment in flight — what the agent is doing NOW, at a glance. */
 .activity__now { white-space: nowrap; color: var(--rt-run); }
-/* PD-CHAT-006: the fail colour is on the FACT that states the failure and on nothing else on the line. The
+/* PD-CHAT-004 revision 3: the fail colour is on the FACT that states the failure and on nothing else on the line. The
    falsified rules, kept beside their replacement — they coloured every segment of a run holding one failed
    member, reasoning included, which is REQ-CHAT-065's own text and is exactly what the directive narrows:
      .tool--failed  > .row__grid > .row__main > .tool__header .activity__segment,
@@ -352,7 +361,7 @@
  * pattern the design already fixed (§1, G1: a rule and a glyph, never a filled background). */
 .row--system { border-left: var(--rt-notice-rule-width, 2px) solid var(--rt-border-strong); border-radius: 0; color: var(--rt-text-secondary); }
 .row--system .row__body { color: var(--rt-text-secondary); font-size: var(--rt-text-xs, 12px); }
-/* PD-CHAT-005: a row still being written draws no animated indicator of its own. The falsified rules, kept beside
+/* PD-CHAT-006: a row still being written draws no animated indicator of its own. The falsified rules, kept beside
    their replacement — there is no replacement, which is the point; the row's own growth says it is being written:
      .row__streaming { color: var(--rt-accent-300); font-size: var(--rt-text-2xs, 10px); animation: rt-pulse …; }
      @media (prefers-reduced-motion: reduce) { .row__streaming { animation: none; } }
@@ -480,7 +489,7 @@
 .tool__outcome--failed, .tool__outcome--blocked { color: var(--rt-danger-300); }
 /* The child combinators are load-bearing: a group coloured `failed` reveals its members INSIDE its own element, and a
    descendant selector tints the names of the ok members too — found by looking at an expanded group.
-   PD-CHAT-006 adds `.row--tool`, which is what confines these to a row that IS the call that failed. Without it they
+   PD-CHAT-004 revision 3 adds `.row--tool`, which is what confines these to a row that IS the call that failed. Without it they
    also caught the activity line, whose header carries a `.tool__chevron` of its own: the chevron of a whole run went
    red for one failed member, which is the half of the owner's report the segment rules above do not cover. */
 .row--tool.tool--blocked > .row__grid > .row__main > .tool__header > .tool__name,
@@ -491,7 +500,7 @@
 /* REQ-CHAT-061's expansion IS the design's revealed card, and now carries the surface the row gave up: a panel
    with a 2 px rail in the tool axis, which is where the design puts a border it means. */
 .tool__card { display: flex; flex-direction: column; gap: var(--rt-space-1, 4px); margin-top: var(--rt-space-2, 8px); max-width: 620px; padding: var(--rt-space-2, 8px) var(--rt-space-3, 12px); background: var(--rt-surface); border: 1px solid var(--rt-border); border-left: 2px solid var(--rt-axis-y-500); border-radius: var(--rt-radius-md, 6px); }
-/* PD-CHAT-006: `.row--tool` again, and here the DESCENDANT combinator is why it is needed — an expanded member's
+/* PD-CHAT-004 revision 3: `.row--tool` again, and here the DESCENDANT combinator is why it is needed — an expanded member's
    card sits inside the group element, so a run coloured `failed` gave every open member a red rail. */
 .row--tool.tool--failed .tool__card, .row--tool.tool--blocked .tool__card { border-left-color: var(--rt-danger-300); }
 .tool__caption { font-size: var(--rt-text-2xs, 10px); letter-spacing: var(--rt-tracking-label, .06em); color: var(--rt-text-tertiary); }

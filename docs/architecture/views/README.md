@@ -24,20 +24,93 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Also reconciled with the code on **2026-09-15** — **the complete reviewed-improvement lifecycle**: the Library and
-Overview read one proposal store; review, edit, delete, export and Undo flow through main to the workspace service;
-approved proposals become an `improvement_run` todo; verifier blocks use the shared configuration writer; dedicated Git
-checkpoints provide previewed, confirmed rollback with a pre-rollback safety point. The process view carries the new
-renderer commands, run-host `initialTodo`, workspace-service actions, revision bumps and outcome notices. Schema v18
-continues to carry the immutable session run type, durable session-to-artifact association, current records, immutable
-versions and both gap counters.
-Last reconciled with the code: **2026-09-15** — **`PD-CHAT-004` revision 2 and `PD-CHAT-005`**: the activity
+Last reconciled with the code: **2026-09-16** — **a cost the provider reported** (`PD-MONITOR-001`,
+minted and first executed this day): a completed provider request can carry the cost that provider computed
+for it, asked for in the endpoint's own body field and read back through the SDK's metadata seam, because the
+SDK's usage mapping drops every field but the token counts. The run's total is exact decimal addition on
+`bigint` — the only money arithmetic in the product, and addition only, which is why it does not wait on
+OQ-21 — and the label carries REQ-MONITOR-166's fourth qualifier. Only the **runtime view** is affected — a
+new paragraph in the turn section says where the figure enters, what adds it and what the label says. No
+package, edge, message kind or store table moved; `sessions.cost` was already a decimal string.
+
+Previously reconciled, the same day: **no loop supervision while the plan gate holds**
+(`PD-ORCH-001`, minted this day): a held run has its write and execute tools withheld, so it greps and reads,
+which is REQ-ORCH-101's repetition trigger read literally — and the corrective goes in as an unmarked user
+message, so the run reconciles an instruction no user gave while it waits for the user's decision. `Run` now
+attaches no supervisor for the turn the hold covers, and attaches one again on the first turn after the gate
+resolves. Only the **runtime view** is affected — the plan-gate paragraph and the turn's step order say where
+the supervisor is and is not. No package, edge, message kind or store table moved.
+
+Previously reconciled, the same day: **the MCP child's stderr, measured after its repair**:
+a child server's stderr does reach the log at `debug` and never at `info` (141 lines against 0 in one
+driven launch), and `debug` is a label rather than a filter, because the application log reads no level
+at all — raised as OQ-63. Only the **process view** is affected — the MCP-child paragraph says what the
+level does and does not do. No code moved for it; no package, edge, message kind or store table moved.
+
+Previously reconciled, the same day: **what the model is told about a tool, and who is
+speaking to it**: the advertised parameter schema is now the INPUT form, so a field with a default is
+advertised optional as the parser treats it, and `todo`'s five operations reach the model as an enum;
+`todo`'s refusals name the operation that takes a batch instead of six words that name nothing; and the
+plan gate's resume section names the product as its speaker rather than narrating the user inside a
+`role: 'user'` payload. Only the **runtime view** is affected — the executors paragraph says what
+`toolSpec` hands over, and the plan-gate paragraph says whose voice the two sections are in. No package,
+edge, message kind or store table moved.
+
+Previously reconciled, the same day: **a timed-out child is asked to land** (REQ-ORCH-088's
+graceful-pause arm, first executed): the ceiling no longer aborts the child mid-tool-call, it raises the same
+flag REQ-MONITOR-123's pause raises, so the turn stops before its next model step and the step in flight keeps
+its words; a hard-abort backstop 30 s behind it (`run/grace.ts`, ADR-0014 rule 1's one allowance) still bounds
+REQ-CONFIG-113's ceiling for the child that cannot land. The timeout report carries the last assistant message
+that SPOKE, rather than the last one, which is usually the one that opened a tool call. Only the **runtime
+view** is affected — the resilience paragraph says what expiry now does. No package, edge, message kind or
+store table moved.
+
+Previously reconciled, the same day: **one activity line per working agent** (`PD-CHAT-004`
+revision 2 and `PD-CHAT-005`, first executed): a run is bounded by its agent alone, so concurrent agents
+interleave two lines instead of chopping each other's into fragments; the collapsed line carries one segment
+per tool family with that family's totals; the role line takes the persona's colour and a delegated agent's
+rows indent one step per level. Only the **component view** is affected — the `ui/transcript` note says what
+`project.ts` now decides and where the depth comes from. No package, edge, message kind or store table moved.
+
+Previously reconciled, the same day: **the catalogue readers' duplicate read** (defect AO-3):
+a `prompts.roots.read` or a `skills.read` still in flight is the window's answer, so a second caller joins it
+instead of starting another; a launch had put two identical reads on the wire in the same millisecond, because
+the registrar's effect and the configuration key's both start one before either has an answer to find. Only the
+**process view** is affected — the prompt-commands paragraph says when a read is joined. No package, edge,
+message kind or store table moved.
+
+Previously reconciled, the same day: **the MCP connection's noise** (ADR-0033's first
+execution against a real third-party server): the protocol era a server has already answered with is
+remembered for the process, keyed by what is launched, so `ToolDiscovery`, `SessionConnections` and
+`HealthProbe` probe it once between them rather than each; and a child's stderr is forwarded at
+**debug**, which the run host had been flattening to `info`. Only the **process view** is affected —
+the run host's held state gains the era memory, and the MCP-child paragraph says what level a child's
+stderr reaches the log at. No package, edge, message kind or store table moved.
+
+Before that, the same day: **the plan gate's three repairs** (REQ-ORCH-153,
+REQ-ORCH-082, REQ-TOOLS-032): the held segment's one turn now carries `planRequestSection` on both the task
+string and the initial content parts, so the producing role is told a plan is what is wanted; the dispatch
+check refuses a name that IS a tool and lets a name that is no tool reach the unknown-tool answer, for which
+`createToolPort` hands the gate the set of names it removed at the gate; and a cancel taken at the gate writes
+REQ-ORCH-082's first arm in the same durable act that resolves the cycle. Only the **runtime view** is
+affected — no package, edge, process, message kind, command or store table moved, and the new module sits
+inside `engine`'s existing `run/` directory. Three defect notes, each archived on landing.
+
+Previously reconciled: **2026-09-15** — **`PD-CHAT-004` revision 3 and `PD-CHAT-006`**: the activity
 line's colour moves from the whole line to the `N failed` / `N blocked` facts inside the segment that holds them,
 and a row still being written draws no animated indicator of its own. One module gains one export
 (`segmentFacts` in `ui/src/transcript/project.ts`, the summary becoming its join); no module, edge, process,
 channel or file on disk changes, so only the component view has a line to add. Measured in the built product by
 `pnpm rows-proof` — one fact red of twelve, the chevron and the run's span not, two reasoning segments not, and
 zero animated indicators beside one live message row. **No implementation condition is raised or discharged.**
+
+Previously reconciled: **2026-09-15** — **the complete reviewed-improvement lifecycle**: the Library and
+Overview read one proposal store; review, edit, delete, export and Undo flow through main to the workspace service;
+approved proposals become an `improvement_run` todo; verifier blocks use the shared configuration writer; dedicated Git
+checkpoints provide previewed, confirmed rollback with a pre-rollback safety point. The process view carries the new
+renderer commands, run-host `initialTodo`, workspace-service actions, revision bumps and outcome notices. Schema v18
+continues to carry the immutable session run type, durable session-to-artifact association, current records, immutable
+versions and both gap counters.
 
 Previously reconciled: **2026-09-15** — **project initialization** (ADR-0064, first executed): the
 task registry, the persisted marker and the five set derivations in `config/src/init/`, the coordinator in
@@ -57,11 +130,11 @@ is confined to the `ui` package's transcript module and adds **no edge and no me
 the run boundary from the agent and `display/showReasoning`, `types.ts` gains `ActivitySegment`, and `Row.tsx`
 draws the segments and the one continuous persona rule the revealed members hang from. Only the **component
 view** is affected; the process and runtime views are unchanged, because no process, file or message moved. The
-same change repairs `docs/defects/group-header-claims-the-role-gutter.md`: a folded run's role is now its agent.
+same change repairs a defect note (removed once repaired): a folded run's role is now its agent.
 
 Also **2026-09-15** — **the search pattern dialect**: `grep` and `read_file`'s
 `grep` filter compile through one helper that reads leading `(?flags)` groups, so a pattern the pinned
-accelerator accepts is not refused in process (`docs/defects/grep-refuses-an-inline-flag-group.md`,
+accelerator accepts is not refused in process (a defect note, removed once repaired,
 [R-018](../../product/requests.md#r-018)). The runtime view carries it beside the executor list; no package
 edge, message or process changed.
 

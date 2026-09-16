@@ -1,4 +1,5 @@
 import type { SessionRow, SessionRunPatch } from '@rotaris/store';
+import { addAmounts } from '../money.js';
 
 /**
  * ADR-0008 "The metric aggregates are maintained, not recomputed":
@@ -44,6 +45,21 @@ export class Aggregates {
   addTurnUsage(u: { input: number; output: number }): void {
     this.tokensInput += u.input;
     this.tokensOutput += u.output;
+  }
+
+  /**
+   * PD-MONITOR-001: the cost of ONE completed provider request, as that provider reported it, added
+   * to the run's running total in exact decimal arithmetic (REQ-PROVIDER-121). Added rather than
+   * replaced: REQ-ORCH-142's "provider-reported totals are cumulative and MUST be replaced" is about a
+   * TOTAL a provider reports for the run, and this is a figure it reports for one request — two
+   * requests are two purchases, and the run's total is their sum.
+   *
+   * The comment this class opened with, kept beside its replacement, read "cost is zero until pricing
+   * exists". It was true of every route through a rate: those still wait on OQ-21 and ADR-0031. It was
+   * never true of a figure the provider computed itself, which needs no rate and no multiplication.
+   */
+  addCost(amount: string): void {
+    this.cost = addAmounts(this.cost, amount);
   }
 
   /** REQ-ORCH-097 / REQ-SESSION-139: per-turn tool-call counters accumulate. */

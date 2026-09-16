@@ -1,5 +1,5 @@
 import { millis, type Clocks } from '@rotaris/kernel';
-import type { TurnReport } from '@rotaris/model';
+import type { TurnReport, Usage } from '@rotaris/model';
 import type { SessionWriter } from '../session-writer.js';
 import { classifyFailure, describeCondition, describeError, entryOf, localBackoffMs, pairKey, providerIdentity, retryAfterMs, sameTierCandidates, withSettings, type CatalogueEntry, type ModelChoice, type ResilienceMemory } from './resilience.js';
 import type { WaitRegistry } from './waits.js';
@@ -78,7 +78,7 @@ export interface LadderDeps {
    * an attempt superseded by a fallback — still reported whatever usage the provider reported, and that usage is
    * spent. Reading the usage off the ladder's return value alone loses it.
    */
-  readonly onRequestUsage?: ((usage: { readonly input: number; readonly output: number }) => void) | undefined;
+  readonly onRequestUsage?: ((usage: Usage) => void) | undefined;
 }
 
 function pause(clocks: Clocks, ms: number, signal: AbortSignal): Promise<void> {

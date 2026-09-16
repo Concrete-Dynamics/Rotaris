@@ -93,7 +93,7 @@ export type DisplayRow =
       /**
        * PD-CHAT-004 / REQ-CHAT-057: the run's agent and persona — what the role gutter names and what the
        * expanded rail is coloured by. Never an activity word: putting the family here is the defect
-       * `docs/defects/group-header-claims-the-role-gutter.md` records.
+       * a defect note (removed once repaired) records.
        */
       readonly role: string; readonly persona: string;
       /** REQ-CHAT-065's per-outcome counts over the run's TOOL members; reasoning has no outcome. */

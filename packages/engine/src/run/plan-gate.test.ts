@@ -5,8 +5,9 @@ import { join } from 'node:path';
 import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import type { IntentCategory } from '@rotaris/contracts';
-import { answer, DefaultAgentBackend, ScriptedModelClient, type AgentBackend, type ScriptedCall } from '@rotaris/model';
-import { RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type RunConfig, type RuntimePosture } from '../index.js';
+import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type AgentBackend, type ScriptedCall } from '@rotaris/model';
+import { SUPERVISOR_DEFAULTS, type LoopClassifier } from './supervisor.js';
+import { RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type RunConfig, type RuntimePosture, type ToolPort } from '../index.js';
 
 /**
  * REQ-ORCH-152/153/154 (ADR-0062): the plan gate end to end through the session manager — the park, what it
@@ -45,7 +46,14 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     return { client, backend: new DefaultAgentBackend(client) as AgentBackend };
   }
 
-  function sessionsWith(backend: AgentBackend, opts: { mode?: 'auto' | 'plan'; intent?: IntentCategory } = {}) {
+  /** A one-tool port, so a turn can take several steps — which is what it takes for a loop to exist at all. */
+  const grepPort = (): ToolPort => ({
+    specs: () => [{ name: 'grep', description: 'search', parameters: { type: 'object' } }],
+    dispatch: async () => ({ text: 'packages/a/yarn.lock:1: yaml@2.4.5', isError: false, status: 'ok', durationMs: 1, label: 'grep', args: {} }),
+    cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
+  });
+
+  function sessionsWith(backend: AgentBackend, opts: { mode?: 'auto' | 'plan'; intent?: IntentCategory; classifier?: LoopClassifier } = {}) {
     const runtime: RuntimePosture = {
       permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' },
       sessionLogLevel: 'WARNING', runStartMode: opts.mode ?? 'plan',
@@ -58,6 +66,9 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
       // The registry predicate the run host injects; here just enough to exercise the child-admission refusal.
       planWithholds: (tool) => ['write_file', 'terminal', 'haet', 'haet_edit', 'git_commit'].includes(tool),
       ...(opts.intent ? { preflight: async () => preflightOf(opts.intent!) } : {}),
+      // PD-ORCH-001: supervision is only constructed when this dependency answers, which is how the directive's
+      // "no supervisor is attached" is observable at all — a run without it looks the same from the outside.
+      ...(opts.classifier ? { supervisor: () => ({ config: { ...SUPERVISOR_DEFAULTS, repetitionThreshold: 3 }, classifier: opts.classifier! }), tools: () => grepPort() } : {}),
     });
     return sessions;
   }
@@ -88,6 +99,28 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     // A plan cycle is not an iteration (the owner's ruling): nothing was judged complete and no iteration closed.
     expect(row.iterations_completed).toBe(0);
     expect(dal.eventsOfKind(sid, 'iteration.start')).toEqual([]);
+  });
+
+  it('the producing role is told what a plan cycle is: the task carries the request, and so does the content', async () => {
+    /*
+     * REQ-ORCH-153, found by building: the held run takes ONE turn, and on the first cycle its task is the
+     * user's own prompt. Nothing in it said a plan was what was wanted, that the final message IS the plan, or
+     * that approval is taken in the product — so the role tried to do the work, collected refusals and asked
+     * for approval with a question tool. The preamble has to reach the model through the CONTENT parts, which
+     * are what an initial turn actually sends (`Sessions.start` always builds them).
+     */
+    const s = scripted([answer('a plan')]);
+    const sessions = sessionsWith(s.backend);
+    const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    const first = s.client.requests[0]!;
+    const sent = first.messages.flatMap((m) => [...m.content] as { kind: string; text?: string }[]).map((c) => (c.kind === 'text' ? c.text ?? '' : '')).join('\n');
+    expect(sent).toContain('held at the plan gate');
+    expect(sent).toContain('Write the plan as the final message of this turn');
+    expect(sent).toContain('Do not ask for approval in the conversation');
+    // The user's own prompt still reaches the model, after the request and unaltered.
+    expect(sent).toContain('change the thing');
+    expect(sent.indexOf('held at the plan gate')).toBeLessThan(sent.indexOf('change the thing'));
   });
 
   it('the answer group is never held (REQ-ORCH-021): a question runs straight through in plan mode', async () => {
@@ -154,6 +187,81 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     expect(dal.getSession(sid)!.plan_released).toBe(0);
   });
 
+  /**
+   * A2 of run `a26918e8`'s autopsy. Every message the model reads has an author, and only one of the two
+   * possible authors is a person. This section is delivered inside a `role: 'user'` payload and opened "The user
+   * approved this plan" — the product narrating the user, in the user's own voice, which leaves the model to
+   * work out for itself whether anyone just spoke to it. No requirement fixes the wording; `planRequestSection`
+   * already names the product as the speaker and this now matches it.
+   */
+  const textOf = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }): string =>
+    r.messages.flatMap((m) => [...m.content]).map((c) => (c.kind === 'text' ? c.text ?? '' : '')).join('\n');
+
+  it('the section an APPROVED cycle is handed back names the product as its speaker, not the user (REQ-ORCH-154)', async () => {
+    const s = scripted([answer('a plan'), answer('carried out')]);
+    const sessions = sessionsWith(s.backend);
+    const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    sessions.planDecision(sid, 'approve');
+    await sessions.running(sid)!;
+    const resumed = s.client.requests.map(textOf).find((t) => t.includes('plan gate has resolved'))!;
+    expect(resumed).toContain('the user approved this plan in the product');
+    expect(resumed).toContain('not the user speaking again');
+    expect(resumed).not.toContain('The user approved this plan. Carry it out');
+    // REQ-ORCH-154 is unchanged: the approved text is still carried back whole.
+    expect(resumed).toContain('Approved plan:');
+    expect(resumed).toContain('a plan');
+  });
+
+  it('the section a REVISED cycle is handed back names the product too, and still carries both halves (REQ-ORCH-154)', async () => {
+    const s = scripted([answer('plan one'), answer('plan two')]);
+    const sessions = sessionsWith(s.backend);
+    const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    sessions.planDecision(sid, 'revise', 'smaller steps');
+    await sessions.running(sid)!;
+    const again = s.client.requests.map(textOf).find((t) => t.includes('plan gate has resolved'))!;
+    expect(again).toContain('the user chose revise in the product');
+    expect(again).toContain('not the user speaking again');
+    expect(again).not.toContain('The user asked for a revision of this plan.');
+    expect(again).toContain('The plan as it currently stands:');
+    expect(again).toContain('plan one');
+    expect(again).toContain('smaller steps');
+  });
+
+  /**
+   * PD-ORCH-001. A held run has every writing tool withheld, so the only work it can do is read and search —
+   * and a plan for an unfamiliar codebase is written by doing that over the same region, which is
+   * REQ-ORCH-101's first trigger firing on the gate's own side effect. Run `a26918e8` then read the
+   * supervisor's `role: 'user'` injection as an instruction from the person it was waiting for and spent
+   * 3 min 12 s reconciling it with what it remembered being asked.
+   */
+  it('PD-ORCH-001: supervision does not fire while the gate holds, and fires again once it has resolved', async () => {
+    const circling = (): ScriptedCall => toolCalls([{ callId: 'g1', name: 'grep', args: { pattern: 'yaml', path: 'packages' } }]);
+    let classifications = 0;
+    const classifier: LoopClassifier = {
+      classify: async () => { classifications += 1; return { loop_detected: true, reason: 'circling', corrective_message: 'Pause and reassess the grep call.' }; },
+    };
+    const s = scripted([
+      circling(), circling(), circling(), circling(), answer('a plan'),
+      circling(), circling(), circling(), circling(), answer('carried out'),
+    ]);
+    const sessions = sessionsWith(s.backend, { classifier });
+    const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+
+    // The held segment circled four times over the same call and nothing supervised it.
+    expect(dal.getSession(sid)!.execution_status).toBe('awaiting_plan_decision');
+    expect(classifications).toBe(0);
+    expect(dal.timelineOf(sid).map((t) => t.name)).not.toContain('loop_supervisor_activation');
+
+    sessions.planDecision(sid, 'approve');
+    await sessions.running(sid)!;
+    // Released, the same circling is supervised exactly as it always was.
+    expect(classifications).toBeGreaterThan(0);
+    expect(dal.timelineOf(sid).map((t) => t.name)).toContain('loop_supervisor_activation');
+  });
+
   it('cancel stops the run with `user_cancelled` and launches nothing (REQ-ORCH-153)', async () => {
     const sessions = sessionsWith(scripted([answer('a plan')]).backend);
     const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
@@ -165,6 +273,15 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     expect(row.plan_cycle).toBeNull();
     expect(row.plan_released).toBe(0);
     expect(dal.planCycle(sid, 1)).toMatchObject({ decision: 'cancel' });
+    /*
+     * REQ-ORCH-082, rule 1: a cancel at the gate is a run that came to rest because a person stopped it, and it
+     * is summarised by the one definition the product has. Before this, the three summary columns were written
+     * only by `Run.teardown`, which a cancel at the gate never reaches — so the session read back with a NULL
+     * outcome and no reader could say why it stopped.
+     */
+    expect(row.summary_status).toBe('paused');
+    expect(row.summary_severity).toBe('warning');
+    expect(row.summary_text).toBe('The run came to rest because a person stopped it.');
   });
 
   it('a fresh user prompt is the next run, which the mode governs again (REQ-ORCH-154)', async () => {

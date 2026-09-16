@@ -35,7 +35,7 @@ export interface ActingAgent {
 
 // REQ-LIBRARY-099 as widened by PD-LIBRARY-001: the section filter is defined over the contracts
 // vocabulary — the single definition — and never a second copy of it. A private list here drifted
-// from `ARTIFACT_SECTIONS` once already (docs/defects/artifact-read-section-allow-list-omits-commands.md),
+// from `ARTIFACT_SECTIONS` once already (a defect note, removed once repaired),
 // so the vocabulary is imported rather than restated.
 const SECTION_NAMES: readonly string[] = ARTIFACT_SECTIONS;
 

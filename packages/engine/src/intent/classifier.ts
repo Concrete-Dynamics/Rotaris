@@ -123,8 +123,13 @@ export function normaliseReason(reason: string): string {
   return cut(generic.replace(/\s+/g, ' ').trim(), STATUS_REASON_CAP);
 }
 
-/** Whether a failure is the provider refusing the rung rather than the request (REQ-ORCH-010). */
+/**
+ * Whether a failure is the provider refusing the rung rather than the request (REQ-ORCH-010). The
+ * provider answering 400/422 and the adapter finding the rung undeliverable are one fact to the ladder:
+ * this model cannot take this rung, so remember it and descend.
+ */
 export function isRungRejection(e: ModelError): boolean {
+  if (e.code === 'unsupported_output') return true;
   if (e.code !== 'http' || (e.status !== 400 && e.status !== 422)) return false;
   return /response_format|json_schema|structured|schema|json mode|json_object/i.test(`${e.headline} ${e.providerMessage ?? ''}`);
 }

@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process';
 import { statSync } from 'node:fs';
-import { delimiter, isAbsolute, join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 
 /**
  * The one place a child process is started with the product's fixed flags:
@@ -38,6 +38,11 @@ export function spawnChild(spec: SpawnSpec): ChildProcess {
 export function findExecutable(command: string, env: Readonly<Record<string, string | undefined>>, platform: NodeJS.Platform = process.platform): string | null {
   if (command.trim() === '') return null;
   const win = platform === 'win32';
+  // PATH's separator is a property of the STRING the caller passed, so it follows the platform parameter: the
+  // host-bound `delimiter` split a Windows PATH on `:` whenever the host was not Windows, which cut every entry
+  // at its drive letter. `join` and `isAbsolute` stay the HOST's, because what is stat'd below is the host's own
+  // filesystem however the PATH was spelled.
+  const delimiter = win ? ';' : ':';
   const exts = win ? (env['PATHEXT'] ?? '.COM;.EXE;.BAT;.CMD').split(';').filter((e) => e !== '') : [''];
   // The merge of Parts R and S (2026-09-05) read the MCP category's PNG: the shipped `browser` row still said `spawn npx
   // ENOENT` after Part S's `.cmd` wrap, because Node's own `npx` directory holds an extensionless `npx` (a POSIX shell

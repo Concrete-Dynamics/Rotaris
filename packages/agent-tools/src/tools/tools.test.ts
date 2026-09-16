@@ -6,7 +6,7 @@ import { FakeClock } from '@rotaris/kernel';
 import { checkFence, type FenceConfig } from './fence.js';
 import { renderDiff } from './diff.js';
 import { FileToolState, haetEditTool, haetReadTool, matchEdit, readFileTool, sha256, writeFileTool } from './files.js';
-import { globTool, grepTool, parseGitignore, ignoredBy } from './search.js';
+import { globToRegExp, globTool, grepTool, parseGitignore, ignoredBy } from './search.js';
 import { TodoList, todoTool } from './todo.js';
 import type { ToolContext } from './types.js';
 
@@ -71,6 +71,17 @@ describe('read_file (REQ-TOOLS-134)', () => {
     expect(r.isError).toBe(true);
     expect(r.text).toContain('Contents of src:');
     expect(r.text).toContain('Did you mean: a.ts, b.ts?');
+  });
+  it('a path under a file says the parent is a file; a path under nothing keeps the absent answer (REQ-TOOLS-134)', async () => {
+    writeFileSync(join(root, '.git'), `gitdir: ${join(outside, 'worktrees', 'w')}\n`);
+    const t = readFileTool(state, fence);
+    const underFile = await t.execute({ path: '.git/HEAD', offset: 1, limit: 2000, grep_context: 3 }, ctx());
+    expect(underFile).toMatchObject({ isError: true, text: "File not found: .git/HEAD. '.git' is a file, not a directory." });
+    const underNothing = await t.execute({ path: 'nowhere/at/all.txt', offset: 1, limit: 2000, grep_context: 3 }, ctx());
+    expect(underNothing).toMatchObject({ isError: true, text: 'File not found: nowhere/at/all.txt. Its parent directory does not exist either.' });
+    const linked = await t.execute({ path: '.git', offset: 1, limit: 2000, grep_context: 3 }, ctx());
+    expect(linked.isError).not.toBe(true);
+    expect(linked.text).toContain('gitdir:');
   });
   it('the 30,000-character cap carries a continuation hint', async () => {
     writeFileSync(join(root, 'big.txt'), Array.from({ length: 3000 }, (_, i) => `line ${i + 1} ${'x'.repeat(20)}`).join('\n'));
@@ -203,6 +214,33 @@ describe('grep and glob (REQ-TOOLS-138..141)', () => {
     expect((await gl.execute({ pattern: '**/*.py' }, ctx())).text).toBe('No files found');
     expect((await gl.execute({ pattern: `${outside.replace(/\\/g, '/')}/*` }, ctx())).text).toBe('No files found');
   });
+  it('glob brace alternatives are globs, not literals (REQ-TOOLS-141): what ripgrep accepts is not refused here', async () => {
+    /*
+     * The shape that found this: `packages/*` + a `{*.json,*.ts}` group. Each alternative used to be escaped as a
+     * literal, so its leading star survived into the regex source and the engine refused the whole pattern with
+     * `Nothing to repeat` — a message quoting a regex the caller never wrote.
+     */
+    const gl = globTool(fence);
+    expect((await gl.execute({ pattern: '{src,docs}/*.ts' }, ctx())).text).toBe('src/a.ts\nsrc/b.ts');
+    expect((await gl.execute({ pattern: '**/{*.ts,*.md}' }, ctx())).text).toBe('README.md\nsrc/a.ts\nsrc/b.ts');
+    // Nested groups split at their own level, and a `/` inside an alternative stays a path separator.
+    expect(globToRegExp('{a,{b,c}}.ts').test('c.ts')).toBe(true);
+    expect(globToRegExp('{x/y,z}.md').test('x/y.md')).toBe(true);
+    expect(globToRegExp('{x/y,z}.md').test('z.md')).toBe(true);
+    // An unclosed brace is the literal a caller who typed one meant.
+    expect(globToRegExp('a{b').test('a{b')).toBe(true);
+    /*
+     * REQ-TOOLS-138: whatever the caller writes, the answer is an observation. The compiler escapes everything it
+     * does not translate, so no pattern should reach the RegExp constructor invalid any more — and the guard at the
+     * call site is what makes that a property of the tool rather than of this reading of the compiler.
+     */
+    for (const pattern of ['packages/*/{*.json,*.js,*.ts,*.cjs,*.mjs}', '[unterminated', '{', '}', '{,}', '**/{a,{b,}}', '*{']) {
+      const r = await gl.execute({ pattern }, ctx());
+      expect(r.text).not.toContain('Invalid regular expression');
+      expect(r.isError ?? false).toBe(false);
+    }
+  });
+
   it('the gitignore reader: anchors, directories, negation, whole labels', () => {
     const rules = parseGitignore('/build\nlogs/\n*.tmp\n!keep.tmp\nsrc/**/gen\n');
     expect(ignoredBy(rules, 'build', true)).toBe(true);
@@ -219,7 +257,11 @@ describe('todo (REQ-TOOLS-144..147)', () => {
   it('operations, ids, the single IN_PROGRESS invariant, replace protection, hints, no-op update', async () => {
     const list = new TodoList();
     const t = todoTool(list);
-    expect((await t.execute({ operation: 'bogus' }, ctx())).text).toBe('Unsupported operation: bogus');
+    // REQ-TOOLS-144's five are the schema's now, so a wrong operation is refused BEFORE `execute` — which is
+    // where the mandated words have to be, or the gate answers with its generic schema message instead.
+    expect(t.schema.safeParse({ operation: 'bogus' }).success).toBe(false);
+    expect(t.validationError!({ operation: 'bogus' }, 'operation: invalid option').text).toMatch(/^Unsupported operation: bogus\./);
+    expect(t.validationError!({ operation: 'bogus' }, 'operation: invalid option').isError).toBe(true);
     const p = await t.execute({ operation: 'add_phase', name: 'main' }, ctx());
     const phaseId = /\(([0-9a-f]{8})\)/.exec(p.text)![1]!;
     expect(p.text).toContain('Todo state:');
@@ -245,5 +287,47 @@ describe('todo (REQ-TOOLS-144..147)', () => {
     expect(list.phases[0]!.tasks.map((x) => `${x.name}:${x.state}`)).toEqual(['first:COMPLETED', 'fresh:PENDING']);
     expect((await t.execute({ operation: 'remove_task', task_id: t1 }, ctx())).text).toMatch(/^Removed task first/);
     expect(list.render()).toContain('[PENDING] fresh');
+  });
+
+  /**
+   * Observed live 2026-09-16 (run `a26918e8`): a run sent five phases to `add_phase` — a call the advertised
+   * schema accepts, since `phases` is one of its fields — and read back the six words `add_phase requires a
+   * name.` It retried with `name` AND `phases` together, which adds one empty phase and drops the rest.
+   * REQ-TOOLS-147 mandates a hint for a missing id and says nothing about a missing name; that silence is what
+   * the string filled.
+   */
+  it('a batch sent to add_phase is refused by naming the operation that takes one (REQ-TOOLS-013/147)', async () => {
+    const list = new TodoList();
+    const t = todoTool(list);
+    const r = await t.execute({ operation: 'add_phase', phases: [{ name: 'Discovery', tasks: [] }, { name: 'Build', tasks: [] }] }, ctx());
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain('add_phase requires a name.');
+    expect(r.text).toContain('2 phase(s) sent here were not added');
+    expect(r.text).toContain('call replace with the whole `phases` array');
+    expect(list.phases).toEqual([]);
+
+    // The same fault in `add_task`, which had no hint at all where its siblings all have one.
+    const withPhase = await t.execute({ operation: 'add_phase', name: 'main' }, ctx());
+    const phaseId = /\(([0-9a-f]{8})\)/.exec(withPhase.text)![1]!;
+    const task = await t.execute({ operation: 'add_task', phase_id: phaseId, phases: [{ name: 'Build', tasks: [] }] }, ctx());
+    expect(task.text).toContain('add_task requires a task name (or title).');
+    expect(task.text).toContain('call replace with the whole `phases` array');
+    expect(task.text).toContain('Available phases: main');
+
+    // A plain miss keeps its hint and says nothing about a batch nobody sent.
+    const bare = await t.execute({ operation: 'add_phase' }, ctx());
+    expect(bare.text).toContain('Available phases: main');
+    expect(bare.text).not.toContain('replace');
+  });
+
+  it('the description names the fields each operation reads, which is the only per-operation guidance there is', () => {
+    const d = todoTool(new TodoList()).description;
+    expect(d).toContain('replace {phases: [{name, tasks: [{name, description, state}]}]}');
+    expect(d).toContain('the only operation that takes a batch');
+    expect(d).toContain('add_phase {name}');
+    expect(d).toContain('it does not read `phases`');
+    expect(d).toContain('add_task {phase_id, name, description, state}');
+    expect(d).toContain('update {task_id, name, description, state}');
+    expect(d).toContain('remove_task {task_id}');
   });
 });

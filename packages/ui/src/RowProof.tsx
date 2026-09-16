@@ -187,6 +187,39 @@ export function activityProofRows(): readonly TranscriptRow[] {
   ];
 }
 
+/**
+ * PD-CHAT-004 revision 2 and PD-CHAT-005's fixture: **the screenshot of 2026-09-16**. Two agents working at
+ * once, their rows alternating in the record exactly as the owner read them — the orchestrator thinking and
+ * reading while the analyst it delegated to thinks and searches. Under revision 1 these ten rows drew as five
+ * lines of two, each re-stating a timestamp and a role; under revision 2 they are one line per agent.
+ */
+export function interleaveProofRows(): readonly TranscriptRow[] {
+  interface Who { readonly persona: string; readonly name: string }
+  const parent: Who = { persona: 'orchestrator', name: 'orchestrator' };
+  const child: Who = { persona: 'codebase-analyst', name: 'analyst' };
+  const think = (i: number, who: Who, chars: number, ms: number) =>
+    row(60 + i, { kind: 'thinking', ...who, body: `deliberation ${i}`, chars, durationMs: ms, startedAt: at(60 + i), settled: true });
+  const call = (i: number, who: Who, toolName: string, over: Partial<TranscriptRow> = {}) => row(60 + i, {
+    kind: 'tool', ...who, body: `${toolName} file-${i}.ts`, toolName, toolStatus: 'ok', callKey: `weave-${i}`,
+    durationMs: 120, startedAt: at(60 + i), input: `{ "path": "file-${i}.ts" }`, output: `weave output ${i}`, ...over,
+  });
+  return [
+    row(59, { kind: 'user', body: 'Implement spec-0015.', name: undefined, persona: undefined }),
+    think(0, parent, 880, 4_000), call(1, parent, 'read_file'),
+    think(2, child, 640, 3_000), call(3, child, 'grep'),
+    think(4, parent, 320, 2_000), call(5, parent, 'glob'),
+    think(6, child, 410, 2_000), call(7, child, 'codebase_search'),
+    call(8, parent, 'read_file'), call(9, child, 'grep', { toolStatus: 'running', settled: false }),
+  ];
+}
+
+export function interleaveProofDisplays(): readonly DisplayRow[] {
+  return projectDisplay({
+    rows: interleaveProofRows(), running: true, groupTools: true, showReasoning: false, caps: CAP_DEFAULTS,
+    expanded: new Set(), pendingQuestions: [], pendingApprovals: [],
+  });
+}
+
 export function activityProofDisplays(expanded: ReadonlySet<string>): readonly DisplayRow[] {
   return projectDisplay({
     rows: activityProofRows(), running: true, groupTools: true, showReasoning: false, caps: CAP_DEFAULTS,
@@ -260,6 +293,17 @@ export function RowProof({ onOpenLink, onAcknowledge }: RowProofProps) {
         <RowList
           rows={[]} displays={activityProofDisplays(new Set())} label="Activity line, expanded" acknowledge={onAcknowledge}
           surface={{ showReasoning: false, autoCollapseTools: false, runActive: true, nowMs: Date.parse(at(45)), openLink: onOpenLink }}
+        />
+      </div>
+      {/* PD-CHAT-004 rev. 2 / PD-CHAT-005: two agents working at once. The depth resolver is the delegation
+          tree's, which the Workspace view supplies from `session.agents`; here it is the fixture's own. */}
+      <div className="rows-proof__surface transcript" data-testid="proof-interleave">
+        <RowList
+          rows={[]} displays={interleaveProofDisplays()} label="Two agents at once" acknowledge={onAcknowledge}
+          surface={{
+            showReasoning: false, autoCollapseTools: false, runActive: true, nowMs: Date.parse(at(75)), openLink: onOpenLink,
+            agentDepth: (name) => (name === 'analyst' ? 1 : 0),
+          }}
         />
       </div>
     </div>

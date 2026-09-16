@@ -1,7 +1,7 @@
 import { Budget, millis, toIsoUtc, type Clocks, type MachineId, type Millis, type SessionId, type TimerHandle, type Timers } from '@rotaris/kernel';
 import type { SessionRow } from '@rotaris/store';
 import { DEFAULT_CONTEXT_CAPACITY, isAnswerOnly, type ApprovalOption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RootExecutionRecord } from '@rotaris/contracts';
-import type { AgentBackend, ChatMessage, ContentPart, ModelError, ModelRef, ThinkingLevel, TurnReport } from '@rotaris/model';
+import type { AgentBackend, ChatMessage, ContentPart, ModelError, ModelRef, ThinkingLevel, TurnReport, Usage } from '@rotaris/model';
 import type { EventBus } from './event-bus.js';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { Committed, SessionWriter } from '../session-writer.js';
@@ -9,6 +9,7 @@ import { Aggregates } from './aggregates.js';
 import { classifyStop, statusForResult, stopCondition, summarise, type StopReason, type TerminalResult } from './stop-conditions.js';
 import { StopRequest } from './stop-request.js';
 import { Todo, type TodoDocument } from './todo.js';
+import { planRequestSection } from './plan-text.js';
 import { runTurn, type ToolPort } from './turn.js';
 import { IterationChildren } from '../children/orchestration.js';
 import type { DelegationOps } from '../children/delegation.js';
@@ -238,8 +239,10 @@ export interface RunResult {
   readonly persistence?: { readonly confirmed: false; readonly last_event_ordinal: number };
 }
 
-/** ADR-0014 rule 1: the one 30 s allowance, shared by the cancellation grace and the force-exit backstop. */
-export const STOP_GRACE: Millis = millis(30_000);
+/** ADR-0014 rule 1: the one 30 s allowance. Declared in `grace.ts` and re-exported here, where its two
+ * oldest readers look for it; `grace.ts` says why it may not be declared in this file. */
+export { STOP_GRACE } from './grace.js';
+import { STOP_GRACE } from './grace.js';
 
 export class Run {
   readonly stop = new StopRequest();
@@ -697,8 +700,11 @@ export class Run {
    * so a run that retried a transient failure or resumed its parent spent tokens the session's own totals never
    * counted.
    */
-  private readonly onRequestUsage = (u: { readonly input: number; readonly output: number }): void => {
+  private readonly onRequestUsage = (u: Usage): void => {
     this.aggregates.addTurnUsage(u);
+    // PD-MONITOR-001: a cost the provider reported for THIS request joins the run's total here, beside the
+    // tokens of the same request, so the figure the event carries and the figure the session persists are one.
+    if (u.cost !== undefined) this.aggregates.addCost(u.cost);
     const payload = this.aggregates.usagePayload();
     const totals = usageTotals(payload);
     if (totals === this.lastUsageEmitted) return;
@@ -739,7 +745,7 @@ export class Run {
    * (REQ-ORCH-153's owner ruling), so it numbers itself 0 and leaves `root:1` upwards to the execution segment —
    * `isEntryPort` reads `root:0` as the entry by depth and by spelling alike.
    */
-  private async turn(task: string, iterationOverride?: number): Promise<TurnReport> {
+  private async turn(task: string, iterationOverride?: number, contentOverride?: readonly ContentPart[]): Promise<TurnReport> {
     const { writer, owner, backend, config } = this.deps;
     const iteration = iterationOverride ?? this.iterationsCompleted + 1;
     this.rootIterationId = `root:${iteration}`;
@@ -792,7 +798,7 @@ export class Run {
     let initial = true;
     const compression = this.compressionFor(this.rootResilience().cell.model, () => this.plannerTodoLines());
     const turnFn = (text: string, history: readonly ChatMessage[]) => {
-      const content = initial ? this.deps.taskContent : undefined;
+      const content = initial ? (contentOverride ?? this.deps.taskContent) : undefined;
       const initialCall = initial;
       initial = false;
       return runTurn({
@@ -802,7 +808,12 @@ export class Run {
       // so a skill force-loaded since the last turn reaches this agent (REQ-CONFIG-166).
       systemPrompt: withContextUnits(withPlaybook(config.systemPrompt, this.preflight?.playbookFor(config.persona) ?? ''), this.deps.contextUnits?.() ?? []), model: this.entryOverride.model ?? config.model, thinking: this.entryOverride.thinking ?? config.thinking, modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries,
       credentialFor: config.credentialFor, maxStepsPerTurn: config.maxStepsPerTurn, warn: this.deps.warn, dispatched: this.dispatched,
-      ...(this.deps.supervisorFor ? { supervisor: this.deps.supervisorFor(this.rootId) } : {}),
+      // PD-ORCH-001: no supervision while the plan gate holds the run. The hold withholds every writing tool,
+      // so the only work left is reading the same region repeatedly — REQ-ORCH-101's first trigger, fired by the
+      // gate's own side effect — and the corrective message goes in as the user, to a run that is waiting for
+      // the user. Read here rather than captured once because `turnFn` is built once per segment and called per
+      // turn; the hold itself is settled once and never cleared in place (REQ-ORCH-153), so the two agree.
+      ...(this.deps.supervisorFor && !this.planHeld ? { supervisor: this.deps.supervisorFor(this.rootId) } : {}),
       steering: this.steeringFor('root'), shouldPause: () => this.pauseRequested,
       resilience: this.rootResilience(),
       // Part AH: the entry agent compresses against its own model's capacity, carrying the run-level plan.
@@ -1029,7 +1040,20 @@ export class Run {
     const intent = (this.preflight?.intent ?? NO_PREFLIGHT_INTENT).category;
     let plan = '';
     try {
-      const report = await this.turn(this.deps.task, 0);
+      /*
+       * REQ-ORCH-153: "the run MUST produce a plan". The producing role is TOLD that here, and nowhere else —
+       * the turn below is the only one a held run takes, and on the first cycle its task is the user's own
+       * prompt, which asks for the work rather than for a plan. The preamble reaches the model through the
+       * content parts as well as the task string, because an initial turn built from `taskContent` (a prompt
+       * with attachments — always, since `Sessions.start` builds one) never reads the task string at all.
+       * The root execution record carries what the model was given (REQ-ORCH-072), which is why both are wrapped.
+       */
+      const preamble = planRequestSection();
+      const content: readonly ContentPart[] = [
+        { kind: 'text', text: preamble },
+        ...(this.deps.taskContent ?? [{ kind: 'text' as const, text: this.deps.task }]),
+      ];
+      const report = await this.turn(`${preamble}\n\n${this.deps.task}`, 0, content);
       plan = report.status === 'failed' ? '' : report.text.trim();
       if (report.status === 'failed') this.lastFailure = describe(report.error);
     } catch (cause) {

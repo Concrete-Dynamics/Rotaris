@@ -52,7 +52,8 @@ contradicts (or none), and the relevant files. Record it whether or not it is in
 Recording is not repairing and not classifying. Writing the note does not authorize the fix, and it does
 not substitute for the paths above: a **defect found by building** still owes its amendment round and its
 row in `docs/architecture/first-executions.md`, and a change the owner asks for is still classified in
-`docs/product/requests.md` before code.
+`docs/product/requests.md` before code. When a noted defect is repaired, move its note to `docs/defects/fixed/`
+rather than deleting it.
 
 ## Process state
 

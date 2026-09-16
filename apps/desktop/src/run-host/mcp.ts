@@ -30,7 +30,7 @@ import { CALL_TIMEOUT_DEFAULT_MS, HealthProbe, runSetupSteps, SessionConnections
  */
 export interface McpHostDeps {
   readonly clocks: Clocks;
-  readonly log: (message: string, level?: 'info' | 'warn') => void;
+  readonly log: (message: string, level?: 'info' | 'warn' | 'debug') => void;
   /**
    * REQ-MCP-044 channel 1: the warning as a transient acknowledgement of kind `warn` (Part V). It rode `notice.publish` with an
    * 8 s `ttlMs` from Part S; REQ-NOTIFY-040 forbids a notice leaving on a timer, and REQ-NOTIFY-011 fixes the transient lifetime
@@ -103,7 +103,9 @@ export class McpHost {
   private readonly mcpLog: McpLog;
 
   constructor(private readonly deps: McpHostDeps) {
-    this.mcpLog = { info: (m) => deps.log(m), warn: (m) => deps.log(m, 'warn'), debug: (m) => deps.log(m) };
+    // `debug` reached the log as `info` here, so a child's stderr burst was indistinguishable from the product's
+    // own findings in the launch log. The wire has carried four levels all along (`process-protocol.ts`).
+    this.mcpLog = { info: (m) => deps.log(m), warn: (m) => deps.log(m, 'warn'), debug: (m) => deps.log(m, 'debug') };
     this.discovery = new ToolDiscovery({ clocks: deps.clocks, log: this.mcpLog, parentEnv: deps.parentEnv });
     this.probe = new HealthProbe({ clocks: deps.clocks, log: this.mcpLog, parentEnv: deps.parentEnv });
   }

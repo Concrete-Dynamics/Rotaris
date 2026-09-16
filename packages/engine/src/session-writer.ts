@@ -3,7 +3,7 @@ import { err, maskArguments, ok, redactRowString, toIsoUtc, type Instant, type M
 import { RELEASE_PAGE_SIZE, RESIDENT_ROW_CAP, type CheckpointRow, type QueuedPromptRow, type ChildInsert, type ChildRow, type RowToolFields, type SessionRunPatch, type StoreDal, type TranscriptRowRecord } from '@rotaris/store';
 import { isLegalChildMove, isTerminalChildState, type ChildState, type ImageAttachment, type RunType, type SettlingPath, type TimelineSeverity, type TranscriptRow } from '@rotaris/contracts';
 import { EVENT_SCHEMA_VERSION, locator, serializeEvent, type EventKind, type WireEvent } from './events.js';
-import { isActiveStatus } from './run/stop-conditions.js';
+import { isActiveStatus, summarise } from './run/stop-conditions.js';
 import { AgentActivity } from './children/activity.js';
 
 /**
@@ -1171,7 +1171,18 @@ export class SessionWriter {
         dal.decidePlanCycle(sessionId, cycle, decision, at);
         dal.setPlanGate(sessionId, status, null, at);
         if (released) dal.setPlanReleased(sessionId, true, at);
-        if (stopReason !== null) dal.updateSessionRun(sessionId, { stop_reason: stopReason });
+        /*
+         * REQ-ORCH-082 is "the single definition of end-of-run summarization for the whole product", and a run
+         * cancelled AT the gate comes to rest here rather than in `Run.teardown` — the only other place that ever
+         * wrote the three summary columns. So it wrote a stop reason and no summary, and the session read back with
+         * a NULL outcome: `summary.md` omitted its Outcome block, the agents view showed an empty activity line,
+         * and nothing said the person had stopped it. The arms are not this file's to restate; `summarise` holds
+         * them, and the cancel arm is rule 1.
+         */
+        if (stopReason !== null) {
+          const summary = summarise({ stopReason, completed: 0, abandoned: 0, lastFailure: null });
+          dal.updateSessionRun(sessionId, { stop_reason: stopReason, summary_status: summary.status, summary_severity: summary.severity, summary_text: summary.message });
+        }
         dal.insertTimeline(sessionId, this.nextTimelineOrdinal(), at, 'plan_gate_resolved', 'user', `The plan gate was resolved: ${decision} (cycle ${cycle}).`, JSON.stringify({ cycle, decision }), timelineId(), 'info');
       });
     } catch (cause) {

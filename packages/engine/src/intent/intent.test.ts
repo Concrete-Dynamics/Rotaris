@@ -79,6 +79,20 @@ describe('REQ-ORCH-005..013 the classifier', () => {
     expect(new RungMemory({ small: 'json_object' }).ladder('small')).toEqual(['json_object', 'text']);
     expect(isRungRejection(modelError({ code: 'http', status: 500, headline: 'schema' }))).toBe(false);
   });
+  it('REQ-ORCH-010: a rung the adapter could not send descends exactly like a provider refusal', async () => {
+    // What OpenRouter produced on 2026-09-16 (session 6696f6ed): no refusal came back, because the SDK
+    // had replaced the schema with bare json_object before the request left. The adapter now reports it.
+    const dropped: TurnReport = { status: 'failed', text: '', usage: { input: 0, output: 0 }, error: modelError({ code: 'unsupported_output', headline: 'the json_schema rung was not sent: JSON response format schema is only supported with structuredOutputs', transient: false }) };
+    const memory = new RungMemory();
+    const { b, inputs } = backend((input) => (input.output?.kind === 'json_schema' ? dropped : ok('{"intent":"question","confidence":0.5,"reason":"asks about what exists"}')));
+    const warnings: string[] = [];
+    const r = await classifyIntent({ prompt: 'p', metadata: {} }, SLOTS, { ...deps(b, new FakeClock(), memory), warn: (m: string) => warnings.push(m) }, new AbortController().signal);
+    expect(r).toMatchObject({ category: 'question', fallback: false, rung: 'json_object' });
+    expect(inputs.map((i) => i.output?.kind ?? 'text')).toEqual(['json_schema', 'json_object']);
+    expect(memory.ladder('small')).toEqual(['json_object', 'text']);
+    expect(warnings[0]).toContain('rejected the json_schema rung');
+    expect(isRungRejection(modelError({ code: 'unsupported_output', headline: 'the json_schema rung was not sent', transient: false }))).toBe(true);
+  });
   it('REQ-ORCH-007: unparseable, unmapped, empty, and a non-rung failure all fall back with a reason and never throw', async () => {
     const cases: [TurnReport, RegExp][] = [
       [ok('not json'), /could not be mapped/],

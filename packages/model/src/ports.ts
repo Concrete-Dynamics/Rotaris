@@ -83,7 +83,13 @@ export type StreamPart =
  * the request's content, expected to differ on repetition.
  */
 export interface ModelError {
-  readonly code: 'aborted' | 'timeout' | 'connection' | 'http' | 'validation' | 'unknown';
+  /**
+   * `unsupported_output` is the one code no provider produces: the adapter saw the SDK drop the
+   * structured-output rung it was given rather than send it (REQ-ORCH-010). It falls into neither of
+   * REQ-ORCH-092's two classes, as an unsupported request always has, so it fails a turn at once; the
+   * ladder is the recovery that applies to it, and `isRungRejection` is where that is read.
+   */
+  readonly code: 'aborted' | 'timeout' | 'connection' | 'http' | 'validation' | 'unsupported_output' | 'unknown';
   readonly headline: string;
   readonly status?: number;
   /** The provider's message, cut to its first 500 characters (REQ-PROVIDER-071). */
@@ -110,6 +116,10 @@ export function modelError(fields: Omit<ModelError, 'transient'> & { readonly tr
 /**
  * REQ-ORCH-010's rungs as the port sees them: a strict JSON schema, or JSON-object mode; absent means
  * ordinary text. A provider that rejects the rung fails the request with an HTTP error the caller reads.
+ *
+ * That sentence was the whole story only while the request was believed to leave as written. It does not
+ * have to: an SDK that cannot carry the rung downgrades it and warns, and the adapter turns that warning
+ * into `unsupported_output` so the caller reads a rejection either way.
  */
 export type OutputSpec =
   | { readonly kind: 'json_schema'; readonly name: string; readonly schema: Readonly<Record<string, unknown>> }

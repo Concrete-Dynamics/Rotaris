@@ -176,6 +176,48 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     expect(dal.getSession(sid)!.plan_released).toBe(0);
   });
 
+  /**
+   * A2 of run `a26918e8`'s autopsy. Every message the model reads has an author, and only one of the two
+   * possible authors is a person. This section is delivered inside a `role: 'user'` payload and opened "The user
+   * approved this plan" — the product narrating the user, in the user's own voice, which leaves the model to
+   * work out for itself whether anyone just spoke to it. No requirement fixes the wording; `planRequestSection`
+   * already names the product as the speaker and this now matches it.
+   */
+  const textOf = (r: { messages: readonly { content: readonly { kind: string; text?: string }[] }[] }): string =>
+    r.messages.flatMap((m) => [...m.content]).map((c) => (c.kind === 'text' ? c.text ?? '' : '')).join('\n');
+
+  it('the section an APPROVED cycle is handed back names the product as its speaker, not the user (REQ-ORCH-154)', async () => {
+    const s = scripted([answer('a plan'), answer('carried out')]);
+    const sessions = sessionsWith(s.backend);
+    const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    sessions.planDecision(sid, 'approve');
+    await sessions.running(sid)!;
+    const resumed = s.client.requests.map(textOf).find((t) => t.includes('plan gate has resolved'))!;
+    expect(resumed).toContain('the user approved this plan in the product');
+    expect(resumed).toContain('not the user speaking again');
+    expect(resumed).not.toContain('The user approved this plan. Carry it out');
+    // REQ-ORCH-154 is unchanged: the approved text is still carried back whole.
+    expect(resumed).toContain('Approved plan:');
+    expect(resumed).toContain('a plan');
+  });
+
+  it('the section a REVISED cycle is handed back names the product too, and still carries both halves (REQ-ORCH-154)', async () => {
+    const s = scripted([answer('plan one'), answer('plan two')]);
+    const sessions = sessionsWith(s.backend);
+    const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    sessions.planDecision(sid, 'revise', 'smaller steps');
+    await sessions.running(sid)!;
+    const again = s.client.requests.map(textOf).find((t) => t.includes('plan gate has resolved'))!;
+    expect(again).toContain('the user chose revise in the product');
+    expect(again).toContain('not the user speaking again');
+    expect(again).not.toContain('The user asked for a revision of this plan.');
+    expect(again).toContain('The plan as it currently stands:');
+    expect(again).toContain('plan one');
+    expect(again).toContain('smaller steps');
+  });
+
   it('cancel stops the run with `user_cancelled` and launches nothing (REQ-ORCH-153)', async () => {
     const sessions = sessionsWith(scripted([answer('a plan')]).backend);
     const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;

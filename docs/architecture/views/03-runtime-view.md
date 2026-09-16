@@ -72,7 +72,7 @@ place — so a segment's grants are constant and the model's listing and callabl
 **iteration 0** (`root:0`) because a plan cycle is not an iteration, and then `parkAtPlanGate()` mirrors
 `pauseAtLimit` exactly: status `awaiting_plan_decision` with the cycle, the cycle's row written in the same
 durable transaction with a `plan_gate_opened` entry, **no terminal pair**, and an EMPTY stop reason
-(REQ-MONITOR-301's set names no hold). The turn's report text IS the plan, verbatim — and the turn is TOLD so: `planRequestSection` (`run/plan-text.ts`, beside the `planSection` a decided cycle is handed back) prefixes both the task string and the initial content parts, because an initial turn built from `taskContent` never reads the string. Before 2026-09-16 the first cycle's turn received the user's bare prompt and read it as work to do.
+(REQ-MONITOR-301's set names no hold). The turn's report text IS the plan, verbatim — and the turn is TOLD so: `planRequestSection` (`run/plan-text.ts`, beside the `planSection` a decided cycle is handed back) prefixes both the task string and the initial content parts, because an initial turn built from `taskContent` never reads the string. Before 2026-09-16 the first cycle's turn received the user's bare prompt and read it as work to do. Both sections name the **product** as their speaker: they are delivered inside a `role: 'user'` payload, and `planSection` opened "The user approved this plan" until the same date — a user-role turn narrating the user.
 
 While the hold stands, three places enforce the planning grants of REQ-ORCH-153 — the port's narrowing
 (`createToolPort`, which only removes, and which hands the gate the set of names it removed), `Gate.dispatch`
@@ -161,6 +161,12 @@ message; each tool call is observed, written as a running `tool` row, dispatched
 approval when needed → executor; hooks in its two slots), settled with its outcome (and a `diff` row for an
 edit); the results go back as one tool message; hook feedback follows as a user message. A reply with no tool call ends the turn — unless a steer is pending, in which case
 the agent takes another round; an empty reply with no call is the runtime's stuck report to the supervisor.
+
+What the model is handed for each of them is `toolSpec` (`run-host/tools.ts`): an MCP tool's own input schema where
+ADR-0034 supplies one, otherwise the zod schema converted **as an input** (`io: 'input'`) — the shape of a call about to
+be made, in which a field carrying a `.default()` is optional as the parser treats it. Converted as an output, which was
+the default until 2026-09-16, such a field is advertised as required and the product states a contract it does not
+enforce.
 
 The executors a port registers (`run-host/tools.ts`): `read_file`, `write_file`, `haet_read`, `haet_edit`/`haet`, `grep`,
 `glob`, `todo`, `terminal` (by shell presence, REQ-TOOLS-104), the three delegation tools when delegation is available,

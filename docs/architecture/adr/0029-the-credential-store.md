@@ -236,4 +236,24 @@ entry before a save and reads the result back independently of the store.
 lock file is adjacent per 152 and inside the directory, and enumeration filters `*.json`. (b) SR-1 makes the lock
 belt over braces, as the decision says; its bound was not observed. (c) A pid reused by an unrelated live process
 reads as a live holder — the safe direction. (d) Windows only is measured; POSIX is `chmod` then `stat` and waits on
-IC-3. (e) Consequence 5 holds: no credential value has a row type in the store's schema (v6).
+IC-3. **[Discharged 2026-09-16 — see below; IC-3 bounds a release artifact and never bounded the
+measurement, so this reading was more conservative than the condition it cited.]** (e) Consequence 5 holds: no credential value has a row type in the store's schema (v6).
+
+## First execution — 2026-09-16, the POSIX half of the protection adapter
+
+*Recorded under GD-10, discharging reading (d) above. `createProtector` chooses between two adapters by
+platform and only the Windows one had a real-filesystem proof: the on-machine test was
+`it.skipIf(process.platform !== 'win32')` and `posixProtector` — the adapter that protects every stored
+credential on Linux and macOS — was executed by no test at all. IC-3 was cited as the reason and does not
+reach this: it bounds producing a Linux or macOS **release artifact**, not measuring a chmod.*
+
+**Run:** `packages/providers/src/credentials.test.ts` on Linux, two proofs shaped as the Windows one is —
+the real adapter against a real directory, read back independently of the store. A file left at `0666` and a
+directory left at `0777` — the condition `REQ-PROVIDER-016` forbids inheriting, and one the umask will not
+produce on its own — become `0600` and `0700`, with no group or other bit set. A protection that cannot be
+applied is `credential.protect` and not a silent pass. A real `save` through a real `CredentialStore` leaves
+`<data>/tokens` at `0700`, `deepseek.json` at `0600`, no `.tmp` behind and no stray entry — which is the
+POSIX statement of what the spike confirmed on Windows, that **the protection travels with the rename**
+(`REQ-PROVIDER-018`) rather than being applied to the target afterwards.
+
+**Found: nothing.** Both halves of `REQ-PROVIDER-016` are now measured on the platform that has them.

@@ -276,7 +276,10 @@ processes** live under the run host: one per stdio server per session (`SessionC
 or probe, all through `OwnedStdioTransport` (three piped streams, hidden window, `.cmd`/`.bat` runners through
 `cmd.exe`), killed by `terminateTree` (terminate, 5 s, force, the tree). A child's stderr reaches the log redacted and
 at **debug** — its diagnostics are its own, and a real server writes them by the dozen per connection — while
-`REQ-MCP-107`'s tail keeps every line for the failure account. The fixture server the proof and the tests speak
+`REQ-MCP-107`'s tail keeps every line for the failure account. **Debug is a label here and not a filter:** the
+application log has no level threshold anywhere in main (`index.ts` prints `run host ${e.level}: ${e.message}`
+through one `console.log`), so those lines still reach it — 141 of them in one measured launch. What level, if
+any, that log should take is **OQ-63**; every level requirement in the corpus governs the per-session log. The fixture server the proof and the tests speak
 to is `apps/desktop/scripts/fixtures/mcp-fixture-server.mjs`. The scripted client's step `mcp:<server>.<tool>` calls an
 MCP tool by its callable name; `ROTARIS_CAPTURE_PROMPT_MS` delays the typed prompt (verification only).
 

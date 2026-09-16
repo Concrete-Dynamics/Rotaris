@@ -260,3 +260,17 @@ broken; the launch log was simply unreadable. Two answers, both in the mechanism
 answered, not honoured), and a probe **timeout**, which remains what the original record said it was. The application
 log's own verbosity is spec-silent — `REQ-CONFIG-121` fixes the per-session log level and nothing fixes this one — so a
 `debug` line still reaches the launch log, now saying what it is.
+
+**Confirmed against a fresh launch, 2026-09-16 (R-026's sixth finding).** The repair above landed about an
+hour after the run whose log raised the finding, so the finding's own evidence pre-dates it and could not
+show whether it worked. Measured on the built app driven through `pnpm app:drive` against a throwaway
+workspace, with the bundled runtime present and one scripted run started from the composer — 195 lines of
+application log, of which:
+
+- `run host info: mcp code_intelligence stderr:` — **0**,
+- `run host debug: mcp code_intelligence stderr:` — **141**, 44 of them serena's own `INFO` records.
+
+So the level the product forwards a child's stderr at is now `debug` for every line of it, and the run
+host no longer flattens it. What the sentence above predicted is what happened: the lines still reach the
+launch log, now saying what they are. That residue is **OQ-63** — the application log reads no level at
+all, and the 141 lines are the measurement of it.

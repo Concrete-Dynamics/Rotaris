@@ -24,7 +24,13 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-16** — **what the model is told about a tool, and who is
+Last reconciled with the code: **2026-09-16** — **the MCP child's stderr, measured after its repair**:
+a child server's stderr does reach the log at `debug` and never at `info` (141 lines against 0 in one
+driven launch), and `debug` is a label rather than a filter, because the application log reads no level
+at all — raised as OQ-63. Only the **process view** is affected — the MCP-child paragraph says what the
+level does and does not do. No code moved for it; no package, edge, message kind or store table moved.
+
+Previously reconciled, the same day: **what the model is told about a tool, and who is
 speaking to it**: the advertised parameter schema is now the INPUT form, so a field with a default is
 advertised optional as the parser treats it, and `todo`'s five operations reach the model as an enum;
 `todo`'s refusals name the operation that takes a batch instead of six words that name nothing; and the

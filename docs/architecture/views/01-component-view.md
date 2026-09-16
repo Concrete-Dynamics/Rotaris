@@ -5,6 +5,13 @@ more of the five composition roots, arrows point downward only, and `eslint-plug
 `pnpm lint` on any edge outside the matrix below (`eslint.config.js`, `ALLOW`). Composition roots are the
 only places `electron` is imported.
 
+| Read this section when you are | Section |
+|---|---|
+| adding a package, or asking which one work belongs in | [The packages](#the-packages) |
+| adding an import that crosses a package | [The allowed-edge matrix](#the-allowed-edge-matrix-the-lint-rule-verbatim) |
+| deciding where a responsibility sits | [Where the responsibilities sit](#where-the-responsibilities-sit) |
+| touching the transcript, the Library, MCP, the code-intelligence bundle or the design system | the `###` sections after it |
+
 ## The packages
 
 ```mermaid

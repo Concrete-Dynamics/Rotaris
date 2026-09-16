@@ -229,6 +229,11 @@
 .row--block-start { margin-top: var(--rt-space-3, 12px); }
 .rowlist .row:first-child { margin-top: 0; }
 .row__grid { display: grid; grid-template-columns: 52px 112px minmax(0, 1fr); align-items: baseline; column-gap: var(--rt-space-2, 8px); }
+/* PD-CHAT-005: a delegated agent's rows indent one step per level of the delegation tree, so the transcript
+   says who reports to whom in the same place the Agents panel does. `Row.tsx` sets `--rt-row-depth` from the
+   tree and writes no pixel; the step is the language's own 16 px. REQ-CHAT-057's 52 px and 112 px columns are
+   UNTOUCHED — the indent MOVES the grid, it does not resize it, so `rows-proof` measures the same two widths. */
+.row[style*='--rt-row-depth'] > .row__grid { padding-inline-start: calc(var(--rt-row-depth, 0) * var(--rt-space-4, 16px)); }
 .row__main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .row__attribution { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .row__task { font-size: var(--rt-text-2xs, 10px); color: var(--rt-text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -243,6 +248,9 @@
 .row--user { padding: var(--rt-space-2, 8px) var(--rt-space-3, 12px); background: var(--rt-accent-tint-07); border-color: var(--rt-accent-800); }
 .row--user:hover { background: var(--rt-accent-tint-10); }
 .row__head { display: flex; align-items: baseline; gap: var(--rt-space-2, 8px); }
+/* PD-CHAT-005: the accent is the ink of a row that names NO persona — the reader's own row, a system notice.
+   A row that names one carries its assigned colour inline, from `personaColourToken`, so one agent reads as one
+   colour in the label, the continuation bar and the expanded rail alike. */
 .row__role { font-size: var(--rt-text-2xs, 10px); font-weight: var(--rt-weight-medium, 500); letter-spacing: var(--rt-tracking-label, .06em); text-transform: uppercase; color: var(--rt-accent-300); overflow: hidden; text-overflow: ellipsis; }
 /* REQ-CHAT-057: timestamps in the monospace stack at 8 pt — the requirement's own unit, not a token's. */
 .row__time { font-family: var(--rt-font-mono); font-size: 8pt; color: var(--rt-text-tertiary); }

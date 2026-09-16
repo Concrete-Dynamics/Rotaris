@@ -206,14 +206,24 @@ function runnable(row: TranscriptRow, showReasoning: boolean): boolean {
 }
 
 /**
- * PD-CHAT-004: a run is bounded by the **agent**, not by the family. A change of family and an
- * intervening reasoning row no longer end it; a different agent, a row of any other category and
- * REQ-CHAT-066's exempt rows still do, which is what `runnable` and this pair together decide.
+ * PD-CHAT-004: a run is bounded by the **agent**. This is the run's identity — a row that names neither a
+ * name nor a persona belongs to the run itself rather than to one participant, and answers the empty key.
  */
-function canFoldTogether(a: TranscriptRow, b: TranscriptRow, showReasoning: boolean): boolean {
-  if (!runnable(a, showReasoning) || !runnable(b, showReasoning)) return false;
-  return (a.name ?? '') === (b.name ?? '') && (a.persona ?? '') === (b.persona ?? '');
+function agentKey(row: TranscriptRow): string {
+  const name = row.name ?? '';
+  const persona = row.persona ?? '';
+  return name === '' && persona === '' ? '' : `${name}|${persona}`;
 }
+
+/**
+ * PD-CHAT-004 **revision 2**: what ENDS a run, now that a different agent's row no longer does.
+ *
+ * A row that names no agent belongs to the run rather than to a participant — a system notice, an intent
+ * marker — so it ends EVERY open run. A **user prompt** ends every open run whatever it names: it is the
+ * turn boundary the reader drew themselves, and no agent's work continues across it. Everything else ends
+ * the run of the agent it names and no other, which is `runnable` plus `agentKey` and nothing further.
+ */
+function closesEveryRun(row: TranscriptRow): boolean { return row.kind === 'user' || agentKey(row) === ''; }
 
 /** PD-CHAT-004: the activity word a member contributes — `reasoning`, or REQ-CHAT-064's family word. */
 function segmentLabel(row: TranscriptRow): string {
@@ -223,20 +233,31 @@ function segmentLabel(row: TranscriptRow): string {
 interface MutableSegment { label: string; reasoning: boolean; members: number; counts: Record<Severity, number>; durationMs: number; chars: number }
 
 /**
- * PD-CHAT-004: the run's segments, in the order they first appear. The **same family reached again after
- * another segment forms a second segment of that family** rather than rejoining the first, so the line
- * reads as a sequence of things done — `reading ×2 · 2 ok, running ×1 · 1 ok, reading ×3 · 3 ok` — which
- * is what a reader follows. Merging them would state a total nobody watched happen.
+ * PD-CHAT-004 **revision 2**: the run's segments — **one per activity word, carrying that word's totals**,
+ * in the order the words first appear: `reasoning ×24 · 41s · ~6.1k tok, reading ×22 · 22 ok, searching ×5 · 5 ok`.
+ *
+ * **The falsified reason, kept beside its replacement.** Revision 1 formed a SECOND segment of a family
+ * whenever that family was reached again after another one, so that the line "reads as a sequence of things
+ * done"; merging them, it said, "would state a total nobody watched happen". What the owner measured on
+ * 2026-09-16 is that an agent alternating reasoning and reading produces one segment per STEP — thirty
+ * segments for thirty steps — so the line grew with the work exactly as the appended rows it replaced did,
+ * and the sequence it preserved was unreadable by the time there was enough of it to matter. The sequence
+ * is not lost and is not summarised away: it is the expansion, in recorded order, one row per step.
+ *
+ * The map is keyed by the word AND by which kind of word it is, so a tool literally named `reasoning`
+ * counts as its own family rather than joining the reasoning segment.
  */
 function buildSegments(members: readonly TranscriptRow[]): ActivitySegment[] {
-  const out: MutableSegment[] = [];
+  // Insertion order IS first-appearance order, which is the order the line states its words in.
+  const out = new Map<string, MutableSegment>();
   for (const m of members) {
     const label = segmentLabel(m);
     const reasoning = isReasoningRow(m);
-    let seg = out[out.length - 1];
-    if (seg === undefined || seg.label !== label || seg.reasoning !== reasoning) {
+    const key = `${reasoning ? 'r' : 't'}:${label}`;
+    let seg = out.get(key);
+    if (seg === undefined) {
       seg = { label, reasoning, members: 0, counts: { ok: 0, failed: 0, blocked: 0, running: 0 }, durationMs: 0, chars: 0 };
-      out.push(seg);
+      out.set(key, seg);
     }
     seg.members += 1;
     seg.durationMs += m.durationMs ?? 0;
@@ -248,7 +269,7 @@ function buildSegments(members: readonly TranscriptRow[]): ActivitySegment[] {
   }
   // REQ-CHAT-062's arithmetic, applied to the SEGMENT: the summed characters divided by 4, once, rather
   // than each member's own figure rounded and then added — the two differ by up to one token per member.
-  return out.map((s) => ({ label: s.label, reasoning: s.reasoning, members: s.members, counts: s.counts, durationMs: s.durationMs, tokens: Math.floor(s.chars / 4) }));
+  return [...out.values()].map((s) => ({ label: s.label, reasoning: s.reasoning, members: s.members, counts: s.counts, durationMs: s.durationMs, tokens: Math.floor(s.chars / 4) }));
 }
 
 /** The earliest instant a member is known to have started, and the latest one a member is known to have reached. */
@@ -335,61 +356,79 @@ function dropRepeatedDiffs(rows: readonly TranscriptRow[]): TranscriptRow[] {
 }
 
 /**
- * REQ-CHAT-065: "Expanding a group MUST keep the header on screen and reveal its members beneath it" — so an
- * EXPANDED group is the header followed by its members as ordinary rows, and a collapsed one is the header alone.
- * The header is emitted either way, which is what keeps it on screen across the toggle, and the members keep their
- * own identities so a member opened inside an expanded group stays open (REQ-CHAT-059).
+ * REQ-CHAT-065: "Expanding a group MUST keep the header on screen and reveal its members beneath it" — which
+ * `Row.tsx` draws, hanging the revealed members from PD-CHAT-004's one continuous rule in the agent's persona
+ * colour. **This step emits the header alone.** It once emitted the members a second time as top-level rows,
+ * which drew every member twice the moment a line was opened in the product — once nested under the rule and
+ * once beneath it with a gutter of its own. Recorded as
+ * `docs/defects/fixed/an-expanded-activity-line-draws-its-members-twice.md` and repaired here; the members are
+ * still carried on the header, which is what `Row.tsx` reveals and what REQ-CHAT-065's blob is built from.
+ *
+ * **PD-CHAT-004 revision 2 — runs INTERLEAVE.** One pass: a runnable row joins its agent's open run, or opens
+ * one and takes that run's place in the output; every other row is emitted where it stands and closes the runs
+ * it ends. A run therefore sits at the position of its EARLIEST member, which is R-017's "display them
+ * according to sent first", and two agents working at once own two lines that never contend for the tail.
+ *
+ * The two-row floor is REQ-CHAT-064's and is untouched: a run of one row is one row, drawn as its own category
+ * states, which is what keeps a lone reasoning row a REQ-CHAT-062 summary and a lone tool call a REQ-CHAT-060
+ * header. With REQ-CHAT-067's grouping switch off no run is formed at all.
  */
-function foldRuns(rows: readonly TranscriptRow[], groupTools: boolean, showReasoning: boolean, expanded: ReadonlySet<string>): DisplayRow[] {
-  const out: DisplayRow[] = [];
-  let i = 0;
-  while (i < rows.length) {
-    const row = rows[i]!;
-    let j = i;
-    if (groupTools) while (j + 1 < rows.length && canFoldTogether(rows[j]!, rows[j + 1]!, showReasoning)) j += 1;
-    // REQ-CHAT-064's two-row floor is UNTOUCHED by PD-CHAT-004: a run of at least TWO rows collapses, and
-    // one row is one row — drawn as its own category states, which is what keeps a lone reasoning row a
-    // REQ-CHAT-062 summary and a lone tool call a REQ-CHAT-060 header.
-    if (j > i) {
-      const members = rows.slice(i, j + 1);
-      const first = members[0]!;
-      const counts: Record<Severity, number> = { ok: 0, failed: 0, blocked: 0, running: 0 };
-      let inFlight: string | null = null;
-      let inFlightLabel: string | null = null;
-      const pieces: string[] = [];
-      for (const m of members) {
-        // REQ-CHAT-065's severity is over the run's TOOL members: a reasoning row carries no tool outcome,
-        // and counting it as `ok` would let a reasoning-only run claim an outcome it never had.
-        if (!isReasoningRow(m)) {
-          const status = (m.toolStatus ?? 'ok') as Severity;
-          counts[SEVERITY_ORDER.includes(status) ? status : 'failed'] += 1;
-        }
-        if (inFlight === null && (m.toolStatus === 'running' || (isReasoningRow(m) && !m.settled))) {
-          inFlight = m.body;
-          inFlightLabel = segmentLabel(m);
-        }
-        pieces.push(`${m.body} ${m.toolName ?? ''} ${m.output ?? ''}`.trim());
-      }
-      const segments = buildSegments(members);
-      const span = spanOf(members);
-      out.push({
-        shape: 'group', key: `group:${rowKey(first)}`, members, segments,
-        // REQ-CHAT-074 indexes a group on its family word; PD-CHAT-004 leaves that the FIRST segment's.
-        family: segments[0]?.label ?? segmentLabel(first),
-        // PD-CHAT-004 / REQ-CHAT-057: the agent, never an activity word. Every member carries the same one,
-        // because `canFoldTogether` is what put them in one run.
-        role: first.persona ?? first.name ?? first.kind, persona: first.persona ?? first.name ?? '',
-        counts, durationMs: span.durationMs, startedAt: span.startedAt, endedAt: span.endedAt, inFlight, inFlightLabel,
-        // REQ-CHAT-065: the members' searchable text, capped at 2000 characters, so search matches inside a fold.
-        blob: pieces.join('\n').slice(0, GROUP_BLOB_CAP),
-      });
-      const header = out[out.length - 1]!;
-      if (expanded.has(header.key)) for (const m of members) out.push({ shape: 'row', key: rowKey(m), row: m });
-      i = j + 1;
+function foldRuns(rows: readonly TranscriptRow[], groupTools: boolean, showReasoning: boolean): DisplayRow[] {
+  interface Run { readonly members: TranscriptRow[] }
+  const slots: Array<Run | { readonly row: TranscriptRow }> = [];
+  const open = new Map<string, Run>();
+  for (const row of rows) {
+    if (groupTools && runnable(row, showReasoning)) {
+      const key = agentKey(row);
+      let run = open.get(key);
+      if (run === undefined) { run = { members: [] }; open.set(key, run); slots.push(run); }
+      run.members.push(row);
       continue;
     }
-    out.push({ shape: 'row', key: rowKey(row), row });
-    i += 1;
+    if (closesEveryRun(row)) open.clear(); else open.delete(agentKey(row));
+    slots.push({ row });
+  }
+
+  const out: DisplayRow[] = [];
+  for (const slot of slots) {
+    if (!('members' in slot)) { out.push({ shape: 'row', key: rowKey(slot.row), row: slot.row }); continue; }
+    const members = slot.members;
+    if (members.length < 2) {
+      const only = members[0]!;
+      out.push({ shape: 'row', key: rowKey(only), row: only });
+      continue;
+    }
+    const first = members[0]!;
+    const counts: Record<Severity, number> = { ok: 0, failed: 0, blocked: 0, running: 0 };
+    let inFlight: string | null = null;
+    let inFlightLabel: string | null = null;
+    const pieces: string[] = [];
+    for (const m of members) {
+      // REQ-CHAT-065's severity is over the run's TOOL members: a reasoning row carries no tool outcome,
+      // and counting it as `ok` would let a reasoning-only run claim an outcome it never had.
+      if (!isReasoningRow(m)) {
+        const status = (m.toolStatus ?? 'ok') as Severity;
+        counts[SEVERITY_ORDER.includes(status) ? status : 'failed'] += 1;
+      }
+      if (inFlight === null && (m.toolStatus === 'running' || (isReasoningRow(m) && !m.settled))) {
+        inFlight = m.body;
+        inFlightLabel = segmentLabel(m);
+      }
+      pieces.push(`${m.body} ${m.toolName ?? ''} ${m.output ?? ''}`.trim());
+    }
+    const segments = buildSegments(members);
+    const span = spanOf(members);
+    out.push({
+      shape: 'group', key: `group:${rowKey(first)}`, members, segments,
+      // REQ-CHAT-074 indexes a group on its family word; PD-CHAT-004 leaves that the FIRST segment's.
+      family: segments[0]?.label ?? segmentLabel(first),
+      // PD-CHAT-004 / REQ-CHAT-057: the agent, never an activity word. Every member carries the same one,
+      // because `agentKey` is what put them in one run.
+      role: first.persona ?? first.name ?? first.kind, persona: first.persona ?? first.name ?? '',
+      counts, durationMs: span.durationMs, startedAt: span.startedAt, endedAt: span.endedAt, inFlight, inFlightLabel,
+      // REQ-CHAT-065: the members' searchable text, capped at 2000 characters, so search matches inside a fold.
+      blob: pieces.join('\n').slice(0, GROUP_BLOB_CAP),
+    });
   }
   return out;
 }
@@ -437,6 +476,51 @@ export function trailerRows(o: Pick<ProjectOptions, 'pendingQuestions' | 'pendin
 }
 
 /**
+ * ADR-0046's incremental bound, under PD-CHAT-004 revision 2: **the latest position at or before `b` that no
+ * run crosses**. Re-projecting from a clean cut reproduces every displayed row from it onward, and no
+ * displayed row before it, which is exactly what makes the caller's previous prefix reusable.
+ *
+ * Revision 1 could walk back one predicate at a time — a run was a consecutive stretch, so the nearest
+ * boundary was the first pair that could not fold. Runs now INTERLEAVE, so a run that began long before `b`
+ * can still be open at it while other agents' runs opened and closed inside it, and a cut taken in the middle
+ * of one would lose the members below it: they would be neither reused (their header reaches past the cut)
+ * nor re-projected (they sit before it).
+ *
+ * Two passes, both bounded by the work they find rather than by the window. The suffix says which agents
+ * have a run open at `b` — an agent whose first event at or after `b` is runnable. Then the walk back keeps,
+ * per agent, the highest index at which that agent is known to have a runnable row above the current cut:
+ * a row whose run reaches the cut drags the cut down to itself, a row whose run ended above it does not, and
+ * a row that closes an agent's run starts that agent again from the row before. A row naming no agent closes
+ * every run, so nothing before it can cross and the walk stops there.
+ */
+function cleanCut(rows: readonly TranscriptRow[], b: number, showReasoning: boolean): number {
+  const reach = new Map<string, number>();
+  const closedAbove = new Set<string>();
+  for (let i = b; i < rows.length; i += 1) {
+    const row = rows[i]!;
+    if (closesEveryRun(row)) break;
+    const key = agentKey(row);
+    if (!runnable(row, showReasoning)) { closedAbove.add(key); continue; }
+    // An agent whose first event in the suffix is runnable has a run that may reach back past `b`.
+    if (!closedAbove.has(key) && !reach.has(key)) reach.set(key, b);
+  }
+
+  let cut = b;
+  for (let i = b - 1; i >= 0; i -= 1) {
+    const row = rows[i]!;
+    if (closesEveryRun(row)) break;
+    const key = agentKey(row);
+    if (!runnable(row, showReasoning)) { reach.delete(key); continue; }
+    // The highest index this agent's current run is known to reach. Unset means this row is its highest.
+    const highest = reach.get(key) ?? i;
+    reach.set(key, highest);
+    // It crosses the cut when it has a member at or above the cut and this member below it.
+    if (highest >= cut) cut = i;
+  }
+  return cut;
+}
+
+/**
  * The whole of step 4 over the resident window. `from` is the earliest-changed ROW INDEX; the projection walks
  * back from it to the nearest group boundary and re-projects only the suffix, reusing the caller's previous
  * displayed prefix. Passing `from` as `null` (or omitting `previous`) re-projects the window, which is what a
@@ -449,14 +533,12 @@ export function projectDisplay(o: ProjectOptions, incremental?: { readonly previ
   let startRow = 0;
   let prefix: DisplayRow[] = [];
   if (incremental) {
-    // The nearest group boundary at or before the earliest-changed index: walk back while the row before could
-    // have folded with this one, so one fold can be recomputed and no other.
     let b = deduped.findIndex((r) => r.index >= incremental.from);
     if (b === -1) b = deduped.length;
-    while (b > 0 && canFoldTogether(deduped[b - 1]!, deduped[b] ?? deduped[b - 1]!, o.showReasoning)) b -= 1;
-    // REQ-CHAT-048 needs the immediately previous thinking row, so one more row of lookback is kept for context.
-    startRow = b;
-    const boundaryIndex = deduped[b]?.index ?? Number.POSITIVE_INFINITY;
+    startRow = cleanCut(deduped, b, o.showReasoning);
+    // The ROW INDEX of the clean cut, which is where re-projection begins — not `b`'s, which a run open at
+    // `b` may reach back past. REQ-CHAT-048 needs the immediately previous thinking row, kept below.
+    const boundaryIndex = deduped[startRow]?.index ?? Number.POSITIVE_INFINITY;
     prefix = incremental.previous.filter((d) => d.shape !== 'trailer' && lastIndexOf(d) < boundaryIndex);
     // A reusable prefix must be a prefix: stop at the first displayed row that is not below the boundary.
     const cut = incremental.previous.findIndex((d) => d.shape === 'trailer' || lastIndexOf(d) >= boundaryIndex);
@@ -471,7 +553,7 @@ export function projectDisplay(o: ProjectOptions, incremental?: { readonly previ
     if (row.kind === 'thinking') previousThinking = row;
     if (out !== null) cleaned.push(out);
   }
-  return [...prefix, ...foldRuns(cleaned, o.groupTools, o.showReasoning, o.expanded), ...trailerRows(o)];
+  return [...prefix, ...foldRuns(cleaned, o.groupTools, o.showReasoning), ...trailerRows(o)];
 }
 
 function lastThinkingBefore(rows: readonly TranscriptRow[], before: number): TranscriptRow | null {

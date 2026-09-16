@@ -14,8 +14,9 @@ that writes it.
 
 ## Count
 
-**Eight.** The count here is the number of entries below, written nowhere else so that it cannot go
-stale.
+**Nine.** The count here is the number of entries below, written nowhere else so that it cannot go
+stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
+directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 2.
 
 ---
 
@@ -322,12 +323,32 @@ selecting rather than the unset whole-surface state the first checkbox state del
 
 ### PD-CHAT-004 — an agent's uninterrupted work draws as one activity line that updates in place
 
-**The run.** A *run* is a maximal sequence of consecutive transcript rows that belong to **one agent**
-and are of the `tool call` or `streamed reasoning` categories. A run of **two or more** rows SHALL be
-displayed as a single row — the **activity line**; a run of one row SHALL be displayed as that row,
-drawn as its own category states. Neither a change of tool family nor an intervening reasoning row
-SHALL end a run. A row of any other category, a row of a different agent, and an exempt row SHALL end
-it.
+*Revision 2, 2026-09-16 ([R-025](requests.md#r-025)). Revision 1 (2026-09-15) is quoted where it is
+replaced, never deleted: the two rules below that moved are the run's boundary and the segment's shape.*
+
+**The run.** A *run* is a maximal sequence of transcript rows that belong to **one agent** and are of
+the `tool call` or `streamed reasoning` categories. A run of **two or more** rows SHALL be displayed as
+a single row — the **activity line**; a run of one row SHALL be displayed as that row, drawn as its own
+category states. Neither a change of tool family nor an intervening reasoning row SHALL end a run.
+
+**Runs interleave, and a run is bounded by its agent alone (revision 2).** A row of a **different**
+agent SHALL NOT end a run. What ends one is: a row of any other category **belonging to that agent**, a
+row belonging to **no** agent, a **user prompt**, and an exempt row. A row belonging to no agent and a
+user prompt each end **every** open run — the first because it belongs to the run rather than to a
+participant, the second because it is the turn boundary the reader drew themselves. Each activity line
+SHALL be displayed at the position of its **earliest** member, and a later member SHALL lengthen that
+line where it already stands rather than move it.
+
+> **Revision 1 said:** "A *run* is a maximal sequence of **consecutive** transcript rows … A row of any
+> other category, **a row of a different agent**, and an exempt row SHALL end it."
+>
+> **Why it was wrong, measured 2026-09-16.** The rule solves the single-agent case and re-creates the
+> problem in the concurrent one. Two agents working at once interleave in the record, so each agent's
+> run is cut at every turn-taking: the owner's screenshot drew ten rows of two agents' work as **five**
+> lines of two, each re-stating a timestamp and a full role, with three of them runs of one row that
+> were not lines at all. The directive was raised because "two agents writing at once competed for the
+> newest row"; under revision 1 they stopped competing for it and started fragmenting each other
+> instead. The cost of the repair is stated below.
 
 **What never enters a run.** The structured-questions tool row and an unsettled live-terminal row
 (REQ-CHAT-066), and — while `display/showReasoning` is on (REQ-CHAT-167) — any streamed-reasoning
@@ -336,12 +357,24 @@ row, so that switching the preference on reveals reasoning without a second expa
 **What the collapsed line states.** In the agent's own role gutter, at the run's earliest member start
 time, on one line:
 
-- the run's **segments**, in the order they first appear. A reasoning segment reads
-  `reasoning ×N · <S>s · ~<T> tok`, its seconds the summed duration of its members and its token
-  figure their summed streamed-character count divided by 4 (REQ-CHAT-062's arithmetic). A tool
-  segment reads `<family> ×N` followed by the per-outcome counts of REQ-CHAT-065 — `3 ok`, `1 failed`
-  — omitting an outcome with no members. Consecutive rows of one family form one segment; the same
-  family reached again after another segment forms a second segment of that family.
+- the run's **segments — one per activity word, carrying that word's totals** — in the order the words
+  first appear (revision 2). A reasoning segment reads `reasoning ×N · <S>s · ~<T> tok`, its seconds the
+  summed duration of its members and its token figure their summed streamed-character count divided by 4
+  (REQ-CHAT-062's arithmetic). A tool segment reads `<family> ×N` followed by the per-outcome counts of
+  REQ-CHAT-065 — `3 ok`, `1 failed` — omitting an outcome with no members. A family reached again after
+  another word SHALL rejoin its own segment rather than open a second one, so the number of segments on
+  a line is the number of distinct words in the run and never the number of steps in it.
+
+  > **Revision 1 said:** "Consecutive rows of one family form one segment; the same family reached again
+  > after another segment forms a second segment of that family", reasoning that the line should read as
+  > a sequence of things done and that merging "would state a total nobody watched happen".
+  >
+  > **Why it was wrong, measured 2026-09-16.** An agent alternating reasoning and reading — which is what
+  > an agent does — produces one segment per **step**. The owner's screenshot carries a single line of
+  > more than thirty segments, wrapped over seven rows of text: the line grew with the work exactly as
+  > the appended rows it replaced did, which is the one property the directive exists to remove. The
+  > sequence is not summarised away and not lost. It is the expansion, in recorded order, one row per
+  > step, which is where a reader who wants the order already goes.
 - while a call is in flight, the activity word of the segment in flight marked as continuing, and that
   call's text on the dimmed `⤷` preview line REQ-CHAT-061 gives a collapsed tool row;
 - the run's **elapsed span** — from the earliest member's start to the last member's end — counting
@@ -393,11 +426,79 @@ been at this", which is the question the line is drawn to answer, at the cost of
 activity word**, so the glanceable "what is it doing" is a list rather than a word; the in-flight
 segment is drawn as continuing precisely to keep that answer available at a glance.
 
+**What revision 2 gives up, and it is real.** **A live line no longer sits at the tail.** A run is drawn
+where its earliest member is, so an agent that has been working since before another agent's rows keeps
+its line above them and updates it there; a reader watching the bottom of the transcript sees the other
+agent's line move and must look up for the first one's. That is the direct price of "display them
+according to sent first" and of a row that changes rather than grows — the two cannot both be satisfied
+at the tail. **The order in which one agent used its tools is one expansion away**, where revision 1 put
+it on the line; what the line answers instead is how much of each thing the agent has done, which is the
+question a reader glancing at two working agents is actually asking. **A word's totals span the whole
+run**, so `reading ×22 · 22 ok` may cover calls made minutes apart and the per-call instants are, again,
+the expansion's.
+
 > **Narrows:** REQ-CHAT-046, REQ-CHAT-062, REQ-CHAT-064, REQ-CHAT-065
 > **Extends:** REQ-CHAT-067
 
 *Raised by the owner, 2026-09-15; logged as [R-017](requests.md#r-017) and chosen from four drawn
-approaches as [R-019](requests.md#r-019).*
+approaches as [R-019](requests.md#r-019). **Revised** at the owner's request, 2026-09-16; logged as
+[R-025](requests.md#r-025).*
+
+---
+
+<a id="pd-chat-005"></a>
+
+### PD-CHAT-005 — a row names its agent by colour, and a delegated agent's rows sit one step in
+
+**The colour.** A transcript row's **role label** SHALL be drawn in its persona's assigned colour —
+the same colour REQ-CHAT-057's continuation bar and PD-CHAT-004's expanded rail already take, so one
+agent reads as one colour everywhere it appears. A row that names no persona — the reader's own row, a
+system notice — SHALL keep the surface's accent and take no persona colour.
+
+The assigned colours SHALL be taken from the **categorical set the adopted design language already
+declares** for data whose values are names rather than magnitudes, in that set's own order, assigned by
+a stable function of the persona's name. No persona colour SHALL be a **state** colour: a colour the
+product uses to say `ok`, `running`, `waiting` or `failed` may not also say *who*, because the two would
+then be indistinguishable on a row that carries both.
+
+**The place.** A row belonging to an agent at depth *N* in the run's delegation tree
+(REQ-MONITOR-036/037) SHALL be drawn indented *N* steps, one step being the design language's base
+spacing step, with the run's own entry persona at depth 0. The indent SHALL move the row's columns and
+SHALL NOT resize them: REQ-CHAT-057's 52 px timestamp column and 112 px role column are untouched, as
+are its margins and its minimum height. That is why this directive **extends** that requirement rather
+than narrowing it — every figure REQ-CHAT-057 fixes still holds on an indented row, and the indent is a
+new fact drawn beside them. (`PD-CHAT-003` already narrows REQ-CHAT-057, and one requirement may be
+narrowed by one directive only, so a second claim on it would have had to be settled rather than
+declared; there is nothing to settle, because nothing here disagrees with it.) A surface that does
+not know the delegation tree SHALL draw every row at depth 0, which is what every surface did before
+this directive.
+
+**Why, and what it costs.** The owner read a live two-agent transcript and reported that "agents can be
+barely distinguished". They were not: the role label was drawn in one accent colour for every agent, the
+persona colour reached only a 2 px continuation bar and an expanded rail, and nothing in the transcript
+said which agent had delegated to which — that fact lived only in the Agents panel, which indents its
+children. Two agents alternating therefore read as one column of identical labels.
+
+The palette this replaces was six tokens of which `--rt-ok` and `--rt-run` are the **same** colour, so
+six slots yielded five hues and one persona in six collided outright; and three of the six were state
+colours, so a persona bar could be read as an outcome beside a row whose outcome it was not. The
+language's categorical ramp is six distinct hues declared for exactly this purpose.
+
+The costs are four. **Beyond six personas the hues repeat**, which is the ramp's own declared behaviour
+and is not fixed here; two agents deep in one run may share a colour, and the label, the indent and the
+task line still tell them apart. **An indented row's columns move with it**: the first evidence shows
+a child's timestamp starting one step right of its parent's, so the time gutter reads as a stepped
+column rather than one straight edge. The alternative — indenting from the role label and leaving
+the times aligned — puts the step inside the row and breaks the block the row is, which is worse for
+the fact being drawn. **Depth costs horizontal room**: a row at depth 2 gives up 32 px of
+measure, and REQ-CHAT-057's columns do not shrink to pay for it, so a deep delegation narrows the text
+rather than the gutter. **The transcript now depends on the delegation tree** to draw a row in its
+place, where it depended on the row alone; a row whose agent the record does not yet name is drawn at
+depth 0 and moves in when the record catches up.
+
+> **Extends:** REQ-CHAT-057, REQ-CHAT-068, REQ-CHAT-069, REQ-SHELL-075
+
+*Raised by the owner, 2026-09-16; logged as [R-025](requests.md#r-025).*
 
 ---
 

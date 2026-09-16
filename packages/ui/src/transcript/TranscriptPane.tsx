@@ -41,6 +41,11 @@ export interface TranscriptPaneProps {
   readonly onOpenTrailer?: ((trailer: TrailerRow) => void) | undefined;
   readonly questionAgent?: string | undefined;
   readonly scopeAgent?: string | null | undefined;
+  /**
+   * PD-CHAT-005: how deep a named agent sits in the delegation tree, for the row's indentation. The view above
+   * holds the tree (REQ-MONITOR-036/037); the pane holds none and asks. Absent leaves every row at depth 0.
+   */
+  readonly agentDepth?: ((name: string, persona: string) => number) | undefined;
   /** REQ-CHAT-165: fetch the next older span. Resolves false when the load FAILED, which a reader must be able to tell from having reached the oldest row. */
   readonly onPageOlder?: ((beforeIndex: number) => Promise<boolean>) | undefined;
   /** REQ-CHAT-165: the first recorded row is among those held, so there is nothing older to fetch. */
@@ -80,7 +85,7 @@ const EMPTY_BODY = 'Describe the outcome you want. Rotaris will show agent activ
 
 export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
   const {
-    rows, running, groupTools, caps = CAP_DEFAULTS, pendingQuestions, pendingApprovals, questionAgent, scopeAgent,
+    rows, running, groupTools, caps = CAP_DEFAULTS, pendingQuestions, pendingApprovals, questionAgent, scopeAgent, agentDepth,
     onPageOlder, reachedOldest = false, onFocusComposer, renderRow = Row, onOpenTrailer,
     showReasoning = false, autoCollapseTools = false, onOpenLink, onReadAttachment, onAcknowledge, nowMs = 0,
   } = props;
@@ -191,6 +196,7 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
     attachmentUrl: (attachment) => attachmentBodies.get(attachment.digest) ?? null,
     memberExpanded: (key) => expanded.has(key),
     toggleMember: (key) => toggle(key, expanded.has(key)),
+    agentDepth,
   };
 
   /** REQ-CHAT-057 / REQ-CHAT-067: the two facts a row cannot know about itself, once for the whole array. */

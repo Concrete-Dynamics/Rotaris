@@ -1453,7 +1453,9 @@ to R-026 settles exactly one of them.
   because it narrows a requirement the owner is choosing to govern rather than correcting one that is
   wrong. What makes this branch rulable ahead of the other two: carrying a figure the provider computed
   needs **exact decimal addition only and never a multiplication**, so `REQ-PROVIDER-121`'s one money
-  rule is met without deciding what a *price* is — which is OQ-21's question and ADR-0031's spike.
+  rule is met without deciding what a *price* is — which is OQ-21's question and ADR-0031's spike. **Built
+  the same day it was ruled** (`packages/model/src/reported-cost.ts`, `packages/engine/src/money.ts`); the
+  first execution is reported into the directive and into ADR-0031 in place.
 - **Discovery pricing — stated, not ruled.** `REQ-PROVIDER-072` admits pricing "only for
   `concrete-cloud`" and `discovery.ts` returns `pricing: {}` unconditionally, with a test pinning it.
   An amendment would land there. It stays blocked behind **OQ-21**, because carrying a per-token price

@@ -395,6 +395,12 @@ While a task run is executing, a user must be able to watch what every agent is 
 
 **REQ-MONITOR-166** — The cumulative-tokens card shows the total token count with thousands separators and a `tok` suffix, a sparkline of token history, and a sub-line showing a pre-rendered cost label. The token history is sampled by the run, not by the card: the cumulative total is sampled every 10 seconds while the session's status claims a live run, and once more when the run reaches a terminal state, so a sparkline never depends on a view having been open. The most recent 120 samples are retained — 20 minutes of a run at that cadence — the oldest being discarded as newer ones arrive, and they are persisted with the session so the sparkline is the same when the session is reopened (REQ-MONITOR-242). Fewer than two samples renders as an explicit empty sparkline rather than a flat line. The cost label carries its own qualifier distinguishing an unknown price, an incomplete price, and a price derived from configured rates, so that no view has to invent its own description for a run whose price could not be established.
 
+> **Narrowed by [`PD-MONITOR-001`](../product/directives.md#pd-monitor-001), 2026-09-16.** The card, the
+> sampling, the retention and the empty sparkline are untouched. The closed three — an unknown price, an
+> incomplete price, a price derived from configured rates — gain a **fourth** member, `reported`, for a
+> figure the provider computed and the product only carried. The reason the set could stay at three was
+> that every route to a figure ran through a rate; a provider-reported cost runs through none.
+
 **REQ-MONITOR-167** — The tool-calls card shows the session-wide tool-call total, a caption naming the number of agents it spans, and up to five per-tool chips of the form `{tool} {count}` sorted by count descending, aggregated from per-agent metrics.
 
 **REQ-MONITOR-168** — The repository card shows commits ahead and behind with directional markers, the comparison base and current branch, and a line stating how many files were touched and how many changes are uncommitted.

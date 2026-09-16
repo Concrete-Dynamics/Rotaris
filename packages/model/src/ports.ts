@@ -65,6 +65,14 @@ export type ChatMessage =
 export interface Usage {
   readonly input: number;
   readonly output: number;
+  /**
+   * PD-MONITOR-001: the cost of THIS request as the provider itself reported it, a decimal string,
+   * present only when the provider answered with one. It is never computed here: the product asks
+   * the endpoints whose protocol defines the field, carries what comes back, and adds figures to
+   * each other and to nothing else (REQ-PROVIDER-121 — no amount is computed in binary floating
+   * point). A provider that reports none leaves this absent, which is not the same as zero.
+   */
+  readonly cost?: string;
 }
 
 export type FinishReason = 'stop' | 'length' | 'other';

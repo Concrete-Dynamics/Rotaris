@@ -163,6 +163,20 @@ approval when needed → executor; hooks in its two slots), settled with its out
 edit); the results go back as one tool message; hook feedback follows as a user message. A reply with no tool call ends the turn — unless a steer is pending, in which case
 the agent takes another round; an empty reply with no call is the runtime's stuck report to the supervisor.
 
+**What a step costs (PD-MONITOR-001; `model/reported-cost.ts`, `engine/money.ts`, `run/aggregates.ts`).** A
+completed provider request carries its tokens and, where the endpoint's protocol defines a field for it,
+the cost that provider computed for that request. The ask is a body field the endpoint owns, sent only to
+endpoints that define one (`COST_REPORTING_HOSTS`, today OpenRouter's `usage.include`), because a strict
+OpenAI-shaped API answers an unrecognised body key with a 400. The reading is the SDK's `metadataExtractor`,
+which sees the raw chunk before the SDK's usage mapping keeps the token fields and drops the rest; the figure
+leaves the adapter on the port's own `usage` part. `Aggregates.addCost` adds it to the run's total in exact
+decimal arithmetic on `bigint`, at whatever scale the operands carry — the only money arithmetic in the
+product, and addition only, which is why it does not wait on OQ-21 or ADR-0031's spike the way every route
+through a per-token **rate** does. The total reaches `usage.update` and `session.end` in the payload's
+existing `cost.total`, and the label reads it back under REQ-MONITOR-166's fourth qualifier, `reported`,
+rendered half-up to two places or four below one hundredth and with no currency symbol, because the provider
+named no currency and the product picks none.
+
 What the model is handed for each of them is `toolSpec` (`run-host/tools.ts`): an MCP tool's own input schema where
 ADR-0034 supplies one, otherwise the zod schema converted **as an input** (`io: 'input'`) — the shape of a call about to
 be made, in which a field carrying a `.default()` is optional as the parser treats it. Converted as an output, which was

@@ -2,8 +2,9 @@ import { err, millis, ok, type Result, type TimerHandle, type Timers } from '@ro
 import { APICallError, jsonSchema, Output, streamText, tool, type LanguageModel, type ModelMessage, type ToolSet } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
-import { modelError, type ChatMessage, type ModelClient, type ModelError, type ModelRequest, type OutputSpec, type StreamPart, type ToolSpec } from './ports.js';
+import { modelError, type ChatMessage, type ModelClient, type ModelError, type ModelRequest, type OutputSpec, type StreamPart, type ToolSpec, type Usage } from './ports.js';
 import { createStreamNormaliser, reasoningItemSeparator } from './reasoning.js';
+import { costAskFor, reportedCostExtractor, reportedCostFrom } from './reported-cost.js';
 
 /**
  * ADR-0027 — the AI SDK behind `ModelClient`, for the request-and-stream
@@ -178,7 +179,19 @@ export class AiSdkModelClient implements ModelClient {
      * session `6696f6ed`. An endpoint that cannot take the schema now says so with a 400 or a 422, which
      * `isRungRejection` already reads as "descend a rung and remember it for this model".
      */
-    const provider = createOpenAICompatible({ name: req.model.providerId, baseURL: req.model.baseUrl ?? this.opts.baseUrl, includeUsage: true, supportsStructuredOutputs: true, fetch: decorated });
+    /**
+     * PD-MONITOR-001: where the endpoint's protocol defines a way to ask for the request's own cost,
+     * ask — `transformRequestBody` is the SDK's seam for a body field it has no option of its own for
+     * — and read what comes back through `metadataExtractor`, which sees the raw chunk before the
+     * SDK's usage mapping drops every field but the token counts. An endpoint that defines no such
+     * field is asked nothing: a strict OpenAI-shaped API answers an unrecognised body key with a 400.
+     */
+    const ask = costAskFor(req.model.baseUrl ?? this.opts.baseUrl);
+    const provider = createOpenAICompatible({
+      name: req.model.providerId, baseURL: req.model.baseUrl ?? this.opts.baseUrl, includeUsage: true, supportsStructuredOutputs: true, fetch: decorated,
+      metadataExtractor: reportedCostExtractor(),
+      ...(ask === null ? {} : { transformRequestBody: (body: Record<string, unknown>) => ({ ...body, ...ask }) }),
+    });
     return provider.chatModel(req.model.modelId);
   }
 
@@ -229,7 +242,10 @@ export class AiSdkModelClient implements ModelClient {
         model, messages: toModelMessages(rest), ...(instructions === undefined ? {} : { instructions }), abortSignal: signal, maxRetries: req.retries, ...(tools ? { tools } : {}), ...(output ? { output } : {}),
         ...(req.thinking === 'unset' ? {} : { providerOptions: { openai: { reasoningEffort: req.thinking === 'max' ? 'high' : req.thinking } } }),
       });
-      let usage: { input: number; output: number } | null = null;
+      let usage: Usage | null = null;
+      // PD-MONITOR-001: the provider's own cost for this request, carried on the `finish-step` part the
+      // SDK puts provider metadata on, and read here so the `usage` part below carries it out whole.
+      let reportedCost: string | null = null;
       // REQ-CHAT-163: every text and reasoning part passes through the normaliser, which is where the three shapes
       // deliberation arrives in are recognised and where whitespace-only deltas are preserved exactly as received.
       const normalise = createStreamNormaliser();
@@ -268,11 +284,14 @@ export class AiSdkModelClient implements ModelClient {
             // finish, so the finished message equals the concatenation of the deltas received (REQ-CHAT-157).
             for (const out of normalise.flush()) yield ok<StreamPart>(out);
             const u = part.totalUsage;
-            usage = { input: u.inputTokens ?? 0, output: u.outputTokens ?? 0 };
+            usage = { input: u.inputTokens ?? 0, output: u.outputTokens ?? 0, ...(reportedCost === null ? {} : { cost: reportedCost }) };
             yield ok<StreamPart>({ kind: 'usage', usage });
             yield ok<StreamPart>({ kind: 'finish', reason: part.finishReason === 'stop' ? 'stop' : part.finishReason === 'length' ? 'length' : 'other' });
             break;
           }
+          case 'finish-step':
+            reportedCost = reportedCostFrom(part.providerMetadata) ?? reportedCost;
+            break;
           case 'error':
             yield err(fromError(part.error, req.signal.aborted));
             return;

@@ -1,5 +1,5 @@
 import { err, ok, type Result } from '@rotaris/kernel';
-import { modelError, type ModelClient, type ModelError, type ModelRequest, type StreamPart } from './ports.js';
+import { modelError, type ModelClient, type ModelError, type ModelRequest, type StreamPart, type Usage } from './ports.js';
 
 /**
  * A `ModelClient` that plays a script: one entry per call, in order. Every
@@ -67,7 +67,7 @@ function abortPromise(signal: AbortSignal): Promise<void> {
 }
 
 /** A script that answers `text` in `chunks` deltas with `usage`. */
-export function answer(text: string, usage = { input: 10, output: 5 }, chunks = 3): ScriptedCall {
+export function answer(text: string, usage: Usage = { input: 10, output: 5 }, chunks = 3): ScriptedCall {
   const size = Math.max(1, Math.ceil(text.length / chunks));
   const parts: ScriptedPart[] = [];
   for (let i = 0; i < text.length; i += size) parts.push({ part: { kind: 'text', delta: text.slice(i, i + size) } });
@@ -77,7 +77,7 @@ export function answer(text: string, usage = { input: 10, output: 5 }, chunks = 
 }
 
 /** A script that requests tool calls (after optional `text`), finishing `other` as a provider does on a tool step. */
-export function toolCalls(calls: readonly { callId: string; name: string; args: Record<string, unknown> | string }[], text = '', usage = { input: 10, output: 5 }): ScriptedCall {
+export function toolCalls(calls: readonly { callId: string; name: string; args: Record<string, unknown> | string }[], text = '', usage: Usage = { input: 10, output: 5 }): ScriptedCall {
   const parts: ScriptedPart[] = [];
   if (text) parts.push({ part: { kind: 'text', delta: text } });
   for (const c of calls) parts.push({ part: { kind: 'tool-call', callId: c.callId, name: c.name, argsDelta: typeof c.args === 'string' ? c.args : JSON.stringify(c.args) } });

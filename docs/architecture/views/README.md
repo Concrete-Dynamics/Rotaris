@@ -24,7 +24,16 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-16** — **no loop supervision while the plan gate holds**
+Last reconciled with the code: **2026-09-16** — **a cost the provider reported** (`PD-MONITOR-001`,
+minted and first executed this day): a completed provider request can carry the cost that provider computed
+for it, asked for in the endpoint's own body field and read back through the SDK's metadata seam, because the
+SDK's usage mapping drops every field but the token counts. The run's total is exact decimal addition on
+`bigint` — the only money arithmetic in the product, and addition only, which is why it does not wait on
+OQ-21 — and the label carries REQ-MONITOR-166's fourth qualifier. Only the **runtime view** is affected — a
+new paragraph in the turn section says where the figure enters, what adds it and what the label says. No
+package, edge, message kind or store table moved; `sessions.cost` was already a decimal string.
+
+Previously reconciled, the same day: **no loop supervision while the plan gate holds**
 (`PD-ORCH-001`, minted this day): a held run has its write and execute tools withheld, so it greps and reads,
 which is REQ-ORCH-101's repetition trigger read literally — and the corrective goes in as an unmarked user
 message, so the run reconciles an instruction no user gave while it waits for the user's decision. `Run` now

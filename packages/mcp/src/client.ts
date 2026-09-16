@@ -1,5 +1,6 @@
 import { Client, SdkError, SdkErrorCode, SSEClientTransport, StreamableHTTPClientTransport, SUPPORTED_PROTOCOL_VERSIONS, type Transport, type VersionNegotiationOptions } from '@modelcontextprotocol/client';
 import { millis, type Millis, type MonotonicClock, type Timers } from '@rotaris/kernel';
+import { launchIdentity } from './identity.js';
 import { OwnedStdioTransport } from './transport.js';
 import type { CallOutcome, McpLog, ServerDescription, ToolInfo } from './types.js';
 
@@ -66,15 +67,49 @@ function closedDuringProbe(error: unknown): boolean {
   return error instanceof SdkError && error.code === SdkErrorCode.EraNegotiationFailed && /closed during the server\/discover probe/.test(error.message);
 }
 
+/**
+ * What the probe cost a real third-party server, measured 2026-09-16 (ADR-0033's first execution against one):
+ * serena validates the raw `server/discover` against a union of request shapes, logs the whole pydantic failure to
+ * stderr at WARNING — 55 lines — answers `-32602` and stays alive, so the fallback works and the noise is pure. The
+ * three paths that connect to one server (ToolDiscovery, a session, HealthProbe) each paid it.
+ *
+ * So a server that has already told us its era is not asked twice. Only the LEGACY outcome is remembered: a modern
+ * server answers the probe as designed and costs one request with no noise, while a pin has no fallback — remembering
+ * one would turn a server that changes era between connections into a hard failure for the rest of the process. The
+ * memory lives for the process, is keyed by what is launched rather than by the caller's label, and an explicit
+ * `negotiation` from the caller always wins over it.
+ */
+const negotiatedEras = new Map<string, VersionNegotiationOptions>();
+
+/** Forget every remembered era. For tests; the product never needs it, since the memory dies with the process. */
+export function forgetNegotiatedEras(): void {
+  negotiatedEras.clear();
+}
+
+function rememberEra(key: string, opened: OpenedClient, asked: VersionNegotiationOptions, opts: OpenOptions): void {
+  if (asked.mode !== 'auto' || negotiatedEras.has(key)) return;
+  const version = opened.negotiatedVersion();
+  // The legacy list is the one `initialize` offers; a version outside it was reached through the modern era.
+  if (version === undefined || !SUPPORTED_PROTOCOL_VERSIONS.includes(version)) return;
+  negotiatedEras.set(key, { mode: 'legacy' });
+  opts.log.debug(`mcp ${opts.label}: negotiated the ${version} era through the legacy handshake; later connections to this server skip the server/discover probe (REQ-MCP-046)`);
+}
+
 /** Connect: `initialize` (or `server/discover` then the modern era) under one explicit timeout; every failure closes the transport. */
 export async function openClient(opts: OpenOptions): Promise<OpenedClient> {
+  const key = launchIdentity(opts.description);
+  const asked = opts.negotiation ?? negotiatedEras.get(key) ?? DEFAULT_NEGOTIATION;
   try {
-    return await openOnce(opts, opts.negotiation ?? DEFAULT_NEGOTIATION);
+    const opened = await openOnce(opts, asked);
+    rememberEra(key, opened, asked, opts);
+    return opened;
   } catch (cause) {
-    const auto = (opts.negotiation ?? DEFAULT_NEGOTIATION).mode === 'auto';
-    if (auto && opts.description.transport === 'stdio' && closedDuringProbe(cause)) {
+    if (asked.mode === 'auto' && opts.description.transport === 'stdio' && closedDuringProbe(cause)) {
       opts.log.debug(`mcp ${opts.label}: the server closed on the server/discover probe; connecting again under the legacy handshake (one launch at a time)`);
-      return openOnce(opts, { mode: 'legacy' });
+      const opened = await openOnce(opts, { mode: 'legacy' });
+      // It died on the probe; asking again would kill it again.
+      negotiatedEras.set(key, { mode: 'legacy' });
+      return opened;
     }
     throw cause;
   }

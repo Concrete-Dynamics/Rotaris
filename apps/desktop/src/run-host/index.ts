@@ -467,7 +467,7 @@ const configure = (workspaceRoot: string, attended: boolean) => {
 /**
  * ADR-0030 / REQ-PROVIDER-066 for the continuation paths: a paused or resumed session's run reads
  * the bearers of the LAST launch's lease (`leased`), which an application restart empties — the
- * 401 recorded in `docs/defects/continue-run-sends-no-authorization-header.md`. Every continuation
+ * 401 recorded in a defect note (removed once repaired). Every continuation
  * launch therefore re-asks main first (`leaseForContinuation`), publishes the fresh map under the
  * workspace root, and only then lets the engine resolve the setup. The user notices nothing; the
  * one refusal is an entry provider main cannot resolve, the same sentence a launch gives. A

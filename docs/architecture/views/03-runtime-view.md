@@ -96,7 +96,7 @@ runtime section; the other configuration sections remain outside this snapshot i
 the session's workspace root (`sessionRoots`, recorded at `session.start` and `session.resume`). Before the
 repair, a resumed session's continuation read the previous launch's lease — empty after an application
 restart — and its first model call went out with **no `Authorization` header** (the 401 recorded in
-`docs/defects/continue-run-sends-no-authorization-header.md`). The refresh is invisible when main answers;
+a defect note, removed once repaired). The refresh is invisible when main answers;
 an entry provider main cannot resolve refuses with REQ-WORKSPACE-137's sentence, exactly as a launch does.
 A session this process never started or resumed leases nothing — the engine's own `not-live` / `no-session`
 refusals answer it.

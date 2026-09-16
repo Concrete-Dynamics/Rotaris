@@ -201,7 +201,7 @@ status was changed to justify it. If the owner prefers the fourth exit, the repa
 
 ## Deliberately out of scope
 
-**The root execution record's identity** (`docs/defects/root-execution-record-has-no-identity.md`). That
+**The root execution record's identity** (a defect note, removed once repaired). That
 note says the canonical name and task id are the first thing this Part will need; reading `REQ-ORCH-153`
 against the code says otherwise. What the gate requires is that the root execution record is *created with
 the entry role*, and the port `turn()` already builds at depth 0 is that record. Nothing in the plan cycle
@@ -220,7 +220,7 @@ looks the root up by name. The defect stands and keeps its own commit, where `ba
 4. **`HOOK_SKIP_REASONS` has two members**, and a consumer that treats the field as a constant is wrong.
    `docs/spec/20-event-history-replay-export.md` still restates the one-member claim in two places — a
    defect found by building, recorded in
-   `docs/defects/hook-skip-reason-vocabulary-stale-in-events-spec.md`, and owing an amendment round.
+   a defect note (removed once repaired), and owing an amendment round.
 5. **The gate is offered on two surfaces and holds state on neither.** The composer's control and the start
    dialog's both write `runtime.run_start_mode` through the scoped per-field path, so the setting is
    persistent and one value governs whichever surface the user next starts from.
@@ -237,6 +237,6 @@ ADR-0062's first execution in the built app proved the plan gate end to end acro
 6. The file named in the plan does not exist during the hold and does exist after approval — verifying that execution is blocked before any file-modifying work is done.
 
 **Defects surfaced by the first execution:**
-- **Event specification contradiction:** A4 widened `REQ-HOOKS-126` to define `plan_gate` as a valid skip reason. `REQ-EVENTS-047` and the `hook.finish` row in `20-event-history-replay-export.md` still asserted `untrusted_workspace` was the only defined value. Recorded as a defect found by building (`docs/defects/hook-skip-reason-vocabulary-stale-in-events-spec.md`).
+- **Event specification contradiction:** A4 widened `REQ-HOOKS-126` to define `plan_gate` as a valid skip reason. `REQ-EVENTS-047` and the `hook.finish` row in `20-event-history-replay-export.md` still asserted `untrusted_workspace` was the only defined value. Recorded as a defect found by building (a defect note, removed once repaired).
 - **Surface layout and reachability:** Scripted clicks on *Approve* initially failed because flex children and layout sums pushed the buttons out of view or under dividers across varying heights. Repaired by making the three answers sticky (`position: sticky; bottom: 0`) inside the block.
 - **Synthesized events:** The harness verified that synthetic `blur` does not trigger React's `onBlur` delegation (which listens to `focusout`).

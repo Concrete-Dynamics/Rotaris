@@ -743,7 +743,7 @@ form, `ROTARIS_CAPTURE_WAIT=js:<expression>`, ends the capture when the accept l
 the window — so the deadline became a bound that a quick model does not pay, where the old shape always cost
 `window + 17 s`. An expiry is now **one** failure, and the presses never made are noted with what each wait did
 rather than reported as evidence about the board. The note is
-`docs/defects/live-run-board-window-presses-accept-blind.md`; it stays, with its repair recorded in it.
+a defect note (removed once repaired); it stays, with its repair recorded in it.
 
 **The first repair was itself wrong, and the live run caught it before it landed** — kept beside its replacement
 because it sharpens the finding. Enter was gated on `[data-req-card="REQ-104"]:focus`, which matched **63 ms into
@@ -1729,7 +1729,7 @@ whole path in the built app: a child runs three ordered terminal calls (success,
 and the ledger lands in SQLite in the exact run order, comes back through the real filtered tool read as **only**
 the Commands section, sits in the sidecar with the same statuses in words, and renders in the inspector. The scripted dialect gained a
 verification-only `terminal:<key>` step for it. `REQ-TOOLS-148` now takes that widened vocabulary through the
-directive too. Recorded in `docs/defects/artifact-read-section-allow-list-omits-commands.md`;
+directive too. Recorded in a defect note (removed once repaired);
 the first execution is in `docs/architecture/first-executions.md` and the directive's own record.
 
 ## Verifying a part runs the WHOLE proof suite, not its neighbours

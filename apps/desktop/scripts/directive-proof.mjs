@@ -97,7 +97,7 @@ try {
       `${carried} PD symbols, DIRECTIVE_COUNT ${declared}`,
     );
     // Found on the first execution of this register with real PD-CHAT-001 entries in it (2026-09-14,
-    // docs/defects/directive-proof-template-check-fails-on-main.md): this used to assert that
+    // a defect note, removed once repaired): this used to assert that
     // 'PD-CHAT-001' appeared nowhere in the artifact — true while the only PD-CHAT-001 in existence
     // was the example inside the register's HTML comment, and unsatisfiable from the day the owner
     // minted a real PD-CHAT-001 (the composer's popover chips). What the comment promises is that

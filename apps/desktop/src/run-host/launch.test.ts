@@ -168,7 +168,7 @@ describe('launch configuration ownership (REQ-TRACE-470/471, REQ-SESSION-138)', 
   });
 });
 
-describe('the continuation lease (REQ-PROVIDER-066; docs/defects/continue-run-sends-no-authorization-header.md)', () => {
+describe('the continuation lease (REQ-PROVIDER-066; a defect note, removed once repaired)', () => {
   let dir: string;
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'rotaris-lease-'));

@@ -30,7 +30,7 @@ export type ContinuationLeaseDeps = Pick<LaunchDeps, 'workspaceRoot' | 'attended
  * `session.planDecision`): a paused or resumed session launches its run through `setupFor` →
  * `configure`, which reads the bearers of the LAST launch's lease — empty after an application
  * restart, so the continuation's first model call went out with no `Authorization` header at all
- * (the 401 recorded in `docs/defects/continue-run-sends-no-authorization-header.md`). The repair
+ * (the 401 recorded in a defect note, removed once repaired). The repair
  * takes the same lease a launch takes, per continuation: main answers with the stored credential
  * for the providers the current configuration names, and the caller publishes the map so the run's
  * per-request resolvers read it. The user notices nothing. One refusal: an entry provider main

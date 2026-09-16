@@ -206,7 +206,7 @@ that depended on it.
 **The repair** is decision 4: the fence travels with the tool, the state holds the read record and the
 undo stacks. The falsified comment is kept beside its replacement in `run-host/tools.ts`.
 
-Recorded as a defect note in `docs/defects/file-tool-fence-frozen-at-first-run.md` and as the
+Recorded as a defect note in a defect note (removed once repaired) and as the
 hundred-and-first entry in `codebase.md`'s ledger.
 
 **It found a second, in the surface — and the proof found it, not a test.** The Settings selectors were

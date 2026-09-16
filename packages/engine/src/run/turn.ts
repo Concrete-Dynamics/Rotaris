@@ -343,7 +343,7 @@ async function step(deps: TurnDeps, choice: ModelChoice, messages: readonly Chat
    * REQ-CHAT-062's settled form carries FINAL figures, so the settle stamps `durationMs` — the wall span from the
    * row's `startedAt` to this settle, on the clock port. Without the stamp the renderer's settled branch falls
    * through to `nowMs - startedAt` against its once-a-second tick and the seconds keep rising after the row is
-   * finished (docs/defects/settled-reasoning-row-counts-forever.md).
+   * finished (a defect note, removed once repaired).
    */
   const settleReasoning = (): void => {
     if (reasoningIndex === null) return;

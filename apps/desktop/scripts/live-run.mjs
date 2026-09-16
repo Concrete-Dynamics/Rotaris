@@ -673,7 +673,7 @@ if (wanted.includes('edit')) {
  * committed — "the card rests in running", "the history lacks the accept" — when the truth was that accept had been
  * pressed at a card still running and the product had correctly declined it. Measured 2026-09-13 against
  * `qwen3.8-flash-next`: 240 s expired with the run about half-way, and the same run passed every check at 900 s.
- * `docs/defects/live-run-board-window-presses-accept-blind.md` is the note. A harness that manufactures false
+ * a defect note (removed once repaired) is the note. A harness that manufactures false
  * product symptoms is worse than one that is merely slow, because `AGENTS.md` rightly says to believe it.
  */
 if (wanted.includes('requirements')) {

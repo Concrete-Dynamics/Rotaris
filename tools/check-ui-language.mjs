@@ -53,7 +53,7 @@ for (const path of drawingRoots.flatMap((drawingRoot) => walk(drawingRoot))) {
   }
   if (extension === '.css') {
     // Found while writing the plan gate's styles (2026-09-13,
-    // docs/defects/ui-language-checker-reads-css-comments.md): these scans ran over raw text, so a
+    // a defect note, removed once repaired): these scans ran over raw text, so a
     // property name in prose inside a `/* … */` block was read as a declaration — and because the
     // value pattern runs to the next `;` or `}` and a comment holds neither, the match continued
     // PAST the comment's end and attributed the first literal of the next rule to the sentence.

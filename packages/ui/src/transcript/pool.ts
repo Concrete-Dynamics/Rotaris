@@ -18,7 +18,7 @@ import type { DisplayRow } from './types.js';
  * text, but under REQ-CHAT-167 (show-reasoning default OFF) a collapsed one draws only its one-line summary —
  * and a LIVE row is never measured (`reuseKey` returns null for it), so a body-based estimate for one survives
  * uncorrected for the whole streaming period, pushing every row below off-screen and reading as blank space
- * (docs/defects/estimate-counts-collapsed-thinking-body.md). The caller therefore passes the expansion state it
+ * (a defect note, removed once repaired). The caller therefore passes the expansion state it
  * already holds, and a collapsed reasoning row estimates its header. Expanded reasoning rows keep the body-based
  * estimate; live tool rows draw their one-line preview, which the per-line term already covers.
  */

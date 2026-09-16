@@ -150,7 +150,7 @@ of REQ-SESSION-136, which this directive does not require and does not forbid.
 > and its test green, but every model-facing filtered read returned the full document. Repaired against contracts'
 > `ARTIFACT_SECTIONS`; the ledger itself behaved exactly as this record fixes it — order preserved, statuses
 > in words, the denied command carrying no exit status. The full account is in
-> `docs/architecture/first-executions.md` and `docs/defects/artifact-read-section-allow-list-omits-commands.md`.
+> `docs/architecture/first-executions.md` and a defect note (removed once repaired).
 
 <a id="pd-chat-001"></a>
 
@@ -378,7 +378,7 @@ in turn drew as `ORCHESTRATOR / READING / ORCHESTRATOR / READING`, and reported 
 column appeared to name two participants where there was one agent, and two agents writing at once
 competed for the newest row, which flickered. The first fault is a defect against REQ-CHAT-057 and
 REQ-CHAT-064 and is repaired as one
-(`docs/defects/group-header-claims-the-role-gutter.md`); **this directive is the second.** Flicker is
+(a defect note, removed once repaired); **this directive is the second.** Flicker is
 a consequence of the shape of the record, not of the painting: a run of an agent's work appends a row
 per step, every append moves the tail, and two agents appending at once move it twice as often. A row
 that changes rather than grows removes the cause — each working agent owns exactly one line, and two

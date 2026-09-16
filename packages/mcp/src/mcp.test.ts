@@ -199,6 +199,8 @@ describe('OwnedStdioTransport (ADR-0033, ADR-0007)', () => {
     expect(line).toBeDefined();
     expect(line).not.toContain('ghp_abcdefghijklmnop');
     expect(line).toContain('***');
+    // At DEBUG: the child's diagnostics are its own, and a real server writes them by the dozen per connection.
+    expect(line!.startsWith('D ')).toBe(true);
   });
   it('a .cmd runner on PATH starts through cmd.exe with its arguments intact (REQ-MCP-113 on Windows)', async () => {
     if (process.platform !== 'win32') return;

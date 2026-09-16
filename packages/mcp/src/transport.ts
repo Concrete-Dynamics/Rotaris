@@ -145,7 +145,10 @@ export class OwnedStdioTransport implements Transport {
           this.onmessage?.(message);
         }
       });
-      // ADR-0007: the child's error stream reaches the log only through the redaction pass.
+      // ADR-0007: the child's error stream reaches the log only through the redaction pass, at DEBUG: it is the
+      // child's own diagnostic stream and not this product's finding, and a real server's stderr is a burst — one
+      // third-party server wrote 55 validation lines per connection (ADR-0033, first execution against one).
+      // REQ-MCP-107's `stderrTail` is unaffected: it is kept whatever the log does with the line.
       let pending = '';
       child.stderr?.setEncoding('utf8');
       child.stderr?.on('data', (chunk: string) => {
@@ -156,7 +159,7 @@ export class OwnedStdioTransport implements Transport {
           if (line.trim() === '') continue;
           const safe = redact(line);
           this.stderrTail = `${this.stderrTail}\n${safe}`.slice(-2_000);
-          this.spec.log.info(`mcp ${this.spec.label} stderr: ${safe}`);
+          this.spec.log.debug(`mcp ${this.spec.label} stderr: ${safe}`);
         }
       });
       child.stdin?.on('error', (error: Error) => { this.onerror?.(error); });

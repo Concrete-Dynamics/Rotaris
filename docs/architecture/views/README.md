@@ -24,7 +24,15 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-Last reconciled with the code: **2026-09-16** — **the plan gate's three repairs** (REQ-ORCH-153,
+Last reconciled with the code: **2026-09-16** — **the MCP connection's noise** (ADR-0033's first
+execution against a real third-party server): the protocol era a server has already answered with is
+remembered for the process, keyed by what is launched, so `ToolDiscovery`, `SessionConnections` and
+`HealthProbe` probe it once between them rather than each; and a child's stderr is forwarded at
+**debug**, which the run host had been flattening to `info`. Only the **process view** is affected —
+the run host's held state gains the era memory, and the MCP-child paragraph says what level a child's
+stderr reaches the log at. No package, edge, message kind or store table moved.
+
+Previously reconciled, the same day: **the plan gate's three repairs** (REQ-ORCH-153,
 REQ-ORCH-082, REQ-TOOLS-032): the held segment's one turn now carries `planRequestSection` on both the task
 string and the initial content parts, so the producing role is told a plan is what is wanted; the dispatch
 check refuses a name that IS a tool and lets a name that is no tool reach the unknown-tool answer, for which

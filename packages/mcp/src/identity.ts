@@ -13,3 +13,12 @@ export function serverIdentity(name: string, description: ServerDescription, wor
     : [name, description.transport, null, null, null, null, description.url, sortedMap(description.headers), workspaceRoot];
   return JSON.stringify(nine);
 }
+
+/**
+ * What is LAUNCHED, with the name and the workspace root left out: the same server reached by discovery
+ * (`req.name`), by a session (`name`) and by the health probe (`probe:<name>`) keys one entry, which is
+ * the point — the three paths connect to one process and should not each re-learn its protocol era.
+ */
+export function launchIdentity(description: ServerDescription): string {
+  return serverIdentity('', description, '');
+}

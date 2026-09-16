@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import type { VersionNegotiationOptions } from '@modelcontextprotocol/client';
 import { millis } from '@rotaris/kernel';
 import { nodeClocks } from '@rotaris/platform';
-import { listTools, openClient } from './client.js';
+import { forgetNegotiatedEras, listTools, openClient } from './client.js';
 import type { McpLog, StdioDescription } from './types.js';
 
 /**
@@ -43,6 +43,30 @@ async function connectOnce(era: string, mode: string, dir: string): Promise<Cell
     return { era, mode, ok: false, version: undefined, tools: 0, processes, error: String(cause instanceof Error ? cause.message : cause).slice(0, 900), elapsedMs: clocks.monotonic.now() - started };
   }
 }
+
+describe('the era a server already told us (ADR-0033, first execution against a real third-party server)', () => {
+  it('a server that answered the probe with an error is asked once, not once per connection', async () => {
+    forgetNegotiatedEras();
+    const dir = mkdtempSync(join(tmpdir(), 'rotaris-mcp-era-'));
+    const requests = join(dir, 'requests.log');
+    writeFileSync(requests, '');
+    const description: StdioDescription = { transport: 'stdio', command: process.execPath, args: [FIXTURE, '--era', '2025', '--request-file', requests], env: { ...process.env as Record<string, string> }, cwd: dir };
+    const methods = () => readFileSync(requests, 'utf8').split('\n').filter((l) => l.trim() !== '');
+    for (const label of ['discovery', 'session', 'probe']) {
+      // No `negotiation`: exactly what ToolDiscovery, SessionConnections and HealthProbe pass.
+      const opened = await openClient({ description, label, timers: clocks.timers, monotonic: clocks.monotonic, log: quiet, connectTimeoutMs: millis(8_000) });
+      expect(opened.negotiatedVersion()).toBe('2025-11-25');
+      await opened.close();
+    }
+    expect(methods().filter((m) => m === 'server/discover')).toHaveLength(1);
+    expect(methods().filter((m) => m === 'initialize')).toHaveLength(3);
+    // A caller that asks for a mode still gets it; the memory is a default, not an override.
+    const pinned = openClient({ description, label: 'pinned', timers: clocks.timers, monotonic: clocks.monotonic, log: quiet, connectTimeoutMs: millis(8_000), negotiation: { mode: { pin: '2026-07-28' } } });
+    await expect(pinned).rejects.toThrow();
+    expect(methods().filter((m) => m === 'server/discover')).toHaveLength(2);
+    forgetNegotiatedEras();
+  }, 30_000);
+});
 
 describe('spike 3 — negotiation over OwnedStdioTransport (ADR-0033 c.2, ESC-12)', () => {
   it('measures three eras under three modes and decides the mode', async () => {

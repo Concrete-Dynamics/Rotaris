@@ -230,3 +230,33 @@ Electron's binary writes CR LF to standard output ~50 ms after start on Windows,
 (`spikes/code-intelligence-branch.md` §2); a blank line is not a message under newline framing, and nothing else is
 tolerated. The stdin-end close path ends the runtime by itself (measured: exit 0 within a second), so `terminateTree`'s
 kill is the grace path only.
+
+**A real third-party server, at last — 2026-09-16.** The first-execution record above ends with "**Not tested:** a real
+third-party server (the hand-written fixture only, in both eras)". One ran: `serena`, configured as
+`code_intelligence`, on a plan-mode launch (`/tmp/rotaris-launch.log`, session `6696f6ed`).
+
+**The decision holds and the mechanism worked.** `'auto'` reached it, over one process, with the legacy fallback doing
+exactly what the spike said it would: serena answers `server/discover` with `-32602` — invalid params, not `-32601` —
+and stays alive, so the era resolves to 2025-11-25 and the connection proceeds. Neither the pin nor a sibling process
+was needed, and `REQ-MCP-067`'s process count held against something nobody wrote.
+
+**What the fixture could not show: the probe is not free on a server built from a validating SDK.** Serena's Python
+SDK checks the raw request against a union of request shapes and writes the whole pydantic failure to stderr at
+WARNING — **55 lines per connection**, before answering. Multiply by the three paths that connect to one server
+(`ToolDiscovery`, `SessionConnections`, `HealthProbe`, ADR-0034) and one launch carried it three times. Nothing was
+broken; the launch log was simply unreadable. Two answers, both in the mechanism rather than in the decision:
+
+- **The era is remembered per server for the process** (`negotiatedEras` in `packages/mcp/src/client.ts`, keyed by
+  `launchIdentity` — what is launched, not the caller's label, so the three paths share one entry). Only the LEGACY
+  outcome is remembered: a modern server answers the probe as designed at the cost of one request, while `{ pin }` has
+  no fallback, and remembering a pin would turn a server that changes era between connections into a hard failure for
+  the rest of the process. A caller's explicit `negotiation` still wins, which is what keeps the spike's table honest.
+- **The child's stderr is forwarded at `debug`, not `info`** (`transport.ts`), and the run host stopped flattening
+  `debug` into `info` on the way to the log (`run-host/mcp.ts`; the wire has carried four levels all along). It is the
+  child's diagnostic stream, not this product's finding. `REQ-MCP-107`'s `stderrTail` is untouched, so a failure still
+  explains itself.
+
+**Still not measured, and now separable:** a third-party server in the MODERN era (serena is 2025-era; the probe was
+answered, not honoured), and a probe **timeout**, which remains what the original record said it was. The application
+log's own verbosity is spec-silent — `REQ-CONFIG-121` fixes the per-session log level and nothing fixes this one — so a
+`debug` line still reaches the launch log, now saying what it is.

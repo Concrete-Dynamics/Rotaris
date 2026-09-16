@@ -64,7 +64,7 @@ function ask(request: ServiceAsk, boundMs: Millis): Promise<ProcessReply> {
 function reply(id: number, r: ProcessReply): void {
   send({ v: CONTRACT_SCHEMA_VERSION, id, reply: r });
 }
-function log(message: string, level: 'info' | 'warn' = 'info'): void {
+function log(message: string, level: 'info' | 'warn' | 'debug' = 'info'): void {
   send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'log', level, message } });
 }
 /** Part X: the DAL's readonly lists as the wire carries them (REQ-LIBRARY-138); the schema wants mutable arrays. */

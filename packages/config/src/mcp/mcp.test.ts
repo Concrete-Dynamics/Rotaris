@@ -213,6 +213,12 @@ describe('REQ-MCP-082/083/087/088/090 — secrets and the environment', () => {
     const u = resolveRemoteUrl('web_search', 'https://x/?k=${MISSING}', {}, {});
     expect(u.value).toEqual({ url: 'https://x/?k=${MISSING}', unresolved: ['MISSING'] });
     expect(u.diagnostics[0]!.message).toMatch(/could not be resolved/);
+    expect(u.diagnostics[0]).toMatchObject({ severity: 'warning', scope: 'load', channels: 'user' });
+    // REQ-MCP-040: a server turned off is a choice. Its unresolved placeholder is a state, said once per process.
+    const d = resolveRemoteUrl('web_search', 'https://x/?k=${MISSING}', {}, {}, false);
+    expect(d.value.unresolved).toEqual(['MISSING']);
+    expect(d.diagnostics[0]).toMatchObject({ severity: 'info', scope: 'process', channels: 'log', key: 'mcp.url-unresolved.web_search.MISSING' });
+    expect(d.diagnostics.filter((x) => x.severity === 'warning')).toEqual([]);
   });
 });
 

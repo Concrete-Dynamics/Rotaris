@@ -72,6 +72,17 @@ describe('read_file (REQ-TOOLS-134)', () => {
     expect(r.text).toContain('Contents of src:');
     expect(r.text).toContain('Did you mean: a.ts, b.ts?');
   });
+  it('a path under a file says the parent is a file; a path under nothing keeps the absent answer (REQ-TOOLS-134)', async () => {
+    writeFileSync(join(root, '.git'), `gitdir: ${join(outside, 'worktrees', 'w')}\n`);
+    const t = readFileTool(state, fence);
+    const underFile = await t.execute({ path: '.git/HEAD', offset: 1, limit: 2000, grep_context: 3 }, ctx());
+    expect(underFile).toMatchObject({ isError: true, text: "File not found: .git/HEAD. '.git' is a file, not a directory." });
+    const underNothing = await t.execute({ path: 'nowhere/at/all.txt', offset: 1, limit: 2000, grep_context: 3 }, ctx());
+    expect(underNothing).toMatchObject({ isError: true, text: 'File not found: nowhere/at/all.txt. Its parent directory does not exist either.' });
+    const linked = await t.execute({ path: '.git', offset: 1, limit: 2000, grep_context: 3 }, ctx());
+    expect(linked.isError).not.toBe(true);
+    expect(linked.text).toContain('gitdir:');
+  });
   it('the 30,000-character cap carries a continuation hint', async () => {
     writeFileSync(join(root, 'big.txt'), Array.from({ length: 3000 }, (_, i) => `line ${i + 1} ${'x'.repeat(20)}`).join('\n'));
     const r = await readFileTool(state, fence).execute({ path: 'big.txt', offset: 1, limit: 5000, grep_context: 3 }, ctx());

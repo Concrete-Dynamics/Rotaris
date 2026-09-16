@@ -90,6 +90,22 @@ function listing(dir: string): string {
   return entries.map((e) => (e.isDirectory() ? `${e.name}/` : e.name)).join('\n');
 }
 
+/**
+ * Why REQ-TOOLS-134's parent listing could not be taken, read from the filesystem rather than assumed.
+ * A linked worktree's `.git` is a file, not a directory, and answering `read_file .git/HEAD` with "its
+ * parent directory does not exist either" sent an agent hunting for a path that was there all along.
+ */
+function unlistableParent(parent: string, relParent: string): string {
+  if (!existsSync(parent)) return 'Its parent directory does not exist either.';
+  const name = relParent === '' || relParent === '.' ? 'The workspace root' : `'${relParent}'`;
+  try {
+    if (!statSync(parent).isDirectory()) return `${name} is a file, not a directory.`;
+  } catch {
+    return `${name} could not be read.`;
+  }
+  return `${name} could not be listed.`;
+}
+
 /** REQ-TOOLS-134: the parent listing and up to five close matches at ≥ 0.45 under REQ-TOOLS-188. */
 function missingPathMessage(resolved: string, rel: string): string {
   const parent = dirname(resolved);
@@ -98,7 +114,7 @@ function missingPathMessage(resolved: string, rel: string): string {
   try {
     names = readdirSync(parent);
   } catch {
-    return `File not found: ${rel}. Its parent directory does not exist either.`;
+    return `File not found: ${rel}. ${unlistableParent(parent, dirname(rel))}`;
   }
   const scored = names.map((n) => ({ n, s: similarity(wanted, n.toLowerCase()) })).filter((x) => x.s >= 0.45).sort((a, b) => b.s - a.s || a.n.localeCompare(b.n)).slice(0, 5);
   const suggestions = scored.length ? `\nDid you mean: ${scored.map((x) => x.n).join(', ')}?` : '';

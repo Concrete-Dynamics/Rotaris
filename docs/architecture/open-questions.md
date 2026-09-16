@@ -33,9 +33,11 @@ session on one workspace ordinary) **and OQ-59** (a chooser restricted to a file
 no platform dialog offers). **Three escalations were raised in the same pass** — **ESC-37** (per-prompt
 attachment against a session-long force-loaded block), **ESC-38** (the Skills table's five columns
 against its seven) and **ESC-39** (a taken command name skipped against suffixed) — each stating the
-reading the build proceeds under, all three in `owner-decisions.md`. **One more was raised on 2026-09-16
-by repairing the plan gate: OQ-60** (what summary a session carries when the run that owned it died
-without a teardown, which REQ-ORCH-082's five stop-reason arms cannot select). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+reading the build proceeds under, all three in `owner-decisions.md`. **Two more were raised on 2026-09-16
+by repairing what one plan-mode run hit: OQ-60** (what summary a session carries when the run that owned
+it died without a teardown, which REQ-ORCH-082's five stop-reason arms cannot select) **and OQ-61**
+(whether an isolated run may read the repository metadata of the worktree it works in, which neither of
+the fence's two designators covers). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -2588,6 +2590,36 @@ REQ-SESSION-062's correction entry is the whole of what a recovered session says
 case the three NULL columns are correct and the readers should present that entry instead. The build
 must not choose: a second place deciding a summary would contradict REQ-ORCH-082's own claim to be the
 only one.
+
+**OQ-61 — May an isolated run read the repository metadata of the worktree it is working in?** *(REQ-TOOLS-132 with REQ-GIT-019/021/022 and REQ-TOOLS-001/142; raised 2026-09-16 while repairing what an isolated plan-mode run hit.)*
+
+An isolated run works in a linked worktree under `<workspace>/.rotaris/worktrees/<id>`, which
+REQ-GIT-019 makes its effective root. A linked worktree's `.git` is a **file** holding a
+`gitdir:` pointer, so HEAD, the refs and the worktree's own administrative directory all live
+under `<workspace>/.git/`, above the fence. Every repository-metadata path the run reached for in
+session `6696f6ed` — `.git/HEAD`, `.git/refs/heads/<branch>`, `<workspace>/.git/worktrees/<id>/HEAD`
+and a bare `../` — was refused by REQ-TOOLS-129's boundary check, and the run recorded its own git
+state as unverifiable.
+
+The fence admits a read outside the root only from a **designated additional read-only root**
+(REQ-TOOLS-132), and the corpus designates exactly two things: `runtime.additional_read_only_roots`
+(REQ-CONFIG-468) and the catalogued skill directories (REQ-WORKSPACE-059). A repository's git
+directory is not among them. Nor is there a read-only git tool to ask instead: REQ-TOOLS-001 and
+REQ-TOOLS-142 declare `git_commit` and nothing else.
+
+**What the build proceeds under.** Nothing changes: an isolated run still cannot read the metadata
+of the worktree it occupies. What *was* repaired in this pass is only the answer it received —
+`read_file .git/HEAD` replied `Its parent directory does not exist either.` about a `.git` that
+exists and is a file, which sent the run looking for a path that was there all along.
+
+**What a ruling decides.** Which of three shapes the capability takes, if it is wanted at all:
+the run-host designates the base repository's git directory as an additional read-only root for an
+isolated port, which needs no new tool but adds a read root the corpus does not name; or
+REQ-TOOLS-001 gains a read-only git member, which is a new tool with its own contract and its own
+permission facet; or the run is *told* its branch and base commit in the opening context it already
+receives and never reads metadata at all, which is a message the specification does not have. The
+build must not choose between them: each one adds product behaviour, and the third would put the
+git state in a place no requirement says it appears.
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

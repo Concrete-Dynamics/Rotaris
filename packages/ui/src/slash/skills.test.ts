@@ -3,7 +3,8 @@ import type { SkillRow, SkillsState } from '@rotaris/contracts';
 import { buildCatalogue, type CatalogueOptions } from './catalogue.js';
 import { createSlashRegistry } from './registry.js';
 import {
-  catalogueNormalForm, freeName, registerSkillCommands, skillCommandDescription, skillRegistrations, triggerCommandName,
+  bindSkillsReader, cachedSkills, catalogueNormalForm, freeName, readSkills, registerSkillCommands,
+  skillCommandDescription, skillRegistrations, triggerCommandName,
 } from './skills.js';
 
 const row = (over: Partial<SkillRow> = {}): SkillRow => ({
@@ -130,5 +131,34 @@ describe('REQ-WORKSPACE-073 — what invoking a skill command does', () => {
     // The typed name is the catalogue's form; the name the host is asked for is the SKILL's (REQ-WORKSPACE-054).
     await registry.lookup('build-ui')!.run('anything typed after it', ctx);
     expect(loaded).toEqual(['build-ui']);
+  });
+});
+
+describe('slash/skills — the reader keeps what it has and what it is waiting for (defect AO-3)', () => {
+  it('three callers in the same tick join one read, and a later one reads the catalog again', async () => {
+    const answer = state([row()]);
+    let reads = 0;
+    let release: (() => void) | null = null;
+    bindSkillsReader(async () => { reads += 1; await new Promise<void>((r) => { release = r; }); return answer; });
+    // The registrar's effect, the configuration key's and the rescan counter's, all at window start, none with an answer to find.
+    const first = readSkills();
+    const second = readSkills();
+    const third = readSkills();
+    expect(reads).toBe(1);
+    expect(second).toBe(first);
+    expect(third).toBe(first);
+    release!();
+    expect(await Promise.all([first, second, third])).toEqual([answer, answer, answer]);
+    expect(cachedSkills()).toEqual(answer);
+    // Settled: a rescan or a configuration change still asks the run host.
+    const later = readSkills();
+    expect(reads).toBe(2);
+    expect(later).not.toBe(first);
+    release!();
+    await later;
+    // A new window or a new workspace drops the answer and any read still running with it.
+    bindSkillsReader(null);
+    expect(cachedSkills()).toBeNull();
+    expect(readSkills()).toBeNull();
   });
 });

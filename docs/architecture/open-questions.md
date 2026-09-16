@@ -37,7 +37,8 @@ reading the build proceeds under, all three in `owner-decisions.md`. **Two more 
 by repairing what one plan-mode run hit: OQ-60** (what summary a session carries when the run that owned
 it died without a teardown, which REQ-ORCH-082's five stop-reason arms cannot select) **and OQ-61**
 (whether an isolated run may read the repository metadata of the worktree it works in, which neither of
-the fence's two designators covers). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+the fence's two designators covers), **and OQ-62** (whether a price may come from a provider's discovery
+payload, and whether a provider-reported cost has a qualifier — the reason every run's cost reads zero). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -2620,6 +2621,45 @@ permission facet; or the run is *told* its branch and base commit in the opening
 receives and never reads metadata at all, which is a message the specification does not have. The
 build must not choose between them: each one adds product behaviour, and the third would put the
 git state in a place no requirement says it appears.
+
+**OQ-62 — May a price come from a provider's discovery payload, and may a provider-reported cost be shown under its own qualifier?** *(REQ-PROVIDER-072, REQ-MONITOR-166, REQ-CONFIG-088, with ADR-0031 and OQ-21; raised 2026-09-16 from a run whose cost read `0` throughout.)*
+
+Every run's `cost` column reads `"0"` and every cost label reads "price not established". That is not a
+defect of the aggregate: `Aggregates` has no mutator for cost because there is nothing to feed one.
+Four routes to a figure exist and three of them need a ruling.
+
+**Discovery drops the prices it is given.** `REQ-PROVIDER-072` admits pricing "only for
+`concrete-cloud`", so `describeModel` returns `pricing: {}` for every other provider and a test pins
+it. OpenRouter publishes per-token prices in the same payload, as decimal strings, and they are
+discarded on the way past.
+
+**A provider-reported per-request cost has nowhere to land.** OpenRouter answers `usage.cost` when the
+request asks for it; the adapter neither asks nor reads it. `REQ-MONITOR-166` fixes the cost label's
+qualifier as one of three — `unknown`, `incomplete`, `configured` — and a figure the provider itself
+computed is none of them. A fourth would have to be named.
+
+**Configured rates are covered in principle and blocked in practice.** `REQ-CONFIG-088`'s
+`input_cost_per_token` / `output_cost_per_token` take effect only when both are set — and today they
+take effect never: `effectivePricing()` has no callers at all. Multiplying them is where this stops.
+`REQ-PROVIDER-121` states the one money rule, that no amount is computed in binary floating point
+anywhere; ADR-0031 is the decision that carries it out, and it is **proposed**, names a spike it has
+not had, and is blocked by **OQ-21** — the same two fields are float-typed at their source
+(`REQ-CONFIG-088`, `REQ-PROVIDER-072`) and exact in the rule that consumes them. ADR-0031's first
+accepted consequence settles what to do meanwhile in terms: if the float typing stands, the exactness
+is unattainable and "that is a specification defect to be recorded rather than a design to be built
+around".
+
+**What the build proceeds under.** Nothing was built for this, deliberately. Cost stays `"0"` and the
+label stays `price not established` under the `unknown` qualifier, which `REQ-MONITOR-166` provides
+for. Writing the arithmetic now would choose ADR-0031's representation before OQ-21 answers and before
+the spike that decision requires, and a second money path is precisely what the lint rule in that
+decision exists to prevent. The gap is recorded as an open defect note instead.
+
+**What a ruling decides.** Whether discovery carries per-token prices for every provider (as decimal
+strings, extending OQ-21's own recommended reading, which would amend `REQ-PROVIDER-072`'s
+`concrete-cloud` clause); whether `REQ-MONITOR-166`'s qualifier set gains a fourth member for a price
+the provider computed rather than the product; and whether configured rates are meant to produce a
+figure at all — which cannot be built until OQ-21 says what a price is.
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

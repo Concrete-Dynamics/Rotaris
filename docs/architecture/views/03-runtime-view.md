@@ -72,11 +72,13 @@ place — so a segment's grants are constant and the model's listing and callabl
 **iteration 0** (`root:0`) because a plan cycle is not an iteration, and then `parkAtPlanGate()` mirrors
 `pauseAtLimit` exactly: status `awaiting_plan_decision` with the cycle, the cycle's row written in the same
 durable transaction with a `plan_gate_opened` entry, **no terminal pair**, and an EMPTY stop reason
-(REQ-MONITOR-301's set names no hold). The turn's report text IS the plan, verbatim.
+(REQ-MONITOR-301's set names no hold). The turn's report text IS the plan, verbatim — and the turn is TOLD so: `planRequestSection` (`run/plan-text.ts`, beside the `planSection` a decided cycle is handed back) prefixes both the task string and the initial content parts, because an initial turn built from `taskContent` never reads the string. Before 2026-09-16 the first cycle's turn received the user's bare prompt and read it as work to do.
 
 While the hold stands, three places enforce the planning grants of REQ-ORCH-153 — the port's narrowing
-(`createToolPort`, which only removes), `Gate.dispatch` ahead of the permission resolution (so a refused call's
-tool hooks never fire, REQ-HOOKS-004), and child admission (`IterationChildren.delegate`) — and the hook engine
+(`createToolPort`, which only removes, and which hands the gate the set of names it removed), `Gate.dispatch`
+ahead of the permission resolution (so a refused call's tool hooks never fire, REQ-HOOKS-004 — and which refuses
+a name that is a tool, letting a name that is no tool reach REQ-TOOLS-032's unknown-tool answer instead of a
+promise no approval can keep), and child admission (`IterationChildren.delegate`) — and the hook engine
 starts no process, emitting one `hook.finish` with `skip_reason: 'plan_gate'` per withheld invocation
 (REQ-HOOKS-126). The check suite is unreachable rather than guarded: a held segment never enters the loop.
 
@@ -321,7 +323,8 @@ text and moves nothing else; `session.planDecision {decision, changes?}` carries
 (REQ-ORCH-153) and, in one durable act, decides the cycle, clears `sessions.plan_cycle` and writes
 `plan_gate_resolved`. **approve** sets `plan_released = 1` and launches the execution segment with the approved
 text (the edit where one exists); **revise** launches a further plan cycle with the plan as it stands and the
-changes stated, without limit; **cancel** comes to rest with stop reason `user_cancelled` and launches nothing.
+changes stated, without limit; **cancel** comes to rest with stop reason `user_cancelled`, writes the summary REQ-ORCH-082's first arm gives
+(the same `summarise` the run's teardown calls, in the same transaction) and launches nothing.
 `plan_released` is read at every launch and cleared only by the next user prompt, which is REQ-ORCH-154's one-way
 approval across the process boundary the park introduces.
 

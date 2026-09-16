@@ -44,7 +44,7 @@ function recordingSink() {
   return { sink, decisions, requested, issues, timeline, opens, settles, pending, warnings };
 }
 
-function harness(opts: { preset?: string; attended?: boolean; presenter?: PresenterPort | null; headless?: 'deny' | 'abort'; abortHook?: (() => void) | null; timeoutMs?: number; extraExecutors?: [string, ReturnType<typeof simpleExecutor>][]; hooks?: ToolHooks | null; planGateHeld?: boolean } = {}) {
+function harness(opts: { preset?: string; attended?: boolean; presenter?: PresenterPort | null; headless?: 'deny' | 'abort'; abortHook?: (() => void) | null; timeoutMs?: number; extraExecutors?: [string, ReturnType<typeof simpleExecutor>][]; hooks?: ToolHooks | null; planGateHeld?: boolean; planGateWithheldNames?: readonly string[] } = {}) {
   const clock = new FakeClock();
   const rec = recordingSink();
   const approvals = new PendingApprovals(clock);
@@ -63,6 +63,7 @@ function harness(opts: { preset?: string; attended?: boolean; presenter?: Presen
     monotonic: clock, wall: clock, timers: clock, sink: rec.sink, nextSequence: () => ++seq, newRequestId: () => `req${++seq}`,
     hooks: opts.hooks ?? null,
     planGateHeld: () => opts.planGateHeld ?? false,
+    planGateWithheldNames: () => new Set(opts.planGateWithheldNames ?? []),
   });
   const call = (name: string, args: unknown): ToolCall => ({ callId: `c-${name}`, name, rawArgs: typeof args === 'string' ? args : (args as Record<string, unknown>), persona: 'orchestrator', agentId: 'orchestrator', agentName: 'orchestrator' });
   return { gate, clock, rec, approvals, policy, executed, call };
@@ -351,10 +352,34 @@ describe('the plan gate at dispatch (REQ-ORCH-153, ADR-0062)', () => {
   });
 
   it('refuses a name this port never offered — an MCP tool reaching the role by another route', async () => {
-    const h = harness({ preset: 'autonomous', planGateHeld: true });
+    const h = harness({ preset: 'autonomous', planGateHeld: true, planGateWithheldNames: ['mcp__x__write'] });
     const r = await h.gate.dispatch(h.call('mcp__x__write', { any: 1 }), new AbortController().signal);
     expect(r.status).toBe('blocked');
     expect(r.text).toContain('held at the plan gate');
+    expect(h.rec.settles[0]).toMatchObject({ failure_kind: 'plan_gate_withheld' });
+  });
+
+  it('refuses a public name the port did not offer with the gate\'s reason — approval is what would grant it', async () => {
+    const h = harness({ preset: 'autonomous', planGateHeld: true });
+    const r = await h.gate.dispatch(h.call('git_commit', { message: 'x' }), new AbortController().signal);
+    expect(r.status).toBe('blocked');
+    expect(r.text).toContain('held at the plan gate');
+  });
+
+  it('a name that is no tool reads as unknown, not as withheld: no approval can make it exist', async () => {
+    const h = harness({ preset: 'autonomous', planGateHeld: true });
+    const r = await h.gate.dispatch(h.call('read_path', { path: 'a.ts' }), new AbortController().signal);
+    expect(r.status).toBe('failed');
+    expect(r.text).toBe("Unknown tool 'read_path'. The call was not executed; choose one of the tools listed.");
+    expect(r.text).not.toContain('plan gate');
+    expect(h.rec.settles[0]).toMatchObject({ failure_kind: 'invalid_request' });
+    expect(h.executed).toEqual([]);
+  });
+
+  it('the remedy names the act that ends the hold, not the state', async () => {
+    const h = harness({ preset: 'autonomous', planGateHeld: true });
+    const r = await h.gate.dispatch(h.call('write_file', { operation: 'create', path: 'a.txt' }), new AbortController().signal);
+    expect(r.text).toContain('Write the plan as the final message of this turn and stop');
   });
 
   it('lets a reading tool through, and the same call through untouched once the hold is over', async () => {

@@ -88,6 +88,17 @@ place — so a segment's grants are constant and the model's listing and callabl
 durable transaction with a `plan_gate_opened` entry, **no terminal pair**, and an EMPTY stop reason
 (REQ-MONITOR-301's set names no hold). The turn's report text IS the plan, verbatim — and the turn is TOLD so: `planRequestSection` (`run/plan-text.ts`, beside the `planSection` a decided cycle is handed back) prefixes both the task string and the initial content parts, because an initial turn built from `taskContent` never reads the string. Before 2026-09-16 the first cycle's turn received the user's bare prompt and read it as work to do. Both sections name the **product** as their speaker: they are delivered inside a `role: 'user'` payload, and `planSection` opened "The user approved this plan" until the same date — a user-role turn narrating the user. A held segment's turn also carries **no loop supervisor** (`PD-ORCH-001`, which narrows REQ-ORCH-099 and REQ-ORCH-101): `Run` attaches the supervisor per turn, and while the hold stands it attaches none. A run whose write and execute tools are withheld can only grep and read, which is REQ-ORCH-101's repetition trigger read literally; the corrective it injects is an unmarked `role: 'user'` message, so the run reads a user instruction no user gave while waiting for the decision of the actual user. Supervision attaches again on the first turn after the gate resolves, and the classifier keeps no state across the hold.
 
+**What the reader sees while it holds (PD-ORCH-002 revision 2, 2026-09-17).** The gate is its own row of the
+workspace grid, above the transcript, in two states the reader moves between in one action: **expanded**, the
+state a gate opens in and the state a further cycle returns it to, where the gate's row takes the free space,
+the transcript's row is zero and `.transcript` is not drawn at all; and **collapsed**, where the gate is a bar
+in an `auto` row and the transcript reads under REQ-CHAT-010's own floor. `WorkspaceView` owns the state — the
+GRID is what changes with it, published as `data-plan-gate-collapsed` beside `data-plan-gate` — and `PlanGate`
+draws REQ-ORCH-153's three answers in **both** states, so no state and no window size can put the decision out
+of reach. Revision 1 gave the transcript a floor of 220 px and capped the gate instead; the owner's capture of
+2026-09-17 showed what that costs at the window the product is used at, and the CSS keeps the falsified reason
+beside its replacement.
+
 While the hold stands, three places enforce the planning grants of REQ-ORCH-153 — the port's narrowing
 (`createToolPort`, which only removes, and which hands the gate the set of names it removed), `Gate.dispatch`
 ahead of the permission resolution (so a refused call's tool hooks never fire, REQ-HOOKS-004 — and which refuses

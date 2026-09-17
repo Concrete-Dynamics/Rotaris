@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PlanDecision, PlanGatePayload } from '@rotaris/contracts';
-import { Button as DesignButton, TextArea as DesignTextArea } from './design-system/index.js';
+import { Button as DesignButton, TextArea as DesignTextArea, layoutContractAttributes, type UiLayoutContract } from './design-system/index.js';
 import { Markdown } from './markdown/Markdown.js';
 
 /**
@@ -15,6 +15,12 @@ import { Markdown } from './markdown/Markdown.js';
  * PD-ORCH-002 narrows REQ-ORCH-153: the plan is rendered as formatted Markdown by default, with an inline toggle
  * to view or edit the verbatim source text. Editing the text approves nothing: the user's text is written through
  * `onEdit` and the three answers stay exactly where they were (REQ-ORCH-154).
+ *
+ * PD-ORCH-002 **revision 2** gives the gate the whole reading area and the reader the choice of when to give it
+ * back: expanded (the state a gate opens in) the transcript is not drawn and the plan's own text takes whatever
+ * height is left; collapsed the gate is a bar above a transcript that reads as it does with no gate held. The
+ * three answers are offered in BOTH states, under the labels REQ-SHELL-048 fixes — collapsing is a way to read
+ * the conversation before deciding, never a way to mislay the decision.
  */
 export interface PlanGateProps {
   readonly gate: PlanGatePayload;
@@ -23,7 +29,22 @@ export interface PlanGateProps {
   /** REQ-ORCH-153: the three answers, exactly. */
   readonly onDecide: (decision: PlanDecision, changes: string) => Promise<{ ok: true } | { ok: false; reason: string }>;
   readonly onOpenLink?: ((href: string) => void) | undefined;
+  /**
+   * PD-ORCH-002 revision 2. The state is held by the view rather than here because the workspace GRID is what
+   * changes with it — the gate's row takes the free space expanded and the transcript's takes none.
+   */
+  readonly collapsed?: boolean | undefined;
+  readonly onToggleCollapsed?: (() => void) | undefined;
 }
+
+/**
+ * What `pnpm ui-audit` measures on this surface, after the five captures that each left some part of it
+ * unreachable: the gate stands inside the view, and the three answers stand inside the gate and are hit-testable.
+ */
+const GATE_LAYOUT = {
+  root: { id: 'plan-gate', relations: [{ kind: 'containment' }] },
+  actions: { id: 'plan-gate-actions', relations: [{ kind: 'containment', target: 'plan-gate' }, { kind: 'hit-test' }] },
+} satisfies Record<string, UiLayoutContract>;
 
 /** REQ-ORCH-153, PD-ORCH-002: implied todo state deduplicated and stripped of redundant duplicate lines. */
 export function planTodoLines(todo: string): readonly string[] {
@@ -47,7 +68,7 @@ export function planTodoLines(todo: string): readonly string[] {
   }
 }
 
-export function PlanGate({ gate, onEdit, onDecide, onOpenLink }: PlanGateProps) {
+export function PlanGate({ gate, onEdit, onDecide, onOpenLink, collapsed = false, onToggleCollapsed }: PlanGateProps) {
   // The edit is local while it is being typed and written through on blur; `edited` is what the store already holds.
   const [text, setText] = useState(gate.edited ?? gate.plan);
   const [mode, setMode] = useState<'preview' | 'edit'>('preview');
@@ -87,34 +108,70 @@ export function PlanGate({ gate, onEdit, onDecide, onOpenLink }: PlanGateProps) 
 
   const todo = planTodoLines(gate.todo);
 
+  /**
+   * REQ-ORCH-153's three answers, drawn once. `compact` is the collapsed bar's size and nothing else: the labels
+   * are REQ-SHELL-048's vocabulary in both states, and the ref sits on the first answer wherever it is drawn.
+   */
+  const answers = (compact: boolean) => (
+    <div
+      className={`dialog-actions plan-gate__actions${compact ? ' plan-gate__actions--bar' : ''}`}
+      aria-label="Plan decision"
+      {...layoutContractAttributes(GATE_LAYOUT.actions)}>
+      <DesignButton ref={first} type="button" className={`btn btn-primary${compact ? ' btn-compact' : ''}`} disabled={busy} data-testid="plan-approve" onClick={() => { void decide('approve'); }}>Approve</DesignButton>
+      <DesignButton type="button" className={`btn btn-secondary${compact ? ' btn-compact' : ''}`} disabled={busy} data-testid="plan-revise" onClick={() => { void decide('revise'); }}>Revise</DesignButton>
+      <DesignButton type="button" className={`btn btn-danger${compact ? ' btn-compact' : ''}`} disabled={busy} data-testid="plan-cancel" onClick={() => { void decide('cancel'); }}>Cancel the run</DesignButton>
+    </div>
+  );
+
   return (
-    <section className="plan-gate" role="region" aria-labelledby="plan-gate-title" data-testid="plan-gate" data-cycle={gate.cycle}>
+    <section
+      className={`plan-gate${collapsed ? ' plan-gate--collapsed' : ''}`}
+      role="region"
+      aria-labelledby="plan-gate-title"
+      data-testid="plan-gate"
+      data-cycle={gate.cycle}
+      data-collapsed={collapsed ? '1' : '0'}
+      {...layoutContractAttributes(GATE_LAYOUT.root)}>
       <header className="plan-gate__header">
         <div className="plan-gate__header-left">
+          {onToggleCollapsed && (
+            <DesignButton
+              type="button"
+              className="btn btn-ghost btn-compact plan-gate__toggle"
+              aria-expanded={!collapsed}
+              data-testid="plan-gate-collapse"
+              title={collapsed ? 'Show the plan again' : 'Collapse the plan and read the conversation'}
+              onClick={onToggleCollapsed}>
+              <i className={`ph ${collapsed ? 'ph-caret-down' : 'ph-caret-up'}`} aria-hidden="true" />{collapsed ? 'Expand' : 'Collapse'}
+            </DesignButton>
+          )}
           <h2 id="plan-gate-title" className="plan-gate__title">Plan ready for your decision</h2>
           <dl className="plan-gate__facts mono" aria-label="Plan facts">
             <div><dt>Cycle</dt><dd data-figure="cycle">{gate.cycle}</dd></div>
             <div><dt>Intent</dt><dd data-figure="intent">{gate.intent}</dd></div>
           </dl>
         </div>
-        <div className="plan-gate__view-toggle" role="group" aria-label="Plan presentation">
-          <DesignButton
-            type="button"
-            className={`btn btn-compact ${mode === 'preview' ? 'btn-secondary is-active' : 'btn-ghost'}`}
-            data-testid="plan-gate-toggle-preview"
-            onClick={() => setMode('preview')}>
-            Preview
-          </DesignButton>
-          <DesignButton
-            type="button"
-            className={`btn btn-compact ${mode === 'edit' ? 'btn-secondary is-active' : 'btn-ghost'}`}
-            data-testid="plan-gate-toggle-edit"
-            onClick={() => setMode('edit')}>
-            Edit source
-          </DesignButton>
-        </div>
+        {collapsed ? answers(true) : (
+          <div className="plan-gate__view-toggle" role="group" aria-label="Plan presentation">
+            <DesignButton
+              type="button"
+              className={`btn btn-compact ${mode === 'preview' ? 'btn-secondary is-active' : 'btn-ghost'}`}
+              data-testid="plan-gate-toggle-preview"
+              onClick={() => setMode('preview')}>
+              Preview
+            </DesignButton>
+            <DesignButton
+              type="button"
+              className={`btn btn-compact ${mode === 'edit' ? 'btn-secondary is-active' : 'btn-ghost'}`}
+              data-testid="plan-gate-toggle-edit"
+              onClick={() => setMode('edit')}>
+              Edit source
+            </DesignButton>
+          </div>
+        )}
       </header>
 
+      {collapsed ? null : <>
       <p className="plan-gate__body">
         Nothing writes files or runs commands until you answer. Review or edit the plan below before approving.
       </p>
@@ -177,11 +234,9 @@ export function PlanGate({ gate, onEdit, onDecide, onOpenLink }: PlanGateProps) 
 
       {error && <p className="composer__error" role="alert">{error}</p>}
 
-      <div className="dialog-actions plan-gate__actions" aria-label="Plan decision">
-        <DesignButton ref={first} type="button" className="btn btn-primary" disabled={busy} data-testid="plan-approve" onClick={() => { void decide('approve'); }}>Approve</DesignButton>
-        <DesignButton type="button" className="btn btn-secondary" disabled={busy} data-testid="plan-revise" onClick={() => { void decide('revise'); }}>Revise</DesignButton>
-        <DesignButton type="button" className="btn btn-danger" disabled={busy} data-testid="plan-cancel" onClick={() => { void decide('cancel'); }}>Cancel the run</DesignButton>
-      </div>
+      {answers(false)}
+      </>}
+      {collapsed && error && <p className="composer__error" role="alert">{error}</p>}
     </section>
   );
 }

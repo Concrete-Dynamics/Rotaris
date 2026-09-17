@@ -1078,6 +1078,18 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
    * store, so it is there after a restart with no run behind it.
    */
   const planGate = session?.planGate ?? null;
+  /*
+   * PD-ORCH-002 revision 2: expanded is the state a gate OPENS in, and a further plan cycle returns it to that
+   * state — a new plan is a new thing to read, so the reader does not inherit the last cycle's collapse. The state
+   * lives here rather than in the gate because the workspace grid is what changes with it.
+   */
+  const [planCollapsed, setPlanCollapsed] = useState(false);
+  const [seenPlanCycle, setSeenPlanCycle] = useState<number | null>(planGate?.cycle ?? null);
+  const gateCycle = planGate?.cycle ?? null;
+  if (seenPlanCycle !== gateCycle) {
+    setSeenPlanCycle(gateCycle);
+    setPlanCollapsed(false);
+  }
   const paused = session !== null && (session.executionStatus === 'paused' || session.executionStatus === 'paused_message_limit' || session.executionStatus === 'awaiting_plan_decision');
   const queued = session?.queuedPrompts ?? [];
   // REQ-CHAT-158: the step the run is inside now, from the newest row it produced (live one first). See `composer.ts`.
@@ -1129,7 +1141,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
     else if (e.key === 'End') { e.preventDefault(); commitHeight(COMPOSER_MIN_HEIGHT); }
   };
   return (
-    <div ref={shell} style={{ ['--rt-composer-height' as string]: `${height}px` }} className={`workspace workspace--with-sidebar${narrow ? ' workspace--narrow' : ''}`} data-drawer={drawer ?? ''} data-plan-gate={planGate ? '1' : ''}>
+    <div ref={shell} style={{ ['--rt-composer-height' as string]: `${height}px` }} className={`workspace workspace--with-sidebar${narrow ? ' workspace--narrow' : ''}`} data-drawer={drawer ?? ''} data-plan-gate={planGate ? '1' : ''} data-plan-gate-collapsed={planGate && planCollapsed ? '1' : ''}>
       {narrow && (
         <div className="workspace__drawer-bar" aria-label="Panels">
           {agents.length > 0 && <DesignButton type="button" className={`btn btn-ghost btn-compact${drawer === 'agents' ? ' is-active' : ''}`} aria-pressed={drawer === 'agents'} onClick={() => setDrawer(drawer === 'agents' ? null : 'agents')}>Agents</DesignButton>}
@@ -1178,12 +1190,15 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
         * REQ-SHELL-168: the plan gate is hosted inside THIS view and nowhere else — not a modal window, not the
         * Overview, not a notice. It is its own row of the workspace grid, ABOVE the transcript rather than inside
         * it: the transcript is a scrolling log that tail-follows, and a surface the user must answer cannot be
-        * something the next published row scrolls away. Its row is `auto`, so it costs no height when no gate holds.
+        * something the next published row scrolls away. The row costs no height when no gate holds; while one does,
+        * PD-ORCH-002 revision 2 gives it the free space and the transcript none, until the reader collapses it.
         */}
       {planGate && onPlanEdit && onPlanDecision && (
         <PlanGate key={planGate.cycle} gate={planGate}
           onEdit={(t) => onPlanEdit(t)}
           onDecide={(d, c) => onPlanDecision(d, c)}
+          collapsed={planCollapsed}
+          onToggleCollapsed={() => setPlanCollapsed(!planCollapsed)}
           onOpenLink={onOpenLink} />
       )}
       <div className="transcript" role="log" aria-label="Transcript" aria-live="polite">

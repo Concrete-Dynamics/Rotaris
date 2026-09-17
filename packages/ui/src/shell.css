@@ -559,20 +559,36 @@
 .workspace > .run-header { grid-area: runhead; }
 .workspace > .plan-gate { grid-area: plangate; }
 /*
- * REQ-ORCH-153 / REQ-SHELL-048: while a plan gate holds, the transcript's 180 px floor gives way. Without this the
- * grid is over-constrained on an ordinary window — the gate's `auto` row is allocated less than its content, the
- * overflow is painted over by the next row, and the three answers sit under the transcript where no click reaches
- * them (four built-app captures found exactly that, each time a row further down). The transcript is a log the
- * reader can scroll; the gate is a decision the run is stopped on, so the transcript gives way first. What is left
- * over after that comes off the gate's own row (`minmax(0, auto)`), and the block scrolls rather than overflowing.
- * **The three answers are pinned sticky to the block's own floor**, which is the part that is not an optimisation:
- * five built-app captures each left some part of the gate unreachable, and a decision the run is stopped on cannot
- * depend on grid arithmetic coming out right at one window size. Pinned to the block's own floor they are reachable
- * at every height, which is what REQ-SHELL-048 asks of every action and REQ-ORCH-153 of these three in particular. Nothing here applies when no gate holds, so REQ-CHAT-010's 180 px floor is untouched
- * for every other run.
+ * PD-ORCH-002 revision 2 (REQ-ORCH-153 / REQ-SHELL-048, narrowing REQ-CHAT-010): the gate expanded IS the reading
+ * area. Its row takes the free space and the transcript's row is zero, because the transcript is not drawn at all
+ * while the gate stands open — one action collapses the gate and gives the conversation back.
+ *
+ * Revision 1 split the same screen between the two, guaranteeing the transcript a floor of 220 px and capping the
+ * gate. It was falsified by the owner's capture on 2026-09-17 and is kept here rather than repaired quietly: at the
+ * window size the product is used at, the floor and the cap are two constraints on one axis and the gate was left
+ * less height than its own contents need — a Markdown preview clipped to a single line, the three answers overlapping
+ * the text above them, and four rows of transcript underneath. A floor that buys four rows is not conversation
+ * context; it is the cost of making the plan unreadable.
+ *
+ * What survives revision 1 unchanged, because it was never about arithmetic: **the three answers are pinned sticky
+ * to the block's own floor**. Five built-app captures each left some part of the gate unreachable, and a decision the
+ * run is stopped on cannot depend on grid arithmetic coming out right at one window size — REQ-SHELL-048 asks that of
+ * every action and REQ-ORCH-153 of these three in particular. Collapsed, the same three stand in the bar itself.
+ * Nothing here applies when no gate holds, so REQ-CHAT-010's 180 px floor is untouched for every other run.
+ *
+ * The composer's track is `min-content` while the gate is expanded rather than the height the divider was left at.
+ * It accepts nothing while a decision is pending, and the height it is not using is the plan's — measured at the
+ * first execution, where the saved divider height was holding 252 px of an 835 px window against a gate of 397.
+ * The composer keeps its OWN floor (`.composer` carries REQ-CHAT-010's 110 px), the persisted position is not
+ * written, and it governs again the moment the gate is collapsed or answered.
  */
-.workspace[data-plan-gate='1'] { grid-template-rows: auto minmax(0, auto) minmax(220px, 1fr) auto auto minmax(min-content, var(--rt-composer-height, 150px)); }
-.workspace--narrow[data-plan-gate='1'] { grid-template-rows: auto auto minmax(0, auto) minmax(220px, 1fr) auto auto minmax(min-content, var(--rt-composer-height, 150px)); }
+.workspace[data-plan-gate='1'] { grid-template-rows: auto minmax(0, 1fr) 0 auto auto min-content; }
+.workspace--narrow[data-plan-gate='1'] { grid-template-rows: auto auto minmax(0, 1fr) 0 auto auto min-content; }
+.workspace[data-plan-gate='1'] > .transcript { display: none; }
+/* Collapsed: the bar is one `auto` row and the transcript reads under REQ-CHAT-010's own floor, as it does with no gate. */
+.workspace[data-plan-gate='1'][data-plan-gate-collapsed='1'] { grid-template-rows: auto auto minmax(180px, 1fr) auto auto minmax(min-content, var(--rt-composer-height, 150px)); }
+.workspace--narrow[data-plan-gate='1'][data-plan-gate-collapsed='1'] { grid-template-rows: auto auto auto minmax(180px, 1fr) auto auto minmax(min-content, var(--rt-composer-height, 150px)); }
+.workspace[data-plan-gate='1'][data-plan-gate-collapsed='1'] > .transcript { display: flex; }
 .workspace > .queue { grid-area: queue; }
 .workspace > .composer__divider { grid-area: divider; }
 .agents { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); padding: var(--rt-space-3, 12px); border-right: 1px solid var(--rt-border); background: var(--rt-chrome); overflow: auto; }
@@ -705,10 +721,11 @@
  * gate placed in it stood at its natural height and the column clipped whatever did not fit — first the title,
  * then the three answers. Neither `position: sticky` nor a `vh` bound nor `max-height: 100%` nor `min-height: 0`
  * repairs that, because the question is not how the box shrinks but which box it belongs to. On its own `auto`
- * row the gate is whole, the transcript takes what is left, and no published row can scroll the decision away.
- * The row is `minmax(0, auto)`, so it costs no height when no gate holds AND can shrink below the gate's natural
- * height on a short window — where the shrink lands on the plan field (`flex: 1 1 0`, `min-height: 0`), the one
- * child that can absorb it, rather than on the three answers. Keeping every answer reachable without scrolling is
+ * row the gate is whole, and no published row can scroll the decision away.
+ * Under PD-ORCH-002 revision 2 that row takes the free space and the transcript's takes none, so the gate is as tall
+ * as the reading area and the plan field (`flex: 1 1 auto`, `min-height: 0`) is what grows into it — the majority of
+ * the surface at every window size, which is what the revision asks for. Collapsed, the same row is `auto` and holds
+ * a bar. Keeping every answer reachable without scrolling is
  * REQ-SHELL-048's obligation on every action. Sticky does nothing for a box taller than its scroll container, and the first two
  * built-app captures showed exactly that: the transcript tail-follows, the gate stood taller than the column, and
  * the title and then the three answers scrolled out of sight. A `vh` bound does not fix it either, because the
@@ -716,9 +733,12 @@
  * scrolling — REQ-SHELL-048's obligation on every action, and what REQ-SHELL-168 means by hosting the gate inside
  * the view that carries the run.
  */
-.plan-gate { display: flex; flex-direction: column; min-height: 0; max-height: 52vh; overflow: auto; gap: var(--rt-space-2); margin: 0 var(--rt-space-5) var(--rt-space-3); padding: var(--rt-space-3); background: var(--rt-surface); border: var(--rt-hairline-width) solid var(--rt-border); border-left: calc(var(--rt-hairline-width) * 3) solid var(--rt-accent); border-radius: var(--rt-radius-md); }
+.plan-gate { display: flex; flex-direction: column; min-height: 0; max-height: 100%; overflow: auto; gap: var(--rt-space-1); margin: var(--rt-space-3) var(--rt-space-5); padding: var(--rt-space-3); background: var(--rt-surface); border: var(--rt-hairline-width) solid var(--rt-border); border-left: calc(var(--rt-hairline-width) * 3) solid var(--rt-accent); border-radius: var(--rt-radius-md); }
+/* PD-ORCH-002 revision 2: collapsed, the gate is a bar — one row of facts and the three answers, nothing that scrolls. */
+.plan-gate--collapsed { gap: 0; overflow: visible; margin-bottom: 0; padding: var(--rt-space-2) var(--rt-space-3); }
 .plan-gate__header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--rt-space-2); }
-.plan-gate__header-left { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--rt-space-3); }
+.plan-gate__header-left { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rt-space-3); }
+.plan-gate__toggle { flex: none; }
 .plan-gate__view-toggle { display: flex; gap: var(--rt-space-1); }
 .plan-gate__title { margin: 0; font-size: var(--rt-text-md); font-weight: var(--rt-weight-medium); color: var(--rt-text); }
 .plan-gate__facts { display: flex; gap: var(--rt-space-3); margin: 0; font-size: var(--rt-text-xs); }
@@ -728,11 +748,14 @@
 .plan-gate__body { margin: 0; font-size: var(--rt-text-sm); color: var(--rt-text-secondary); }
 .plan-gate__prior { margin: 0; font-size: var(--rt-text-xs); color: var(--rt-accent-300); }
 .plan-gate > * { flex: 0 0 auto; }
-.plan-gate__preview-wrap { flex: 1 1 auto; min-height: 0; max-height: calc(var(--rt-space-24) * 3); overflow: auto; padding: var(--rt-space-2) var(--rt-space-3); background: var(--rt-surface-2); border: var(--rt-hairline-width) solid var(--rt-border); border-radius: var(--rt-radius-sm); }
+/* Revision 2: the plan's own text takes what is left after the heading, the controls and the three answers — no cap
+   of its own, since the cap is what left it a single clipped line on the window the product is used at. */
+.plan-gate__preview-wrap { flex: 1 1 auto; min-height: 0; overflow: auto; padding: var(--rt-space-2) var(--rt-space-3); background: var(--rt-surface-2); border: var(--rt-hairline-width) solid var(--rt-border); border-radius: var(--rt-radius-sm); }
 .plan-gate__markdown { font-size: var(--rt-text-sm); line-height: var(--rt-leading-body); }
 .plan-gate__markdown .md__table { width: 100%; margin: var(--rt-space-1) 0; }
-.plan-gate__plan { flex: 1 1 0; width: 100%; min-height: 0; max-height: calc(var(--rt-space-24) * 3); resize: vertical; white-space: pre; overflow-wrap: normal; overflow: auto; line-height: var(--rt-leading-body); }
-.plan-gate__todo { display: flex; flex-direction: column; gap: var(--rt-space-1); padding: var(--rt-space-2); background: color-mix(in oklch, var(--rt-surface-2) 60%, transparent); border-radius: var(--rt-radius-sm); }
+.plan-gate__plan { flex: 1 1 auto; width: 100%; min-height: 0; resize: none; white-space: pre; overflow-wrap: normal; overflow: auto; line-height: var(--rt-leading-body); }
+/* The implied todo state is bounded so a long one cannot take the height revision 2 gives the plan; it scrolls instead. */
+.plan-gate__todo { display: flex; flex-direction: column; gap: var(--rt-space-1); max-height: var(--rt-space-16); overflow: auto; padding: var(--rt-space-2); background: color-mix(in oklch, var(--rt-surface-2) 60%, transparent); border-radius: var(--rt-radius-sm); }
 .plan-gate__todo-label { font-size: var(--rt-text-xs); font-weight: var(--rt-weight-medium); color: var(--rt-text-secondary); }
 .plan-gate__todo-list { margin: 0; padding-left: var(--rt-space-4); font-size: var(--rt-text-xs); color: var(--rt-text); }
 .plan-gate__changes-details { margin-top: var(--rt-space-1); }
@@ -742,6 +765,8 @@
 .plan-gate__changes-label { font-size: var(--rt-text-xs); font-weight: var(--rt-weight-medium); color: var(--rt-text-secondary); }
 .plan-gate__changes { width: 100%; resize: vertical; }
 .plan-gate__actions { position: sticky; bottom: 0; justify-content: flex-end; padding-top: var(--rt-space-2); background: var(--rt-surface); border-top: var(--rt-hairline-width) solid var(--rt-divider); }
+/* In the collapsed bar the same three answers stand in the header row itself: nothing scrolls, so nothing is pinned. */
+.plan-gate__actions--bar { position: static; flex: none; margin: 0; padding-top: 0; background: none; border-top: 0; }
 
 /* De-emphasis of composer while plan gate holds (PD-ORCH-002) */
 .composer--locked { opacity: 0.65; filter: grayscale(20%); }

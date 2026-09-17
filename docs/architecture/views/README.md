@@ -45,6 +45,11 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-17**
 
+**The plan gate takes the reading area (PD-ORCH-002 revision 2).** `03-runtime-view.md` gains the two states
+the gate is drawn in and who owns the choice between them: expanded it takes the free space and no transcript
+is drawn beneath it, collapsed it is a bar above a transcript reading under REQ-CHAT-010's floor, and the three
+answers stand in both. `WorkspaceView` holds the state because the grid is what changes with it.
+
 **The run host stopped starting itself at import.** `apps/desktop/src/run-host/index.ts` held thirty-six
 module-scope bindings, which meant that IMPORTING the run host started one: the MCP host, the confinement
 service, the terminal manager and the code-intelligence launch all came up as a side effect of the module being

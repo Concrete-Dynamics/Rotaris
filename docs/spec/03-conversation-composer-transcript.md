@@ -38,6 +38,14 @@ The conversation surface belongs to the single desktop application, and is backe
   > always-expanded selector; the autonomous warning dialog above governs unchanged. The persona
   > and model chips are outside the directive and this requirement governs them in full.
 - **REQ-CHAT-010** — Composer geometry defaults MUST be: composer block default height 150 px, minimum 110 px; transcript area minimum 180 px; composer widget minimum height 48 px. The divider between transcript and composer MUST be user-draggable and its position persisted across launches.
+
+  > **Narrowed by [`PD-ORCH-002`](../product/directives.md#pd-orch-002) revision 2, 2026-09-17.** In exactly
+  > one case — a plan gate held and expanded in this view — no transcript area is drawn at all, so this
+  > requirement's 180 px minimum has nothing to apply to, and the composer stands at its own minimum rather
+  > than at the height the divider was left at. The composer's own 110 px minimum governs unchanged, the
+  > persisted divider position is not written, and collapsing the gate is one action and restores both the
+  > transcript and that position under this requirement in full. Every other geometry figure above governs
+  > unchanged, gate or no gate.
 - **REQ-CHAT-011** — Given no active run, when the user submits non-empty text, the frontend MUST validate that a run can start; on success it MUST set the session status to starting, append a transcript row of kind `user` (displayed role `you`, timestamp formatted `HH:MM:SS` 24-hour), and record the text in prompt history. Validation also covers the attachments carried by the composer: a submission whose attachments fail REQ-CHAT-170 or whose selected model does not announce image input (REQ-CHAT-171) is refused before the run starts, with the composer contents and the remaining attachments preserved.
 - **REQ-CHAT-012** — When starting a run fails for any reason (including "a run is already active" and workspace-isolation refusals), the typed text MUST be restored into the composer unchanged and an error notice raised with the failure reason (e.g. "A run is already active."). The user's text is never lost by a failed submission.
 - **REQ-CHAT-013** — In demo mode (no run backend attached), a submission MUST append the user row plus a system row reading "Demo mode: run bridge is disabled." and start nothing.

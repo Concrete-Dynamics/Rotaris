@@ -1,16 +1,14 @@
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
-import { createStore } from 'zustand/vanilla';
-import { BRIDGE_KEY, isBusy, isViewId, LIBRARY_TABS, presentationStatus, resolveTheme, STATUS_LABELS, THEMES, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type ImageAttachmentInput, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ApprovalOption, type ApprovalPayload, type ConfigSnapshot, type ConfinementVerdict, type InitializationStateView, type DisplayView, type PausePayload, type PauseResolution, type PlanDecision, type HookAgentId, type HooksSummary, type ImprovementArtifactRecord, type ImprovementRollbackPreview, type ImprovementRollbackResult, type ProposalStatus, type McpHealth, type McpListing, type McpSecretsView, type PermissionPreset, type PlaybookCatalogue, type ProviderDialogPayload, type ProviderRow, type ProviderSignInResult, type RendererBridge, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload, type QuestionAnswers } from '@rotaris/contracts';
-import { createAcknowledgementStore, createNoticeStore, createReplicaStore, type AcknowledgementStore, type NoticeStore, type ReplicaStore } from '@rotaris/ui-core';
-// Part AL2 — the terminal in this window (ADR-0021's subscription point, ADR-0047's window; REQ-SHELL-079..111): the
-// preview registry every transcript surface reads, the host that carries it, and the terminal window's own registry.
-import { TERMINAL_REFUSALS, TERMINAL_WINDOW_ROLE, type TerminalFrame, type TerminalRefusal, type TerminalWindowPayload } from '@rotaris/contracts';
-import { createTerminalWindowStreams, headlessEmulator, TerminalHostProvider, TerminalStreamSet, TerminalWindow, terminalWindowTitle, type TerminalActionResult, type TerminalActions, type TerminalHost } from '@rotaris/ui';
-import { Acknowledgements, type AboutInfo, applyChange, applyTheme, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, rebasePending, ApprovalDialog, HookReviewDialog, isDirty, liveStateOf, motionReduced, PauseDialog, pendingFrom, ProviderDialog, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, PersonaWindow, runLevelAgent, type PersonaEntry, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, readTranscriptCounts, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, type SlashHost, RequirementsBoard } from '@rotaris/ui';
+import { isBusy, isViewId, LIBRARY_TABS, presentationStatus, STATUS_LABELS, THEMES, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ConfigSnapshot, type ConfinementVerdict, type InitializationStateView, type HookAgentId, type HooksSummary, type ImprovementArtifactRecord, type ImprovementRollbackPreview, type ImprovementRollbackResult, type ProposalStatus, type McpHealth, type McpListing, type McpSecretsView, type PlaybookCatalogue, type ProviderRow, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload } from '@rotaris/contracts';
+// Part AL2 — the terminal in this window (REQ-SHELL-079..111): the role the terminal window is opened under, and the
+// provider that carries this window's preview registry down to every transcript surface (ADR-0047).
+import { TERMINAL_WINDOW_ROLE } from '@rotaris/contracts';
+import { TerminalHostProvider } from '@rotaris/ui';
+import { Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, rebasePending, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, runLevelAgent, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, type SlashHost, RequirementsBoard } from '@rotaris/ui';
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls, and the shape it answers.
-import { bindPromptRootsReader, ToggleSwitch } from '@rotaris/ui';
+import { bindPromptRootsReader } from '@rotaris/ui';
 import type { PromptsRootsResult } from '@rotaris/contracts';
 // ADR-0063 — portable skills: the catalog reader, the Settings tab's props and the composer's commands.
 import { bindSkillsReader } from '@rotaris/ui';
@@ -21,198 +19,23 @@ import './design.css';
 import '@phosphor-icons/web/regular';
 import '@phosphor-icons/web/fill';
 
+// The window itself: the bridge, the replica and the two stacks, the terminal registry, the display preferences and
+// the theme — everything this window has before a surface mounts (`shell.ts`).
+import { acknowledge, acknowledgements, answerQuestions, bridge, cancelAgent, cancelQuestions, continueSession, control, displayPrefs, notices, openLink, pendingDisplay, planDecision, planEdit, readDisplayPrefs, refreshStats, replica, setMode, setRunStartMode, stopRun, submitPrompt, terminalHost, windowTheme, writeDisplayPref } from './shell.js';
+// What a transcript surface reads about the session it is following, shared with the persona window (`session-view.ts`).
+import { entryOf, openPersona, personasOf, useConfigSnapshot, useElapsedTick } from './session-view.js';
+// The other windows this same bundle is the root of, each one a role on the route (`windows.tsx`, ADR-0056).
+import { bootApproval, bootHookReview, bootPause, bootPersona, bootProvider, bootTerminal } from './windows.js';
 /**
- * The renderer composition root. One bundle for every window; the window's
- * role arrives by route (ADR-0056). Sandboxed: no Node, no filesystem, no
- * store handle — everything it knows arrives over the five channels through
- * the one frozen namespace the preload exposes (ADR-0044).
+ * THE RENDERER'S ROOT. One bundle for every window; the window's role arrives by route (ADR-0056), and `boot` at the
+ * bottom is the only place that reads it. Sandboxed: no Node, no filesystem, no store handle — everything this bundle
+ * knows arrives over the five channels through the one frozen namespace the preload exposes (ADR-0044).
  *
- * The replica (ADR-0043) has exactly two writers, wired here to channels 1
- * and 2; a gap or a decline asks main for a whole read through channel 5,
- * and the answer arrives as ordinary traffic on channels 1 and 2. The one
- * current notice arrives on channel 4 (ADR-0049).
+ * What the window HAS is `shell.ts` — the bridge, the replica, the two stacks, the terminal registry, the display
+ * preferences, the theme and the gestures against the followed session. What the other windows ARE is `windows.tsx`.
+ * What is left here is the MAIN window: its six views, the state they share, the notice dispatcher, and `boot`.
  */
-function requireBridge(): RendererBridge {
-  const b = (window as unknown as Record<string, RendererBridge | undefined>)[BRIDGE_KEY];
-  if (!b) throw new Error('the preload bridge is absent — the renderer was loaded without its preload');
-  return b;
-}
-const bridge = requireBridge();
-let runningTheme = resolveTheme(undefined);
-const themeSubscribers = new Set<(theme: Theme) => void>();
-bridge.onThemeChanged((payload) => {
-  const name = (payload as { name?: string }).name;
-  runningTheme = resolveTheme(name);
-  applyTheme(runningTheme, document.documentElement);
-  for (const subscriber of themeSubscribers) subscriber(runningTheme);
-});
 
-const replica: ReplicaStore = createReplicaStore({
-  requestReconcile: (sessionId) => { void bridge.command({ kind: 'session.reconcile', sessionId }); },
-  onDiagnostic: (m) => console.warn(`[replica] ${m}`),
-});
-const notices: NoticeStore = createNoticeStore();
-/** REQ-NOTIFY-013 / REQ-SHELL-112: this window's ONE transient stack; main pushes to it over channel 8. */
-const acknowledgements: AcknowledgementStore = createAcknowledgementStore();
-/**
- * Part R (REQ-MONITOR-038's 250 ms budget, REQ-SHELL-076): the last whole-session update's apply-to-paint time and the
- * agent count it carried, read by the Mission view's data attributes and by main's persona-window paint measurement
- * (`__rotarisPersonaPainted`, wall-clock so main can subtract its own show instant). Verification instruments; no surface
- * behaves differently because of them.
- */
-const refreshStats = createStore<{ ms: number; agents: number; seq: number } | null>(() => null);
-bridge.onSessionSnapshot((p) => {
-  const t0 = performance.now();
-  const outcome = replica.getState().applySnapshot(p);
-  if (outcome !== 'reset') return;
-  const agents = replica.getState().session?.agents.length ?? 0;
-  const seq = (p as { seq?: number }).seq ?? 0;
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    refreshStats.setState({ ms: performance.now() - t0, agents, seq });
-    (window as unknown as { __rotarisPersonaPainted?: unknown }).__rotarisPersonaPainted = { at: Date.now(), seq, agents };
-  }));
-});
-/**
- * Part Z, verification instruments (no surface behaves differently because they exist):
- *
- *  - the apply-to-paint sample of every transcript increment, taken at the point REQ-CHAT-055 fixes — after the
- *    frame showing the update has been painted, never a synchronous figure. A double `requestAnimationFrame` is
- *    the same proxy ADR-0045's spike used and the same one the whole-session path above already uses, and it is a
- *    PROXY: it says a frame boundary passed after the change was committed, not that a frame containing the change
- *    was presented. ADR-0045 measured that the platform's own paint event cannot be used for this (with no damage
- *    it delivers about one frame every five seconds), and did not establish that the two agree where both resolve.
- *  - the replica's counters, both sets: ADR-0043's seven publication classes and ADR-0046 step 3's six row ops.
- *  - ADR-0045's structural counts, read from the ONE definition in `@rotaris/ui` rather than restated here.
- */
-const applySamples: { seq: number; rows: number; ms: number }[] = [];
-bridge.onTranscriptIncrement((p) => {
-  const t0 = performance.now();
-  const outcome = replica.getState().applyIncrement(p);
-  const seq = (p as { seq?: number }).seq ?? 0;
-  const rows = ((p as { rows?: unknown[] }).rows ?? []).length;
-  if (outcome !== 'applied') return;
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    applySamples.push({ seq, rows, ms: performance.now() - t0 });
-    if (applySamples.length > 400) applySamples.shift();
-  }));
-});
-Object.assign(window as unknown as Record<string, unknown>, {
-  __rotarisCounts: () => readTranscriptCounts(),
-  __rotarisReplica: () => { const s = replica.getState(); return { counters: s.counters, rowOps: s.rowOps, rows: s.rows.length, reachedOldest: s.reachedOldest, oldestIndex: s.rows[0]?.index ?? null }; },
-  __rotarisApplies: () => applySamples.slice(),
-  __rotarisResetApplies: () => { applySamples.length = 0; return true; },
-  __rotarisRow: (index: number) => replica.getState().rows.find((r) => r.index === index) ?? null,
-});
-bridge.onNotice((p) => notices.getState().apply(p));
-bridge.onAcknowledgement((p) => acknowledgements.getState().apply(p));
-/**
- * Part AL2 — the terminal in THIS window (REQ-SHELL-079..111; ADR-0021 first executed through a window, ADR-0047's
- * surfaces mounted over the real frames).
- *
- * Every renderer that draws transcript rows — the main window and each persona window — holds ONE `TerminalStreamSet`
- * over the headless emulator: the subscription point the row previews read (REQ-SHELL-079, REQ-CHAT-063/066/076) and
- * the persona card's parity with the main window's preview (REQ-SHELL-075 b, REQ-SHELL-102: the same frames, the same
- * parser, from the same point). Frames arrive on channel 3 for the sessions this window subscribed to; a frame of a
- * session the replica no longer follows is not applied (REQ-SHELL-105: attaching to another session supersedes the
- * earlier attachment). The terminal window is a different renderer (`bootTerminal`) with its own registry whose
- * emulators paint, and it does not run this one.
- *
- * REQ-SHELL-110/111 in the main window: a change of the followed session — to another, to none, to a new one — clears
- * every screen and the counts here, and is REPORTED to main (`window.terminalSession`), which closes the terminal
- * window and reopens it for the new session without focus only when it had been open on a session before (the reading
- * is on `TerminalWindows.onSessionChange`). The re-attach ("streams re-attach to the newly focused session") is the
- * resync: after the new session's first whole-session update — which the subscribe's attach delivers, so channel 3
- * reaches this window by then — `terminal.streams` asks the run host for one `screen` frame per retained stream
- * (REQ-SHELL-104). A persona window resyncs again each time it is shown, because it unsubscribes while hidden.
- */
-const windowRole = new URLSearchParams(window.location.search).get('role') ?? 'main';
-const terminalStreams = new TerminalStreamSet(headlessEmulator);
-let terminalFollowed: string | null = replica.getState().sessionId;
-let terminalResynced: string | null = null;
-if (windowRole !== TERMINAL_WINDOW_ROLE) {
-  bridge.onTerminalFrame((p) => {
-    const frame = p as TerminalFrame;
-    if (frame.sessionId !== replica.getState().sessionId) return;
-    terminalStreams.apply(frame);
-  });
-  replica.subscribe(() => {
-    const sessionId = replica.getState().sessionId;
-    if (sessionId === terminalFollowed) return;
-    terminalFollowed = sessionId;
-    terminalResynced = null;
-    terminalStreams.clear();
-    if (windowRole === 'main') void bridge.command({ kind: 'window.terminalSession', sessionId });
-  });
-  bridge.onSessionSnapshot((p) => {
-    const sessionId = (p as { sessionId?: string }).sessionId;
-    if (!sessionId || sessionId !== replica.getState().sessionId || terminalResynced === sessionId) return;
-    terminalResynced = sessionId;
-    void bridge.command({ kind: 'terminal.streams', sessionId });
-  });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) terminalResynced = null; });
-}
-/** What the surfaces read: the registry, and the way to the pop-out (REQ-SHELL-080; a raise is a request, REQ-SHELL-161). */
-const terminalHost: TerminalHost = {
-  streams: terminalStreams,
-  open: (streamId) => { void bridge.command({ kind: 'window.openTerminal', ...(streamId === undefined ? {} : { streamId }) }); },
-};
-/** REQ-SHELL-083's "Go to Workspace" from the terminal window: main asks this window to switch the view, then surfaces it. */
-(window as unknown as { __rotarisShowWorkspace?: () => boolean }).__rotarisShowWorkspace = () => { useShellState.getState().switchView('workspace'); return true; };
-/**
- * Part AA — REQ-CHAT-075/076. Every transcript surface in this window acknowledges what it did: a copy that
- * worked and one the platform refused, an open that worked and one that failed. Both go to THIS window's stack
- * (ADR-0049's fourth decision), so a persona window's acknowledgements are its own.
- */
-const acknowledge = (kind: 'ok' | 'fail' | 'info' | 'warn', title: string, body?: string): void => {
-  acknowledgements.getState().publish({ kind, title, ...(body === undefined ? {} : { body }) });
-};
-/**
- * REQ-CHAT-076: an `http(s)` link opens in the SYSTEM BROWSER through the one command; the renderer never
- * navigates (ADR-0051). "Opening MUST be acknowledged and a failure to open MUST be reported rather than
- * passing silently" is why every outcome ends in the stack and none is dropped.
- */
-const openLink = (href: string): void => {
-  void bridge.command({ kind: 'shell.openExternal', url: href }).then((r) => {
-    if (r.ok) acknowledge('ok', 'Opened in your browser', href);
-    else acknowledge('fail', r.headline, r.detail ?? href);
-  });
-};
-/**
- * REQ-CHAT-167 (`display/showReasoning`) and REQ-CHAT-067 (`display/autoCollapseTools` and `display/groupTools`) —
- * global to the transcript, taking effect immediately on the rows already on screen. Module-scoped because every
- * transcript surface in the window reads the same values, the persona window included.
- *
- * Part AG moved `display/groupTools` in here from App's own state: REQ-CONFIG-403 gives the Display settings
- * category a control over it, and a preference two components can set is a preference that must have one home.
- * The first two default **off**, `groupTools` defaults **on** (REQ-CHAT-067), so an unset preference reads as on.
- */
-const displayPrefs = createStore<{ showReasoning: boolean; autoCollapseTools: boolean; groupTools: boolean }>(() => ({ showReasoning: false, autoCollapseTools: false, groupTools: true }));
-async function readDisplayPrefs(): Promise<void> {
-  const [reasoning, collapse, group] = await Promise.all([
-    bridge.command({ kind: 'prefs.get', key: 'display/showReasoning' }),
-    bridge.command({ kind: 'prefs.get', key: 'display/autoCollapseTools' }),
-    bridge.command({ kind: 'prefs.get', key: 'display/groupTools' }),
-  ]);
-  displayPrefs.setState({
-    showReasoning: reasoning.ok && (reasoning.value as { value?: boolean }).value === true,
-    autoCollapseTools: collapse.ok && (collapse.value as { value?: boolean }).value === true,
-    groupTools: group.ok ? (group.value as { value?: boolean }).value !== false : true,
-  });
-}
-/**
- * REQ-CONFIG-472 (Part AG): the Display category's four tool-row fields are workspace configuration committed by
- * Save, and they nevertheless take effect on the rows already on screen the moment a control moves. The settings
- * screen publishes its pending values here and the transcript prefers them over the saved snapshot, so Save
- * settles what the file says and never what is currently drawn. Null whenever no settings screen is mounted.
- */
-const pendingDisplay = createStore<{ caps: DisplayView | null }>(() => ({ caps: null }));
-/** REQ-CONFIG-403: written the moment the control moves, and the transcript re-renders from the same store. */
-async function writeDisplayPref(key: 'display/autoCollapseTools' | 'display/groupTools', value: boolean): Promise<{ ok: true } | { ok: false; reason: string }> {
-  const r = await bridge.command({ kind: 'prefs.set', key, value });
-  if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
-  displayPrefs.setState(key === 'display/groupTools' ? { groupTools: value } : { autoCollapseTools: value });
-  return { ok: true };
-}
 /**
  * REQ-NOTIFY-044's `focus-session`: opening a session is the App component's own callback (it owns the replica and the
  * browser state), so the root registers it here for the dispatcher, which is module-scoped because a notice may arrive
@@ -227,182 +50,6 @@ let openWorkspace = '(no workspace)';
 /** REQ-GIT-082's comparison, the idiom this renderer already uses for "does this still name the open workspace". */
 const sameWorkspace = (a: string, b: string): boolean =>
   a.replace(/\\/g, '/').toLowerCase() === b.replace(/\\/g, '/').toLowerCase();
-
-/**
- * REQ-CHAT-011: no session → start one; a loaded session with no run → record the prompt.
- * REQ-SHELL-125: the launch dialog's accepted choices, held in shell state, ride on the NEXT start and are consumed
- * by it — a refused start keeps them for the retry the composer offers.
- */
-async function submitPrompt(text: string, attachments: readonly ImageAttachmentInput[]): Promise<{ ok: true } | { ok: false; reason: string }> {
-  const s = replica.getState();
-  if (!s.sessionId) {
-    const options = useShellState.getState().launchOptions;
-    const r = await bridge.command({ kind: 'session.start', prompt: text, ...(attachments.length === 0 ? {} : { attachments: [...attachments] }), ...(options?.isolation ? { isolation: options.isolation } : {}), ...(options?.attach ? { attach: { path: options.attach.path } } : {}), ...(options ? { sandboxMode: options.sandboxMode } : {}) });
-    if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
-    useShellState.getState().takeLaunchOptions();
-    const { sessionId } = r.value as { sessionId: string };
-    replica.getState().follow(sessionId);
-    // Every attach begins with a whole-session update (REQ-MONITOR-214); the transcript follows it.
-    const sub = await bridge.command({ kind: 'session.subscribe', sessionId });
-    if (!sub.ok) return { ok: false, reason: sub.detail ?? sub.headline };
-    return { ok: true };
-  }
-  const r = await bridge.command({ kind: 'session.prompt', sessionId: s.sessionId, prompt: text, ...(attachments.length === 0 ? {} : { attachments: [...attachments] }) });
-  return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline };
-}
-
-/** REQ-SESSION-186 / ADR-0013: the shell resolves focus to a session id, then sends the control. */
-async function stopRun(force: boolean): Promise<{ ok: true } | { ok: false; reason: string }> {
-  const sessionId = replica.getState().sessionId;
-  if (!sessionId) return { ok: false, reason: 'No run is active.' };
-  const r = await bridge.command({ kind: 'session.control', request: { op: 'cancel', sessionId, args: { force } } });
-  if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
-  const result = r.value as { ok: boolean };
-  return result.ok ? { ok: true } : { ok: false, reason: 'The run is no longer cancellable.' };
-}
-
-/** REQ-TOOLS-077 / REQ-MONITOR-150: the mode change goes to the focused session; the run decides what actually happened. */
-async function setMode(mode: PermissionPreset): Promise<{ ok: true } | { ok: false; reason: string }> {
-  // REQ-CONFIG-288 / ADR-0037 ESC-1: the composer's control writes ITS key through the scoped per-field path, nothing else; refused loudly when the file cannot be read (REQ-CONFIG-442).
-  const written = await bridge.command({ kind: 'config.setField', patch: { runtime: { permission_mode: mode } } });
-  if (!written.ok) return { ok: false, reason: written.detail ?? written.headline };
-  const sessionId = replica.getState().sessionId;
-  if (!sessionId) return { ok: true };
-  const r = await bridge.command({ kind: 'session.control', request: { op: 'setPermissionMode', sessionId, args: { mode } } });
-  if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
-  return (r.value as { ok: boolean }).ok ? { ok: true } : { ok: false, reason: 'The run did not accept the mode change.' };
-}
-
-/** REQ-MONITOR-009: cancel one child; the shell resolves the session, the run decides. */
-async function cancelAgent(agentId: string): Promise<{ ok: true } | { ok: false; reason: string }> {
-  const sessionId = replica.getState().sessionId;
-  if (!sessionId) return { ok: false, reason: 'No run is active.' };
-  const r = await bridge.command({ kind: 'session.control', request: { op: 'cancelAgent', sessionId, args: { agentId } } });
-  if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
-  return (r.value as { ok: boolean }).ok ? { ok: true } : { ok: false, reason: 'That agent is not cancellable (unknown, or already finished).' };
-}
-
-/** ADR-0010 channel 1: one control against the focused session, `false` named as a refusal (REQ-MONITOR-006). */
-async function control(op: Parameters<typeof bridge.command>[0] extends infer R ? R extends { kind: 'session.control'; request: { op: infer O } } ? O : never : never, args: Record<string, string | number | boolean | null>, refusal: string): Promise<{ ok: true; value?: string } | { ok: false; reason: string }> {
-  const sessionId = replica.getState().sessionId;
-  if (!sessionId) return { ok: false, reason: 'No run is active.' };
-  const r = await bridge.command({ kind: 'session.control', request: { op, sessionId, args } });
-  if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
-  // A refusal carries the ENGINE's words; the caller's sentence is only the fallback for a reply that states none.
-  // `ControlResult` has carried `refusal` since Part AC and this helper discarded it, substituting the caller's string.
-  // Harmless while the ops it names were unimplemented, and a lie the moment Part AO armed them: a `/compress` the
-  // engine refused because no agent context was live reported that the host "does not support forceCompression yet".
-  // Part AO saw this and raised it as a ruling request rather than widen a file it did not own (the note beside
-  // `ControlRefusalSchema` in `contracts/src/control.ts`); the ruling, at merge 2, is to prefer the engine's message.
-  const v = r.value as { ok: boolean; value?: string; refusal?: { code?: string; message?: string } };
-  return v.ok ? { ok: true, ...(v.value === undefined ? {} : { value: v.value }) } : { ok: false, reason: v.refusal?.message ?? refusal };
-}
-
-/**
- * Part AC — REQ-CHAT-101/102: every step's answer in ONE control request. The answers map REQ-CHAT-095 fixes is a
- * record of records and `ControlRequestSchema`'s value space is not (REQ-MONITOR-013 limits arguments to text,
- * numbers, booleans and simple collections of those), so it crosses as two flat maps keyed by step id and is
- * recombined in `Sessions.control`. `delivered` is false unless a waiting call actually took the answers — which is
- * exactly what REQ-CHAT-102 turns into "the modal stays open", so it is never softened into an optimistic true.
- */
-async function answerQuestions(requestId: string, answers: QuestionAnswers): Promise<{ delivered: boolean }> {
-  const sessionId = replica.getState().sessionId;
-  if (!sessionId) return { delivered: false };
-  const selected: Record<string, string | null> = {};
-  const freeform: Record<string, string | null> = {};
-  for (const [id, a] of Object.entries(answers)) { selected[id] = a.selected_option; freeform[id] = a.freeform_text; }
-  const r = await bridge.command({ kind: 'session.control', request: { op: 'answerQuestion', sessionId, args: { requestId, selected, freeform } } });
-  return { delivered: r.ok && (r.value as { ok: boolean }).ok };
-}
-
-/** REQ-CHAT-101: cancellation, forwarded to the waiting tool call, which the stepper emits exactly once. */
-function cancelQuestions(requestId: string): void {
-  const sessionId = replica.getState().sessionId;
-  if (!sessionId) return;
-  void bridge.command({ kind: 'session.control', request: { op: 'cancelQuestions', sessionId, args: { requestId } } });
-}
-
-/** REQ-SESSION-110 / REQ-MONITOR-125: continue the focused session, or resolve its pause. */
-async function continueSession(action: PauseResolution = 'continue'): Promise<{ ok: true } | { ok: false; reason: string }> {
-  const sessionId = replica.getState().sessionId;
-  if (!sessionId) return { ok: false, reason: 'No session is loaded.' };
-  const r = await bridge.command({ kind: 'session.continue', sessionId, action });
-  return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline };
-}
-
-/**
- * REQ-ORCH-154: the user's text over the plan awaiting a decision. It approves nothing — main forwards it to the
- * run host, which records it against the pending cycle and leaves the gate exactly where it was.
- */
-async function planEdit(text: string): Promise<{ ok: true } | { ok: false; reason: string }> {
-  const sessionId = replica.getState().sessionId;
-  if (!sessionId) return { ok: false, reason: 'No session is loaded.' };
-  const r = await bridge.command({ kind: 'session.planEdit', sessionId, text });
-  return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline };
-}
-
-/** REQ-ORCH-153: one of exactly three answers, with the changes `revise` hands to the next cycle. */
-async function planDecision(decision: PlanDecision, changes: string): Promise<{ ok: true } | { ok: false; reason: string }> {
-  const sessionId = replica.getState().sessionId;
-  if (!sessionId) return { ok: false, reason: 'No session is loaded.' };
-  const r = await bridge.command({ kind: 'session.planDecision', sessionId, decision, changes });
-  return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline };
-}
-
-/**
- * REQ-ORCH-152 / REQ-CONFIG-476 / ADR-0037 ESC-1: the run-start mode written through the scoped per-field path,
- * the same one the permission-mode chip uses. The composer's control and the start dialog's both come here, so
- * there is one key and no surface holds a mode of its own.
- */
-async function setRunStartMode(mode: 'auto' | 'plan'): Promise<{ ok: true } | { ok: false; reason: string }> {
-  const written = await bridge.command({ kind: 'config.setField', patch: { runtime: { run_start_mode: mode } } });
-  return written.ok ? { ok: true } : { ok: false, reason: written.detail ?? written.headline };
-}
-
-/** ADR-0037: the configuration snapshot as the screen reads it — once on mount, again on every `config:changed`. */
-function useConfigSnapshot(workspace: string): ConfigSnapshot | null {
-  const [snapshot, setSnapshot] = useState<ConfigSnapshot | null>(null);
-  const hasWorkspace = workspace !== '(no workspace)';
-  useEffect(() => {
-    if (!hasWorkspace) return;
-    queueMicrotask(() => { void bridge.command({ kind: 'config.read' }).then((r) => { if (r.ok) setSnapshot(r.value as ConfigSnapshot); }); });
-    return bridge.onConfigChanged((p) => setSnapshot((p as { snapshot: ConfigSnapshot }).snapshot));
-  }, [hasWorkspace]);
-  return snapshot;
-}
-/** REQ-MONITOR-050: one tab per configured persona, from the snapshot's roles (their declared tools stand in for an agent with no grant). */
-function personasOf(snapshot: ConfigSnapshot | null): PersonaEntry[] {
-  return (snapshot?.roles ?? []).map((r) => ({ role: r.role, tools: r.tools, thinking: r.rawThinking, effectiveModel: r.effectiveModel }));
-}
-/**
- * The entry role as the run-level agent presents it (REQ-MONITOR-057/058): the persona the transcript's first agent row
- * names when no child carries that name, else `orchestrator`; its model and reasoning from the snapshot's role view.
- */
-function entryOf(snapshot: ConfigSnapshot | null, rows: readonly TranscriptRow[], agents: readonly AgentRecord[]): { persona: string; model: string; reasoning: string; tools: readonly string[] } {
-  const childNames = new Set(agents.map((a) => a.name));
-  const first = rows.find((r) => r.kind === 'agent' && r.persona !== undefined && r.name !== undefined && !childNames.has(r.name));
-  const persona = first?.persona ?? 'orchestrator';
-  const role = snapshot?.roles.find((r) => r.role === persona);
-  return { persona, model: role?.effectiveModel ?? '', reasoning: role?.rawThinking ?? 'medium', tools: role?.tools ?? [] };
-}
-/** REQ-SHELL-072/073: open or raise the persona window for an agent; the run-level agent's persona is the entry role's. */
-async function openPersona(agent: AgentRecord, focusSteer: boolean): Promise<void> {
-  await bridge.command({ kind: 'window.openPersona', persona: agent.persona, agentId: agent.id, focusSteer });
-}
-/** REQ-MONITOR-107/110: the once-a-second tick of a VISIBLE surface, running only while the followed run is busy; nothing ticks when unmounted. */
-function useElapsedTick(session: { executionStatus: string; updatedAt: string } | null): string | null {
-  const busy = session !== null && isBusy(session.executionStatus);
-  const [nowIso, setNowIso] = useState(() => new Date().toISOString());
-  // The instant is re-read when the run becomes busy — derived during render, not in an effect (React's own rule).
-  const [seenBusy, setSeenBusy] = useState(busy);
-  if (seenBusy !== busy) { setSeenBusy(busy); if (busy) setNowIso(new Date().toISOString()); }
-  useEffect(() => {
-    if (!busy) return;
-    const t = setInterval(() => setNowIso(new Date().toISOString()), 1000);
-    return () => clearInterval(t);
-  }, [busy]);
-  return busy ? nowIso : session?.updatedAt ?? null;
-}
 
 /**
  * Part X — the workspace's saved prompts (REQ-LIBRARY-137/138/139), held ABOVE the views. That placement is
@@ -590,14 +237,7 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
   const skillsRevision = useShellState((s) => s.skillsRevision);
   const slashHost = useMemo<SlashHost>(() => ({
     themes: THEMES.map((t) => t.name),
-    setTheme: async (name) => {
-      const r = await bridge.command({ kind: 'theme.set', name: name as ThemeName });
-      if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
-      runningTheme = resolveTheme(name);
-      applyTheme(runningTheme, document.documentElement);
-      for (const subscriber of themeSubscribers) subscriber(runningTheme);
-      return { ok: true };
-    },
+    setTheme: (name) => windowTheme.change(name as ThemeName),
     providers: providerRows.map((row) => row.id),
     logout: async (id) => {
       const r = await bridge.command({ kind: 'providers.signOut', id });
@@ -1393,7 +1033,7 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
     useShellState.getState().switchView('workspace');
     requestAnimationFrame(() => requestAnimationFrame(() => { const input = document.querySelector<HTMLTextAreaElement>('.composer__input'); if (input) { input.value = ''; input.focus(); } }));
   }, []);
-  useEffect(() => { themeSubscribers.add(setTheme); return () => { themeSubscribers.delete(setTheme); }; }, []);
+  useEffect(() => windowTheme.subscribe(setTheme), []);
   // REQ-MONITOR-144: the run header's model selector offers the configured models.
   useEffect(() => {
     if (workspace === '(no workspace)') return;
@@ -1409,15 +1049,7 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
     presentedPause.current = key;
     void bridge.command({ kind: 'pause.present', payload: { sessionId: session.id, count: session.pausedAtCount ?? session.iterationsCompleted, limit: session.messageLimit, tokens: session.tokenUsage } });
   }, [session]);
-  const changeTheme = useCallback(async (name: ThemeName) => {
-    const r = await bridge.command({ kind: 'theme.set', name });
-    if (!r.ok) return { ok: false as const, reason: r.detail ?? r.headline };
-    const next = resolveTheme(name);
-    runningTheme = next;
-    applyTheme(next, document.documentElement);
-    setTheme(next);
-    return { ok: true as const };
-  }, []);
+  const changeTheme = useCallback((name: ThemeName) => windowTheme.change(name), []);
   const changeMotion = useCallback(async (value: boolean) => {
     const r = await bridge.command({ kind: 'prefs.set', key: 'ui/reduced_motion', value });
     if (!r.ok) return { ok: false as const, reason: r.detail ?? r.headline };
@@ -1597,35 +1229,6 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
   </>);
 }
 
-/** The approval window: the same bundle, role by route (ADR-0056); it asks main for its request, answers through the control. */
-async function bootApproval(): Promise<void> {
-  const r = await bridge.command({ kind: 'approval.payload' });
-  const root = createRoot(document.getElementById('root')!);
-  if (!r.ok) { root.render(<div className="approval"><p role="alert">{r.headline}</p></div>); return; }
-  const { payload, othersWaiting } = r.value as { payload: ApprovalPayload; othersWaiting: number };
-  document.title = 'Permission required';
-  const onAnswer = async (option: ApprovalOption): Promise<{ delivered: boolean }> => {
-    const c = await bridge.command({ kind: 'session.control', request: { op: 'answerApproval', sessionId: payload.session_id, args: { requestId: payload.request_id, option } } });
-    return { delivered: c.ok && (c.value as { ok: boolean }).ok };
-  };
-  root.render(<StrictMode><ApprovalDialog payload={payload} othersWaiting={othersWaiting} onAnswer={onAnswer} /></StrictMode>);
-}
-
-
-/** REQ-PROVIDER-116/117: the provider authentication window; it signs in through the command and closes itself. */
-async function bootProvider(): Promise<void> {
-  const r = await bridge.command({ kind: 'provider.payload' });
-  const root = createRoot(document.getElementById('root')!);
-  if (!r.ok) { root.render(<div className="approval"><p role="alert">{r.headline}</p></div>); return; }
-  const payload = r.value as ProviderDialogPayload;
-  const onSubmit = async (req: { providerId: string; label: string; baseUrl: string; apiKey: string; replace: boolean; allowEmpty: boolean }): Promise<ProviderSignInResult | { outcome: 'error'; message: string }> => {
-    const c = await bridge.command({ kind: 'provider.signIn', providerId: req.providerId, label: req.label, baseUrl: req.baseUrl, apiKey: req.apiKey, replace: req.replace, allowEmpty: req.allowEmpty });
-    if (!c.ok) return { outcome: 'error', message: c.detail ?? c.headline };
-    return c.value as ProviderSignInResult;
-  };
-  root.render(<StrictMode><ProviderDialog payload={payload} onSubmit={onSubmit} onClose={() => window.close()} /></StrictMode>);
-}
-
 /** REQ-CONFIG-329 / REQ-PROVIDER-140/141: the provider list and its actions, answered by main. */
 /** ADR-0034 (Part S): the MCP category's data and actions — every read answered by the run host through main; probes one server at a time (REQ-MCP-092). */
 function useMcp(): McpSettingsProps {
@@ -1724,192 +1327,6 @@ function useProviders(): ProvidersCardProps {
   };
 }
 
-/** REQ-ORCH-086 / REQ-SESSION-109: the pause window; it resolves through the session command and closes itself. */
-async function bootPause(): Promise<void> {
-  const r = await bridge.command({ kind: 'pause.payload' });
-  const root = createRoot(document.getElementById('root')!);
-  if (!r.ok) { root.render(<div className="approval"><p role="alert">{r.headline}</p></div>); return; }
-  const payload = r.value as PausePayload;
-  document.title = 'Run paused';
-  const onResolve = async (action: PauseResolution): Promise<{ ok: true } | { ok: false; reason: string }> => {
-    const c = await bridge.command({ kind: 'session.continue', sessionId: payload.sessionId, action });
-    if (!c.ok) return { ok: false, reason: c.detail ?? c.headline };
-    window.close();
-    return { ok: true };
-  };
-  root.render(<StrictMode><PauseDialog payload={payload} onResolve={onResolve} /></StrictMode>);
-  // Verification only: the proof answers the dialog through a query the main process set from its seam.
-  const scripted = new URLSearchParams(window.location.search).get('answer');
-  if (scripted === 'continue' || scripted === 'double' || scripted === 'cancel') setTimeout(() => { void onResolve(scripted); }, 400);
-}
-
-/** REQ-HOOKS-106/107: the review window — the only surface that displays a hook command. */
-async function bootHookReview(): Promise<void> {
-  const r = await bridge.command({ kind: 'hooks.reviewPayload' });
-  const root = createRoot(document.getElementById('root')!);
-  if (!r.ok) { root.render(<div className="approval"><p role="alert">{r.headline}</p></div>); return; }
-  const { workspace, entries } = r.value as { workspace: string; entries: HooksSummary['review'] };
-  document.title = "Review this workspace's hooks";
-  const onDecide = async (trusted: boolean): Promise<{ ok: true } | { ok: false; reason: string }> => {
-    const c = await bridge.command({ kind: 'hooks.reviewDecide', trusted });
-    return c.ok ? { ok: true } : { ok: false, reason: c.detail ?? c.headline };
-  };
-  root.render(<StrictMode><HookReviewDialog workspace={workspace} entries={entries} onDecide={onDecide} /></StrictMode>);
-}
-
-/**
- * ADR-0048 B / ADR-0043 (Part R): a persona window is a full renderer with its own replica of the same numbered
- * publications. Visibility is the platform's own signal: on hide the window unsubscribes and cancels every timer (the
- * zero-work rule); on show it subscribes again — the relay first, then the attach whose whole-session update is the
- * first state painted — and re-reads its payload for the instance main asked it to select. Refreshes are coalesced at
- * 120 ms (REQ-SHELL-076): the replica's changes reach React through one trailing timer per interval, none while hidden.
- */
-function PersonaApp({ persona, initialSelect }: { persona: string; initialSelect: { agentId: string; focusSteer: boolean } | null }) {
-  const [state, setState] = useState(() => ({ session: replica.getState().session, rows: replica.getState().rows }));
-  const [selected, setSelected] = useState<string | null>(initialSelect?.agentId ?? null);
-  const [focusSteer, setFocusSteer] = useState(initialSelect?.focusSteer ? 1 : 0);
-  const [visible, setVisible] = useState(!document.hidden);
-  const snapshot = useConfigSnapshot('persona');
-  useEffect(() => {
-    // REQ-SHELL-076: one rebuild per 120 ms interval; a hidden window rebuilds nothing.
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const unsubscribe = replica.subscribe(() => {
-      if (document.hidden || timer !== null) return;
-      timer = setTimeout(() => { timer = null; if (!document.hidden) setState({ session: replica.getState().session, rows: replica.getState().rows }); }, 120);
-    });
-    return () => { unsubscribe(); if (timer !== null) clearTimeout(timer); };
-  }, []);
-  useEffect(() => {
-    const onVisibility = () => {
-      const sessionId = replica.getState().sessionId;
-      if (document.hidden) {
-        setVisible(false);
-        if (sessionId) void bridge.command({ kind: 'session.unsubscribe', sessionId });
-        return;
-      }
-      setVisible(true);
-      void bridge.command({ kind: 'window.personaPayload' }).then(async (r) => {
-        const payload = r.ok ? (r.value as { sessionId: string | null; select: { agentId: string; focusSteer: boolean } | null }) : null;
-        const next = payload?.sessionId ?? sessionId;
-        if (!next) return;
-        if (next !== replica.getState().sessionId) replica.getState().follow(next);
-        await bridge.command({ kind: 'session.subscribe', sessionId: next });
-        setState({ session: replica.getState().session, rows: replica.getState().rows });
-        if (payload?.select) { setSelected(payload.select.agentId); if (payload.select.focusSteer) setFocusSteer((n) => n + 1); }
-      });
-    };
-    document.addEventListener('visibilitychange', onVisibility);
-    (window as unknown as { __rotarisPersonaSelect?: (id: string, focus: boolean) => boolean }).__rotarisPersonaSelect = (id, focus) => { setSelected(id); if (focus) setFocusSteer((n) => n + 1); return true; };
-    return () => { document.removeEventListener('visibilitychange', onVisibility); delete (window as unknown as { __rotarisPersonaSelect?: unknown }).__rotarisPersonaSelect; };
-  }, []);
-  const entry = useMemo(() => entryOf(snapshot, state.rows, state.session?.agents ?? []), [snapshot, state]);
-  const runLevel = useMemo(() => runLevelAgent(state.session, entry), [state.session, entry]);
-  const nowIso = useElapsedTick(visible ? state.session : null);
-  const declared = snapshot?.roles.find((r) => r.role === persona)?.tools ?? [];
-  const display = useStore(displayPrefs, (s) => s);
-  return (<>
-    <PersonaWindow
-      onOpenLink={openLink} onAcknowledge={acknowledge} showReasoning={display.showReasoning} autoCollapseTools={display.autoCollapseTools}
-      // Part AL2 — REQ-SHELL-075 (b): this window's own preview registry, and the pop-out request (REQ-CHAT-076).
-      terminalPreview={(streamId) => terminalStreams.previewOf(streamId)} openTerminal={(streamId) => terminalHost.open(streamId)}
-      persona={persona} session={state.session} rows={state.rows} runLevel={runLevel} declaredTools={declared} selectedAgentId={selected} onSelectTab={setSelected}
-      nowIso={nowIso} compressionThresholdPercent={snapshot?.compressorThresholdPercentage ?? 60} focusSteer={focusSteer}
-      onSteer={(agentId, text) => control('submitSteeringPrompt', { agentId, text }, 'Steering is unavailable for this run.')}
-      onCancel={(agentId) => (agentId === RUN_AGENT_ID ? stopRun(false) : cancelAgent(agentId))}
-    />
-    {/* ADR-0049's fourth decision: the acknowledgement stack is PER WINDOW, so this window owns its own — the same
-        shared component the main window draws, swept for accessibility here in its own right (REQ-SHELL-112). */}
-    <Acknowledgements store={acknowledgements} />
-  </>);
-}
-async function bootPersona(): Promise<void> {
-  const r = await bridge.command({ kind: 'window.personaPayload' });
-  const root = createRoot(document.getElementById('root')!);
-  if (!r.ok) { root.render(<div className="approval"><p role="alert">{r.headline}</p></div>); return; }
-  const payload = r.value as { persona: string; sessionId: string | null; select: { agentId: string; focusSteer: boolean } | null };
-  document.title = `Rotaris · ${payload.persona}`;
-  if (payload.sessionId) {
-    replica.getState().follow(payload.sessionId);
-    await bridge.command({ kind: 'session.subscribe', sessionId: payload.sessionId });
-  }
-  root.render(<StrictMode><PersonaApp persona={payload.persona} initialSelect={payload.select} /></StrictMode>);
-}
-
-/**
- * Part AL2 — the terminal window's renderer (`role=terminal`; REQ-SHELL-079..111): ADR-0047's window component mounted
- * over ADR-0021's frames, in a window `main/windows.ts` builds once per main window and rebuilds on every open
- * (REQ-SHELL-086). It asks main what it was opened onto (`window.terminalPayload`: the followed session, the stream to
- * bring forward, the auto-open preference), subscribes to that session FOR ITSELF so channel 3 reaches it (the sender
- * is the subscriber, ADR-0043's note), asks the run host for the resync (REQ-SHELL-104: the retained output at once),
- * and binds the window's six actions to the `terminal.*` commands. The title is REQ-SHELL-081's; the auto-open control
- * (REQ-SHELL-109) sits in a slim bar under the window's content — the specification names no surface for the
- * preference, and the window the preference is about is where a user looks for it; stated as a reading.
- */
-const terminalRefusalOf = (r: CommandOutcome): TerminalRefusal => {
-  if (r.ok) return 'unknown-stream';
-  const code = r.code.startsWith('terminal.') ? r.code.slice('terminal.'.length) : r.code;
-  return (TERMINAL_REFUSALS as readonly string[]).includes(code) ? (code as TerminalRefusal) : 'unknown-stream';
-};
-const terminalResult = (r: CommandOutcome): Awaited<TerminalActionResult> => (r.ok ? { ok: true, value: undefined } : { ok: false, error: terminalRefusalOf(r) });
-const terminalActions: TerminalActions = {
-  sendKeys: async (streamId, keys) => terminalResult(await bridge.command({ kind: 'terminal.sendKeys', streamId, keys: [...keys] })),
-  interrupt: async (streamId) => terminalResult(await bridge.command({ kind: 'terminal.interrupt', streamId })),
-  endInput: async (streamId) => terminalResult(await bridge.command({ kind: 'terminal.endInput', streamId })),
-  kill: async (streamId) => terminalResult(await bridge.command({ kind: 'terminal.kill', streamId })),
-  resize: (streamId, cols, rows) => bridge.command({ kind: 'terminal.resize', streamId, cols, rows }),
-  audit: (streamId, entry) => { void bridge.command({ kind: 'terminal.audit', streamId, entry }); },
-};
-function TerminalApp({ streams, sessionId, initialFocus, initialAutoOpen }: { streams: TerminalStreamSet; sessionId: string | null; initialFocus: string | null; initialAutoOpen: boolean }) {
-  const [focusStream, setFocusStream] = useState<string | null>(initialFocus);
-  const [autoOpen, setAutoOpen] = useState(initialAutoOpen);
-  const [label, setLabel] = useState<string | null>(sessionId);
-  useEffect(() => {
-    // REQ-SHELL-085: a later open names a stream to bring forward; the same stream twice must still reach the tick.
-    (window as unknown as { __rotarisTerminalFocus?: (id: string) => boolean }).__rotarisTerminalFocus = (id) => { setFocusStream(null); setTimeout(() => setFocusStream(id), 0); return true; };
-    return () => { delete (window as unknown as { __rotarisTerminalFocus?: unknown }).__rotarisTerminalFocus; };
-  }, []);
-  // REQ-SHELL-081: "Rotaris · Terminal — {session label}" — the session's name, or its identifier when unnamed.
-  useEffect(() => {
-    // The session is fixed for this window's life (a change of session rebuilds the window), so the label is only ever refined here.
-    if (!sessionId) return;
-    let live = true;
-    void bridge.command({ kind: 'session.list' }).then((r) => {
-      if (!live || !r.ok) return;
-      const entry = (r.value as { sessions: SessionListItemPayload[] }).sessions.find((s) => s.sessionId === sessionId);
-      if (entry && entry.label.trim() !== '') setLabel(entry.label);
-    });
-    return () => { live = false; };
-  }, [sessionId]);
-  useEffect(() => { document.title = terminalWindowTitle(label); }, [label]);
-  const changeAutoOpen = (value: boolean) => { setAutoOpen(value); void bridge.command({ kind: 'window.terminalAutoOpen', value }); };
-  return (
-    <div className="term-shell" data-testid="term-shell">
-      <TerminalWindow streams={streams} actions={terminalActions} onGoToWorkspace={() => { void bridge.command({ kind: 'window.showWorkspace' }); }} focusStream={focusStream} acknowledge={acknowledge} />
-      {/* REQ-SHELL-109: the auto-open preference, default off, persisted user-wide by main under `terminal/autoOpen`. */}
-      <div className="term-shell__bar" data-testid="term-auto-open">
-        <span id="term-auto-open-label">Open this window automatically</span>
-        <ToggleSwitch checked={autoOpen} onChange={changeAutoOpen} label="Open this window automatically" aria-labelledby="term-auto-open-label" aria-description={`Automatic opening is ${autoOpen ? 'on' : 'off'}. On, the terminal window opens without taking focus when an agent's terminal starts while it is closed.`} data-testid="term-auto-open-toggle" />
-        <span className="text-secondary">When an agent's terminal starts while this window is closed, it opens without taking focus.</span>
-      </div>
-      {/* ADR-0049's fourth decision: the acknowledgement stack is per window (a copy's outcome, REQ-SHELL-101). */}
-      <Acknowledgements store={acknowledgements} />
-    </div>
-  );
-}
-async function bootTerminal(): Promise<void> {
-  const r = await bridge.command({ kind: 'window.terminalPayload' });
-  const root = createRoot(document.getElementById('root')!);
-  if (!r.ok) { root.render(<div className="approval"><p role="alert">{r.headline}</p></div>); return; }
-  const payload = r.value as TerminalWindowPayload;
-  const streams = createTerminalWindowStreams();
-  bridge.onTerminalFrame((p) => { const frame = p as TerminalFrame; if (payload.sessionId !== null && frame.sessionId === payload.sessionId) streams.apply(frame); });
-  document.title = terminalWindowTitle(payload.sessionId);
-  if (payload.sessionId !== null) {
-    await bridge.command({ kind: 'session.subscribe', sessionId: payload.sessionId });
-    void bridge.command({ kind: 'terminal.streams', sessionId: payload.sessionId });
-  }
-  root.render(<StrictMode><TerminalApp streams={streams} sessionId={payload.sessionId} initialFocus={payload.focusStream} initialAutoOpen={payload.autoOpen} /></StrictMode>);
-}
 
 async function boot(): Promise<void> {
   const [themeReply, motionReply, categoryReply, layoutReply, gitLayoutReply, libraryLayoutReply, popOutReply, workspaceLayoutReply] = await Promise.all([
@@ -1928,8 +1345,7 @@ async function boot(): Promise<void> {
   const initialLibraryLayout = libraryLayoutReply.ok ? ((libraryLayoutReply.value as { value?: PaneLayout }).value ?? undefined) : undefined;
   // Part AB — REQ-CHAT-010 / REQ-SHELL-069: the Workspace's transcript/composer split, read before the first paint.
   const initialWorkspaceLayout = workspaceLayoutReply.ok ? ((workspaceLayoutReply.value as { value?: PaneLayout }).value ?? undefined) : undefined;
-  runningTheme = resolveTheme(themeReply.ok ? (themeReply.value as { name?: string }).name : undefined);
-  applyTheme(runningTheme, document.documentElement);
+  const bootTheme = windowTheme.adopt(themeReply.ok ? (themeReply.value as { name?: string }).name : undefined);
   const motionSetting = motionReply.ok ? (motionReply.value as { value?: boolean }).value : undefined;
   setStoredMotionPreference(motionSetting);
   const settingsCategory = categoryReply.ok ? String((categoryReply.value as { value?: string }).value ?? 'models') : 'models';
@@ -1957,7 +1373,7 @@ async function boot(): Promise<void> {
   openWorkspace = info.workspace;
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
-      <App version={info.version} workspace={info.workspace} home={info.home} processes={info.processes} initialTheme={runningTheme} initialReducedMotion={motionSetting} initialLayout={initialLayout} initialGitLayout={initialGitLayout} initialLibraryLayout={initialLibraryLayout} initialWorkspaceLayout={initialWorkspaceLayout} settingsCategory={settingsCategory} circuitBreakerArmed={info.circuitBreakerArmed} initialPopOut={initialPopOut} />
+      <App version={info.version} workspace={info.workspace} home={info.home} processes={info.processes} initialTheme={bootTheme} initialReducedMotion={motionSetting} initialLayout={initialLayout} initialGitLayout={initialGitLayout} initialLibraryLayout={initialLibraryLayout} initialWorkspaceLayout={initialWorkspaceLayout} settingsCategory={settingsCategory} circuitBreakerArmed={info.circuitBreakerArmed} initialPopOut={initialPopOut} />
     </StrictMode>,
   );
 }

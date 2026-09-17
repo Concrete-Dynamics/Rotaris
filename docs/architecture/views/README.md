@@ -45,6 +45,23 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-17**
 
+**The renderer root became five modules, and its first test.** Five hundred and ninety-four lines came out of
+`apps/desktop/src/renderer/main.tsx`, which is now the main window and nothing else. What a window HAS is
+`shell.ts` — the bridge, the replica, the two stacks, the terminal registry, the display preferences, the theme
+and the session gestures, wired to the numbered channels once per window. What those gestures ARE is
+`session-actions.ts`: eleven functions that take the bridge and the replica as **arguments**, which is the whole
+difference, because `session-actions.test.ts` now drives all eleven with two plain objects and no window, no
+preload and no main process — the first tests renderer code has ever had, and they pin the refusal discipline
+that was already wrong once (a refused control carries the ENGINE's words, not the caller's sentence). What the
+other windows ARE is `windows.tsx`: six roles over one `mountWindow`, which is the four copies of "ask main for
+the payload this window was opened for, and draw its headline instead when main refuses" written once. What a
+transcript surface READS is `session-view.ts`, shared with the persona window so "which persona is the entry
+role" has one answer (REQ-MONITOR-057/058) rather than two. The theme moved the same way: adopting one is three
+moves that must happen together, it was written out four times, and a fourth copy that forgot the third would
+have left the document restyled and React drawing the old palette. **No product behaviour moves**: every body
+is the body it was. The seams view's §1 gained the rule for choosing which side of the renderer a send belongs
+on; the process view's **renderer** row and the module map carry the rest.
+
 **Every renderer command became a module, and the seam that names them a table.** One thousand and fifty-six
 lines came out of `main()`'s `runCommand` and into `apps/desktop/src/main/commands/` — sixteen facets, one per
 family, beside `context.ts`. What the switch could only do by being read, the table now does by compiling:

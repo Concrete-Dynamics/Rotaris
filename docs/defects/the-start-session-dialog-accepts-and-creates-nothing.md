@@ -30,6 +30,13 @@ What is NOT a candidate is branch validation, the obvious suspect: the scenario'
 `main` and one worktree (its own), so `defaultSessionBranch` collides with nothing and `branchError`
 should be null.
 
+**A third candidate arrived from `pnpm ui-audit` the same day, and it is the strongest**: the dialog
+measures 560 × **904** and does not fit any supported window — at the minimum 1000 × 680 its run-start
+selector, its `Cancel` and its `Start session` are all measured OFF SCREEN
+(`the-start-session-dialog-does-not-fit-the-minimum-window.md`). A synthesized click at a control's
+computed centre lands nowhere when that centre is outside the window, which would produce exactly what
+the log shows: the seam reports the click, and nothing happens.
+
 Either way the user-visible behaviour is the same and is wrong on its own terms: a dialog that accepts
 a gesture and produces neither a session nor a reason.
 

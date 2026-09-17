@@ -1,34 +1,38 @@
-## The start-session dialog does not fit the minimum window, and its two buttons fall off the screen
+## The Start session dialog stands 904 px tall, so it overflows every supported window and its two actions leave the screen
 
-At the window's own minimum of 1000×680 (`REQ-SHELL-022`), the start-session dialog measures 560×**727** and is
-positioned at y = 16, so it ends 63 px below the viewport. The two actions sit at the bottom of that box, which
-puts both of them off screen:
+`pnpm ui-audit` measures the dialog at **560 × 904 at (420, 16)** in a 1400 × 900 window — 20 px taller
+than the viewport it is centred in — and at **560 × 904 at (220, 16)** in the minimum 1000 × 680 window,
+where three controls are measured *off screen* outright:
 
-```json
-{"kind":"CONTAINMENT","view":"overlay: start-session dialog","size":"1000x680",
- "box":{"x":220,"y":16,"w":560,"h":727},"viewport":{"w":1000,"h":680}}
-{"kind":"STACKING","el":".btn.btn-secondary","at":"(off screen)","cx":622,"cy":707,"text":"Cancel"}
-{"kind":"STACKING","el":".btn.btn-primary","at":"(off screen)","cx":711,"cy":707,"text":"Start session"}
+```
+CONTAINMENT overlay: start-session dialog @ 1400x900 — {"box":{"x":420,"y":16,"w":560,"h":904},"viewport":{"w":1400,"h":900}}
+CONTAINMENT overlay: start-session dialog @ 1000x680 — {"box":{"x":220,"y":16,"w":560,"h":904},"viewport":{"w":1000,"h":680}}
+STACKING    overlay: start-session dialog @ 1000x680 — {"el":".input.select.start-session__select","at":"(off screen)"…}
+STACKING    overlay: start-session dialog @ 1000x680 — {"el":".btn.btn-secondary","at":"(off screen)","text":"Cancel"}
+STACKING    overlay: start-session dialog @ 1000x680 — {"el":".btn.btn-primary","at":"(off screen)","text":"Start session"}
 ```
 
-The dialog does not scroll, so at the minimum window a pointer can neither start the session nor cancel out of
-the dialog; `Escape` is the only way out, and it is not drawn anywhere. The same dialog at 1400×900 is clean,
-which is why the ordinary development window never shows it.
-
-Found on 2026-09-16 by `pnpm ui-review -- --iteration=1` while gathering evidence for `PD-CHAT-004` revision 2
-and `PD-CHAT-005`. Not repaired here: the transcript change touches no overlay, and the fix is a decision about
-which of the dialog's sections gives up height or scrolls.
+At the minimum window the run-start mode selector, **Cancel** and **Start session** are all outside the
+viewport. The dialog is the only way to start a session with a worktree, and at that size there is no way
+to accept it and no way to dismiss it with the pointer.
 
 ## Specs
 
-`REQ-SHELL-022` fixes 1000×680 as a size the window refuses to go below, and `REQ-SHELL-061` describes the
-Workspace view working at exactly that size — a surface that cannot be completed or dismissed there contradicts
-both. `REQ-SHELL-023`'s reachability and the seven primary views are unaffected; this is one overlay.
+REQ-SHELL-022 fixes 1000 × 680 as the minimum window and requires the surfaces to work there;
+REQ-SHELL-125 puts the isolation choice, the branch, the sandbox mode and the run-start mode in this one
+dialog, which is what made it grow. A modal whose dismissal is off screen also defeats the escape route
+every modal owes its user.
 
 ## Relevant files
 
-- `packages/ui/src/` — the start-session dialog and its footer of actions.
-- `apps/desktop/scripts/ui-audit.mjs` — the sweep that measures overlays at both sizes; `CONTAINMENT` and
-  `STACKING` are its own kinds.
-- `.ui-review/d0feea476077/iteration-1/report.json` — the three findings quoted above, with the screenshot
-  `overlay-start-session-dialog-1000x680.png` beside them.
+- `packages/ui/src/StartSessionDialog.tsx` — the dialog's sections and its action row.
+- `packages/ui/src/shell.css` — `.start-session__*` and the shared `.dialog` geometry (the neighbouring
+  dialogs measure 327 and 360 px tall and are clean at both sizes).
+- `.ui-audit/` — the evidence pack this was measured from.
+
+Related: `the-start-session-dialog-accepts-and-creates-nothing.md`. The two are separate failures of the
+same surface, and the geometry is a plausible contributor to the other: a synthesized click at a control's
+computed centre lands nowhere when that centre is outside the window.
+
+Noticed 2026-09-17 by Part AT (`PD-LIBRARY-002`) running `pnpm ui-audit` after drawing its own surfaces.
+Not repaired here: the dialog belongs to the session-start path this part does not touch.

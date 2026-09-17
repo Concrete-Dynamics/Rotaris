@@ -1,36 +1,50 @@
 // ADR-0035 (Part T): the pre-bootstrap branch is the FIRST import and must never be reordered — with the reserved token
 // first on the command line it hands the process to the bundled runtime and exits before anything below is evaluated.
 import './sentinel.js';
-import { buildIdentifier, thirdPartyLicensesPath } from './about.js';
 import type { PersonaWindows, TerminalWindows } from './windows.js'; // Part AL2: the terminal window's registry beside the persona windows'
-import { createElectronMainWindowAdapter, createElectronProjectFolderChooser, MainWindows, type MainWindowView } from './main-windows.js';
+import { createElectronMainWindowAdapter, createElectronProjectFolderChooser, MainWindows } from './main-windows.js';
 import { createNoticeStore } from './notices.js';
 import { createLibraryRevision } from './library.js';
 // The driver seam (verification only; `ROTARIS_DRIVER` names its endpoint file). Never reached by a product surface.
 import { startDriver } from './driver.js';
-// Part AK — the requirements relay and the OS account the actor is stamped with (REQ-CONFIG-198).
-import { createRequirementsRelay } from './requirements.js';
 // Part AK2 — the fold key's placeholder and its resolution (see `requirementsPreferenceKey`, which reads the window's workspace).
-import { REQUIREMENT_FOLDS_PREFERENCE_KEY, SKIP_WRITE_FAILED } from '@rotaris/contracts';
+import { REQUIREMENT_FOLDS_PREFERENCE_KEY } from '@rotaris/contracts';
 import { requirementColumnFoldsKey, type PreferenceKey } from '@rotaris/platform';
 // Part AP — the board's run coordinator (spec 08 §Runs Started from the Board; ADR-0041).
 import { createRequirementsRuns } from './requirements-runs.js';
 import { createImprovementCoordinator } from './improvements.js';
-import { buildImprovementExport, writeImprovementExport, type ImprovementExportHistory } from './improvement-export.js';
-import { homedir, userInfo } from 'node:os';
-import { FrameDeliveryLimiter, relayTerminalCommand } from './terminal.js';
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell, utilityProcess, type UtilityProcess } from 'electron';
+import { homedir } from 'node:os';
+import { FrameDeliveryLimiter } from './terminal.js';
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, utilityProcess, type UtilityProcess } from 'electron';
 import { join } from 'node:path';
-import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
+import { mkdirSync, statSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { millis, toIsoUtc } from '@rotaris/kernel';
-import { type AcknowledgementAction, CHANNEL, CHECKPOINT_BUSY_TOAST, CHECKPOINTS_NO_WORKSPACE, CHECKPOINTS_STORE_UNREADABLE, CommandRequestSchema, CONTRACT_SCHEMA_VERSION, ImprovementPreparationSchema, ImprovementRollbackPreviewSchema, ImprovementRollbackResultSchema, LIVE_RUN_REFUSAL, LIVENESS_UNKNOWN_REFUSAL, oklchToSrgb, parseOklch, resolveTheme, restoredNoticeBody, restoreSummary, srgbToHex, type Theme, type HooksSummary, type ApprovalPayload, type PausePayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type CommandOutcome, type ImprovementArtifactRecord, type NoticeAction, type NoticeSeverity, type ProposalStatus, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProviderSignInResult, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest, type WorktreeBinding, TERMINAL_WINDOW_ROLE, TERMINAL_AUTO_OPEN_PREFERENCE, type TerminalWindowCommand, type TerminalWindowOpened, type TerminalWindowPayload } from '@rotaris/contracts';
-import { claimInstance, composerDraftKey, dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, type HandOver } from '@rotaris/platform';
+import { type AcknowledgementAction, CHANNEL, CommandRequestSchema, type CommandRequest, CONTRACT_SCHEMA_VERSION, oklchToSrgb, parseOklch, resolveTheme, srgbToHex, type Theme, type HooksSummary, type ApprovalPayload, type PausePayload, type CommandOutcome, type NoticeSeverity, type ProposalStatus, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest, TERMINAL_WINDOW_ROLE, TERMINAL_AUTO_OPEN_PREFERENCE, type TerminalWindowCommand, type TerminalWindowOpened, type TerminalWindowPayload } from '@rotaris/contracts';
+import { claimInstance, dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, type HandOver } from '@rotaris/platform';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from '@rotaris/shell';
 import { CATALOGUE, createProtector, CredentialStore, destinationHint, METHOD_LABELS, ProjectSettingsStore, ProviderService, validateCatalog } from '@rotaris/providers';
 import { PROJECT_SETTINGS_FILE, scopeFiles } from '@rotaris/config';
 import { InitializationCoordinator } from './initialization.js'; // Part AS (ADR-0064)
 import { runCapture } from './capture/index.js'; // the scripted launch that ends in a photograph (verification only)
+import { checkpointsCommands } from './commands/checkpoints.js';
+import { configCommands } from './commands/config.js';
+import { dialogsCommands } from './commands/dialogs.js';
+import { gitCommands } from './commands/git.js';
+import { hooksCommands } from './commands/hooks.js';
+import { improvementsCommands } from './commands/improvements.js';
+import { initializationCommands } from './commands/initialization.js';
+import { libraryCommands } from './commands/library.js';
+import { mcpCommands } from './commands/mcp.js';
+import { providersCommands } from './commands/providers.js';
+import { requirementsCommands } from './commands/requirements.js';
+import { sessionCommands } from './commands/session.js';
+import { shellCommands } from './commands/shell.js';
+import { skillsCommands } from './commands/skills.js';
+import { windowsCommands } from './commands/windows.js';
+import { workspaceCommands } from './commands/workspace.js';
+// The answer every command ends in, and the inventory the facets above are given (ADR-0019, REQ-SHELL-020).
+import { refusal, type ApprovalDialogState, type CommandContext, type CommandHandler, type CommandHandlers, type MainWindowState, type Recovery } from './commands/context.js';
 
 /**
  * MAIN — the composition root for the Electron main process (ADR-0002 #1).
@@ -64,11 +78,6 @@ function workspaceFromArgv(argv: readonly string[]): string | undefined {
   // of its own (P-13); a bare path is what a file manager passes.
   const candidate = argv.slice(app.isPackaged ? 1 : 2).find((a) => !a.startsWith('-'));
   return candidate ? canonicalPath(candidate) : undefined;
-}
-
-function refusal(r: ProcessReply, headline: string): CommandOutcome {
-  const detail = r.kind === 'refused' ? [r.headline, r.detail].filter(Boolean).join(': ') : `unexpected reply ${r.kind}`;
-  return { ok: false, code: r.kind === 'refused' ? r.code : 'reply.unexpected', headline, detail };
 }
 
 function portOf(child: UtilityProcess): MessagePortLike {
@@ -163,8 +172,6 @@ async function main(): Promise<void> {
    * The capacity is still exactly one and nothing here changes behaviour; lifting it is A3's job, and the
    * reason it is worth a step of its own is that `REQ-SHELL-017` needs two of these alive at once.
    */
-  type ApprovalDialogState = { requestId: string; win: BrowserWindow; answered: boolean };
-  type MainWindowState = MainWindowView<BrowserWindow, PersonaWindows, TerminalWindows>;
   /**
    * A2 — the registry, and ADR-0055 consequence 5's ordering. Keyed by the window's `webContents` id, which is
    * what every message from a renderer carries, so "which window asked this" is a lookup rather than a guess.
@@ -299,7 +306,6 @@ async function main(): Promise<void> {
     }
     log(`library change (${change}) → revision ${revision}`);
   });
-  type Recovery = { label: string; action: NoticeAction }[];
   const improvementUndo = new Map<string, { artifactId: string; proposalId: string; previous: ProposalStatus; current: ProposalStatus; summary: string }>();
   const improvementRuns = new Map<string, { artifactId: string; workspaceRoot: string }>();
   const raiseNotice = (severity: NoticeSeverity, headline: string, detail?: string, recovery?: Recovery, sessionId?: string) => {
@@ -1190,119 +1196,50 @@ async function main(): Promise<void> {
    * flight at a time (REQ-GIT-091) — a second is declined with code `checkpoint.busy` and the renderer shows the toast
    * or retries a listing once after 150 ms (REQ-GIT-095). Every refusal is a returned value (REQ-GIT-052).
    */
-  let checkpointOp: Promise<unknown> | null = null;
-  const checkpointGate = (fn: () => Promise<CommandOutcome>): Promise<CommandOutcome> => {
-    if (checkpointOp) return Promise.resolve({ ok: false, code: 'checkpoint.busy', headline: CHECKPOINT_BUSY_TOAST });
-    const p = fn().finally(() => { if (checkpointOp === p) checkpointOp = null; });
-    checkpointOp = p;
-    return p;
-  };
-  const checkpointContext = async (w: MainWindowState): Promise<{ workspaceId: string; root: string; svc: { link: ProcessLink<WorkspaceServiceRequest> } } | CommandOutcome> => {
-    await mainWindows.awaitWorkspace(w.wcId);
-    if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'checkpoint.no-workspace', headline: CHECKPOINTS_NO_WORKSPACE };
-    const root = canonicalPath(w.workspace);
-    const svc = services.get(root);
-    if (!svc) return { ok: false, code: 'checkpoint.no-workspace', headline: CHECKPOINTS_NO_WORKSPACE };
-    return { workspaceId: w.workspaceId, root, svc };
-  };
-  const readListing = async (workspaceId: string, sessionId: string): Promise<CheckpointListPayload | CommandOutcome> => {
-    const r = await runHost.request({ kind: 'checkpoint.list', workspaceId, sessionId }, millis(15_000));
-    if (r.kind !== 'checkpoint.list') {
-      if (r.kind === 'refused' && r.code === 'checkpoint.no-session') return { ok: false, code: r.code, headline: r.headline };
-      // REQ-GIT-095: a store that cannot be read is an empty listing behind the error dialog.
-      return { ok: false, code: 'checkpoint.store', headline: "Could not read this session's checkpoints", detail: r.kind === 'refused' ? `${CHECKPOINTS_STORE_UNREADABLE} (${r.headline})` : CHECKPOINTS_STORE_UNREADABLE };
-    }
-    // REQ-GIT-094: the repair is announced as a warning notice. One session here, always — this path repairs the
-    // session whose listing was asked for and no other (OQ-46 governs the batch the explicit repair produces).
-    if (r.listing.repaired) announceRepairs([{ sessionId, from: r.listing.repaired.previous, reason: r.listing.repaired.reason }]);
-    return r.listing;
-  };
-  const isOutcome = (x: unknown): x is CommandOutcome => typeof x === 'object' && x !== null && 'ok' in x;
-  /** REQ-GIT-092: stamped on every listing and checked before every preview and restore; a broken check never enables a restore. */
-  const livenessRefusal = (l: CheckpointListPayload): string | null => (l.liveness === 'live' ? LIVE_RUN_REFUSAL : l.liveness === 'unknown' ? LIVENESS_UNKNOWN_REFUSAL : null);
-  /** REQ-GIT-056: the 10 most recent recorded plus the last restored when outside them, newest first. */
-  const driftCandidates = (l: CheckpointListPayload): { sequence: number; commit: string }[] => {
-    const newest = [...l.rows].sort((a, b) => b.sequence - a.sequence).slice(0, 10);
-    const last = l.lastRestoredSequence === null ? undefined : l.rows.find((r) => r.sequence === l.lastRestoredSequence);
-    if (last && !newest.some((r) => r.sequence === last.sequence)) newest.push(last);
-    return newest.map((r) => ({ sequence: r.sequence, commit: r.commit }));
-  };
-  const previewOf = async (ctx: { workspaceId: string; root: string; svc: { link: ProcessLink<WorkspaceServiceRequest> } }, l: CheckpointListPayload, sequence: number) => {
-    const row = l.rows.find((r) => r.sequence === sequence);
-    if (!row) return null;
-    const started = clocks.monotonic.now();
-    const r = await ctx.svc.link.request({ kind: 'checkpoint.preview', workspaceRoot: ctx.root, treeRoot: l.treeRoot, sessionId: l.sessionId, sequence, commit: row.commit, candidates: driftCandidates(l), includeUntracked: l.includeUntracked }, millis(320_000));
-    if (r.kind !== 'checkpoint.previewed') return { row, treeState: 'inspect-failed' as const, entries: [], dirty: [], blockedReason: `Git could not inspect checkpoint ${sequence}: ${r.kind === 'refused' ? r.headline : `unexpected answer ${r.kind}`}`, text: `Git could not inspect checkpoint ${sequence}: ${r.kind === 'refused' ? r.headline : `unexpected answer ${r.kind}`}`, invocations: 0, elapsedMs: 0 };
-    log(`checkpoint preview ${l.sessionId}/${sequence}: ${r.treeState}, ${r.entries.length} entr${r.entries.length === 1 ? 'y' : 'ies'}, ${r.dirty.length} dirty; ${r.invocations} git invocations, ${r.elapsedMs} ms in the service, ${Math.round(clocks.monotonic.now() - started)} ms end to end`);
-    return { row, ...r };
-  };
-  const checkpointPreview = async (w: MainWindowState, sessionId: string, sequence: number): Promise<CommandOutcome> => {
-    const ctx = await checkpointContext(w);
-    if (isOutcome(ctx)) return ctx;
-    const l = await readListing(ctx.workspaceId, sessionId);
-    if (isOutcome(l)) return l;
-    if (l.unavailable) return { ok: false, code: 'checkpoint.unavailable', headline: l.unavailable };
-    const live = livenessRefusal(l);
-    if (live) return { ok: false, code: 'checkpoint.live', headline: live };
-    const p = await previewOf(ctx, l, sequence);
-    if (p === null) return { ok: false, code: 'checkpoint.unrecorded', headline: `Checkpoint ${sequence} is no longer recorded for this session.` };
-    const value: CheckpointPreviewPayload = { sessionId, sequence, treeRoot: l.treeRoot, entries: p.entries, dirty: p.dirty, blockedReason: p.blockedReason, text: p.text, summary: restoreSummary(sequence, p.entries.length, l.treeRoot), restorable: p.treeState === 'ok' };
-    return { ok: true, value };
-  };
-  const checkpointRestore = async (w: MainWindowState, sessionId: string, sequence: number, force: boolean): Promise<CommandOutcome> => {
-    const ctx = await checkpointContext(w);
-    if (isOutcome(ctx)) return ctx;
-    const l = await readListing(ctx.workspaceId, sessionId);
-    if (isOutcome(l)) return l;
-    const outcome = (o: Omit<CheckpointRestoreOutcomePayload, 'sequence'>): CommandOutcome => ({ ok: true, value: { sequence, ...o } satisfies CheckpointRestoreOutcomePayload });
-    if (l.unavailable) return outcome({ restored: false, safetySequence: null, changedPaths: 0, blockedReason: l.unavailable });
-    const live = livenessRefusal(l);
-    if (live) return outcome({ restored: false, safetySequence: null, changedPaths: 0, blockedReason: live });
-    const started = clocks.monotonic.now();
-    const row = l.rows.find((r) => r.sequence === sequence) ?? null;
-    // REQ-GIT-058/062: every refusal at a gate is recorded on the session; the record never raises here.
-    const record = async (o: { restored: boolean; safetySequence: number | null; changedPaths: number; blockedReason: string; dirtyPaths: readonly string[] }) => {
-      const r = await runHost.request({ kind: 'checkpoint.recordRestore', workspaceId: ctx.workspaceId, sessionId, sequence, restored: o.restored, safetySequence: o.safetySequence, changedPaths: o.changedPaths, blockedReason: o.blockedReason, forced: force, treeRoot: l.treeRoot, dirtyPaths: [...o.dirtyPaths], ref: row?.ref ?? null, commit: row?.commit ?? null }, millis(15_000)).catch((e: Error) => ({ kind: 'refused' as const, code: 'ask', headline: e.message }));
-      if (r.kind !== 'ack') log(`checkpoint restore ${sessionId}/${sequence}: the outcome could not be recorded (${r.kind === 'refused' ? r.headline : r.kind})`);
-    };
-    const refuse = async (blockedReason: string, safetySequence: number | null = null, dirtyPaths: readonly string[] = []) => {
-      await record({ restored: false, safetySequence, changedPaths: 0, blockedReason, dirtyPaths });
-      log(`checkpoint restore ${sessionId}/${sequence} refused: ${blockedReason}`);
-      return outcome({ restored: false, safetySequence, changedPaths: 0, blockedReason });
-    };
-    // Gate 1.
-    if (!row) return refuse(`No checkpoint ${sequence} is recorded for session ${sessionId}.`);
-    // Gates 2 and 3 — the preview again, fresh (the tree may have moved since the dialog was shown).
-    const p = await previewOf(ctx, l, sequence);
-    if (p === null) return refuse(`No checkpoint ${sequence} is recorded for session ${sessionId}.`);
-    if (p.treeState !== 'ok') return refuse(p.blockedReason);
-    // Gate 4 — force bypasses this gate only.
-    if (p.dirty.length > 0 && !force) return refuse(p.blockedReason, null, p.dirty);
-    // Gate 5 — the safety checkpoint, untracked always included, numbered from both sources (REQ-GIT-059); it MUST succeed.
-    let safetySequence: number | null = null;
-    const refs = await ctx.svc.link.request({ kind: 'checkpoint.refs', workspaceRoot: ctx.root, treeRoot: l.treeRoot, sessionId }, millis(60_000)).catch(() => null);
-    const fromRefs = refs?.kind === 'checkpoint.refs' && refs.ok ? refs.entries.reduce((m, e) => Math.max(m, e.sequence), 0) : 0;
-    const safety = Math.max(fromRefs, ...l.rows.map((r) => r.sequence), 0) + 1;
-    const captured = await ctx.svc.link.request({ kind: 'checkpoint.capture', workspaceRoot: ctx.root, treeRoot: l.treeRoot, sessionId, sequence: safety, iteration: 0, childName: '', checkpointKind: 'pre_restore', includeUntracked: true, message: `rotaris pre-restore checkpoint ${safety} for session ${sessionId} (before restoring checkpoint ${sequence})` }, millis(320_000)).catch((e: Error) => ({ kind: 'refused' as const, code: 'ask', headline: e.message }));
-    if (captured.kind !== 'checkpoint.captured') return refuse(`Could not record a safety checkpoint before the restore: ${captured.kind === 'refused' ? captured.headline : `unexpected answer ${captured.kind}`}`, null, p.dirty);
-    if (captured.outcome === 'failed' || captured.outcome === 'unavailable') return refuse(`Could not record a safety checkpoint before the restore: ${captured.detail ?? 'Git declined'}`, null, p.dirty);
-    if (captured.outcome === 'recorded') {
-      const persisted = await runHost.request({ kind: 'checkpoint.recordSafety', workspaceId: ctx.workspaceId, sessionId, sequence: safety, ref: captured.ref ?? '', commit: captured.commit ?? '', files: captured.files ?? [] }, millis(60_000)).catch((e: Error) => ({ kind: 'refused' as const, code: 'ask', headline: e.message }));
-      if (persisted.kind !== 'checkpoint.recorded') return refuse(`Could not persist the safety checkpoint on the session: ${persisted.kind === 'refused' ? persisted.headline : `unexpected answer ${persisted.kind}`}`, null, p.dirty);
-      safetySequence = safety;
-      log(`checkpoint restore ${sessionId}/${sequence}: safety checkpoint ${safety} recorded over ${captured.files?.length ?? 0} file(s) (${captured.invocations} git invocations, ${captured.elapsedMs} ms)`);
-    } else log(`checkpoint restore ${sessionId}/${sequence}: no safety checkpoint needed — the tree already matches the last commit`);
-    // Gate 6 — the restore itself; a failure still reports the safety checkpoint, the sole surviving copy of the tree.
-    const restored = await ctx.svc.link.request({ kind: 'checkpoint.restore', workspaceRoot: ctx.root, treeRoot: l.treeRoot, sessionId, sequence, commit: row.commit, entries: p.entries }, millis(320_000)).catch((e: Error) => ({ kind: 'refused' as const, code: 'ask', headline: e.message }));
-    if (restored.kind !== 'checkpoint.restored') return refuse(`Git could not restore checkpoint ${sequence}: ${restored.kind === 'refused' ? restored.headline : `unexpected answer ${restored.kind}`}`, safetySequence, p.dirty);
-    if (!restored.ok) return refuse(`Git could not restore checkpoint ${sequence}: ${restored.detail ?? 'Git declined'}`, safetySequence, p.dirty);
-    // Gate 7 — success: the record (last_restored_sequence, the timeline entry, the event) and the persistent notice (REQ-GIT-100).
-    await record({ restored: true, safetySequence, changedPaths: restored.touched.length, blockedReason: '', dirtyPaths: p.dirty });
-    raiseNotice('info', `Restored checkpoint ${sequence}`, restoredNoticeBody(restored.touched.length, safetySequence));
-    log(`checkpoint restore ${sessionId}/${sequence}: restored ${restored.touched.length} file(s) in ${l.treeRoot}, safety ${safetySequence ?? 'none'}${force ? ', forced' : ''}; ${restored.invocations} git invocations, ${restored.elapsedMs} ms in the service, ${Math.round(clocks.monotonic.now() - started)} ms end to end`);
-    return outcome({ restored: true, safetySequence, changedPaths: restored.touched.length, blockedReason: '' });
-  };
 
+  /**
+   * A4 — the inventory `main()` hands the command facets (`./commands/`). It was the closure this
+   * function was written inside; naming it is what lets a facet declare the slice it needs and a test
+   * stand in for the rest. Nothing is copied: every member is the same object main itself holds.
+   */
+  /** REQ-GIT-101: written by the checkpoint commands, read by the quit path below and by nothing else. */
+  const checkpointOp: { current: Promise<unknown> | null } = { current: null };
+  const commandContext: CommandContext = {
+    log, clocks, capturing, layout, processes,
+    runHost, services, relay,
+    mainWindows, windowFor, ownerOfAuxiliary, dialogs, dialogPayloads,
+    pauseWindows, pausePayloads, presentPause, reviewPayloads,
+    measurePersonaPaint, terminalWindowCommand, surface,
+    notices, raiseNotice, raiseNoticeKeyed, recoveryFor, announceRepairs,
+    providers, healthCache, providerPayloads, providerChoices, providerRows, presentProvider, afterProviderChange,
+    preferences, currentTheme: () => currentTheme, setTheme: (name) => (currentTheme = resolveTheme(name)), themeBackground, requirementsPreferenceKey,
+    initialization, libraryRevision, requirementsRuns, improvementUndo, improvementRuns,
+    chooseSave, chooseExportPath, chooseDirectory, chooseSkillFile,
+    openHookReview, restoreFlow, checkpointOp,
+  };
+  /**
+   * Every command this product answers, filed under its kind. `CommandHandlers` is total over
+   * `CommandRequest['kind']`, so a kind added to the contract and to no facet fails to compile here —
+   * which is the stop `04-seams.md` §1 names, and is why this table has no `default`.
+   */
+  const handlers: CommandHandlers = {
+    ...checkpointsCommands(commandContext),
+    ...configCommands(commandContext),
+    ...dialogsCommands(commandContext),
+    ...gitCommands(commandContext),
+    ...hooksCommands(commandContext),
+    ...improvementsCommands(commandContext),
+    ...initializationCommands(commandContext),
+    ...libraryCommands(commandContext),
+    ...mcpCommands(commandContext),
+    ...providersCommands(commandContext),
+    ...requirementsCommands(commandContext),
+    ...sessionCommands(commandContext),
+    ...shellCommands(commandContext),
+    ...skillsCommands(commandContext),
+    ...windowsCommands(commandContext),
+    ...workspaceCommands(commandContext),
+  };
   const runCommand = async (raw: unknown, senderId = activeWindow()?.wcId ?? -1): Promise<CommandOutcome> => {
     /**
      * A2 — REQ-SHELL-020: a command is answered for the window that RAISED it, so every workspace-scoped read
@@ -1322,1008 +1259,15 @@ async function main(): Promise<void> {
     if (!parsed.success) return { ok: false, code: 'command.malformed', headline: 'The request could not be read' };
     const req = parsed.data;
     const awaitWorkspace = () => mainWindows.awaitWorkspace(w.wcId);
-    switch (req.kind) {
-      case 'approval.payload': {
-        const p = dialogPayloads.get(senderId);
-        return p ? { ok: true, value: p } : { ok: false, code: 'approval.none', headline: 'This window was not opened for an approval' };
-      }
-      case 'approval.raise': {
-        // Part AC — REQ-CHAT-098/103: the approval trailer re-opens what is already up. Main raises; it never decides.
-        const open = mainWindows.openDialog(w.wcId);
-        if (!open || open.requestId !== req.requestId || open.win.isDestroyed()) return { ok: false, code: 'approval.none', headline: 'No approval dialog is open for that request' };
-        open.win.show();
-        open.win.focus();
-        log(`approval ${req.requestId} raised from the transcript trailer`);
-        return { ok: true };
-      }
-      case 'pause.payload': {
-        const p = pausePayloads.get(senderId);
-        return p ? { ok: true, value: p } : { ok: false, code: 'pause.none', headline: 'This window was not opened for a pause' };
-      }
-      case 'pause.present':
-        void presentPause(req.payload);
-        return { ok: true };
-      case 'providers.list':
-        return { ok: true, value: providerRows() };
-      case 'providers.health': {
-        healthCache.set(req.id, { state: 'checking', detail: '', available: true });
-        const h = await providers.health(req.id);
-        healthCache.set(req.id, h);
-        if (h.state === 'healthy') void afterProviderChange();
-        return { ok: true, value: h };
-      }
-      case 'providers.open':
-        void presentProvider(req.mode, req.providerId ?? null);
-        return { ok: true };
-      case 'provider.payload': {
-        const p = providerPayloads.get(senderId);
-        if (!p) return { ok: false, code: 'provider.none', headline: 'This window was not opened for a provider sign-in' };
-        const payload: ProviderDialogPayload = { mode: p.mode, providerId: p.providerId, displayName: p.providerId ? providers.displayName(p.providerId) : null, choices: providerChoices() };
-        return { ok: true, value: payload };
-      }
-      case 'provider.signIn': {
-        // The pasted key comes in here and goes to the store or nowhere; it is never logged (REQ-PROVIDER-131).
-        const outcome: ProviderSignInResult = req.providerId === 'openai-compatible'
-          ? await providers.addInstance({ label: req.label ?? '', baseUrl: req.baseUrl ?? '', apiKey: req.apiKey, ...(req.replace ? { replace: true } : {}), ...(req.allowEmpty ? { allowEmpty: true } : {}) })
-          : await providers.signInWithKey(req.providerId, req.apiKey, req.allowEmpty ?? false);
-        if (outcome.outcome === 'signed-in') {
-          // A catalog that answers without a key validated nothing (REQ-PROVIDER-133's gap on a public catalog): health stays unchecked and the notice warns.
-          healthCache.set(outcome.id, outcome.keyValidated ? { state: 'healthy', detail: outcome.message, available: true } : { state: 'unknown', detail: outcome.message, available: true });
-          raiseNotice(outcome.keyValidated ? 'info' : 'warning', outcome.message, 'Model slots were assigned from the discovered catalog; review them under Settings → Models.', recoveryFor('config.models'));
-          await afterProviderChange();
-        } else if (outcome.outcome === 'failed') {
-          log(`providers: sign-in failed for ${req.providerId}: ${outcome.message}`);
-        }
-        return { ok: true, value: outcome };
-      }
-      case 'providers.save': {
-        let message = '';
-        if (req.baseUrl !== null) { const r = await providers.setBaseUrl(req.id, req.baseUrl); if (!r.ok) return { ok: true, value: { ok: false, message: r.error } }; message = r.value; }
-        if (req.apiKey.trim() !== '') { const r = await providers.replaceKey(req.id, req.apiKey, req.validate); if (!r.ok) return { ok: true, value: { ok: false, message: r.error } }; message = r.value; }
-        else if (req.baseUrl === null && !providers.status(req.id).startsWith('auth')) return { ok: true, value: { ok: false, message: `A key is required for ${providers.displayName(req.id)}.` } };
-        if (message === '') message = 'Nothing changed.';
-        else { healthCache.delete(req.id); await afterProviderChange(); }
-        return { ok: true, value: { ok: true, message: `Saved. ${message}` } };
-      }
-      case 'providers.validate': {
-        const r = await providers.validate(req.id);
-        if (r.ok) { healthCache.set(req.id, { state: 'healthy', detail: r.value, available: true }); await afterProviderChange(); }
-        else healthCache.delete(req.id);
-        return { ok: true, value: r.ok ? { ok: true, message: r.value } : { ok: false, message: r.error } };
-      }
-      case 'providers.signOut': {
-        const r = await providers.signOut(req.id);
-        healthCache.delete(req.id);
-        log(`providers: ${r.message}`);
-        await afterProviderChange();
-        return { ok: true, value: { ok: r.outcome === 'signed-out' || r.outcome === 'nothing', message: r.message } };
-      }
-      case 'providers.delete': {
-        const r = await providers.deleteInstance(req.id);
-        healthCache.delete(req.id);
-        if (r.ok) { log(`providers: ${r.value.message}`); await afterProviderChange(); }
-        return { ok: true, value: r.ok ? { ok: true, message: r.value.message } : { ok: false, message: r.error } };
-      }
-      case 'providers.refresh': {
-        const lines: string[] = [];
-        const summary = await providers.refresh(req.ids, (l) => { lines.push(l); log(`providers: ${l}`); });
-        await afterProviderChange();
-        return { ok: true, value: { ok: summary.complete, message: lines[lines.length - 1] ?? '' } };
-      }
-      case 'session.continue': {
-        const r = await runHost.request({ kind: 'session.continue', sessionId: req.sessionId, action: req.action }, millis(10_000));
-        if (r.kind !== 'session.continued') { if (r.kind === 'refused') raiseNotice('error', r.headline, r.detail); return refusal(r, 'The session could not be continued'); }
-        const open = pauseWindows.get(req.sessionId);
-        if (open && !open.isDestroyed()) open.close();
-        log(`session ${req.sessionId} ${req.action}: ${r.resumed ? 'continued' : 'left paused'}`);
-        return { ok: true, value: { resumed: r.resumed, messageLimit: r.messageLimit } };
-      }
-      /*
-       * REQ-ORCH-153/154 (ADR-0062): the plan gate's two entries, forwarded to the run host that owns the session.
-       * They are session commands and not controls: the run is PARKED, so there is nothing live to control and the
-       * answer must reach a session whose hosting process may have exited since the gate opened.
-       */
-      case 'session.planEdit': {
-        const r = await runHost.request({ kind: 'session.planEdit', sessionId: req.sessionId, text: req.text }, millis(10_000));
-        return r.kind === 'ack' ? { ok: true, value: null } : refusal(r, 'The plan could not be edited');
-      }
-      case 'session.planDecision': {
-        const r = await runHost.request({ kind: 'session.planDecision', sessionId: req.sessionId, decision: req.decision, ...(req.changes === undefined ? {} : { changes: req.changes }) }, millis(10_000));
-        if (r.kind !== 'session.planResolved') { if (r.kind === 'refused') raiseNotice('error', r.headline, r.detail); return refusal(r, 'The plan decision could not be applied'); }
-        log(`session ${req.sessionId} plan cycle ${r.cycle}: ${req.decision}${r.relaunched ? ' — a further segment is executing' : ' — the run came to rest'}`);
-        return { ok: true, value: { cycle: r.cycle, relaunched: r.relaunched } };
-      }
-      case 'hooks.summary': {
-        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace to see its hooks' };
-        const r = await runHost.request({ kind: 'hooks.summary', workspaceId: w.workspaceId, ...(req.sessionId === undefined ? {} : { sessionId: req.sessionId }) }, millis(10_000));
-        return r.kind === 'hooks.summary' ? { ok: true, value: r.summary } : refusal(r, 'The hooks could not be read');
-      }
-      case 'hooks.review':
-        return openHookReview();
-      case 'playbooks.catalogue': {
-        const r = await runHost.request({ kind: 'playbooks.catalogue' }, millis(10_000));
-        return r.kind === 'playbooks.catalogue' ? { ok: true, value: r.catalogue } : refusal(r, 'The playbook catalogue could not be read');
-      }
-      case 'hooks.reviewPayload': {
-        const p = reviewPayloads.get(senderId);
-        return p ? { ok: true, value: { workspace: p.workspace, entries: p.entries } } : { ok: false, code: 'hooks.review.none', headline: 'This window was not opened for a hook review' };
-      }
-      case 'hooks.reviewDecide': {
-        const p = reviewPayloads.get(senderId);
-        if (!p || p.decided) return { ok: false, code: 'hooks.review.none', headline: 'No review is open for this window' };
-        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'The workspace is no longer open' };
-        const r = await runHost.request({ kind: 'hooks.decide', workspaceId: w.workspaceId, trusted: req.trusted }, millis(10_000));
-        if (r.kind !== 'ack') return refusal(r, 'The decision could not be saved');
-        p.decided = true;
-        log(`hook review → ${req.trusted ? 'allowed' : 'refused'}`);
-        clocks.timers.after(millis(50), () => { if (!p.win.isDestroyed()) p.win.close(); });
-        return { ok: true };
-      }
-      case 'hooks.clearDecision': {
-        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
-        const r = await runHost.request({ kind: 'hooks.clearDecision', workspaceId: w.workspaceId }, millis(10_000));
-        return r.kind === 'ack' ? { ok: true } : refusal(r, 'The stored decision could not be removed');
-      }
-      case 'hooks.setToggle': {
-        const r = await runHost.request({ kind: 'hooks.setToggle', agent: req.agent, hookId: req.hookId, on: req.on }, millis(10_000));
-        return r.kind === 'ack' ? { ok: true } : refusal(r, 'The hook policy could not be saved');
-      }
-      // ADR-0034 (Part S): the MCP category is answered by the run host, the one holder of the pipeline, the probe and the session override.
-      case 'mcp.list': {
-        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
-        const r = await runHost.request({ kind: 'mcp.list', workspaceId: w.workspaceId }, millis(10_000));
-        return r.kind === 'mcp.list' ? { ok: true, value: r.listing } : refusal(r, 'The MCP servers could not be listed');
-      }
-      case 'mcp.probe': {
-        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
-        const r = await runHost.request({ kind: 'mcp.probe', workspaceId: w.workspaceId, ...(req.name === undefined ? {} : { name: req.name }) }, millis(req.name === undefined ? 120_000 : 12_000));
-        return r.kind === 'mcp.probe' ? { ok: true, value: r.results } : refusal(r, 'The MCP server could not be probed');
-      }
-      case 'mcp.setEnabled': {
-        const r = await runHost.request({ kind: 'mcp.setEnabled', name: req.name, enabled: req.enabled }, millis(10_000));
-        return r.kind === 'ack' ? { ok: true } : refusal(r, 'The session toggle could not be applied');
-      }
-      case 'mcp.secrets': {
-        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
-        const r = await runHost.request({ kind: 'mcp.secrets', workspaceId: w.workspaceId, ...(req.server === undefined ? {} : { server: req.server }) }, millis(10_000));
-        return r.kind === 'mcp.secrets' ? { ok: true, value: r.view } : refusal(r, 'The stored secrets could not be read');
-      }
-      /**
-       * ADR-0022 (Part AR): main relays; the run host owns the verdict because it is the process that
-       * executes commands (REQ-SANDBOX-067, REQ-SANDBOX-094). No workspace is required — whether this
-       * HOST can confine anything is a property of the machine, and REQ-SANDBOX-130's disclosure is
-       * owed on the settings surface before any workspace question is settled. The bound is the
-       * probe's own 5.0 s (REQ-SANDBOX-069) plus the round trip.
-       */
-      case 'confinement.status': {
-        const r = await runHost.request({ kind: 'confinement.status', ...(req.recheck === undefined ? {} : { recheck: req.recheck }) }, millis(10_000));
-        return r.kind === 'confinement.status' ? { ok: true, value: r.verdict } : refusal(r, 'The confinement availability could not be read');
-      }
-      // ADR-0035 (Part T) / REQ-MCP-099/112: the code-intelligence project setup runs in the run host; main relays the action and the status.
-      case 'mcp.setup': {
-        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
-        const r = await runHost.request({ kind: 'mcp.setup', workspaceId: w.workspaceId, action: req.action }, millis(15_000));
-        return r.kind === 'mcp.setup' ? { ok: true, value: r.status } : refusal(r, 'The code-intelligence setup could not be started');
-      }
-      /*
-       * Part AS — ADR-0064 (REQ-WORKSPACE-102, 105, 110, 111, 109, 115). Every answer is the whole state,
-       * and the coordinator publishes on channel 12 besides, so a window that did not ask still catches up.
-       */
-      case 'initialization.read':
-        return { ok: true, value: await initialization.read() };
-      case 'initialization.resolve':
-        // REQ-WORKSPACE-102: a user-requested check is additional to the one automatic resolution per open.
-        return { ok: true, value: await initialization.resolve(false) };
-      case 'initialization.start': {
-        const r = await initialization.start();
-        return r.ok ? { ok: true, value: await initialization.read() } : { ok: false, code: 'initialization.refused', headline: r.headline, ...(r.detail === '' ? {} : { detail: r.detail }) };
-      }
-      case 'initialization.skip': {
-        const r = await initialization.skip(req.ids);
-        return r.ok ? { ok: true, value: await initialization.read() } : { ok: false, code: 'initialization.write', headline: SKIP_WRITE_FAILED(r.reason) };
-      }
-      case 'initialization.cancel':
-        await initialization.cancel();
-        return { ok: true, value: await initialization.read() };
-      /*
-       * ADR-0063 — portable skills (REQ-WORKSPACE-051..073, 151). The run host answers because it owns the
-       * catalog; main names the window's open workspace and the session it follows, as it does for every
-       * workspace-scoped command. A window following no session sends none, and the run host puts the
-       * gesture in that workspace's pending bucket for the next session to adopt (OQ-58).
-       */
-      case 'skills.read':
-      case 'skills.rescan': {
-        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reading its portable skills' };
-        const r = await runHost.request({ kind: req.kind, workspaceRoot: canonicalPath(w.workspace), ...(w.followedSessionId === null ? {} : { sessionId: w.followedSessionId }) }, millis(15_000));
-        return r.kind === 'skills.state' ? { ok: true, value: r.state } : refusal(r, 'The portable skills could not be read');
-      }
-      case 'skills.forceLoad': {
-        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
-        const r = await runHost.request({ kind: 'skills.forceLoad', workspaceRoot: canonicalPath(w.workspace), name: req.name, ...(w.followedSessionId === null ? {} : { sessionId: w.followedSessionId }) }, millis(10_000));
-        // REQ-WORKSPACE-073: the refusal text is the run host's — "Skills are disabled. Enable them in Settings."
-        return r.kind === 'skills.state' ? { ok: true, value: { name: r.loaded, state: r.state } } : refusal(r, 'The skill could not be loaded');
-      }
-      /*
-       * REQ-WORKSPACE-151 — "Load skill file…". With no path the platform's own chooser opens on REQ-SHELL-164's
-       * terms and a dismissal by any means returns no selection and changes nothing; with one the caller already
-       * has the path (the typed `/skill <path>` of REQ-CHAT-162, which needs no dialog).
-       *
-       * **The dialog is a FILE chooser on Windows and Linux** and both properties on macOS. The requirement asks
-       * for a chooser "restricted to selecting a SKILL.md file or a directory containing one", which no platform
-       * dialog offers on those two hosts — logged as OQ-59. The directory form of REQ-WORKSPACE-057 stays
-       * reachable through the typed command, so no capability is lost; only the dialog is narrower.
-       */
-      case 'skills.loadFile': {
-        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
-        let path = req.path;
-        if (path === undefined) {
-          const chosen = await chooseSkillFile(w.win, canonicalPath(w.workspace));
-          if (chosen === null) return { ok: true, value: { cancelled: true } };
-          path = chosen;
-        }
-        const r = await runHost.request({ kind: 'skills.loadFile', workspaceRoot: canonicalPath(w.workspace), path, ...(w.followedSessionId === null ? {} : { sessionId: w.followedSessionId }) }, millis(10_000));
-        return r.kind === 'skills.state' ? { ok: true, value: { cancelled: false, name: r.loaded, state: r.state } } : refusal(r, 'The skill file could not be loaded');
-      }
-      case 'shell.hello': {
-        const cb = w.workspaceId
-          ? await runHost.request({ kind: 'circuit_breaker.status', workspaceId: w.workspaceId }, millis(5_000))
-          : { kind: 'circuit_breaker.status' as const, enabled: process.env['ROTARIS_CIRCUIT_BREAKER'] !== 'off' };
-        // REQ-SHELL-140 (Part AG): the About page's product card reads its four local facts from here; it makes no
-        // request of its own and none of these leaves the machine (REQ-SHELL-139, REQ-CONFIG-398).
-        return { ok: true, value: {
-          version: app.getVersion(), workspace: w.workspace, processes: [...processes, ...services.keys()].map((p) => `svc:${p}`),
-          circuitBreakerArmed: cb.kind === 'circuit_breaker.status' && cb.enabled,
-          build: buildIdentifier(), standalone: app.isPackaged, thirdPartyLicenses: thirdPartyLicensesPath() !== null,
-          // Stage B — REQ-WORKSPACE-149 rule 1: home collapsing is a DISPLAY rule, so the renderer needs to know
-          // where home is. It cannot ask the platform itself (no `node:os` in a sandboxed renderer, ADR-0051), and
-          // the collapse must never reach the tooltip, the accessible description or anything handed to the host,
-          // which is why what travels is home itself rather than an already-collapsed label.
-          home: homedir(),
-        } };
-      }
-      /**
-       * Part AA — REQ-CHAT-076: an `http(s)` link in transcript text opens in the SYSTEM BROWSER, the opening is
-       * acknowledged and a failure is reported rather than passing silently. The renderer is sandboxed and never
-       * navigates (ADR-0051); main is the only process that hands a URL to the platform.
-       *
-       * **The scheme is checked here and nowhere else.** Transcript text is model-authored, so a `file:`,
-       * `javascript:` or shell-registered scheme reaching `shell.openExternal` would run at the reader's expense
-       * on their machine. Only `http:` and `https:` are opened; everything else, and anything that is not a URL
-       * at all, is refused with the target named.
-       */
-      case 'shell.openExternal': {
-        let parsed: URL;
-        try { parsed = new URL(req.url); }
-        catch { return { ok: false, code: 'link.unreadable', headline: 'That link could not be opened', detail: `“${req.url}” is not a web address.` }; }
-        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-          return { ok: false, code: 'link.scheme', headline: 'That link could not be opened', detail: `Only http and https links open in the browser; this one is “${parsed.protocol.replace(':', '')}”.` };
-        }
-        // Verification seam (only with ROTARIS_CAPTURE_PNG): `record` opens nothing and reports success, `fail`
-        // reports the platform refusal, so both halves of the requirement are exercised without launching a browser.
-        const scripted = capturing ? process.env['ROTARIS_CAPTURE_OPEN_EXTERNAL'] : undefined;
-        if (scripted === 'fail') { log(`capture: open-external REFUSED ${parsed.href}`); return { ok: false, code: 'link.failed', headline: 'That link could not be opened', detail: 'The system browser refused to open it (scripted).' }; }
-        if (scripted === 'record') { log(`capture: open-external ${parsed.href}`); return { ok: true, value: { url: parsed.href } }; }
-        try { await shell.openExternal(parsed.href); }
-        catch (cause) { return { ok: false, code: 'link.failed', headline: 'That link could not be opened', detail: cause instanceof Error ? cause.message : String(cause) }; }
-        log(`opened externally: ${parsed.href}`);
-        return { ok: true, value: { url: parsed.href } };
-      }
-      /**
-       * Part AG — REQ-SHELL-142: the third-party licence bundle opens as a **local** file, so it takes its own
-       * command rather than the scheme-guarded external opener beside it. Main resolves the path; the renderer
-       * never names one. With no bundle the refusal is the ordinary case for this build, not an error.
-       */
-      case 'shell.openThirdPartyLicenses': {
-        const path = thirdPartyLicensesPath();
-        if (path === null) return { ok: false, code: 'licenses.absent', headline: 'No third-party license bundle', detail: 'This build does not carry a third-party license bundle.' };
-        const scripted = capturing ? process.env['ROTARIS_CAPTURE_OPEN_EXTERNAL'] : undefined;
-        if (scripted === 'fail') { log(`capture: open-licenses REFUSED ${path}`); return { ok: false, code: 'licenses.failed', headline: 'The license bundle could not be opened', detail: 'The system refused to open it (scripted).' }; }
-        if (scripted === 'record') { log(`capture: open-licenses ${path}`); return { ok: true, value: { path } }; }
-        const failed = await shell.openPath(path);
-        if (failed !== '') return { ok: false, code: 'licenses.failed', headline: 'The license bundle could not be opened', detail: failed };
-        log(`opened licenses: ${path}`);
-        return { ok: true, value: { path } };
-      }
-      case 'theme.get':
-        return { ok: true, value: { name: currentTheme.name } };
-      case 'theme.set': {
-        currentTheme = resolveTheme(req.name);
-        preferences.writeThemeSync(currentTheme.name);
-        nativeTheme.themeSource = currentTheme.dark ? 'dark' : 'light';
-        const background = themeBackground();
-        for (const window of BrowserWindow.getAllWindows()) {
-          if (window.isDestroyed()) continue;
-          window.setBackgroundColor(background);
-          window.webContents.send(CHANNEL.themeChanged, { v: CONTRACT_SCHEMA_VERSION, name: currentTheme.name });
-        }
-        log(`theme applied ${currentTheme.name} to every live window`);
-        return { ok: true, value: { name: currentTheme.name } };
-      }
-      case 'prefs.get':
-        return { ok: true, value: { value: preferences.read(requirementsPreferenceKey(req.key)) } };
-      case 'prefs.set': {
-        if (req.key === 'panels/overview' || req.key === 'panels/git' || req.key === 'panels/library' || req.key === 'panels/workspace') {
-          if (typeof req.value !== 'object') return { ok: false, code: 'preference.type', headline: 'A pane layout requires a layout record' };
-          await preferences.write(req.key, req.value);
-        } else if (req.key === 'ui/reduced_motion') {
-          if (typeof req.value !== 'boolean') return { ok: false, code: 'preference.type', headline: 'Reduce motion requires a boolean value' };
-          await preferences.write(req.key, req.value);
-        } else if (req.key === 'interface/agentPopOut' || req.key === 'display/showReasoning' || req.key === 'display/autoCollapseTools') {
-          // Part AA: REQ-CHAT-167's `display/showReasoning` and REQ-CHAT-067's `display/autoCollapseTools`, both booleans and both off by default.
-          if (typeof req.value !== 'boolean') return { ok: false, code: 'preference.type', headline: 'This display preference requires a boolean value' };
-          await preferences.write(req.key, req.value);
-        } else if (req.key === 'display/groupTools') {
-          // REQ-CHAT-067 (Part Z): the tool-grouping switch, default on.
-          if (typeof req.value !== 'boolean') return { ok: false, code: 'preference.type', headline: 'Tool grouping requires a boolean value' };
-          await preferences.write(req.key, req.value);
-        } else {
-          if (typeof req.value !== 'string') return { ok: false, code: 'preference.type', headline: 'The Settings category requires a string value' };
-          await preferences.write(requirementsPreferenceKey(req.key), req.value);
-        }
-        return { ok: true };
-      }
-      /**
-       * REQ-CHAT-015 / REQ-SHELL-159 (Part AB): the per-workspace composer draft. Main resolves the key from the
-       * workspace IT has open — the renderer names none — so a draft can only ever be read or written against the
-       * workspace whose window asked, and the isolation REQ-CHAT-015 requires is a property of this seam rather
-       * than of the caller. With no workspace open there is no draft: the read answers the empty default and the
-       * write is a silent no-op, which is the state a window is in before its first workspace opens.
-       */
-      case 'composer.readDraft':
-        if (w.workspace === '(no workspace)') return { ok: true, value: { text: '' } };
-        return { ok: true, value: { text: preferences.read(composerDraftKey(w.workspace)) } };
-      case 'composer.writeDraft': {
-        if (w.workspace === '(no workspace)') return { ok: true };
-        await preferences.write(composerDraftKey(w.workspace), req.text);
-        return { ok: true };
-      }
-      case 'session.start': {
-        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before starting a run' };
-        // REQ-GIT-021: the two conflicting choices, refused before anything is created (REQ-GIT-158 makes this unreachable from the dialog).
-        if (req.isolation && req.attach) return { ok: false, code: 'session.worktree-options', headline: 'Choose either an isolated worktree or an existing worktree to attach, not both.' };
-        /**
-         * REQ-GIT-022/023 (Part O), the reading taken with a main-minted id: the binding is made BEFORE the run host is
-         * asked for the session, so a binding failure leaves no session, no lock and no log — "deleted" by construction
-         * rather than by a delete. The id the dialog showed (session.newId) is the id the session takes (REQ-GIT-007/118).
-         */
-        let binding: WorktreeBinding | undefined;
-        let sessionId: string | undefined;
-        const root = canonicalPath(w.workspace);
-        const svc = services.get(root);
-        if (req.isolation || req.attach) {
-          if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
-          sessionId = mainWindows.takeMintedSession(w.wcId) ?? randomUUID();
-          const bindFailure = (r: ProcessReply): CommandOutcome => {
-            const detail = r.kind === 'refused' ? [r.headline, r.detail].filter(Boolean).join(': ') : `unexpected reply ${r.kind}`;
-            const headline = `Error: could not create or attach the requested worktree: ${detail}`;
-            raiseNotice('error', headline);
-            log(`run refused before start: ${headline}`);
-            return { ok: false, code: 'session.worktree', headline, detail };
-          };
-          if (req.isolation) {
-            const made = await svc.link.request({ kind: 'worktree.create', workspaceRoot: root, branch: req.isolation.branch, collisionSafe: true, target: { kind: 'session', sessionId } }, millis(120_000));
-            if (made.kind !== 'worktree.created') return bindFailure(made);
-            binding = { worktree_path: made.path, branch: made.branch, base_branch: made.baseBranch, base_revision: made.baseRevision, created_by_session: true, merge_status: 'ready', integration_session_id: null };
-          } else if (req.attach) {
-            const checked = await svc.link.request({ kind: 'worktree.checkAttach', workspaceRoot: root, path: req.attach.path }, millis(60_000));
-            if (checked.kind !== 'worktree.attachable') return bindFailure(checked);
-            binding = { worktree_path: checked.path, branch: checked.branch, base_branch: checked.baseBranch, base_revision: checked.baseRevision, created_by_session: false, merge_status: 'ready', integration_session_id: null };
-          }
-        }
-        const r = await runHost.request({ kind: 'session.start', workspaceId: w.workspaceId, prompt: req.prompt, ...(req.attachments === undefined ? {} : { attachments: req.attachments }), ...(sessionId === undefined ? {} : { sessionId }), ...(binding === undefined ? {} : { effectiveRoot: binding.worktree_path, worktree: binding }), ...(req.sandboxMode === undefined ? {} : { sandboxMode: req.sandboxMode }) }, millis(10_000));
-        if (r.kind !== 'session.started') {
-          // A tree this request created for a session that never came to exist is taken away again, so nothing is left behind (REQ-GIT-023).
-          if (binding?.created_by_session && svc) {
-            const path = binding.worktree_path;
-            void svc.link.request({ kind: 'worktree.remove', workspaceRoot: root, path, force: true }, millis(60_000)).then((x) => log(`worktree ${path} removed after the refused start (${x.kind})`)).catch(() => undefined);
-          }
-          // REQ-NOTIFY-003: a refusal is also published as a persistent notice, so it outlives the composer's error line.
-          // REQ-WORKSPACE-137: the two provider refusals carry an action leading to the Models settings.
-          if (r.kind === 'refused') { raiseNotice('error', r.headline, r.detail, r.code === 'session.no-model' || r.code === 'session.provider-auth' ? recoveryFor('config.models') : undefined); log(`run refused: ${r.headline}${r.detail ? ` — ${r.detail}` : ''}`); }
-          return refusal(r, 'The session could not be started');
-        }
-        if (binding) log(`session ${r.sessionId} bound to ${binding.worktree_path} on ${binding.branch} (${binding.created_by_session ? 'created by the session' : 'attached'})`);
-        // REQ-NOTIFY-058 / REQ-NOTIFY-029: a starting run clears the standing notice only where it is unscoped or
-        // scoped to this same session; a notice about another session survives, whatever order the events arrived in.
-        await notices.clearForRunStart(r.sessionId);
-        // REQ-SHELL-078: a new session starts — every persona window and its cache go.
-        w.personaWindows.destroyAll('a new session started');
-        return { ok: true, value: { sessionId: r.sessionId } };
-      }
-      case 'session.newId': {
-        // REQ-GIT-118: the id the launch dialog shows; the next isolated or attached start takes it.
-        const sessionId = randomUUID();
-        mainWindows.setMintedSession(w.wcId, sessionId);
-        return { ok: true, value: { sessionId } };
-      }
-      case 'git.read': {
-        await awaitWorkspace();
-        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reading its repository' };
-        const svc = services.get(canonicalPath(w.workspace));
-        if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
-        // REQ-GIT-102: 15 s per read is the bound; a refresh of a repository with many worktrees is many reads.
-        const r = await svc.link.request({ kind: 'git.view', workspaceRoot: canonicalPath(w.workspace) }, millis(600_000));
-        if (r.kind !== 'git.state') return refusal(r, 'The repository could not be read');
-        const st = r.state;
-        log(`git view: ${st.reads} reads in ${st.readMs} ms (git=${st.gitAvailable} repo=${st.isRepository} branch=${st.branch ?? (st.detached ? 'detached' : '-')} +${st.ahead}/-${st.behind} worktrees=${st.worktrees.length} history=${st.history.length}${st.failed.length > 0 ? ` failed=${st.failed.join(',')}` : ''})`);
-        // REQ-GIT-104 / ADR-0038 c.1: a fixed identity, so refreshes replace rather than stack it; a non-repository raises nothing.
-        if (!st.gitAvailable && raiseNoticeKeyed('git.missing', 'info', 'Working without Git', 'Git is not installed or not on PATH, so this workspace has no history and no worktrees. Everything else works, and Rotaris makes its changes in place instead of in a worktree of its own.')) log('notice: Working without Git');
-        return { ok: true, value: st };
-      }
-      case 'worktree.create': {
-        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before creating a worktree' };
-        const svc = services.get(canonicalPath(w.workspace));
-        if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
-        // REQ-GIT-110/115: the user's own path, not collision-safe — a typed name is created exactly or refused with Git's wording.
-        const r = await svc.link.request({ kind: 'worktree.create', workspaceRoot: canonicalPath(w.workspace), branch: req.branch, collisionSafe: false, target: { kind: 'path', path: req.path } }, millis(120_000));
-        if (r.kind !== 'worktree.created') { log(`worktree create refused: ${r.kind === 'refused' ? r.headline : r.kind}`); return r.kind === 'refused' ? { ok: false, code: r.code, headline: r.headline, ...(r.detail === undefined ? {} : { detail: r.detail }) } : refusal(r, 'The worktree could not be created'); }
-        log(`worktree created by the user: ${r.branch} at ${r.path}`);
-        return { ok: true, value: { path: r.path, branch: r.branch } };
-      }
-      case 'worktree.remove': {
-        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before deleting a worktree' };
-        const svc = services.get(canonicalPath(w.workspace));
-        if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
-        const r = await svc.link.request({ kind: 'worktree.remove', workspaceRoot: canonicalPath(w.workspace), path: req.path, force: req.force }, millis(120_000));
-        if (r.kind !== 'worktree.removed') {
-          // REQ-GIT-117: the one refusal force would cure is named by its code; everything else is Git's wording.
-          if (r.kind === 'refused') { log(`worktree remove refused${r.needsForce ? ' (needs force)' : ''}: ${r.headline}`); return { ok: false, code: r.needsForce ? 'worktree.needs-force' : r.code, headline: r.headline }; }
-          return refusal(r, 'The worktree could not be deleted');
-        }
-        log(`worktree deleted by the user: ${r.path}${req.force ? ' (forced)' : ''}`);
-        return { ok: true, value: { path: r.path } };
-      }
-      case 'worktree.chooseAttach': {
-        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before attaching a worktree' };
-        const svc = services.get(canonicalPath(w.workspace));
-        if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
-        const chosen = await chooseDirectory(w.win, { title: 'Attach to an existing worktree', properties: ['openDirectory'] });
-        if (!chosen) return { ok: true, value: { cancelled: true } };
-        // REQ-GIT-158: validated exactly as REQ-GIT-011 validates an attach, before any session exists.
-        const r = await svc.link.request({ kind: 'worktree.checkAttach', workspaceRoot: canonicalPath(w.workspace), path: chosen }, millis(60_000));
-        if (r.kind !== 'worktree.attachable') return r.kind === 'refused' ? { ok: false, code: r.code, headline: r.headline } : refusal(r, 'The worktree could not be checked');
-        return { ok: true, value: { path: r.path, branch: r.branch } };
-      }
-      case 'checkpoints.list':
-        return checkpointGate(async () => {
-          const ctx = await checkpointContext(w);
-          if (isOutcome(ctx)) return ctx;
-          const l = await readListing(ctx.workspaceId, req.sessionId);
-          return isOutcome(l) ? l : { ok: true, value: l };
-        });
-      case 'checkpoints.preview':
-        return checkpointGate(() => checkpointPreview(w, req.sessionId, req.sequence));
-      case 'checkpoints.restore':
-        return checkpointGate(() => checkpointRestore(w, req.sessionId, req.sequence, req.force));
-      case 'worktree.probePath': {
-        try {
-          if (!existsSync(req.path)) return { ok: true, value: { exists: false, nonEmpty: false } };
-          const st = statSync(req.path);
-          return { ok: true, value: { exists: true, nonEmpty: !st.isDirectory() || readdirSync(req.path).length > 0 } };
-        } catch { return { ok: true, value: { exists: true, nonEmpty: true } }; }
-      }
-      case 'session.list': {
-        await awaitWorkspace();
-        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before browsing sessions' };
-        const r = await runHost.request({ kind: 'session.list', workspaceId: w.workspaceId }, millis(5_000));
-        return r.kind === 'session.list' ? { ok: true, value: { sessions: r.sessions } } : refusal(r, 'The session list could not be loaded');
-      }
-      // ---- Part Y: the Library's Artifacts tab (REQ-LIBRARY-108/131..136). Main relays; the run host owns the store and the files. ----
-      case 'artifacts.list': {
-        await awaitWorkspace();
-        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before browsing artifacts' };
-        const r = await runHost.request({ kind: 'artifacts.list', workspaceId: w.workspaceId }, millis(5_000));
-        return r.kind === 'artifacts.state' ? { ok: true, value: r.state } : refusal(r, 'The session artifacts could not be read');
-      }
-      case 'artifacts.body': {
-        await awaitWorkspace();
-        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before opening an artifact' };
-        const r = await runHost.request({ kind: 'artifacts.body', workspaceId: w.workspaceId, ref: req.ref }, millis(10_000));
-        return r.kind === 'artifacts.body' ? { ok: true, value: { id: r.id, slug: r.slug, title: r.title, artifactKind: r.kind_, status: r.status, producer: r.producer, persona: r.persona, edited: r.edited, body: r.body, fallback: r.fallback } } : refusal(r, 'The artifact could not be loaded');
-      }
-      case 'artifacts.save': {
-        await awaitWorkspace();
-        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before saving an artifact' };
-        const r = await runHost.request({ kind: 'artifacts.save', workspaceId: w.workspaceId, ref: req.ref, body: req.body }, millis(10_000));
-        if (r.kind !== 'artifacts.saved') return refusal(r, 'The artifact could not be saved');
-        // REQ-LIBRARY-105: the session artifact store is one of the closed four, so a hand edit that reached the
-        // store IS a library change and every live window re-reads — the same counter a prompt write moves.
-        libraryRevision.bump('session-artifacts');
-        return { ok: true, value: { id: r.id, editedAt: r.editedAt } };
-      }
-      // ---- Part U: the session browser's actions (REQ-SESSION-182). Main supplies the dialogs and the platform's file manager; the run host does the work. ----
-      case 'session.repair': {
-        await awaitWorkspace();
-        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before repairing its sessions' };
-        const r = await runHost.request({ kind: 'session.repair', workspaceId: w.workspaceId, ...(req.sessionId === undefined ? {} : { sessionId: req.sessionId }) }, millis(30_000));
-        if (r.kind !== 'session.repaired') return refusal(r, 'The repair could not be carried out');
-        for (const x of r.report.repaired) log(`session ${x.sessionId} repaired: '${x.from}' → interrupted (${x.reason})`);
-        if (r.report.nothingStale) log(`session repair: nothing was stale`);
-        /**
-         * OQ-46: the whole batch is settled before this reply exists — the run host repairs every stale session
-         * of the workspace inside the one request — so the announcement, and the browser's refreshed list behind
-         * it, describe a settled batch and never a partly repaired one. That is what makes continuation safe to
-         * offer here rather than after a later re-check.
-         */
-        announceRepairs(r.report.repaired);
-        return { ok: true, value: { report: r.report } };
-      }
-      case 'session.delete': {
-        await awaitWorkspace();
-        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before deleting a session' };
-        const r = await runHost.request({ kind: 'session.delete', workspaceId: w.workspaceId, sessionId: req.sessionId }, millis(120_000));
-        if (r.kind !== 'session.deleted') { if (r.kind === 'refused') raiseNotice('error', 'The session was not deleted', r.headline); return refusal(r, 'The session was not deleted'); }
-        if (r.refsLeft !== null) log(`session ${req.sessionId}: checkpoint refs remain under ${r.refsLeft} (REQ-GIT-069, best-effort)`);
-        if (w.followedSessionId === req.sessionId) { mainWindows.clearFollowedSession(w.wcId, req.sessionId); w.personaWindows.destroyAll('the followed session was deleted'); }
-        if (r.existed) raiseNotice('info', `Deleted session ${req.sessionId}.`, `${r.refsDeleted} checkpoint ref${r.refsDeleted === 1 ? '' : 's'} removed${r.refsLeft === null ? '' : `; some refs remain under ${r.refsLeft}`}.`);
-        return { ok: true, value: { sessionId: r.sessionId, existed: r.existed, refsDeleted: r.refsDeleted, refsLeft: r.refsLeft, filesRemoved: r.filesRemoved, unreadable: r.unreadable, elapsedMs: r.elapsedMs } };
-      }
-      case 'session.export':
-      case 'session.exportTrajectory': {
-        // REQ-SESSION-189/199: a file the user chooses; nothing is written until then; not a channel.
-        await awaitWorkspace();
-        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before exporting a session' };
-        const ids = req.kind === 'session.export' ? [req.sessionId] : req.sessionIds;
-        const stamp = new Date(clocks.wall.instant()).toISOString().replace(/[:.]/g, '-');
-        const destination = await chooseExportPath(w.win, req.kind === 'session.export'
-          ? { title: 'Export the session records', defaultPath: `rotaris-session-${req.sessionId}-records-${stamp}.json`, filters: [{ name: 'JSON document', extensions: ['json'] }] }
-          : { title: ids.length === 1 ? 'Export the trajectory' : `Export ${ids.length} trajectories`, defaultPath: ids.length === 1 ? `rotaris-trajectory-${ids[0]}-${stamp}.json` : `rotaris-trajectories-${ids.length}-${stamp}.json`, filters: [{ name: 'JSON document', extensions: ['json'] }] });
-        if (!destination) return { ok: true, value: { cancelled: true } };
-        const r = await runHost.request(req.kind === 'session.export'
-          ? { kind: 'session.export', workspaceId: w.workspaceId, sessionId: req.sessionId, destination }
-          : { kind: 'session.exportTrajectory', workspaceId: w.workspaceId, sessionIds: [...req.sessionIds], destination }, millis(120_000));
-        if (r.kind !== 'session.exported') { if (r.kind === 'refused') raiseNotice('error', 'The export could not be written', [r.headline, r.detail].filter(Boolean).join(': ')); return refusal(r, 'The export could not be written'); }
-        raiseNotice(r.warnings.length > 0 ? 'warning' : 'info', `Wrote ${r.documents} ${req.kind === 'session.export' ? 'records document' : `trajectory document${r.documents === 1 ? '' : 's'}`} to ${r.destination}.`, r.warnings.length > 0 ? r.warnings.join(' ') : undefined);
-        return { ok: true, value: { destination: r.destination, bytes: r.bytes, documents: r.documents, warnings: r.warnings, elapsedMs: r.elapsedMs } };
-      }
-      case 'session.openLog':
-      case 'session.revealFiles': {
-        // REQ-SESSION-191: the log opened for reading, the files revealed in the platform's file manager; a missing file is reported, never faked.
-        await awaitWorkspace();
-        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
-        const r = await runHost.request({ kind: 'session.files', workspaceId: w.workspaceId, sessionId: req.sessionId }, millis(10_000));
-        if (r.kind !== 'session.files') return refusal(r, 'The session files could not be located');
-        if (req.kind === 'session.openLog') {
-          if (r.files.log === null) return { ok: false, code: 'session.no-log', headline: 'No log is kept for this session', detail: `Nothing was logged at or above the configured level, so no log file exists in ${r.files.directory}.` };
-          const failed = await shell.openPath(r.files.log);
-          return failed === '' ? { ok: true, value: { path: r.files.log } } : { ok: false, code: 'session.open-failed', headline: 'The log could not be opened', detail: failed };
-        }
-        const anyFile = r.files.summary ?? r.files.log ?? r.files.artifacts;
-        if (anyFile === null) return { ok: false, code: 'session.no-files', headline: 'This session has no files yet', detail: `No log, summary or artifact body has been written for it, so there is nothing to reveal in ${r.files.directory}.` };
-        shell.showItemInFolder(anyFile);
-        return { ok: true, value: { directory: r.files.directory, log: r.files.log, summary: r.files.summary, artifacts: r.files.artifacts } };
-      }
-      // ---- Part X: the saved prompts (REQ-LIBRARY-137/138). Relayed to the run host, which owns the store, exactly
-      // as `timeline.append` is; main adds the library revision (REQ-LIBRARY-105) and REQ-LIBRARY-138's failure notice. ----
-      case 'improvements.start': {
-        await awaitWorkspace();
-        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before starting an improvement run' };
-        const root = canonicalPath(w.workspace);
-        const svc = services.get(root);
-        if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
-        const preparedReply = await svc.link.request({ kind: 'improvements.command', workspaceRoot: root, command: { action: 'prepare', artifact_id: req.artifactId } }, millis(320_000)).catch((cause: Error) => ({ kind: 'refused' as const, code: 'improvements.prepare', headline: 'The improvement run could not be prepared', detail: cause.message }));
-        if (preparedReply.kind !== 'improvements.result') {
-          raiseNotice('error', 'The improvement run could not be prepared', preparedReply.kind === 'refused' ? [preparedReply.headline, preparedReply.detail].filter(Boolean).join(': ') : `unexpected reply ${preparedReply.kind}`);
-          return refusal(preparedReply, 'The improvement run could not be prepared');
-        }
-        const parsed = ImprovementPreparationSchema.safeParse(preparedReply.value);
-        if (!parsed.success) {
-          const detail = parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ');
-          raiseNotice('error', 'The improvement run could not be prepared', detail);
-          return { ok: false, code: 'improvements.preparation-invalid', headline: 'The improvement run could not be prepared', detail };
-        }
-        const prepared = parsed.data;
-        libraryRevision.bump('improvement-artifacts');
-        for (const gate of prepared.gate_results) {
-          const detail = gate.detail === null ? undefined : gate.detail;
-          raiseNotice(gate.outcome === 'failed' || gate.outcome === 'invalid' ? 'warning' : 'info', `${gate.proposal_id}: ${gate.outcome}`, detail);
-        }
-        if (prepared.checkpoint === null && prepared.checkpoint_reason !== null) raiseNotice('warning', `Improvement ${req.artifactId} has no rollback point`, prepared.checkpoint_reason);
-        if (prepared.plan.phases.length === 0) {
-          raiseNotice('success', `Applied approved gate proposals from ${req.artifactId}.`, 'The artifact contained no approved agent tasks.');
-          return { ok: true, value: { sessionId: null, gateOnly: true } };
-        }
-        const initialTodo = {
-          schema_version: 1 as const,
-          phases: prepared.plan.phases.map((phase) => ({ name: phase.name, tasks: phase.tasks.map((task) => ({ id: task.proposal_id, text: task.payload, state: 'pending' as const, consecutiveRetries: 0 as const })) })),
-        };
-        const started = await runHost.request({ kind: 'session.start', workspaceId: w.workspaceId, prompt: prepared.prompt, runType: 'improvement_run', initialTodo }, millis(320_000));
-        if (started.kind !== 'session.started') {
-          raiseNotice('error', 'The improvement run could not be started', started.kind === 'refused' ? [started.headline, started.detail].filter(Boolean).join(': ') : `unexpected reply ${started.kind}`);
-          return refusal(started, 'The improvement run could not be started');
-        }
-        improvementRuns.set(started.sessionId, { artifactId: req.artifactId, workspaceRoot: root });
-        await notices.clearForRunStart(started.sessionId);
-        w.personaWindows.destroyAll('a new session started');
-        log(`improvement ${req.artifactId} started as session ${started.sessionId}`);
-        return { ok: true, value: { sessionId: started.sessionId, gateOnly: false } };
-      }
-      case 'improvements.rollbackPreview': {
-        await awaitWorkspace();
-        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before previewing an improvement rollback' };
-        const root = canonicalPath(w.workspace);
-        const svc = services.get(root);
-        if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
-        const reply = await svc.link.request({ kind: 'improvements.command', workspaceRoot: root, command: { action: 'rollback-preview', artifact_id: req.artifactId } }, millis(120_000)).catch((cause: Error) => ({ kind: 'refused' as const, code: 'improvements.preview', headline: 'The rollback preview could not be computed', detail: cause.message }));
-        if (reply.kind !== 'improvements.result') return refusal(reply, 'The rollback preview could not be computed');
-        const parsed = ImprovementRollbackPreviewSchema.safeParse(reply.value);
-        return parsed.success ? { ok: true, value: parsed.data } : { ok: false, code: 'improvements.preview-invalid', headline: 'The rollback preview could not be computed', detail: parsed.error.message };
-      }
-      case 'improvements.rollback': {
-        await awaitWorkspace();
-        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before rolling back an improvement' };
-        const root = canonicalPath(w.workspace);
-        const svc = services.get(root);
-        if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
-        const reply = await svc.link.request({ kind: 'improvements.command', workspaceRoot: root, command: { action: 'rollback', artifact_id: req.artifactId, force: req.force } }, millis(320_000)).catch((cause: Error) => ({ kind: 'refused' as const, code: 'improvements.rollback', headline: 'The improvement rollback could not be completed', detail: cause.message }));
-        if (reply.kind !== 'improvements.result') {
-          raiseNotice('error', 'The improvement rollback could not be completed', reply.kind === 'refused' ? [reply.headline, reply.detail].filter(Boolean).join(': ') : `unexpected reply ${reply.kind}`);
-          return refusal(reply, 'The improvement rollback could not be completed');
-        }
-        const parsed = ImprovementRollbackResultSchema.safeParse(reply.value);
-        if (!parsed.success) return { ok: false, code: 'improvements.rollback-invalid', headline: 'The improvement rollback could not be completed', detail: parsed.error.message };
-        const result = parsed.data;
-        libraryRevision.bump('improvement-artifacts');
-        if (!result.restored) {
-          const detail = result.blocked_reason ?? `Improvement ${req.artifactId} could not be rolled back.`;
-          raiseNotice('error', `Improvement ${req.artifactId} was not rolled back`, detail);
-        } else if (result.warning !== null) {
-          raiseNotice('warning', `Improvement ${req.artifactId} was rolled back with a recording warning`, result.warning);
-        } else {
-          const ids = result.reset_proposal_ids.length === 0 ? 'No proposal statuses changed.' : `Returned to pending review: ${result.reset_proposal_ids.join(', ')}.`;
-          raiseNotice('success', `Rolled back improvement ${req.artifactId}`, `${result.changed_files} file${result.changed_files === 1 ? '' : 's'} changed. ${ids} Safety checkpoint ${result.safety_checkpoint?.ref ?? 'recorded'}.`);
-        }
-        return { ok: true, value: result };
-      }
-      case 'improvements': {
-        await awaitWorkspace();
-        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reading improvement artifacts' };
-        const svc = services.get(canonicalPath(w.workspace));
-        if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
-        const root = canonicalPath(w.workspace);
-        const command = req.command;
-        const reply = await svc.link.request({ kind: 'improvements.command', workspaceRoot: root, command }, millis(10_000)).catch((cause: Error) => ({ kind: 'refused' as const, code: 'improvements.failed', headline: 'The improvement store could not be updated', detail: cause.message }));
-        if (reply.kind !== 'improvements.result') {
-          const headline = command.action === 'list' || command.action === 'get' || command.action === 'history' ? 'The improvement artifacts could not be read' : 'Could not update proposal';
-          raiseNotice('error', headline, reply.kind === 'refused' ? [reply.headline, reply.detail].filter(Boolean).join(': ') : `unexpected reply ${reply.kind}`);
-          return refusal(reply, headline);
-        }
-        if (reply.changed === true) libraryRevision.bump('improvement-artifacts');
-        if (command.action === 'review' && reply.changed === true) {
-          const result = reply.value as { previous: ProposalStatus; current: ProposalStatus; record: ImprovementArtifactRecord };
-          const proposal = result.record.artifact.proposals.find((candidate) => candidate.id === command.request.proposal_id);
-          const undoId = randomUUID();
-          improvementUndo.set(undoId, { artifactId: command.request.artifact_id, proposalId: command.request.proposal_id, previous: result.previous, current: result.current, summary: proposal?.summary ?? command.request.proposal_id });
-          raiseNotice('success', `Proposal marked ${result.current.replaceAll('_', ' ')}`, proposal?.summary, [{ label: 'Undo', action: { kind: 'revert-proposal-review', id: undoId } }]);
-        } else if (command.action === 'edit' && reply.changed === true) raiseNotice('success', 'Proposal updated.');
-        else if (command.action === 'delete' && reply.changed === true) raiseNotice('success', 'Proposal deleted.');
-        return { ok: true, value: reply.value };
-      }
-      case 'improvements.undoReview': {
-        const undo = improvementUndo.get(req.id);
-        if (!undo) return { ok: false, code: 'improvements.undo-spent', headline: 'This proposal review can no longer be undone.' };
-        improvementUndo.delete(req.id);
-        await awaitWorkspace();
-        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open the proposal workspace before undoing its review' };
-        const svc = services.get(canonicalPath(w.workspace));
-        if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
-        const root = canonicalPath(w.workspace);
-        const loaded = await svc.link.request({ kind: 'improvements.command', workspaceRoot: root, command: { action: 'get', artifact_id: undo.artifactId } }, millis(10_000)).catch(() => null);
-        if (loaded?.kind !== 'improvements.result') {
-          raiseNotice('warning', `Proposal ${undo.proposalId} is gone.`, 'The undo wrote nothing.');
-          libraryRevision.bump('improvement-artifacts');
-          return { ok: false, code: 'improvements.undo-gone', headline: `Proposal ${undo.proposalId} is gone.` };
-        }
-        const record = loaded.value as ImprovementArtifactRecord;
-        const proposal = record.artifact.proposals.find((candidate) => candidate.id === undo.proposalId);
-        if (!proposal) {
-          raiseNotice('warning', `Proposal ${undo.proposalId} is gone.`, 'The undo wrote nothing.');
-          libraryRevision.bump('improvement-artifacts');
-          return { ok: false, code: 'improvements.undo-gone', headline: `Proposal ${undo.proposalId} is gone.` };
-        }
-        if (proposal.status !== undo.current) {
-          raiseNotice('warning', `Proposal ${undo.proposalId} has since changed.`, `Its current status is ${proposal.status.replaceAll('_', ' ')}. The undo wrote nothing.`);
-          libraryRevision.bump('improvement-artifacts');
-          return { ok: false, code: 'improvements.undo-stale', headline: `Proposal ${undo.proposalId} has since changed`, detail: `Its current status is ${proposal.status}.` };
-        }
-        const restored = await svc.link.request({ kind: 'improvements.command', workspaceRoot: root, command: { action: 'review', request: { artifact_id: undo.artifactId, proposal_id: undo.proposalId, status: undo.previous, expected_versions_due: record.versions_due } } }, millis(10_000)).catch(() => null);
-        if (restored?.kind !== 'improvements.result') {
-          raiseNotice('error', 'Could not update proposal', restored?.kind === 'refused' ? [restored.headline, restored.detail].filter(Boolean).join(': ') : 'The undo could not be stored.');
-          return { ok: false, code: 'improvements.undo-failed', headline: 'Could not update proposal' };
-        }
-        libraryRevision.bump('improvement-artifacts');
-        raiseNotice('success', `Proposal returned to ${undo.previous.replaceAll('_', ' ')}`, undo.summary);
-        return { ok: true, value: restored.value };
-      }
-      case 'improvements.export': {
-        await awaitWorkspace();
-        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before exporting improvement artifacts' };
-        const svc = services.get(canonicalPath(w.workspace));
-        if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
-        const root = canonicalPath(w.workspace);
-        const read = await svc.link.request({ kind: 'improvements.command', workspaceRoot: root, command: req.artifactId === undefined ? { action: 'list' } : { action: 'get', artifact_id: req.artifactId } }, millis(10_000)).catch(() => null);
-        if (read?.kind !== 'improvements.result') {
-          const reason = read?.kind === 'refused' ? [read.headline, read.detail].filter(Boolean).join(': ') : 'The improvement store did not answer.';
-          raiseNotice('error', 'The improvement artifacts could not be exported', reason);
-          return { ok: false, code: 'improvements.export-read', headline: 'The improvement artifacts could not be exported', detail: reason };
-        }
-        const records = req.artifactId === undefined ? read.value as ImprovementArtifactRecord[] : [read.value as ImprovementArtifactRecord];
-        const histories = new Map<string, ImprovementExportHistory>();
-        for (const record of records) {
-          const history = await svc.link.request({ kind: 'improvements.command', workspaceRoot: root, command: { action: 'history', artifact_id: record.artifact.artifact_id } }, millis(10_000)).catch(() => null);
-          if (history?.kind !== 'improvements.result') {
-            const reason = history?.kind === 'refused' ? [history.headline, history.detail].filter(Boolean).join(': ') : `History for ${record.artifact.artifact_id} could not be read.`;
-            raiseNotice('error', 'The improvement artifacts could not be exported', reason);
-            return { ok: false, code: 'improvements.export-history', headline: 'The improvement artifacts could not be exported', detail: reason };
-          }
-          histories.set(record.artifact.artifact_id, history.value as ImprovementExportHistory);
-        }
-        const destination = await chooseExportPath(w.win, { title: req.artifactId === undefined ? 'Export improvement artifacts' : `Export ${req.artifactId}`, defaultPath: req.artifactId === undefined ? 'rotaris-improvements.json' : `${req.artifactId}.json`, filters: [{ name: 'JSON', extensions: ['json'] }] });
-        if (destination === null) return { ok: true, value: { cancelled: true } };
-        const document = buildImprovementExport(records, histories, toIsoUtc(clocks.wall.instant()), req.artifactId);
-        const written = await writeImprovementExport(destination, document, clocks.timers);
-        if (!written.ok) {
-          raiseNotice('error', 'The improvement artifacts could not be exported', written.reason);
-          return { ok: false, code: 'improvements.export-write', headline: 'The improvement artifacts could not be exported', detail: written.reason };
-        }
-        raiseNotice('success', `Exported ${records.length} improvement artifact${records.length === 1 ? '' : 's'}.`, destination);
-        return { ok: true, value: { cancelled: false, destination, bytes: written.bytes } };
-      }
-      case 'prompts.read':
-      case 'prompts.push':
-      case 'prompts.take': {
-        await awaitWorkspace();
-        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reading its saved prompts' };
-        const r = await runHost.request(
-          req.kind === 'prompts.read' ? { kind: 'prompts.read', workspaceId: w.workspaceId }
-            : req.kind === 'prompts.push' ? { kind: 'prompts.push', workspaceId: w.workspaceId, list: req.list, text: req.text }
-              : { kind: 'prompts.take', workspaceId: w.workspaceId, list: req.list, index: req.index, remove: req.remove },
-          millis(10_000),
-        ).catch((e: Error) => ({ kind: 'refused' as const, code: 'prompts.ask', headline: 'Could not save prompt history', detail: e.message }));
-        if (r.kind !== 'prompts.state' && r.kind !== 'prompts.taken') {
-          // REQ-LIBRARY-138: the persistent notice, with the detail the requirement writes; the window's in-memory
-          // lists stay usable, which is what that detail promises, so nothing here clears anything.
-          if (req.kind !== 'prompts.read') raiseNotice('error', 'Could not save prompt history', 'Rotaris will keep prompts in memory for this window.');
-          return refusal(r, 'Could not save prompt history');
-        }
-        // REQ-LIBRARY-105: exactly a write that changed a list is a library change; a read is not one, and neither is
-        // a `take` that kept the entry (`remove: false` copies and stores nothing).
-        if (req.kind === 'prompts.push') libraryRevision.bump(req.list === 'history' ? 'prompt-history' : 'prompt-stash');
-        else if (req.kind === 'prompts.take' && req.remove) libraryRevision.bump(req.list === 'history' ? 'prompt-history' : 'prompt-stash');
-        return { ok: true, value: r.kind === 'prompts.state' ? { state: r.state } : { text: r.text, state: r.state } };
-      }
-      case 'session.resume': {
-        if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before loading a session' };
-        const active = await runHost.request({ kind: 'runs.active', workspaceId: w.workspaceId }, millis(5_000));
-        if (active.kind === 'runs.count' && active.count > 0) return { ok: false, code: 'session.run-active', headline: 'Finish or cancel the active run before switching sessions.' };
-        const r = await runHost.request({ kind: 'session.resume', workspaceId: w.workspaceId, sessionId: req.sessionId }, millis(10_000));
-        if (r.kind !== 'session.resumed') {
-          if (r.kind === 'refused') raiseNotice('error', r.headline, r.detail);
-          return refusal(r, 'The session could not be loaded');
-        }
-        raiseNotice('info', `Loaded session ${r.sessionId}.`, r.settledChildren > 0 ? `${r.settledChildren} unfinished child record(s) were settled before continuation.` : undefined);
-        // REQ-SHELL-078 read for a loaded session too: the windows were opened onto the previous session's agents and would otherwise show them (Part R's reading, ADR-0048 note).
-        if (w.followedSessionId !== null && w.followedSessionId !== r.sessionId) w.personaWindows.destroyAll('a different session was loaded');
-        return { ok: true, value: { sessionId: r.sessionId, settledChildren: r.settledChildren } };
-      }
-      case 'config.read': {
-        // Part Q's first execution: the renderer asks for the configuration as it mounts, before the argv workspace has opened; without
-        // this wait the answer was `workspace.none`, the run header's model list stayed empty (REQ-MONITOR-144) and the wait header
-        // had no "Change model" to offer. `repository.read` already waited; this read did not.
-        await awaitWorkspace();
-        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reading its configuration' };
-        const svc = services.get(canonicalPath(w.workspace));
-        if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
-        const r = await svc.link.request({ kind: 'config.read', workspaceRoot: canonicalPath(w.workspace) }, millis(10_000));
-        return r.kind === 'config.snapshot' ? { ok: true, value: r.snapshot } : refusal(r, 'The configuration could not be read');
-      }
-      case 'repository.read': {
-        await awaitWorkspace();
-        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reading its repository' };
-        const svc = services.get(canonicalPath(w.workspace));
-        if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
-        // REQ-GIT-102: five reads at 15 s each is the bound; the request waits for all of them.
-        const r = await svc.link.request({ kind: 'repository.read', workspaceRoot: canonicalPath(w.workspace) }, millis(80_000));
-        if (r.kind !== 'repository.state') return refusal(r, 'The repository could not be read');
-        const st = r.state;
-        log(`repository ${canonicalPath(w.workspace)}: git=${st.gitAvailable} repo=${st.isRepository} branch=${st.branch ?? '-'} base=${st.base ?? '-'} +${st.ahead}/-${st.behind} touched=${st.touched} uncommitted=${st.uncommitted}${st.failed.length > 0 ? ` failed=${st.failed.join(',')}` : ''} in ${st.readMs} ms`);
-        return { ok: true, value: st };
-      }
-      case 'config.save':
-      case 'config.setField': {
-        // ADR-0037 Tier A: the service writes and loads again; every window repopulates from the reloaded snapshot (decision 4 of the plan for REQ-CONFIG-423).
-        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before changing its configuration' };
-        const svc = services.get(canonicalPath(w.workspace));
-        if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
-        const root = canonicalPath(w.workspace);
-        const runtimePatch = req.kind === 'config.save' ? req.save.runtime : req.patch['runtime'];
-        const explicitCollectorEnable = runtimePatch !== null && typeof runtimePatch === 'object'
-          && (runtimePatch as Record<string, unknown>)['improvement_collector_enabled'] === true;
-        if (explicitCollectorEnable) {
-          const current = await svc.link.request({ kind: 'config.read', workspaceRoot: root }, millis(10_000));
-          if (current.kind === 'config.snapshot') {
-            const slots = new Map<string, string | null>(current.snapshot.slots.map((slot) => [slot.slot, slot.value]));
-            if (req.kind === 'config.save') for (const [slot, value] of Object.entries(req.save.slots ?? {})) slots.set(slot, value);
-            if (!slots.get('improvement_collector_model') && !slots.get('medium_model')) {
-              return { ok: false, code: 'config.improvement-model', headline: 'medium_model must be configured to enable the post-run improvement collector.' };
-            }
-          }
-        }
-        const r = await svc.link.request(req.kind === 'config.save' ? { kind: 'config.save', workspaceRoot: root, save: req.save } : { kind: 'config.setField', workspaceRoot: root, ...(req.scope ? { scope: req.scope } : {}), patch: req.patch }, millis(30_000));
-        if (r.kind !== 'config.snapshot') { if (r.kind === 'refused') raiseNotice('error', r.headline, r.detail); return refusal(r, 'The configuration could not be written'); }
-        for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(CHANNEL.configChanged, { v: CONTRACT_SCHEMA_VERSION, snapshot: r.snapshot });
-        log(`configuration ${req.kind === 'config.save' ? 'saved' : 'field written'} for ${root}`);
-        return { ok: true, value: r.snapshot };
-      }
-      case 'config.liveState': {
-        // ADR-0037 Tier B: the settings store's current values reach the run host ahead of the next run start.
-        const r = await runHost.request({ kind: 'config.liveState', state: req.state }, millis(5_000));
-        return r.kind === 'ack' ? { ok: true } : refusal(r, 'The live settings could not be handed over');
-      }
-      // Part AP — the board's run coordinator answers the renderer's one command (spec 08 §Runs Started from the Board): a launch
-      // preview with the two preferences folded in, a dispatch after an act or a queue change, the permanent suppression, the live runs.
-      case 'requirements.runs':
-        return requirementsRuns.handle(req);
-      // Part AL — the seven `terminal.*` commands travel to the run host shape for shape (`main/terminal.ts`, REQ-TOOLS-128).
-      case 'terminal.streams':
-      case 'terminal.sendKeys':
-      case 'terminal.resize':
-      case 'terminal.interrupt':
-      case 'terminal.endInput':
-      case 'terminal.kill':
-      case 'terminal.audit':
-        return relayTerminalCommand(req, runHost, log);
-      // The same block's second half (wave 2): the terminal WINDOW's five commands, answered by the registry built above `runCommand`.
-      case 'window.openTerminal':
-      case 'window.terminalPayload':
-      case 'window.terminalSession':
-      case 'window.terminalAutoOpen':
-      case 'window.showWorkspace':
-        return terminalWindowCommand(req, senderId);
-      case 'session.control': {
-        // ADR-0010 channel 1 across ADR-0013's boundary: the same arguments, the same `{ok, value?}`.
-        // Part AC's seam (verification only, ROTARIS_CAPTURE_PNG): ROTARIS_CAPTURE_QUESTION_STALE corrupts the request
-        // id of a forwarded `answerQuestion` so that no wait carries it. REQ-CHAT-102's failed delivery is otherwise
-        // a race between the click and the wait being released, which no script can hit reliably; the whole product
-        // path — the stepper, the channel, the run host's routing — is exercised unchanged, only the id is stale.
-        const forwarded = capturing && process.env['ROTARIS_CAPTURE_QUESTION_STALE'] && req.request.op === 'answerQuestion'
-          ? { ...req.request, args: { ...req.request.args, requestId: `${String(req.request.args['requestId'])}-stale` } }
-          : req.request;
-        // Part AO: a manual compression settles only once every live conversation has (REQ-MONITOR-092), each pass bounded by
-        // `compressor.timeout_seconds` (120 s by default, ADR-0060), so the 10 s bound every other control keeps would time this
-        // reply out while the pass ran on; the default pass bound plus a margin is the reply's. A larger configured bound outlives it — stated, not hidden.
-        const r = await runHost.request({ kind: 'session.control', request: forwarded }, millis(forwarded.op === 'forceCompression' ? 130_000 : 10_000));
-        if (req.request.op === 'answerApproval' && r.kind === 'control.result') {
-          // REQ-TOOLS-063: a delivered answer marks its dialog answered (the run host's close follows); an undeliverable one leaves it open.
-          const d = dialogs.get(senderId);
-          if (d && r.result.ok) d.answered = true;
-          log(`approval ${String(req.request.args['requestId'])} answered ${String(req.request.args['option'])} → ${r.result.ok ? 'delivered' : 'undeliverable'}`);
-        }
-        if (req.request.op !== 'answerApproval') log(`control ${req.request.op} on ${req.request.sessionId} → ${r.kind === 'control.result' ? (r.result.ok ? `ok${r.result.value ? ` (${r.result.value})` : ''}` : 'false') : r.kind}`);
-        return r.kind === 'control.result' ? { ok: true, value: r.result } : refusal(r, 'The control could not be delivered');
-      }
-      case 'notice.acknowledge':
-        // REQ-NOTIFY-026: with an identifier this is a compare-and-clear, so dismissing a notice already superseded
-        // leaves its successor standing; without one it clears whatever is current.
-        await notices.dismiss(req.noticeId);
-        return { ok: true };
-      // Part AO — `notice.report`: a renderer surface raising a persistent notice through the ONE store (ADR-0049 decision B's
-      // missing entry for a renderer, defect fifty-seven); the record of REQ-NOTIFY-268 and the scoping of REQ-NOTIFY-028 apply
-      // as to every other publication. And `prompts.roots.read`: REQ-CHAT-160's three roots, read by the workspace service.
-      case 'notice.report': {
-        const r = await notices.report({ severity: req.severity, title: req.title, ...(req.message === undefined ? {} : { message: req.message }), ...(req.detail === undefined ? {} : { detail: req.detail }), persistent: req.persistent, ...(req.sessionId === undefined ? {} : { sessionId: req.sessionId }) });
-        log(`notice from the renderer: ${req.severity} "${req.title}" → #${r.id}`);
-        return { ok: true, value: { id: r.id } };
-      }
-      case 'prompts.roots.read': {
-        await awaitWorkspace();
-        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before reading its prompt files' };
-        const svc = services.get(canonicalPath(w.workspace));
-        if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
-        const r = await svc.link.request({ kind: 'prompts.roots.read', workspaceRoot: canonicalPath(w.workspace) }, millis(10_000));
-        return r.kind === 'prompts.roots' ? { ok: true, value: r.result } : refusal(r, 'The prompt files could not be read');
-      }
-      case 'workspace.backup': {
-        // REQ-SESSION-201: the destination is a file the user chooses; nothing is written until then.
-        if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before backing up its session store' };
-        const svc = services.get(canonicalPath(w.workspace));
-        if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
-        const stamp = new Date(clocks.wall.instant()).toISOString().replace(/[:.]/g, '-');
-        const destination = await chooseSave(w.win, {
-          title: 'Back up the session store', defaultPath: `rotaris-sessions-${w.workspaceId}-${stamp}.tar`,
-          filters: [{ name: 'Rotaris session store backup', extensions: ['tar'] }],
-        });
-        if (!destination) return { ok: true, value: { cancelled: true } };
-        const r = await svc.link.request({ kind: 'workspace.backup', workspaceRoot: canonicalPath(w.workspace), destination }, millis(600_000));
-        if (r.kind !== 'workspace.backedUp') { if (r.kind === 'refused') raiseNotice('error', 'The backup could not be taken', [r.headline, r.detail].filter(Boolean).join(': ')); return refusal(r, 'The backup could not be taken'); }
-        raiseNotice('info', `Backed up ${r.sessions} session${r.sessions === 1 ? '' : 's'} to ${r.destination}.`);
-        return { ok: true, value: { destination: r.destination, sessions: r.sessions, bytes: r.bytes } };
-      }
-      case 'workspace.restore':
-        return restoreFlow(w);
-      /**
-       * Stage B — REQ-SHELL-021 / REQ-WORKSPACE-009/010: the title-bar chip's flow, answered for the window that
-       * raised it (REQ-SHELL-020). Gates first and in order, then the chooser, then either nothing at all or the
-       * replacement. No folder arrives from the renderer, so no surface can skip a gate or name a folder it was
-       * not given.
-       */
-      case 'workspace.choose': {
-        return mainWindows.choose(w.wcId, { newWindow: req.newWindow === true });
-      }
-      case 'session.prompt': {
-        const r = await runHost.request({ kind: 'session.prompt', sessionId: req.sessionId, prompt: req.prompt, ...(req.attachments === undefined ? {} : { attachments: req.attachments }) }, millis(10_000));
-        return r.kind === 'ack' ? { ok: true } : refusal(r, 'The prompt could not be recorded');
-      }
-      case 'session.readAttachment': {
-        const r = await runHost.request(req, millis(10_000));
-        return r.kind === 'session.attachment' ? { ok: true, value: r } : refusal(r, 'The image attachment could not be loaded');
-      }
-      case 'session.subscribe': {
-        // Subscribe the relay FIRST so the attach's snapshot and transcript reach this window.
-        // Part R found the twenty-seventh defect here: this subscribed `wcId` — the MAIN window — whatever window asked, so a
-        // second renderer on one session (ADR-0043's "several windows", REQ-SHELL-076) would have fed the main window twice and
-        // itself never; unseen because only the main window had ever subscribed. The sender is the subscriber (ADR-0043 note).
-        relay.subscribe(senderId, req.sessionId);
-        // A2: the follow belongs to whichever MAIN window subscribed — a persona or terminal window subscribes
-        // for itself (the twenty-seventh defect above) and must not move any main window's followed session.
-        mainWindows.setFollowedSession(senderId, req.sessionId);
-        const r = await runHost.request({ kind: 'session.attach', sessionId: req.sessionId }, millis(5_000));
-        return r.kind === 'ack' ? { ok: true } : refusal(r, 'The session could not be followed');
-      }
-      case 'session.unsubscribe':
-        relay.unsubscribe(senderId, req.sessionId);
-        mainWindows.clearFollowedSession(senderId, req.sessionId);
-        void runHost.request({ kind: 'session.detach', sessionId: req.sessionId }, millis(5_000)).catch(() => undefined);
-        return { ok: true };
-      case 'window.openPersona': {
-        // REQ-SHELL-072: an unknown agent — here, no followed session for it to belong to — is a silent no-op; the renderer
-        // sends the command only for an id its replica holds (the reading in ADR-0048's note).
-        if (w.followedSessionId === null) { log(`persona window for ${req.agentId} not opened: no session is followed`); return { ok: true, value: { opened: false } }; }
-        const shownAt = Date.now();
-        const wasVisible = w.personaWindows.entry(req.persona)?.win.isVisible() ?? false;
-        const entry = await w.personaWindows.open(req.persona, req.agentId, req.focusSteer ?? false);
-        if (!wasVisible) measurePersonaPaint(req.persona, entry.win, shownAt);
-        return { ok: true, value: { opened: true, reused: wasVisible } };
-      }
-      case 'window.personaPayload': {
-        // A3: from the persona window itself, so its owner is found through the registries rather than assumed.
-        const owner = ownerOfAuxiliary(senderId);
-        const entry = owner?.personaWindows.bySender(senderId);
-        if (!owner || !entry) return { ok: false, code: 'window.unknown', headline: 'This window is not a persona window' };
-        return { ok: true, value: { persona: entry.persona, sessionId: owner.followedSessionId, select: owner.personaWindows.takeSelection(senderId) } };
-      }
-      case 'window.modality': {
-        // ADR-0048's application modality, second execution (Part W): the main window's palette or keyboard help is open or
-        // closed; every persona window of the family stops taking input, or takes it again. Only the main window may say so.
-        if (windowFor(senderId) === undefined) return { ok: false, code: 'window.notMain', headline: 'Only the main window registers an application-modal surface' };
-        const n = w.personaWindows.setFamilyModal(req.active);
-        log(`application modality ${req.active ? 'on' : 'off'}: ${n} persona window(s) ${req.active ? 'disabled' : 'enabled'} (ADR-0048)`);
-        return { ok: true, value: { windows: n } };
-      }
-      case 'session.reconcile': {
-        const r = await runHost.request({ kind: 'session.reconcile', sessionId: req.sessionId }, millis(5_000));
-        return r.kind === 'ack' ? { ok: true } : refusal(r, 'The session could not be re-read');
-      }
-      case 'session.pageOlder': {
-        const r = await runHost.request({ kind: 'session.pageOlder', sessionId: req.sessionId, beforeIndex: req.beforeIndex }, millis(5_000));
-        return r.kind === 'session.page' ? { ok: true, value: { rows: r.rows, oldest: r.oldest } } : refusal(r, 'Older messages could not be loaded');
-      }
-      // Part AK — the requirements family (spec 08; ADR-0041). The ACTOR is stamped here and nowhere else
-      // (REQ-CONFIG-198: a command from a window is the OS account main runs as); the workspace is the one this
-      // instance has open; the service answers from its store; a write broadcasts channel 10 AFTER the reply.
-      case 'requirements': {
-        return createRequirementsRelay({
-          currentWorkspace: () => (w.workspaceId && w.workspace !== '(no workspace)' ? canonicalPath(w.workspace) : undefined),
-          awaitWorkspace,
-          request: (root, r, bound) => services.get(root)?.link.request(r, bound),
-          person: () => { try { return userInfo().username; } catch { return process.env['USERNAME'] ?? process.env['USER'] ?? 'unknown'; } },
-          broadcast: (payload) => { for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(CHANNEL.requirementsChanged, payload); },
-          log,
-        }).handle(req.command, { kind: 'window', webContentsId: senderId });
-      }
-      default:
-        return { ok: false, code: 'command.unimplemented', headline: `${req.kind} is not built yet` };
-    }
+    /**
+     * A4: the handler the table above names, called with the request narrowed to its own kind. The cast is
+     * the one place that narrowing is asserted rather than proved — `handlers[req.kind]` is a union of
+     * handlers, and TypeScript cannot pair it with `req` unaided. It is sound because `CommandHandlers` is
+     * total over the contract's kinds: every entry answers the kind it is filed under, and a kind with no
+     * entry does not compile. Nothing throws out of here (ADR-0019) — a handler that does is caught below.
+     */
+    const handler = handlers[req.kind] as CommandHandler<CommandRequest['kind']>;
+    return handler(req, { w, senderId, awaitWorkspace });
   };
   ipcMain.handle(CHANNEL.command, (e, raw) => runCommand(raw, e.sender.id));
 
@@ -2417,7 +1361,7 @@ async function main(): Promise<void> {
     improvementCoordinator.shutdown();
     void (async () => {
       // REQ-GIT-101: a desktop checkpoint operation in flight finishes first — bounded only by REQ-GIT-033's limits.
-      if (checkpointOp) { log('quit: waiting for the in-flight checkpoint operation (REQ-GIT-101)'); await checkpointOp.catch(() => undefined); }
+      if (checkpointOp.current) { log('quit: waiting for the in-flight checkpoint operation (REQ-GIT-101)'); await checkpointOp.current.catch(() => undefined); }
       await runHost.request({ kind: 'shutdown', deadlineMs: 30_000 }, millis(30_000)).catch(() => undefined);
       // REQ-GIT-101 again, one process down: each workspace service finishes its in-flight checkpoint Git before it exits.
       await Promise.all([...services.values()].map((s) => s.link.request({ kind: 'shutdown', deadlineMs: 30_000 }, millis(330_000)).catch(() => undefined)));

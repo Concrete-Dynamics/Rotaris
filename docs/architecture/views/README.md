@@ -45,6 +45,20 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-17**
 
+**Every renderer command became a module, and the seam that names them a table.** One thousand and fifty-six
+lines came out of `main()`'s `runCommand` and into `apps/desktop/src/main/commands/` — sixteen facets, one per
+family, beside `context.ts`. What the switch could only do by being read, the table now does by compiling:
+`CommandHandlers` is **total** over `CommandRequest['kind']`, so a kind the contract declares and no facet
+answers fails the build where it used to answer `command.unimplemented` at run time. Building it found one such
+kind already there (`shell.switchView`), which is now a named line rather than an absence. `CommandContext` is
+the other half: the closure `runCommand` was written inside, given a name, so a facet can declare the slice it
+uses and a test can satisfy that slice — `commands/mcp.test.ts` drives real handlers in six milliseconds with a
+plain object where the run host is, which was not possible at all before. The checkpoint family's seven gates
+moved with their commands; main keeps only the holder the quit path waits on (REQ-GIT-101). **No product
+behaviour moves**: every handler body is the case body it was, `runCommand` still answers for the window that
+raised the command (REQ-SHELL-020) and still lets nothing throw (ADR-0019). The seams view's §1 carries the new
+stop 2 and the rule for choosing a facet; the process view's **main** row and the module map carry the rest.
+
 **The capture script became a module.** Six hundred and forty-six lines came out of `main()` and into
 `apps/desktop/src/main/capture/` — the step grammar and the host main gives it (`host.ts`, and the grammar
 now has a test), the part a shipped build still answers (`probe.ts`), the scriptable half (`seams.ts`) and

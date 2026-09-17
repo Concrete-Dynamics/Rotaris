@@ -415,6 +415,12 @@ While a task run is executing, a user must be able to watch what every agent is 
 
 **REQ-MONITOR-173** — The overview's right column shows, in order: the cloud-credit tile first (the balance determines whether provider quotas are reachable at all); the subscription-limits card; an agent-tree card with a link to the mission view; and an improvement-proposals card with a tag counting proposals pending review, a link into the library, and per-proposal rows carrying a summary link, status tag, category caption, and approve/reject/defer actions excluding the proposal's current status.
 
+  > **Extended by [`PD-LIBRARY-002`](../product/directives.md#pd-library-002), 2026-09-17.** The
+  > card's rows may also carry retrospective proposals — they are improvement proposals in the same
+  > store, reviewed by the same actions, and the card distinguishes them from per-run ones by the
+  > artifact that holds them rather than by a second card or a second vocabulary. The card's own
+  > contract above is unchanged.
+
 **REQ-MONITOR-174** — The overview refreshes in response to state-change notifications (agents, sessions, status, repository, proposals, settings) and performs no work while hidden; the session runtime and status in its header follow status changes.
 
 **REQ-MONITOR-175** — A session's awaiting-input flag must be recorded in its externally readable metadata as true when it has pending approvals or pending questions, so that every session list reveals a background run that is waiting on a human answer. The rendered attention text is a single fixed sentence stating that the run cannot proceed until the person answers.

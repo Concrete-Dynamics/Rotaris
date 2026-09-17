@@ -624,6 +624,12 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 
 **REQ-NOTIFY-251** — Post-run improvement analysis never blocks or alters a run. On failure, or on exceeding `runtime.improvement_collector_timeout`, default 60 seconds, it yields an empty artifact.
 
+  > **Extended by [`PD-LIBRARY-002`](../product/directives.md#pd-library-002), 2026-09-17.** The
+  > same non-blocking discipline governs the directive's user-started retrospective: it runs off
+  > everything the user is waiting on, is bounded by its own timeout with the empty-artifact
+  > outcome, and never blocks or alters a run — it is not attached to a run at all, so there is
+  > nothing of one it could alter.
+
 **REQ-NOTIFY-252** — A run waiting on a person — for an approval it raised, or for an answer to a question it asked — is displayed as awaiting input. This holds for every session and not only the focused one, so a background run waiting for an answer is visibly waiting without being focused first. One sentence states that condition, worded identically on every surface that states it, and where the condition does not hold that sentence appears nowhere.
 
 **REQ-NOTIFY-253** — Where a todo edit cannot be written through to the live run, the persisted session state is reloaded and the user is told that the todo changed elsewhere and that the latest session state was loaded.

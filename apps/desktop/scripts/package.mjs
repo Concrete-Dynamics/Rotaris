@@ -14,7 +14,7 @@
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const APP = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -80,16 +80,30 @@ try {
    * without it, a guard someone moved outside the block — would leave the surface in the product and change
    * nothing a source reading would notice. The probe below drives `_PROMPT` and `_PNG`, so those must survive;
    * everything named in the second list can script a window, so none of them may.
+   *
+   * EVERY emitted file of the main section is read, not `index.js` alone. The scriptable seams live in
+   * `main/capture/seams.ts`, reached by a dynamic import inside `if (__ROTARIS_SEAMS__)`: with the flag false the
+   * branch goes, the chunk is unreferenced and rollup emits no chunk at all — but a chunk is exactly the shape
+   * this surface could come back in, and a check that reads one file would not see it. `index.js` alone was the
+   * check while the seams were inline in `main()`, and it stopped being sufficient the moment they were not.
    */
   step('the packaged bundle carries no scriptable seam', () => {
-    const bundle = readFileSync(join(APP, 'out', 'main', 'index.js'), 'utf8');
+    const mainOut = join(APP, 'out', 'main');
+    const emitted = readdirSync(mainOut, { recursive: true, withFileTypes: true })
+      .filter((e) => e.isFile() && e.name.endsWith('.js'))
+      .map((e) => join(e.parentPath, e.name));
+    const bundle = readFileSync(join(mainOut, 'index.js'), 'utf8');
     const kept = ['ROTARIS_CAPTURE_PNG', 'ROTARIS_CAPTURE_PROMPT', 'ROTARIS_CAPTURE_AFTER_MS'];
     const forbidden = ['ROTARIS_CAPTURE_CLICKS', 'ROTARIS_CAPTURE_TYPE', 'ROTARIS_CAPTURE_CHORDS', 'ROTARIS_CAPTURE_EVAL_AT', 'ROTARIS_CAPTURE_OS_INPUT', 'ROTARIS_CAPTURE_SELECT', 'ROTARIS_CAPTURE_NOTICES', 'ROTARIS_CAPTURE_DRAG_AT', 'ROTARIS_CAPTURE_PERSONA_STEER', 'ROTARIS_THEME_PROOF_DIR', 'ROTARIS_DRIVER'];
     const missing = kept.filter((name) => !bundle.includes(name));
-    const present = forbidden.filter((name) => bundle.includes(name));
+    const present = [];
+    for (const file of emitted) {
+      const text = readFileSync(file, 'utf8');
+      for (const name of forbidden) if (text.includes(name)) present.push(`${name} (${relative(mainOut, file)})`);
+    }
     if (missing.length) throw new Error(`the packaged bundle lost a seam the probe needs: ${missing.join(', ')}`);
     if (present.length) throw new Error(`the packaged bundle still carries scriptable seams: ${present.join(', ')}`);
-    return { kept, removed: forbidden.length, bytes: bundle.length };
+    return { kept, removed: forbidden.length, files: emitted.length, bytes: bundle.length };
   });
   // The keep-prebuild counterfactual packs from the same configuration minus the prebuild exclusions, so the
   // prebuild is in the asar index where the binding's own loader looks first. Rule 4 has to refuse it.

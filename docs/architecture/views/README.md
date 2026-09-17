@@ -43,9 +43,22 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-09-16**
+## Last reconciled with the code: **2026-09-17**
 
-**The navigation pass.** Three views became six, and nothing about the system changed with it: `04-seams.md`
+**The capture script became a module.** Six hundred and forty-six lines came out of `main()` and into
+`apps/desktop/src/main/capture/` — the step grammar and the host main gives it (`host.ts`, and the grammar
+now has a test), the part a shipped build still answers (`probe.ts`), the scriptable half (`seams.ts`) and
+the theme proof's pass (`theme-proof.ts`). The last two are reached only by a dynamic import inside
+`if (__ROTARIS_SEAMS__)`, so a packaged build does not merely branch past them: the chunk is unreferenced
+and never emitted. **No product behaviour moves** — the seams fire at the same times, on the same
+variables, through the same `runCommand`. What moved with it is the check that guards the gate: it now
+reads every emitted file of the main section rather than `index.js` alone, since a chunk is exactly the
+shape that surface could come back in. The process view's **main** row carries both. Measured the same day:
+the package-mode build carries none of the eleven forbidden names anywhere in `out/main/`, the dev build
+carries them in one chunk and the widened check refuses it, and the built app captured a window driven
+through `_VIEWS`, `_EVAL_AT` and `_PROBE`.
+
+**The navigation pass** (2026-09-16). Three views became six, and nothing about the system changed with it: `04-seams.md`
 (the ordered edit path for the eight additions this product makes most often), `05-state-ownership.md`
 (six homes, one writer each, consolidating facts that were already written down in three places) and
 `06-sequences.md` (launch, the approval round trip, and the board's release → run → review → accept — the

@@ -45,6 +45,20 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-17**
 
+**The run host stopped starting itself at import.** `apps/desktop/src/run-host/index.ts` held thirty-six
+module-scope bindings, which meant that IMPORTING the run host started one: the MCP host, the confinement
+service, the terminal manager and the code-intelligence launch all came up as a side effect of the module being
+loaded, so nothing in this process could be reached from a test at all. They are `createRunHost()` in `host.ts`
+now — the same bindings in the same load-bearing order, built when the function is called. The five hundred
+lines that answered requests are `dispatch(req, host)` in `dispatch.ts`, taking what they need as an argument
+rather than closing over module scope; two bindings that change after the host is built (the terminal manager,
+which arrives asynchronously, and the live state, which a command writes) are reached through the host every
+time rather than copied out of it once. The scripted model client — two hundred and fifty-seven lines of
+verification-only stand-in that every proof runs against, read past by everyone editing the dispatch — is
+`scripted-client.ts`. `index.ts` is 53 lines: build it, listen, announce ready. **No product behaviour moves**:
+the dispatch answers the same kinds with the same bodies, and `pnpm part-h-proof` and `pnpm skills-proof` both
+drive the rebuilt binary end to end. The seams view's stop 4 and the process view's **run host** row carry it.
+
 **The renderer root became five modules, and its first test.** Five hundred and ninety-four lines came out of
 `apps/desktop/src/renderer/main.tsx`, which is now the main window and nothing else. What a window HAS is
 `shell.ts` — the bridge, the replica, the two stacks, the terminal registry, the display preferences, the theme

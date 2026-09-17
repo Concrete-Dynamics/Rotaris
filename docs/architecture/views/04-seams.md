@@ -32,7 +32,7 @@ The renderer's only outward path. One IPC channel carries every kind; the union 
 | 1 | `packages/contracts/src/commands.ts` | a member of `CommandRequestSchema` (discriminated on `kind`). The answer is always `CommandOutcomeSchema`: `{ok: true, value?}` or `{ok: false, code, headline, detail?}` |
 | 2 | `apps/desktop/src/main/commands/<facet>.ts` | the handler, filed under its kind: main answers it (preferences, theme, providers, windows, dialogs) **or** relays it |
 | 3 | `packages/contracts/src/process-protocol.ts` | only if it relays: the request and reply that cross to a child |
-| 4 | `apps/desktop/src/run-host/index.ts` or `apps/desktop/src/workspace-service/index.ts` | the child's own dispatch `switch` |
+| 4 | `apps/desktop/src/run-host/dispatch.ts` or `apps/desktop/src/workspace-service/index.ts` | the child's own dispatch `switch` — in the run host over the `RunHost` it is handed, never over module scope |
 | 5 | `apps/desktop/src/renderer/session-actions.ts`, else the window's own root | the send — a surface takes a callback and never the bridge |
 
 **Which side of the renderer.** A surface in `packages/ui/src/` holds no bridge: it takes a callback and returns

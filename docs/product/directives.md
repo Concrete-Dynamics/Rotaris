@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Twelve.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Thirteen.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -803,6 +803,106 @@ adding to it.
 > `packages/engine/src/money.ts`, scale-free so no place is truncated, and it is reported into ADR-0031
 > in place: it is not that decision's `Money` type, its library or its lint rule, all of which stay
 > blocked on OQ-21. The account is in `docs/architecture/first-executions.md`.
+
+<a id="pd-library-002"></a>
+
+### PD-LIBRARY-002 — a retrospective pass reads the workspace's own session history and proposes what a user would otherwise have to teach the product by hand
+
+**The rule.** Beside the per-run analyst of section 3, the improvement domain SHALL carry a second
+kind of analysis pass, the **retrospective**. A retrospective SHALL read only material this product
+already keeps for the workspace it runs in — session records, improvement artifacts and their
+recorded versions, saved prompts, persona memory, and the workspace's own `AGENTS.md` or
+`AGENTS.override.md` as REQ-WORKSPACE-041 fixes discovery — and SHALL author, per REQ-LIBRARY-003,
+evidence-backed proposals of the closed vocabulary of REQ-LIBRARY-006 about **how the workspace is
+worked in across runs**, not about how one run went. A retrospective proposal's evidence entries
+MUST be attributable to material the workspace's own record holds, in the way REQ-LIBRARY-017
+attributes a per-run proposal's evidence to its source run: each entry names the record that holds
+what it cites, and a proposal whose evidence cannot be so attributed MUST NOT reach a review
+surface.
+
+**What the retrospective looks for is stated as the fields its proposals serve, not as a model
+promise.** Its proposals are ordinary proposals in every mechanical respect — REQ-LIBRARY-006's
+vocabulary, REQ-LIBRARY-008's fields, REQ-LIBRARY-009's validation, REQ-LIBRARY-046's duplicate
+suppression, REQ-LIBRARY-116's undo, REQ-LIBRARY-162's versioned history — and the categories they
+name are the ones whose effect is to teach the product rather than to change the workspace:
+`agents_md_update`, `persona_or_prompt_adjustment`, `persona_memory_update`, `documentation_update`
+and `config_change` among them. The product MUST NOT attempt to detect whether a retrospective
+proposal is good, novel, or non-speculative; the answer to a poor one is the human gate, as
+REQ-LIBRARY-016 already says, and no quality test replaces it here either.
+
+**Reach, and the boundary it holds.** A retrospective reads **across** sessions but SHALL NOT read
+outside the workspace: no other workspace's record, no user-global location, and — like every
+analysis this domain runs — nothing on the network. Its output lands in the same store, is reviewed
+on the same two surfaces, and is applied only through the same separately started improvement run.
+The retrospective has no authority REQ-LIBRARY-001 does not already give the per-run analyst, and
+no proposal of it is ever applied by anything but a human approval of that exact proposal.
+
+**The trigger.** A retrospective SHALL be started by the user's explicit gesture on a desktop
+surface, and from nowhere else. It MUST NOT be scheduled, chained from a run's completion, or
+started by an agent. It is therefore never automatic, exactly as this product's live-run against a
+real model is never automatic: the pass spends tokens the owner pays for, and the trigger that
+costs money is theirs.
+
+**The pass is bounded like its sibling.** A retrospective SHALL complete within a configurable
+wall-clock timeout, defaulting to 120 seconds, and SHALL never extend anything the user is waiting
+on: the timeout's expiry takes the empty-artifact outcome of REQ-LIBRARY-023, the same recovery
+paths of REQ-LIBRARY-022 and REQ-LIBRARY-023 apply unchanged, and the pass MUST NOT raise into its
+caller. While one runs, the application stays fully usable; its activity is signalled per the
+pattern of REQ-LIBRARY-125 with its own label, and shutdown cancels it on the terms of
+REQ-LIBRARY-127.
+
+**The model.** A retrospective uses a dedicated model slot, `retrospective_model` (nullable string,
+default null), with its own `retrospective_model_thinking` companion, persisted and round-tripped
+like other slots and resolved on the same fallback rule REQ-LIBRARY-040 fixes for its sibling.
+Configuration for the pass follows the shape of section 6: the configuration surface for the
+retrospective is exactly the three keys its timeout, its slot and its companion need, and none of
+its bounds is exposed beyond them. A workspace with no resolvable retrospective model captures no
+pass, and the first time a retrospective gesture is made in that state the product MUST post one
+informational notice conveying that no model is configured for the retrospective and offering an
+action that opens Settings at the slot — the same refusal-shape REQ-LIBRARY-037 fixes for the
+per-run analyst, with the notice per gesture rather than once per workspace, because nothing
+happens here that a user did not just ask for by name.
+
+**Why, and what it costs.** The request drew the comparison deliberately: an insights report
+(`sessions → patterns, friction, recommendations`) and a feedback loop
+(`analysis → proposed instruction changes → future sessions`), and asked for the best of both. The
+corpus already holds every primitive: the durable store REQ-SESSION-197 and REQ-SESSION-198 keep,
+the export-level record REQ-SESSION-199 guarantees readable, the four-versioned stores the
+improvement domain already owns, and a human-gated apply path REQ-LIBRARY-001..064 built. What no
+requirement gives is the pass that **reads across sessions** — REQ-LIBRARY-017 forbids the per-run
+analyst exactly that: "Data from another run, another session, or another workspace MUST NOT inform
+it", which is the right fence for a run's own analysis and the exact reason the corpus cannot meet
+this request without a new mechanism. That is the classification: nothing the owner wants is
+covered, and nothing covered is wrong — REQ-LIBRARY-015's per-run analyst keeps its scope, its
+skip-list and its bounds untouched. Where the owner's two influences part, this product takes the
+loop, not the report: Claude Code's `/insights` produces a document a person then acts on, while
+Chronicle's `improve` proposes changes to a live instruction file and the product's whole improvement
+lifecycle exists to carry proposed changes through review to application with rollback. A report
+surface would be a fifth thing this corpus has no home for; a proposal is already a first-class
+record with evidence, review, undo, history, export and an executor behind it.
+
+**What it costs.** Three things, stated rather than discovered.
+
+- **Privacy of the record, spent deliberately.** Sessions hold everything a run did — commands,
+  tool arguments, file contents. A cross-session pass therefore reads material whose per-run
+  handling deliberately never lifts it out of the workspace; REQ-EVENTS-166's export discipline
+  survives only because the analysis stays machine-local and writes nothing but proposals to the
+  store. The cost is that the pass must be trusted with what the workspace record already holds —
+  which is no more than any run of this workspace holds in memory — and nothing may leave the
+  machine except what any provider call already carries.
+- **A second analysis budget.** The per-run analyst's 60-second pass was sized against one run's
+  transcript (REQ-LIBRARY-165's constants); a retrospective reads a workspace's whole record, and
+  the same bound would read nothing. The 120-second default is the new spend; it is bounded and it
+  is never on anything the user is waiting for.
+- **A slot the owner must fill or refuse.** The pass is inert without a configured model — that is
+  REQ-LIBRARY-037's shape and it is kept. The cost is one more empty-slot refusal a user can meet;
+  it is paid once per gesture, names the exact field to set, and stops there.
+
+> **Extends:** REQ-LIBRARY-003, REQ-LIBRARY-006, REQ-LIBRARY-015
+> **New:** no live requirement covers a cross-session analysis pass; REQ-LIBRARY-017 forbids the
+> per-run analyst exactly this reach, faithfully to its own scope.
+
+*Raised by the owner, 2026-09-17; logged as [R-033](requests.md#r-033).*
 
 ---
 

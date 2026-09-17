@@ -11,6 +11,12 @@ status: approved (Specification Gate closed 2026-08-31; amendments land as dated
 
 After every completed task run the product may perform an optional, strictly non-blocking background analysis that stores an "improvement artifact" containing evidence-backed improvement proposals authored by a dedicated analysis model. Users review, edit, approve, reject, defer, reset, or delete those proposals from two desktop surfaces — a Library view and a dashboard card — both of which read and mutate the same workspace-scoped artifacts in the one store. Approved proposals are applied only by a separately started improvement run whose workspace effects are checkpointed and reversible. The same domain covers the per-session store of agent-published reports and deliverables (browsable and editable in the Library and via agent-facing tools), per-persona memory files re-injected into future runs, and the saved-prompt stash and prompt history.
 
+> **Extended by [`PD-LIBRARY-002`](../product/directives.md#pd-library-002), 2026-09-17.** The domain
+> carries a second kind of analysis pass beside the per-run one: a user-started **retrospective** that
+> reads the workspace's own session history across runs and authors proposals in this domain's own
+> vocabulary and lifecycle. Nothing below is changed for the per-run analyst; where the retrospective
+> reaches, the directive says so.
+
 ## Requirements
 
 ### 1. Improvement lifecycle and run classification
@@ -21,6 +27,12 @@ After every completed task run the product may perform an optional, strictly non
 
 **REQ-LIBRARY-003** — Deterministic, non-model parts of the product may gather evidence but MUST never author user-reviewable proposals. Proposals are authored exclusively by the model-backed post-run analyst; each artifact records the authoring model identifier (`collector_model`, nullable).
 
+  > **Extended by [`PD-LIBRARY-002`](../product/directives.md#pd-library-002), 2026-09-17.** The
+  > rule — only a model-backed pass authors proposals, deterministic parts gather evidence only —
+  > now covers two passes: this requirement's per-run analyst, and the directive's user-started
+  > retrospective. A retrospective artifact records its own authoring slot (`retrospective_model`)
+  > under the same discipline, and no deterministic path authors proposals of either kind.
+
 **REQ-LIBRARY-004** — Task completion MUST never be delayed or altered by improvement analysis. Given a completing task run, when it reaches its terminal state, then the terminal result is reported to the host before any analysis work begins, and the host receives a self-contained analysis job it may execute afterward.
 
 **REQ-LIBRARY-005** — An improvement run MUST never trigger another improvement analysis (no self-chaining). Given a run of type `improvement_run` (or `integration_run`) reaching a terminal state, then no post-run analysis occurs and no new proposals appear. End-to-end, an approval-driven improvement run performs zero analysis passes.
@@ -28,6 +40,12 @@ After every completed task run the product may perform an optional, strictly non
 ### 2. Proposal data model and validation
 
 **REQ-LIBRARY-006** — The proposal category vocabulary MUST be closed with exactly 10 values: `documentation_update`, `agents_md_update`, `workspace_note`, `config_change`, `tool_enablement`, `dependency_install`, `persona_or_prompt_adjustment`, `persona_memory_update`, `preflight_check`, `verifier_gate_update`.
+
+  > **Extended by [`PD-LIBRARY-002`](../product/directives.md#pd-library-002), 2026-09-17.** The set
+  > is untouched — the directive's retrospective authors proposals from this same closed vocabulary
+  > and no other, and this requirement remains its single definition. No value is added and none is
+  > redefined; a retrospective proposal is distinguishable from a per-run one by its artifact, not by
+  > its category.
 
 **REQ-LIBRARY-007** — Review status MUST have exactly 4 values: `pending_review`, `approved`, `rejected`, `deferred`. Risk MUST have exactly 3 values: `low`, `medium`, `high`.
 
@@ -49,9 +67,23 @@ After every completed task run the product may perform an optional, strictly non
 
 **REQ-LIBRARY-015** — The post-run analyst is a dedicated model-backed pass invoked at most once per terminal task run, with a configurable wall-clock timeout defaulting to 60 seconds. The analyst MUST never raise into its caller: every failure path yields an empty artifact whose `notes` field explains the failure.
 
+  > **Extended by [`PD-LIBRARY-002`](../product/directives.md#pd-library-002), 2026-09-17.** The
+  > no-raise discipline and the two-outcome shape of an analysis pass govern a second pass now: the
+  > user-started cross-session retrospective, bounded by its own timeout (default 120 seconds) on the
+  > same recovery paths. This requirement's own scope — at most once per terminal task run — is
+  > unchanged, and the retrospective is never invoked by a run at all.
+
 **REQ-LIBRARY-016** — An analysis pass MUST end in one of exactly two ways: an artifact whose proposals all satisfy REQ-LIBRARY-009, or the recovery outcome of REQ-LIBRARY-022. A reply that offers nothing to propose is a success and MUST yield an artifact whose `proposals` list is empty, never an error. A reply that cannot be turned into valid proposals — because it is not the machine-readable form REQ-LIBRARY-020 accepts, or because its entries fail REQ-LIBRARY-009 — MUST take that recovery path, and nothing from it may reach a stored artifact or any review surface. Every proposal that does reach a review surface MUST consequently carry at least one evidence entry; name exactly one `target_persona` when its category is `persona_memory_update`; carry a complete `proposed_verifier_section` when its category is `verifier_gate_update` (REQ-LIBRARY-063); hold a category from the closed vocabulary of REQ-LIBRARY-006, an unrecognised value having been coerced under REQ-LIBRARY-021 rather than the proposal dropped; and not repeat an outstanding gate proposal (REQ-LIBRARY-026). This list is the whole of what the product guarantees about an analysis pass, and no further guarantee is expected of it or of the executor: whether a proposal is useful, novel, or non-speculative is a property of the model's judgement, is not decidable by the product, and MUST NOT be stated as a requirement. The product's answer to a poor proposal is the human gate — the proposal is rejected, and a rejected proposal suppresses nothing later (REQ-LIBRARY-030, REQ-LIBRARY-046) — not a quality test the product could not run.
 
 **REQ-LIBRARY-017** — Analysis MUST draw only on material belonging to the run that triggered it: that run's progress, its todo state, its child reports, its gate evidence, its transcript, and the bounded prior-artifact history of REQ-LIBRARY-034. Data from another run, another session, or another workspace MUST NOT inform it. Every proposal in an artifact MUST therefore be attributable to material that existed in the session named by that artifact's `source_session_id` at the moment the run reached its terminal state, and every prior artifact that informed it MUST be named through `considered_session_ids` (REQ-LIBRARY-025).
+
+  > **Extended by [`PD-LIBRARY-002`](../product/directives.md#pd-library-002), 2026-09-17.** The
+  > fence above governs the per-run analyst and still governs it exactly as written — it is the
+  > reason that pass cannot meet a cross-session request, and the reason the corpus needed a new
+  > mechanism rather than a widened one. The directive's retrospective is a different pass, scoped to
+  > the workspace this requirement's third clause already names as the outermost boundary: it reads
+  > across this workspace's own sessions and never outside the workspace, its evidence stays
+  > attributable to the records that hold what it cites, and no clause here is relaxed for it.
 
 **REQ-LIBRARY-018** — The volume of evidence one analysis pass consumes MUST be bounded, so that the outcome a user sees does not change with the size of the run: a very long transcript, a large set of child reports, or a workspace holding many prior artifacts MUST still produce a result within the timeout of REQ-LIBRARY-039. Wherever evidence text is shortened to respect a bound, the shortening MUST be marked with `…`, so that any excerpt reaching a stored artifact is either complete or visibly cut. The bounds themselves are fixed by REQ-LIBRARY-165 and are not configurable.
 

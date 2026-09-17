@@ -149,6 +149,14 @@ The product operates on a user-selected workspace folder: the desktop app resolv
 
 - **REQ-WORKSPACE-041** — Context-file discovery SHALL be workspace-root-only: in the resolved workspace root, `AGENTS.override.md` is used when present, otherwise `AGENTS.md`; nothing else. Those two names are the whole vocabulary. No other directory SHALL be consulted — not an ancestor, not the enclosing repository root, not an intermediate directory, not a user-global location — and no other file name SHALL be read or injected, user-global context files, `CLAUDE.md`, `GEMINI.md`, and any product-named alternative such as a root-level `ROTARIS.md` included, even when such a file is present at the workspace root. This is a closed rule rather than an omission: a multi-level scheme would make what an agent was given depend on where the folder happens to sit in a tree the user did not choose, and the override file already provides the one thing a second level would be for. A broader scheme, if ever wanted, requires its own requirement and is not implied by anything here.
 
+  > **Extended by [`PD-LIBRARY-002`](../product/directives.md#pd-library-002), 2026-09-17.** The
+  > directive's retrospective pass reads the file this requirement discovers, as one of the
+  > workspace-held materials it may cite evidence from, and may propose an `agents_md_update`
+  > against it — which is applied, like every proposal, only through the improvement lifecycle, and
+  > never written back directly by an analysis. This requirement's discovery rule — the two names,
+  > the workspace root, nothing else — governs that read unchanged; the injection behaviour of this
+  > section is untouched.
+
 - **REQ-WORKSPACE-042** — Given both `AGENTS.override.md` and `AGENTS.md` exist at the workspace root, only the override file's content SHALL appear in the merged output; the regular file's content SHALL be absent.
 
 - **REQ-WORKSPACE-043** — Merged-output format: each contributing file's content SHALL be preceded by a one-line HTML comment `<!-- source: {absolute path} -->` on its own line; blocks SHALL be separated by one blank line; concatenation follows discovery order.

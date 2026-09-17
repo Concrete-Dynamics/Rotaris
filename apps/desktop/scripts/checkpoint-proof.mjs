@@ -345,7 +345,7 @@ const repaired = launch('repaired', workspace, local, preferences, {
   const lock = db.prepare('SELECT * FROM session_locks WHERE session_id = ?').get(sid);
   db.close();
   if (lock) throw new Error('the orphaned lock was not released');
-  if (timelineOf(sid, 'session_marked_interrupted').length !== 1) throw new Error('no session_marked_interrupted timeline entry');
+  if (timelineOf(sid, 'session.interrupted_recovered').length !== 1) throw new Error('no session.interrupted_recovered timeline entry');
   const headlines = text(repaired.probes, '.notice__headline');
   if (!/marked interrupted \(REQ-GIT-094\)/.test(repaired.log) || !/notice: Session marked interrupted/.test(repaired.log)) throw new Error('the repair and its notice were not logged');
   results.repaired = { status: 'interrupted', lockReleased: true, noticeRaised: true, noticeOnScreenAtCapture: headlines.some((h) => h === 'Session marked interrupted'), png: repaired.png };

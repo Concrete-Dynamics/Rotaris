@@ -195,7 +195,10 @@ const repairOne = launch('repair-one', {
   const row = sessionRow(A);
   expect(row.execution_status === 'interrupted', `A reads ${row.execution_status}`);
   expect(countIn('session_locks', A) === 0, 'the orphaned lock was not released');
-  expect(withDb((db) => db.prepare("SELECT count(*) AS c FROM timeline WHERE session_id = ? AND name = 'session_marked_interrupted'").get(A).c) === 1, 'no session_marked_interrupted entry');
+  // REQ-SESSION-062 names this entry `session.interrupted_recovered`. The first implementation invented
+  // `session_marked_interrupted`, and OQ-46's audit corrected the product without correcting the proofs that assert
+  // the invented name (`docs/defects/fixed/the-proofs-assert-a-timeline-name-the-audit-corrected.md`).
+  expect(withDb((db) => db.prepare("SELECT count(*) AS c FROM timeline WHERE session_id = ? AND name = 'session.interrupted_recovered'").get(A).c) === 1, 'no session.interrupted_recovered entry');
   // The probe cuts text at 400 characters, so the three paragraphs are read one by one.
   const disclosure = atText(repairOne, 5600, '[data-testid="session-disclosure"]');
   const carried = atText(repairOne, 5600, '[data-testid="session-disclosure-carried"]');
@@ -243,7 +246,7 @@ withDb((db) => {
     db.prepare("INSERT INTO issues (session_id, ordinal, id, recorded_at, kind, severity, actor, message, evidence_ref, metadata) VALUES ('B-nolock', 1, 'aaaaaaaaaaaa', 't1', 'permission_denied', 'warning', 'gate', 'denied once', 'permission_audit#9', '{}')").run();
     db.prepare("INSERT INTO issues (session_id, ordinal, id, recorded_at, kind, severity, actor, message, evidence_ref, metadata) VALUES ('B-nolock', 2, 'bbbbbbbbbbbb', 't2', 'tool_error', 'warning', 'gate', 'a tool errored', '', '{\"k\":1}')").run();
     db.prepare("INSERT INTO ring_state (session_id, kind, next_ordinal, held, dropped) VALUES ('B-nolock', 'issues', 3, 2, 0)").run();
-    // The repair already filed B's `session_marked_interrupted` at ordinal 1; the planted entries follow it.
+    // The repair already filed B's `session.interrupted_recovered` at ordinal 1; the planted entries follow it.
     const next = db.prepare("SELECT coalesce(max(ordinal), 0) + 1 AS n FROM timeline WHERE session_id = 'B-nolock'").get().n;
     for (const [i, name] of [[0, 'run_start'], [1, 'issue'], [2, 'run_end']]) db.prepare("INSERT INTO timeline (session_id, ordinal, at, name, actor, message, metadata) VALUES ('B-nolock', ?, ?, ?, 'rotaris', ?, '{}')").run(next + i, `2026-09-05T09:1${i}:00.000Z`, name, `${name} planted`);
   });
@@ -284,16 +287,17 @@ const exportRecords = launch('export-records', {
   expect(parsed.audit.complete === false && parsed.audit.dropped === 3 && parsed.audit.retained === CAP && parsed.audit.entries === CAP && parsed.audit.contiguous && parsed.audit.arithmetic && parsed.audit.firstOrdinal === 4 && parsed.audit.cap === CAP, `B's audit: ${JSON.stringify(parsed.audit)}`);
   expect(parsed.audit.firstEntryFields.includes('id') && parsed.audit.firstEntryFields.includes('decision') && parsed.audit.firstEntryFields.includes('rule_id'), `the entry's fields: ${JSON.stringify(parsed.audit.firstEntryFields)}`);
   expect(parsed.issues.count === 2 && parsed.issues.ids[0] === 'aaaaaaaaaaaa' && parsed.issues.locator === 'permission_audit#9' && parsed.issues.complete === true, `B's issues: ${JSON.stringify(parsed.issues)}`);
-  expect(parsed.timeline.length === 4 && parsed.timeline[0][1] === 'session_marked_interrupted' && JSON.stringify(parsed.timeline.slice(1).map((t) => t[1])) === '["run_start","issue","run_end"]' && parsed.timeline.every((t, i) => t[0] === i + 1), `B's timeline: ${JSON.stringify(parsed.timeline)}`);
+  expect(parsed.timeline.length === 4 && parsed.timeline[0][1] === 'session.interrupted_recovered' && JSON.stringify(parsed.timeline.slice(1).map((t) => t[1])) === '["run_start","issue","run_end"]' && parsed.timeline.every((t, i) => t[0] === i + 1), `B's timeline: ${JSON.stringify(parsed.timeline)}`);
   // REQ-SESSION-134 / REQ-SESSION-199, the repair of Part U's thirty-second defect (schema v10): the entry the PRODUCT
-  // wrote — the repair's own `session_marked_interrupted` — carries a 12-hex id and a severity through the export and out
-  // to a stock parser. The three planted with the pre-v10 column list carry no `id` key at all (an identifier the record
-  // never held is not invented on the way out) and read the requirement's default severity.
-  expect(/^[0-9a-f]{12}$/.test(parsed.timeline[0][2] ?? '') && parsed.timeline[0][3] === 'info', `the written entry's id and severity: ${JSON.stringify(parsed.timeline[0])}`);
+  // wrote — the repair's own `session.interrupted_recovered` — carries a 12-hex id and a severity through the export and out
+  // to a stock parser. Its severity is REQ-SESSION-062's `warning` — the same correction as the entry's name, and asserted
+  // as `info` here until Part AT. The three planted with the pre-v10 column list carry no `id` key at all (an identifier
+  // the record never held is not invented on the way out) and read the requirement's default severity.
+  expect(/^[0-9a-f]{12}$/.test(parsed.timeline[0][2] ?? '') && parsed.timeline[0][3] === 'warning', `the written entry's id and severity: ${JSON.stringify(parsed.timeline[0])}`);
   expect(parsed.timeline.slice(1).every((t) => t[2] === null && t[3] === 'info'), `the pre-v10 entries: ${JSON.stringify(parsed.timeline.slice(1))}`);
   expect(parsed.metrics.session_id === 'B-nolock' && parsed.metrics.decisions === CAP && parsed.metrics.issuesTotal === 2, `B's metrics: ${JSON.stringify(parsed.metrics)}`);
   // C holds nothing but the repair's own timeline entry: the two rings export as empty records with `complete: true`, never as nothing.
-  expect(JSON.stringify(parsed.empty.timeline) === '["session_marked_interrupted"]' && parsed.empty.issues === 0 && parsed.empty.audit === 0 && parsed.empty.auditComplete === true && parsed.empty.metricsId === 'C-deadlock', `C's empty records: ${JSON.stringify(parsed.empty)}`);
+  expect(JSON.stringify(parsed.empty.timeline) === '["session.interrupted_recovered"]' && parsed.empty.issues === 0 && parsed.empty.audit === 0 && parsed.empty.auditComplete === true && parsed.empty.metricsId === 'C-deadlock', `C's empty records: ${JSON.stringify(parsed.empty)}`);
   const lines = [...exportRecords.log.matchAll(/records exported to (\S+): .*?; (\d+) bytes in (\d+) attempt\(s\), (\d+) ms/g)].map((m) => ({ destination: m[1], bytes: Number(m[2]), attempts: Number(m[3]), ms: Number(m[4]) }));
   expect(lines.length === 2, `export lines: ${JSON.stringify(lines)}`);
   results.exportRecords = { parsedByStockParser: parsed, files: [recordsB, recordsC], sizes: [statSync(recordsB).size, statSync(recordsC).size], writes: lines, png: exportRecords.png };

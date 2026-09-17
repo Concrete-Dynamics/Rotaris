@@ -187,7 +187,12 @@ the fourth stayed hidden: past the corrected name, `sessions-proof` reports that
 only session-scoped table in the store with no `REFERENCES sessions(session_id) ON DELETE CASCADE`, so
 deleting a session leaves its plan text — stored VERBATIM by `REQ-ORCH-154` — behind for good (**125**,
 `docs/defects/a-session-delete-leaves-its-plan-cycles-behind.md`). That one is NOT repaired here: it needs an
-appended migration rebuilding a table this part does not own, and the note carries the repair's shape.
+appended migration rebuilding a table this part does not own, and the note carries the repair's shape. Past the same
+corrected name, `checkpoint-proof` reaches a scenario nothing had run in weeks and finds the Start session dialog
+accepting a gesture and producing NOTHING — no session row, no refusal, no notice, reproduced twice (**126**,
+`docs/defects/the-start-session-dialog-accepts-and-creates-nothing.md`, cause deliberately not guessed at). Two
+defects, both hidden behind one stale string, which is the argument for running the whole suite rather than the
+script named after the part.
 
 **And one defect in the sibling this pass is built beside (124).** `REQ-LIBRARY-124` fixes the completion
 notice's wording, its action and its zero-proposal outcome, and the built notice matched none of the three:

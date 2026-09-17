@@ -19,6 +19,10 @@ import { cleanEnvironment } from './lib/harness.mjs';
  *  6. **Nothing wrote before approval and something wrote after it** — the file the plan names does not exist
  *     while the gate is held and does exist once the approved run has run, which is the whole of "blocks
  *     before any file-modifying work is done" measured rather than asserted.
+ *  7. **PD-ORCH-003: a follow-up prompt in the approved session is not held** — the mode is still `plan` and
+ *     the gate stays shut, because the release belongs to the session and not to the run that took it.
+ *  8. **PD-ORCH-003: choosing `plan` again on the run-start chip re-arms it** — driven through the chip's own
+ *     popover, after which the next prompt is held at a third cycle.
  *
  * Every assertion reads the store, the workspace or the app's own log. The PNGs are read back so a launch
  * that painted nothing cannot pass.
@@ -241,6 +245,62 @@ if (approved.cycles.length !== 2) throw new Error(`a plan produced after approva
 results.approved = {
   decision: approved.cycles[1].decision, released: approved.session.plan_released, status: approved.session.execution_status,
   cycles: approved.cycles.length, plannedFileExists: existsSync(PLANNED_FILE), log: /ended \w+/.exec(log4)?.[0] ?? null,
+};
+
+/*
+ * 5. PD-ORCH-003: a follow-up prompt in the approved session is NOT held.
+ *
+ * This is the directive's whole point and the one launch that would have failed before it: `run_start_mode` is
+ * still `plan`, the intent of the follow-up is outside REQ-ORCH-021's answer group, and the gate must stay shut
+ * anyway because this session already holds an approval. The prompt is typed through the real input path.
+ */
+const log5 = launch('follow-up-not-held', {
+  ROTARIS_CAPTURE_RESUME: 'latest',
+  ROTARIS_CAPTURE_PROMPT: 'also add a second line saying again to planned.txt',
+  ROTARIS_CAPTURE_PROMPT_MS: '10000',
+  ROTARIS_CAPTURE_AFTER_MS: '34000',
+}, 180_000);
+const followUp = readStore();
+if (followUp.session.execution_status === 'awaiting_plan_decision') throw new Error(`a follow-up after approval opened the gate again (PD-ORCH-003):\n${log5}`);
+if (followUp.session.plan_cycle !== null) throw new Error(`a cycle is pending after a follow-up: ${JSON.stringify(followUp.session.plan_cycle)}`);
+if (followUp.session.plan_released !== 1) throw new Error('the prompt cleared the release — the release is the session\'s under PD-ORCH-003');
+if (followUp.cycles.length !== 2) throw new Error(`the follow-up opened a plan cycle: ${followUp.cycles.length} cycles, expected the 2 already decided`);
+results.followUpNotHeld = {
+  status: followUp.session.execution_status, cycle: followUp.session.plan_cycle,
+  released: followUp.session.plan_released, cycles: followUp.cycles.length,
+};
+
+/*
+ * 6. PD-ORCH-003: choosing `plan` again on the run-start chip re-arms the session, and the next prompt is held.
+ *
+ * Driven through the chip itself rather than through the command, because the directive puts the re-arm ON that
+ * control: the popover is opened and the `plan` item chosen by its own label, so a renamed option fails here
+ * rather than silently selecting the wrong one.
+ */
+// Two steps rather than one, with the popover's own render between them: the panel is mounted by a state update
+// the opening click schedules, so a single expression that clicks and then queries is racing its own effect.
+const OPEN_CHIP = `(() => { const chip = document.querySelector('[data-testid="chip-run-start-mode"]'); if (!chip) return 'no-chip'; const trigger = chip.querySelector('[data-ui-component="PopoverMenu"]'); if (!trigger) return 'no-trigger'; trigger.click(); return 'opened'; })()`;
+const CHOOSE_PLAN = `(() => { const panel = document.querySelector('[data-testid="chip-menu-panel"]'); if (!panel) return 'no-panel'; const item = [...panel.querySelectorAll('[role="menuitemradio"]')].find((b) => /plan first/i.test(b.textContent || '')); if (!item) return 'no-plan-option'; const chosen = (item.textContent || '').trim(); item.click(); return 'chose:' + chosen; })()`;
+const log6 = launch('re-armed', {
+  ROTARIS_CAPTURE_RESUME: 'latest',
+  ROTARIS_CAPTURE_EVAL_AT: `${OPEN_CHIP}@10000;;${CHOOSE_PLAN}@11000`,
+  ROTARIS_CAPTURE_PROMPT: 'now do the other thing entirely',
+  ROTARIS_CAPTURE_PROMPT_MS: '15000',
+  ROTARIS_CAPTURE_AFTER_MS: '36000',
+}, 180_000);
+// The app logs an eval as `eval-at <ms> <the expression> → "<the value>"`, and the expression itself contains
+// every token the answer does — so the answer is read from the arrow at the end of the line, never from the line.
+const rearmSteps = log6.split('\n').filter((l) => l.includes('eval-at')).map((l) => /→ "([^"]*)"/.exec(l)?.[1]?.trim() ?? 'no-answer');
+const rearmChoice = rearmSteps.find((s) => s.startsWith('chose:')) ?? null;
+if (rearmSteps.some((s) => s.startsWith('no-')) || rearmChoice === null) throw new Error(`the run-start chip could not be driven: ${JSON.stringify(rearmSteps)}\n${log6}`);
+const rearmed = readStore();
+if (rearmed.session.plan_released !== 0) throw new Error(`choosing \`plan\` did not re-arm the session: plan_released=${rearmed.session.plan_released}\n${log6}`);
+if (rearmed.session.execution_status !== 'awaiting_plan_decision') throw new Error(`the re-armed session did not hold the next prompt: ${rearmed.session.execution_status}\n${log6}`);
+if (rearmed.session.plan_cycle !== 3) throw new Error(`the held cycle is ${JSON.stringify(rearmed.session.plan_cycle)}, expected a third`);
+if (rearmed.cycles.length !== 3) throw new Error(`expected a third cycle, found ${rearmed.cycles.length}`);
+results.reArmed = {
+  chipChoice: rearmChoice, released: rearmed.session.plan_released, status: rearmed.session.execution_status,
+  cycle: rearmed.session.plan_cycle, cycles: rearmed.cycles.length,
 };
 
 /*

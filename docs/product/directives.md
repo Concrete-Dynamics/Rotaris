@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Thirteen.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Fifteen.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -717,6 +717,101 @@ for these three in particular.
 [R-032](requests.md#r-032). `REQ-CHAT-010` joins the dispositions at revision 2: its 180 px transcript
 minimum is a floor under an area this directive now takes in full while the gate is expanded, and a
 requirement a mechanism contradicts is named by the directive or it is an ungoverned deviation from it.*
+
+<a id="pd-orch-003"></a>
+
+### PD-ORCH-003 — an approval releases the plan gate for the session, not only for the run
+
+**The rule.** An approval taken under `REQ-ORCH-153` SHALL release execution for the remainder of the run
+that received it **and for every later run of the same session**, until the gate is re-armed. A run started
+in a session that holds an approved release SHALL NOT be held at the gate, whatever the run-start mode says.
+
+The gate SHALL be re-armed by exactly two things, and by nothing else:
+
+- **a new session**, which never holds a release and is therefore held exactly as `REQ-ORCH-152` and
+  `REQ-ORCH-153` require; and
+- **the user choosing `plan` on the run-start control** while the session holds a release, which re-arms
+  that session in the same gesture that writes the setting.
+
+Neither **revise** nor **cancel** releases anything. An approval SHALL NOT change the run-start mode: the
+setting keeps its value and its persistence under `REQ-ORCH-152`, and no answer at the gate writes it.
+
+A surface that offers the run-start mode for a session holding a release SHALL state that the session is
+released, so the control never reads as promising a gate that will not open.
+
+**Why, and what it costs.** The unit a person plans is the **piece of work**, and a session is this
+product's name for that. Approval already installs the run's execution grants, so the transition from
+planning to implementing inside one run costs one keystroke and no setting; the ceremony is entirely at the
+next prompt. A follow-up to a plan that was just approved — *"you missed the error case, add it"* — opened a
+fresh gate and asked the user to read and approve a plan for a two-line change, and the only escape was a
+control in the composer that a user has no reason to visit and every reason to forget. A gate people route
+around is worse than no gate, because it trains the reflex of approving without reading.
+
+What it costs is stated plainly, because it is real: a long-lived session plans **once**, and work that
+drifts into new territory inside that session runs ungated until someone re-arms it. That is accepted for
+two reasons — the release is **visible on the very control that sets the mode**, so the state is never a
+surprise, and **one gesture undoes it**, the same gesture that asked for planning in the first place.
+
+**Why not switching the mode instead.** The first shape asked for was an approval that switches
+`runtime.run_start_mode` away from `plan` ([R-034](requests.md#r-034), declined). It buys the approved run
+nothing, since the grants are already installed; all it does is pre-decide the **next** run at the moment
+the user is reading **this** plan. It also makes a one-shot answer write a persistent setting behind the
+user's back, which is the failure `REQ-ORCH-152` was written to avoid. This directive changes the reach of
+the release and leaves the setting alone.
+
+**Why not by intent.** `REQ-ORCH-153`'s carve-out could instead be widened from `REQ-ORCH-021`'s answer
+group to answer ∪ micro, so a small follow-up never gates. It needs no new state at all, and it was
+rejected: it makes the gate's appearance **probabilistic**, with a classifier deciding whether the user is
+shown the plan before files are written. A gate that exists to stop unread writes has to be predictable, and
+a user must be able to answer "will the next run be held?" without knowing how their sentence was
+classified. Recorded here so the cheaper-looking option is not re-proposed as new.
+
+**Why it names one requirement and not three.** The mechanism touches the plan gate, and two of the three
+requirements that govern it are deliberately **not** in the disposition:
+
+- `REQ-ORCH-154` is untouched and every clause of it still holds as written. It states what approval
+  guarantees *for the run that received it* — that the run may not return to the gate, that a later plan in
+  that run may not block, that a mode change mid-run lands on the next run. This directive adds a second,
+  wider scope; it contradicts none of those sentences.
+- `REQ-ORCH-153`'s block is already conditioned on the release in the built product (ADR-0062 reads
+  `plan_released` at every launch), and that condition was grounded in `REQ-ORCH-154`'s one-way clause when
+  it was built. What changes here is not *whether* a released run is held but **for how long the release
+  lasts**, and the sentence that fixes that is `REQ-ORCH-152`'s — the mode "governs the next run started in
+  the same workspace until the user changes it".
+
+So `REQ-ORCH-152` is the identifier this displaces, and naming the other two would claim a precedence this
+directive does not need. It would also be refused: `PD-ORCH-002` already supersedes `REQ-ORCH-153` and
+narrows `REQ-ORCH-154`, and the symbol generator rejects two directives over one requirement so that
+precedence stays unambiguous.
+
+> **Narrows:** REQ-ORCH-152
+
+*Raised by the owner, 2026-09-17; logged as [R-035](requests.md#r-035).*
+
+**First execution, 2026-09-17 — the mechanism held, and the proof that measured it did not.**
+`pnpm plan-gate-proof` gained two launches the day the directive was written and ran them against the built
+product: a follow-up prompt typed into an approved session through the real input path, and the run-start
+chip's own popover driven open and answered. Both behaved as the rule states on the first run. The follow-up
+came to rest `completed` with no cycle pending, `plan_released` still `1` and the session's cycle count
+unmoved at the two already decided — the launch that would have failed before the directive, since the mode
+was still `plan` and the follow-up's intent sits outside `REQ-ORCH-021`'s answer group. Choosing `Plan first`
+again cleared the release, and the next prompt was held at a third cycle.
+
+**What did hold a defect was the harness.** The first run failed reading its own evidence: the app logs an
+evaluated expression as `eval-at <ms> <the expression> → "<the value>"`, and the expression **contains every
+token the answer does**, so a pattern matching the answer anywhere in the line matched the question instead.
+It is the shape of mistake that reports a pass as easily as a failure — here it refused a launch that had in
+fact succeeded, which is the safe direction, and the same pattern read one character differently would have
+green-lit a chip that was never clicked. The answer is now read from the arrow at the end of the line. Not
+minted as a numbered defect: it was written and found inside the same hour and never governed anything, and
+`first-executions.md` excludes proof defects by its own terms.
+
+**One defect was found beside it, in code this change only passed through**: a `PopoverMenu` option's
+accessible name fuses its label and its hint with no separator — `Auto` + `start at once` announces as
+*"Autostart at once"* — which reaches every chip built on the component and predates this directive. Recorded
+as [`a-chip-option-announces-its-label-and-hint-as-one-word.md`](../defects/a-chip-option-announces-its-label-and-hint-as-one-word.md)
+and deliberately not repaired here. The row is in
+[`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 <a id="pd-monitor-001"></a>
 

@@ -1079,6 +1079,11 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
    */
   const planGate = session?.planGate ?? null;
   /*
+   * PD-ORCH-003: the session already holds an approved release, so `plan` on the chip describes the setting and
+   * not what the next run will do. The chip states which of the two it is; choosing `plan` again re-arms it.
+   */
+  const planReleased = session?.planReleased === true;
+  /*
    * PD-ORCH-002 revision 2: expanded is the state a gate OPENS in, and a further plan cycle returns it to that
    * state — a new plan is a new thing to read, so the reader does not inherit the last cycle's collapse. The state
    * lives here rather than in the gate because the workspace grid is what changes with it.
@@ -1367,8 +1372,9 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
             {onSetRunStartMode && (
               <PopoverChip id="chip-run-start-mode" testId="chip-run-start-mode" ariaLabel="Run-start mode for the next run"
                 icon="ph-play-circle" reason={chipReason} value={runStartMode} options={['auto', 'plan']}
-                labels={{ auto: 'Auto', plan: 'Plan first' }}
-                hints={{ auto: 'start at once', plan: 'plan gate first' }}
+                labels={{ auto: 'Auto', plan: planReleased ? 'Plan first · released' : 'Plan first' }}
+                /* PD-ORCH-003: the released hint names the gesture that re-arms, because choosing `plan` IS that gesture. */
+                hints={{ auto: 'start at once', plan: planReleased ? 'approved — choose again to plan the next run' : 'plan gate first' }}
                 onChoose={(v) => { void onSetRunStartMode(v as 'auto' | 'plan').then((r) => { if (!r.ok) setError(r.reason); }); }} />
             )}
             {onSetNextReasoning && (

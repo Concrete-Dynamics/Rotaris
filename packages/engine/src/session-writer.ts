@@ -1194,7 +1194,10 @@ export class SessionWriter {
     return ok(generation);
   }
 
-  /** REQ-ORCH-154: a fresh user prompt is the next run, which the mode governs again — so the release is cleared. */
+  /**
+   * PD-ORCH-003: the release is dropped and the mode governs this session's next run again. Its one caller is
+   * `SessionManager.planRearm` — a fresh prompt used to clear it here, and under the directive no longer does.
+   */
   clearPlanRelease(): void {
     try { this.deps.dal.setPlanReleased(this.deps.sessionId, false, toIsoUtc(this.deps.wall.instant())); } catch (cause) { this.deps.warn(`clearing the plan release on ${this.deps.sessionId} failed: ${String(cause)}`); }
   }

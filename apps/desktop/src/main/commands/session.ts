@@ -11,7 +11,7 @@ import { refusal, type CommandContext, type CommandHandlers } from './context.js
  */
 export function sessionCommands(
   ctx: Pick<CommandContext, 'capturing' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'pauseWindows' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runHost' | 'services'>,
-): Pick<CommandHandlers, 'session.continue' | 'session.planEdit' | 'session.planDecision' | 'session.start' | 'session.newId' | 'session.resume' | 'session.control' | 'session.prompt' | 'session.readAttachment' | 'session.subscribe' | 'session.unsubscribe' | 'session.reconcile' | 'session.pageOlder'> {
+): Pick<CommandHandlers, 'session.continue' | 'session.planEdit' | 'session.planDecision' | 'session.planRearm' | 'session.start' | 'session.newId' | 'session.resume' | 'session.control' | 'session.prompt' | 'session.readAttachment' | 'session.subscribe' | 'session.unsubscribe' | 'session.reconcile' | 'session.pageOlder'> {
   const { capturing, dialogs, log, mainWindows, notices, pauseWindows, raiseNotice, recoveryFor, relay, runHost, services } = ctx;
   return {
     'session.continue': async (req) => {
@@ -23,9 +23,9 @@ export function sessionCommands(
       return { ok: true, value: { resumed: r.resumed, messageLimit: r.messageLimit } };
     },
     /*
-     * REQ-ORCH-153/154 (ADR-0062): the plan gate's two entries, forwarded to the run host that owns the session.
-     * They are session commands and not controls: the run is PARKED, so there is nothing live to control and the
-     * answer must reach a session whose hosting process may have exited since the gate opened.
+     * REQ-ORCH-153/154 (ADR-0062) and PD-ORCH-003: the plan gate's three entries, forwarded to the run host that
+     * owns the session. They are session commands and not controls: the run is PARKED, so there is nothing live to
+     * control and the answer must reach a session whose hosting process may have exited since the gate opened.
      */
     'session.planEdit': async (req) => {
       const r = await runHost.request({ kind: 'session.planEdit', sessionId: req.sessionId, text: req.text }, millis(10_000));
@@ -36,6 +36,10 @@ export function sessionCommands(
       if (r.kind !== 'session.planResolved') { if (r.kind === 'refused') raiseNotice('error', r.headline, r.detail); return refusal(r, 'The plan decision could not be applied'); }
       log(`session ${req.sessionId} plan cycle ${r.cycle}: ${req.decision}${r.relaunched ? ' — a further segment is executing' : ' — the run came to rest'}`);
       return { ok: true, value: { cycle: r.cycle, relaunched: r.relaunched } };
+    },
+    'session.planRearm': async (req) => {
+      const r = await runHost.request({ kind: 'session.planRearm', sessionId: req.sessionId }, millis(10_000));
+      return r.kind === 'ack' ? { ok: true, value: null } : refusal(r, 'The plan gate could not be re-armed');
     },
     'session.start': async (req, { w }) => {
       if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before starting a run' };

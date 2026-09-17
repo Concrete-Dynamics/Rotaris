@@ -143,6 +143,12 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
    */
   z.object({ kind: z.literal('session.planEdit'), sessionId: z.string().min(1), text: z.string() }),
   z.object({ kind: z.literal('session.planDecision'), sessionId: z.string().min(1), decision: z.enum(PLAN_DECISIONS), changes: z.string().optional() }),
+  /**
+   * PD-ORCH-003: re-arm the gate for a session whose approval released it. The third entry, and a session
+   * command for the same reason as the other two. It is the only way back to a held gate inside a session,
+   * which is what keeps the release visible rather than permanent — nothing in the run re-arms itself.
+   */
+  z.object({ kind: z.literal('session.planRearm'), sessionId: z.string().min(1) }),
   /** REQ-SESSION-109: a surface attached to a session paused at the limit asks main for the dialog; the dialog window reads its payload. */
   z.object({ kind: z.literal('pause.present'), payload: PausePayloadSchema }),
   z.object({ kind: z.literal('pause.payload') }),

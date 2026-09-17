@@ -163,6 +163,16 @@ it is what survives a restart, on the same terms as `paused_at_count` does for `
 launch, and cleared only by the next user prompt — because `REQ-ORCH-154` says a mode change made while a
 run is in flight takes effect only for the next run, and a fresh prompt **is** the next run.
 
+> **Superseded by [`PD-ORCH-003`](../../product/directives.md#pd-orch-003), 2026-09-17 — the clearing rule
+> alone.** The sentence above is kept because its reasoning was sound and is why the flag is written the way
+> it is. What it got wrong is not the mechanism but **the unit**. A fresh prompt is indeed the next run; the
+> directive's point is that the next run is the wrong thing to re-gate, because the unit a person plans is
+> the piece of work and a follow-up to a plan they just approved is the same piece of work.
+> `SessionWriter.clearPlanRelease` is no longer called from `SessionManager.prompt`; its one caller is
+> `SessionManager.planRearm`, reached by the run-start control and by nothing inside a run. Everything else
+> in this section holds unchanged — the column, the read at every launch, the process boundary it survives,
+> and `plan_cycle` beside `execution_status`.
+
 The gate reaches the surface from the **store**, not from a live run: the deciding surface must find it
 after a restart with no process behind it.
 
@@ -171,6 +181,11 @@ after a restart with no process behind it.
 `CONTROL_OPS` is `REQ-MONITOR-004`'s closed enumeration over a **live** run, and a parked run has nothing
 live to control. `session.planEdit` and `session.planDecision` join the command schema beside
 `session.continue`, which is the same shape for the same reason (ruling 2).
+
+`PD-ORCH-003` adds a third, `session.planRearm`, on the same argument carried one step further: it addresses
+a session holding no run at all, live or parked. It refuses while a run is active — what a launch has already
+read cannot be changed under it — and re-arming an already-armed session succeeds and does nothing, so the
+caller need not read the flag it is about to set.
 
 ### 9. The surface is inside the primary view, and no dismissal answers it
 
@@ -224,6 +239,14 @@ looks the root up by name. The defect stands and keeps its own commit, where `ba
 5. **The gate is offered on two surfaces and holds state on neither.** The composer's control and the start
    dialog's both write `runtime.run_start_mode` through the scoped per-field path, so the setting is
    persistent and one value governs whichever surface the user next starts from.
+
+   > **Amended by [`PD-ORCH-003`](../../product/directives.md#pd-orch-003), 2026-09-17.** The composer's
+   > control now writes session state as well: choosing `plan` on a session holding an approved release
+   > sends `session.planRearm` after the field write, because under the directive the setting alone no
+   > longer decides whether that session's next run is held. The start dialog's control does not — it opens
+   > a session that holds no release. The two writes are ordered and both are reported: the field is the
+   > durable half, and a silent success over a gate that did not re-arm is the outcome the directive exists
+   > to prevent. What still holds is the sentence's point — neither surface keeps a mode of its own.
 
 ## First execution — 2026-09-13, the plan gate in the built app (`pnpm plan-gate-proof`)
 

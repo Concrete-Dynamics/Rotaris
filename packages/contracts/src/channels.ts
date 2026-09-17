@@ -246,6 +246,13 @@ export const SessionRecordSchema = z.object({
    * (REQ-ORCH-153's restart clause, on the same terms as `pausedAtCount`).
    */
   planGate: PlanGateSchema.nullable(),
+  /**
+   * PD-ORCH-003: whether this session already holds an approved release. Read from the same stored row as
+   * `planGate`, for the same reason. It is NOT the mode — `runtime.run_start_mode` is configuration and says
+   * what the user asked for; this says whether the next run in THIS session will actually be held, which is
+   * the fact a surface showing the mode has to state or it offers a gate that will not open.
+   */
+  planReleased: z.boolean(),
   /** REQ-MONITOR-166: the token history the run sampled — [at, cumulative total], oldest first, at most 120 (named without the word the secret test forbids). */
   usageHistory: z.array(z.tuple([z.string(), z.number().int().nonnegative()])),
   /**

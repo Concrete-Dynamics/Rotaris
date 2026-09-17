@@ -78,9 +78,11 @@ launch audit (once per session, REQ-SESSION-138) → `run_start` timeline entry 
 effective permission posture (downgrade row if any) → save `running` → `session_start` hooks → **the plan cycle
 if the gate holds**, otherwise the loop.
 
-**The plan gate (Part; ADR-0062, REQ-ORCH-152/153/154).** In `plan` mode a run whose classified intent is outside
-REQ-ORCH-021's answer group is a sequence of **run segments**: one or more plan cycles, then one execution
-segment. The hold is settled once, after the pre-flight and before anything it withholds, and never cleared in
+**The plan gate (Part; ADR-0062, REQ-ORCH-152/153/154, PD-ORCH-003).** In `plan` mode a run whose classified
+intent is outside REQ-ORCH-021's answer group **and whose session holds no approved release** is a sequence of
+**run segments**: one or more plan cycles, then one execution segment. The release clause is PD-ORCH-003's — an
+approval reaches the session, so every run after it in that session goes straight to execution until the user
+re-arms the gate (`session.planRearm`, sent by the composer's run-start chip) or starts a new session. The hold is settled once, after the pre-flight and before anything it withholds, and never cleared in
 place — so a segment's grants are constant and the model's listing and callable set stay one resolution
 (REQ-TOOLS-010). A held segment takes **one turn of the entry role** through the ordinary `turn()` path, numbered
 **iteration 0** (`root:0`) because a plan cycle is not an iteration, and then `parkAtPlanGate()` mirrors
@@ -379,8 +381,12 @@ text and moves nothing else; `session.planDecision {decision, changes?}` carries
 text (the edit where one exists); **revise** launches a further plan cycle with the plan as it stands and the
 changes stated, without limit; **cancel** comes to rest with stop reason `user_cancelled`, writes the summary REQ-ORCH-082's first arm gives
 (the same `summarise` the run's teardown calls, in the same transaction) and launches nothing.
-`plan_released` is read at every launch and cleared only by the next user prompt, which is REQ-ORCH-154's one-way
-approval across the process boundary the park introduces.
+`plan_released` is read at every launch. **PD-ORCH-003** makes it the **session's** flag rather than the run's: a
+fresh prompt no longer clears it, so every later run of an approved session launches released and the follow-up
+that used to re-open the gate runs straight through. It is cleared by exactly one thing, `session.planRearm
+{sessionId}` — a third session command, refused while a run is active and a successful no-op on a session that
+already holds no release — which the composer's run-start chip sends when the user chooses `plan` on a released
+session. A new session holds no release and is held exactly as REQ-ORCH-152 and REQ-ORCH-153 require.
 
 A **paused** session has no live run: `session.continue {action}` is a session command — at the message limit
 it resolves the pause (continue → `idle`; double → the limit ×2; cancel → `paused`, stop reason

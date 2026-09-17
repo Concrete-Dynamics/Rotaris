@@ -288,7 +288,9 @@ const log6 = launch('re-armed', {
   ROTARIS_CAPTURE_PROMPT_MS: '15000',
   ROTARIS_CAPTURE_AFTER_MS: '36000',
 }, 180_000);
-const rearmSteps = [...log6.matchAll(/eval-at "?((?:chose:|opened|no-)[^"\n]*)/g)].map((m) => m[1].trim());
+// The app logs an eval as `eval-at <ms> <the expression> → "<the value>"`, and the expression itself contains
+// every token the answer does — so the answer is read from the arrow at the end of the line, never from the line.
+const rearmSteps = log6.split('\n').filter((l) => l.includes('eval-at')).map((l) => /→ "([^"]*)"/.exec(l)?.[1]?.trim() ?? 'no-answer');
 const rearmChoice = rearmSteps.find((s) => s.startsWith('chose:')) ?? null;
 if (rearmSteps.some((s) => s.startsWith('no-')) || rearmChoice === null) throw new Error(`the run-start chip could not be driven: ${JSON.stringify(rearmSteps)}\n${log6}`);
 const rearmed = readStore();

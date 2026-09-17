@@ -788,6 +788,31 @@ precedence stays unambiguous.
 
 *Raised by the owner, 2026-09-17; logged as [R-035](requests.md#r-035).*
 
+**First execution, 2026-09-17 — the mechanism held, and the proof that measured it did not.**
+`pnpm plan-gate-proof` gained two launches the day the directive was written and ran them against the built
+product: a follow-up prompt typed into an approved session through the real input path, and the run-start
+chip's own popover driven open and answered. Both behaved as the rule states on the first run. The follow-up
+came to rest `completed` with no cycle pending, `plan_released` still `1` and the session's cycle count
+unmoved at the two already decided — the launch that would have failed before the directive, since the mode
+was still `plan` and the follow-up's intent sits outside `REQ-ORCH-021`'s answer group. Choosing `Plan first`
+again cleared the release, and the next prompt was held at a third cycle.
+
+**What did hold a defect was the harness.** The first run failed reading its own evidence: the app logs an
+evaluated expression as `eval-at <ms> <the expression> → "<the value>"`, and the expression **contains every
+token the answer does**, so a pattern matching the answer anywhere in the line matched the question instead.
+It is the shape of mistake that reports a pass as easily as a failure — here it refused a launch that had in
+fact succeeded, which is the safe direction, and the same pattern read one character differently would have
+green-lit a chip that was never clicked. The answer is now read from the arrow at the end of the line. Not
+minted as a numbered defect: it was written and found inside the same hour and never governed anything, and
+`first-executions.md` excludes proof defects by its own terms.
+
+**One defect was found beside it, in code this change only passed through**: a `PopoverMenu` option's
+accessible name fuses its label and its hint with no separator — `Auto` + `start at once` announces as
+*"Autostart at once"* — which reaches every chip built on the component and predates this directive. Recorded
+as [`a-chip-option-announces-its-label-and-hint-as-one-word.md`](../defects/a-chip-option-announces-its-label-and-hint-as-one-word.md)
+and deliberately not repaired here. The row is in
+[`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 <a id="pd-monitor-001"></a>
 
 ### PD-MONITOR-001 — a cost the provider reported is carried and shown under its own qualifier

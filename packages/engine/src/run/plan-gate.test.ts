@@ -284,20 +284,52 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     expect(row.summary_text).toBe('The run came to rest because a person stopped it.');
   });
 
-  it('a fresh user prompt is the next run, which the mode governs again (REQ-ORCH-154)', async () => {
-    const sessions = sessionsWith(scripted([answer('a plan'), answer('carried out'), answer('a second plan'), answer('spare'), answer('spare')]).backend);
+  it('PD-ORCH-003: a follow-up prompt after an approval is NOT held — the release is the session\'s', async () => {
+    const sessions = sessionsWith(scripted([answer('a plan'), answer('carried out'), answer('the follow-up, carried out'), answer('spare')]).backend);
     const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
     await sessions.running(sid)!;
     sessions.planDecision(sid, 'approve');
     await sessions.running(sid)!;
     expect(dal.getSession(sid)!.plan_released).toBe(1);
-    // The next prompt clears the release, so the gate holds again.
+    // The friction the directive was raised against: this used to open a second gate for a follow-up to a plan
+    // the user had just approved. The mode is still `plan` and is deliberately not consulted.
+    expect(sessions.prompt(sid, 'you missed the error case, add it').ok).toBe(true);
+    await sessions.running(sid)!;
+    const row = dal.getSession(sid)!;
+    expect(row.plan_released).toBe(1);
+    expect(row.execution_status).not.toBe('awaiting_plan_decision');
+    expect(row.plan_cycle).toBeNull();
+    // One cycle in the whole session, and it is the one that was approved.
+    expect(dal.planCyclesOf(sid)).toHaveLength(1);
+  });
+
+  it('PD-ORCH-003: re-arming holds the next prompt again, and re-arming an armed session does nothing', async () => {
+    const sessions = sessionsWith(scripted([answer('a plan'), answer('carried out'), answer('a second plan'), answer('spare')]).backend);
+    const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    sessions.planDecision(sid, 'approve');
+    await sessions.running(sid)!;
+    // `true` says a release was dropped; the second call is a no-op that still succeeds, so a surface may send
+    // it without reading the flag first.
+    expect(sessions.planRearm(sid)).toEqual({ ok: true, value: true });
+    expect(sessions.planRearm(sid)).toEqual({ ok: true, value: false });
+    expect(dal.getSession(sid)!.plan_released).toBe(0);
     expect(sessions.prompt(sid, 'and now the other thing').ok).toBe(true);
     await sessions.running(sid)!;
     const row = dal.getSession(sid)!;
-    expect(row.plan_released).toBe(0);
     expect(row.execution_status).toBe('awaiting_plan_decision');
     expect(row.plan_cycle).toBe(2);
+  });
+
+  it('PD-ORCH-003: a cancelled gate releases nothing, so the next prompt is held', async () => {
+    const sessions = sessionsWith(scripted([answer('a plan'), answer('a second plan'), answer('spare')]).backend);
+    const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    sessions.planDecision(sid, 'cancel');
+    expect(dal.getSession(sid)!.plan_released).toBe(0);
+    expect(sessions.prompt(sid, 'try again then').ok).toBe(true);
+    await sessions.running(sid)!;
+    expect(dal.getSession(sid)!.execution_status).toBe('awaiting_plan_decision');
   });
 
   it('an answer is refused when no gate is held, and a decided cycle takes no further edit', async () => {

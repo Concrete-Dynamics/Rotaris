@@ -275,6 +275,14 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       log(`session ${req.sessionId} plan cycle ${r.value.cycle}: ${req.decision}${r.value.relaunched ? ' — a further segment is executing' : ' — the run came to rest'}`);
       return { kind: 'session.planResolved', sessionId: req.sessionId, cycle: r.value.cycle, relaunched: r.value.relaunched };
     }
+    case 'session.planRearm': {
+      // PD-ORCH-003: the release is dropped and nothing else moves. No run is launched and no gate opens here —
+      // the next prompt in this session is the run the mode governs again.
+      const r = sessions.planRearm(asSessionId(req.sessionId));
+      if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: 'The plan gate could not be re-armed', detail: r.error.reason };
+      log(`session ${req.sessionId}: the plan gate is re-armed — the next run is held`);
+      return { kind: 'ack' };
+    }
     case 'session.prompt': {
       // REQ-PROVIDER-066 (the continuation lease): a prompt on a resumed session launches a run — refresh first.
       const leaseRefusal = await continuationLeaseForSession(req.sessionId);

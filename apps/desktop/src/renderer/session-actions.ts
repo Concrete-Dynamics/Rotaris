@@ -155,10 +155,22 @@ export function createSessionActions({ bridge, replica }: SessionActionDeps) {
    * REQ-ORCH-152 / REQ-CONFIG-476 / ADR-0037 ESC-1: the run-start mode written through the scoped per-field path,
    * the same one the permission-mode chip uses. The composer's control and the start dialog's both come here, so
    * there is one key and no surface holds a mode of its own.
+   *
+   * PD-ORCH-003: choosing `plan` on a session an approval already released also RE-ARMS that session. The two are
+   * one gesture because they are one intention — a user asking for `plan` on a released session is asking to be
+   * shown the next plan, and writing only the key would leave the chip reading `Plan first` over a run that still
+   * would not be held. The re-arm is sent second and its failure is reported: the mode is the durable half, and a
+   * silent success over a gate that did not re-arm is the one outcome this directive exists to prevent. Choosing
+   * `auto` re-arms nothing — it is the setting saying no gate is wanted at all.
    */
   async function setRunStartMode(mode: 'auto' | 'plan'): Promise<{ ok: true } | { ok: false; reason: string }> {
     const written = await bridge.command({ kind: 'config.setField', patch: { runtime: { run_start_mode: mode } } });
-    return written.ok ? { ok: true } : { ok: false, reason: written.detail ?? written.headline };
+    if (!written.ok) return { ok: false, reason: written.detail ?? written.headline };
+    if (mode !== 'plan') return { ok: true };
+    const sessionId = replica.getState().sessionId;
+    if (!sessionId) return { ok: true };
+    const rearmed = await bridge.command({ kind: 'session.planRearm', sessionId });
+    return rearmed.ok ? { ok: true } : { ok: false, reason: rearmed.detail ?? rearmed.headline };
   }
 
   return { answerQuestions, cancelAgent, cancelQuestions, continueSession, control, planDecision, planEdit, setMode, setRunStartMode, stopRun, submitPrompt };

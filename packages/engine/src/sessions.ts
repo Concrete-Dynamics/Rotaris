@@ -503,6 +503,9 @@ export function toSessionRecord(r: SessionRow, queued: readonly { id: string; co
     messageLimit: r.message_limit,
     pausedAtCount: r.paused_at_count,
     planGate,
+    // PD-ORCH-003: the release outlives the run that took it, so a surface showing the mode reads this to tell
+    // an armed `plan` from a released one rather than promising a gate that will not open.
+    planReleased: r.plan_released === 1,
     usageHistory: parseTokenSamples(r.token_samples),
     costLabel: costLabelOf(r.cost),
     toolCalls: { total: r.tool_calls, agents: Math.max(0, ...toolCalls.map((t) => t.agents)), byTool: toolCalls.map((t) => ({ tool: t.tool_name, count: t.count })) },
@@ -917,9 +920,10 @@ export class Sessions {
     if (!attachments.ok) return err({ code: 'attachment-invalid', reason: attachments.reason });
     const row = s.writer.appendRow('user', prompt, true, { attachments: attachments.attachments });
     if (!row.ok) return err({ code: row.error.code, reason: 'reason' in row.error ? row.error.reason : String(row.error.code) });
-    // REQ-ORCH-154: approval is one-way FOR THE RUN THAT RECEIVED IT. A fresh user prompt is the next run, which
-    // the mode governs again — so the release is cleared here and nowhere else.
-    s.writer.clearPlanRelease();
+    // PD-ORCH-003: a fresh prompt does NOT clear the release. REQ-ORCH-154's "one-way for the run that received
+    // it" is widened to one-way for the SESSION, because the unit a user plans is the piece of work and not the
+    // run — re-planning a follow-up to a plan they just approved is the ceremony the directive was raised against.
+    // What re-arms is explicit and never inferred: a new session (the column defaults to 0), or `planRearm`.
     this.launchContinuation(s, prompt, payload, todo.value, previousIntent(s.dal, sessionId), setup.value, attachments.content);
     return ok(row.value);
   }
@@ -1343,7 +1347,9 @@ export class Sessions {
    * the mode setting made while a run is in flight takes effect only for the next run" expressed as the place the
    * value is read. `plan_released` is approval's one-way flag: once execution has been released the run no longer
    * holds, whatever the mode says and whichever process is asking — that is what makes "a plan produced later in
-   * the same run MUST NOT block execution" survive the process boundary the park introduces. `override` is a
+   * the same run MUST NOT block execution" survive the process boundary the park introduces. **PD-ORCH-003 widens
+   * that flag from the run to the session**: it is no longer cleared by the next prompt, so every later run of an
+   * approved session reads it too, and only `planRearm` or a new session sets the gate again. `override` is a
    * revise cycle, which carries its own number and the changes the user stated and is not subject to the mode
    * read: the user asked for that cycle explicitly.
    *
@@ -1358,6 +1364,26 @@ export class Sessions {
     if (!row || row.plan_released === 1) return undefined;
     const cycles = dal.planCyclesOf(sessionId);
     return { plan: { cycle: (cycles[cycles.length - 1]?.cycle ?? 0) + 1, changes: '', withholds } };
+  }
+
+  /**
+   * PD-ORCH-003: re-arm the gate a previous approval released. It starts nothing and stops nothing — the next
+   * prompt in this session is held, exactly as the first one was.
+   *
+   * It refuses while a run is active, for the reason REQ-ORCH-154 gives for the mode itself: what a launch
+   * already read cannot be changed under it. Re-arming an already-armed session succeeds and does nothing, so
+   * a surface may send it without first reading the flag it is about to set.
+   */
+  planRearm(sessionId: SessionId): Result<boolean, { readonly code: string; readonly reason: string }> {
+    const s = this.live.get(sessionId);
+    if (!s) return err({ code: 'not-live', reason: `${sessionId} is not a live session` });
+    const stored = s.dal.getSession(sessionId);
+    if (!stored) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
+    if (s.run && !s.run.isEnded) return err({ code: 'run-active', reason: 'A run is already active; the plan gate re-arms for the next run.' });
+    if (stored.plan_released !== 1) return ok(false);
+    s.writer.clearPlanRelease();
+    s.owner.reconcile();
+    return ok(true);
   }
 
   /**

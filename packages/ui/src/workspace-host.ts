@@ -1,5 +1,5 @@
 /**
- * Stage C — the two module-level openers the project-folder gestures act through, and why they are module-level.
+ * Stage C — the module-level openers a few gestures act through, and why they are module-level.
  *
  * Both callers are places that cannot hold the bridge. The command palette's entry runs against a
  * `CommandContext` which carries no command channel (`commands/registry.ts`), and the transient
@@ -33,5 +33,20 @@ export function bindNewSessionOpener(fn: (() => void) | null): void { newSession
 export function startNewSessionFromOffer(): boolean {
   if (newSessionOpener === null) return false;
   newSessionOpener();
+  return true;
+}
+
+/**
+ * PD-LIBRARY-002's gesture, raised from exactly three surfaces — the Library's Proposals tab, the Overview's
+ * proposals card and the command palette — and from nowhere else: no run completion, no schedule, no agent.
+ * All three act through this one opener rather than three routes, because the palette cannot hold the bridge
+ * and because one route is one place for the refusal and its notice to arrive at.
+ */
+let retrospectiveStarter: (() => void) | null = null;
+export function bindRetrospectiveStarter(fn: (() => void) | null): void { retrospectiveStarter = fn; }
+/** False where no starter is bound (an auxiliary window), which is a window with no workspace to look back over. */
+export function startRetrospective(): boolean {
+  if (retrospectiveStarter === null) return false;
+  retrospectiveStarter();
   return true;
 }

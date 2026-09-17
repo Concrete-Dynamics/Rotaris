@@ -4,7 +4,9 @@ export const IMPROVEMENT_HISTORY_LIMIT = 25;
 
 export interface ImprovementArtifactRow {
   readonly artifact_id: string;
-  readonly source_session_id: string;
+  /** v19 (ADR-0065): null for a retrospective, which belongs to no session. */
+  readonly source_session_id: string | null;
+  readonly source_kind: string;
   readonly source_run_type: string;
   readonly generated_at: string;
   readonly body: string;
@@ -22,7 +24,8 @@ export interface ImprovementVersionRow {
 
 export interface ImprovementArtifactWrite {
   readonly artifact_id: string;
-  readonly source_session_id: string;
+  readonly source_session_id: string | null;
+  readonly source_kind: string;
   readonly source_run_type: string;
   readonly generated_at: string;
   readonly body: string;
@@ -30,7 +33,7 @@ export interface ImprovementArtifactWrite {
   readonly versions_pruned: number;
 }
 
-/** Statement-shaped access to v18's current rows and immutable history rows. */
+/** Statement-shaped access to v19's current rows and immutable history rows. */
 export class ImprovementDal {
   private readonly listNewestStmt;
   private readonly listIdsStmt;
@@ -55,10 +58,11 @@ export class ImprovementDal {
     this.latestStmt = db.prepare('SELECT * FROM improvement_artifacts ORDER BY generated_at DESC, artifact_id ASC LIMIT 1');
     this.latestForSessionStmt = db.prepare('SELECT * FROM improvement_artifacts WHERE source_session_id = ? ORDER BY generated_at DESC, artifact_id ASC LIMIT 1');
     this.upsertStmt = db.prepare(`INSERT INTO improvement_artifacts
-      (artifact_id, source_session_id, source_run_type, generated_at, body, versions_due, versions_pruned)
-      VALUES (@artifact_id, @source_session_id, @source_run_type, @generated_at, @body, @versions_due, @versions_pruned)
+      (artifact_id, source_session_id, source_kind, source_run_type, generated_at, body, versions_due, versions_pruned)
+      VALUES (@artifact_id, @source_session_id, @source_kind, @source_run_type, @generated_at, @body, @versions_due, @versions_pruned)
       ON CONFLICT(artifact_id) DO UPDATE SET
         source_session_id=excluded.source_session_id,
+        source_kind=excluded.source_kind,
         source_run_type=excluded.source_run_type,
         generated_at=excluded.generated_at,
         body=excluded.body,

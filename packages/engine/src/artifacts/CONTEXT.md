@@ -61,9 +61,23 @@ What a proposal rests on — a kind, text, and the ids of whatever it was drawn 
 without at least one is not a proposal. — `REQ-LIBRARY` proposal data model
 
 **Analyst**:
-The dedicated model that authors proposals from six frozen snapshots of the finished run, with an
-unavailable source kept distinguishable from an empty one. — `REQ-LIBRARY-017`, `REQ-LIBRARY-019`
+The dedicated model that authors proposals from frozen snapshots, with an unavailable source kept
+distinguishable from an empty one: six of the finished run in the post-run pass, five of the workspace's
+own record in the retrospective. One analyst, two passes. — `REQ-LIBRARY-017`, `REQ-LIBRARY-019`,
+`PD-LIBRARY-002`
 _Avoid_: collector in prose, though `improvement_collector_*` is the configuration spelling
+
+**Retrospective**:
+The second analysis pass: the same analyst reading the WORKSPACE's own record — its recent sessions,
+its prior proposals and their decisions, its saved prompts, its persona memory and its instruction
+files — on a gesture rather than after a run, and producing ordinary proposals. Its artifact names no
+source session, because it starts none; what it read is in `considered_session_ids`. — `PD-LIBRARY-002`
+_Avoid_: insights, chronicle, review pass, workspace analysis
+
+**Pass**:
+Which of the two analyses produced an artifact or is running: `post_run` or `retrospective`. A surface
+that shows analysis in progress says which pass it is. — `PD-LIBRARY-002`, `REQ-LIBRARY-125`
+_Avoid_: mode, kind (the artifact's own column is `source_kind`, the stored spelling)
 
 **Gate evidence**:
 The record of what the check suite was, what ran, and how it came out, stamped so the analyst cannot

@@ -19,6 +19,29 @@ export const IMPROVEMENT_ANALYST_SYSTEM = [
   "Evidence entries need kind and text. Return an empty proposals array when the evidence supports no proposal.",
 ].join(" ");
 
+/**
+ * PD-LIBRARY-002: the retrospective asks a different question of the same analyst — how this workspace is
+ * worked in across runs, rather than how one run went. The category vocabulary, the JSON shape and the
+ * empty-array outcome are the sibling's, because a retrospective proposal is an ordinary proposal.
+ */
+export const RETROSPECTIVE_SYSTEM = [
+  "You are the retrospective improvement analyst for a software workspace.",
+  "The evidence spans many past sessions in this one workspace, plus its saved prompts, persona memory, instruction files and earlier proposals.",
+  "Propose how the workspace itself is set up and worked in — recurring friction, stale instructions, missing checks — never how one run went.",
+  "Use only the frozen evidence in the request, and do not repeat a proposal the prior proposals already carry.",
+  "Every evidence entry must name the record it came from: set source_session_id to a session id from considered_session_ids when the entry cites a session.",
+  "Return one JSON object with a proposals array and optional notes.",
+  "Each proposal needs category, summary, evidence, recommended_action, risk, target_persona when relevant, and proposed_verifier_section when relevant.",
+  "Evidence entries need kind and text. Return an empty proposals array when the evidence supports no proposal.",
+].join(" ");
+
+/** The system text this pass speaks with (ADR-0065 decision 1: one analyst, two passes). */
+export function analystSystem(job: ImprovementAnalysisJob): string {
+  return job.pass === "retrospective"
+    ? RETROSPECTIVE_SYSTEM
+    : IMPROVEMENT_ANALYST_SYSTEM;
+}
+
 export interface ImprovementAnalystDeps {
   readonly backend: AgentBackend;
   readonly model: ModelRef;
@@ -155,16 +178,49 @@ function priorPendingGateKeys(job: ImprovementAnalysisJob): Set<string> {
 }
 
 function sourceNotes(job: ImprovementAnalysisJob): string[] {
-  return [
-    ["progress", job.progress.available],
-    ["todo", job.todo.available],
-    ["child reports", job.child_reports.available],
-    ["transcript", job.transcript.available],
-    ["gate evidence", job.gate.available],
-    ["prior artifact history", job.prior_artifacts_available],
-  ]
+  const sources: [string, boolean][] =
+    job.pass === "retrospective"
+      ? [
+          ["session history", job.retrospective?.sessions.available ?? false],
+          ["prior proposals", job.retrospective?.proposals.available ?? false],
+          ["saved prompts", job.retrospective?.prompts.available ?? false],
+          [
+            "persona memory",
+            job.retrospective?.persona_memory.available ?? false,
+          ],
+          [
+            "instruction files",
+            job.retrospective?.instructions.available ?? false,
+          ],
+        ]
+      : [
+          ["progress", job.progress.available],
+          ["todo", job.todo.available],
+          ["child reports", job.child_reports.available],
+          ["transcript", job.transcript.available],
+          ["gate evidence", job.gate.available],
+          ["prior artifact history", job.prior_artifacts_available],
+        ];
+  return sources
     .filter((entry): entry is [string, false] => entry[1] === false)
     .map(([name]) => `${name} unavailable at capture`);
+}
+
+/**
+ * PD-LIBRARY-002's attribution clause. A post-run entry belongs to the one session that triggered the pass;
+ * a retrospective entry names its own record, and an id the capture never read is refused rather than
+ * carried, so a proposal's evidence always points at material this pass actually consumed.
+ */
+function evidenceSession(
+  job: ImprovementAnalysisJob,
+  entry: Readonly<Record<string, unknown>>,
+): string | null {
+  if (job.pass !== "retrospective") return job.source_session_id;
+  const claimed = entry["source_session_id"];
+  return typeof claimed === "string" &&
+    job.considered_session_ids.includes(claimed)
+    ? claimed
+    : null;
 }
 
 function asObject(value: unknown, label: string): Record<string, unknown> {
@@ -206,7 +262,7 @@ export function parseImprovementAnalysis(
       );
       return {
         ...entry,
-        source_session_id: job.source_session_id,
+        source_session_id: evidenceSession(job, entry),
         source_task_id: entry["source_task_id"] ?? null,
         source_artifact_id: entry["source_artifact_id"] ?? null,
       };
@@ -265,6 +321,9 @@ export function parseImprovementAnalysis(
   return ImprovementArtifactSchema.parse({
     artifact_id: job.artifact_id,
     source_session_id: job.source_session_id,
+    // PD-LIBRARY-002 (ADR-0065 decision 2): `source_kind` is what tells the two passes apart; `source_run_type`
+    // stays REQ-SESSION-021's marker, because a retrospective starts no session and a filter by it must not move.
+    source_kind: job.pass,
     source_run_type: "task_run",
     generated_at: job.generated_at,
     collector_model: job.collector_model,
@@ -283,6 +342,7 @@ function recovery(
   return ImprovementArtifactSchema.parse({
     artifact_id: job.artifact_id,
     source_session_id: job.source_session_id,
+    source_kind: job.pass,
     source_run_type: "task_run",
     generated_at: job.generated_at,
     collector_model: job.collector_model,
@@ -295,6 +355,7 @@ function recovery(
 }
 
 export function improvementPrompt(job: ImprovementAnalysisJob): string {
+  if (job.pass === "retrospective") return retrospectivePrompt(job);
   return `Analyse this frozen post-run evidence and return the required JSON object.\n${JSON.stringify(
     {
       source_session_id: job.source_session_id,
@@ -304,6 +365,25 @@ export function improvementPrompt(job: ImprovementAnalysisJob): string {
       gate: job.gate.entries,
       transcript: job.transcript.entries,
       prior_artifacts: job.prior_artifacts,
+    },
+  )}`;
+}
+
+/**
+ * PD-LIBRARY-002: the same frozen-evidence contract, over the five workspace-wide sources. The capture has
+ * already bounded and visibly cut every entry, so this only names each source for the model.
+ */
+function retrospectivePrompt(job: ImprovementAnalysisJob): string {
+  const sources = job.retrospective;
+  return `Analyse this frozen workspace-wide evidence and return the required JSON object.\n${JSON.stringify(
+    {
+      workspace_id: job.workspace_id,
+      considered_session_ids: job.considered_session_ids,
+      session_digests: sources?.sessions.entries ?? [],
+      prior_proposals: sources?.proposals.entries ?? [],
+      saved_prompts: sources?.prompts.entries ?? [],
+      persona_memory: sources?.persona_memory.entries ?? [],
+      instruction_files: sources?.instructions.entries ?? [],
     },
   )}`;
 }
@@ -339,7 +419,7 @@ export async function analyzeImprovement(
       const report = await deps.backend.runTurn(
         {
           persona: "improvement-analyst",
-          systemPrompt: IMPROVEMENT_ANALYST_SYSTEM,
+          systemPrompt: analystSystem(job),
           messages: [
             { role: "user", content: [{ kind: "text", text: request }] },
           ],

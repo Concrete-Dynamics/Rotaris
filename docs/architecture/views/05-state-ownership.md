@@ -25,6 +25,8 @@ credentials     → main, and main alone
 | Window registry, keyed by `webContents` id; focus order | main | `apps/desktop/src/main/main-windows.ts` | main |
 | Approval dialog queue, per window | main | `main/index.ts` | main; the run host asks, main presents |
 | The single current notice, and its serialised chain | main | `main/notices.ts` | main |
+| The improvement queue, the one active job and **which pass it is** (`post_run` / `retrospective`, Part AT — `PD-LIBRARY-002`) | main | `main/improvements.ts` | main; the run host analyses the job it is handed and owns no queue, and a retrospective is an ordinary member of the same FIFO |
+| The improvement activity a surface draws (`active`, `pass`) | renderer (per window) | `packages/ui/src/shell-state.ts` — `improvementAnalysis` | channel 11's publisher only; the two indicators (REQ-LIBRARY-125/126) read it and never set it |
 | Credential leases handed out for a run | main | `packages/providers` | main |
 | Session locks this instance holds | run host | `packages/engine/src/sessions.ts` | run host |
 | Live runs, writers, projection owners | run host | `engine/sessions.ts`, `session-writer.ts` | run host |

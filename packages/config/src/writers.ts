@@ -54,6 +54,8 @@ export function starterDocument(defaultPersona = 'orchestrator'): string {
     'fallback_model_thinking: null',
     'improvement_collector_model: null',
     'improvement_collector_model_thinking: null',
+    'retrospective_model: null',
+    'retrospective_model_thinking: null',
     '',
   ].join('\n');
 }

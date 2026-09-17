@@ -689,6 +689,69 @@ export const MIGRATIONS: readonly Migration[] = [
       );
     `,
   },
+  {
+    to: 19,
+    /*
+     * ADR-0065 / PD-LIBRARY-002. A retrospective belongs to no session, so the source column is relaxed to
+     * NULL and `source_kind` says which pass wrote the row. SQLite cannot drop a NOT NULL in place, so both
+     * tables are rebuilt — inside the one transaction `migrateStore` already wraps a migration in, which is
+     * why a crash here leaves v18 whole rather than half of v19. Every existing row is a post-run artifact by
+     * construction, because no other writer existed.
+     *
+     * The CHILD is copied and dropped FIRST, and that order is the whole point: `foreign_keys` is ON for the
+     * migration (`migrateStore`), a pragma cannot be changed inside a transaction, and `DROP TABLE` on a
+     * parent under an enforced `ON DELETE CASCADE` performs an implicit delete that would take every recorded
+     * version with it (REQ-LIBRARY-162's history). With the child already gone the cascade has nothing to
+     * find. Renaming the new parent rewrites the FK clause the new child carries, so the child ends up
+     * referencing `improvement_artifacts` under its own name again.
+     *
+     * Both indexes are recreated with their v18 definitions. `improvement_artifacts_by_session` keeps serving
+     * REQ-LIBRARY-045's by-session query; a retrospective row holds NULL there and can never match it, which
+     * is the point — it is not any session's artifact.
+     */
+    sql: `
+      CREATE TABLE improvement_artifacts_v19 (
+        artifact_id       TEXT PRIMARY KEY,
+        source_session_id TEXT,
+        source_kind       TEXT NOT NULL DEFAULT 'post_run'
+          CHECK (source_kind IN ('post_run', 'retrospective')),
+        source_run_type   TEXT NOT NULL,
+        generated_at      TEXT NOT NULL,
+        body              TEXT NOT NULL,
+        versions_due      INTEGER NOT NULL DEFAULT 0 CHECK (versions_due >= 0),
+        versions_pruned   INTEGER NOT NULL DEFAULT 0 CHECK (versions_pruned >= 0),
+        CHECK (source_kind <> 'post_run' OR source_session_id IS NOT NULL)
+      );
+      INSERT INTO improvement_artifacts_v19
+        (artifact_id, source_session_id, source_kind, source_run_type, generated_at, body, versions_due, versions_pruned)
+        SELECT artifact_id, source_session_id, 'post_run', source_run_type, generated_at, body, versions_due, versions_pruned
+        FROM improvement_artifacts;
+
+      CREATE TABLE improvement_artifact_versions_v19 (
+        artifact_id TEXT NOT NULL REFERENCES improvement_artifacts_v19(artifact_id) ON DELETE CASCADE,
+        version     INTEGER NOT NULL CHECK (version >= 1),
+        recorded_at TEXT NOT NULL,
+        cause       TEXT NOT NULL,
+        body        TEXT NOT NULL,
+        PRIMARY KEY (artifact_id, version)
+      );
+      INSERT INTO improvement_artifact_versions_v19 (artifact_id, version, recorded_at, cause, body)
+        SELECT artifact_id, version, recorded_at, cause, body FROM improvement_artifact_versions;
+
+      DROP TABLE improvement_artifact_versions;
+      DROP INDEX improvement_artifacts_newest;
+      DROP INDEX improvement_artifacts_by_session;
+      DROP TABLE improvement_artifacts;
+
+      ALTER TABLE improvement_artifacts_v19 RENAME TO improvement_artifacts;
+      ALTER TABLE improvement_artifact_versions_v19 RENAME TO improvement_artifact_versions;
+
+      CREATE INDEX improvement_artifacts_newest
+        ON improvement_artifacts(generated_at DESC, artifact_id ASC);
+      CREATE INDEX improvement_artifacts_by_session
+        ON improvement_artifacts(source_session_id, generated_at DESC, artifact_id ASC);
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

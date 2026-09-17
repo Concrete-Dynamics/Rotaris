@@ -647,7 +647,28 @@ async function main(): Promise<void> {
     },
     stored: (record) => {
       libraryRevision.bump('improvement-artifacts');
-      raiseNotice('info', 'Improvement proposals are ready', `${record.artifact.proposals.length} proposal${record.artifact.proposals.length === 1 ? '' : 's'} collected in ${record.artifact.artifact_id}.`, undefined, record.artifact.source_session_id);
+      /*
+       * PD-LIBRARY-002: the same notice for both passes, saying which one produced the proposals. A
+       * retrospective names no session — it looked at the workspace, not at one run — so the notice carries
+       * none rather than a null one, and both open the Library at the tab the proposals landed on.
+       */
+      const count = record.artifact.proposals.length;
+      const retrospective = record.artifact.source_kind === 'retrospective';
+      const session = record.artifact.source_session_id ?? undefined;
+      if (count === 0) {
+        // REQ-LIBRARY-124: zero proposals is an informational notice with NO action — there is nothing to review.
+        raiseNotice('info', retrospective ? 'The retrospective found nothing to propose' : 'Improvement analysis complete — no proposals', `Nothing was proposed in ${record.artifact.artifact_id}.`, undefined, session);
+        return;
+      }
+      raiseNotice(
+        'success',
+        // REQ-LIBRARY-124 fixes the sibling's wording exactly; the retrospective says which pass proposed, per
+        // PD-LIBRARY-002's "its own label", and both open the Library where the proposals landed.
+        retrospective ? `${count} retrospective proposal${count === 1 ? '' : 's'} ready` : `${count} improvement proposal${count === 1 ? '' : 's'} ready`,
+        retrospective ? `Collected in ${record.artifact.artifact_id} from this workspace's own history.` : `Collected in ${record.artifact.artifact_id}.`,
+        [{ label: 'Review proposals', action: { kind: 'open-library', tab: 'proposals' } }],
+        session,
+      );
     },
     log,
   });
@@ -1214,6 +1235,7 @@ async function main(): Promise<void> {
     providers, healthCache, providerPayloads, providerChoices, providerRows, presentProvider, afterProviderChange,
     preferences, currentTheme: () => currentTheme, setTheme: (name) => (currentTheme = resolveTheme(name)), themeBackground, requirementsPreferenceKey,
     initialization, libraryRevision, requirementsRuns, improvementUndo, improvementRuns,
+    enqueueImprovement: (job) => improvementCoordinator.enqueue(job),
     chooseSave, chooseExportPath, chooseDirectory, chooseSkillFile,
     openHookReview, restoreFlow, checkpointOp,
   };

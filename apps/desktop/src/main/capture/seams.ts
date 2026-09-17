@@ -89,7 +89,13 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
       return true;
     };
     clocks.timers.after(millis(modeAt), async () => {
-      if (!(await click('.seg-opt', modeWanted))) return;
+      // PD-CHAT-001 replaced the always-drawn segmented row with a press-revealed popover, so the three presets are
+      // reached in two clicks now: the chip, then the option. The option's own text is label + hint, so the click
+      // lands on `.chip-menu__label`, whose text is the preset alone. (This seam still read `.seg-opt` until Part AT;
+      // `docs/defects/fixed/the-config-proof-clicks-a-control-that-became-a-popover.md`.)
+      if (!(await click('[data-testid="chip-mode"] .chip-menu', null))) return;
+      await pause(host, 200);
+      if (!(await click('.chip-menu__panel .chip-menu__label', modeWanted))) return;
       if (modeWanted === 'autonomous') { await pause(host, 300); await click('.dialog-actions .btn-danger', 'Switch to autonomous'); }
     });
   }

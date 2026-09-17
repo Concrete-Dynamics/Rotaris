@@ -11,10 +11,10 @@ export type ConfigScopeName = (typeof CONFIG_SCOPES)[number];
 /** REQ-CONFIG-341: workspace > global > discovered (the snapshot layer) > built-in. */
 export const CONFIG_ORIGINS = ['workspace', 'global', 'discovered', 'built-in'] as const;
 
-export const MODEL_SLOT_NAMES = ['default_summary_model', 'improvement_collector_model', 'gatekeeper_model', 'small_model', 'medium_model', 'large_model', 'fallback_model'] as const;
+export const MODEL_SLOT_NAMES = ['default_summary_model', 'improvement_collector_model', 'retrospective_model', 'gatekeeper_model', 'small_model', 'medium_model', 'large_model', 'fallback_model'] as const;
 export type ModelSlotName = (typeof MODEL_SLOT_NAMES)[number];
 /** REQ-CONFIG-256/329 and REQ-LIBRARY-040: the startup slots the screen edits. */
-export const EDITABLE_SLOTS = ['large_model', 'medium_model', 'small_model', 'fallback_model', 'default_summary_model', 'improvement_collector_model'] as const;
+export const EDITABLE_SLOTS = ['large_model', 'medium_model', 'small_model', 'fallback_model', 'default_summary_model', 'improvement_collector_model', 'retrospective_model'] as const;
 export const REASONING_LEVEL_NAMES = ['auto', 'low', 'medium', 'high', 'max'] as const;
 export const ROLE_REASONING_NAMES = ['default', 'provider_default', ...REASONING_LEVEL_NAMES] as const;
 export const DELEGATION_STRATEGY_NAMES = ['orchestrator', 'swarm', 'single'] as const;
@@ -50,6 +50,8 @@ export const RuntimeViewSchema = z.object({
   permission_mode: z.string(),
   improvement_collector_enabled: z.boolean(),
   improvement_collector_timeout: z.number().int().min(1),
+  /** PD-LIBRARY-002: the retrospective's own bound, defaulting to 120 seconds. */
+  retrospective_timeout: z.number().int().min(1),
   keep_going: z.boolean(),
   run_start_mode: z.enum(RUN_START_MODE_NAMES),
   memory_diagnostics_enabled: z.boolean(),

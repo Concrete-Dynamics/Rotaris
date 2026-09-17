@@ -402,6 +402,52 @@ describe('store — v3: what a run records (REQ-SESSION-138, REQ-SESSION-168, RE
     r.db.close();
     forgetSpelling(r.dir);
   });
+  /**
+   * PD-LIBRARY-002 (ADR-0065): the v18→v19 rebuild. What is asserted here is what nearly went wrong writing it —
+   * the recorded VERSIONS survive. `migrateStore` enforces foreign keys, so dropping the parent while the old
+   * child still referenced it would have cascaded REQ-LIBRARY-162's whole history away without raising a thing.
+   */
+  it('PD-LIBRARY-002: a v18 store migrates to v19, keeping every recorded version and stamping every row post_run', () => {
+    const id = mintWorkspaceId('000000000000000000000000000000f3');
+    const r = openWorkspaceStore(root, id, 'C:/ws');
+    // Back to the v18 shape: the two improvement tables as ADR-0061 wrote them, NOT NULL source and no source_kind.
+    r.db.exec('DROP TABLE improvement_artifact_versions; DROP TABLE improvement_artifacts;');
+    r.db.exec(`
+      CREATE TABLE improvement_artifacts (
+        artifact_id TEXT PRIMARY KEY, source_session_id TEXT NOT NULL, source_run_type TEXT NOT NULL,
+        generated_at TEXT NOT NULL, body TEXT NOT NULL,
+        versions_due INTEGER NOT NULL DEFAULT 0 CHECK (versions_due >= 0),
+        versions_pruned INTEGER NOT NULL DEFAULT 0 CHECK (versions_pruned >= 0));
+      CREATE INDEX improvement_artifacts_newest ON improvement_artifacts(generated_at DESC, artifact_id ASC);
+      CREATE INDEX improvement_artifacts_by_session ON improvement_artifacts(source_session_id, generated_at DESC, artifact_id ASC);
+      CREATE TABLE improvement_artifact_versions (
+        artifact_id TEXT NOT NULL REFERENCES improvement_artifacts(artifact_id) ON DELETE CASCADE,
+        version INTEGER NOT NULL CHECK (version >= 1), recorded_at TEXT NOT NULL, cause TEXT NOT NULL,
+        body TEXT NOT NULL, PRIMARY KEY (artifact_id, version));
+    `);
+    r.db.exec(`INSERT INTO improvement_artifacts VALUES ('impart_00000001', 'S-old', 'task_run', 't1', '{"a":1}', 2, 0);`);
+    r.db.exec(`INSERT INTO improvement_artifact_versions VALUES ('impart_00000001', 1, 't1', 'collected', '{"a":1}'), ('impart_00000001', 2, 't2', 'edit', '{"a":2}');`);
+    r.db.pragma('user_version = 18');
+
+    expect(migrateStore(r.db)).toEqual({ kind: 'migrated', from: 18, to: CURRENT_SCHEMA_VERSION });
+    const artifact = r.db.prepare('SELECT * FROM improvement_artifacts').get() as { source_kind: string; source_session_id: string | null; versions_due: number };
+    expect([artifact.source_kind, artifact.source_session_id, artifact.versions_due]).toEqual(['post_run', 'S-old', 2]);
+    const versions = r.db.prepare('SELECT version, cause FROM improvement_artifact_versions ORDER BY version').all() as { version: number; cause: string }[];
+    expect(versions).toEqual([{ version: 1, cause: 'collected' }, { version: 2, cause: 'edit' }]);
+
+    // A retrospective row takes NULL where a post-run row may not, and the CHECK still holds the post-run case.
+    r.db.exec(`INSERT INTO improvement_artifacts VALUES ('impart_00000002', NULL, 'retrospective', 'task_run', 't3', '{}', 0, 0);`);
+    expect(() => r.db.exec(`INSERT INTO improvement_artifacts VALUES ('impart_00000003', NULL, 'post_run', 'task_run', 't4', '{}', 0, 0);`)).toThrow(/CHECK/);
+    expect(() => r.db.exec(`INSERT INTO improvement_artifacts VALUES ('impart_00000004', 'S', 'insight', 'task_run', 't5', '{}', 0, 0);`)).toThrow(/CHECK/);
+
+    // A declared index is not an index the planner uses: both recreated ones are asserted, not assumed.
+    const plan = (sql: string, ...args: unknown[]) => (r.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args) as { detail: string }[]).map((entry) => entry.detail).join(' | ');
+    expect(plan('SELECT * FROM improvement_artifacts ORDER BY generated_at DESC, artifact_id ASC')).toContain('improvement_artifacts_newest');
+    expect(plan('SELECT * FROM improvement_artifacts WHERE source_session_id = ? ORDER BY generated_at DESC, artifact_id ASC', 'S-old')).toContain('improvement_artifacts_by_session');
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+
   it('the launch audit is written exactly once: the second insert is refused by the statement, not by a check', () => {
     const id = mintWorkspaceId('00000000000000000000000000000089');
     const r = openWorkspaceStore(root, id, 'C:/ws');
@@ -566,11 +612,12 @@ describe('store — v5: the child ledger (ADR-0012, REQ-ORCH-043/049/050/151)', 
     session_id: asSessionId(sid), task_id: taskId, canonical_name: taskId, given_name: taskId, persona: 'coding-agent', state, parent_id: 'root', depth: 1, iteration: 1,
     model_key: 'm', category: '', background: 1, task: 'do it', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't',
   });
-  it('the schema is v18; a child row round-trips with its defaults; the claim is one conditional update that wins exactly once', () => {
+  it('the schema is v19; a child row round-trips with its defaults; the claim is one conditional update that wins exactly once', () => {
     const { r, dal, sid } = open('96');
     // REQ-ORCH-153/154: v17 adds `plan_cycles` and the two session columns; v16 added `artifacts.commands`;
-    // v18 (ADR-0061) added the typed-run session columns and the improvement tables.
-    expect(CURRENT_SCHEMA_VERSION).toBe(18);
+    // v18 (ADR-0061) added the typed-run session columns and the improvement tables; v19 (ADR-0065)
+    // rebuilt `improvement_artifacts` for PD-LIBRARY-002's retrospective, which belongs to no session.
+    expect(CURRENT_SCHEMA_VERSION).toBe(19);
     dal.insertChild(child(sid, 'bg_00000001'));
     const c = dal.getChild(sid, 'bg_00000001')!;
     expect(c).toMatchObject({ state: 'queued', launch_generation: 0, report_stored: 0, observed: 0, context_injected: 0, tool_calls: 0, completed_at: null, report: null });
@@ -850,13 +897,13 @@ describe('store — v11: the saved prompts (Part X; REQ-LIBRARY-137/138/139, REQ
     forgetSpelling(r.dir);
   });
 
-  it('is v18, and the migration list is append-only with nothing renumbered', () => {
+  it('is v19, and the migration list is append-only with nothing renumbered', () => {
     // Part X reserved v11, Part Y v12, Part AB v13, Part AE v14 and Part AK v15 (plan Reservations, ruled 2026-09-09: the ladder and
     // the pin ride with the v15 reservation) before any of them was written; PD-LIBRARY-001 appended v16; the plan gate appended
-    // v17; ADR-0061 appended v18. The ladder is asserted whole rather than at its top, so a later part that renumbers an earlier
-    // entry fails here and not on a user's disk.
-    expect(MIGRATIONS.map((m) => m.to)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]);
-    expect(CURRENT_SCHEMA_VERSION).toBe(18);
+    // v17; ADR-0061 appended v18; ADR-0065 appended v19. The ladder is asserted whole rather than at its top, so a later part
+    // that renumbers an earlier entry fails here and not on a user's disk.
+    expect(MIGRATIONS.map((m) => m.to)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]);
+    expect(CURRENT_SCHEMA_VERSION).toBe(19);
   });
 });
 

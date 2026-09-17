@@ -1,14 +1,14 @@
-import { SKILLS_DISABLED_MESSAGE, type ProcessReply, type RunHostRequest } from '@rotaris/contracts';
+import { SKILLS_DISABLED_MESSAGE, type ImprovementArtifactRecord, type ProcessReply, type RunHostRequest } from '@rotaris/contracts';
 import { asSessionId, millis, toIsoUtc, type WorkspaceId } from '@rotaris/kernel';
 import { openStore, StoreDal, forgetSpelling } from '@rotaris/store';
-import { analyzeImprovement, CATALOGUE, relativeTime, timelineId } from '@rotaris/engine';
+import { analyzeImprovement, captureRetrospectiveJob, CATALOGUE, relativeTime, timelineId } from '@rotaris/engine';
 import { renderUnavailability } from '@rotaris/agent-tools';
 import { clearHooksDecision, decideHooks, hooksSummaryFor, setHookToggle } from './hooks.js';
 import { REFS_ASK_BOUND } from './checkpoints.js';
 import type { McpHost } from './mcp.js';
 import { deleteSession, exportRecords, exportTrajectories, repairSessions, sessionFiles } from './session-actions.js';
 import { CHECKPOINTS_DEFAULTS, type LiveState } from '@rotaris/config';
-import { improvementCollectorOf } from './configuration.js';
+import { improvementCollectorOf, retrospectiveOf } from './configuration.js';
 import { launchSession } from './launch.js';
 import { randomUUID } from 'node:crypto';
 // The step-driven stand-in every proof runs against (`scripted-client.ts`); no provider, no key, no network.
@@ -72,6 +72,7 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
     configure,
     leaseReports,
     continuationLeaseForSession,
+    leaseForWorkspace,
     configuredFor,
     sessions,
     sessionActions,
@@ -228,27 +229,65 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
         },
       });
     }
-  case 'improvement.analyze': {
+    /**
+     * PD-LIBRARY-002 (ADR-0065 decision 5): the pass a person started. It has no run to inherit a model, a
+     * credential or a store handle from, so it resolves each by the run-free paths this host already owns —
+     * `configuredFor` for the configuration, `leaseForWorkspace` for the bearers — and captures against the
+     * store main already opened for the workspace. Nothing is written here: the job goes back to main, which
+     * enqueues it on the one coordinator both passes share.
+     */
+    case 'retrospective.capture': {
+      const s = stores.get(req.workspaceId);
+      if (!s?.dal) return { kind: 'refused', code: 'workspace.not-open', headline: 'No store is open for this workspace' };
+      const setup = configuredFor(s.root);
+      if (setup === null) return { kind: 'refused', code: 'retrospective.no-configuration', headline: 'The workspace configuration could not be loaded' };
+      const collector = retrospectiveOf(setup.cfg, setup.scripted);
+      if (collector === null) return { kind: 'refused', code: 'retrospective.no-model', headline: 'No retrospective analyst is configured' };
+      const leaseRefusal = await leaseForWorkspace(s.root);
+      if (leaseRefusal) return leaseRefusal;
+      // REQ-LIBRARY-019/030: the prior proposals are evidence, and a history that could not be read is a source
+      // reported unavailable rather than one silently missing.
+      const historyReply = await ask({ kind: 'improvements.command', workspaceRoot: s.root, command: { action: 'list' } }, millis(10_000)).catch((cause: Error) => {
+        log(`retrospective: the proposal history could not be read (${cause.message})`, 'warn');
+        return null;
+      });
+      const prior = historyReply?.kind === 'improvements.result' ? (historyReply.value as ImprovementArtifactRecord[]).map((record) => record.artifact) : [];
+      const job = captureRetrospectiveJob(s.dal, {
+        workspaceId: req.workspaceId, workspaceRoot: s.root, generatedAt: toIsoUtc(clocks.wall.instant()),
+        timeoutSeconds: setup.cfg.runtime.retrospective_timeout, collectorModel: collector.key,
+        priorArtifactsAvailable: historyReply?.kind === 'improvements.result', priorArtifacts: prior,
+      });
+      if (job === null) return { kind: 'refused', code: 'retrospective.no-evidence', headline: 'This workspace has no history to look back over yet' };
+      log(`retrospective: captured ${job.artifact_id} over ${job.considered_session_ids.length} session(s) for ${s.root}`);
+      return { kind: 'retrospective.captured', job };
+    }
+    case 'improvement.analyze': {
+      /*
+       * Both passes analyse through one function (ADR-0065 decision 1). A post-run job carries the run that
+       * captured it; a retrospective has none, so it resolves the workspace's configuration afresh — and its
+       * model comes from its own slot, never the sibling's.
+       */
       const context = improvementContexts.get(req.job.artifact_id);
-      if (context === undefined) return { kind: 'refused', code: 'improvement.expired', headline: 'The captured improvement job is no longer available' };
-      const collector = improvementCollectorOf(context.run.cfg, context.run.scripted);
+      const run = context?.run ?? (req.job.pass === 'retrospective' ? configuredFor(req.job.workspace_root) : null);
+      if (!run) return { kind: 'refused', code: 'improvement.expired', headline: 'The captured improvement job is no longer available' };
+      const collector = req.job.pass === 'retrospective' ? retrospectiveOf(run.cfg, run.scripted) : improvementCollectorOf(run.cfg, run.scripted);
       if (collector === null) return { kind: 'refused', code: 'improvement.no-model', headline: 'No improvement analyst is configured' };
       const controller = new AbortController();
       improvementControllers.set(req.job.artifact_id, controller);
       try {
-        const artifact = await analyzeImprovement(req.job, { backend: context.run.model.backend, model: collector.model, thinking: collector.thinking, timers: clocks.timers, credentialFor: context.run.model.config.credentialFor, warn: (message) => log(message, 'warn') }, controller.signal);
+        const artifact = await analyzeImprovement(req.job, { backend: run.model.backend, model: collector.model, thinking: collector.thinking, timers: clocks.timers, credentialFor: run.model.config.credentialFor, warn: (message) => log(message, 'warn') }, controller.signal);
         return { kind: 'improvement.analyzed', artifact };
       } finally {
         improvementControllers.delete(req.job.artifact_id);
-      improvementContexts.delete(req.job.artifact_id);
+        improvementContexts.delete(req.job.artifact_id);
+      }
     }
-  }
-  case 'improvement.cancel': {
-    improvementControllers.get(req.artifactId)?.abort();
-    improvementControllers.delete(req.artifactId);
-    improvementContexts.delete(req.artifactId);
-    return { kind: 'ack' };
-  }
+    case 'improvement.cancel': {
+      improvementControllers.get(req.artifactId)?.abort();
+      improvementControllers.delete(req.artifactId);
+      improvementContexts.delete(req.artifactId);
+      return { kind: 'ack' };
+    }
     case 'session.continue': {
       // REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause or continue a paused session; nothing is appended.
       // REQ-PROVIDER-066 (the continuation lease): refresh the bearers before the run resolves its setup.

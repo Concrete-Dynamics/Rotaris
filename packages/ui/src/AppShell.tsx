@@ -6,6 +6,7 @@ import { WorkspaceChip } from './WorkspaceChip.js';
 import { useShellState } from './shell-state.js';
 import { Acknowledgements } from './Acknowledgements.js';
 import { NoticeBanner } from './Notice.js';
+import { ImprovementActivity } from './ImprovementActivity.js';
 import { CommandPalette } from './commands/CommandPalette.js';
 import { KeyboardHelp } from './commands/KeyboardHelp.js';
 import { commandById, detectPlatform, type CommandContext } from './commands/registry.js';
@@ -110,6 +111,7 @@ export function AppShell({ version, workspacePath, home, sessionName, onChooseWo
   const switchView = useShellState((s) => s.switchView);
   const paletteOpen = useShellState((s) => s.paletteOpen);
   const helpOpen = useShellState((s) => s.helpOpen);
+  const improvementAnalysis = useShellState((s) => s.improvementAnalysis);
   const closePalette = useShellState((s) => s.closePalette);
   const closeKeyboardHelp = useShellState((s) => s.closeKeyboardHelp);
   const ctx = useCommandContext();
@@ -138,6 +140,9 @@ export function AppShell({ version, workspacePath, home, sessionName, onChooseWo
         <div className="title-bar__workspace-slot">
           <WorkspaceChip path={workspacePath} home={home} sessionName={sessionName} onChoose={onChooseWorkspace} />
         </div>
+        {/* REQ-LIBRARY-125: the title-bar indicator, present only while an analysis runs. REQ-SHELL-033's order is
+            kept — the session control stays last — and no control is disabled while it shows. */}
+        <ImprovementActivity active={improvementAnalysis.active} pass={improvementAnalysis.pass} placement="title-bar" />
         {onOpenSessions && <DesignButton type="button" className="btn btn-ghost title-bar__sessions" onClick={onOpenSessions}>Sessions</DesignButton>}
       </header>
       <div className="notice-slot" aria-live="polite">

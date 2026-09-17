@@ -56,7 +56,7 @@ export interface PendingSettings {
   readonly roles: Readonly<Record<string, { readonly scope: 'workspace' | 'global'; readonly model?: string | null; readonly thinking?: string | null; readonly unsetModel?: boolean; readonly unsetThinking?: boolean }>>;
 }
 
-const SLOT_KEYS: readonly ModelSlotName[] = ['default_summary_model', 'improvement_collector_model', 'gatekeeper_model', 'small_model', 'medium_model', 'large_model', 'fallback_model'];
+const SLOT_KEYS: readonly ModelSlotName[] = ['default_summary_model', 'improvement_collector_model', 'retrospective_model', 'gatekeeper_model', 'small_model', 'medium_model', 'large_model', 'fallback_model'];
 
 /** The pending state a snapshot populates: the file's values, so the form starts clean by definition (REQ-CONFIG-425). */
 export function pendingFrom(snapshot: ConfigSnapshot): PendingSettings {

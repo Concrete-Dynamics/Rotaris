@@ -381,6 +381,23 @@ export function improvementCollectorOf(cfg: LoadedConfiguration, scripted: boole
   };
 }
 
+/**
+ * PD-LIBRARY-002: the retrospective's own slot, then the medium tier — the ladder REQ-LIBRARY-040 states for
+ * the sibling, which the directive adopts. A workspace where neither resolves captures no pass at all.
+ */
+export function retrospectiveOf(cfg: LoadedConfiguration, scripted: boolean): { key: string; model: ModelRef; thinking: ThinkingLevel } | null {
+  const slot = cfg.slots.retrospective_model ? 'retrospective_model' : 'medium_model';
+  const name = cfg.slots[slot];
+  const model = modelRefOf(cfg, name, scripted);
+  if (!name || !model) return null;
+  const configuredThinking = cfg.slotThinking[slot];
+  return {
+    key: name,
+    model,
+    thinking: configuredThinking && configuredThinking !== 'auto' ? configuredThinking : thinkingOf(cfg.models[name]),
+  };
+}
+
 export interface ConfiguredRun extends RunSetup {
   readonly cfg: LoadedConfiguration;
   readonly runtime: RuntimeFromConfiguration;

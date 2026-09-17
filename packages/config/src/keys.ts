@@ -4,7 +4,7 @@
  * rejected nor silently lost: the loader warns naming it and the file, and every writer leaves it in place
  * (REQ-CONFIG-040, REQ-CONFIG-233, REQ-CONFIG-477 ground 1).
  */
-export const MODEL_SLOTS = ['default_summary_model', 'improvement_collector_model', 'gatekeeper_model', 'small_model', 'medium_model', 'large_model', 'fallback_model'] as const;
+export const MODEL_SLOTS = ['default_summary_model', 'improvement_collector_model', 'retrospective_model', 'gatekeeper_model', 'small_model', 'medium_model', 'large_model', 'fallback_model'] as const;
 export type ModelSlot = (typeof MODEL_SLOTS)[number];
 
 /** REQ-CONFIG-070: exactly the three tier aliases. */

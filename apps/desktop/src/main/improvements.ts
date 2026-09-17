@@ -39,12 +39,21 @@ export function createImprovementCoordinator(
   let active: { job: ImprovementAnalysisJob; cancelled: boolean } | null = null;
   let closing = false;
 
+  /** What a log line calls a job: a retrospective has no session to name (PD-LIBRARY-002). */
+  const label = (job: ImprovementAnalysisJob): string =>
+    job.pass === "retrospective"
+      ? `the retrospective ${job.artifact_id}`
+      : `session ${job.source_session_id}`;
+
   const publish = (job: ImprovementAnalysisJob | null): void => {
     deps.activity({
       workspace_id: job?.workspace_id ?? active?.job.workspace_id ?? "",
       active: active !== null,
       queued: queue.length,
       source_session_id: active?.job.source_session_id ?? null,
+      // REQ-LIBRARY-125 with PD-LIBRARY-002: the indicator says WHICH pass is running, so the two are told
+      // apart while one FIFO orders both.
+      pass: active?.job.pass ?? job?.pass ?? "post_run",
     });
   };
 
@@ -74,7 +83,7 @@ export function createImprovementCoordinator(
           !closing
         ) {
           deps.log(
-            `improvements: analyst could not start for ${job.source_session_id}`,
+            `improvements: the analyst could not start for ${label(job)}`,
             "warn",
           );
         }
@@ -96,7 +105,7 @@ export function createImprovementCoordinator(
       ) {
         if (!running.cancelled && !closing)
           deps.log(
-            `improvements: artifact save failed for ${job.source_session_id}`,
+            `improvements: the artifact save failed for ${label(job)}`,
             "warn",
           );
         return;
@@ -129,7 +138,7 @@ export function createImprovementCoordinator(
     } catch (cause) {
       if (!running.cancelled && !closing)
         deps.log(
-          `improvements: ${job.source_session_id} failed: ${
+          `improvements: ${label(job)} failed: ${
             cause instanceof Error ? cause.message : String(cause)
           }`,
           "warn",

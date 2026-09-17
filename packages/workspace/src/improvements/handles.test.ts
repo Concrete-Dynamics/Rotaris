@@ -53,6 +53,7 @@ function artifact(id = "impart_00000001", action = "Record the result once.") {
   return {
     artifact_id: id,
     source_session_id: "session-1",
+    source_kind: "post_run" as const,
     source_run_type: "task_run" as const,
     generated_at: "2026-09-14T10:00:00.000Z",
     collector_model: "analyst",
@@ -91,9 +92,9 @@ function opened() {
 }
 
 describe("improvement store handles (ADR-0061)", () => {
-  it("migrates v18, records the session association and survives reopen", () => {
+  it("migrates v19, records the session association and survives reopen", () => {
     const resolved = opened();
-    expect(CURRENT_SCHEMA_VERSION).toBe(18);
+    expect(CURRENT_SCHEMA_VERSION).toBe(19);
     const sessionDal = new StoreDal(resolved.db);
     sessionDal.upsertSession({
       session_id: "typed-run",
@@ -323,6 +324,7 @@ describe("improvement store handles (ADR-0061)", () => {
     dal.write({
       artifact_id: initial.artifact_id,
       source_session_id: initial.source_session_id,
+      source_kind: initial.source_kind,
       source_run_type: initial.source_run_type,
       generated_at: initial.generated_at,
       body: JSON.stringify(initial),

@@ -418,16 +418,20 @@ export function createImprovementWriter(
       dal.write({
         artifact_id: artifact.artifact_id,
         source_session_id: artifact.source_session_id,
+        source_kind: artifact.source_kind,
         source_run_type: artifact.source_run_type,
         generated_at: artifact.generated_at,
         body: JSON.stringify(artifact),
         versions_due: next,
         versions_pruned: currentRow?.versions_pruned ?? 0,
       });
-      dal.associateWithSession(
-        artifact.source_session_id,
-        artifact.artifact_id,
-      );
+      // PD-LIBRARY-002: a retrospective belongs to no session, so there is no snapshot to associate it with
+      // (REQ-LIBRARY-036 is about re-associating a session's own artifacts across resumes).
+      if (artifact.source_session_id !== null)
+        dal.associateWithSession(
+          artifact.source_session_id,
+          artifact.artifact_id,
+        );
       return artifact;
     });
 

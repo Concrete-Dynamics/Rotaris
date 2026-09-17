@@ -54,7 +54,7 @@ export function snapshotOf(cfg: LoadedConfiguration): ConfigSnapshot {
     runtime: {
       max_depth: cfg.runtime.max_depth, max_active_children: cfg.runtime.max_active_children, max_iterations: cfg.runtime.max_iterations,
       allow_outside_workspace: cfg.runtime.allow_outside_workspace, permission_mode: cfg.runtime.permission_mode,
-      improvement_collector_enabled: cfg.runtime.improvement_collector_enabled, improvement_collector_timeout: cfg.runtime.improvement_collector_timeout, keep_going: cfg.runtime.keep_going, run_start_mode: cfg.runtime.run_start_mode,
+      improvement_collector_enabled: cfg.runtime.improvement_collector_enabled, improvement_collector_timeout: cfg.runtime.improvement_collector_timeout, retrospective_timeout: cfg.runtime.retrospective_timeout, keep_going: cfg.runtime.keep_going, run_start_mode: cfg.runtime.run_start_mode,
       memory_diagnostics_enabled: cfg.runtime.memory_diagnostics_enabled,
       // REQ-SANDBOX-113 (Part AR): all six, so the runtime section can edit them.
       sandbox_mode: cfg.runtime.sandbox_mode, sandbox_writable_roots: [...cfg.runtime.sandbox_writable_roots],
@@ -85,7 +85,7 @@ export function fatalSnapshot(globalDir: string, workspaceRoot: string, report: 
     runtime: {
       max_depth: RUNTIME_DEFAULTS.max_depth, max_active_children: RUNTIME_DEFAULTS.max_active_children, max_iterations: RUNTIME_DEFAULTS.max_iterations,
       allow_outside_workspace: RUNTIME_DEFAULTS.allow_outside_workspace, permission_mode: RUNTIME_DEFAULTS.permission_mode,
-      improvement_collector_enabled: RUNTIME_DEFAULTS.improvement_collector_enabled, improvement_collector_timeout: RUNTIME_DEFAULTS.improvement_collector_timeout, keep_going: RUNTIME_DEFAULTS.keep_going, run_start_mode: RUNTIME_DEFAULTS.run_start_mode,
+      improvement_collector_enabled: RUNTIME_DEFAULTS.improvement_collector_enabled, improvement_collector_timeout: RUNTIME_DEFAULTS.improvement_collector_timeout, retrospective_timeout: RUNTIME_DEFAULTS.retrospective_timeout, keep_going: RUNTIME_DEFAULTS.keep_going, run_start_mode: RUNTIME_DEFAULTS.run_start_mode,
       memory_diagnostics_enabled: RUNTIME_DEFAULTS.memory_diagnostics_enabled,
       sandbox_mode: RUNTIME_DEFAULTS.sandbox_mode, sandbox_writable_roots: [...RUNTIME_DEFAULTS.sandbox_writable_roots],
       sandbox_allow_network: RUNTIME_DEFAULTS.sandbox_allow_network, network_egress_policy: RUNTIME_DEFAULTS.network_egress_policy,

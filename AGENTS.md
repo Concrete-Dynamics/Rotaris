@@ -63,6 +63,7 @@ wrong.
 | | `git-proof` | the Git view and the worktrees |
 | | `terminal-proof` | the terminal grid, the pop-out window, the transcript preview (ADR-0047) |
 | | `improvements-proof` | the reviewed-improvement lifecycle end to end |
+| | `retrospective-proof` | the retrospective pass, driven from its surfaces against the built app (PD-LIBRARY-002) |
 | | `theme-proof` | the themes and scales, rendered — plus two counterfactuals that must stay red |
 | | `layout-proof` | the Workspace view's grid, **measured** at the sizes the specification names |
 | **Requirements** | `requirements-proof` | the delivery store and the board (ADR-0041) |

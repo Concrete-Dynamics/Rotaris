@@ -18,7 +18,7 @@ describe('production design-system layer', () => {
   it('exports the approved inventory through one subpath', () => {
     expect(Object.keys(design)).toEqual(expect.arrayContaining([
       'Button', 'Kbd', 'SegmentedControl', 'StatusDot', 'Tag', 'ToggleSwitch',
-      'Input', 'TextArea', 'Select', 'Checkbox', 'Card', 'KpiCard', 'SectionLabel',
+      'Input', 'TextArea', 'Select', 'SearchableSelect', 'Checkbox', 'Card', 'KpiCard', 'SectionLabel',
       'ContextRing', 'MeterBar', 'Sparkline', 'Table',
       'Dialog', 'Spinner', 'Tooltip', 'Acknowledgement',
       'Tabs', 'NavRail', 'CommandPalette',
@@ -37,6 +37,7 @@ describe('production design-system layer', () => {
       ['Input', design.Input, {}],
       ['TextArea', design.TextArea, {}],
       ['Select', design.Select, {}],
+      ['SearchableSelect', design.SearchableSelect, { value: '', options: [], ariaLabel: 'Model', onChange: () => undefined }],
       ['Checkbox', design.Checkbox, { label: 'Run isolated' }],
       ['Card', design.Card, {}],
       ['KpiCard', design.KpiCard, { title: 'Runs', value: 4 }],
@@ -194,6 +195,48 @@ describe('production design-system layer', () => {
       expect(markup).toContain('<option value="a">A</option>');
       expect(markup).toContain('<option value="c" disabled="">C</option>');
       expect(markup).toContain('class="input select"');
+    });
+
+    it('draws the searchable picker as a closed combobox trigger carrying the bare value', () => {
+      const markup = render(design.SearchableSelect, {
+        value: 'b', ariaLabel: 'Model for tester', onChange: () => undefined,
+        options: [{ value: '', label: 'Unset (built-in)' }, { value: 'a', label: 'a' }, { value: 'b', label: 'b' }],
+      });
+      expect(markup).toContain('data-ui-component="SearchableSelect"');
+      expect(markup).toContain('aria-haspopup="listbox"');
+      expect(markup).toContain('aria-expanded="false"');
+      expect(markup).toContain('aria-label="Model for tester"');
+      expect(markup).toContain('data-value="b"');
+      // The bare identifier is the visible text — never a decorated label (REQ-CONFIG-432).
+      expect(markup).toContain('>b<');
+      expect(markup).not.toContain('searchable-select-panel');
+    });
+  });
+
+  describe('SearchableSelect — the searchable model picker (REQ-CONFIG-427..433)', () => {
+    it('filters case-insensitively over value and label, keeping the caller order', () => {
+      const options = [
+        { value: 'small_model', label: 'small_model' },
+        { value: 'openai-compatible--vllm/qwen3.8-flash-next', label: 'openai-compatible--vllm/qwen3.8-flash-next' },
+        { value: 'openai-compatible--openrouter/anthropic/claude-haiku-latest', label: 'openai-compatible--openrouter/anthropic/claude-haiku-latest' },
+      ];
+      expect(design.filterSearchableOptions(options, '')).toEqual(options);
+      expect(design.filterSearchableOptions(options, '  QWEN  ').map((o) => o.value)).toEqual(['openai-compatible--vllm/qwen3.8-flash-next']);
+      // Slot-first order survives filtering (REQ-CONFIG-339).
+      expect(design.filterSearchableOptions(options, 'model').map((o) => o.value)).toEqual(['small_model']);
+      expect(design.filterSearchableOptions(options, 'openai-compatible').map((o) => o.value)).toEqual([
+        'openai-compatible--vllm/qwen3.8-flash-next',
+        'openai-compatible--openrouter/anthropic/claude-haiku-latest',
+      ]);
+      expect(design.filterSearchableOptions(options, 'no-such-model')).toEqual([]);
+    });
+
+    it('debounces the filter interval at the product filter precedent', () => {
+      expect(design.FILTER_DEBOUNCE_MS).toBe(150);
+    });
+
+    it('caps the visible rows at the slash popup figure', () => {
+      expect(design.SEARCHABLE_SELECT_MAX_ROWS).toBe(8);
     });
   });
 

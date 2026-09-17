@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { DELEGATION_STRATEGY_NAMES, EDITABLE_SLOTS, PERMISSION_PRESETS, REASONING_LEVEL_NAMES, ROLE_REASONING_NAMES, RUN_START_MODE_NAMES, type ConfigSnapshot, type ConfinementVerdict, type ModelSlotName } from '@rotaris/contracts';
 import { clampForDisplay, type PendingChange, type PendingSettings } from './config-state.js';
 import { SecurityPolicy } from './SecurityPolicy.js';
-import { Button as DesignButton, Card as DesignCard, Input as DesignInput, Select as DesignSelect, Table as DesignTable } from '../design-system/index.js';
+import { Button as DesignButton, Card as DesignCard, Input as DesignInput, SearchableSelect as DesignSearchableSelect, Select as DesignSelect, Table as DesignTable } from '../design-system/index.js';
 
 /**
  * The three configuration categories (structure from docs/spec, language from docs/design/system):
@@ -104,10 +104,13 @@ export function ModelsSettings(props: ConfigSettingsProps) {
               <tr key={slot}>
                 <td className="mono">{slot}<span className="text-tertiary settings__origin"> {view?.origin ?? 'built-in'}</span></td>
                 <td>
-                  <DesignSelect className="input select" aria-label={`Model for ${slot}`} value={value} onChange={(e) => onChange({ kind: 'slot', slot, value: e.currentTarget.value === '' ? null : e.currentTarget.value })}>
-                    <option value="">Leave as configured{view?.value ? ` (${view.value})` : ''}</option>
-                    {options.map((m) => <option key={m} value={m}>{m}</option>)}
-                  </DesignSelect>
+                  <DesignSearchableSelect
+                    className="input select"
+                    ariaLabel={`Model for ${slot}`}
+                    value={value}
+                    options={[{ value: '', label: `Leave as configured${view?.value ? ` (${view.value})` : ''}` }, ...options.map((m) => ({ value: m, label: m }))]}
+                    onChange={(next) => onChange({ kind: 'slot', slot, value: next === '' ? null : next })}
+                  />
                 </td>
                 <td>
                   <DesignSelect className="input select" aria-label={`Reasoning strength for ${slot}`} aria-description={`Sets the reasoning or thinking strength used by ${slot}'s model.`} value={thinking ?? ''} onChange={(e) => onChange({ kind: 'slotThinking', slot, value: e.currentTarget.value === '' ? null : e.currentTarget.value })}>
@@ -158,10 +161,13 @@ export function PersonasSettings(props: ConfigSettingsProps & { readonly childre
                 <td>{r.role}</td>
                 <td className="mono">{r.role}</td>
                 <td>
-                  <DesignSelect className="input select" aria-label={`Model for ${r.role}`} value={model} onChange={(e) => onChange({ kind: 'role', role: r.role, scope, model: e.currentTarget.value === '' ? null : e.currentTarget.value })}>
-                    <option value="">{r.inherited ? `Inherited (${r.effectiveModel})` : `Unset (${r.builtInDefault ?? 'built-in'})`}</option>
-                    {modelOptions.map((m) => <option key={m} value={m}>{m}</option>)}
-                  </DesignSelect>
+                  <DesignSearchableSelect
+                    className="input select"
+                    ariaLabel={`Model for ${r.role}`}
+                    value={model}
+                    options={[{ value: '', label: r.inherited ? `Inherited (${r.effectiveModel})` : `Unset (${r.builtInDefault ?? 'built-in'})` }, ...modelOptions.map((m) => ({ value: m, label: m }))]}
+                    onChange={(next) => onChange({ kind: 'role', role: r.role, scope, model: next === '' ? null : next })}
+                  />
                 </td>
                 <td>
                   <DesignSelect className="input select" aria-label={`Reasoning for ${r.role}`} value={thinking} onChange={(e) => onChange({ kind: 'role', role: r.role, scope, thinking: e.currentTarget.value })}>

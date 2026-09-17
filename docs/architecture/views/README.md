@@ -43,9 +43,36 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-09-16**
+## Last reconciled with the code: **2026-09-17**
 
-**The navigation pass.** Three views became six, and nothing about the system changed with it: `04-seams.md`
+**Every renderer command became a module, and the seam that names them a table.** One thousand and fifty-six
+lines came out of `main()`'s `runCommand` and into `apps/desktop/src/main/commands/` — sixteen facets, one per
+family, beside `context.ts`. What the switch could only do by being read, the table now does by compiling:
+`CommandHandlers` is **total** over `CommandRequest['kind']`, so a kind the contract declares and no facet
+answers fails the build where it used to answer `command.unimplemented` at run time. Building it found one such
+kind already there (`shell.switchView`), which is now a named line rather than an absence. `CommandContext` is
+the other half: the closure `runCommand` was written inside, given a name, so a facet can declare the slice it
+uses and a test can satisfy that slice — `commands/mcp.test.ts` drives real handlers in six milliseconds with a
+plain object where the run host is, which was not possible at all before. The checkpoint family's seven gates
+moved with their commands; main keeps only the holder the quit path waits on (REQ-GIT-101). **No product
+behaviour moves**: every handler body is the case body it was, `runCommand` still answers for the window that
+raised the command (REQ-SHELL-020) and still lets nothing throw (ADR-0019). The seams view's §1 carries the new
+stop 2 and the rule for choosing a facet; the process view's **main** row and the module map carry the rest.
+
+**The capture script became a module.** Six hundred and forty-six lines came out of `main()` and into
+`apps/desktop/src/main/capture/` — the step grammar and the host main gives it (`host.ts`, and the grammar
+now has a test), the part a shipped build still answers (`probe.ts`), the scriptable half (`seams.ts`) and
+the theme proof's pass (`theme-proof.ts`). The last two are reached only by a dynamic import inside
+`if (__ROTARIS_SEAMS__)`, so a packaged build does not merely branch past them: the chunk is unreferenced
+and never emitted. **No product behaviour moves** — the seams fire at the same times, on the same
+variables, through the same `runCommand`. What moved with it is the check that guards the gate: it now
+reads every emitted file of the main section rather than `index.js` alone, since a chunk is exactly the
+shape that surface could come back in. The process view's **main** row carries both. Measured the same day:
+the package-mode build carries none of the eleven forbidden names anywhere in `out/main/`, the dev build
+carries them in one chunk and the widened check refuses it, and the built app captured a window driven
+through `_VIEWS`, `_EVAL_AT` and `_PROBE`.
+
+**The navigation pass** (2026-09-16). Three views became six, and nothing about the system changed with it: `04-seams.md`
 (the ordered edit path for the eight additions this product makes most often), `05-state-ownership.md`
 (six homes, one writer each, consolidating facts that were already written down in three places) and
 `06-sequences.md` (launch, the approval round trip, and the board's release → run → review → accept — the

@@ -33,9 +33,17 @@ The renderer's only outward path. One IPC channel carries every kind; the union 
 | 2 | `apps/desktop/src/main/commands/<facet>.ts` | the handler, filed under its kind: main answers it (preferences, theme, providers, windows, dialogs) **or** relays it |
 | 3 | `packages/contracts/src/process-protocol.ts` | only if it relays: the request and reply that cross to a child |
 | 4 | `apps/desktop/src/run-host/index.ts` or `apps/desktop/src/workspace-service/index.ts` | the child's own dispatch `switch` |
-| 5 | `packages/ui/src/…` | the caller, through `window.rotaris.command` |
+| 5 | `apps/desktop/src/renderer/session-actions.ts`, else the window's own root | the send — a surface takes a callback and never the bridge |
 
-**Which facet.** Fifteen sit beside `commands/context.ts`, one per family: `dialogs`, `providers`, `session`,
+**Which side of the renderer.** A surface in `packages/ui/src/` holds no bridge: it takes a callback and returns
+a result. The window's root is what sends, and which root depends on what the command is about. A gesture against
+**the session this window follows** belongs in `apps/desktop/src/renderer/session-actions.ts` — resolve focus to a
+session id, send one command, turn anything that is not a success into a sentence a surface can show — and adding
+it there gives it to every window at once, because `shell.ts` makes that set one per window. Anything a window
+reads or writes for itself stays in the root that draws it: `main.tsx` for the main window's six views,
+`windows.tsx` for the approval, provider, pause, hook-review, persona and terminal windows.
+
+**Which facet.** Sixteen sit beside `commands/context.ts`, one per family: `dialogs`, `providers`, `session`,
 `hooks`, `mcp`, `initialization`, `skills`, `shell`, `git`, `checkpoints`, `library`, `improvements`, `config`,
 `requirements`, `windows`, `workspace`. Add the kind to the one whose name it already carries; a family with no
 facet yet is a new file and one more spread in the table. Each declares the slice of `CommandContext` it uses

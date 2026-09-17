@@ -26,7 +26,7 @@ The only importers of `electron`. One process each, except the renderer, whose r
 |---|---|---|
 | `main/` | windows and dialogs, `runCommand`, the update relay, preferences, provider sign-in, notices, process supervision, the requirements actor stamp, project-initialization coordination, the verification driver seam | `commands/` (one facet per command family, `context.ts` for what main hands them), `index.ts` (`runCommand` and the handler table), `main-windows.ts`, `windows.ts`, `notices.ts`, `initialization.ts`, `driver.ts` |
 | `preload/` | the one frozen bridge — `window.rotaris`: `command`, plus one `subscribe` per channel | `index.ts` |
-| `renderer/` | the React root; role by route (main, approval, pause, hook-review, provider, persona, terminal, rows-proof) | `main.tsx` |
+| `renderer/` | the React roots; role by route (main, approval, pause, hook-review, provider, persona, terminal, rows-proof) | `shell.ts` (what a window has: the bridge, the replica, the stacks, the theme), `session-actions.ts` (the gestures against the followed session, and the only renderer file with tests), `session-view.ts` (what a transcript surface reads), `windows.tsx` (every role but `main`), `main.tsx` (the main window, and `boot`) |
 | `run-host/` | one live session: runs, turns, tools, hooks, MCP, the skill catalog, configuration Tier B, checkpoints, terminal streams | `index.ts` (the dispatch switch), `launch.ts`, `loop.ts`, `tools.ts`, `configuration.ts` |
 | `workspace-service/` | workspace identity, store open and **migrate**, backup and restore, configuration Tier A, delivery, traceability, improvements, saved prompts | `index.ts`, `delivery.ts`, `traceability.ts` |
 
@@ -82,7 +82,7 @@ Each of these was decided; the authority is in brackets, and none of them is saf
 Five files carry a disproportionate share of the product. Open them by symbol rather than by reading them
 top to bottom, and add to the module beside them where the seam allows.
 
-`apps/desktop/src/main/index.ts` (`runCommand`) and `apps/desktop/src/main/commands/` (the handler it calls) · `apps/desktop/src/renderer/main.tsx` (every route's root)
+`apps/desktop/src/main/index.ts` (`runCommand`) and `apps/desktop/src/main/commands/` (the handler it calls) · `apps/desktop/src/renderer/main.tsx` (the main window's six views and `boot`; the other roles are in `windows.tsx`)
 · `apps/desktop/src/run-host/index.ts` (the child's dispatch) · `packages/engine/src/run/run.ts` (the run
 loop) · `packages/store/src/dal.ts` (every query).
 

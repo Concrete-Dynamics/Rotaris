@@ -162,6 +162,53 @@ if (edited.cycles[0].edited !== EDIT) throw new Error(`the edit was not recorded
 if (edited.cycles[0].plan !== held.cycles[0].plan) throw new Error("the role's verbatim plan was overwritten by the edit");
 results.survivedRestart = { status: edited.session.execution_status, cycle: edited.session.plan_cycle, edited: edited.cycles[0].edited };
 
+/*
+ * 2b. PD-ORCH-002 revision 2's two states, measured rather than asserted. Revision 1 was falsified by geometry —
+ * the gate's row was allocated less than its content — so what this reads is geometry: where the boxes actually
+ * stand after layout settles, at the window the product opens. The reading is taken twice, once on the state a
+ * gate OPENS in and once after the collapse control has been clicked like a user clicks it.
+ */
+const STATE_PROBE = "(() => { const r = (el) => { if (!el) return null; const b = el.getBoundingClientRect(); return { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.width), h: Math.round(b.height) }; }; const gate = document.querySelector('[data-testid=\"plan-gate\"]'); const plan = document.querySelector('[data-testid=\"plan-gate-preview\"]') || document.querySelector('[data-testid=\"plan-gate-plan\"]'); const tr = document.querySelector('.transcript'); const answers = document.querySelector('[data-ui=\"plan-gate-actions\"]'); const ws = document.querySelector('.workspace'); return { collapsed: ws ? (ws.getAttribute('data-plan-gate-collapsed') || '') : 'no-workspace', workspace: r(ws), rows: ws ? getComputedStyle(ws).gridTemplateRows : null, children: gate ? [...gate.children].map((c) => ({ c: c.className.split(' ')[0], h: Math.round(c.getBoundingClientRect().height), grow: getComputedStyle(c).flexGrow })) : null, gate: r(gate), plan: r(plan), answers: r(answers), transcript: r(tr), threeAnswers: ['plan-approve', 'plan-revise', 'plan-cancel'].every((t) => document.querySelector('[data-testid=\"' + t + '\"]') !== null), viewport: Math.round(window.innerHeight) }; })()";
+const log2b = launch('two-states', {
+  ROTARIS_CAPTURE_RESUME: 'latest',
+  ROTARIS_CAPTURE_AFTER_MS: '14000',
+  ROTARIS_CAPTURE_EVAL_AT: `${STATE_PROBE}@7000;;${STATE_PROBE}@10000`,
+  ROTARIS_CAPTURE_CLICKS: '[data-testid="plan-gate-collapse"]@8500',
+});
+const readings = [...log2b.matchAll(/eval-at \d+ .* → (\{.*\})/g)].map((m) => JSON.parse(m[1]));
+if (readings.length !== 2) throw new Error(`expected two state readings, got ${readings.length}:\n${log2b}`);
+const [open, shut] = readings;
+if (open.gate === null) throw new Error('no gate surface stood in the view');
+if (open.collapsed !== '') throw new Error(`the gate did not open expanded: ${JSON.stringify(open.collapsed)}`);
+if (open.transcript !== null && open.transcript.h > 0) throw new Error(`a transcript was drawn beneath the expanded gate (PD-ORCH-002 revision 2): ${JSON.stringify(open.transcript)}`);
+if (!open.threeAnswers || open.answers === null) throw new Error('the three answers are not drawn expanded');
+/*
+ * "The largest element of the surface and the ONLY element that grows with it" (PD-ORCH-002 revision 2), read as
+ * two facts rather than as a share of the height: the plan is taller than every other part of the gate, and it is
+ * the only part with a flex grow factor — so the pixels a taller window adds reach the plan and nothing else. The
+ * share is REPORTED rather than asserted, because the first execution measured what it depends on: at an 835 px
+ * window the composer's own content minimum is 252 px and the gate is left 397, of which the heading, the intent,
+ * the implied todo, the progressive revision field and the three answers take what they take.
+ */
+if (open.plan === null || open.children === null) throw new Error('the expanded gate drew no plan');
+const grew = open.children.filter((c) => Number(c.grow) > 0 && c.h > 1).map((c) => c.c);
+if (grew.length !== 1 || !/plan-gate__(preview-wrap|plan)/.test(grew[0])) throw new Error(`the plan is not the only element that grows: ${JSON.stringify(grew)}`);
+const tallest = open.children.reduce((a, b) => (b.h > a.h ? b : a));
+if (!/plan-gate__(preview-wrap|plan)/.test(tallest.c)) throw new Error(`the plan is not the largest element of the surface: ${JSON.stringify(open.children)}`);
+if (open.answers.y + open.answers.h > open.gate.y + open.gate.h + 1) throw new Error('the answers stand outside the gate they belong to (the five-capture failure)');
+if (!/capture: clicked "\[data-testid="plan-gate-collapse"\]"/.test(log2b)) throw new Error(`the collapse control was not on screen:\n${log2b}`);
+if (shut.collapsed !== '1') throw new Error(`clicking the control did not collapse the gate: ${JSON.stringify(shut.collapsed)}`);
+if (shut.transcript === null || shut.transcript.h < 180) throw new Error(`collapsing did not give the transcript back under REQ-CHAT-010's floor: ${JSON.stringify(shut.transcript)}`);
+if (!shut.threeAnswers || shut.answers === null) throw new Error('the three answers are not offered in the collapsed bar (PD-ORCH-002 revision 2)');
+if (shut.gate.h > open.gate.h / 2) throw new Error(`the collapsed gate is not a bar: ${shut.gate.h} of ${open.gate.h}`);
+const stillHeld = readStore();
+if (stillHeld.session.execution_status !== 'awaiting_plan_decision' || stillHeld.session.plan_cycle !== 1) throw new Error('collapsing the surface answered the gate');
+results.twoStates = {
+  expanded: { gate: open.gate.h, plan: open.plan.h, share: `${Math.round((open.plan.h / open.gate.h) * 100)}%`, transcript: open.transcript?.h ?? 0, viewport: open.viewport, children: open.children },
+  collapsed: { gate: shut.gate.h, transcript: shut.transcript.h, threeAnswers: shut.threeAnswers },
+  decisionUntouched: stillHeld.session.execution_status,
+};
+
 // 3. Revise: a further cycle, carrying the changes stated, and still nothing written.
 const log3 = launch('revised', {
   ROTARIS_CAPTURE_RESUME: 'latest',

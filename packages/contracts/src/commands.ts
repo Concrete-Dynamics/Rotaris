@@ -106,6 +106,8 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('improvements.export'), artifactId: z.string().min(1).optional() }),
   z.object({ kind: z.literal('improvements.undoReview'), id: z.string().min(1) }),
   z.object({ kind: z.literal('improvements.start'), artifactId: z.string().min(1) }),
+  /** PD-LIBRARY-002: the user's explicit gesture, and the only way a retrospective ever starts. */
+  z.object({ kind: z.literal('improvements.retrospective') }),
   z.object({ kind: z.literal('improvements.rollbackPreview'), artifactId: z.string().min(1) }),
   z.object({ kind: z.literal('improvements.rollback'), artifactId: z.string().min(1), force: z.boolean() }),
   /** REQ-MONITOR-168 / REQ-GIT-102: the repository card's reads, relayed to the workspace service (ADR-0038). */

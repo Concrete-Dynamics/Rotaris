@@ -1,7 +1,9 @@
 import { useCallback, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { PROPOSAL_STATUSES, isBusy, presentationChildState, presentationStatus, STATUS_LABELS, type AgentRecord, type ImprovementArtifactRecord, type ImprovementProposal, type PaneLayout, type ProposalStatus, type RepositoryState, type SessionListItemPayload, type SessionRecord } from '@rotaris/contracts';
 import { AgentTree } from './AgentTree.js';
-import { categoryLabel, ProposalDecisionDialog, statusLabel } from './library/ProposalsTab.js';
+import { categoryLabel, ProposalDecisionDialog, RETROSPECTIVE_BUSY_REASON, RETROSPECTIVE_DESCRIPTION, RETROSPECTIVE_LABEL, statusLabel } from './library/ProposalsTab.js';
+import { startRetrospective } from './workspace-host.js';
+import { useShellState } from './shell-state.js';
 import { Button as DesignButton, EmptyState as DesignEmptyState, PageHeader as DesignPageHeader, Tag as DesignTag } from './design-system/index.js';
 
 /**
@@ -116,6 +118,8 @@ export function OverviewView(props: OverviewProps) {
   const { session, sessions, sessionsState, sessionsError = null, repository, caps, layout, onLayout, nowIso = null, reducedMotion = false } = props;
   const now = nowIso ?? new Date().toISOString();
   const bodyRef = useRef<HTMLDivElement | null>(null);
+  // REQ-LIBRARY-123: one analysis at a time, so the gesture rests while one runs and says why.
+  const analysisRunning = useShellState((state) => state.improvementAnalysis.active);
   const [right, setRight] = useState<number>(() => layout?.sizes[1] ?? OVERVIEW_RIGHT_DEFAULT);
   // A layout arriving from the preference store (REQ-SHELL-069) replaces the split: derived during render, not in an effect.
   const [seenLayout, setSeenLayout] = useState(layout);
@@ -255,8 +259,12 @@ export function OverviewView(props: OverviewProps) {
             <Card kicker="Agents" className="ov-card--tree" actions={<DesignButton type="button" className="btn btn-link" onClick={() => props.onGoTo('mission')}>Open Mission</DesignButton>}>
               <AgentTree agents={session?.agents ?? []} selected={selectedAgent} onSelect={setSelectedAgent} nowIso={nowIso} />
             </Card>
-            <Card kicker="Improvement proposals" className="ov-card--proposals" actions={<><DesignTag className="tag tag-accent">{pendingProposals} new</DesignTag><DesignButton type="button" className="btn btn-link" onClick={() => props.onOpenProposal()}>Open in Library →</DesignButton></>}>
-              {proposalRows.length === 0 ? <DesignEmptyState className="empty-state library__empty"><span className="empty-state-title">No proposals</span><span className="empty-state-hint">Run improvement analysis to produce reviewable suggestions.</span></DesignEmptyState>
+            <Card kicker="Improvement proposals" className="ov-card--proposals" actions={<><DesignTag className="tag tag-accent">{pendingProposals} new</DesignTag>
+              {/* PD-LIBRARY-002's gesture, on the second of its three surfaces — the same opener the Library tab and the palette raise. */}
+              <DesignButton type="button" className="btn btn-link" data-testid="overview-retrospective" disabled={analysisRunning} aria-disabled={analysisRunning}
+                title={analysisRunning ? RETROSPECTIVE_BUSY_REASON : RETROSPECTIVE_DESCRIPTION} onClick={() => { startRetrospective(); }}>{RETROSPECTIVE_LABEL}</DesignButton>
+              <DesignButton type="button" className="btn btn-link" onClick={() => props.onOpenProposal()}>Open in Library →</DesignButton></>}>
+              {proposalRows.length === 0 ? <DesignEmptyState className="empty-state library__empty"><span className="empty-state-title">No proposals</span><span className="empty-state-hint">Run improvement analysis, or a retrospective over this workspace&rsquo;s history, to produce reviewable suggestions.</span></DesignEmptyState>
                 : <ul className="ov-proposals">{proposalRows.slice(0, 4).map((row) => <li key={`${row.artifactId}:${row.proposal.id}`} className="ov-proposal">
                   <DesignButton type="button" className="btn btn-link ov-proposal__summary" title="Open in Library → Improvement proposals" onClick={() => props.onOpenProposal(row.proposal.id)}>{row.proposal.summary}</DesignButton>
                   <DesignTag className={`tag ${row.proposal.status === 'approved' ? 'tag-accent' : row.proposal.status === 'pending_review' ? 'tag-outline' : 'tag-neutral'}`}>{statusLabel(row.proposal.status)}</DesignTag>

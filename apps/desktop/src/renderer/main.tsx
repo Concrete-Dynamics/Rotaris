@@ -1,12 +1,12 @@
 import { StrictMode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
-import { isBusy, isViewId, LIBRARY_TABS, presentationStatus, STATUS_LABELS, THEMES, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ConfigSnapshot, type ConfinementVerdict, type InitializationStateView, type HookAgentId, type HooksSummary, type ImprovementArtifactRecord, type ImprovementRollbackPreview, type ImprovementRollbackResult, type ProposalStatus, type McpHealth, type McpListing, type McpSecretsView, type PlaybookCatalogue, type ProviderRow, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload } from '@rotaris/contracts';
+import { isBusy, isViewId, LIBRARY_TABS, presentationStatus, STATUS_LABELS, THEMES, type AnalysisPass, type NoticeAction, type CommandOutcome, type PromptList, type PromptState, type RepairReportPayload, type CheckpointListPayload, type CheckpointPreviewPayload, type CheckpointRestoreOutcomePayload, type GitViewState, type PaneLayout, type RepositoryState, type SandboxModeName, type Theme, type ThemeName, type ConfigSnapshot, type ConfinementVerdict, type InitializationStateView, type HookAgentId, type HooksSummary, type ImprovementArtifactRecord, type ImprovementRollbackPreview, type ImprovementRollbackResult, type ProposalStatus, type McpHealth, type McpListing, type McpSecretsView, type PlaybookCatalogue, type ProviderRow, type SessionListItemPayload, type TranscriptRow, RUN_AGENT_ID, type AgentRecord, type McpSetupStatus, type ArtifactRowPayload } from '@rotaris/contracts';
 // Part AL2 — the terminal in this window (REQ-SHELL-079..111): the role the terminal window is opened under, and the
 // provider that carries this window's preview registry down to every transcript surface (ADR-0047).
 import { TERMINAL_WINDOW_ROLE } from '@rotaris/contracts';
 import { TerminalHostProvider } from '@rotaris/ui';
-import { Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, rebasePending, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, runLevelAgent, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, type SlashHost, RequirementsBoard } from '@rotaris/ui';
+import { Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, rebasePending, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, runLevelAgent, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, type SlashHost, RequirementsBoard } from '@rotaris/ui';
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls, and the shape it answers.
 import { bindPromptRootsReader } from '@rotaris/ui';
 import type { PromptsRootsResult } from '@rotaris/contracts';
@@ -190,6 +190,11 @@ bindSkillsReader(async () => {
 // the window binds the opener once at module scope. The command carries no folder: main opens the chooser,
 // evaluates no gate on this route, and adds a window rather than displacing one.
 bindProjectFolderOpener(() => { void bridge.command({ kind: 'workspace.choose', newWindow: true }); });
+
+// Part AT — PD-LIBRARY-002: the retrospective's one route, bound once for the three surfaces that raise it. Main
+// answers the refusals with the notices the directive fixes (no model configured, nothing to look back over), so
+// nothing is reported here; a window that never binds it is an auxiliary window with no workspace of its own.
+bindRetrospectiveStarter(() => { void bridge.command({ kind: 'improvements.retrospective' }); });
 
 // Part AN — the two openers the slash catalogue needs from App's own state: the launch dialog (REQ-SHELL-125, `/new`)
 // and the session browser (REQ-SHELL-126, `/resume` and `/sessions`). App registers them once mounted; Workspace calls
@@ -1113,6 +1118,18 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
   // REQ-NOTIFY-044's `focus-session`: the dispatcher is module-scoped (a notice can arrive before a view mounts), so
   // the opener is registered here for as long as this window lives.
   useEffect(() => { focusSession = (id) => { void openSession(id); }; return () => { focusSession = null; }; }, [openSession]);
+
+  /*
+   * REQ-LIBRARY-125/126 (PD-LIBRARY-002): the improvement analysis activity, which main has published on its own
+   * channel since Part V with nothing reading it. It is application-wide rather than this session's — one FIFO
+   * orders every pass — so it lands in the shell store, where the title bar and the run header each read it
+   * without owning the other. The last publication a shutdown makes carries `active: false`, which is what
+   * REQ-LIBRARY-127's "the indicators MUST end hidden" comes to here.
+   */
+  useEffect(() => bridge.onImprovementActivity((p) => {
+    const payload = p as { active?: boolean; pass?: AnalysisPass };
+    useShellState.getState().setImprovementAnalysis({ active: payload.active === true, pass: payload.pass ?? 'post_run' });
+  }), []);
 
   /*
    * PD-CHAT-002 (superseding REQ-CHAT-098/099): question prompts auto-open docked at the bottom of the transcript.

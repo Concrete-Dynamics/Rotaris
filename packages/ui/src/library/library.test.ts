@@ -25,6 +25,7 @@ const record = (artifactId: string, proposals: readonly ImprovementProposal[]): 
   artifact: {
     artifact_id: artifactId,
     source_session_id: 'session-1',
+    source_kind: 'post_run',
     source_run_type: 'task_run',
     generated_at: '2026-09-14T10:00:00.000Z',
     collector_model: 'analyst',

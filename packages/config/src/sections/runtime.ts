@@ -35,6 +35,8 @@ export interface RuntimeSection {
   readonly terminal_stream_buffer_kb: number;
   readonly improvement_collector_enabled: boolean;
   readonly improvement_collector_timeout: number;
+  /** PD-LIBRARY-002: the retrospective's wall-clock bound; the pass's sibling reads the line above. */
+  readonly retrospective_timeout: number;
   readonly claude_sdk_native_loop: boolean;
   readonly auto_retries_transient: number;
   readonly auto_retries_validation: number;
@@ -73,7 +75,7 @@ export const RUNTIME_DEFAULTS: RuntimeSection = {
   model_timeout: 120, tool_call_timeout: 30, summary_timeout: 120,
   shell_command_timeout: 100, shell_max_background_sessions: 20, shell_background_timeout: 3600,
   terminal_stream_enabled: true, terminal_stream_interval_ms: 100, terminal_stream_buffer_kb: 256,
-  improvement_collector_enabled: true, improvement_collector_timeout: 60,
+  improvement_collector_enabled: true, improvement_collector_timeout: 60, retrospective_timeout: 120,
   claude_sdk_native_loop: true, auto_retries_transient: 1, auto_retries_validation: 0,
   session_log_level: 'WARNING', permission_mode: DEFAULT_PRESET, allow_outside_workspace: false, allow_unsandboxed_autonomous: false,
   headless_approval_policy: 'deny', approval_timeout_seconds: 300,
@@ -139,6 +141,7 @@ export function readRuntimeSection(value: unknown, sink: ProblemSink): RuntimeSe
     terminal_stream_buffer_kb: r.int('terminal_stream_buffer_kb', d.terminal_stream_buffer_kb, { min: 0, max: 8192 }),
     improvement_collector_enabled: r.bool('improvement_collector_enabled', d.improvement_collector_enabled),
     improvement_collector_timeout: r.int('improvement_collector_timeout', d.improvement_collector_timeout, { min: 1 }),
+    retrospective_timeout: r.int('retrospective_timeout', d.retrospective_timeout, { min: 1 }),
     claude_sdk_native_loop: r.bool('claude_sdk_native_loop', d.claude_sdk_native_loop),
     auto_retries_transient: r.int('auto_retries_transient', d.auto_retries_transient, { min: 0 }),
     auto_retries_validation: r.int('auto_retries_validation', d.auto_retries_validation, { min: 0 }),

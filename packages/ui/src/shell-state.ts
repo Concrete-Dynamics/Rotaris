@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { isViewId, LIBRARY_TABS, STARTUP_VIEW, type ViewId } from '@rotaris/contracts';
+import { isViewId, LIBRARY_TABS, STARTUP_VIEW, type AnalysisPass, type ViewId } from '@rotaris/contracts';
 
 /**
  * Local-only interface state (ADR-0043, ADR-0057): the active view, and later
@@ -76,6 +76,20 @@ export interface ShellState {
    */
   readonly skillsRevision: number;
   skillsChanged(): void;
+  /**
+   * REQ-LIBRARY-125/126 with PD-LIBRARY-002: whether an improvement analysis is running anywhere, and which
+   * pass it is. It lives here because the two indicators that show it sit in two different surfaces — the
+   * title bar and the workspace run header — and neither owns the other. The coordinator is
+   * application-wide and runs one pass at a time, so "at least one session's analysis is in progress"
+   * (REQ-LIBRARY-126) is exactly `active`, and shutdown's last publication clears it (REQ-LIBRARY-127).
+   */
+  readonly improvementAnalysis: ImprovementAnalysisActivity;
+  setImprovementAnalysis(activity: ImprovementAnalysisActivity): void;
+}
+
+export interface ImprovementAnalysisActivity {
+  readonly active: boolean;
+  readonly pass: AnalysisPass;
 }
 
 export interface ComposerRegistration {
@@ -107,6 +121,8 @@ export interface LaunchChoices {
 
 export const useShellState = create<ShellState>((set, get) => ({
   activeView: STARTUP_VIEW,
+  improvementAnalysis: { active: false, pass: 'post_run' },
+  setImprovementAnalysis(activity) { set({ improvementAnalysis: activity }); },
   switchView(id) {
     if (!isViewId(id)) return;
     const state = get();

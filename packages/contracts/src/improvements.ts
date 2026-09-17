@@ -5,6 +5,15 @@ export const RUN_TYPES = ['task_run', 'improvement_run', 'integration_run'] as c
 export const RunTypeSchema = z.enum(RUN_TYPES);
 export type RunType = z.infer<typeof RunTypeSchema>;
 
+/**
+ * PD-LIBRARY-002: the two analysis passes. `post_run` is REQ-LIBRARY-015's sibling, fenced to one run by
+ * REQ-LIBRARY-017; `retrospective` is the user-started pass that reads across this workspace's own record.
+ * This is NOT a run type: a retrospective starts no session, so RUN_TYPES above is untouched.
+ */
+export const ANALYSIS_PASSES = ['post_run', 'retrospective'] as const;
+export const AnalysisPassSchema = z.enum(ANALYSIS_PASSES);
+export type AnalysisPass = z.infer<typeof AnalysisPassSchema>;
+
 /** REQ-LIBRARY-006: one closed proposal-category vocabulary. */
 export const IMPROVEMENT_CATEGORIES = [
   'documentation_update',
@@ -125,7 +134,13 @@ export type ImprovementCheckpoint = z.infer<typeof ImprovementCheckpointSchema>;
 
 const artifactShape = z.object({
   artifact_id: z.string().regex(/^impart_[0-9A-Za-z]{8}$/),
-  source_session_id: z.string().min(1),
+  /**
+   * PD-LIBRARY-002 (ADR-0065 decision 2): null ONLY for a retrospective, which belongs to no session. The
+   * refinement below keeps a post-run artifact exactly as strict as it was, and the sessions a retrospective
+   * read are named in `considered_session_ids` while each evidence entry keeps its own source.
+   */
+  source_session_id: z.string().min(1).nullable().default(null),
+  source_kind: AnalysisPassSchema.default('post_run'),
   source_run_type: RunTypeSchema.default('task_run'),
   generated_at: utc,
   collector_model: z.string().min(1).nullable().default(null),
@@ -134,6 +149,10 @@ const artifactShape = z.object({
   notes: z.string().nullable().default(null),
   checkpoints: z.array(ImprovementCheckpointSchema).default([]),
   rolled_back_at: utc.nullable().default(null),
+}).superRefine((artifact, ctx) => {
+  if (artifact.source_kind === 'post_run' && artifact.source_session_id === null) {
+    ctx.addIssue({ code: 'custom', path: ['source_session_id'], message: 'source_session_id is required for a post-run artifact' });
+  }
 });
 
 /** REQ-LIBRARY-011/014: accept the legacy session_id alias and emit the canonical shape. */
@@ -197,6 +216,8 @@ export const ImprovementActivitySchema = z.object({
   active: z.boolean(),
   queued: z.number().int().nonnegative(),
   source_session_id: z.string().nullable(),
+  /** REQ-LIBRARY-125 with PD-LIBRARY-002: which pass the indicators are labelling. */
+  pass: AnalysisPassSchema.default('post_run'),
 });
 export type ImprovementActivity = z.infer<typeof ImprovementActivitySchema>;
 
@@ -204,13 +225,36 @@ export type ImprovementActivity = z.infer<typeof ImprovementActivitySchema>;
 export const ImprovementCapturedSourceSchema = z.object({ available: z.boolean(), entries: z.array(z.string()) });
 export type ImprovementCapturedSource = z.infer<typeof ImprovementCapturedSourceSchema>;
 
-/** REQ-ORCH-137 / REQ-LIBRARY-032..034: the host-to-coordinator handoff. */
+/**
+ * PD-LIBRARY-002 (ADR-0065 decision 6): the five sources a retrospective reads, each frozen and bounded at
+ * capture exactly as the sibling's six are, each entry naming the record it came from so its evidence stays
+ * attributable. A source that could not be read is `available: false` and is named in the artifact's notes.
+ */
+export const RetrospectiveSourcesSchema = z.object({
+  sessions: ImprovementCapturedSourceSchema,
+  proposals: ImprovementCapturedSourceSchema,
+  prompts: ImprovementCapturedSourceSchema,
+  persona_memory: ImprovementCapturedSourceSchema,
+  instructions: ImprovementCapturedSourceSchema,
+});
+export type RetrospectiveSources = z.infer<typeof RetrospectiveSourcesSchema>;
+
+/** REQ-ORCH-137 / REQ-LIBRARY-032..034, and PD-LIBRARY-002 for the second pass: the host-to-coordinator handoff. */
 export const ImprovementAnalysisJobSchema = z.object({
-  artifact_id: z.string().regex(/^impart_[0-9A-Za-z]{8}$/), workspace_id: z.string().min(1), workspace_root: z.string().min(1), source_session_id: z.string().min(1), generated_at: utc,
+  artifact_id: z.string().regex(/^impart_[0-9A-Za-z]{8}$/), workspace_id: z.string().min(1), workspace_root: z.string().min(1), source_session_id: z.string().min(1).nullable().default(null), generated_at: utc,
   timeout_seconds: z.number().int().positive(), collector_model: z.string().min(1), considered_session_ids: z.array(z.string().min(1)),
+  pass: AnalysisPassSchema.default('post_run'),
   progress: ImprovementCapturedSourceSchema, todo: ImprovementCapturedSourceSchema, child_reports: ImprovementCapturedSourceSchema,
   transcript: ImprovementCapturedSourceSchema, gate: ImprovementCapturedSourceSchema, prior_artifacts_available: z.boolean(),
   prior_artifacts: z.array(ImprovementArtifactSchema).max(5),
+  retrospective: RetrospectiveSourcesSchema.nullable().default(null),
+}).superRefine((job, ctx) => {
+  if (job.pass === 'post_run' && job.source_session_id === null) {
+    ctx.addIssue({ code: 'custom', path: ['source_session_id'], message: 'source_session_id is required for a post-run job' });
+  }
+  if (job.pass === 'retrospective' && job.retrospective === null) {
+    ctx.addIssue({ code: 'custom', path: ['retrospective'], message: 'a retrospective job carries its own captured sources' });
+  }
 });
 export type ImprovementAnalysisJob = z.infer<typeof ImprovementAnalysisJobSchema>;
 

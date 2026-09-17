@@ -41,6 +41,7 @@
     "notice-proof": "node apps/desktop/scripts/notice-proof.mjs",
     "library-proof": "node apps/desktop/scripts/library-proof.mjs",
     "improvements-proof": "node apps/desktop/scripts/improvements-proof.mjs",
+    "retrospective-proof": "node apps/desktop/scripts/retrospective-proof.mjs",
     "artifacts-proof": "node apps/desktop/scripts/artifacts-proof.mjs",
     "palette-proof": "node apps/desktop/scripts/palette-proof.mjs",
     "transcript-proof": "node apps/desktop/scripts/transcript-proof.mjs",

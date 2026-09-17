@@ -1,7 +1,7 @@
 import { PRIMARY_VIEWS, type ViewId } from '@rotaris/contracts';
 import { openTerminalWindow } from '../terminal/host.js'; // Part AL2
 import { compressFromPalette } from '../slash/host.js'; // Part AO
-import { openProjectFolderInNewWindow } from '../workspace-host.js'; // Stage C — PD-SHELL-001
+import { openProjectFolderInNewWindow, startRetrospective } from '../workspace-host.js'; // Stage C — PD-SHELL-001; Part AT — PD-LIBRARY-002
 
 /**
  * REQ-SHELL-048 — the window's ONE vocabulary of named actions, presented three ways: the command palette
@@ -98,6 +98,10 @@ export const COMMANDS: readonly Command[] = [
   // when run while no run executes (the palette hides an unavailable entry, so "listed with its reason" is the refusal on
   // activation); its slash mirror is `/compress-context`, beside the built-in `/compress` (REQ-CHAT-028's rule keeps both).
   { id: 'run.compress', label: 'Compress context', keywords: ['compress', 'context', 'condense', 'compact', 'memory'], available: always, run: () => compressFromPalette() },
+  // Part AT — PD-LIBRARY-002: the third of the retrospective's three surfaces. Listed always, on the terms
+  // `Open terminal` above states: a window with no starter bound does nothing, and the refusals a workspace
+  // can meet — no model, nothing to read — arrive as notices rather than as a hidden entry.
+  { id: 'improvements.retrospective', label: 'Run workspace retrospective', keywords: ['retrospective', 'improve', 'history', 'insights', 'review', 'proposals', 'look back'], available: always, run: () => { startRetrospective(); } },
   // Stage C — PD-SHELL-001: one of the add route's exactly two gestures (the other is the chip with the platform's
   // secondary-activation modifier held). Shortcut-less and labelled as the directive words it. Registering it HERE
   // rather than binding it privately is what puts it in the keyboard help and the composer's slash catalogue too,

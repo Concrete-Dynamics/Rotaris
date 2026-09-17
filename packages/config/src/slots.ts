@@ -59,7 +59,7 @@ export function resolveSlotsAndReasoning(draft: SlotDraft): SlotResolution {
   for (const [role, persona] of Object.entries(draft.personas)) if (isTierAlias(persona.model)) tiers[role] = persona.model;
 
   // REQ-CONFIG-073: every reference field; the literal alias survives where no substitution is registered.
-  for (const slot of ['default_summary_model', 'improvement_collector_model', 'gatekeeper_model', 'fallback_model'] as const) draft.slots[slot] = substitute(draft.slots[slot]);
+  for (const slot of ['default_summary_model', 'improvement_collector_model', 'retrospective_model', 'gatekeeper_model', 'fallback_model'] as const) draft.slots[slot] = substitute(draft.slots[slot]);
   for (const [role, persona] of Object.entries(draft.personas)) {
     draft.personas[role] = { ...persona, model: substitute(persona.model) ?? persona.model, summary_model: substitute(persona.summary_model), fallback_model: substitute(persona.fallback_model) };
   }

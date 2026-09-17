@@ -5,6 +5,7 @@ import type {
   CommandOutcome,
   CommandRequest,
   HooksSummary,
+  ImprovementAnalysisJob,
   NoticeAction,
   NoticeSeverity,
   PausePayload,
@@ -132,6 +133,11 @@ export interface CommandContext {
   readonly requirementsRuns: ReturnType<typeof createRequirementsRuns>;
   readonly improvementUndo: Map<string, { artifactId: string; proposalId: string; previous: ProposalStatus; current: ProposalStatus; summary: string }>;
   readonly improvementRuns: Map<string, { artifactId: string; workspaceRoot: string }>;
+  /**
+   * PD-LIBRARY-002: the one FIFO both analysis passes ride (REQ-LIBRARY-123/127). A post-run job reaches it
+   * from the run host's own event; a retrospective reaches it from the command a person raised.
+   */
+  readonly enqueueImprovement: (job: ImprovementAnalysisJob) => void;
 
   // The native choosers, each of which a capture script may answer instead (verification only).
   readonly chooseSave: (parent: BrowserWindow, opts: Electron.SaveDialogOptions) => Promise<string | null>;

@@ -207,6 +207,21 @@ timeout. Main then relays `save-collected` to the workspace service, rereads the
 state, queued count and source session. Workspace close or application shutdown sends `improvement.cancel`, aborts active
 analysis and discards queued jobs before any artifact or notice is written.
 
+**The retrospective pass (Part AT; `PD-LIBRARY-002`, ADR-0065).** The same analyst, reached without a run. A gesture on
+any of three surfaces sends main `improvements.retrospective {workspaceRoot}`; main asks the run host for
+`retrospective.capture {workspaceRoot}`, which resolves the workspace's configuration through `configuredFor` (no run
+context exists), leases its bearers through `leaseForContinuation`, and answers the existing `improvement.job` event —
+carrying `pass: 'retrospective'` and a `retrospective` sources block (session digests, prior proposals, saved prompts,
+persona memory, instruction files, each entry naming its record) — or `retrospective.no-model` when nothing resolves.
+From there the path is the post-run one, unchanged: the same application-wide FIFO, the same `improvement.analyze`
+(whose run-free branch takes its backend and `credentialFor` from the configured workspace rather than from
+`improvementContexts`), the same `save-collected` to the workspace service, the same canonical reread and bump. Two
+things differ at the ends. The artifact carries `source_kind: 'retrospective'` and a NULL `source_session_id`, naming
+what it read in `considered_session_ids` and attributing each evidence entry to its own record. And
+`improvement:activity` gains `pass`, which is what lets the two indicators (REQ-LIBRARY-125/126, built in this part and
+not before) say WHICH analysis is running. `improvement.cancel`, the queue's ordering and shutdown's discard are
+untouched: a retrospective is an ordinary job on the ordinary queue.
+
 **The session artifact store (Part Y; REQ-LIBRARY-087..101, REQ-ORCH-149).** Renderer → main: `artifacts.list` (the
 Library's Artifacts tab), `artifacts.body {ref}` (the inspector's load), `artifacts.save {ref, body}` (REQ-LIBRARY-133's
 save, the body ONLY). Main relays each to the run host as `artifacts.list {workspaceId}` → `artifacts.state {state:

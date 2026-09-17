@@ -45,6 +45,19 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-17**
 
+**The retrospective pass (Part AT — `PD-LIBRARY-002`, ADR-0065).** A second analysis pass over the workspace's own
+record, reached by a gesture rather than by a run ending, and reusing the post-run lifecycle whole. `02-process-view.md`
+gains the message (`retrospective.capture` to the run host, answered with the existing `improvement.job` event or
+`retrospective.no-model`) and the run-free branch of `improvement.analyze`, which takes its backend and credential from
+the configured workspace instead of a run context. `03-runtime-view.md` §7 carries store **v19** — `source_kind` on the
+artifact and a `source_session_id` relaxed to nullable, by a table rebuild inside the migration's transaction — and the
+three configuration keys the directive fixes (`retrospective_model`, its thinking companion, `retrospective_timeout`).
+`05-state-ownership.md` gains who owns which pass is running, and who may write the activity a surface draws. What did
+NOT move is the point: the FIFO, the cancel, the shutdown discard, the save, the review surfaces, the executor, the
+checkpoints and the rollback are the same objects, because a retrospective proposal is an ordinary proposal. The two
+activity indicators (REQ-LIBRARY-125/126) were specified in Part AF and drawn by nothing until this part built them,
+once, for both passes.
+
 **The plan gate takes the reading area (PD-ORCH-002 revision 2).** `03-runtime-view.md` gains the two states
 the gate is drawn in and who owns the choice between them: expanded it takes the free space and no transcript
 is drawn beneath it, collapsed it is a bar above a transcript reading under REQ-CHAT-010's floor, and the three

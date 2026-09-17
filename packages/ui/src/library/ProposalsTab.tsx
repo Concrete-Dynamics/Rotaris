@@ -18,6 +18,18 @@ import {
   Tag as DesignTag,
   TextArea as DesignTextArea,
 } from '../design-system/index.js';
+import { useShellState } from '../shell-state.js';
+import { startRetrospective } from '../workspace-host.js';
+
+/**
+ * PD-LIBRARY-002's gesture, on the first of its three surfaces. It is disabled only while an analysis is
+ * already running — one FIFO orders both passes (REQ-LIBRARY-123), so a second gesture would queue rather
+ * than start — and states that as its reason. Everything the gesture can be refused for afterwards (no model
+ * configured, nothing in the workspace to read) arrives as the notice REQ-LIBRARY-037's shape fixes.
+ */
+export const RETROSPECTIVE_LABEL = 'Run retrospective';
+export const RETROSPECTIVE_DESCRIPTION = "Look back over this workspace's own history and propose improvements.";
+export const RETROSPECTIVE_BUSY_REASON = 'An improvement analysis is already running.';
 
 export interface ImprovementHistoryPayload {
   readonly versions: readonly RecordedImprovementVersion[];
@@ -183,6 +195,7 @@ export function ProposalsTab(props: ProposalsTabProps) {
   const [selectedVersion, setSelectedVersion] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const analysisRunning = useShellState((state) => state.improvementAnalysis.active);
   const [decision, setDecision] = useState<ProposalStatus | null>(null);
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -263,13 +276,16 @@ export function ProposalsTab(props: ProposalsTabProps) {
     <section className="library-proposals" aria-label="Improvement proposals" data-testid="library-proposals" data-ui="library-proposals" data-ui-contract='[{"kind":"containment"},{"kind":"viewport-scroll","axis":"both","expected":false}]'>
       <div className="library-proposals__toolbar">
         <span className="card-meta">Workspace-scoped review records stay available across sessions.</span>
+        <DesignButton type="button" className="btn btn-secondary btn-compact" data-testid="library-retrospective"
+          disabled={analysisRunning} aria-disabled={analysisRunning} title={analysisRunning ? RETROSPECTIVE_BUSY_REASON : RETROSPECTIVE_DESCRIPTION}
+          onClick={() => { startRetrospective(); }}>{RETROSPECTIVE_LABEL}</DesignButton>
         <DesignButton type="button" className="btn btn-secondary btn-compact" disabled={busy} onClick={() => { void props.onExport(); }}>Export all</DesignButton>
       </div>
       {error && <div className="composer__error" role="alert" data-testid="library-proposals-error">{error}</div>}
       {records.length === 0 ? (
         <DesignEmptyState className="empty-state library__empty" data-testid="library-improvements-empty">
           <span className="empty-state-title">No improvement artifacts exist yet.</span>
-          <span className="empty-state-hint">Finishing a task run produces them when the improvement collector finds reviewable suggestions.</span>
+          <span className="empty-state-hint">Finishing a task run produces them when the improvement collector finds reviewable suggestions, and a retrospective produces them from this workspace&rsquo;s own history.</span>
         </DesignEmptyState>
       ) : (
         <div className="library-proposals__grid">
@@ -312,7 +328,9 @@ export function ProposalsTab(props: ProposalsTabProps) {
           {chosenRecord && <section className="card library-proposals__detail" aria-label={`Improvement artifact ${chosenRecord.artifact.artifact_id}`} data-ui="library-proposal-detail">
             <div className="ov-card__head"><span className="card-kicker">Artifact detail</span><span className="mono card-meta">{chosenRecord.artifact.artifact_id}</span></div>
             <dl className="library-proposals__facts">
-              <div><dt>Generated</dt><dd>{new Date(chosenRecord.artifact.generated_at).toLocaleString()}</dd></div><div><dt>Source session</dt><dd className="mono">{chosenRecord.artifact.source_session_id}</dd></div>
+              <div><dt>Generated</dt><dd>{new Date(chosenRecord.artifact.generated_at).toLocaleString()}</dd></div>{/* PD-LIBRARY-002: a retrospective belongs to no session, so the cell says what it DOES belong to — an empty
+                  cell would read as a session the record failed to name rather than as a pass that never had one. */}
+              <div><dt>Source</dt><dd className="mono" data-testid="library-proposal-source">{chosenRecord.artifact.source_kind === 'retrospective' ? `This workspace's history · ${chosenRecord.artifact.considered_session_ids.length} session(s)` : chosenRecord.artifact.source_session_id}</dd></div>
               <div><dt>Proposals</dt><dd>{artifactCounts(chosenRecord)}</dd></div><div><dt>Rollback</dt><dd>{checkpoint ? `${checkpoint.ref} · ${checkpoint.commit.slice(0, 12)}` : 'No rollback point recorded.'}{chosenRecord.artifact.rolled_back_at ? ` Rolled back ${new Date(chosenRecord.artifact.rolled_back_at).toLocaleString()}.` : ''}</dd></div>
             </dl>
             <div className="library-proposals__detail-actions">

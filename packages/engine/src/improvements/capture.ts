@@ -46,7 +46,8 @@ export function visiblyCut(text: string, cap: number): string {
   return cap <= 1 ? "…".slice(0, cap) : `${text.slice(0, cap - 1)}…`;
 }
 
-function bounded(
+/** The sibling pass uses the same packing, so it is shared rather than written twice (PD-LIBRARY-002). */
+export function bounded(
   entries: readonly string[],
   itemCap: number,
   totalCap: number,

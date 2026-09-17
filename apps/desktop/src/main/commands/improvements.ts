@@ -11,10 +11,44 @@ import { refusal, type CommandContext, type CommandHandlers } from './context.js
  * decision be taken back before the artifact is closed.
  */
 export function improvementsCommands(
-  ctx: Pick<CommandContext, 'chooseExportPath' | 'clocks' | 'improvementRuns' | 'improvementUndo' | 'libraryRevision' | 'log' | 'notices' | 'raiseNotice' | 'runHost' | 'services'>,
-): Pick<CommandHandlers, 'improvements.start' | 'improvements.rollbackPreview' | 'improvements.rollback' | 'improvements' | 'improvements.undoReview' | 'improvements.export'> {
-  const { chooseExportPath, clocks, improvementRuns, improvementUndo, libraryRevision, log, notices, raiseNotice, runHost, services } = ctx;
+  ctx: Pick<CommandContext, 'chooseExportPath' | 'clocks' | 'enqueueImprovement' | 'improvementRuns' | 'improvementUndo' | 'libraryRevision' | 'log' | 'notices' | 'raiseNotice' | 'runHost' | 'services'>,
+): Pick<CommandHandlers, 'improvements.start' | 'improvements.retrospective' | 'improvements.rollbackPreview' | 'improvements.rollback' | 'improvements' | 'improvements.undoReview' | 'improvements.export'> {
+  const { chooseExportPath, clocks, enqueueImprovement, improvementRuns, improvementUndo, libraryRevision, log, notices, raiseNotice, runHost, services } = ctx;
   return {
+    /**
+     * PD-LIBRARY-002: the second analysis pass, and the ONLY way it ever starts — a person raised this command
+     * from one of its three surfaces. No run completion, no schedule and no agent reaches it, because the pass
+     * spends the owner's money. The run host captures the evidence; the job then rides the same FIFO, the same
+     * analyst and the same save path as the post-run pass, so nothing downstream of here knows it exists.
+     */
+    'improvements.retrospective': async (_req, { w, awaitWorkspace }) => {
+      await awaitWorkspace();
+      if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace before looking back over its history' };
+      const captured = await runHost
+        .request({ kind: 'retrospective.capture', workspaceId: w.workspaceId, workspaceRoot: canonicalPath(w.workspace) }, millis(30_000))
+        .catch((cause: Error) => ({ kind: 'refused' as const, code: 'retrospective.capture', headline: 'The retrospective could not be started', detail: cause.message }));
+      if (captured.kind !== 'retrospective.captured') {
+        const detail = captured.kind === 'refused' ? [captured.headline, captured.detail].filter(Boolean).join(': ') : `unexpected reply ${captured.kind}`;
+        /*
+         * REQ-LIBRARY-037 with PD-LIBRARY-002: ONE informational notice per gesture, not one per workspace —
+         * the user asked for this pass by name, so each asking is answered. The action opens the settings
+         * category holding the slot that would resolve it.
+         */
+        if (captured.kind === 'refused' && captured.code === 'retrospective.no-model') {
+          raiseNotice('info', 'The retrospective needs a model', 'Choose a retrospective or medium model, then run the retrospective again.', [{ label: 'Open Models settings', action: { kind: 'open-settings', category: 'models' } }]);
+          return { ok: false, code: captured.code, headline: captured.headline, detail };
+        }
+        if (captured.kind === 'refused' && captured.code === 'retrospective.no-evidence') {
+          raiseNotice('info', 'There is nothing to look back over yet', 'This workspace has no sessions, prompts, proposals or instruction files for a retrospective to read.');
+          return { ok: false, code: captured.code, headline: captured.headline, detail };
+        }
+        raiseNotice('error', 'The retrospective could not be started', detail);
+        return refusal(captured, 'The retrospective could not be started');
+      }
+      enqueueImprovement(captured.job);
+      log(`retrospective ${captured.job.artifact_id} queued over ${captured.job.considered_session_ids.length} session(s)`);
+      return { ok: true, value: { artifactId: captured.job.artifact_id, sessions: captured.job.considered_session_ids.length } };
+    },
     // ---- Part X: the saved prompts (REQ-LIBRARY-137/138). Relayed to the run host, which owns the store, exactly
     // as `timeline.append` is; main adds the library revision (REQ-LIBRARY-105) and REQ-LIBRARY-138's failure notice. ----
     'improvements.start': async (req, { w, awaitWorkspace }) => {

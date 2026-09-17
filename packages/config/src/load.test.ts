@@ -164,7 +164,7 @@ describe('REQ-CONFIG-051 the end-to-end two-scope fixture', () => {
 
 describe('REQ-CONFIG-063..081 tier aliases and reasoning synthesis', () => {
   it('registers an alias only for a concrete slot value; a literal alias survives to referential validation (REQ-CONFIG-074)', () => {
-    expect(registeredAliases({ small_model: 'medium_model', medium_model: 'm', large_model: 'large_model', default_summary_model: null, improvement_collector_model: null, gatekeeper_model: null, fallback_model: null })).toEqual({ medium_model: 'm' });
+    expect(registeredAliases({ small_model: 'medium_model', medium_model: 'm', large_model: 'large_model', default_summary_model: null, improvement_collector_model: null, retrospective_model: null, gatekeeper_model: null, fallback_model: null })).toEqual({ medium_model: 'm' });
     const c = loaded(null, 'small_model: medium_model\nmedium_model: gpt-4o\n');
     expect(c.slots.small_model).toBe('medium_model');
     expect(c.referential).toContain("small_model 'medium_model' names no configured model (a tier alias that registered no substitution)");
@@ -196,7 +196,7 @@ describe('REQ-CONFIG-063..081 tier aliases and reasoning synthesis', () => {
     expect(c.warnings).toContain("thinking for role librarian skipped: 'missing' is not a configured model");
   });
   it('the transform is pure over a draft', () => {
-    const draft = { slots: { small_model: 'a', medium_model: 'a', large_model: 'a', default_summary_model: 'small_model', improvement_collector_model: null, gatekeeper_model: null, fallback_model: null }, slotThinking: { small_model: null, medium_model: null, large_model: null, default_summary_model: null, improvement_collector_model: null, gatekeeper_model: null, fallback_model: null }, models: { a: readModelEntry('a', { provider: 'p', model_id: 'a' }, sink())! }, personas: {}, compressorModel: 'small_model', circuitBreakerModel: 'x' };
+    const draft = { slots: { small_model: 'a', medium_model: 'a', large_model: 'a', default_summary_model: 'small_model', improvement_collector_model: null, retrospective_model: null, gatekeeper_model: null, fallback_model: null }, slotThinking: { small_model: null, medium_model: null, large_model: null, default_summary_model: null, improvement_collector_model: null, retrospective_model: null, gatekeeper_model: null, fallback_model: null }, models: { a: readModelEntry('a', { provider: 'p', model_id: 'a' }, sink())! }, personas: {}, compressorModel: 'small_model', circuitBreakerModel: 'x' };
     const r = resolveSlotsAndReasoning(draft);
     expect(r.warnings).toEqual([]);
     expect(draft.slots.fallback_model).toBe('a');
@@ -303,7 +303,7 @@ describe('REQ-CONFIG-229..238, 478 validation and the fatal report', () => {
     const models = { m: readModelEntry('m', { provider: 'p', model_id: 'm' }, sink())! };
     const persona = (over: Record<string, unknown>) => ({ name: 'r', model: 'm', purpose: null, system_prompt: null, system_prompt_file: null, model_family_variants: null, tools: [], delegates_to: [], custom_tools: [], mcp_servers: [], mcp_tools: null, tool_restrictions: null, coordinator_only: false, read_only: false, can_publish_artifacts: false, skip_auto_sibling_context: false, stall_timeout: null, permission_mode: null, fallback_model: null, summary_model: null, thinking: null, ...over });
     const messages = referentialMessages({
-      defaultPersona: 'ghost', slots: { small_model: 'm', medium_model: null, large_model: 'zz', default_summary_model: 'm', improvement_collector_model: null, gatekeeper_model: null, fallback_model: 'm' }, models,
+      defaultPersona: 'ghost', slots: { small_model: 'm', medium_model: null, large_model: 'zz', default_summary_model: 'm', improvement_collector_model: null, retrospective_model: null, gatekeeper_model: null, fallback_model: 'm' }, models,
       personas: { a: persona({ model: 'nope', summary_model: 'nope2', delegates_to: ['b', 'ghost'], mcp_servers: ['srv'], mcp_tools: { other: ['t'] }, tools: ['read_file', 'read_file', 'internal_only'], custom_tools: ['read_file'] }), b: persona({ delegates_to: ['a'] }) },
       compressorModel: 'small_model',
     });

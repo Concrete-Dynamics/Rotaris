@@ -33,6 +33,8 @@ const DEFAULT_LAYER: PlainMap = {
   default_summary_model: 'small_model',
   fallback_model: 'small_model',
   improvement_collector_model: null,
+  // PD-LIBRARY-002: the retrospective's own slot, falling back to the medium tier exactly as its sibling does.
+  retrospective_model: null,
   gatekeeper_model: null,
   worktree_storage_subpath: 'worktrees',
   inject_agents_md: true,

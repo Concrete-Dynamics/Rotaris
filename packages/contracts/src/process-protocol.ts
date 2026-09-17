@@ -202,6 +202,12 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('artifacts.save'), workspaceId: z.string(), ref: z.string().min(1), body: z.string() }),
   /** REQ-LIBRARY-024/035: main schedules a captured job back onto the run host's analyst. */
   z.object({ kind: z.literal('improvement.analyze'), job: ImprovementAnalysisJobSchema }),
+  /**
+   * PD-LIBRARY-002 (ADR-0065 decisions 4 and 5): the user's gesture asks the host to capture a retrospective
+   * over the workspace's own record. The host is where the store is open and where a model resolves; a pass
+   * with no run therefore configures the workspace and leases its credentials the way a continuation does.
+   */
+  z.object({ kind: z.literal('retrospective.capture'), workspaceId: z.string().min(1), workspaceRoot: z.string().min(1) }),
   z.object({ kind: z.literal('improvement.cancel'), artifactId: z.string().regex(/^impart_[0-9A-Za-z]{8}$/) }),
   z.object({ kind: z.literal('shutdown'), deadlineMs: z.number().int().positive() }),
   /**
@@ -487,6 +493,8 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('requirements.result'), value: z.unknown(), changed: z.object({ generation: z.number().int().nonnegative(), affected: z.array(z.string()).nullable() }).optional() }),
   z.object({ kind: z.literal('improvements.result'), value: z.unknown(), changed: z.boolean().optional() }),
   z.object({ kind: z.literal('improvement.analyzed'), artifact: ImprovementArtifactSchema }),
+  /** PD-LIBRARY-002: the captured retrospective, handed straight to the coordinator main already owns. */
+  z.object({ kind: z.literal('retrospective.captured'), job: ImprovementAnalysisJobSchema }),
   // Part AJ
   /** ADR-0040 (Part AJ): one operation's `Result<…, TraceabilityFailure>` as the seam types it; `cancelled` is REQ-TRACE-226's boolean. */
   z.object({ kind: z.literal('traceability.result'), operation: z.enum(['check', 'regenerate', 'baselines', 'compare']), root: z.string(), elapsedMs: z.number().nonnegative(), result: z.object({ ok: z.boolean(), value: z.unknown().optional(), error: z.unknown().optional() }) }),

@@ -231,9 +231,12 @@ export function createRunHost() {
    * about it here, and the engine's own refusals (`not-live`, `no-session`) answer it instead.
    */
   const leaseReports = new LeaseReportLog();
-  const continuationLeaseForSession = async (sessionId: string): Promise<ProcessReply | null> => {
-    const workspaceRoot = sessionRoots.get(sessionId);
-    if (workspaceRoot === undefined) return null;
+  /**
+   * The lease by workspace root. PD-LIBRARY-002's retrospective has no session and no run, so it cannot be
+   * leased through one; it is the same path `leaseForContinuation` already walks, keyed by the only thing a
+   * user-started pass knows about itself (ADR-0030, ADR-0065 decision 5).
+   */
+  const leaseForWorkspace = async (workspaceRoot: string): Promise<ProcessReply | null> => {
     const r = await leaseForContinuation(workspaceRoot, {
       workspaceRoot, attended: presenters.attended, configuration: configurationDeps,
       leaseCredentials: async (providers) => {
@@ -247,6 +250,11 @@ export function createRunHost() {
     if (r.kind === 'refused') return r.reply;
     leased.set(workspaceRoot, r.bearers);
     return null;
+  };
+  const continuationLeaseForSession = async (sessionId: string): Promise<ProcessReply | null> => {
+    const workspaceRoot = sessionRoots.get(sessionId);
+    if (workspaceRoot === undefined) return null;
+    return leaseForWorkspace(workspaceRoot);
   };
   /** Only a tool port built outside a run start reaches this; the run path always configures first. */
   const configureRunFallback = () => {
@@ -431,6 +439,7 @@ export function createRunHost() {
     configure,
     leaseReports,
     continuationLeaseForSession,
+    leaseForWorkspace,
     configuredFor,
     sessions,
     sessionActions,

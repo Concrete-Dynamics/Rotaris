@@ -4,6 +4,8 @@ import { REASONING_LEVELS, RUN_STATE_TAGS, runHeaderControlReason, runStateLabel
 import { markMotionStart } from './motion.js';
 import { COMPRESS_DESCRIPTION, COMPRESS_LABEL, COMPRESSING_LABEL, compressNow, useChatControls } from './slash/host.js';
 import { Button as DesignButton, Select as DesignSelect } from './design-system/index.js'; // Part AO
+import { ImprovementActivity } from './ImprovementActivity.js';
+import { useShellState } from './shell-state.js';
 
 /**
  * Part AN — the run header, extracted from `WorkspaceView.tsx` as a pure move of Part AB's markup so that Part AO can
@@ -92,6 +94,13 @@ export function RunHeader({ runState, session, runActive, stepStartedAt, models,
    * locally owned, and stating one of the four reason texts whenever they are not.
    */
   const headerReason = runHeaderControlReason(runState);
+  /*
+   * REQ-LIBRARY-125's second indicator. It is read from the shell store rather than taken as a prop: the
+   * activity belongs to the application (one FIFO over every session, REQ-LIBRARY-123/126) and not to this
+   * run, and this header's prop list is not the improvement domain's to widen. It changes no control here —
+   * REQ-LIBRARY-125 forbids disabling anything while an analysis runs, the send button included.
+   */
+  const improvementAnalysis = useShellState((s) => s.improvementAnalysis);
   return (
     <div className="run-header" role="group" aria-label="Run" data-state={runState} data-testid="run-header">
       {/* The design's Tag with a status dot, which is how the material draws a run's state (README §7). */}
@@ -101,6 +110,7 @@ export function RunHeader({ runState, session, runActive, stepStartedAt, models,
         {runStateLabel(runState)}
       </span>
       <RunTiming session={session} busy={runActive} stepStartedAt={stepStartedAt} />
+      <ImprovementActivity active={improvementAnalysis.active} pass={improvementAnalysis.pass} placement="run-header" />
       {/* Part AO: the header's third live-run control, in the same region as the two selectors (REQ-CHAT-078). */}
       <div className="run-controls" aria-label="Active run controls">
         <CompressControl runState={runState} runActive={runActive} />

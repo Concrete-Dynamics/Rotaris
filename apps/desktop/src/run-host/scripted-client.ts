@@ -99,6 +99,45 @@ export function scriptedClient(c: Clocks, log: (message: string) => void): Model
         yield ok<StreamPart>({ kind: 'finish', reason: 'stop' });
         return;
       }
+      /**
+       * PD-LIBRARY-002 (ADR-0065): the improvement analyst, BOTH passes, recognised by its own system text
+       * rather than by a role, because `analystSystem` is the only thing that tells them apart on the wire.
+       *
+       * `ROTARIS_IMPROVEMENT_SCRIPT` is what a proof drives it with — `propose` (anything else, once set),
+       * `empty`, `timeout` (never answers, so the analyst's own wall-clock bound is what ends the pass) and
+       * `wait:<ms>[:<step>]` (the pass held open long enough for a surface to be read WHILE it runs). Unset
+       * means this branch does not exist: every proof written before it sees the answer it always saw.
+       *
+       * A proposal's evidence cites a session id taken out of the request's own `considered_session_ids`,
+       * and the second proposal cites one that is not there — so the attribution the analyst enforces has
+       * both a case it must keep and a case it must refuse, measured in the built product.
+       */
+      const analystScript = (process.env['ROTARIS_IMPROVEMENT_SCRIPT'] ?? '').trim();
+      if (analystScript !== '' && /improvement analyst for a software workspace/.test(system)) {
+        log(`scripted improvement analyst: ${analystScript}`);
+        let want = analystScript;
+        const held = /^wait:(\d+)(?::(.+))?$/.exec(want);
+        if (held) {
+          await new Promise<void>((resolve) => { const t = c.timers.after(millis(Number(held[1])), resolve); req.signal.addEventListener('abort', () => { t.cancel(); resolve(); }, { once: true }); });
+          if (req.signal.aborted) { yield { ok: false as const, error: { code: 'aborted' as const, headline: 'aborted', transient: false } }; return; }
+          want = held[2] ?? 'propose';
+        }
+        if (want === 'timeout') { await new Promise<void>((resolve) => req.signal.addEventListener('abort', () => resolve(), { once: true })); yield { ok: false as const, error: { code: 'aborted' as const, headline: 'aborted', transient: false } }; return; }
+        const prompt = req.messages.map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('')).join('\n');
+        let considered: string[] = [];
+        try { considered = JSON.parse(/"considered_session_ids":(\[[^\]]*\])/.exec(prompt)?.[1] ?? '[]') as string[]; } catch { considered = []; }
+        const cited = considered[0] ?? null;
+        const answer = want === 'empty' ? { proposals: [] } : {
+          proposals: [
+            { category: 'agents_md_update', summary: 'Name the build gate in AGENTS.md', recommended_action: 'Add one line to AGENTS.md naming the gate every run must pass.', risk: 'low', evidence: [{ kind: 'session', text: 'recent sessions ended without naming a gate', source_session_id: cited }] },
+            { category: 'documentation_update', summary: 'Record how this workspace is set up', recommended_action: 'Add a paragraph to README.md.', risk: 'low', evidence: [{ kind: 'session', text: 'cited from a session this pass never read', source_session_id: 'session-never-read' }] },
+          ],
+        };
+        yield ok<StreamPart>({ kind: 'text', delta: JSON.stringify(answer) });
+        yield ok<StreamPart>({ kind: 'usage', usage: { input: 64, output: 48 } });
+        yield ok<StreamPart>({ kind: 'finish', reason: 'stop' });
+        return;
+      }
       let step = scripts[who]?.[(calls[who] ?? 1) - 1] ?? 'answer';
       const wait = /^wait:(\d+)$/.exec(step);
       if (wait) {

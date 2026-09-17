@@ -106,11 +106,11 @@ describe('REQ-CONFIG-025..030 the bootstrap', () => {
     expect(bootstrapConfigFile(join(s.workspaceRoot, '.rotaris'))).toEqual({ ok: true, value: 'declined-directory' });
     writeFileSync(s.gFile, Buffer.from([0xff, 0xfe, 0x41]));
     expect(bootstrapConfigFile(s.gFile)).toEqual({ ok: true, value: 'declined-not-utf8' });
-    // The twelve explicit nulls do not clear the built-in slots (REQ-CONFIG-052).
+    // The fourteen explicit nulls do not clear the built-in slots (REQ-CONFIG-052); PD-LIBRARY-002 added two.
     const c = loadConfiguration({ globalDir: join(tmp(), 'none'), workspaceRoot: s.workspaceRoot, keepIgnored: false });
     expect(c.ok && c.value.slots.large_model).toBe('gpt-4o');
     expect(starterDocument()).toMatch(/^# Rotaris configuration/);
-    expect((starterDocument().match(/: null$/gm) ?? []).length).toBe(12);
+    expect((starterDocument().match(/: null$/gm) ?? []).length).toBe(14);
   });
 });
 

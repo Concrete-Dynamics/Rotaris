@@ -25,7 +25,7 @@ and answered differently, and nobody can see that it happened. The reason is par
 
 ## Count
 
-**Thirty-seven requests, R-001 to R-037.** One row, one identifier, no gap — so the highest identifier is
+**Thirty-eight requests, R-001 to R-038.** One row, one identifier, no gap — so the highest identifier is
 the number of rows, and there is nothing here for a reader to tally.
 [`tools/check-request-log.mjs`](../../tools/check-request-log.mjs) holds that as part of `pnpm lint`,
 because a count written in prose is exactly what let seventeen rows sit under the word "Sixteen".
@@ -87,6 +87,8 @@ which is how two `R-016`s sat twenty lines apart and were never once read side b
 | <a id="r-036"></a>R-036 | 2026-09-18 | "there are a lot of models at one point in the dropdown, making them hard to scroll to the correct one. we need a search input and therefore a custom dropdown with debounce. propose this feature plan." followed by "Start implementation." | covered | REQ-CONFIG-338 fixes the role table's Model column as interactive, REQ-CONFIG-339 fixes slot-names-first ordering, REQ-CONFIG-330 fixes the slot model selector, and REQ-CONFIG-427..433 fix the shared model-picker discipline (uniform availability marking, greyed-unselectable rows, four-channel reasons, bare-id values, everything-projection options). The searchable picker redraws those selectors with a debounced filter and keeps every clause: same options, same order, same values, same Save flow. Nothing minted |
 
 | <a id="r-037"></a>R-037 | 2026-09-18 | "also add this new component for the dropdown at the workspace model selection and everywhere else where it fits for searching." — extending [R-036](#r-036)'s searchable picker beyond Settings | covered | REQ-CHAT-009 fixes the composer's persona and model chips as interactive selectors stating the next run's choice; REQ-CHAT-006/007 fix the disabled reason's two channels; REQ-MONITOR-052/057/058/066/067 fix the inspector's model control (writable run-level only, current model always named, withheld listed with reason); REQ-CHAT-078 fixes the run header's live-run model switch. The searchable picker redraws those long-list selectors with a debounced filter and keeps every clause: same options, same order, same values, same callbacks, same enablement. Small fixed vocabularies (reasoning, scope, strategy, run-start, sandbox, theme, depth) stay native — search adds nothing there. Nothing minted |
+
+| <a id="r-038"></a>R-038 | 2026-09-18 | "can you make it so that when one of these search drop downs is opened, the focus is automatically in the search textfield? that would improve ux. (also on the side: add a small padding for the text in the box to the left side inside the textbox, as it currently touches the border)." — focus + inset follow-up to [R-036](#r-036)/[R-037](#r-037)'s searchable picker | covered | The picker already carries the filter as `role="combobox"` with the listbox contract (REQ-CONFIG-427..433's discipline, REQ-CHAT-009/006/007, REQ-MONITOR-052/057/058/066/067, REQ-CHAT-078's adoptions). Focusing the filter on open and giving its text a token inset changes no option, order, value, callback or enablement — craft under `docs/design/README.md` §7, tokens by name. Nothing minted |
 
 <!--
 Row shape:

@@ -45,6 +45,8 @@ export interface ForegroundResult {
   readonly sessionReinitialized: boolean;
   readonly truncated: boolean;
   readonly error: string | null;
+  /** PD-TOOLS-001: what the post-reset restore did — carried into the observation's detail. */
+  readonly restore: RestoreOutcome;
 }
 
 export const FOREGROUND_CAP = 100_000;
@@ -191,6 +193,123 @@ export function wrapCommand(backend: ShellBackend, command: string, start: strin
   return `printf '%s\\n' '${start}'; ${command}; printf '${end}:%s\\n' "$?"`;
 }
 
+/**
+ * PD-TOOLS-001 — the shell state a hard-timeout reset re-applies: the working directory and the
+ * exported variables. The snapshot is taken after a completed command, when the shell is idle and
+ * responsive; the restore runs after the reset respawned a fresh shell. Both are best effort: a
+ * snapshot that cannot be parsed keeps the previous capture, and a restore that fails is reported in
+ * the observation's detail while the REQ-TOOLS-099 contract (124/session_reset/state lost) stands.
+ * Aliases, functions and background jobs are captured by neither — they cannot be enumerated reliably
+ * from outside the shell that held them — and the detail says so.
+ *
+ * A snapshot whose own capture times out leaves the session freshly reset with the PREVIOUS capture
+ * still held (stale by one command); the next completed command refreshes it. The direction is
+ * deliberate: a stale restore that fails is reported, while no restore abandons the directory.
+ */
+export interface ShellState {
+  readonly cwd: string;
+  readonly env: Readonly<Record<string, string>>;
+}
+
+export type RestoreOutcome =
+  | { readonly status: 'restored'; readonly cwd: string; readonly vars: number }
+  | { readonly status: 'none' }
+  | { readonly status: 'failed' };
+
+/** Bound on the snapshot/restore round trip: the shell just proved responsive (or just respawned). */
+export const SNAPSHOT_TIMEOUT_MS = 15_000;
+
+/**
+ * PD-TOOLS-001's capture line: the shell's own cwd plus every exported variable, one per line. The
+ * marker literals are assembled through variables (`$__p`, `$P`) rather than written inline, so the
+ * PTY's echo of this command can never itself match the parse below however the screen wraps it.
+ */
+export function snapshotCommand(backend: ShellBackend): string {
+  if (backend.kind === 'powershell') {
+    return `$__p = '__rot_cwd__'; Write-Output ($__p + ':' + (Get-Location).Path); $__q = '__rot_env__'; Get-ChildItem Env: | ForEach-Object { Write-Output ($__q + ':' + $_.Name + '=' + $_.Value) }`;
+  }
+  return `P='__rot_cwd__'; printf '%s:%s\\n' "$P" "$PWD"; Q='__rot_env__'; env | sed "s/^/$Q:/"`;
+}
+
+/** PD-TOOLS-001's parse: the last cwd line wins; env lines after it; indented continuations rejoin. */
+export function parseSnapshot(output: string): ShellState | null {
+  let cwd: string | null = null;
+  let env: Record<string, string> = {};
+  let cur: string | null = null;
+  for (const line of output.split('\n')) {
+    if (line.startsWith('__rot_cwd__:')) {
+      cwd = line.slice('__rot_cwd__:'.length);
+      env = {};
+      cur = null;
+      continue;
+    }
+    if (line.startsWith('__rot_env__:')) {
+      const rest = line.slice('__rot_env__:'.length);
+      const eq = rest.indexOf('=');
+      if (eq >= 0) {
+        cur = rest.slice(0, eq);
+        env[cur] = rest.slice(eq + 1);
+      } else {
+        cur = null;
+      }
+      continue;
+    }
+    if (cur !== null) env[cur] += `\n${line}`;
+  }
+  if (cwd === null) return null;
+  return { cwd, env };
+}
+
+function psQuote(s: string): string {
+  return `'${s.replace(/'/g, `''`)}'`;
+}
+
+function shQuote(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
+/** Shell-managed variables no restore may set: the directory arrives via cd, the rest are per-process. */
+const POSIX_RESTORE_SKIP: ReadonlySet<string> = new Set(['PWD', 'OLDPWD', 'SHLVL', '_']);
+
+export interface RestorePlan {
+  readonly line: string;
+  readonly vars: number;
+}
+
+/**
+ * PD-TOOLS-001's re-apply: every variable that differs from the spawn environment, removals for spawn
+ * variables the snapshot no longer holds, and the directory change LAST so the exit status reports it.
+ * Null when there is nothing to do — the snapshot already matches the fresh shell.
+ */
+export function restoreCommand(backend: ShellBackend, snap: ShellState, spawn: { cwd: string; env: Readonly<Record<string, string>> }): RestorePlan | null {
+  if (backend.kind === 'powershell') {
+    const parts: string[] = [];
+    for (const [k, v] of Object.entries(snap.env)) {
+      if (spawn.env[k] !== v) parts.push(`Set-Item -LiteralPath ${psQuote(`Env:${k}`)} -Value ${psQuote(v)}`);
+    }
+    for (const k of Object.keys(spawn.env)) {
+      if (!(k in snap.env)) parts.push(`Remove-Item -LiteralPath ${psQuote(`Env:${k}`)} -ErrorAction SilentlyContinue`);
+    }
+    if (parts.length === 0 && snap.cwd === spawn.cwd) return null;
+    parts.push(`Set-Location -LiteralPath ${psQuote(snap.cwd)}`);
+    return { line: parts.join('; '), vars: parts.length - 1 };
+  }
+  const parts: string[] = [];
+  for (const [k, v] of Object.entries(snap.env)) {
+    if (POSIX_RESTORE_SKIP.has(k)) continue;
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(k)) continue;
+    if (spawn.env[k] !== v) parts.push(`export ${k}=${shQuote(v)}`);
+  }
+  for (const k of Object.keys(spawn.env)) {
+    if (POSIX_RESTORE_SKIP.has(k)) continue;
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(k)) continue;
+    if (!(k in snap.env)) parts.push(`unset ${k}`);
+  }
+  if (parts.length === 0 && snap.cwd === spawn.cwd) return null;
+  parts.push(`cd ${shQuote(snap.cwd)}`);
+  return { line: parts.join(' && '), vars: parts.length - 1 };
+}
+
 export class ForegroundSession {
   readonly id: string;
   private pty: PtyLike | null = null;
@@ -206,6 +325,12 @@ export class ForegroundSession {
   private pausedCommand: PausedCall | null = null;
   /** A paused command that has since finished: its output and exit status wait for the next poll. */
   private pausedDone: PausedCall | null = null;
+  /**
+   * PD-TOOLS-001's last-known shell state: the cwd and exported variables of the most recent
+   * COMPLETED command, refreshed after every exit. The reset path re-applies it to the respawned
+   * shell; a snapshot that cannot be parsed keeps the previous capture rather than clearing it.
+   */
+  private lastState: ShellState | null = null;
 
   constructor(private readonly deps: SessionDeps, id?: string) {
     this.id = id ?? `ts_${randomBytes(4).toString('hex')}`;
@@ -385,17 +510,22 @@ export class ForegroundSession {
     this.listeners = this.listeners.filter((l) => l !== listener);
     await screen.write(hold.take());
     const lines = ForegroundSession.cleanLines(screen.text(), start, end);
-    const finish = (r: Omit<ForegroundResult, 'output' | 'truncated' | 'sessionReinitialized'>): ForegroundResult => {
+    const finish = (r: Omit<ForegroundResult, 'output' | 'truncated' | 'sessionReinitialized' | 'restore'>): ForegroundResult => {
       let text = lines.join('\n').replace(/\s+$/, '');
       // REQ-TOOLS-097's 100,000-character cap, truncated from the OLDEST end, over what the screen retained.
       let cut = screen.truncated || hold.dropped;
       if (text.length > FOREGROUND_CAP) { text = text.slice(-FOREGROUND_CAP); cut = true; }
-      return { ...r, output: text, truncated: cut, sessionReinitialized: reinit };
+      return { ...r, output: text, truncated: cut, sessionReinitialized: reinit, restore: { status: 'none' } };
     };
     if (outcome.kind === 'exit') {
       this.state = 'idle';
       const r = finish({ exitCode: outcome.code, timedOut: false, softPaused: false, killStatus: null, error: null });
       screen.dispose();
+      // PD-TOOLS-001: the shell proved responsive and idle — refresh the snapshot for the next reset.
+      // Awaited, not fired-and-forgotten: the refresh rides the session's own marker scan, and a
+      // concurrent next command would overwrite `active` and wedge until the hard cap. One quick
+      // round trip per completed command is the cost of a snapshot that is never stale by more than one.
+      await this.refreshState();
       return r;
     }
     if (outcome.kind === 'pause') {
@@ -422,10 +552,14 @@ export class ForegroundSession {
       return r;
     }
     // timeout or abort: REQ-TOOLS-097/099 — the whole tree goes, the session restarts, shell state is lost.
+    // PD-TOOLS-001 narrows what "lost" means afterwards: the cwd and exported variables snapshotted after
+    // the last completed command are re-applied to the fresh shell, and the outcome names what was restored.
+    // The REQ-TOOLS-099 contract stands — 124, session_reset, state lost — and the detail says both.
     this.active = null;
     this.state = 'resetting';
     const reset = this.resetNow();
-    const r = finish({ exitCode: 124, timedOut: true, softPaused: false, killStatus: reset ? 'session_reset' : 'reset_failed', error: outcome.kind === 'abort' ? 'the call was cancelled' : null });
+    const restore: RestoreOutcome = reset ? await this.restoreState() : { status: 'failed' };
+    const r = { ...finish({ exitCode: 124, timedOut: true, softPaused: false, killStatus: reset ? 'session_reset' : 'reset_failed', error: outcome.kind === 'abort' ? 'the call was cancelled' : null }), restore };
     screen.dispose();
     return r;
   }
@@ -444,11 +578,11 @@ export class ForegroundSession {
       const out = await ForegroundSession.sincePoll(done);
       const truncated = done.screen.truncated || done.hold.dropped;
       done.screen.dispose();
-      return { output: out, exitCode: done.code ?? 0, timedOut: false, softPaused: false, killStatus: null, sessionReinitialized: false, truncated, error: null };
+      return { output: out, exitCode: done.code ?? 0, timedOut: false, softPaused: false, killStatus: null, sessionReinitialized: false, truncated, error: null, restore: { status: 'none' } };
     }
     const pc = this.pausedCommand;
-    if (!pc) return { output: '', exitCode: 0, timedOut: false, softPaused: false, killStatus: null, sessionReinitialized: false, truncated: false, error: 'No paused command to poll.' };
-    return { output: await ForegroundSession.sincePoll(pc), exitCode: -1, timedOut: false, softPaused: true, killStatus: null, sessionReinitialized: false, truncated: pc.screen.truncated || pc.hold.dropped, error: null };
+    if (!pc) return { output: '', exitCode: 0, timedOut: false, softPaused: false, killStatus: null, sessionReinitialized: false, truncated: false, error: 'No paused command to poll.', restore: { status: 'none' } };
+    return { output: await ForegroundSession.sincePoll(pc), exitCode: -1, timedOut: false, softPaused: true, killStatus: null, sessionReinitialized: false, truncated: pc.screen.truncated || pc.hold.dropped, error: null, restore: { status: 'none' } };
   }
 
   /**
@@ -493,9 +627,98 @@ export class ForegroundSession {
     }
   }
 
+  /** PD-TOOLS-001: an explicit reset clears the snapshot — the user asked for a clean shell. */
+  clearSnapshot(): void {
+    this.lastState = null;
+  }
+
   /** REQ-TOOLS-096: keystroke input, a special key or text, written to the PTY as is. */
   sendInput(text: string): void {
     this.ensure().write(text);
+  }
+
+  /**
+   * PD-TOOLS-001's snapshot: run the capture line on the idle shell and parse it. Best effort —
+   * a capture that cannot be parsed keeps the previous state, and a capture that times out leaves
+   * the session freshly reset with that previous capture still held (stale by one command).
+   */
+  private async captureState(): Promise<ShellState | null> {
+    try {
+      const r = await this.runRaw(snapshotCommand(this.deps.backend), SNAPSHOT_TIMEOUT_MS);
+      if (r.exitCode !== 0) return null;
+      return parseSnapshot(r.output);
+    } catch {
+      return null;
+    }
+  }
+
+  /** Refresh the snapshot after a completed command; a failure keeps the previous capture. */
+  private async refreshState(): Promise<void> {
+    const snap = await this.captureState();
+    if (snap) this.lastState = snap;
+  }
+
+  /**
+   * PD-TOOLS-001's restore: re-apply the last snapshot to the respawned shell. Null when there is
+   * nothing to restore (no completed command yet, or the snapshot already matches the fresh shell).
+   */
+  private async restoreState(): Promise<RestoreOutcome> {
+    const snap = this.lastState;
+    if (!snap) return { status: 'none' };
+    const plan = restoreCommand(this.deps.backend, snap, { cwd: this.deps.cwd, env: this.deps.env });
+    if (!plan) return { status: 'none' };
+    try {
+      const r = await this.runRaw(plan.line, SNAPSHOT_TIMEOUT_MS);
+      if (r.exitCode !== 0) return { status: 'failed' };
+      return { status: 'restored', cwd: snap.cwd, vars: plan.vars };
+    } catch {
+      return { status: 'failed' };
+    }
+  }
+
+  /**
+   * One raw round trip on the idle shell, outside the queue-of-one: the snapshot and the restore
+   * run when no command is active (after an exit, after a reset), so they must not wait behind the
+   * chain a wedged call may still hold. The markers are the same nonce protocol `execute` uses.
+   *
+   * The round trip rides the session's own `onData` marker scan rather than a private poll: the
+   * scan resolves the pending marker, clears `pendingText`, and hands the exit code to the handler
+   * it finds. A private poll racing that scan would consume the frame first and leave the scan's
+   * handler waiting until the hard cap — the shape that wedged the first draft of this restore.
+   */
+  private runRaw(line: string, timeoutMs: number): Promise<{ exitCode: number; output: string }> {
+    const p = this.ensure();
+    const nonce = randomBytes(12).toString('hex');
+    const start = `__rot_${nonce}_s`;
+    const end = `__rot_${nonce}_e`;
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const buf: string[] = [];
+      const listener = (chunk: string) => { buf.push(chunk); };
+      this.listeners.push(listener);
+      const timer = this.deps.timers.after(timeoutMs as Millis, () => {
+        if (settled) return;
+        settled = true;
+        this.listeners = this.listeners.filter((l) => l !== listener);
+        this.active = null;
+        reject(new Error('snapshot timed out'));
+      });
+      const finish = (code: number) => {
+        if (settled) return;
+        settled = true;
+        timer.cancel();
+        this.listeners = this.listeners.filter((l) => l !== listener);
+        const screen = this.newScreen();
+        void screen.write(buf.join('')).then(() => {
+          const text = ForegroundSession.clean(screen.text(), start, end);
+          screen.dispose();
+          resolve({ exitCode: code, output: text });
+        });
+      };
+      this.pendingText = '';
+      this.active = { start, end, onEnd: finish, onKill: () => finish(-1) };
+      p.write(`${wrapCommand(this.deps.backend, line, start, end)}\r`);
+    });
   }
 
   dispose(): void {

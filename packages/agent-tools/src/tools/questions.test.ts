@@ -119,6 +119,22 @@ describe('REQ-CHAT-093/094/096 — the wait registry', () => {
   });
 });
 
+describe('REQ-TOOLS-032 — the schema refusal names the expected shape', () => {
+  it('a `questions` key is redirected to `steps`, with one minimal example', async () => {
+    const timers = new TestTimers();
+    const pending = new PendingQuestions(timers);
+    const tool = askQuestionsTool({ pending, conversationId: 'root', agentId: 'orchestrator', timeoutMs: 300_000, publish: () => true, newRequestId: () => 'q1' });
+    // The run's first use sent `{questions: [...]}`; the hook names the key and shows the shape.
+    const r = tool.validationError!({ questions: [{ id: 'a', title: 'A' }] }, 'steps: Required');
+    expect(r.isError).toBe(true);
+    expect(r.text).toMatch(/takes `steps`, not `questions`/);
+    expect(r.text).toMatch(/\{"steps": \[\{"id": "scope", "title": "Which scope\?"/);
+    const generic = tool.validationError!({}, 'steps: Required');
+    expect(generic.text).toMatch(/It takes \{steps: \[\{id, title/);
+    expect(generic.text).toMatch(/1 to 10 steps/);
+  });
+});
+
 describe('REQ-CHAT-095 — the four outcomes and the `## User Answers` rendering', () => {
   const steps = [
     { id: 'scope', title: 'Which scope?', description: '', options: [{ label: 'One file', description: '' }], allow_freeform: true },

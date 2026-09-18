@@ -73,6 +73,7 @@ export class OwnedStdioTransport implements Transport {
   private closed = false;
   private stderrTail = '';
   private exitDetail = '';
+  private flushStderrRepeats: (() => void) | null = null;
   onclose?: (() => void) | undefined;
   onerror?: ((error: Error) => void) | undefined;
   onmessage?: ((message: JSONRPCMessage) => void) | undefined;
@@ -149,7 +150,25 @@ export class OwnedStdioTransport implements Transport {
       // child's own diagnostic stream and not this product's finding, and a real server's stderr is a burst — one
       // third-party server wrote 55 validation lines per connection (ADR-0033, first execution against one).
       // REQ-MCP-107's `stderrTail` is unaffected: it is kept whatever the log does with the line.
+      //
+      // The run of 2026-09-18 (`cc6191a2`) showed the other half of the burst: the same validation traceback
+      // repeated once per connection attempt, so the launch log carried the identical ~80-line block several
+      // times over. Consecutive repeats of a line already logged are collapsed to one line plus a count —
+      // the first occurrence is always written, so a line not written cannot be recovered — and a single
+      // line longer than the cap is truncated with its length named. OQ-63's ruling stands: no level is
+      // filtered, and the application log still keeps every level.
       let pending = '';
+      let lastLine = '';
+      let repeatCount = 0;
+      const flushRepeats = () => {
+        if (repeatCount > 0) {
+          this.spec.log.debug(`mcp ${this.spec.label} stderr: (previous line repeated ${repeatCount} more time${repeatCount === 1 ? '' : 's'})`);
+          repeatCount = 0;
+        }
+      };
+      // The burst arrives at start and the test closes right after: flush on close too, so the
+      // summary is in the log before `close()` resolves rather than stranded in the counter.
+      this.flushStderrRepeats = flushRepeats;
       child.stderr?.setEncoding('utf8');
       child.stderr?.on('data', (chunk: string) => {
         pending += chunk;
@@ -159,7 +178,10 @@ export class OwnedStdioTransport implements Transport {
           if (line.trim() === '') continue;
           const safe = redact(line);
           this.stderrTail = `${this.stderrTail}\n${safe}`.slice(-2_000);
-          this.spec.log.debug(`mcp ${this.spec.label} stderr: ${safe}`);
+          if (safe === lastLine) { repeatCount += 1; continue; }
+          flushRepeats();
+          lastLine = safe;
+          this.spec.log.debug(`mcp ${this.spec.label} stderr: ${safe.length > 500 ? `${safe.slice(0, 500)}… (truncated, ${safe.length} chars)` : safe}`);
         }
       });
       child.stdin?.on('error', (error: Error) => { this.onerror?.(error); });
@@ -176,6 +198,8 @@ export class OwnedStdioTransport implements Transport {
   }
 
   async close(): Promise<void> {
+    this.flushStderrRepeats?.();
+    this.flushStderrRepeats = null;
     const child = this.child;
     if (child) {
       try { child.stdin?.end(); } catch { /* the stream may already be gone */ }

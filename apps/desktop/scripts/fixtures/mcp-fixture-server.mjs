@@ -38,9 +38,13 @@ const crashAfter = Number(opt('--crash-after', '0'));
 const initDelay = Number(opt('--init-delay', '0'));
 const neverInit = has('--never-init');
 const stderrText = opt('--stderr');
+const stderrRepeat = opt('--stderr-repeat');
+const stderrCount = Number(opt('--stderr-count', '0'));
 const listChanged = !has('--no-list-changed');
 if (pidFile) appendFileSync(pidFile, `${process.pid}\n`);
 if (stderrText) process.stderr.write(`${stderrText}\n`);
+// The run of 2026-09-18: a server whose validation block repeats per connection attempt.
+if (stderrRepeat) for (let i = 0; i < (stderrCount || 3); i += 1) process.stderr.write(`${stderrRepeat}\n`);
 
 const LEGACY_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05', '2024-10-07'];
 const MODERN = '2026-07-28';

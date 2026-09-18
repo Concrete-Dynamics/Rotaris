@@ -18,6 +18,23 @@ export interface TerminalFacts {
 
 const MARKERS = ['Traceback (most recent call last):', 'ERROR: file or directory not found', 'no tests ran', 'AssertionError', 'FAILED '] as const;
 
+/**
+ * Commands whose exit 1 is a success-with-output convention, not a failure. `git diff` (and
+ * `diff --no-index`) exits 1 when differences were found — the payload the caller asked for — and
+ * `grep` exits 1 when nothing matched, which is an answer rather than an error. `findstr` is the
+ * Windows native with the same no-match convention. Matched on the command's own leading tokens
+ * (case-insensitive head, REQ-TOOLS-033's rule), so `git diff --no-index` and `git --no-pager diff`
+ * both read as diff invocations while `git difftool` does not.
+ */
+function successExitOne(command: string): boolean {
+  const head = command.trim().split(/\s+/)[0]?.toLowerCase() ?? '';
+  const rest = command.trim().split(/\s+/).slice(1).map((t) => t.toLowerCase());
+  if (head === 'grep' || head === 'egrep' || head === 'fgrep' || head === 'rg' || head === 'findstr') return true;
+  if (head === 'diff') return true;
+  if (head === 'git' && rest.includes('diff')) return true;
+  return false;
+}
+
 /** REQ-TOOLS-113: at most one warning per check, in the fixed order; de-duplicated with the first occurrence kept. */
 export function outputWarnings(command: string, output: string, exitCode: number | null): string[] {
   const out: string[] = [];
@@ -49,6 +66,10 @@ export function classifyOutcome(f: TerminalFacts, warnings: readonly string[]): 
     return { outcomeKind: 'background_terminal', severity: f.backgroundStatus === 'completed' ? 'info' : f.backgroundStatus === 'killed' ? 'warning' : 'error' };
   }
   if (f.exitCode === -1) return { outcomeKind: 'soft_pause', severity: 'warning' };
+  // REQ-TOOLS-112 test 4, narrowed: a known success-with-output convention (git diff, diff, grep)
+  // reads exit 1 as success, not shell_failure. The run's `git diff --no-index` with differences was
+  // classified a failure the agent then had to explain away; the payload was the answer, not an error.
+  if (f.exitCode === 1 && successExitOne(f.command)) return { outcomeKind: 'success', severity: 'info' };
   if (f.exitCode !== null && f.exitCode !== 0) return { outcomeKind: 'shell_failure', severity: 'error' };
   if (f.exitCode === 0 && warnings.some((w) => !w.startsWith('Pipeline'))) return { outcomeKind: 'suspicious_success', severity: 'warning' };
   return { outcomeKind: 'success', severity: 'info' };

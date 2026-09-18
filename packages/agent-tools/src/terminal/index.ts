@@ -261,6 +261,8 @@ export function terminalTool(manager: TerminalManager, config: TerminalConfig, c
       let resetNote = '';
       if (a.reset) {
         session.resetNow();
+        // PD-TOOLS-001: an explicit reset is a request for a clean shell — the snapshot goes with it.
+        session.clearSnapshot();
         session = manager.session(key, cwd);
         resetNote = 'The terminal session has been reset; all previous environment variables and session state were cleared.';
         if (a.command === '') {
@@ -309,7 +311,16 @@ export function terminalTool(manager: TerminalManager, config: TerminalConfig, c
       if (failureKind === 'sandbox_unavailable') {
         detail = LAUNCHER_FAILED_DETAIL;
       } else if (r.timedOut) {
-        detail = `The command exceeded its timeout of ${timeoutMs / 1000} seconds; the terminal session was forcibly restarted to terminate the process tree, and shell state (working directory, variables, aliases, background jobs) was lost${r.killStatus === 'reset_failed' ? ' — restarting the session failed' : ''}.${r.error ? ` (${r.error})` : ''}`;
+        // PD-TOOLS-001 narrows what "lost" means: the cwd and exported variables snapshotted after the
+        // last completed command are re-applied to the fresh shell. The REQ-TOOLS-099 contract stands —
+        // 124, session_reset, state lost — and the detail says both, plus the boundary: aliases, functions
+        // and background jobs are not restored.
+        const restoreNote = r.restore.status === 'restored'
+          ? ` The working directory and ${r.restore.vars} exported variable${r.restore.vars === 1 ? '' : 's'} were restored (${r.restore.cwd}); aliases, functions and background jobs were not.`
+          : r.restore.status === 'failed'
+            ? ' Restoring the working directory and variables failed; the session is at its defaults.'
+            : ' There was no earlier shell state to restore.';
+        detail = `The command exceeded its timeout of ${timeoutMs / 1000} seconds; the terminal session was forcibly restarted to terminate the process tree, and shell state (working directory, variables, aliases, background jobs) was lost${r.killStatus === 'reset_failed' ? ' — restarting the session failed' : ''}.${restoreNote}${r.error ? ` (${r.error})` : ''}`;
       } else if (r.softPaused) {
         detail = r.output === ''
           ? `No output for ${(config.noOutputWindowMs ?? 30_000) / 1000} seconds in the merged terminal stream; stdout and stderr are both captured. The process may still be running. Poll by calling the tool again with an empty command, or interrupt by sending C-c with is_input=true.`

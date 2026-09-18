@@ -193,6 +193,18 @@ export function askQuestionsTool(deps: AskQuestionsDeps): ToolExecutor<AskQuesti
     name: 'ask_questions',
     description: DESCRIPTION,
     schema: askSchema,
+    /**
+     * REQ-TOOLS-032's recoverable refusal, with the expected shape named: the run's first use sent
+     * `{questions: [...]}` for `{steps: [...]}`, and the gate's generic "do not match its schema" left
+     * the model to guess the key. Anything else keeps the gate's detail and gains the bounds, which is
+     * the only place a caller that sent the wrong shape will read them.
+     */
+    validationError: (args, detail) => {
+      if (args['questions'] !== undefined && args['steps'] === undefined) {
+        return errorObservation(`ask_questions takes \`steps\`, not \`questions\`: [{id, title, ...}]. Example: {"steps": [{"id": "scope", "title": "Which scope?", "options": [{"label": "One file"}]}]}. (${detail})`);
+      }
+      return errorObservation(`The arguments for 'ask_questions' do not match its schema (${detail}). It takes {steps: [{id, title, description?, options?: [{label, description?}] (at most 8), allow_freeform? (default true)}]} — 1 to 10 steps, each with a unique non-empty id and title; a step must offer options or freeform, or both. Example: {"steps": [{"id": "scope", "title": "Which scope?"}]}.`);
+    },
     label: (args) => `ask_questions ${stepsPhrase(args.steps?.length ?? 0)}`,
     async execute(args, ctx) {
       // REQ-CHAT-092 / REQ-TOOLS-157: validated BEFORE anything is shown, every violation named.

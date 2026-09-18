@@ -254,6 +254,22 @@ describe('grep and glob (REQ-TOOLS-138..141)', () => {
 });
 
 describe('todo (REQ-TOOLS-144..147)', () => {
+  it('REQ-TOOLS-032: schema refusals name the expected shape — write_file, haet_edit, ask_questions', async () => {
+    const w = writeFileTool(state, fence);
+    // The run's first use omitted `operation`; the hook names the selector and shows one example.
+    const noOp = w.validationError!({}, 'Required');
+    expect(noOp.isError).toBe(true);
+    expect(noOp.text).toMatch(/write_file requires an operation: one of create, edit, overwrite, insert, undo/);
+    expect(noOp.text).toMatch(/\{"operation": "edit", "path": "notes\.txt"/);
+    const badOp = w.validationError!({ operation: 'fix' }, 'operation: invalid option');
+    expect(badOp.text).toMatch(/do not match the write_file schema/);
+    expect(badOp.text).toMatch(/The operations are create, edit, overwrite, insert, undo/);
+    const he = haetEditTool(state, fence);
+    const noPath = he.validationError!({ content_hash: 'a'.repeat(64), old_string: 'a', new_string: 'b' }, 'Required');
+    expect(noPath.isError).toBe(true);
+    expect(noPath.text).toMatch(/haet_edit requires a path/);
+    expect(noPath.text).toMatch(/content_hash.*64 hex chars from haet_read/);
+  });
   it('operations, ids, the single IN_PROGRESS invariant, replace protection, hints, no-op update', async () => {
     const list = new TodoList();
     const t = todoTool(list);

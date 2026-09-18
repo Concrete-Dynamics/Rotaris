@@ -202,6 +202,24 @@ describe('OwnedStdioTransport (ADR-0033, ADR-0007)', () => {
     // At DEBUG: the child's diagnostics are its own, and a real server writes them by the dozen per connection.
     expect(line!.startsWith('D ')).toBe(true);
   });
+  it('collapses consecutive repeated stderr lines and truncates long ones; the tail keeps everything', async () => {
+    // The run of 2026-09-18: the same validation block repeated once per connection attempt.
+    const before = lines.length;
+    const t = new OwnedStdioTransport({ command: process.execPath, args: [FIXTURE, '--stderr-repeat', 'same-line', '--stderr-count', '5'], cwd: dir, env, timers: clocks.timers, log, label: 'repeater' });
+    await t.start();
+    // Wait for ALL five lines to reach the tail before closing: the burst can arrive in several
+    // chunks, and closing after only the first log line strands the rest behind the close flush.
+    // The tail keeps every line (REQ-MCP-107) while the log collapses them, so the tail is the gate.
+    const waited = await until(() => (t.detail.match(/same-line/g) ?? []).length >= 5);
+    expect(waited, 'the child wrote nothing to the log within the bound').not.toBeNull();
+    await t.close();
+    const fresh = lines.slice(before);
+    // The launch line carries the fixture ARGS (`--stderr-repeat same-line`), so the filter must
+    // match the stderr line's shape, not the bare text — else the launch counts as a second occurrence.
+    expect(fresh.filter((l) => l.includes('stderr: same-line'))).toHaveLength(1);
+    expect(fresh.some((l) => l.includes('repeated 4 more times'))).toBe(true);
+    expect(t.detail).toContain('same-line');
+  });
   it('a .cmd runner on PATH starts through cmd.exe with its arguments intact (REQ-MCP-113 on Windows)', async () => {
     if (process.platform !== 'win32') return;
     // A batch runner like npx.cmd: it forwards its arguments to node.

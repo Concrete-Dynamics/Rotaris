@@ -1406,6 +1406,27 @@ identity and its typed command are different things — but nothing currently sa
 
 ## Rulings and escalations after the gate — 2026-09-16
 
+### ESC-41 — the exit-1 success conventions: REQ-TOOLS-112's test 4 against `git diff`, `diff` and `grep`
+
+**Raised 2026-09-18, not yet ruled.** Found by the autopsy of run `cc6191a2` (logged as
+[R-039](../product/requests.md#r-039)): the run's `git diff --no-index` with differences exits 1
+carrying the payload the caller asked for, and the observation classified it `shell_failure` / error.
+`REQ-TOOLS-112`'s test 4 reads "a non-zero exit code → `shell_failure` / error" with no carve-out, and
+the conventions predate the corpus: `git diff` exits 1 when differences were found, `diff` exits 1 on
+a difference, `grep` exits 1 on no match. Each is an answer, not a failure.
+
+**What the build proceeds under.** The narrowed reading: exit 1 from a command whose leading tokens
+name one of those conventions (`git … diff …`, `diff`, `grep`/`egrep`/`fgrep`/`rg`, head matched
+case-insensitively per REQ-TOOLS-033) classifies `success` / info; every other non-zero exit still
+classifies `shell_failure` / error, and a present `failure_kind` still outranks the map. The code is
+`successExitOne` in `packages/agent-tools/src/terminal/classify.ts`, consulted before the generic
+non-zero rule.
+
+**What the ruling decides.** Whether `REQ-TOOLS-112`'s test 4 is amended with the named-convention
+carve-out (what is built), or whether the blanket rule stands and the misclassification is recorded as
+a known pitfall instead. The amendment would land in `REQ-TOOLS-112` alone; no other test of the
+cascade moves.
+
 ### ESC-40 — `session_log_level`'s default and vocabulary: REQ-CLI-065's lowercase `info` against three requirements' uppercase `WARNING`
 
 **Raised 2026-09-16, not yet ruled.** Found while reading the application log for R-026's sixth

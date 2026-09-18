@@ -371,3 +371,26 @@ a real PTY, and every one was red first: defect A as an unbounded call (the test
 `exit_code −1` on a here-string that never terminated, C as `ab` for `a       b`, D as the marker verbatim in
 the observation. `pnpm terminal-proof` (116/116) and `pnpm terminal-stream-proof` cover the grid and the live
 stream and were re-run to show they did not move — the first of them caught the budget, the second the write.
+
+## Third first execution — 2026-09-18, what a real completed run did with the reset and the exit code
+
+Run `cc6191a2` (logged as R-039) completed and its autopsy found two things this record had decided on paper
+but never executed against a real run.
+
+**The reset kept the REQ-TOOLS-099 contract and lost the shell around it.** A command that hung on an
+unbalanced quote hit the hard timeout, the session respawned at the default directory with a default
+environment, and the agent spent the next turns re-discovering where it had been. The tree must go and the
+session must restart — that stands — and what happens *after* the restart is new, under PD-TOOLS-001: the
+snapshot after each completed command (the cwd plus the exported variables, captured on the idle shell through
+the session''s own marker scan rather than a private poll, which wedged the first draft), re-applied to the
+fresh shell, the observation naming both the loss and the restore. The refresh is awaited, not
+fired-and-forgotten: it rides the same scan a concurrent next command would overwrite. An explicit reset
+clears the snapshot — the user asked for a clean shell. Aliases, functions and background jobs are not
+restored and the detail says so. The timeout test now asserts the variable survives the respawn.
+
+**The exit-1 map is narrowed, not widened.** The run''s `git diff --no-index` with differences exited 1
+carrying the payload and read as `shell_failure`, which the agent had to explain away. REQ-TOOLS-112 test 4
+stands; the carve-out is the commands whose exit 1 IS the convention — `git diff`/`diff`, `grep` and its kin
+plus `findstr` on Windows — matched on the command''s own leading tokens, with a real failure kind still
+outranking it. Recorded as ESC-41; the amendment round writes the carve-out into the requirement. The e2e
+proof spells the search portably (`findstr` on Windows, `grep` on POSIX) because the suite runs on both.

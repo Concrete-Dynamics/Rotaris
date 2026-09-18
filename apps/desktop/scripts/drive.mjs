@@ -25,9 +25,10 @@
  * Nothing here is product code, and nothing here is evidence: a proof asserts, this reports.
  */
 import { existsSync, readFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { isAbsolute, join, relative, resolve } from 'node:path';
+import { cwd } from 'node:process';
 import { connect, startApp } from './lib/driver.mjs';
-import { evidenceDirectory } from './lib/harness.mjs';
+import { evidenceDirectory, repo } from './lib/harness.mjs';
 
 const root = evidenceDirectory('.drive');
 const endpointFile = join(root, 'endpoint.json');
@@ -63,6 +64,19 @@ switch (command) {
       rmSync(endpointFile, { force: true });
     }
     const workspace = flag('workspace', undefined);
+    // The run of 2026-09-18: `--workspace=.drive-autopsy-ws` put a scratch workspace INSIDE the
+    // checkout, and its `.rotaris`/`.serena` residue is still on disk. A workspace inside the
+    // checkout is never what a drive wants — the app writes into it — so refuse it here.
+    // Top-level await is unavailable (no "type": "module" marker reaches this script), so the
+    // path helpers are static imports, not dynamic ones.
+    if (typeof workspace === 'string') {
+      const abs = isAbsolute(workspace) ? workspace : resolve(cwd(), workspace);
+      const rel = relative(repo, abs);
+      if (rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))) {
+        console.error(`refusing --workspace inside the checkout: ${workspace} (a driven app writes into its workspace; use a path outside the repository)`);
+        process.exit(2);
+      }
+    }
     /*
      * `--env=KEY=VALUE`, repeatable, handed to the launch as `startApp`'s `extra`.
      *

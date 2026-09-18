@@ -297,6 +297,27 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
     name: 'write_file',
     description: 'Create, edit (old_string → new_string), overwrite, insert into, or undo the last write of a workspace file. Read a file before editing it.',
     schema: writeSchema,
+    /**
+     * REQ-TOOLS-032's recoverable refusal, with the expected shape named: the run's first uses omitted
+     * `operation` (the selector REQ-TOOLS-135 names, which no `command` facet may stand in for), and the
+     * gate's generic "do not match its schema" left the model to guess the key. Anything else keeps the
+     * gate's detail and gains the per-operation fields, which is the only place a caller that sent the
+     * wrong shape will read them.
+     */
+    validationError: (args, detail) => {
+      if (args['operation'] === undefined) {
+        return errorObservation(`write_file requires an operation: one of create, edit, overwrite, insert, undo. Example: {"operation": "edit", "path": "notes.txt", "old_string": "a", "new_string": "b"}. (${detail})`);
+      }
+      const op = String(args['operation']);
+      const fields: Record<string, string> = {
+        create: 'create reads `path` and `content`.',
+        edit: 'edit reads `path`, `old_string` and `new_string` (plus `replace_all?`).',
+        overwrite: 'overwrite reads `path` and `content`, and the file must have been read first.',
+        insert: 'insert reads `path`, `content` and `insert_line` (0 = beginning).',
+        undo: 'undo reads `path`.',
+      };
+      return errorObservation(`The arguments for '${op}' do not match the write_file schema (${detail}). ${fields[op] ?? 'The operations are create, edit, overwrite, insert, undo.'}`);
+    },
     label: (a) => `write_file ${a.operation} ${a.path ?? a.file_path ?? ''}`,
     execute: async (a) => {
       const path = (a.path ?? a.file_path) as string;
@@ -387,6 +408,18 @@ export function haetEditTool(state: FileToolState, fence: FenceConfig, name: 'ha
     name,
     description: 'Hash-anchored exact edit: replace old_string with new_string in a file whose current SHA-256 equals content_hash (from haet_read). Reports the new content_hash.',
     schema: haetEditSchema,
+    /**
+     * REQ-TOOLS-032's recoverable refusal, with the expected shape named: the run's first uses omitted
+     * `path` (or sent a stale hash), and the gate's generic "do not match its schema" left the model to
+     * guess the key. Anything else keeps the gate's detail and gains the field list, which is the only
+     * place a caller that sent the wrong shape will read it.
+     */
+    validationError: (args, detail) => {
+      if (args['path'] === undefined && args['file_path'] === undefined) {
+        return errorObservation(`${name} requires a path (or file_path). Example: {"path": "notes.txt", "content_hash": "<64 hex chars from haet_read>", "old_string": "a", "new_string": "b"}. (${detail})`);
+      }
+      return errorObservation(`The arguments for '${name}' do not match its schema (${detail}). It takes {path, content_hash (64 lowercase hex from haet_read), old_string, new_string, replace_all?}.`);
+    },
     label: (a) => `${name} ${a.path ?? a.file_path ?? ''}`,
     execute: async (a) => {
       const path = (a.path ?? a.file_path) as string;

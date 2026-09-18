@@ -80,6 +80,14 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113)', () => {
     expect(classifyOutcome({ exitCode: 0, output: '', command: 'x', backgroundStatus: 'killed' }, [])).toEqual({ outcomeKind: 'background_terminal', severity: 'warning' });
     expect(classifyOutcome({ exitCode: -1, output: '', command: 'x' }, [])).toEqual({ outcomeKind: 'soft_pause', severity: 'warning' });
     expect(classifyOutcome({ exitCode: 2, output: '', command: 'x' }, [])).toEqual({ outcomeKind: 'shell_failure', severity: 'error' });
+    // The run's `git diff --no-index` with differences: exit 1 is the payload, not a failure.
+    expect(classifyOutcome({ exitCode: 1, output: 'a\nb', command: 'git diff --no-index a b' }, [])).toEqual({ outcomeKind: 'success', severity: 'info' });
+    expect(classifyOutcome({ exitCode: 1, output: 'a\nb', command: 'git --no-pager diff' }, [])).toEqual({ outcomeKind: 'success', severity: 'info' });
+    expect(classifyOutcome({ exitCode: 1, output: '', command: 'grep needle src/a.ts' }, [])).toEqual({ outcomeKind: 'success', severity: 'info' });
+    expect(classifyOutcome({ exitCode: 1, output: '', command: 'diff a b' }, [])).toEqual({ outcomeKind: 'success', severity: 'info' });
+    // Anything else at exit 1 is still a failure — and a real failure kind still outranks the map.
+    expect(classifyOutcome({ exitCode: 1, output: '', command: 'pytest -q' }, [])).toEqual({ outcomeKind: 'shell_failure', severity: 'error' });
+    expect(classifyOutcome({ failureKind: 'timeout', exitCode: 1, output: '', command: 'git diff' }, [])).toEqual({ outcomeKind: 'timeout', severity: 'error' });
     expect(classifyOutcome({ exitCode: 0, output: '', command: 'x' }, ['Output contains the failure marker'])).toEqual({ outcomeKind: 'suspicious_success', severity: 'warning' });
     expect(classifyOutcome({ exitCode: 0, output: '', command: 'x' }, [])).toEqual({ outcomeKind: 'success', severity: 'info' });
     expect(diagnosticBlock({ b: 1, a: null, c: 'x' })).toBe('[terminal_diagnostic] {"b":1,"c":"x"}');
@@ -165,11 +173,14 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     const r = await t.execute(args({ command: `${SH.sleep(20)}; ${SH.echo('late')}`, timeout: 1 }), ctx());
     expect(diag(r.text)).toMatchObject({ exit_code: 124, timeout: true, failure_kind: 'timeout', kill_status: 'session_reset', outcome_kind: 'timeout' });
     expect(r.text).toContain('[partial_terminal_output]');
+    // PD-TOOLS-001: the reset re-applies the snapshot — the variable the timed-out command inherited
+    // survives the respawn, and the detail names what was restored beside the REQ-TOOLS-099 loss sentence.
+    expect(r.text).toContain('were restored');
     // This one reads a SHELL THAT HAS JUST BEEN RESPAWNED, and a cold `pwsh` under full-suite load can take
     // longer to answer than the 1.5 s no-output window; the read then came back `(no output)` and the test read
     // as a failure of the reset. It names its own timeout, which is what takes the window out of the question.
     const after = await t.execute(args({ command: SH.bracketVar('ROTARIS_GONE'), timeout: 15 }), ctx());
-    expect(output(after.text)).toBe('[]');
+    expect(output(after.text)).toBe('[set]');
     expect(diag(after.text)['session_reinitialized']).toBe(true);
   }, 30_000);
 
@@ -291,6 +302,18 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     expect(reset.text).toContain('The terminal session has been reset');
     expect(reset.label).toBe('$ [RESET]');
   }, 20_000);
+  it('a real diff-with-differences reads success, not shell_failure, end to end', async () => {
+    const t = await tool();
+    // The run's shape: `git diff --no-index` with differences exits 1 carrying the payload.
+    const r = await t.execute(args({ command: 'git diff --no-index -- a b || true; git diff --no-index -- a b', timeout: 15 }), ctx());
+    expect(diag(r.text)['exit_code']).toBe(1);
+    expect(diag(r.text)).toMatchObject({ outcome_kind: 'success', outcome_severity: 'info' });
+    expect(r.isError).toBe(false);
+    // And a no-match search answers rather than fails — `findstr` on Windows, `grep` on POSIX.
+    const search = PS ? 'findstr /C:definitely-not-here-xyz src\\a.ts; echo "search said $LASTEXITCODE"' : 'grep definitely-not-here-xyz src/a.ts; echo "grep said $?"';
+    const g = await t.execute(args({ command: search, timeout: 15 }), ctx());
+    expect(output(g.text)).toContain('said 1');
+  }, 30_000);
   it('REQ-TOOLS-107..110: a background session returns at once, is queried for new output only, listed, and killed', async () => {
     const t = await tool();
     const ticks = PS

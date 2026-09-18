@@ -7,8 +7,21 @@ import type { ToolHooks } from './gate.js';
 import { completeTruncatedJson, Gate, repairPayload, simpleExecutor, type GateSink, type ToolCall } from './gate.js';
 import { buildPolicy, PolicyContext } from './policy.js';
 import { terminalTool, TERMINAL_DEFAULTS, type TerminalManager } from './terminal/index.js';
+import { askQuestionsTool, PendingQuestions } from './tools/questions.js';
+import { FileToolState, haetEditTool, writeFileTool } from './tools/files.js';
 
 const ROOT = 'D:/ws';
+
+/** The real executors, so the gate test sends the run's exact malformed shapes through the real hooks. */
+function askQuestionsReal() {
+  return askQuestionsTool({ pending: new PendingQuestions(new FakeClock()), conversationId: 'root', agentId: 'orchestrator', timeoutMs: 300_000, publish: () => true });
+}
+function writeFileReal() {
+  return writeFileTool(new FileToolState(), { workspaceRoot: ROOT, allowOutsideWorkspace: false, additionalReadOnlyRoots: [] });
+}
+function haetEditReal() {
+  return haetEditTool(new FileToolState(), { workspaceRoot: ROOT, allowOutsideWorkspace: false, additionalReadOnlyRoots: [] });
+}
 
 it('OQ-15: an unknown terminal action preserves the ValueError contract through the gate', async () => {
   const terminal = terminalTool({} as TerminalManager, TERMINAL_DEFAULTS);
@@ -207,6 +220,23 @@ describe('gate (ADR-0017, ADR-0019, REQ-TOOLS-011..013, 027, 032, 050..066, 175)
     expect(h.rec.settles[1]).toMatchObject({ status: 'failed', failure_kind: 'invalid_request' });
     const unknown = await h.gate.dispatch(h.call('nope', {}), new AbortController().signal);
     expect(unknown.text).toMatch(/Unknown tool 'nope'/);
+  });
+
+  it('REQ-TOOLS-032: the run\'s exact malformed shapes reach the hooks, not the generic message', async () => {
+    const h = harness({ preset: 'autonomous', extraExecutors: [['ask_questions', askQuestionsReal()], ['write_file', writeFileReal()], ['haet_edit', haetEditReal()]] });
+    // Ordinal 19: `{questions: [...]}` for `{steps: [...]}`.
+    const q = await h.gate.dispatch(h.call('ask_questions', { questions: [{ id: 'a', title: 'A' }] }), new AbortController().signal);
+    expect(q.status).toBe('failed');
+    expect(q.text).toMatch(/takes `steps`, not `questions`/);
+    // Ordinal 121/266: `write_file` without `operation`.
+    const w = await h.gate.dispatch(h.call('write_file', { path: 'notes.txt', content: 'x' }), new AbortController().signal);
+    expect(w.status).toBe('failed');
+    expect(w.text).toMatch(/write_file requires an operation/);
+    // Ordinal 159: `haet_edit` without `path`.
+    const he = await h.gate.dispatch(h.call('haet_edit', { content_hash: 'a'.repeat(64), old_string: 'a', new_string: 'b' }), new AbortController().signal);
+    expect(he.status).toBe('failed');
+    expect(he.text).toMatch(/haet_edit requires a path/);
+    expect(h.rec.settles.slice(-3).every((s) => (s as { failure_kind: string }).failure_kind === 'invalid_request')).toBe(true);
   });
 
   it('an executor that throws or is aborted becomes a failed observation with a tool_error issue; the run is never aborted', async () => {

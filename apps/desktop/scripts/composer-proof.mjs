@@ -59,8 +59,9 @@ const expect = (condition, message) => { if (!condition) throw new Error(message
 
 const PROBES = [
   '[data-testid="run-header"]', '[data-testid="run-state"]', '[data-testid="run-timing"]', '[data-testid="composer-divider"]',
+  '[data-testid="composer-dock"]', '[data-testid="composer-strip"]',
   '[data-testid="chip-persona"] [data-ui-component="SearchableSelect"]', '[data-testid="chip-model"] [data-ui-component="SearchableSelect"]', '[data-testid="chip-reasoning"] [aria-haspopup="menu"]',
-  '[data-testid="chip-mode-label"]', '.composer__input', '.queue__head span', '.composer__error', '.composer__actions .btn-primary',
+  '[data-testid="chip-mode-label"]', '.composer__input', '.queue__head span', '.composer__error', '[data-testid="composer-send"]',
   '.app-shell',
 ];
 
@@ -186,7 +187,7 @@ results.draft = { typedBack: DRAFT.length, storedUnderKey: keyA, characterForCha
 // ── 2. The relaunch: the draft and the divider come back; the chips are enabled and state no reason ──
 const back = launch('relaunch', workspaceA, local, preferences, {
   ROTARIS_CAPTURE_EVAL_AT: `${readComposer}@3200`,
-  ROTARIS_CAPTURE_INSPECT_AT: '[data-testid="composer-divider"]@3400;;[data-testid="chip-model"] [data-ui-component="SearchableSelect"]@3400;;[data-testid="chip-reasoning"] [aria-haspopup="menu"]@3400;;[data-testid="chip-persona"] [data-ui-component="SearchableSelect"]@3400;;[data-testid="chip-mode-label"]@3400;;.composer__actions .btn-primary@3400',
+  ROTARIS_CAPTURE_INSPECT_AT: '[data-testid="composer-divider"]@3400;;[data-testid="chip-model"] [data-ui-component="SearchableSelect"]@3400;;[data-testid="chip-reasoning"] [aria-haspopup="menu"]@3400;;[data-testid="chip-persona"] [data-ui-component="SearchableSelect"]@3400;;[data-testid="chip-mode-label"]@3400;;[data-testid="composer-send"]@3400;;[data-testid="composer-strip"]@3400;;[data-testid="composer-dock"]@3400',
   ROTARIS_CAPTURE_AFTER_MS: '3800',
 });
 const restored = back.evals.find((e) => e.at === 3200)?.value;
@@ -203,9 +204,17 @@ expect(reasoningChip !== null, 'the reasoning chip is not on screen');
 expect(reasoningChip.attrs['aria-disabled'] !== 'true', 'chip-reasoning is disabled while the session is idle (REQ-CHAT-006)');
 const modeLabel = match(back, '[data-testid="chip-mode-label"]', 3400)?.text ?? '';
 expect(modeLabel === 'mode: ask', `the permission chip should name the CONFIGURED mode the next run starts from: ${JSON.stringify(modeLabel)}`);
-const primary = match(back, '.composer__actions .btn-primary', 3400)?.text;
-expect(primary === 'Start run', `with no session the primary action should read "Start run", not ${JSON.stringify(primary)}`);
-results.relaunch = { draftRestored: true, dividerRestored: 180, chipsEnabled: true, modeLabel, primaryAction: primary };
+// PD-CHAT-001 revision 2 (the docked strip): the send is the strip's short pill — the mode's short label
+// visible, the spec's own wording as its accessible name, so REQ-CHAT-005 still states the mode.
+const primary = match(back, '[data-testid="composer-send"]', 3400);
+expect(primary?.text === 'Run', `with no session the send pill should read "Run", not ${JSON.stringify(primary?.text)}`);
+expect(primary?.attrs['aria-label'] === 'Start run. Persona orchestrator. Model scripted. Control Enter submits from anywhere in the window.', `the send pill's accessible name is not the spec wording: ${JSON.stringify(primary?.attrs['aria-label'])}`);
+const strip = match(back, '[data-testid="composer-strip"]', 3400);
+expect(strip !== null, 'the composer strip is not on screen');
+// The dock is the strip's contour: one border around field and strip, the field's own border gone.
+const dock = match(back, '[data-testid="composer-dock"]', 3400);
+expect(dock !== null, 'the composer dock is not on screen');
+results.relaunch = { draftRestored: true, dividerRestored: 180, chipsEnabled: true, modeLabel, primaryAction: primary?.text, sendName: primary?.attrs['aria-label'], stripOnScreen: true, dockOnScreen: true };
 
 // ── 3. Another workspace, same preference root: the draft does not follow (REQ-CHAT-015) ──
 const other = launch('other-workspace', workspaceB, local, preferences, {
@@ -231,7 +240,7 @@ const run = launch('run', workspaceA, local, preferences, {
   ROTARIS_CAPTURE_INSPECT_AT: [
     '[data-testid="run-state"]@4200', '[data-testid="run-timing"]@4200', '[data-testid="chip-model"] [data-ui-component="SearchableSelect"]@4200',
     '[data-testid="chip-reasoning"] [aria-haspopup="menu"]@4200', '[data-testid="chip-persona"] [data-ui-component="SearchableSelect"]@4200', '.composer__input@4200',
-    '[data-testid="chip-mode-label"]@4200', '.composer__actions .btn-primary@4200',
+    '[data-testid="chip-mode-label"]@4200', '[data-testid="composer-send"]@4200',
     '[data-testid="chip-model"] .visually-hidden@4200', '[data-testid="chip-reasoning"] .visually-hidden@4200', '[data-testid="chip-persona"] .visually-hidden@4200',
     '.queue__head span@6200', '.queue__head span@8200',
     '[data-testid="run-timing"]@12200',
@@ -243,7 +252,7 @@ expect(runState === 'Run active', `the run-state label during a run should be RE
 const composerDuringRun = match(run, '.composer__input', 4200);
 expect(composerDuringRun?.attrs['disabled'] === undefined, 'the composer text area was disabled during a run (REQ-CHAT-006, REQ-CHAT-156)');
 expect(composerDuringRun?.attrs['placeholder'] === 'Run active — write a follow-up for the next iteration…', `the first placeholder is not REQ-CHAT-004's: ${JSON.stringify(composerDuringRun?.attrs['placeholder'])}`);
-expect(match(run, '.composer__actions .btn-primary', 4200)?.text === 'Queue', 'the primary action is not labelled Queue during a run (REQ-CHAT-005, REQ-CHAT-156)');
+expect(match(run, '[data-testid="composer-send"]', 4200)?.text === 'Queue', 'the send pill is not labelled Queue during a run (REQ-CHAT-005, REQ-CHAT-156)');
 expect(/^mode: /.test(match(run, '[data-testid="chip-mode-label"]', 4200)?.text ?? ''), 'the permission-mode chip vanished during a run (REQ-CHAT-006)');
 // REQ-CHAT-006/007: every disabled chip publishes its reason through BOTH the tooltip and the accessible description.
 const REASON = 'Run controls are unavailable while run active';

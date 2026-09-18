@@ -31,7 +31,7 @@ import { addImageBytes, composerTokenEstimate } from './attachments.js';
 import { PlanGate } from './PlanGate.js';
 import { QuestionForm } from './QuestionStepper.js';
 import './attachments.css';
-import { Button as DesignButton, Input as DesignInput, PopoverMenu, SearchableSelect as DesignSearchableSelect, TextArea as DesignTextArea } from './design-system/index.js';
+import { Button as DesignButton, Input as DesignInput, PopoverMenu, SearchableSelect as DesignSearchableSelect, SendPill as DesignSendPill, StripActionButton, TextArea as DesignTextArea } from './design-system/index.js';
 
 // Part AA: the row helpers moved to `transcript/Row.tsx`, the ONE row renderer, and are exported from the package
 // root through that module alone (`TranscriptRows.tsx` is deleted). Re-exporting them here as well would make the
@@ -461,10 +461,15 @@ function WaitHeader({ wait, models, onSetModel, onCancel }: { wait: NonNullable<
  * and its accessible description; "greying the control alone does not satisfy this". One component owns both,
  * so a control cannot acquire one and not the other. The description is a `visually-hidden` element referenced
  * by `aria-describedby`, which is the form every assistive technology in use reads; `title` is the tooltip.
+ *
+ * PD-CHAT-001 revision 2 (the composer's docked strip, R-040 choice B): the same shell in the strip's
+ * borderless form — `strip` switches the class from the chip row's `chip-control` to the strip, and the
+ * pickers inside switch their own trigger shell through their `strip` prop. Test ids, reasons, values,
+ * options, callbacks and enablement are untouched: the same control wearing two shells.
  */
-function ChipShell({ id, label, reason, testId, children }: { id: string; label: string; reason: string | null; testId: string; children?: ReactNode }) {
+function ChipShell({ id, label, reason, testId, children, strip = false }: { id: string; label: string; reason: string | null; testId: string; children?: ReactNode; strip?: boolean }) {
   return (
-    <div className="chip-control" data-testid={testId} data-disabled={reason === null ? '0' : '1'}>
+    <div className={strip ? 'strip-control' : 'chip-control'} data-testid={testId} data-disabled={reason === null ? '0' : '1'}>
       <span className="visually-hidden" id={`${id}-reason`}>{reason ?? ''}</span>
       {children ?? <span className="chip-control__label">{label}</span>}
     </div>
@@ -477,22 +482,27 @@ function ChipShell({ id, label, reason, testId, children }: { id: string; label:
  * A disabled chip carries the reason twice (REQ-CHAT-006/007) through `ChipShell`.
  * PD-CHAT-001's icon clause: an icon may carry the name where the spec fixes it as an accessible name, so the
  * visible `persona:` / model prefix becomes an icon and the label text rides hidden.
+ * PD-CHAT-001 revision 2: `strip` renders the picker's borderless strip trigger instead of the bordered
+ * chip — same value, options, reason and callback; the strip shell reads its icon and display labels here.
  */
-function SelectorChip({ id, testId, label, ariaLabel, value, options, reason, onChoose, icon, filterPlaceholder = 'Filter…', emptyText = 'No matches.' }: {
+function SelectorChip({ id, testId, label, ariaLabel, value, options, reason, onChoose, icon, stripIcon, stripLabels, filterPlaceholder = 'Filter…', emptyText = 'No matches.' }: {
   id: string; testId: string; label: string; ariaLabel: string; value: string; options: readonly string[]; reason: string | null;
-  onChoose: (value: string) => void; icon?: string | undefined; filterPlaceholder?: string | undefined; emptyText?: string | undefined;
+  onChoose: (value: string) => void; icon?: string | undefined; stripIcon?: string | undefined; stripLabels?: Readonly<Record<string, string>> | undefined; filterPlaceholder?: string | undefined; emptyText?: string | undefined;
 }) {
   return (
-    <ChipShell id={id} label={label} reason={reason} testId={testId}>
-      {icon !== undefined
-        ? <i className={`ph ${icon} chip-control__icon`} aria-hidden="true" />
-        : <label className="chip-control__label" htmlFor={id}>{label}</label>}
+    <ChipShell id={id} label={label} reason={reason} testId={testId} strip={stripIcon !== undefined}>
+      {stripIcon === undefined
+        ? (icon !== undefined
+          ? <i className={`ph ${icon} chip-control__icon`} aria-hidden="true" />
+          : <label className="chip-control__label" htmlFor={id}>{label}</label>)
+        : null}
       <DesignSearchableSelect
         id={id} className="input select chip-control__select" ariaLabel={ariaLabel} value={value} disabled={reason !== null}
         title={reason ?? `Chosen for the next run.`} aria-describedby={`${id}-reason`}
         filterPlaceholder={filterPlaceholder} emptyText={emptyText}
         options={options.length === 0 ? [{ value: '', label: '—' }] : options.map((o) => ({ value: o, label: o }))}
         onChange={(v) => { if (v !== '') onChoose(v); }}
+        strip={stripIcon === undefined ? undefined : { icon: stripIcon, labels: stripLabels }}
       />
     </ChipShell>
   );
@@ -507,14 +517,16 @@ function SelectorChip({ id, testId, label, ariaLabel, value, options, reason, on
  * the accessible description, which `ChipShell` publishes and the chip references. The accessible name
  * carries the spec's wording ("Reasoning effort for the next run"); the visible value is the choice
  * alone ("High"), which is the narrowing the directive makes.
+ * PD-CHAT-001 revision 2: `strip` renders the menu's borderless strip trigger instead of the bordered
+ * chip — same value, options, reason and callback; the strip shell reads its icon and display labels here.
  */
-function PopoverChip({ id, testId, ariaLabel, value, options, reason, icon, labels, hints, onChoose }: {
+function PopoverChip({ id, testId, ariaLabel, value, options, reason, icon, labels, hints, onChoose, strip = false }: {
   id: string; testId: string; ariaLabel: string; value: string; options: readonly string[]; reason: string | null;
   icon: string; labels?: Readonly<Record<string, string>> | undefined; hints?: Readonly<Record<string, string>> | undefined;
-  onChoose: (value: string) => void;
+  onChoose: (value: string) => void; strip?: boolean;
 }) {
   return (
-    <ChipShell id={id} label={ariaLabel} reason={reason} testId={testId}>
+    <ChipShell id={id} label={ariaLabel} reason={reason} testId={testId} strip={strip}>
       <PopoverMenu
         anchorRef={undefined}
         ariaLabel={ariaLabel}
@@ -525,6 +537,7 @@ function PopoverChip({ id, testId, ariaLabel, value, options, reason, icon, labe
         title={reason ?? `Chosen for the next run.`}
         options={options.map((o) => ({ value: o, label: labels?.[o] ?? o, hint: hints?.[o] }))}
         onChoose={onChoose}
+        strip={strip ? { labels } : undefined}
       />
     </ChipShell>
   );
@@ -557,8 +570,10 @@ function useThemeName(): string {
  * always-drawn segmented row; the confirmation dialog and the "enabled in EVERY run state" rule (REQ-CHAT-006)
  * govern unchanged. The visible value is the mode alone; the label text REQ-CHAT-009 fixes rides as the
  * accessible name, and the per-preset sentences stay as each option's tooltip through the popover's title.
+ * PD-CHAT-001 revision 2: `strip` renders the menu's borderless strip trigger and the
+ * borderless shell instead of the chip row's — same presets, dialog, values and callbacks.
  */
-function ModeSelector({ current, enabled, onSetMode }: { current: PermissionPreset | null; enabled: boolean; onSetMode: (m: PermissionPreset) => Promise<{ ok: true } | { ok: false; reason: string }> }) {
+function ModeSelector({ current, enabled, onSetMode, strip = false }: { current: PermissionPreset | null; enabled: boolean; onSetMode: (m: PermissionPreset) => Promise<{ ok: true } | { ok: false; reason: string }>; strip?: boolean }) {
   const [confirming, setConfirming] = useState<PermissionPreset | null>(null);
   const [error, setError] = useState<string | null>(null);
   const apply = async (m: PermissionPreset) => {
@@ -567,7 +582,7 @@ function ModeSelector({ current, enabled, onSetMode }: { current: PermissionPres
     setError(r.ok ? null : r.reason);
   };
   return (
-    <div className="mode chip-control" data-testid="chip-mode" aria-label="Permission mode">
+    <div className={strip ? 'strip-control' : 'mode chip-control'} data-testid="chip-mode" aria-label="Permission mode">
       <span className="visually-hidden" data-testid="chip-mode-label">mode: {current ?? 'default'}</span>
       <PopoverMenu
         ariaLabel="Permission mode, strictest first"
@@ -583,6 +598,7 @@ function ModeSelector({ current, enabled, onSetMode }: { current: PermissionPres
           hint: m === 'autonomous' ? 'runs without asking' : m === 'ask' ? 'asks per tool call' : 'denies by default',
         }))}
         onChoose={(m) => { if (m === 'autonomous') setConfirming(m as PermissionPreset); else void apply(m as PermissionPreset); }}
+        strip={strip ? {} : undefined}
       />
       {/* REQ-CHAT-007's dual channel: the mode chip never disables, so the description carries the tooltip's sentence. */}
       <span className="visually-hidden" id="chip-mode-reason">{enabled
@@ -925,6 +941,10 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
     area.current?.focus();
   };
 
+  /** The send control's label and accessible name, by composer mode (PD-CHAT-001 revision 2, R-040).
+    * Reads only `session` and `runActive`, which are declared above — never the gate or the pause below. */
+  const sendLabel = composerAction(session, runActive);
+  const sendShortLabel = sendLabel === 'Start run' ? 'Run' : sendLabel === 'Continue run' ? 'Continue' : sendLabel;
   /** REQ-CHAT-042 / REQ-LIBRARY-140: the trimmed text onto the top of the stash, and the composer cleared. */
   const stash = () => {
     if (!onStash) return;
@@ -1095,6 +1115,15 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
     setPlanCollapsed(false);
   }
   const paused = session !== null && (session.executionStatus === 'paused' || session.executionStatus === 'paused_message_limit' || session.executionStatus === 'awaiting_plan_decision');
+  /** The send control's accessible name, by composer mode (PD-CHAT-001 revision 2, R-040). Set beside the
+    * gate and the pause it reads, so no declaration order can break it again. */
+  const sendName = runActive
+    ? 'Queue the message for the next iteration'
+    : planGate
+      ? 'Answer the plan first'
+      : paused && onContinue
+        ? 'Continue with a message'
+        : `${sendLabel}. ${entry?.persona !== undefined && entry?.persona !== '' ? `Persona ${entry.persona}. ` : ''}${entry?.model !== undefined && entry?.model !== '' ? `Model ${entry.model}. ` : ''}Control Enter submits from anywhere in the window.`;
   const queued = session?.queuedPrompts ?? [];
   // REQ-CHAT-158: the step the run is inside now, from the newest row it produced (live one first). See `composer.ts`.
   const stepStartedAt = useMemo(() => modelCallStartedAt(rows), [rows]);
@@ -1301,6 +1330,15 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
           * textarea draws its text itself and there is no overlay at all. The four colours are the theme's, corrected
           * to the floor by `slashRoleColours`, and reach the CSS as custom properties on this box.
           */}
+        {/*
+          * PD-CHAT-001 revision 2 (the composer's docked strip, R-040 choice B): the field and the strip
+          * share the composer's own outer contour — the textarea above, the 34 px strip below, one border
+          * around both. REQ-CHAT-024's anchor ("directly above the composer at the composer's width") is
+          * the same box, so the popup's geometry is unchanged. `rows` stays the requirement's own figure
+          * surface (REQ-CHAT-010 fixes nothing about the visible row count); the strip, not a second chip
+          * row, is what the saved height no longer has to pay for.
+          */}
+        <div className="composer__dock" data-testid="composer-dock">
         <div className="slash-field" style={roleStyle} data-testid="slash-field" data-token-state={tokenState ?? ''}>
           <DesignTextArea
             ref={area}
@@ -1319,7 +1357,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
             onKeyDown={onKey}
             /* REQ-SHELL-159: focus loss is one of the four flush points — the write does not wait the interval out. */
             onBlur={() => flushDraft()}
-            rows={3}
+            rows={2}
           />
           {tokenState !== null && (
             <div className="input composer__input slash-overlay" aria-hidden="true" data-testid="slash-overlay">
@@ -1329,76 +1367,71 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
           )}
           {popupOpen && <SlashPopup commands={suggestions} selected={current} ctx={slashContext} listId={listId} anchor={area} onHover={setRowIndex} onActivate={activate} />}
         </div>
-        <div className="composer__attachments" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); void addFiles([...e.dataTransfer.files]); }} data-testid="composer-attachments">
+        <div className="composer__strip" role="toolbar" aria-label="Composer controls" data-testid="composer-strip">
           <DesignInput ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden onChange={(e) => { void addFiles([...(e.currentTarget.files ?? [])]); e.currentTarget.value = ''; }} />
-          {/* PD-CHAT-001: the explanatory sentence rides as tooltip + accessible description; a refusal reason stays visible text. */}
-          {attachmentReason !== null
-            ? <span id="attachment-capability" className="composer__hint" role="status">{attachmentReason}</span>
-            : <span id="attachment-capability" className="visually-hidden">Drop PNG, JPEG, WebP, or GIF images here.</span>}
-          <DesignButton type="button" className="btn btn-ghost btn-compact" disabled={!acceptsImages} aria-label="Attach images" aria-describedby="attachment-capability" title={attachmentReason ?? 'Attach images — drop PNG, JPEG, WebP, or GIF here.'} data-testid="composer-attach" onClick={() => fileInput.current?.click()}><i className="ph ph-paperclip" aria-hidden="true" /></DesignButton>
-          {attachments.length > 0 && <ol className="composer__attachment-list">{attachments.map((a, i) => <li key={`${a.name}-${i}`}><span>{a.name}</span><span className="mono">{Math.ceil(a.size / 1024)} KiB</span><DesignButton type="button" className="btn btn-ghost" aria-label={`Remove ${a.name}`} onClick={() => setAttachments((xs) => xs.filter((_, x) => x !== i))}>Remove</DesignButton></li>)}</ol>}
-          <span className="composer__estimate mono" data-lower-bound={estimate.lowerBound ? '1' : '0'}>{estimate.label}</span>
-        </div>
-        <div className="composer__actions">
-          {/*
-            * REQ-CHAT-009's four selector chips. The three that choose what the NEXT run starts with are disabled in
-            * exactly REQ-CHAT-006's six states and each publishes its reason through both its tooltip and its
-            * accessible description; the permission-mode chip and Stash are enabled in every state.
-            */}
-          <div className="composer__chips" aria-label="Next run">
-            {onSetNextPersona && (
-              <SelectorChip id="chip-persona" testId="chip-persona" label="persona" ariaLabel="Persona for the next run" reason={chipReason}
-                icon="ph-user-circle" value={entry?.persona ?? ''} options={personas.length > 0 ? personas.map((p) => p.role) : entry ? [entry.persona] : []}
-                filterPlaceholder="Filter personas…" emptyText="No matching persona."
-                onChoose={(v) => { void onSetNextPersona(v).then((r) => { if (!r.ok) setError(r.reason); }); }} />
-            )}
-            {onSetNextModel && (
-              <ChipShell id="chip-model" testId="chip-model" label={modelChipLabel(modelsLoaded, models, entry?.model ?? null)} reason={modelsLoaded ? chipReason : 'Model options are still loading.'}>
-                <i className="ph ph-cpu chip-control__icon" aria-hidden="true" />
-                <DesignSearchableSelect id="chip-model" className="input select chip-control__select" ariaLabel="Model for the next run"
-                  value={entry?.model && models.includes(entry.model) ? entry.model : ''}
-                  /* REQ-CHAT-009: disabled while the neutral loading label is showing, so no run starts against a model nobody chose. */
-                  disabled={!modelsLoaded || chipReason !== null}
-                  title={modelsLoaded ? chipReason ?? 'Chosen for the next run.' : 'Model options are still loading.'} aria-describedby="chip-model-reason"
-                  filterPlaceholder="Filter models…"
-                  options={[{ value: '', label: '—' }, ...models.map((m) => ({ value: m, label: m }))]}
-                  onChange={(v) => { if (v !== '' && attachments.length > 0 && !imageInputModels.includes(v)) { setError(`${v} does not declare image input support. Remove the images before selecting it.`); return; } if (v !== '') void onSetNextModel(v).then((r) => { if (!r.ok) setError(r.reason); }); }} />
-              </ChipShell>
-            )}
-            {/* REQ-ORCH-152: the run-start mode. It obeys the same enablement rule as its three neighbours — it
-              * chooses what the NEXT run starts with, and a change made while a run is in flight takes effect only
-              * for the next run (REQ-ORCH-154). PD-CHAT-001: a value chip over a press-revealed popover. */}
-            {onSetRunStartMode && (
-              <PopoverChip id="chip-run-start-mode" testId="chip-run-start-mode" ariaLabel="Run-start mode for the next run"
-                icon="ph-play-circle" reason={chipReason} value={runStartMode} options={['auto', 'plan']}
-                labels={{ auto: 'Auto', plan: planReleased ? 'Plan first · released' : 'Plan first' }}
-                /* PD-ORCH-003: the released hint names the gesture that re-arms, because choosing `plan` IS that gesture. */
-                hints={{ auto: 'start at once', plan: planReleased ? 'approved — choose again to plan the next run' : 'plan gate first' }}
-                onChoose={(v) => { void onSetRunStartMode(v as 'auto' | 'plan').then((r) => { if (!r.ok) setError(r.reason); }); }} />
-            )}
-            {onSetNextReasoning && (
-              <PopoverChip id="chip-reasoning" testId="chip-reasoning" ariaLabel="Reasoning effort for the next run"
-                icon="ph-brain" reason={chipReason}
-                value={(REASONING_LEVELS as readonly string[]).includes(entry?.reasoning ?? '') ? entry!.reasoning : DEFAULT_REASONING}
-                options={REASONING_LEVELS}
-                labels={{ low: 'Low', medium: 'Medium', high: 'High' }}
-                hints={{ medium: 'default' }}
-                onChoose={(v) => { void onSetNextReasoning(v).then((r) => { if (!r.ok) setError(r.reason); }); }} />
-            )}
-          </div>
-          {onSetMode && <ModeSelector current={mode} enabled={runActive} onSetMode={onSetMode} />}
-          {/* REQ-LIBRARY-140 / REQ-CHAT-042: a ghost control beside the composer; it stashes whatever is typed, run or no run.
-            * PD-CHAT-001: icon-only with the sentence as tooltip; the visible word was never spec-fixed. */}
-          {onStash && <DesignButton type="button" className="btn btn-ghost btn-compact" aria-label="Stash prompt for later" title="Stash prompt for later" data-testid="composer-stash" onClick={stash}><i className="ph ph-push-pin" aria-hidden="true" /></DesignButton>}
-          {runActive && onSteer && <DesignButton type="button" className="btn btn-secondary btn-compact" aria-label="Steer the run" title="Send steering text to the run's agent" onClick={() => setSteering({ id: 'run', name: 'the run' })}><i className="ph ph-compass" aria-hidden="true" /></DesignButton>}
-          {runActive && onPause && <DesignButton type="button" className="btn btn-secondary btn-compact" disabled={pausePending || session?.executionStatus === 'pausing'} aria-label="Pause the run" title="Pause after the current step" onClick={() => { void pause(); }}>{pausePending || session?.executionStatus === 'pausing' ? 'Pausing…' : <i className="ph ph-pause" aria-hidden="true" />}</DesignButton>}
+          {/* PD-CHAT-001: the explanatory sentence rides as tooltip + accessible description; a refusal reason stays visible text.
+            * Revision 2: the strip's attach is the action shell — icon only, never a sentence. */}
+          <span id="attachment-capability" className="visually-hidden">{attachmentReason ?? 'Attach images — drop PNG, JPEG, WebP, or GIF here.'}</span>
+          <StripActionButton icon="ph-paperclip" aria-label="Attach images" aria-describedby="attachment-capability" title={attachmentReason ?? 'Attach images — drop PNG, JPEG, WebP, or GIF here.'} disabled={!acceptsImages} data-testid="composer-attach" onClick={() => fileInput.current?.click()} />
+          {onSetNextPersona && (
+            <SelectorChip id="chip-persona" testId="chip-persona" label="persona" ariaLabel="Persona for the next run" reason={chipReason}
+              stripIcon="ph-user-circle" value={entry?.persona ?? ''} options={personas.length > 0 ? personas.map((p) => p.role) : entry ? [entry.persona] : []}
+              filterPlaceholder="Filter personas…" emptyText="No matching persona."
+              onChoose={(v) => { void onSetNextPersona(v).then((r) => { if (!r.ok) setError(r.reason); }); }} />
+          )}
+          {onSetNextModel && (
+            <ChipShell id="chip-model" testId="chip-model" label={modelChipLabel(modelsLoaded, models, entry?.model ?? null)} reason={modelsLoaded ? chipReason : 'Model options are still loading.'} strip>
+              <DesignSearchableSelect id="chip-model" className="input select chip-control__select" ariaLabel="Model for the next run"
+                value={entry?.model && models.includes(entry.model) ? entry.model : ''}
+                /* REQ-CHAT-009: disabled while the neutral loading label is showing, so no run starts against a model nobody chose. */
+                disabled={!modelsLoaded || chipReason !== null}
+                title={modelsLoaded ? chipReason ?? 'Chosen for the next run.' : 'Model options are still loading.'} aria-describedby="chip-model-reason"
+                filterPlaceholder="Filter models…"
+                options={[{ value: '', label: '—' }, ...models.map((m) => ({ value: m, label: m }))]}
+                onChange={(v) => { if (v !== '' && attachments.length > 0 && !imageInputModels.includes(v)) { setError(`${v} does not declare image input support. Remove the images before selecting it.`); return; } if (v !== '') void onSetNextModel(v).then((r) => { if (!r.ok) setError(r.reason); }); }}
+                strip={{ icon: 'ph-cpu' }} />
+            </ChipShell>
+          )}
+          <span className="strip-sep" aria-hidden="true" data-testid="strip-sep" />
+          {onSetNextReasoning && (
+            <PopoverChip id="chip-reasoning" testId="chip-reasoning" ariaLabel="Reasoning effort for the next run"
+              icon="ph-brain" reason={chipReason} strip
+              value={(REASONING_LEVELS as readonly string[]).includes(entry?.reasoning ?? '') ? entry!.reasoning : DEFAULT_REASONING}
+              options={REASONING_LEVELS}
+              labels={{ low: 'Low', medium: 'Medium', high: 'High' }}
+              hints={{ medium: 'default' }}
+              onChoose={(v) => { void onSetNextReasoning(v).then((r) => { if (!r.ok) setError(r.reason); }); }} />
+          )}
+          {/* REQ-ORCH-152: the run-start mode. It obeys the same enablement rule as its three neighbours — it
+            * chooses what the NEXT run starts with, and a change made while a run is in flight takes effect only
+            * for the next run (REQ-ORCH-154). PD-CHAT-001 revision 2: the strip shell, same labels and hints. */}
+          {onSetRunStartMode && (
+            <PopoverChip id="chip-run-start-mode" testId="chip-run-start-mode" ariaLabel="Run-start mode for the next run"
+              icon="ph-play-circle" reason={chipReason} value={runStartMode} options={['auto', 'plan']} strip
+              labels={{ auto: 'Auto', plan: planReleased ? 'Plan first · released' : 'Plan first' }}
+              /* PD-ORCH-003: the released hint names the gesture that re-arms, because choosing `plan` IS that gesture. */
+              hints={{ auto: 'start at once', plan: planReleased ? 'approved — choose again to plan the next run' : 'plan gate first' }}
+              onChoose={(v) => { void onSetRunStartMode(v as 'auto' | 'plan').then((r) => { if (!r.ok) setError(r.reason); }); }} />
+          )}
+          {onSetMode && <ModeSelector current={mode} enabled={runActive} onSetMode={onSetMode} strip />}
+          {/* REQ-LIBRARY-140 / REQ-CHAT-042: stashes whatever is typed, run or no run.
+            * PD-CHAT-001 revision 2: the strip's stash is the action shell — icon only, the sentence as tooltip. */}
+          {onStash && <StripActionButton icon="ph-push-pin" aria-label="Stash prompt for later" title="Stash prompt for later" data-testid="composer-stash" onClick={stash} />}
+          {/* PD-CHAT-001 revision 2: the estimate lives on the strip, so the legacy attachments row
+            * below keeps only the ordered removable list — REQ-CHAT-169's own surface. */}
+          <span className="composer__estimate mono" data-lower-bound={estimate.lowerBound ? '1' : '0'} data-testid="composer-estimate-strip">{estimate.label}</span>
+          {runActive && onSteer && <StripActionButton icon="ph-compass" aria-label="Steer the run" title="Send steering text to the run's agent" onClick={() => setSteering({ id: 'run', name: 'the run' })} />}
+          {runActive && onPause && <StripActionButton icon={pausePending || session?.executionStatus === 'pausing' ? 'ph-dots-three' : 'ph-pause'} aria-label="Pause the run" title="Pause after the current step" disabled={pausePending || session?.executionStatus === 'pausing'} onClick={() => { void pause(); }} />}
           {runActive ? (
             <>
               {/* REQ-SESSION-186's two-step stop: the hint sentence rides as tooltip + accessible description
-                * (PD-CHAT-001) instead of a visible line, and the label stays the spec's own. */}
+                * (PD-CHAT-001) instead of a visible line, and the label stays the spec's own.
+                * Revision 2: the stop and the queue are the strip's shells — the stop keeps its danger
+                * button (it confirms and destroys), the queue is the send pill in its Queue mode, so the
+                * run state the strip draws needs no button family the strip does not own. */}
               <DesignButton type="button" className="btn btn-danger btn-compact" onClick={() => setConfirming('stop')} aria-describedby="stop-hint" title={stopPending ? 'The stop is pending; the next activation forces it.' : 'Stops gracefully; a second activation forces.'}>{stopLabel(stopPending)}</DesignButton>
               <span id="stop-hint" className="visually-hidden">{stopPending ? 'The stop is pending; the next activation forces it.' : 'Stops gracefully; a second activation forces.'}</span>
-              <DesignButton type="submit" className="btn btn-primary" disabled={busy}>Queue</DesignButton>
+              <DesignSendPill shortLabel="Queue" sendName="Queue the message for the next iteration" disabled={busy} title={undefined} aria-describedby={undefined} data-testid="composer-send" />
             </>
           ) : planGate ? (
             /*
@@ -1417,13 +1450,29 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
             </>
           ) : (
             /*
-             * Part AS — REQ-WORKSPACE-112: while the setup prompt is unanswered the Send control is
-             * DISABLED and names its reason, on both channels REQ-CHAT-007 requires (the tooltip and the
-             * accessible description — the lesson of PD-CHAT-001's first execution). Only that limb
-             * disables: REQ-CHAT-007's cancelling refusal is still raised on submit, unchanged.
-             */
-            <DesignButton type="submit" className="btn btn-primary" disabled={busy || projectSetupPending} title={projectSetupPending ? PROJECT_SETUP_SEND_REASON : undefined} aria-describedby={projectSetupPending ? sendReasonId : undefined} data-testid="composer-send">{composerAction(session, runActive)}</DesignButton>
+              * Part AS — REQ-WORKSPACE-112: while the setup prompt is unanswered the Send control is
+              * DISABLED and names its reason, on both channels REQ-CHAT-007 requires (the tooltip and the
+              * accessible description — the lesson of PD-CHAT-001's first execution). Only that limb
+              * disables: REQ-CHAT-007's cancelling refusal is still raised on submit, unchanged.
+              * PD-CHAT-001 revision 2 (R-040 choice B): the send is the strip's short pill — the mode's
+              * short label visible ("Run" / "Continue" / "Queue"), the spec's own wording as the
+              * accessible name, so REQ-CHAT-005 still states the mode and the strip stays one band.
+              */
+            <DesignSendPill shortLabel={sendShortLabel} sendName={projectSetupPending ? PROJECT_SETUP_SEND_REASON : sendName} disabled={busy || projectSetupPending} title={projectSetupPending ? PROJECT_SETUP_SEND_REASON : undefined} aria-describedby={projectSetupPending ? sendReasonId : undefined} data-testid="composer-send" />
           )}
+        </div>
+        </div>
+        <div className="composer__attachments" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); void addFiles([...e.dataTransfer.files]); }} data-testid="composer-attachments" hidden={attachments.length === 0 && estimate.label === ''}>
+          {attachments.length > 0 && <ol className="composer__attachment-list">{attachments.map((a, i) => <li key={`${a.name}-${i}`}><span>{a.name}</span><span className="mono">{Math.ceil(a.size / 1024)} KiB</span><DesignButton type="button" className="btn btn-ghost" aria-label={`Remove ${a.name}`} onClick={() => setAttachments((xs) => xs.filter((_, x) => x !== i))}>Remove</DesignButton></li>)}</ol>}
+          {/* The estimate's home is the strip (`composer-estimate-strip`); REQ-CHAT-174's figure is read once, never twice. */}
+          <span className="composer__estimate mono" data-lower-bound={estimate.lowerBound ? '1' : '0'} data-testid="composer-estimate-attachments" aria-hidden="true" tabIndex={-1}>{estimate.label}</span>
+        </div>
+        {/*
+          * PD-CHAT-001 revision 2: the strip carries the controls, so the old two-row composition
+          * (`.composer__chips` first band, `.composer__actions` second) is gone — the rows below are
+          * the gate's and the pause's notices, which stand outside the strip and outside the dock.
+          */}
+        <div className="composer__notices">
           {projectSetupPending && <span id={sendReasonId} className="visually-hidden">{PROJECT_SETUP_SEND_REASON}</span>}
           {planGate && <span id="plan-gate-hint" className="composer__hint">A plan is waiting for your decision above. Approve, revise, or cancel the run to continue.</span>}
           {paused && !planGate && <span className="composer__hint">Paused. Run controls need the run continued before they can be used.</span>}

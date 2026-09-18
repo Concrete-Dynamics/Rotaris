@@ -25,7 +25,7 @@ and answered differently, and nobody can see that it happened. The reason is par
 
 ## Count
 
-**Thirty-nine requests, R-001 to R-039.** One row, one identifier, no gap — so the highest identifier is
+**Forty requests, R-001 to R-040.** One row, one identifier, no gap — so the highest identifier is
 the number of rows, and there is nothing here for a reader to tally.
 [`tools/check-request-log.mjs`](../../tools/check-request-log.mjs) holds that as part of `pnpm lint`,
 because a count written in prose is exactly what let seventeen rows sit under the word "Sixteen".
@@ -91,6 +91,8 @@ which is how two `R-016`s sat twenty lines apart and were never once read side b
 | <a id="r-038"></a>R-038 | 2026-09-18 | "can you make it so that when one of these search drop downs is opened, the focus is automatically in the search textfield? that would improve ux. (also on the side: add a small padding for the text in the box to the left side inside the textbox, as it currently touches the border)." — focus + inset follow-up to [R-036](#r-036)/[R-037](#r-037)'s searchable picker | covered | The picker already carries the filter as `role="combobox"` with the listbox contract (REQ-CONFIG-427..433's discipline, REQ-CHAT-009/006/007, REQ-MONITOR-052/057/058/066/067, REQ-CHAT-078's adoptions). Focusing the filter on open and giving its text a token inset changes no option, order, value, callback or enablement — craft under `docs/design/README.md` §7, tokens by name. Nothing minted |
 
 | <a id="r-039"></a>R-039 | 2026-09-18 | "Inspect the run", then "Propose a big holistic plan to tackle each issue by its root. Dont be afraid to ask me when multiple solutions arise or u are not sure.", then "Start implementation" — autopsy of run `cc6191a2` (punchclock_v2, completed, 20 failed calls) with four product roots plus hygiene | defect | Findings 1+2: terminal robustness (shell state lost on hard-timeout reset per REQ-TOOLS-099; `git diff`/`diff --no-index`/`grep` exit 1 misclassified as `shell_failure` per REQ-TOOLS-112). Finding 3: schema refusals for `ask_questions`/`write_file`/`haet_edit` carry only the gate's generic message (REQ-TOOLS-032), unlike `todo`/`terminal` which have `validationError` hooks. Finding 4: MCP child-stderr volume in the launch log (known; OQ-63 open, standing ruling keeps every level — minimal dedupe+truncate only). Finding 5: stray `.drive-autopsy-ws/` workspace inside the checkout (hygiene; guard + ignore). Cost `0` is correct on the unmetered endpoint (PD-MONITOR-001); permission audit clean. Nothing minted; no directive, no escalation, no open question raised |
+
+| <a id="r-040"></a>R-040 | 2026-09-18 | "bitte mach die controls unten am chat im workspace kompakter, moderner und wengier platzeinnehmend. so wie bei copilot oder opencode eher. plane das erstmal aus und liefer mir mindestens drei screenshots als designvorschläge." — der Owner wählte B (docked strip, kurze Labels „Run/Continue" + ausgeschriebenes „Medium") | directive | **[`PD-CHAT-001`](directives.md#pd-chat-001) revision 2** — drei gerenderte Vorschläge geliefert, B gewählt und gebaut |
 
 <!--
 Row shape:

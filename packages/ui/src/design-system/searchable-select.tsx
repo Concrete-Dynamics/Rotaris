@@ -61,6 +61,15 @@ export interface SearchableSelectProps extends Omit<ButtonHTMLAttributes<HTMLBut
   readonly emptyText?: string | undefined;
   readonly ui?: UiLayoutContract;
   readonly children?: ReactNode;
+  /**
+   * PD-CHAT-001 revision 2 (the composer's docked strip, R-040 choice B): render the trigger as
+   * the strip's borderless icon-led shell instead of the bordered value chip. The panel, the
+   * filter, the options, the values and the callbacks are untouched — only the trigger's shell
+   * changes, so a strip control and a chip control are the same picker wearing two shells.
+   * The shell's `value` is the same `chosenText` the chip shows; `icon` is the strip's leading
+   * glyph. A fixed small set passes its display map here (reasoning `medium` → `Medium`).
+   */
+  readonly strip?: { readonly icon: string; readonly labels?: Readonly<Record<string, string>> | undefined } | undefined;
 }
 
 export const SEARCHABLE_SELECT_MAX_ROWS = 8;
@@ -77,7 +86,7 @@ function rowSuffix(option: SearchableOption): string {
   return `${option.label} — ${option.suffix ?? 'unavailable'}`;
 }
 
-export function SearchableSelect({ value, options, ariaLabel, onChange, filterPlaceholder = 'Filter models…', emptyText = 'No matching model.', className, disabled, title, ui, children, ...rest }: SearchableSelectProps) {
+export function SearchableSelect({ value, options, ariaLabel, onChange, filterPlaceholder = 'Filter models…', emptyText = 'No matching model.', className, disabled, title, ui, children, strip, ...rest }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const debounced = useDebouncedValue(query, FILTER_DEBOUNCE_MS);
@@ -91,6 +100,8 @@ export function SearchableSelect({ value, options, ariaLabel, onChange, filterPl
 
   const chosen = options.find((o) => o.value === value);
   const chosenText = chosen === undefined ? value : rowSuffix(chosen);
+  /** The strip shell reads the display map over the SAME text the chip shows — never a second source. */
+  const triggerText = strip?.labels !== undefined && strip.labels[chosenText] !== undefined ? strip.labels[chosenText]! : chosenText;
 
   // The highlight is a pure function of the narrowed list, derived during render rather than
   // synchronized in an effect: no cascading render is needed to keep it in step with the filter.
@@ -201,7 +212,7 @@ export function SearchableSelect({ value, options, ariaLabel, onChange, filterPl
       <button
         ref={trigger}
         type="button"
-        className={classes('chip-menu', 'searchable-select', open && 'is-open', className)}
+        className={strip === undefined ? classes('chip-menu', 'searchable-select', open && 'is-open', className) : classes('strip-btn', open && 'is-open', className)}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
@@ -219,8 +230,9 @@ export function SearchableSelect({ value, options, ariaLabel, onChange, filterPl
         {...layoutContractAttributes(ui)}
         {...rest}
       >
-        <span className="chip-menu__value">{chosenText}</span>
-        <i className="ph ph-caret-down chip-menu__caret" aria-hidden="true" />
+        {strip !== undefined && <i className={classes('ph', strip.icon)} aria-hidden="true" />}
+        <span className={strip === undefined ? 'chip-menu__value' : 'strip-btn__value'}>{triggerText}</span>
+        <i className={strip === undefined ? classes('ph', 'ph-caret-down', 'chip-menu__caret') : classes('ph', 'ph-caret-down', 'strip-btn__caret')} aria-hidden="true" />
       </button>
       {open && (
         <div

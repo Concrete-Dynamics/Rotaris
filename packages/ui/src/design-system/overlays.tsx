@@ -129,8 +129,15 @@ export interface PopoverMenuTriggerProps extends Omit<ButtonHTMLAttributes<HTMLB
    * the strip's borderless icon-led shell instead of the bordered value chip. The panel, the
    * options, the values and the callback are untouched — only the trigger's shell changes.
    * A fixed small set passes its display map here (reasoning `medium` → `Medium`).
+   *
+   * PD-CHAT-001 revision 3 (the compact strip, R-041): `iconOnly` hides the trigger's own value
+   * text and caret behind the strip's `data-compact` state instead of unmounting it — the panel
+   * still announces the current choice with its check mark, and the tooltip still names value and
+   * choice. The span stays mounted (with the value as its text) so the established `text` probes
+   * keep reading the control they always read; CSS hides it. Never a second source: `triggerText`
+   * below is the only text either shell draws.
    */
-  readonly strip?: { readonly labels?: Readonly<Record<string, string>> | undefined } | undefined;
+  readonly strip?: { readonly labels?: Readonly<Record<string, string>> | undefined; readonly iconOnly?: boolean | undefined } | undefined;
 }
 
 /** `true` when the point is outside the element's rect — the outside-press test. */

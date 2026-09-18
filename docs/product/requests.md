@@ -25,7 +25,7 @@ and answered differently, and nobody can see that it happened. The reason is par
 
 ## Count
 
-**Forty requests, R-001 to R-040.** One row, one identifier, no gap — so the highest identifier is
+**Forty-one requests, R-001 to R-041.** One row, one identifier, no gap — so the highest identifier is
 the number of rows, and there is nothing here for a reader to tally.
 [`tools/check-request-log.mjs`](../../tools/check-request-log.mjs) holds that as part of `pnpm lint`,
 because a count written in prose is exactly what let seventeen rows sit under the word "Sixteen".
@@ -93,6 +93,8 @@ which is how two `R-016`s sat twenty lines apart and were never once read side b
 | <a id="r-039"></a>R-039 | 2026-09-18 | "Inspect the run", then "Propose a big holistic plan to tackle each issue by its root. Dont be afraid to ask me when multiple solutions arise or u are not sure.", then "Start implementation" — autopsy of run `cc6191a2` (punchclock_v2, completed, 20 failed calls) with four product roots plus hygiene | defect | Findings 1+2: terminal robustness (shell state lost on hard-timeout reset per REQ-TOOLS-099; `git diff`/`diff --no-index`/`grep` exit 1 misclassified as `shell_failure` per REQ-TOOLS-112). Finding 3: schema refusals for `ask_questions`/`write_file`/`haet_edit` carry only the gate's generic message (REQ-TOOLS-032), unlike `todo`/`terminal` which have `validationError` hooks. Finding 4: MCP child-stderr volume in the launch log (known; OQ-63 open, standing ruling keeps every level — minimal dedupe+truncate only). Finding 5: stray `.drive-autopsy-ws/` workspace inside the checkout (hygiene; guard + ignore). Cost `0` is correct on the unmetered endpoint (PD-MONITOR-001); permission audit clean. Nothing minted; no directive, no escalation, no open question raised |
 
 | <a id="r-040"></a>R-040 | 2026-09-18 | "bitte mach die controls unten am chat im workspace kompakter, moderner und wengier platzeinnehmend. so wie bei copilot oder opencode eher. plane das erstmal aus und liefer mir mindestens drei screenshots als designvorschläge." — der Owner wählte B (docked strip, kurze Labels „Run/Continue" + ausgeschriebenes „Medium") | directive | **[`PD-CHAT-001`](directives.md#pd-chat-001) revision 2** — drei gerenderte Vorschläge geliefert, B gewählt und gebaut |
+
+| <a id="r-041"></a>R-041 | 2026-09-18 | "bei kleinen screens haben wir hier ein problem. vllt sollten wir dort die denkst\u00e4rke durch ein symbol abk\u00fcrzen, auch persona, auto /plan first und autonomous / ask durch icon abk\u00fcrzen in der darstellung. wenns noch kleiner wird dann vllt auch das modell." \u2014 mit Screenshot des \u00fcberlaufenden Composer-Strips (abgeschnittenes \u201eautonomous\u201c, doppelte \u201e~0 tok\u201c-Sch\u00e4tzung) | directive | **[`PD-CHAT-001`](directives.md#pd-chat-001) revision 3** \u2014 der Strip k\u00fcrzt hinter seinem eigenen Kompakt-Zustand: erst die kleinen festen Sets + Sch\u00e4tzung, dann Persona und Modell |
 
 <!--
 Row shape:

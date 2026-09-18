@@ -157,9 +157,34 @@ of REQ-SESSION-136, which this directive does not require and does not forbid.
 
 ### PD-CHAT-001 — the composer's selector chips open their alternatives in a press-revealed popover
 
-*Revision 2 (2026-09-18, [R-040](requests.md#r-040)) — **the docked strip**, below. Revision 1
-(2026-09-13, [R-010](requests.md#r-010)) is quoted where it is replaced, never deleted. A changed
-directive takes a revision and never a new number ([`README.md`](README.md)).*
+*Revision 3 (2026-09-18, [R-041](requests.md#r-041)) — **the compact strip**, below.
+Revision 2 (2026-09-18, [R-040](requests.md#r-040)) — the docked strip — is quoted where it is
+replaced, never deleted. A changed directive takes a revision and never a new number
+([`README.md`](README.md)).*
+
+**The compact strip.** The strip SHALL shorten its controls to their icon behind its own
+`data-compact` state, derived from the dock's own width: `tight` below 900 px, `narrow` below
+700 px. `tight` shortens the four small fixed sets — reasoning effort, run-start mode, permission
+mode — and the token estimate; `narrow` additionally shortens persona and model. A shortened
+control keeps its value mounted with the value as its text while CSS hides it, so the established
+probes keep reading the control and the panel keeps listing the current choice checked; the compact
+tooltip names control and choice, because an icon alone states nothing (REQ-CHAT-007's dual
+channel). The estimate owns no popover and shortens by hiding its one figure — it is drawn once,
+never twice. What never shortens: attach, stash, steer, pause and the send pill — an action
+without a visible label is a control without a name.
+
+> **Revision 2 said, and no longer governs:** "The strip SHALL carry every control the composer
+> draws … No control SHALL stand on a second chip row outside the dock … Each strip control SHALL
+> present as an icon-led control — the icon, the current value in the mono face, a press
+> affordance … The strip changes the trigger's shell and nothing else."
+>
+> **Why it was wrong, measured 2026-09-18.** Revision 2 kept every value visible at every width,
+> so a long model id (`openai-compatible--vlm/qwen3.8-flash-next`, the owner's screenshot) pushed
+> the strip past its dock: `autonomous` clipped mid-word and the estimate doubled below the strip.
+> The owner's follow-up (R-041) named the order: first the small fixed sets, then persona and
+> model. The thresholds are the built strip measured at 1000×680 — dock 876 px, content 874 px
+> against 560 px of values that may shorten — not an estimate. Kept in place beside its
+> replacement rather than repaired quietly.
 
 **The strip.** The composer's field and its controls SHALL share ONE outer contour — the textarea
 above, a 34 px strip below, a single `surface` border and the large radius around both. The strip
@@ -213,7 +238,8 @@ the warning confirmation dialog REQ-CHAT-009 fixes, with Cancel holding initial 
 > **Extends:** REQ-CHAT-006, REQ-CHAT-007
 
 *Raised by the owner, 2026-09-13; logged as [R-010](requests.md#r-010). **Revised** at the owner's
-request, 2026-09-18; logged as [R-040](requests.md#r-040).*
+request, 2026-09-18; logged as [R-040](requests.md#r-040). **Revised again** at the owner's request,
+2026-09-18; logged as [R-041](requests.md#r-041).*
 
 <a id="pd-chat-002"></a>
 

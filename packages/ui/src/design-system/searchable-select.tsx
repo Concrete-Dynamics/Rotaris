@@ -68,8 +68,15 @@ export interface SearchableSelectProps extends Omit<ButtonHTMLAttributes<HTMLBut
    * changes, so a strip control and a chip control are the same picker wearing two shells.
    * The shell's `value` is the same `chosenText` the chip shows; `icon` is the strip's leading
    * glyph. A fixed small set passes its display map here (reasoning `medium` → `Medium`).
+   *
+   * PD-CHAT-001 revision 3 (the compact strip, R-041): `iconOnly` hides the trigger's own value
+   * text and caret behind the strip's `data-compact` state instead of unmounting it — the panel
+   * still lists every option with the current choice checked, and the tooltip still names value
+   * and choice. The span stays mounted (with the value as its text) so the established `text`
+   * probes keep reading the control they always read; CSS hides it. Never a second source:
+   * `triggerText` below is the only text either shell draws.
    */
-  readonly strip?: { readonly icon: string; readonly labels?: Readonly<Record<string, string>> | undefined } | undefined;
+  readonly strip?: { readonly icon: string; readonly labels?: Readonly<Record<string, string>> | undefined; readonly iconOnly?: boolean | undefined } | undefined;
 }
 
 export const SEARCHABLE_SELECT_MAX_ROWS = 8;

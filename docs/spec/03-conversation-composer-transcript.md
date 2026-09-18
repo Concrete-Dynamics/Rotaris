@@ -45,6 +45,10 @@ The conversation surface belongs to the single desktop application, and is backe
   > presents as an icon-led strip control whose panel is the same picker's own, and the field and
   > the strip share one outer contour. Values, options, order, callbacks, enablement and the
   > autonomous dialog above govern unchanged.
+  > **Narrowed further by revision 3, 2026-09-18.** Behind the strip's own compact state a shortened
+  > control draws its icon alone while its value stays mounted for the probes and the panel keeps
+  > listing the current choice; the compact tooltip names control and choice. Order, thresholds and
+  > what never shortens are the directive's, and govern there.
 - **REQ-CHAT-010** — Composer geometry defaults MUST be: composer block default height 150 px, minimum 110 px; transcript area minimum 180 px; composer widget minimum height 48 px. The divider between transcript and composer MUST be user-draggable and its position persisted across launches.
 
   > **Narrowed by [`PD-ORCH-002`](../product/directives.md#pd-orch-002) revision 2, 2026-09-17.** In exactly

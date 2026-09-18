@@ -77,3 +77,44 @@ checkout answers with the worktree-creation refusal "Workspace must be the root 
 the repository rather than its root — a property of the driven checkout, not of the dialog. Whether
 that refusal is also what the proof's scratch workspace met is not established here; the scenario
 remains open with one fewer candidate.
+
+## Repaired — 2026-09-18
+
+The silence is closed by construction rather than by chasing the one refusal the proof met: the
+accept-to-submit path held three shapes of it, and every one is now a reported refusal.
+
+**Root.** The dialog's accept creates no session by design — it holds `launchOptions` for the
+composer's next submission (`apps/desktop/src/renderer/main.tsx:1029`), which sends `session.start`.
+That command crossed two process links with no rejection handling — `worktree.create`/`checkAttach`
+(120 s/60 s bounds) and the run host's `session.start` (10 s) in
+`apps/desktop/src/main/commands/session.ts` — while `ProcessLink.request` rejects on timeout or
+close (`packages/shell/src/process-link.ts:56`). A rejection threw out of the handler, past a
+`runCommand` that catches nothing despite ADR-0019's "nothing throws" (`apps/desktop/src/main/index.ts:1291`),
+so `ipcRenderer.invoke` rejected in the renderer — where `session-actions.ts` awaited the bridge
+with no catch, and `WorkspaceView`'s submit cleared the text and set busy before `onSubmit`
+answered. The composer sat wedged, emptied, with no error; main logged nothing and raised no
+notice. The three pre-binding early returns (`workspace.none` ×2, `worktree-options`) likewise
+returned without a log line. Any one of these produces exactly the recorded evidence: gestures in
+the log, no session row, no refusal anywhere.
+
+**Repair.** `session.start` funnels both links' rejections into its existing refused paths — the
+workspace-service link into `bindFailure` (notice + `run refused before start` log), the run-host
+link into the refused-start block (orphan worktree removed per REQ-GIT-023, notice + `run refused`
+log) — and the three early returns log. The same unguarded `session.start` relay in
+`improvements.ts` takes the file's own `.catch`-to-refused idiom. The renderer's eleven gestures
+send through one `send()` that turns a rejection into `{ok:false}` carrying the cause
+(`command.unreachable`), which is the never-throw contract the module's own header already
+promised; `WorkspaceView`'s submit catches around `onSubmit` so `busy` always clears and
+REQ-CHAT-012 (text restored, reason raised) holds even on a throw. `checkpoint-proof` probes
+`.composer__error` now, and the isolated assertion carries the composer's words and the notice
+headlines, so a future silence names its refusal instead of its symptom.
+
+**Evidence.** `apps/desktop/src/main/commands/session.test.ts` (4: rejecting worktree link refuses
+with the cause + notice + log and never asks the run host; rejecting run host refuses and removes
+the created tree; both early returns logged; the isolated happy path carries the minted id and the
+binding); `session-actions.test.ts` (+1: all eleven gestures answer on a rejecting bridge).
+`pnpm checkpoint-proof --skip-build` green on the built app — the note's own gesture sequence
+(`New session → isolation → accept → typed prompt`) creates session `78a392ef`, binds worktree
+`rotaris/session/78a392ef`, records checkpoint 1 with its ref in the shared repository, and the
+isolated restore rewrites the worktree only. No requirement is falsified — ADR-0019 and the
+refusal discipline already required all of this — so no amendment round is owed.

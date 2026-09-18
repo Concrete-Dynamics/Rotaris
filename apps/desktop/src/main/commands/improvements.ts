@@ -83,7 +83,8 @@ export function improvementsCommands(
         schema_version: 1 as const,
         phases: prepared.plan.phases.map((phase) => ({ name: phase.name, tasks: phase.tasks.map((task) => ({ id: task.proposal_id, text: task.payload, state: 'pending' as const, consecutiveRetries: 0 as const })) })),
       };
-      const started = await runHost.request({ kind: 'session.start', workspaceId: w.workspaceId, prompt: prepared.prompt, runType: 'improvement_run', initialTodo }, millis(320_000));
+      // ADR-0019: an unanswered run host refuses the start rather than throwing out of the command (R0-2).
+      const started = await runHost.request({ kind: 'session.start', workspaceId: w.workspaceId, prompt: prepared.prompt, runType: 'improvement_run', initialTodo }, millis(320_000)).catch((cause: Error) => ({ kind: 'refused' as const, code: 'run-host.unreachable', headline: 'The improvement run could not be started', detail: cause.message }));
       if (started.kind !== 'session.started') {
         raiseNotice('error', 'The improvement run could not be started', started.kind === 'refused' ? [started.headline, started.detail].filter(Boolean).join(': ') : `unexpected reply ${started.kind}`);
         return refusal(started, 'The improvement run could not be started');

@@ -1,4 +1,4 @@
-import type { ImageAttachmentInput, PauseResolution, PermissionPreset, PlanDecision, QuestionAnswers, RendererBridge } from '@rotaris/contracts';
+import type { CommandOutcome, CommandRequest, ImageAttachmentInput, PauseResolution, PermissionPreset, PlanDecision, QuestionAnswers, RendererBridge } from '@rotaris/contracts';
 import { useShellState } from '@rotaris/ui';
 
 /**
@@ -31,6 +31,16 @@ export interface SessionActionDeps {
 
 export function createSessionActions({ bridge, replica }: SessionActionDeps) {
   /**
+   * ADR-0019: `bridge.command` rejects when main's handler throws or the channel is gone
+   * (`ipcRenderer.invoke`), and every answer of this module is never-throw — so a rejection is a
+   * refusal carrying the cause, which the surface shows like any other (R0-2: the isolated start
+   * met a rejection as a wedged, emptied, silent composer).
+   */
+  async function send(req: CommandRequest): Promise<CommandOutcome> {
+    try { return await bridge.command(req); }
+    catch (cause) { return { ok: false, code: 'command.unreachable', headline: 'The application did not answer', detail: cause instanceof Error ? cause.message : String(cause) }; }
+  }
+  /**
    * REQ-CHAT-011: no session → start one; a loaded session with no run → record the prompt.
    * REQ-SHELL-125: the launch dialog's accepted choices, held in shell state, ride on the NEXT start and are consumed
    * by it — a refused start keeps them for the retry the composer offers.
@@ -39,17 +49,17 @@ export function createSessionActions({ bridge, replica }: SessionActionDeps) {
     const s = replica.getState();
     if (!s.sessionId) {
       const options = useShellState.getState().launchOptions;
-      const r = await bridge.command({ kind: 'session.start', prompt: text, ...(attachments.length === 0 ? {} : { attachments: [...attachments] }), ...(options?.isolation ? { isolation: options.isolation } : {}), ...(options?.attach ? { attach: { path: options.attach.path } } : {}), ...(options ? { sandboxMode: options.sandboxMode } : {}) });
+      const r = await send({ kind: 'session.start', prompt: text, ...(attachments.length === 0 ? {} : { attachments: [...attachments] }), ...(options?.isolation ? { isolation: options.isolation } : {}), ...(options?.attach ? { attach: { path: options.attach.path } } : {}), ...(options ? { sandboxMode: options.sandboxMode } : {}) });
       if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
       useShellState.getState().takeLaunchOptions();
       const { sessionId } = r.value as { sessionId: string };
       replica.getState().follow(sessionId);
       // Every attach begins with a whole-session update (REQ-MONITOR-214); the transcript follows it.
-      const sub = await bridge.command({ kind: 'session.subscribe', sessionId });
+      const sub = await send({ kind: 'session.subscribe', sessionId });
       if (!sub.ok) return { ok: false, reason: sub.detail ?? sub.headline };
       return { ok: true };
     }
-    const r = await bridge.command({ kind: 'session.prompt', sessionId: s.sessionId, prompt: text, ...(attachments.length === 0 ? {} : { attachments: [...attachments] }) });
+    const r = await send({ kind: 'session.prompt', sessionId: s.sessionId, prompt: text, ...(attachments.length === 0 ? {} : { attachments: [...attachments] }) });
     return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline };
   }
 
@@ -57,7 +67,7 @@ export function createSessionActions({ bridge, replica }: SessionActionDeps) {
   async function stopRun(force: boolean): Promise<{ ok: true } | { ok: false; reason: string }> {
     const sessionId = replica.getState().sessionId;
     if (!sessionId) return { ok: false, reason: 'No run is active.' };
-    const r = await bridge.command({ kind: 'session.control', request: { op: 'cancel', sessionId, args: { force } } });
+    const r = await send({ kind: 'session.control', request: { op: 'cancel', sessionId, args: { force } } });
     if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
     const result = r.value as { ok: boolean };
     return result.ok ? { ok: true } : { ok: false, reason: 'The run is no longer cancellable.' };
@@ -66,11 +76,11 @@ export function createSessionActions({ bridge, replica }: SessionActionDeps) {
   /** REQ-TOOLS-077 / REQ-MONITOR-150: the mode change goes to the focused session; the run decides what actually happened. */
   async function setMode(mode: PermissionPreset): Promise<{ ok: true } | { ok: false; reason: string }> {
     // REQ-CONFIG-288 / ADR-0037 ESC-1: the composer's control writes ITS key through the scoped per-field path, nothing else; refused loudly when the file cannot be read (REQ-CONFIG-442).
-    const written = await bridge.command({ kind: 'config.setField', patch: { runtime: { permission_mode: mode } } });
+    const written = await send({ kind: 'config.setField', patch: { runtime: { permission_mode: mode } } });
     if (!written.ok) return { ok: false, reason: written.detail ?? written.headline };
     const sessionId = replica.getState().sessionId;
     if (!sessionId) return { ok: true };
-    const r = await bridge.command({ kind: 'session.control', request: { op: 'setPermissionMode', sessionId, args: { mode } } });
+    const r = await send({ kind: 'session.control', request: { op: 'setPermissionMode', sessionId, args: { mode } } });
     if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
     return (r.value as { ok: boolean }).ok ? { ok: true } : { ok: false, reason: 'The run did not accept the mode change.' };
   }
@@ -79,7 +89,7 @@ export function createSessionActions({ bridge, replica }: SessionActionDeps) {
   async function cancelAgent(agentId: string): Promise<{ ok: true } | { ok: false; reason: string }> {
     const sessionId = replica.getState().sessionId;
     if (!sessionId) return { ok: false, reason: 'No run is active.' };
-    const r = await bridge.command({ kind: 'session.control', request: { op: 'cancelAgent', sessionId, args: { agentId } } });
+    const r = await send({ kind: 'session.control', request: { op: 'cancelAgent', sessionId, args: { agentId } } });
     if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
     return (r.value as { ok: boolean }).ok ? { ok: true } : { ok: false, reason: 'That agent is not cancellable (unknown, or already finished).' };
   }
@@ -88,7 +98,7 @@ export function createSessionActions({ bridge, replica }: SessionActionDeps) {
   async function control(op: Parameters<typeof bridge.command>[0] extends infer R ? R extends { kind: 'session.control'; request: { op: infer O } } ? O : never : never, args: Record<string, string | number | boolean | null>, refusal: string): Promise<{ ok: true; value?: string } | { ok: false; reason: string }> {
     const sessionId = replica.getState().sessionId;
     if (!sessionId) return { ok: false, reason: 'No run is active.' };
-    const r = await bridge.command({ kind: 'session.control', request: { op, sessionId, args } });
+    const r = await send({ kind: 'session.control', request: { op, sessionId, args } });
     if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
     // A refusal carries the ENGINE's words; the caller's sentence is only the fallback for a reply that states none.
     // `ControlResult` has carried `refusal` since Part AC and this helper discarded it, substituting the caller's string.
@@ -113,7 +123,7 @@ export function createSessionActions({ bridge, replica }: SessionActionDeps) {
     const selected: Record<string, string | null> = {};
     const freeform: Record<string, string | null> = {};
     for (const [id, a] of Object.entries(answers)) { selected[id] = a.selected_option; freeform[id] = a.freeform_text; }
-    const r = await bridge.command({ kind: 'session.control', request: { op: 'answerQuestion', sessionId, args: { requestId, selected, freeform } } });
+    const r = await send({ kind: 'session.control', request: { op: 'answerQuestion', sessionId, args: { requestId, selected, freeform } } });
     return { delivered: r.ok && (r.value as { ok: boolean }).ok };
   }
 
@@ -121,14 +131,14 @@ export function createSessionActions({ bridge, replica }: SessionActionDeps) {
   function cancelQuestions(requestId: string): void {
     const sessionId = replica.getState().sessionId;
     if (!sessionId) return;
-    void bridge.command({ kind: 'session.control', request: { op: 'cancelQuestions', sessionId, args: { requestId } } });
+    void send({ kind: 'session.control', request: { op: 'cancelQuestions', sessionId, args: { requestId } } });
   }
 
   /** REQ-SESSION-110 / REQ-MONITOR-125: continue the focused session, or resolve its pause. */
   async function continueSession(action: PauseResolution = 'continue'): Promise<{ ok: true } | { ok: false; reason: string }> {
     const sessionId = replica.getState().sessionId;
     if (!sessionId) return { ok: false, reason: 'No session is loaded.' };
-    const r = await bridge.command({ kind: 'session.continue', sessionId, action });
+    const r = await send({ kind: 'session.continue', sessionId, action });
     return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline };
   }
 
@@ -139,7 +149,7 @@ export function createSessionActions({ bridge, replica }: SessionActionDeps) {
   async function planEdit(text: string): Promise<{ ok: true } | { ok: false; reason: string }> {
     const sessionId = replica.getState().sessionId;
     if (!sessionId) return { ok: false, reason: 'No session is loaded.' };
-    const r = await bridge.command({ kind: 'session.planEdit', sessionId, text });
+    const r = await send({ kind: 'session.planEdit', sessionId, text });
     return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline };
   }
 
@@ -147,7 +157,7 @@ export function createSessionActions({ bridge, replica }: SessionActionDeps) {
   async function planDecision(decision: PlanDecision, changes: string): Promise<{ ok: true } | { ok: false; reason: string }> {
     const sessionId = replica.getState().sessionId;
     if (!sessionId) return { ok: false, reason: 'No session is loaded.' };
-    const r = await bridge.command({ kind: 'session.planDecision', sessionId, decision, changes });
+    const r = await send({ kind: 'session.planDecision', sessionId, decision, changes });
     return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline };
   }
 
@@ -164,12 +174,12 @@ export function createSessionActions({ bridge, replica }: SessionActionDeps) {
    * `auto` re-arms nothing — it is the setting saying no gate is wanted at all.
    */
   async function setRunStartMode(mode: 'auto' | 'plan'): Promise<{ ok: true } | { ok: false; reason: string }> {
-    const written = await bridge.command({ kind: 'config.setField', patch: { runtime: { run_start_mode: mode } } });
+    const written = await send({ kind: 'config.setField', patch: { runtime: { run_start_mode: mode } } });
     if (!written.ok) return { ok: false, reason: written.detail ?? written.headline };
     if (mode !== 'plan') return { ok: true };
     const sessionId = replica.getState().sessionId;
     if (!sessionId) return { ok: true };
-    const rearmed = await bridge.command({ kind: 'session.planRearm', sessionId });
+    const rearmed = await send({ kind: 'session.planRearm', sessionId });
     return rearmed.ok ? { ok: true } : { ok: false, reason: rearmed.detail ?? rearmed.headline };
   }
 

@@ -42,9 +42,9 @@ export function sessionCommands(
       return r.kind === 'ack' ? { ok: true, value: null } : refusal(r, 'The plan gate could not be re-armed');
     },
     'session.start': async (req, { w }) => {
-      if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before starting a run' };
+      if (!w.workspaceId) { log('run refused before start: no workspace is open'); return { ok: false, code: 'workspace.none', headline: 'Open a workspace before starting a run' }; }
       // REQ-GIT-021: the two conflicting choices, refused before anything is created (REQ-GIT-158 makes this unreachable from the dialog).
-      if (req.isolation && req.attach) return { ok: false, code: 'session.worktree-options', headline: 'Choose either an isolated worktree or an existing worktree to attach, not both.' };
+      if (req.isolation && req.attach) { log('run refused before start: isolation and attach together'); return { ok: false, code: 'session.worktree-options', headline: 'Choose either an isolated worktree or an existing worktree to attach, not both.' }; }
       /**
        * REQ-GIT-022/023 (Part O), the reading taken with a main-minted id: the binding is made BEFORE the run host is
        * asked for the session, so a binding failure leaves no session, no lock and no log — "deleted" by construction
@@ -55,7 +55,7 @@ export function sessionCommands(
       const root = canonicalPath(w.workspace);
       const svc = services.get(root);
       if (req.isolation || req.attach) {
-        if (!svc) return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' };
+        if (!svc) { log('run refused before start: the workspace service is not running'); return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' }; }
         sessionId = mainWindows.takeMintedSession(w.wcId) ?? randomUUID();
         const bindFailure = (r: ProcessReply): CommandOutcome => {
           const detail = r.kind === 'refused' ? [r.headline, r.detail].filter(Boolean).join(': ') : `unexpected reply ${r.kind}`;
@@ -64,17 +64,24 @@ export function sessionCommands(
           log(`run refused before start: ${headline}`);
           return { ok: false, code: 'session.worktree', headline, detail };
         };
+        /**
+         * ADR-0019: the links reject on timeout or close (`ProcessLink.request`), so a rejection is a
+         * refusal carrying the cause as its detail — never a throw out of the command, which the
+         * renderer would meet as a rejected `invoke` and the composer as silence (R0-2).
+         */
+        const unreachable = (cause: Error) => ({ kind: 'refused' as const, code: 'link.unreachable', headline: 'The workspace service did not answer', detail: cause.message });
         if (req.isolation) {
-          const made = await svc.link.request({ kind: 'worktree.create', workspaceRoot: root, branch: req.isolation.branch, collisionSafe: true, target: { kind: 'session', sessionId } }, millis(120_000));
+          const made = await svc.link.request({ kind: 'worktree.create', workspaceRoot: root, branch: req.isolation.branch, collisionSafe: true, target: { kind: 'session', sessionId } }, millis(120_000)).catch(unreachable);
           if (made.kind !== 'worktree.created') return bindFailure(made);
           binding = { worktree_path: made.path, branch: made.branch, base_branch: made.baseBranch, base_revision: made.baseRevision, created_by_session: true, merge_status: 'ready', integration_session_id: null };
         } else if (req.attach) {
-          const checked = await svc.link.request({ kind: 'worktree.checkAttach', workspaceRoot: root, path: req.attach.path }, millis(60_000));
+          const checked = await svc.link.request({ kind: 'worktree.checkAttach', workspaceRoot: root, path: req.attach.path }, millis(60_000)).catch(unreachable);
           if (checked.kind !== 'worktree.attachable') return bindFailure(checked);
           binding = { worktree_path: checked.path, branch: checked.branch, base_branch: checked.baseBranch, base_revision: checked.baseRevision, created_by_session: false, merge_status: 'ready', integration_session_id: null };
         }
       }
-      const r = await runHost.request({ kind: 'session.start', workspaceId: w.workspaceId, prompt: req.prompt, ...(req.attachments === undefined ? {} : { attachments: req.attachments }), ...(sessionId === undefined ? {} : { sessionId }), ...(binding === undefined ? {} : { effectiveRoot: binding.worktree_path, worktree: binding }), ...(req.sandboxMode === undefined ? {} : { sandboxMode: req.sandboxMode }) }, millis(10_000));
+      // ADR-0019, as above: an unanswered run host refuses the start rather than throwing out of it.
+      const r = await runHost.request({ kind: 'session.start', workspaceId: w.workspaceId, prompt: req.prompt, ...(req.attachments === undefined ? {} : { attachments: req.attachments }), ...(sessionId === undefined ? {} : { sessionId }), ...(binding === undefined ? {} : { effectiveRoot: binding.worktree_path, worktree: binding }), ...(req.sandboxMode === undefined ? {} : { sandboxMode: req.sandboxMode }) }, millis(10_000)).catch((cause: Error) => ({ kind: 'refused' as const, code: 'run-host.unreachable', headline: 'The run host did not answer', detail: cause.message }));
       if (r.kind !== 'session.started') {
         // A tree this request created for a session that never came to exist is taken away again, so nothing is left behind (REQ-GIT-023).
         if (binding?.created_by_session && svc) {

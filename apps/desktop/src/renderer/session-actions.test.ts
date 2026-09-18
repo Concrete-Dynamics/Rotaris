@@ -96,4 +96,35 @@ describe('the gestures against the followed session', () => {
     const a = actions([{ ok: true, value: { ok: false } }]);
     expect(await a.answerQuestions('R1', { q1: { selected_option: 'yes', freeform_text: null } })).toEqual({ delivered: false });
   });
+
+  /**
+   * R0-2: `bridge.command` rejects when main's handler throws or the channel is gone
+   * (`ipcRenderer.invoke`) — every gesture below answers with the cause instead, because the
+   * caller is a click handler and a throw there is a wedged, silent composer.
+   */
+  function refusingActions(sessionId: string | null = 'S1') {
+    const sent: CommandRequest[] = [];
+    const deps: SessionActionDeps = {
+      bridge: {
+        command: async (req) => { sent.push(req); throw new Error('no reply to session.start within 10000 ms'); },
+      },
+      replica: { getState: () => ({ sessionId, follow: () => undefined }) },
+    };
+    return { ...createSessionActions(deps), sent };
+  }
+
+  it('never throws when the application does not answer', async () => {
+    const a = refusingActions(null);
+    await expect(a.submitPrompt('build the thing', [])).resolves.toEqual({ ok: false, reason: 'no reply to session.start within 10000 ms' });
+    const b = refusingActions('S1');
+    await expect(b.submitPrompt('and again', [])).resolves.toEqual({ ok: false, reason: 'no reply to session.start within 10000 ms' });
+    await expect(b.stopRun(false)).resolves.toEqual({ ok: false, reason: 'no reply to session.start within 10000 ms' });
+    await expect(b.continueSession()).resolves.toEqual({ ok: false, reason: 'no reply to session.start within 10000 ms' });
+    await expect(b.control('forceCompression', {}, 'Compression is unavailable for this run.')).resolves.toEqual({ ok: false, reason: 'no reply to session.start within 10000 ms' });
+    await expect(b.planEdit('take the other branch')).resolves.toEqual({ ok: false, reason: 'no reply to session.start within 10000 ms' });
+    await expect(b.planDecision('approve', '')).resolves.toEqual({ ok: false, reason: 'no reply to session.start within 10000 ms' });
+    await expect(b.setMode('ask')).resolves.toEqual({ ok: false, reason: 'no reply to session.start within 10000 ms' });
+    await expect(b.setRunStartMode('plan')).resolves.toEqual({ ok: false, reason: 'no reply to session.start within 10000 ms' });
+    await expect(b.answerQuestions('R1', { q1: { selected_option: 'yes', freeform_text: null } })).resolves.toEqual({ delivered: false });
+  });
 });

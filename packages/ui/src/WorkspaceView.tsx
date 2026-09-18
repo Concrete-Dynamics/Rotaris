@@ -956,7 +956,14 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
       return;
     }
     setStopRequested(false);
-    const r = await onSubmit(value, attachments);
+    // ADR-0019 / R0-2: a send that throws rather than refusing still owes REQ-CHAT-012 — the text
+    // comes back and the cause is raised — and must never wedge the composer busy with it cleared.
+    let r: { ok: true } | { ok: false; reason: string };
+    try {
+      r = await onSubmit(value, attachments);
+    } catch (cause) {
+      r = { ok: false, reason: cause instanceof Error ? cause.message : String(cause) };
+    }
     setBusy(false);
     if (!r.ok) {
       // REQ-CHAT-012: the typed text is restored unchanged and the reason is raised.

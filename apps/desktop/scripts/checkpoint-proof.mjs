@@ -55,7 +55,7 @@ if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${ele
 const PROBES = [
   '[data-testid="git-checkpoint-row"]', '[data-testid="git-checkpoints-empty"]', '[data-testid="git-restore"]', '[data-testid="git-checkpoint-session"]', '[data-testid="git-checkpoint-table"]',
   '[data-testid="checkpoint-confirm"]', '[data-testid="checkpoint-summary"]', '[data-testid="checkpoint-preview-text"]', '[data-testid="checkpoint-warning"]', '[data-testid="checkpoint-overwrite"]', '[data-testid="checkpoint-restore-confirm"]', '[data-testid="checkpoint-consent-reason"]',
-  '[data-testid="checkpoint-progress-text"]', '[data-testid="checkpoint-message"]', '[data-testid="acknowledgement-title"]', '.notice__headline', '.notice__detail', '.notice__body', '.app-shell', '[data-testid="git-branch"]',
+  '[data-testid="checkpoint-progress-text"]', '[data-testid="checkpoint-message"]', '[data-testid="acknowledgement-title"]', '.notice__headline', '.notice__detail', '.notice__body', '.composer__error', '.app-shell', '[data-testid="git-branch"]',
 ];
 
 function launch(name, workspace, local, preferences, extra, timeoutMs = 150_000) {
@@ -365,7 +365,14 @@ const isolated = launch('isolated', workspace, local, preferences, {
 }, 180_000);
 const iso = latestSession();
 {
-  if (iso.worktree === null) throw new Error('the isolated session carries no binding');
+  // R0-2: the old failure named the symptom (`latestSession()` reading the previous scenario's
+  // session). The composer error and the notice headlines the product now guarantees are part of
+  // the sentence, so the next silence names its refusal instead.
+  if (iso.worktree === null) {
+    const composerError = text(isolated.probes, '.composer__error')[0] ?? '';
+    const noticeHeadlines = text(isolated.probes, '.notice__headline').join(' | ');
+    throw new Error(`the isolated session carries no binding${composerError !== '' ? `; the composer reads "${composerError}"` : ''}${noticeHeadlines !== '' ? `; notices read "${noticeHeadlines}"` : ''}`);
+  }
   const binding = JSON.parse(iso.worktree);
   const rows = checkpointsOf(iso.session_id);
   if (rows.length !== 1 || rows[0].sequence !== 1) throw new Error(`isolated rows: ${JSON.stringify(rows)}`);

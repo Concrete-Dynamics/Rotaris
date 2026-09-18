@@ -141,7 +141,7 @@ results.about = { rows: aboutRows, legal: legal.length, opened: 'https://rotaris
 const tools = launch('tools', null, local, preferences, { ...openCategory('Tools'), ROTARIS_CAPTURE_AFTER_MS: '2600' });
 const toolRows = rows(tools.probes, '[data-testid="inventory-row"]');
 // REQ-CONFIG-277: populated unconditionally — with no workspace open at all.
-if (toolRows.length !== 18) throw new Error(`the Tools inventory listed ${toolRows.length} rows, not the eighteen public names`);
+if (toolRows.length !== 19) throw new Error(`the Tools inventory listed ${toolRows.length} rows, not the nineteen public names`);
 const toolNames = toolRows.map((r) => r.data['data-name']);
 if (JSON.stringify(toolNames) !== JSON.stringify([...toolNames].sort((a, b) => a.localeCompare(b)))) throw new Error(`the Tools inventory was not sorted: ${toolNames.join(', ')}`);
 if (toolRows.some((r) => r.data['data-source'] !== 'built-in')) throw new Error('a Tools row carried a source other than built-in');

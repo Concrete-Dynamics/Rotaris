@@ -21,7 +21,8 @@
 --rt-text:oklch(94% 0 0);
 --rt-text-secondary:oklch(80% 0 0);
 --rt-text-tertiary:oklch(68% 0 0);
---rt-text-disabled:oklch(52% 0 0);
+/* OQ-56, ruled 2026-09-18: raised from 52%, which missed REQ-SHELL-145's 3:1 floor on every surface but the page ground */
+--rt-text-disabled:oklch(58% 0 0);
 
 /* ── brand accent — the Z axis, violet (OKLCH hue 292): resolute, technical ── */
 --rt-accent-100:oklch(96% 0.030 292);

@@ -25,7 +25,8 @@ describe('planning grants (REQ-ORCH-153, ADR-0062)', () => {
 
   it('leaves reading, searching, fetching, delegating, the todo and the artifact tools available', () => {
     // A plan is written by reading: `readsWorkspaceFiles` is deliberately not one of the two facets.
-    for (const name of ['read_file', 'grep', 'glob', 'haet_read', 'fetch', 'todo', 'delegate', 'background_output', 'wait_for_tasks', 'artifact_read', 'artifact_list', 'artifact_write', 'ask_questions']) {
+    // OQ-61: `git_read` survives the hold, which is what lets a held run verify its own git state.
+    for (const name of ['read_file', 'grep', 'glob', 'haet_read', 'fetch', 'todo', 'delegate', 'background_output', 'wait_for_tasks', 'artifact_read', 'artifact_list', 'artifact_write', 'ask_questions', 'git_read']) {
       expect({ name, withheld: withheldUnderPlanGate(name) }).toEqual({ name, withheld: false });
     }
   });

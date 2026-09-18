@@ -21,7 +21,8 @@ _Avoid_: built-in tools, the tool list
 **Tool-name registry**:
 The public declaration of what each tool does — reads workspace files, writes workspace files, runs
 commands — which other domains resolve capability questions against, so that a tool added later
-joins or stays out of a bundle by its own declaration. — `REQ-CONFIG-231`
+joins or stays out of a bundle by its own declaration. — `REQ-TOOLS-001` (which fixes the name set
+and every declaration; `REQ-CONFIG-231` owns only the validation rule that reads it)
 
 **Custom tool plugin**:
 A module loaded in-process from the workspace's designated plugin folder, extending the surface

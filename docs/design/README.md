@@ -35,7 +35,7 @@ panels, cards and hover states stay legibly separate.
 | `--rt-overlay` | `oklch(12% 0 0 / 0.72)` | modal backdrop |
 
 Text ramp: `--rt-text` `oklch(94% 0 0)` (primary), `--rt-text-secondary` `80%`,
-`--rt-text-tertiary` `68%` (captions, passive metadata), `--rt-text-disabled` `52%`.
+`--rt-text-tertiary` `68%` (captions, passive metadata), `--rt-text-disabled` `58%` (OQ-56, ruled 2026-09-18; was `52%`).
 
 ### 1.2 The accent
 
@@ -561,16 +561,18 @@ These are not open questions — they are the tests the language has to pass onc
 `REQ-SHELL-160` requires all four of the following to be settled from **rendered pixels on a real
 display**, not from token arithmetic.
 
-1. **Contrast — settled from rendered pixels 2026-09-12, and the token named here is the one that failed.**
+1. **Contrast — settled from rendered pixels 2026-09-12; the shortfall it found was ruled OQ-56 on 2026-09-18 and the token below is the repaired value.**
    `REQ-SHELL-144` (4.5:1 normal text, 3:1 large text and non-text boundaries) and
    `REQ-SHELL-145`, sampled from the painted label against the painted background after all styling,
-   states and overlays. Specifically at risk in the imported palette: `--rt-text-disabled`
+   states and overlays. At risk in the imported palette was `--rt-text-disabled`
    (`REQ-SHELL-145` requires it below half the enabled contrast ratio while still clearing 3:1) —
-   **`pnpm theme-proof` measures it at 2.898:1 on a card in `rotaris-dim` at 100 %, 125 %, 150 % and
-   200 % — and 3.030:1 at 175 %, where one scale's rounding is the whole distance to the floor — and
-   clear on `nocturne` and `high-contrast`; the dimness half is met and the floor is not.
-   Raised as OQ-56, because the two ways out are a change to this material or an amendment to the
-   requirement, and neither is an agent's to choose.** Everything else this item names cleared its floor
+   **`pnpm theme-proof` measured it at 2.898:1 on a card in `rotaris-dim` at 100 %, 125 %, 150 % and
+   200 % — and 3.030:1 at 175 %, where one scale's rounding was the whole distance to the floor — and
+   clear on `nocturne` and `high-contrast`; the dimness half was met and the floor was not.
+   Raised as OQ-56, because the two ways out were a change to this material or an amendment to the
+   requirement, and neither was an agent's to choose. Ruled 2026-09-18: the adopted token rises to
+   `oklch(58% 0 0)`, which clears 3.18:1 at the dimmest surface; `theme-proof`'s `contrast` section
+   is the measure that closed the question.** Everything else this item names cleared its floor
    on the same run:
    every state text colour on every background it is painted on; the primary button's label in rest,
    hover and pressed; the diff washes over syntax-coloured code; and every derived persona shade,

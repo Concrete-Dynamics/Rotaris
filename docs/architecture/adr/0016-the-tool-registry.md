@@ -7,7 +7,8 @@
 
 ## Context
 
-`REQ-TOOLS-001` closes the public tool name set at exactly eighteen names, with `haet` an alias
+`REQ-TOOLS-001` closes the public tool name set at exactly nineteen names (eighteen plus `git_read`,
+ruled OQ-61 on 2026-09-18), with `haet` an alias
 resolving to the same tool as `haet_edit`. `REQ-TOOLS-002` makes any other `tools:` entry a
 configuration-validation error naming the persona, the entry and the accepted names, with an extra
 sentence pointing at `mcp_servers` when the entry names a configured MCP server.
@@ -27,7 +28,7 @@ the direction is part of the query.
 
 `REQ-TOOLS-007` and `REQ-SANDBOX-039` state two tool **classes** against the declaration and require
 them to stay consistent with it: the read-only class is exactly `grep`, `glob`, `fetch`, `haet_read`,
-`read_file`, `artifact_read`, `artifact_list`, `artifact_write`, and the network class is exactly
+`read_file`, `git_read`, `artifact_read`, `artifact_list`, `artifact_write`, and the network class is exactly
 `fetch`. Class membership is **not** a facet and is not derivable from the facets.
 
 `REQ-TOOLS-006` fixes narrowing as a four-stage pipeline that can only remove, applied in the order
@@ -110,7 +111,7 @@ rather than an architectural one.
 
 *Recorded under GD-10.*
 
-**Built and run:** `packages/agent-tools/src/registry.ts` — the frozen facet table for the eighteen names, the
+**Built and run:** `packages/agent-tools/src/registry.ts` — the frozen facet table for the nineteen names (plus `git_read`, OQ-61), the
 alias table, the two classes as literal sets under the consistency test, `grantsOn` / `withholdsOn` (an
 unknown name answers `false` and `true`), the four-stage fold each stage asserted a subset of its input,
 prerequisite removal with stable reason codes, and `resolveToolSet` whose ONE value feeds both the prompt's

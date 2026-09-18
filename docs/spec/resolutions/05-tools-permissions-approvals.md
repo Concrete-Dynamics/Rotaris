@@ -266,3 +266,23 @@ the follower side of the pair is not yet written.
 > untouched, and none of the three amendments reaches it: the closing frame's shape, the period's reading and the
 > session ceiling are all about what a *display* is delivered, never about what a command does or what an
 > observation reports.
+
+> ## Amendment, 2026-09-18 — OQ-61: a read-only git member joins the registry
+>
+> OQ-61 asked which of three shapes an isolated run's repository-metadata reads should take, and the
+> owner ruled for the second: REQ-TOOLS-001 gains a read-only git member rather than a new read root
+> or a new opening-context message.
+>
+> **REQ-TOOLS-193 (new) — `git_read`.** Operations exactly `head` and `read_ref`, resolved by reading
+> `HEAD`, loose refs and `packed-refs` through the worktree's `gitdir:` pointer and its `commondir`,
+> with no subprocess and no command run. The tool declares reading — repository files above the
+> workspace fence — and neither writing nor running, and joins the read-only class of REQ-TOOLS-007;
+> its confinement is its own whitelist (any other repository path refused; configuration, hooks,
+> objects, the index and logs never readable), not the path fence, which keeps refusing every direct
+> read of the same metadata. **REQ-TOOLS-001, REQ-TOOLS-006 and REQ-TOOLS-007** carry the membership:
+> the closed set is nineteen names, the reads list gains the name, the class gains the member, and
+> the `coordinator_only` removal list is untouched because a read-only tool survives it by
+> construction. No policy rule is added: the tool takes no path argument, so the outside-workspace
+> ask never fires, and the read-only allow rules admit it in bulk like every other member of the
+> class. The first execution is the unit suite against real repositories, reported in OQ-61's entry
+> in place.

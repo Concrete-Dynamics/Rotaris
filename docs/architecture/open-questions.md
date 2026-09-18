@@ -2501,6 +2501,10 @@ and the second changes an approved requirement. Until it is answered, `pnpm them
 `rotaris-dim` at four of the five scales **and on nothing else**, the two tests that pin the shortfall keep it from being
 lost, and the narrow static check stays narrow so the conflict cannot be mistaken for an ordinary test failure.
 
+**RULED 2026-09-18: the adopted token rises.** The owner chose the first resolution — `--rt-text-disabled`
+to `oklch(58% 0 0)` in the adopted material, transcribed without drift, with `theme-proof`'s `contrast`
+section as the measure that closes this question.
+
 **OQ-57 — Decision closed, 2026-09-13.** The owner ruled by direction — *"i want you to fix ALL of them"* — so **the product draws a checkbox**, and it is assembled from parts the language already declares rather than invented as a new idiom: `.input`'s hairline and `--rt-boundary-strong`, `--rt-radius-sm`, `--rt-accent` for the checked ground, `--rt-accent-100` for the tick, and the one focus ring every control shares. It is `Checkbox` in `packages/ui/src/design-system/forms.tsx`, the twenty-eighth brief; the native `input` is the control itself under `appearance: none`, so a pointer, a screen reader and the focus ring all meet one element, and the label sits beside the box on one line. Seven call sites moved onto it. The `.check__box` span the first draft drew beside a hidden 1 px input is gone with it, because a hidden input takes two literals the baseline would have had to carry. **The question below is kept as it was asked**, because the reason it was a question — that an agent may not mint a member of the design language — is the part worth keeping, and the answer is the owner's, not the builder's. Recorded in `docs/product/requests.md` as R-008.
 
 **OQ-57 — The product draws checkboxes and the adopted design language has none.** *(`docs/design/README.md` §2; raised 2026-09-12 by the first independent visual-critic pass, finding UIR-004.)*
@@ -2624,6 +2628,23 @@ permission facet; or the run is *told* its branch and base commit in the opening
 receives and never reads metadata at all, which is a message the specification does not have. The
 build must not choose between them: each one adds product behaviour, and the third would put the
 git state in a place no requirement says it appears.
+
+**RULED 2026-09-18: REQ-TOOLS-001 gains a read-only git member.** The owner chose the second shape —
+a new tool with its own contract and its own permission facet (reads declared, read-only class, no
+writes, no commands), reading the worktree's metadata through the `gitdir:` pointer rather than
+through a new read root. The refusal for unlisted metadata stands; only the tool's own operations
+are granted.
+
+**Built and run the same day it was ruled.** `git_read` (`packages/agent-tools/src/tools/git-read.ts`,
+`REQ-TOOLS-193`): operations exactly `head` and `read_ref`, resolved from `HEAD`, loose refs and
+`packed-refs` through the `gitdir:` pointer and its `commondir`, no subprocess, no command run; any
+other repository path refused, a non-repository refused up front. Nineteen names in
+`REQ-TOOLS-001`/`REQ-TOOLS-006`/`REQ-TOOLS-007`, the declaration and the class in `registry.ts`, the
+executor wired in `run-host/tools.ts`, the read group in `children/personas.ts`. No policy rule
+added — the tool takes no path, so the outside-workspace ask never fires — and no transcript change:
+a tool call is a tool call. First execution: seven unit cases against real repositories (plain,
+linked worktree with the pointer file, packed-only ref, detached HEAD, non-repository, traversal
+names, the mandated refusals), plus the registry, planning-grants and contract pins — all green.
 
 **OQ-62 — May a price come from a provider's discovery payload, and may a provider-reported cost be shown under its own qualifier? PARTLY RULED 2026-09-16 — the second half is answered, the first is not.** *(REQ-PROVIDER-072, REQ-MONITOR-166, REQ-CONFIG-088, with ADR-0031 and OQ-21; raised 2026-09-16 from a run whose cost read `0` throughout.)*
 

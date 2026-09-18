@@ -311,7 +311,7 @@ the specification still does not say.
 
 | # | Constraint | Label | Requirements |
 |---|---|---|---|
-| T-01 | The public tool name set is **closed at eighteen names** with one alias; any other entry fails configuration validation with a specific message. | HARD | REQ-TOOLS-001, REQ-TOOLS-002 |
+| T-01 | The public tool name set is **closed at nineteen names** (OQ-61, ruled 2026-09-18) with one alias; any other entry fails configuration validation with a specific message. | HARD | REQ-TOOLS-001, REQ-TOOLS-002 |
 | T-02 | Every registry name carries a **three-facet capability declaration** that is a property of the tool, never of the content it is handed, stated in exactly one place. | HARD | REQ-TOOLS-001 |
 | T-03 | A tool **outside** the registry carries **no** declaration and no facet is inferred from its name, description or self-description; it is read fail-closed **in the direction of the reading rule**. | HARD | REQ-TOOLS-001 |
 | T-04 | Two tool classes are stated against the declaration and must stay consistent with it by construction; class membership is **not** a facet. | HARD | REQ-TOOLS-007, REQ-SANDBOX-039 |

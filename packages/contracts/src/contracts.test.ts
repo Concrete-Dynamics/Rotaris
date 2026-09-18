@@ -142,8 +142,8 @@ describe('contracts — the presentation mapping (REQ-NOTIFY-049, REQ-NOTIFY-050
 describe('contracts — tools vocabularies', () => {
   it('REQ-TOOLS-001/028/041/047: the sets are exactly as fixed and the ranks total', async () => {
     const t = await import('./tools.js');
-    expect(t.PUBLIC_TOOL_NAMES).toHaveLength(18);
-    expect(new Set(t.PUBLIC_TOOL_NAMES).size).toBe(18);
+    expect(t.PUBLIC_TOOL_NAMES).toHaveLength(19);
+    expect(new Set(t.PUBLIC_TOOL_NAMES).size).toBe(19);
     expect(t.DECISION_SOURCES).toHaveLength(12);
     expect(t.PERMISSION_PRESETS).toEqual(['restricted', 'ask', 'autonomous']);
     expect(t.resolvePreset('')).toEqual({ preset: 'ask', warned: false });
@@ -180,11 +180,11 @@ describe('contracts — theme data (REQ-SHELL-128..145)', () => {
     expect(resolveTheme('removed-theme').name).toBe('rotaris-dim');
   });
 
-  it('checks every palette against the static contrast pairs and preserves the adopted-palette finding', () => {
+  it('checks every palette against the static contrast pairs (OQ-56 ruled 2026-09-18: the adopted disabled ink now clears its floor)', () => {
     const adopted = resolveTheme('rotaris-dim').tokens.color;
     expect(contrastRatio(adopted['--rt-border-strong']!, adopted['--rt-bg']!)).toBeLessThan(3);
     expect(contrastRatio('oklch(97% 0.02 292)', adopted['--rt-accent-500']!)).toBeLessThan(4.5);
-    expect(contrastRatio(adopted['--rt-text-disabled']!, adopted['--rt-surface']!)).toBeLessThan(3);
+    expect(contrastRatio(adopted['--rt-text-disabled']!, adopted['--rt-surface']!)).toBeGreaterThanOrEqual(3);
     for (const theme of THEMES) expect(() => assertThemeContrast(theme)).not.toThrow();
   });
 

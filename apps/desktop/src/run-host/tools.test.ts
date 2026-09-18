@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { TodoList, todoTool } from '@rotaris/agent-tools';
+import { TOOL_IMPLEMENTATIONS } from '@rotaris/contracts';
+import { gitReadTool, TodoList, todoTool } from '@rotaris/agent-tools';
 import { isEntryPort, toolSpec } from './tools.js';
 
 /**
@@ -44,5 +45,15 @@ describe('the tool schema the model is handed (REQ-TOOLS-013)', () => {
     // REQ-TOOLS-144's five reach the model as an enum rather than as a bare string in a prose description.
     const properties = spec.parameters['properties'] as Record<string, { enum?: string[] }>;
     expect(properties['operation']!.enum).toEqual(['replace', 'add_phase', 'add_task', 'update', 'remove_task']);
+  });
+
+  it('advertises git_read\'s two operations with ref optional (REQ-TOOLS-193)', () => {
+    // The inventory-to-executor link: the name the Tools surface lists is the executor the port wires.
+    expect(TOOL_IMPLEMENTATIONS['git_read']).toBe('gitReadTool');
+    const spec = toolSpec(gitReadTool('D:/work'));
+    expect(spec.name).toBe('git_read');
+    expect(spec.parameters['required']).toEqual(['operation']);
+    const properties = spec.parameters['properties'] as Record<string, { enum?: string[] }>;
+    expect(properties['operation']!.enum).toEqual(['head', 'read_ref']);
   });
 });

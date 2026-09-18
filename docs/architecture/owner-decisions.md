@@ -1429,7 +1429,7 @@ cascade moves.
 
 ### ESC-40 — `session_log_level`'s default and vocabulary: REQ-CLI-065's lowercase `info` against three requirements' uppercase `WARNING`
 
-**Raised 2026-09-16, not yet ruled.** Found while reading the application log for R-026's sixth
+**Raised 2026-09-16. RULED 2026-09-18: domain 07 wins.** Found while reading the application log for R-026's sixth
 finding: four live requirements fix the same configuration key, and one of them fixes it differently
 in every part.
 
@@ -1462,6 +1462,12 @@ not implemented and is not treated as a defect of the code** — it is treated a
 headless run is meant to default to a *more* verbose log than an attended one, which is the only
 reading under which both defaults stand. If it is, the key needs two defaults and a requirement saying
 which context selects which — nothing currently says so.
+
+**RULED 2026-09-18: the uppercase set the other three name.** The default is `WARNING`, the parse
+is case-insensitive (`WARN` included), integer levels are accepted, and an unknown string falls back
+to `WARNING` with a warning — the behaviour `packages/engine/src/session-log.ts` already implements
+under REQ-SESSION-142. REQ-CLI-065 is amended to cite that set instead of its own; no second default
+is minted, headless or otherwise.
 
 ### OQ-62 — a provider-reported cost, ruled; the other two branches stated and left open
 

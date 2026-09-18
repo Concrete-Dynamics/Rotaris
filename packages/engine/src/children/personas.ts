@@ -49,7 +49,14 @@ export interface PersonaResolver {
  * reason code for withholding it), so a persona that should publish declares it in configuration
  * (REQ-TOOLS-002). That no built-in persona does is recorded as an open question rather than settled here.
  */
-const READ_TOOLS = ['read_file', 'haet_read', 'grep', 'glob', 'artifact_read', 'artifact_list'];
+/**
+ * OQ-61, ruled 2026-09-18: `git_read` joins the read group with the search tools rather than as a
+ * grant. It answers repository identity for the worktree the run already occupies — the question an
+ * isolated analyst or verifier otherwise records as unverifiable — declaring reads and joining the
+ * read-only class, so it survives `read_only`, `coordinator_only` and the plan-gate hold by
+ * construction rather than by a second decision.
+ */
+const READ_TOOLS = ['read_file', 'haet_read', 'grep', 'glob', 'git_read', 'artifact_read', 'artifact_list'];
 const WRITE_TOOLS = ['write_file', 'haet_edit', 'haet'];
 const DELEGATION = ['delegate', 'todo'];
 /**

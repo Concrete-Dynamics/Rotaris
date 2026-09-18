@@ -50,11 +50,11 @@ each row is in the dated entry at the end of this document
 |---|---|---|---|
 | R0 | Primary-flow defects | `docs/defects/fixed/a-session-delete-leaves-its-plan-cycles-behind.md` (repaired 2026-09-18, store v20), `docs/defects/fixed/the-start-session-dialog-accepts-and-creates-nothing.md` (repaired 2026-09-18, no-throw session start + never-throw sends, checkpoint-proof isolated green), `docs/defects/fixed/the-start-session-dialog-does-not-fit-the-minimum-window.md` (repaired 2026-09-18, scroll-under-fixed-head/foot + run-start-mode first, ui-audit CLEAN 7/7), `docs/defects/fixed/expanding-a-member-of-an-activity-line-does-not-lift-the-display-caps.md` (repaired 2026-09-18, memberKey = rowKey, rows-proof reads 30/30 live) | **CLOSED 2026-09-18 — 0 open, 4 repaired** |
 | R1 | Release gate and distribution | `REQ-STARTUP-156` gate unbuilt; portable stub, icon, `REQ-SHELL-140/142` notices bundle (ADR-0054); signed `SHA256SUMS.txt` (`REQ-STARTUP-167/168`); per-runner load proof (IC-3 item 3); Linux/macOS artifacts (IC-3 items 1, 2, 4); notices-generator section for provisioned tools (IC-7 remainder) | **BLOCKS RELEASE — Windows installer exists, release pipeline does not** |
-| R2 | Owner rulings owed | ESC-36 (provider row visibility), ESC-37 (skill invocation surface), ESC-38 (Skills columns), ESC-39 (taken command name), ESC-40 (session log level); OQ-58 (skill session scope), OQ-59 (file-or-dir chooser), OQ-60 (summary without teardown), OQ-61 (isolated-run git reads), OQ-62 branches 2–3 (discovery/ configured pricing), OQ-63 (application-log threshold) | **BLOCKS RELEASE where the build proceeds under an interim reading — 5 ESC + 7 OQ open** |
+| R2 | Owner rulings owed | ESC-36 (provider row visibility), ESC-37 (skill invocation surface), ESC-38 (Skills columns), ESC-39 (taken command name); OQ-58 (skill session scope), OQ-59 (file-or-dir chooser), OQ-60 (summary without teardown), OQ-62 branches 2–3 (discovery/ configured pricing), OQ-63 (application-log threshold) — ESC-40 ruled 2026-09-18 (domain 07 wins, REQ-CLI-065 amended), OQ-56 ruled and built 2026-09-18 (token to 58%, theme-proof green), OQ-61 ruled and built 2026-09-18 (`git_read`, REQ-TOOLS-193) | **BLOCKS RELEASE where the build proceeds under an interim reading — 4 ESC + 5 OQ open** |
 | R3 | Confinement and platform proof | IC-8 proposed (six `REQ-SANDBOX-127` effects on real macOS/Linux hosts); IC-4 half 2 (rename machine, record figures); OQ-12 power-loss fault half (owner physical act, per platform); POSIX proof isolation (`proof-isolation-is-windows-only…`); platform-parameterised helpers (`platform-parameterised-helpers…`) | **BLOCKS multi-platform claims; Windows-only release needs ESC-6 disclosure + IC-4 half 2 or a recorded waiver** |
 | R4 | Spec packages still pending | Providers and MCP (A5, A7, A8, OQ-6, OQ-18, OQ-21, OQ-22, OQ-50); Services/stores/recovery (OQ-1, OQ-2, OQ-43, OQ-47, OQ-48; OQ-45 ruled 2026-09-11, delivery unconfirmed); Traceability/presentation/benchmarks (OQ-24, OQ-25, OQ-29, OQ-32, OQ-33, OQ-34, OQ-40); Governance A1 | **BLOCKS a "spec-complete" claim; shippable only with each item waived or moved post-1.0 explicitly** |
 | R5 | Should-fix defects (non-blocking) | `configured-per-token-prices-take-no-effect.md`, `the-analysis-completion-notice-does-not-match-its-requirement.md`, `a-chip-option-announces-its-label-and-hint-as-one-word.md`, `the-in-projection-scope-filter-is-never-reached.md`, `two-proof-scripts-assert-a-timeline-name-the-code-has-never-written.md`, `staging-failure-escapes-the-replacement-ladder.md` (claims repaired, verify + close) | **7 open — ship only with known-issue notes, or fix first** |
-| R6 | Proof health | `theme-proof` red by design (`--rt-text-disabled` misses 3:1 on cards — OQ-56, needs design-or-requirement ruling); `delivery-proof` legacy red (85/86); `slice-proof` stale (needs pasted key); oldest green batch 2026-09-11 | **BLOCKS "all proofs green" — theme red needs an owner ruling either way** |
+| R6 | Proof health | `theme-proof` green 2026-09-18 (OQ-56 ruled: token to 58%, all 15 cells pass); `delivery-proof` legacy red (85/86); `slice-proof` stale (needs pasted key); oldest green batch 2026-09-11 | **"all proofs green" still blocked by delivery-proof + slice-proof** |
 | R7 | Live-model confirmation | Strict-schema rung fix (`REQ-ORCH-010`, accepted-not-sent) needs `pnpm live-run --confirm`; last green 2026-09-13 was 21/21 on `sign-in + requirements` only | **Owed before claiming the model boundary is proven** |
 | R8 | Polish / hygiene | `the-git-table-clips-its-content-and-does-not-scroll.md`, `the-application-log-keeps-every-level-because-nothing-reads-one.md`, `the-directive-registers-count-is-prose-with-no-checker.md`, `plan-gate-proof-resume-sometimes-finds-no-session-row.md`, `role-gutter-truncation-rule-is-inert.md` + `live-rows-are-never-measured.md` (both carry Repaired 2026-09-15 — verify + close) | **Not blocking — close or carry as known issues** |
 
@@ -402,16 +402,16 @@ provisioned after installation" section, `REQ-STARTUP-141/142/143`).
 Linux/macOS artifacts stay bound by IC-3 items 1, 2 and 4; shipping
 them before discharge is shipping on an untested platform.
 
-**R2 — rulings owed (5 ESC, 7 OQ branches).** The build proceeds under
-stated interim readings for ESC-36 (row visibility stays on
+**R2 — rulings owed (4 ESC, 5 OQ branches; ESC-40, OQ-56 and OQ-61 ruled and built 2026-09-18).**
+The build proceeds under stated interim readings for ESC-36 (row visibility stays on
 `REQ-PROVIDER-140`), ESC-37 (force-loaded skill block, no chip),
 ESC-38 (seven Skills columns), ESC-39 (suffixed command names),
-ESC-40 (domain-07 log level; CLI default unimplemented), and OQ-58
-(per-session skill state), OQ-59 (file filter + `/skill <path>`),
-OQ-60 (NULL summary), OQ-61 (isolated-run git reads still refused;
-only the misleading message fixed), OQ-62 branches 2–3 (discovery
+and OQ-58 (per-session skill state), OQ-59 (file filter + `/skill <path>`),
+OQ-60 (NULL summary), OQ-62 branches 2–3 (discovery
 pricing blocked on OQ-21; configured rates deliberately unbuilt),
-OQ-63 (keep everything). OQ-62 branch 1 (provider-reported cost) was
+OQ-63 (keep everything). ESC-40 ruled for the domain-07 log level with REQ-CLI-065 amended;
+OQ-56 ruled for the raised disabled token with `theme-proof` green; OQ-61 ruled for the read-only
+`git_read` member with the unit suite green. OQ-62 branch 1 (provider-reported cost) was
 ruled 2026-09-16 as `PD-MONITOR-001` and built. A release needs each
 row ruled or explicitly waived; the interim is recorded, not assumed.
 

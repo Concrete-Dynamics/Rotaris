@@ -32,6 +32,7 @@ export const DECLARATIONS: Readonly<Record<PublicToolName, Declaration>> = Objec
   write_file: d(true, true, false),
   terminal: d(false, false, true),
   git_commit: d(true, true, false),
+  git_read: d(true, false, false),
   todo: d(false, false, false),
   fetch: d(false, false, false),
   grep: d(true, false, false),
@@ -43,7 +44,7 @@ export const DECLARATIONS: Readonly<Record<PublicToolName, Declaration>> = Objec
 
 /** REQ-TOOLS-007: the read-only class, exactly. */
 export const READ_ONLY_CLASS: ReadonlySet<PublicToolName> = new Set<PublicToolName>([
-  'grep', 'glob', 'fetch', 'haet_read', 'read_file', 'artifact_read', 'artifact_list', 'artifact_write',
+  'grep', 'glob', 'fetch', 'haet_read', 'read_file', 'git_read', 'artifact_read', 'artifact_list', 'artifact_write',
 ]);
 /** REQ-TOOLS-007: the network class, exactly. */
 export const NETWORK_CLASS: ReadonlySet<PublicToolName> = new Set<PublicToolName>(['fetch']);

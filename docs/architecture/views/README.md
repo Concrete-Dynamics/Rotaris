@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-18**
 
+**The Start session dialog fits the minimum window (REQ-SHELL-022/125).** The panel caps at the
+viewport with the three sections scrolling under a fixed head and foot; run-start mode stands first.
+No view file moves — the dialog is drawn by the renderer composition root, not by a primary view —
+so the change is recorded here and not in a view: `StartSessionDialog.tsx` (`START_SESSION_LAYOUT`
+containment + hit-test contracts), `shell.css` (the cap, the scroll region, the fixed actions row),
+`layout-regression.test.ts` (the pinned rules).
+
 **The `plan_cycles` cascade (store v20, REQ-SESSION-166).** `03-runtime-view.md` §7 carries v20: the
 plan-cycles table rebuilt with `REFERENCES sessions(session_id) ON DELETE CASCADE`, so a session
 delete takes the VERBATIM plan text with the record; already-orphaned rows are dropped by the

@@ -20,4 +20,14 @@ describe('minimum-window layout regressions', () => {
     expect(rule('.git__table-scroll')).toContain('overflow-x: auto');
     expect(rule('.git__checkpoint-table')).toContain('min-width: 560px');
   });
+
+  it('keeps the start-session dialog inside the 1000x680 minimum with its actions reachable (REQ-SHELL-022/125)', () => {
+    // The three sections plus the disclosure and advisory the spec requires stood 904 px tall,
+    // so the run-start selector and both actions left the screen. The panel caps itself at the
+    // viewport; the CHOICES scroll under a fixed head and foot, so the run-start selector —
+    // first section, the choice the acceptance path walks — never sits under a pressed control.
+    expect(rule('.start-session')).toContain('max-height: calc(100vh - 2 * var(--rt-space-4))');
+    expect(rule('.start-session__scroll')).toContain('overflow-y: auto');
+    expect(rule('.start-session .dialog-actions')).toContain('flex: none');
+  });
 });

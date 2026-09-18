@@ -1129,8 +1129,16 @@
 .worktree-dialog__message--ok { color: var(--rt-text-tertiary); }
 .worktree-dialog__failure { display: flex; flex-direction: column; gap: 4px; }
 .worktree-dialog__failure-title { font-size: var(--rt-text-sm, 13px); color: var(--rt-danger-300); }
-/* REQ-SHELL-125: at least 460 px wide. */
-.start-session { width: min(560px, 100%); min-width: 460px; }
+/* REQ-SHELL-125: at least 460 px wide. REQ-SHELL-022: wholly inside the 1000×680 minimum —
+ * the three sections plus the disclosure and advisory the spec requires stood 904 px tall, so the
+ * run-start selector and both actions left the screen. The panel caps itself at the viewport and
+ * the CHOICES scroll under a fixed head and foot: title, intro and the actions never move, so the
+ * run-start selector — the last section and the one the acceptance path walks — never sits under
+ * a control the user must press, and nothing reachable is reachable only by scrolling past the
+ * actions that dismiss it. */
+.start-session { width: min(560px, 100%); min-width: 460px; max-height: calc(100vh - 2 * var(--rt-space-4)); }
+.start-session__scroll { display: flex; flex-direction: column; gap: var(--rt-space-3); min-height: 0; overflow-y: auto; margin: 0; padding: 0; border: 0; }
+.start-session .dialog-actions { flex: none; }
 /* UIR-004: a card, like every other grouping in the product — the ground and the hairline come from
    `.card`; this rule adds only the stack and the padding the dialog wants. */
 .start-session__group { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); margin: 0; padding: var(--rt-space-3, 12px); }

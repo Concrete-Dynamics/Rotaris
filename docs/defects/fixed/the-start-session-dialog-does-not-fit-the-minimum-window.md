@@ -36,3 +36,23 @@ computed centre lands nowhere when that centre is outside the window.
 
 Noticed 2026-09-17 by Part AT (`PD-LIBRARY-002`) running `pnpm ui-audit` after drawing its own surfaces.
 Not repaired here: the dialog belongs to the session-start path this part does not touch.
+
+## Repaired — 2026-09-18
+
+The panel caps itself at the viewport (`max-height: calc(100vh - 2 * var(--rt-space-4))`) and the
+three sections scroll under a fixed head and foot (`start-session__scroll`, actions `flex: none`),
+so title, intro and both actions never move. Run-start mode stands FIRST, not last: at the minimum
+the middle scrolls, and the choice the acceptance path walks must be reachable without scrolling the
+sandbox disclosure and advisory past the actions row — whose own centre otherwise sits on top of it
+(a placement measured, not reasoned: the selector at y 662 read topmost under the actions at y 612).
+
+The dialog carries a `UiLayoutContract` (`START_SESSION_LAYOUT`): panel containment, the run-start
+selector + both actions containment and hit-test. `pnpm ui-audit --sizes=1000x680 --views=2` is CLEAN
+— start-session overlay 560×648 at (220, 16), 7 of 7 controls tested, 0 clipped — where the note
+measured 560×904 off screen with three controls. Live-measured per-control at 1000×680: panel bottom
+664 ≤ 680, run-start selector, isolation checkbox, attach, Cancel and accept each in-view and topmost.
+At 1400×900 all five in-view and topmost with the panel fully drawn. `layout-regression.test.ts` pins
+the three CSS rules.
+
+Regression tests: `packages/ui/src/layout-regression.test.ts`, in "keeps the start-session dialog
+inside the 1000x680 minimum with its actions reachable".

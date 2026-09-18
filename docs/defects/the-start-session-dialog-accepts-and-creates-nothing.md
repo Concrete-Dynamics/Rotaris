@@ -62,3 +62,18 @@ everything else the product declines to do: a refusal is reported, never silent.
 Noticed 2026-09-17 by Part AT (`PD-LIBRARY-002`) after repairing the stale assertion that had been
 hiding this scenario. Not repaired here: it is a session-creation path this part does not touch, and
 diagnosing it belongs with whoever owns that dialog's next change.
+
+## Evidence against the geometry candidate — 2026-09-18
+
+The sibling note's repair was driven in the built app and this scenario's first two candidates were
+tested there too, against the repaired dialog at 1000×680: the isolation click lands on the native
+checkbox (`INPUT.check__input`, toggles to `checked: true`), the accept closes the dialog, and the
+composer takes focus with its choices held for the next submission. The synthesized click the note
+describes produces exactly what the log shows — the seam reports the click — and something happens:
+the dialog closes. The off-screen geometry is therefore falsified as the cause of THIS scenario; its
+strongest candidate is out. The refusal candidates stand: driving the isolated path further in this
+checkout answers with the worktree-creation refusal "Workspace must be the root of its Git worktree"
+(`packages/workspace/src/git/worktrees.ts:103`), because the driven workspace is a subdirectory of
+the repository rather than its root — a property of the driven checkout, not of the dialog. Whether
+that refusal is also what the proof's scratch workspace met is not established here; the scenario
+remains open with one fewer candidate.

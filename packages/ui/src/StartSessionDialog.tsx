@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import { confinementMessage, NO_CONFINEMENT_DISCLOSURE, SANDBOX_MODE_NAMES, validateBranchName, type ConfinementVerdict, type SandboxModeName } from '@rotaris/contracts';
-import { Button as DesignButton, Checkbox as DesignCheckbox, Input as DesignInput, Select as DesignSelect } from './design-system/index.js';
+import { Button as DesignButton, Checkbox as DesignCheckbox, Input as DesignInput, Select as DesignSelect, layoutContractAttributes, type UiLayoutContract } from './design-system/index.js';
 
 /**
  * REQ-SHELL-125's "Start session" dialog (≥ 460 px wide): Git worktree isolation with its branch (REQ-GIT-118, the
@@ -78,6 +78,19 @@ export function defaultSessionBranch(sessionId: string): string {
   return `rotaris/session/${sessionId}`;
 }
 
+/**
+ * REQ-SHELL-022: the dialog's machine-checkable answer to the minimum window. The panel is
+ * contained in the viewport at 1000×680; the run-start selector, Cancel and the accept each
+ * carry a hit-test, so `pnpm ui-audit` reads the repair as numbers rather than as a screenshot.
+ */
+const START_SESSION_LAYOUT = {
+  dialog: { id: 'start-session-dialog', relations: [{ kind: 'containment' }] },
+  runStartMode: { id: 'start-session-run-start-mode', relations: [{ kind: 'containment' }, { kind: 'hit-test' }] },
+  actions: { id: 'start-session-actions', relations: [{ kind: 'containment' }] },
+  cancel: { id: 'start-session-cancel', relations: [{ kind: 'containment' }, { kind: 'hit-test' }] },
+  accept: { id: 'start-session-accept', relations: [{ kind: 'containment' }, { kind: 'hit-test' }] },
+} satisfies Record<string, UiLayoutContract>;
+
 export function StartSessionDialog({ sessionId, runActive, defaultSandboxMode, defaultRunStartMode = 'auto', confinement, advisory = '', onChooseAttach, onAccept, onCancel }: StartSessionDialogProps) {
   const confinementAvailable = confinement?.available === true;
   const titleId = useId();
@@ -112,11 +125,28 @@ export function StartSessionDialog({ sessionId, runActive, defaultSandboxMode, d
   const isolationLocked = runActive || attach !== null;
   return (
     <div className="dialog-backdrop" role="presentation">
-      <form className="dialog start-session" role="dialog" aria-modal="true" aria-labelledby={titleId} data-testid="start-session-dialog" onSubmit={(event) => { event.preventDefault(); accept(); }}>
+      {/* REQ-SHELL-022: the panel owns the containment contract — wholly inside the 1000×680
+          minimum with the run-start selector and both actions reachable at it. The actions row
+          stands OUTSIDE the scroll region with the title and intro, so no reachable control sits
+          under a control the user must press. Run-start mode stands FIRST, not last: at the
+          minimum the panel's middle scrolls, and the choice the acceptance path walks must be
+          reachable without scrolling the sandbox disclosure and advisory past it. */}
+      <form className="dialog start-session" role="dialog" aria-modal="true" aria-labelledby={titleId} data-testid="start-session-dialog" onSubmit={(event) => { event.preventDefault(); accept(); }} {...layoutContractAttributes(START_SESSION_LAYOUT.dialog)}>
         <h2 id={titleId} className="dialog-title">Start session</h2>
         <p className="dialog-body">Two optional choices for the session the next message starts. The workspace is the one this window has open.</p>
+        <div className="start-session__scroll" data-testid="start-session-scroll">
         {/* UIR-004: a card with the system's section kicker, where the browser default fieldset drew a
             hairline rectangle notched by a sentence-case legend — an idiom used nowhere else here. */}
+        {/* REQ-ORCH-152: the second of the two places the mode is offered; REQ-ORCH-153 states what `plan` does.
+            It stands FIRST, not last — see the panel note above. */}
+        <section className="card start-session__group">
+          <div className="card-kicker">Run-start mode</div>
+          <DesignSelect className="input select start-session__select" aria-label="Run-start mode" data-testid="start-session-run-start-mode" value={runStartMode} onChange={(event) => setRunStartMode(event.currentTarget.value as 'auto' | 'plan')} ui={START_SESSION_LAYOUT.runStartMode}>
+            <option value="auto">auto — start work straight away</option>
+            <option value="plan">plan — produce a plan and wait for a decision</option>
+          </DesignSelect>
+          <p className="start-session__hint text-secondary" data-testid="start-session-run-start-hint">In <code>plan</code> mode nothing that writes files or runs commands happens until you approve the plan. Questions and exploration are never held.</p>
+        </section>
         <section className="card start-session__group">
           <div className="card-kicker">Git worktree</div>
           <DesignCheckbox className="check start-session__check" title={runActive ? ISOLATION_REQUIRED_TOOLTIP : undefined} data-testid="start-session-isolation" checked={isolation} disabled={isolationLocked} onChange={(event) => setIsolation(event.currentTarget.checked)} label="Run in an isolated Git worktree" />
@@ -157,18 +187,10 @@ export function StartSessionDialog({ sessionId, runActive, defaultSandboxMode, d
           {/* REQ-SANDBOX-107: the advisory, beside the disclosure and never suppressing it. */}
           {advisory !== '' && <p className="start-session__hint text-secondary" role="status" data-testid="start-session-advisory">{advisory}</p>}
         </section>
-        {/* REQ-ORCH-152: the second of the two places the mode is offered; REQ-ORCH-153 states what `plan` does. */}
-        <section className="card start-session__group">
-          <div className="card-kicker">Run-start mode</div>
-          <DesignSelect className="input select start-session__select" aria-label="Run-start mode" data-testid="start-session-run-start-mode" value={runStartMode} onChange={(event) => setRunStartMode(event.currentTarget.value as 'auto' | 'plan')}>
-            <option value="auto">auto — start work straight away</option>
-            <option value="plan">plan — produce a plan and wait for a decision</option>
-          </DesignSelect>
-          <p className="start-session__hint text-secondary" data-testid="start-session-run-start-hint">In <code>plan</code> mode nothing that writes files or runs commands happens until you approve the plan. Questions and exploration are never held.</p>
-        </section>
-        <div className="dialog-actions">
-          <DesignButton type="button" className="btn btn-secondary" disabled={choosing} onClick={onCancel}>Cancel</DesignButton>
-          <DesignButton type="submit" className="btn btn-primary" disabled={branchError !== null || choosing} data-testid="start-session-accept">Start session</DesignButton>
+        </div>
+        <div className="dialog-actions" {...layoutContractAttributes(START_SESSION_LAYOUT.actions)}>
+          <DesignButton type="button" className="btn btn-secondary" disabled={choosing} onClick={onCancel} ui={START_SESSION_LAYOUT.cancel}>Cancel</DesignButton>
+          <DesignButton type="submit" className="btn btn-primary" disabled={branchError !== null || choosing} data-testid="start-session-accept" ui={START_SESSION_LAYOUT.accept}>Start session</DesignButton>
         </div>
       </form>
     </div>

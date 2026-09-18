@@ -359,20 +359,62 @@
    Density review 2026-09-13: the widget's flex-grow let the divider's surplus inflate it to 80 px (the mockup
    draws 52 px and grows on the user's resize, not on layout). The cap keeps the divider-driven growth bounded;
    the block minimum and the widget minimum below are the requirement's own figures and are untouched. */
-.composer { display: flex; flex-direction: column; gap: var(--rt-space-2, 8px); min-height: 110px; overflow: auto; padding: var(--rt-space-3, 12px) var(--rt-space-5, 24px); background: var(--rt-chrome); }
+.composer { display: flex; flex-direction: column; gap: var(--rt-space-2); min-height: 110px; overflow: auto; padding: var(--rt-space-3) var(--rt-space-5); background: var(--rt-chrome); }
 .composer__input { min-height: 48px; max-height: 120px; resize: none; flex: 1 1 auto; }
+/*
+ * PD-CHAT-001 revision 2 (the composer's docked strip, R-040 choice B): the field and the strip share
+ * ONE outer contour — the textarea above, the 34 px strip below, a single `surface` border around both.
+ * The dock is the contour; the field's own `.input` border is gone inside it, so no double edge is drawn.
+ * The strip carries `--rt-chrome` and a top divider, the way the decision's proposal B drew it. The old
+ * two-row composition (`.composer__chips` first band, `.composer__actions` second) is retired with the
+ * markup that owned it; the falsified reason is kept at the rules below, where the classes still live.
+ */
+.composer__dock { display: flex; flex-direction: column; background: var(--rt-surface); border: var(--rt-hairline-width) solid var(--rt-border); border-radius: var(--rt-radius-lg); overflow: clip; }
+.composer__dock:focus-within { border-color: var(--rt-border-strong); }
+.composer__dock .slash-field { padding: var(--rt-space-2) var(--rt-space-3) 0; }
+.composer__dock .composer__input { min-height: 40px; border-color: transparent; background: transparent; }
+.composer__dock .composer__input:hover { border-color: transparent; }
+.composer__dock .composer__input:focus-visible { border-color: transparent; outline: none; }
+.composer__strip { display: flex; align-items: center; gap: var(--rt-space-1); min-height: 34px; padding: var(--rt-space-1) var(--rt-space-2); border-top: var(--rt-hairline-width) solid var(--rt-divider); background: var(--rt-chrome); overflow-x: auto; }
+.strip-control { display: inline-flex; align-items: center; flex: none; }
+.strip-btn { display: inline-flex; align-items: center; gap: var(--rt-space-1); min-height: 26px; padding: 0 var(--rt-space-1); border: 0; border-radius: var(--rt-radius-sm); background: transparent; color: var(--rt-text-secondary); font-family: inherit; font-size: var(--rt-text-xs); font-weight: var(--rt-weight-medium); cursor: pointer; white-space: nowrap; }
+.strip-btn:hover { background: var(--rt-hover); color: var(--rt-text); }
+.strip-btn.is-open { background: var(--rt-hover); color: var(--rt-text); }
+.strip-btn:disabled { opacity: 0.6; cursor: default; }
+.strip-btn:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
+.strip-btn .ph { font-size: var(--rt-text-sm); color: var(--rt-text-tertiary); }
+.strip-btn__value { color: var(--rt-text); font-family: var(--rt-font-mono); font-weight: var(--rt-weight-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.strip-btn__caret { font-size: 10px; color: var(--rt-text-tertiary); }
+.strip-sep { flex: none; width: 1px; height: 16px; background: var(--rt-divider); margin-inline: var(--rt-space-1); }
+/*
+ * The strip's send: the primary button's own fill as a short pill (the system's ONE filled control,
+ * design §1.7), carrying the mode's short label visible and the spec's own wording as its accessible
+ * name (PD-CHAT-001 revision 2). The pill never wraps and never stretches: it is 26 px tall at every
+ * strip width, whatever sits beside it.
+ */
+.strip-send { display: inline-flex; align-items: center; gap: var(--rt-space-1); flex: none; min-height: 26px; padding: 0 var(--rt-space-2) 0 var(--rt-space-3); border: 0; border-radius: var(--rt-radius-pill); background: var(--rt-accent-600); color: var(--rt-text); font-family: inherit; font-size: var(--rt-text-xs); font-weight: var(--rt-weight-medium); cursor: pointer; white-space: nowrap; }
+.strip-send:hover { background: var(--rt-accent-500); }
+.strip-send:active { background: var(--rt-accent-700); }
+.strip-send:disabled { background: var(--rt-bg); color: var(--rt-text-disabled); cursor: default; }
+.strip-send:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
+.strip-send .ph { font-size: var(--rt-text-xs); }
+/* The attachment row survives only as the ordered removable list plus the estimate: hidden while both are empty. */
+.composer__notices { display: flex; flex-direction: column; gap: var(--rt-space-1, 4px); }
+.composer__notices:empty { display: none; }
 /* The chips wrap onto several lines when the transcript column is narrow; without this the send button, being a
    flex item under the default `stretch`, grew to the height of all of them. The design draws it at button height
    whatever sits beside it. */
-/* UIR-009: the two-row composition is DECLARED, not discovered by flex-wrap. At 1000x680 the chips,
-   the segmented control, Stash and Start run landed on four unrelated bands, with the primary action
-   — the only accent surface on the view — at the far left under the persona select, diagonally
-   opposite the button it belongs beside. The chips take the first row and may wrap among themselves;
-   the actions hold the second, trailing-aligned, at every width.
-   Density review 2026-09-13 (below): UIR-009's finding was measured at 1000x680 — the only width
-   where the two-row composition is load-bearing. At ≥1180 px everything fits one band and the mockup
-   draws it there, so the forced `flex: 1 1 100%` on the chips is lifted and the band is one row
-   where it fits, two rows where it does not. The primary action's alignment rule is untouched. */
+/* UIR-009: the two-row composition is RETIRED by PD-CHAT-001 revision 2 (the docked strip) — the
+ * markup that owned `.composer__chips` and `.composer__actions` is gone, and the strip is the one band
+ * at every width. The rules below are kept so the classes still resolve where a proof or a test names
+ * them, and so the falsified reason stays beside its replacement: at 1000x680 the chips, the segmented
+ * control, Stash and Start run landed on four unrelated bands, with the primary action — the only accent
+ * surface on the view — at the far left under the persona select, diagonally opposite the button it
+ * belongs beside. The strip this replaces it with owns its own contour and never wraps into bands.
+ * Density review 2026-09-13 (below): UIR-009's finding was measured at 1000x680 — the only width
+ * where the two-row composition is load-bearing. At ≥1180 px everything fits one band and the mockup
+ * draws it there, so the forced `flex: 1 1 100%` on the chips is lifted and the band is one row
+ * where it fits, two rows where it does not. The primary action's alignment rule is untouched. */
 .composer__actions { display: flex; justify-content: flex-start; align-items: center; flex-wrap: wrap; min-width: 0; }
 .composer__error { font-size: var(--rt-text-xs, 12px); color: var(--rt-danger-300); }
 .composer__error--action { display: flex; align-items: center; justify-content: space-between; gap: var(--rt-space-3); flex-wrap: wrap; }

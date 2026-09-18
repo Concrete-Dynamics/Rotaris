@@ -87,7 +87,7 @@ launch('queue', s1, { ROTARIS_SCRIPT: 'read,read,read', ROTARIS_CAPTURE_PROMPT: 
 
 // 2. A steer reaches the entry role at its next step.
 const s2 = scenario('steer', []);
-launch('steer', s2, { ROTARIS_SCRIPT: 'read,read,read,read', ROTARIS_CAPTURE_PROMPT: 'steer me', ROTARIS_CAPTURE_CLICKS: '.composer__actions .btn-secondary>>Steer@1900;;.dialog-actions .btn-primary>>Steer@2600', ROTARIS_CAPTURE_TYPE: 'go left>>no-enter@2300', ROTARIS_CAPTURE_AFTER_MS: '9000' });
+launch('steer', s2, { ROTARIS_SCRIPT: 'read,read,read,read', ROTARIS_CAPTURE_PROMPT: 'steer me', ROTARIS_CAPTURE_CLICKS: '[data-testid="composer-strip"] [aria-label="Steer the run"]@1900;;.dialog-actions .btn-primary>>Steer@2600', ROTARIS_CAPTURE_TYPE: 'go left>>no-enter@2300', ROTARIS_CAPTURE_AFTER_MS: '9000' });
 {
   const db = open(s2);
   const sid = db.prepare('SELECT session_id FROM sessions').get().session_id;
@@ -97,9 +97,11 @@ launch('steer', s2, { ROTARIS_SCRIPT: 'read,read,read,read', ROTARIS_CAPTURE_PRO
   results.steer = { timeline: list.filter((n) => n.startsWith('steering')) };
 }
 
-// 3. A graceful pause, then the composer's Continue.
+// 3. A graceful pause, then the paused Continue. The pause click WAITS for the run to be pausable
+// (the `~` form) and the Continue waits for the paused strip — which keeps its own `Continue run`
+// button beside the message pill, so the lookup is the button's own visible label.
 const s3 = scenario('pause', []);
-launch('pause', s3, { ROTARIS_SCRIPT: 'read,read,read,read,read', ROTARIS_CAPTURE_PROMPT: 'pause me', ROTARIS_CAPTURE_CLICKS: '.composer__actions .btn-secondary>>Pause@1900;;.composer__actions .btn-primary>>Continue run@6500', ROTARIS_CAPTURE_AFTER_MS: '26000' });
+launch('pause', s3, { ROTARIS_SCRIPT: 'read,read,read,read,read', ROTARIS_CAPTURE_PROMPT: 'pause me', ROTARIS_CAPTURE_CLICKS: '[data-testid="composer-strip"] [aria-label="Pause the run"]@~8000;;.composer__strip .btn-primary>>Continue run@~24000', ROTARIS_CAPTURE_AFTER_MS: '26000' });
 {
   const db = open(s3);
   const session = db.prepare('SELECT session_id, execution_status, stop_reason FROM sessions').get();

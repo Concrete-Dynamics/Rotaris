@@ -67,7 +67,10 @@ const MEASURE = `JSON.stringify((() => {
     const asked = (cs.gridArea || '').split('/')[0].trim();
     return { cls: (typeof el.className === 'string' ? el.className : el.tagName).trim(), area: asked, ...box(el) };
   });
-  const startRun = [...document.querySelectorAll('button')].find((b) => (b.textContent || '').trim() === 'Start run');
+  const startRun = [...document.querySelectorAll('button')].find((b) => (b.textContent || '').trim() === 'Start run')
+    // PD-CHAT-001 revision 2 (the docked strip): the send pill carries the mode's short label visible
+    // ("Run") and the spec's own wording as its accessible name, so the lookup follows the name.
+    ?? [...document.querySelectorAll('button')].find((b) => (b.getAttribute('aria-label') || '').startsWith('Start run'));
   return {
     viewport: { w: innerWidth, h: innerHeight },
     cls: w.className,

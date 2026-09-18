@@ -20,6 +20,10 @@ The conversation surface belongs to the single desktop application, and is backe
 - **REQ-CHAT-003** — Submitting empty or whitespace-only text MUST do nothing except return keyboard focus to the composer: no run starts, no transcript row appears, no history entry is recorded.
 - **REQ-CHAT-004** — The composer placeholder MUST be one of exactly these four strings, chosen by the first condition that holds, in the order given: (1) "Run active — write a follow-up for the next iteration…" whenever a locally owned run is active; (2) "Describe how to continue this session…" whenever the loaded session reports itself busy while no local run exists; (3) "Message orchestrator — type / for commands, ↑ for history…" whenever a named session is loaded and neither of the first two conditions holds — the same state in which REQ-CHAT-005 labels the primary action `Continue run`; (4) "Describe the outcome you want…" when no session is loaded, the state in which REQ-CHAT-005 labels the primary action `Start run` and REQ-CHAT-073 shows the same sentence in the empty transcript. The four conditions are exhaustive and, taken in order, mutually exclusive, so the placeholder is always determined by the composer's mode alone.
 - **REQ-CHAT-005** — The primary action button beside the composer MUST state the composer's current mode via its label — `Queue` while a local run is active, `Continue run` when a named session is loaded with no active run, else `Start run` — and there MUST NOT be a separate in-composer mode label.
+  > **Narrowed by [`PD-CHAT-001`](../product/directives.md#pd-chat-001) revision 2, 2026-09-18.** The
+  > strip's send pill carries the mode's short label visible — `Run`, `Continue`, `Queue` — and the
+  > wording above as its accessible name, so the mode is still stated and the strip stays one band.
+  > The text above states the behavioural target and is kept for that reason.
 - **REQ-CHAT-006** — The composer text area MUST stay editable in every run state, including while a run is active. The permission-mode chip and the Stash button MUST stay enabled in every run state. The composer's persona, model, and reasoning chips select what the **next** run starts with, and MUST therefore be disabled in exactly these run states: starting, running, pausing, paused, cancelling, and the synthetic recovery state of REQ-CHAT-008. They MUST be enabled in the idle, completed, failed, and stopped states. Those nine run states are the members of the presentation vocabulary of REQ-NOTIFY-048, which this requirement partitions and does not extend. Each disabled chip MUST state its reason, drawn from the same set of reason texts REQ-CHAT-078 gives the run controls, and MUST publish it through both its tooltip and its accessible description per REQ-CHAT-007. This requirement is canonical for the three composer chips; the run header's own model and reasoning selectors (REQ-CHAT-078) are separate controls that change the **live** run and follow the opposite rule, being enabled only while a run is running and locally owned.
   > **Extended by [`PD-CHAT-001`](../product/directives.md#pd-chat-001), 2026-09-13.** The
   > enablement rule above governs unchanged when a chip presents as a value chip with a
@@ -37,6 +41,10 @@ The conversation surface belongs to the single desktop application, and is backe
   > rest but offer their alternatives through a press-revealed popover instead of an
   > always-expanded selector; the autonomous warning dialog above governs unchanged. The persona
   > and model chips are outside the directive and this requirement governs them in full.
+  > **Narrowed further by revision 2, 2026-09-18.** Every selector — persona and model with it —
+  > presents as an icon-led strip control whose panel is the same picker's own, and the field and
+  > the strip share one outer contour. Values, options, order, callbacks, enablement and the
+  > autonomous dialog above govern unchanged.
 - **REQ-CHAT-010** — Composer geometry defaults MUST be: composer block default height 150 px, minimum 110 px; transcript area minimum 180 px; composer widget minimum height 48 px. The divider between transcript and composer MUST be user-draggable and its position persisted across launches.
 
   > **Narrowed by [`PD-ORCH-002`](../product/directives.md#pd-orch-002) revision 2, 2026-09-17.** In exactly

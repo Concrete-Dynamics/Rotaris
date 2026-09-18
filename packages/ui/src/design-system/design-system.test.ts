@@ -64,7 +64,40 @@ describe('production design-system layer', () => {
     }
   });
 
+  describe('docked-strip shells (PD-CHAT-001 revision 2)', () => {
+    it('marks the strip shells, so the rendered audit can name them', () => {
+      expect(render(design.StripActionButton, { icon: 'ph-paperclip', ariaLabel: 'Attach images' })).toContain('data-ui-component="StripActionButton"');
+      expect(render(design.SendPill, { shortLabel: 'Run', sendName: 'Start run. Control Enter submits from anywhere in the window.' })).toContain('data-ui-component="SendPill"');
+    });
+
+    it('the send pill carries the spec wording as its accessible name, never as visible copy', () => {
+      const markup = render(design.SendPill, { shortLabel: 'Run', sendName: 'Start run. Control Enter submits from anywhere in the window.' });
+      expect(markup).toContain('aria-label="Start run. Control Enter submits from anywhere in the window."');
+      expect(markup).toContain('>Run<');
+      expect(markup).not.toContain('>Start run<');
+    });
+
+    it('the strip shell of the searchable picker reads the display map over the chip text', () => {
+      const options = [{ value: 'medium', label: 'medium' }, { value: 'high', label: 'high' }];
+      const chip = render(design.SearchableSelect, { value: 'medium', options, ariaLabel: 'Reasoning effort', onChange: () => undefined });
+      const strip = render(design.SearchableSelect, { value: 'medium', options, ariaLabel: 'Reasoning effort', onChange: () => undefined, strip: { icon: 'ph-brain', labels: { medium: 'Medium' } } });
+      expect(chip).toContain('>medium<');
+      expect(strip).toContain('>Medium<');
+      expect(strip).toContain('strip-btn');
+    });
+
+    it('the strip shell of the popover menu reads the display map over the chip value', () => {
+      const options = [{ value: 'auto', label: 'Auto' }, { value: 'plan', label: 'Plan' }];
+      const chip = render(design.PopoverMenu, { value: 'auto', options, ariaLabel: 'Mode', onChoose: () => undefined });
+      const strip = render(design.PopoverMenu, { value: 'auto', options, ariaLabel: 'Mode', onChoose: () => undefined, strip: { labels: { auto: 'Auto' } } });
+      expect(chip).toContain('>auto<');
+      expect(strip).toContain('>Auto<');
+      expect(strip).toContain('strip-btn');
+    });
+  });
+
   describe('Button', () => {
+
     it('draws each variant and size through the foundation class', () => {
       expect(render(design.Button, { variant: 'primary' }, 'Save')).toContain('class="btn btn-primary"');
       expect(render(design.Button, { variant: 'danger', size: 'compact' }, 'Delete')).toContain('class="btn btn-danger btn-compact"');

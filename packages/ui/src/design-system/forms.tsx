@@ -1,4 +1,4 @@
-import { forwardRef, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
+import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 import { layoutContractAttributes, type UiLayoutContract } from './layout-contract.js';
 import { classes, componentClass } from './shared.js';
 
@@ -61,4 +61,28 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
   );
   if (label === undefined) return field;
   return <label className="field"><span className="field-label">{label}</span>{field}</label>;
+});
+
+/**
+ * The composer's short send pill (PD-CHAT-001 revision 2, R-040 choice B): the primary button's own
+ * fill as a pill — the system's ONE filled control (design §1.7) — carrying the mode's short label
+ * visible ("Run" / "Continue" / "Queue") and the spec's own wording as its accessible name, so
+ * REQ-CHAT-005 still states the mode and the strip stays one band. A submit by construction: it
+ * sends the composer's form, which no press-revealed menu does — which is why it lives with the
+ * fields rather than with the menu shells.
+ */
+export interface SendPillProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  /** The mode's short label, visible on the pill. */
+  readonly shortLabel: string;
+  /** The spec's own wording — the accessible name, never the visible copy. */
+  readonly sendName: string;
+  readonly ui?: UiLayoutContract;
+}
+export const SendPill = forwardRef<HTMLButtonElement, SendPillProps>(function SendPill({ shortLabel, sendName, className, ui, type, title, ...rest }, ref) {
+  return (
+    <button ref={ref} type={type ?? 'submit'} className={componentClass(className, 'strip-send')} data-ui-component="SendPill" aria-label={sendName} title={title} {...layoutContractAttributes(ui)} {...rest}>
+      {shortLabel}
+      <i className="ph ph-arrow-up" aria-hidden="true" />
+    </button>
+  );
 });

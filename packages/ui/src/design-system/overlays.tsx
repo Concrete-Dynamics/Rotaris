@@ -8,6 +8,88 @@ import { classes } from './shared.js';
  * The design-system press-revealed popover menu (PD-CHAT-001): a value chip whose alternatives
  * open in a small panel anchored to it, rather than an always-expanded selector.
  *
+ * Beside it the composer's docked-strip shells (PD-CHAT-001 revision 2, R-040 choice B) live in
+ * this module because the strip's menus ARE these two pickers' panels: an icon-led control for
+ * the strip that shares the composer's own outer contour — persona, model, reasoning, run-start
+ * mode, permission mode, attach, stash, steer, pause. The value reads beside the icon; the
+ * spec-fixed wording rides as the accessible name (PD-CHAT-001's icon clause). Small fixed sets
+ * render their value through a label map (e.g. reasoning `medium` → `Medium`); long lists keep
+ * the bare identifier, which is their `SearchableSelect` value unchanged.
+ *
+ * Two shells exist for one strip and one reason: a control that OPENS alternatives (persona,
+ * model, reasoning, run-start, permission mode) renders `StripMenuButton`, a bare press-revealed
+ * trigger whose panel is the wrapped picker's own (nothing here invents a second popover); a
+ * control that ACTS (attach, stash, steer, pause, stop, send) renders `StripActionButton`, a bare
+ * borderless press. The strip owns the contour and the 34 px band; neither button draws a border
+ * or a background at rest, so the two shells read as one toolbar.
+ */
+export interface StripMenuButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onClick' | 'value' | 'aria-label'> {
+  /** Phosphor class for the leading icon (e.g. `ph-brain`). */
+  readonly icon: string;
+  /** The current value, read beside the icon. */
+  readonly value: string;
+  /** Accessible name of the control — the spec-fixed wording rides here, not as visible copy. Strip callers pass the DOM `aria-label`; the shell maps it. */
+  readonly ariaLabel?: string | undefined;
+  readonly 'aria-label'?: string | undefined;
+  readonly onClick?: ((e: React.MouseEvent<HTMLButtonElement>) => void) | undefined;
+}
+
+/** REQ-CHAT-006/007 govern unchanged: a disabled strip control carries its reason through both channels. */
+export function StripMenuButton({ icon, value, ariaLabel, className, disabled, title, children, onClick, ...rest }: StripMenuButtonProps) {
+  const name = ariaLabel ?? rest['aria-label'];
+  return (
+    <button
+      type="button"
+      className={classes('strip-btn', className)}
+      aria-label={name}
+      aria-describedby={rest['aria-describedby']}
+      disabled={disabled}
+      aria-disabled={disabled}
+      title={title}
+      data-ui-component="StripMenuButton"
+      data-value={value}
+      onClick={onClick}
+      {...rest}
+    >
+      <i className={classes('ph', icon)} aria-hidden="true" />
+      <span className="strip-btn__value">{value}</span>
+      {children}
+    </button>
+  );
+}
+
+export interface StripActionButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onClick' | 'aria-label'> {
+  /** Phosphor class for the icon (e.g. `ph-paperclip`). */
+  readonly icon: string;
+  /** Accessible name of the control. Strip callers pass the DOM `aria-label`; the shell maps it. */
+  readonly ariaLabel?: string | undefined;
+  readonly 'aria-label'?: string | undefined;
+  readonly onClick?: ((e: React.MouseEvent<HTMLButtonElement>) => void) | undefined;
+}
+
+/** A strip control that acts rather than opens — attach, stash, steer, pause. */
+export function StripActionButton({ icon, ariaLabel, className, children, onClick, ...rest }: StripActionButtonProps) {
+  const name = ariaLabel ?? rest['aria-label'];
+  return (
+    <button
+      type="button"
+      className={classes('strip-btn', className)}
+      aria-label={name}
+      aria-describedby={rest['aria-describedby']}
+      data-ui-component="StripActionButton"
+      onClick={onClick}
+      {...rest}
+    >
+      <i className={classes('ph', icon)} aria-hidden="true" />
+      {children}
+    </button>
+  );
+}
+
+/**
+ * The design-system press-revealed popover menu (PD-CHAT-001): a value chip whose alternatives
+ * open in a small panel anchored to it, rather than an always-expanded selector.
+ *
  * Craft is the slash popup's (`shell.css` `.slash-popup`): `--rt-surface` ground, hairline border,
  * `--rt-shadow-lg` (a shadow only ever means *this floats*), `--rt-radius-lg`, the `rt-rise`
  * entrance. The active option is `--rt-accent-tint-14` + `--rt-accent-200` (docs/design/README.md
@@ -42,6 +124,13 @@ export interface PopoverMenuTriggerProps extends Omit<ButtonHTMLAttributes<HTMLB
   readonly children?: ReactNode;
   /** Anchor ref for tests and callers that need the trigger element. */
   readonly anchorRef?: RefObject<HTMLButtonElement | null> | undefined;
+  /**
+   * PD-CHAT-001 revision 2 (the composer's docked strip, R-040 choice B): render the trigger as
+   * the strip's borderless icon-led shell instead of the bordered value chip. The panel, the
+   * options, the values and the callback are untouched — only the trigger's shell changes.
+   * A fixed small set passes its display map here (reasoning `medium` → `Medium`).
+   */
+  readonly strip?: { readonly labels?: Readonly<Record<string, string>> | undefined } | undefined;
 }
 
 /** `true` when the point is outside the element's rect — the outside-press test. */
@@ -50,7 +139,7 @@ function pointOutside(el: Element, x: number, y: number): boolean {
   return x < r.left || x > r.right || y < r.top || y > r.bottom;
 }
 
-export function PopoverMenu({ value, icon, ariaLabel, options, onChoose, className, disabled, title, anchorRef, ...rest }: PopoverMenuTriggerProps) {
+export function PopoverMenu({ value, icon, ariaLabel, options, onChoose, className, disabled, title, anchorRef, strip, ...rest }: PopoverMenuTriggerProps) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(() => Math.max(0, options.findIndex((o) => o.value === value)));
   const trigger = useRef<HTMLButtonElement | null>(null);
@@ -107,6 +196,8 @@ export function PopoverMenu({ value, icon, ariaLabel, options, onChoose, classNa
   }, [open, close]);
 
   const currentIndex = Math.max(0, options.findIndex((o) => o.value === value));
+  /** The strip shell reads the display map over the SAME value the chip shows — never a second source. */
+  const triggerText = strip?.labels !== undefined && strip.labels[value] !== undefined ? strip.labels[value]! : value;
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (!open) {
@@ -135,7 +226,7 @@ export function PopoverMenu({ value, icon, ariaLabel, options, onChoose, classNa
       <button
         ref={setTrigger}
         type="button"
-        className={classes('chip-menu', open && 'is-open', className)}
+        className={strip === undefined ? classes('chip-menu', open && 'is-open', className) : classes('strip-btn', open && 'is-open', className)}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
@@ -152,8 +243,8 @@ export function PopoverMenu({ value, icon, ariaLabel, options, onChoose, classNa
         {...rest}
       >
         {icon !== undefined && <i className={classes('ph', icon)} aria-hidden="true" />}
-        <span className="chip-menu__value">{value}</span>
-        <i className="ph ph-caret-down chip-menu__caret" aria-hidden="true" />
+        <span className={strip === undefined ? 'chip-menu__value' : 'strip-btn__value'}>{triggerText}</span>
+        <i className={strip === undefined ? classes('ph', 'ph-caret-down', 'chip-menu__caret') : classes('ph', 'ph-caret-down', 'strip-btn__caret')} aria-hidden="true" />
       </button>
       {open && (
         <div

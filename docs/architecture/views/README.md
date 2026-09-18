@@ -45,6 +45,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-18**
 
+**The composer's docked strip (PD-CHAT-001 revision 2).** The field and the strip share one outer
+contour (`WorkspaceView`'s `composer__dock`: textarea above, 34 px `composer__strip` below); every
+composer control stands on the strip and no second chip row is drawn. The pickers are shared
+objects — `SearchableSelect` and `PopoverMenu` take a `strip` prop that switches only their
+trigger's shell — and the send is `SendPill` in `design-system/forms.tsx`. The seams view's §8
+carries it; no view diagram moves, because no package, edge, process, message or ownership moves
+with it.
+
 **The Start session dialog fits the minimum window (REQ-SHELL-022/125).** The panel caps at the
 viewport with the three sections scrolling under a fixed head and foot; run-start mode stands first.
 No view file moves — the dialog is drawn by the renderer composition root, not by a primary view —

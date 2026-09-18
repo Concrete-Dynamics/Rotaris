@@ -88,11 +88,19 @@ describe('production design-system layer', () => {
 
     it('the strip shell of the popover menu reads the display map over the chip value', () => {
       const options = [{ value: 'auto', label: 'Auto' }, { value: 'plan', label: 'Plan' }];
-      const chip = render(design.PopoverMenu, { value: 'auto', options, ariaLabel: 'Mode', onChoose: () => undefined });
-      const strip = render(design.PopoverMenu, { value: 'auto', options, ariaLabel: 'Mode', onChoose: () => undefined, strip: { labels: { auto: 'Auto' } } });
-      expect(chip).toContain('>auto<');
+      const chip = render(design.PopoverMenu, { value: 'Auto', options, ariaLabel: 'Mode', onChoose: () => undefined });
+      const strip = render(design.PopoverMenu, { value: 'Auto', options, ariaLabel: 'Mode', onChoose: () => undefined, strip: { labels: { Auto: 'Auto' } } });
+      expect(chip).toContain('>Auto<');
       expect(strip).toContain('>Auto<');
       expect(strip).toContain('strip-btn');
+    });
+
+    it('iconOnly keeps the value mounted for the probes while the compact state hides it', () => {
+      const options = [{ value: 'medium', label: 'medium' }, { value: 'high', label: 'high' }];
+      const strip = render(design.SearchableSelect, { value: 'medium', options, ariaLabel: 'Reasoning effort', onChange: () => undefined, strip: { icon: 'ph-brain', iconOnly: true } });
+      expect(strip).toContain('>medium<');
+      const menu = render(design.PopoverMenu, { value: 'auto', options: [{ value: 'auto', label: 'Auto' }], ariaLabel: 'Mode', onChoose: () => undefined, strip: { iconOnly: true } });
+      expect(menu).toContain('>auto<');
     });
   });
 

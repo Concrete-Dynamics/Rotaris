@@ -375,17 +375,46 @@
 .composer__dock .composer__input { min-height: 40px; border-color: transparent; background: transparent; }
 .composer__dock .composer__input:hover { border-color: transparent; }
 .composer__dock .composer__input:focus-visible { border-color: transparent; outline: none; }
-.composer__strip { display: flex; align-items: center; gap: var(--rt-space-1); min-height: 34px; padding: var(--rt-space-1) var(--rt-space-2); border-top: var(--rt-hairline-width) solid var(--rt-divider); background: var(--rt-chrome); overflow-x: auto; }
-.strip-control { display: inline-flex; align-items: center; flex: none; }
-.strip-btn { display: inline-flex; align-items: center; gap: var(--rt-space-1); min-height: 26px; padding: 0 var(--rt-space-1); border: 0; border-radius: var(--rt-radius-sm); background: transparent; color: var(--rt-text-secondary); font-family: inherit; font-size: var(--rt-text-xs); font-weight: var(--rt-weight-medium); cursor: pointer; white-space: nowrap; }
+.composer__strip { display: flex; align-items: center; gap: var(--rt-space-1); min-height: 34px; padding: var(--rt-space-1) var(--rt-space-2); border-top: var(--rt-hairline-width) solid var(--rt-divider); background: var(--rt-chrome); overflow-x: auto; scrollbar-width: none; }
+.composer__strip::-webkit-scrollbar { display: none; }
+.strip-control { display: inline-flex; align-items: center; flex: none; min-width: 0; }
+.strip-btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--rt-space-1); min-height: 26px; min-width: var(--rt-control-height-compact); padding: 0 var(--rt-space-1); border: 0; border-radius: var(--rt-radius-sm); background: transparent; color: var(--rt-text-secondary); font-family: inherit; font-size: var(--rt-text-xs); font-weight: var(--rt-weight-medium); cursor: pointer; white-space: nowrap; }
 .strip-btn:hover { background: var(--rt-hover); color: var(--rt-text); }
 .strip-btn.is-open { background: var(--rt-hover); color: var(--rt-text); }
 .strip-btn:disabled { opacity: 0.6; cursor: default; }
 .strip-btn:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
 .strip-btn .ph { font-size: var(--rt-text-sm); color: var(--rt-text-tertiary); }
+/* The compact trigger is icon-only: the icon keeps the row's neutral ink, so a shortened control reads
+ * as quieter than its neighbours rather than as a second accent. */
+.composer__strip[data-compact='tight'] .strip-btn .ph,
+.composer__strip[data-compact='narrow'] .strip-btn .ph { color: var(--rt-text-secondary); }
 .strip-btn__value { color: var(--rt-text); font-family: var(--rt-font-mono); font-weight: var(--rt-weight-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .strip-btn__caret { font-size: 10px; color: var(--rt-text-tertiary); }
 .strip-sep { flex: none; width: 1px; height: 16px; background: var(--rt-divider); margin-inline: var(--rt-space-1); }
+/*
+ * PD-CHAT-001 revision 3 (the compact strip, R-041): the strip shortens its controls to their icon
+ * behind its own `data-compact` state — `tight` below 900 px, `narrow` below 700 px, both measured
+ * against the dock's own width (the numbers are the 2026-09-18 measurement, not an estimate).
+ * What shortens, and in which order: `tight` shortens the four small fixed sets (reasoning,
+ * run-start mode, permission mode) and the estimate; `narrow` additionally shortens persona and
+ * model. The span stays mounted with the value as its text — the established `text` probes keep
+ * reading the control — and CSS hides it; the compact tooltip names control and choice, because an
+ * icon alone states nothing (REQ-CHAT-007's dual channel). The estimate owns no popover, so it
+ * shortens by rendering its figure once and hiding it in `tight`: a reader who needs the number
+ * widens the dock, and no second estimate is ever drawn. What never shortens: attach, stash,
+ * steer, pause and the send pill — an action without a visible label is a control without a name.
+ */
+.composer__strip[data-compact='tight'] .strip-control[data-testid='chip-reasoning'] .strip-btn__value,
+.composer__strip[data-compact='tight'] .strip-control[data-testid='chip-reasoning'] .strip-btn__caret,
+.composer__strip[data-compact='tight'] .strip-control[data-testid='chip-run-start-mode'] .strip-btn__value,
+.composer__strip[data-compact='tight'] .strip-control[data-testid='chip-run-start-mode'] .strip-btn__caret,
+.composer__strip[data-compact='tight'] .strip-control[data-testid='chip-mode'] .strip-btn__value,
+.composer__strip[data-compact='tight'] .strip-control[data-testid='chip-mode'] .strip-btn__caret,
+.composer__strip[data-compact='tight'] [data-testid='composer-estimate-strip'],
+.composer__strip[data-compact='narrow'] .strip-control[data-testid='chip-persona'] .strip-btn__value,
+.composer__strip[data-compact='narrow'] .strip-control[data-testid='chip-persona'] .strip-btn__caret,
+.composer__strip[data-compact='narrow'] .strip-control[data-testid='chip-model'] .strip-btn__value,
+.composer__strip[data-compact='narrow'] .strip-control[data-testid='chip-model'] .strip-btn__caret { display: none; }
 /*
  * The strip's send: the primary button's own fill as a short pill (the system's ONE filled control,
  * design §1.7), carrying the mode's short label visible and the spec's own wording as its accessible
@@ -398,7 +427,10 @@
 .strip-send:disabled { background: var(--rt-bg); color: var(--rt-text-disabled); cursor: default; }
 .strip-send:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
 .strip-send .ph { font-size: var(--rt-text-xs); }
-/* The attachment row survives only as the ordered removable list plus the estimate: hidden while both are empty. */
+/* The attachment row survives only as the ordered removable list: hidden while it holds none. Revision 3
+ * deletes the row's second estimate copy outright — the strip is the figure's one home (R-041). */
+.composer__attachments:empty,
+.composer__attachments[hidden] { display: none; }
 .composer__notices { display: flex; flex-direction: column; gap: var(--rt-space-1, 4px); }
 .composer__notices:empty { display: none; }
 /* The chips wrap onto several lines when the transcript column is narrow; without this the send button, being a

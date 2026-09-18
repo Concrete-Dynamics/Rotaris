@@ -485,9 +485,10 @@ function ChipShell({ id, label, reason, testId, children, strip = false }: { id:
  * PD-CHAT-001 revision 2: `strip` renders the picker's borderless strip trigger instead of the bordered
  * chip — same value, options, reason and callback; the strip shell reads its icon and display labels here.
  */
-function SelectorChip({ id, testId, label, ariaLabel, value, options, reason, onChoose, icon, stripIcon, stripLabels, filterPlaceholder = 'Filter…', emptyText = 'No matches.' }: {
+function SelectorChip({ id, testId, label, ariaLabel, value, options, reason, onChoose, icon, stripIcon, stripLabels, stripCompact, filterPlaceholder = 'Filter…', emptyText = 'No matches.' }: {
   id: string; testId: string; label: string; ariaLabel: string; value: string; options: readonly string[]; reason: string | null;
-  onChoose: (value: string) => void; icon?: string | undefined; stripIcon?: string | undefined; stripLabels?: Readonly<Record<string, string>> | undefined; filterPlaceholder?: string | undefined; emptyText?: string | undefined;
+  onChoose: (value: string) => void; icon?: string | undefined; stripIcon?: string | undefined; stripLabels?: Readonly<Record<string, string>> | undefined;
+  stripCompact?: boolean | undefined; filterPlaceholder?: string | undefined; emptyText?: string | undefined;
 }) {
   return (
     <ChipShell id={id} label={label} reason={reason} testId={testId} strip={stripIcon !== undefined}>
@@ -498,14 +499,38 @@ function SelectorChip({ id, testId, label, ariaLabel, value, options, reason, on
         : null}
       <DesignSearchableSelect
         id={id} className="input select chip-control__select" ariaLabel={ariaLabel} value={value} disabled={reason !== null}
-        title={reason ?? `Chosen for the next run.`} aria-describedby={`${id}-reason`}
+        title={stripIcon === undefined ? reason ?? `Chosen for the next run.` : stripIconTitle(ariaLabel, value, reason)} aria-describedby={`${id}-reason`}
         filterPlaceholder={filterPlaceholder} emptyText={emptyText}
         options={options.length === 0 ? [{ value: '', label: '—' }] : options.map((o) => ({ value: o, label: o }))}
         onChange={(v) => { if (v !== '') onChoose(v); }}
-        strip={stripIcon === undefined ? undefined : { icon: stripIcon, labels: stripLabels }}
+        strip={stripIcon === undefined ? undefined : { icon: stripIcon, labels: stripLabels, iconOnly: stripCompact === true ? true : undefined }}
       />
     </ChipShell>
   );
+}
+
+/**
+ * PD-CHAT-001 revision 3 (the compact strip, R-041): which strip controls are shortened to their
+ * icon behind the strip's `data-compact` state. `full` draws every value; `tight` shortens the four
+ * small fixed sets (reasoning, run-start mode, permission mode) plus the estimate; `narrow` additionally
+ * shortens persona and model. The estimate is shortened by CSS alone (it owns no popover); every
+ * control with a panel shortens through the pickers' `strip.iconOnly`, so the panel keeps listing
+ * the current choice while the trigger shows the icon.
+ *
+ * Pure over the dock's own width, so the rule is checkable without a DOM: the numbers are the
+ * 2026-09-18 measurement on the built strip, not an armchair estimate.
+ */
+export type StripDensity = 'full' | 'tight' | 'narrow';
+export const STRIP_TIGHT_BELOW = 900;
+export const STRIP_NARROW_BELOW = 700;
+export function stripDensity(dockWidth: number): StripDensity {
+  if (dockWidth < STRIP_NARROW_BELOW) return 'narrow';
+  if (dockWidth < STRIP_TIGHT_BELOW) return 'tight';
+  return 'full';
+}
+/** REQ-CHAT-007's dual channel, applied to the compact icon: the tooltip names control and choice. */
+export function stripIconTitle(ariaLabel: string, valueText: string, reason: string | null): string {
+  return reason ?? `${ariaLabel}: ${valueText}.`;
 }
 
 /**
@@ -519,12 +544,16 @@ function SelectorChip({ id, testId, label, ariaLabel, value, options, reason, on
  * alone ("High"), which is the narrowing the directive makes.
  * PD-CHAT-001 revision 2: `strip` renders the menu's borderless strip trigger instead of the bordered
  * chip — same value, options, reason and callback; the strip shell reads its icon and display labels here.
+ * PD-CHAT-001 revision 3: `stripCompact` shortens the trigger to its icon behind the strip's
+ * `data-compact` state — the panel still lists every option with the current choice checked, and the
+ * tooltip names control and choice through `stripIconTitle`.
  */
-function PopoverChip({ id, testId, ariaLabel, value, options, reason, icon, labels, hints, onChoose, strip = false }: {
+function PopoverChip({ id, testId, ariaLabel, value, options, reason, icon, labels, hints, onChoose, strip = false, stripCompact = false }: {
   id: string; testId: string; ariaLabel: string; value: string; options: readonly string[]; reason: string | null;
   icon: string; labels?: Readonly<Record<string, string>> | undefined; hints?: Readonly<Record<string, string>> | undefined;
-  onChoose: (value: string) => void; strip?: boolean;
+  onChoose: (value: string) => void; strip?: boolean; stripCompact?: boolean;
 }) {
+  const shown = labels?.[value] ?? value;
   return (
     <ChipShell id={id} label={ariaLabel} reason={reason} testId={testId} strip={strip}>
       <PopoverMenu
@@ -532,12 +561,12 @@ function PopoverChip({ id, testId, ariaLabel, value, options, reason, icon, labe
         ariaLabel={ariaLabel}
         aria-describedby={`${id}-reason`}
         icon={icon}
-        value={labels?.[value] ?? value}
+        value={shown}
         disabled={reason !== null}
-        title={reason ?? `Chosen for the next run.`}
+        title={strip ? stripIconTitle(ariaLabel, shown, reason) : reason ?? `Chosen for the next run.`}
         options={options.map((o) => ({ value: o, label: labels?.[o] ?? o, hint: hints?.[o] }))}
         onChoose={onChoose}
-        strip={strip ? { labels } : undefined}
+        strip={strip ? { labels, iconOnly: stripCompact ? true : undefined } : undefined}
       />
     </ChipShell>
   );
@@ -572,8 +601,11 @@ function useThemeName(): string {
  * accessible name, and the per-preset sentences stay as each option's tooltip through the popover's title.
  * PD-CHAT-001 revision 2: `strip` renders the menu's borderless strip trigger and the
  * borderless shell instead of the chip row's — same presets, dialog, values and callbacks.
+ * PD-CHAT-001 revision 3: `stripCompact` shortens the trigger to its icon behind the strip's
+ * `data-compact` state — the tooltip names control and choice through `stripIconTitle`, because an
+ * icon alone states nothing.
  */
-function ModeSelector({ current, enabled, onSetMode, strip = false }: { current: PermissionPreset | null; enabled: boolean; onSetMode: (m: PermissionPreset) => Promise<{ ok: true } | { ok: false; reason: string }>; strip?: boolean }) {
+function ModeSelector({ current, enabled, onSetMode, strip = false, stripCompact = false }: { current: PermissionPreset | null; enabled: boolean; onSetMode: (m: PermissionPreset) => Promise<{ ok: true } | { ok: false; reason: string }>; strip?: boolean; stripCompact?: boolean }) {
   const [confirming, setConfirming] = useState<PermissionPreset | null>(null);
   const [error, setError] = useState<string | null>(null);
   const apply = async (m: PermissionPreset) => {
@@ -581,6 +613,7 @@ function ModeSelector({ current, enabled, onSetMode, strip = false }: { current:
     const r = await onSetMode(m);
     setError(r.ok ? null : r.reason);
   };
+  const shown = current ?? 'default';
   return (
     <div className={strip ? 'strip-control' : 'mode chip-control'} data-testid="chip-mode" aria-label="Permission mode">
       <span className="visually-hidden" data-testid="chip-mode-label">mode: {current ?? 'default'}</span>
@@ -588,8 +621,8 @@ function ModeSelector({ current, enabled, onSetMode, strip = false }: { current:
         ariaLabel="Permission mode, strictest first"
         aria-describedby="chip-mode-reason"
         icon="ph-shield-check"
-        value={current ?? 'default'}
-        title={enabled
+        value={shown}
+        title={strip ? stripIconTitle('Permission mode', shown, null) : enabled
           ? 'Switch the active run\'s mode from the next tool call, and write it as the configured mode.'
           : 'Write the configured permission mode; the next run starts from it (REQ-CONFIG-288).'}
         options={PERMISSION_PRESETS.map((m) => ({
@@ -598,7 +631,7 @@ function ModeSelector({ current, enabled, onSetMode, strip = false }: { current:
           hint: m === 'autonomous' ? 'runs without asking' : m === 'ask' ? 'asks per tool call' : 'denies by default',
         }))}
         onChoose={(m) => { if (m === 'autonomous') setConfirming(m as PermissionPreset); else void apply(m as PermissionPreset); }}
-        strip={strip ? {} : undefined}
+        strip={strip ? { iconOnly: stripCompact ? true : undefined } : undefined}
       />
       {/* REQ-CHAT-007's dual channel: the mode chip never disables, so the description carries the tooltip's sentence. */}
       <span className="visually-hidden" id="chip-mode-reason">{enabled
@@ -1021,6 +1054,27 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
   const selectedAgent = useShellState((st) => st.selectedAgentId);
   const selectAgentShared = useShellState((st) => st.selectAgent);
   const select = (id: string | null, source?: 'click' | 'key') => { selectAgentShared(id); onSelectAgent?.(id, source); };
+  /*
+   * PD-CHAT-001 revision 3 (the compact strip, R-041): the dock reports its own width through a
+   * ResizeObserver, and `stripDensity` above derives the density from it — no `matchMedia`, no
+   * window width, no second opinion about the box the strip actually owns. State rather than a
+   * ref, because the render below reads it (the same reason `useNarrow` is state, Part AB §83).
+   */
+  const dockRef = useRef<HTMLDivElement | null>(null);
+  const [dockWidth, setDockWidth] = useState<number | null>(null);
+  useEffect(() => {
+    const el = dockRef.current;
+    if (!el || typeof ResizeObserver !== 'function') return;
+    const measure = () => setDockWidth(el.getBoundingClientRect().width);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  /** `null` is "not measured yet" — the strip draws full until the observer's first reading lands. */
+  const density: StripDensity = dockWidth === null ? 'full' : stripDensity(dockWidth);
+  const stripTight = density !== 'full';
+  const stripNarrow = density === 'narrow';
   // Memoised so the derivations below (REQ-CHAT-069's scope, PD-CHAT-005's depth) do not see a new array every render.
   const agents = useMemo(() => session?.agents ?? [], [session]);
   const runLevel = useMemo(() => (entry ? runLevelAgent(session, entry) : null), [session, entry]);
@@ -1338,7 +1392,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
           * surface (REQ-CHAT-010 fixes nothing about the visible row count); the strip, not a second chip
           * row, is what the saved height no longer has to pay for.
           */}
-        <div className="composer__dock" data-testid="composer-dock">
+        <div ref={dockRef} className="composer__dock" data-testid="composer-dock">
         <div className="slash-field" style={roleStyle} data-testid="slash-field" data-token-state={tokenState ?? ''}>
           <DesignTextArea
             ref={area}
@@ -1367,7 +1421,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
           )}
           {popupOpen && <SlashPopup commands={suggestions} selected={current} ctx={slashContext} listId={listId} anchor={area} onHover={setRowIndex} onActivate={activate} />}
         </div>
-        <div className="composer__strip" role="toolbar" aria-label="Composer controls" data-testid="composer-strip">
+        <div className="composer__strip" role="toolbar" aria-label="Composer controls" data-testid="composer-strip" data-compact={density} data-dock-width={dockWidth === null ? '' : String(Math.round(dockWidth))}>
           <DesignInput ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden onChange={(e) => { void addFiles([...(e.currentTarget.files ?? [])]); e.currentTarget.value = ''; }} />
           {/* PD-CHAT-001: the explanatory sentence rides as tooltip + accessible description; a refusal reason stays visible text.
             * Revision 2: the strip's attach is the action shell — icon only, never a sentence. */}
@@ -1375,7 +1429,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
           <StripActionButton icon="ph-paperclip" aria-label="Attach images" aria-describedby="attachment-capability" title={attachmentReason ?? 'Attach images — drop PNG, JPEG, WebP, or GIF here.'} disabled={!acceptsImages} data-testid="composer-attach" onClick={() => fileInput.current?.click()} />
           {onSetNextPersona && (
             <SelectorChip id="chip-persona" testId="chip-persona" label="persona" ariaLabel="Persona for the next run" reason={chipReason}
-              stripIcon="ph-user-circle" value={entry?.persona ?? ''} options={personas.length > 0 ? personas.map((p) => p.role) : entry ? [entry.persona] : []}
+              stripIcon="ph-user-circle" stripCompact={stripNarrow} value={entry?.persona ?? ''} options={personas.length > 0 ? personas.map((p) => p.role) : entry ? [entry.persona] : []}
               filterPlaceholder="Filter personas…" emptyText="No matching persona."
               onChoose={(v) => { void onSetNextPersona(v).then((r) => { if (!r.ok) setError(r.reason); }); }} />
           )}
@@ -1385,17 +1439,16 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
                 value={entry?.model && models.includes(entry.model) ? entry.model : ''}
                 /* REQ-CHAT-009: disabled while the neutral loading label is showing, so no run starts against a model nobody chose. */
                 disabled={!modelsLoaded || chipReason !== null}
-                title={modelsLoaded ? chipReason ?? 'Chosen for the next run.' : 'Model options are still loading.'} aria-describedby="chip-model-reason"
+                title={stripNarrow ? stripIconTitle('Model for the next run', entry?.model && models.includes(entry.model) ? entry.model : modelChipLabel(modelsLoaded, models, entry?.model ?? null), !modelsLoaded ? 'Model options are still loading.' : chipReason) : modelsLoaded ? chipReason ?? 'Chosen for the next run.' : 'Model options are still loading.'} aria-describedby="chip-model-reason"
                 filterPlaceholder="Filter models…"
-                options={[{ value: '', label: '—' }, ...models.map((m) => ({ value: m, label: m }))]}
-                onChange={(v) => { if (v !== '' && attachments.length > 0 && !imageInputModels.includes(v)) { setError(`${v} does not declare image input support. Remove the images before selecting it.`); return; } if (v !== '') void onSetNextModel(v).then((r) => { if (!r.ok) setError(r.reason); }); }}
-                strip={{ icon: 'ph-cpu' }} />
+                options={[{ value: '', label: '—' }, ...models.map((m) => ({ value: m, label: m }))]}                onChange={(v) => { if (v !== '' && attachments.length > 0 && !imageInputModels.includes(v)) { setError(`${v} does not declare image input support. Remove the images before selecting it.`); return; } if (v !== '') void onSetNextModel(v).then((r) => { if (!r.ok) setError(r.reason); }); }}
+                strip={{ icon: 'ph-cpu', iconOnly: stripNarrow ? true : undefined }} />
             </ChipShell>
           )}
           <span className="strip-sep" aria-hidden="true" data-testid="strip-sep" />
           {onSetNextReasoning && (
             <PopoverChip id="chip-reasoning" testId="chip-reasoning" ariaLabel="Reasoning effort for the next run"
-              icon="ph-brain" reason={chipReason} strip
+              icon="ph-brain" reason={chipReason} strip stripCompact={stripTight}
               value={(REASONING_LEVELS as readonly string[]).includes(entry?.reasoning ?? '') ? entry!.reasoning : DEFAULT_REASONING}
               options={REASONING_LEVELS}
               labels={{ low: 'Low', medium: 'Medium', high: 'High' }}
@@ -1404,22 +1457,24 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
           )}
           {/* REQ-ORCH-152: the run-start mode. It obeys the same enablement rule as its three neighbours — it
             * chooses what the NEXT run starts with, and a change made while a run is in flight takes effect only
-            * for the next run (REQ-ORCH-154). PD-CHAT-001 revision 2: the strip shell, same labels and hints. */}
+            * for the next run (REQ-ORCH-154). PD-CHAT-001 revision 2: the strip shell, same labels and hints.
+            * Revision 3: `tight` shortens the trigger to its icon — the panel keeps the released wording. */}
           {onSetRunStartMode && (
             <PopoverChip id="chip-run-start-mode" testId="chip-run-start-mode" ariaLabel="Run-start mode for the next run"
-              icon="ph-play-circle" reason={chipReason} value={runStartMode} options={['auto', 'plan']} strip
+              icon="ph-play-circle" reason={chipReason} value={runStartMode} options={['auto', 'plan']} strip stripCompact={stripTight}
               labels={{ auto: 'Auto', plan: planReleased ? 'Plan first · released' : 'Plan first' }}
               /* PD-ORCH-003: the released hint names the gesture that re-arms, because choosing `plan` IS that gesture. */
               hints={{ auto: 'start at once', plan: planReleased ? 'approved — choose again to plan the next run' : 'plan gate first' }}
               onChoose={(v) => { void onSetRunStartMode(v as 'auto' | 'plan').then((r) => { if (!r.ok) setError(r.reason); }); }} />
           )}
-          {onSetMode && <ModeSelector current={mode} enabled={runActive} onSetMode={onSetMode} strip />}
+          {onSetMode && <ModeSelector current={mode} enabled={runActive} onSetMode={onSetMode} strip stripCompact={stripTight} />}
           {/* REQ-LIBRARY-140 / REQ-CHAT-042: stashes whatever is typed, run or no run.
             * PD-CHAT-001 revision 2: the strip's stash is the action shell — icon only, the sentence as tooltip. */}
           {onStash && <StripActionButton icon="ph-push-pin" aria-label="Stash prompt for later" title="Stash prompt for later" data-testid="composer-stash" onClick={stash} />}
           {/* PD-CHAT-001 revision 2: the estimate lives on the strip, so the legacy attachments row
-            * below keeps only the ordered removable list — REQ-CHAT-169's own surface. */}
-          <span className="composer__estimate mono" data-lower-bound={estimate.lowerBound ? '1' : '0'} data-testid="composer-estimate-strip">{estimate.label}</span>
+            * below keeps only the ordered removable list — REQ-CHAT-169's own surface.
+            * Revision 3: `data-estimate` mirrors the figure for the compact probe — one figure, one home. */}
+          <span className="composer__estimate mono" data-lower-bound={estimate.lowerBound ? '1' : '0'} data-estimate={estimate.label} data-testid="composer-estimate-strip">{estimate.label}</span>
           {runActive && onSteer && <StripActionButton icon="ph-compass" aria-label="Steer the run" title="Send steering text to the run's agent" onClick={() => setSteering({ id: 'run', name: 'the run' })} />}
           {runActive && onPause && <StripActionButton icon={pausePending || session?.executionStatus === 'pausing' ? 'ph-dots-three' : 'ph-pause'} aria-label="Pause the run" title="Pause after the current step" disabled={pausePending || session?.executionStatus === 'pausing'} onClick={() => { void pause(); }} />}
           {runActive ? (
@@ -1462,10 +1517,8 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
           )}
         </div>
         </div>
-        <div className="composer__attachments" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); void addFiles([...e.dataTransfer.files]); }} data-testid="composer-attachments" hidden={attachments.length === 0 && estimate.label === ''}>
+        <div className="composer__attachments" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); void addFiles([...e.dataTransfer.files]); }} data-testid="composer-attachments" hidden={attachments.length === 0}>
           {attachments.length > 0 && <ol className="composer__attachment-list">{attachments.map((a, i) => <li key={`${a.name}-${i}`}><span>{a.name}</span><span className="mono">{Math.ceil(a.size / 1024)} KiB</span><DesignButton type="button" className="btn btn-ghost" aria-label={`Remove ${a.name}`} onClick={() => setAttachments((xs) => xs.filter((_, x) => x !== i))}>Remove</DesignButton></li>)}</ol>}
-          {/* The estimate's home is the strip (`composer-estimate-strip`); REQ-CHAT-174's figure is read once, never twice. */}
-          <span className="composer__estimate mono" data-lower-bound={estimate.lowerBound ? '1' : '0'} data-testid="composer-estimate-attachments" aria-hidden="true" tabIndex={-1}>{estimate.label}</span>
         </div>
         {/*
           * PD-CHAT-001 revision 2: the strip carries the controls, so the old two-row composition

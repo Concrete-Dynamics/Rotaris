@@ -7,6 +7,7 @@ import {
   reasoningChipLabel, runControlReason, runHeaderControlReason, RUN_STATE_LABELS, runStateOf, runTimingLabel, runTimingSeconds,
   sendRefusal, TRANSCRIPT_MIN_HEIGHT, type HistoryWalk,
 } from './composer.js';
+import { STRIP_NARROW_BELOW, STRIP_TIGHT_BELOW, stripDensity, stripIconTitle } from './WorkspaceView.js';
 
 describe('composer — REQ-CHAT-008: the run-state label vocabulary', () => {
   it('labels every member of REQ-NOTIFY-048 exactly as the requirement words it, plus the synthetic tenth', () => {
@@ -122,8 +123,7 @@ describe('composer — REQ-CHAT-014 / REQ-SHELL-159: two debounces, not one', ()
   });
 });
 
-describe('composer — REQ-CHAT-010: the geometry and the divider clamp', () => {
-  it('states the requirements own four figures', () => {
+describe('composer — REQ-CHAT-010: the geometry and the divider clamp', () => {  it('states the requirements own four figures', () => {
     expect([COMPOSER_DEFAULT_HEIGHT, COMPOSER_MIN_HEIGHT, TRANSCRIPT_MIN_HEIGHT, COMPOSER_WIDGET_MIN_HEIGHT]).toEqual([150, 110, 180, 48]);
   });
   it('never lets the composer fall below its minimum nor the transcript below its own', () => {
@@ -197,5 +197,21 @@ describe('composer — REQ-CHAT-158: the run-timing indicator', () => {
     expect(modelCallStartedAt([{ at: t(1), settled: true }, { at: t(2), settled: true }])).toBe(t(2));
     expect(modelCallStartedAt([{ at: t(1), settled: false }, { at: t(2), settled: true }])).toBe(t(1));
     expect(modelCallStartedAt([{ at: t(1), settled: false }, { at: t(2), settled: false }])).toBe(t(2));
+  });
+});
+
+describe('composer — PD-CHAT-001 revision 3: the compact strip density', () => {
+  it('derives the density from the dock width alone, at the measured thresholds', () => {
+    expect(STRIP_TIGHT_BELOW).toBe(900);
+    expect(STRIP_NARROW_BELOW).toBe(700);
+    expect(stripDensity(901)).toBe('full');
+    expect(stripDensity(900)).toBe('full');
+    expect(stripDensity(899)).toBe('tight');
+    expect(stripDensity(700)).toBe('tight');
+    expect(stripDensity(699)).toBe('narrow');
+  });
+  it('names control and choice on the compact tooltip, and the reason when disabled', () => {
+    expect(stripIconTitle('Reasoning effort for the next run', 'Medium', null)).toBe('Reasoning effort for the next run: Medium.');
+    expect(stripIconTitle('Model for the next run', 'gpt-4o', 'Run controls are unavailable while run active')).toBe('Run controls are unavailable while run active');
   });
 });

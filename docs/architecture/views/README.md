@@ -52,6 +52,16 @@ the projection (`project.ts`) reads one spelling from the one set, both surfaces
 through one definition, and `RowProof`'s seeded-open variant (`activityProofDisplaysMemberOpen`) is the
 projection half of the same gesture, so the change is recorded here and not in a view.
 
+**The composer's compact strip (PD-CHAT-001 revision 3).** The strip shortens its controls to
+their icon behind its own `data-compact` state — `tight` below 900 px, `narrow` below 700 px of the
+dock's own width, read by a `ResizeObserver` on the dock (`stripDensity` in `WorkspaceView`).
+`tight` shortens reasoning, run-start mode, permission mode and the estimate; `narrow`
+additionally shortens persona and model; attach, stash, steer, pause and the send pill never
+shorten. A shortened value stays mounted for the probes while CSS hides it; the compact tooltip
+names control and choice. The token estimate is drawn once, on the strip. The seams view's §8
+carries it; no view diagram moves, because no package, edge, process, message or ownership moves
+with it.
+
 **The composer's docked strip (PD-CHAT-001 revision 2).** The field and the strip share one outer
 contour (`WorkspaceView`'s `composer__dock`: textarea above, 34 px `composer__strip` below); every
 composer control stands on the strip and no second chip row is drawn. The pickers are shared

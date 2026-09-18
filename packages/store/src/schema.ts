@@ -752,6 +752,42 @@ export const MIGRATIONS: readonly Migration[] = [
         ON improvement_artifacts(source_session_id, generated_at DESC, artifact_id ASC);
     `,
   },
+  {
+    to: 20,
+    /*
+     * REQ-SESSION-166 / REQ-ORCH-154. `plan_cycles` (v17) was the one session-scoped table whose
+     * `session_id` carried no foreign key, so a session delete removed the transcript, the artifacts,
+     * the checkpoints and the audit — and kept the VERBATIM plan text indefinitely, keyed by a session
+     * id that no longer names a row. SQLite cannot add a foreign key in place, so v20 rebuilds the
+     * table with `REFERENCES sessions(session_id) ON DELETE CASCADE` and copies only the rows whose
+     * session still exists: dropping the already-orphaned ones IS the delete the user asked for, and
+     * nothing requires `plan_cycles` to outlive its session (the ruled exception is `delivery_runs`,
+     * REQ-TRACE-476, which this migration does not touch). The table has no child of its own, so the
+     * child-first order v19 needed does not apply; the rebuild still runs inside the one transaction
+     * `migrateStore` wraps a migration in, with `foreign_keys` ON.
+     */
+    sql: `
+      CREATE TABLE plan_cycles_v20 (
+        session_id TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+        cycle      INTEGER NOT NULL,
+        opened_at  TEXT NOT NULL,
+        plan       TEXT NOT NULL,
+        intent     TEXT NOT NULL,
+        todo       TEXT NOT NULL DEFAULT '',
+        changes    TEXT NOT NULL DEFAULT '',
+        edited     TEXT,
+        decision   TEXT,
+        decided_at TEXT,
+        PRIMARY KEY (session_id, cycle)
+      );
+      INSERT INTO plan_cycles_v20
+        (session_id, cycle, opened_at, plan, intent, todo, changes, edited, decision, decided_at)
+        SELECT session_id, cycle, opened_at, plan, intent, todo, changes, edited, decision, decided_at
+        FROM plan_cycles WHERE session_id IN (SELECT session_id FROM sessions);
+      DROP TABLE plan_cycles;
+      ALTER TABLE plan_cycles_v20 RENAME TO plan_cycles;
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

@@ -513,7 +513,7 @@ export class StoreDal {
       setArtifactTimelineEvent: db.prepare('UPDATE artifacts SET timeline_event_id = ? WHERE session_id = ? AND id = ?'),
       countArtifacts: db.prepare('SELECT count(*) AS c FROM artifacts WHERE session_id = ?'),
       // Part U (REQ-SESSION-166): the one delete statement. Every child table declares ON DELETE CASCADE and the open
-      // enables enforcement (open.ts, defect 40), so the row's removal takes its thirteen dependants in the same statement;
+      // enables enforcement (open.ts, defect 40), so the row's removal takes its fifteen dependants in the same statement;
       // `store.test.ts` plants a row in every table and asserts each is gone.
       deleteSession: db.prepare('DELETE FROM sessions WHERE session_id = ?'),
       // Part U (REQ-SESSION-153/189): the whole history in stored order — the trajectory's events, read in one transaction.

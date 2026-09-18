@@ -43,7 +43,12 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-09-17**
+## Last reconciled with the code: **2026-09-18**
+
+**The `plan_cycles` cascade (store v20, REQ-SESSION-166).** `03-runtime-view.md` §7 carries v20: the
+plan-cycles table rebuilt with `REFERENCES sessions(session_id) ON DELETE CASCADE`, so a session
+delete takes the VERBATIM plan text with the record; already-orphaned rows are dropped by the
+migration. Fifteen dependent tables, not thirteen.
 
 **The retrospective pass (Part AT — `PD-LIBRARY-002`, ADR-0065).** A second analysis pass over the workspace's own
 record, reached by a gesture rather than by a run ending, and reusing the post-run lifecycle whole. `02-process-view.md`

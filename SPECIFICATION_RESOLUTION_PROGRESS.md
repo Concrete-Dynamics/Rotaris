@@ -48,7 +48,7 @@ each row is in the dated entry at the end of this document
 
 | # | Track | Contains | State as of 2026-09-18 |
 |---|---|---|---|
-| R0 | Primary-flow defects | `docs/defects/a-session-delete-leaves-its-plan-cycles-behind.md`, `the-start-session-dialog-accepts-and-creates-nothing.md`, `the-start-session-dialog-does-not-fit-the-minimum-window.md`, `expanding-a-member-of-an-activity-line-does-not-lift-the-display-caps.md` | **BLOCKS RELEASE — 4 open, none repaired** |
+| R0 | Primary-flow defects | `docs/defects/fixed/a-session-delete-leaves-its-plan-cycles-behind.md` (repaired 2026-09-18, store v20), `the-start-session-dialog-accepts-and-creates-nothing.md`, `the-start-session-dialog-does-not-fit-the-minimum-window.md`, `expanding-a-member-of-an-activity-line-does-not-lift-the-display-caps.md` | **BLOCKS RELEASE — 3 open, 1 repaired** |
 | R1 | Release gate and distribution | `REQ-STARTUP-156` gate unbuilt; portable stub, icon, `REQ-SHELL-140/142` notices bundle (ADR-0054); signed `SHA256SUMS.txt` (`REQ-STARTUP-167/168`); per-runner load proof (IC-3 item 3); Linux/macOS artifacts (IC-3 items 1, 2, 4); notices-generator section for provisioned tools (IC-7 remainder) | **BLOCKS RELEASE — Windows installer exists, release pipeline does not** |
 | R2 | Owner rulings owed | ESC-36 (provider row visibility), ESC-37 (skill invocation surface), ESC-38 (Skills columns), ESC-39 (taken command name), ESC-40 (session log level); OQ-58 (skill session scope), OQ-59 (file-or-dir chooser), OQ-60 (summary without teardown), OQ-61 (isolated-run git reads), OQ-62 branches 2–3 (discovery/ configured pricing), OQ-63 (application-log threshold) | **BLOCKS RELEASE where the build proceeds under an interim reading — 5 ESC + 7 OQ open** |
 | R3 | Confinement and platform proof | IC-8 proposed (six `REQ-SANDBOX-127` effects on real macOS/Linux hosts); IC-4 half 2 (rename machine, record figures); OQ-12 power-loss fault half (owner physical act, per platform); POSIX proof isolation (`proof-isolation-is-windows-only…`); platform-parameterised helpers (`platform-parameterised-helpers…`) | **BLOCKS multi-platform claims; Windows-only release needs ESC-6 disclosure + IC-4 half 2 or a recorded waiver** |
@@ -367,10 +367,10 @@ IC-4 half-open, IC-7 half-open, IC-8 proposed, 5 ESC + 7 OQ branches
 open, 43 proof scripts, `pnpm package` Windows-only, `REQ-STARTUP-156`
 gate unbuilt, last `live-run` 21/21 on two scenarios only.
 
-**R0 — fix before any release (4).** Each breaks a primary flow
+**R0 — fix before any release (4; item 1 repaired 2026-09-18).** Each breaks a primary flow
 against a live requirement, so none can ride as a known issue:
-(1) session delete orphans `plan_cycles` (no `ON DELETE CASCADE`;
-`REQ-SESSION-166`, `REQ-ORCH-154` — delete-to-remove fails);
+(1) ~~session delete orphans `plan_cycles`~~ repaired: store v20 rebuilds `plan_cycles` with
+`ON DELETE CASCADE` (`REQ-SESSION-166`, `REQ-ORCH-154` — note in `docs/defects/fixed/`);
 (2) start-session dialog Accept creates nothing, silently
 (`REQ-SESSION-084`, `REQ-GIT-118`, `REQ-SHELL-125`);
 (3) the same dialog overflows the 1,000×680 minimum (`REQ-SHELL-022`,

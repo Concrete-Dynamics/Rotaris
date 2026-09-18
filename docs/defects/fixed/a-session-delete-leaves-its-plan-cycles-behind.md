@@ -50,3 +50,17 @@ retrospective pass.
 
 Noticed 2026-09-17 by Part AT (`PD-LIBRARY-002`) while running the wider proof sweep, and confirmed to
 pre-date that work: `plan_cycles` has been reference-free since v17 landed on `main`.
+
+## Repaired — 2026-09-18
+
+Appended migration v20 (`packages/store/src/schema.ts`): `plan_cycles` rebuilt with
+`REFERENCES sessions(session_id) ON DELETE CASCADE`, live rows copied, already-orphaned rows
+dropped. `delivery_runs` untouched under its REQ-TRACE-476 ruling.
+
+Regression tests: `packages/store/src/store.test.ts`, in "REQ-SESSION-166: a v19 store migrates
+to v20" — live cycles survive verbatim, the orphan drops, the reference is read from the schema,
+and `deleteSession` takes the deleted session's cycles leaving another session's; and the delete
+test now plants a plan cycle and expects `plan_cycles` among the fifteen dependants. Built-app
+proof: `apps/desktop/scripts/sessions-proof.mjs` plants A's plan text, pins sixteen cascaded
+tables with `delivery_runs` the one fact, and asserts `plan_cycles` 1 before and 0 after A's
+delete.

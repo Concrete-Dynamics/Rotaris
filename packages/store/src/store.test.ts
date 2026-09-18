@@ -447,6 +447,47 @@ describe('store — v3: what a run records (REQ-SESSION-138, REQ-SESSION-168, RE
     r.db.close();
     forgetSpelling(r.dir);
   });
+  /**
+   * REQ-SESSION-166: the v19→v20 rebuild. `plan_cycles` gains REFERENCES sessions(session_id)
+   * ON DELETE CASCADE; rows whose session still exists survive VERBATIM, and the orphans v19 let
+   * accumulate are dropped — that drop IS the delete the user asked for. The cascade is then
+   * measured, not assumed: deleting the session removes its cycles and nothing of another session.
+   */
+  it('REQ-SESSION-166: a v19 store migrates to v20; live plan cycles survive verbatim, orphans drop, the delete cascades', () => {
+    const id = mintWorkspaceId('000000000000000000000000000000f4');
+    const r = openWorkspaceStore(root, id, 'C:/ws');
+    const live = asSessionId('S-live');
+    const other = asSessionId('S-other');
+    const setup = new StoreDal(r.db);
+    for (const sid of [live, other]) setup.upsertSession({ session_id: sid, execution_status: 'idle', workspace_root: 'C:/ws', created_at: 't', updated_at: 't' });
+    setup.insertPlanCycle(live, 1, 't0', 'the plan, verbatim', 'small_feature', '', '');
+    // Back to the v19 shape: the same columns without the reference, so the orphan below inserts
+    // the way v19 allowed — no foreign key to refuse it.
+    r.db.exec(`CREATE TABLE plan_cycles_v19 (
+        session_id TEXT NOT NULL, cycle INTEGER NOT NULL, opened_at TEXT NOT NULL, plan TEXT NOT NULL,
+        intent TEXT NOT NULL, todo TEXT NOT NULL DEFAULT '', changes TEXT NOT NULL DEFAULT '',
+        edited TEXT, decision TEXT, decided_at TEXT, PRIMARY KEY (session_id, cycle));
+      INSERT INTO plan_cycles_v19 SELECT * FROM plan_cycles;
+      DROP TABLE plan_cycles;
+      ALTER TABLE plan_cycles_v19 RENAME TO plan_cycles;`);
+    r.db.prepare("INSERT INTO plan_cycles (session_id, cycle, opened_at, plan, intent, todo) VALUES ('S-gone', 1, 't0', 'orphan', 'small_feature', '')").run();
+    r.db.pragma('user_version = 19');
+
+    expect(migrateStore(r.db)).toEqual({ kind: 'migrated', from: 19, to: CURRENT_SCHEMA_VERSION });
+    const dal = new StoreDal(r.db);
+    // The live cycle survives VERBATIM (REQ-ORCH-154); the orphan is gone with the session it named.
+    expect(dal.planCycle(live, 1)).toMatchObject({ plan: 'the plan, verbatim', intent: 'small_feature' });
+    expect(r.db.prepare("SELECT count(*) AS c FROM plan_cycles WHERE session_id = 'S-gone'").get()).toMatchObject({ c: 0 });
+    // The reference is declared, not assumed: read it from the schema the delete relies on.
+    expect((r.db.prepare("SELECT count(*) AS c FROM pragma_foreign_key_list('plan_cycles') WHERE \"from\" = 'session_id' AND \"table\" = 'sessions'").get() as { c: number }).c).toBe(1);
+    // And the delete the requirement names takes the cycles with the session, leaving the other's.
+    dal.insertPlanCycle(other, 1, 't0', 'the other plan', 'small_feature', '', '');
+    expect(dal.transaction(() => dal.deleteSession(live))).toBe(true);
+    expect(dal.planCyclesOf(live)).toEqual([]);
+    expect(dal.planCycle(other, 1)!.plan).toBe('the other plan');
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
 
   it('the launch audit is written exactly once: the second insert is refused by the statement, not by a check', () => {
     const id = mintWorkspaceId('00000000000000000000000000000089');
@@ -616,8 +657,9 @@ describe('store — v5: the child ledger (ADR-0012, REQ-ORCH-043/049/050/151)', 
     const { r, dal, sid } = open('96');
     // REQ-ORCH-153/154: v17 adds `plan_cycles` and the two session columns; v16 added `artifacts.commands`;
     // v18 (ADR-0061) added the typed-run session columns and the improvement tables; v19 (ADR-0065)
-    // rebuilt `improvement_artifacts` for PD-LIBRARY-002's retrospective, which belongs to no session.
-    expect(CURRENT_SCHEMA_VERSION).toBe(19);
+    // rebuilt `improvement_artifacts` for PD-LIBRARY-002's retrospective, which belongs to no session;
+    // v20 gives `plan_cycles` the cascade REQ-SESSION-166's delete assumes.
+    expect(CURRENT_SCHEMA_VERSION).toBe(20);
     dal.insertChild(child(sid, 'bg_00000001'));
     const c = dal.getChild(sid, 'bg_00000001')!;
     expect(c).toMatchObject({ state: 'queued', launch_generation: 0, report_stored: 0, observed: 0, context_injected: 0, tool_calls: 0, completed_at: null, report: null });
@@ -759,6 +801,8 @@ describe('Part U — the delete and its cascade (REQ-SESSION-166, ADR-0058)', ()
       dal.enqueueSlot(sid, 'm', 'bg_00000001');
       dal.insertQueuedPrompt(sid, 'q1', 'later', 't');
       dal.insertCheckpoint({ session_id: sid, sequence: 1, ref: 'refs/rotaris/checkpoints/x/1', commit_id: 'c', created_at: 't', iteration: 1, child_name: '', files: '[]', kind: 'iteration' });
+      // v20 (REQ-SESSION-166): the plan cycle goes with its session, so its VERBATIM plan text leaves with the delete.
+      dal.insertPlanCycle(sid, 1, 't', 'the plan, verbatim', 'small_feature', '', '');
       // Part Y (v12): the artifact record goes with its session, so its body file is the only thing left to remove.
       dal.insertArtifact({
         session_id: raw, id: `art_${raw.slice(-6)}A`, slug: `slug-${raw.toLowerCase()}`, title: 't', kind: 'agent_published', source_task_id: null, canonical_name: null, source_persona: 'p',
@@ -774,10 +818,10 @@ describe('Part U — the delete and its cascade (REQ-SESSION-166, ADR-0058)', ()
     // requirement's run history outlives the session it names (REQ-TRACE-405/476: "no requirement SHALL be silently
     // reset"), so the dependants of the session row are the tables whose session_id column REFERENCES it.
     const tables = (r.db.prepare("SELECT m.name FROM sqlite_master m WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%' AND (m.name = 'sessions' OR EXISTS (SELECT 1 FROM pragma_foreign_key_list(m.name) WHERE \"from\" = 'session_id' AND \"table\" = 'sessions'))").all() as { name: string }[]).map((t) => t.name).sort();
-    // Every table whose session_id references the session row is a dependant of it: fourteen today (Part Y's `artifacts`
-    // among them) plus `sessions` itself. `delivery_runs` names a session and is NOT among them (Part AK).
+    // Every table whose session_id references the session row is a dependant of it: fifteen today (v20's
+    // `plan_cycles` cascade among them) plus `sessions` itself. `delivery_runs` names a session and is NOT among them (Part AK).
     expect((r.db.prepare("SELECT count(*) AS c FROM pragma_table_info('delivery_runs') WHERE name = 'session_id'").get() as { c: number }).c).toBe(1);
-    expect(tables).toEqual(['artifacts', 'checkpoints', 'children', 'events', 'issues', 'launch_audits', 'model_slot_queue', 'permission_audit', 'queued_prompts', 'ring_state', 'session_locks', 'sessions', 'timeline', 'tool_calls', 'transcript_rows']);
+    expect(tables).toEqual(['artifacts', 'checkpoints', 'children', 'events', 'issues', 'launch_audits', 'model_slot_queue', 'permission_audit', 'plan_cycles', 'queued_prompts', 'ring_state', 'session_locks', 'sessions', 'timeline', 'tool_calls', 'transcript_rows']);
     const count = (table: string, sid: string) => (r.db.prepare(`SELECT count(*) AS c FROM ${table} WHERE session_id = ?`).get(sid) as { c: number }).c;
     for (const t of tables) expect(count(t, gone), `${t} planted`).toBeGreaterThan(0);
     // The delete runs on the RUN HOST's kind of connection — openStore on the resolved file, no migrateStore — which is
@@ -900,10 +944,10 @@ describe('store — v11: the saved prompts (Part X; REQ-LIBRARY-137/138/139, REQ
   it('is v19, and the migration list is append-only with nothing renumbered', () => {
     // Part X reserved v11, Part Y v12, Part AB v13, Part AE v14 and Part AK v15 (plan Reservations, ruled 2026-09-09: the ladder and
     // the pin ride with the v15 reservation) before any of them was written; PD-LIBRARY-001 appended v16; the plan gate appended
-    // v17; ADR-0061 appended v18; ADR-0065 appended v19. The ladder is asserted whole rather than at its top, so a later part
+    // v17; ADR-0061 appended v18; ADR-0065 appended v19; the plan_cycles cascade appended v20. The ladder is asserted whole rather than at its top, so a later part
     // that renumbers an earlier entry fails here and not on a user's disk.
-    expect(MIGRATIONS.map((m) => m.to)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]);
-    expect(CURRENT_SCHEMA_VERSION).toBe(19);
+    expect(MIGRATIONS.map((m) => m.to)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]);
+    expect(CURRENT_SCHEMA_VERSION).toBe(20);
   });
 });
 

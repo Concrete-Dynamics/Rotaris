@@ -396,14 +396,18 @@ const tables = tablesWithSession();
 // Part Y (v12) added `artifacts`: fifteen tables carried a session_id, and the cascade took each of them. Part AK (v15)
 // added a sixteenth, `delivery_runs`, whose `session_id` names a session as a fact about the run and carries no foreign
 // key, because a requirement's run history outlives the session it names (REQ-TRACE-476; ADR-0041's first execution,
-// ruled 2026-09-09). The cascade premise is therefore "the tables whose session_id REFERENCES sessions", read from the
-// schema rather than pinned by count. The count pin that stood here was the sixtieth defect: the ruling narrowed the
-// premise in the store's own suite, and nothing carried it to this proof until the merge-1 proof pass ran it.
+// ruled 2026-09-09). v20 gives `plan_cycles` the reference REQ-SESSION-166's delete assumes, so the cascade takes it
+// too and `delivery_runs` stands alone as the one deliberate exception. The cascade premise is therefore "the tables
+// whose session_id REFERENCES sessions", read from the schema rather than pinned by count. The count pin that stood
+// here was the sixtieth defect: the ruling narrowed the premise in the store's own suite, and nothing carried it to
+// this proof until the merge-1 proof pass ran it.
 const cascaded = ['sessions', ...tablesReferencingSessions()];
 const facts = tables.filter((t) => !cascaded.includes(t));
-expect(cascaded.length === 15, `tables whose session_id references sessions: ${cascaded.join(', ')}`);
+expect(cascaded.length === 16, `tables whose session_id references sessions: ${cascaded.join(', ')}`);
 expect(JSON.stringify(facts) === '["delivery_runs"]', `tables carrying session_id as a fact: ${facts.join(', ')}`);
 withDb((db) => db.prepare("INSERT INTO delivery_runs (req_id, unit, session_id, worktree_ref, permissions, status, stage, outcome, started_at, ended_at) VALUES ('REQ-PROOF-001', 'u1', ?, NULL, '', 'running', NULL, NULL, '2026-09-05T09:00:00.000Z', NULL)").run(A));
+// v20 (REQ-SESSION-166): A's VERBATIM plan text is planted so the built-app delete below measures the cascade taking it.
+withDb((db) => db.prepare("INSERT INTO plan_cycles (session_id, cycle, opened_at, plan, intent, todo) VALUES (?, 1, 't', 'proof plan, verbatim', 'small_feature', '')").run(A));
 const plantedBefore = Object.fromEntries(tables.map((t) => [t, countIn(t, A)]));
 expect(refsOf(workspace, A).length === 2, `A's refs before: ${JSON.stringify(refsOf(workspace, A))}`);
 const del = launch('delete', {
@@ -423,6 +427,8 @@ const del = launch('delete', {
   expect(cascaded.every((t) => after[t] === 0), `rows left for A: ${JSON.stringify(after)}`);
   // REQ-TRACE-476: the run row that names A survives A's delete; the fact stands after the session is gone.
   expect(plantedBefore.delivery_runs === 1 && after.delivery_runs === 1, `A's delivery run: ${plantedBefore.delivery_runs} before, ${after.delivery_runs} after`);
+  // REQ-SESSION-166 (v20): A's VERBATIM plan text leaves with the session; it is not a second `delivery_runs`.
+  expect(plantedBefore.plan_cycles === 1 && after.plan_cycles === 0, `A's plan cycles: ${plantedBefore.plan_cycles} before, ${after.plan_cycles} after`);
   expect(refsOf(workspace, A).length === 0, `A's refs after: ${JSON.stringify(refsOf(workspace, A))}`);
   expect(!existsSync(filesA), `A's files remain at ${filesA}`);
   expect(refsOf(workspace, 'B-nolock').length === 0 && sessionRow('B-nolock') !== undefined && countIn('permission_audit', 'B-nolock') === CAP, 'another session was touched');

@@ -36,7 +36,29 @@ Accepted: 2026-09-06. Scope: all 48 decisions in [the review](SPECIFICATION_REVI
 
 Each item requires current evidence for its operative specification, dependent contracts, implementation and relevant verification. Hardware-dependent measurements remain explicitly recorded as evidence debt under the accepted proposals. A decision's acceptance alone establishes its authority; the checklist below tracks its delivery.
 
-## Work packages
+## Roadmap — what is left before a production release (overhauled 2026-09-18)
+
+This table overhauls the six-package acceptance tracker above into a
+release tracker. The six rows are kept with their delivery state as of
+2026-09-18; the rows after them are the work the acceptance scope did
+not contain and a production release does. Ordering is by
+release-blocking force, not by package number. Detail and evidence for
+each row is in the dated entry at the end of this document
+(`2026-09-18 — release-readiness audit`).
+
+| # | Track | Contains | State as of 2026-09-18 |
+|---|---|---|---|
+| R0 | Primary-flow defects | `docs/defects/a-session-delete-leaves-its-plan-cycles-behind.md`, `the-start-session-dialog-accepts-and-creates-nothing.md`, `the-start-session-dialog-does-not-fit-the-minimum-window.md`, `expanding-a-member-of-an-activity-line-does-not-lift-the-display-caps.md` | **BLOCKS RELEASE — 4 open, none repaired** |
+| R1 | Release gate and distribution | `REQ-STARTUP-156` gate unbuilt; portable stub, icon, `REQ-SHELL-140/142` notices bundle (ADR-0054); signed `SHA256SUMS.txt` (`REQ-STARTUP-167/168`); per-runner load proof (IC-3 item 3); Linux/macOS artifacts (IC-3 items 1, 2, 4); notices-generator section for provisioned tools (IC-7 remainder) | **BLOCKS RELEASE — Windows installer exists, release pipeline does not** |
+| R2 | Owner rulings owed | ESC-36 (provider row visibility), ESC-37 (skill invocation surface), ESC-38 (Skills columns), ESC-39 (taken command name), ESC-40 (session log level); OQ-58 (skill session scope), OQ-59 (file-or-dir chooser), OQ-60 (summary without teardown), OQ-61 (isolated-run git reads), OQ-62 branches 2–3 (discovery/ configured pricing), OQ-63 (application-log threshold) | **BLOCKS RELEASE where the build proceeds under an interim reading — 5 ESC + 7 OQ open** |
+| R3 | Confinement and platform proof | IC-8 proposed (six `REQ-SANDBOX-127` effects on real macOS/Linux hosts); IC-4 half 2 (rename machine, record figures); OQ-12 power-loss fault half (owner physical act, per platform); POSIX proof isolation (`proof-isolation-is-windows-only…`); platform-parameterised helpers (`platform-parameterised-helpers…`) | **BLOCKS multi-platform claims; Windows-only release needs ESC-6 disclosure + IC-4 half 2 or a recorded waiver** |
+| R4 | Spec packages still pending | Providers and MCP (A5, A7, A8, OQ-6, OQ-18, OQ-21, OQ-22, OQ-50); Services/stores/recovery (OQ-1, OQ-2, OQ-43, OQ-47, OQ-48; OQ-45 ruled 2026-09-11, delivery unconfirmed); Traceability/presentation/benchmarks (OQ-24, OQ-25, OQ-29, OQ-32, OQ-33, OQ-34, OQ-40); Governance A1 | **BLOCKS a "spec-complete" claim; shippable only with each item waived or moved post-1.0 explicitly** |
+| R5 | Should-fix defects (non-blocking) | `configured-per-token-prices-take-no-effect.md`, `the-analysis-completion-notice-does-not-match-its-requirement.md`, `a-chip-option-announces-its-label-and-hint-as-one-word.md`, `the-in-projection-scope-filter-is-never-reached.md`, `two-proof-scripts-assert-a-timeline-name-the-code-has-never-written.md`, `staging-failure-escapes-the-replacement-ladder.md` (claims repaired, verify + close) | **7 open — ship only with known-issue notes, or fix first** |
+| R6 | Proof health | `theme-proof` red by design (`--rt-text-disabled` misses 3:1 on cards — OQ-56, needs design-or-requirement ruling); `delivery-proof` legacy red (85/86); `slice-proof` stale (needs pasted key); oldest green batch 2026-09-11 | **BLOCKS "all proofs green" — theme red needs an owner ruling either way** |
+| R7 | Live-model confirmation | Strict-schema rung fix (`REQ-ORCH-010`, accepted-not-sent) needs `pnpm live-run --confirm`; last green 2026-09-13 was 21/21 on `sign-in + requirements` only | **Owed before claiming the model boundary is proven** |
+| R8 | Polish / hygiene | `the-git-table-clips-its-content-and-does-not-scroll.md`, `the-application-log-keeps-every-level-because-nothing-reads-one.md`, `the-directive-registers-count-is-prose-with-no-checker.md`, `plan-gate-proof-resume-sometimes-finds-no-session-row.md`, `role-gutter-truncation-rule-is-inert.md` + `live-rows-are-never-measured.md` (both carry Repaired 2026-09-15 — verify + close) | **Not blocking — close or carry as known issues** |
+
+## Work packages (acceptance scope, kept for history)
 
 | Package | Accepted items | State |
 |---|---|---|
@@ -335,3 +357,96 @@ as `d9738ece8`; the commit's actual short hash on `main` is `d9738ec`, and it no
 of that entry's claims were confirmed against history rather than taken from it: the merge exists,
 its message names REQ-ORCH-152/153/154 and ADR-0062, and the entry's predecessor commits (`70a12c3`,
 `60ff8c5`) are the A4-specification and A2-audit rounds this document narrates.
+
+### 2026-09-18 — release-readiness audit (roadmap overhaul)
+
+Audited against `main` at `4861978`: `pnpm check` green
+(symbols 4,399 ids, typecheck, lint, 1,639 passed / 25 skipped),
+19 open defect notes (24 fixed), IC-1/2/5/6 discharged, IC-3 open,
+IC-4 half-open, IC-7 half-open, IC-8 proposed, 5 ESC + 7 OQ branches
+open, 43 proof scripts, `pnpm package` Windows-only, `REQ-STARTUP-156`
+gate unbuilt, last `live-run` 21/21 on two scenarios only.
+
+**R0 — fix before any release (4).** Each breaks a primary flow
+against a live requirement, so none can ride as a known issue:
+(1) session delete orphans `plan_cycles` (no `ON DELETE CASCADE`;
+`REQ-SESSION-166`, `REQ-ORCH-154` — delete-to-remove fails);
+(2) start-session dialog Accept creates nothing, silently
+(`REQ-SESSION-084`, `REQ-GIT-118`, `REQ-SHELL-125`);
+(3) the same dialog overflows the 1,000×680 minimum (`REQ-SHELL-022`,
+`REQ-SHELL-125` — likely contributor to (2));
+(4) expanding an activity-line member does not lift the display caps
+(key mismatch `activity-4` vs `tool:activity-4`;
+`REQ-CHAT-061/166/059` — full tool output unreadable).
+
+**R1 — the release pipeline is the second blocker, not the installer.**
+`pnpm package` produces a Windows installer and its load proof, but a
+production release additionally owes: the `REQ-STARTUP-156` gate
+(version/pin guards, per-platform notices validation, `SHA256SUMS.txt`
+covering every asset with matching digests, detached `.sig` against a
+key every offered artifact carries, seven-element body, every artifact
+of each of the three platform keys downloaded and launched to first
+paint offline — two runs for a self-preparing portable — with any
+unestablishable check recorded `not performed` = FAIL); the portable
+stub, the icon, and `REQ-SHELL-140/142` (ADR-0054); the signed
+checksums (unsigned binaries are by design, `REQ-STARTUP-021/023`,
+disclosed per `REQ-STARTUP-035(6)`); the per-runner load proof
+(IC-3 item 3); and the IC-7 remainder (notices-generator "Tools
+provisioned after installation" section, `REQ-STARTUP-141/142/143`).
+Linux/macOS artifacts stay bound by IC-3 items 1, 2 and 4; shipping
+them before discharge is shipping on an untested platform.
+
+**R2 — rulings owed (5 ESC, 7 OQ branches).** The build proceeds under
+stated interim readings for ESC-36 (row visibility stays on
+`REQ-PROVIDER-140`), ESC-37 (force-loaded skill block, no chip),
+ESC-38 (seven Skills columns), ESC-39 (suffixed command names),
+ESC-40 (domain-07 log level; CLI default unimplemented), and OQ-58
+(per-session skill state), OQ-59 (file filter + `/skill <path>`),
+OQ-60 (NULL summary), OQ-61 (isolated-run git reads still refused;
+only the misleading message fixed), OQ-62 branches 2–3 (discovery
+pricing blocked on OQ-21; configured rates deliberately unbuilt),
+OQ-63 (keep everything). OQ-62 branch 1 (provider-reported cost) was
+ruled 2026-09-16 as `PD-MONITOR-001` and built. A release needs each
+row ruled or explicitly waived; the interim is recorded, not assumed.
+
+**R3 — platform proof.** IC-8 binds any confinement claim: none of the
+six `REQ-SANDBOX-127` effects has been demonstrated on a real host;
+the Windows `available: false` refusal path is proven
+(`pnpm sandbox-proof`, ESC-6). IC-4 half 2 needs the owner-run rename
++ reboot with figures recorded. OQ-12's fault half needs the owner's
+physical act per platform (wording closed, measurement owed on
+Windows, blocked on Linux/macOS while IC-3 stands). Two harness gaps
+make cross-platform proof undecidable: proof isolation sets only
+`LOCALAPPDATA`/`APPDATA` (POSIX runs touch the real data directory),
+and five helpers take `platform` but read the host separator
+(`REQ-STARTUP-145`, `REQ-MCP-021/037`, `REQ-CHAT-015`, W-27).
+Windows-only release posture: keep ESC-6's disclosure on the surface
+and in the advisory, close or waive IC-4 half 2.
+
+**R4 — acceptance packages still pending.** Providers and MCP (A5, A7,
+A8, OQ-6, OQ-18, OQ-21, OQ-22, OQ-50 — A5/OQ-19/OQ-20 amended with
+regressions, selector/attachment integration and the shared
+effective-capability resolver still owed); services/stores/recovery
+(OQ-1, OQ-2, OQ-43, OQ-47, OQ-48); traceability/presentation/
+benchmarks (OQ-24, OQ-25, OQ-29, OQ-32, OQ-33, OQ-34, OQ-40);
+governance A1. Session lifecycle is delivered 2026-09-13 with the two
+recorded evidence debts (OQ-12 measurement; OQ-42 notice rendered
+form, trigger unexercised for want of a fault seam). Permissions/
+orchestration/terminal is A2 + A4 delivered, remainder open
+(`priorResponse` has no producer — owed as the `REQ-ORCH-012` route).
+
+**R6/R7 — evidence health.** `theme-proof` is red by design
+(`rotaris-dim` `--rt-text-disabled` misses 3:1 on cards — OQ-56; needs
+a design-or-requirement ruling either way, not a code tweak).
+`delivery-proof` legacy red (85/86) should be retired or repaired, not
+carried silently. `slice-proof` (2026-09-05) is stale by construction.
+`pnpm live-run` last green 2026-09-13 covers `sign-in + requirements`
+only; the strict-schema fix (`REQ-ORCH-010` first real execution
+2026-09-16) is accepted-not-sent until a confirmed live run.
+
+**Suggested release order.** R0 → R2 rulings that unblock R0/R1
+(ESC-40, OQ-61, OQ-56) → R1 gate + IC-7 remainder → R3 Windows
+posture (IC-4 half 2, proof isolation, separator helpers) → R5/R8
+verify-and-close sweep (`staging-failure…`, `live-rows…`,
+`role-gutter…`) → R7 live-run → R4 triage (waive vs post-1.0 per
+item, explicitly). IC-3/IC-8 stay as the multi-platform gate.

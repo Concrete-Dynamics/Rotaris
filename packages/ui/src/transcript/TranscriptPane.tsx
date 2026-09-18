@@ -193,7 +193,9 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
    * `memberExpanded` / `toggleMember` are how a group's MEMBER is opened. `RowRenderProps` carries one
    * `expanded` for the whole `DisplayRow`, so a group cannot express its members' states through it — the
    * second gap in the seam, found when the two halves met. The map is the same one, keyed by the member's own
-   * display key, which never collides with its group's: `project.ts` keys a group `group:<first member's key>`.
+   * display key — `rowKey(member)`, the identity step 4 holds REQ-CHAT-166's caps against. Toggling the member
+   * therefore opens the card AND lifts the caps in the same gesture — which never collides with its group's:
+   * `project.ts` keys a group `group:<first member's key>`.
    */
   // Part AL2 — REQ-SHELL-079 / REQ-CHAT-063/076: the live preview and the click that requests the pop-out come from the
   // renderer's terminal host (`terminal/host.tsx`), a context and not a prop, so this pane's props and the view above it

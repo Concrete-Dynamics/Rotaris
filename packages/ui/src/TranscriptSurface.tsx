@@ -3,7 +3,7 @@ import { RUN_AGENT_ID, type AgentRecord, type TranscriptRow } from '@rotaris/con
 import { elapsedLabel } from './AgentTree.js';
 import { countNoun } from './agents.js';
 import {
-  Row, TranscriptSurfaceProvider, defaultExpanded, delegationSummary, expansionKey, placements, rowMenuEntries,
+  Row, TranscriptSurfaceProvider, defaultExpanded, delegationSummary, expansionKey, placements, rowKey as memberRowKey, rowMenuEntries,
   type DisplayRow, type RowMenuEntry, type RowMenuRequest, type TranscriptSurface,
 } from './transcript/Row.js';
 import { Button as DesignButton } from './design-system/index.js';
@@ -239,7 +239,7 @@ export function RowList({ rows, surface, acknowledge, trailers, displays: given,
   const [menu, setMenu] = useState<RowMenuRequest | null>(null);
   const box = useRef<HTMLDivElement>(null);
   const displays = useMemo<readonly DisplayRow[]>(
-    () => given ?? [...rows.map((row): DisplayRow => ({ shape: 'row', key: row.callKey ?? `${row.index}`, row })), ...(trailers ?? [])],
+    () => given ?? [...rows.map((row): DisplayRow => ({ shape: 'row', key: memberRowKey(row), row })), ...(trailers ?? [])],
     [given, rows, trailers],
   );
   const places = useMemo(() => placements(displays), [displays]);
@@ -247,8 +247,12 @@ export function RowList({ rows, surface, acknowledge, trailers, displays: given,
   const value = useMemo<TranscriptSurface>(() => ({
     ...surface,
     openMenu: (request) => setMenu(request),
-    // A member of a group is a row, and `expansionKey` is what keeps its identity apart from the group's — the two
-    // carry the same string under REQ-CHAT-059 and would otherwise open together.
+    // R0-4: a member's card is `memberKey(member)` — the identity step 4 holds the caps against — so opening
+    // the card and lifting its caps are one gesture. The map still never collides with the GROUP's own key:
+    // `project.ts` keys a group `group:<first member's key>`, whose `group:` prefix no member key carries.
+    // `expansionKey` stays the single definition of the SHAPE part, which is what keeps a group's identity
+    // apart from its members' — the two carry the same string under REQ-CHAT-059 and would otherwise open
+    // together (docs/defects/…-does-not-lift-the-display-caps.md — moved to `fixed/` with the repair).
     memberExpanded: (key) => expanded[expansionKey('row', key)] === true,
     toggleMember: (key) => toggle(expansionKey('row', key), false),
   }), [surface, expanded, toggle]);

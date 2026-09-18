@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { AgentRecord, QuestionPrompt, TranscriptRow } from '@rotaris/contracts';
 import { trailerRows } from './transcript/project.js';
 import {
-  compactTask, defaultExpanded, delegationSummary, groupDurationMs, groupSeverity, groupSummary, isLiveTerminalRow,
-  personaColourToken, placements, reasoningSummary, rowMenuEntries, rowRole, rowTask, rowTime, stalledLabel, stripOutcomeGlyph,
+  compactTask, defaultExpanded, delegationSummary, expansionKey, groupDurationMs, groupSeverity, groupSummary, isLiveTerminalRow,
+  personaColourToken, placements, reasoningSummary, rowKey, rowMenuEntries, rowRole, rowTask, rowTime, stalledLabel, stripOutcomeGlyph,
   THINKING_LIVE_CUTOFF_MS, toolOutcome, trailerText, type DisplayRow,
 } from './transcript/Row.js';
 import { RUN_OWNED_KINDS, SCOPE_NO_AGENT, scopedRows } from './TranscriptSurface.js';
@@ -219,6 +219,16 @@ describe('rows — REQ-CHAT-067/167, the two display preferences', () => {
     expect(defaultExpanded(thinking, { showReasoning: false })).toBe(false);
     expect(defaultExpanded(thinking, { showReasoning: true })).toBe(true);
     expect(defaultExpanded(display(row({ kind: 'tool' })), { showReasoning: true })).toBe(false);
+  });
+
+  it('REQ-CHAT-059/061/166: a member card is keyed by the row identity the caps are held against', () => {
+    // The defect this pins (R0-4): the member opened onto the capped projection because the card's key
+    // was `callKey ?? index` while `hygiene` held the caps against `rowKey`. A member's card key IS the
+    // row's own key, so the map the surfaces toggle and the set step 4 reads cannot disagree — and the
+    // GROUP's own key still parts from it by the `group:` prefix, so opening the line opens the line alone.
+    const member = row({ kind: 'tool', body: 'read_file README.md', toolName: 'read_file', callKey: 'activity-1' });
+    expect(rowKey(member)).toBe('tool:activity-1');
+    expect(expansionKey('row', rowKey(member))).not.toBe(expansionKey('group', rowKey(member)));
   });
 
   it('REQ-CHAT-066: a live terminal row is recognised by its stream id and its unsettled state', () => {

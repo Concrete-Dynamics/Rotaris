@@ -5,7 +5,7 @@ import { linkifyBare, type Span } from '../markdown/parse.js';
 import { markMotionStart } from '../motion.js';
 import { TerminalPreviewBlock } from '../terminal/TerminalPreviewBlock.js';
 import type { TerminalPreview } from '../terminal/streams.js';
-import { FACT_SEPARATOR, activitySpanMs, activitySummary, groupSeverity, groupSummary, isLive, isReasoningRow, reasoningChars, segmentFacts, type Severity } from './project.js';
+import { FACT_SEPARATOR, activitySpanMs, activitySummary, groupSeverity, groupSummary, isLive, isReasoningRow, reasoningChars, rowKey, segmentFacts, type Severity } from './project.js';
 
 /**
  * Part AA — **the ONE row renderer** (ADR-0051's second execution). What one row looks like once a slot is
@@ -373,8 +373,19 @@ export function placements(displays: readonly DisplayRow[]): readonly RowPlace[]
  * alone opens a group's first member whenever the group is opened. (Seen in the product the first time a group was
  * expanded, not by reading.) The shape is therefore part of the key, and this is the single definition of it, so
  * Part Z's map and this file's list cannot disagree.
+ *
+ * `rowKey` is REQ-CHAT-059's identity for a ROW and lives in `project.ts`; it is re-exported here so every
+ * surface reaches the member's card key by its old name (`Row.tsx` is where the member's card is drawn).
+ * `memberKey` is R0-4's single definition of a GROUP MEMBER's card key: the member's own `rowKey`, which is
+ * what step 4 holds REQ-CHAT-166's caps against (`o.expanded.has(rowKey(m))` in `hygiene`) and therefore what
+ * opens the card AND lifts the caps in one gesture. Every caller that opens, reads or seeds a member's card —
+ * `Row`'s group branch below, both surfaces' `memberExpanded`/`toggleMember`, the proof's seeded-open variant —
+ * reads this and nothing else, so the four spellings cannot strand again.
  */
 export function expansionKey(shape: DisplayRow['shape'], key: string): string { return `${shape}:${key}`; }
+export { rowKey };
+/** R0-4: a group member's card key — the member's own `rowKey`, the identity step 4 holds the caps against. */
+export function memberKey(m: TranscriptRow): string { return rowKey(m); }
 
 /**
  * REQ-CHAT-167 and REQ-CHAT-067: the expansion a row has when the reader has NOT set one by hand. Part Z's map
@@ -612,7 +623,10 @@ export function Row(p: RowProps) {
               // colour spanning the whole run — one line for one agent's callings, rather than a rule per row.
               <div className="row__members" data-testid="group-members" style={{ borderInlineStartColor: `var(${rail}, var(--rt-border))` }}>
                 {display.members.map((m) => {
-                  const key = m.callKey ?? `${m.index}`;
+                  // R0-4: `memberKey` — the member's own `rowKey`, the identity step 4 holds the caps against.
+                  // `data-member-key` on the drawn member row publishes the card's key (below), so the proof's
+                  // click lands on the member it means.
+                  const key = memberKey(m);
                   return (
                     <Row
                       key={key}
@@ -667,7 +681,7 @@ export function Row(p: RowProps) {
     // for the row's stream, expanded or not, so it stays visible; the card's INPUT/OUTPUT sit beneath it when open.
     const preview = stream !== null && !row.settled ? (surface.terminalPreview?.(stream) ?? null) : null;
     return (
-      <article {...common} className={`row row--tool tool tool--${outcome.state}${live ? ' row--streaming' : ''}${blockStartClass}`} style={depthStyle(surface, row)} data-index={row.index} data-settled={row.settled} data-call-key={row.callKey} data-agent={row.name} data-collapsed={collapsedToName ? 'name' : undefined}>
+      <article {...common} className={`row row--tool tool tool--${outcome.state}${live ? ' row--streaming' : ''}${blockStartClass}`} style={depthStyle(surface, row)} data-index={row.index} data-settled={row.settled} data-call-key={row.callKey} data-member-key={display.key} data-agent={row.name} data-collapsed={collapsedToName ? 'name' : undefined}>
         <div className="row__grid">
           <Attribution row={row} place={place} personaBar={personaColourToken(row.persona ?? row.name ?? '')} />
           <div className="row__main">

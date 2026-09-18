@@ -4,6 +4,7 @@ import { PersonaWindow } from './PersonaWindow.js';
 import { WorkspaceView } from './WorkspaceView.js';
 import { RowList, type Acknowledger } from './TranscriptSurface.js';
 import type { DisplayRow } from './transcript/Row.js';
+import { memberKey } from './transcript/Row.js';
 import { CAP_DEFAULTS, projectDisplay } from './transcript/project.js';
 import { Button as DesignButton } from './design-system/index.js';
 
@@ -167,14 +168,21 @@ export function rowProofDisplays(): readonly DisplayRow[] {
  * PD-CHAT-004's fixture: the sequence the owner reported — one agent thinking and reading in turn — plus a
  * second agent's run beside it, and a live third run. It is projected through the **real** `projectDisplay`
  * rather than written out as `DisplayRow` literals, so what the proof measures is step 4's own output and
- * not a hand-built stand-in for it.
+ * not a hand-built stand-in for it. The members carry 30-line outputs against the 10-line cap, so the
+ * expanded `proof-activity-open` surface also measures R0-4: opening a member lifts REQ-CHAT-166's caps
+ * for that member, through the real `rowKey` identity the surfaces share with step 4.
  */
 export function activityProofRows(): readonly TranscriptRow[] {
   const think = (i: number, chars: number, ms: number) => row(30 + i, { kind: 'thinking', persona: 'orchestrator', name: 'orchestrator', body: `deliberation ${i}`, chars, durationMs: ms, startedAt: at(30 + i), settled: true });
+  // R0-4's evidence: `read_file`'s output is a capped 30-line body, every OTHER tool member's is one line —
+  // so whatever the card count reads, the opened member is unambiguous and the siblings cannot inflate it.
   const call = (i: number, toolName: string, over: Partial<TranscriptRow> = {}) => row(30 + i, {
     kind: 'tool', persona: 'orchestrator', name: 'orchestrator', body: `${toolName} file-${i}.ts`, toolName,
     toolStatus: 'ok', callKey: `activity-${i}`, durationMs: 120, startedAt: at(30 + i), input: `{ "path": "file-${i}.ts" }`,
-    output: `ACTIVITY-OUTPUT-${i} must never appear in the line's copy or description`, ...over,
+    output: toolName === 'read_file'
+      ? Array.from({ length: 30 }, (_, n) => `ACTIVITY-OUTPUT-${i} line ${n}`).join('\n')
+      : `ACTIVITY-OUTPUT-${i} line 0`,
+    ...over,
   });
   return [
     think(0, 2216, 16_000), call(1, 'read_file'), call(2, 'glob'),
@@ -227,6 +235,35 @@ export function activityProofDisplays(expanded: ReadonlySet<string>): readonly D
   });
 }
 
+/**
+ * R0-4's seeded-open variant: the FIRST `read_file` member opened through `memberKey` — the key the member's
+ * card carries and the key step 4 holds the caps against — beside the LINE's own key, which is what draws the
+ * `group-members` container the card hangs from. What `proof-activity` above opens is a CLICK through the
+ * same map; this is the projection half of the same gesture, so the proof measures the caps lifting rather
+ * than the click landing. FIRST `read_file`, skipping the reasoning head AND the one-line members: it is the
+ * only member carrying the 30-line body, so the card count is unambiguous however the probe joins the text.
+ * (`grep`'s failure keeps the line's `failed` severity and every colour assertion reading it.)
+ *
+ * **Both keys, because the container and the card are two expansions.** Seeding the member alone projects
+ * the line collapsed and the card never reaches the DOM, because only the line's own `expanded` draws the
+ * container at all. Seeding the line alone draws the container with every card shut. The pair — line for
+ * the container, member for the card — is what the click performs in the product.
+ */
+export function activityProofDisplaysMemberOpen(): readonly DisplayRow[] {
+  const rows = activityProofRows();
+  const line = projectDisplay({
+    rows, running: true, groupTools: true, showReasoning: false, caps: CAP_DEFAULTS,
+    expanded: new Set(), pendingQuestions: [], pendingApprovals: [],
+  })[0];
+  if (line === undefined || line.shape !== 'group') throw new Error('activity fixture folded to no line');
+  const member = line.members.find((m) => m.kind === 'tool' && m.toolName === 'read_file');
+  if (member === undefined) throw new Error('activity fixture holds no read_file member');
+  return projectDisplay({
+    rows, running: true, groupTools: true, showReasoning: false, caps: CAP_DEFAULTS,
+    expanded: new Set([line.key, memberKey(member)]), pendingQuestions: [], pendingApprovals: [],
+  });
+}
+
 export interface RowProofProps {
   readonly onOpenLink: (href: string) => void;
   readonly onAcknowledge: Acknowledger;
@@ -249,6 +286,7 @@ export function RowProof({ onOpenLink, onAcknowledge }: RowProofProps) {
   }, []);
   const [showReasoning, setShowReasoning] = useState(false);
   const [autoCollapseTools, setAutoCollapseTools] = useState(false);
+  const activityOpen = useMemo(() => activityProofDisplaysMemberOpen(), []);
   const shared = { showReasoning, autoCollapseTools, onOpenLink, onAcknowledge } as const;
   return (
     <div className="rows-proof" data-testid="rows-proof">
@@ -290,8 +328,13 @@ export function RowProof({ onOpenLink, onAcknowledge }: RowProofProps) {
         />
       </div>
       <div className="rows-proof__surface transcript" data-testid="proof-activity-open">
+        {/* R0-4: the FIRST `read_file` member opened through `memberKey`, `RowList`'s own map — the only
+            member carrying the 30-line body. The `proof-activity` surface above opens the LINE by click
+            (which also opens nothing else); the LINE's expansion lives in the same map the seeded member
+            does, so the stranded card the proof seeks is the member's own — this surface carries the pair
+            the click performs (line for the container, first long member for the card). */}
         <RowList
-          rows={[]} displays={activityProofDisplays(new Set())} label="Activity line, expanded" acknowledge={onAcknowledge}
+          rows={[]} displays={activityOpen} label="Activity line, expanded member" acknowledge={onAcknowledge}
           surface={{ showReasoning: false, autoCollapseTools: false, runActive: true, nowMs: Date.parse(at(45)), openLink: onOpenLink }}
         />
       </div>

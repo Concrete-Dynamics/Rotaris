@@ -390,6 +390,28 @@ describe('ADR-0046 step 4 — the projection', () => {
     expect(rowKey(row(3, { kind: 'tool', body: 'x' }))).toBe(rowKey(row(9, { kind: 'tool', body: 'x' })));
   });
 
+  it('REQ-CHAT-061/166: expanding a member of an activity line lifts the display caps for THAT member', () => {
+    // The defect this pins (docs/defects/…, R0-4): the member opened onto the capped projection because the
+    // card's key (`callKey ?? index`) stranded from the key `hygiene` holds the caps against (`rowKey`).
+    const output = Array.from({ length: 30 }, (_, i) => `member line ${i}`).join('\n');
+    const rows = [tool(0, 'read_file', { output }), tool(1, 'glob', { output })];
+    // Collapsed: the caps hold — the members are projected THROUGH the group's hygiene, thirty lines in the
+    // record against the ten-line cap, so what the projection carries out is ten plus the marker. The record
+    // itself keeps all thirty (REQ-CHAT-166's "the session record MUST retain the full text").
+    expect(rows.map((r) => r.output!.split('\n').length)).toEqual([30, 30]);
+    const line = asGroup(projectDisplay(options(rows))[0]);
+    expect(line.members.map((m) => m.output!.split('\n').length)).toEqual([11, 11]);
+    const member = line.members[0]!;
+    // The member's own identity is what step 4 reads: opening it projects it untruncated, and the sibling
+    // stays capped — the expansion is per member, not per line.
+    const memberKey = rowKey(member);
+    const open = projectDisplay(options(rows, { expanded: new Set([memberKey]) }));
+    const openLine = asGroup(open[0]);
+    expect(openLine.members[0]!.output).toBe(output);
+    expect(openLine.members[0]!.output).not.toContain('cut short');
+    expect(openLine.members[1]!.output!.split('\n').length).toBe(11);
+  });
+
   it('REQ-CHAT-067 / PD-CHAT-004: grouping off leaves every tool row its own row, and forms no run', () => {
     const rows = [tool(0, 'read_file'), tool(1, 'read_file'), tool(2, 'read_file')];
     expect(projectDisplay(options(rows, { groupTools: false })).map((d) => d.shape)).toEqual(['row', 'row', 'row']);

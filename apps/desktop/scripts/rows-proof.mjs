@@ -171,6 +171,11 @@ const r = launch('rows', {
     // PD-CHAT-004: open the FIRST activity line on the second surface, so the continuous rule and the
     // members' own timestamps are measured in the product rather than seeded into the projection.
     `${AO} [data-testid="group-header"]@4400`,
+    // R0-4: open the FIRST TOOL member's own header on that same surface, so its card — the gesture whose
+    // caps the projection must lift — is opened by a real click and not by a seeded set. The run's first
+    // member is a reasoning row with no card; the tool members carry `data-member-key` (the card's key,
+    // `rowKey(member)`), and the click lands on the one the seeded projection opened.
+    `${AO} [data-testid="group-members"] [data-member-key^="tool:"] [data-testid="tool-header"]@4600`,
     '[data-testid="proof-show-reasoning"]@6000',
     '[data-testid="proof-auto-collapse"]@7000',
     // REQ-CHAT-077: a row taking focus from a pointer, so the arrow keys have a current row to move from. The system
@@ -188,6 +193,15 @@ const r = launch('rows', {
   ].join(';;'),
   ROTARIS_CAPTURE_EVAL_AT: [
     `(() => [...document.querySelectorAll('${W} .transcript__slot[data-bound]')].map((slot) => { const style = getComputedStyle(slot); return { transform: style.transform, willChange: style.willChange }; }))()@1500`,
+    // R0-4's count probes: the opened card's line count and its tail, read from the LIVE layout rather than
+    // from the end probe — whose 400-character truncation is what produced the "15 of 30" misreading when
+    // two truncated card texts were joined. The opened member is the only 30-line body in the run; the count
+    // is unambiguous however the text is joined. Single-line expressions: the log parser's `eval-at` regex
+    // cannot span newlines. `@5000`, beside the `group-members` inspect at the same time: the card is open
+    // by then (the member click lands at 4600).
+    `(() => document.querySelector('${AO} [data-testid="group-members"] .row--tool:nth-child(2) [data-testid="tool-output"]').textContent.split('line').length - 1)()@5000`,
+    `(() => document.querySelector('${AO} [data-testid="group-members"] .row--tool:nth-child(2) [data-testid="tool-output"]').textContent.slice(-60))()@5000`,
+    `(() => document.querySelector('${AO} [data-testid="group-members"] .row--tool:nth-child(2) [data-testid="tool-output"]').textContent.includes('cut short'))()@5000`,
     // PD-CHAT-004's rail is a COMPUTED border on the container, which `inspect-at` does not report; it is read
     // here, from the live layout, together with the two facts that make it "one continuous rule": that the
     // members draw no bar of their own, and that they all hang from this one element.
@@ -410,6 +424,25 @@ const openMembers = text(r.probes, `${AO} [data-testid="group-members"] .row`);
 expect(openMembers.length === 7, `expanding the run revealed ${openMembers.length} members, not 7`);
 const memberTimes = text(r.probes, `${AO} [data-testid="group-members"] .row__time`).filter((t) => t !== '');
 expect(memberTimes.length === 7, `${memberTimes.length} of 7 revealed members carried a timestamp — the per-step instants are what expanding is for`);
+// R0-4 (REQ-CHAT-061/166): the opened member's card carries the FULL 30-line output — the first
+// `read_file` member's every line, the only 30-line body in the run — while the other members' rows carry
+// none and the line's own summary carries none of it. Read from the LIVE layout (`eval-at`): the end probe
+// truncates every text to 400 characters, so joining the truncated card texts misreads "15 of 30" for a
+// card that holds all thirty — the count below reads the card's own text, untruncated, where it stands.
+const r0count = Number((/capture: eval-at 5000 .*nth-child\(2\) \[data-testid="tool-output"[^`]*split\('line'\).*→ (\d+)\s*$/m.exec(r.log) ?? [])[1]);
+const r0tail = (/capture: eval-at 5000 .*nth-child\(2\) \[data-testid="tool-output"[^`]*slice\(-60\).*→ "(.*)"\s*$/m.exec(r.log) ?? [])[1] ?? '';
+const r0cut = (/capture: eval-at 5000 .*nth-child\(2\) \[data-testid="tool-output"[^`]*includes\('cut short'\).*→ (\w+)\s*$/m.exec(r.log) ?? [])[1] ?? '?';
+expect(r0count === 30, `the opened member's card carried ${JSON.stringify(r0count)} 'line' occurrences, not 30`);
+expect(r0tail.includes('line 29'), `the opened member's card did not reach its last line: ${JSON.stringify(r0tail)}`);
+expect(r0cut === 'false', 'the opened member still carries a truncation marker');
+const closedSummary = activitySummary;
+expect(!closedSummary.includes('ACTIVITY-OUTPUT'), 'the activity summary carried raw tool output');
+// The SIBLINGS stay capped: the collapsed surface draws no member card at all, and the opened surface draws
+// no second card — the expansion is per member, not per line. Without this the assertions above pass on a
+// build that lifted the caps for all.
+const collapsedSiblingOutputs = text(r.probes, `${A} [data-testid="group-members"] [data-testid="tool-output"]`);
+expect(collapsedSiblingOutputs.length === 0, `the collapsed surface drew ${collapsedSiblingOutputs.length} member cards`);
+results.memberCaps = { openMemberLines: r0count, openMemberTail: r0tail, openMemberTruncated: r0cut !== 'false' };
 // PD-CHAT-006: a row still being written draws no animated indicator of its own. The absence is only a
 // measurement beside the live row it used to sit on, so both are counted.
 const liveMessageRows = (r.probes[`${W} [data-testid="row-agent"][data-settled="false"]`] ?? []).length;
@@ -422,6 +455,7 @@ results.activityLine = {
   failColour, factsColouredFail: marked.length, factsPlain: plain.length, reasoningSegments: colours?.reasoningSegments ?? null,
   chevronColour: colours?.chevron ?? null, spanColour: colours?.span ?? null,
   failedMemberName: memberColours?.failedMemberName ?? null, okMemberName: memberColours?.okMemberName ?? null,
+  openMemberLines: results.memberCaps.openMemberLines, openMemberTruncated: results.memberCaps.openMemberTruncated,
   liveMessageRows, streamingMarks,
   railWidthPx: railWidth, railColour: rail?.railColour ?? null, membersRevealed: openMembers.length,
   memberTimestamps: memberTimes.length, memberBars: rail?.memberBars ?? null,

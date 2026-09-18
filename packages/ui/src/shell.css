@@ -192,7 +192,7 @@
 .searchable-select__panel { gap: var(--rt-space-1); overflow: hidden; }
 .searchable-select__filter { display: flex; align-items: center; gap: var(--rt-space-2); padding: var(--rt-space-1) var(--rt-space-2); border-bottom: var(--rt-hairline-width) solid var(--rt-border); }
 .searchable-select__filter .ph { flex: none; font-size: var(--rt-text-sm); color: var(--rt-text-tertiary); }
-.searchable-select__input { flex: 1 1 auto; min-width: 0; border: 0; background: transparent; padding: 0; }
+.searchable-select__input { flex: 1 1 auto; min-width: 0; border: 0; background: transparent; padding: 0 0 0 var(--rt-space-1); }
 .searchable-select__input:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
 .searchable-select__list { overflow: auto; max-height: calc(var(--rt-space-16) * 2); display: flex; flex-direction: column; padding: var(--rt-space-1); }
 .searchable-select__option.is-disabled { color: var(--rt-text-disabled); cursor: default; }

@@ -15,8 +15,9 @@ import { FILTER_DEBOUNCE_MS, useDebouncedValue } from './use-debounced-value.js'
  * `aria-controls` and `aria-activedescendant`; the results are `role="listbox"` with
  * `role="option"` rows. Up/Down move, Enter chooses, Escape closes without choosing, Home/End
  * jump, Tab closes without choosing. The first row is auto-selected whenever results exist.
- * Outside press closes without choosing. The trigger keeps focus while open — the panel never
- * takes it — which is the pattern the slash popup already established.
+ * Outside press closes without choosing. The filter field takes focus on open (R-038) —
+ * the point of the picker is to type at once — while the trigger takes it back on close,
+ * which is the pattern the slash popup already established.
  *
  * Craft is the slash popup's (`shell.css` `.slash-popup`): `--rt-surface` ground, hairline
  * border, `--rt-shadow-lg`, `--rt-radius-lg`, the `rt-rise` entrance. The active row is
@@ -97,12 +98,13 @@ export function SearchableSelect({ value, options, ariaLabel, onChange, filterPl
   const firstUsable = filtered.findIndex((o) => o.unavailableReason === undefined);
   const effectiveActive = filtered.length === 0 ? 0 : filtered[active]?.unavailableReason === undefined ? active : Math.max(0, firstUsable);
 
-  const openWith = (focusFilter: boolean) => {
+  const openWith = () => {
     setOpen(true);
     setQuery('');
     const index = Math.max(0, filtered.findIndex((o) => o.value === value && o.unavailableReason === undefined));
     setActive(index);
-    if (focusFilter) requestAnimationFrame(() => input.current?.focus());
+    // The point of the picker is to type at once: focus lands in the filter on open (R-038).
+    requestAnimationFrame(() => input.current?.focus());
   };
 
   const close = (refocus: boolean) => {
@@ -173,7 +175,7 @@ export function SearchableSelect({ value, options, ariaLabel, onChange, filterPl
     if (!open) {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        openWith(e.key !== ' ');
+        openWith();
       }
       return;
     }
@@ -213,7 +215,7 @@ export function SearchableSelect({ value, options, ariaLabel, onChange, filterPl
         data-value={value}
         data-open={open ? '1' : '0'}
         onKeyDown={onKeyDown}
-        onClick={() => { if (open) close(true); else openWith(false); }}
+        onClick={() => { if (open) close(true); else openWith(); }}
         {...layoutContractAttributes(ui)}
         {...rest}
       >

@@ -179,12 +179,14 @@ const readNotice = `(() => { const n = document.querySelector('[data-testid="not
 // command raises none and clears none, so "no notice" reads as "not a NEW notice" — the slot still holds the last refusal.
 const sameNotice = (a, b) => (a === null && b === null) || (a !== null && b !== null && a.title === b.title && a.message === b.message);
 const readActive = `(() => { const a = document.activeElement; return a ? { tag: a.tagName.toLowerCase(), testId: a.getAttribute('data-testid'), className: a.className } : null; })()`;
-/** The configured catalogue as the model chip offers it — the source REQ-CHAT-032's "Available:" clause must follow, in its order. */
-const readModels = `[...document.querySelectorAll('#chip-model option')].map((o) => o.value).filter((v) => v !== '')`;
+/** The configured catalogue as the model chip offers it — the source REQ-CHAT-032's "Available:" clause must follow, in its order. Read from the opened searchable picker, whose listbox rows carry the bare ids. */
+const openChipModels = `(() => { const t = document.querySelector('[data-testid="chip-model"] [data-ui-component="SearchableSelect"]'); if (!t) return 'no chip'; t.click(); return 'opened'; })()`;
+const readChipModels = `[...document.querySelectorAll('[data-testid="searchable-select-list"] [role="option"]')].map((o) => o.getAttribute('data-value')).filter((v) => v !== '')`;
+const closeChipModels = `(() => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); return document.querySelector('[data-testid="searchable-select-list"]') === null; })()`;
 
 const T = {
   focus: 1600, slash: 1900, popup: 2400, mod: 2700, partial: 3100, el: 3300, resolved: 3700, tab: 3900, completed: 4200,
-  zzz: 4400, unknown: 4800, model: 5000, modelEnter: 5200, usage: 5800, models: 5950, modelNope: 6000, modelNopeEnter: 6200, unknownModel: 6800,
+  zzz: 4400, unknown: 4800, model: 5000, modelEnter: 5200, usage: 5800, modelsOpen: 5900, models: 5950, modelsClose: 5975, modelNope: 6000, modelNopeEnter: 6200, unknownModel: 6800,
   stop: 7000, stopEnter: 7200, noRun: 7800, stash1: 8000, stash1Enter: 8200, count1: 8700, stash2: 8900, stash2Enter: 9100, count2: 9600,
   pop: 9800, popEnter: 10000, dialog: 10500, popClick: 10700, popped: 11300, toolbar: 11500, popClick2: 12000, appended: 12600,
   popEmpty: 12800, popEmptyEnter: 13000, stashEmpty: 13600, setModel: 13800, setModelEnter: 14000, modelSet: 14700,
@@ -211,7 +213,7 @@ const run = launch('catalogue', workspace, local, preferences, {
     `${readPopup}@${T.popup}`, `${readToken}@${T.partial}`, `${readPopup}@${T.partial + 100}`, `${readToken}@${T.resolved}`, `${readPopup}@${T.resolved + 100}`,
     `${readComposer}@${T.completed}`, `${readToken}@${T.completed + 100}`, `${setComposer('/zzz')}@${T.zzz}`, `${readToken}@${T.unknown}`,
     `${setComposer('/model')}@${T.model}`, `${readComposer}@${T.usage}`, `${readNotice}@${T.usage + 100}`,
-    `${readModels}@${T.models}`, `${setComposer('/model nope')}@${T.modelNope}`, `${readNotice}@${T.unknownModel}`, `${readComposer}@${T.unknownModel + 100}`,
+    `${openChipModels}@${T.modelsOpen}`, `${readChipModels}@${T.models}`, `${closeChipModels}@${T.modelsClose}`, `${setComposer('/model nope')}@${T.modelNope}`, `${readNotice}@${T.unknownModel}`, `${readComposer}@${T.unknownModel + 100}`,
     `${setComposer('/stop')}@${T.stop}`, `${readNotice}@${T.noRun}`, `${readComposer}@${T.noRun + 100}`,
     `${setComposer('/stash keep this')}@${T.stash1}`, `${readComposer}@${T.count1}`, `${readNotice}@${T.count1 + 100}`,
     `${setComposer('/stash second one')}@${T.stash2}`,
@@ -234,7 +236,7 @@ const run = launch('catalogue', workspace, local, preferences, {
     `[data-testid="slash-popup"] [role="option"]@${T.popup + 100}`,
     `[data-testid="transcript-stash"]@${T.count1}`, `[data-testid="transcript-stash"]@${T.count2}`, `[data-testid="stash-dialog"]@${T.dialog}`,
     `[data-testid="transcript-stash"]@${T.popped}`, `[data-testid="transcript-stash"]@${T.appended}`,
-    `[data-testid="chip-model"] select@${T.modelSet}`,
+    `[data-testid="chip-model"] [data-ui-component="SearchableSelect"]@${T.modelSet}`,
     `.session-browser@${T.browser}`, `.session-browser@${T.newSession}`, `[data-testid="start-session-dialog"]@${T.launch}`, `[data-testid="start-session-dialog"]@${T.worktree}`,
     `[data-testid="worktree-dialog"]@${T.worktreeDialog}`, `[data-testid="worktree-dialog"]@${T.hello}`,
     `[data-testid="run-state"]@${T.running}`, `[data-testid="run-state"]@${T.stopped}`,
@@ -308,7 +310,11 @@ expect(usageComposer?.value === '/model' && usageComposer.start === 6 && usageCo
 results.usage = { notice: usageNotice, composer: usageComposer };
 
 // ── `/model <unknown>` lists the configured catalogue in order — the same list, in the same order, the model chip offers ──
+const chipOpened = evalAt(run, T.modelsOpen);
+expect(chipOpened === 'opened', `the model chip did not open its picker: ${JSON.stringify(chipOpened)}`);
 const configured = evalAt(run, T.models);
+expect(Array.isArray(configured) && configured.includes('scripted') && configured.includes('scripted-2') && configured.indexOf('scripted') < configured.indexOf('scripted-2'), `the configured catalogue should hold the two scripted models in file order: ${JSON.stringify(configured)}`);
+expect(evalAt(run, T.modelsClose) === true, 'the model chip picker did not close on Escape');
 const unknownModel = evalAt(run, T.unknownModel);
 expect(Array.isArray(configured) && configured.includes('scripted') && configured.includes('scripted-2') && configured.indexOf('scripted') < configured.indexOf('scripted-2'), `the configured catalogue should hold the two scripted models in file order: ${JSON.stringify(configured)}`);
 expect(unknownModel?.message === `Unknown model 'nope'. Available: ${configured.join(', ')}`, `the unknown-model message should name the configured catalogue in its order: ${JSON.stringify(unknownModel)} vs ${JSON.stringify(configured)}`);
@@ -339,7 +345,7 @@ expect(stashEmpty?.message === 'No stashed prompts. Use Stash beside the compose
 results.stash = { popped: popped.value, appended: appended.value, emptyReason: stashEmpty.message };
 
 // ── `/model scripted-2` succeeds: the chip shows the new name and the notice is shown ──
-const chip = match(run, '[data-testid="chip-model"] select', T.modelSet);
+const chip = match(run, '[data-testid="chip-model"] [data-ui-component="SearchableSelect"]', T.modelSet);
 expect(chip?.text?.includes('scripted-2') && sameNotice(evalAt(run, T.modelSet), stashEmpty), `the model chip should offer scripted-2 and no NEW failure notice be raised (Part AO): ${JSON.stringify(chip?.text)} ${JSON.stringify(evalAt(run, T.modelSet))}`);
 expect(run.texts[`Model set to scripted-2.@${T.modelSet}`] === true, '"Model set to scripted-2." was not shown');
 results.modelSet = true;

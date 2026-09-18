@@ -238,6 +238,20 @@ describe('production design-system layer', () => {
     it('caps the visible rows at the slash popup figure', () => {
       expect(design.SEARCHABLE_SELECT_MAX_ROWS).toBe(8);
     });
+
+    it('suffixes an unavailable row in words, overridable per vocabulary', () => {
+      const unavailable = render(design.SearchableSelect, {
+        value: 'm', ariaLabel: 'Agent model', onChange: () => undefined,
+        options: [{ value: 'm', label: 'm', unavailableReason: 'switched off' }],
+      });
+      // Closed trigger shows the suffixed text — the bare id never round-trips decorated (REQ-CONFIG-432).
+      expect(unavailable).toContain('m — unavailable');
+      const withheld = render(design.SearchableSelect, {
+        value: 'm', ariaLabel: 'Agent model', onChange: () => undefined,
+        options: [{ value: 'm', label: 'm', unavailableReason: 'quota', suffix: 'withheld: quota' }],
+      });
+      expect(withheld).toContain('m — withheld: quota');
+    });
   });
 
   describe('Checkbox — OQ-57, drawn from parts the language declares', () => {

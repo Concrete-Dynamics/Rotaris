@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-18**
 
+**The member card opens by its row identity (REQ-CHAT-059/061/166).** A group member's card is keyed by
+`memberKey` (`Row.tsx`) — the member's own `rowKey`, the identity step 4 holds the caps against — instead
+of `callKey ?? index`, which stranded from `rowKey` on every member without a call key. No view file moves:
+the projection (`project.ts`) reads one spelling from the one set, both surfaces toggle the same spelling
+through one definition, and `RowProof`'s seeded-open variant (`activityProofDisplaysMemberOpen`) is the
+projection half of the same gesture, so the change is recorded here and not in a view.
+
 **The composer's docked strip (PD-CHAT-001 revision 2).** The field and the strip share one outer
 contour (`WorkspaceView`'s `composer__dock`: textarea above, 34 px `composer__strip` below); every
 composer control stands on the strip and no second chip row is drawn. The pickers are shared

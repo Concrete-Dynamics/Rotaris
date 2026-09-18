@@ -33,3 +33,20 @@ and `callKey ?? index` is a fourth spelling of it.
 
 Noticed 2026-09-16 while rewriting the run boundary for PD-CHAT-004 revision 2. **Not repaired**: it is
 independent of that change, and the repair moves expansion-state keys, which is its own evidence to gather.
+
+## Repaired — 2026-09-18
+
+The member's card is keyed by `memberKey` (`Row.tsx`) — the member's own `rowKey`, the identity step 4
+holds the caps against — instead of `callKey ?? index`, which stranded from `rowKey` on every member
+without a call key (REQ-CHAT-059's content-hash fallback). Opening the card and lifting its caps are one
+gesture again: `Row`'s group branch, both surfaces' `memberExpanded`/`toggleMember`, the plain-list
+fallback key and the proof's seeded-open variant all read `memberKey` and nothing else. `data-member-key`
+on the drawn member row publishes the card's key so the proof's click lands on the member it means.
+
+Measured in the built app (`rows-proof`): the opened member's card carries all 30 lines of the run's only
+30-line body — 30 `line` occurrences, tail `line 29`, no `cut short` marker — read from the live layout,
+while the collapsed surface draws no member card and the line's own summary carries none of the output.
+`transcript.test.ts` pins the projection half (member opened untruncated, sibling capped); `rows.test.ts`
+pins the key identity. `rows-proof` itself is green on `main`'s script; the branch's added R0-4 assertions
+read green up to the pre-existing REQ-CHAT-077 keyboard section, which regressed under an unrelated `main`
+change (composer-docked-strip, R-040) and is recorded separately — the R0-4 evidence is unaffected.

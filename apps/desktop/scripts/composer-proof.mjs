@@ -59,7 +59,7 @@ const expect = (condition, message) => { if (!condition) throw new Error(message
 
 const PROBES = [
   '[data-testid="run-header"]', '[data-testid="run-state"]', '[data-testid="run-timing"]', '[data-testid="composer-divider"]',
-  '[data-testid="chip-persona"] select', '[data-testid="chip-model"] select', '[data-testid="chip-reasoning"] [aria-haspopup="menu"]',
+  '[data-testid="chip-persona"] [data-ui-component="SearchableSelect"]', '[data-testid="chip-model"] [data-ui-component="SearchableSelect"]', '[data-testid="chip-reasoning"] [aria-haspopup="menu"]',
   '[data-testid="chip-mode-label"]', '.composer__input', '.queue__head span', '.composer__error', '.composer__actions .btn-primary',
   '.app-shell',
 ];
@@ -186,14 +186,14 @@ results.draft = { typedBack: DRAFT.length, storedUnderKey: keyA, characterForCha
 // ── 2. The relaunch: the draft and the divider come back; the chips are enabled and state no reason ──
 const back = launch('relaunch', workspaceA, local, preferences, {
   ROTARIS_CAPTURE_EVAL_AT: `${readComposer}@3200`,
-  ROTARIS_CAPTURE_INSPECT_AT: '[data-testid="composer-divider"]@3400;;[data-testid="chip-model"] select@3400;;[data-testid="chip-reasoning"] [aria-haspopup="menu"]@3400;;[data-testid="chip-persona"] select@3400;;[data-testid="chip-mode-label"]@3400;;.composer__actions .btn-primary@3400',
+  ROTARIS_CAPTURE_INSPECT_AT: '[data-testid="composer-divider"]@3400;;[data-testid="chip-model"] [data-ui-component="SearchableSelect"]@3400;;[data-testid="chip-reasoning"] [aria-haspopup="menu"]@3400;;[data-testid="chip-persona"] [data-ui-component="SearchableSelect"]@3400;;[data-testid="chip-mode-label"]@3400;;.composer__actions .btn-primary@3400',
   ROTARIS_CAPTURE_AFTER_MS: '3800',
 });
 const restored = back.evals.find((e) => e.at === 3200)?.value;
 expect(restored === DRAFT, `the draft did not survive the quit character for character: ${JSON.stringify(restored)}`);
 expect(match(back, '[data-testid="composer-divider"]', 3400)?.attrs['aria-valuenow'] === '180', 'the divider position did not survive the relaunch');
 for (const chip of ['chip-model', 'chip-persona']) {
-  const el = match(back, `[data-testid="${chip}"] select`, 3400);
+  const el = match(back, `[data-testid="${chip}"] [data-ui-component="SearchableSelect"]`, 3400);
   expect(el !== null, `${chip} is not on screen`);
   expect(el.attrs['aria-disabled'] !== 'true', `${chip} is disabled while the session is idle (REQ-CHAT-006)`);
 }
@@ -229,8 +229,8 @@ const run = launch('run', workspaceA, local, preferences, {
   // Two follow-ups queued while the run is active (REQ-CHAT-035), so the panel's count is read at one and at two.
   ROTARIS_CAPTURE_TYPE: 'first follow-up@5200;;second follow-up@7200',
   ROTARIS_CAPTURE_INSPECT_AT: [
-    '[data-testid="run-state"]@4200', '[data-testid="run-timing"]@4200', '[data-testid="chip-model"] select@4200',
-    '[data-testid="chip-reasoning"] [aria-haspopup="menu"]@4200', '[data-testid="chip-persona"] select@4200', '.composer__input@4200',
+    '[data-testid="run-state"]@4200', '[data-testid="run-timing"]@4200', '[data-testid="chip-model"] [data-ui-component="SearchableSelect"]@4200',
+    '[data-testid="chip-reasoning"] [aria-haspopup="menu"]@4200', '[data-testid="chip-persona"] [data-ui-component="SearchableSelect"]@4200', '.composer__input@4200',
     '[data-testid="chip-mode-label"]@4200', '.composer__actions .btn-primary@4200',
     '[data-testid="chip-model"] .visually-hidden@4200', '[data-testid="chip-reasoning"] .visually-hidden@4200', '[data-testid="chip-persona"] .visually-hidden@4200',
     '.queue__head span@6200', '.queue__head span@8200',
@@ -249,7 +249,7 @@ expect(/^mode: /.test(match(run, '[data-testid="chip-mode-label"]', 4200)?.text 
 const REASON = 'Run controls are unavailable while run active';
 const chipReasons = {};
 for (const chip of ['chip-model', 'chip-persona']) {
-  const el = match(run, `[data-testid="${chip}"] select`, 4200);
+  const el = match(run, `[data-testid="${chip}"] [data-ui-component="SearchableSelect"]`, 4200);
   expect(el?.attrs['aria-disabled'] === 'true', `${chip} was enabled while the run was active (REQ-CHAT-006)`);
   expect(el.attrs['title'] === REASON, `${chip}'s tooltip is not the reason text: ${JSON.stringify(el.attrs['title'])}`);
   expect(el.attrs['aria-describedby'] === `${chip}-reason`, `${chip} has no accessible description (REQ-CHAT-007)`);

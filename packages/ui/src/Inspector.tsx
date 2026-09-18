@@ -4,7 +4,7 @@ import { cascadeNote, chipStates, followedAgent, inspectorEnablement, instancesO
 import { elapsedLabel } from './AgentTree.js';
 import { ContextRing } from './ContextRing.js';
 import { markMotionStart } from './motion.js';
-import { Button as DesignButton, Select as DesignSelect } from './design-system/index.js';
+import { Button as DesignButton, SearchableSelect as DesignSearchableSelect, Select as DesignSelect } from './design-system/index.js';
 import { PopoverMenu } from './design-system/overlays.js';
 
 /**
@@ -132,10 +132,10 @@ export function Inspector(props: InspectorProps) {
           </div>
           <div className="inspector__controls">
             <label className="field-label" htmlFor="inspector-model">Model</label>
-            <DesignSelect id="inspector-model" className="input select" aria-label="Agent model" value={currentModel} disabled={!writable} aria-describedby="inspector-controls-note" data-testid="inspector-model" onChange={(e) => { const v = e.currentTarget.value; if (onSetModel && v !== '' && v !== currentModel) void onSetModel(v).then((r) => setError(r.ok ? null : r.reason)); }}>
-              {modelOptions.map((m) => <option key={m} value={m}>{m}</option>)}
-              {withheldModels.map((w) => <option key={`withheld:${w.model}`} value={w.model} disabled>{w.model} — withheld: {w.reason}</option>)}
-            </DesignSelect>
+            <DesignSearchableSelect id="inspector-model" className="input select" ariaLabel="Agent model" value={currentModel} disabled={!writable} aria-describedby="inspector-controls-note" data-testid="inspector-model"
+              filterPlaceholder="Filter models…"
+              options={[...modelOptions.map((m) => ({ value: m, label: m })), ...withheldModels.map((w) => ({ value: w.model, label: w.model, unavailableReason: w.reason, suffix: `withheld: ${w.reason}` }))]}
+              onChange={(v) => { if (onSetModel && v !== '' && v !== currentModel) void onSetModel(v).then((r) => setError(r.ok ? null : r.reason)); }} />
             <label className="field-label" htmlFor="inspector-reasoning">Reasoning</label>
             <DesignSelect id="inspector-reasoning" className="input select" aria-label="Agent reasoning" value={['low', 'medium', 'high'].includes(shown.reasoning) ? shown.reasoning : 'medium'} disabled={!writable} aria-describedby="inspector-controls-note" data-testid="inspector-reasoning" onChange={(e) => { const v = e.currentTarget.value; if (onSetReasoning) void onSetReasoning(v).then((r) => setError(r.ok ? null : r.reason)); }}>
               {['low', 'medium', 'high'].map((l) => <option key={l} value={l}>{l}</option>)}

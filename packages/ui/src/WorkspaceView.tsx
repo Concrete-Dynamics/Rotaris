@@ -31,7 +31,7 @@ import { addImageBytes, composerTokenEstimate } from './attachments.js';
 import { PlanGate } from './PlanGate.js';
 import { QuestionForm } from './QuestionStepper.js';
 import './attachments.css';
-import { Button as DesignButton, Input as DesignInput, PopoverMenu, Select as DesignSelect, TextArea as DesignTextArea } from './design-system/index.js';
+import { Button as DesignButton, Input as DesignInput, PopoverMenu, SearchableSelect as DesignSearchableSelect, TextArea as DesignTextArea } from './design-system/index.js';
 
 // Part AA: the row helpers moved to `transcript/Row.tsx`, the ONE row renderer, and are exported from the package
 // root through that module alone (`TranscriptRows.tsx` is deleted). Re-exporting them here as well would make the
@@ -437,10 +437,10 @@ function WaitHeader({ wait, models, onSetModel, onCancel }: { wait: NonNullable<
       <div className="wait-header__actions" aria-label="Wait choices">
         <DesignButton type="button" className="btn btn-secondary btn-compact" onClick={() => { setAcknowledged(true); setChoosing(false); }}>Keep waiting</DesignButton>
         {onSetModel && models.length > 0 && (choosing ? (
-          <DesignSelect className="input select" aria-label="Change model" defaultValue="" autoFocus onChange={(e) => { const v = e.currentTarget.value; if (v !== '') void onSetModel(v).then((r) => { setError(r.ok ? null : r.reason); setChoosing(false); }); }}>
-            <option value="">Choose a model…</option>
-            {models.map((m) => <option key={m} value={m}>{m}</option>)}
-          </DesignSelect>
+          <DesignSearchableSelect className="input select" ariaLabel="Change model" value="" autoFocus
+            filterPlaceholder="Filter models…"
+            options={[{ value: '', label: 'Choose a model…' }, ...models.map((m) => ({ value: m, label: m }))]}
+            onChange={(v) => { if (v !== '') void onSetModel(v).then((r) => { setError(r.ok ? null : r.reason); setChoosing(false); }); }} />
         ) : (
           <DesignButton type="button" className="btn btn-secondary btn-compact" onClick={() => { setAcknowledged(false); setChoosing(true); }}>Change model</DesignButton>
         ))}
@@ -472,29 +472,28 @@ function ChipShell({ id, label, reason, testId, children }: { id: string; label:
 }
 
 /**
- * REQ-CHAT-009's selector chips. Each is a `select` so the chip both states the current choice in its label and
- * offers the alternatives without a second surface; the label is the requirement's own (`mode: <name>`,
- * `reasoning: <level>`). A disabled chip carries the reason twice (REQ-CHAT-006/007) through `ChipShell`.
+ * REQ-CHAT-009's selector chips. Each states the current choice and offers the alternatives through
+ * the searchable picker, so a long model or persona list narrows by typing instead of scrolling.
+ * A disabled chip carries the reason twice (REQ-CHAT-006/007) through `ChipShell`.
  * PD-CHAT-001's icon clause: an icon may carry the name where the spec fixes it as an accessible name, so the
  * visible `persona:` / model prefix becomes an icon and the label text rides hidden.
  */
-function SelectorChip({ id, testId, label, ariaLabel, value, options, reason, onChoose, icon }: {
+function SelectorChip({ id, testId, label, ariaLabel, value, options, reason, onChoose, icon, filterPlaceholder = 'Filter…', emptyText = 'No matches.' }: {
   id: string; testId: string; label: string; ariaLabel: string; value: string; options: readonly string[]; reason: string | null;
-  onChoose: (value: string) => void; icon?: string | undefined;
+  onChoose: (value: string) => void; icon?: string | undefined; filterPlaceholder?: string | undefined; emptyText?: string | undefined;
 }) {
   return (
     <ChipShell id={id} label={label} reason={reason} testId={testId}>
       {icon !== undefined
         ? <i className={`ph ${icon} chip-control__icon`} aria-hidden="true" />
         : <label className="chip-control__label" htmlFor={id}>{label}</label>}
-      <DesignSelect
-        id={id} className="input select chip-control__select" aria-label={ariaLabel} value={value} disabled={reason !== null}
-        aria-disabled={reason !== null} title={reason ?? `Chosen for the next run.`} aria-describedby={`${id}-reason`}
-        onChange={(e) => { const v = e.currentTarget.value; if (v !== '') onChoose(v); }}
-      >
-        {options.length === 0 && <option value="">—</option>}
-        {options.map((o) => <option key={o} value={o}>{o}</option>)}
-      </DesignSelect>
+      <DesignSearchableSelect
+        id={id} className="input select chip-control__select" ariaLabel={ariaLabel} value={value} disabled={reason !== null}
+        title={reason ?? `Chosen for the next run.`} aria-describedby={`${id}-reason`}
+        filterPlaceholder={filterPlaceholder} emptyText={emptyText}
+        options={options.length === 0 ? [{ value: '', label: '—' }] : options.map((o) => ({ value: o, label: o }))}
+        onChange={(v) => { if (v !== '') onChoose(v); }}
+      />
     </ChipShell>
   );
 }
@@ -1350,20 +1349,20 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
             {onSetNextPersona && (
               <SelectorChip id="chip-persona" testId="chip-persona" label="persona" ariaLabel="Persona for the next run" reason={chipReason}
                 icon="ph-user-circle" value={entry?.persona ?? ''} options={personas.length > 0 ? personas.map((p) => p.role) : entry ? [entry.persona] : []}
+                filterPlaceholder="Filter personas…" emptyText="No matching persona."
                 onChoose={(v) => { void onSetNextPersona(v).then((r) => { if (!r.ok) setError(r.reason); }); }} />
             )}
             {onSetNextModel && (
               <ChipShell id="chip-model" testId="chip-model" label={modelChipLabel(modelsLoaded, models, entry?.model ?? null)} reason={modelsLoaded ? chipReason : 'Model options are still loading.'}>
                 <i className="ph ph-cpu chip-control__icon" aria-hidden="true" />
-                <DesignSelect id="chip-model" className="input select chip-control__select" aria-label="Model for the next run"
+                <DesignSearchableSelect id="chip-model" className="input select chip-control__select" ariaLabel="Model for the next run"
                   value={entry?.model && models.includes(entry.model) ? entry.model : ''}
                   /* REQ-CHAT-009: disabled while the neutral loading label is showing, so no run starts against a model nobody chose. */
-                  disabled={!modelsLoaded || chipReason !== null} aria-disabled={!modelsLoaded || chipReason !== null}
+                  disabled={!modelsLoaded || chipReason !== null}
                   title={modelsLoaded ? chipReason ?? 'Chosen for the next run.' : 'Model options are still loading.'} aria-describedby="chip-model-reason"
-                  onChange={(e) => { const v = e.currentTarget.value; if (v !== '' && attachments.length > 0 && !imageInputModels.includes(v)) { setError(`${v} does not declare image input support. Remove the images before selecting it.`); return; } if (v !== '') void onSetNextModel(v).then((r) => { if (!r.ok) setError(r.reason); }); }}>
-                  <option value="">—</option>
-                  {models.map((m) => <option key={m} value={m}>{m}</option>)}
-                </DesignSelect>
+                  filterPlaceholder="Filter models…"
+                  options={[{ value: '', label: '—' }, ...models.map((m) => ({ value: m, label: m }))]}
+                  onChange={(v) => { if (v !== '' && attachments.length > 0 && !imageInputModels.includes(v)) { setError(`${v} does not declare image input support. Remove the images before selecting it.`); return; } if (v !== '') void onSetNextModel(v).then((r) => { if (!r.ok) setError(r.reason); }); }} />
               </ChipShell>
             )}
             {/* REQ-ORCH-152: the run-start mode. It obeys the same enablement rule as its three neighbours — it

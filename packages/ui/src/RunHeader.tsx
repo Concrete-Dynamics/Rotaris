@@ -3,7 +3,7 @@ import type { SessionRecord } from '@rotaris/contracts';
 import { REASONING_LEVELS, RUN_STATE_TAGS, runHeaderControlReason, runStateLabel, runTimingLabel, runTimingSeconds, type RunState } from './composer.js';
 import { markMotionStart } from './motion.js';
 import { COMPRESS_DESCRIPTION, COMPRESS_LABEL, COMPRESSING_LABEL, compressNow, useChatControls } from './slash/host.js';
-import { Button as DesignButton, Select as DesignSelect } from './design-system/index.js'; // Part AO
+import { Button as DesignButton, SearchableSelect as DesignSearchableSelect, Select as DesignSelect } from './design-system/index.js'; // Part AO
 import { ImprovementActivity } from './ImprovementActivity.js';
 import { useShellState } from './shell-state.js';
 
@@ -122,12 +122,11 @@ export function RunHeader({ runState, session, runActive, stepStartedAt, models,
             <>
               {/* PD-CHAT-001's icon clause: the wording rides as the accessible name; the icon leads. */}
               <i className="ph ph-cpu run-controls__icon" aria-hidden="true" />
-              <DesignSelect className="input select chip-control__select" aria-label="Active run model" data-testid="run-model" defaultValue="" disabled={headerReason !== null} aria-disabled={headerReason !== null}
+              <DesignSearchableSelect className="input select chip-control__select" ariaLabel="Active run model" data-testid="run-model" value="" disabled={headerReason !== null}
                 title={headerReason ?? 'Switch the live run to another model from its next iteration.'} aria-describedby="run-controls-reason"
-                onChange={(e) => { const v = e.currentTarget.value; if (v !== '') void onSetModel(v).then((r) => { if (!r.ok) onError(r.reason); }); }}>
-                <option value="">Switch model…</option>
-                {models.map((m) => <option key={m} value={m}>{m}</option>)}
-              </DesignSelect>
+                filterPlaceholder="Filter models…"
+                options={[{ value: '', label: 'Switch model…' }, ...models.map((m) => ({ value: m, label: m }))]}
+                onChange={(v) => { if (v !== '') void onSetModel(v).then((r) => { if (!r.ok) onError(r.reason); }); }} />
             </>
           )}
           {onSetReasoning && (

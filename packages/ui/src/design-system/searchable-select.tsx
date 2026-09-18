@@ -37,6 +37,12 @@ export interface SearchableOption {
   readonly label: string;
   /** REQ-CONFIG-429: the reason sentence resolved once at load (REQ-CONFIG-208). Absent means usable. */
   readonly unavailableReason?: string | undefined;
+  /**
+   * The word joining the label to the reason on an unavailable row (default `unavailable`).
+   * The Inspector's withheld models (REQ-MONITOR-067) pass `withheld: <reason>`'s head word here,
+   * so one unselectable-row path serves both vocabularies.
+   */
+  readonly suffix?: string | undefined;
   /** Optional secondary text after the label (e.g. the effective model an Inherited row resolves to). */
   readonly hint?: string | undefined;
 }
@@ -50,6 +56,8 @@ export interface SearchableSelectProps extends Omit<ButtonHTMLAttributes<HTMLBut
   readonly onChange: (value: string) => void;
   /** Placeholder of the filter field (default `Filter models…`). */
   readonly filterPlaceholder?: string | undefined;
+  /** Empty-list sentence (default `No matching model.`); persona lists pass their own noun. */
+  readonly emptyText?: string | undefined;
   readonly ui?: UiLayoutContract;
   readonly children?: ReactNode;
 }
@@ -64,10 +72,11 @@ export function filterSearchableOptions(options: readonly SearchableOption[], qu
 }
 
 function rowSuffix(option: SearchableOption): string {
-  return option.unavailableReason === undefined ? option.label : `${option.label} — unavailable`;
+  if (option.unavailableReason === undefined) return option.label;
+  return `${option.label} — ${option.suffix ?? 'unavailable'}`;
 }
 
-export function SearchableSelect({ value, options, ariaLabel, onChange, filterPlaceholder = 'Filter models…', className, disabled, title, ui, children, ...rest }: SearchableSelectProps) {
+export function SearchableSelect({ value, options, ariaLabel, onChange, filterPlaceholder = 'Filter models…', emptyText = 'No matching model.', className, disabled, title, ui, children, ...rest }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const debounced = useDebouncedValue(query, FILTER_DEBOUNCE_MS);
@@ -266,7 +275,7 @@ export function SearchableSelect({ value, options, ariaLabel, onChange, filterPl
                 </div>
               );
             })}
-            {filtered.length === 0 && <div className="cmdk-empty text-secondary" role="presentation" data-testid="searchable-select-empty">No matching model.</div>}
+            {filtered.length === 0 && <div className="cmdk-empty text-secondary" role="presentation" data-testid="searchable-select-empty">{emptyText}</div>}
           </div>
           {children}
         </div>

@@ -28,6 +28,19 @@ It is latent in production, where the parameter is always `process.platform` and
 It is not latent in the corpus: it makes every requirement these functions implement decidable only on one
 operating system, which is exactly what naming the platform was supposed to stop.
 
+**Repaired 2026-09-19, in part** (branch `fix-r3-proof-isolation-separators`): the five named helpers already
+took the platform and now spell by it — verified above — but the audit found the same class in four places
+beside them, repaired here: `dataLayout` takes the platform and joins by it (was host-bound `join`, so a
+Windows answer asked off Windows carried POSIX separators); `PreferenceStore` takes the platform for its
+one path; `environmentWithout` folds case by the parameter rather than the host; and `canonicalPath` no
+longer resolves a foreign-platform spelling through the host's own `realpathSync` — the fold (separators,
+case) is the cross-platform rule, existence stays the host's to know. `spawn.ts`'s `join`/`isAbsolute`
+and `discovery-files.ts` stay as the note describes: what is `stat`ed is the host's own filesystem.
+Measured: new `platform.test.ts` cases (Windows sub-locations spelled by `win32`, cross-platform fold,
+`environmentWithout` per parameter), exact-spelling assertions replacing the two `startsWith` checks, and
+the full `platform` + `config/src/mcp` suites green. **Not closed**: "decidable on every platform" still
+needs a POSIX run of the suite — argued here, measured on Windows.
+
 ## Specs
 
 - `REQ-STARTUP-145` — the per-user directories, whose Windows half says both live under the LOCAL profile.

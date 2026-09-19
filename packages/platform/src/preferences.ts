@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
-import { join, posix, win32 } from 'node:path';
+import { posix, win32 } from 'node:path';
 import { pathKey } from './canonical.js';
 import { guardedRead, replaceDocument, replaceDocumentSync } from './document.js';
 
@@ -187,7 +187,14 @@ const serialise = (document: DocumentShape): string => `${JSON.stringify(Object.
 
 export class PreferenceStore {
   readonly file: string;
-  constructor(readonly root: string) { this.file = join(root, 'preferences.json'); }
+  /**
+   * The platform decides the separator of the one path this store builds — the same rule
+   * `resolveUserDirs` and `dataLayout` follow. In production it is always the host's own, so the
+   * parameter is one callers pass only when asking for another platform's answer.
+   */
+  constructor(readonly root: string, platform: NodeJS.Platform = process.platform) {
+    this.file = (platform === 'win32' ? win32 : posix).join(root, 'preferences.json');
+  }
 
   private document(): DocumentShape {
     const read = guardedRead<DocumentShape>(this.file, (raw) => JSON.parse(raw) as DocumentShape);

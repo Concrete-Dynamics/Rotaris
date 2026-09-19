@@ -1,5 +1,5 @@
 import { homedir } from 'node:os';
-import { join, posix, win32 } from 'node:path';
+import { posix, win32 } from 'node:path';
 
 /**
  * REQ-STARTUP-145 — per-user directories for the application name `rotaris`.
@@ -57,7 +57,12 @@ export function resolveUserDirs(e: DirEnv = { platform: process.platform, env: p
 }
 
 /** Fixed sub-locations inside the data directory. Fixed-length by construction where a path budget matters (ADR-0058 c.13). */
-export function dataLayout(dirs: UserDirs) {
+export function dataLayout(dirs: UserDirs, platform: NodeJS.Platform = process.platform) {
+  // The platform is a PARAMETER for the same reason `resolveUserDirs` takes one: the spelling of a
+  // sub-location is decided by the platform the answer is FOR, not by the host the code runs on. In
+  // production the two always agree (every caller passes no platform). A bare host-bound `join` here
+  // spelled the Windows answer with POSIX separators whenever the question was asked off Windows.
+  const { join } = platform === 'win32' ? win32 : posix;
   return {
     workspaces: join(dirs.data, 'workspaces'),
     instanceRecord: join(dirs.data, 'instance.json'),

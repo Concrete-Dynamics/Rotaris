@@ -1,5 +1,5 @@
 import { createServer, connect, type Server, type Socket } from 'node:net';
-import { readFileSync, rmSync, unlinkSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, unlinkSync } from 'node:fs';
 import { createHash, randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import type { MachineId, Millis, Timers, WallClock } from '@rotaris/kernel';
@@ -54,9 +54,18 @@ export interface ClaimDeps {
   /** Called on the instance side for every hand-over it acknowledges. */
   readonly onHandOver: (h: HandOver) => void;
   readonly platform?: NodeJS.Platform;
+  /**
+   * Where a unix socket for the hand-over endpoint may live, on platforms that
+   * use one. The default is `endpointDir` — which is the per-user data
+   * directory in production. A caller that isolates the data directory under a
+   * deep scratch profile (the proofs) names a shallow directory here instead,
+   * because a unix socket path is capped at 108 bytes and the data root alone
+   * already overflows it.
+   */
+  readonly socketDir?: string;
 }
 
-export function endpointFor(endpointDir: string, pid: number, platform: NodeJS.Platform = process.platform): string {
+export function endpointFor(endpointDir: string, pid: number, platform: NodeJS.Platform = process.platform, socketDir?: string): string {
   // A nonce beside the pid: a process that claims, closes and claims again must not collide with its own
   // still-closing endpoint, and a reclaimed pid must not inherit a dead process's name.
   const nonce = randomBytes(4).toString('hex');
@@ -64,7 +73,8 @@ export function endpointFor(endpointDir: string, pid: number, platform: NodeJS.P
     const h = createHash('sha256').update(endpointDir).digest('hex').slice(0, 16);
     return `\\\\.\\pipe\\rotaris-${h}-${pid}-${nonce}`;
   }
-  return join(endpointDir, `instance-${pid}-${nonce}.sock`);
+  const dir = socketDir ?? endpointDir;
+  return join(dir, `instance-${pid}-${nonce}.sock`);
 }
 
 function readRecord(file: string): InstanceRecord | undefined {
@@ -126,8 +136,19 @@ function tryHandOver(endpoint: string, h: HandOver, timers: Timers, bound: Milli
  */
 export async function claimInstance(deps: ClaimDeps, handOver: HandOver = {}): Promise<ClaimOutcome> {
   const platform = deps.platform ?? process.platform;
+  /**
+   * The socket directory is read ONCE, before the record exists: a nonce is minted per attempt and the
+   * record names the endpoint the first attempt listened on, so re-reading the environment inside the
+   * retry would address a directory the record never named. The directory is created here rather than
+   * left to the listen, because a scratch runtime directory does not exist until the harness's launch
+   * makes the profile that names it.
+   */
+  const socketDir = deps.socketDir ?? (platform === 'win32' ? undefined : process.env['XDG_RUNTIME_DIR']);
+  if (platform !== 'win32' && socketDir !== undefined && socketDir !== deps.endpointDir) {
+    try { mkdirSync(socketDir, { recursive: true }); } catch { /* the listen reports it */ }
+  }
   const attempt = async (): Promise<ClaimOutcome | 'lost'> => {
-    const endpoint = endpointFor(deps.endpointDir, deps.pid, platform);
+    const endpoint = endpointFor(deps.endpointDir, deps.pid, platform, socketDir);
     const record: InstanceRecord = { pid: deps.pid, host: deps.machineId, acquired_at: toIsoUtc(deps.wall.instant()), endpoint };
     const r = exclusiveCreate(deps.recordFile, `${JSON.stringify(record)}\n`);
     if (!r.ok) return { outcome: 'refused', reason: `${r.error.headline}: ${r.error.detail ?? ''}` };

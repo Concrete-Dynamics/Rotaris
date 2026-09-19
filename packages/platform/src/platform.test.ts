@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync, readdirSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, win32 } from 'node:path';
+import { join, sep, win32 } from 'node:path';
 import { millis, mintMachineId, FakeClock, type MachineId } from '@rotaris/kernel';
-import { replaceDocument, exclusiveCreate, guardedRead, probePid, isLockLive, isLockForeign, canonicalPath, samePath, readOrMintMachineId, resolveUserDirs, claimInstance, nodeClocks, findExecutable, environmentWithout, PreferenceStore, resolvePreferenceRoot, coercePaneLayout, composerDraftKey } from './index.js';
+import { replaceDocument, exclusiveCreate, guardedRead, probePid, isLockLive, isLockForeign, canonicalPath, samePath, readOrMintMachineId, resolveUserDirs, dataLayout, claimInstance, endpointFor, nodeClocks, findExecutable, environmentWithout, PreferenceStore, resolvePreferenceRoot, coercePaneLayout, composerDraftKey } from './index.js';
 
 let dir: string;
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'rotaris-platform-')); });
@@ -15,17 +15,33 @@ const OTHER = mintMachineId('00000000000000000000000000000002');
 describe('platform — per-user directories (REQ-STARTUP-145)', () => {
   it('on Windows both directories are under the LOCAL profile, never the roaming one', () => {
     const d = resolveUserDirs({ platform: 'win32', env: { LOCALAPPDATA: 'C:\\U\\me\\AppData\\Local', APPDATA: 'C:\\U\\me\\AppData\\Roaming' }, home: 'C:\\U\\me' });
-    expect(d.config.startsWith('C:\\U\\me\\AppData\\Local\\rotaris')).toBe(true);
-    expect(d.data.startsWith('C:\\U\\me\\AppData\\Local\\rotaris')).toBe(true);
+    expect(d.config).toBe(win32.join('C:\\U\\me\\AppData\\Local', 'rotaris', 'config'));
+    expect(d.data).toBe(win32.join('C:\\U\\me\\AppData\\Local', 'rotaris', 'data'));
     expect(d.data).not.toContain('Roaming');
   });
   it('on Linux the XDG variables govern', () => {
     const d = resolveUserDirs({ platform: 'linux', env: { XDG_CONFIG_HOME: '/x/cfg', XDG_DATA_HOME: '/x/data' }, home: '/home/me' });
-    // The expectation is spelled the way the PLATFORM PARAMETER spells it. `join` is the host's, so on Windows
-    // it answered `\x\cfg\rotaris` and the proof disagreed with the repaired code rather than with the defect —
-    // the same class the code was repaired for, in the assertion that measures it.
+    // The expectation is spelled the way the PLATFORM PARAMETER spells it. `join` used to be the host's,
+    // so on Windows it answered `\x\cfg\rotaris` and the proof disagreed with the repaired code rather
+    // than with the defect — the same class the code was repaired for, in the assertion that measures it.
     expect(d.config).toBe('/x/cfg/rotaris');
     expect(d.data).toBe('/x/data/rotaris');
+  });
+  it('the sub-locations are spelled by the platform asked about, not the host asking (R3 separator residue)', () => {
+    // The defect this pins: a bare host-bound `join` spelled the Windows answer with POSIX separators
+    // whenever the question was asked off Windows. Production always agrees with its host, so this is
+    // a proof-of-the-rule case — other-platform answers decided on every operating system.
+    const win = { config: 'C:\\U\\me\\AppData\\Local\\rotaris\\config', data: 'C:\\U\\me\\AppData\\Local\\rotaris\\data' } as const;
+    const layout = dataLayout(win, 'win32');
+    expect(layout.workspaces).toBe(win32.join(win.data, 'workspaces'));
+    expect(layout.instanceRecord).toBe(win32.join(win.data, 'instance.json'));
+    expect(layout.machineId).toBe(win32.join(win.data, 'machine-id'));
+    expect(layout.tokens).toBe(win32.join(win.data, 'tokens'));
+    const store = new PreferenceStore('X:\\proof', 'win32');
+    expect(store.file).toBe(win32.join('X:\\proof', 'preferences.json'));
+    // `environmentWithout` folds case on Windows however the host spells its own variables.
+    expect(environmentWithout(['git_dir'], { GIT_DIR: '/x', PATH: '/bin' }, 'win32')).toEqual({ PATH: '/bin' });
+    expect(environmentWithout(['git_dir'], { GIT_DIR: '/x', PATH: '/bin' }, 'linux')).toEqual({ GIT_DIR: '/x', PATH: '/bin' });
   });
 });
 
@@ -92,6 +108,13 @@ describe('platform — canonical path (W-27, OQ-49)', () => {
       expect(canonicalPath(sub.toLowerCase())[0]).toBe(sub[0]!.toUpperCase());
     }
   });
+  it('a Windows spelling asked off Windows still folds separators and case (R3 separator residue)', () => {
+    // The defect this pins: `canonicalPath` answered a Windows spelling through the host's own realpath.
+    // Resolution is the host's to know — no parameter can make `C:\ws\alpha` exist on a POSIX disk — so
+    // the cross-platform rule is the fold, not the filesystem: separators normalised, case folded.
+    expect(canonicalPath('C:\\ws\\alpha', 'win32')).toBe(win32.resolve('C:\\ws\\alpha'));
+    expect(samePath('C:\\ws\\alpha', 'c:/ws/ALPHA/', 'win32')).toBe(true);
+  });
 });
 
 describe('platform — machine identifier (REQ-SESSION-046)', () => {
@@ -157,6 +180,21 @@ describe('platform — the instance claim (ADR-0055 alt I, REQ-STARTUP-161/162/1
     expect(Date.now() - t0).toBeLessThan(5_000);
     expect(r.outcome).toBe('instance');
     if (r.outcome === 'instance') await r.close();
+  });
+  it('the hand-over socket lives outside a deep data directory: endpointFor honours the socket directory', () => {
+    // A unix socket path is capped at 108 bytes; a data root nested under a proof profile already overflows it.
+    // The pure function's contract is that the socket is addressed under the shallow directory while every
+    // other file stays under the data root. Whether a host actually LISTENS on a unix path is the host's
+    // own business (on Windows a `.sock` name is not listenable at all) and is not asserted here.
+    const deep = join(dir, 'a'.repeat(40), 'b'.repeat(40), 'c'.repeat(40));
+    const shallow = join(dir, 'sock');
+    const endpoint = endpointFor(deep, process.pid, 'linux', shallow);
+    expect(endpoint.startsWith(`${shallow}${sep}`)).toBe(true);
+    expect(endpoint.length).toBeLessThan(108);
+    // The default is unchanged: without a socket directory the endpoint lives under the data root.
+    expect(endpointFor(deep, process.pid, 'linux').startsWith(`${deep}${sep}`)).toBe(true);
+    // A win32 endpoint names a pipe, never the socket directory.
+    expect(endpointFor(deep, process.pid, 'win32', shallow).startsWith('\\\\.\\pipe\\')).toBe(true);
   });
 });
 

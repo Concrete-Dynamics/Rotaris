@@ -22,12 +22,19 @@ import { posix, win32 } from 'node:path';
 export function canonicalPath(p: string, platform: NodeJS.Platform = process.platform): string {
   // The platform is a PARAMETER: `C:\\ws\\alpha` and `c:/ws/ALPHA/` are one directory under the Windows rule
   // whatever host asks the question, so the separator and the resolver come from the parameter, not from the host.
+  // The one step that stays the HOST's is the symlink resolution: `realpathSync` answers what exists on the
+  // filesystem the code is running on, and no parameter can make a Windows spelling exist on a POSIX disk.
+  // A Windows spelling asked off Windows therefore keeps its resolved spelling without the realpath step —
+  // the comparison still folds separators and case, which is the rule the requirement states; existence is
+  // the host's to know and the caller's to decide about.
   const { resolve, sep } = platform === 'win32' ? win32 : posix;
   let abs = resolve(p);
-  try {
-    abs = realpathSync.native(abs);
-  } catch {
-    // A path that does not exist yet keeps its resolved spelling; the caller decides whether that is an error.
+  if (platform === process.platform) {
+    try {
+      abs = realpathSync.native(abs);
+    } catch {
+      // A path that does not exist yet keeps its resolved spelling; the caller decides whether that is an error.
+    }
   }
   if (abs.length > 1 && abs.endsWith(sep)) abs = abs.slice(0, -1);
   if (platform === 'win32') {

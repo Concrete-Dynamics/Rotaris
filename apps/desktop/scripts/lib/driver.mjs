@@ -10,8 +10,9 @@
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { connect as connectSocket } from 'node:net';
-import { join } from 'node:path';
-import { app as appDirectory, cleanEnvironment, electron, mainEntry } from './harness.mjs';
+import { tmpdir } from 'node:os';
+import { basename, join } from 'node:path';
+import { app as appDirectory, cleanEnvironment, electron, mainEntry, proofIsolationEnv } from './harness.mjs';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -128,9 +129,7 @@ export async function startApp({ root, workspace, extra = {}, electronArgs = [],
     stdio: ['ignore', out, out],
     env: {
       ...cleanEnvironment(),
-      LOCALAPPDATA: local,
-      APPDATA: join(root, 'roaming'),
-      ROTARIS_PREFERENCES_ROOT: preferences,
+      ...proofIsolationEnv({ profileRoot: root, local, preferences }),
       ROTARIS_MODEL_DIALECT: dialect,
       ROTARIS_DRIVER: endpointFile,
       ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',

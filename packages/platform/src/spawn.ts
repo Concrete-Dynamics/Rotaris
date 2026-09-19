@@ -83,13 +83,15 @@ export function windowsLaunchOf(command: string, args: readonly string[], env: R
 }
 
 /** Copy the process environment with named variables deleted (ADR-0038: fourteen named variables for git). */
-export function environmentWithout(names: readonly string[], base: NodeJS.ProcessEnv = process.env): Record<string, string> {
+export function environmentWithout(names: readonly string[], base: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): Record<string, string> {
   const out: Record<string, string> = {};
-  const drop = new Set(names.map((n) => (process.platform === 'win32' ? n.toUpperCase() : n)));
+  // The platform is a PARAMETER for the same reason `findExecutable` takes one: on Windows the
+  // comparison is case-insensitive and off Windows it is not, whatever host asks the question.
+  const keyOf = (n: string): string => (platform === 'win32' ? n.toUpperCase() : n);
+  const drop = new Set(names.map(keyOf));
   for (const [k, v] of Object.entries(base)) {
     if (v === undefined) continue;
-    const key = process.platform === 'win32' ? k.toUpperCase() : k;
-    if (drop.has(key)) continue;
+    if (drop.has(keyOf(k))) continue;
     out[k] = v;
   }
   return out;

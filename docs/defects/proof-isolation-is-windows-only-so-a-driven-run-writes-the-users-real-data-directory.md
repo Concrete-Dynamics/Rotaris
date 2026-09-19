@@ -22,12 +22,21 @@ The preference store is unaffected: `ROTARIS_PREFERENCES_ROOT` is the product's 
 every platform (`REQ-CONFIG-*`), which is why the same launch writes its preferences inside the proof profile and
 its database outside it. The workspace store has no such override — `dirs.ts` is the only decision point.
 
-Noticed on 2026-09-16 while gathering evidence for `PD-CHAT-004` revision 2 and `PD-CHAT-005`, three days after
-`docs/architecture/first-executions.md` records the first time the suite ran anywhere but Windows. Not repaired
-here: the repair belongs with whoever owns the harness, and it is one decision — either the harness sets
-`XDG_DATA_HOME` (and `XDG_CONFIG_HOME`) beside the two Windows variables, or `dirs.ts` gains a product variable for
-the data root on the terms `ROTARIS_PREFERENCES_ROOT` already has. A run that needs isolation today can export
-`XDG_DATA_HOME` itself — but only to a **short** path, which is the second half of this note.
+**Repaired 2026-09-19** (branch `fix-r3-proof-isolation-separators`): `apps/desktop/scripts/lib/harness.mjs`
+gains `proofIsolationEnv` — every launch names both pairs on every platform: the Windows pair as before, plus
+`XDG_DATA_HOME` / `XDG_CONFIG_HOME` under the scratch profile's own `local/` (POSIX-spelled, since a POSIX
+launch reads the values) and a short `XDG_RUNTIME_DIR` under the system temporary directory (a unix socket
+path is capped at 108 bytes; the data root nested under `.proof/<name>/profile` already overflows it).
+`apps/desktop/scripts/lib/driver.mjs`'s `startApp` uses it, and `launchOptions` carries it so the one
+`skills-proof` launch that already went through the shared helper is isolated too. The product's half:
+`packages/platform/src/instance.ts` takes an optional `socketDir` (else `XDG_RUNTIME_DIR` on POSIX), so the
+claim listens on the shallow directory while every other file stays under the data root. Measured: new unit
+case on `endpointFor`'s contract (shallow address, under the 108-byte cap, defaults unchanged); `pnpm
+driver-proof` green (14 passed) with the store under the profile's `local/` and no `USERPROFILE` leak in the
+log. **Not proven here**: that a POSIX launch lands its store in the profile — no such host exists on this
+project yet, so the POSIX half is argued from `dirs.ts` reading exactly these variables, not measured.
+`HOME` is still the operator's own on POSIX (except through `ROTARIS_CAPTURE_SKILLS_HOME` in `skills-proof`);
+overriding it kills Electron before it paints on Windows.
 
 **Exporting `XDG_DATA_HOME` at the proof's own profile does not work, and the reason is a POSIX limit the
 Windows-shaped design never had to meet.** The single-instance claim listens on a unix socket under the data

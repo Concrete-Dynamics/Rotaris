@@ -126,6 +126,15 @@ export function clickAt(win: BrowserWindow, point: { x: number; y: number }): vo
   win.webContents.sendInputEvent({ type: 'mouseUp', x: Math.round(point.x), y: Math.round(point.y), button: 'left', clickCount: 1 });
 }
 
+/** A real double-click at a point: two press-release pairs with clickCount 2, as the renderer delivers one. */
+export function doubleClickAt(win: BrowserWindow, point: { x: number; y: number }): void {
+  const at = { x: Math.round(point.x), y: Math.round(point.y) };
+  win.webContents.sendInputEvent({ type: 'mouseDown', ...at, button: 'left', clickCount: 1 });
+  win.webContents.sendInputEvent({ type: 'mouseUp', ...at, button: 'left', clickCount: 1 });
+  win.webContents.sendInputEvent({ type: 'mouseDown', ...at, button: 'left', clickCount: 2 });
+  win.webContents.sendInputEvent({ type: 'mouseUp', ...at, button: 'left', clickCount: 2 });
+}
+
 /** The centre of whatever the finder expression returns, or null when it matches nothing. */
 export function centre(win: BrowserWindow, finder: string): Promise<{ x: number; y: number } | null> {
   return win.webContents.executeJavaScript(`(() => { const b = ${finder}; if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`) as Promise<{ x: number; y: number } | null>;

@@ -116,8 +116,8 @@ export const RequirementCard = memo(function RequirementCard({ card, now, localO
         </div>
       )}
       <div className="req-card__foot">
-        <DesignButton type="button" className="btn btn-ghost btn-compact" onClick={(event) => { event.stopPropagation(); onOpen(card.id); }} aria-label={`Open ${card.id}`}>Open</DesignButton>
-        <DesignButton type="button" className="btn btn-ghost btn-compact" onClick={(event) => { event.stopPropagation(); onOpenEvidence(card.id); }} aria-label={`Open the evidence of ${card.id}`}>Evidence</DesignButton>
+        <DesignButton type="button" className="btn btn-ghost btn-compact" data-testid="req-card-open" onClick={(event) => { event.stopPropagation(); onOpen(card.id); }} aria-label={`Open ${card.id}`}>Open</DesignButton>
+        <DesignButton type="button" className="btn btn-ghost btn-compact" data-testid="req-card-evidence" onClick={(event) => { event.stopPropagation(); onOpenEvidence(card.id); }} aria-label={`Open the evidence of ${card.id}`}>Evidence</DesignButton>
       </div>
     </article>
   );

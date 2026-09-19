@@ -433,10 +433,17 @@ function cleanup(keep) {
   else rmSync(sandbox, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
 }
 // Whatever a previous run left behind loses its credentials now, and loses everything unless it was kept on purpose.
-if (existsSync(SANDBOX_ROOT)) for (const old of readdirSync(SANDBOX_ROOT)) {
+// A locked handle (measured 2026-09-19: a Serena language server kept the prior sandbox's workspace open past
+// process exit, so `rmSync` threw EPERM out of the sweep and the run died before starting) must never kill the
+// run: the sweep reports the leftover and continues, and the startup of THIS run re-sweeps it next time.
+for (const old of existsSync(SANDBOX_ROOT) ? readdirSync(SANDBOX_ROOT) : []) {
   const dir = join(SANDBOX_ROOT, old);
-  dropCredentials(dir);
-  if (!existsSync(join(dir, KEPT))) rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  try {
+    dropCredentials(dir);
+    if (!existsSync(join(dir, KEPT))) rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  } catch (cause) {
+    console.error(`warning: the previous sandbox could not be swept (${dir}): ${cause instanceof Error ? cause.message : String(cause)} — continuing with a fresh one.`);
+  }
 }
 const sandbox = join(SANDBOX_ROOT, stamp);
 const workspace = join(sandbox, 'workspace');
@@ -663,17 +670,34 @@ if (wanted.includes('edit')) {
  * script LOOKED, and a different schedule would print different numbers for identical work. The product's own times
  * are read from the delivery store afterwards, which is the only place a duration here comes from.
  *
- * NOTHING THIS SCENARIO PRESSES IS PRESSED ON A CLOCK. Every click, the Enter that opens the card, and the two reads
+ * NOTHING THIS SCENARIO PRESSES IS PRESSED ON A CLOCK. Every click, the Open control that opens the card, and the two reads
  * of what the accept left behind wait for the state they act on (`@~ms`, a deadline rather than an appointment), and
  * the capture ends on the accept landing (`ROTARIS_CAPTURE_WAIT=js:…`) rather than at the far end of the window.
  *
  * That is a repair, and the defect it repairs is worth keeping in view: these presses used to fire at offsets
  * measured from the end of `LIVE_RUN_BOARD_MS`, whatever the board was showing by then. A model slower than the
- * window turned one timing failure into three, and two of the three accused the PRODUCT of faults it had not
- * committed — "the card rests in running", "the history lacks the accept" — when the truth was that accept had been
- * pressed at a card still running and the product had correctly declined it. Measured 2026-09-13 against
- * `qwen3.8-flash-next`: 240 s expired with the run about half-way, and the same run passed every check at 900 s.
- * a defect note (removed once repaired) is the note. A harness that manufactures false
+  * window turned one timing failure into three, and two of the three accused the PRODUCT of faults it had not
+  * committed — "the card rests in running", "the history lacks the accept" — when the truth was that accept had been
+  * pressed at a card still running and the product had correctly declined it. Measured 2026-09-13 against
+  * `qwen3.8-flash-next`: 240 s expired with the run about half-way, and the same run passed every check at 900 s.
+  *
+  * A second repair, 2026-09-19: the review presses went through the card's FOCUS — a click, then Enter into
+  * whatever held focus once `[data-req-card]:focus` matched — and focus is not a thing the harness can hold.
+  * Measured that day: the card-in-review click landed, the run's own completion re-rendered the board, focus was
+  * lost, the `:focus` wait expired, and Enter went into unfocused space. The detail never opened, the review pane
+  * never appeared, and the two closing checks accused the board of refusing an accept that was never presented.
+  * The repair is the same rule applied one level down: the card is opened through its OWN OPEN CONTROL — the
+  * `Open ${card.id}` button the card carries in its foot — pressed as soon as the card is in review, not through
+  * a focus state no press can re-assert. Focus is a precondition the product owns; a click target is one the
+  * harness can re-drive until it lands.
+  *
+  * A third repair, later the same day: the fallback above was UNSCOPED — `[data-testid="req-card-open"]` with no
+  * column — so it matched a backlog card 1.5 s into the run and opened the detail mid-release, the 2026-09-13
+  * premature-open resurrected. The scope is now part of the selector: the card in review, its foot, its Open
+  * control, and nothing else matches. A press aimed at a state that is also true BEFORE the thing it waits for
+  * is no better than a clock, and is harder to see.
+  *
+  * a defect note (removed once repaired) is the note. A harness that manufactures false
  * product symptoms is worse than one that is merely slow, because `AGENTS.md` rightly says to believe it.
  */
 if (wanted.includes('requirements')) {
@@ -691,16 +715,23 @@ if (wanted.includes('requirements')) {
   // It is what the scenario waits on to finish and what the two closing reads wait on to look — one signal, so a
   // read can never happen before the thing it reads about.
   const ACCEPTED = '[data-testid="req-history-state"] li:nth-child(2)';
-  const CARD_IN_REVIEW = `${CARD}[data-column="review"], ${CARD}[data-column="done"]`;
-  /**
-   * The Enter that opens the detail waits for the card to be BOTH in review and the focused one, not merely focused.
-   * Measured 2026-09-13, first attempt at this repair: `${CARD}:focus` alone matched 63 ms into the run — the opening
-   * click focuses the card — so Enter opened the detail at 3 s, the Review control appeared, and the press that waits
-   * for it opened a review pane over a card that had not been released yet. The decisions never came, and the
-   * scenario failed with the card resting in `review`: a state-driven press aimed at a state that is also true
-   * BEFORE the thing it is waiting for is no better than a clock, and is harder to see.
-   */
-  const FOCUSED_CARD = `${CARD}[data-column="review"]:focus, ${CARD}[data-column="done"]:focus`;
+  const CARD_IN_REVIEW = `${CARD}[data-column="review"]`;
+  // The detail is opened through the card's OWN Open control, not through focus plus Enter. Focus is a
+  // precondition the product owns — the harness can wait for it but cannot re-assert it, so a lost focus
+  // (measured 2026-09-19: the completion re-render between the click and the press) turns Enter into a
+  // keystroke into unfocused space. A control is a target the harness CAN re-drive: the click seam retries
+  // the match until the deadline, so a re-render that drops one attempt costs one poll, not the scenario.
+  //
+  // The selector carries the WHOLE chain — the card, its column, its foot, the control — because a press
+  // aimed at a state that is also true BEFORE the thing it waits for is no better than a clock. The
+  // unscoped `[data-testid="req-card-open"]` matched a backlog card 1.5 s into the run on 2026-09-19 and
+  // opened the detail mid-release. The column is what makes this press wait: nothing matches until the run
+  // puts the card in review. Scoped to the card for REQ-104 throughout, so the control is this card's and
+  // not another's. The foot's Open control carries `data-testid="req-card-open"` (`Card.tsx`, added beside
+  // the untestable label-only buttons); the click seam matches exact text, so the `>>Open` half names the
+  // label while the selector half scopes it.
+  const OPEN_CONTROL_SELECTOR = `${CARD_IN_REVIEW} [data-testid="req-card-open"]`;
+  const OPEN_CONTROL = `${OPEN_CONTROL_SELECTOR}>>Open`;
   // Scoped to the open detail for REQ-104, so the control is this card's and not another's.
   const REVIEW_CONTROL = `[data-testid="req-detail"][data-req="REQ-104"] [data-testid="req-detail-review"]`;
   const poll = [];
@@ -714,13 +745,28 @@ if (wanted.includes('requirements')) {
     // sandbox opts in — so the press is a no-op where there is none and the acceptance where there is one.
     '[data-testid="req-pane-disclosure"] .btn>>Start the run@6800',
     // From here the model decides the pace. Each press names the thing that must be on screen before it means
-    // anything, and the deadline is the only number: the card once the run puts it in review, the Review control
-    // once the detail is open, the decision once the pane is, the confirmation once the dialog is.
+    // anything, and the deadline is the only number: the card once the run puts it in review, the Open control
+    // once the card is there, the Review control once the detail is open, the decision once the pane is, the
+    // confirmation once the dialog is. The Open press below is a second click at the same card: the first
+    // click selects it for the release, this one opens its detail once the run puts it in review — the card's
+    // own control, matched by state rather than by focus. The double-click travels its own seam
+    // (`ROTARIS_CAPTURE_DOUBLE_CLICKS`, `seams.ts`): the click seam sends single clicks only and a single
+    // click merely selects, while the card's `onDoubleClick` is what opens the detail — the same gesture a
+    // person uses. Both wait on the CARD's state (in review), never on focus.
     `${CARD_IN_REVIEW}@~${deadline}`,
+    `${OPEN_CONTROL}@~${deadline}`,
     `${REVIEW_CONTROL}@~${deadline}`,
     `[data-testid="req-pane-review-decisions"] .btn-primary@~${deadline}`,
     `[data-testid="req-pane-review-confirm"] .btn-primary@~${deadline}`,
   ];
+  // The double-click is NOT in `clicks`: it must not fire at an appointment before the card is in review
+  // (the 2026-09-13 premature-open) — one waited press, aimed at the card rather than at its foot.
+  const doubleClicks = [
+    `${CARD_IN_REVIEW}@~${deadline}`,
+  ];
+  // The fallback Open click IS in `clicks` beside the double-click: both share the deadline, and the match
+  // names the card IN REVIEW — a card the double-click has already opened has moved past review, so the
+  // fallback's match lapses before it presses. The fallback fires only into the gap the double-click left.
   const watches = [
     `${BOARD_AT}@6400`,
     ...poll.map((t) => `${BOARD_AT}@${t}`),
@@ -730,10 +776,8 @@ if (wanted.includes('requirements')) {
   const log = launch('requirements', {
     ROTARIS_CAPTURE_RESIZE: '1264x800@300',
     ROTARIS_CAPTURE_VIEWS: '4@1200',
-    ROTARIS_CAPTURE_CLICKS: clicks.join(';;'),
-    // REQ-TRACE-484: the focused card opens its own detail with Enter; the harness sends single clicks only. The
-    // press waits for the card to BE the focused one, which is the click above having landed.
-    ROTARIS_CAPTURE_KEYS: `Return>>${FOCUSED_CARD}@~${deadline}`,
+    ROTARIS_CAPTURE_CLICKS: [...clicks, `${OPEN_CONTROL}@~${deadline}`].join(';;'),
+    ROTARIS_CAPTURE_DOUBLE_CLICKS: doubleClicks.join(';;'),
     ROTARIS_CAPTURE_EVAL_AT: watches.join(';;'),
     ROTARIS_CAPTURE_WAIT: `js:document.querySelector(${JSON.stringify(ACCEPTED)}) !== null`,
     ROTARIS_CAPTURE_WAIT_MS: String(deadline + 30_000),
@@ -751,19 +795,38 @@ if (wanted.includes('requirements')) {
     if (new RegExp(`capture: ${quoted} never matched within`).test(log)) return 'expired';
     return 'not reached';
   };
+  /** The detail counts as opened when the Review control was offered (the detail carries it) or when either
+   * opening gesture landed: the double-click logs `double-clicked "…"`, the fallback click logs
+   * `clicked "Open"`. A re-render can drop one poll while the press still lands, so no single line is
+   * load-bearing — but the Review control appearing is conclusive either way. */
+  const detailOpened = () => {
+    if (waited(REVIEW_CONTROL) !== 'not reached') return waited(REVIEW_CONTROL);
+    if (/capture: double-clicked /m.test(log)) return 'matched';
+    if (waited(OPEN_CONTROL_SELECTOR) !== 'not reached') return waited(OPEN_CONTROL_SELECTOR);
+    return /capture: clicked "Open"/m.test(log) ? 'matched' : 'not reached';
+  };
   const columns = poll.map((t) => readEval(t)?.column ?? null);
   const trail = columns.filter((c) => c !== null).join(' → ') || 'the board showed nothing';
   check(columns.some((c) => c === 'running' || c === 'review' || c === 'done'), 'the release became a real run, started by the board and not by a prompt', trail);
   /**
-   * One expiry, one failure. The three presses after it are not attempted against a board that never offered them,
+   * One expiry, one failure. The presses after it are not attempted against a board that never offered them,
    * so they are NOTED rather than failed: a press that was never made cannot be evidence about the product, and
    * reporting it as one is how this scenario used to accuse the board of losing a card it had never been given.
+   * That rule now covers every link of the review chain, not just the card reaching review: the detail never
+   * opened means the Review control, the decision and the confirmation were never offered either — each
+   * unreached press is noted with what its wait did.
    */
+  const opened = detailOpened();
+  const reviewOffered = waited(REVIEW_CONTROL) === 'matched';
   let settled = null;
   const reachedReview = waited(CARD_IN_REVIEW) === 'matched';
   check(reachedReview, `the run reached review inside the ${Math.round(deadline / 1000)} s the board was given`, reachedReview ? trail : `${trail} — the window expired with the card where the trail leaves it; raise LIVE_RUN_BOARD_MS if the model is slower than that`);
   if (!reachedReview) {
-    noted('the review was never offered, so the accept was not pressed', `review control: ${waited(REVIEW_CONTROL)}; decision: ${waited('[data-testid="req-pane-review-decisions"] .btn-primary')}; confirmation: ${waited('[data-testid="req-pane-review-confirm"] .btn-primary')}`);
+    noted('the review was never offered, so the accept was not pressed', `detail: ${opened}; review control: ${waited(REVIEW_CONTROL)}; decision: ${waited('[data-testid="req-pane-review-decisions"] .btn-primary')}; confirmation: ${waited('[data-testid="req-pane-review-confirm"] .btn-primary')}`);
+  } else if (opened !== 'matched') {
+    noted('the card reached review but its detail never opened', `detail: ${opened}; review control: ${waited(REVIEW_CONTROL)}; decision: ${waited('[data-testid="req-pane-review-decisions"] .btn-primary')}; confirmation: ${waited('[data-testid="req-pane-review-confirm"] .btn-primary')}`);
+  } else if (!reviewOffered) {
+    noted('the detail never offered its Review control, so the review was never offered', `review control: ${waited(REVIEW_CONTROL)}; decision: ${waited('[data-testid="req-pane-review-decisions"] .btn-primary')}; confirmation: ${waited('[data-testid="req-pane-review-confirm"] .btn-primary')}`);
   } else {
     settled = readEval(deadline);
     check(settled?.column === 'done', "the review's accept left the card resting in done", `it rests in ${settled?.column ?? 'nothing the board showed'}`);

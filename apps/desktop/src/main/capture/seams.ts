@@ -3,7 +3,7 @@ import { writeFileSync } from 'node:fs';
 import { type BrowserWindow, screen } from 'electron';
 import { millis } from '@rotaris/kernel';
 import { CHANNEL, CONTRACT_SCHEMA_VERSION, type NoticeAction, type NoticeSeverity } from '@rotaris/contracts';
-import { type CaptureHost, type CaptureStep, centre, chordEvent, clickAt, onStep, parseSelectors, parseSteps, pause, settleAt } from './host.js';
+import { type CaptureHost, type CaptureStep, centre, chordEvent, clickAt, doubleClickAt, onStep, parseSelectors, parseSteps, pause, settleAt } from './host.js';
 
 /**
  * THE SCRIPTABLE SEAMS — clicks, typed text, chords, renderer `eval`, notices, prompts, drags, OS input,
@@ -107,6 +107,19 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
       if (!rect) { log(`capture: no "${step.arg ?? step.selector}" control on screen`); return; }
       clickAt(win, rect);
       log(`capture: clicked "${step.arg ?? step.selector}"`);
+    });
+  }
+
+  // ROTARIS_CAPTURE_DOUBLE_CLICKS="selector>>text@ms;;…": the same match as a click, pressed twice — the card's
+  // own `onDoubleClick` opens its detail (the single click only selects). The live run's requirements scenario
+  // needs it: a re-render between a select-click and an Enter loses focus and the keystroke goes nowhere, while
+  // a control the foot may not render (a selected-but-unopened card shows no foot) cannot be pressed at all.
+  for (const step of steps(process.env['ROTARIS_CAPTURE_DOUBLE_CLICKS'])) {
+    onStep(host, step, async () => {
+      const rect = await win.webContents.executeJavaScript(`(() => { const b = [...document.querySelectorAll(${JSON.stringify(step.selector)})].find((x) => ${step.arg === null ? 'true' : `x.textContent.trim() === ${JSON.stringify(step.arg)}`}); if (!b) return null; b.scrollIntoView({ block: 'center' }); const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`) as { x: number; y: number } | null;
+      if (!rect) { log(`capture: no "${step.arg ?? step.selector}" control on screen`); return; }
+      doubleClickAt(win, rect);
+      log(`capture: double-clicked "${step.arg ?? step.selector}"`);
     });
   }
 

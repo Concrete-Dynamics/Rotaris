@@ -66,7 +66,7 @@ export const EpicCardView = memo(function EpicCardView({ card, epic, cards, sele
       )}
       <div className="req-card__foot">
         <DesignButton type="button" className="btn btn-ghost btn-compact" data-testid="req-epic-filter" onClick={(event) => { event.stopPropagation(); onFilterToEpic(card.id); }} aria-label={`Filter the board to ${card.id} and its children`}>Filter to children</DesignButton>
-        <DesignButton type="button" className="btn btn-ghost btn-compact" onClick={(event) => { event.stopPropagation(); onOpen(card.id); }} aria-label={`Open ${card.id}`}>Open</DesignButton>
+        <DesignButton type="button" className="btn btn-ghost btn-compact" data-testid="req-card-open" onClick={(event) => { event.stopPropagation(); onOpen(card.id); }} aria-label={`Open ${card.id}`}>Open</DesignButton>
       </div>
     </article>
   );

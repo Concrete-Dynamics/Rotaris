@@ -7,6 +7,7 @@ export * from './attachments.js';
 export * from './projection-owner.js';
 export * from './sessions.js';
 export * from './export.js';
+export * from './autopsy.js';
 export * from './run/stop-request.js';
 export * from './run/stop-conditions.js';
 export * from './run/todo.js';

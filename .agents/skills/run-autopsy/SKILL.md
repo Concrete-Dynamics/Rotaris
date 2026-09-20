@@ -32,16 +32,24 @@ saying why in the report.
 
 ### Step 1 — Size the run
 
-Quantify before judging. Run [store_snapshot.py](./scripts/store_snapshot.py)
-first — it emits the session row, per-tool breakdown (failed vs blocked
-partitioned, elapsed sums), failure detail with causes, usage curve with
-largest jumps, coherence warnings, and per-endpoint model-request counts in
-one read-only pass:
+Quantify before judging. Run the product reader first —
+`apps/desktop/scripts/autopsy.mjs` (backed by `readAutopsy` in
+`packages/engine/src/autopsy.ts`, covered work under R-043:
+REQ-SESSION-139/199/153/136/134/135, REQ-EVENTS-056). It emits the session
+row, per-tool breakdown (failed vs blocked partitioned, elapsed sums),
+failure detail grouped by cause, usage curve with largest jumps, coherence
+warnings, and per-model-key tool-call attribution from the children record,
+in one read-only pass:
 
 ```bash
-python3 ./scripts/store_snapshot.py            # newest db + default log
-python3 ./scripts/store_snapshot.py DB LOG [SESSION_ID]
+node apps/desktop/scripts/autopsy.mjs              # newest db + latest started session
+node apps/desktop/scripts/autopsy.mjs DB [SESSION_ID]
 ```
+
+Two facts the reader bakes in: the `usage.update` payload carries tokens and
+cost alone — no provider or model — so attribution reads `children.model_key`,
+and every printed line is truncated to 220 columns, so one catalogue dump
+cannot take the transcript.
 
 Then supplement from the store by hand for anything the snapshot doesn't
 cover. Every number the report claims (duration, tokens, tool calls,

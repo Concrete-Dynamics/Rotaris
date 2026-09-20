@@ -252,6 +252,25 @@ describe('production design-system layer', () => {
       expect(markup).toContain('>b<');
       expect(markup).not.toContain('searchable-select-panel');
     });
+
+    it('names the full value on the trigger tooltip, so a truncated control still reads whole', () => {
+      const long = 'openai-compatible--vllm/qwen3.8-flash-next';
+      const markup = render(design.SearchableSelect, {
+        value: long, ariaLabel: 'Agent model', onChange: () => undefined,
+        options: [{ value: long, label: long }],
+      });
+      expect(markup).toContain(`title="${long}"`);
+      const explicit = render(design.SearchableSelect, {
+        value: long, ariaLabel: 'Agent model', title: 'Custom reason', onChange: () => undefined,
+        options: [{ value: long, label: long }],
+      });
+      expect(explicit).toContain('title="Custom reason"');
+      const withheld = render(design.SearchableSelect, {
+        value: 'm', ariaLabel: 'Agent model', onChange: () => undefined,
+        options: [{ value: 'm', label: 'm', unavailableReason: 'switched off' }],
+      });
+      expect(withheld).toContain('title="switched off"');
+    });
   });
 
   describe('SearchableSelect — the searchable model picker (REQ-CONFIG-427..433)', () => {

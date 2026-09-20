@@ -3,6 +3,7 @@ import {
   type ButtonHTMLAttributes, type ReactNode, type RefObject,
 } from 'react';
 import { classes } from './shared.js';
+import { panelPlacement, type PanelBox } from './panel-placement.js';
 
 /**
  * The design-system press-revealed popover menu (PD-CHAT-001): a value chip whose alternatives
@@ -152,7 +153,7 @@ export function PopoverMenu({ value, icon, ariaLabel, options, onChoose, classNa
   const trigger = useRef<HTMLButtonElement | null>(null);
   const panel = useRef<HTMLDivElement>(null);
   const listId = useId();
-  const [box, setBox] = useState<{ left: number; bottom: number; minWidth: number } | null>(null);
+  const [box, setBox] = useState<PanelBox | null>(null);
   const setTrigger = (el: HTMLButtonElement | null) => {
     trigger.current = el;
     if (anchorRef !== undefined) anchorRef.current = el;
@@ -165,7 +166,10 @@ export function PopoverMenu({ value, icon, ariaLabel, options, onChoose, classNa
     if (!field) return;
     const measure = () => {
       const r = field.getBoundingClientRect();
-      setBox({ left: r.left, bottom: window.innerHeight - r.bottom, minWidth: r.width });
+      setBox(panelPlacement(
+        { left: r.left, bottom: r.bottom, width: r.width },
+        { width: window.innerWidth, height: window.innerHeight },
+      ));
     };
     measure();
     const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null;
@@ -260,7 +264,7 @@ export function PopoverMenu({ value, icon, ariaLabel, options, onChoose, classNa
           role="menu"
           aria-label={ariaLabel}
           id={listId}
-          style={box ? { left: box.left, bottom: box.bottom, minWidth: box.minWidth } : undefined}
+          style={box ? { left: box.left, ...(box.top !== undefined ? { top: box.top } : { bottom: box.bottom }), minWidth: box.minWidth, maxHeight: box.maxHeight } : undefined}
           data-testid="chip-menu-panel"
           onKeyDown={onKeyDown}
         >

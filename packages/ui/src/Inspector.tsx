@@ -133,6 +133,7 @@ export function Inspector(props: InspectorProps) {
           <div className="inspector__controls">
             <label className="field-label" htmlFor="inspector-model">Model</label>
             <DesignSearchableSelect id="inspector-model" className="input select" ariaLabel="Agent model" value={currentModel} disabled={!writable} aria-describedby="inspector-controls-note" data-testid="inspector-model"
+              title={currentModel === '' ? undefined : currentModel}
               filterPlaceholder="Filter models…"
               options={[...modelOptions.map((m) => ({ value: m, label: m })), ...withheldModels.map((w) => ({ value: w.model, label: w.model, unavailableReason: w.reason, suffix: `withheld: ${w.reason}` }))]}
               onChange={(v) => { if (onSetModel && v !== '' && v !== currentModel) void onSetModel(v).then((r) => setError(r.ok ? null : r.reason)); }} />

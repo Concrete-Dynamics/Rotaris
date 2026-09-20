@@ -3,6 +3,7 @@ import {
   type ButtonHTMLAttributes, type ReactNode,
 } from 'react';
 import { layoutContractAttributes, type UiLayoutContract } from './layout-contract.js';
+import { panelPlacement, type PanelBox } from './panel-placement.js';
 import { classes } from './shared.js';
 import { FILTER_DEBOUNCE_MS, useDebouncedValue } from './use-debounced-value.js';
 
@@ -103,7 +104,7 @@ export function SearchableSelect({ value, options, ariaLabel, onChange, filterPl
   const panel = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const listId = useId();
-  const [box, setBox] = useState<{ left: number; bottom: number; minWidth: number } | null>(null);
+  const [box, setBox] = useState<PanelBox | null>(null);
 
   const chosen = options.find((o) => o.value === value);
   const chosenText = chosen === undefined ? value : rowSuffix(chosen);
@@ -138,7 +139,10 @@ export function SearchableSelect({ value, options, ariaLabel, onChange, filterPl
     if (!field) return;
     const measure = () => {
       const r = field.getBoundingClientRect();
-      setBox({ left: r.left, bottom: window.innerHeight - r.bottom, minWidth: r.width });
+      setBox(panelPlacement(
+        { left: r.left, bottom: r.bottom, width: r.width },
+        { width: window.innerWidth, height: window.innerHeight },
+      ));
     };
     measure();
     const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null;
@@ -227,7 +231,9 @@ export function SearchableSelect({ value, options, ariaLabel, onChange, filterPl
         aria-activedescendant={open ? activeRowId : undefined}
         disabled={disabled}
         aria-disabled={disabled}
-        title={title ?? (chosen?.unavailableReason ?? undefined)}
+        // A truncated trigger must still name its value: the explicit title wins, then the
+        // withheld/unavailable reason, then the shown text itself (the bare identifier).
+        title={title ?? chosen?.unavailableReason ?? (triggerText !== '' ? triggerText : undefined)}
         aria-description={chosen?.unavailableReason ?? undefined}
         data-ui-component="SearchableSelect"
         data-value={value}
@@ -247,7 +253,7 @@ export function SearchableSelect({ value, options, ariaLabel, onChange, filterPl
           className="chip-menu__panel searchable-select__panel"
           role="presentation"
           id={`${listId}-panel`}
-          style={box ? { left: box.left, bottom: box.bottom, minWidth: box.minWidth } : undefined}
+          style={box ? { left: box.left, ...(box.top !== undefined ? { top: box.top } : { bottom: box.bottom }), minWidth: box.minWidth, maxHeight: box.maxHeight } : undefined}
           data-testid="searchable-select-panel"
           onKeyDown={onKeyDown}
         >

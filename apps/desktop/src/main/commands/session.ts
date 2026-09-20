@@ -54,9 +54,24 @@ export function sessionCommands(
       let sessionId: string | undefined;
       const root = canonicalPath(w.workspace);
       const svc = services.get(root);
-      if (req.isolation || req.attach) {
+      // REQ-MONITOR-251 / REQ-GIT-120: the 2nd+ concurrent launch is placed in a worktree. The dialog
+      // locks isolation on (REQ-GIT-119), but a start arriving without an explicit tree — e.g. a retry
+      // holding pre-dialog launch options — must not share the base tree with the live run, so main
+      // force-creates the default isolated tree instead of refusing or colliding.
+      let effectiveIsolation = req.isolation;
+      const effectiveAttach = req.attach;
+      let forcedSessionId: string | undefined;
+      if (!effectiveIsolation && !effectiveAttach) {
+        const active = await runHost.request({ kind: 'runs.active', workspaceId: w.workspaceId }, millis(5_000)).catch(() => null);
+        if (active?.kind === 'runs.count' && active.count > 0) {
+          forcedSessionId = mainWindows.takeMintedSession(w.wcId) ?? randomUUID();
+          effectiveIsolation = { branch: `rotaris/session/${forcedSessionId}` };
+          log(`concurrent start while ${active.count} run(s) active: force-creating isolated worktree ${effectiveIsolation.branch} (REQ-MONITOR-251)`);
+        }
+      }
+      if (effectiveIsolation || effectiveAttach) {
         if (!svc) { log('run refused before start: the workspace service is not running'); return { ok: false, code: 'workspace.none', headline: 'The workspace service is not running' }; }
-        sessionId = mainWindows.takeMintedSession(w.wcId) ?? randomUUID();
+        sessionId = forcedSessionId ?? mainWindows.takeMintedSession(w.wcId) ?? randomUUID();
         const bindFailure = (r: ProcessReply): CommandOutcome => {
           const detail = r.kind === 'refused' ? [r.headline, r.detail].filter(Boolean).join(': ') : `unexpected reply ${r.kind}`;
           const headline = `Error: could not create or attach the requested worktree: ${detail}`;
@@ -70,12 +85,12 @@ export function sessionCommands(
          * renderer would meet as a rejected `invoke` and the composer as silence (R0-2).
          */
         const unreachable = (cause: Error) => ({ kind: 'refused' as const, code: 'link.unreachable', headline: 'The workspace service did not answer', detail: cause.message });
-        if (req.isolation) {
-          const made = await svc.link.request({ kind: 'worktree.create', workspaceRoot: root, branch: req.isolation.branch, collisionSafe: true, target: { kind: 'session', sessionId } }, millis(120_000)).catch(unreachable);
+        if (effectiveIsolation) {
+          const made = await svc.link.request({ kind: 'worktree.create', workspaceRoot: root, branch: effectiveIsolation.branch, collisionSafe: true, target: { kind: 'session', sessionId } }, millis(120_000)).catch(unreachable);
           if (made.kind !== 'worktree.created') return bindFailure(made);
           binding = { worktree_path: made.path, branch: made.branch, base_branch: made.baseBranch, base_revision: made.baseRevision, created_by_session: true, merge_status: 'ready', integration_session_id: null };
-        } else if (req.attach) {
-          const checked = await svc.link.request({ kind: 'worktree.checkAttach', workspaceRoot: root, path: req.attach.path }, millis(60_000)).catch(unreachable);
+        } else if (effectiveAttach) {
+          const checked = await svc.link.request({ kind: 'worktree.checkAttach', workspaceRoot: root, path: effectiveAttach.path }, millis(60_000)).catch(unreachable);
           if (checked.kind !== 'worktree.attachable') return bindFailure(checked);
           binding = { worktree_path: checked.path, branch: checked.branch, base_branch: checked.baseBranch, base_revision: checked.baseRevision, created_by_session: false, merge_status: 'ready', integration_session_id: null };
         }
@@ -109,8 +124,10 @@ export function sessionCommands(
     },
     'session.resume': async (req, { w }) => {
       if (!w.workspaceId) return { ok: false, code: 'workspace.none', headline: 'Open a workspace before loading a session' };
-      const active = await runHost.request({ kind: 'runs.active', workspaceId: w.workspaceId }, millis(5_000));
-      if (active.kind === 'runs.count' && active.count > 0) return { ok: false, code: 'session.run-active', headline: 'Finish or cancel the active run before switching sessions.' };
+      // REQ-MONITOR-249/252/258: multi-session host — focusing another session (idle or already live
+      // in the background) stays available while a run is active. The engine still refuses the one
+      // case that must not proceed: resuming the session a run is already executing where a fresh
+      // load would collide (REQ-MONITOR-256); the renderer treats that answer as a focus switch.
       const r = await runHost.request({ kind: 'session.resume', workspaceId: w.workspaceId, sessionId: req.sessionId }, millis(10_000));
       if (r.kind !== 'session.resumed') {
         if (r.kind === 'refused') raiseNotice('error', r.headline, r.detail);

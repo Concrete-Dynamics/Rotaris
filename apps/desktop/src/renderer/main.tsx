@@ -1001,17 +1001,18 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
   const [stashOpen, setStashOpen] = useState(false);
   const git = useGitState(workspace);
   /**
-   * REQ-SHELL-125 / REQ-SESSION-184: "New session" opens the launch dialog — refused with the sentence while a run is
-   * active on this single-run host; accepting holds the choices for the composer's next submission, releases the
-   * followed session, empties the composer and shows Workspace.
+   * REQ-SHELL-125 / REQ-SESSION-184: "New session" opens the launch dialog — on this multi-session host
+   * a run being active no longer refuses it (REQ-MONITOR-258); the dialog locks isolation on instead
+   * (REQ-GIT-119, REQ-MONITOR-251). Accepting holds the choices for the composer's next submission,
+   * releases the followed session, empties the composer and shows Workspace — the previous run carries
+   * on in the background.
    */
   const [launch, setLaunch] = useState<{ sessionId: string; sandboxMode: SandboxModeName; runStartMode: 'auto' | 'plan'; runActive: boolean; permissionMode: string; allowUnsandboxedAutonomous: boolean } | null>(null);
   // REQ-SANDBOX-119/120/130: the dialog shows this host's own verdict, never a hardcoded answer.
   const launchConfinement = useConfinement();
   const openStartDialog = useCallback(async (): Promise<{ ok: true } | { ok: false; reason: string }> => {
     const current = replica.getState();
-    if (current.session && isBusy(current.session.executionStatus)) return { ok: false, reason: 'Finish or cancel the active run before starting a new session.' };
-    const [id, config] = await Promise.all([bridge.command({ kind: 'session.newId' }), bridge.command({ kind: 'config.read' })]);
+    const [id, config, list] = await Promise.all([bridge.command({ kind: 'session.newId' }), bridge.command({ kind: 'config.read' }), bridge.command({ kind: 'session.list' })]);
     if (!id.ok) return { ok: false, reason: id.detail ?? id.headline };
     const sandboxMode = config.ok ? (config.value as ConfigSnapshot).runtime.sandbox_mode : 'off';
     // REQ-ORCH-152: the persisted mode is what the dialog preselects; it holds none of its own.
@@ -1023,7 +1024,13 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
      * produces the advisory rather than suppresses it.
      */
     const permissionMode = config.ok ? (config.value as ConfigSnapshot).runtime.permission_mode : 'ask';
-    setLaunch({ sessionId: (id.value as { sessionId: string }).sessionId, sandboxMode, runStartMode, runActive: false, permissionMode, allowUnsandboxedAutonomous: false });
+    // REQ-MONITOR-251 / REQ-GIT-119: the 2nd+ concurrent launch is forced into a worktree. Any busy
+    // session in this workspace — focused or background — locks isolation on in the dialog.
+    const currentBusy = current.session !== null && isBusy(current.session.executionStatus);
+    const listBusy = list.ok
+      ? ((list.value as { sessions: SessionListItemPayload[] }).sessions.some((s) => s.busy || isBusy(s.status)))
+      : false;
+    setLaunch({ sessionId: (id.value as { sessionId: string }).sessionId, sandboxMode, runStartMode, runActive: currentBusy || listBusy, permissionMode, allowUnsandboxedAutonomous: false });
     return { ok: true };
   }, []);
   const acceptLaunch = useCallback(async (options: LaunchOptions) => {
@@ -1032,8 +1039,9 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
     // so the run this launch begins reads it. A failure to write is surfaced by the settings path, not swallowed here.
     await setRunStartMode(options.runStartMode);
     useShellState.getState().setLaunchOptions(options);
-    const current = replica.getState();
-    if (current.sessionId) await bridge.command({ kind: 'session.unsubscribe', sessionId: current.sessionId });
+    // REQ-MONITOR-249/252: multi-session host — the previous run carries on in the background. Its relay
+    // subscription is kept so background notices and terminal frames still reach this window; the replica
+    // simply follows nothing until the next prompt starts the new session.
     replica.getState().follow(null);
     useShellState.getState().switchView('workspace');
     requestAnimationFrame(() => requestAnimationFrame(() => { const input = document.querySelector<HTMLTextAreaElement>('.composer__input'); if (input) { input.value = ''; input.focus(); } }));
@@ -1094,18 +1102,26 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
   const outcomeOf = <T,>(r: CommandOutcome): { ok: true; value?: T } | { ok: false; reason: string } => (r.ok ? { ok: true, value: r.value as T } : { ok: false, reason: r.detail ?? r.headline });
   const deleteSession = useCallback(async (sessionId: string) => {
     const r = await bridge.command({ kind: 'session.delete', sessionId });
+    // The relay subscription is per window per session: drop it whether the deleted session was
+    // focused or running in the background, so no further frames for it reach this window.
+    void bridge.command({ kind: 'session.unsubscribe', sessionId }).catch(() => undefined);
     if (r.ok && replica.getState().sessionId === sessionId) {
       // The window followed the session that is now gone: stop following it rather than render a record that no longer exists.
-      await bridge.command({ kind: 'session.unsubscribe', sessionId });
       replica.getState().follow(null);
     }
     return outcomeOf<DeleteOutcome>(r);
   }, []);
   const openSession = useCallback(async (sessionId: string): Promise<{ ok: true } | { ok: false; reason: string }> => {
     const result = await bridge.command({ kind: 'session.resume', sessionId });
-    if (!result.ok) return { ok: false, reason: result.detail ?? result.headline };
-    const current = replica.getState().sessionId;
-    if (current && current !== sessionId) await bridge.command({ kind: 'session.unsubscribe', sessionId: current });
+    if (!result.ok) {
+      // REQ-MONITOR-249/252: focusing a background run that is already live is not a resume — the
+      // engine reports that session as already active, and following it is the correct outcome.
+      const alreadyLive = result.code === 'session.run-active'
+        || /already active in this application/i.test(`${result.detail ?? ''} ${result.headline ?? ''}`);
+      if (!alreadyLive) return { ok: false, reason: result.detail ?? result.headline };
+    }
+    // Multi-session focus switch: keep the previous session's relay subscription so its background
+    // notices and terminal frames keep reaching this window; the replica follows only the focused one.
     replica.getState().follow(sessionId);
     const subscribed = await bridge.command({ kind: 'session.subscribe', sessionId });
     if (!subscribed.ok) return { ok: false, reason: subscribed.detail ?? subscribed.headline };

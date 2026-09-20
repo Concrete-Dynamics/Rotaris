@@ -9,7 +9,8 @@ import { Button as DesignButton, Checkbox as DesignCheckbox, Input as DesignInpu
  * REQ-GIT-021's first refusal is unreachable), and the sandbox mode — the three values of REQ-SANDBOX-048 in that
  * order, preselected to the configured value (REQ-TOOLS-114) — with REQ-SANDBOX-130's disclosure as text on a host
  * that cannot confine anything (ADR-0022). Cancel clears nothing. REQ-GIT-119 (isolation mandatory while another
- * run is active) is carried by `runActive`; on this single-run host REQ-SHELL-125's refusal fires before the dialog.
+ * run is active) is carried by `runActive`; on this multi-session host the dialog opens even then,
+ * with isolation locked on (REQ-GIT-119, REQ-MONITOR-251).
  */
 export interface LaunchOptions {
   readonly isolation: { readonly branch: string } | null;

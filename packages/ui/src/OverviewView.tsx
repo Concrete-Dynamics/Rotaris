@@ -34,7 +34,7 @@ export interface OverviewProps {
   readonly onLayout: (layout: PaneLayout) => void;
   readonly nowIso?: string | null | undefined;
   readonly onListSessions: () => void;
-  /** REQ-SHELL-125: refused with its sentence while a run is active; the reason is shown under the header. */
+  /** REQ-SHELL-125 (multi-session host): opens the launch dialog even while a run is active; a refusal reason is shown under the header. */
   readonly onNewSession: () => Promise<{ ok: true } | { ok: false; reason: string }>;
   readonly onOpenSession: (sessionId: string) => void;
   readonly onContinueSession: (sessionId: string) => void;

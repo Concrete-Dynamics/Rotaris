@@ -25,7 +25,7 @@ and answered differently, and nobody can see that it happened. The reason is par
 
 ## Count
 
-**Forty-one requests, R-001 to R-041.** One row, one identifier, no gap — so the highest identifier is
+**Forty-two requests, R-001 to R-042.** One row, one identifier, no gap — so the highest identifier is
 the number of rows, and there is nothing here for a reader to tally.
 [`tools/check-request-log.mjs`](../../tools/check-request-log.mjs) holds that as part of `pnpm lint`,
 because a count written in prose is exactly what let seventeen rows sit under the word "Sixteen".
@@ -95,6 +95,8 @@ which is how two `R-016`s sat twenty lines apart and were never once read side b
 | <a id="r-040"></a>R-040 | 2026-09-18 | "bitte mach die controls unten am chat im workspace kompakter, moderner und wengier platzeinnehmend. so wie bei copilot oder opencode eher. plane das erstmal aus und liefer mir mindestens drei screenshots als designvorschläge." — der Owner wählte B (docked strip, kurze Labels „Run/Continue" + ausgeschriebenes „Medium") | directive | **[`PD-CHAT-001`](directives.md#pd-chat-001) revision 2** — drei gerenderte Vorschläge geliefert, B gewählt und gebaut |
 
 | <a id="r-041"></a>R-041 | 2026-09-18 | "bei kleinen screens haben wir hier ein problem. vllt sollten wir dort die denkst\u00e4rke durch ein symbol abk\u00fcrzen, auch persona, auto /plan first und autonomous / ask durch icon abk\u00fcrzen in der darstellung. wenns noch kleiner wird dann vllt auch das modell." \u2014 mit Screenshot des \u00fcberlaufenden Composer-Strips (abgeschnittenes \u201eautonomous\u201c, doppelte \u201e~0 tok\u201c-Sch\u00e4tzung) | directive | **[`PD-CHAT-001`](directives.md#pd-chat-001) revision 3** \u2014 der Strip k\u00fcrzt hinter seinem eigenen Kompakt-Zustand: erst die kleinen festen Sets + Sch\u00e4tzung, dann Persona und Modell |
+
+| <a id="r-042"></a>R-042 | 2026-09-20 | "can i have two runs running in paralell?", then "i want it to be possible to start a second run when a run is already running", then "multiple runs should be able to be controllable in the same window. a different project of course has its running runs in their window." | directive | [`PD-SHELL-002`](directives.md#pd-shell-002) — every window is the multi-session host: new session and session browser stay available while a run is active, the 2nd+ launch is forced into an isolated worktree, focus switches leave background runs live and controllable in the same window; other projects keep their runs in their own windows (PD-SHELL-001) |
 
 <!--
 Row shape:

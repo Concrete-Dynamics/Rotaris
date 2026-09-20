@@ -169,7 +169,10 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       return { kind: 'session.list', sessions: sessions.list(s.dal, s.root) };
     }
     case 'session.resume': {
-      if (sessions.activeRunCount() > 0) return { kind: 'refused', code: 'session.run-active', headline: 'Finish or cancel the active run before switching sessions.' };
+      // REQ-MONITOR-249/252/258: multi-session host — loading/focusing another session stays available
+      // while a run is active. Only the target session itself is guarded, inside Sessions.resume
+      // (already-live → run-active, lock held elsewhere → lock-held); a blanket activeRunCount gate
+      // here would forbid every focus switch and every 2nd concurrent start.
       const s = stores.get(req.workspaceId);
       if (!s?.dal) return { kind: 'refused', code: 'workspace.not-open', headline: 'No store is open for this workspace' };
       sessionRoots.set(req.sessionId, s.root);

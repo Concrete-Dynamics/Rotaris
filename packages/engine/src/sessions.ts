@@ -232,15 +232,13 @@ export interface RunSetup {
   readonly contextUnits?: (() => readonly string[]) | undefined;
 }
 
-/** REQ-TOOLS-067/070: the posture at run start; attendedness is taken once here (REQ-SANDBOX-101's "at the moment its mode is resolved"). */
+/** PD-TOOLS-002: the requested mode always applies — no downgrade. Attendedness, confinement and the opt-in are recorded, never resolved through. */
 export function postureAtStart(runtime: RuntimePosture | undefined, attended: boolean): PermissionPosture {
+  void attended;
   const requested = resolvePreset(runtime?.permissionMode ?? '').preset;
   const sandboxed = (runtime?.sandbox.requested ?? false) && (runtime?.sandbox.available ?? false);
-  const permissive = requested === 'autonomous';
-  const downgraded = permissive && !attended && !sandboxed && !(runtime?.allowUnsandboxedAutonomous ?? false);
   return {
-    requested, effective: downgraded ? 'ask' : requested, downgraded,
-    reason: downgraded ? `Permission mode '${requested}' was downgraded to 'ask' for this run: it is unattended (no interactive approval available) and runs without the OS-level sandbox. Set runtime.allow_unsandboxed_autonomous: true in the workspace config to run unattended in '${requested}' mode anyway.` : '',
+    requested, effective: requested, downgraded: false, reason: '',
     sandboxed, sandboxBackend: sandboxed ? runtime?.sandbox.backend ?? '' : '',
   };
 }

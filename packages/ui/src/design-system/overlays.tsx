@@ -97,7 +97,10 @@ export function StripActionButton({ icon, ariaLabel, className, children, onClic
  * §1.2, per UIR-005).
  *
  * Accessibility: the trigger carries `aria-haspopup="menu"` and `aria-expanded`; the panel is
- * `role="menu"` with `menuitemradio` options (one selection, checkable). Arrow keys move, Enter and
+ * `role="menu"` with `menuitemradio` options (one selection, checkable). Each option is named by
+ * its label alone (`aria-labelledby` to the label span) with the hint as its accessible
+ * description (`aria-describedby` to the hint span, REQ-CHAT-007) — never the two fused into one
+ * name. Arrow keys move, Enter and
  * Space choose, Escape closes and returns focus to the trigger, Home/End jump, Tab closes without
  * choosing. Outside press closes. The panel never takes focus on open — the trigger keeps it and
  * acts as the menu's keyboard anchor, which is the pattern the slash popup already established.
@@ -139,6 +142,11 @@ export interface PopoverMenuTriggerProps extends Omit<ButtonHTMLAttributes<HTMLB
    * below is the only text either shell draws.
    */
   readonly strip?: { readonly labels?: Readonly<Record<string, string>> | undefined; readonly iconOnly?: boolean | undefined } | undefined;
+  /**
+   * Test seam only: render with the panel open so static-markup tests can assert the option
+   * rows. The product always starts closed; no caller passes this.
+   */
+  readonly defaultOpen?: boolean | undefined;
 }
 
 /** `true` when the point is outside the element's rect — the outside-press test. */
@@ -147,8 +155,8 @@ function pointOutside(el: Element, x: number, y: number): boolean {
   return x < r.left || x > r.right || y < r.top || y > r.bottom;
 }
 
-export function PopoverMenu({ value, icon, ariaLabel, options, onChoose, className, disabled, title, anchorRef, strip, ...rest }: PopoverMenuTriggerProps) {
-  const [open, setOpen] = useState(false);
+export function PopoverMenu({ value, icon, ariaLabel, options, onChoose, className, disabled, title, anchorRef, strip, defaultOpen, ...rest }: PopoverMenuTriggerProps) {
+  const [open, setOpen] = useState(defaultOpen ?? false);
   const [active, setActive] = useState(() => Math.max(0, options.findIndex((o) => o.value === value)));
   const trigger = useRef<HTMLButtonElement | null>(null);
   const panel = useRef<HTMLDivElement>(null);
@@ -275,6 +283,8 @@ export function PopoverMenu({ value, icon, ariaLabel, options, onChoose, classNa
               role="menuitemradio"
               aria-checked={o.value === value}
               aria-disabled={o.disabled}
+              aria-labelledby={`${listId}-${i}-label`}
+              aria-describedby={o.hint !== undefined ? `${listId}-${i}-hint` : undefined}
               id={`${listId}-${i}`}
               data-index={i}
               className={classes('chip-menu__item', i === active && 'is-active', o.value === value && 'is-chosen', o.disabled && 'is-disabled')}
@@ -282,8 +292,8 @@ export function PopoverMenu({ value, icon, ariaLabel, options, onChoose, classNa
               onClick={() => { if (!o.disabled) { close(true); onChoose(o.value); } }}
             >
               <span className="chip-menu__check" aria-hidden="true">{o.value === value ? <i className="ph ph-check" /> : null}</span>
-              <span className="chip-menu__label">{o.label}</span>
-              {o.hint !== undefined && <span className="chip-menu__hint">{o.hint}</span>}
+              <span className="chip-menu__label" id={`${listId}-${i}-label`}>{o.label}</span>
+              {o.hint !== undefined && <span className="chip-menu__hint" id={`${listId}-${i}-hint`}>{o.hint}</span>}
             </button>
           ))}
         </div>

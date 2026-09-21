@@ -25,7 +25,7 @@ and answered differently, and nobody can see that it happened. The reason is par
 
 ## Count
 
-**Forty-five requests, R-001 to R-045.** One row, one identifier, no gap — so the highest identifier is
+**Forty-six requests, R-001 to R-046.** One row, one identifier, no gap — so the highest identifier is
 the number of rows, and there is nothing here for a reader to tally.
 [`tools/check-request-log.mjs`](../../tools/check-request-log.mjs) holds that as part of `pnpm lint`,
 because a count written in prose is exactly what let seventeen rows sit under the word "Sixteen".
@@ -101,8 +101,9 @@ which is how two `R-016`s sat twenty lines apart and were never once read side b
 
 | <a id="r-044"></a>R-044 | 2026-09-21 | "fix the most pressing defect" — the run-autopsy of run `7bd9c19d` ranked the single-retry stream-stall abort highest by cost, but the stall timeout, the retry budget and the failure summary are each fixed by live requirements (REQ-CONFIG-114, REQ-ORCH-092, REQ-ORCH-082 rule 4), so there is no code fix there; the fixable defect is the win32 SIGINT refusal (`docs/defects/win32-terminal-edge-cases-bounced-to-the-agent.md`): map the undeliverable background-pipe signals onto the session's own termination | question | OQ-10, answered in place for background pipe sessions by this instruction (R-008 precedent): SIGINT/SIGHUP on a win32 pipe terminate the tree, as SIGTERM/SIGKILL already do |
 
-| <a id="r-045"></a>R-045 | 2026-09-21 | "the instruction files in the instructions settings tab should be toggable. so the user can deactivate the auto injection of some of these. also it should pick up global agents.md and claude.md and from the project." — clarified: global locations mirror the skill user-scope roots; project scope stays the workspace root; filenames are the AGENTS pair plus the CLAUDE pair; toggles persist in `agents.yaml` with `inject_agents_md` staying the master switch | directive | [`PD-WORKSPACE-002`](directives.md#pd-workspace-002) — the Instructions inventory lists the workspace AGENTS/CLAUDE pairs plus the global/user/machine files, each row carrying a per-file on/off switch persisted as an `instructions.overrides` policy; the merged injection (when built) consumes the enabled set in discovery order under the master switch |
+| <a id="r-045"></a>R-045 | 2026-09-21 | "i dont want that unsandbox and unattended downgrades it. record a PD and overrule it. then modify the code accordingly and delete the flake report." — plus the earlier report that selecting autonomous still leaves subagents asking (recorded as `docs/defects/a-mid-session-switch-to-autonomous-does-not-reach-agents-built-later.md`) | directive | [`PD-TOOLS-002`](directives.md#pd-tools-002) — the requested permission mode always applies; no unattended downgrade, on any agent, for the whole run |
 
+| <a id="r-046"></a>R-046 | 2026-09-21 | "the instruction files in the instructions settings tab should be toggable. so the user can deactivate the auto injection of some of these. also it should pick up global agents.md and claude.md and from the project." — clarified: global locations mirror the skill user-scope roots; project scope stays the workspace root; filenames are the AGENTS pair plus the CLAUDE pair; toggles persist in `agents.yaml` with `inject_agents_md` staying the master switch. **Written as R-045 in its own worktree; the PD-TOOLS-002 row above reached `main` first and keeps that number, so this row moved to R-046 with every word unchanged.** | directive | [`PD-WORKSPACE-002`](directives.md#pd-workspace-002) — the Instructions inventory lists the workspace AGENTS/CLAUDE pairs plus the global/user/machine files, each row carrying a per-file on/off switch persisted as an `instructions.overrides` policy; the merged injection consumes the enabled set in discovery order under the master switch, and is built in the same round |
 <!--
 Row shape:
 

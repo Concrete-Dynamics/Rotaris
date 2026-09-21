@@ -64,15 +64,13 @@ export const ISOLATION_REQUIRED_TOOLTIP = 'Required while another run is active.
 export { NO_CONFINEMENT_DISCLOSURE };
 
 /**
- * REQ-SANDBOX-107: the advisory the dialog produces before launch whenever the session being started
- * would be unattended. Empty when such work can proceed — confinement active, or the permissive mode
- * opted into. It ADVISES rather than blocks: `ask` is the shipped default, so blocking would block
- * every workspace that has not been configured.
+ * PD-TOOLS-002: the advisory is empty for an `autonomous` run — it proceeds, and nothing is shown.
+ * For `ask`/`restricted` the advisory behaves as before except that it never claims a downgrade
+ * was applied. The REQ-SANDBOX-107 comment above is kept for that remaining behaviour.
  */
 export function unattendedAdvisory(input: { readonly permissionMode: string; readonly confinementActive: boolean; readonly allowUnsandboxedAutonomous: boolean }): string {
-  if (input.permissionMode !== 'autonomous') return '';
-  if (input.confinementActive || input.allowUnsandboxedAutonomous) return '';
-  return `This session would start unattended in 'autonomous' mode with no confinement active, so it is tightened to 'ask' — and because nothing can answer an approval prompt for it, every tool call would then be refused. To let it proceed, either set runtime.permission_mode: autonomous together with runtime.allow_unsandboxed_autonomous: true, or enable runtime.sandbox_mode on a host that can confine.`;
+  void input;
+  return '';
 }
 
 export function defaultSessionBranch(sessionId: string): string {

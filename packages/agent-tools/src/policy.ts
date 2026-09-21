@@ -380,14 +380,7 @@ export interface DowngradeInput {
   readonly allowUnsandboxedAutonomous: boolean;
 }
 
-/** REQ-TOOLS-067/068: the single definition of the downgrade; never raises; never further than `ask`. */
+/** PD-TOOLS-002: the requested mode always applies — no downgrade, on any agent, for the whole run. The input fields above are retained (inert) so callers keep compiling; they have no effect. */
 export function effectiveMode(input: DowngradeInput): { readonly effective: PermissionPreset; readonly downgraded: boolean; readonly reason: string } {
-  const permissive = input.requested === 'autonomous';
-  if (permissive && !input.attended && !input.sandboxed && !input.allowUnsandboxedAutonomous) {
-    return {
-      effective: 'ask', downgraded: true,
-      reason: `Permission mode '${input.requested}' was downgraded to 'ask' for this run: it is unattended (no interactive approval available) and runs without the OS-level sandbox. Set runtime.allow_unsandboxed_autonomous: true in the workspace config to run unattended in '${input.requested}' mode anyway.`,
-    };
-  }
   return { effective: input.requested, downgraded: false, reason: '' };
 }

@@ -303,15 +303,13 @@ describe('policy (ADR-0017, REQ-TOOLS-011..029, 039..047)', () => {
     expect(evaluate(UNRESTRICTED_POLICY, [], permissionRequest('terminal', 'o', { command: 'rm -rf /' }), env)).toMatchObject({ decision: 'allow', ruleId: 'preset:unrestricted' });
   });
 
-  it('REQ-TOOLS-048/067/068: mode selection and the downgrade', () => {
+  it('PD-TOOLS-002 (was REQ-TOOLS-048/067/068): mode selection; the requested mode always applies — no downgrade', () => {
     expect(selectRequestedMode({ pin: 'restricted', override: 'autonomous' })).toBe('restricted');
     expect(selectRequestedMode({ pin: 'autonomous', override: 'ask' })).toBe('ask');
     expect(selectRequestedMode({ runtime: '' })).toBe('ask');
-    expect(effectiveMode({ requested: 'autonomous', attended: false, sandboxed: false, allowUnsandboxedAutonomous: false })).toMatchObject({ effective: 'ask', downgraded: true });
+    expect(effectiveMode({ requested: 'autonomous', attended: false, sandboxed: false, allowUnsandboxedAutonomous: false })).toMatchObject({ effective: 'autonomous', downgraded: false, reason: '' });
     expect(effectiveMode({ requested: 'autonomous', attended: true, sandboxed: false, allowUnsandboxedAutonomous: false }).downgraded).toBe(false);
     expect(effectiveMode({ requested: 'autonomous', attended: false, sandboxed: false, allowUnsandboxedAutonomous: true }).downgraded).toBe(false);
     expect(effectiveMode({ requested: 'ask', attended: false, sandboxed: false, allowUnsandboxedAutonomous: false }).downgraded).toBe(false);
-    const r = effectiveMode({ requested: 'autonomous', attended: false, sandboxed: false, allowUnsandboxedAutonomous: false }).reason;
-    expect(r).toBe("Permission mode 'autonomous' was downgraded to 'ask' for this run: it is unattended (no interactive approval available) and runs without the OS-level sandbox. Set runtime.allow_unsandboxed_autonomous: true in the workspace config to run unattended in 'autonomous' mode anyway.");
   });
 });

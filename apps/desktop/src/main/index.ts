@@ -905,7 +905,7 @@ async function main(): Promise<void> {
       if (process.env['ELECTRON_RENDERER_URL']) await win.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?${new URLSearchParams(query).toString()}`);
       else await win.loadFile(join(__dirname, '../renderer/index.html'), { query });
     },
-    relayAttach: (win) => relay.attach({ id: win.webContents.id, send: (channel, payload) => { if (!win.isDestroyed()) win.webContents.send(channel, payload); } }),
+    relayAttach: (win) => relay.attach({ id: win.webContents.id, send: (channel, payload) => { if (!win.isDestroyed() && !win.webContents.isDestroyed()) win.webContents.send(channel, payload); } }),
     relayDetach: (wcId) => { relay.detach(wcId); },
     registerPresenter: (wcId) => {
       parentWindowIds.add(String(wcId));

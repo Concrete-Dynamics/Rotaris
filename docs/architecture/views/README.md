@@ -54,6 +54,15 @@ section and its configuration section move; `04-seams.md` §5 gains the files a 
 needs past the six a plain key needs. `REQ-WORKSPACE-050`'s worktree half stays unbuilt and is recorded
 in `docs/defects/`, not here.
 
+**The requested permission mode always applies (PD-TOOLS-002).** No unattended downgrade: the
+requested mode is the effective mode for every agent, for the whole run. `03-runtime-view.md`
+carries the announcement without a downgrade row; the sandbox proof's scenario 4 keeps the mode.
+
+**The relay sheds dead sinks (REQ-MONITOR-226 intent).** `relaySequenced` and `broadcast` isolate per sink:
+a `send` that throws (disposed render frame) detaches the sink and delivery continues to the survivors.
+`render-process-gone` detaches at once; the channel-3 limiter sheds the same way; `ProcessLink` isolates
+per event listener. Recorded in `04-seams.md` §2.
+
 **The member card opens by its row identity (REQ-CHAT-059/061/166).** A group member's card is keyed by
 `memberKey` (`Row.tsx`) — the member's own `rowKey`, the identity step 4 holds the caps against — instead
 of `callKey ?? index`, which stranded from `rowKey` on every member without a call key. No view file moves:

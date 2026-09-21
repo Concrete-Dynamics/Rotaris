@@ -173,16 +173,16 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
     await sessions.running(sid)!;
   });
 
-  it('REQ-TOOLS-067/071: autonomous requested while unattended and unsandboxed is downgraded to ask, announced in the row, the timeline, the log and session.start', async () => {
+  it('PD-TOOLS-002 (was REQ-TOOLS-067/071): autonomous requested while unattended and unsandboxed keeps autonomous — no downgrade row, timeline event or log warning', async () => {
     const { port } = fakePort();
     const { sessions, logLines } = sessionsWith([answer('hi')], port, { attended: false, runtime: { permissionMode: 'autonomous' } });
     const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
     await sessions.running(sid)!;
-    expect(dal.getSession(sid)!.permission_mode).toBe('ask');
-    expect(dal.residentRows(sid)[1]!.body).toMatch(/^Permission mode 'autonomous' was downgraded to 'ask' for this run/);
-    expect(dal.timelineOf(sid).map((t) => t.name)).toContain('permission_mode_downgraded');
-    expect(logLines.some((l) => /WARNING.*downgraded/.test(l))).toBe(true);
-    expect(JSON.parse(dal.eventsOfKind(sid, 'session.start')[0]!.payload)).toMatchObject({ permission_mode: 'ask' });
+    expect(dal.getSession(sid)!.permission_mode).toBe('autonomous');
+    expect(dal.residentRows(sid).map((r) => r.body).join('\n')).not.toMatch(/downgraded/);
+    expect(dal.timelineOf(sid).map((t) => t.name)).not.toContain('permission_mode_downgraded');
+    expect(logLines.some((l) => /WARNING.*downgraded/.test(l))).toBe(false);
+    expect(JSON.parse(dal.eventsOfKind(sid, 'session.start')[0]!.payload)).toMatchObject({ permission_mode: 'autonomous' });
   });
 
   it('with no tool port the model is offered no tool and a requested call ends the turn with a warning', async () => {

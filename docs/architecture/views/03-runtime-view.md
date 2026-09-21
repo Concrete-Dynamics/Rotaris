@@ -83,7 +83,7 @@ REQ-WORKSPACE-065's "every agent built for a session sees the same catalog" hold
 `Run.start()` in order (REQ-SESSION-087): save `starting` → the pre-flight (intent classification through the
 small slot's rung ladder; the grant; the playbooks; the BUDGET cell) → **the plan gate's hold settled** → the
 launch audit (once per session, REQ-SESSION-138) → `run_start` timeline entry → hook trust announced → the
-effective permission posture (downgrade row if any) → save `running` → `session_start` hooks → **the plan cycle
+effective permission posture (PD-TOOLS-002: the requested mode, never a downgrade row) → save `running` → `session_start` hooks → **the plan cycle
 if the gate holds**, otherwise the loop.
 
 **The plan gate (Part; ADR-0062, REQ-ORCH-152/153/154, PD-ORCH-003).** In `plan` mode a run whose classified

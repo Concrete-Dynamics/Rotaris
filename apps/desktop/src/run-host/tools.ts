@@ -3,7 +3,7 @@ import { dirname } from 'node:path';
 import { toIsoUtc, type Clocks } from '@rotaris/kernel';
 import { resolvePreset, type ApprovalPayload, type PermissionPreset, type ToolStatus } from '@rotaris/contracts';
 import {
-  askQuestionsTool, buildPolicy, directWorkBundle, effectiveMode, fetchTool, FileToolState, findShell, Gate, gitReadTool, globTool, grepTool, haetEditTool, haetReadTool, nodePtyFactory, PendingApprovals, PendingQuestions, PolicyContext, readFileTool, realPathOf,
+  askQuestionsTool, buildPolicy, directWorkBundle, fetchTool, FileToolState, findShell, Gate, gitReadTool, globTool, grepTool, haetEditTool, haetReadTool, nodePtyFactory, PendingApprovals, PendingQuestions, PolicyContext, readFileTool, realPathOf,
   resolveToolSet, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, withheldUnderPlanGate, writeFileTool, type ConfinementPort, type GateSink, type PolicyRead, type PresenterPort, type ToolExecutor,
 } from '@rotaris/agent-tools';
 import { BUILT_IN_PERSONAS, type ModeChange, type PersonaResolver, type PortToolCall, type PortToolResult, type RoleName, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
@@ -350,11 +350,10 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     setMode: (requested, _source): ModeChange => {
       const previous = mode;
       const wanted = resolvePreset(requested).preset;
-      // REQ-TOOLS-073: re-resolved through the downgrade for this run's context.
-      const e = effectiveMode({ requested: wanted, attended: ctx.attended(), sandboxed: false, allowUnsandboxedAutonomous: runtime.allowUnsandboxedAutonomous });
-      mode = e.effective;
+      // PD-TOOLS-002: the requested mode always applies — no re-resolution through attendedness, confinement or the opt-in.
+      mode = wanted;
       policy.replace(buildPolicy({ preset: mode, workspaceRoot: root }));
-      return { requested: wanted, effective: mode, downgraded: e.downgraded, reason: e.reason, previous };
+      return { requested: wanted, effective: mode, downgraded: false, reason: '', previous };
     },
     currentMode: () => mode,
     answerApproval: (requestId, option) => approvals.resolve(requestId, option),

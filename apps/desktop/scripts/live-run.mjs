@@ -41,6 +41,11 @@
  *                 to, and by running `node --test` inside that worktree. It is the one path the composer scenarios
  *                 never take: the work is handed over by the board, not typed into a prompt.
  *   5. shell    — a relaunch with no prompt: Overview painted from the store, the sessions the runs left.
+ *   7. faults    — the ENDPOINT misbehaves, on purpose, through the recording proxy: a 429 and a 500 on
+ *                 named calls (does the ladder wait, fall back and finish?), then a stream that stops
+ *                 mid-answer with the socket held open (is that reported as a user cancellation, which is
+ *                 the eighty-second defect's signature?). Neither injected refusal reaches the endpoint,
+ *                 so the ladder half costs nothing but retries.
  *   6. frictions — one real run engineered to trip the inducible run-autopsy frictions (first-use
  *                 `write_file` without `operation`, a SIGINT stop on a win32 pipe session), read back from
  *                 the store rather than from the model's report. Red by design until the fixes land; the
@@ -78,7 +83,7 @@
 import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve, sep } from 'node:path';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
 import { cleanEnvironment, findDatabases } from './lib/harness.mjs';
@@ -144,7 +149,7 @@ let proxy = null;
 const closeProxy = () => { try { proxy?.close(); } catch { /* the run is ending either way */ } };
 const SIGN_IN_WAIT_MS = Number(process.env['LIVE_RUN_SIGN_IN_WAIT_MS'] ?? 120_000);
 const RUN_WAIT_MS = Number(process.env['LIVE_RUN_WAIT_MS'] ?? 420_000);
-const OPTIONAL = ['ask', 'edit', 'requirements', 'shell', 'frictions'];
+const OPTIONAL = ['ask', 'edit', 'requirements', 'shell', 'frictions', 'faults'];
 const only = value('only', null);
 const wanted = only === null ? OPTIONAL : only.split(',').map((s) => s.trim()).filter((s) => s !== '');
 for (const name of wanted) if (!OPTIONAL.includes(name)) throw new Error(`--only takes ${OPTIONAL.join(', ')}; got ${name}`);
@@ -600,7 +605,45 @@ function assertNoCredential(what, text) {
   if (/Bearer\s+(?!\*\*\*)\S{20,}/.test(text)) throw new Error(`${what} carries a bearer value`);
 }
 
-function launch(name, extra, timeoutMs = 180_000) {
+/**
+ * One launch of the built application, ASYNCHRONOUSLY — and the reason that word is load-bearing.
+ *
+ * Every scenario used `spawnSync`, which blocks this process's event loop for the whole scenario. That was
+ * harmless while the harness only watched a child and read its output at the end. It stopped being harmless the
+ * moment the recording proxy moved into the path: an in-process HTTP server cannot answer a request while the
+ * loop is blocked, so the app's very first model call would hang until the scenario's own wait expired.
+ * Measured before the repair: a child fetching a loopback server in this process while `spawnSync` blocked it
+ * got **no answer in 6 s**, and the server served **0** requests. Nothing about the recording was wrong; what
+ * was wrong was that the harness could not run a server and a scenario at the same time.
+ *
+ * `spawn` plus a promise restores that, and it is also what the fault scenario's own timers need — a press or
+ * a kill scheduled DURING a run is impossible under a blocked loop, which is why no scenario had ever done one.
+ * The returned shape is `spawnSync`'s (`status`, `signal`, `stdout`, `stderr`) so every caller reads unchanged.
+ */
+function runElectron(args, { timeout, env }) {
+  return new Promise((resolve) => {
+    const child = spawn(electron, args, { cwd: app, windowsHide: !GUI, env });
+    let stdout = '';
+    let stderr = '';
+    let timedOut = false;
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    const timer = setTimeout(() => { timedOut = true; child.kill('SIGKILL'); }, timeout);
+    child.on('error', (cause) => { clearTimeout(timer); resolve({ status: null, signal: null, stdout, stderr: `${stderr}\n${String(cause)}` }); });
+    child.on('close', (status, signal) => {
+      clearTimeout(timer);
+      // `spawnSync` reports a timeout as a signal with a null status; the callers all read it that way.
+      resolve({ status: timedOut ? null : status, signal: timedOut ? 'SIGKILL' : signal, stdout, stderr, pid: child.pid });
+    });
+    launchInFlight = child;
+  });
+}
+/** The launch a scheduled fault acts on. Null between scenarios. */
+let launchInFlight = null;
+
+async function launch(name, extra, timeoutMs = 180_000) {
   const dir = scenarioDir(name);
   const png = join(dir, `${name}.png`);
   // Each scenario's model traffic lands in its own file, so a record is always attributable to a scenario.
@@ -617,8 +660,8 @@ function launch(name, extra, timeoutMs = 180_000) {
   const paced = budget > 0 && extra['ROTARIS_CAPTURE_PNG_AT'] === undefined
     ? { ROTARIS_CAPTURE_PNG_AT: `${join(dir, `${name}.early.png`)}@${Math.round(budget * 0.2)};;${join(dir, `${name}.mid.png`)}@${Math.round(budget * 0.6)}` }
     : {};
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), workspace], {
-    cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: !GUI,
+  const result = await runElectron([join(app, 'out', 'main', 'index.js'), workspace], {
+    timeout: timeoutMs,
     env: {
       ...cleanEnvironment(),
       LOCALAPPDATA: local, APPDATA: join(sandbox, 'roaming'), ROTARIS_PREFERENCES_ROOT: join(sandbox, 'preferences'),
@@ -627,6 +670,7 @@ function launch(name, extra, timeoutMs = 180_000) {
       ...extra,
     },
   });
+  launchInFlight = null;
   const log = redact(`${result.stdout ?? ''}\n${result.stderr ?? ''}`);
   writeFileSync(join(dir, 'app.log'), log);
   const filtered = filterLog(log, sandbox);
@@ -810,7 +854,7 @@ console.log(`key: ${keySource}`);
 console.log(`sandbox: ${sandbox}`);
 
 // ── 1. Sign in through the product's own dialog ──────────────────────────────────────────────────────────────
-const signIn = launch('sign-in', {
+const signIn = await launch('sign-in', {
   ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Models',
   ROTARIS_CAPTURE_CLICKS: '[data-action="add-endpoint"]@2200',
   ROTARIS_CAPTURE_PROVIDER_FILL: `${endpoint.label}>>${appBaseUrl}>>${key}`,
@@ -852,7 +896,7 @@ check(['large_model', 'medium_model', 'small_model'].every((slot) => agents.incl
 
 // ── 2. One real run that reads and answers ───────────────────────────────────────────────────────────────────
 if (wanted.includes('ask')) {
-  const log = launch('ask', {
+  const log = await launch('ask', {
     ROTARIS_CAPTURE_PROMPT: 'Read src/todos.js in this workspace and reply, in one sentence, with the names of the functions it exports.',
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '2500',
   }, RUN_WAIT_MS + 90_000);
@@ -891,7 +935,7 @@ if (wanted.includes('ask')) {
 
 // ── 3. One real run that changes the workspace and verifies it ───────────────────────────────────────────────
 if (wanted.includes('edit')) {
-  const log = launch('edit', {
+  const log = await launch('edit', {
     ROTARIS_CAPTURE_PROMPT: 'Implement REQ-103 from docs/requirements: add a clearCompleted(todos) function to src/todos.js, export it, add tests for it to src/todos.test.js, then run `node --test` in the terminal and tell me whether it passed.',
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000',
   }, RUN_WAIT_MS + 90_000);
@@ -1041,7 +1085,7 @@ if (wanted.includes('requirements')) {
     `${RESTING_AT}>>${ACCEPTED}@~${deadline}`,
     `${HISTORY_AT}>>${ACCEPTED}@~${deadline + 1}`,
   ];
-  const log = launch('requirements', {
+  const log = await launch('requirements', {
     ROTARIS_CAPTURE_RESIZE: '1264x800@300',
     ROTARIS_CAPTURE_VIEWS: '4@1200',
     ROTARIS_CAPTURE_CLICKS: [...clicks, `${OPEN_CONTROL}@~${deadline}`].join(';;'),
@@ -1152,7 +1196,7 @@ if (wanted.includes('requirements')) {
 // ── 5. The shell over what the runs left ─────────────────────────────────────────────────────────────────────
 if (wanted.includes('shell')) {
   const PROBES = ['[data-testid="overview-sessions"] .ov-session', '[data-testid="overview-repo-branch"]', '[data-testid="overview-tool-chips"] .tag', '.app-shell'];
-  const log = launch('shell', { ROTARIS_CAPTURE_END_VIEW: '1', ROTARIS_CAPTURE_END_VIEW_MS: '3500', ROTARIS_CAPTURE_PROBE: PROBES.join(';;'), ROTARIS_CAPTURE_AFTER_MS: '2500' });
+  const log = await launch('shell', { ROTARIS_CAPTURE_END_VIEW: '1', ROTARIS_CAPTURE_END_VIEW_MS: '3500', ROTARIS_CAPTURE_PROBE: PROBES.join(';;'), ROTARIS_CAPTURE_AFTER_MS: '2500' });
   const probe = (selector) => {
     const line = new RegExp(`capture: probe ${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} → (\\[.*\\])\\s*$`, 'm').exec(log);
     return line === null ? null : JSON.parse(line[1]);
@@ -1178,7 +1222,7 @@ if (wanted.includes('shell')) {
  * and the exit-trace gap needs a crash — and are noted as such instead of asserted.
  */
 if (wanted.includes('frictions')) {
-  const log = launch('frictions', {
+  const log = await launch('frictions', {
     ROTARIS_CAPTURE_PROMPT: 'Create a file called friction-probe.txt in the workspace root containing exactly one line with the text probe-ok. Then run `node -e "setTimeout(() => {}, 20000)"` in the terminal and stop it by sending SIGINT to its session. Reply DONE when both are finished.',
     ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000',
   }, RUN_WAIT_MS + 90_000);
@@ -1208,11 +1252,81 @@ if (wanted.includes('frictions')) {
     check(existsSync(join(workspace, 'friction-probe.txt')), 'the probe file landed in the workspace', 'friction-probe.txt');
     rmSync(join(workspace, 'friction-probe.txt'), { force: true });
   }
-  noted('the stream-stall abort is not covered here', 'it needs an endpoint fault; the observed shape is recorded in docs/defects/single-retry-stream-stall-aborted-a-76-minute-run.md');
+  noted('the stream-stall abort is not covered here', 'the `faults` scenario induces it through the recording proxy; the observed shape is recorded in docs/defects/single-retry-stream-stall-aborted-a-76-minute-run.md');
   noted('the exit-trace gap is not covered here', 'it needs a crash; the observed shape is recorded in docs/defects/process-exit-left-no-diagnosable-trace.md');
   results.scenarios.frictions = { status: read?.session.execution_status, tools: names, writeOpRefusals: writeOp.map((call) => call.ordinal), sigintRefusals: sigint.map((call) => call.ordinal) };
   if (read) preserveRun('frictions', read.session.session_id);
   await budgetGate();
+}
+
+// ── 7. The endpoint misbehaves, on purpose ───────────────────────────────────────────────────────────────
+/**
+ * Two of the run-autopsy's recorded frictions have always been reported as uncoverable here — "the stream-stall
+ * abort is not covered, it needs an endpoint fault". The recording proxy is already in the path, so the
+ * endpoint fault is now something this harness can produce, on a call it NAMES rather than on one it hopes for.
+ *
+ * Two launches, because one fault can end a run before the next would fire, and a rule that never fired is not
+ * evidence about anything:
+ *
+ *   faults-ladder — a 429 on the second completion and a 500 on the third. Neither reaches the endpoint, so
+ *                   this costs the owner nothing but the retries. The question is REQ-ORCH-092's: does the
+ *                   ladder wait, fall back, and still finish?
+ *   faults-stall  — the bytes stop mid-stream on the second completion and the socket stays open. The question
+ *                   is the eighty-second defect's: a model timeout once collapsed into the same `aborted` flag
+ *                   a user's stop sets, and the run reported itself `user_cancelled` with nobody having
+ *                   pressed anything. That is the assertion below, and it is a real regression guard.
+ *
+ * NEVER EXECUTED AT THE TIME OF WRITING. The fault mechanism is unit-tested against a loopback upstream
+ * (`lib/model-traffic.test.ts`); what these two checks claim about the PRODUCT is unverified until a live run
+ * reports back, and the first execution owes its row in `docs/architecture/first-executions.md`.
+ */
+if (wanted.includes('faults')) {
+  if (proxy === null) {
+    noted('the fault scenarios did not run', 'they need the recording proxy, and it is not in the path (--no-record-traffic, or it could not start)');
+  } else {
+    const PROMPT = 'Read src/todos.js and reply, in one sentence, with the names of the functions it exports.';
+
+    proxy.setFaults([{ kind: 'status', at: 2, status: 429 }, { kind: 'status', at: 3, status: 500 }]);
+    const ladder = await launch('faults-ladder', {
+      ROTARIS_CAPTURE_PROMPT: PROMPT,
+      ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '2500',
+    }, RUN_WAIT_MS + 90_000);
+    void ladder;
+    const ladderFired = proxy.stats().faultsFired;
+    const ladderTraffic = readTraffic('faults-ladder');
+    const injected = ladderTraffic.filter((r) => r.fault !== undefined).map((r) => r.status);
+    const ladderRead = readSession();
+    check(ladderFired.length === 2, 'both injected refusals reached the product', `${ladderFired.length} of 2 fired; statuses recorded: ${injected.join(', ') || 'none'}`);
+    check(ladderRead?.session.execution_status === 'completed', 'the run completed despite a 429 and a 500', `${ladderRead?.session.execution_status} (${ladderRead?.session.stop_reason})`);
+    // A ladder that waited and retried made MORE calls than the faults it was given; one that gave up made fewer.
+    check(ladderTraffic.length > injected.length, 'the ladder retried past the refusals rather than giving up', `${ladderTraffic.length} call(s) for ${injected.length} refusal(s)`);
+    if (ladderRead) preserveRun('faults-ladder', ladderRead.session.session_id);
+    results.scenarios['faults-ladder'] = { fired: ladderFired, injected, calls: ladderTraffic.length, status: ladderRead?.session.execution_status, stopReason: ladderRead?.session.stop_reason };
+    await budgetGate();
+
+    // The stall holds past any sane idle bound; the launch's own timeout is the backstop if the product has none.
+    const HOLD_MS = Number(process.env['LIVE_RUN_STALL_HOLD_MS'] ?? 300_000);
+    proxy.setFaults([{ kind: 'stall', at: 2, afterChunks: 2, holdMs: HOLD_MS }]);
+    const stalled = await launch('faults-stall', {
+      ROTARIS_CAPTURE_PROMPT: PROMPT,
+      ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '2500',
+    }, RUN_WAIT_MS + 120_000);
+    void stalled;
+    const stallFired = proxy.stats().faultsFired;
+    const stallRead = readSession();
+    check(stallFired.length === 1, 'the stall was injected', `${stallFired.length} of 1 fired`);
+    if (stallRead === null) {
+      check(false, 'the stalled run left a session row', 'no session was recorded at all');
+    } else {
+      // The eighty-second defect's signature: nobody pressed stop, so nothing may say the user cancelled.
+      check(stallRead.session.stop_reason !== 'user_cancelled', 'a stalled stream is not reported as a user cancellation', `stop_reason ${stallRead.session.stop_reason} (${stallRead.session.execution_status})`);
+      noted('what the stalled run settled as', `${stallRead.session.execution_status} / ${stallRead.session.stop_reason} after ${stallRead.session.iterations_completed} iteration(s)`);
+      preserveRun('faults-stall', stallRead.session.session_id);
+    }
+    results.scenarios['faults-stall'] = { fired: stallFired, holdMs: HOLD_MS, status: stallRead?.session.execution_status, stopReason: stallRead?.session.stop_reason };
+    proxy.setFaults([]);
+    await budgetGate();
+  }
 }
 
 await budgetGate();

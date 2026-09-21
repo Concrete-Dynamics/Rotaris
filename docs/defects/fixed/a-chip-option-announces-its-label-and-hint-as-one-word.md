@@ -48,3 +48,22 @@ about how it is announced, so no clause of it is contradicted.
 - `apps/desktop/scripts/plan-gate-proof.mjs` — the `re-armed` launch whose `CHOOSE_PLAN` eval reads the
   option's `textContent`; its logged answer is the evidence above.
 - `packages/ui/src/design-system/design-system.test.ts` — where an assertion on the computed name would sit.
+
+## Repaired — 2026-09-21
+
+Each `PopoverMenu` option button is now named by its label alone (`aria-labelledby` to the
+`chip-menu__label` span) with the hint as its accessible description (`aria-describedby` to the
+`chip-menu__hint` span, REQ-CHAT-007's extension). No `aria-label` is composed, so the visible
+label stays the single source of the name (REQ-SHELL-048) and no duplicated string can drift.
+DOM text, CSS classes and `textContent` are unchanged, so the visuals and the plan-gate proof's
+`CHOOSE_PLAN` reader are unaffected. Options without a hint carry no `aria-describedby`.
+`SearchableSelect` rows keep their existing shape (hint visible only; `aria-description`/`title`
+reserved for `unavailableReason` per REQ-CONFIG-429) — same-commit change not taken, named
+follow-up if a row hint ever needs the description channel.
+
+Evidence: `design-system.test.ts` gains two open-panel assertions via a test-only `defaultOpen`
+seam (43/43 green); driven built app reads `aria-labelledby` resolving to `Auto` and
+`aria-describedby` to `start at once` on the run-start-mode chip (same for `Plan first` /
+`plan gate first`); `pnpm plan-gate-proof` exit 0; `pnpm ui-audit` shows only the pre-existing
+Git-table SHRUNK at 1000x680 (`.table.git__table` 340 holds 352, no scroll — the subject of
+`the-git-table-clips-its-content-and-does-not-scroll.md`, untouched by this change).

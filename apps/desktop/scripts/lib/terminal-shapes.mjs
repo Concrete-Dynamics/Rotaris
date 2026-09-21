@@ -1,0 +1,88 @@
+/**
+ * The terminal shapes the live run replays, and the reader that finds them again in the store.
+ *
+ * These live here rather than inside `live-run.mjs` for one reason: they are the part of the `terminal` scenario
+ * that can be wrong SILENTLY. A pattern that no longer matches its own command turns every check in that
+ * scenario into "the model never attempted it" — a NOTE, a green run, and a question that stopped being asked
+ * without anyone being told. `terminal-shapes.test.ts` pins the round trip so that failure is loud and local.
+ *
+ * Each shape is a command a recorded defect actually carried, not a plausible command of the same family.
+ * `codebase.md`'s strongest finding of 2026-09-12 is why: sixty real-PTY runs at four geometries could not
+ * reproduce a concatenation because the trigger was an empty write between two non-empty ones, present in the
+ * production commands and in none of the sixty. Sixty negative runs are not a negative result when none of them
+ * carries the input that failed.
+ *
+ * Nothing here is product code. It runs only from the live run.
+ */
+
+/** How wide one line of the long-output shape is, past any sane single-write boundary. */
+const PAD = 'x'.repeat(100);
+/** How many lines the long-output shape emits. The assertion counts distinct markers against this. */
+export const LONG_OUTPUT_LINES = 40;
+
+/**
+ * The six shapes, in the dialect of one platform.
+ *
+ * `match` is a pattern rather than a substring because the question is whether the SHAPE was issued, not
+ * whether the model reproduced this file's whitespace. Too strict and a call that happened reads as a call that
+ * did not; too loose and one shape's assertions run against another shape's call. The test pins both directions.
+ */
+export function terminalShapes(platform = process.platform) {
+  const node = 'node -e "setTimeout(() => {}, 45000)"';
+  const failed = `node -e "console.log('step one FAILED to connect, retrying'); process.exit(0)"`;
+  const diff = 'git --no-pager diff --no-index -- package.json src/todos.js';
+  const common = [
+    // `hardMs` was passed by `index.ts` and read nowhere, so a call supplying no `timeout` had the soft pause
+    // and no hard cap at all — REQ-TOOLS-097 wants both bounds with the first to fire governing.
+    { id: 'wedge', match: /setTimeout/, command: node },
+    // REQ-TOOLS-113 searches literal markers case-insensitively; this output carries one and exits 0. The
+    // warning is faithful. What the record wanted measured is what it costs.
+    { id: 'failed-word', match: /FAILED to connect/, command: failed },
+    // ESC-41's carve-out: `git diff` exiting 1 IS the answer, and classifying it a failure made the agent
+    // explain away its own evidence.
+    { id: 'diff-exit-1', match: /--no-index/, command: diff },
+  ];
+  return platform === 'win32'
+    ? [
+      // A multi-line command lost its newlines in the PTY, so the here-string never found its delimiter.
+      { id: 'here-string', match: /@"/, command: '$t = @"\nalpha-one\nbeta-two\n"@\nWrite-Output $t' },
+      // The concatenation the sixty runs missed, and the VT strip the agent's capture was left out of.
+      { id: 'long-output', match: /LINE-/, command: `1..${LONG_OUTPUT_LINES} | ForEach-Object { "LINE-{0:D3} ${PAD}" -f $_ }` },
+      ...common,
+      // `starter:deny-pipe-to-shell` — the single deny among 340 permission decisions in run `2e21e324`.
+      { id: 'pipe-to-shell', match: /\|\s*(?:pwsh|powershell)/i, command: 'git status --porcelain | powershell -NoProfile -Command "$input | Select-Object -First 5"' },
+    ]
+    : [
+      { id: 'here-string', match: /<<\s*'?EOF/, command: "cat <<'EOF'\nalpha-one\nbeta-two\nEOF" },
+      { id: 'long-output', match: /LINE-/, command: `awk 'BEGIN{for(i=1;i<=${LONG_OUTPUT_LINES};i++)printf "LINE-%03d ${PAD}\\n", i}'` },
+      ...common,
+      { id: 'pipe-to-shell', match: /\|\s*(?:sh|bash|zsh)\b/, command: "git status --porcelain | sh -c 'head -5'" },
+    ];
+}
+
+/**
+ * The `[terminal_diagnostic] {…}` block every terminal observation ends with (`terminal/classify.ts`), or null.
+ *
+ * Read rather than inferred from prose: `exit_code`, `outcome_kind`, `timeout`, `timeout_seconds` and
+ * `warnings` are what the scenario's checks are about, and the detail sentence above it is not evidence.
+ */
+export function diagnosticOf(result) {
+  // The LAST block, not the first: the observation ends with its own, and the `[terminal_output]` section
+  // above it holds whatever the command printed — which, for a command that read an earlier observation, is
+  // another one of these. Taking the first would read a quoted diagnostic as this call's own.
+  const blocks = [...String(result ?? '').matchAll(/\[terminal_diagnostic\] (\{.*\})\s*$/gm)];
+  if (blocks.length === 0) return null;
+  try { return JSON.parse(blocks[blocks.length - 1][1]); } catch { return null; }
+}
+
+/**
+ * What the long-output assertion asks of one captured result: the distinct markers, and the lines carrying more
+ * than one of them. Two markers on one line is the concatenation; fewer than `LONG_OUTPUT_LINES` distinct is a
+ * capture that lost output.
+ */
+export function longOutputReading(result) {
+  const text = String(result ?? '');
+  const markers = [...text.matchAll(/LINE-(\d{3})/g)].map((m) => m[1]);
+  const doubled = text.split('\n').filter((line) => (line.match(/LINE-\d{3}/g) ?? []).length > 1);
+  return { markers, distinct: new Set(markers).size, doubled, escaped: text.includes(`${String.fromCharCode(27)}[`) };
+}

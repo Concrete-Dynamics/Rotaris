@@ -742,6 +742,34 @@ product check has yet run against a real endpoint**: the mechanism is unit-teste
 what the checks claim about the product is unverified, and that first execution owes its row in
 `first-executions.md`.
 
+**Two scenarios enter the gap this page names below** — "short tasks against an unmetered endpoint, so no
+generation near the model timeout, no multi-line command, and no re-spawn", where all seven of one session's
+defects lived. `terminal` issues **six commands the record names verbatim**: the multi-line here-string that lost
+its newlines in the PTY, forty long lines for the concatenation the sixty runs missed and the VT strip the
+agent's capture was left out of, a wedge supplying no `timeout` for the `hardMs` that was read nowhere, an exit-0
+output carrying `FAILED`, a `git diff` exiting 1 for ESC-41's carve-out, and a read-only pipeline through a pipe.
+The shapes, their patterns and the two readers live in `apps/desktop/scripts/lib/terminal-shapes.mjs` and are
+pinned by `terminal-shapes.test.ts` **because that is the part of the scenario that can be wrong silently**: a
+pattern that stopped matching its own command would turn every check in it into "the model never attempted it",
+which is a NOTE, a green run, and a question nobody is told has stopped being asked. The test pins the round
+trip in both directions — every shape matches its own command, no shape matches another's — measured by
+breaking one pattern and confirming the red, then restoring it. Writing it found one defect in the reader as
+first drafted: `diagnosticOf` took the FIRST `[terminal_diagnostic]` block, and an observation whose output
+quotes an earlier one would have had a previous call's exit code read as its own; it takes the last now.
+It reads `tool_calls` — `args.command` and the `[terminal_diagnostic]` block — never the model's prose, and the
+shapes whose behaviour is faithful to a requirement (`REQ-TOOLS-113`'s marker, `REQ-TOOLS-036/038`'s deny) are
+**NOTEs measuring their cost** rather than checks accusing the product; so is a shape the model never issued.
+That split is deliberate: a scenario that reports a faithful behaviour as a fault teaches its reader to ignore
+it, which is what the board scenario did twice. `duress` is the length, **opt-in under `--only=duress`** because
+a thirty-minute scenario inside a smoke test is a smoke test nobody runs; it asserts **coherence rather than
+correctness** — the autopsy's own two booleans, a failed child with an empty `final_response` (the eighty-second
+defect's shape at the child level), a child that ran commands and reported none (the eighty-eighth), and the
+`compressions` aggregate against the `context_compressed` timeline entries (the eighty-seventh) — and it
+**reports whether it was long at all**, including when it stopped at `--max-iterations` and was bounded by the
+harness rather than by the work. `--duress-fixture` replaces the workspace for the whole run and is refused
+alongside any other scenario, because one sandbox holds one store and every other prompt names `todo-app`'s
+files. Neither scenario has run against a real endpoint; both owe their row in `first-executions.md`.
+
 **What the board's live path found on its first execution — 2026-09-11, and the eighty-first defect.** The fifth
 scenario was written after a hand-driven precursor took the same path, and the precursor is what found the defect;
 the scenario passed 21 checks at once and found nothing of its own. **The eighty-first: a requirement store whose

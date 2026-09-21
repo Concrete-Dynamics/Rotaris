@@ -26,3 +26,36 @@ Adjacent, not the primary contradiction: REQ-TOOLS-048 (pin/override selection a
 - `packages/config/src/sections/personas.ts` — the pin is parsed per REQ-CONFIG-109 but never consumed downstream.
 
 Noticed 2026-09-21 by owner report; code path traced in the same session.
+
+## Fixed 2026-09-22
+
+Confirmed first, against the engine's delegation harness: a run started in `ask`, switched to
+`autonomous` while the entry agent held the only port, then delegating, built its child with `ask`
+(`children.test.ts`, red before the change). The non-defect reading (REQ-TOOLS-067's downgrade) could
+not explain it — `PD-TOOLS-002` had already removed the downgrade, so nothing but the missing override
+was left.
+
+The repair is the second half of REQ-TOOLS-073, and the three adjacent gaps the note listed fall out of
+it rather than being patched separately:
+
+- `Sessions` holds a **session-level override** per Live record, installed fresh by `start` and by
+  `launchContinuation` — one holder per RUN, which is what discards it at run end (REQ-TOOLS-075) — and
+  the `toolsFor` closure reads it LIVE at every agent construction rather than spreading a value captured
+  at run start. `Sessions.control`'s `setPermissionMode` records the requested name into it.
+- `ToolPortContext` carries `modeOverride`, and the run host's port SELECTS at construction through
+  `selectRequestedMode` (REQ-TOOLS-048) — which had no callers — from the persona pin, the override, and
+  `runtime.permission_mode`. Under `PD-TOOLS-002` the selected name is the effective one.
+- `personaResolverFor` carries `personas.<role>.permission_mode` onto the built persona, so the pin
+  REQ-CONFIG-109 parses reaches the port at last. `setMode` refuses a change that would LOOSEN a pinned
+  agent and names its persona; `Run.setPermissionMode` collects those names into `skipped_personas`
+  (which was hardcoded `[]`), the log line and the transcript row (REQ-TOOLS-074).
+- `setMode`'s hardcoded `sandboxed: false` is gone with the re-resolution it fed.
+
+Evidence: `children.test.ts` — a child built after the switch takes the new mode (red before, green
+after); `run-host/tools.test.ts` — three new cases over a real configuration and a real port for the
+selection, the pin's direction and the live pin-aware change; `turn.test.ts` — the audit entry, the
+transcript row and the log line name the skipped persona while the session's own mode is the requested
+one. `pnpm check` green in the worktree and on merged `main` but for two suites failing identically on
+`main` before this change: `terminal.test.ts`'s real `git diff` case (the recorded
+`the-real-git-diff-terminal-test-times-out-on-win32.md`, exit 124) and `configuration.test.ts`'s egress
+cost measurement, which passes when run alone.

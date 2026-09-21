@@ -12,7 +12,7 @@ const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
 const NONE: Publisher = { increment: () => undefined, snapshot: () => undefined };
 
 /** A tool port that records calls and answers by name; `hold` parks a dispatch until released. */
-function fakePort(opts: { hold?: Promise<void>; holdOn?: string } = {}) {
+function fakePort(opts: { hold?: Promise<void>; holdOn?: string; pinnedPersona?: string } = {}) {
   const calls: PortToolCall[] = [];
   const pending = { cancelled: 0, answered: [] as string[] };
   let mode: 'restricted' | 'ask' | 'autonomous' = 'ask';
@@ -27,7 +27,13 @@ function fakePort(opts: { hold?: Promise<void>; holdOn?: string } = {}) {
       return { text: 'a.ts\nb.ts', isError: false, status: 'ok', durationMs: 3, label: 'glob **/*.ts', args: {} };
     },
     cancelPending: () => { pending.cancelled += 1; return 0; },
-    setMode: (m, _source): ModeChange => { const previous = mode; mode = m as typeof mode; return { requested: mode, effective: mode, downgraded: false, reason: '', previous }; },
+    setMode: (m, _source): ModeChange => {
+      const previous = mode;
+      // REQ-TOOLS-074: a pinned agent refuses a loosening change and names its persona; the run collects the names.
+      if (opts.pinnedPersona !== undefined) return { requested: m as typeof mode, effective: previous, downgraded: false, reason: '', previous, skippedPersona: opts.pinnedPersona };
+      mode = m as typeof mode;
+      return { requested: mode, effective: mode, downgraded: false, reason: '', previous };
+    },
     currentMode: () => mode,
     answerApproval: (id) => { pending.answered.push(id); return id === 'known'; },
   };
@@ -156,6 +162,24 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
     await sessions.running(sid)!;
     // REQ-TOOLS-075: the override is discarded at run end — a later control is refused because no run is live.
     expect(sessions.control({ op: 'setPermissionMode', sessionId: sid, args: { mode: 'ask' } })).toEqual({ ok: false });
+  });
+
+  it('REQ-TOOLS-074: a change that would loosen a pinned agent leaves it pinned, and the persona is named in the audit, the row and the log', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    const { port } = fakePort({ hold, holdOn: 'glob', pinnedPersona: 'reviewer' });
+    const { sessions, logLines } = sessionsWith([toolCalls([{ callId: 'c1', name: 'glob', args: {} }]), answer('ok')], port);
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    await new Promise((r) => setTimeout(r, 5));
+    expect(sessions.control({ op: 'setPermissionMode', sessionId: sid, args: { mode: 'autonomous' } })).toEqual({ ok: true });
+    // The pinned agent keeps deciding under its pin; the SESSION's mode is the one that was asked for.
+    expect(port.currentMode()).toBe('ask');
+    expect(dal.getSession(sid)!.permission_mode).toBe('autonomous');
+    expect(JSON.parse(dal.auditOf(sid)[0]!.entry)).toMatchObject({ requested_mode: 'autonomous', effective_mode: 'autonomous', skipped_personas: ['reviewer'] });
+    expect(dal.residentRows(sid).find((r) => r.kind === 'system')?.body).toBe("Permission mode is now 'autonomous'; it applies from the next tool call. reviewer keeps its pinned mode.");
+    expect(logLines.some((l) => /did not reach reviewer/.test(l))).toBe(true);
+    release();
+    await sessions.running(sid)!;
   });
 
   it('answerApproval routes by request id across live sessions; unknown id or option is refused (REQ-MONITOR-010/254)', async () => {

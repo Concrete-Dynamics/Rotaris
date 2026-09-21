@@ -80,6 +80,12 @@ export interface ToolPortContext {
   readonly persona: string;
   readonly agentName: string;
   readonly requestedMode: PermissionPreset;
+  /**
+   * REQ-TOOLS-048/073: the session-level override a mid-session change recorded — the REQUESTED name, or null
+   * when no change has been made in this run. The port selects between it, the persona's `permission_mode` pin
+   * and `requestedMode` (which carries `runtime.permission_mode`); PD-TOOLS-002 applies the selection directly.
+   */
+  readonly modeOverride?: string | null | undefined;
   readonly attended: () => boolean;
   readonly warn: (message: string) => void;
   /** REQ-TOOLS-065's abort hook: stops this run. */
@@ -256,6 +262,13 @@ interface Live {
   memory: ResilienceMemory | null;
   /** Part Y (REQ-ORCH-149): the session's artifact store, one per live session, shared across iterations and continuations. */
   artifacts: ArtifactStore | null;
+  /**
+   * REQ-TOOLS-073's second half / REQ-TOOLS-075: the session-level mode override — the REQUESTED name a
+   * mid-session change recorded, read at EVERY agent construction (PD-TOOLS-002: applied directly, with no
+   * re-resolution). One holder per RUN: `start` and `prompt` each install a fresh one, which is what discards
+   * the override at run end so a resumed session does not inherit a previous run's switch.
+   */
+  modeOverride: { value: string | null };
 }
 
 export interface SessionListItem {
@@ -760,7 +773,7 @@ export class Sessions {
     const settled = settleStaleChildren(dal, writer, sessionId, warn);
     if (settled > 0) warn(`${settled} child record(s) from a previous run were settled cancelled before continuation (REQ-ORCH-053)`);
     // Part Q: the memory is rehydrated at the first continuation, when the run's model resolver exists (REQ-SESSION-196's override).
-    this.live.set(sessionId, { writer, owner, dal, run: null, running: null, tools: null, log, commitTarget: entry, memory: null, artifacts: this.newArtifactStore(dal, sessionId, () => writer, warn) });
+    this.live.set(sessionId, { writer, owner, dal, run: null, running: null, tools: null, log, commitTarget: entry, memory: null, artifacts: this.newArtifactStore(dal, sessionId, () => writer, warn), modeOverride: { value: null } });
     return ok({ sessionId, settledChildren: settled });
   }
 
@@ -819,7 +832,7 @@ export class Sessions {
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
-    const live: Live = { writer, owner, dal, run: null, running: null, tools: null, log, commitTarget: entry, memory: new ResilienceMemory(), artifacts: this.newArtifactStore(dal, sessionId, () => writer, warn) };
+    const live: Live = { writer, owner, dal, run: null, running: null, tools: null, log, commitTarget: entry, memory: new ResilienceMemory(), artifacts: this.newArtifactStore(dal, sessionId, () => writer, warn), modeOverride: { value: null } };
     this.live.set(sessionId, live);
     const row = writer.appendRow('user', prompt, true, { attachments: storedAttachments.attachments });
     if (!row.ok) return err({ code: row.error.code, reason: 'reason' in row.error ? row.error.reason : String(row.error.code) });
@@ -839,6 +852,9 @@ export class Sessions {
     // REQ-ORCH-005/016: the pre-flight's grant reaches the entry role's tool port; the ports are created after the pre-flight ran.
     const decided: { grant: IntentGrant; intent: IntentCategory | undefined } = { grant: 'none', intent: undefined };
     const artifacts = live.artifacts!;
+    // REQ-TOOLS-075: one override holder per RUN — installed here, read at every agent construction below.
+    const modeOverride: { value: string | null } = { value: null };
+    live.modeOverride = modeOverride;
     const baseCtx = { sessionId, workspaceRoot, effectiveRoot, writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
     // With delegation the run creates the root's port itself (its own identity); the base port exists only without it.
     const tools: ToolPort | null = null;
@@ -872,7 +888,7 @@ export class Sessions {
       ...(supervisors ? { supervisorFor: (conversationId: string) => supervisors.forConversation(conversationId) } : {}),
       ...(preflight ? { preflight: async (signal: AbortSignal) => { const p = await preflight({ sessionId, workspaceRoot, prompt, signal, warn }); decided.grant = p.grant; decided.intent = p.intent.category; return p; } } : {}),
       ...(this.deps.tools ? {
-        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, grant: decided.grant, intent: decided.intent, artifacts: artifactOps(artifacts, { canonicalName: agentName, persona, conversationId: parentId }), readTodo: () => runRef.run?.agentTodoFor(parentId, depth === 0) ?? null, writeTodo: (document) => runRef.run?.replaceAgentTodo(parentId, depth === 0, document) ?? false, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false }),
+        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, modeOverride: modeOverride.value, grant: decided.grant, intent: decided.intent, artifacts: artifactOps(artifacts, { canonicalName: agentName, persona, conversationId: parentId }), readTodo: () => runRef.run?.agentTodoFor(parentId, depth === 0) ?? null, writeTodo: (document) => runRef.run?.replaceAgentTodo(parentId, depth === 0, document) ?? false, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false }),
         dal, artifacts, budget, modelCap: capFor,
         summariser: { backend: model.backend, model: model.summariser?.model ?? model.config.model, thinking: model.summariser?.thinking ?? model.config.thinking, timers: this.deps.clocks.timers, credentialFor: model.config.credentialFor },
       } : {}),
@@ -965,6 +981,9 @@ export class Sessions {
     // Part Y (REQ-ORCH-149): the store outlives the run — a continuation reads the artifacts earlier iterations published.
     const artifacts = s.artifacts ?? this.newArtifactStore(s.dal, sessionId, () => s.writer, warn);
     s.artifacts = artifacts;
+    // REQ-TOOLS-075: a continuation is a new run, so it starts with no override — a previous run's switch is not inherited.
+    const modeOverride: { value: string | null } = { value: null };
+    s.modeOverride = modeOverride;
     const baseCtx = { sessionId, workspaceRoot, effectiveRoot, writer: s.writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
     s.tools = null;
     const stale = settleStaleChildren(s.dal, s.writer, sessionId, warn);
@@ -1004,7 +1023,7 @@ export class Sessions {
       onSaved: (generation) => summary.rebuild(generation, () => s.dal.getSession(sessionId)),
       ...(preflight ? { preflight: async (signal: AbortSignal) => { const p = await preflight({ sessionId, workspaceRoot, prompt, signal, warn, previousIntent: priorIntent, hasUnfinishedWork: true }); decided.grant = p.grant; decided.intent = p.intent.category; return p; } } : {}),
       ...(this.deps.tools ? {
-        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, grant: decided.grant, intent: decided.intent, artifacts: artifactOps(artifacts, { canonicalName: agentName, persona, conversationId: parentId }), readTodo: () => runRef.run?.agentTodoFor(parentId, depth === 0) ?? null, writeTodo: (document) => runRef.run?.replaceAgentTodo(parentId, depth === 0, document) ?? false, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false }),
+        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, modeOverride: modeOverride.value, grant: decided.grant, intent: decided.intent, artifacts: artifactOps(artifacts, { canonicalName: agentName, persona, conversationId: parentId }), readTodo: () => runRef.run?.agentTodoFor(parentId, depth === 0) ?? null, writeTodo: (document) => runRef.run?.replaceAgentTodo(parentId, depth === 0, document) ?? false, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false }),
         dal: s.dal, artifacts, budget, modelCap: capFor,
         summariser: { backend: model.backend, model: model.summariser?.model ?? model.config.model, thinking: model.summariser?.thinking ?? model.config.thinking, timers: this.deps.clocks.timers, credentialFor: model.config.credentialFor },
       } : {}),
@@ -1189,6 +1208,9 @@ export class Sessions {
         const mode = req.args['mode'];
         if (typeof mode !== 'string' || mode.trim() === '') return { ok: false };
         const r = run.setPermissionMode(mode, 'user');
+        // REQ-TOOLS-073's second half: the change reaches the live agents through the run, and the session-level
+        // override is what carries it to the agents this run builds afterwards — every delegated child included.
+        if (r.ok) s!.modeOverride.value = r.effective;
         return r.ok ? { ok: true } : { ok: false };
       }
       case 'cancelAgent': {

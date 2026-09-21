@@ -1,10 +1,10 @@
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { toIsoUtc, type Clocks } from '@rotaris/kernel';
-import { resolvePreset, type ApprovalPayload, type PermissionPreset, type ToolStatus } from '@rotaris/contracts';
+import { presetRank, resolvePreset, type ApprovalPayload, type PermissionPreset, type ToolStatus } from '@rotaris/contracts';
 import {
   askQuestionsTool, buildPolicy, directWorkBundle, fetchTool, FileToolState, findShell, Gate, gitReadTool, globTool, grepTool, haetEditTool, haetReadTool, nodePtyFactory, PendingApprovals, PendingQuestions, PolicyContext, readFileTool, realPathOf,
-  resolveToolSet, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, withheldUnderPlanGate, writeFileTool, type ConfinementPort, type GateSink, type PolicyRead, type PresenterPort, type ToolExecutor,
+  resolveToolSet, selectRequestedMode, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, withheldUnderPlanGate, writeFileTool, type ConfinementPort, type GateSink, type PolicyRead, type PresenterPort, type ToolExecutor,
 } from '@rotaris/agent-tools';
 import { BUILT_IN_PERSONAS, type ModeChange, type PersonaResolver, type PortToolCall, type PortToolResult, type RoleName, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
 import type { ConfiguredRun, RuntimeFromConfiguration } from './configuration.js';
@@ -274,7 +274,15 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   for (const n of resolved.tools) { const e = executors.get(n); if (e) callable.set(n, e); }
   const specs = [...callable.values()].map(toolSpec);
 
-  let mode: PermissionPreset = ctx.requestedMode;
+  /*
+   * REQ-TOOLS-048 (narrowed by PD-TOOLS-002): the requested mode is SELECTED here, at agent construction, from
+   * the persona's `permission_mode` pin, the session-level override a mid-session change recorded, and
+   * `runtime.permission_mode` (which is what `ctx.requestedMode` carries). The pin wins over the override unless
+   * the override is at least as restrictive as it — the same direction REQ-TOOLS-074 gives a live agent. The
+   * selected name IS the effective one: there is no downgrade left to re-resolve.
+   */
+  const pin = persona.permissionMode ?? null;
+  let mode: PermissionPreset = selectRequestedMode({ pin, override: ctx.modeOverride ?? null, runtime: ctx.requestedMode });
   const policy = new PolicyContext(buildPolicy({ preset: mode, workspaceRoot: root }));
   const approvals = new PendingApprovals(deps.clocks.timers);
   const gate = new Gate({
@@ -350,6 +358,12 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     setMode: (requested, _source): ModeChange => {
       const previous = mode;
       const wanted = resolvePreset(requested).preset;
+      // REQ-TOOLS-074: a session-wide change reaches a PINNED agent only when it is at least as restrictive as
+      // the pin (REQ-TOOLS-047's order). A change that would loosen this agent leaves it deciding under its pin,
+      // and names the persona so the run can list it in `skipped_personas`, the log line and the confirmation.
+      if (pin !== null && presetRank(wanted) > presetRank(pin)) {
+        return { requested: wanted, effective: previous, downgraded: false, reason: '', previous, skippedPersona: ctx.persona };
+      }
       // PD-TOOLS-002: the requested mode always applies — no re-resolution through attendedness, confinement or the opt-in.
       mode = wanted;
       policy.replace(buildPolicy({ preset: mode, workspaceRoot: root }));

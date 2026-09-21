@@ -233,6 +233,9 @@ export function personaResolverFor(cfg: LoadedConfiguration, scripted: boolean, 
       implementer: tools.some((t) => ['write_file', 'haet_edit', 'haet', 'terminal'].includes(t)),
       ...(modelRef ? { modelRef, thinking: thinkingOf(entry ? cfg.models[entry.model] : null) } : {}),
       ...(fallbackRef && entry?.fallback_model ? { fallbackModel: fallbackRef, fallbackThinking: thinkingOf(cfg.models[entry.fallback_model]) } : {}),
+      // REQ-CONFIG-109 / REQ-TOOLS-048: the role's `permission_mode` pin, parsed by the loader and read at agent
+      // construction and at every mid-session change (REQ-TOOLS-074). Absent means the role takes the session's mode.
+      ...(entry?.permission_mode ? { permissionMode: entry.permission_mode } : {}),
       // REQ-MCP-065 (Part S): the grant evidence the ledger records at spawn, read from the run host's memoised surface at that moment.
       ...(mcpEvidence ? { mcpEvidence: () => mcpEvidence(role) } : {}),
     };

@@ -58,6 +58,14 @@ in `docs/defects/`, not here.
 requested mode is the effective mode for every agent, for the whole run. `03-runtime-view.md`
 carries the announcement without a downgrade row; the sandbox proof's scenario 4 keeps the mode.
 
+**A mid-session mode change reaches the agents built after it (REQ-TOOLS-073's second half).** The
+recorded defect — a switch to `autonomous` leaving every delegated child asking — was the missing
+half: `Sessions` now holds a per-run override, the run records the requested name into it, and the
+tool port selects at construction through `selectRequestedMode` (pin, then override, then
+`runtime.permission_mode`, REQ-TOOLS-048), with the persona pin carried out of the configuration at
+last. A change that would loosen a pinned agent does not reach it and names the persona
+(REQ-TOOLS-074). `03-runtime-view.md` §5's control row states both halves.
+
 **The relay sheds dead sinks (REQ-MONITOR-226 intent).** `relaySequenced` and `broadcast` isolate per sink:
 a `send` that throws (disposed render frame) detaches the sink and delivery continues to the survivors.
 `render-process-gone` detaches at once; the channel-3 limiter sheds the same way; `ProcessLink` isolates

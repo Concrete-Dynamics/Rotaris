@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { FakeClock, millis, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling, type ChildRow } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ScriptedCall } from '@rotaris/model';
-import { CHILD_STATES, CHILD_TRANSITIONS, isLegalChildMove, TASK_ID_PATTERN, TERMINAL_CHILD_STATES } from '@rotaris/contracts';
+import { CHILD_STATES, CHILD_TRANSITIONS, isLegalChildMove, TASK_ID_PATTERN, TERMINAL_CHILD_STATES, type PermissionPreset } from '@rotaris/contracts';
 import { canonicaliseName, ChildLedger, RUN_CONFIG_DEFAULTS, Scheduler, Sessions, SessionWriter, uniqueUnderParent, type DelegationOps, type PortToolResult, type Publisher, type RunConfig, type ToolPort } from '../index.js';
 import type { ProjectionOwner } from '../projection-owner.js';
 
@@ -220,16 +220,29 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       return original(req);
     };
     let n = 0;
+    const built: { persona: string; mode: PermissionPreset }[] = [];
     const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k' };
     const sessions = new Sessions({
       clocks: clock, publisher: NONE, pid: 77, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), mintSessionId: () => `S${++n}`,
       model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
-      tools: (ctx) => (ctx.delegation ? delegationPort(ctx.delegation, ctx.parentId ?? 'root') : { specs: () => [], dispatch: async () => ({ text: '', isError: true, status: 'failed', durationMs: 0, label: '', args: {} }), cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false }),
+      tools: (ctx) => {
+        // The mode each agent was BUILT with, in construction order. The run host's port SELECTS it through
+        // `selectRequestedMode` — the persona's pin, then the session override, then `runtime.permission_mode`
+        // (REQ-TOOLS-048, covered in `run-host/tools.test.ts`); with no pins that is the override or the
+        // start-of-run mode, which is the half this run's engine owns (REQ-TOOLS-073's second).
+        const selected = (ctx.modeOverride ?? ctx.requestedMode) as PermissionPreset;
+        built.push({ persona: ctx.persona, mode: selected });
+        let mode: PermissionPreset = selected;
+        const base = { cancelPending: () => 0, setMode: (m: string) => { const previous = mode; mode = m as PermissionPreset; return { requested: mode, effective: mode, downgraded: false, reason: '', previous }; }, currentMode: () => mode, answerApproval: () => false };
+        return ctx.delegation
+          ? { ...delegationPort(ctx.delegation, ctx.parentId ?? 'root'), ...base }
+          : { specs: () => [], dispatch: async () => ({ text: '', isError: true, status: 'failed', durationMs: 0, label: '', args: {} }), ...base };
+      },
       attended: () => true,
       runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', modelConcurrencyCap: over.cap ?? null, drainTimeoutMs: 0 },
     });
     void over.childTimeoutMs;
-    return { sessions, client, counts };
+    return { sessions, client, counts, built };
   }
   const children = (sid: SessionId): ChildRow[] => dal.childrenOf(sid);
   const kinds = (sid: SessionId) => dal.eventsFrom(sid, 1, 10_000).map((e) => e.kind);
@@ -268,6 +281,27 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     expect(dal.residentRows(sid).some((r) => r.kind === 'agent' && r.name === 'implement')).toBe(true);
     expect(dal.timelineOf(sid).map((t) => t.name)).toEqual(expect.arrayContaining(['child_start', 'child_end', 'child_result', 'child_conversation_closed']));
     expect(dal.getSession(sid)!.execution_status).toBe('completed');
+  });
+
+  it('REQ-TOOLS-030/073 (PD-TOOLS-002): a mid-run switch to autonomous reaches the children built after it', async () => {
+    const ref: { sid?: SessionId } = {};
+    const { sessions, built } = sessionsWith((persona, turn) => {
+      if (persona === 'orchestrator') {
+        if (turn === 1) {
+          // Mid-run, while the entry agent is the only agent: the user picks `autonomous` in the composer.
+          expect(sessions.control({ op: 'setPermissionMode', sessionId: ref.sid!, args: { mode: 'autonomous' } })).toEqual({ ok: true });
+          return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coder', task_name: 'implement', task: 'TASK: write it' } }], 'Delegating.');
+        }
+        return answer('All done.');
+      }
+      if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+      return answer('I implemented it.');
+    });
+    ref.sid = (sessions.start(dal, 'C:/ws', 'build the thing') as { value: SessionId }).value;
+    expect((await sessions.running(ref.sid)!).status).toBe('completed');
+    // The entry agent was built before the switch; the child was built after it and must carry the new mode.
+    expect(built[0]).toMatchObject({ persona: 'orchestrator', mode: 'ask' });
+    expect(built.slice(1).map((b) => b.mode)).not.toContain('ask');
   });
 
   it('REQ-MONITOR-102: the persisted tool-call total is session-wide — the entry agent\'s calls AND its children\'s', async () => {

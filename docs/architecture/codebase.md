@@ -699,7 +699,24 @@ store's token counts, else tokens alone against `--max-tokens`. `--context=<toke
 `max_input_tokens` on the written entry. An endpoint that
 discovers no catalogue is not a dead end: the sign-in takes the dialog's own "Continue anyway" and the script writes
 the `models:` entry the run needs (REQ-CONFIG-082..097, the shape `snapshotLayer` would have produced). Evidence
-under `.live-run/`; `AGENTS.md` is its standing instruction.
+under `.live-run/runs/<stamp>/`, one directory per scenario, packs accumulating to `--keep-runs` (default 10);
+`AGENTS.md` is its standing instruction. **The pack became the run-autopsy skill's input on 2026-09-22, and was
+not before it**: the skill asks for a launch log, the session store and a session id, and this script produced
+all three and deleted two of them with the sandbox — so each scenario now leaves `autopsy.txt`, the product's own
+`session.log`, the full `transcript.md` and a filtered copy of the launch log beside the verbatim one, and the
+store is copied out before the sandbox goes. Until then every defect that skill found came from a session driven
+by hand, and the live run had found exactly one defect in its life, which was its own.
+
+**What the model was sent, and what came back, is recorded by a loopback proxy** the sandbox's `base_url` points
+at (`apps/desktop/scripts/lib/model-traffic.mjs`, `--no-record-traffic` to bypass). The product emits one line
+per call — `run-host/host.ts`'s `onRequest`: a method, a URL, and whether an authorization header was set — and
+no body, status or duration anywhere; the only body that survives a real call is 500 characters of a failed
+response kept on a `ModelError`. So the proxy adds a record the product cannot, without changing the product:
+it is a raw pipe, forwarding chunks as they arrive, because a buffering proxy would remove the streaming the run
+loop is built on and leave every assertion green — the harness measuring a product that exists only while it is
+measured, which is the shape of the two false-symptom repairs above. `model-traffic.test.ts` pins that property
+with a case that hangs if the pipe ever buffers, verified by making it buffer. Credentials are replaced in the
+record before it is written and the `ask` scenario asserts it.
 
 **What the board's live path found on its first execution — 2026-09-11, and the eighty-first defect.** The fifth
 scenario was written after a hand-driven precursor took the same path, and the precursor is what found the defect;

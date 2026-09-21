@@ -61,6 +61,7 @@
     "requirements-runs-proof": "node apps/desktop/scripts/requirements-runs-proof.mjs",
     "chat-controls-proof": "node apps/desktop/scripts/chat-controls-proof.mjs",
     "live-run": "node apps/desktop/scripts/live-run.mjs",
+    "autopsy": "node apps/desktop/scripts/autopsy.mjs",
     "app:drive": "node apps/desktop/scripts/drive.mjs",
     "driver-proof": "node apps/desktop/scripts/driver-proof.mjs",
     "layout-proof": "node apps/desktop/scripts/layout-proof.mjs",

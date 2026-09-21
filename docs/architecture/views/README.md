@@ -45,6 +45,10 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-21**
 
+**The requested permission mode always applies (PD-TOOLS-002).** No unattended downgrade: the
+requested mode is the effective mode for every agent, for the whole run. `03-runtime-view.md`
+carries the announcement without a downgrade row; the sandbox proof's scenario 4 keeps the mode.
+
 **The relay sheds dead sinks (REQ-MONITOR-226 intent).** `relaySequenced` and `broadcast` isolate per sink:
 a `send` that throws (disposed render frame) detaches the sink and delivery continues to the survivors.
 `render-process-gone` detaches at once; the channel-3 limiter sheds the same way; `ProcessLink` isolates

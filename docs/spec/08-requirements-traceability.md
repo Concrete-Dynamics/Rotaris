@@ -1223,6 +1223,7 @@ A project keeps its requirements as versioned documents in its own repository. A
 - **REQ-TRACE-469** — **An unlimited wait SHALL remain cancellable.** Stopping the run SHALL immediately release whatever it was blocked on, rather than leaving the caller to sit out the remaining budget.
 
 - **REQ-TRACE-470** — A run started from the board SHALL receive the permissive permission preset **and** the unsandboxed opt-in **together, and both SHALL be confined to that run**. Granting only the preset SHALL NOT count as satisfying this: a run so configured still stops at the first tool that needs approval. The grant SHALL leave the workspace's stored configuration as it stands, and **any other run started from the same process — before it, alongside it or after it — SHALL receive exactly the permissions its own configuration specifies**, the composer's next run included.
+  > **Narrowed by [`PD-TOOLS-002`](../product/directives.md#pd-tools-002), 2026-09-21.** The confinement above still governs; the preset alone now satisfies the elevation — the opt-in is retained but inert.
 
 - **REQ-TRACE-471** — The elevation SHALL apply **exclusively to runs launched from the board**. A run begun from the composer, or from any other surface of the application, SHALL retain whichever permission mode its own configuration specifies, and the workspace's stored agent configuration SHALL be left unmodified.
 

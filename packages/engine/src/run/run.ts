@@ -511,13 +511,8 @@ export class Run {
           this.deps.notice?.({ severity: 'warning', headline: 'Workspace hooks need review', detail: trust.notice, action: 'hooks.review', key: `hooks.review:${trust.workspace}:${trust.fingerprint}`, sessionId: this.sessionId });
         }
       }
-      // REQ-TOOLS-071: the effective mode announced — session state, and on a downgrade the transcript, the timeline and the log.
+      // PD-TOOLS-002: the requested mode always applies — no downgrade row, timeline event or log warning. The announcement records the requested (= effective) mode.
       const perm = this.deps.permission;
-      if (perm.downgraded) {
-        writer.appendRow('system', perm.reason, true);
-        writer.appendTimeline('permission_mode_downgraded', 'rotaris', perm.reason, { requested_mode: perm.requested, effective_mode: perm.effective });
-        this.deps.warn(perm.reason);
-      }
       this.saveRunning({ run_started_at: this.deps.readSession()?.updated_at ?? null, permission_mode: perm.effective, sandboxed: perm.sandboxed ? 1 : 0 });
       // REQ-MONITOR-166: sampled by the run, not by a view — the cadence from the clock port, never a bare timer.
       this.sampler = clocks.timers.every(TOKEN_SAMPLE_PERIOD, () => this.sampleTokens(true));
@@ -1168,9 +1163,8 @@ export class Run {
       requested_mode: change.requested, effective_mode: change.effective, previous_mode: change.previous, source, reason: change.reason, skipped_personas: [],
     });
     writer.appendTimeline('permission_mode_changed', source, `Permission mode changed from '${change.previous}' to '${change.effective}'${change.reason ? ` — ${change.reason}` : ''}`, { requested_mode: change.requested, effective_mode: change.effective, previous_mode: change.previous });
-    const row = change.downgraded
-      ? change.reason
-      : `Permission mode is now '${change.effective}'; it applies from the next tool call.`;
+    // PD-TOOLS-002: no downgrade — the row states the new mode, never a downgrade reason.
+    const row = `Permission mode is now '${change.effective}'; it applies from the next tool call.`;
     writer.appendRow('system', row, true);
     this.saveRunning({ permission_mode: change.effective });
     return { ok: true, effective: change.effective };

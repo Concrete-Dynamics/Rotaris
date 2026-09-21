@@ -142,14 +142,14 @@ if (existsSync(join(s3.workspace, '.rotaris', 'sessions'))) throw new Error('a s
 results.refusedBeforeStart = { line: refusal.trim(), sessionLeftBehind: false };
 
 /*
- * 4. REQ-SANDBOX-105 case 1 / REQ-SANDBOX-099: `sandbox_mode: off` requests no confinement, so the run
- *    STARTS, is tightened to `ask` because it is unattended and unconfined, and is recorded unconfined
- *    with an empty backend name (REQ-SANDBOX-093, -108, -110).
+ * 4. PD-TOOLS-002 (was REQ-SANDBOX-105 case 1 / REQ-SANDBOX-099): `sandbox_mode: off` requests no
+ *    confinement, so the run STARTS, keeps `autonomous` with no tightening, and is recorded
+ *    unconfined with an empty backend name (REQ-SANDBOX-093, -108, -110).
  */
 const s4 = scenario('downgrade', WORKSPACE_AUTONOMOUS);
 const log4 = launch('downgrade', s4, { ROTARIS_CAPTURE_PROMPT: 'an unattended autonomous run', ROTARIS_CAPTURE_AFTER_MS: '14000' });
 if (!/session .* started/.test(log4)) throw new Error(`the run did not start with sandbox_mode off:\n${log4}`);
-results.downgrade = { started: true, note: 'the tightening is asserted by the engine tests; this run proves the gate does not refuse mode off (REQ-SANDBOX-092)' };
+results.downgrade = { started: true, note: 'the kept mode is asserted by the engine tests; this run proves the gate does not refuse mode off (REQ-SANDBOX-092)' };
 
 /*
  * 5. REQ-SANDBOX-054: all six round-trip. The surface saves them and the loader reads back the same

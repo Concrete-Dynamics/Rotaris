@@ -699,7 +699,13 @@ store's token counts, else tokens alone against `--max-tokens`. `--context=<toke
 `max_input_tokens` on the written entry. An endpoint that
 discovers no catalogue is not a dead end: the sign-in takes the dialog's own "Continue anyway" and the script writes
 the `models:` entry the run needs (REQ-CONFIG-082..097, the shape `snapshotLayer` would have produced). Evidence
-under `.live-run/`; `AGENTS.md` is its standing instruction.
+under `.live-run/runs/<stamp>/`, one directory per scenario, packs accumulating to `--keep-runs` (default 10);
+`AGENTS.md` is its standing instruction. **The pack became the run-autopsy skill's input on 2026-09-22, and was
+not before it**: the skill asks for a launch log, the session store and a session id, and this script produced
+all three and deleted two of them with the sandbox — so each scenario now leaves `autopsy.txt`, the product's own
+`session.log`, the full `transcript.md` and a filtered copy of the launch log beside the verbatim one, and the
+store is copied out before the sandbox goes. Until then every defect that skill found came from a session driven
+by hand, and the live run had found exactly one defect in its life, which was its own.
 
 **What the board's live path found on its first execution — 2026-09-11, and the eighty-first defect.** The fifth
 scenario was written after a hand-driven precursor took the same path, and the precursor is what found the defect;

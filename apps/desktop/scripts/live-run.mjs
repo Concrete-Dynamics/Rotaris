@@ -52,13 +52,29 @@
  *      (`~/.rotaris/live-run/<name>.key`, mode 600, elsewhere).
  * Every log this script writes has the key substituted out of it, and each one is asserted to hold no bearer.
  *
- * Evidence under `.live-run/`: one PNG and one log per scenario, `results.json`, `changed/` (what the agent
- * wrote), `diff.txt`. The sandbox goes away at the end unless `--keep` is given. The run is unattended and its
- * window is hidden; `--gui` shows it, for watching rather than using.
+ * EVIDENCE, and what it is FOR. A pack lands at `.live-run/runs/<stamp>/` — packs accumulate, `latest.txt` names
+ * the newest, `--keep-runs` (default 10) prunes the oldest — with `results.json` and the copied `workspace.db` at
+ * its root and one directory per scenario holding:
+ *
+ *   app.log            the launch verbatim, key substituted out and asserted free of a bearer
+ *   app.filtered.log   the same log without a child MCP server's stderr, consecutive repeats collapsed, the
+ *                      sandbox path shortened — two thirds of a launch log is one language server booting
+ *   autopsy.txt        `apps/desktop/scripts/autopsy.mjs` over this scenario's session
+ *   session.log        the product's own per-session log, at `--session-log-level` (default INFO)
+ *   transcript.md      every transcript row in full, not the 400 characters `results.json` keeps
+ *   *.png              the end of the scenario, plus a fifth and three fifths of the way through its wait
+ *   node-test.log, diff.txt, changed/   where the scenario produces them
+ *
+ * The shape is not arbitrary: it is the input `.agents/skills/run-autopsy/SKILL.md` asks for — a launch log, the
+ * session store and a session id. This script produced all three and deleted two of them with the sandbox, which
+ * is why every defect that skill has found came from a session driven by hand rather than from a live run. The
+ * sandbox still goes away at the end unless `--keep` is given; the record of what happened in it no longer does.
+ *
+ * The run is unattended and its window is hidden; `--gui` shows it, for watching rather than using.
  */
 import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { join, relative, resolve, sep } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
@@ -69,7 +85,17 @@ const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
 const fixture = join(app, 'scripts', 'fixtures', 'todo-app');
 const electron = process.platform === 'win32' ? join(repo, 'node_modules', 'electron', 'dist', 'electron.exe') : join(repo, 'node_modules', 'electron', 'dist', 'electron');
-const output = resolve(repo, '.live-run');
+/**
+ * The evidence root, and why a run no longer overwrites the one before it.
+ *
+ * `.live-run/` used to BE the pack: emptied at every start, so run N-1 was unrecoverable and two runs could never
+ * be compared. It is now a directory OF packs — `runs/<stamp>/`, the same stamp the sandbox carries, with
+ * `latest.txt` naming the newest — and `--keep-runs` (default 10) prunes the oldest rather than the last one.
+ * The whole tree is still gitignored; what changed is that the machine keeps a history the owner can read.
+ */
+const EVIDENCE_ROOT = resolve(repo, '.live-run');
+const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+const output = join(EVIDENCE_ROOT, 'runs', stamp);
 if (relative(repo, output).startsWith(`..${sep}`) || relative(repo, output) === '..') throw new Error(`the evidence directory escaped the repository: ${output}`);
 
 const argv = process.argv.slice(2);
@@ -88,6 +114,14 @@ const GUI = has('gui');
 const BUDGET = Number(value('budget', '1.00'));
 const MAX_TOKENS = Number(value('max-tokens', '500000'));
 const MAX_ITERATIONS = Number(value('max-iterations', '15'));
+const KEEP_RUNS = Math.max(1, Number(value('keep-runs', '10')));
+/**
+ * The session log level written into the sandbox's own configuration. `WARNING` is the product's default and
+ * holds warnings alone; `INFO` adds the run-end line, the hook lines and the checkpoint lines. It is NOT raised
+ * to `DEBUG` by default and that is deliberate: the engine has no `debug` call site on this log, so `DEBUG` and
+ * `INFO` are the same file and naming the louder one would imply a detail that does not exist.
+ */
+const SESSION_LOG_LEVEL = value('session-log-level', 'INFO');
 const SIGN_IN_WAIT_MS = Number(process.env['LIVE_RUN_SIGN_IN_WAIT_MS'] ?? 120_000);
 const RUN_WAIT_MS = Number(process.env['LIVE_RUN_WAIT_MS'] ?? 420_000);
 const OPTIONAL = ['ask', 'edit', 'requirements', 'shell', 'frictions'];
@@ -268,6 +302,8 @@ const USAGE = `pnpm live-run — the application against a real model endpoint, 
                        an endpoint registered --unmetered carries no ceiling unless one of these two is named here
   --max-iterations=<n> the ceiling written into the workspace's runtime configuration (default 15)
   --only=<csv>         run only some of ${OPTIONAL.join(', ')} (sign-in always runs; the sandbox is fresh)
+  --keep-runs=<n>      evidence packs to keep under .live-run/runs (default 10; the oldest are pruned)
+  --session-log-level=<lvl>  the sandbox's session_log_level (default INFO; WARNING is the product's own default)
   --gui                show the window each scenario drives, to watch it (hidden by default; nothing else changes)
   --keep               keep the sandbox workspace instead of deleting it
   --skip-build         trust apps/desktop/out as it stands
@@ -411,8 +447,19 @@ const before = accountingKind === 'provider' ? await providerCredits() : { usage
 if (before.remaining !== null && before.remaining < BUDGET) console.error(`warning: the key has ${before.remaining} USD left, below the ${BUDGET.toFixed(2)} USD ceiling.`);
 
 // ── The build, the sandbox and the evidence ──────────────────────────────────────────────────────────────────
-rmSync(output, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+/**
+ * Prune, never wipe. The newest `KEEP_RUNS` packs stay; the oldest go. A pack that cannot be removed — the same
+ * locked handle the sandbox sweep already forgives — is reported and skipped rather than killing the run before
+ * it starts, because losing an old pack is not a reason to lose this one.
+ */
+mkdirSync(join(EVIDENCE_ROOT, 'runs'), { recursive: true });
+const priorRuns = readdirSync(join(EVIDENCE_ROOT, 'runs')).sort();
+for (const old of priorRuns.slice(0, Math.max(0, priorRuns.length - (KEEP_RUNS - 1)))) {
+  try { rmSync(join(EVIDENCE_ROOT, 'runs', old), { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); }
+  catch (cause) { console.error(`warning: the pack ${old} could not be pruned: ${cause instanceof Error ? cause.message : String(cause)}`); }
+}
 mkdirSync(output, { recursive: true });
+writeFileSync(join(EVIDENCE_ROOT, 'latest.txt'), `${output}\n`);
 if (!has('skip-build')) {
   const built = process.platform === 'win32'
     ? spawnSync('cmd.exe', ['/d', '/s', '/c', 'pnpm --filter @rotaris/desktop build'], { cwd: repo, encoding: 'utf8', timeout: 300_000 })
@@ -422,7 +469,6 @@ if (!has('skip-build')) {
 }
 if (!existsSync(electron)) throw new Error(`the Electron executable is absent: ${electron}`);
 
-const stamp = new Date().toISOString().replace(/[:.]/g, '-');
 const SANDBOX_ROOT = join(tmpdir(), 'rotaris-live-run');
 const KEPT = 'KEPT';
 /**
@@ -475,24 +521,89 @@ function oneDatabase() {
   if (databases.length !== 1) throw new Error(`expected one workspace database below ${local}; found ${databases.length}`);
   return databases[0];
 }
+
+/** What each scenario left in the pack, reported in `results.json` so a reader knows what exists without listing it. */
+const scenarioEvidence = {};
+/** One directory per scenario, so a pack reads as the run did rather than as one flat heap of prefixed names. */
+function scenarioDir(name) {
+  const dir = join(output, name);
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+/**
+ * The readable half of the launch log. The verbatim log is always kept beside it — a line this drops must be
+ * recoverable, so nothing here is a substitute for `app.log`, only a way to read it.
+ *
+ * Three reductions, in order of how much they take:
+ *   1. a child MCP server's stderr, forwarded into the application log by `packages/mcp/src/transport.ts`. Two
+ *      thirds of a live launch log is one language server's boot noise (190 of 288 lines, measured on the
+ *      2026-09-21 pack; 141 of 195 measured independently on 2026-09-16). OQ-63 rules that the application log
+ *      keeps every level, so this is the READER filtering, never the product — which is why `app.log` stays.
+ *   2. consecutive repeats of one line, collapsed to the line and a count, the shape `transport.ts` already uses.
+ *   3. the sandbox's absolute path, which prefixes most lines at about ninety characters, shortened to `<sandbox>`.
+ */
+function filterLog(text, sandboxPath) {
+  const dropped = { mcpStderr: 0, repeats: 0 };
+  const short = (line) => line.split(sandboxPath).join('<sandbox>');
+  const out = [];
+  let previous = null;
+  let run = 0;
+  const flush = () => {
+    if (previous !== null && run > 1) { out.push(`  … the line above repeated ${run} times`); dropped.repeats += run - 1; }
+  };
+  for (const raw of text.split('\n')) {
+    if (/ (?:run host|workspace service) debug: mcp \S+ stderr: /.test(raw)) { dropped.mcpStderr += 1; continue; }
+    const body = short(raw).replace(/^\[[^\]]*\] /, '');
+    if (body === previous) { run += 1; continue; }
+    flush();
+    previous = body;
+    run = 1;
+    out.push(short(raw));
+  }
+  flush();
+  return { text: out.join('\n'), dropped };
+}
+
+/** No bearer may reach the evidence — the substitution is the belt, these two are the braces. */
+function assertNoCredential(what, text) {
+  if (/sk-[a-z-]*[a-z0-9]{16,}/i.test(text)) throw new Error(`${what} carries something shaped like an API key`);
+  if (/Bearer\s+(?!\*\*\*)\S{20,}/.test(text)) throw new Error(`${what} carries a bearer value`);
+}
+
 function launch(name, extra, timeoutMs = 180_000) {
-  const png = join(output, `${name}.png`);
+  const dir = scenarioDir(name);
+  const png = join(dir, `${name}.png`);
+  /*
+   * Two extra photographs, at a fifth and three fifths of the scenario's OWN wait budget, so a run that stalls
+   * leaves a picture of where it stalled instead of one frame of whatever was on screen when it gave up. They
+   * are proportional rather than fixed because the budgets here span 120 s (sign-in) to 900 s (the board), and
+   * a fixed offset would photograph the splash screen in one and the finished run in the other. A caller that
+   * names its own `_PNG_AT` keeps it; `capture/seams.ts` reads them at those offsets and writes nothing if the
+   * launch has already exited.
+   */
+  const budget = Number(extra['ROTARIS_CAPTURE_WAIT_MS'] ?? 0);
+  const paced = budget > 0 && extra['ROTARIS_CAPTURE_PNG_AT'] === undefined
+    ? { ROTARIS_CAPTURE_PNG_AT: `${join(dir, `${name}.early.png`)}@${Math.round(budget * 0.2)};;${join(dir, `${name}.mid.png`)}@${Math.round(budget * 0.6)}` }
+    : {};
   const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), workspace], {
     cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: !GUI,
     env: {
       ...cleanEnvironment(),
       LOCALAPPDATA: local, APPDATA: join(sandbox, 'roaming'), ROTARIS_PREFERENCES_ROOT: join(sandbox, 'preferences'),
       ROTARIS_CAPTURE_PNG: png, ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
+      ...paced,
       ...extra,
     },
   });
   const log = redact(`${result.stdout ?? ''}\n${result.stderr ?? ''}`);
-  writeFileSync(join(output, `${name}.log`), log);
-  if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${name}.log`);
+  writeFileSync(join(dir, 'app.log'), log);
+  const filtered = filterLog(log, sandbox);
+  writeFileSync(join(dir, 'app.filtered.log'), `${filtered.text}\n`);
+  scenarioEvidence[name] = { dir: relative(output, dir), lines: log.split('\n').length, filteredLines: filtered.text.split('\n').length, ...filtered.dropped };
+  if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'}; see ${join(dir, 'app.log')}`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
-  // The substitution above is the belt; these two are the braces — no bearer may reach the evidence.
-  if (/sk-[a-z-]*[a-z0-9]{16,}/i.test(log)) throw new Error(`${name}.log carries something shaped like an API key`);
-  if (/Bearer\s+(?!\*\*\*)\S{20,}/.test(log)) throw new Error(`${name}.log carries a bearer value`);
+  assertNoCredential(`${name}/app.log`, log);
   return log;
 }
 /** The store as the run left it: the newest session, its rows, its events, and the totals across every session. */
@@ -510,6 +621,80 @@ function readSession() {
     return { session, rows, events, totals, byAgent };
   } finally { db.close(); }
 }
+/**
+ * The three records the run-autopsy skill asks for and this harness used to destroy.
+ *
+ * `.agents/skills/run-autopsy/SKILL.md` names its inputs — a launch log, the session store, a session id — and
+ * its Step 1 runs `apps/desktop/scripts/autopsy.mjs` over them. This script produced all three and deleted two
+ * with the sandbox, which is why every defect that skill has found came from a session somebody drove by hand
+ * rather than from a live run. Each run-bearing scenario now leaves the autopsy's own output, the product's
+ * per-session log and the transcript beside the launch log, so a pack can be autopsied days later.
+ *
+ * Nothing here may fail the run. A pack is evidence about the product; a reader that throws would turn a green
+ * run red over its own bookkeeping, so each half reports what it could not write and continues.
+ */
+function preserveRun(name, sessionId) {
+  const dir = scenarioDir(name);
+  const wrote = [];
+  const failed = [];
+  const db = oneDatabase();
+  try {
+    // Step 1 of the skill, run here so the pack carries it rather than requiring the reader to re-derive it.
+    const snapshot = spawnSync(process.execPath, [join(app, 'scripts', 'autopsy.mjs'), db, sessionId], { cwd: repo, encoding: 'utf8', timeout: 120_000 });
+    const text = redact(`${snapshot.stdout ?? ''}\n${snapshot.stderr ?? ''}`);
+    assertNoCredential(`${name}/autopsy.txt`, text);
+    writeFileSync(join(dir, 'autopsy.txt'), text);
+    wrote.push('autopsy.txt');
+  } catch (cause) { failed.push(`autopsy.txt (${cause instanceof Error ? cause.message : String(cause)})`); }
+  try {
+    // The product's OWN per-session log (`run-host/host.ts`'s appender), at whatever level the sandbox was given.
+    const sessionLog = join(dirname(db), 'sessions', sessionId, 'session.log');
+    if (existsSync(sessionLog)) {
+      const text = redact(readFileSync(sessionLog, 'utf8'));
+      assertNoCredential(`${name}/session.log`, text);
+      writeFileSync(join(dir, 'session.log'), text);
+      wrote.push('session.log');
+    } else failed.push(`session.log (the run wrote none at ${SESSION_LOG_LEVEL})`);
+  } catch (cause) { failed.push(`session.log (${cause instanceof Error ? cause.message : String(cause)})`); }
+  try {
+    // The transcript in full. `results.json` keeps 400 characters of the answer; this keeps what was actually said.
+    const Database = require('better-sqlite3');
+    const handle = new Database(db, { readonly: true });
+    let rows;
+    try { rows = handle.prepare('SELECT row_index, kind, settled, tool_name, tool_status, body FROM transcript_rows WHERE session_id = ? ORDER BY row_index').all(sessionId); }
+    finally { handle.close(); }
+    const text = redact(rows.map((r) => `## ${r.row_index} ${r.kind}${r.tool_name ? ` — ${r.tool_name} [${r.tool_status}${r.settled === 1 ? '' : ', unsettled'}]` : ''}\n\n${r.body ?? ''}\n`).join('\n'));
+    assertNoCredential(`${name}/transcript.md`, text);
+    writeFileSync(join(dir, 'transcript.md'), `# ${name} — session ${sessionId}, ${rows.length} row(s)\n\n${text}`);
+    wrote.push('transcript.md');
+  } catch (cause) { failed.push(`transcript.md (${cause instanceof Error ? cause.message : String(cause)})`); }
+  scenarioEvidence[name] = { ...(scenarioEvidence[name] ?? {}), sessionId, wrote, ...(failed.length > 0 ? { failed } : {}) };
+  if (failed.length > 0) console.error(`warning: ${name} left an incomplete pack — ${failed.join('; ')}`);
+}
+
+/**
+ * The store itself, copied out before the sandbox goes. It is the record every surface is derived from, and the
+ * one thing a reader cannot reconstruct from anything else in the pack.
+ *
+ * The credential store is a SEPARATE directory and is deleted on every exit path, so this file should never hold
+ * the key — but "should" is not a guarantee about a database whose transcript holds whatever the model wrote, so
+ * the bytes are searched for the key before the copy is kept and the copy is dropped if it is found. Copying a
+ * live SQLite file means taking its sidecars too; without `-wal` the copy reads as the last checkpoint.
+ */
+function preserveStore() {
+  try {
+    const db = oneDatabase();
+    const bytes = readFileSync(db);
+    if (bytes.includes(Buffer.from(key, 'utf8'))) { console.error('warning: the store held the key verbatim, so it was NOT copied into the pack'); return { copied: false, reason: 'the store held the key' }; }
+    cpSync(db, join(output, 'workspace.db'));
+    for (const sidecar of ['-wal', '-shm']) if (existsSync(`${db}${sidecar}`)) cpSync(`${db}${sidecar}`, join(output, `workspace.db${sidecar}`));
+    return { copied: true, from: db };
+  } catch (cause) {
+    console.error(`warning: the store could not be copied into the pack: ${cause instanceof Error ? cause.message : String(cause)}`);
+    return { copied: false, reason: cause instanceof Error ? cause.message : String(cause) };
+  }
+}
+
 function storeTotals() {
   try {
     const Database = require('better-sqlite3');
@@ -528,6 +713,10 @@ const results = {
 function finish(code) {
   results.finishedAt = new Date().toISOString();
   results.checks = checks;
+  // The store goes into the pack BEFORE `cleanup` takes the sandbox — on every exit path through `finish`,
+  // including the budget gate's early stop, because a run that stopped early is exactly the one worth reading.
+  results.store = preserveStore();
+  results.evidence = scenarioEvidence;
   results.passed = code === 0 && checks.every((c) => c.passed);
   writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
   // A red names the assertion, never the run.
@@ -535,6 +724,9 @@ function finish(code) {
   const tokens = results.tokens ? `${results.tokens.input} in / ${results.tokens.output} out` : 'none recorded';
   console.log(`\nspend: ${typeof results.spentUsd === 'number' ? `${results.spentUsd.toFixed(4)} USD (${accountingKind === 'provider' ? "the provider's figure" : 'estimated from the registered prices'}) of the ${BUDGET.toFixed(2)} USD ceiling` : `no money figure for this endpoint; ${tokens} of the ${MAX_TOKENS} token ceiling`}`);
   console.log(`evidence: ${output}`);
+  const packed = Object.entries(scenarioEvidence).filter(([, e]) => Array.isArray(e.wrote) && e.wrote.length > 0);
+  if (packed.length > 0) console.log(`autopsy:  ${packed.map(([name, e]) => `${name} (${e.wrote.join(', ')})`).join('; ')}`);
+  console.log(`          read one with \`node apps/desktop/scripts/autopsy.mjs "${join(output, 'workspace.db')}" <session-id>\`, or the run-autopsy skill over this directory`);
   cleanup(has('keep'));
   if (has('keep')) console.log(`sandbox kept (its credential store deleted): ${sandbox}`);
   console.log(results.passed ? 'live-run PASSED' : 'live-run FAILED');
@@ -599,7 +791,10 @@ if (!inCatalogue || typeof endpoint.contextTokens === 'number') {
   const context = typeof endpoint.contextTokens === 'number' ? `    max_input_tokens: ${endpoint.contextTokens}\n` : '';
   agents += `models:\n  ${JSON.stringify(QUALIFIED)}:\n    provider: openai-compatible\n    model_id: ${JSON.stringify(endpoint.model)}\n    auth_provider: ${PROVIDER_ID}\n    base_url: ${endpoint.baseUrl}\n${context}${prices}`;
 }
-if (!agents.includes('permission_mode:')) agents += `runtime:\n  permission_mode: autonomous\n  allow_unsandboxed_autonomous: true\n  max_iterations: ${MAX_ITERATIONS}\n`;
+// `session_log_level` is the one level knob the product actually honours (REQ-SESSION-142; the APPLICATION log
+// filters on nothing, which is OQ-63's open question). It governs `<store>/sessions/<id>/session.log`, which
+// `preserveRun` copies into the pack.
+if (!agents.includes('permission_mode:')) agents += `runtime:\n  permission_mode: autonomous\n  allow_unsandboxed_autonomous: true\n  max_iterations: ${MAX_ITERATIONS}\n  session_log_level: ${SESSION_LOG_LEVEL}\n`;
 writeFileSync(agentsFile, agents);
 cpSync(agentsFile, join(output, 'agents.yaml'));
 check(['large_model', 'medium_model', 'small_model'].every((slot) => agents.includes(`${slot}: ${QUALIFIED}`)), 'the three tier slots name the live model', QUALIFIED);
@@ -623,6 +818,7 @@ if (wanted.includes('ask')) {
   check(/addTodo/.test(answer) && /toggleTodo/.test(answer), 'the answer names the functions the file exports', answer.trim().slice(0, 200));
   check(usage.length > 0, 'usage figures were recorded', JSON.stringify(usage[usage.length - 1] ?? null));
   results.scenarios.ask = { status: read?.session.execution_status, iterations: read?.session.iterations_completed, tokens: { input: read?.session.tokens_input, output: read?.session.tokens_output }, tools: tools.map((row) => row.tool_name), answer: answer.trim().slice(0, 400) };
+  if (read) preserveRun('ask', read.session.session_id);
   await budgetGate();
 }
 
@@ -652,14 +848,15 @@ if (wanted.includes('edit')) {
   check(/clearCompleted/.test(suite), 'src/todos.test.js tests it');
   // The independent reading: this script runs the suite itself, whatever the agent reported.
   const suiteRun = spawnSync(process.execPath, ['--test'], { cwd: workspace, encoding: 'utf8', timeout: 120_000 });
-  writeFileSync(join(output, 'node-test.log'), `${suiteRun.stdout ?? ''}\n${suiteRun.stderr ?? ''}`);
+  writeFileSync(join(scenarioDir('edit'), 'node-test.log'), `${suiteRun.stdout ?? ''}\n${suiteRun.stderr ?? ''}`);
   check(suiteRun.status === 0, 'node --test is green in the workspace afterwards', `exit ${suiteRun.status ?? suiteRun.signal}`);
   const diff = git('diff', head, '--stat');
-  writeFileSync(join(output, 'diff.txt'), `${git('diff', head)}\n`);
+  writeFileSync(join(scenarioDir('edit'), 'diff.txt'), `${git('diff', head)}\n`);
   check(diff !== '', 'git sees the change', diff.split('\n').pop() ?? '');
-  mkdirSync(join(output, 'changed'), { recursive: true });
-  cpSync(join(workspace, 'src'), join(output, 'changed'), { recursive: true });
+  mkdirSync(join(scenarioDir('edit'), 'changed'), { recursive: true });
+  cpSync(join(workspace, 'src'), join(scenarioDir('edit'), 'changed'), { recursive: true });
   results.scenarios.edit = { status: read?.session.execution_status, iterations: read?.session.iterations_completed, tokens: { input: read?.session.tokens_input, output: read?.session.tokens_output }, tools: names, toolCallTotal: read?.session.tool_calls ?? null, toolCallsByAgent: byAgent, diffstat: diff, suiteExit: suiteRun.status };
+  if (read) preserveRun('edit', read.session.session_id);
   await budgetGate();
 }
 
@@ -871,9 +1068,9 @@ if (wanted.includes('requirements')) {
   check(/completedCount/.test(suiteText), 'the worktree\'s suite tests it');
   // The independent reading, as in `edit`: this script runs the suite itself, whatever the agent reported.
   const suiteRun = unit === undefined ? { status: null } : spawnSync(process.execPath, ['--test'], { cwd: unit, encoding: 'utf8', timeout: 120_000 });
-  if (unit !== undefined) writeFileSync(join(output, 'node-test-requirements.log'), `${suiteRun.stdout ?? ''}\n${suiteRun.stderr ?? ''}`);
+  if (unit !== undefined) writeFileSync(join(scenarioDir('requirements'), 'node-test.log'), `${suiteRun.stdout ?? ''}\n${suiteRun.stderr ?? ''}`);
   check(suiteRun.status === 0, 'node --test is green inside the worktree afterwards', `exit ${suiteRun.status ?? 'no worktree to run it in'}`);
-  if (unit !== undefined) writeFileSync(join(output, 'diff-requirements.txt'), `${execFileSync('git', ['-C', unit, 'diff', head], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })}\n`);
+  if (unit !== undefined) writeFileSync(join(scenarioDir('requirements'), 'diff.txt'), `${execFileSync('git', ['-C', unit, 'diff', head], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 })}\n`);
   results.scenarios.requirements = {
     observed: columns, settledColumn: settled?.column ?? null, history: historyRows.map((r) => ({ action: r.action, at: r.at })),
     run: run === undefined ? null : { sessionId: run.session_id, permissions: run.permissions, startedAt: run.started_at, endedAt: run.ended_at },
@@ -881,6 +1078,7 @@ if (wanted.includes('requirements')) {
     runMs: run?.started_at && run?.ended_at ? Date.parse(String(run.ended_at)) - Date.parse(String(run.started_at)) : null,
     tokens: { input: read?.session.tokens_input, output: read?.session.tokens_output }, tools: names, worktree: unit ?? null, suiteExit: suiteRun.status,
   };
+  if (read) preserveRun('requirements', read.session.session_id);
   await budgetGate();
 }
 
@@ -946,6 +1144,7 @@ if (wanted.includes('frictions')) {
   noted('the stream-stall abort is not covered here', 'it needs an endpoint fault; the observed shape is recorded in docs/defects/single-retry-stream-stall-aborted-a-76-minute-run.md');
   noted('the exit-trace gap is not covered here', 'it needs a crash; the observed shape is recorded in docs/defects/process-exit-left-no-diagnosable-trace.md');
   results.scenarios.frictions = { status: read?.session.execution_status, tools: names, writeOpRefusals: writeOp.map((call) => call.ordinal), sigintRefusals: sigint.map((call) => call.ordinal) };
+  if (read) preserveRun('frictions', read.session.session_id);
   await budgetGate();
 }
 

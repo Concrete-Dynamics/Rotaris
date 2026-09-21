@@ -220,9 +220,32 @@ the script writes the `models:` entry the run needs into the sandbox's `agents.y
 `model_id`, `auth_provider`, `base_url`, and the prices if they were registered — which is the same shape the
 snapshot layer would have produced (`REQ-CONFIG-082..097`, `REQ-PROVIDER-091`).
 
-Evidence lands in `.live-run/` (gitignored): a PNG and a log per scenario, `results.json` with every check, the
-accounting kind and the spend, `agents.yaml` as the run saw it, `diff.txt` and `changed/` for what the agent
-wrote, `node-test.log` for the independent reading. The sandbox is deleted at the end unless `--keep`.
+### The evidence pack, and what it is for
+
+Evidence lands in `.live-run/runs/<stamp>/` (gitignored). **Packs accumulate** — `.live-run/latest.txt` names the
+newest and `--keep-runs` (default 10) prunes the oldest — so two runs can be compared, which they could not be
+while each run emptied the directory.
+
+At the pack's root: `results.json` with every check, the accounting kind and the spend; `agents.yaml` as the run
+saw it; `build.log`; and **`workspace.db`, the store copied out of the sandbox before it is deleted**. Then one
+directory per scenario:
+
+| file | what it holds |
+|---|---|
+| `app.log` | the launch verbatim, key substituted out and asserted free of a bearer |
+| `app.filtered.log` | the same log with a child MCP server's stderr dropped, consecutive repeats collapsed and the sandbox path shortened — two thirds of a launch log is one language server booting (OQ-63 rules that the *product's* log keeps every level, so this is the reader filtering, never the product) |
+| `autopsy.txt` | `apps/desktop/scripts/autopsy.mjs` over that scenario's session |
+| `session.log` | the product's own per-session log, at `--session-log-level` (default `INFO`) |
+| `transcript.md` | every transcript row in full, not the 400 characters `results.json` keeps |
+| `*.png` | the end of the scenario, plus one a fifth and one three fifths through its wait |
+| `node-test.log`, `diff.txt`, `changed/` | where the scenario produces them |
+
+**That shape is the run-autopsy skill's input.** `.agents/skills/run-autopsy/SKILL.md` asks for a launch log, the
+session store and a session id; the live run produced all three and used to delete two of them with the sandbox,
+which is why every defect that skill has found came from a session somebody drove by hand. Read a pack with
+`pnpm autopsy .live-run/runs/<stamp>/workspace.db <session-id>`, or point the skill at the pack directory.
+
+The sandbox itself is deleted at the end unless `--keep`. The record of what happened in it is not.
 
 The sandbox holds a **real credential** — the app writes the leased key into its own store, as it would on the
 owner's machine — so the credential directory is deleted on every exit path there is: the normal end, `--keep`,
@@ -233,9 +256,13 @@ the next run sweeps every unmarked leftover, and takes the credentials out of th
 
 Each check prints `PASS`, `FAIL` or `NOTE` with its own sentence, so a red names the assertion rather than the
 run. `results.json` holds the same list plus the per-scenario detail — iterations, tokens, tool names, the
-answer, the diffstat. A failure in `edit` is usually worth reading beside `.live-run/changed/` and `diff.txt`:
+answer, the diffstat. A failure in `edit` is usually worth reading beside `edit/changed/` and `edit/diff.txt`:
 what the agent wrote is as informative as what the app did with it. A weaker or smaller model failing `edit`
 while `ask` passes is a fact about the model, not necessarily about the product — say which you think it is.
+
+Read the scenario's **`autopsy.txt` first** and its `app.filtered.log` second; `transcript.md` and the verbatim
+`app.log` are there for the question the first two raise. A check that went red without the autopsy showing a
+cause is itself worth reporting — it means the store recorded nothing about the failure.
 
 A live-run failure is a **defect of the product**, not of the harness, until the harness is shown to be wrong.
 Record what it found where the mechanism was decided, as the standing policy in `CLAUDE.md` requires.

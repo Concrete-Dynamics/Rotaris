@@ -49,13 +49,37 @@ const cap = (buffers) => {
  * `upstreamUrl` is the endpoint's own base (e.g. `https://host/v1`); its path is prefixed onto every incoming
  * path, so the product may treat the returned URL as a base exactly as it treats the real one.
  */
-export async function startRecordingProxy({ upstreamUrl, redact = (s) => s }) {
+export async function startRecordingProxy({ upstreamUrl, redact = (s) => s, faults: declared = [] }) {
+  let faults = declared.map((rule) => ({ ...rule }));
   const upstream = new URL(upstreamUrl);
   const transport = upstream.protocol === 'https:' ? httpsRequest : httpRequest;
   const basePath = upstream.pathname.replace(/\/+$/, '');
   let sink = null;
   let recorded = 0;
   let failed = 0;
+  /** How many calls have reached each watched path, so a rule can name the call it acts on. */
+  const calls = new Map();
+  const fired = [];
+
+  /**
+   * The rule that acts on THIS call, or null.
+   *
+   * A rule names the path it watches (`/chat/completions` unless it says otherwise) and the **1-based index**
+   * of the call on that path it fires at, because "the second completion" is a reproduction and "some
+   * completion" is a coincidence — `codebase.md`'s strongest finding of 2026-09-12 is that sixty negative runs
+   * proved nothing because none of them carried the input that failed. Each rule fires at most once.
+   */
+  const ruleFor = (path) => {
+    if (faults.length === 0) return null;
+    const watched = faults.filter((f) => path.includes(f.path ?? '/chat/completions'));
+    if (watched.length === 0) return null;
+    const key = watched[0].path ?? '/chat/completions';
+    const index = (calls.get(key) ?? 0) + 1;
+    calls.set(key, index);
+    const rule = watched.find((f) => f.at === index && f.spent !== true) ?? null;
+    if (rule !== null) { rule.spent = true; fired.push({ kind: rule.kind, at: rule.at, path: key }); }
+    return rule;
+  };
 
   const write = (record) => {
     if (sink === null) return;
@@ -69,22 +93,88 @@ export async function startRecordingProxy({ upstreamUrl, redact = (s) => s }) {
     const sentChunks = [];
     const backChunks = [];
     const headers = { ...clientReq.headers, host: upstream.host };
+    const rule = ruleFor(path);
+    const note = rule === null ? {} : { fault: { kind: rule.kind, at: rule.at, ...(rule.status ? { status: rule.status } : {}), ...(rule.afterChunks === undefined ? {} : { afterChunks: rule.afterChunks }) } };
+
+    /*
+     * `status`: the endpoint answers a refusal, and the upstream is never contacted. Synthesised rather than
+     * rewritten from a real answer because the point is the STATUS the product sees — a 429 the ladder must
+     * wait on, a 500 it must fall back from — and contacting the endpoint to discard its answer would spend
+     * the owner's tokens to produce nothing.
+     */
+    if (rule?.kind === 'status') {
+      const body = rule.body ?? JSON.stringify({ error: { message: `injected by the live run's recording proxy (rule ${rule.at})`, type: 'injected_fault' } });
+      clientReq.on('data', (chunk) => sentChunks.push(chunk));
+      clientReq.on('end', () => {
+        clientRes.writeHead(rule.status ?? 500, { 'content-type': 'application/json', ...(rule.headers ?? {}) });
+        clientRes.end(body);
+        write({
+          at: new Date(started).toISOString(), ms: Date.now() - started,
+          method: clientReq.method, path: clientReq.url, upstream: `${upstream.origin}${path}`,
+          status: rule.status ?? 500, ...note,
+          requestHeaders: scrub(clientReq.headers), requestBody: redact(cap(sentChunks)),
+          responseHeaders: {}, responseBody: body,
+        });
+      });
+      return;
+    }
 
     const upstreamReq = transport(
       { protocol: upstream.protocol, hostname: upstream.hostname, port: upstream.port || (upstream.protocol === 'https:' ? 443 : 80), method: clientReq.method, path, headers },
       (upstreamRes) => {
         // Status and headers straight through, before a single byte of body is copied anywhere.
         clientRes.writeHead(upstreamRes.statusCode ?? 502, upstreamRes.headers);
-        upstreamRes.on('data', (chunk) => { backChunks.push(chunk); clientRes.write(chunk); });
-        upstreamRes.on('end', () => {
-          clientRes.end();
+        let forwarded = 0;
+        let severed = false;
+        let stallTimer = null;
+        const settle = () => {
           write({
             at: new Date(started).toISOString(), ms: Date.now() - started,
             method: clientReq.method, path: clientReq.url, upstream: `${upstream.origin}${path}`,
-            status: upstreamRes.statusCode ?? null,
+            status: upstreamRes.statusCode ?? null, ...note,
             requestHeaders: scrub(clientReq.headers), requestBody: redact(cap(sentChunks)),
             responseHeaders: upstreamRes.headers, responseBody: redact(cap(backChunks)),
           });
+        };
+        upstreamRes.on('data', (chunk) => {
+          backChunks.push(chunk);
+          if (severed) return;
+          forwarded += 1;
+          const after = rule?.afterChunks ?? 1;
+          /*
+           * `stall`: the bytes stop but the connection stays OPEN. This is the shape of
+           * `docs/defects/single-retry-stream-stall-aborted-a-76-minute-run.md` and the one the product cannot
+           * distinguish from a slow model without an idle bound — which is why it is worth inducing at all.
+           * Nothing is closed: the run must be the thing that decides the stream is dead.
+           */
+          if (rule?.kind === 'stall') {
+            // `afterChunks` is how many chunks DO arrive before the silence. Forward those, then stop
+            // forwarding anything further while leaving the socket open. Getting this off by one gives the
+            // client headers and no body at all, which is a different fault (a hang before the first byte)
+            // and not the one this rule claims to reproduce.
+            if (forwarded <= after) { clientRes.write(chunk); return; }
+            if (!severed) {
+              severed = true;
+              stallTimer = setTimeout(() => { try { clientRes.destroy(); upstreamReq.destroy(); } catch { /* the call is over */ } settle(); }, rule.holdMs ?? 180_000);
+              stallTimer.unref?.();
+            }
+            return;
+          }
+          /* `cut`: the connection dies mid-stream, the way a proxy or a load balancer drops one. */
+          if (rule?.kind === 'cut' && forwarded >= after) {
+            severed = true;
+            clientRes.write(chunk);
+            try { clientRes.destroy(); upstreamReq.destroy(); } catch { /* the call is over */ }
+            settle();
+            return;
+          }
+          clientRes.write(chunk);
+          /* `malformed`: a frame the stream parser must reject, injected into an otherwise healthy answer. */
+          if (rule?.kind === 'malformed' && forwarded === after) clientRes.write(rule.frame ?? 'data: {"choices":[{"delta":\n\n');
+        });
+        upstreamRes.on('end', () => {
+          if (stallTimer !== null) return;
+          if (!severed) { clientRes.end(); settle(); }
         });
         upstreamRes.on('error', () => { clientRes.destroy(); });
       },
@@ -120,7 +210,13 @@ export async function startRecordingProxy({ upstreamUrl, redact = (s) => s }) {
     url: `http://127.0.0.1:${port}`,
     /** Point the recorder at this scenario's file. `null` stops recording without stopping the proxy. */
     sink: (path) => { sink = path; },
-    stats: () => ({ recorded, failed }),
+    /**
+     * Replace the fault rules between launches, and reset the per-path call counters with them. The counters
+     * must reset: a rule that says "the second completion" means the second of THIS launch, and a scenario
+     * that inherited the previous launch's count would fire it somewhere nobody chose.
+     */
+    setFaults: (rules) => { faults = rules.map((rule) => ({ ...rule })); calls.clear(); fired.length = 0; },
+    stats: () => ({ recorded, failed, faultsFired: fired.slice(), faultsDeclared: faults.length }),
     close: () => new Promise((resolve) => { server.close(() => resolve(undefined)); server.closeAllConnections?.(); }),
   };
 }

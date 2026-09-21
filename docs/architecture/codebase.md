@@ -718,6 +718,30 @@ measured, which is the shape of the two false-symptom repairs above. `model-traf
 with a case that hangs if the pipe ever buffers, verified by making it buffer. Credentials are replaced in the
 record before it is written and the `ask` scenario asserts it.
 
+**The proxy's own first execution found that it could not answer a single call, and the reason is kept beside
+its replacement.** The script launched every scenario with `spawnSync`, which blocks the Node event loop until
+the child exits; a listener on a blocked loop accepts nothing, so the connection sat in the kernel's backlog and
+was served only after the scenario that made it was over. A probe measured it rather than reasoned about it — a
+child `fetch`ing a counting server while the parent sat in `spawnSync` reported `NO ANSWER after 6012 ms` and the
+server had served **0** requests. Nine unit tests were green throughout, every one of them exercising the proxy
+from a loop that was free: the same shape as 2026-09-12's finding that a proof which cannot fail is a finding.
+`runElectron` now spawns asynchronously and resolves on `close`, keeping the SIGKILL-on-timeout behaviour its
+callers read; the regression guard asserts **both legs**, that the `spawnSync` child is not served and the
+`spawn` child is, because without the first the second could pass for an unrelated reason
+(`docs/defects/fixed/the-recording-proxy-could-not-answer-while-spawnsync-blocked.md`).
+
+**A proxy in the path can also misbehave on purpose, which is the `faults` scenario.** A rule names a kind
+(`status`, `cut`, `stall`, `malformed`), the path it watches and the **1-based index** of the call it fires at,
+and fires once — the index is the point, because "the second completion" is a reproduction and "some completion"
+is a coincidence. `faults-ladder` answers 429 then 500 without contacting the endpoint (so the injected calls
+spend nothing) and asks whether the ladder waits, falls back and still finishes; `faults-stall` stops the bytes
+mid-answer with the socket open and asks the **eighty-second defect's** question, which is whether a model
+timeout is still collapsed into the flag a user's stop sets and reported as `user_cancelled`. This makes the
+first of the two frictions the `frictions` scenario records as uncoverable inducible on demand. **Neither
+product check has yet run against a real endpoint**: the mechanism is unit-tested against a loopback upstream,
+what the checks claim about the product is unverified, and that first execution owes its row in
+`first-executions.md`.
+
 **What the board's live path found on its first execution — 2026-09-11, and the eighty-first defect.** The fifth
 scenario was written after a hand-driven precursor took the same path, and the precursor is what found the defect;
 the scenario passed 21 checks at once and found nothing of its own. **The eighty-first: a requirement store whose

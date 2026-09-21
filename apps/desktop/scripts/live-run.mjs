@@ -41,6 +41,10 @@
  *                 to, and by running `node --test` inside that worktree. It is the one path the composer scenarios
  *                 never take: the work is handed over by the board, not typed into a prompt.
  *   5. shell    — a relaunch with no prompt: Overview painted from the store, the sessions the runs left.
+ *   6. frictions — one real run engineered to trip the inducible run-autopsy frictions (first-use
+ *                 `write_file` without `operation`, a SIGINT stop on a win32 pipe session), read back from
+ *                 the store rather than from the model's report. Red by design until the fixes land; the
+ *                 stall-abort and exit-trace frictions are recorded but not inducible on demand.
  *
  * The key is never passed on a command line and never written to the repository. For one endpoint `<name>`:
  *   1. `ROTARIS_LIVE_API_KEY` in the environment (for a one-off, or a machine where the prompt cannot run);
@@ -86,7 +90,7 @@ const MAX_TOKENS = Number(value('max-tokens', '500000'));
 const MAX_ITERATIONS = Number(value('max-iterations', '15'));
 const SIGN_IN_WAIT_MS = Number(process.env['LIVE_RUN_SIGN_IN_WAIT_MS'] ?? 120_000);
 const RUN_WAIT_MS = Number(process.env['LIVE_RUN_WAIT_MS'] ?? 420_000);
-const OPTIONAL = ['ask', 'edit', 'requirements', 'shell'];
+const OPTIONAL = ['ask', 'edit', 'requirements', 'shell', 'frictions'];
 const only = value('only', null);
 const wanted = only === null ? OPTIONAL : only.split(',').map((s) => s.trim()).filter((s) => s !== '');
 for (const name of wanted) if (!OPTIONAL.includes(name)) throw new Error(`--only takes ${OPTIONAL.join(', ')}; got ${name}`);
@@ -894,6 +898,55 @@ if (wanted.includes('shell')) {
   check(sessions.length >= wanted.filter((name) => name === 'ask' || name === 'edit').length, 'Overview lists the sessions the runs left', `${sessions.length} session row(s)`);
   check(branch.length > 0 && /main/.test(branch[0]?.text ?? ''), 'the repository card reads the branch', branch[0]?.text ?? 'absent');
   results.scenarios.shell = { sessions: sessions.map((row) => row.text), branch: branch[0]?.text ?? null, toolChips: (probe('[data-testid="overview-tool-chips"] .tag') ?? []).map((tag) => tag.text) };
+}
+
+// ── 6. The frictions probe: first-use write_file and the win32 SIGINT stop ───────────────────────────────
+/**
+ * One real run engineered to trip the inducible run-autopsy frictions, read back from the STORE rather than
+ * from the model's report: a first-use `write_file` create (nine refusals across three fresh children in run
+ * `7bd9c19d`; `docs/defects/a-first-use-schema-guess-failed-without-an-example.md`) and a SIGINT stop of a
+ * pipe session on win32 (`docs/defects/win32-terminal-edge-cases-bounced-to-the-agent.md`).
+ *
+ * Red by design until the fixes land: each check below fails while its friction reproduces and passes once
+ * the product absorbs it, which is what makes this scenario the fixes' verification. Two recorded frictions
+ * are NOT covered because they are not inducible on demand — the stream-stall abort needs an endpoint fault
+ * and the exit-trace gap needs a crash — and are noted as such instead of asserted.
+ */
+if (wanted.includes('frictions')) {
+  const log = launch('frictions', {
+    ROTARIS_CAPTURE_PROMPT: 'Create a file called friction-probe.txt in the workspace root containing exactly one line with the text probe-ok. Then run `node -e "setTimeout(() => {}, 20000)"` in the terminal and stop it by sending SIGINT to its session. Reply DONE when both are finished.',
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000',
+  }, RUN_WAIT_MS + 90_000);
+  check(!/capture: wait for result timed out/.test(log), 'the probe run reached its result inside the wait');
+  const read = readSession();
+  check(read?.session.execution_status === 'completed', 'the probe run completed', `${read?.session.execution_status} (${read?.session.stop_reason})`);
+  const tools = (read?.rows ?? []).filter((row) => row.kind === 'tool');
+  const names = [...new Set(tools.map((row) => row.tool_name))];
+  check(names.includes('write_file'), 'the probe run attempted the file write', names.join(', '));
+  // The tool-call record, for the two refusals no surface shows: what the agent passed and what refused it.
+  const fdb = new (require('better-sqlite3'))(oneDatabase(), { readonly: true });
+  let calls = [];
+  try {
+    if (read) calls = fdb.prepare('SELECT ordinal, tool_name, agent_name, status, entry FROM tool_calls WHERE session_id = ? ORDER BY ordinal').all(read.session.session_id);
+  } finally { fdb.close(); }
+  const entryOf = (call) => { try { return JSON.parse(call.entry); } catch { return {}; } };
+  const resultOf = (call) => String(entryOf(call).result ?? '');
+  const argsOf = (call) => entryOf(call).args ?? {};
+  const writeOp = calls.filter((call) => call.tool_name === 'write_file' && call.status !== 'ok' && resultOf(call).includes('requires an operation'));
+  check(writeOp.length === 0, 'write_file needed no operation repair on first use', writeOp.length === 0 ? 'no refusal in the record' : `${writeOp.length} refusal(s), e.g. ordinal ${writeOp[0].ordinal} (${writeOp[0].agent_name})`);
+  const signalled = calls.some((call) => call.tool_name === 'terminal' && argsOf(call).session_action === 'send_signal');
+  check(signalled, 'the probe run attempted the SIGINT stop', signalled ? 'send_signal dispatched' : 'no send_signal in the record — the model did not attempt it');
+  const sigint = calls.filter((call) => call.tool_name === 'terminal' && resultOf(call).includes('cannot be delivered'));
+  check(sigint.length === 0, 'SIGINT was delivered without a platform refusal', sigint.length === 0 ? 'no refusal in the record' : `${sigint.length} refusal(s), e.g. ordinal ${sigint[0].ordinal} (${sigint[0].agent_name})`);
+  // The probe file served its purpose in the record above; the sandbox stays clean for the scenarios after it.
+  if (read) {
+    check(existsSync(join(workspace, 'friction-probe.txt')), 'the probe file landed in the workspace', 'friction-probe.txt');
+    rmSync(join(workspace, 'friction-probe.txt'), { force: true });
+  }
+  noted('the stream-stall abort is not covered here', 'it needs an endpoint fault; the observed shape is recorded in docs/defects/single-retry-stream-stall-aborted-a-76-minute-run.md');
+  noted('the exit-trace gap is not covered here', 'it needs a crash; the observed shape is recorded in docs/defects/process-exit-left-no-diagnosable-trace.md');
+  results.scenarios.frictions = { status: read?.session.execution_status, tools: names, writeOpRefusals: writeOp.map((call) => call.ordinal), sigintRefusals: sigint.map((call) => call.ordinal) };
+  await budgetGate();
 }
 
 await budgetGate();

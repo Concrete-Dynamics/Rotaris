@@ -163,7 +163,12 @@ pnpm live-run --confirm --gui        # the same run, with the window on screen t
 
 `--confirm` is required. The full flag list (`--endpoint`, `--model`, `--base-url`, `--budget`,
 `--max-tokens`, `--only`, `--max-iterations`, `--gui`, `--keep`, `--skip-build`, `--keep-runs`,
-`--session-log-level`, `--no-record-traffic`) is in the script's own header — `pnpm live-run --help` prints it.
+`--session-log-level`, `--no-record-traffic`, `--duress-fixture`) is in the script's own header —
+`pnpm live-run --help` prints it.
+
+**One scenario is not in the default set and only runs when named**: `duress`, the long run. The ordinary live
+run is a smoke test and stays one; a scenario that trebles its wall clock belongs behind `--only=duress`, and a
+scenario nobody can leave out is a scenario people stop running.
 
 The `requirements` scenario waits for the board rather than for a clock: every press after the release
 names the state it needs, `LIVE_RUN_BOARD_MS` (900 s) is the deadline for all of them, and the capture
@@ -214,6 +219,8 @@ neither path depends on what the other did.
 | `shell` | a relaunch with no prompt | Overview painted from the store: the sessions the runs left, the repository card's branch |
 | `frictions` | one real run engineered to trip the inducible autopsy frictions, read back from the store | first-use `write_file` with no operation repair, SIGINT delivered with no platform refusal — **red by design until the fixes land**; the exit-trace friction is recorded but not inducible on demand, and the stall-abort one moved to `faults` |
 | `faults` | two runs against an endpoint the proxy makes misbehave: a 429-then-500 ladder, and a stream that stops mid-answer with the socket open | the ladder run still completes; the stalled run does **not** report `user_cancelled` with nobody having pressed anything (defect 82's shape) — **never yet executed against a real endpoint** |
+| `terminal` | one run issuing six commands the record names verbatim: a multi-line here-string, forty long lines, a wedge with no `timeout`, an exit-0 output carrying `FAILED`, a `git diff` exiting 1, a pipeline through a pipe | the here-string terminated; all forty lines arrived, none concatenated, none carrying an escape sequence; a call with no `timeout` was still bounded; exit 1 from `git diff` was not `shell_failure`; **no end marker in anything the model read**. The other two are NOTEs — they fire as their requirements specify — and a shape the model never issued is a NOTE too |
+| `duress` | **opt-in** (`--only=duress`): one delegating run under `LIVE_RUN_DURESS_MS` (default 30 min) against `--duress-fixture` | the autopsy's coherence section is clean (no null summary on a stopped run, no tokens against a zero cost); no child ended `failed` with nothing to say; a child that ran commands reported them; the `compressions` aggregate agrees with the timeline. Length, children and compressions are **reported**, so a run that was not duress says so |
 
 An endpoint that discovers no model catalogue is not a dead end. The sign-in takes the dialog's own "Continue
 anyway" (the zero-model recovery), the catalogue check is recorded as a **NOTE** rather than a silent pass, and
@@ -271,6 +278,38 @@ product is unverified until a live run reports back, and that first execution ow
 
 `faults-stall` holds the socket for `LIVE_RUN_STALL_HOLD_MS` (default five minutes) before letting go, so the
 scenario is the slow one — it is opt-in with the others under `--only=`.
+
+### The two duress scenarios, and the rule they obey
+
+`terminal` and `duress` exist to enter one gap `docs/architecture/codebase.md` names: the live run "runs short
+tasks against an unmetered endpoint, so it holds **no generation near the model timeout, no multi-line command,
+and no re-spawn**" — and all seven defects one hand-driven session found lived in exactly that gap.
+
+**The rule both obey is from the same page: replay the shape the record names, never a plausible family
+resembling it.** Sixty real-PTY runs at four geometries could not reproduce a concatenation the live run had
+shown, because the trigger was an *empty write between two non-empty ones* and none of the sixty carried it.
+Sixty negative runs are not a negative result when none of them carries the input that failed. So `terminal`
+issues the recorded commands verbatim, and asserts from `tool_calls` — what the agent passed, what came back —
+rather than from what the model says it did.
+
+**Three of the six shapes are NOTEs, on purpose.** The `FAILED`-marker warning and the pipe-to-shell deny fire
+exactly as `REQ-TOOLS-113` and `REQ-TOOLS-036/038` specify; their notes exist to measure what they cost, not to
+accuse the product. A shape the model never issued is also a NOTE. Reporting a faithful behaviour as a fault is
+how a scenario teaches its reader to ignore it — the mistake the board scenario made twice.
+
+`duress` asserts **coherence, not correctness**: a long run's failures are mostly records disagreeing with each
+other, and `apps/desktop/scripts/autopsy.mjs` already computes most of them. What the model produced is never
+asserted — a weak model doing the work badly is a fact about the model. Whether the run was long *at all* is
+reported rather than assumed, including a note when it stopped at `--max-iterations` and was therefore bounded
+by the harness rather than by the work.
+
+The shapes and the two readers live in `apps/desktop/scripts/lib/terminal-shapes.mjs`, pinned by
+`terminal-shapes.test.ts` — a pattern that stopped matching its own command would turn every check in the
+scenario into "never attempted" without anybody being told, so the test asserts the round trip in both
+directions: every shape matches its own command, and none matches another's.
+
+**Neither scenario has been executed against a real endpoint.** Both owe their row in
+`docs/architecture/first-executions.md`.
 
 **The traffic is recorded through a loopback proxy**, so the sandbox's `base_url` is the proxy and the endpoint
 is one hop further on. Two consequences worth knowing before reading a pack: a `model request POST` line in

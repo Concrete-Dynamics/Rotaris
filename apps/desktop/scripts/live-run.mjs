@@ -41,15 +41,24 @@
  *                 to, and by running `node --test` inside that worktree. It is the one path the composer scenarios
  *                 never take: the work is handed over by the board, not typed into a prompt.
  *   5. shell    — a relaunch with no prompt: Overview painted from the store, the sessions the runs left.
+ *   6. frictions — one real run engineered to trip the inducible run-autopsy frictions (first-use
+ *                 `write_file` without `operation`, a SIGINT stop on a win32 pipe session), read back from
+ *                 the store rather than from the model's report. Red by design until the fixes land; the
+ *                 exit-trace friction is recorded but not inducible on demand.
  *   7. faults    — the ENDPOINT misbehaves, on purpose, through the recording proxy: a 429 and a 500 on
  *                 named calls (does the ladder wait, fall back and finish?), then a stream that stops
  *                 mid-answer with the socket held open (is that reported as a user cancellation, which is
  *                 the eighty-second defect's signature?). Neither injected refusal reaches the endpoint,
  *                 so the ladder half costs nothing but retries.
- *   6. frictions — one real run engineered to trip the inducible run-autopsy frictions (first-use
- *                 `write_file` without `operation`, a SIGINT stop on a win32 pipe session), read back from
- *                 the store rather than from the model's report. Red by design until the fixes land; the
- *                 stall-abort and exit-trace frictions are recorded but not inducible on demand.
+ *   8. terminal  — the TERMINAL under duress, one run, six named shapes replayed from the record: a
+ *                 multi-line here-string, forty lines of long output, a wedge with no `timeout` supplied,
+ *                 an exit-0 output carrying the word FAILED, a `git diff` with differences exiting 1, and a
+ *                 read-only git pipeline through a pipe. Asserted from `tool_calls`, never from the model's
+ *                 prose; a shape the model never attempted is a NOTE, not a failure.
+ *   9. duress    — OPT-IN (`--only=duress`), tens of minutes: a delegating run long enough to reach
+ *                 compression, re-spawn and a child that ends badly. Its assertions are coherence
+ *                 questions the autopsy reader already computes, which is what makes a long run cheap to
+ *                 check and hard to fool.
  *
  * The key is never passed on a command line and never written to the repository. For one endpoint `<name>`:
  *   1. `ROTARIS_LIVE_API_KEY` in the environment (for a one-off, or a machine where the prompt cannot run);
@@ -82,12 +91,13 @@
  */
 import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
 import { cleanEnvironment, findDatabases } from './lib/harness.mjs';
 import { startRecordingProxy } from './lib/model-traffic.mjs';
+import { LONG_OUTPUT_LINES, diagnosticOf, longOutputReading, terminalShapes } from './lib/terminal-shapes.mjs';
 
 const require = createRequire(import.meta.url);
 const repo = resolve(import.meta.dirname, '..', '..', '..');
@@ -149,10 +159,37 @@ let proxy = null;
 const closeProxy = () => { try { proxy?.close(); } catch { /* the run is ending either way */ } };
 const SIGN_IN_WAIT_MS = Number(process.env['LIVE_RUN_SIGN_IN_WAIT_MS'] ?? 120_000);
 const RUN_WAIT_MS = Number(process.env['LIVE_RUN_WAIT_MS'] ?? 420_000);
-const OPTIONAL = ['ask', 'edit', 'requirements', 'shell', 'frictions', 'faults'];
+const OPTIONAL = ['ask', 'edit', 'requirements', 'shell', 'frictions', 'faults', 'terminal'];
+/**
+ * Scenarios that `--only` accepts and the default set never contains.
+ *
+ * `duress` is the long run — a delegating, compressing, re-spawning run measured in tens of minutes rather
+ * than in the four each other scenario takes. The ordinary live run is a smoke test and stays one; a scenario
+ * that trebles its wall clock does not belong in it by default, and a scenario nobody can leave out is a
+ * scenario people stop running. Naming it is the consent.
+ */
+const OPT_IN = ['duress'];
+const SCENARIOS = [...OPTIONAL, ...OPT_IN];
 const only = value('only', null);
 const wanted = only === null ? OPTIONAL : only.split(',').map((s) => s.trim()).filter((s) => s !== '');
-for (const name of wanted) if (!OPTIONAL.includes(name)) throw new Error(`--only takes ${OPTIONAL.join(', ')}; got ${name}`);
+for (const name of wanted) if (!SCENARIOS.includes(name)) throw new Error(`--only takes ${SCENARIOS.join(', ')}; got ${name}`);
+/**
+ * The workspace the `duress` scenario opens. `todo-app` is five files — enough to commission delegation by
+ * instruction, not enough to commission it by weight — so the scenario reports which fixture it ran against
+ * rather than implying the default was a considered choice. Point it at a larger throwaway tree to ask the
+ * harder question; the scenario asserts the same things either way.
+ */
+const DURESS_FIXTURE = value('duress-fixture', null);
+const DURESS_MS = Number(process.env['LIVE_RUN_DURESS_MS'] ?? 1_800_000);
+/*
+ * A named fixture replaces the workspace for the WHOLE run, because one sandbox holds one store and
+ * `oneDatabase` refuses a second. Every other scenario's prompt names files `todo-app` has, so running them
+ * against someone else's tree would fail them for a reason that is not about the product. Refused rather than
+ * silently allowed: the reader of a red must never have to wonder which fixture produced it.
+ */
+if (DURESS_FIXTURE !== null && wanted.some((name) => name !== 'duress')) {
+  throw new Error(`--duress-fixture replaces the workspace, so it runs with --only=duress alone; got --only=${wanted.join(',')}`);
+}
 
 // ── The endpoint registry and the key store ──────────────────────────────────────────────────────────────────
 const HOME_DIR = join(homedir(), '.rotaris', 'live-run');
@@ -327,6 +364,8 @@ const USAGE = `pnpm live-run — the application against a real model endpoint, 
                        an endpoint registered --unmetered carries no ceiling unless one of these two is named here
   --max-iterations=<n> the ceiling written into the workspace's runtime configuration (default 15)
   --only=<csv>         run only some of ${OPTIONAL.join(', ')} (sign-in always runs; the sandbox is fresh)
+                       and ${OPT_IN.join(', ')}, which only run when named — the long one, tens of minutes
+  --duress-fixture=<dir>  the workspace duress opens (default: the same small todo-app the others use)
   --keep-runs=<n>      evidence packs to keep under .live-run/runs (default 10; the oldest are pruned)
   --session-log-level=<lvl>  the sandbox's session_log_level (default INFO; WARNING is the product's own default)
   --no-record-traffic  talk to the endpoint directly; do not record request and response bodies
@@ -530,13 +569,15 @@ mkdirSync(local, { recursive: true });
 // An interrupt or a crash is an exit path too: it may not strand the key in the temp directory.
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { console.error(`\n${signal}: deleting the sandbox.`); closeProxy(); cleanup(false); process.exit(130); });
 for (const fatal of ['uncaughtException', 'unhandledRejection']) process.on(fatal, (error) => { console.error(`${fatal}: ${error instanceof Error ? error.stack ?? error.message : String(error)}`); closeProxy(); cleanup(false); process.exit(1); });
-cpSync(fixture, workspace, { recursive: true });
+const workspaceFixture = DURESS_FIXTURE === null ? fixture : resolve(DURESS_FIXTURE);
+if (!existsSync(workspaceFixture)) throw new Error(`--duress-fixture names no directory: ${workspaceFixture}`);
+cpSync(workspaceFixture, workspace, { recursive: true, filter: (from) => !/[\\/](?:node_modules|\.git)$/.test(from) });
 const GIT_IDENTITY = { GIT_AUTHOR_NAME: 'rotaris-live-run', GIT_AUTHOR_EMAIL: 'live-run@rotaris.invalid', GIT_COMMITTER_NAME: 'rotaris-live-run', GIT_COMMITTER_EMAIL: 'live-run@rotaris.invalid' };
 const git = (...args) => execFileSync('git', args, { cwd: workspace, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } }).trim();
 try { execFileSync('git', ['--version'], { stdio: 'ignore' }); } catch { console.error('the live run needs git on PATH: the workspace is a repository and the edit is read back from `git diff`.'); process.exit(1); }
 git('init', '-q', '-b', 'main');
 git('add', '.');
-git('commit', '-q', '-m', 'the todo application, before the live run');
+git('commit', '-q', '-m', `${basename(workspaceFixture)}, before the live run`);
 const head = git('rev-parse', 'HEAD');
 
 const tokensFile = join(local, 'rotaris', 'data', 'tokens', `${PROVIDER_ID}.json`);
@@ -694,6 +735,24 @@ function readSession() {
     // The ring the gate writes, by the agent that dispatched: what the session's own counter must agree with.
     const byAgent = db.prepare('SELECT agent_name, COUNT(*) AS calls FROM tool_calls WHERE session_id = ? GROUP BY agent_name ORDER BY agent_name').all(session.session_id);
     return { session, rows, events, totals, byAgent };
+  } finally { db.close(); }
+}
+/**
+ * Every tool call of one session with its `entry` parsed — `{ ordinal, tool_name, agent_name, status, args, result }`.
+ *
+ * The scenarios below assert from THIS and never from the model's prose. A run that says it ran a command and a
+ * run that ran one are different facts, and only one of them is in the store.
+ */
+function readToolCalls(sessionId) {
+  const Database = require('better-sqlite3');
+  const db = new Database(oneDatabase(), { readonly: true });
+  try {
+    return db.prepare('SELECT ordinal, tool_name, agent_name, status, entry FROM tool_calls WHERE session_id = ? ORDER BY ordinal').all(sessionId)
+      .map((call) => {
+        let entry = {};
+        try { entry = JSON.parse(call.entry); } catch { /* a row that will not parse is still a call that happened */ }
+        return { ...call, args: entry.args ?? {}, result: String(entry.result ?? '') };
+      });
   } finally { db.close(); }
 }
 /**
@@ -1327,6 +1386,249 @@ if (wanted.includes('faults')) {
     proxy.setFaults([]);
     await budgetGate();
   }
+}
+
+// ── 8. The terminal under duress ─────────────────────────────────────────────────────────────────────────
+/**
+ * Six shapes the record NAMES, replayed; never a plausible family resembling them.
+ *
+ * `codebase.md` states why that distinction is the whole scenario: sixty real-PTY runs at four geometries could
+ * not reproduce a concatenation the live run had shown, and the trigger the sixty missed was narrow — an empty
+ * write between two non-empty ones, present in both production commands and in none of the sixty. **Sixty
+ * negative runs are not a negative result when none of them carries the input that failed.** So each shape below
+ * is taken from a recorded defect and issued as that defect's own command, and each assertion reads `tool_calls`
+ * — what the agent passed and what came back — rather than what the model said about it.
+ *
+ * | shape | the record it replays |
+ * |---|---|
+ * | `here-string`   | a multi-line command lost its newlines in the PTY, so a here-string never terminated |
+ * | `long-output`   | the concatenation above, and the agent's capture VT-stripped where the window's was not |
+ * | `wedge`         | `hardMs` passed and read nowhere: a call supplying no `timeout` had the soft pause and no hard cap (REQ-TOOLS-097) |
+ * | `failed-word`   | `exit-0-output-flagged-on-the-word-failed-twice.md` — fired as REQ-TOOLS-113 specifies, recorded for cost |
+ * | `diff-exit-1`   | `git-diff-with-differences-read-as-a-failure.md` — ESC-41's carve-out, and a real regression guard |
+ * | `pipe-to-shell` | `a-read-only-git-pipeline-was-withheld-by-the-pipe-to-shell-rule.md` — also cost, not contradiction |
+ *
+ * **A shape the model never attempted is a NOTE, not a failure.** Three of these are cost observations whose
+ * behaviour is faithful to a requirement, and reporting them as faults would train a reader to ignore this
+ * scenario — the mistake the board scenario made twice. Only `here-string`, `long-output`, `diff-exit-1` and the
+ * marker leak are asserted as product facts.
+ */
+if (wanted.includes('terminal')) {
+  /*
+   * The shapes, their patterns and the readers live in `lib/terminal-shapes.mjs` and are pinned by
+   * `terminal-shapes.test.ts` — a pattern that stopped matching its own command would turn every check below
+   * into "the model never attempted it", which is a green run and a question nobody is told has stopped being
+   * asked. Per platform, because a here-string and a pipe-into-a-shell are written differently and a scenario
+   * that is a no-op off win32 would report green for having asked nothing.
+   */
+  const SHAPES = terminalShapes();
+  const PROMPT = [
+    'Run each of the following in the terminal, exactly as written, one call per command, in this order.',
+    'Do not rewrite them, do not split them, do not add a timeout argument, and do not skip one because you',
+    'expect it to fail — a failure is the answer for some of them. Report what each did in one line.',
+    '',
+    ...SHAPES.map((shape, i) => `${i + 1}. ${shape.command}`),
+  ].join('\n');
+  const log = await launch('terminal', {
+    ROTARIS_CAPTURE_PROMPT: PROMPT,
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000',
+  }, RUN_WAIT_MS + 120_000);
+  check(!/capture: wait for result timed out/.test(log), 'the terminal run reached its result inside the wait');
+  const read = readSession();
+  const calls = read === null ? [] : readToolCalls(read.session.session_id);
+  const terminals = calls.filter((call) => call.tool_name === 'terminal');
+  const shapeOf = (id) => SHAPES.find((shape) => shape.id === id);
+  const attempted = (id) => terminals.filter((call) => shapeOf(id).match.test(String(call.args.command ?? '')));
+  const seen = {};
+  for (const shape of SHAPES) seen[shape.id] = attempted(shape.id).length;
+  noted('what the model attempted', SHAPES.map((s) => `${s.id}×${seen[s.id]}`).join(', '));
+
+  const hereString = attempted('here-string')[0];
+  if (hereString === undefined) noted('the here-string was not attempted', 'no terminal call carried it; nothing is asserted about the PTY');
+  else {
+    const d = diagnosticOf(hereString.result);
+    // The defect's signature is the here-string never terminating: newlines lost, so the shell waits for a
+    // delimiter that never comes and the call dies on its timeout rather than on its own last line.
+    check(String(hereString.args.command ?? '').includes('\n'), 'the multi-line command reached the tool with its newlines', `${String(hereString.args.command ?? '').split('\n').length} line(s) in args.command`);
+    check(d?.timeout !== true && d?.exit_code === 0, 'the here-string terminated rather than hanging on a lost delimiter', `exit ${d?.exit_code ?? 'none'}${d?.timeout ? ', timed out' : ''}`);
+    check(/alpha-one/.test(hereString.result) && /beta-two/.test(hereString.result), 'both lines of the here-string came back', hereString.result.includes('alpha-one') ? 'alpha-one present' : 'alpha-one absent');
+  }
+
+  const longOutput = attempted('long-output')[0];
+  if (longOutput === undefined) noted('the long-output command was not attempted', 'no terminal call carried it; the concatenation and VT questions are unasked');
+  else {
+    const reading = longOutputReading(longOutput.result);
+    check(reading.distinct === LONG_OUTPUT_LINES, `all ${LONG_OUTPUT_LINES} lines of output reached the agent`, `${reading.distinct} distinct of ${reading.markers.length} marker(s)`);
+    // The concatenation the sixty runs could not reproduce is visible here as two markers sharing one line.
+    check(reading.doubled.length === 0, 'no two output lines were concatenated into one', reading.doubled.length === 0 ? 'every marker on its own line' : `${reading.doubled.length} line(s), e.g. ${reading.doubled[0].slice(0, 120)}`);
+    // The agent's capture and the terminal window's are meant to be the same rendering of the same bytes: the
+    // strip landed for the live stream and the agent's capture was left behind, so the two diverged.
+    check(!reading.escaped, 'the agent read a VT-stripped capture', reading.escaped ? 'an escape sequence survived into the recorded result' : 'no escape sequence in the recorded result');
+  }
+
+  const wedge = attempted('wedge')[0];
+  if (wedge === undefined) noted('the wedge was not attempted', 'no terminal call carried it; the hard cap is unasked');
+  else {
+    const d = diagnosticOf(wedge.result);
+    check(wedge.args.timeout === undefined, 'the wedge was issued with no timeout argument, as asked', `timeout ${wedge.args.timeout ?? 'absent'}`);
+    // REQ-TOOLS-097 wants BOTH bounds with the first to fire governing. The defect was a call with neither a
+    // caller timeout nor a hard cap; either a soft pause or a hard timeout is a bound, and no bound is the fault.
+    const bounded = d?.timeout === true || /still running|Poll by calling|No output for/.test(wedge.result);
+    check(bounded, 'a call supplying no timeout was still bounded', d?.timeout === true ? `hard timeout at ${d.timeout_seconds}s` : bounded ? 'soft pause' : 'neither bound fired');
+    if (d?.timeout === true) {
+      check(Number.isFinite(d.timeout_seconds), 'the hard cap named its own bound', `timeout_seconds ${d.timeout_seconds}`);
+      // PD-TOOLS-001: the reset must say what it lost AND what it put back, never be silent about the shell.
+      check(/restored|failed|no earlier shell state/.test(wedge.result), 'the reset reported what it restored', 'the detail names the shell state');
+    } else noted('the wedge did not reach the hard cap', 'it soft-paused first; the hard bound is unmeasured this run');
+  }
+
+  const failedWord = attempted('failed-word')[0];
+  if (failedWord === undefined) noted('the exit-0 FAILED command was not attempted', 'no terminal call carried it');
+  else {
+    const d = diagnosticOf(failedWord.result);
+    // REQ-TOOLS-113 searches literal markers case-insensitively and this output carries one. The warning is
+    // FAITHFUL; what the record wanted measured is what it costs — an agent explaining a false positive away.
+    noted('an exit-0 output carrying the word FAILED', `exit ${d?.exit_code ?? 'none'}, outcome ${d?.outcome_kind ?? 'none'}, warnings: ${(d?.warnings ?? []).join(' ') || 'none'}`);
+  }
+
+  const diffExitOne = attempted('diff-exit-1')[0];
+  if (diffExitOne === undefined) noted('the git diff was not attempted', 'no terminal call carried it; ESC-41 is unasked');
+  else {
+    const d = diagnosticOf(diffExitOne.result);
+    // ESC-41's carve-out: `git diff` exiting 1 IS the answer, and classifying it a failure made the agent
+    // explain away its own evidence. A real regression guard, not a cost note.
+    check(d?.exit_code === 1, 'the git diff found differences and exited 1, as the shape needs', `exit ${d?.exit_code ?? 'none'}`);
+    if (d?.exit_code === 1) check(d?.outcome_kind !== 'shell_failure', 'exit 1 from git diff was not classified a shell failure', `outcome ${d?.outcome_kind ?? 'none'}`);
+  }
+
+  const piped = attempted('pipe-to-shell')[0];
+  if (piped === undefined) noted('the piped git pipeline was not attempted', 'no terminal call carried it');
+  else noted('a read-only git pipeline through a pipe', `${piped.status}${/pipe to shell/i.test(piped.result) ? ' by starter:deny-pipe-to-shell' : ''} — REQ-TOOLS-036/038 firing as specified; recorded for cost`);
+
+  // The end marker is the harness the terminal uses to find where a command finished; the model must never
+  // read it. Detection matched it unanchored while removal matched it anchored, and it leaked verbatim.
+  const leaked = terminals.filter((call) => /__rot_/.test(call.result));
+  check(leaked.length === 0, 'no end marker leaked into what the model read', leaked.length === 0 ? 'no __rot_ in any terminal result' : `${leaked.length} call(s), e.g. ordinal ${leaked[0].ordinal}`);
+
+  results.scenarios.terminal = {
+    platform: process.platform, status: read?.session.execution_status, stopReason: read?.session.stop_reason,
+    attempted: seen, terminalCalls: terminals.length,
+    diagnostics: SHAPES.map((shape) => {
+      const call = attempted(shape.id)[0];
+      return { id: shape.id, command: shape.command, ...(call === undefined ? { attempted: false } : { attempted: true, ordinal: call.ordinal, status: call.status, diagnostic: diagnosticOf(call.result) }) };
+    }),
+  };
+  if (read) preserveRun('terminal', read.session.session_id);
+  await budgetGate();
+}
+
+// ── 9. The long run ──────────────────────────────────────────────────────────────────────────────────────
+/**
+ * OPT-IN, and the only scenario here that is. `--only=duress`.
+ *
+ * `codebase.md` names the gap this exists to enter: "`pnpm live-run` runs short tasks against an unmetered
+ * endpoint, so it holds **no generation near the model timeout, no multi-line command, and no re-spawn**. Every
+ * one of the seven lived in exactly that gap." Scenario 8 takes the multi-line command. This one takes the
+ * length: a delegating run long enough to reach compression, a child that ends badly, and the aggregates that
+ * only diverge after a while.
+ *
+ * **What it asserts is coherence, not correctness.** A long run's failures are mostly records that disagree with
+ * each other — a stopped run with a null summary, tokens with no cost, a compressions counter that never
+ * counted, a child report that hardcoded an empty command list. `autopsy.mjs` already computes most of those, so
+ * the checks read its output and the store rather than re-deriving them here; that is what makes a thirty-minute
+ * scenario cheap to write and hard to fool. What the model produced is NOT asserted: a weak model doing the work
+ * badly is a fact about the model.
+ *
+ * Its wall clock is `LIVE_RUN_DURESS_MS` (default 30 minutes) and its workspace is `--duress-fixture` (default
+ * the same five-file todo application the other scenarios use, which commissions delegation by instruction
+ * rather than by weight — reported, never implied).
+ */
+if (wanted.includes('duress')) {
+  const PROMPT = [
+    'Work through this repository as a team, delegating rather than doing it all yourself.',
+    'Commission three children and wait for all of them:',
+    '  1. document every exported function under src/ into docs/api.md, one section each, with its signature;',
+    '  2. add test/extra.test.js covering the list functions, then run `node --test` in the terminal and fix what fails;',
+    '  3. write docs/overview.md summarising the repository with a file-by-file table.',
+    'Read the files before you describe them. When all three have reported, reply with one paragraph naming what',
+    'each child did and which files changed.',
+  ].join('\n');
+  const startedAt = Date.now();
+  const log = await launch('duress', {
+    ROTARIS_CAPTURE_PROMPT: PROMPT,
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(DURESS_MS), ROTARIS_CAPTURE_AFTER_MS: '4000',
+  }, DURESS_MS + 180_000);
+  const elapsed = Date.now() - startedAt;
+  check(!/capture: wait for result timed out/.test(log), 'the long run reached its result inside the wait', `${Math.round(elapsed / 1000)} s of ${Math.round(DURESS_MS / 1000)} s`);
+  const read = readSession();
+  if (read === null) check(false, 'the long run left a session row', 'no session was recorded at all');
+  else {
+    const sessionId = read.session.session_id;
+    // The autopsy is written FIRST, because the checks below read it. `preserveRun` never throws.
+    preserveRun('duress', sessionId);
+    const autopsyFile = join(scenarioDir('duress'), 'autopsy.txt');
+    const autopsy = existsSync(autopsyFile) ? readFileSync(autopsyFile, 'utf8') : '';
+    const coherent = (label) => new RegExp(`${label}: (true|false)`).exec(autopsy)?.[1] ?? null;
+    if (autopsy === '') check(false, 'the autopsy reader produced a reading of the long run', 'autopsy.txt is absent or empty');
+    else {
+      check(coherent('null summary on stopped run') === 'false', 'a stopped run did not end with a null summary', `autopsy says ${coherent('null summary on stopped run')}`);
+      check(coherent('zero cost with tokens') === 'false', 'tokens were not recorded against a zero cost', `autopsy says ${coherent('zero cost with tokens')}`);
+    }
+
+    const Database = require('better-sqlite3');
+    const db = new Database(oneDatabase(), { readonly: true });
+    let children = [];
+    let compressed = 0;
+    let aggregate = null;
+    try {
+      children = db.prepare('SELECT given_name, persona, state, tool_calls, report FROM children WHERE session_id = ? ORDER BY spawned_at').all(sessionId);
+      compressed = db.prepare("SELECT COUNT(*) AS n FROM timeline WHERE session_id = ? AND name = 'context_compressed'").get(sessionId)?.n ?? 0;
+      aggregate = db.prepare('SELECT compressions FROM sessions WHERE session_id = ?').get(sessionId)?.compressions ?? null;
+    } finally { db.close(); }
+    const reportOf = (child) => { try { return JSON.parse(child.report ?? '{}'); } catch { return {}; } };
+    const calls = readToolCalls(sessionId);
+
+    // A run that commissioned nobody asked none of the questions below. That is a fact about the model and the
+    // fixture, not a fault of the product, so it is a NOTE — and the checks that depend on it say so too.
+    if (children.length === 0) noted('the long run commissioned no children', `fixture ${basename(workspaceFixture)}; delegation was asked for and not taken, so the child-record checks are unasked`);
+    else {
+      noted('what the long run commissioned', children.map((c) => `${c.given_name} [${c.persona}] ${c.state}, ${c.tool_calls} calls`).join('; '));
+      // The eighty-second defect's shape at the child level: four of eleven children died with an empty
+      // `final_response` because a model timeout was read as a user abort. An empty report from a failed child
+      // is the observable, whatever the cause underneath it.
+      const silent = children.filter((c) => c.state === 'failed' && String(reportOf(c).final_response ?? '') === '');
+      check(silent.length === 0, 'no child ended failed with nothing to say', silent.length === 0 ? 'every failed child reported' : `${silent.length}: ${silent.map((c) => c.given_name).join(', ')}`);
+      // The eighty-eighth: `commands: []` was hardcoded at all three construction sites, so a child that ran
+      // eight commands reported none. Derived from the transcript now; this is the live reading of that.
+      const ranCommands = children.filter((c) => c.tool_calls > 0 && calls.some((call) => call.agent_name === c.given_name && call.tool_name === 'terminal'));
+      const mute = ranCommands.filter((c) => (reportOf(c).commands ?? []).length === 0);
+      if (ranCommands.length === 0) noted('no child ran a terminal command', 'the report.commands reading is unasked this run');
+      else check(mute.length === 0, 'every child that ran a command reported its commands', mute.length === 0 ? `${ranCommands.length} child(ren) reported theirs` : `${mute.length} reported none, e.g. ${mute[0].given_name}`);
+    }
+
+    // The eighty-seventh: the session `compressions` aggregate was declared, rehydrated, copied into every save
+    // and never added to — three `context_compressed` entries against a persisted 0 (REQ-SESSION-139, ADR-0008).
+    if (compressed === 0) noted('the long run never compressed its context', `${read.session.iterations_completed} iteration(s) was not long enough; the compressions aggregate is unasked`);
+    else check(aggregate === compressed, 'the compressions aggregate counted what the timeline recorded', `aggregate ${aggregate} against ${compressed} timeline entr${compressed === 1 ? 'y' : 'ies'}`);
+
+    const leaked = calls.filter((call) => call.tool_name === 'terminal' && /__rot_/.test(call.result));
+    check(leaked.length === 0, 'no end marker leaked into what the model read', leaked.length === 0 ? 'no __rot_ in any terminal result' : `${leaked.length} call(s), e.g. ordinal ${leaked[0].ordinal}`);
+
+    // Whether this run was duress at all. Said plainly rather than inferred from a green: a scenario built for
+    // the long path that finished in four minutes has measured the short path under a longer deadline.
+    noted('how long the long run was', `${Math.round(elapsed / 1000)} s, ${read.session.iterations_completed} iteration(s), ${calls.length} tool call(s), ${children.length} child(ren), ${compressed} compression(s) — fixture ${basename(workspaceFixture)}`);
+    // The ceiling is written into the sandbox once for every scenario, so the long run inherits the smoke
+    // test's. A run that stopped at it was bounded by the harness and not by the work, and the difference is
+    // invisible in a green: `--max-iterations` is what raises it.
+    if (read.session.iterations_completed >= MAX_ITERATIONS) noted('the long run stopped at the iteration ceiling', `${MAX_ITERATIONS} iterations — it was bounded by --max-iterations, not by the work; raise it to ask the longer question`);
+    results.scenarios.duress = {
+      fixture: basename(workspaceFixture), elapsedMs: elapsed, budgetMs: DURESS_MS,
+      status: read.session.execution_status, stopReason: read.session.stop_reason,
+      iterations: read.session.iterations_completed, toolCalls: calls.length, compressions: { aggregate, timeline: compressed },
+      children: children.map((c) => ({ name: c.given_name, persona: c.persona, state: c.state, toolCalls: c.tool_calls, commands: (reportOf(c).commands ?? []).length })),
+    };
+  }
+  await budgetGate();
 }
 
 await budgetGate();

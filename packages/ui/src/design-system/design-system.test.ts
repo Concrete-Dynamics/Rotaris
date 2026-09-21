@@ -102,6 +102,33 @@ describe('production design-system layer', () => {
       const menu = render(design.PopoverMenu, { value: 'auto', options: [{ value: 'auto', label: 'Auto' }], ariaLabel: 'Mode', onChoose: () => undefined, strip: { iconOnly: true } });
       expect(menu).toContain('>auto<');
     });
+
+    it('names a hinted option by its label alone, with the hint as its description (REQ-CHAT-007)', () => {
+      const options = [
+        { value: 'auto', label: 'Auto', hint: 'start at once' },
+        { value: 'plan', label: 'Plan first', hint: 'plan gate first' },
+      ];
+      const markup = render(design.PopoverMenu, { value: 'auto', options, ariaLabel: 'Mode', onChoose: () => undefined, defaultOpen: true });
+      expect(markup).toContain('role="menuitemradio"');
+      expect(markup).toContain('aria-labelledby=');
+      // The name points at the label span, never at a fused label+hint string.
+      expect(markup).toContain('class="chip-menu__label"');
+      expect(markup).toContain('class="chip-menu__hint"');
+      expect(markup).toContain('aria-describedby=');
+      expect(markup).not.toContain('aria-label="Auto');
+      expect(markup).not.toContain('aria-label="Plan first');
+    });
+
+    it('carries no description on an option with no hint', () => {
+      const markup = render(design.PopoverMenu, {
+        value: 'a', options: [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }],
+        ariaLabel: 'Mode', onChoose: () => undefined, defaultOpen: true,
+      });
+      expect(markup).toContain('role="menuitemradio"');
+      expect(markup).toContain('aria-labelledby=');
+      expect(markup).not.toContain('aria-describedby=');
+      expect(markup).not.toContain('chip-menu__hint');
+    });
   });
 
   describe('Button', () => {

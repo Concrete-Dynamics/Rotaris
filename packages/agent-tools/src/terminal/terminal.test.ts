@@ -344,6 +344,20 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     expect(diag(killed.text)).toMatchObject({ session_status: 'killed', exit_code: -1, outcome_severity: 'warning' });
     expect((await t.execute(args({ session_id: 'ts_0badf00d' }), ctx())).text).toContain("Unknown background session: 'ts_0badf00d'");
   }, 30_000);
+  it('OQ-10 (R-044): send_signal SIGINT stops a background session instead of refusing it', async () => {
+    const t = await tool();
+    const started = await t.execute(args({ command: SH.sleep(30), background: true }), ctx());
+    const id = /ts_[0-9a-f]{8}/.exec(started.text)![0];
+    const stopped = await t.execute(args({ session_id: id, session_action: 'send_signal', signal: 'SIGINT' }), ctx());
+    expect(stopped.text).toContain(`Sent SIGINT to session ${id}.`);
+    expect(stopped.text).not.toContain('could not be delivered');
+    // The session is ended, not refused: poll the list the way the session test above does.
+    for (let i = 0; i < 80; i += 1) {
+      if ((await t.execute(args({ session_action: 'list' }), ctx())).text.includes(`✗ ${id}`)) break;
+      await new Promise((res) => setTimeout(res, 250));
+    }
+    expect((await t.execute(args({ session_action: 'list' }), ctx())).text).toContain(`✗ ${id}`);
+  }, 30_000);
   it('REQ-TOOLS-108: the background cap is an execution_error naming the count', async () => {
     const t = await tool({ maxBackgroundSessions: 1 });
     const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, maxBackgroundSessions: 1 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });

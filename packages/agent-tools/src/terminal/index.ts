@@ -359,7 +359,8 @@ function startBackground(a: TerminalArgs, manager: TerminalManager, ctx: ToolCon
   }
   const s = started.session;
   // Part AL / REQ-TOOLS-107/127/128: its own `bg:<id>` stream — a pipe, so no real terminal to resize (ADR-0020 c.3),
-  // send-keys through stdin, interrupt as SIGINT where a pipe can take one, kill as the session's own termination.
+  // send-keys through stdin, interrupt as SIGINT, kill as the session's own termination — on a Windows
+  // pipe both end the tree, there being no graceful interrupt to deliver (OQ-10, ruled in R-044).
   const streamId = backgroundStreamId(s.id);
   const opened = manager.streams.begin({
     sessionId: ctx.sessionId, streamId, kind: 'background', displayName: streamDisplayName(streamId), command: a.command, cols: 80, rows: 24, workspaceRoot: ctx.workspaceRoot,
@@ -410,7 +411,7 @@ function sessionAction(a: TerminalArgs, bg: BackgroundManager): Promise<Observat
     case 'send_signal': {
       const sig = a.signal ?? 'SIGTERM';
       const ok = s.signal(sig);
-      return ok ? finish(`Sent ${sig} to session ${s.id}.`, '') : invalid(`${sig} cannot be delivered to a background pipe session on ${process.platform}; use kill, or SIGTERM/SIGKILL.`, a);
+      return ok ? finish(`Sent ${sig} to session ${s.id}.`, '') : invalid(`${sig} could not be delivered to session ${s.id}; use kill, or SIGTERM/SIGKILL.`, a);
     }
     default:
       return invalid(`Unknown session action '${String(action)}'.`, a);

@@ -25,7 +25,7 @@ and answered differently, and nobody can see that it happened. The reason is par
 
 ## Count
 
-**Forty-three requests, R-001 to R-043.** One row, one identifier, no gap — so the highest identifier is
+**Forty-four requests, R-001 to R-044.** One row, one identifier, no gap — so the highest identifier is
 the number of rows, and there is nothing here for a reader to tally.
 [`tools/check-request-log.mjs`](../../tools/check-request-log.mjs) holds that as part of `pnpm lint`,
 because a count written in prose is exactly what let seventeen rows sit under the word "Sixteen".
@@ -98,6 +98,8 @@ which is how two `R-016`s sat twenty lines apart and were never once read side b
 
 | <a id="r-042"></a>R-042 | 2026-09-20 | "can i have two runs running in paralell?", then "i want it to be possible to start a second run when a run is already running", then "multiple runs should be able to be controllable in the same window. a different project of course has its running runs in their window." | directive | [`PD-SHELL-002`](directives.md#pd-shell-002) — every window is the multi-session host: new session and session browser stay available while a run is active, the 2nd+ launch is forced into an isolated worktree, focus switches leave background runs live and controllable in the same window; other projects keep their runs in their own windows (PD-SHELL-001) |
 | <a id="r-043"></a>R-043 | 2026-09-20 | "how could we improve the logging and therefore debugging options so we can dig better into past runs?", then "impelement your suggestions." — post-run forensics over the store: one read-only snapshot per session joining the records the product already keeps | covered | REQ-SESSION-139 (the metrics document rebuilt from state plus evidence records), REQ-SESSION-199 (the four records as one document in one read transaction), REQ-SESSION-153 (the trajectory summary recomputed from exported events alone), REQ-SESSION-136 (the tool-call record's args/result/outcome/exit/failure/warnings), REQ-SESSION-134/135 (timeline and issue shapes), REQ-EVENTS-056 (locators carried, never resolved). Nothing minted: the snapshot reads the same records the exports read, in the same transaction discipline, and writes nothing to the session's own record |
+
+| <a id="r-044"></a>R-044 | 2026-09-21 | "fix the most pressing defect" — the run-autopsy of run `7bd9c19d` ranked the single-retry stream-stall abort highest by cost, but the stall timeout, the retry budget and the failure summary are each fixed by live requirements (REQ-CONFIG-114, REQ-ORCH-092, REQ-ORCH-082 rule 4), so there is no code fix there; the fixable defect is the win32 SIGINT refusal (`docs/defects/win32-terminal-edge-cases-bounced-to-the-agent.md`): map the undeliverable background-pipe signals onto the session's own termination | question | OQ-10, answered in place for background pipe sessions by this instruction (R-008 precedent): SIGINT/SIGHUP on a win32 pipe terminate the tree, as SIGTERM/SIGKILL already do |
 
 <!--
 Row shape:

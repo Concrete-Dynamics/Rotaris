@@ -71,7 +71,8 @@ export class BackgroundSession {
   whenExited(): Promise<void> {
     return this.exited;
   }
-  /** REQ-TOOLS-128: interrupt for a background session is SIGINT — undeliverable to a pipe on Windows (OQ-10), so false there. */
+  /** REQ-TOOLS-128: interrupt for a background session is SIGINT — on a Windows pipe it terminates
+   * the session's own tree (OQ-10, ruled 2026-09-21 in R-044), there being no graceful interrupt to deliver. */
   interrupt(): boolean {
     return this.signal('SIGINT');
   }
@@ -119,9 +120,11 @@ export class BackgroundSession {
     const pid = this.child.pid;
     if (!pid) return false;
     if (process.platform === 'win32') {
-      // Decision 6 / OQ-10: SIGTERM and SIGKILL terminate the tree; SIGINT and SIGHUP have no equivalent for a pipe on Windows.
-      if (name === 'SIGTERM' || name === 'SIGKILL') { void this.end('killed'); return true; }
-      return false;
+      // OQ-10, ruled 2026-09-21 in R-044: a pipe has no graceful interrupt on Windows, so EVERY signal
+      // terminates the session's own tree — the mapping SIGTERM/SIGKILL already used, extended to
+      // SIGINT/SIGHUP rather than refusing what REQ-TOOLS-110 promises to send.
+      void this.end('killed');
+      return true;
     }
     try { process.kill(-pid, name); return true; } catch { return false; }
   }

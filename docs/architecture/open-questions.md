@@ -1425,6 +1425,8 @@ signals; a send-signal call there has no faithful mapping, and the specification
 refuses them. The chosen pseudo-terminal library documents that its signal argument is **ignored** on
 Windows.
 
+**Ruled 2026-09-21 for background pipe sessions, on the owner's fix instruction ([R-044](../product/requests.md#r-044)); the foreground/PTY scope stays open.** A pipe has no graceful interrupt on Windows, so SIGINT and SIGHUP terminate the session's own tree there — the mapping SIGTERM and SIGKILL already used (`packages/agent-tools/src/terminal/background.ts`). `send_signal` therefore delivers every signal in its vocabulary on every platform, as `REQ-TOOLS-110` states, and the stream-control `interrupt` (`REQ-TOOLS-128`) stops a win32 background session instead of answering false.
+
 **OQ-11 — Resolved by dissolution.** See *Resolved, and closed with the reason* above, and **OQ-44**,
 which the closure opened.
 

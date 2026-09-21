@@ -13,7 +13,7 @@ const snapshot: ConfigSnapshot = {
   runtime: { max_depth: 3, max_active_children: 6, max_iterations: 20, allow_outside_workspace: false, permission_mode: 'ask', improvement_collector_enabled: true, improvement_collector_timeout: 60, retrospective_timeout: 120, keep_going: false, run_start_mode: 'auto', memory_diagnostics_enabled: false, sandbox_mode: 'off', sandbox_writable_roots: [], sandbox_allow_network: false, network_egress_policy: 'ask', network_allowed_hosts: [], network_denied_hosts: [] },
   rawRuntime: { workspace: { max_depth: 3 }, global: null },
   circuitBreakerEnabled: true, compressorThresholdPercentage: 60, display: { show_tool_results: true, show_tool_inputs: true, tool_result_lines: 10, tool_input_lines: 2 },
-  skills: { enabled: true, overrides: {}, invocation_overrides: {} }, delegationStrategy: 'orchestrator', instructions: [], referential: [], warnings: [],
+  skills: { enabled: true, overrides: {}, invocation_overrides: {} }, instructionsPolicy: { overrides: {} }, injectAgentsMd: true, delegationStrategy: 'orchestrator', instructions: [], referential: [], warnings: [],
   files: { workspace: 'C:/ws/.rotaris/agents.yaml', global: 'C:/cfg/agents.yaml' },
 };
 
@@ -111,5 +111,24 @@ describe('REQ-CONFIG-472 — the Display category in the pending state', () => {
     const rebased = rebasePending(saved, pending, fresh);
     expect(rebased.display.tool_input_lines).toBe(50);
     expect(rebased.display.tool_result_lines).toBe(20);
+  });
+
+  it('PD-WORKSPACE-002: a per-file switch marks dirty, and the save writes it sparsely', async () => {
+    const { applyChange, isDirty, pendingFrom, savePayload } = await import('./config-state.js');
+    const saved = pendingFrom(snapshot);
+    expect(isDirty(saved, saved)).toBe(false);
+    expect(savePayload(saved, saved).instructions).toBeUndefined();
+    const off = applyChange(saved, { kind: 'instructionToggle', id: 'workspace:AGENTS.md', value: 'off' });
+    expect(isDirty(saved, off)).toBe(true);
+    // Off differs from the implicit baseline: the deviation is persisted.
+    expect(savePayload(saved, off).instructions).toEqual({ overrides: { 'workspace:AGENTS.md': 'off' } });
+    const layered = { ...snapshot, instructionsPolicy: { overrides: { 'global:CLAUDE.md': 'off' as const } } };
+    const savedLayered = pendingFrom(layered);
+    const back = applyChange(savedLayered, { kind: 'instructionToggle', id: 'global:CLAUDE.md', value: 'on' });
+    // A lower layer states a policy: the baseline is written explicitly so the merge produces it.
+    expect(savePayload(savedLayered, back).instructions).toEqual({ overrides: { 'global:CLAUDE.md': 'on' } });
+    const reselected = applyChange(off, { kind: 'instructionToggle', id: 'workspace:AGENTS.md', value: 'on' });
+    // Back to the baseline with no lower-layer policy: the key is removed.
+    expect(savePayload(saved, reselected).instructions).toEqual({ overrides: { 'workspace:AGENTS.md': null } });
   });
 });

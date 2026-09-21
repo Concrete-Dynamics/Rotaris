@@ -1,6 +1,5 @@
-import { statSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { SKILLS_CONFIG_DEFAULT, type ConfigSnapshot, type DesktopSavePayload } from '@rotaris/contracts';
+import { homedir } from 'node:os';
+import { INSTRUCTIONS_CONFIG_DEFAULT, SKILLS_CONFIG_DEFAULT, type ConfigSnapshot, type DesktopSavePayload } from '@rotaris/contracts';
 import type { Timers } from '@rotaris/kernel';
 import { PERSONA_SYNTHETIC_PREFIX, STARTUP_SLOT_PREFIX } from './keys.js';
 import { isPlainMap, type PlainMap } from './merge.js';
@@ -9,40 +8,52 @@ import { rolePreferences, slotPreferences } from './preferences.js';
 import { RUNTIME_DEFAULTS } from './sections/runtime.js';
 import { DISPLAY_DEFAULTS } from './display-section.js';
 import { renderFatal } from './validate.js';
+import { discoverInstructionFiles, WORKSPACE_INSTRUCTION_FILE_NAMES } from './instructions.js';
 import { saveDesktop, writeConfigFields, type DesktopSave, type RoleEdit, type WriteRefusal } from './writers.js';
 
 /**
  * ADR-0037 Tier A, the workspace service's side: read the projection the Settings screen consumes
  * (REQ-CONFIG-279, "the screen never names a file"), commit a save or a per-field write, and load again.
- * The projection also carries the Instructions inventory (REQ-CONFIG-277), which is a presence check over the
- * workspace rather than anything the configuration states — it rides here because the screen reads one shape.
+ * The projection also carries the Instructions inventory (REQ-CONFIG-277, narrowed by PD-WORKSPACE-002),
+ * which is a presence check over the workspace, the global directory and the home- and machine-wide
+ * bases rather than anything the configuration states — it rides here because the screen reads one shape.
  */
 
-/** REQ-CONFIG-277: the workspace instruction files, in the order the requirement names them. */
-export const INSTRUCTION_FILE_NAMES = ['AGENTS.md', 'AGENTS.override.md'] as const;
+/** PD-WORKSPACE-002: the workspace instruction files, in discovery order. Kept for callers naming the workspace vocabulary. */
+export const INSTRUCTION_FILE_NAMES = [...WORKSPACE_INSTRUCTION_FILE_NAMES] as const;
 
-/**
- * REQ-CONFIG-277 (Part AG): the Instructions inventory — a presence check over those two names, each described by
- * its absolute path, empty without a workspace. A directory carrying one of the names is not an instruction file
- * and is not listed; anything unreadable reads as absent, which is what the empty state already says in words.
- */
-export function instructionFiles(workspaceRoot: string): { name: string; path: string }[] {
-  if (workspaceRoot.trim() === '') return [];
-  const root = resolve(workspaceRoot);
-  const found: { name: string; path: string }[] = [];
-  for (const name of INSTRUCTION_FILE_NAMES) {
-    const path = join(root, name);
-    try {
-      if (statSync(path).isFile()) found.push({ name, path });
-    } catch {
-      // Absent, or unreadable: the same thing to a user looking at an inventory of what the agent would read.
-    }
-  }
-  return found;
+export interface InstructionSnapshotEnv {
+  /** The Rotaris global configuration directory; absent means the global base is skipped. */
+  readonly globalDir?: string | undefined;
+  /** The operator's home; defaults to this process's, so unit tests pass an isolated one. */
+  readonly home?: string | undefined;
+  readonly platform?: NodeJS.Platform | undefined;
 }
 
-export function snapshotOf(cfg: LoadedConfiguration): ConfigSnapshot {
+/**
+ * PD-WORKSPACE-002: the Instructions inventory — every present instruction file in discovery order,
+ * each described by its stable identity, file name, source label and absolute path, empty without a
+ * workspace. A directory carrying one of the names is not an instruction file and is not listed;
+ * anything unreadable reads as absent, which is what the empty state already says in words.
+ */
+export function instructionFiles(workspaceRoot: string, env: InstructionSnapshotEnv = {}): { id: string; name: string; path: string; source: string }[] {
+  if (workspaceRoot.trim() === '') return [];
+  return discoverInstructionFiles({
+    workspaceRoot,
+    globalDir: env.globalDir ?? '',
+    home: env.home ?? homedir(),
+    platform: env.platform ?? process.platform,
+  });
+}
+
+/** PD-WORKSPACE-002: the on/off state of one inventoried file under the master switch and its policy. */
+export function instructionEnabled(master: boolean, overrides: Readonly<Record<string, string>>, id: string): boolean {
+  return master && (overrides[id] ?? 'on') === 'on';
+}
+
+export function snapshotOf(cfg: LoadedConfiguration, env: InstructionSnapshotEnv = {}): ConfigSnapshot {
   const rawRuntimeOf = (raw: PlainMap | null): Record<string, unknown> | null => (raw && isPlainMap(raw['runtime']) ? (raw['runtime'] as Record<string, unknown>) : null);
+  const discovered = instructionFiles(cfg.workspaceRoot, { ...env, globalDir: env.globalDir ?? cfg.files.global.dir });
   return {
     workspaceRoot: cfg.workspaceRoot,
     loadOk: true,
@@ -66,10 +77,15 @@ export function snapshotOf(cfg: LoadedConfiguration): ConfigSnapshot {
     compressorThresholdPercentage: cfg.compressor.threshold_percentage,
     // REQ-CHAT-166 (Part Z): the transcript reads its caps from the same snapshot the settings screen does.
     display: { ...cfg.display },
-    instructions: instructionFiles(cfg.workspaceRoot),
+    // PD-WORKSPACE-002: every present file with its on/off state under the master switch and its policy.
+    instructions: discovered.map((f) => ({ ...f, enabled: instructionEnabled(cfg.injectAgentsMd, cfg.instructions.overrides as Readonly<Record<string, string>>, f.id) })),
     // REQ-CONFIG-166..169 (ADR-0063): the policy the Settings selectors edit. The discovered skills ride a
     // different answer (`skills.read`), because they are read from disk on a different schedule.
     skills: { enabled: cfg.skills.enabled, overrides: { ...cfg.skills.overrides }, invocation_overrides: { ...cfg.skills.invocation_overrides } },
+    // PD-WORKSPACE-002: the per-file policy the Instructions switches edit, and REQ-WORKSPACE-048's
+    // master switch beside it, so the screen can tell "this file is off" from "injection is off".
+    instructionsPolicy: { overrides: { ...cfg.instructions.overrides } },
+    injectAgentsMd: cfg.injectAgentsMd,
     delegationStrategy: cfg.delegationStrategy,
     referential: [...cfg.referential],
     warnings: [...cfg.warnings],
@@ -78,7 +94,7 @@ export function snapshotOf(cfg: LoadedConfiguration): ConfigSnapshot {
 }
 
 /** REQ-CONFIG-478: a snapshot that carries the fatal report so the screen can say what to change. */
-export function fatalSnapshot(globalDir: string, workspaceRoot: string, report: string): ConfigSnapshot {
+export function fatalSnapshot(globalDir: string, workspaceRoot: string, report: string, env: InstructionSnapshotEnv = {}): ConfigSnapshot {
   const files = scopeFiles(globalDir, workspaceRoot);
   return {
     workspaceRoot, loadOk: false, fatal: report, slots: [], models: [], imageInputModels: [], roles: [],
@@ -92,16 +108,16 @@ export function fatalSnapshot(globalDir: string, workspaceRoot: string, report: 
       network_allowed_hosts: [...RUNTIME_DEFAULTS.network_allowed_hosts], network_denied_hosts: [...RUNTIME_DEFAULTS.network_denied_hosts],
     },
     rawRuntime: { workspace: null, global: null },
-    circuitBreakerEnabled: true, compressorThresholdPercentage: 60, display: { ...DISPLAY_DEFAULTS }, skills: { ...SKILLS_CONFIG_DEFAULT }, delegationStrategy: 'orchestrator', referential: [], warnings: [],
+    circuitBreakerEnabled: true, compressorThresholdPercentage: 60, display: { ...DISPLAY_DEFAULTS }, skills: { ...SKILLS_CONFIG_DEFAULT }, instructionsPolicy: { ...INSTRUCTIONS_CONFIG_DEFAULT }, injectAgentsMd: true, delegationStrategy: 'orchestrator', referential: [], warnings: [],
     // The instruction files exist or do not whatever the configuration says, so the inventory stands in a fatal snapshot too.
-    instructions: instructionFiles(workspaceRoot),
+    instructions: instructionFiles(workspaceRoot, { ...env, globalDir: env.globalDir ?? globalDir }).map((f) => ({ ...f, enabled: true })),
     files: { workspace: files.workspace.agents, global: files.global.agents },
   };
 }
 
-export function readSnapshot(globalDir: string, workspaceRoot: string, now?: () => number): ConfigSnapshot {
+export function readSnapshot(globalDir: string, workspaceRoot: string, now?: () => number, env: InstructionSnapshotEnv = {}): ConfigSnapshot {
   const loaded = loadConfiguration({ globalDir, workspaceRoot, ...(now ? { now } : {}) });
-  return loaded.ok ? snapshotOf(loaded.value) : fatalSnapshot(globalDir, workspaceRoot, renderFatal(loaded.error));
+  return loaded.ok ? snapshotOf(loaded.value, env) : fatalSnapshot(globalDir, workspaceRoot, renderFatal(loaded.error), env);
 }
 
 /** The contract's save payload as the writer's argument (the two are one shape; the cast is over the runtime record). */
@@ -119,6 +135,8 @@ function toDesktopSave(save: DesktopSavePayload): DesktopSave {
     ...(save.display && Object.keys(save.display).length > 0 ? { display: save.display } : {}),
     // REQ-CONFIG-256/258 (ADR-0063): the three `skills` keys, already sparse — a null value removes a key.
     ...(save.skills && Object.keys(save.skills).length > 0 ? { skills: save.skills } : {}),
+    // PD-WORKSPACE-002: the `instructions.overrides` key, already sparse — a null value removes a key.
+    ...(save.instructions && Object.keys(save.instructions).length > 0 ? { instructions: save.instructions } : {}),
     ...(Object.keys(roles).length > 0 ? { roles } : {}),
   };
 }
@@ -126,17 +144,17 @@ function toDesktopSave(save: DesktopSavePayload): DesktopSave {
 export type CommitResult = { readonly ok: true; readonly snapshot: ConfigSnapshot } | { readonly ok: false; readonly refusal: WriteRefusal };
 
 /** REQ-CONFIG-256..261: the desktop save, then the load again within the same action. */
-export async function commitDesktopSave(globalDir: string, workspaceRoot: string, save: DesktopSavePayload, timers: Timers): Promise<CommitResult> {
+export async function commitDesktopSave(globalDir: string, workspaceRoot: string, save: DesktopSavePayload, timers: Timers, env: InstructionSnapshotEnv = {}): Promise<CommitResult> {
   const files = scopeFiles(globalDir, workspaceRoot);
   const r = await saveDesktop({ workspace: files.workspace.agents, global: files.global.agents }, toDesktopSave(save), { timers });
   if (!r.ok) return { ok: false, refusal: r.error };
-  return { ok: true, snapshot: readSnapshot(globalDir, workspaceRoot) };
+  return { ok: true, snapshot: readSnapshot(globalDir, workspaceRoot, undefined, env) };
 }
 
 /** REQ-CONFIG-441/463: the scoped per-field write into the chosen scope (workspace when none), then the load again. */
-export async function commitConfigFields(globalDir: string, workspaceRoot: string, scope: 'workspace' | 'global' | undefined, patch: Record<string, unknown>, timers: Timers): Promise<CommitResult> {
+export async function commitConfigFields(globalDir: string, workspaceRoot: string, scope: 'workspace' | 'global' | undefined, patch: Record<string, unknown>, timers: Timers, env: InstructionSnapshotEnv = {}): Promise<CommitResult> {
   const files = scopeFiles(globalDir, workspaceRoot);
   const r = await writeConfigFields(scope === 'global' ? files.global.agents : files.workspace.agents, patch, { timers });
   if (!r.ok) return { ok: false, refusal: r.error };
-  return { ok: true, snapshot: readSnapshot(globalDir, workspaceRoot) };
+  return { ok: true, snapshot: readSnapshot(globalDir, workspaceRoot, undefined, env) };
 }

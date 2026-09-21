@@ -11,7 +11,7 @@ import { runPreflight } from './intent.js';
 import { createLoopClassifier } from './loop.js';
 import { createCheckpointPort } from './checkpoints.js';
 import { McpHost } from './mcp.js';
-import { CHECKPOINTS_DEFAULTS, loadConfiguration, RUNTIME_DEFAULTS, SKILLS_DEFAULTS, type LiveState, CODE_INTELLIGENCE_TOKEN } from '@rotaris/config';
+import { CHECKPOINTS_DEFAULTS, INSTRUCTIONS_DEFAULTS, loadConfiguration, RUNTIME_DEFAULTS, SKILLS_DEFAULTS, type LiveState, CODE_INTELLIGENCE_TOKEN } from '@rotaris/config';
 import { SkillHost } from './skills.js'; // ADR-0063
 import { classifierSlotsOf, configureRun, egressReader, improvementCollectorOf, modelRefOf, type ConfiguredRun } from './configuration.js';
 import { leaseForContinuation, LeaseReportLog } from './launch.js';
@@ -205,13 +205,33 @@ export function createRunHost() {
      * It is a seam rather than an override of `HOME`/`USERPROFILE` because overriding those **kills the Electron
      * process before it paints** on Windows (measured on this proof's first run, 2026-09-14). A user-driven launch
      * never sets it and takes `homedir()`.
+     *
+     * `ROTARIS_CAPTURE_INSTRUCTIONS_HOME` is the same seam for `PD-WORKSPACE-002`'s home-relative instruction
+     * bases, and it is read here as well as in the workspace service: one `home` serves both discoveries, and a
+     * proof that isolated the inventory but not the injection would put the operator's own `~/.agents/AGENTS.md`
+     * into a driven run's agent context.
      */
-    ...(process.env['ROTARIS_CAPTURE_SKILLS_HOME'] ? { home: process.env['ROTARIS_CAPTURE_SKILLS_HOME'] } : {}),
+    ...(process.env['ROTARIS_CAPTURE_SKILLS_HOME'] ?? process.env['ROTARIS_CAPTURE_INSTRUCTIONS_HOME']
+      ? { home: (process.env['ROTARIS_CAPTURE_SKILLS_HOME'] ?? process.env['ROTARIS_CAPTURE_INSTRUCTIONS_HOME'])! }
+      : {}),
     section: (workspaceRoot) => {
       const loaded = loadConfiguration({ globalDir: configDir, workspaceRoot });
       if (loaded.ok) return loaded.value.skills;
       log(`skills: the configuration could not be read for ${workspaceRoot}; the shipped defaults stand`, 'warn');
       return SKILLS_DEFAULTS;
+    },
+    /*
+     * PD-WORKSPACE-002 / REQ-WORKSPACE-048 — the master switch and the per-file instruction policy, read
+     * from the SAVED configuration on the same argument the `skills:` section is: a switch saved now gates
+     * the next session, and a run already under way keeps what it was given. A configuration that cannot be
+     * read leaves the shipped defaults standing — injection on, no file switched off — because a broken
+     * file must not silently take an agent's standing instructions away.
+     */
+    instructions: (workspaceRoot) => {
+      const loaded = loadConfiguration({ globalDir: configDir, workspaceRoot });
+      if (loaded.ok) return { section: loaded.value.instructions, master: loaded.value.injectAgentsMd, globalDir: configDir };
+      log(`workspace context: the configuration could not be read for ${workspaceRoot}; the shipped defaults stand`, 'warn');
+      return { section: INSTRUCTIONS_DEFAULTS, master: true, globalDir: configDir };
     },
   });
 

@@ -205,6 +205,15 @@ export interface DesktopSave {
     readonly overrides?: Readonly<Record<string, string | null>> | undefined;
     readonly invocationOverrides?: Readonly<Record<string, string | null>> | undefined;
   };
+  /**
+   * PD-WORKSPACE-002: the `instructions.overrides` map, into the WORKSPACE file only. A map value of
+   * `null` removes that file's key, which is how the sparse rule reaches the document — the screen
+   * decides which of the two a baseline choice is, because only it knows whether a lower layer
+   * states a policy for that file.
+   */
+  readonly instructions?: {
+    readonly overrides?: Readonly<Record<string, string | null>> | undefined;
+  };
   readonly roles?: Readonly<Record<string, RoleEdit>>;
 }
 
@@ -305,6 +314,22 @@ export async function saveDesktop(files: { workspace: string; global: string }, 
     writeMap('overrides', save.skills.overrides);
     writeMap('invocation_overrides', save.skills.invocationOverrides);
     if (skills.items.length === 0) root.delete('skills');
+  }
+  // PD-WORKSPACE-002: the `instructions.overrides` map, per file identity. A null value DELETES that
+  // file's entry, which is the sparse rule reaching the document; a map left empty by the deletions is
+  // removed with it, so a workspace that states no policy carries no `instructions:`.
+  if (save.instructions && Object.keys(save.instructions).length > 0) {
+    const instructions = ensureMapping(root, 'instructions', doc);
+    const entries = save.instructions.overrides;
+    if (entries && Object.keys(entries).length > 0) {
+      const map = ensureMapping(instructions, 'overrides', doc);
+      for (const [id, state] of Object.entries(entries)) {
+        if (state === null) map.delete(id);
+        else map.set(id, doc.createNode(state));
+      }
+      if (map.items.length === 0) instructions.delete('overrides');
+    }
+    if (instructions.items.length === 0) root.delete('instructions');
   }
   for (const [role, edit] of Object.entries(save.roles ?? {})) if (edit.scope === 'workspace') applyRoleEdit(doc, root, role, edit);
   if (global) for (const [role, edit] of globalEdits) applyRoleEdit(global.doc, rootOf(global.doc), role, edit);

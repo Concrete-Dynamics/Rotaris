@@ -43,7 +43,16 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-09-18**
+## Last reconciled with the code: **2026-09-22**
+
+**Workspace-context injection fills the first context-unit slot (PD-WORKSPACE-002).** The slot
+`03-runtime-view.md` carried as "not built" since ADR-0063 now holds the merged instruction context:
+`SkillHost.workspaceContext` discovers the present files over the workspace root plus five further bases,
+drops the ones the per-file `instructions.overrides` policy switches off, merges the rest in discovery
+order, and caches the block per workspace root for the session's lifetime. Both the runtime view's prompt
+section and its configuration section move; `04-seams.md` §5 gains the files a Settings-**editable** key
+needs past the six a plain key needs. `REQ-WORKSPACE-050`'s worktree half stays unbuilt and is recorded
+in `docs/defects/`, not here.
 
 **The member card opens by its row identity (REQ-CHAT-059/061/166).** A group member's card is keyed by
 `memberKey` (`Row.tsx`) — the member's own `rowKey`, the identity step 4 holds the caps against — instead

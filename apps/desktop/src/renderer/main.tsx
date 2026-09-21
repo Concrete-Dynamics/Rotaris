@@ -12,7 +12,7 @@ import { bindPromptRootsReader } from '@rotaris/ui';
 import type { PromptsRootsResult } from '@rotaris/contracts';
 // ADR-0063 — portable skills: the catalog reader, the Settings tab's props and the composer's commands.
 import { bindSkillsReader } from '@rotaris/ui';
-import { EMPTY_SKILLS_STATE, type SkillInvocationModeName, type SkillLoadModeName, type SkillsState } from '@rotaris/contracts';
+import { EMPTY_SKILLS_STATE, type InstructionStateName, type SkillInvocationModeName, type SkillLoadModeName, type SkillsState } from '@rotaris/contracts';
 import './design.css';
 // The mockup loads these two stylesheets from @phosphor-icons/web@2.1.1; the design assets
 // carry the same two fonts byte for byte (REQ-SHELL-027, a distinct icon per view).
@@ -862,6 +862,16 @@ function Settings({ workspace, home, theme, reducedMotion, settingsCategory, onT
       return { ok: true as const, cancelled: false, ...(outcome.name === undefined ? {} : { name: outcome.name }) };
     },
   }), [skillsState, home, config, skillsChanged]);
+  /*
+   * PD-WORKSPACE-002 — the Instructions category. The inventory is the configuration snapshot's; the
+   * POLICY joins the pending settings like every other destination-1 value, so Save writes it through
+   * Tier A and the save bar governs it.
+   */
+  const instructions = useMemo(() => ({
+    // The switches show what the SCREEN holds, so an unsaved choice does not snap back.
+    ...(config.pending ? { pending: config.pending.instructions.overrides } : {}),
+    onToggle: (id: string, value: InstructionStateName) => config.onChange({ kind: 'instructionToggle', id, value }),
+  }), [config]);
   const initialCategory = settingsCategory === 'models' || settingsCategory === 'personas' || settingsCategory === 'runtime' || settingsCategory === 'interface' || settingsCategory === 'display' || settingsCategory === 'skills' || settingsCategory === 'instructions' || settingsCategory === 'hooks' || settingsCategory === 'mcp' || settingsCategory === 'plugins' || settingsCategory === 'tools' || settingsCategory === 'project' || settingsCategory === 'about' ? settingsCategory : 'models';
   return (<>
     <SettingsView
@@ -891,6 +901,7 @@ function Settings({ workspace, home, theme, reducedMotion, settingsCategory, onT
       traceability={traceability /* Part AJ2 */}
       projectInit={projectInit /* Part AS */}
       skills={skills /* ADR-0063 */}
+      instructions={instructions /* PD-WORKSPACE-002 */}
     />
     {guardDialog}
   </>);

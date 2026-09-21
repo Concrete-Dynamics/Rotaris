@@ -61,6 +61,19 @@ This record builds the middle two and makes the seam an **ordered list**, so the
 slots in a sequence rather than a shape a later part has to re-cut. `contextUnits` is documented with
 the four positions named and two of them stated empty.
 
+> **Reported back, 2026-09-22 — the seam held, and the empty slot was load-bearing in a way this record
+> did not foresee.** `PD-WORKSPACE-002` built the first of the two absent units (workspace-context
+> injection, `REQ-WORKSPACE-041`..`048`). The list shape cost the filling **nothing**: one `push` ahead of
+> the catalog, no signature change, no caller touched, and every existing assertion about the middle two
+> stood unaltered — which is the claim this section made and is the part worth recording as confirmed.
+>
+> What it did not foresee is that an *empty slot is invisible to the surface that configures it*. The
+> settings screen had carried an Instructions inventory since Part AG, listing the very files this slot
+> would have read; nothing anywhere said the list described a mechanism that did not run. The owner asked
+> for switches over "the auto injection" on the reasonable assumption that there was one. A slot named in
+> a record is not a slot named in the product, and the second absent unit — persona memory — has the same
+> exposure today. `REQ-WORKSPACE-050`'s worktree half is still unbuilt and is recorded in `docs/defects/`.
+
 ## The decision
 
 ### 1. The discovery library is pure, lives in `config`, and touches the filesystem through one module

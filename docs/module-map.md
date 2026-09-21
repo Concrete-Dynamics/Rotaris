@@ -40,7 +40,7 @@ Listed foundation-first, which is also dependency order. "Root" is the compositi
 | `contracts` | every cross-boundary type: channels, commands, the child process protocol, control, requirements, tools, hooks, notices, theme data, roles | `commands.ts`, `channels.ts`, `process-protocol.ts` | every root | — |
 | `platform` | OS facts and side effects that are not `electron`: directories, the YAML document model, single-instance, machine id, liveness, clocks, the preference store | `dirs.ts`, `preferences.ts`, `document.ts`, `instance.ts` | main, run-host, workspace-service | — |
 | `store` | the SQLite schema and its migrations, the DAL, open/lock/rings, backup and restore primitives, delivery and improvement tables | `schema.ts` (append a `Migration`, never edit a shipped one), `dal.ts`, `open.ts` | workspace-service (migrate), run-host (read/write) | [`store/CONTEXT.md`](../packages/store/CONTEXT.md) |
-| `config` | the three-tier layered configuration, its loader, validators and comment-preserving writers; portable skills; project initialization | `load.ts`, `merge.ts`, `tiers.ts`, `writers.ts`, `sections/`, `skills/`, `init/` | run-host (Tier B), workspace-service (Tier A), main (init) | [`config/CONTEXT.md`](../packages/config/CONTEXT.md) |
+| `config` | the three-tier layered configuration, its loader, validators and comment-preserving writers; portable skills; instruction-file discovery and merge; project initialization | `load.ts`, `merge.ts`, `tiers.ts`, `writers.ts`, `sections/`, `skills/`, `instructions.ts`, `init/` | run-host (Tier B), workspace-service (Tier A), main (init) | [`config/CONTEXT.md`](../packages/config/CONTEXT.md) |
 | `model` | the model port and its clients — the default backend, the AI-SDK client, the scripted client, reasoning, reported cost | `ports.ts`, `default-backend.ts`, `ai-sdk-client.ts`, `scripted-client.ts` | run-host | — |
 | `hooks` | lifecycle hooks: the matcher, the runner, the trust gate, policy, external import | `engine.ts`, `matcher.ts`, `runner.ts`, `trust.ts` | run-host | [`hooks/CONTEXT.md`](../packages/hooks/CONTEXT.md) |
 | `providers` | the frozen provider catalogue, the credential store, sign-in, discovery, slot assignment, `project_settings.yaml` | `catalogue.ts`, `credentials/`, `signin.ts`, `discovery.ts`, `slots.ts` | **main only** | [`providers/CONTEXT.md`](../packages/providers/CONTEXT.md) |
@@ -62,6 +62,11 @@ Each of these was decided; the authority is in brackets, and none of them is saf
 
 - **Portable skills live in `config`, not `workspace`** — ADR-0063; the run host has no `workspace` edge,
   and skills are injected at agent construction. The *vocabulary* still belongs to `workspace/CONTEXT.md`.
+- **Instruction files live in `config` for the same reason** — `PD-WORKSPACE-002`. `config/src/instructions.ts`
+  holds the discovery, the enabled set and the merge (pure over an injected home, platform and read port);
+  `config/src/sections/instructions.ts` holds the `instructions:` policy. The run host composes the block at
+  agent construction beside the skill catalog (`run-host/skills.ts`), and the settings screen reads both the
+  inventory and the policy off the one configuration snapshot.
 - **Project initialization lives in `config`, and its coordinator in `main`** — ADR-0064. The marker's one
   writer is the workspace service; the one shipped task's work is the run host's.
 - **Credentials and provider sign-in are `main`'s alone** — ADR-0030. The run host is *leased* a resolved

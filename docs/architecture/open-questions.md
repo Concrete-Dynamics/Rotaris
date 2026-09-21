@@ -41,7 +41,10 @@ the fence's two designators covers), **and OQ-62** (whether a price may come fro
 payload, and whether a provider-reported cost has a qualifier — the reason every run's cost reads zero), of
 which **one branch was ruled on 2026-09-16** by `PD-MONITOR-001` and two stay open. **One more was raised on
 2026-09-16 by reading a launch log: OQ-63** (what level threshold, if any, governs the **application** log —
-every level requirement in the corpus governs the per-session log instead). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+every level requirement in the corpus governs the per-session log instead). **One more was raised on
+2026-09-21 by building `PD-WORKSPACE-002`'s per-file switches: OQ-64** (whether an instruction override
+suppresses its base when the override is itself switched off — a third state REQ-WORKSPACE-042's "given
+both exist" has no word for). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -2746,6 +2749,31 @@ about **packaged** builds specifically, where nobody is watching a terminal.
 key is `session_log_level`'s (which would make one key govern two logs of different audiences) or its
 own; and whether a packaged build suppresses `debug` with an environment switch to restore it — which is
 the shape every other desktop product settles on and which no requirement here states.
+
+**OQ-64 — Does an instruction override suppress its base when the override is switched off?** *(REQ-WORKSPACE-042, narrowed by `PD-WORKSPACE-002`; REQ-WORKSPACE-043/047/048. Raised 2026-09-21 by building the per-file switches and the injection that consumes them.)*
+
+REQ-WORKSPACE-042 was written when a workspace root held two files and the only question was which of
+them reached a model: "given both `AGENTS.override.md` and `AGENTS.md` exist at the workspace root, only
+the override file's content SHALL appear". `PD-WORKSPACE-002` adds a third state the sentence has no
+word for — a file that exists and is **switched off** — and the sentence can be read two ways against it.
+
+**Read against presence**, the override suppresses its base whether or not it is itself enabled, so a
+user who switches the override off is given *neither* file: the base stays suppressed by a file nothing
+reads, while the Instructions inventory still shows that base switched on. The screen would say a file
+is on and the agent would not have it.
+
+**Read against the enabled set**, the override suppresses its base only while the override is enabled,
+so switching the override off returns the base to the merge. Every row the inventory shows as on then
+contributes, and the switch means exactly what it says — at the cost of one file's switch changing
+which *other* file an agent is given, which is a second-order effect no requirement states.
+
+**What the build proceeds under.** The second reading. `enabledInstructionFiles` computes suppression
+over the enabled set, because a screen that reports a file as on while the agent is not given it is the
+worse of the two failures and the harder one for a user to diagnose. The decision is one line and is
+marked in place.
+
+**What a ruling decides.** Which reading governs; and, if the first, whether the inventory gains a
+third row state — *suppressed* — so that the screen stops disagreeing with the merge.
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

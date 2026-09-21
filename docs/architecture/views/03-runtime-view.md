@@ -65,9 +65,17 @@ sequenceDiagram
 **What an agent's system prompt is made of (ADR-0063).** At every agent construction — the entry turn and each
 child — the role's instructions take its playbook (`withPlaybook`, REQ-ORCH-019) and then the session's
 **always-active context units** (`withContextUnits`, REQ-WORKSPACE-060), in that requirement's order: workspace
-context → the skill catalog → the force-loaded skill bodies → persona memory. **Two of the four are not built**
-(workspace-context injection, REQ-WORKSPACE-041..050, and persona memory) and are empty slots in the list rather
-than a shape a later part must re-cut. The units arrive as a **getter**, called at construction and never
+context → the skill catalog → the force-loaded skill bodies → persona memory. **One of the four is not built**
+(persona memory) and is an empty slot in the list rather than a shape a later part must re-cut.
+Workspace-context injection (REQ-WORKSPACE-041..048, narrowed and extended by `PD-WORKSPACE-002`) fills the
+first: `SkillHost.workspaceContext` reads the master switch `inject_agents_md` and the per-file
+`instructions.overrides` policy from the **saved** configuration, discovers the present instruction files over
+the workspace root and the five further bases, merges the enabled set into one block
+(`mergeInstructionContext` — a source comment per file, one blank line between blocks, both size limits) and
+caches it per workspace root for as long as the session lasts (REQ-WORKSPACE-046), cleared by session creation
+and by a rescan, the two events that already clear the catalog. `REQ-WORKSPACE-050`'s worktree half is **not**
+met: the context is read from the base workspace, which `docs/defects/` records.
+The units arrive as a **getter**, called at construction and never
 captured, so a skill invoked between prompts reaches the next agent built while one already running keeps the
 context it was built with (REQ-CONFIG-166). Because the list is a property of the session and not of the role,
 REQ-WORKSPACE-065's "every agent built for a session sees the same catalog" holds by construction.
@@ -481,9 +489,15 @@ of §5 and none a channel: each is a request answered once.
   observed to do is narrowed by the shell itself: Settings replaces the Workspace among REQ-SHELL-023's seven views,
   and REQ-CONFIG-286's guard will not let a dirty form be left, so pending and file cannot be seen to disagree over a
   visible transcript in the main window.
-- **The Instructions inventory rides the same snapshot** (REQ-CONFIG-277, Part AG): `readSnapshot` adds a presence
-  check over the workspace's `AGENTS.md` and `AGENTS.override.md`, so the settings screen reads one shape and no new
-  message crosses the boundary for it. It is a presence check and never a read of what those files say.
+- **The Instructions inventory rides the same snapshot** (REQ-CONFIG-277, Part AG; narrowed by `PD-WORKSPACE-002`):
+  `readSnapshot` adds a presence check over the workspace root's `AGENTS`/`CLAUDE` pairs and over the five further
+  bases — the global configuration directory, `~/.agents`, `~/.config/opencode`, `~/.openhands` and, off Windows,
+  `/etc/codex` — so the settings screen reads one shape and no new message crosses the boundary for it. It is a
+  presence check and never a read of what those files say. The per-file `instructions.overrides` policy rides the
+  same snapshot on a second field (`instructionsPolicy`), because the inventory says what exists and the policy says
+  what is switched on, and the screen holds the second pending while the first is a fact about the disk. The
+  discovery is **pure over an injected home and platform** (`ROTARIS_CAPTURE_INSTRUCTIONS_HOME` in the workspace
+  service), the same seam the skills proof uses and for the same reason: overriding `HOME` kills Electron on Windows.
 - **The MCP layer (Part S)** — the two `mcp.json` files are layer 2 of the load (defaults → discovered → global → workspace,
   REQ-MCP-025), the merged `mcp_servers` map is resolved at load (origin, command, availability, environment with secrets
   overlaid, the URL, the normalised description) and rides on `LoadedConfiguration.mcp`; Tier B resolves it again over the

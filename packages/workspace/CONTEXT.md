@@ -47,6 +47,20 @@ The `AGENTS.md` content injected into every agent, merged from the files found a
 budgets. — `REQ-WORKSPACE` workspace context injection
 _Avoid_: system prompt, instructions (a role's instructions are a different thing)
 
+**Instruction file**:
+One file whose content may become workspace context: `AGENTS.md`, `AGENTS.override.md`, `CLAUDE.md` or
+`CLAUDE.override.md` at the workspace root, or `AGENTS.md`/`CLAUDE.md` at one of the five bases beyond
+it. Each carries a **stable identity** — `<base>:<file name>`, the key the per-file policy is written
+against — which survives the file being edited or absent. — `PD-WORKSPACE-002`, narrowing
+`REQ-WORKSPACE-041`
+_Avoid_: context file (that names the *content*; this names the file), AGENTS.md (one of six names)
+
+**Enabled set**:
+The present instruction files whose per-file policy is `on`, under the master switch, with each
+override pair's base suppressed by its own enabled override. This is what the merge consumes; the
+inventory lists every present file whether or not it is in it. — `PD-WORKSPACE-002`
+_Avoid_: active files, selected files
+
 **Portable skill**:
 A `SKILL.md` discovered under a known layout, carrying a name, a description and a trigger. The
 format is a third-party one the product reads rather than defines. — `REQ-WORKSPACE` portable skill

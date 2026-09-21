@@ -1,12 +1,18 @@
-import { PUBLIC_TOOL_NAMES, TOOL_IMPLEMENTATIONS, type ConfigSnapshot } from '@rotaris/contracts';
-import { Table as DesignTable } from '../design-system/index.js';
+import { PUBLIC_TOOL_NAMES, TOOL_IMPLEMENTATIONS, type ConfigSnapshot, type InstructionStateName } from '@rotaris/contracts';
+import { Table as DesignTable, ToggleSwitch } from '../design-system/index.js';
 
 /**
- * The read-only inventories (REQ-CONFIG-276, REQ-CONFIG-277, REQ-TOOLS-165). Three columns — Name, Source,
+ * The inventories (REQ-CONFIG-276, REQ-CONFIG-277, REQ-TOOLS-165). Three columns — Name, Source,
  * Description — an explanatory empty state instead of an empty table, and no control that authors anything:
  * REQ-CONFIG-464 makes that a decision rather than a gap, so each empty state names the file or folder the user
  * would edit instead (REQ-CONFIG-437). Everything an entry says is carried in text, never by colour alone
  * (REQ-SHELL-149).
+ *
+ * **Instructions is no longer one of the read-only ones** (`PD-WORKSPACE-002`, narrowing REQ-CONFIG-276 and
+ * REQ-CONFIG-277): it renders a fourth column carrying a per-file switch, and draws its own table rather than
+ * `InventoryTable` because the shared one is exactly the three-column read-only shape the requirement fixes
+ * and widening it would quietly widen Plugins and Tools too. It still authors nothing — the switch edits a
+ * policy over files it neither creates nor deletes, and the empty state still names the file to write.
  *
  * Two of the four inventories REQ-CONFIG-276 names are here. **Hooks** has its own surface already
  * (REQ-CONFIG-354). **Plugins** is not built: REQ-TOOLS-165 requires the tab to list exactly the files the host
@@ -39,26 +45,92 @@ export function InventoryTable({ label, entries, empty }: { label: string; entri
 }
 
 /**
- * REQ-CONFIG-277: the workspace's `AGENTS.md` and `AGENTS.override.md` where they exist, source `workspace`,
- * each described by its absolute path. Empty without a workspace. The snapshot carries the presence check
- * (`instructionFiles` in `@rotaris/config`), so this draws what it is given and probes nothing.
+ * PD-WORKSPACE-002: the workspace's, the global directory's and the home- and machine-wide bases'
+ * `AGENTS.md` / `CLAUDE.md` files where they exist, each described by its absolute path and carrying
+ * a per-file on/off switch. Empty without a workspace. The snapshot carries the presence check plus
+ * the on/off state, so this draws what it is given and probes nothing.
  */
-export function InstructionsSettings({ snapshot, workspace }: { snapshot: ConfigSnapshot | null; workspace: string | null }) {
-  const entries: InventoryEntry[] = (snapshot?.instructions ?? []).map((f) => ({ name: f.name, source: 'workspace', description: f.path }));
+export interface InstructionsSettingsProps {
+  readonly snapshot: ConfigSnapshot | null;
+  readonly workspace: string | null;
+  /**
+   * The PENDING policy, as the screen holds it — bound to this and not to the snapshot's rows, so a
+   * choice the user has not saved yet does not snap back the moment the screen redraws (the same rule
+   * the Skills category follows).
+   */
+  readonly pending?: Readonly<Record<string, InstructionStateName>> | undefined;
+  /** A switch change joins the pending settings; Save writes it (PD-WORKSPACE-002). */
+  readonly onToggle?: ((id: string, value: InstructionStateName) => void) | undefined;
+}
+
+export function InstructionsSettings({ snapshot, workspace, pending, onToggle }: InstructionsSettingsProps) {
+  /*
+   * A row's switch shows the per-file POLICY, never the row's `enabled` — those two differ exactly when
+   * the master switch is off, and a switch drawn from `enabled` would then read off for every file while
+   * the policy said on, so flipping one would write a value the file already held and the screen would
+   * say nothing about why. The master switch is stated in words below instead (it is file-edited: the
+   * desktop save does not write `inject_agents_md`, REQ-CONFIG-256).
+   */
+  const policy = snapshot?.instructionsPolicy.overrides ?? {};
+  const injecting = snapshot?.injectAgentsMd ?? true;
+  const rows = (snapshot?.instructions ?? []).map((f) => ({
+    ...f,
+    switchedOn: pending?.[f.id] ?? policy[f.id] ?? 'on',
+  }));
+  if (rows.length === 0) {
+    return (
+      <div className="settings__section">
+        <h1 className="display">Instructions</h1>
+        <p className="text-secondary">
+          The instruction files reaching every agent built in this workspace. Switch a file off to keep it
+          on disk while taking it out of what agents are given.
+        </p>
+        <p className="text-secondary" data-testid="inventory-empty">{workspace === null
+          ? 'No workspace is open, so there are no instruction files to list.'
+          : `No instruction files. Create AGENTS.md in ${workspace} to give every agent standing instructions, and AGENTS.override.md beside it for instructions that take precedence.`}</p>
+      </div>
+    );
+  }
   return (
     <div className="settings__section">
       <h1 className="display">Instructions</h1>
       <p className="text-secondary">
-        The instruction files this workspace contributes to every agent it builds. This is an inventory, not an editor:
-        which files exist is a matter of what is on disk, so add or change one in the workspace itself and it appears here.
+        The instruction files reaching every agent built in this workspace — this project's pair, the
+        global pair, and your own and machine-wide files. Switch a file off to keep it on disk while
+        taking it out of what agents are given; the change applies on Save.
       </p>
-      <InventoryTable
-        label="Instruction files"
-        entries={entries}
-        empty={workspace === null
-          ? 'No workspace is open, so there are no instruction files to list.'
-          : `No instruction files. Create AGENTS.md in ${workspace} to give every agent standing instructions, and AGENTS.override.md beside it for instructions that take precedence.`}
-      />
+      {injecting ? null : (
+        <p className="text-secondary" data-testid="instructions-master-off">
+          Injection is switched off for this workspace, so no instruction file is read whatever these
+          switches say. Set <span className="mono">inject_agents_md: true</span> in{' '}
+          <span className="mono">{workspace === null ? '.rotaris/agents.yaml' : `${workspace}/.rotaris/agents.yaml`}</span> to
+          turn it back on.
+        </p>
+      )}
+      <DesignTable className="table settings__grid" aria-label="Instruction files">
+        <thead><tr><th>Name</th><th>Source</th><th>Description</th><th>Enabled</th></tr></thead>
+        <tbody>
+          {rows.map((f) => (
+            <tr key={f.id} data-testid="inventory-row" data-name={f.name} data-source={f.source}>
+              <td className="mono">{f.name}</td>
+              <td className="text-secondary">{f.source}</td>
+              <td title={f.path}>{f.path}</td>
+              <td>
+                <ToggleSwitch
+                  checked={f.switchedOn === 'on'}
+                  onChange={(value) => onToggle?.(f.id, value ? 'on' : 'off')}
+                  label={`Enable ${f.id}`}
+                  aria-description={`Controls whether ${f.path} is injected into newly created agents`}
+                  disabled={workspace === null || onToggle === undefined}
+                  data-testid="instruction-toggle"
+                  data-id={f.id}
+                  data-on={f.switchedOn === 'on' ? 'true' : 'false'}
+                />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </DesignTable>
     </div>
   );
 }

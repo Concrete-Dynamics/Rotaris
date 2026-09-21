@@ -2,9 +2,10 @@ import { homedir } from 'node:os';
 import type { SkillsState, SkillRow } from '@rotaris/contracts';
 import type { MonotonicClock } from '@rotaris/kernel';
 import {
-  discoverSkills, loadManualSkill, NODE_DISCOVERY_PORTS, parseSkill, resolveSkills,
+  discoverInstructionFiles, discoverSkills, enabledInstructionFiles, loadManualSkill, mergeInstructionContext,
+  NODE_DISCOVERY_PORTS, parseSkill, resolveSkills,
   skillBodyBlock, skillCatalogBlock, skillReadRoots,
-  type DiscoveredSkill, type DiscoveryPorts, type SkillDiscovery, type SkillSessionState, type SkillsSection,
+  type DiscoveredSkill, type DiscoveryPorts, type InstructionsSection, type SkillDiscovery, type SkillSessionState, type SkillsSection,
 } from '@rotaris/config';
 
 /**
@@ -33,6 +34,12 @@ export interface SkillHostDeps {
   readonly ports?: DiscoveryPorts;
   /** The SAVED `skills:` section for a workspace — see `forceLoad` on why it is read per gesture. */
   readonly section: (workspaceRoot: string) => SkillsSection;
+  /**
+   * PD-WORKSPACE-002 — the master switch, the per-file policy and the global configuration directory
+   * the instruction-file discovery reads its `global` base from. Absent means the workspace pair alone
+   * reaches an agent, which is what a build with no configuration layer would give it.
+   */
+  readonly instructions?: ((workspaceRoot: string) => { section: InstructionsSection; master: boolean; globalDir: string }) | undefined;
   /** ADR-0006: the monotonic clock port. Absent means the discovery log carries no duration, never a global read. */
   readonly monotonic?: MonotonicClock | undefined;
   readonly log: (message: string, level?: 'info' | 'warn') => void;
@@ -49,6 +56,8 @@ interface MutableSession {
 export class SkillHost {
   /** REQ-WORKSPACE-058: per resolved workspace root, cleared by a rescan and by session creation. */
   private readonly catalogs = new Map<string, SkillDiscovery>();
+  /** REQ-WORKSPACE-046: the merged workspace context, on the same lifetime and cleared in the same places. */
+  private readonly contexts = new Map<string, string>();
   private readonly sessions = new Map<string, MutableSession>();
 
   constructor(private readonly deps: SkillHostDeps) {}
@@ -98,12 +107,17 @@ export class SkillHost {
    */
   rescan(workspaceRoot: string): SkillDiscovery {
     this.catalogs.delete(workspaceRoot);
+    // REQ-WORKSPACE-046: "an explicit cache-clear operation SHALL force a reload" — the rescan is that
+    // operation for both caches, so a file edited between sessions reaches the next agent built.
+    this.contexts.delete(workspaceRoot);
     return this.catalog(workspaceRoot);
   }
 
   /** REQ-WORKSPACE-058: session creation clears the catalog cache AND adopts that root's pending gestures. */
   onSessionCreated(workspaceRoot: string, sessionId: string): void {
     this.catalogs.delete(workspaceRoot);
+    // REQ-WORKSPACE-046: the merged context is cleared with the catalog, so each new session re-reads it.
+    this.contexts.delete(workspaceRoot);
     const pending = this.sessions.get(pendingKey(workspaceRoot));
     if (pending) {
       this.sessions.set(sessionId, pending);
@@ -119,6 +133,33 @@ export class SkillHost {
 
   private resolved(workspaceRoot: string, sessionId: string | undefined) {
     return resolveSkills(this.catalog(workspaceRoot).skills, this.deps.section(workspaceRoot), this.sessionState(workspaceRoot, sessionId));
+  }
+
+  /**
+   * REQ-WORKSPACE-041..048 (PD-WORKSPACE-002) — the merged instruction context, cached per resolved
+   * workspace root for as long as the session lasts (REQ-WORKSPACE-046) so a second agent built in the
+   * same session touches no filesystem.
+   *
+   * The policy is read from the SAVED configuration at each cold read, on the same argument the skills
+   * section is: a switch the user has just saved gates the next session, and a run that started earlier
+   * keeps what it was given. With the master switch false nothing is read at all (REQ-WORKSPACE-048).
+   */
+  workspaceContext(workspaceRoot: string): string {
+    const held = this.contexts.get(workspaceRoot);
+    if (held !== undefined) return held;
+    const policy = this.deps.instructions?.(workspaceRoot);
+    let merged = '';
+    if (policy === undefined || policy.master) {
+      const env = { workspaceRoot, globalDir: policy?.globalDir ?? '', home: this.home, platform: this.deps.platform ?? process.platform };
+      const present = discoverInstructionFiles(env, (p) => this.ports.isFile(p));
+      const enabled = enabledInstructionFiles(present, true, policy?.section.overrides ?? {});
+      merged = mergeInstructionContext(enabled, this.ports, (m) => this.deps.log(`workspace context: ${m}`, 'warn'));
+      this.deps.log(`workspace context: ${enabled.length} of ${present.length} instruction file(s) enabled for ${workspaceRoot}${enabled.length === 0 ? '' : ` (${enabled.map((f) => f.id).join(', ')})`}`);
+    } else {
+      this.deps.log(`workspace context: injection is switched off for ${workspaceRoot}; no instruction file was read`);
+    }
+    this.contexts.set(workspaceRoot, merged);
+    return merged;
   }
 
   /** The projection a surface reads (REQ-WORKSPACE-067; `contracts/skills.ts`). */
@@ -189,15 +230,17 @@ export class SkillHost {
    * order. Called at every agent construction (a getter, not a captured value), so a force-load reaches the
    * next agent built and never retracts one already running (REQ-CONFIG-166).
    *
-   * The order is **workspace context → skill catalog → force-loaded skill bodies → persona memory**. Two of
-   * those four do not exist in this build — workspace context injection (REQ-WORKSPACE-041..050) and persona
-   * memory — so this returns the middle two and the list is the seam where the other two will sit. They are
-   * empty slots in a sequence, not a shape a later part has to re-cut.
+   * The order is **workspace context → skill catalog → force-loaded skill bodies → persona memory**. The
+   * first three exist; persona memory does not, so the list is the seam where it will sit — an empty slot
+   * in a sequence, not a shape a later part has to re-cut.
    */
   contextUnits(workspaceRoot: string, sessionId?: string): readonly string[] {
     const resolved = this.resolved(workspaceRoot, sessionId);
     const units: string[] = [];
-    // [slot] workspace context (REQ-WORKSPACE-047) — not built.
+    // REQ-WORKSPACE-047: ahead of the catalog, ahead of every force-loaded body. Empty merged content
+    // constructs no unit — "with no context files, or injection disabled, no such unit SHALL be built".
+    const context = this.workspaceContext(workspaceRoot);
+    if (context !== '') units.push(context);
     const catalog = skillCatalogBlock(resolved);
     if (catalog !== null) units.push(catalog);
     for (const r of resolved) {

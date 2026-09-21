@@ -116,6 +116,20 @@ export const SkillsConfigViewSchema = z.object({
 export type SkillsConfigView = z.infer<typeof SkillsConfigViewSchema>;
 export const SKILLS_CONFIG_DEFAULT: SkillsConfigView = Object.freeze({ enabled: true, overrides: {}, invocation_overrides: {} });
 
+/**
+ * PD-WORKSPACE-002: the `instructions:` section as the layered load resolves it. The map is keyed by the
+ * instruction file's stable identity (`workspace:AGENTS.md`, `global:CLAUDE.md`, …) and holds only the
+ * files some layer states a policy for — absent means `on`, which is what keeps the sparse write
+ * computable like REQ-CONFIG-258's.
+ */
+export const INSTRUCTION_STATE_NAMES = ['on', 'off'] as const;
+export type InstructionStateName = (typeof INSTRUCTION_STATE_NAMES)[number];
+export const InstructionsConfigViewSchema = z.object({
+  overrides: z.record(z.string(), z.enum(INSTRUCTION_STATE_NAMES)),
+});
+export type InstructionsConfigView = z.infer<typeof InstructionsConfigViewSchema>;
+export const INSTRUCTIONS_CONFIG_DEFAULT: InstructionsConfigView = Object.freeze({ overrides: {} });
+
 export const ConfigSnapshotSchema = z.object({
   workspaceRoot: z.string(),
   /** False when the files could not be loaded; `fatal` then carries REQ-CONFIG-478's report and every other field is the built-in default. */
@@ -135,11 +149,12 @@ export const ConfigSnapshotSchema = z.object({
   /** REQ-CHAT-166 (Part Z): the transcript's four display caps, resolved. */
   display: DisplayViewSchema,
   /**
-   * REQ-CONFIG-277 (Part AG): the Instructions inventory — the workspace's `AGENTS.md` and `AGENTS.override.md`
-   * where they exist, in that order, each described by its absolute path. Empty with no workspace. A presence
-   * check, not a read: this says which files the agent's instructions would come from, never what they say.
+   * PD-WORKSPACE-002: the Instructions inventory — every present instruction file in discovery order,
+   * each described by its stable identity, file name, source label, absolute path and on/off state.
+   * Empty with no workspace. A presence check, not a read: this says which files the agent's
+   * instructions would come from, never what they say.
    */
-  instructions: z.array(z.object({ name: z.string(), path: z.string() })),
+  instructions: z.array(z.object({ id: z.string(), name: z.string(), path: z.string(), source: z.string(), enabled: z.boolean() })),
   /**
    * REQ-CONFIG-166..169 (ADR-0063): the `skills:` section as the files resolve it — the master switch and
    * the two override maps keyed by normalized skill name. The DISCOVERED skills are not here: they are the
@@ -147,6 +162,20 @@ export const ConfigSnapshotSchema = z.object({
    * schedule (REQ-WORKSPACE-058) and are not configuration.
    */
   skills: SkillsConfigViewSchema,
+  /**
+   * PD-WORKSPACE-002: the `instructions:` section as the files resolve it — the per-file override map
+   * keyed by stable file identity. The screen holds it pending like the skills maps, so Save can write
+   * it sparsely.
+   */
+  instructionsPolicy: InstructionsConfigViewSchema,
+  /**
+   * REQ-WORKSPACE-048's master switch `inject_agents_md`, as the files resolve it. It rides here
+   * **separately from each row's `enabled`** — which already folds it in — because the Instructions
+   * category has to tell two states apart that look identical in a switch: a file the user turned off,
+   * and every file being off because injection is off for the whole workspace. The category does not
+   * write this key (REQ-CONFIG-256 does not name it); it says so in words instead.
+   */
+  injectAgentsMd: z.boolean(),
   delegationStrategy: z.enum(DELEGATION_STRATEGY_NAMES),
   referential: z.array(z.string()),
   warnings: z.array(z.string()),
@@ -195,6 +224,20 @@ export const SkillsSaveSchema = z.object({
 });
 export type SkillsSavePayload = z.infer<typeof SkillsSaveSchema>;
 
+/**
+ * PD-WORKSPACE-002: the `instructions.overrides` key the desktop save writes, into the **workspace**
+ * file only and with no per-field scope of its own, on REQ-CONFIG-258's sparse terms.
+ *
+ * A map value of `null` **removes** that file's key. The screen sends one where the chosen state is the
+ * baseline (`on`) and no lower layer states a policy for that file; where a lower layer does state one,
+ * it sends the baseline explicitly instead, so returning one file to the baseline is possible from the
+ * screen at all.
+ */
+export const InstructionsSaveSchema = z.object({
+  overrides: z.record(z.string(), z.enum(INSTRUCTION_STATE_NAMES).nullable()).optional(),
+});
+export type InstructionsSavePayload = z.infer<typeof InstructionsSaveSchema>;
+
 /** REQ-CONFIG-256: the desktop save's enumerable key set. */
 export const DesktopSaveSchema = z.object({
   slots: z.partialRecord(z.enum(MODEL_SLOT_NAMES), z.string().nullable()).optional(),
@@ -208,6 +251,8 @@ export const DesktopSaveSchema = z.object({
   display: DisplaySaveSchema.optional(),
   /** REQ-CONFIG-256/258 (ADR-0063): the three `skills` keys. Written SPARSELY — see `SkillsSaveSchema`. */
   skills: SkillsSaveSchema.optional(),
+  /** PD-WORKSPACE-002: the `instructions.overrides` key. Written SPARSELY — see `InstructionsSaveSchema`. */
+  instructions: InstructionsSaveSchema.optional(),
 });
 export type DesktopSavePayload = z.infer<typeof DesktopSaveSchema>;
 

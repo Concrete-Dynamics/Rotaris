@@ -161,10 +161,20 @@ Three tiers, one writer.
 | 5 | `apps/desktop/src/run-host/configuration.ts` | Tier B — what a run resolves at start |
 | 6 | `packages/ui/src/settings/…` | the Settings surface |
 
+A key the Settings screen *edits* takes four more, and they are the ones a first attempt forgets:
+`packages/contracts/src/config.ts` (the snapshot field and the save payload's key), then
+`packages/ui/src/settings/config-state.ts` — `PendingSettings`, `pendingFrom`, `rebasePending`,
+`PendingChange`, `applyChange` and `savePayload`, in that order. A key touching fewer than all six of
+those is a key that saves and does not mark dirty, or marks dirty and does not survive a reload.
+`instructions.overrides` (`PD-WORKSPACE-002`) is the worked example, and `skills.overrides` the one
+before it.
+
 Invariants:
 
 - **Configuration is resolved once per run start.** A run does not re-read; a surface that changes a value
-  changes the next run, not the running one.
+  changes the next run, not the running one. Two readers deliberately break this and say so where they do:
+  the `skills:` section and the `instructions:` policy are read from the **saved** file at each gesture,
+  because both gate something happening now rather than a run that started earlier.
 - **The workspace service is the only writer** (`config.read` / `config.save` / `config.setField`, each
   followed by the load again). The run host never writes a configuration file.
 - The writer **re-emits hand-authored YAML with its comments**. Inline-comment spacing collapsing on

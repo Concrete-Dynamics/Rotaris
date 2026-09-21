@@ -186,3 +186,84 @@ describe('the per-port fence (REQ-CONFIG-468, REQ-WORKSPACE-059 — ADR-0063 fir
     } finally { rmSync(base, { recursive: true, force: true }); }
   });
 });
+
+/**
+ * PD-WORKSPACE-002 / REQ-WORKSPACE-041..048 — the workspace context unit: what the per-file switches
+ * actually reach. The discovery and the merge are pure and are tested in `packages/config`; what is
+ * here is the run host's half — the order in the unit list, the cache lifetime, and the two switches.
+ */
+const contextHost = (home: string, globalDir: string, overrides: Record<string, 'on' | 'off'> = {}, master = true) =>
+  new SkillHost({
+    home,
+    section: () => SKILLS_DEFAULTS,
+    instructions: () => ({ section: { overrides }, master, globalDir }),
+    log: () => undefined,
+  });
+
+describe('the workspace context unit (REQ-WORKSPACE-041..048, PD-WORKSPACE-002)', () => {
+  it('REQ-WORKSPACE-047: the context leads the unit list, ahead of the skill catalog', () => {
+    const t = tree();
+    try {
+      writeFileSync(join(t.root, 'AGENTS.md'), 'STANDING INSTRUCTIONS\n');
+      const units = contextHost(t.home, join(t.home, 'cfg')).contextUnits(t.root, 's1');
+      expect(units).toHaveLength(2);
+      expect(units[0]).toContain('STANDING INSTRUCTIONS');
+      expect(units[0]).toContain(`<!-- source: ${join(t.root, 'AGENTS.md')} -->`);
+      expect(units[1]).toContain('- alpha: Alpha does things.');
+    } finally { t.cleanup(); }
+  });
+
+  it('PD-WORKSPACE-002: the global and user bases reach the agent, in discovery order', () => {
+    const t = tree();
+    try {
+      const globalDir = join(t.home, 'cfg');
+      mkdirSync(globalDir, { recursive: true });
+      mkdirSync(join(t.home, '.agents'), { recursive: true });
+      writeFileSync(join(t.root, 'CLAUDE.md'), 'PROJECT CLAUDE\n');
+      writeFileSync(join(globalDir, 'AGENTS.md'), 'GLOBAL AGENTS\n');
+      writeFileSync(join(t.home, '.agents', 'AGENTS.md'), 'USER AGENTS\n');
+      const unit = contextHost(t.home, globalDir).contextUnits(t.root, 's1')[0]!;
+      expect(unit.indexOf('PROJECT CLAUDE')).toBeLessThan(unit.indexOf('GLOBAL AGENTS'));
+      expect(unit.indexOf('GLOBAL AGENTS')).toBeLessThan(unit.indexOf('USER AGENTS'));
+    } finally { t.cleanup(); }
+  });
+
+  it('PD-WORKSPACE-002: a file switched off contributes nothing, not even its source comment', () => {
+    const t = tree();
+    try {
+      const globalDir = join(t.home, 'cfg');
+      mkdirSync(globalDir, { recursive: true });
+      writeFileSync(join(t.root, 'AGENTS.md'), 'STANDING INSTRUCTIONS\n');
+      writeFileSync(join(globalDir, 'AGENTS.md'), 'GLOBAL AGENTS\n');
+      const unit = contextHost(t.home, globalDir, { 'global:AGENTS.md': 'off' }).contextUnits(t.root, 's1')[0]!;
+      expect(unit).toContain('STANDING INSTRUCTIONS');
+      expect(unit).not.toContain('GLOBAL AGENTS');
+      expect(unit).not.toContain(join(globalDir, 'AGENTS.md'));
+    } finally { t.cleanup(); }
+  });
+
+  it('REQ-WORKSPACE-048: with the master switch false no context file is read at all', () => {
+    const t = tree();
+    try {
+      writeFileSync(join(t.root, 'AGENTS.md'), 'STANDING INSTRUCTIONS\n');
+      const units = contextHost(t.home, join(t.home, 'cfg'), { 'workspace:AGENTS.md': 'on' }, false).contextUnits(t.root, 's1');
+      expect(units.some((u) => u.includes('STANDING INSTRUCTIONS'))).toBe(false);
+    } finally { t.cleanup(); }
+  });
+
+  it('REQ-WORKSPACE-046: the merge is cached per root until a session is created or a rescan clears it', () => {
+    const t = tree();
+    try {
+      writeFileSync(join(t.root, 'AGENTS.md'), 'FIRST\n');
+      const h = contextHost(t.home, join(t.home, 'cfg'));
+      expect(h.contextUnits(t.root, 's1')[0]).toContain('FIRST');
+      writeFileSync(join(t.root, 'AGENTS.md'), 'SECOND\n');
+      expect(h.contextUnits(t.root, 's1')[0]).toContain('FIRST');
+      h.onSessionCreated(t.root, 's2');
+      expect(h.contextUnits(t.root, 's2')[0]).toContain('SECOND');
+      writeFileSync(join(t.root, 'AGENTS.md'), 'THIRD\n');
+      h.rescan(t.root);
+      expect(h.contextUnits(t.root, 's2')[0]).toContain('THIRD');
+    } finally { t.cleanup(); }
+  });
+});

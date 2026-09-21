@@ -4,6 +4,7 @@ import { dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs } from '@r
 import { establishWorkspaceId, openWorkspaceStore, forgetSpelling, REFUSAL_LEASE_MS, type ResolvedStore, type RunHostControl } from '@rotaris/store';
 import { assessRestore, backupWorkspace, capture as captureCheckpoint, checkAttach, createWorktree, deleteNamespace, deleteRefs, listRefs, performRestore, preview as previewCheckpoint, readGitView, readRepository, removeWorktree, restore as restoreCheckpoint, sessionWorktreePath, validateBranchName } from '@rotaris/workspace';
 import { bootstrapConfigFile, commitConfigFields, commitDesktopSave, readSnapshot, scopeFiles } from '@rotaris/config';
+import { homedir } from 'node:os';
 import { mkdirSync } from 'node:fs';
 import { deliveryServiceFor } from './delivery.js'; // Part AK
 import { promptsRootsRead } from './prompts.js'; // Part AO
@@ -36,6 +37,20 @@ const layout = dataLayout(dirs);
 mkdirSync(layout.workspaces, { recursive: true });
 const thisMachine = readOrMintMachineId(layout.machineId);
 let open: ResolvedStore | null = null;
+
+/*
+ * PD-WORKSPACE-002 — the home the instruction-file discovery reads user-scope files from.
+ *
+ * Verification only — `ROTARIS_CAPTURE_INSTRUCTIONS_HOME` points discovery at a scratch tree, so a
+ * proof exercises the home-relative bases without reading the operator's own files. It is a seam
+ * rather than an override of `HOME`/`USERPROFILE` because overriding those kills the Electron
+ * process before it paints on Windows (measured on the skills proof's first run, 2026-09-14).
+ * A user-driven launch never sets it and takes `homedir()`.
+ */
+function instructionEnv(): { home: string; platform: NodeJS.Platform } {
+  const home = process.env['ROTARIS_CAPTURE_INSTRUCTIONS_HOME'];
+  return { home: home === undefined || home === '' ? homedir() : home, platform: process.platform };
+}
 
 function send(m: ProcessMessage | ServiceAskEnvelope): void {
   port.postMessage(m);
@@ -133,15 +148,15 @@ async function handle(req: WorkspaceServiceRequest): Promise<ProcessReply> {
       return { kind: 'workspace.restored', report };
     }
     case 'config.read':
-      return { kind: 'config.snapshot', snapshot: readSnapshot(dirs.config, req.workspaceRoot, () => clocks.monotonic.now()) };
+      return { kind: 'config.snapshot', snapshot: readSnapshot(dirs.config, req.workspaceRoot, () => clocks.monotonic.now(), instructionEnv()) };
     case 'config.save': {
-      const r = await commitDesktopSave(dirs.config, req.workspaceRoot, req.save, clocks.timers);
+      const r = await commitDesktopSave(dirs.config, req.workspaceRoot, req.save, clocks.timers, instructionEnv());
       if (!r.ok) return { kind: 'refused', code: `config.${r.refusal.code}`, headline: 'The settings could not be saved', detail: `${r.refusal.file}: ${r.refusal.fault}` };
       log(`configuration saved: ${req.workspaceRoot}`);
       return { kind: 'config.snapshot', snapshot: r.snapshot };
     }
     case 'config.setField': {
-      const r = await commitConfigFields(dirs.config, req.workspaceRoot, req.scope, req.patch, clocks.timers);
+      const r = await commitConfigFields(dirs.config, req.workspaceRoot, req.scope, req.patch, clocks.timers, instructionEnv());
       if (!r.ok) return { kind: 'refused', code: `config.${r.refusal.code}`, headline: 'The setting could not be written', detail: `${r.refusal.file}: ${r.refusal.fault}` };
       return { kind: 'config.snapshot', snapshot: r.snapshot };
     }
@@ -151,7 +166,7 @@ async function handle(req: WorkspaceServiceRequest): Promise<ProcessReply> {
       const r = bootstrapConfigFile(files.workspace.agents);
       if (!r.ok) return { kind: 'refused', code: `config.${r.error.code}`, headline: 'The starter configuration could not be written', detail: `${r.error.file}: ${r.error.fault}` };
       log(`configuration bootstrap for ${req.workspaceRoot}: ${r.value}`);
-      return { kind: 'config.snapshot', snapshot: readSnapshot(dirs.config, req.workspaceRoot, () => clocks.monotonic.now()) };
+      return { kind: 'config.snapshot', snapshot: readSnapshot(dirs.config, req.workspaceRoot, () => clocks.monotonic.now(), instructionEnv()) };
     }
     case 'repository.read': {
       // ADR-0038 / REQ-GIT-102: every read bounded, every failure an empty value; the state is logged, never a dialog.

@@ -8,7 +8,10 @@
  *                     REQ-SHELL-142's caption; the Tools inventory is fully populated (REQ-CONFIG-277 populates
  *                     it unconditionally); Instructions is empty and names the file to create.
  *   2. instructions — the same workspace with `AGENTS.md` and `AGENTS.override.md` on disk: two rows, in the
- *                     requirement's order, source `workspace`, described by absolute path.
+ *                     requirement's order, source `workspace`, described by absolute path; the first row's switch
+ *                     is turned off and saved, and the `instructions.overrides` policy lands in the file
+ *                     (PD-WORKSPACE-002). The home-relative bases resolve into a scratch home, so the operator's
+ *                     own files never reach the inventory.
  *   3. display      — the Display category: the four caps moved, the save bar going dirty and back to saved, the
  *                     file written under REQ-CONFIG-172's key names with unlimited as `0`, and the two desktop
  *                     preferences written the moment they move.
@@ -49,7 +52,7 @@ if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${ele
 const PROBES = [
   '.app-shell', '.save-bar__status', '[data-testid="about-row"]', '[data-testid="legal-link"]',
   '[data-testid="legal-error"]', '[data-testid="licenses-caption"]', '[data-testid="licenses-error"]',
-  '[data-testid="inventory-row"]', '[data-testid="inventory-empty"]',
+  '[data-testid="inventory-row"]', '[data-testid="inventory-empty"]', '[data-testid="instruction-toggle"]',
   '[data-testid="tool-result-lines"]', '[data-testid="tool-input-lines"]',
   '[data-testid="show-tool-results"]', '[data-testid="show-tool-inputs"]',
   '[data-testid="auto-collapse-tools"]', '[data-testid="group-tools"]',
@@ -65,6 +68,9 @@ function launch(name, workspace, local, preferences, extra, timeoutMs = 120_000)
     env: {
       ...cleanEnvironment(), LOCALAPPDATA: local, APPDATA: join(dirname(local), 'roaming'), ROTARIS_PREFERENCES_ROOT: preferences,
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ROTARIS_CAPTURE_PROBE: PROBES.join(';;'), ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
+      // PD-WORKSPACE-002: the scratch home for instruction-file discovery, so this proof exercises the
+      // home-relative bases without reading the operator's own files (the skills proof's seam pattern).
+      ROTARIS_CAPTURE_INSTRUCTIONS_HOME: home,
       ...extra,
     },
   });
@@ -87,8 +93,10 @@ const root = join(output, 'profile');
 const workspace = join(root, 'workspace');
 const local = join(root, 'local');
 const preferences = join(root, 'preferences');
+const home = join(root, 'home');
 mkdirSync(workspace, { recursive: true });
 mkdirSync(local, { recursive: true });
+mkdirSync(home, { recursive: true });
 mkdirSync(join(workspace, '.rotaris'), { recursive: true });
 const configFile = join(workspace, '.rotaris', 'agents.yaml');
 writeFileSync(configFile, [
@@ -157,13 +165,26 @@ results.instructionsEmpty = { rows: 0, namesTheFile: true };
 // ── 2. Both instruction files on disk ───────────────────────────────────────────────────────────────────────
 writeFileSync(join(workspace, 'AGENTS.md'), '# standing instructions\n');
 writeFileSync(join(workspace, 'AGENTS.override.md'), '# overriding instructions\n');
-const instructions = launch('instructions', workspace, local, preferences, { ...openCategory('Instructions'), ROTARIS_CAPTURE_AFTER_MS: '2600' });
+const instructions = launch('instructions', workspace, local, preferences, {
+  ...openCategory('Instructions'),
+  // PD-WORKSPACE-002: switch the first file off and save — the per-file policy round trip.
+  ROTARIS_CAPTURE_CLICKS: '[data-testid="instruction-toggle"][data-id="workspace:AGENTS.md"]@1600;;.save-bar .btn-primary>>Save@3200',
+  ROTARIS_CAPTURE_AFTER_MS: '6000',
+});
 const listed = rows(instructions.probes, '[data-testid="inventory-row"]').map((r) => [r.data['data-name'], r.data['data-source'], r.text]);
 if (listed.length !== 2) throw new Error(`the Instructions inventory listed ${listed.length} rows`);
 if (listed[0][0] !== 'AGENTS.md' || listed[1][0] !== 'AGENTS.override.md') throw new Error(`the order was ${listed.map((l) => l[0]).join(', ')}`);
 if (listed.some((l) => l[1] !== 'workspace')) throw new Error('an Instructions row carried a source other than workspace');
 if (!listed.every((l) => l[2].includes(join(workspace, l[0])))) throw new Error(`a row did not describe its file by absolute path: ${JSON.stringify(listed)}`);
 results.instructions = { rows: listed.map((l) => l[0]), source: 'workspace', absolutePaths: true };
+// PD-WORKSPACE-002: two switches, and the first file's switch stayed off through Save.
+const toggles = rows(instructions.probes, '[data-testid="instruction-toggle"]');
+if (toggles.length !== 2) throw new Error(`the Instructions tab carried ${toggles.length} switches, not two`);
+if (toggles[0].data['data-on'] !== 'false') throw new Error('the AGENTS.md switch did not stay off through Save');
+if (toggles[1].data['data-on'] !== 'true') throw new Error('the AGENTS.override.md switch did not stay on');
+const instructionsYaml = readFileSync(configFile, 'utf8');
+if (!/workspace:AGENTS\.md: off/.test(instructionsYaml)) throw new Error(`the per-file policy was not written:\n${instructionsYaml}`);
+results.instructionToggle = { off: 'workspace:AGENTS.md', file: true };
 
 // ── 3. The Display category: move all six, save, and read the file ──────────────────────────────────────────
 const display = launch('display', workspace, local, preferences, {

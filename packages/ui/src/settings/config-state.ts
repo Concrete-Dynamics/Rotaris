@@ -1,4 +1,4 @@
-import { displayCapToFile, EDITABLE_SLOTS, type ConfigSnapshot, type DesktopSavePayload, type DisplaySavePayload, type DisplayView, type LiveStatePayload, type ModelSlotName, type SkillInvocationModeName, type SkillLoadModeName, type SkillsSavePayload } from '@rotaris/contracts';
+import { displayCapToFile, EDITABLE_SLOTS, type ConfigSnapshot, type DesktopSavePayload, type DisplaySavePayload, type DisplayView, type InstructionStateName, type LiveStatePayload, type ModelSlotName, type SkillInvocationModeName, type SkillLoadModeName, type SkillsSavePayload } from '@rotaris/contracts';
 
 /**
  * The pending settings state (REQ-CONFIG-279..287, 417..426): destination 1's values as the screen holds
@@ -52,6 +52,15 @@ export interface PendingSettings {
     readonly overrides: Readonly<Record<string, SkillLoadModeName>>;
     readonly invocationOverrides: Readonly<Record<string, SkillInvocationModeName>>;
   };
+  /**
+   * PD-WORKSPACE-002: the `instructions:` section as the screen holds it — the per-file override map
+   * keyed by stable file identity. Absent means `on`, which is what makes the sparse write computable:
+   * a name present in `saved` and absent from a higher layer is the case where a baseline must be
+   * written out explicitly.
+   */
+  readonly instructions: {
+    readonly overrides: Readonly<Record<string, InstructionStateName>>;
+  };
   /** Role edits keyed by role, per field scoped (REQ-CONFIG-259); an entry exists only once the user touched the role. */
   readonly roles: Readonly<Record<string, { readonly scope: 'workspace' | 'global'; readonly model?: string | null; readonly thinking?: string | null; readonly unsetModel?: boolean; readonly unsetThinking?: boolean }>>;
 }
@@ -82,6 +91,7 @@ export function pendingFrom(snapshot: ConfigSnapshot): PendingSettings {
     delegationStrategy: snapshot.delegationStrategy,
     display: { ...snapshot.display },
     skills: { enabled: snapshot.skills.enabled, overrides: { ...snapshot.skills.overrides }, invocationOverrides: { ...snapshot.skills.invocation_overrides } },
+    instructions: { overrides: { ...snapshot.instructionsPolicy.overrides } },
     roles: {},
   };
 }
@@ -112,6 +122,10 @@ export function rebasePending(previousSaved: PendingSettings, pending: PendingSe
   return {
     slots, slotThinking: thinking, runtime, display,
     skills: sameValue(pending.skills, previousSaved.skills) ? fresh.skills : pending.skills,
+    // PD-WORKSPACE-002: the instructions block rebases as a whole rather than per key, like the skills
+    // block above and for the same reason — the screen only ever sets a state, and the sparse write below
+    // is what turns a baseline choice into a removal.
+    instructions: sameValue(pending.instructions, previousSaved.instructions) ? fresh.instructions : pending.instructions,
     circuitBreakerEnabled: pending.circuitBreakerEnabled !== previousSaved.circuitBreakerEnabled ? pending.circuitBreakerEnabled : fresh.circuitBreakerEnabled,
     compressorThresholdPercentage: pending.compressorThresholdPercentage !== previousSaved.compressorThresholdPercentage ? pending.compressorThresholdPercentage : fresh.compressorThresholdPercentage,
     delegationStrategy: pending.delegationStrategy !== previousSaved.delegationStrategy ? pending.delegationStrategy : fresh.delegationStrategy,
@@ -135,6 +149,7 @@ export type PendingChange =
   | { readonly kind: 'skillsEnabled'; readonly value: boolean }
   | { readonly kind: 'skillLoad'; readonly name: string; readonly value: SkillLoadModeName }
   | { readonly kind: 'skillInvocation'; readonly name: string; readonly value: SkillInvocationModeName }
+  | { readonly kind: 'instructionToggle'; readonly id: string; readonly value: InstructionStateName }
   | { readonly kind: 'role'; readonly role: string; readonly scope: 'workspace' | 'global'; readonly model?: string | null; readonly thinking?: string | null; readonly unsetModel?: boolean; readonly unsetThinking?: boolean };
 
 /** Apply one change; returns the same object when nothing changed (the equality guard). */
@@ -167,6 +182,11 @@ export function applyChange(pending: PendingSettings, change: PendingChange): Pe
       return pending.skills.overrides[change.name] === change.value ? pending : { ...pending, skills: { ...pending.skills, overrides: { ...pending.skills.overrides, [change.name]: change.value } } };
     case 'skillInvocation':
       return pending.skills.invocationOverrides[change.name] === change.value ? pending : { ...pending, skills: { ...pending.skills, invocationOverrides: { ...pending.skills.invocationOverrides, [change.name]: change.value } } };
+    // PD-WORKSPACE-002 — a per-file switch marks settings dirty and is written by Save. The setter does
+    // not validate the value: `InstructionStateName` is a closed type, and the writer rejects an
+    // unsupported one, so a bad value cannot reach a file through here.
+    case 'instructionToggle':
+      return pending.instructions.overrides[change.id] === change.value ? pending : { ...pending, instructions: { overrides: { ...pending.instructions.overrides, [change.id]: change.value } } };
     case 'role': {
       const current = pending.roles[change.role] ?? { scope: change.scope };
       const next = { ...current, scope: change.scope, ...(change.model !== undefined ? { model: change.model, unsetModel: false } : {}), ...(change.thinking !== undefined ? { thinking: change.thinking, unsetThinking: false } : {}), ...(change.unsetModel ? { unsetModel: true } : {}), ...(change.unsetThinking ? { unsetThinking: true } : {}) };
@@ -231,6 +251,28 @@ export function savePayload(saved: PendingSettings, pending: PendingSettings): D
   if (Object.keys(overrides).length > 0) skills.overrides = overrides;
   if (Object.keys(invocation).length > 0) skills.invocationOverrides = invocation;
   if (Object.keys(skills).length > 0) out.skills = skills;
+  /*
+   * PD-WORKSPACE-002: the `instructions.overrides` map, written SPARSELY on the same terms. Only a state
+   * differing from the baseline (`on`) lands in the map — EXCEPT where a lower layer states a policy for
+   * that file, in which case the baseline is written out explicitly so the choice the user made in the
+   * higher scope is what the merge produces.
+   *
+   * `saved` holding a key stands in for "a lower layer states a policy": the snapshot's map is the MERGED
+   * result, so an identity present there came from *some* file, and the screen cannot see which. It
+   * over-approximates in one direction only — a file the WORKSPACE already states gets its baseline
+   * written back explicitly instead of its key removed, which leaves the file tidier than it could be and
+   * never changes what the merge produces. The skills maps stand on the same proxy (REQ-CONFIG-258), and
+   * splitting the two scopes apart in the snapshot is the change that would remove it from both at once.
+   * `null` is the writer's delete.
+   */
+  const instructionOverrides: Record<string, InstructionStateName | null> = {};
+  for (const [id, state] of Object.entries(pending.instructions.overrides)) {
+    if (state === saved.instructions.overrides[id]) continue;
+    instructionOverrides[id] = state === 'on' && saved.instructions.overrides[id] === undefined ? null : state;
+  }
+  // A file the file stated and the screen no longer holds: its key is removed.
+  for (const id of Object.keys(saved.instructions.overrides)) if (pending.instructions.overrides[id] === undefined) instructionOverrides[id] = null;
+  if (Object.keys(instructionOverrides).length > 0) out.instructions = { overrides: instructionOverrides };
   if (Object.keys(pending.roles).length > 0) {
     out.roles = Object.fromEntries(Object.entries(pending.roles).map(([role, e]) => [role, {
       scope: e.scope,

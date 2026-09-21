@@ -15,6 +15,7 @@ import { readCompressorSection, type CompressorSection } from './sections/compre
 import { readCheckpointsSection, type CheckpointsSection } from './sections/checkpoints.js';
 import { readRequirementsSection, type RequirementsSection } from './sections/requirements.js'; // Part AP
 import { readSkillsSection, type SkillsSection } from './sections/skills.js'; // ADR-0063
+import { readInstructionsSection, type InstructionsSection } from './sections/instructions.js'; // PD-WORKSPACE-002
 import { readDisplaySection, type DisplaySection } from './display-section.js';
 import { readMcpServersSection } from './sections/mcp-servers.js';
 import { readDiscoveryFiles, resolveMcpConfiguration, type BuiltinLaunch, type Diagnostic, type DiscoveredServers, type McpConfiguration } from './mcp/index.js';
@@ -74,6 +75,8 @@ export interface LoadedConfiguration {
   readonly display: DisplaySection;
   /** REQ-CONFIG-166..169 (ADR-0063): the master switch and the two per-skill override maps — the second reader `SECTION_KEYS` declared with nothing behind it. */
   readonly skills: SkillsSection;
+  /** PD-WORKSPACE-002: the per-file instruction on/off policy, keyed by stable file identity. */
+  readonly instructions: InstructionsSection;
   readonly hooks: HooksResolved;
   readonly worktreeStorageSubpath: string;
   readonly injectAgentsMd: boolean;
@@ -327,6 +330,7 @@ export function resolveMerged(top: PlainMap, ctx: ResolveContext): Result<Loaded
   const checkpoints = readCheckpointsSection(top['checkpoints'], sink);
   const requirements = readRequirementsSection(top['requirements'], sink); // Part AP
   const skills = readSkillsSection(top['skills'], sink); // ADR-0063
+  const instructions = readInstructionsSection(top['instructions'], sink); // PD-WORKSPACE-002
   const display = readDisplaySection(top['display'], sink);
   // REQ-MCP-002: every defect of a YAML-scope server entry is fatal and every one is reported (the discovered entries were validated before the merge).
   const mcpServers = readMcpServersSection(top['mcp_servers'], sink);
@@ -367,6 +371,7 @@ export function resolveMerged(top: PlainMap, ctx: ResolveContext): Result<Loaded
     checkpoints,
     requirements, // Part AP
     skills, // ADR-0063
+    instructions, // PD-WORKSPACE-002
     display,
     hooks,
     worktreeStorageSubpath: worktree,

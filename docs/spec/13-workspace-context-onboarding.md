@@ -143,6 +143,11 @@ The product operates on a user-selected workspace folder: the desktop app resolv
 
 - **REQ-WORKSPACE-039** — Saving desktop settings SHALL read `<workspace>/.rotaris/agents.yaml`, change it, and put the result back through an atomic replace. Top-level keys the application does not itself manage SHALL survive the round trip verbatim. The keys the save writes are exactly those REQ-CONFIG-256 enumerates — the model slots and their reasoning companions, the runtime keys including `runtime.allow_outside_workspace` (REQ-WORKSPACE-148) and `runtime.permission_mode`, the six confinement and egress fields, `circuit_breaker.enabled`, `compressor.threshold_percentage`, the delegation strategy, and `skills.enabled`, `skills.overrides` and `skills.invocation_overrides` — and this domain SHALL NOT name a key that requirement does not. A persona edit whose chosen scope is global SHALL be written to the global `agents.yaml` instead of the workspace one. Validation SHALL happen before any file is opened for writing, on the terms of REQ-CONFIG-260: where the schema rejects any of the six confinement or egress values the save SHALL be abandoned, every configuration file SHALL be left byte-for-byte as it was and still loadable, and the user SHALL be shown a single sentence carrying the first complaint. A save that completes SHALL be followed by a configuration reload and by re-projecting the skill list from a freshly discovered catalog.
 
+  > **Extended by [`PD-WORKSPACE-002`](../product/directives.md#pd-workspace-002), 2026-09-21.** The
+  > save additionally writes the `instructions.overrides` per-file policy into the workspace file, on
+  > the same sparse terms as the skill maps; the keys the save writes are otherwise exactly those named
+  > above.
+
 - **REQ-WORKSPACE-040** — Writers of the persisted initialization state SHALL round-trip the entire YAML document and land via atomic replace, so that a crash partway through writing cannot leave the user's configuration truncated; when no `agents.yaml` exists, the minimal bootstrap file SHALL be written first.
 
 ### Workspace Context Injection (AGENTS.md)
@@ -157,9 +162,22 @@ The product operates on a user-selected workspace folder: the desktop app resolv
   > the workspace root, nothing else — governs that read unchanged; the injection behaviour of this
   > section is untouched.
 
+  > **Narrowed by [`PD-WORKSPACE-002`](../product/directives.md#pd-workspace-002), 2026-09-21.** The
+  > discovery rule above no longer states what this product does: the workspace root holds the
+  > `AGENTS` pair and the `CLAUDE` pair, and instruction files are additionally read from the global
+  > directory, the three home-relative bases and the machine-wide base, in the directive's order, each
+  > switchable per file. The text above states the behavioural target and is kept for that reason.
+
 - **REQ-WORKSPACE-042** — Given both `AGENTS.override.md` and `AGENTS.md` exist at the workspace root, only the override file's content SHALL appear in the merged output; the regular file's content SHALL be absent.
+  > **Narrowed by [`PD-WORKSPACE-002`](../product/directives.md#pd-workspace-002), 2026-09-21.** The
+  > suppression is pairwise: `AGENTS.override.md` suppresses `AGENTS.md` alone and
+  > `CLAUDE.override.md` suppresses `CLAUDE.md` alone. The text above states the behavioural target
+  > and is kept for that reason.
 
 - **REQ-WORKSPACE-043** — Merged-output format: each contributing file's content SHALL be preceded by a one-line HTML comment `<!-- source: {absolute path} -->` on its own line; blocks SHALL be separated by one blank line; concatenation follows discovery order.
+  > **Extended by [`PD-WORKSPACE-002`](../product/directives.md#pd-workspace-002), 2026-09-21.** The
+  > format is unchanged and now covers every enabled file in the directive's discovery order; a file
+  > switched off contributes nothing, not even its source comment.
 
 - **REQ-WORKSPACE-044** — Size limits SHALL default to 32,768 bytes for any one context file and 131,072 bytes for the merged output, both measured as UTF-8 bytes and both overridable per call. A file exceeding the per-file limit SHALL be cut back to the last line boundary that fits within it; a file whose very first line already exceeds the limit SHALL contribute nothing at all. Against the total limit, the budget left for a file SHALL be reckoned after its source-comment line has been charged: a file that does not fit whole SHALL be cut down to whatever budget remains, and a file for which no budget remains — including the case where its source comment alone would exhaust it — SHALL be dropped in its entirety, source comment included. A cut made against the total budget SHALL fall back to the last line boundary that fits within the remaining budget, exactly as a cut against the per-file limit does — one truncation rule governs both, so no block ever ends mid-line — and a file whose very first line already exceeds the budget remaining to it SHALL be dropped in its entirety, source comment included, rather than contributing a fragment. Every truncation and every drop SHALL produce a log warning naming the file concerned. The merged output SHALL never exceed the total limit.
 
@@ -170,6 +188,9 @@ The product operates on a user-selected workspace folder: the desktop app resolv
 - **REQ-WORKSPACE-047** — Given context injection is enabled and the merged content is non-empty, each agent built for that session SHALL receive the content as its own permanently active context block, ordered ahead of the skill catalog, ahead of any always-on skill bodies, and ahead of persona memory. With no context files, or injection disabled, no such unit SHALL be constructed.
 
 - **REQ-WORKSPACE-048** — The per-workspace configuration key `inject_agents_md` (boolean, default `true`) SHALL control injection; when false, no context file is read at all.
+  > **Extended by [`PD-WORKSPACE-002`](../product/directives.md#pd-workspace-002), 2026-09-21.** The
+  > master switch stands above the per-file `instructions.overrides` policy: while false nothing is
+  > read, whatever the per-file policies say; while true only the files switched on are read.
 
 - **REQ-WORKSPACE-049** — Discovering and merging workspace context files SHALL complete within 200 ms for a workspace holding up to 20 context files totalling 1 MiB on local storage. It SHALL NOT delay the moment the interface first accepts input, and the window SHALL keep responding to input for as long as it runs. For an unchanged filesystem state, running it again in a separate process SHALL yield byte-identical output: the merged text SHALL carry no timestamp, no process identifier, and no ordering that varies from run to run. The 200 ms figure SHALL be measured under these reference conditions and no others: the workspace on local, non-removable storage; the filesystem cache **cold** for the files concerned, so the figure covers the first read after a workspace is opened rather than a repeat of it; up to 20 context files totalling 1 MiB; and the reported figure being the 95th percentile of at least 20 consecutive cold measurements taken in separate processes, rather than a mean or a best case. Conformance is assessed per machine: a build meets this requirement on a machine when it meets the figure there under those conditions. The determinism and responsiveness guarantees stated here hold unconditionally, on every machine and under every load.
 

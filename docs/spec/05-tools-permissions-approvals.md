@@ -529,6 +529,12 @@ This requirement fixes what a plugin file *is*, and every other requirement abou
 
 **REQ-TOOLS-165** — The desktop settings customization page shows three read-only inventory tabs: Instructions (the workspace instruction files `AGENTS.md` and `AGENTS.override.md` when present, source labeled `workspace`); Plugins (subtitle "Discovered tool plugins": every file under `<workspace>/.rotaris/plugins` that the host process can load as a plugin module (REQ-TOOLS-161), sorted, name = the file's name with any extension removed, source `workspace`, full path shown as description and tooltip — what the tab lists and what `custom_tools:` can load are the same set, so a file the tab lists is one a persona could name and have loaded, and a file the tab omits is one that would fail to load, and the tab never advertises a file the loader would reject nor hides one it would accept); Tools (every built-in public tool name, sorted alphabetically, source `built-in`, runtime target name as description). Each tab shows an empty-state placeholder when it has no entries. Because the folder listing is discovery only and never loading (REQ-TOOLS-161), each Plugins row also states, in text and not by colour alone (REQ-SHELL-149), whether the file is loaded — naming the personas whose `custom_tools:` list it, or reporting that no persona loads it — so a user can see at a glance that a file sitting in the folder is inert until a persona names it.
 
+  > **Narrowed by [`PD-WORKSPACE-002`](../product/directives.md#pd-workspace-002), 2026-09-21.** The
+  > Instructions tab is no longer a read-only inventory: it lists every present instruction file across
+  > the workspace, global, user and machine bases with its on/off state, and each row carries a switch
+  > writing the `instructions.overrides` policy. Plugins and Tools are untouched and stay read-only. The
+  > text above states the behavioural target and is kept for that reason.
+
 ### 24. MCP Server Grants and Per-Persona Narrowing
 
 **REQ-TOOLS-166** — A persona names MCP servers (`mcp_servers`); an optional `mcp_tools` mapping narrows each server to an allow-list of original tool names. No entry (or the field unset) grants the whole server surface. A server's own disabled-tools list applies on top — a denial always wins over a grant.

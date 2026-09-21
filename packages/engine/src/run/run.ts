@@ -1157,17 +1157,30 @@ export class Run {
     // REQ-TOOLS-030/073: every live agent of the session receives the new preset; the first port's change is reported.
     const changes = all.map((p) => p.setMode(mode, source));
     const change = changes[0]!;
+    /*
+     * REQ-TOOLS-074: a change that would LOOSEN an agent whose persona pins `permission_mode` does not reach it;
+     * the port says so by naming its persona. The SESSION's mode is the requested one either way — a pinned agent
+     * keeping its pin does not make the session's change something other than what was asked for, and the agents
+     * built after it take the session's (REQ-TOOLS-073). Under PD-TOOLS-002 the effective mode IS the requested
+     * one, so it is read from the request rather than from whichever port answered first.
+     */
+    const skipped = [...new Set(changes.flatMap((c) => (c.skippedPersona === undefined ? [] : [c.skippedPersona])))].sort();
+    const effective = change.requested;
     const { writer } = this.deps;
     writer.recordModeChange({
       timestamp: toIsoUtc(this.deps.clocks.wall.instant()), event: 'permission_mode_change', session_id: this.sessionId, agent_id: source,
-      requested_mode: change.requested, effective_mode: change.effective, previous_mode: change.previous, source, reason: change.reason, skipped_personas: [],
+      requested_mode: change.requested, effective_mode: effective, previous_mode: change.previous, source, reason: change.reason, skipped_personas: skipped,
     });
-    writer.appendTimeline('permission_mode_changed', source, `Permission mode changed from '${change.previous}' to '${change.effective}'${change.reason ? ` — ${change.reason}` : ''}`, { requested_mode: change.requested, effective_mode: change.effective, previous_mode: change.previous });
+    // REQ-TOOLS-074: the personas the change did not reach are named wherever the change is — the audit entry above,
+    // the log line, and the confirmation the transcript shows the user.
+    const kept = skipped.length === 0 ? '' : ` ${skipped.join(', ')} keeps its pinned mode.`;
+    writer.appendTimeline('permission_mode_changed', source, `Permission mode changed from '${change.previous}' to '${effective}'${change.reason ? ` — ${change.reason}` : ''}${kept}`, { requested_mode: change.requested, effective_mode: effective, previous_mode: change.previous, ...(skipped.length === 0 ? {} : { skipped_personas: skipped }) });
+    if (skipped.length > 0) this.deps.warn(`permission mode '${change.requested}' did not reach ${skipped.join(', ')}: the persona pins a more restrictive mode (REQ-TOOLS-074)`);
     // PD-TOOLS-002: no downgrade — the row states the new mode, never a downgrade reason.
-    const row = `Permission mode is now '${change.effective}'; it applies from the next tool call.`;
+    const row = `Permission mode is now '${effective}'; it applies from the next tool call.${kept}`;
     writer.appendRow('system', row, true);
-    this.saveRunning({ permission_mode: change.effective });
-    return { ok: true, effective: change.effective };
+    this.saveRunning({ permission_mode: effective });
+    return { ok: true, effective };
   }
 
   /** REQ-MONITOR-166: one sample of the cumulative total; the oldest of 120 discarded; a save publishes it. */

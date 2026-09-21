@@ -1,7 +1,15 @@
-import { describe, expect, it } from 'vitest';
-import { TOOL_IMPLEMENTATIONS } from '@rotaris/contracts';
-import { gitReadTool, TodoList, todoTool } from '@rotaris/agent-tools';
-import { isEntryPort, toolSpec } from './tools.js';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { asSessionId, FakeClock, mintMachineId } from '@rotaris/kernel';
+import { TOOL_IMPLEMENTATIONS, type PermissionPreset } from '@rotaris/contracts';
+import { loadConfiguration } from '@rotaris/config';
+import { gitReadTool, permissivePolicyRead, TodoList, todoTool } from '@rotaris/agent-tools';
+import { SessionWriter } from '@rotaris/engine';
+import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
+import { personaResolverFor, runtimeFromConfiguration } from './configuration.js';
+import { createToolPort, isEntryPort, toolSpec, type ToolPortDeps } from './tools.js';
 
 /**
  * Part N's finding: the entry test was written against the root id `root`, which Part B had already made
@@ -55,5 +63,94 @@ describe('the tool schema the model is handed (REQ-TOOLS-013)', () => {
     expect(spec.parameters['required']).toEqual(['operation']);
     const properties = spec.parameters['properties'] as Record<string, { enum?: string[] }>;
     expect(properties['operation']!.enum).toEqual(['head', 'read_ref']);
+  });
+});
+
+/**
+ * REQ-TOOLS-048/073/074 (narrowed by PD-TOOLS-002): the port is where the requested mode is SELECTED, from the
+ * persona's `permission_mode` pin, the session-level override a mid-session change recorded, and
+ * `runtime.permission_mode`. Recorded defect, owner-reported 2026-09-21: the override did not exist, so every
+ * agent built after a mid-run switch — every delegated child — was constructed with the start-of-run mode.
+ */
+describe('the permission mode an agent is BUILT with (REQ-TOOLS-048/073/074)', () => {
+  let dir: string;
+  let dal: StoreDal;
+  let writer: SessionWriter;
+  const warnings: string[] = [];
+
+  const yaml = (pin: string | null) => `default_persona: coding-agent
+models:
+  selected:
+    provider: openai
+    model_id: first
+    api_key: k
+large_model: selected
+medium_model: selected
+small_model: selected
+personas:
+  coding-agent:
+    name: Coding agent
+    model: selected
+${pin === null ? '' : `    permission_mode: ${pin}\n`}runtime:
+  permission_mode: ask
+`;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'rotaris-port-mode-'));
+    const db = openStore(join(dir, 'workspace.db'));
+    migrateStore(db);
+    dal = new StoreDal(db);
+    const created = SessionWriter.create(
+      { dal, sessionId: asSessionId('S1'), wall: new FakeClock(), retentionCap: 0, warn: (m) => warnings.push(m), onCommitted: () => undefined },
+      { workspaceRoot: dir, pid: 1, host: mintMachineId('0000000000000000000000000000000a') },
+    );
+    if (!created.ok) throw new Error('writer');
+    writer = created.value;
+    warnings.length = 0;
+  });
+  afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
+
+  function portFor(pin: string | null, modeOverride: string | null) {
+    mkdirSync(join(dir, '.rotaris'), { recursive: true });
+    writeFileSync(join(dir, '.rotaris', 'agents.yaml'), yaml(pin));
+    const loaded = loadConfiguration({ globalDir: join(dir, 'global'), workspaceRoot: dir });
+    if (!loaded.ok) throw new Error('configuration');
+    const cfg = loaded.value;
+    const resolver = personaResolverFor(cfg, true, (m) => warnings.push(m));
+    const deps: ToolPortDeps = {
+      clocks: new FakeClock(), runtime: () => runtimeFromConfiguration(cfg), personas: () => resolver,
+      presenter: { present: async () => ({ ok: true }), close: () => undefined },
+      nextSequence: () => 1, fileStates: new Map(), terminal: null,
+      egress: () => permissivePolicyRead,
+    };
+    return createToolPort({
+      sessionId: asSessionId('S1'), workspaceRoot: dir, writer, persona: 'coding-agent', agentName: 'coding-agent',
+      requestedMode: 'ask', modeOverride, attended: () => true, warn: (m) => warnings.push(m), abortRun: () => undefined,
+    }, deps);
+  }
+
+  it('an agent built after a mid-run switch takes the session override, not the start-of-run mode', () => {
+    expect(portFor(null, 'autonomous').currentMode()).toBe<PermissionPreset>('autonomous');
+    expect(portFor(null, null).currentMode()).toBe<PermissionPreset>('ask');
+  });
+
+  it('REQ-TOOLS-048: the pin wins over a loosening override; an override at least as restrictive wins over the pin', () => {
+    expect(portFor('restricted', 'autonomous').currentMode()).toBe<PermissionPreset>('restricted');
+    expect(portFor('autonomous', 'ask').currentMode()).toBe<PermissionPreset>('ask');
+    // With no override the pin still governs, over `runtime.permission_mode`.
+    expect(portFor('restricted', null).currentMode()).toBe<PermissionPreset>('restricted');
+  });
+
+  it('REQ-TOOLS-074: a live change that would loosen a pinned agent leaves it under its pin and names the persona', () => {
+    const pinned = portFor('restricted', null);
+    expect(pinned.setMode('autonomous', 'user')).toMatchObject({ effective: 'restricted', previous: 'restricted', skippedPersona: 'coding-agent' });
+    expect(pinned.currentMode()).toBe<PermissionPreset>('restricted');
+    // A tightening change reaches a pinned agent; an unpinned one takes either direction.
+    const pinnedLoose = portFor('autonomous', null);
+    expect(pinnedLoose.setMode('ask', 'user')).toMatchObject({ effective: 'ask' });
+    expect(pinnedLoose.setMode('ask', 'user')).not.toHaveProperty('skippedPersona');
+    const unpinned = portFor(null, null);
+    expect(unpinned.setMode('autonomous', 'user')).toMatchObject({ effective: 'autonomous' });
+    expect(unpinned.currentMode()).toBe<PermissionPreset>('autonomous');
   });
 });

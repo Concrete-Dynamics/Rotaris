@@ -49,6 +49,11 @@ export interface ModeChange {
   readonly downgraded: boolean;
   readonly reason: string;
   readonly previous: PermissionPreset;
+  /**
+   * REQ-TOOLS-074: the persona this change did NOT reach, because the change would loosen an agent whose persona
+   * pins `permission_mode`. Absent when the change applied. The run collects these names for `skipped_personas`.
+   */
+  readonly skippedPersona?: string | undefined;
 }
 export interface ToolPort {
   /** The ONE resolution's listing (REQ-TOOLS-010). */

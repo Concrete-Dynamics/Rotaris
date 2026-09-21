@@ -1,4 +1,4 @@
-import { BUILT_IN_ROLE_NAMES, ROLE_SPAWN_ALIASES, type BuiltInRoleName } from '@rotaris/contracts';
+import { BUILT_IN_ROLE_NAMES, ROLE_SPAWN_ALIASES, type BuiltInRoleName, type PermissionPreset } from '@rotaris/contracts';
 import type { ModelRef, ThinkingLevel } from '@rotaris/model';
 /**
  * Decision 2 of the plan: REQ-ORCH-028's thirteen roles and the two aliases as a BUILT-IN table, each
@@ -20,6 +20,12 @@ export interface Persona {
   /** REQ-CONFIG-110 / REQ-ORCH-144: the role's own `fallback_model`; absent means the run-level slot (REQ-CONFIG-065). */
   readonly fallbackModel?: ModelRef | undefined;
   readonly fallbackThinking?: ThinkingLevel | undefined;
+  /**
+   * REQ-CONFIG-109 / REQ-TOOLS-048/074: the role's own `permission_mode` pin. It wins over a session-level
+   * override unless that override is at least as restrictive as it (REQ-TOOLS-047's order), and it is what
+   * a loosening mid-session change leaves alone. Absent means the role takes the session's mode.
+   */
+  readonly permissionMode?: PermissionPreset | undefined;
   /**
    * REQ-MCP-065 / REQ-MCP-114 (Part S): the MCP grant evidence recorded on a child's row at spawn — the granted tools per
    * server and every carried server's fate. Supplied by the run host's resolver from the same memoised resolution the

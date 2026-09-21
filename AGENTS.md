@@ -162,8 +162,8 @@ pnpm live-run --confirm --gui        # the same run, with the window on screen t
 ```
 
 `--confirm` is required. The full flag list (`--endpoint`, `--model`, `--base-url`, `--budget`,
-`--max-tokens`, `--only`, `--max-iterations`, `--gui`, `--keep`, `--skip-build`) is in the script's own
-header — `pnpm live-run --help` prints it.
+`--max-tokens`, `--only`, `--max-iterations`, `--gui`, `--keep`, `--skip-build`, `--keep-runs`,
+`--session-log-level`, `--no-record-traffic`) is in the script's own header — `pnpm live-run --help` prints it.
 
 The `requirements` scenario waits for the board rather than for a clock: every press after the release
 names the state it needs, `LIVE_RUN_BOARD_MS` (900 s) is the deadline for all of them, and the capture
@@ -212,7 +212,8 @@ neither path depends on what the other did.
 | `edit` | one real run: implement `REQ-103`, then run the suite in the terminal | `clearCompleted` exported and tested, the terminal tool used, the session's tool-call total agreeing with the ring across every agent (`REQ-MONITOR-102`), `git diff` non-empty, and **`node --test` run again by the script itself** — the agent's own report is never the evidence |
 | `requirements` | the board: `REQ-104` selected, the move control pressed, the release confirmed, the run watched to review and its decision taken | the card's own trail `backlog → running → review → done`, exactly one release and an accept in the delivery history, the run record carrying its session identifier and the permissions it was granted (`REQ-TRACE-464/472`), real usage from the endpoint, the run confined to a worktree of its own, `completedCount` exported and tested **inside that worktree**, and **`node --test` run there by the script itself** |
 | `shell` | a relaunch with no prompt | Overview painted from the store: the sessions the runs left, the repository card's branch |
-| `frictions` | one real run engineered to trip the inducible autopsy frictions, read back from the store | first-use `write_file` with no operation repair, SIGINT delivered with no platform refusal — **red by design until the fixes land**; the stall-abort and exit-trace frictions are recorded but not inducible on demand |
+| `frictions` | one real run engineered to trip the inducible autopsy frictions, read back from the store | first-use `write_file` with no operation repair, SIGINT delivered with no platform refusal — **red by design until the fixes land**; the exit-trace friction is recorded but not inducible on demand, and the stall-abort one moved to `faults` |
+| `faults` | two runs against an endpoint the proxy makes misbehave: a 429-then-500 ladder, and a stream that stops mid-answer with the socket open | the ladder run still completes; the stalled run does **not** report `user_cancelled` with nobody having pressed anything (defect 82's shape) — **never yet executed against a real endpoint** |
 
 An endpoint that discovers no model catalogue is not a dead end. The sign-in takes the dialog's own "Continue
 anyway" (the zero-model recovery), the catalogue check is recorded as a **NOTE** rather than a silent pass, and
@@ -247,6 +248,29 @@ which is why every defect that skill has found came from a session somebody drov
 `pnpm autopsy .live-run/runs/<stamp>/workspace.db <session-id>`, or point the skill at the pack directory.
 
 The sandbox itself is deleted at the end unless `--keep`. The record of what happened in it is not.
+
+### The `faults` scenario — the endpoint misbehaving, on purpose
+
+The proxy is in the path, so it can also be told to misbehave on a **named call**. Two launches:
+
+- **`faults-ladder`** — a 429 on the second completion and a 500 on the third, neither of which reaches the
+  endpoint, so the injected calls cost nothing. It asks whether the ladder waits, falls back and still finishes
+  (`REQ-ORCH-091..094`).
+- **`faults-stall`** — the bytes stop mid-answer and the socket stays **open**. It asks the eighty-second
+  defect's question: a model timeout once collapsed into the same `aborted` flag a user's stop sets, and the run
+  reported `user_cancelled` with nobody having pressed anything. The check is that it does not do so again.
+
+This makes the first of the two frictions the `frictions` scenario reports as uncoverable inducible on demand;
+that row's note points here. A rule names the **1-based index** of the call it fires at, deliberately: "the
+second completion" is a reproduction, "some completion" is a coincidence.
+
+**Neither product check has been executed against a real endpoint.** The fault mechanism is unit-tested against
+a loopback upstream (`apps/desktop/scripts/lib/model-traffic.test.ts`); what the two checks claim about the
+product is unverified until a live run reports back, and that first execution owes its row in
+`docs/architecture/first-executions.md`.
+
+`faults-stall` holds the socket for `LIVE_RUN_STALL_HOLD_MS` (default five minutes) before letting go, so the
+scenario is the slow one — it is opt-in with the others under `--only=`.
 
 **The traffic is recorded through a loopback proxy**, so the sandbox's `base_url` is the proxy and the endpoint
 is one hop further on. Two consequences worth knowing before reading a pack: a `model request POST` line in

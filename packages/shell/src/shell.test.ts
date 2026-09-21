@@ -40,6 +40,31 @@ describe('shell — the relay (ADR-0044, ADR-0013)', () => {
     relay.count(CHANNEL.terminalFrames, 2);
     expect(relay.counters[CHANNEL.terminalFrames]).toBe(2);
   });
+  it('a dead sink is shed, not thrown: the survivors still get the publication (REQ-MONITOR-226 intent)', () => {
+    const relay = new UpdateRelay();
+    const got: unknown[] = [];
+    relay.attach({ id: 1, send: () => { throw new Error('Render frame was disposed before WebFrameMain could be accessed'); } });
+    relay.attach({ id: 2, send: (_c, p) => got.push(p) });
+    relay.subscribe(1, 's');
+    relay.subscribe(2, 's');
+    const payload = { v: 1, sessionId: 's', seq: 7 };
+    expect(relay.relaySequenced(CHANNEL.sessionSnapshot, payload)).toBe(1);
+    expect(got[0]).toBe(payload);
+    expect(relay.hasSink(1)).toBe(false);
+    expect(relay.subscribersOf('s').map((s) => s.id)).toEqual([2]);
+    // The next publication reaches the survivor with no throw.
+    expect(relay.relaySequenced(CHANNEL.sessionSnapshot, { ...payload, seq: 8 })).toBe(1);
+  });
+  it('broadcast sheds a dead sink and keeps delivering to the rest', () => {
+    const relay = new UpdateRelay();
+    const got: unknown[] = [];
+    relay.attach({ id: 1, send: () => { throw new Error('Render frame was disposed before WebFrameMain could be accessed'); } });
+    relay.attach({ id: 2, send: (_c, p) => got.push(p) });
+    expect(() => relay.broadcast(CHANNEL.noticeCurrent, { v: 1 })).not.toThrow();
+    expect(got).toHaveLength(1);
+    expect(relay.hasSink(1)).toBe(false);
+    expect(relay.hasSink(2)).toBe(true);
+  });
 });
 
 describe('shell — the process link (ADR-0002 consequence 11)', () => {
@@ -66,6 +91,18 @@ describe('shell — the process link (ADR-0002 consequence 11)', () => {
     const p = link.request({ kind: 'ping' }, millis(2000));
     clock.advance(2000);
     await expect(p).rejects.toThrow(/within 2000 ms/);
+    link.close();
+  });
+  it('a throwing event listener does not break dispatch to the rest', async () => {
+    const clock = new FakeClock();
+    const { a, b } = pair();
+    const link = new ProcessLink(a, clock);
+    const got: unknown[] = [];
+    link.onEvent(() => { throw new Error('a dead sink threw'); });
+    link.onEvent((e) => { got.push(e); });
+    b.postMessage({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'log', level: 'info', message: 'hello' } });
+    await Promise.resolve();
+    expect(got).toHaveLength(1);
     link.close();
   });
 });

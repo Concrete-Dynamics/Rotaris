@@ -96,6 +96,11 @@ Invariants:
 - A delivery bound is **one budget across every window taken together**, not one per window. Getting this
   backwards was defect T2-1 on channel 3.
 - The relay preserves sequence. A surface that needs ordering gets it from the payload, never from arrival.
+- **A dead sink is shed, never thrown on.** A `send` that throws (a disposed render frame) detaches the sink
+  from the relay and delivery continues to the survivors (`relaySequenced`, `broadcast`, and the channel-3
+  limiter's `send` all isolate per sink). `render-process-gone` detaches the window's sink at once, so the
+  crash-without-close path never waits for the next publication. A vanished view leaves the run untouched
+  (`REQ-MONITOR-226`'s intent on the delivery path).
 
 Update the process view's **main → renderer** paragraph and the channel list in its diagram.
 

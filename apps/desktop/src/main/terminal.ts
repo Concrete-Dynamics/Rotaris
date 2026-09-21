@@ -123,11 +123,20 @@ export class FrameDeliveryLimiter {
     this.merge(w, frame);
     this.drain();
   }
-  private send(w: WindowState, frame: TerminalFrame, now: number): void {
-    w.sink.send(CHANNEL.terminalFrames, frame);
+  private send(w: WindowState, frame: TerminalFrame, now: number): boolean {
+    // Channel 3 fans out through the same sinks as the relay, so the same disposed-frame
+    // throw applies: shed the dead window from both the relay and the limiter, keep the rest.
+    try {
+      w.sink.send(CHANNEL.terminalFrames, frame);
+    } catch {
+      this.deps.relay.detach(w.sink.id);
+      this.forget(w.sink.id);
+      return false;
+    }
     this.times.push(now);
     w.delivered += 1;
     this.deps.relay.count(CHANNEL.terminalFrames);
+    return true;
   }
   private merge(w: WindowState, frame: TerminalFrame): void {
     let p = w.pending.get(frame.streamId);
@@ -167,7 +176,7 @@ export class FrameDeliveryLimiter {
         if (next.done) continue;
         const [streamId, p] = next.value;
         const segment = p.segments.shift();
-        if (segment) { this.send(w, segment, now); sent = true; }
+        if (segment) { if (this.send(w, segment, now)) sent = true; }
         if (p.segments.length === 0) w.pending.delete(streamId);
       }
     }

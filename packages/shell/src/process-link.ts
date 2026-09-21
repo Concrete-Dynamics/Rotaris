@@ -25,7 +25,16 @@ export class ProcessLink<Req extends RunHostRequest | WorkspaceServiceRequest> {
       if (!parsed.success) return;
       const m = parsed.data;
       if ('event' in m) {
-        for (const l of this.eventListeners) l(m.event);
+        // One throwing listener must not break dispatch to the rest: the relay's own
+        // shed-on-throw stops the disposed-frame throw at the sink, and this stops any
+        // remaining listener throw from unwinding into the port's message pump.
+        for (const l of this.eventListeners) {
+          try {
+            l(m.event);
+          } catch {
+            continue;
+          }
+        }
         return;
       }
       if ('ask' in m) {

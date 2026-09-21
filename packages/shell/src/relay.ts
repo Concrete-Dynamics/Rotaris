@@ -51,23 +51,45 @@ export class UpdateRelay {
     this.subscriptions.get(sessionId)?.delete(sinkId);
   }
 
-  /** Forward a sequenced publication to every subscriber of its session, payload untouched. */
+  /**
+   * Forward a sequenced publication to every subscriber of its session, payload untouched.
+   *
+   * REQ-MONITOR-226's intent on the delivery path: a view consumer that vanished must leave the run
+   * untouched. A sink whose renderer is gone (disposed render frame) throws out of `send`; the dead
+   * sink is shed from the fan-out and delivery continues to the survivors, so one dead view can
+   * neither abort the publication nor unwind into the run-host event pump.
+   */
   relaySequenced(channel: (typeof SEQUENCED_CHANNELS)[number], payload: { readonly sessionId: string; readonly seq: number }): number {
     this.counters[channel] += 1;
     const subs = this.subscriptions.get(payload.sessionId);
     if (!subs) return 0;
     let n = 0;
-    for (const id of subs) {
+    for (const id of [...subs]) {
       const sink = this.sinks.get(id);
-      if (sink) { sink.send(channel, payload); n += 1; }
+      if (!sink) continue;
+      try {
+        sink.send(channel, payload);
+        n += 1;
+      } catch {
+        this.detach(id);
+      }
     }
     return n;
   }
 
-  /** Broadcast to every attached renderer (notices are per process, ADR-0049). */
+  /**
+   * Broadcast to every attached renderer (notices are per process, ADR-0049).
+   * A dead sink is shed the same way as in `relaySequenced`: drop it, keep delivering.
+   */
   broadcast(channel: ChannelName, payload: unknown): void {
     this.counters[channel] += 1;
-    for (const sink of this.sinks.values()) sink.send(channel, payload);
+    for (const sink of [...this.sinks.values()]) {
+      try {
+        sink.send(channel, payload);
+      } catch {
+        this.detach(sink.id);
+      }
+    }
   }
 
   /**

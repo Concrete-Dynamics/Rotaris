@@ -596,6 +596,12 @@ export function createElectronMainWindowAdapter(
       });
       win.webContents.on('render-process-gone', (_event, details) => {
         releaseModality(`the main window's renderer is gone (${details.reason})`);
+        // The renderer is gone but the window is not closed, so `disposeResources` never runs:
+        // shed the dead sink now so the next publication does not throw on a disposed frame
+        // (REQ-MONITOR-226's intent on the delivery path — drop the vanished view, keep the run).
+        dependencies.relayDetach(wcId);
+        dependencies.forgetTerminalFrames(wcId);
+        dependencies.log(`main window ${wcId} detached from the relay: the renderer is gone (${details.reason})`);
       });
 
       const terminalWindows = new TerminalWindows({

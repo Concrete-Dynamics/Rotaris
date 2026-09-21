@@ -43,7 +43,12 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-09-18**
+## Last reconciled with the code: **2026-09-21**
+
+**The relay sheds dead sinks (REQ-MONITOR-226 intent).** `relaySequenced` and `broadcast` isolate per sink:
+a `send` that throws (disposed render frame) detaches the sink and delivery continues to the survivors.
+`render-process-gone` detaches at once; the channel-3 limiter sheds the same way; `ProcessLink` isolates
+per event listener. Recorded in `04-seams.md` §2.
 
 **The member card opens by its row identity (REQ-CHAT-059/061/166).** A group member's card is keyed by
 `memberKey` (`Row.tsx`) — the member's own `rowKey`, the identity step 4 holds the caps against — instead

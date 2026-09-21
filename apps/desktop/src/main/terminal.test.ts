@@ -156,6 +156,23 @@ describe('FrameDeliveryLimiter — REQ-MONITOR-306 at the point of delivery, per
     expect(h.sent[1]!.map((s) => s.frame.seq)).toEqual([1]);
     expect(h.limiter.stats(1)).toEqual({ delivered: 0, merged: 0, pending: 0 });
   });
+
+  it('a window whose sink throws is shed from the relay and the limiter; the survivor keeps its frames', () => {
+    const clock = new FakeClock();
+    const relay = new UpdateRelay();
+    const got: TerminalFrame[] = [];
+    relay.attach({ id: 1, send: () => { throw new Error('Render frame was disposed before WebFrameMain could be accessed'); } });
+    relay.attach({ id: 2, send: (_c, p) => got.push(p as TerminalFrame) });
+    relay.subscribe(1, 's1');
+    relay.subscribe(2, 's1');
+    const limiter = new FrameDeliveryLimiter({ relay, clocks: clock, log: () => undefined });
+    limiter.deliver(frame({ streamId: 'fg:a', seq: 1 }));
+    expect(got.map((f) => f.seq)).toEqual([1]);
+    expect(relay.hasSink(1)).toBe(false);
+    expect(limiter.stats(1)).toEqual({ delivered: 0, merged: 0, pending: 0 });
+    limiter.deliver(frame({ streamId: 'fg:a', seq: 2 }));
+    expect(got.map((f) => f.seq)).toEqual([1, 2]);
+  });
 });
 
 describe('relayTerminalCommand — shape for shape to the run host', () => {

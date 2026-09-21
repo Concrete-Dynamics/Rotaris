@@ -62,6 +62,9 @@
  *   autopsy.txt        `apps/desktop/scripts/autopsy.mjs` over this scenario's session
  *   session.log        the product's own per-session log, at `--session-log-level` (default INFO)
  *   transcript.md      every transcript row in full, not the 400 characters `results.json` keeps
+ *   model-traffic.jsonl  what the model was SENT and what came back — bodies, status and duration per call,
+ *                      recorded by a loopback proxy the sandbox is pointed at (`--no-record-traffic` skips it).
+ *                      The product logs a method and a URL and nothing else, so this exists nowhere else.
  *   *.png              the end of the scenario, plus a fifth and three fifths of the way through its wait
  *   node-test.log, diff.txt, changed/   where the scenario produces them
  *
@@ -79,6 +82,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
 import { cleanEnvironment, findDatabases } from './lib/harness.mjs';
+import { startRecordingProxy } from './lib/model-traffic.mjs';
 
 const require = createRequire(import.meta.url);
 const repo = resolve(import.meta.dirname, '..', '..', '..');
@@ -122,6 +126,22 @@ const KEEP_RUNS = Math.max(1, Number(value('keep-runs', '10')));
  * `INFO` are the same file and naming the louder one would imply a detail that does not exist.
  */
 const SESSION_LOG_LEVEL = value('session-log-level', 'INFO');
+/**
+ * `--no-record-traffic`: talk to the endpoint directly instead of through the recording proxy.
+ *
+ * The proxy is on by default because what the model was sent and what it answered is the one thing no pack has
+ * ever carried, and it is where most of the questions a red raises are settled. It is a raw pipe — chunks are
+ * forwarded as they arrive, nothing buffered — so a streamed completion reaches the product exactly as the
+ * endpoint sent it. The flag exists for the run where the proxy itself is the suspect.
+ */
+const RECORD_TRAFFIC = !has('no-record-traffic');
+/**
+ * Declared here rather than where it is started, because the signal handlers below close over it and a Ctrl-C
+ * during the build would otherwise reach a `let` still in its temporal dead zone — an exception inside the
+ * handler whose whole job is to make sure the sandbox's credentials are deleted.
+ */
+let proxy = null;
+const closeProxy = () => { try { proxy?.close(); } catch { /* the run is ending either way */ } };
 const SIGN_IN_WAIT_MS = Number(process.env['LIVE_RUN_SIGN_IN_WAIT_MS'] ?? 120_000);
 const RUN_WAIT_MS = Number(process.env['LIVE_RUN_WAIT_MS'] ?? 420_000);
 const OPTIONAL = ['ask', 'edit', 'requirements', 'shell', 'frictions'];
@@ -304,6 +324,7 @@ const USAGE = `pnpm live-run — the application against a real model endpoint, 
   --only=<csv>         run only some of ${OPTIONAL.join(', ')} (sign-in always runs; the sandbox is fresh)
   --keep-runs=<n>      evidence packs to keep under .live-run/runs (default 10; the oldest are pruned)
   --session-log-level=<lvl>  the sandbox's session_log_level (default INFO; WARNING is the product's own default)
+  --no-record-traffic  talk to the endpoint directly; do not record request and response bodies
   --gui                show the window each scenario drives, to watch it (hidden by default; nothing else changes)
   --keep               keep the sandbox workspace instead of deleting it
   --skip-build         trust apps/desktop/out as it stands
@@ -425,6 +446,7 @@ if (!has('confirm')) {
   console.log(`Context:  ${typeof endpoint.contextTokens === 'number' ? `${endpoint.contextTokens} tokens` : 'whatever discovery reports'}`);
   console.log(`Plan:     ${['sign-in', ...wanted].join(' → ')}, ${MAX_ITERATIONS} iterations per run`);
   console.log(`Window:   ${GUI ? 'shown — each scenario appears on screen (--gui)' : 'hidden — add --gui to watch it'}`);
+  console.log(`Traffic:  ${RECORD_TRAFFIC ? 'recorded — request and response bodies through a loopback proxy, one file per scenario' : 'not recorded (--no-record-traffic)'}`);
   console.log(`Ceiling:  ${accountingKind === 'unmetered' ? 'none — registered unmetered; only the iteration ceiling binds' : accountingKind === 'tokens' ? `${MAX_TOKENS} tokens (this endpoint reports no cost and carries no prices)` : `${BUDGET.toFixed(2)} USD, ${accountingKind === 'provider' ? "read from the provider's own accounting" : 'estimated from the registered prices'}`}`);
   console.log(`Key:      ${keySource ?? `NONE — run \`pnpm live-run --set-key --endpoint=${endpoint.name}\`, or set ${KEY_ENV}`}`);
   console.log('\nNothing ran. Add --confirm to spend.');
@@ -501,8 +523,8 @@ const local = join(sandbox, 'local');
 mkdirSync(workspace, { recursive: true });
 mkdirSync(local, { recursive: true });
 // An interrupt or a crash is an exit path too: it may not strand the key in the temp directory.
-for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { console.error(`\n${signal}: deleting the sandbox.`); cleanup(false); process.exit(130); });
-for (const fatal of ['uncaughtException', 'unhandledRejection']) process.on(fatal, (error) => { console.error(`${fatal}: ${error instanceof Error ? error.stack ?? error.message : String(error)}`); cleanup(false); process.exit(1); });
+for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { console.error(`\n${signal}: deleting the sandbox.`); closeProxy(); cleanup(false); process.exit(130); });
+for (const fatal of ['uncaughtException', 'unhandledRejection']) process.on(fatal, (error) => { console.error(`${fatal}: ${error instanceof Error ? error.stack ?? error.message : String(error)}`); closeProxy(); cleanup(false); process.exit(1); });
 cpSync(fixture, workspace, { recursive: true });
 const GIT_IDENTITY = { GIT_AUTHOR_NAME: 'rotaris-live-run', GIT_AUTHOR_EMAIL: 'live-run@rotaris.invalid', GIT_COMMITTER_NAME: 'rotaris-live-run', GIT_COMMITTER_EMAIL: 'live-run@rotaris.invalid' };
 const git = (...args) => execFileSync('git', args, { cwd: workspace, encoding: 'utf8', env: { ...process.env, ...GIT_IDENTITY } }).trim();
@@ -524,6 +546,13 @@ function oneDatabase() {
 
 /** What each scenario left in the pack, reported in `results.json` so a reader knows what exists without listing it. */
 const scenarioEvidence = {};
+
+/** One scenario's recorded model traffic, as records. An absent or half-written file reads as no records. */
+function readTraffic(name) {
+  const file = join(output, name, 'model-traffic.jsonl');
+  if (!existsSync(file)) return [];
+  return readFileSync(file, 'utf8').split('\n').filter((line) => line.trim() !== '').flatMap((line) => { try { return [JSON.parse(line)]; } catch { return []; } });
+}
 /** One directory per scenario, so a pack reads as the run did rather than as one flat heap of prefixed names. */
 function scenarioDir(name) {
   const dir = join(output, name);
@@ -574,6 +603,8 @@ function assertNoCredential(what, text) {
 function launch(name, extra, timeoutMs = 180_000) {
   const dir = scenarioDir(name);
   const png = join(dir, `${name}.png`);
+  // Each scenario's model traffic lands in its own file, so a record is always attributable to a scenario.
+  proxy?.sink(join(dir, 'model-traffic.jsonl'));
   /*
    * Two extra photographs, at a fifth and three fifths of the scenario's OWN wait budget, so a run that stalls
    * leaves a picture of where it stalled instead of one frame of whatever was on screen when it gave up. They
@@ -717,6 +748,8 @@ function finish(code) {
   // including the budget gate's early stop, because a run that stopped early is exactly the one worth reading.
   results.store = preserveStore();
   results.evidence = scenarioEvidence;
+  results.traffic = proxy === null ? { recorded: false, reason: RECORD_TRAFFIC ? 'the proxy could not start' : '--no-record-traffic' } : { recorded: true, proxy: proxy.url, ...proxy.stats() };
+  closeProxy();
   results.passed = code === 0 && checks.every((c) => c.passed);
   writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
   // A red names the assertion, never the run.
@@ -753,7 +786,25 @@ async function budgetGate() {
   }
 }
 
+/**
+ * The recording proxy, and the URL the PRODUCT is given.
+ *
+ * `endpoint.baseUrl` stays the real endpoint and is what this script's own reads use — discovery, and the
+ * provider's credit check, neither of which is the product talking. `appBaseUrl` is what the sandbox is
+ * configured with: the proxy when it is recording, the endpoint itself when it is not. Everything the product
+ * is told, and every assertion about what the product did, uses `appBaseUrl`; nothing else may.
+ *
+ * A proxy that cannot start is not a reason to lose the run. It is reported, `appBaseUrl` falls back to the
+ * endpoint, and the pack says traffic was not recorded rather than quietly holding no file.
+ */
+if (RECORD_TRAFFIC) {
+  try { proxy = await startRecordingProxy({ upstreamUrl: endpoint.baseUrl, redact }); }
+  catch (cause) { console.error(`warning: the recording proxy could not start (${cause instanceof Error ? cause.message : String(cause)}); the run talks to the endpoint directly.`); }
+}
+const appBaseUrl = proxy?.url ?? endpoint.baseUrl;
+
 console.log(`live-run: ${endpoint.label} (${endpoint.name}) at ${endpoint.baseUrl}, model ${endpoint.model}`);
+console.log(`traffic: ${proxy === null ? (RECORD_TRAFFIC ? 'NOT recorded — the proxy could not start' : 'not recorded (--no-record-traffic)') : `recorded through ${proxy.url} → model-traffic.jsonl per scenario`}`);
 console.log(`accounting: ${accountingKind === 'unmetered' ? 'none — unmetered; tokens are counted and reported, nothing stops on them' : accountingKind === 'provider' ? "the provider's own figure" : accountingKind === 'priced' ? 'the registered prices over the store\'s tokens' : `tokens only, ceiling ${MAX_TOKENS}`}`);
 console.log(`key: ${keySource}`);
 console.log(`sandbox: ${sandbox}`);
@@ -762,7 +813,7 @@ console.log(`sandbox: ${sandbox}`);
 const signIn = launch('sign-in', {
   ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Models',
   ROTARIS_CAPTURE_CLICKS: '[data-action="add-endpoint"]@2200',
-  ROTARIS_CAPTURE_PROVIDER_FILL: `${endpoint.label}>>${endpoint.baseUrl}>>${key}`,
+  ROTARIS_CAPTURE_PROVIDER_FILL: `${endpoint.label}>>${appBaseUrl}>>${key}`,
   ROTARIS_CAPTURE_PROVIDER_EMPTY_OK: '1',
   ROTARIS_CAPTURE_WAIT: `file:${tokensFile}`, ROTARIS_CAPTURE_WAIT_MS: String(SIGN_IN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '4000',
 }, SIGN_IN_WAIT_MS + 90_000);
@@ -789,7 +840,7 @@ for (const slot of ['large_model', 'medium_model', 'small_model']) agents = agen
 if (!inCatalogue || typeof endpoint.contextTokens === 'number') {
   const prices = priced ? `    input_cost_per_token: ${endpoint.inputUsdPerMillion / 1e6}\n    output_cost_per_token: ${endpoint.outputUsdPerMillion / 1e6}\n` : '';
   const context = typeof endpoint.contextTokens === 'number' ? `    max_input_tokens: ${endpoint.contextTokens}\n` : '';
-  agents += `models:\n  ${JSON.stringify(QUALIFIED)}:\n    provider: openai-compatible\n    model_id: ${JSON.stringify(endpoint.model)}\n    auth_provider: ${PROVIDER_ID}\n    base_url: ${endpoint.baseUrl}\n${context}${prices}`;
+  agents += `models:\n  ${JSON.stringify(QUALIFIED)}:\n    provider: openai-compatible\n    model_id: ${JSON.stringify(endpoint.model)}\n    auth_provider: ${PROVIDER_ID}\n    base_url: ${appBaseUrl}\n${context}${prices}`;
 }
 // `session_log_level` is the one level knob the product actually honours (REQ-SESSION-142; the APPLICATION log
 // filters on nothing, which is OQ-63's open question). It governs `<store>/sessions/<id>/session.log`, which
@@ -807,7 +858,9 @@ if (wanted.includes('ask')) {
   }, RUN_WAIT_MS + 90_000);
   const requests = [...new Set((log.match(/model request POST (\S+)/g) ?? []).map((line) => line.replace('model request POST ', '')))];
   check(log.includes(`credentials leased: ${PROVIDER_ID}`), 'main leased the bearer to the run host');
-  check(requests.some((url) => url.startsWith(`${endpoint.baseUrl}/chat/completions`)), 'a request reached the endpoint', requests.join(', '));
+  // `appBaseUrl`, not the endpoint: the assertion is about what the PRODUCT did, and when the proxy is recording
+  // the product was given the proxy. The traffic file below is what says the call reached the endpoint itself.
+  check(requests.some((url) => url.startsWith(`${appBaseUrl}/chat/completions`)), 'a request reached the endpoint', requests.join(', '));
   check(!/capture: wait for result timed out/.test(log), 'the run reached its result inside the wait');
   const read = readSession();
   const answer = (read?.rows ?? []).filter((row) => row.kind === 'agent').map((row) => row.body).join(' ');
@@ -817,6 +870,20 @@ if (wanted.includes('ask')) {
   check(tools.length > 0 && tools.every((row) => row.settled === 1), 'every tool call settled', tools.map((row) => `${row.tool_name}:${row.tool_status}`).join(', '));
   check(/addTodo/.test(answer) && /toggleTodo/.test(answer), 'the answer names the functions the file exports', answer.trim().slice(0, 200));
   check(usage.length > 0, 'usage figures were recorded', JSON.stringify(usage[usage.length - 1] ?? null));
+  /*
+   * The recording is itself asserted, not assumed. A proxy that forwarded but recorded nothing would leave the
+   * run green and the pack empty — the exact shape of gap this whole change exists to close — so the first
+   * scenario that talks to the model reads its own traffic file back and requires a completion that the
+   * ENDPOINT answered. It also proves the hop the check above can no longer see: the product reached the proxy,
+   * and this says the proxy reached the endpoint and got a 200.
+   */
+  if (proxy !== null) {
+    const traffic = readTraffic('ask');
+    const completions = traffic.filter((r) => String(r.path ?? '').includes('/chat/completions'));
+    check(completions.some((r) => r.status === 200), 'the endpoint answered a completion, read from the recorded traffic', `${traffic.length} record(s), ${completions.length} completion(s), statuses ${[...new Set(completions.map((r) => r.status))].join(', ') || 'none'}`);
+    check(completions.every((r) => r.requestHeaders?.authorization === '[redacted]'), 'the traffic record carries no bearer', `${completions.length} completion record(s)`);
+    results.scenarios.ask.traffic = { records: traffic.length, completions: completions.length, slowestMs: Math.max(0, ...traffic.map((r) => r.ms ?? 0)) };
+  }
   results.scenarios.ask = { status: read?.session.execution_status, iterations: read?.session.iterations_completed, tokens: { input: read?.session.tokens_input, output: read?.session.tokens_output }, tools: tools.map((row) => row.tool_name), answer: answer.trim().slice(0, 400) };
   if (read) preserveRun('ask', read.session.session_id);
   await budgetGate();

@@ -237,6 +237,7 @@ directory per scenario:
 | `autopsy.txt` | `apps/desktop/scripts/autopsy.mjs` over that scenario's session |
 | `session.log` | the product's own per-session log, at `--session-log-level` (default `INFO`) |
 | `transcript.md` | every transcript row in full, not the 400 characters `results.json` keeps |
+| `model-traffic.jsonl` | **what the model was sent and what came back** — request and response bodies, status and duration per call. The product logs a method and a URL and nothing else, so this exists nowhere else |
 | `*.png` | the end of the scenario, plus one a fifth and one three fifths through its wait |
 | `node-test.log`, `diff.txt`, `changed/` | where the scenario produces them |
 
@@ -246,6 +247,16 @@ which is why every defect that skill has found came from a session somebody drov
 `pnpm autopsy .live-run/runs/<stamp>/workspace.db <session-id>`, or point the skill at the pack directory.
 
 The sandbox itself is deleted at the end unless `--keep`. The record of what happened in it is not.
+
+**The traffic is recorded through a loopback proxy**, so the sandbox's `base_url` is the proxy and the endpoint
+is one hop further on. Two consequences worth knowing before reading a pack: a `model request POST` line in
+`app.log` names the proxy rather than the endpoint, and it is `model-traffic.jsonl` that says the call reached
+the endpoint and what it answered. The proxy forwards chunks as they arrive and buffers nothing — a streamed
+completion reaches the product exactly as the endpoint sent it, which
+`apps/desktop/scripts/lib/model-traffic.test.ts` pins with a case that fails if it ever stops being true.
+`--no-record-traffic` takes the proxy out of the path for the run where the proxy itself is the suspect.
+Credentials never reach the file: `authorization` and the api-key spellings are replaced before it is written,
+and the live run asserts that in `ask`.
 
 The sandbox holds a **real credential** — the app writes the leased key into its own store, as it would on the
 owner's machine — so the credential directory is deleted on every exit path there is: the normal end, `--keep`,

@@ -47,7 +47,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
-import { cleanEnvironment } from './lib/harness.mjs';
+import { cleanEnvironment, proofIsolationEnv } from './lib/harness.mjs';
 import { spawn, spawnSync } from 'node:child_process'; // Part C2 — `spawn` writes a file WHILE a launch blocks this script.
 
 const repo = resolve(import.meta.dirname, '..', '..', '..');
@@ -75,7 +75,7 @@ function launch(name, workspace, local, preferences, extra, timeoutMs = 150_000)
   const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), workspace], {
     cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
     env: {
-      ...cleanEnvironment(), LOCALAPPDATA: local, APPDATA: join(dirname(local), 'roaming'), ROTARIS_PREFERENCES_ROOT: preferences,
+      ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_VIEW: '2', ROTARIS_CAPTURE_VIEW_MS: '1000', ROTARIS_CAPTURE_PNG: png, ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
       ...extra,
     },

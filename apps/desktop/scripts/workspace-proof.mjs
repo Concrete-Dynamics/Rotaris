@@ -26,7 +26,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
-import { app as appDirectory, buildDesktop, cleanEnvironment, electron, evidenceDirectory, mainEntry } from './lib/harness.mjs';
+import { app as appDirectory, buildDesktop, cleanEnvironment, electron, evidenceDirectory, mainEntry, proofIsolationEnv } from './lib/harness.mjs';
 import { startApp } from './lib/driver.mjs';
 
 const output = evidenceDirectory('.workspace-proof');
@@ -127,9 +127,7 @@ async function handOver(started, workspace) {
     stdio: ['ignore', 'pipe', 'pipe'],
     env: {
       ...cleanEnvironment(),
-      LOCALAPPDATA: started.local,
-      APPDATA: join(started.local, '..', 'roaming'),
-      ROTARIS_PREFERENCES_ROOT: started.preferences,
+      ...proofIsolationEnv({ local: started.local, preferences: started.preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted',
       ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
     },

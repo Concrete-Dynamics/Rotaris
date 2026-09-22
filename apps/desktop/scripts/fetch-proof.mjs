@@ -23,9 +23,9 @@
 import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { join, relative, resolve, sep } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { cleanEnvironment, findDatabases, oneDatabase } from './lib/harness.mjs';
+import { cleanEnvironment, findDatabases, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -97,7 +97,7 @@ async function launch(name, url, runtime) {
   saveConfiguration(runtime);
   seen.length = 0;
   const result = await spawnElectron({
-    ...cleanEnvironment(), LOCALAPPDATA: local, APPDATA: join(dirname(local), 'roaming'), ROTARIS_PREFERENCES_ROOT: preferences,
+    ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
     ROTARIS_MODEL_DIALECT: 'scripted', ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
     // REQ-ORCH-016: the direct-work grant is what hands the entry role `fetch` (no built-in persona declares it).
     ROTARIS_INTENT_SCRIPT: 'explicit_trivial',

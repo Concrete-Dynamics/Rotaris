@@ -43,3 +43,8 @@ server's own tool and is not this product's to change.
 
 Measured: `packages/agent-tools/src/tools/tools.test.ts` covers both branches and the two things the
 refusal must not do; 19 passed.
+
+**Raised with the owner, 2026-09-22 — [R-047](../product/requests.md#r-047).** Repairing this note means
+changing behaviour a live requirement states exactly, which `docs/product/README.md` sends to a `PD` and
+an implementer may not mint. The request is logged with the requirements a directive would have to name,
+so the decision is in front of the owner rather than waiting in a defect note.

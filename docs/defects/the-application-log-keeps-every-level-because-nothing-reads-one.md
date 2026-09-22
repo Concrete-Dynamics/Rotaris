@@ -35,3 +35,32 @@ the open question.
   into the message rather than reading it.
 - `packages/mcp/src/transport.ts` — a child server's stderr, now forwarded at `debug`.
 - `apps/desktop/src/run-host/mcp.ts` — the run host's log adapter, which no longer flattens `debug`.
+
+
+## Half repaired — 2026-09-22, and the half that remains is OQ-63's
+
+The note's title names two things and only one of them is an open question. **"Prints the level as text"
+is repaired; "filters on nothing" is not, and must not be here.**
+
+`apps/desktop/src/main/index.ts` now has `logAt(level, source, message)` beside the `log` closure, and the
+two forwarders pass the level as a VALUE rather than interpolating it into the message:
+
+```ts
+svc.link.onEvent((e) => { if (e.kind === 'log') logAt(e.level, 'workspace service', e.message); });
+// …
+else if (e.kind === 'log') logAt(e.level, 'run host', e.message);
+```
+
+**The rendered line is byte-identical.** `run host debug: mcp code_intelligence stderr: …` still reads
+exactly that, so every reader, grep and proof that matches on it is untouched — which is why this could
+be done without ruling anything. What changed is that the level is now a value the log HAS, so a
+threshold is one predicate in one function rather than a parse of a formatted string in two places.
+
+**No threshold was added, and adding one would have been the wrong thing to do.** What a packaged build's
+diagnostics are worth after an incident is **OQ-63**, the build proceeds under "the log keeps every
+level", and the 141 `run host debug:` lines this note measured would all still be written today. The
+volume half of the note stays open until that question is ruled; the mechanism half — "nothing reads
+`e.level`" — is no longer true.
+
+Measured: `pnpm check` green (2,119 passed); `pnpm overview-proof` and `pnpm rows-proof` exit 0 with the
+log lines unchanged in shape.

@@ -12,3 +12,8 @@ No requirement contradicted — the hash guard and the create-guard each held; r
 - `packages/engine/src/children/orchestration.ts` — sibling children spawned into the same workspace.
 
 Noticed 2026-09-20 by the run-autopsy of run `2e21e324`.
+
+**Raised with the owner, 2026-09-22 — [R-047](../product/requests.md#r-047).** Repairing this note means
+changing behaviour a live requirement states exactly, which `docs/product/README.md` sends to a `PD` and
+an implementer may not mint. The request is logged with the requirements a directive would have to name,
+so the decision is in front of the owner rather than waiting in a defect note.

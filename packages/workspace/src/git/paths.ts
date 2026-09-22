@@ -1,5 +1,5 @@
 import { realpathSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { posix, win32 } from 'node:path';
 
 /**
  * Path rules shared by the Git reads and the worktree writes.
@@ -21,10 +21,20 @@ export function normalisePath(path: string, platform: NodeJS.Platform = process.
   return platform === 'win32' ? p.toLowerCase() : p;
 }
 
-/** The resolved, normalised spelling; a path that does not exist resolves lexically so it still compares. */
+/**
+ * The resolved, normalised spelling; a path that does not exist resolves lexically so it still compares.
+ *
+ * The lexical resolution follows the PLATFORM PARAMETER, as `canonicalPath` already does: a host-bound
+ * `resolve` prefixed a Windows spelling with the POSIX host's own working directory, so `C:\ws\alpha`
+ * compared equal to nothing a Windows machine would ever produce. Symlink resolution stays the HOST's
+ * and is attempted only when the two agree — no parameter can make a Windows path exist on a POSIX disk.
+ */
 export function resolvedPath(path: string, platform: NodeJS.Platform = process.platform): string {
+  const { resolve } = platform === 'win32' ? win32 : posix;
   let real = resolve(path);
-  try { real = realpathSync.native(path); } catch { /* absent or unreadable: the lexical resolution stands */ }
+  if (platform === process.platform) {
+    try { real = realpathSync.native(path); } catch { /* absent or unreadable: the lexical resolution stands */ }
+  }
   return normalisePath(real, platform);
 }
 

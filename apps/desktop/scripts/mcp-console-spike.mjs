@@ -17,6 +17,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
+import { proofIsolationEnv } from './lib/harness.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -53,7 +54,7 @@ for (const key of Object.keys(env)) if (key.startsWith('ROTARIS_')) delete env[k
 const launchedAt = new Date();
 const child = spawn(exe, [workspace], {
   cwd: dirname(exe), windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
-  env: { ...env, LOCALAPPDATA: local, APPDATA: join(dirname(local), 'roaming'), ROTARIS_PREFERENCES_ROOT: join(root, 'preferences'), ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_INTENT_SCRIPT: 'explicit_trivial', ROTARIS_CIRCUIT_BREAKER: 'off', ROTARIS_CAPTURE_PNG: join(output, 'window.png'), ROTARIS_CAPTURE_PROMPT: 'echo through cmd', ROTARIS_SCRIPT: 'mcp:console.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '12000', ELECTRON_DISABLE_SECURITY_WARNINGS: 'true' },
+  env: { ...env, ...proofIsolationEnv({ local, preferences: join(root, 'preferences') }), ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_INTENT_SCRIPT: 'explicit_trivial', ROTARIS_CIRCUIT_BREAKER: 'off', ROTARIS_CAPTURE_PNG: join(output, 'window.png'), ROTARIS_CAPTURE_PROMPT: 'echo through cmd', ROTARIS_SCRIPT: 'mcp:console.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '12000', ELECTRON_DISABLE_SECURITY_WARNINGS: 'true' },
 });
 let log = '';
 child.stdout.setEncoding('utf8'); child.stdout.on('data', (d) => { log += d; });

@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { cleanEnvironment, findDatabases, oneDatabase } from './lib/harness.mjs';
+import { cleanEnvironment, findDatabases, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 
 /**
  * Part W's first execution in the built application: the ONE action vocabulary reaching the screen three ways.
@@ -75,7 +75,7 @@ function launch(name, s, extra, opts = {}) {
   const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), s.workspace], {
     cwd: app, encoding: 'utf8', timeout: opts.timeout ?? 150_000, windowsHide: true,
     env: {
-      ...cleanEnvironment(), LOCALAPPDATA: s.local, APPDATA: join(dirname(s.local), 'roaming'), ROTARIS_PREFERENCES_ROOT: s.preferences,
+      ...cleanEnvironment(), ...proofIsolationEnv({ local: s.local, preferences: s.preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ELECTRON_DISABLE_SECURITY_WARNINGS: 'true', ...extra,
     },
   });

@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { cleanEnvironment } from './lib/harness.mjs';
+import { cleanEnvironment, proofIsolationEnv } from './lib/harness.mjs';
 
 /**
  * ADR-0022's first execution in the built app (Part AR).
@@ -64,9 +64,7 @@ function launch(name, s, extra) {
     cwd: app, encoding: 'utf8', timeout: 180_000, windowsHide: true,
     env: {
       ...cleanEnvironment(),
-      LOCALAPPDATA: s.local,
-      APPDATA: join(dirname(s.local), 'roaming'),
-      ROTARIS_PREFERENCES_ROOT: join(s.root, 'preferences'),
+      ...proofIsolationEnv({ local: s.local, preferences: join(s.root, 'preferences') }),
       ROTARIS_MODEL_DIALECT: 'scripted',
       ROTARIS_CAPTURE_PNG: png,
       ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',

@@ -12,3 +12,8 @@ REQ-TOOLS-052 (timeout → deny) and REQ-TOOLS-055 (the shared approval budget) 
 - `packages/config/src/sections/runtime.ts` — `approval_timeout_seconds`, the bound both waits burned.
 
 Noticed 2026-09-21 by the run-autopsy of run `1ddeb71b`.
+
+**Raised with the owner, 2026-09-22 — [R-047](../product/requests.md#r-047).** Repairing this note means
+changing behaviour a live requirement states exactly, which `docs/product/README.md` sends to a `PD` and
+an implementer may not mint. The request is logged with the requirements a directive would have to name,
+so the decision is in front of the owner rather than waiting in a defect note.

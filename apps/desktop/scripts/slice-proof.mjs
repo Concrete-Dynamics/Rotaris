@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { cleanEnvironment, findDatabases, oneDatabase } from './lib/harness.mjs';
+import { cleanEnvironment, findDatabases, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 
 /**
  * The vertical slice's proof (Part K.4): sign in to OpenRouter through the product and complete one run on a
@@ -88,9 +88,7 @@ function launch(name, extra, timeoutMs = 120_000) {
     cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
     env: {
       ...cleanEnvironment(),
-      LOCALAPPDATA: local,
-      APPDATA: join(dirname(local), 'roaming'),
-      ROTARIS_PREFERENCES_ROOT: join(root, 'preferences'),
+      ...proofIsolationEnv({ local, preferences: join(root, 'preferences') }),
       ROTARIS_CAPTURE_PNG: png,
       ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
       ...extra,

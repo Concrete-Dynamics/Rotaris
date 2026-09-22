@@ -25,6 +25,7 @@ import { appendFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSyn
 import { tmpdir } from 'node:os';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { proofIsolationEnv } from './lib/harness.mjs';
 
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
@@ -143,7 +144,9 @@ try {
   writeFileSync(driver, driverSource());
   const processOut = join(output, 'process-results.json');
   const scale = join(output, 'scale');
-  const env = { ...process.env, LOCALAPPDATA: local, APPDATA: join(local, 'roaming'), ELECTRON_DISABLE_SECURITY_WARNINGS: 'true' };
+  // No preference root: the loop below strips every `ROTARIS_` key, so this launch deliberately runs
+  // without one. `proofIsolationEnv` omits the key rather than naming it undefined.
+  const env = { ...process.env, ...proofIsolationEnv({ profileRoot: local, local }), ELECTRON_DISABLE_SECURITY_WARNINGS: 'true' };
   for (const key of Object.keys(env)) if (key.startsWith('ROTARIS_')) delete env[key];
   const drove = spawnSync(electron, [driver, join(app, 'out', 'main', 'workspace-service.js'), processFixture, scale, processOut], { cwd: app, encoding: 'utf8', timeout: 180_000, windowsHide: true, env });
   writeFileSync(join(output, 'process.log'), `${drove.stdout ?? ''}\n${drove.stderr ?? ''}`);

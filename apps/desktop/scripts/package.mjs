@@ -16,6 +16,7 @@ import { createRequire } from 'node:module';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { proofIsolationEnv, workspacesRootFor } from './lib/harness.mjs';
 
 const APP = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const RELEASE = join(APP, 'release');
@@ -149,7 +150,7 @@ appRun = step('the packaged app opens a store and runs a terminal call', () => {
   const png = join(RELEASE, 'load-proof.png');
   const env = {
     ...process.env,
-    LOCALAPPDATA: lad,
+    ...proofIsolationEnv({ profileRoot: scratch, local: lad }),
     ROTARIS_MODEL_DIALECT: 'scripted',
     ROTARIS_SCRIPT: 'git',
     ROTARIS_CAPTURE_PNG: png,
@@ -161,7 +162,9 @@ appRun = step('the packaged app opens a store and runs a terminal call', () => {
   const log = `${r.stdout || ''}\n${r.stderr || ''}`;
   writeFileSync(join(RELEASE, 'load-proof.app.log'), log);
   const dbs = [];
-  const wsRoot = join(lad, 'rotaris', 'data', 'workspaces');
+  // By the platform, never as a Windows literal: the POSIX answer has no `data` segment, so the literal
+  // found nothing off Windows while reading as though the launch had written nothing.
+  const wsRoot = workspacesRootFor(lad);
   if (existsSync(wsRoot)) for (const d of readdirSync(wsRoot)) { const f = join(wsRoot, d, 'workspace.db'); if (existsSync(f)) dbs.push(f); }
   if (dbs.length !== 1) throw new Error(`expected one workspace store under ${wsRoot}, found ${dbs.length} (app exit ${r.status ?? r.signal}); see load-proof.app.log`);
   const Database = require('better-sqlite3');

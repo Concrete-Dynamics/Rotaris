@@ -17,7 +17,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { join, posix, relative, resolve, sep } from 'node:path';
+import { join, posix, relative, resolve, sep, win32 } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 
@@ -52,6 +52,26 @@ export function findDatabases(root) {
     else if (entry.name === 'workspace.db') found.push(path);
   }
   return found;
+}
+
+/**
+ * Where a launch isolated at `local` keeps its workspace stores, **by the platform that will read them**.
+ *
+ * The product's own rule, and it is not the same shape on both sides: `resolveUserDirs` answers
+ * `<LOCALAPPDATA>/rotaris/data` on win32 and `<XDG_DATA_HOME>/rotaris` — no `data` segment — everywhere
+ * else, and `dataLayout` puts `workspaces` under whichever it got. Three scripts spelled the Windows
+ * answer as a literal and so could only find a store on Windows
+ * (`docs/defects/fixed/the-packaged-load-check-reads-its-store-at-a-windows-shaped-path.md`).
+ *
+ * This is a COPY of a rule the product owns, because `harness.mjs` is plain JavaScript run straight from
+ * the repository and cannot import a TypeScript package. `proof-isolation.test.ts` asserts the copy
+ * against `resolveUserDirs`/`dataLayout` themselves on both platforms, which is what keeps it from
+ * drifting — a drift is a failed test, not a proof that quietly finds nothing.
+ */
+export function workspacesRootFor(local, platform = process.platform) {
+  if (platform === 'win32') return win32.join(local, 'rotaris', 'data', 'workspaces');
+  const data = posix.join(local.split(sep).join(posix.sep), 'rotaris', 'data');
+  return posix.join(data, 'rotaris', 'workspaces');
 }
 
 /** The one store below `local`, or a thrown error naming how many there were — a proof that opened the wrong store is the defect this refuses to become. */

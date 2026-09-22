@@ -373,7 +373,20 @@ export function writeFileTool(state: FileToolState, fence: FenceConfig): ToolExe
       };
       switch (a.operation) {
         case 'create': {
-          if (exists) return errorObservation(`File already exists: ${rel}. Use 'overwrite' or 'edit'.`);
+          if (exists) {
+            // The guard is unchanged — which calls are refused is fixed by the requirement. What is added
+            // is the one fact that decides the caller's next move. Two sibling children writing in one
+            // checkout hit this and could not tell a file they had forgotten writing from a file a sibling
+            // had just written; run `2e21e324`'s transcript shows one of them spending a turn discovering
+            // the answer by hand (`docs/defects/two-writing-children-in-one-checkout-collided.md`).
+            // Whether THIS agent has read the path is already known here, costs nothing, and separates the
+            // two cases. No content is quoted, which `tools.test.ts` pins.
+            const lines = before === null ? 0 : before.split('\n').length;
+            const whose = state.wasRead(resolved)
+              ? 'You have read it in this session, so it is a file you already know about.'
+              : 'You have NOT read it in this session — it was there before you started, or something else wrote it while you worked.';
+            return errorObservation(`File already exists: ${rel} (${lines} line(s)). ${whose} Read it before deciding, then use 'overwrite' or 'edit'.`);
+          }
           const content = a.content ?? '';
           return commit(content, `Created ${rel}: ${content.split('\n').length} line(s) created.`);
         }

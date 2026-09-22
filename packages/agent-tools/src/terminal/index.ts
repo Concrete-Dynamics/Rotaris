@@ -1,5 +1,5 @@
 import { existsSync, statSync } from 'node:fs';
-import { delimiter, join } from 'node:path';
+import { join } from 'node:path';
 import { z } from 'zod';
 import type { Clocks } from '@rotaris/kernel';
 import { errorObservation, observation, type Observation, type ToolContext, type ToolExecutor } from '../tools/types.js';
@@ -43,7 +43,10 @@ export type TerminalArgs = z.infer<typeof terminalSchema>;
 /** REQ-TOOLS-104: presence on the host, and nothing else. */
 export function findShell(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): ShellBackend | null {
   if (platform === 'win32') {
-    const dirs = (env['PATH'] ?? env['Path'] ?? '').split(delimiter).filter((d) => d.length > 0);
+    // `;` by the branch, not `delimiter` by the host: a host-bound delimiter split a Windows PATH on `:`
+    // whenever the host was not Windows, cutting every entry at its drive letter. `join` below stays the
+    // host's — what is `stat`ed is the host's own filesystem however the PATH was spelled.
+    const dirs = (env['PATH'] ?? env['Path'] ?? '').split(';').filter((d) => d.length > 0);
     for (const exe of ['pwsh.exe', 'powershell.exe']) {
       for (const d of dirs) {
         const f = join(d, exe);

@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { cleanEnvironment, findDatabases, oneDatabase } from './lib/harness.mjs';
+import { cleanEnvironment, findDatabases, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 
 /**
  * Part Q's first execution in the built app: the model resilience paths against the scripted client's fault steps
@@ -71,7 +71,7 @@ function launch(name, s, extra, opts = {}) {
   const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), s.workspace], {
     cwd: app, encoding: 'utf8', timeout: opts.timeout ?? 180_000, windowsHide: true,
     env: {
-      ...cleanEnvironment(), LOCALAPPDATA: s.local, APPDATA: join(dirname(s.local), 'roaming'), ROTARIS_PREFERENCES_ROOT: join(s.root, 'preferences'),
+      ...cleanEnvironment(), ...proofIsolationEnv({ local: s.local, preferences: join(s.root, 'preferences') }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ELECTRON_DISABLE_SECURITY_WARNINGS: 'true', ...extra,
     },
   });

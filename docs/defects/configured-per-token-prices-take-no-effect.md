@@ -52,3 +52,7 @@ a provider-reported per-request cost — are not covered at all; they are **OQ-6
   (REQ-PROVIDER-072, pinned by `discovery.test.ts`).
 - `docs/architecture/adr/0031-money-as-exact-decimal.md`, `docs/architecture/open-questions.md` (OQ-21,
   OQ-62) — what has to be decided before this is built.
+
+**Confirmed still blocked, 2026-09-22 — [R-047](../product/requests.md#r-047).** Re-read against the code
+under the instruction that every open defect be repaired. The block named above has not moved, and nothing
+in this note can be built without pre-empting it.

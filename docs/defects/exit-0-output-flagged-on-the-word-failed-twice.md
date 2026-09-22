@@ -33,3 +33,8 @@ not mint one. Until the owner rules, the two commands in this run would warn aga
 
 Measured: `packages/agent-tools/src/terminal/terminal.test.ts`'s REQ-TOOLS-113 case, extended with this
 run's own docker line and with the cap, is green.
+
+**Raised with the owner, 2026-09-22 — [R-047](../product/requests.md#r-047).** Repairing this note means
+changing behaviour a live requirement states exactly, which `docs/product/README.md` sends to a `PD` and
+an implementer may not mint. The request is logged with the requirements a directive would have to name,
+so the decision is in front of the owner rather than waiting in a defect note.

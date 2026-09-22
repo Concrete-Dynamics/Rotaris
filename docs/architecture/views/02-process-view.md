@@ -322,9 +322,12 @@ or probe, all through `OwnedStdioTransport` (three piped streams, hidden window,
 `cmd.exe`), killed by `terminateTree` (terminate, 5 s, force, the tree). A child's stderr reaches the log redacted and
 at **debug** — its diagnostics are its own, and a real server writes them by the dozen per connection — while
 `REQ-MCP-107`'s tail keeps every line for the failure account. **Debug is a label here and not a filter:** the
-application log has no level threshold anywhere in main (`index.ts` prints `run host ${e.level}: ${e.message}`
-through one `console.log`), so those lines still reach it — 141 of them in one measured launch. What level, if
-any, that log should take is **OQ-63**; every level requirement in the corpus governs the per-session log. The fixture server the proof and the tests speak
+application log has no level threshold anywhere in main, so those lines still reach it — 141 of them in one
+measured launch. What level, if any, that log should take is **OQ-63**; every level requirement in the corpus
+governs the per-session log. Since 2026-09-22 the level is at least a **value** rather than text: `index.ts`
+carries `logAt(level, source, message)` and the two forwarders pass `e.level` to it instead of interpolating
+it into the message. The rendered line is unchanged (`run host debug: …`), so a threshold, when OQ-63 rules,
+is one predicate in one function rather than a parse of a formatted string in two places. The fixture server the proof and the tests speak
 to is `apps/desktop/scripts/fixtures/mcp-fixture-server.mjs`. The scripted client's step `mcp:<server>.<tool>` calls an
 MCP tool by its callable name; `ROTARIS_CAPTURE_PROMPT_MS` delays the typed prompt (verification only).
 

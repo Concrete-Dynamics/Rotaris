@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import Database from 'better-sqlite3';
-import { cleanEnvironment } from './lib/harness.mjs';
+import { cleanEnvironment, proofIsolationEnv } from './lib/harness.mjs';
 
 /**
  * ADR-0062's first execution in the BUILT app: the plan gate driven end to end (REQ-ORCH-152/153/154).
@@ -81,9 +81,7 @@ function launch(name, extra, timeoutMs = 120_000) {
     cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
     env: {
       ...cleanEnvironment(),
-      LOCALAPPDATA: local,
-      APPDATA: join(dirname(local), 'roaming'),
-      ROTARIS_PREFERENCES_ROOT: join(root, 'preferences'),
+      ...proofIsolationEnv({ local, preferences: join(root, 'preferences') }),
       ROTARIS_MODEL_DIALECT: 'scripted',
       ROTARIS_CAPTURE_PNG: png,
       ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',

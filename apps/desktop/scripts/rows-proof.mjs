@@ -30,7 +30,7 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { cleanEnvironment } from './lib/harness.mjs';
+import { cleanEnvironment, proofIsolationEnv } from './lib/harness.mjs';
 
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
@@ -97,7 +97,7 @@ function launch(name, extra, timeoutMs = 150_000) {
   const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), workspace], {
     cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
     env: {
-      ...cleanEnvironment(), LOCALAPPDATA: local, APPDATA: join(root, 'roaming'), ROTARIS_PREFERENCES_ROOT: preferences,
+      ...cleanEnvironment(), ...proofIsolationEnv({ profileRoot: root, local, preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ROTARIS_CAPTURE_PROBE: PROBES,
       ROTARIS_ROWS_PROOF: '1', ROTARIS_CAPTURE_NET: '1', ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
       ...extra,

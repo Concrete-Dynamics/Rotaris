@@ -13,3 +13,9 @@ No requirement contradicted from this autopsy — the timeout fired, the transie
 - `packages/engine/src/run/resilience.test.ts` — the mid-stream timeout classified `transient`.
 
 Noticed 2026-09-20 by the run-autopsy of run `7bd9c19d`.
+
+**Ruled 2026-09-21 — [R-044](../product/requests.md#r-044), restated here 2026-09-22 under
+[R-047](../product/requests.md#r-047).** The owner asked for the most pressing defect to be fixed and this
+one ranked highest by cost. The classification found no code fix: the stall timeout (`REQ-CONFIG-114`),
+the retry budget (`REQ-ORCH-092`) and the failure summary (`REQ-ORCH-082` rule 4) each fix a part of what
+happened, and the product did each of them. The note stays as the cost record it was recorded as.

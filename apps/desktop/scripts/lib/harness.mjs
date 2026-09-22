@@ -137,11 +137,15 @@ export function proofIsolationEnv({ profileRoot, local, preferences, home }) {
   const env = {
     LOCALAPPDATA: local,
     APPDATA: roaming,
-    ROTARIS_PREFERENCES_ROOT: preferences,
     XDG_DATA_HOME: data,
     XDG_CONFIG_HOME: config,
     XDG_RUNTIME_DIR: runtime,
   };
+  // Omitted rather than set to `undefined`: two launches here isolate the data directory and deliberately
+  // leave the preference root alone (the workspace-service driver, and the packaged load check, neither of
+  // which opens a preference store). Naming the key with no value would put the string "undefined" in the
+  // child's environment on Windows, which is a path.
+  if (preferences !== undefined) env.ROTARIS_PREFERENCES_ROOT = preferences;
   if (home !== undefined) env.HOME = home;
   return env;
 }

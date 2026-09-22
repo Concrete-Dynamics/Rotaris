@@ -66,3 +66,48 @@ reads as proving, and one that reads the store cannot run at all.
   in `dirs.ts` resolves to the operator's home.
 - `packages/platform/src/dirs.ts:44-62` — the POSIX branch that reads `XDG_DATA_HOME`, and `workspaces` beneath it.
 - `apps/desktop/scripts/transcript-proof.mjs:58,83,111` — the script where the assumption becomes a failure.
+
+## Repaired — 2026-09-22
+
+**The 2026-09-19 repair reached one launch path of thirty-four, and the note's own quoted failure was on
+one of the thirty-three it missed.** `proofIsolationEnv` was written and wired into `driver.mjs`'s
+`startApp` and `launchOptions`, but every script that spawns Electron itself kept its own copy of the
+three fields. Counted before this change: **36 files named `LOCALAPPDATA` directly and exactly one named
+`XDG_DATA_HOME`.** `transcript-proof.mjs` — the script whose Linux failure this note quotes — was one of
+them, so the repair it was written against never applied to it.
+
+Every launch site now spreads the shared helper. Twenty-nine were mechanical; six were not, and each is
+noted where it sits:
+
+- `rows-proof`, `live-run`, `terminal-proof/packaged` and `traceability-proof` keep their own roaming
+  location by passing `profileRoot`, so the value each launch gets is byte-identical to the one it got
+  before on Windows.
+- `traceability-proof` names no preference root at all — it strips every `ROTARIS_` key straight after —
+  so `proofIsolationEnv` now OMITS `ROTARIS_PREFERENCES_ROOT` when it is not given one. Naming the key
+  with no value puts the literal string `undefined` in the child's environment, which on Windows is a
+  relative path, not an absent variable.
+- `code-intel-proof`'s "contained" launch overrode `LOCALAPPDATA` alone against a shared base
+  environment, so on a POSIX host it would have shared the previous launch's store while claiming a fresh
+  runtime home. The whole isolation moves together now.
+- `package.mjs` is deliberately left as it was. It reads its store back at a hard-coded
+  `<local>/rotaris/data/workspaces`, which is the Windows shape, and IC-3 blocks a Linux or macOS release
+  artifact anyway — so routing it through the helper would add a POSIX half that the script's own reader
+  cannot follow. That is a second defect of the same script and is not repaired by pretending otherwise.
+
+**The POSIX half is now measured on this host, which is what the note said was missing.**
+`apps/desktop/scripts/lib/proof-isolation.test.ts` composes the two halves that were previously argued:
+`proofIsolationEnv`'s output goes into the product's own `resolveUserDirs` once per platform, and the
+answer must land inside the scratch profile. Both halves take the platform as a PARAMETER, so the join is
+decidable from either side. It also pins the defect itself — the Windows pair ALONE resolves a Linux
+launch to `/home/david/.local/share/rotaris`, the operator's own — because a test whose subject cannot
+fail proves nothing about the repair that made it pass.
+
+The extra `rotaris` segment the POSIX rule adds below `XDG_DATA_HOME` is asserted rather than removed:
+there is no value of `XDG_DATA_HOME` that makes the two platforms spell the same path, and `findDatabases`
+walks the profile depth first, so the asymmetry costs nothing.
+
+**What is still not measured, and it is one step rather than a half:** that an Electron process on Linux
+inherits the environment it is spawned with. That is node's contract, not this product's. Everything
+between the harness and `dirs.ts` is now pinned.
+
+Measured: `apps/desktop/scripts/lib/` (58 passed, 6 of them new); all 60 scripts parse; `pnpm check` green.

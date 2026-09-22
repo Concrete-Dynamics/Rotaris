@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { nodeClocks } from '@rotaris/platform';
-import { ageLabel, excludedPath, normalisePath, parseLog, parseNumstat, parseStatusPaths, parseWorktreeList, readGitView } from '../index.js';
+import { ageLabel, excludedPath, normalisePath, parseLog, parseNumstat, parseStatusPaths, parseWorktreeList, readGitView, resolvedPath, samePath } from '../index.js';
 
 /**
  * ADR-0038's second execution (Part O): the Git view's reads — the parsers as pure functions, REQ-GIT-003's exclusion,
@@ -47,6 +47,17 @@ describe('the parsers are pure functions of Git\'s machine-readable output', () 
   it('normalises separators and, on win32, case', () => {
     expect(normalisePath('D:\\A\\B\\', 'win32')).toBe('d:/a/b');
     expect(normalisePath('/a/B/', 'linux')).toBe('/a/B');
+  });
+  it('resolves lexically by the platform asked about, not the host asking (R3 separator residue)', () => {
+    // Found 2026-09-22 by sweeping every platform-parameterised function for a host-bound `node:path`
+    // export. `resolve` was the HOST's, so a Windows spelling asked on a POSIX host came back prefixed
+    // with that host's working directory (`/home/me/C:\ws\alpha` → `/home/me/c:/ws/alpha`) and REQ-GIT-106's
+    // "joined by resolved path" was decidable on Windows alone. Both answers are absolute on both hosts.
+    expect(resolvedPath('C:\\ws\\Alpha', 'win32')).toBe('c:/ws/alpha');
+    expect(resolvedPath('/srv/ws/Alpha', 'linux')).toBe('/srv/ws/Alpha');
+    // Two spellings of one directory still compare equal under the rule the parameter names (REQ-GIT-106).
+    expect(samePath('C:\\ws\\alpha', 'c:/ws/ALPHA/', 'win32')).toBe(true);
+    expect(samePath('/srv/ws/alpha', '/srv/ws/ALPHA/', 'linux')).toBe(false);
   });
 });
 

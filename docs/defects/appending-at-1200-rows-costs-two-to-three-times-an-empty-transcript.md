@@ -79,3 +79,45 @@ guess is the thing `.agents/skills/debug-ui` step 8 exists to forbid.
 So the note stays open on a narrower question than it was recorded with: **not** whether the product is at
 fault — it is — but which of the remaining depth-dependent terms is worth a seam change, measured under a
 harness whose own spread is currently ±20 ms.
+
+## The remaining candidate is falsified — 2026-09-22
+
+The note closed the last round naming one thing to try: `projectDisplay` runs whole-state on every render,
+an incremental form (`{ previous, from }`) exists, and the pane does not use it because no prop carries the
+replica's `earliestChanged` across the seam. **It is measured now, and it is not where the cost is.**
+
+`packages/ui/src/transcript/append-cost.test.ts` builds the proof's own S1200 fixture and times every pure
+term on the apply path. On the development machine, medians of twenty-one runs after warm-up:
+
+| term, at 1,200 displayed rows | median |
+| --- | --- |
+| `projectDisplay`, whole-state | 0.873 ms |
+| `projectDisplay`, incremental (`from: 1199`) | 0.276 ms |
+| `placements` over the displayed array | 0.072 ms |
+| `measureKey` for every displayed row | 0.089 ms |
+
+The same four at one row total about 0.017 ms. So the entire depth-dependent JavaScript on the apply path
+is **about one millisecond**, and threading `earliestChanged` across the seam would buy **0.6 ms of a 47 ms
+gap** — around one percent of it. That is the seam change the note was holding itself open to consider, and
+it is not worth taking for this.
+
+**Where the cost must therefore be.** The sample is `applyIncrement` plus two `requestAnimationFrame`
+callbacks, so it is quantised by the frame cadence: the empty transcript's 36.8 ms is almost exactly the
+two-frame floor the double-rAF imposes on anything at all, and the loaded transcript's 83.9 ms is five.
+Three extra frames, with one millisecond of this product's own synchronous work in them, means the time is
+being spent by the browser — style, layout, or paint over a scroll container whose offset table is 1,200
+rows tall — or by the measurement pass the `ResizeObserver` drives after the pool rebinds. The pool itself
+is bounded (`visibleRange` against `capacity`), so it is not element count.
+
+**The note stays open, and the question it is open on has changed again.** It is no longer "which of the
+remaining depth-dependent terms is worth a seam change" — none of them is. It is whether `REQ-CHAT-055`'s
+comparison can be met at all under a scroll container that carries the whole transcript's height, or
+whether the harness's apply-to-paint proxy is charging the product for frames it does not cause. Settling
+that needs profiling inside the built application, across a measurement whose own spread is ±20 ms, which
+is a round of work rather than a change — and is exactly the thing `.agents/skills/debug-ui` step 8 exists
+to keep from being guessed at a third time.
+
+What is kept from this round is the falsification, as a test rather than as prose: the bounds in
+`append-cost.test.ts` are two orders above what was measured, so they cannot flake, and they can only fail
+if one of these terms ever becomes the dominant one — which is the only condition under which the seam
+change would be worth revisiting.

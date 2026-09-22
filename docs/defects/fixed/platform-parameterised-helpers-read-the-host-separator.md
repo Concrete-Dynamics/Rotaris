@@ -60,3 +60,45 @@ needs a POSIX run of the suite — argued here, measured on Windows.
 - `packages/config/src/mcp/discovery-files.ts` — `discoveryLocations`, `readOneFile`, `readDiscoveryFiles`.
 - `packages/platform/src/platform.test.ts`, `packages/config/src/mcp/mcp.test.ts` — the proofs that only
   ever passed because the test and the code shared the host's separator.
+
+## Repaired — 2026-09-22
+
+**Three more instances of the same class, found by sweeping for it rather than by reading around the
+five the note names.** `tools/` has no gate for this, so the sweep was a script: every function whose
+signature takes a `NodeJS.Platform` and whose file imports a host-bound `node:path` export, then each
+hit read by hand against the rule "the separator this function ADDS follows the parameter; what is
+`stat`ed stays the host's". Four hits, three of them defects:
+
+- `endpointFor` (`packages/platform/src/instance.ts`) joined the unix-socket path with the host's
+  `join`, so a POSIX endpoint asked on Windows came back `…\instance-4242-ab12cd34.sock` — a name no
+  POSIX machine can bind. The directory the caller passes is **not** rewritten: a backslash is a legal
+  character in a POSIX file name, and correcting the caller's spelling would corrupt a path this
+  function cannot know is wrong.
+- `findShell` (`packages/agent-tools/src/terminal/index.ts`) split the Windows `PATH` on `delimiter`,
+  which is `:` off Windows — every entry cut at its drive letter. The branch already knows the platform,
+  so it is now `;` by the branch. `join` below it stays the host's, for the reason `findExecutable`
+  states.
+- `resolvedPath` (`packages/workspace/src/git/paths.ts`) resolved lexically with the host's `resolve`,
+  so `C:\ws\alpha` asked on a POSIX host came back prefixed with that host's working directory
+  (`/home/me/c:/ws/alpha`) and `REQ-GIT-106`'s "joined by RESOLVED path" was decidable on Windows alone.
+  It now takes the parameter's resolver and attempts `realpathSync` only when the two agree — the same
+  split `canonicalPath` already makes, and for the same reason.
+
+The fourth hit, `findExecutable`'s own `join`/`isAbsolute`, is the documented exception and is unchanged.
+
+**Two of the three are measured here, by a test that fails against the code as it was.** Reverting
+`instance.ts` turns the new case red with `expected '\run\user\1000\instance-4242-384e3dcf…' to match
+/^\/run\/user\/1000\/…/`; reverting `paths.ts` turns its case red with `expected 'D:/srv/ws/Alpha' to be
+'/srv/ws/Alpha'` — the Windows host's own drive letter on a POSIX path. Both assertions ask this host for
+the FOREIGN platform's answer, which is the direction that is decidable from either side.
+
+**`findShell`'s is not, and that is stated rather than papered over.** Its defect is a `:` where a `;`
+belongs, and `delimiter` on a Windows host already evaluates to `;` — so no assertion written here can
+tell the repaired code from the defective code. The new case builds two real directories and one
+`;`-separated PATH, which decides the rule on either operating system and will fail on a POSIX host if
+the split ever regresses. On this host it passes for the same reason the defect was invisible.
+
+Measured: `packages/platform/src/platform.test.ts` (26 passed), `packages/workspace/src/git/view.test.ts`,
+`packages/agent-tools/src/terminal/terminal.test.ts`. The "decidable on every platform" claim the note
+left open is now true of every assertion that CAN be decided from one side; the residue is one test that
+needs a POSIX host to be worth anything, and it is written and waiting (IC-3).

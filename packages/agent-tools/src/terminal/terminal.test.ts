@@ -394,4 +394,26 @@ describe('terminal — availability (REQ-TOOLS-104)', () => {
     if (process.platform !== 'win32') expect(findShell(process.env, process.platform)?.kind).toBe('posix');
     void FakeClock;
   });
+
+  it("splits a Windows PATH on the platform's separator, not the host's (R3 separator residue)", () => {
+    // Found 2026-09-22 by sweeping every platform-parameterised function for a host-bound `node:path`
+    // export. The win32 branch split on `delimiter`, which is `:` off Windows — so every entry of a
+    // Windows PATH was cut at its drive letter and the lookup searched `C`, `\dir`, `C` again.
+    //
+    // Decidable on EVERY host, which is the whole point of the class: the fixture is two real
+    // directories of the host's own, named in one `;`-separated PATH. A `:` split cuts that list
+    // wrongly on either operating system — at the drive letter on Windows, and into a single
+    // non-existent entry on POSIX, where `;` is an ordinary character in a path. Only the `;` split
+    // reaches the directory that holds the file, so the ANSWER differs, not just the spelling.
+    const base = mkdtempSync(join(tmpdir(), 'rotaris-findshell-'));
+    try {
+      const a = join(base, 'a');
+      const b = join(base, 'b');
+      mkdirSync(a);
+      mkdirSync(b);
+      writeFileSync(join(b, 'pwsh.exe'), '');
+      expect(findShell({ PATH: `${a};${b}` }, 'win32')).toEqual({ kind: 'powershell', file: join(b, 'pwsh.exe') });
+      expect(findShell({ PATH: `${a};${a}` }, 'win32')).toBeNull();
+    } finally { rmSync(base, { recursive: true, force: true }); }
+  });
 });

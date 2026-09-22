@@ -30,6 +30,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { proofIsolationEnv } from '../lib/harness.mjs';
 
 const require = createRequire(import.meta.url);
 
@@ -77,7 +78,10 @@ function launch({ exe, scratchRoot, name, enabled, afterMs }) {
   const png = join(scratch, 'painted.png');
   const env = { ...process.env };
   for (const key of Object.keys(env)) if (key.startsWith('ROTARIS_')) delete env[key];
-  env.LOCALAPPDATA = localAppData;
+  // Both variable pairs, so the launch's store is the launch's own on every platform and not the
+  // operator's. `APPDATA` now lands in the scratch profile too, where it used to be inherited; this proof
+  // reads the store below `LOCALAPPDATA` and names no preference root, so nothing here reads either.
+  Object.assign(env, proofIsolationEnv({ profileRoot: scratch, local: localAppData }));
   env.ROTARIS_MODEL_DIALECT = 'scripted';
   env.ROTARIS_SCRIPT = 'git';
   env.ROTARIS_CAPTURE_PNG = png;

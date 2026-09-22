@@ -1,7 +1,7 @@
 import { createServer, connect, type Server, type Socket } from 'node:net';
 import { mkdirSync, readFileSync, rmSync, unlinkSync } from 'node:fs';
 import { createHash, randomBytes } from 'node:crypto';
-import { join } from 'node:path';
+import { posix } from 'node:path';
 import type { MachineId, Millis, Timers, WallClock } from '@rotaris/kernel';
 import { toIsoUtc } from '@rotaris/kernel';
 import { exclusiveCreate } from './document.js';
@@ -74,7 +74,13 @@ export function endpointFor(endpointDir: string, pid: number, platform: NodeJS.P
     return `\\\\.\\pipe\\rotaris-${h}-${pid}-${nonce}`;
   }
   const dir = socketDir ?? endpointDir;
-  return join(dir, `instance-${pid}-${nonce}.sock`);
+  // The branch is reached only for a platform that addresses a unix socket, so the separator is that
+  // platform's and never the host's. A bare `join` here spelled the POSIX answer with backslashes
+  // whenever the question was asked on Windows — the same class the R3 separator sweep repaired in the
+  // five helpers beside this one, missed because the proof compared against the host's `sep` too.
+  // The directory itself is passed through untouched: a backslash is a legal character in a POSIX
+  // file name, so rewriting the caller's spelling would corrupt a directory this function cannot know is wrong.
+  return posix.join(dir, `instance-${pid}-${nonce}.sock`);
 }
 
 function readRecord(file: string): InstanceRecord | undefined {

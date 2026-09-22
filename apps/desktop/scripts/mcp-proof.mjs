@@ -26,9 +26,9 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { cleanEnvironment } from './lib/harness.mjs';
+import { cleanEnvironment, proofIsolationEnv } from './lib/harness.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -120,7 +120,7 @@ function launch(name, extra, { files = {}, timeout = 150_000 } = {}) {
   const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), workspace], {
     cwd: app, encoding: 'utf8', timeout, windowsHide: true,
     env: {
-      ...cleanEnvironment(), LOCALAPPDATA: local, APPDATA: join(dirname(local), 'roaming'), ROTARIS_PREFERENCES_ROOT: preferences,
+      ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_INTENT_SCRIPT: 'explicit_trivial', ROTARIS_CIRCUIT_BREAKER: 'off', ROTARIS_CAPTURE_PNG: png,
       PROOF_SHELL_VALUE: 'from-the-shell', ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
       ...extra,

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync, readdirSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, sep, win32 } from 'node:path';
+import { join, win32 } from 'node:path';
 import { millis, mintMachineId, FakeClock, type MachineId } from '@rotaris/kernel';
 import { replaceDocument, exclusiveCreate, guardedRead, probePid, isLockLive, isLockForeign, canonicalPath, samePath, readOrMintMachineId, resolveUserDirs, dataLayout, claimInstance, endpointFor, nodeClocks, findExecutable, environmentWithout, PreferenceStore, resolvePreferenceRoot, coercePaneLayout, composerDraftKey } from './index.js';
 
@@ -189,12 +189,23 @@ describe('platform — the instance claim (ADR-0055 alt I, REQ-STARTUP-161/162/1
     const deep = join(dir, 'a'.repeat(40), 'b'.repeat(40), 'c'.repeat(40));
     const shallow = join(dir, 'sock');
     const endpoint = endpointFor(deep, process.pid, 'linux', shallow);
-    expect(endpoint.startsWith(`${shallow}${sep}`)).toBe(true);
+    expect(endpoint.startsWith(`${shallow}/`)).toBe(true);
     expect(endpoint.length).toBeLessThan(108);
     // The default is unchanged: without a socket directory the endpoint lives under the data root.
-    expect(endpointFor(deep, process.pid, 'linux').startsWith(`${deep}${sep}`)).toBe(true);
+    expect(endpointFor(deep, process.pid, 'linux').startsWith(`${deep}/`)).toBe(true);
     // A win32 endpoint names a pipe, never the socket directory.
     expect(endpointFor(deep, process.pid, 'win32', shallow).startsWith('\\\\.\\pipe\\')).toBe(true);
+  });
+
+  it('the socket separator is the platform asked about, not the host asking (R3 separator residue)', () => {
+    // Found 2026-09-22 by sweeping every platform-parameterised function for a host-bound `node:path`
+    // export: this one joined with the HOST's separator, so a POSIX endpoint asked on Windows came back
+    // `…\instance-1-ab.sock` — a name no POSIX machine would ever bind. The case above could not see it,
+    // because it compared against the host's own `sep` and so agreed with the defect on every machine.
+    const endpoint = endpointFor('/var/lib/rotaris', 4242, 'linux', '/run/user/1000');
+    expect(endpoint).toMatch(/^\/run\/user\/1000\/instance-4242-[0-9a-f]{8}\.sock$/);
+    expect(endpoint).not.toContain('\\');
+    expect(endpointFor('/var/lib/rotaris', 4242, 'darwin')).toMatch(/^\/var\/lib\/rotaris\/instance-4242-/);
   });
 });
 

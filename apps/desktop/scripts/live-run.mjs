@@ -95,7 +95,7 @@ import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
-import { cleanEnvironment, findDatabases } from './lib/harness.mjs';
+import { cleanEnvironment, findDatabases, proofIsolationEnv } from './lib/harness.mjs';
 import { startRecordingProxy } from './lib/model-traffic.mjs';
 import { LONG_OUTPUT_LINES, diagnosticOf, longOutputReading, terminalShapes } from './lib/terminal-shapes.mjs';
 
@@ -718,7 +718,7 @@ async function launch(name, extra, timeoutMs = 180_000) {
     timeout: timeoutMs,
     env: {
       ...cleanEnvironment(),
-      LOCALAPPDATA: local, APPDATA: join(sandbox, 'roaming'), ROTARIS_PREFERENCES_ROOT: join(sandbox, 'preferences'),
+      ...proofIsolationEnv({ profileRoot: sandbox, local, preferences: join(sandbox, 'preferences') }),
       ROTARIS_CAPTURE_PNG: png, ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
       ...paced,
       ...extra,

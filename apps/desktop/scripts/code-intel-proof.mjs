@@ -26,9 +26,9 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname, join, relative, resolve, sep } from 'node:path';
+import { join, relative, resolve, sep } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { cleanEnvironment } from './lib/harness.mjs';
+import { cleanEnvironment, proofIsolationEnv } from './lib/harness.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -135,7 +135,7 @@ function launch(name, extra, { ws = workspace, global = GLOBAL, timeout = 150_00
   const result = spawnSync(electron, [mainEntry, ws], {
     cwd: app, encoding: 'utf8', timeout, windowsHide: true, maxBuffer: 64 * 1024 * 1024,
     env: {
-      ...cleanEnvironment(), LOCALAPPDATA: local, APPDATA: join(dirname(local), 'roaming'), ROTARIS_PREFERENCES_ROOT: preferences,
+      ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_INTENT_SCRIPT: 'explicit_trivial', ROTARIS_CIRCUIT_BREAKER: 'off', ROTARIS_CAPTURE_PNG: png,
       ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
       ...extra,
@@ -212,7 +212,7 @@ async function exitStatus({ exe, before, env }) {
 }
 const SERVER_TAIL = (ws) => ['start-mcp-server', '--transport', 'stdio', '--context', 'ide', '--project', ws];
 const results = { ...previous, bundle: { python: bundle.python, distribution: bundle.distribution, version: bundle.version, bytes: bundle.size.bytes, files: bundle.size.files, compiled: bundle.compiled, trimmed: bundle.trimmed } };
-const baseEnv = { ...cleanEnvironment(), LOCALAPPDATA: local, APPDATA: join(dirname(local), 'roaming'), ELECTRON_DISABLE_SECURITY_WARNINGS: 'true' };
+const baseEnv = { ...cleanEnvironment(), ...proofIsolationEnv({ local }), ELECTRON_DISABLE_SECURITY_WARNINGS: 'true' };
 
 // ---- 1. the branch guard (ADR-0035 c.1) ------------------------------------------------------------------------
 if (want(1)) {
@@ -398,7 +398,9 @@ if (want(7) && packaged) {
   mkdirSync(join(ws2, 'src'), { recursive: true });
   writeFileSync(join(ws2, 'src', 'index.ts'), 'export function contained(): number { return 1; }\n');
   spawnSync('git', ['init', '-q'], { cwd: ws2, stdio: 'ignore' });
-  const blocked = { ...baseEnv, LOCALAPPDATA: fresh, HTTPS_PROXY: 'http://127.0.0.1:9', HTTP_PROXY: 'http://127.0.0.1:9', ALL_PROXY: 'http://127.0.0.1:9', NO_PROXY: '', npm_config_proxy: 'http://127.0.0.1:9', npm_config_https_proxy: 'http://127.0.0.1:9', npm_config_offline: 'true', npm_config_cache: join(fresh, 'npm-cache-empty') };
+  // The whole isolation moves to `fresh`, not just its Windows half: overriding `LOCALAPPDATA` alone left
+  // the XDG pair inherited from `baseEnv`, so on a POSIX host this launch shared the previous one's store.
+  const blocked = { ...baseEnv, ...proofIsolationEnv({ local: fresh }), HTTPS_PROXY: 'http://127.0.0.1:9', HTTP_PROXY: 'http://127.0.0.1:9', ALL_PROXY: 'http://127.0.0.1:9', NO_PROXY: '', npm_config_proxy: 'http://127.0.0.1:9', npm_config_https_proxy: 'http://127.0.0.1:9', npm_config_offline: 'true', npm_config_cache: join(fresh, 'npm-cache-empty') };
   const c = await branch({ exe: packagedExe, before: [], tail: SERVER_TAIL(ws2), ws: ws2, env: blocked, call: { name: 'get_symbols_overview', args: { relative_path: 'src/index.ts' } }, callTimeoutMs: 120_000, sample: false });
   results.contained = { toolsListMs: c.toolsListMs, toolCount: c.toolNames?.length, call: c.call ?? null, error: c.error ?? null, fetchLines: c.fetchLines, exit: c.exit, verdict: c.call && !c.call.isError && /contained/.test(c.call.text) ? 'answered without fetching' : 'the runtime tried to fetch (IC-7 evidence)' };
   console.log(`[code-intel-proof] 7 contained: ${results.contained.verdict}; ${c.fetchLines.length} fetch line(s)`);

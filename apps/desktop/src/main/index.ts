@@ -68,7 +68,23 @@ const machineId = readOrMintMachineId(layout.machineId);
 const catalogue = validateCatalog();
 if (!catalogue.ok) throw new Error(`the provider catalogue is invalid: ${catalogue.error.join('; ')}`);
 
-const log = (m: string) => console.log(`[main ${new Date().toISOString()}] ${m}`);
+/**
+ * The application log. The level is a PARAMETER, not text a caller interpolates into the message:
+ * `docs/defects/the-application-log-keeps-every-level-because-nothing-reads-one.md` recorded that the two
+ * forwarders wrote `run host ${e.level}: …` and nothing could read it back, so a `debug` line and an
+ * `error` line were indistinguishable to anything but a person.
+ *
+ * **No threshold is applied, and applying one is not this function's to decide.** What a packaged build's
+ * diagnostics are worth after an incident is OQ-63, and the build proceeds under "the log keeps every
+ * level". This only makes the level a value the log HAS. The rendered line is unchanged: `run host debug:`
+ * still reads `run host debug:`, so a reader and a proof that greps for it see exactly what they did.
+ */
+type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+const logAt = (level: LogLevel, source: string | null, m: string): void => {
+  const prefix = source === null ? '' : `${source} ${level}: `;
+  console.log(`[main ${new Date().toISOString()}] ${prefix}${m}`);
+};
+const log = (m: string) => { logAt('info', null, m); };
 // ADR-0019's prohibition, from the other side: an uncaught exception in main would raise the platform's native
 // error box — a synchronous modal that blocks the loop and every poll reply. Log it instead; nothing here may hang.
 process.on('uncaughtException', (e) => { log(`UNCAUGHT in main: ${e.stack ?? String(e)}`); });
@@ -247,7 +263,7 @@ async function main(): Promise<void> {
       services.set(key, svc);
       child.on('exit', (code) => { log(`workspace service for ${key} exited (${code})`); services.delete(key); cancelImprovementWorkspace(key); });
       // The service's log lines reach main's log too (Part P: the checkpoint capture, preview and restore lines the proof reads).
-      svc.link.onEvent((e) => { if (e.kind === 'log') log(`workspace service ${e.level}: ${e.message}`); });
+      svc.link.onEvent((e) => { if (e.kind === 'log') logAt(e.level, 'workspace service', e.message); });
       // ADR-0002 c.7 / ADR-0058: the service's narrow requests back to main are forwarded to the run host, bounded.
       svc.link.onAsk((a) => {
         switch (a.kind) {
@@ -806,7 +822,7 @@ async function main(): Promise<void> {
       resultSeen = true;
       log(`run ${e.sessionId} ended ${e.result.status} (${e.result.stop_reason}) → ${e.result.execution_status}`);
     }
-    else if (e.kind === 'log') log(`run host ${e.level}: ${e.message}`);
+    else if (e.kind === 'log') logAt(e.level, 'run host', e.message);
   });
   // Part AL — channel 3 (ADR-0021 first executed): a terminal frame is delivered to each subscribed window under
   // REQ-MONITOR-306's per-window bound, merged into larger steps rather than dropped (REQ-SHELL-103) — `main/terminal.ts`.

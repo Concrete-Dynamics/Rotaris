@@ -21,6 +21,11 @@ export interface ImprovementCoordinatorDeps {
   ) => Promise<ProcessReply> | undefined;
   readonly activity: (activity: ImprovementActivity) => void;
   readonly stored: (record: ImprovementArtifactRecord) => void;
+  /**
+   * REQ-LIBRARY-124: a job that ended without an artifact for any reason other than cancellation. The
+   * reason is the user's, not the log's — what the run host or the workspace service said, in its words.
+   */
+  readonly failed: (job: ImprovementAnalysisJob, reason: string) => void;
   readonly log: (message: string, level?: "info" | "warn") => void;
 }
 
@@ -44,6 +49,30 @@ export function createImprovementCoordinator(
     job.pass === "retrospective"
       ? `the retrospective ${job.artifact_id}`
       : `session ${job.source_session_id}`;
+
+  /** What a refusal is asked for: the answering process's own words, or the shape of the answer it gave. */
+  const reasonOf = (reply: ProcessReply | undefined): string =>
+    reply === undefined
+      ? "the workspace service did not answer"
+      : reply.kind === "refused"
+        ? reply.detail === undefined
+          ? reply.headline
+          : `${reply.headline}: ${reply.detail}`
+        : `the answer was '${reply.kind}'`;
+
+  /**
+   * REQ-LIBRARY-035(b) records a failure in the application log; REQ-LIBRARY-124 adds the notice the user
+   * sees and says the log entry stays IN ADDITION to it. Both are written in one place so no failure path
+   * can grow one without the other. Cancellation (REQ-LIBRARY-127) and shutdown never reach here.
+   */
+  const failed = (
+    job: ImprovementAnalysisJob,
+    logged: string,
+    reason: string,
+  ): void => {
+    deps.log(`improvements: ${logged}`, "warn");
+    deps.failed(job, reason);
+  };
 
   const publish = (job: ImprovementAnalysisJob | null): void => {
     deps.activity({
@@ -82,9 +111,10 @@ export function createImprovementCoordinator(
           !running.cancelled &&
           !closing
         ) {
-          deps.log(
-            `improvements: the analyst could not start for ${label(job)}`,
-            "warn",
+          failed(
+            job,
+            `the analyst could not start for ${label(job)}`,
+            `the analyst could not start — ${reasonOf(analyzed)}`,
           );
         }
         return;
@@ -104,9 +134,10 @@ export function createImprovementCoordinator(
         saved?.kind !== "improvements.result"
       ) {
         if (!running.cancelled && !closing)
-          deps.log(
-            `improvements: the artifact save failed for ${label(job)}`,
-            "warn",
+          failed(
+            job,
+            `the artifact save failed for ${label(job)}`,
+            `the artifact could not be saved — ${reasonOf(saved)}`,
           );
         return;
       }
@@ -128,20 +159,22 @@ export function createImprovementCoordinator(
         reread?.kind !== "improvements.result"
       ) {
         if (!running.cancelled && !closing)
-          deps.log(
-            `improvements: canonical reread failed for ${analyzed.artifact.artifact_id}`,
-            "warn",
+          failed(
+            job,
+            `canonical reread failed for ${analyzed.artifact.artifact_id}`,
+            `the saved artifact could not be re-read — ${reasonOf(reread)}`,
           );
         return;
       }
       deps.stored(reread.value as ImprovementArtifactRecord);
     } catch (cause) {
       if (!running.cancelled && !closing)
-        deps.log(
-          `improvements: ${label(job)} failed: ${
+        failed(
+          job,
+          `${label(job)} failed: ${
             cause instanceof Error ? cause.message : String(cause)
           }`,
-          "warn",
+          cause instanceof Error ? cause.message : String(cause),
         );
     } finally {
       active = null;

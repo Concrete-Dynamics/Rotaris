@@ -670,6 +670,26 @@ async function main(): Promise<void> {
         session,
       );
     },
+    /**
+     * REQ-LIBRARY-124: a worker failure MUST NOT be silent. A job that ended without an artifact for any
+     * reason other than cancellation (REQ-LIBRARY-127, which stays silent because the user asked for it)
+     * raises a warning naming the run it belonged to and carrying the failure's reason, and offers NO
+     * action — there is nothing to review. REQ-LIBRARY-035(b)'s application-log line stays in addition to
+     * it, written by the coordinator beside this call. PD-LIBRARY-002: a retrospective names no session, so
+     * it names the history it read instead, on the same terms as the completion notice above.
+     */
+    failed: (job, reason) => {
+      const retrospective = job.pass === 'retrospective';
+      raiseNotice(
+        'warning',
+        retrospective ? 'The retrospective could not be completed' : 'The completed run could not be reviewed for improvements',
+        retrospective
+          ? `This workspace's own history was not reviewed: ${reason}.`
+          : `Session ${job.source_session_id} was not reviewed for improvements: ${reason}.`,
+        undefined,
+        job.source_session_id ?? undefined,
+      );
+    },
     log,
   });
   cancelImprovementWorkspace = (workspaceRoot) => improvementCoordinator.cancelWorkspace(workspaceRoot);

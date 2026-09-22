@@ -268,7 +268,11 @@ const behaviour = launch('behaviour', {
     `(() => { const c = document.querySelector('[data-testid="transcript-search-count"]'); const s = ${SCROLL}; const el = [...document.querySelectorAll('.transcript__slot')].find((n) => n.dataset.bound && n.dataset.bound.startsWith('group:')); const v = s.getBoundingClientRect(); const r = el && el.getBoundingClientRect(); return { count: c && c.textContent, following: s.dataset.following, key: el ? el.dataset.bound : null, members: el ? el.querySelector('[data-shape="group"]').dataset.members : null, summary: el ? el.innerText.replace(/\\s+/g, ' ').trim().slice(0, 80) : null, onScreen: el ? (r.bottom > v.top && r.top < v.bottom) : null }; })()@6600`,
     // Expanding the group keeps its header on screen (REQ-CHAT-065).
     `(() => { const el = [...document.querySelectorAll('.transcript__slot')].find((n) => n.dataset.bound && n.dataset.bound.startsWith('group:')); if (!el) return null; el.querySelector('button').click(); return { key: el.dataset.bound }; })()@7200`,
-    `(() => { const el = [...document.querySelectorAll('.transcript__slot')].find((n) => n.dataset.bound && n.dataset.bound.startsWith('group:')); const s = ${SCROLL}; if (!el) return null; const r = el.getBoundingClientRect(); const v = s.getBoundingClientRect(); const members = [...document.querySelectorAll('.transcript__slot')].filter((n) => n.dataset.bound && n.dataset.bound.startsWith('tool:call-4')).length; return { onScreen: r.bottom > v.top && r.top < v.bottom, expanded: el.querySelector('button').getAttribute('aria-expanded'), membersRevealed: members }; })()@8000`,
+    // The revealed members are drawn INSIDE the group's own row (`row__members`, REQ-CHAT-065 / PD-CHAT-004), so
+    // they are counted there. Until 2026-09-22 this step counted pooled SLOTS bound to a member key — a shape the
+    // product has never drawn: a folded group occupies one slot and expanding it adds none, so the count was
+    // structurally zero and the assertion had stopped being about the product.
+    `(() => { const el = [...document.querySelectorAll('.transcript__slot')].find((n) => n.dataset.bound && n.dataset.bound.startsWith('group:')); const s = ${SCROLL}; if (!el) return null; const r = el.getBoundingClientRect(); const v = s.getBoundingClientRect(); const members = [...el.querySelectorAll('[data-testid="group-members"] [data-member-key]')].map((m) => m.dataset.memberKey); return { onScreen: r.bottom > v.top && r.top < v.bottom, expanded: el.querySelector('button').getAttribute('aria-expanded'), membersRevealed: members.length, memberKeys: members.slice(0, 4), slotsForMembers: document.querySelectorAll('.transcript__slot[data-bound^="tool:call-4"]').length }; })()@8000`,
     // REQ-CHAT-166: the cap governs what is DISPLAYED and the record keeps all thirty lines — measured through
     // REQ-CHAT-074, which matches over displayed rows and therefore cannot see what the cap removed. The drawing
     // of a tool card is Part AA's; nothing here depends on it.
@@ -312,7 +316,12 @@ const behaviour = launch('behaviour', {
   const expanded = evalAt(behaviour, 8000);
   expect(expanded && expanded.onScreen === true, `the group header left the screen when it was expanded: ${JSON.stringify(expanded)}`);
   expect(expanded.expanded === 'true', `the group did not expand: ${JSON.stringify(expanded)}`);
-  expect(expanded.membersRevealed >= 4, `expanding the group revealed ${expanded.membersRevealed} members beneath it, not four`);
+  expect(expanded.membersRevealed >= 4, `expanding the group revealed ${expanded.membersRevealed} members beneath it, not four: ${JSON.stringify(expanded)}`);
+  // The four are the group's OWN members, drawn inside its row rather than added to the pool — which is what
+  // keeps "the pool's slot count never moves" (asserted above) true across an expansion.
+  expect(expanded.memberKeys.every((k) => typeof k === 'string' && k.startsWith('tool:call-4')),
+    `the revealed members are not the group's: ${JSON.stringify(expanded.memberKeys)}`);
+  expect(expanded.slotsForMembers === 0, `expanding the group added ${expanded.slotsForMembers} slots to the pool`);
   const beyond = evalAt(behaviour, 9200);
   expect(beyond && /0 results/.test(String(beyond.beyondTheCap)),
     `a line past the ten-line cap is still displayed: ${JSON.stringify(beyond)}`);

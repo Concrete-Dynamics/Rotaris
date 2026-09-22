@@ -189,7 +189,9 @@ const r = launch('rows', {
     `${AO} [data-testid="group-members"]@5000`,
     `${W} [data-call-key="call-blocked"] [data-testid="tool-header"]@5000`,
     `${W} [data-call-key="call-ok"]@7600`,
-    `${W} .rowlist@8100`, `${W} .rowlist@8500`,
+    // The Workspace's transcript is Part Z's pooled pane; `.rowlist` is the OTHER surface's container and
+    // matched nothing here, which left these two readings resting on `active` alone.
+    `${W} .transcript__pool@8100`, `${W} .transcript__pool@8500`,
   ].join(';;'),
   ROTARIS_CAPTURE_EVAL_AT: [
     `(() => [...document.querySelectorAll('${W} .transcript__slot[data-bound]')].map((slot) => { const style = getComputedStyle(slot); return { transform: style.transform, willChange: style.willChange }; }))()@1500`,
@@ -551,8 +553,8 @@ expect(collapsed?.matches?.[0]?.attrs?.['data-collapsed'] === 'name', `auto-coll
 results.autoCollapseTools = { collapsedToName: true };
 
 // REQ-CHAT-077: the arrow keys move the current row, the current row being the focused one.
-const focusedBefore = inspect(r.log, 8100, `${W} .rowlist`)?.active ?? null;
-const focusedAfter = inspect(r.log, 8500, `${W} .rowlist`)?.active ?? null;
+const focusedBefore = inspect(r.log, 8100, `${W} .transcript__pool`)?.active ?? null;
+const focusedAfter = inspect(r.log, 8500, `${W} .transcript__pool`)?.active ?? null;
 const isRow = (el) => Boolean(el) && String(el.className ?? '').split(' ').includes('row');
 expect(isRow(focusedBefore), `the pointer did not make a row current: ${JSON.stringify(focusedBefore)}`);
 expect(isRow(focusedAfter), `after ArrowDown the current row was ${JSON.stringify(focusedAfter)}`);

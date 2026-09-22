@@ -465,7 +465,26 @@ export function haetEditTool(state: FileToolState, fence: FenceConfig, name: 'ha
       if (!existsSync(resolved)) return errorObservation(`File does not exist: ${rel}.`);
       const bytes = readFileSync(resolved);
       const current = sha256(bytes);
-      if (current !== a.content_hash) return errorObservation(`${rel} changed since the hash you hold was taken. Read it again with haet_read before retrying.`);
+      if (current !== a.content_hash) {
+        /*
+         * The re-read direction is REQ-TOOLS-052's and stands. What is added is the one fact the caller
+         * cannot get without another round trip and that decides their next move: whether the text they
+         * meant to replace is still in the file.
+         *
+         * Run `1ddeb71b` (2026-09-21) spent its last stretch on this loop — a stale hash, then a blind
+         * retry, then `old_string was not found exactly` — each attempt paying a wall-clock wait and a user
+         * approval. The two refusals were each correct and arrived one at a time.
+         *
+         * The CURRENT HASH IS DELIBERATELY NOT HANDED BACK. It would let a caller retry without looking,
+         * and the reason the hash moved is that the content moved: their `old_string` was computed against
+         * text that is gone. Naming the hash would buy a round trip and sell a wrong edit.
+         */
+        const stillThere = decodeText(bytes).text.includes(a.old_string);
+        const fate = stillThere
+          ? `Your old_string is still present in the current content, so re-reading and retrying should work.`
+          : `Your old_string is NO LONGER present in the current content — the edit may already have been applied, or the region was rewritten. Read it before deciding whether it is still wanted.`;
+        return errorObservation(`${rel} changed since the hash you hold was taken. Read it again with haet_read before retrying. ${fate}`);
+      }
       const before = decodeText(bytes).text;
       const lines = before.split('\n');
       let after: string;

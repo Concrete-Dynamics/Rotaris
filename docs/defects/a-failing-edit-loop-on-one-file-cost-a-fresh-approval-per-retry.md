@@ -13,3 +13,33 @@ No contradiction: the hash/old_string rejections direct the caller to re-read as
 - `packages/config/src/mcp/code-intelligence-manifest.generated.ts` — `replace_content` is the MCP edit tool whose needle parses as regex.
 
 Noticed 2026-09-21 by the run-autopsy of run `1ddeb71b`.
+
+**Improved 2026-09-22, and not closed — the approval-per-retry half is the owner's.** The loop this note
+records is three refusals deep, and each arrived one at a time: a stale hash, then a blind retry, then
+`old_string was not found exactly`. The stale-hash refusal had the new content in its hands and said nothing
+about it. It now answers the one question that decides the caller's next move:
+
+```
+specs/index.md changed since the hash you hold was taken. Read it again with haet_read before retrying.
+Your old_string is NO LONGER present in the current content — the edit may already have been applied, or
+the region was rewritten. Read it before deciding whether it is still wanted.
+```
+
+The other branch says the `old_string` is still there and a re-read-and-retry should work. That collapses
+two round trips into one for the case this run actually hit, and each round trip was a wall-clock wait plus
+a user action.
+
+**What was deliberately NOT done: hand back the current hash.** It is right there, and it would let a caller
+retry without looking — but the hash moved because the content moved, so their `old_string` was computed
+against text that is gone. Naming the hash buys a round trip and sells a wrong edit. The re-read direction
+REQ-TOOLS-052 states is kept for the reason it exists, and the refusal still quotes no content, which
+`tools.test.ts` pins beside the new assertions.
+
+**What remains, and why it may not be repaired here.** That each same-shape retry re-enters its own approval
+wait is REQ-TOOLS-055's shared budget working as specified. Batching an answer across retries is *behaviour
+the owner wants instead of a live requirement*, which `docs/product/README.md` sends to a `PD`; an
+implementer may not mint one. The MCP `replace_content` regex parse error belongs to the code-intelligence
+server's own tool and is not this product's to change.
+
+Measured: `packages/agent-tools/src/tools/tools.test.ts` covers both branches and the two things the
+refusal must not do; 19 passed.

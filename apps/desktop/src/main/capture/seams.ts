@@ -3,7 +3,7 @@ import { writeFileSync } from 'node:fs';
 import { type BrowserWindow, screen } from 'electron';
 import { millis } from '@rotaris/kernel';
 import { CHANNEL, CONTRACT_SCHEMA_VERSION, type NoticeAction, type NoticeSeverity } from '@rotaris/contracts';
-import { type CaptureHost, type CaptureStep, type CaptureTarget, centre, chordEvent, clickAt, doubleClickAt, onStep, parseSelectors, parseSteps, pause, releaseProbe, settleAt, targetProbe } from './host.js';
+import { type CaptureHost, type CaptureStep, type CaptureTarget, centre, centreWhen, chordEvent, clickAt, doubleClickAt, onStep, parseSelectors, parseSteps, pause, releaseProbe, settleAt, targetProbe } from './host.js';
 
 /**
  * THE SCRIPTABLE SEAMS — clicks, typed text, chords, renderer `eval`, notices, prompts, drags, OS input,
@@ -41,13 +41,16 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
   if (options.resumeWanted) {
     const resumeWanted = options.resumeWanted;
     clocks.timers.after(millis(600), async () => {
-      const control = await centre(win, `document.querySelector('.title-bar__sessions')`);
-      if (!control) { log('capture: no "Sessions" control on screen'); return; }
+      // Both waits are DEADLINES, not appointments. A fixed 700 ms after the click read the list once and
+      // gave up when the browser had not finished listing — one run in four of `plan-gate-proof`, against a
+      // store that held everything the resume needed. Neither waits longer than it has to, and each logs how
+      // much of its budget was left, so a slow list still reads differently from an absent row.
+      const control = await centreWhen(host, `document.querySelector('.title-bar__sessions')`, 5_000, 'the "Sessions" control');
+      if (!control) { log('capture: no "Sessions" control on screen within 5000 ms'); return; }
       clickAt(win, control);
-      await pause(host, 700);
       const rowFinder = resumeWanted === 'latest' ? `document.querySelector('.session-browser tr[data-session-id] button')` : `document.querySelector('.session-browser tr[data-session-id=${JSON.stringify(resumeWanted)}] button')`;
-      const open = await centre(win, rowFinder);
-      if (!open) { log(`capture: no session row for "${resumeWanted}" in the browser`); return; }
+      const open = await centreWhen(host, rowFinder, 10_000, `the session row for "${resumeWanted}"`);
+      if (!open) { log(`capture: no session row for "${resumeWanted}" in the browser within 10000 ms`); return; }
       clickAt(win, open);
       log(`capture: opened session "${resumeWanted}" from the browser`);
     });

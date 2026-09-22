@@ -176,6 +176,13 @@ describe('haet_read / haet_edit (REQ-TOOLS-137/189)', () => {
     expect(stale).toMatchObject({ isError: true });
     expect(stale.text).toMatch(/changed since the hash you hold was taken/);
     expect(stale.text).not.toContain('import { a }');
+    // The refusal says which of the two situations this is, so the next move is not a guess. It still
+    // quotes no content, and it still does NOT hand back the current hash: the hash moved because the
+    // content moved, and naming it would buy a round trip at the price of a blind, wrong edit.
+    expect(stale.text).toContain('Your old_string is still present in the current content');
+    expect(stale.text).not.toMatch(/[0-9a-f]{64}/);
+    const goneStale = await he.execute({ path: 'src/b.ts', content_hash: 'a'.repeat(64), old_string: 'text-that-is-not-in-the-file', new_string: 'x', replace_all: false }, ctx());
+    expect(goneStale.text).toContain('Your old_string is NO LONGER present in the current content');
     const fresh = new FileToolState();
     const ok = await haetEditTool(fresh, fence).execute({ path: 'src/b.ts', content_hash: hash, old_string: 'import { a }', new_string: 'import { a, b }', replace_all: false }, ctx());
     expect(ok.isError).toBe(false);

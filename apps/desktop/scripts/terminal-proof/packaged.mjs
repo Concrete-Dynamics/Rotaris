@@ -30,7 +30,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { proofIsolationEnv } from '../lib/harness.mjs';
+import { proofIsolationEnv, workspacesRootFor } from '../lib/harness.mjs';
 
 const require = createRequire(import.meta.url);
 
@@ -102,7 +102,8 @@ function launch({ exe, scratchRoot, name, enabled, afterMs }) {
   }
 
   const stores = [];
-  const workspaces = join(localAppData, 'rotaris', 'data', 'workspaces');
+  // By the platform (see `workspacesRootFor`): the POSIX answer carries no `data` segment.
+  const workspaces = workspacesRootFor(localAppData);
   if (existsSync(workspaces)) for (const d of readdirSync(workspaces)) { const f = join(workspaces, d, 'workspace.db'); if (existsSync(f)) stores.push(f); }
   const out = { enabled, exit: r.status ?? null, signal: r.signal ?? null, painted: existsSync(png), stores: stores.length, log: join(scratch, 'app.log') };
   if (stores.length !== 1) return { ...out, error: `expected one workspace store under this launch's own LOCALAPPDATA, found ${stores.length}` };

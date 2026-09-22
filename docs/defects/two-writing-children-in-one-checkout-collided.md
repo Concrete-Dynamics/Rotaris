@@ -17,3 +17,28 @@ Noticed 2026-09-20 by the run-autopsy of run `2e21e324`.
 changing behaviour a live requirement states exactly, which `docs/product/README.md` sends to a `PD` and
 an implementer may not mint. The request is logged with the requirements a directive would have to name,
 so the decision is in front of the owner rather than waiting in a defect note.
+
+**Improved 2026-09-22, and not closed — the coordination half is the owner's.** The refusal this run hit
+three times said only that the file was there:
+
+```
+File already exists: tests/unit/application/registration-service.test.ts. Use 'overwrite' or 'edit'.
+```
+
+It now answers the question the second agent spent a turn answering by hand — whether the file is one it
+had forgotten writing or one something else wrote while it worked:
+
+```
+File already exists: tests/unit/application/registration-service.test.ts (34 line(s)). You have NOT read
+it in this session — it was there before you started, or something else wrote it while you worked. Read
+it before deciding, then use 'overwrite' or 'edit'.
+```
+
+The read-state is already known at the guard and costs nothing to say. No content is quoted, which
+`tools.test.ts` pins beside the new assertions.
+
+**What is not repaired, and why it may not be here.** Which calls are refused is unchanged, and it is the
+right refusal: the create-guard and the hash guard both held, which is what the note recorded. Making
+siblings in one checkout aware of each other — a claim, a lease, a partition of the tree — is behaviour
+no requirement states, so it is a `PD` and it is logged at [R-047](../product/requests.md#r-047) with the
+requirements a directive would have to name.

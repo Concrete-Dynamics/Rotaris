@@ -28,7 +28,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, w
 import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { cleanEnvironment, proofIsolationEnv } from './lib/harness.mjs';
+import { cleanEnvironment, proofIsolationEnv, workspacesRootFor } from './lib/harness.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -97,7 +97,7 @@ const GLOBAL_BROKEN = `${GLOBAL}mcp_servers:\n  code_intelligence: { args: ["--t
 function databases() {
   const found = [];
   const walk = (dir) => { if (!existsSync(dir)) return; for (const e of readdirSync(dir, { withFileTypes: true })) { const p = join(dir, e.name); if (e.isDirectory()) walk(p); else if (e.name === 'workspace.db') found.push(p); } };
-  walk(join(local, 'rotaris', 'data', 'workspaces'));
+  walk(workspacesRootFor(local));
   if (found.length < 1) throw new Error(`no workspace database below ${local}`);
   return found.sort();
 }

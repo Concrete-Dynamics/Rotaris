@@ -17,7 +17,7 @@
 import { describe, expect, it } from 'vitest';
 import { posix, win32 } from 'node:path';
 import { resolveUserDirs, dataLayout } from '@rotaris/platform';
-import { proofIsolationEnv } from './harness.mjs';
+import { proofIsolationEnv, workspacesRootFor } from './harness.mjs';
 
 const PROFILE = 'D:\\repo\\.proof\\transcript-proof\\profile';
 const LOCAL = `${PROFILE}\\local`;
@@ -94,6 +94,21 @@ describe('proof isolation lands inside the scratch profile on every platform', (
     const withHome = proofIsolationEnv({ profileRoot: PROFILE, local: LOCAL, preferences: PREFERENCES, home: scratch });
     expect(withHome['HOME']).toBe(scratch);
     expect(resolveUserDirs({ platform: 'darwin', env: withHome, home: withHome['HOME'] }).data.startsWith(scratch)).toBe(true);
+  });
+
+  it("the harness's own store-root rule agrees with the product's, on both platforms", () => {
+    // `workspacesRootFor` is a COPY of `resolveUserDirs` + `dataLayout`, because `harness.mjs` is plain
+    // JavaScript and cannot import a TypeScript package. This is what keeps the copy honest: three
+    // scripts previously spelled the Windows answer as a literal `rotaris/data/workspaces`, which is not
+    // the POSIX answer at all — there the product answers `<XDG_DATA_HOME>/rotaris/workspaces`, with no
+    // `data` segment — so those readers could only ever find a store on Windows.
+    for (const platform of ['win32', 'linux', 'darwin'] as const) {
+      const dirs = resolveUserDirs({ platform, env, home: platform === 'win32' ? OPERATOR.win32Home : OPERATOR.home });
+      if (platform === 'darwin') continue; // composed from HOME, not from the pairs; not a `local`-rooted answer.
+      expect(workspacesRootFor(LOCAL, platform)).toBe(dataLayout(dirs, platform).workspaces);
+    }
+    // And the two answers really do differ, so the test above is not agreeing with itself.
+    expect(workspacesRootFor(LOCAL, 'win32')).not.toBe(workspacesRootFor(LOCAL, 'linux'));
   });
 
   it('the instance socket stays short enough for a unix path, from a deep profile', () => {

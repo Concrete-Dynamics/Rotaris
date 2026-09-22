@@ -32,8 +32,28 @@ export const RETROSPECTIVE_EVIDENCE_BOUNDS = Object.freeze({
 
 /** The directory the executor writes a persona memory file into (REQ-LIBRARY-006's `persona_memory_update`). */
 const PERSONA_MEMORY_DIR = join(".rotaris", "persona_memory");
-/** REQ-WORKSPACE-041's discovery, in the order that requirement fixes; `config` owns the same two names. */
-const INSTRUCTION_FILES = ["AGENTS.md", "AGENTS.override.md"] as const;
+/**
+ * FALSIFIED 2026-09-22, kept beside its replacement: `const INSTRUCTION_FILES = ["AGENTS.md",
+ * "AGENTS.override.md"]`, described as "REQ-WORKSPACE-041's discovery, in the order that requirement fixes".
+ * It was a copy of that requirement's sentence rather than a use of it, and the sentence moved:
+ * `PD-WORKSPACE-002` widened discovery to four names at the workspace root and two at each of five further
+ * bases, and gave every file an on/off switch. `PD-LIBRARY-002` pointed this read at the rule by NAME, so
+ * the read was meant to widen with it — instead the two readers of the same files disagreed about what an
+ * instruction file is, and this one read files the user had switched off.
+ *
+ * The set is no longer decided here. It arrives on the input, computed by the run host, which owns the
+ * configuration and the policy; the engine may not depend on `@rotaris/config` and should not be the place
+ * a policy is restated. Which switches reach an analysis rather than an agent is **OQ-65**; what the build
+ * proceeds under is that the retrospective consumes exactly the set injection consumes.
+ */
+export interface RetrospectiveInstructionFile {
+  /** The stable identity the per-file switch keys on, e.g. `workspace:AGENTS.md`. */
+  readonly id: string;
+  /** The file's own name, which is what the retrospective's evidence and any proposal cite. */
+  readonly name: string;
+  /** Absolute path, already resolved against the base the file was discovered under. */
+  readonly path: string;
+}
 
 function parsedList(raw: string | null): unknown[] {
   if (raw === null) return [];
@@ -221,16 +241,15 @@ function personaMemorySource(workspaceRoot: string): ImprovementCapturedSource {
   return { available: true, entries };
 }
 
-function instructionsSource(workspaceRoot: string): ImprovementCapturedSource {
-  const found = INSTRUCTION_FILES.flatMap((name) => {
-    const path = join(workspaceRoot, name);
+function instructionsSource(files: readonly RetrospectiveInstructionFile[]): ImprovementCapturedSource {
+  const found = files.flatMap((file) => {
     try {
-      if (!statSync(path).isFile()) return [];
+      if (!statSync(file.path).isFile()) return [];
     } catch {
       return [];
     }
-    const body = readTextFile(path);
-    return body === null ? [] : [{ name, body }];
+    const body = readTextFile(file.path);
+    return body === null ? [] : [{ name: file.name, body }];
   });
   if (found.length === 0) return { available: true, entries: [] };
   return {
@@ -251,6 +270,12 @@ export interface CaptureRetrospectiveInput {
   readonly collectorModel: string;
   readonly priorArtifactsAvailable?: boolean;
   readonly priorArtifacts: readonly ImprovementArtifact[];
+  /**
+   * The instruction files this pass may read, already discovered and already filtered by the per-file and
+   * master switches (`PD-WORKSPACE-002`, REQ-WORKSPACE-048) by the caller that owns the configuration.
+   * Omitted means none — an absent policy is read as "nothing to offer", never as "read the root and hope".
+   */
+  readonly instructionFiles?: readonly RetrospectiveInstructionFile[];
 }
 
 /**
@@ -270,7 +295,7 @@ export function captureRetrospectiveJob(
   );
   const prompts = promptsSource(dal);
   const personaMemory = personaMemorySource(input.workspaceRoot);
-  const instructions = instructionsSource(input.workspaceRoot);
+  const instructions = instructionsSource(input.instructionFiles ?? []);
   const empty =
     sessions.entries.length === 0 &&
     proposals.entries.length === 0 &&

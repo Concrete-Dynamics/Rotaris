@@ -22,3 +22,7 @@ No requirement contradicted — a refusal-shape improvement inside the REQ-TOOLS
 - `packages/agent-tools/src/gate.test.ts`, `questions.test.ts`, `tools.test.ts` — the hook tests.
 
 Noticed 2026-09-18 by the run-autopsy of run `cc6191a2`; repaired on the same branch.
+
+*Confirmed landed and filed 2026-09-22: `askQuestionsTool.validationError` is in
+`packages/agent-tools/src/tools/questions.ts:202`, with the write-file and haet hooks beside it in
+`files.ts`. The note recorded its own repair and was never moved.*

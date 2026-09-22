@@ -21,3 +21,7 @@ No requirement contradicted — a volume repair inside OQ-63's "the log keeps ev
 - `apps/desktop/scripts/fixtures/mcp-fixture-server.mjs` — `--stderr-repeat`/`--stderr-count`.
 
 Noticed 2026-09-18 by the run-autopsy of run `cc6191a2`; repaired on the same branch.
+
+*Confirmed landed and filed 2026-09-22: the repeat counter and its flush are in
+`packages/mcp/src/transport.ts:152-165`, and `stderrTail` is kept whatever the log does with the line.
+The note recorded its own repair and was never moved.*

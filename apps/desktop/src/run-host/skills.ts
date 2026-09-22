@@ -5,7 +5,7 @@ import {
   discoverInstructionFiles, discoverSkills, enabledInstructionFiles, loadManualSkill, mergeInstructionContext,
   NODE_DISCOVERY_PORTS, parseSkill, resolveSkills,
   skillBodyBlock, skillCatalogBlock, skillReadRoots,
-  type DiscoveredSkill, type DiscoveryPorts, type InstructionsSection, type SkillDiscovery, type SkillSessionState, type SkillsSection,
+  type DiscoveredSkill, type DiscoveryPorts, type InstructionFileEntry, type InstructionsSection, type SkillDiscovery, type SkillSessionState, type SkillsSection,
 } from '@rotaris/config';
 
 /**
@@ -161,21 +161,39 @@ export class SkillHost {
     const readRoot = executionRoot === undefined || executionRoot === '' ? workspaceRoot : executionRoot;
     const held = this.contexts.get(workspaceRoot)?.get(readRoot);
     if (held !== undefined) return held;
-    const policy = this.deps.instructions?.(workspaceRoot);
-    let merged = '';
-    if (policy === undefined || policy.master) {
-      const env = { workspaceRoot: readRoot, globalDir: policy?.globalDir ?? '', home: this.home, platform: this.deps.platform ?? process.platform };
-      const present = discoverInstructionFiles(env, (p) => this.ports.isFile(p));
-      const enabled = enabledInstructionFiles(present, true, policy?.section.overrides ?? {});
-      merged = mergeInstructionContext(enabled, this.ports, (m) => this.deps.log(`workspace context: ${m}`, 'warn'));
-      this.deps.log(`workspace context: ${enabled.length} of ${present.length} instruction file(s) enabled for ${readRoot}${readRoot === workspaceRoot ? '' : ` (the worktree of ${workspaceRoot}, REQ-WORKSPACE-050)`}${enabled.length === 0 ? '' : ` (${enabled.map((f) => f.id).join(', ')})`}`);
-    } else {
-      this.deps.log(`workspace context: injection is switched off for ${workspaceRoot}; no instruction file was read`);
-    }
+    const enabled = this.instructionFiles(workspaceRoot, readRoot, 'workspace context');
+    const merged = enabled.length === 0
+      ? ''
+      : mergeInstructionContext(enabled, this.ports, (m) => this.deps.log(`workspace context: ${m}`, 'warn'));
     const byRoot = this.contexts.get(workspaceRoot) ?? new Map<string, string>();
     byRoot.set(readRoot, merged);
     this.contexts.set(workspaceRoot, byRoot);
     return merged;
+  }
+
+  /**
+   * The instruction files this workspace's policy allows to be read, discovered once and decided once.
+   *
+   * It is a method rather than a step inside `workspaceContext` because there are TWO readers of these
+   * files and they had drifted apart: the retrospective held its own copy of the rule — two names at the
+   * workspace root, no policy at all — so a file the user had switched off was still read into an analysis
+   * and could still be proposed as an edit, while injection honoured every switch
+   * (`docs/defects/fixed/the-retrospective-reads-instruction-files-the-user-switched-off.md`). One
+   * computation, both callers. Whether an ANALYSIS is bound by a switch stated over what agents are GIVEN
+   * is **OQ-65**; what the build proceeds under is that it is.
+   */
+  instructionFiles(workspaceRoot: string, executionRoot?: string, forLog = 'instruction files'): readonly InstructionFileEntry[] {
+    const readRoot = executionRoot === undefined || executionRoot === '' ? workspaceRoot : executionRoot;
+    const policy = this.deps.instructions?.(workspaceRoot);
+    if (policy !== undefined && !policy.master) {
+      this.deps.log(`${forLog}: injection is switched off for ${workspaceRoot}; no instruction file was read`);
+      return [];
+    }
+    const env = { workspaceRoot: readRoot, globalDir: policy?.globalDir ?? '', home: this.home, platform: this.deps.platform ?? process.platform };
+    const present = discoverInstructionFiles(env, (p) => this.ports.isFile(p));
+    const enabled = enabledInstructionFiles(present, true, policy?.section.overrides ?? {});
+    this.deps.log(`${forLog}: ${enabled.length} of ${present.length} instruction file(s) enabled for ${readRoot}${readRoot === workspaceRoot ? '' : ` (the worktree of ${workspaceRoot}, REQ-WORKSPACE-050)`}${enabled.length === 0 ? '' : ` (${enabled.map((f) => f.id).join(', ')})`}`);
+    return enabled;
   }
 
   /** The projection a surface reads (REQ-WORKSPACE-067; `contracts/skills.ts`). */

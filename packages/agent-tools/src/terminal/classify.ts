@@ -35,13 +35,33 @@ function successExitOne(command: string): boolean {
   return false;
 }
 
+/** Longest quoted line in a marker warning; past this the line is cut and the cut is shown. */
+const MARKER_LINE_CAP = 120;
+
+/**
+ * REQ-TOOLS-113's marker warning "names the marker that matched", and naming it alone is what cost run
+ * `2e21e324` two explanations: `FAILED ` matched docker's `failed to connect to the docker API` on one
+ * exit-0 command and git's own chatter on another, and from the warning by itself neither the agent nor
+ * the reader could tell either from a test runner's `FAILED test_a`. The marker is still named first —
+ * the requirement's clause is untouched — and the line it matched on is quoted after it, so the judgement
+ * is one read rather than a second pass over the whole output. Which outputs warn is not changed here:
+ * that is fixed by the requirement, and narrowing it would be a directive, not a repair.
+ */
+function markerWarning(output: string, marker: string): string {
+  const needle = marker.toLowerCase();
+  const line = (output.split('\n').find((l) => l.toLowerCase().includes(needle)) ?? '').trim();
+  if (line === '') return `Output contains the failure marker '${marker.trim()}'.`;
+  const quoted = line.length > MARKER_LINE_CAP ? `${line.slice(0, MARKER_LINE_CAP - 1)}…` : line;
+  return `Output contains the failure marker '${marker.trim()}', in: ${quoted}`;
+}
+
 /** REQ-TOOLS-113: at most one warning per check, in the fixed order; de-duplicated with the first occurrence kept. */
 export function outputWarnings(command: string, output: string, exitCode: number | null): string[] {
   const out: string[] = [];
   const lower = output.toLowerCase();
   if (exitCode === 0) {
     for (const m of MARKERS) {
-      if (lower.includes(m.toLowerCase())) { out.push(`Output contains the failure marker '${m.trim()}'.`); break; }
+      if (lower.includes(m.toLowerCase())) { out.push(markerWarning(output, m)); break; }
     }
     const count = /(^|\n)[^\n]*\bfound (\d+) errors?\b/i.exec(output);
     if (count && Number(count[2]) !== 0) out.push(`Output reports ${count[2]} error(s).`);

@@ -1152,6 +1152,25 @@
    `.git__body` hands the checkpoint column its full 480px and the remainder to the worktrees — and
    choosing between a narrower checkpoint column, a stacked layout, and fewer columns at the minimum
    size is the design material's call, not a CSS nudge at the end of a repair round. */
+/* FALSIFIED IN PART, 2026-09-22, kept above its replacement. Everything the paragraph measures is still
+   true, and its conclusion is still the design material's to make — but it treats "fit the columns" as the
+   only repair, and the finding it was written against is not that the table is cramped. It is that twelve
+   pixels are UNREACHABLE: "not truncated with a marker, not scrollable to, simply outside the box". Those
+   are two faults, and the second has an answer that takes none of the three decisions above, because this
+   view already made it once — the checkpoint table sits in `.git__table-scroll` and scrolls when its
+   columns exceed the card.
+   Re-measured live at 1000x680 before changing anything, the content floor per column is: Branch 59
+   (heading; the cell elides), Session 53, State 59, Ahead 49, Behind 49, Files 73, Actions 58 — 400px of
+   floor for a 340px pane. Seven columns CANNOT fit here, whatever the CSS does, which is why the two
+   earlier nudges could not move the number and why neither was kept. So the columns take the width they
+   need, the two that elide share the remainder, and the card — which already carries `overflow-x: auto` —
+   does the scrolling. Nothing is dropped and nothing is decided that belongs to the design. */
+.git__worktree-table { min-width: 408px; }
+.git__col-session { width: 56px; }
+.git__col-state { width: 64px; }
+.git__col-count { width: 52px; }
+.git__col-files { width: 76px; }
+.git__col-actions { width: 64px; }
 .git__cell-branch, .git__cell-session { min-width: 0; max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .git__cell-branch .git__branch-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* UIR-012: the history ran 2229.56 px inside a 754.75 px view, so its last row was cut by the status

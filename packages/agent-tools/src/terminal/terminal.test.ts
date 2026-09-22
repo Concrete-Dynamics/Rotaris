@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock, type Clocks } from '@rotaris/kernel';
@@ -93,11 +93,14 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113)', () => {
     expect(diagnosticBlock({ b: 1, a: null, c: 'x' })).toBe('[terminal_diagnostic] {"b":1,"c":"x"}');
   });
   it('REQ-TOOLS-113: the marker order, the error count (Found 0 errors never warns), the banner, the pipeline check', () => {
-    expect(outputWarnings('pytest', 'AssertionError: x\nFAILED test_a', 0)).toEqual(["Output contains the failure marker 'AssertionError'."]);
+    expect(outputWarnings('pytest', 'AssertionError: x\nFAILED test_a', 0)).toEqual(["Output contains the failure marker 'AssertionError', in: AssertionError: x"]);
     expect(outputWarnings('tsc', 'found 3 errors', 0)).toEqual(['Output reports 3 error(s).']);
     expect(outputWarnings('tsc', 'Found 0 errors', 0)).toEqual([]);
     // 'FAILED ' is searched case-insensitively, so the banner's own 'failed ' fires the marker check too — two warnings, marker first.
-    expect(outputWarnings('pytest', '==== 1 failed ====', 0)).toEqual(["Output contains the failure marker 'FAILED'.", 'A test-runner failure banner appears in the output.']);
+    expect(outputWarnings('pytest', '==== 1 failed ====', 0)).toEqual(["Output contains the failure marker 'FAILED', in: ==== 1 failed ====", 'A test-runner failure banner appears in the output.']);
+    // The line is what tells run `2e21e324`'s two exit-0 matches apart from a test runner's, and it is capped.
+    expect(outputWarnings('docker', 'Client: ok\nfailed to connect to the docker API\n', 0)).toEqual(["Output contains the failure marker 'FAILED', in: failed to connect to the docker API"]);
+    expect(outputWarnings('x', `FAILED ${'y'.repeat(300)}`, 0)[0]).toMatch(/, in: FAILED y{112}…$/);
     expect(outputWarnings('a | b', 'error: x', 3)).toEqual(['Pipeline command may have hidden an upstream failure exit code.']);
     expect(outputWarnings('a', 'error: x', 3)).toEqual([]);
   });
@@ -304,11 +307,21 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
   }, 20_000);
   it('a real diff-with-differences reads success, not shell_failure, end to end', async () => {
     const t = await tool();
+    // The two files are WRITTEN, and they differ. Without them git exits 1 saying `Could not access 'a'` —
+    // an error that happens to share the status the carve-out is about, so the case would pass while proving
+    // nothing about a diff. Their content differs on one line, so exit 1 carries a real hunk.
+    mkdirSync(join(root, 'src'), { recursive: true });
+    writeFileSync(join(root, 'a'), 'one\ntwo\nthree\n');
+    writeFileSync(join(root, 'b'), 'one\nTWO\nthree\n');
+    writeFileSync(join(root, 'src', 'a.ts'), 'export const a = 1;\n');
     // The run's shape: `git diff --no-index` with differences exits 1 carrying the payload.
     const r = await t.execute(args({ command: 'git diff --no-index -- a b || true; git diff --no-index -- a b', timeout: 15 }), ctx());
     expect(diag(r.text)['exit_code']).toBe(1);
     expect(diag(r.text)).toMatchObject({ outcome_kind: 'success', outcome_severity: 'info' });
     expect(r.isError).toBe(false);
+    // The payload, not just the status: a pager left to start would have eaten this and the status both.
+    expect(output(r.text)).toContain('-two');
+    expect(output(r.text)).toContain('+TWO');
     // And a no-match search answers rather than fails — `findstr` on Windows, `grep` on POSIX.
     const search = PS ? 'findstr /C:definitely-not-here-xyz src\\a.ts; echo "search said $LASTEXITCODE"' : 'grep definitely-not-here-xyz src/a.ts; echo "grep said $?"';
     const g = await t.execute(args({ command: search, timeout: 15 }), ctx());

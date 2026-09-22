@@ -22,3 +22,10 @@ REQ-TOOLS-112 test 4 — narrowed reading under ESC-41; the amendment round is o
 - `packages/agent-tools/src/terminal/terminal.test.ts` — pure asserts plus the real `git diff`/`findstr` e2e.
 
 Noticed 2026-09-18 by the run-autopsy of run `cc6191a2`; repaired on the same branch.
+
+*Confirmed landed and filed 2026-09-22: `successExitOne` is in
+`packages/agent-tools/src/terminal/classify.ts:29`, reached from the exit-1 branch at line 72. The
+end-to-end half of its evidence was red for an unrelated reason until the same day —
+[`the-real-git-diff-terminal-test-times-out-on-win32.md`](the-real-git-diff-terminal-test-times-out-on-win32.md),
+a pager, not this carve-out — and is green now. The amendment round ESC-41 owes the requirement is
+still owed.*

@@ -83,6 +83,15 @@ describe('read_file (REQ-TOOLS-134)', () => {
     expect(linked.isError).not.toBe(true);
     expect(linked.text).toContain('gitdir:');
   });
+  it('a memory: path names the tool that answers it rather than listing a parent that never existed', async () => {
+    const r = await readFileTool(state, fence).execute({ path: 'memory:punchclock/build-and-styling-gotchas', offset: 1, limit: 2000, grep_context: 3 }, ctx());
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain('Memory not found through read_file: memory:punchclock/build-and-styling-gotchas.');
+    expect(r.text).toContain("read_memory (memory_file_name: 'punchclock/build-and-styling-gotchas')");
+    expect(r.text).toContain('list_memories');
+    // The refusal it replaced said only this, about a namespace that has no parent to speak of.
+    expect(r.text).not.toContain('Its parent directory does not exist either.');
+  });
   it('the 30,000-character cap carries a continuation hint', async () => {
     writeFileSync(join(root, 'big.txt'), Array.from({ length: 3000 }, (_, i) => `line ${i + 1} ${'x'.repeat(20)}`).join('\n'));
     const r = await readFileTool(state, fence).execute({ path: 'big.txt', offset: 1, limit: 5000, grep_context: 3 }, ctx());

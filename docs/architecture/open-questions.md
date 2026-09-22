@@ -2775,6 +2775,36 @@ marked in place.
 **What a ruling decides.** Which reading governs; and, if the first, whether the inventory gains a
 third row state — *suppressed* — so that the screen stops disagreeing with the merge.
 
+**OQ-65 — Do the instruction-file switches reach the retrospective, or only what agents are given?** *(`PD-LIBRARY-002` over REQ-WORKSPACE-041, since narrowed by `PD-WORKSPACE-002`; REQ-WORKSPACE-048. Raised 2026-09-22 by repairing [`the-retrospective-reads-instruction-files-the-user-switched-off.md`](../defects/fixed/the-retrospective-reads-instruction-files-the-user-switched-off.md).)*
+
+`PD-LIBRARY-002` let the retrospective read the instruction files a workspace holds, and pointed it at one
+rule for finding them: REQ-WORKSPACE-041's discovery, "the two names, the workspace root, nothing else —
+governs that read unchanged". `PD-WORKSPACE-002` has since narrowed that requirement, so the rule the
+retrospective was pointed at says something else now: four names at the workspace root, two at each of five
+further bases, and a per-file on/off switch over all of them under REQ-WORKSPACE-048's master switch.
+
+**The discovery half is not the question.** `PD-LIBRARY-002` named the rule rather than copying it, so when
+the rule widened the read widened with it. The code had frozen the old sentence as a two-name constant, and
+that is a plain defect against the directive that cites it.
+
+**The switch half is the question.** `PD-WORKSPACE-002` states its switches as governing what agents are
+*given*. A retrospective is not an agent being given context; it is an analysis of the workspace, and an
+analysis that may not read a file the workspace contains is a different kind of restriction from one that
+decides what an agent is told. Read narrowly, the switches govern injection alone and the retrospective
+reads everything present. Read widely, a file the product has been told not to use is not evidence either.
+
+**What the build proceeds under.** The wide reading: the retrospective consumes exactly the set injection
+consumes, master switch and per-file switches included. Two reasons, and the second is the one that decides
+it. A user switches a file off to take it out of the product's working material, and would not expect the
+same product to quote it back at them as evidence. And the retrospective's own output can be an
+`agents_md_update` proposal — a proposed EDIT to a file the product has been told not to use, which is a
+worse outcome than a thinner analysis. The set is computed by the run host, which owns the policy, and
+handed to the engine, which owns neither.
+
+**What a ruling decides.** Whether an analysis reads what injection may not; and, if not, whether the
+retrospective should say in its own output that a file was present and withheld, so a user reading a thin
+retrospective can tell it apart from an empty workspace.
+
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 
 The key is registered with default 20 and minimum 1. Each background session publishes its own `bg:<id>` stream at up to 50 frames/s (the 20 ms floor), so the produced aggregate is `(agents + background sessions) × 50 frames/s`, and only one of those two factors — agents, REQ-MONITOR-285's 20 — has a ceiling. Part AL reads the key into the manager and caps the *delivered* rate per window at 1,000 frames/s by merging (REQ-MONITOR-306, REQ-SHELL-103), so a user who configures 400 background sessions saturates the run-host → main pipe, not a renderer. A stated maximum on the key would let the produced rate be computed rather than absorbed. The owner's call; recorded, not resolved.

@@ -106,8 +106,28 @@ function unlistableParent(parent: string, relParent: string): string {
   return `${name} could not be listed.`;
 }
 
+/**
+ * A `memory:` path is not a file and never will be, so the parent listing REQ-TOOLS-134 owes it answers a
+ * question nobody asked. Observed 2026-09-20, run `2e21e324`: an agent that had just listed memories
+ * through `list_memories` reached for two of them with `read_file` and was told `Its parent directory does
+ * not exist either.` — truthful, naming no tool, so the next move was a guess. The namespace belongs to the
+ * code-intelligence server, whose manifest (`packages/config/src/mcp/code-intelligence-manifest.generated.ts`,
+ * `read.memoryReading`) maps it to `read_memory`. The two names are repeated rather than imported: nothing
+ * in the run host's tool layer may depend on `@rotaris/config`.
+ */
+function namespacedElsewhere(rel: string): string | null {
+  const head = rel.split(/[\\/]/, 1)[0] ?? '';
+  if (!/^memory:/i.test(head)) return null;
+  const name = rel.slice(rel.indexOf(':') + 1);
+  return `Memory not found through read_file: ${rel}.\n`
+    + `'memory:' is not a path on disk — it is the code-intelligence server's own namespace. `
+    + `Read it with read_memory (memory_file_name: '${name}'), and list what is there with list_memories.`;
+}
+
 /** REQ-TOOLS-134: the parent listing and up to five close matches at ≥ 0.45 under REQ-TOOLS-188. */
 function missingPathMessage(resolved: string, rel: string): string {
+  const namespaced = namespacedElsewhere(rel);
+  if (namespaced !== null) return namespaced;
   const parent = dirname(resolved);
   const wanted = basename(resolved).toLowerCase();
   let names: string[] = [];

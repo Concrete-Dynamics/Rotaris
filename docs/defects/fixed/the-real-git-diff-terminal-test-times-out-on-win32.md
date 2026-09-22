@@ -38,3 +38,26 @@ the test is accidentally measuring instead.
 
 Noticed 2026-09-22 while running `pnpm check` for `PD-WORKSPACE-002`; pre-existing on `main`, not
 repaired here.
+
+**Repaired 2026-09-22.** The pager guess in this note is the cause, and it was measured rather than
+reasoned: the product's own spawn arguments driven through a real `node-pty` answered
+
+```
+__ROT_START__
+WARNING: terminal is not fully functional
+Press RETURN to continue
+```
+
+and then nothing. Git sets its pager up when `isatty(stdout)` is true, which a pseudo-terminal always is,
+and `less` under `TERM=dumb` prints that line and waits for a keystroke no agent can send. The end marker
+never arrives and the call dies at the hard timeout (REQ-TOOLS-099) whatever the command was going to say.
+
+The repair is in the product, not the test: `NO_PAGER` (`GIT_PAGER=cat`, `PAGER=cat`) joins `TERM=dumb`
+in the session's environment, so `git diff`, `git log` and `git show` answer in a session no one can press
+RETURN in. `GIT_PAGER` covers git even where a user's `core.pager` names something else.
+
+The test owed a second repair the note did not see: it never created `a` and `b`. Git's exit status for
+`Could not access 'a'` is also **1**, so once the pager was gone the case would have passed without a diff
+ever being taken. The files are written now and differ on one line, and the case asserts the hunk
+(`-two`, `+TWO`) beside the status. Measured: the case passes in **1.84 s**, where it spent 15.7 s reaching
+exit 124 before.

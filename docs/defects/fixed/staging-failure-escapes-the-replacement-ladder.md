@@ -32,3 +32,7 @@ and a staging refusal reaching `document.stage` is that function behaving as spe
 - `packages/platform/src/document.ts` — the primitive that is correct as it stands, for contrast.
 - `packages/engine/src/session-actions.test.ts` — A9's destination-failure proof, which now says which of
   the two refusals it installed rather than assuming the Windows one.
+
+*Confirmed landed and filed 2026-09-22: `writeFileSync(staged, text)` sits inside the `try` inside the
+retry loop in `tools/symbol-artifact/replace.mjs`, so a staging refusal leaves through the one declared
+sentence; `packages/platform/src/document.ts` is untouched, as this note said it should be.*

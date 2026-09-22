@@ -37,3 +37,12 @@ evidence for `REQ-GIT-094` and for the session repair in `REQ-TRACE-*`'s export.
 - `packages/engine/src/session-actions.ts` — writes `session.interrupted_recovered`, the name that is real.
 - `packages/engine/src/session-actions.test.ts` — lines 59 and 99 assert that name, which is why the unit
   tests are green while the proofs are not.
+
+**Already repaired when this was re-read, 2026-09-22.** This note and
+[`the-proofs-assert-a-timeline-name-the-audit-corrected.md`](the-proofs-assert-a-timeline-name-the-audit-corrected.md)
+are the same defect written twice, from the two sides it was seen from — this one from the `runCommand`
+move, that one from OQ-46's audit of REQ-SESSION-062. The repair landed under the other note and covers
+every assertion this one lists: `checkpoint-proof.mjs:348` and `sessions-proof.mjs:201,290,300` all read
+`session.interrupted_recovered`, the name `packages/engine/src/sessions.ts:1564` writes. The old spelling
+survives in exactly two comments, both of which exist to say it was wrong. Nothing was left to repair;
+the note is filed here so a reader meeting it is not sent looking for a second fix.

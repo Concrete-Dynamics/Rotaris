@@ -96,7 +96,11 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
       // reached in two clicks now: the chip, then the option. The option's own text is label + hint, so the click
       // lands on `.chip-menu__label`, whose text is the preset alone. (This seam still read `.seg-opt` until Part AT;
       // `docs/defects/fixed/the-config-proof-clicks-a-control-that-became-a-popover.md`.)
-      if (!(await click('[data-testid="chip-mode"] .chip-menu', null))) return;
+      // BOTH trigger classes, because `PopoverMenu` has two: `.chip-menu` when it is drawn as a chip, and
+      // `.strip-btn` once PD-CHAT-001's revisions docked the composer controls into a strip. Naming only
+      // the first made this seam miss again on 2026-09-22, in the same way and for the same reason as the
+      // `.seg-opt` miss the note above records — so it names the shape rather than one of its two forms.
+      if (!(await click('[data-testid="chip-mode"] .chip-menu, [data-testid="chip-mode"] .strip-btn', null))) return;
       await pause(host, 200);
       if (!(await click('.chip-menu__panel .chip-menu__label', modeWanted))) return;
       if (modeWanted === 'autonomous') { await pause(host, 300); await click('.dialog-actions .btn-danger', 'Switch to autonomous'); }
@@ -538,10 +542,36 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
   if (quitAt > 0) clocks.timers.after(millis(quitAt), () => { log('capture: closing the main window (user-initiated)'); win.close(); });
 
   // ROTARIS_CAPTURE_SELECT="selector>>value@ms;;…": a value chosen in a select, for the configuration proof.
+  //
+  // TWO control kinds, because the product has two and a seam that knows only one silently drives nothing.
+  // A native `<select>` takes the value through the prototype setter and a `change` event. The design
+  // system's `SearchableSelect` is a button plus a listbox, so it is driven the way a person drives it:
+  // the trigger is clicked, and the `[role="option"]` carrying the wanted `data-value` is clicked in the
+  // panel that opens. The panel appears on a React update, so the option is looked for on the next frame.
+  //
+  // The reason this exists: `config-proof`'s models scenario named `select[aria-label="Model for …"]` and
+  // the control had become a `SearchableSelect`, so the step logged `no such control`, the launch carried on,
+  // and the proof failed five assertions later on a file that was missing the key nobody had chosen.
   for (const step of steps(process.env['ROTARIS_CAPTURE_SELECT'])) {
     clocks.timers.after(millis(step.at), async () => {
-      const done = await win.webContents.executeJavaScript(`(() => { const el = document.querySelector(${JSON.stringify(step.selector)}); if (!el) return false; const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set; setter.call(el, ${JSON.stringify(step.arg ?? '')}); el.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`) as boolean;
-      log(`capture: select ${step.selector} = ${step.arg ?? ''} → ${done ? 'chosen' : 'no such control'}`);
+      const outcome = await win.webContents.executeJavaScript(`(async () => {
+        const el = document.querySelector(${JSON.stringify(step.selector)});
+        if (!el) return 'no such control';
+        const wanted = ${JSON.stringify(step.arg ?? '')};
+        if (el instanceof HTMLSelectElement) {
+          const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+          setter.call(el, wanted);
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+          return 'chosen';
+        }
+        el.click();
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const option = document.querySelector('[role="option"][data-value=' + JSON.stringify(wanted) + ']');
+        if (!option) return 'no such option';
+        option.click();
+        return 'chosen';
+      })()`) as string;
+      log(`capture: select ${step.selector} = ${step.arg ?? ''} → ${outcome}`);
     });
   }
 

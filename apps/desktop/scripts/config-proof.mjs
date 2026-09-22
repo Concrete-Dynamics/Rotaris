@@ -107,12 +107,21 @@ results.runtimeSave = { workspaceFile: ws1, loadMs: /loaded in ([\d.]+) ms/.exec
 
 // 2. Settings → Models: a slot chosen from the catalogue, then Save; the global comment header and unknown key survive a global-scoped read.
 const s2 = scenario('models-save');
-launch('models-save', s2, {
+// The slot is a `SearchableSelect` (a button and a listbox), its reasoning companion a native `<select>`.
+// The selectors are therefore written WITHOUT a tag qualifier: `select[aria-label=…]` matched nothing once
+// the slot control changed, and the step logged `no such control` while the launch carried on.
+const models2Log = launch('models-save', s2, {
   ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_SETTINGS: 'Models',
-  ROTARIS_CAPTURE_SELECT: 'select[aria-label="Model for large_model"]>>other@1800;;select[aria-label="Reasoning strength for large_model"]>>high@2200',
-  ROTARIS_CAPTURE_CLICKS: '.save-bar .btn-primary>>Save@2800',
-  ROTARIS_CAPTURE_AFTER_MS: '4000',
+  ROTARIS_CAPTURE_SELECT: '[aria-label="Model for large_model"]>>other@1800;;[aria-label="Reasoning strength for large_model"]>>high@2400',
+  ROTARIS_CAPTURE_CLICKS: '.save-bar .btn-primary>>Save@3000',
+  ROTARIS_CAPTURE_AFTER_MS: '4200',
 });
+// Read the steps back before the file: a control that was never driven must fail HERE, naming itself,
+// rather than three lines down as a key missing from a file for reasons the message cannot state.
+for (const line of models2Log.split('\n')) {
+  const m = /capture: select (.+?) = (.*?) → (.+)$/.exec(line.trim());
+  if (m && m[3] !== 'chosen') throw new Error(`the models scenario could not drive ${m[1]} to '${m[2]}': ${m[3]}`);
+}
 const ws2 = readFileSync(s2.workspaceFile, 'utf8');
 if (!ws2.includes('large_model: other\n') || !ws2.includes('large_model_thinking: high\n')) throw new Error(`the models save did not write the slot and its companion:\n${ws2}`);
 if (!ws2.startsWith('# workspace configuration\n')) throw new Error('the models save lost the comment header');

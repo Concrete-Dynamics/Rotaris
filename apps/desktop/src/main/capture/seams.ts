@@ -3,7 +3,7 @@ import { writeFileSync } from 'node:fs';
 import { type BrowserWindow, screen } from 'electron';
 import { millis } from '@rotaris/kernel';
 import { CHANNEL, CONTRACT_SCHEMA_VERSION, type NoticeAction, type NoticeSeverity } from '@rotaris/contracts';
-import { type CaptureHost, type CaptureStep, type CaptureTarget, centre, chordEvent, clickAt, doubleClickAt, onStep, parseSelectors, parseSteps, pause, settleAt, targetProbe } from './host.js';
+import { type CaptureHost, type CaptureStep, type CaptureTarget, centre, chordEvent, clickAt, doubleClickAt, onStep, parseSelectors, parseSteps, pause, releaseProbe, settleAt, targetProbe } from './host.js';
 
 /**
  * THE SCRIPTABLE SEAMS — clicks, typed text, chords, renderer `eval`, notices, prompts, drags, OS input,
@@ -100,11 +100,30 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
     });
   }
 
-  /** The point a click step presses — and a covered element REPORTED rather than pressed through in silence. */
+  /**
+   * The point a click step presses — re-read while the element is not the one drawn there, and REPORTED when it
+   * never becomes so, rather than pressed through in silence.
+   *
+   * The retry is what a settling page needs: a step scheduled at an appointment can read its point out of a
+   * layout the next render moves, and the press then lands wherever that point ended up. Three re-reads over
+   * ~360 ms cost nothing when the first answer is already right, which is the ordinary case.
+   */
   const aimAt = async (step: CaptureStep): Promise<CaptureTarget | null> => {
-    const target = await win.webContents.executeJavaScript(targetProbe(step.selector, step.arg)) as CaptureTarget | null;
-    if (!target) { log(`capture: no "${step.arg ?? step.selector}" control on screen`); return null; }
-    if (target.under !== null) log(`capture: "${step.arg ?? step.selector}" is not under the pointer at ${Math.round(target.x)},${Math.round(target.y)} — "${target.under}" is`);
+    const what = step.arg ?? step.selector;
+    const read = () => win.webContents.executeJavaScript(targetProbe(step.selector, step.arg)) as Promise<CaptureTarget | null>;
+    let target = await read();
+    if (!target) { log(`capture: no "${what}" control on screen`); return null; }
+    for (let attempt = 0; attempt < 3 && target.under !== null; attempt += 1) {
+      // A tail-following transcript un-scrolls whatever was scrolled into view, so the first thing to try is
+      // what a reader would do: stop following. It answers null when the target is in no such container.
+      const released = await win.webContents.executeJavaScript(releaseProbe(step.selector, step.arg)) as { tries: number; following: string } | null;
+      if (released) log(`capture: released the tail follow around "${what}" after ${released.tries} scrolls (following=${released.following})`);
+      else await pause(host, 120);
+      const again = await read();
+      if (!again) { log(`capture: no "${what}" control on screen`); return null; }
+      target = again;
+    }
+    if (target.under !== null) log(`capture: "${what}" is not under the pointer at ${Math.round(target.x)},${Math.round(target.y)} — "${target.under}" is`);
     return target;
   };
 

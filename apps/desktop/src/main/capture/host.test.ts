@@ -59,7 +59,13 @@ describe('the capture script grammar (verification seams)', () => {
     expect(probe).toContain(JSON.stringify('.row--system'));
     // The two halves that make a miss visible: the hit test, and the covering element being named.
     expect(probe).toContain('document.elementFromPoint(x, y)');
-    expect(probe).toContain('over === b || b.contains(over) || over.contains(b)');
+    // Reached means the element itself or something inside it; an ancestor answering is a miss.
+    expect(probe).toContain('over === b || b.contains(over)');
+    expect(probe).not.toContain('over.contains(b)');
+    // The point is taken two frames after the scroll, and the element looked up AGAIN there: a pooled
+    // transcript re-binds the slot a rect was read from, and the press would land on its new row.
+    expect(probe).toContain('requestAnimationFrame(() => requestAnimationFrame(go))');
+    expect(probe.match(/b = find\(\)/g)?.length).toBe(2);
     // The text form quotes what it was given, exactly as the match probe does.
     expect(targetProbe('.btn', `it's`)).toContain(`x.textContent.trim() === "it's"`);
   });

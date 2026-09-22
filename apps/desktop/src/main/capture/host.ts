@@ -124,9 +124,34 @@ export function matchProbe(selector: string, text: string | null): string {
  * pointer steps move between runs of one build: the proof page had squeezed three of its surfaces to a
  * pixel behind a fourth, and the log said "clicked" every time. `under` names the intruder when there is
  * one; the click is delivered either way, so no existing proof changes except in what its log can say.
+ *
+ * "Reached" means the point answers with the element itself or something inside it. An ANCESTOR answering
+ * is a miss too, not a near-hit: it means the element is clipped away at the point its own rectangle
+ * claims, which is how the first of these misses actually presented.
+ *
+ * The point is measured TWO FRAMES after the scroll, and the element is looked up again there. A pooled
+ * transcript re-binds its slots on the scroll event and the render after it, so a rect read in the same
+ * turn as the scroll can belong to a slot that is about to hold a different row — the press then lands on
+ * whatever took that position. That is the second half of the same defect: one click in five went nowhere
+ * with the log reading `clicked`, and no coverage test could see it because nothing was covering anything.
  */
 export function targetProbe(selector: string, text: string | null): string {
-  return `(() => { const b = [...document.querySelectorAll(${JSON.stringify(selector)})].find((x) => ${text === null ? 'true' : `x.textContent.trim() === ${JSON.stringify(text)}`}); if (!b) return null; b.scrollIntoView({ block: 'center' }); const r = b.getBoundingClientRect(); const x = r.x + r.width / 2, y = r.y + r.height / 2; const over = document.elementFromPoint(x, y); const reached = over !== null && (over === b || b.contains(over) || over.contains(b)); return { x, y, under: reached ? null : (over === null ? 'nothing' : (over.getAttribute('data-testid') || (typeof over.className === 'string' && over.className !== '' ? over.className : over.tagName))) }; })()`;
+  const find = `[...document.querySelectorAll(${JSON.stringify(selector)})].find((x) => ${text === null ? 'true' : `x.textContent.trim() === ${JSON.stringify(text)}`})`;
+  return `(async () => { const find = () => ${find}; let b = find(); if (!b) return null; b.scrollIntoView({ block: 'center' }); await new Promise((go) => requestAnimationFrame(() => requestAnimationFrame(go))); b = find(); if (!b) return null; const r = b.getBoundingClientRect(); const x = r.x + r.width / 2, y = r.y + r.height / 2; const over = document.elementFromPoint(x, y); const reached = over !== null && (over === b || b.contains(over)); return { x, y, under: reached ? null : (over === null ? 'nothing' : (over.getAttribute('data-testid') || (typeof over.className === 'string' && over.className !== '' ? over.className : over.tagName))) }; })()`;
+}
+
+/**
+ * The renderer expression that releases a TAIL-FOLLOWING container the click target sits in (REQ-CHAT-070).
+ *
+ * A following transcript pins itself to the bottom on every render, so scrolling a row above the tail into
+ * view lasts about two frames: the point is true when it is read and stale when the press arrives. `onScroll`
+ * ignores one scroll after the pane's own (`programmatic`), so a single nudge is swallowed as often as not;
+ * this one keeps nudging until the pane publishes `data-following="0"`, which is what a reader's wheel does
+ * over several events. Reached only when the target is covered, so a proof that never scrolls never sees it.
+ */
+export function releaseProbe(selector: string, text: string | null): string {
+  const find = `[...document.querySelectorAll(${JSON.stringify(selector)})].find((x) => ${text === null ? 'true' : `x.textContent.trim() === ${JSON.stringify(text)}`})`;
+  return `(async () => { const b = ${find}; if (!b) return null; const s = b.closest('[data-following="1"]'); if (!s) return null; let tries = 0; while (s.dataset.following === '1' && tries < 30) { tries += 1; s.scrollTop = Math.max(0, s.scrollTop - 8); await new Promise((go) => requestAnimationFrame(go)); } return { tries, following: s.dataset.following }; })()`;
 }
 
 /** What `targetProbe` answers with: the point to press, and the intruder over it when the element is covered. */

@@ -188,8 +188,6 @@ export interface ProjectOptions {
   readonly pendingApprovals: readonly ApprovalPayload[];
   /** REQ-CHAT-051: the question trailer is attributed to the agent that asked. */
   readonly questionAgent?: string | undefined;
-  /** REQ-CHAT-069's scope filter: null is "All activity". Verifier rows are never filtered out. */
-  readonly scopeAgent?: string | null | undefined;
 }
 
 /** REQ-CHAT-166: a capped value with the truncation marked in the drawn text, stating how many further lines exist. */
@@ -362,13 +360,6 @@ function hygiene(row: TranscriptRow, previousThinking: TranscriptRow | null, o: 
     out = { ...out, ...(input === undefined ? {} : { input }), ...(output === undefined ? {} : { output }) };
   }
   return out;
-}
-
-/** REQ-CHAT-069: keep user, system, question, approval and verifier rows plus the selected agent's; verifier rows are never filtered out. */
-function inScope(row: TranscriptRow, agent: string | null | undefined): boolean {
-  if (agent === null || agent === undefined) return true;
-  if (row.kind === 'user' || row.kind === 'system' || row.kind === 'verifier') return true;
-  return (row.name ?? '') === agent;
 }
 
 /** REQ-CHAT-050: the edit-diff row is displayed at most ONCE however often the transcript is re-projected. */
@@ -558,8 +549,10 @@ function cleanCut(rows: readonly TranscriptRow[], b: number, showReasoning: bool
  * display-cap change does exactly once (REQ-CHAT-166) and what a reset does.
  */
 export function projectDisplay(o: ProjectOptions, incremental?: { readonly previous: readonly DisplayRow[]; readonly from: number }): DisplayRow[] {
-  const kept = o.rows.filter((r) => inScope(r, o.scopeAgent));
-  const deduped = dropRepeatedDiffs(kept);
+  // REQ-CHAT-069's scope filter is NOT applied here: it is `scopedRows` in `TranscriptSurface.tsx`, applied by
+  // the surface that owns the toggle. One requirement, one implementation — a second copy here was unreachable
+  // and disagreed about the kinds (docs/defects/fixed/the-in-projection-scope-filter-is-never-reached.md).
+  const deduped = dropRepeatedDiffs(o.rows);
 
   let startRow = 0;
   let prefix: DisplayRow[] = [];

@@ -175,7 +175,12 @@ export const SCOPE_NO_AGENT = 'Select an agent to scope the transcript to its ta
 /** REQ-CHAT-069: the run-owned kinds a scoped transcript always keeps; a verifier row is never filtered out per agent. */
 export const RUN_OWNED_KINDS = new Set(['user', 'system', 'question', 'approval', 'verifier']);
 
-/** REQ-CHAT-069: the run-owned rows plus the selected agent's own; the run-level agent owns the rows named for its persona. */
+/**
+ * REQ-CHAT-069: the run-owned rows plus the selected agent's own; the run-level agent owns the rows named for its
+ * persona. **This is the requirement's one implementation.** The projection held a second one that no surface
+ * ever reached and that kept three kinds of the five; it is gone
+ * (docs/defects/fixed/the-in-projection-scope-filter-is-never-reached.md).
+ */
 export function scopedRows(rows: readonly TranscriptRow[], agent: AgentRecord | null): readonly TranscriptRow[] {
   if (!agent) return rows;
   return rows.filter((r) => RUN_OWNED_KINDS.has(r.kind)

@@ -51,8 +51,10 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 drops the ones the per-file `instructions.overrides` policy switches off, merges the rest in discovery
 order, and caches the block per workspace root for the session's lifetime. Both the runtime view's prompt
 section and its configuration section move; `04-seams.md` §5 gains the files a Settings-**editable** key
-needs past the six a plain key needs. `REQ-WORKSPACE-050`'s worktree half stays unbuilt and is recorded
-in `docs/defects/`, not here.
+needs past the six a plain key needs. **`REQ-WORKSPACE-050`'s worktree half is now built** (2026-09-22): the
+instruction files are read from the root the run executes in while the skill catalog stays with the base
+workspace, the execution root travelling through `configure`'s context, and the merge cached per base root
+**and** per execution root. The defect note moves to `docs/defects/fixed/`.
 
 **The requested permission mode always applies (PD-TOOLS-002).** No unattended downgrade: the
 requested mode is the effective mode for every agent, for the whole run. `03-runtime-view.md`

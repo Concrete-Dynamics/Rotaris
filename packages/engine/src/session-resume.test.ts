@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { asSessionId, FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
+import { asSessionId, FakeClock, mintMachineId, type MachineId, type Result, type SessionId } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, type AgentBackend } from '@rotaris/model';
-import { buildContinuationPayload, RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type PreflightContext, type TodoDocument } from './index.js';
+import { buildContinuationPayload, RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type PreflightContext, type RunSetup, type TodoDocument } from './index.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
 const OTHER = mintMachineId('0000000000000000000000000000000b') as MachineId;
@@ -36,6 +36,40 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
   const child = (sid: SessionId) => ({
     session_id: sid, task_id: 'bg_00000001', canonical_name: 'old-child', given_name: 'old-child', persona: 'coding-agent', state: 'running', parent_id: 'root', depth: 1, iteration: 1,
     model_key: 'm', category: '', background: 1, task: 'old work', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: '2026-09-04T00:00:00.000Z',
+  });
+
+  /**
+   * REQ-WORKSPACE-050, the context half: the root a run EXECUTES in reaches configuration, which is where the
+   * run host turns it into the workspace-context reader. The recorded defect was that it did not — an isolated
+   * session was given the BASE workspace's instruction files, never its worktree's. A continuation of that
+   * session owes the same root, which it reads back from the stored binding rather than from a start argument.
+   */
+  it('REQ-WORKSPACE-050: an isolated session hands configuration the worktree as its execution root, at start and at every continuation', async () => {
+    const client = new ScriptedModelClient([answer('one'), answer('two')]);
+    const backend = new DefaultAgentBackend(client);
+    const roots: { workspaceRoot: string; executionRoot: string }[] = [];
+    const sessions = new Sessions({
+      clocks: clock, publisher: { increment: () => undefined, snapshot: () => undefined }, pid: 77, host: HOST,
+      retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-isolated',
+      model: null, sessionFilesDir: (_store, sid) => join(dir, 'sessions', sid),
+      configure: (workspaceRoot, ctx): Result<RunSetup, { readonly reason: string }> => {
+        roots.push({ workspaceRoot, executionRoot: ctx.executionRoot });
+        return { ok: true, value: { model: { backend, config: { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => '' } }, runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING' } } };
+      },
+    });
+    // A real directory: a continuation refuses a binding whose tree has gone (REQ-GIT-157).
+    const tree = join(dir, 'worktrees', 'S-isolated');
+    mkdirSync(tree, { recursive: true });
+    const started = sessions.start(dal, 'C:/ws', 'build it', {
+      worktree: { worktree_path: tree, branch: 'feat/x', base_branch: 'main', base_revision: 'abc', created_by_session: true, merge_status: 'ready', integration_session_id: null },
+    });
+    if (!started.ok) throw new Error(started.error.reason);
+    await sessions.running(started.value);
+    const again = sessions.prompt(started.value, 'keep going');
+    if (!again.ok) throw new Error(again.error.reason);
+    await sessions.running(started.value);
+    // The record stays anchored to the base workspace; the run works in the tree, both times.
+    expect(roots).toEqual([{ workspaceRoot: 'C:/ws', executionRoot: tree }, { workspaceRoot: 'C:/ws', executionRoot: tree }]);
   });
 
   it('reopens the same identity, sweeps orphans, continues ordinals and carries prior intent', async () => {

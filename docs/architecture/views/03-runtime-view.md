@@ -72,9 +72,14 @@ first: `SkillHost.workspaceContext` reads the master switch `inject_agents_md` a
 `instructions.overrides` policy from the **saved** configuration, discovers the present instruction files over
 the workspace root and the five further bases, merges the enabled set into one block
 (`mergeInstructionContext` — a source comment per file, one blank line between blocks, both size limits) and
-caches it per workspace root for as long as the session lasts (REQ-WORKSPACE-046), cleared by session creation
-and by a rescan, the two events that already clear the catalog. `REQ-WORKSPACE-050`'s worktree half is **not**
-met: the context is read from the base workspace, which `docs/defects/` records.
+caches it for as long as the session lasts (REQ-WORKSPACE-046), cleared by session creation and by a rescan, the
+two events that already clear the catalog. **`REQ-WORKSPACE-050` is met on both halves:** the instruction files
+are read from the root the run **executes** in — the worktree of an isolated session — while the skill catalog
+and the policy stay with the **base** workspace, so persistent workspace metadata stays with the base. The
+execution root reaches the run host through `configure`'s context (`Sessions.setupFor`, from the start
+argument's binding or, for a continuation, from the stored one), and the merge is cached per base root **and**
+per execution root, so two sessions on one base with different trees never answer for each other. The per-file
+switches are untouched by this: they key on a stable identity (`workspace:AGENTS.md`), not on a path.
 The units arrive as a **getter**, called at construction and never
 captured, so a skill invoked between prompts reaches the next agent built while one already running keeps the
 context it was built with (REQ-CONFIG-166). Because the list is a property of the session and not of the role,

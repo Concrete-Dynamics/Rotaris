@@ -47,7 +47,6 @@ export interface SkillHostDeps {
 
 /** The pending bucket's key: a workspace root that has no session yet, or none on screen. */
 const pendingKey = (workspaceRoot: string): string => `pending:${workspaceRoot}`;
-
 interface MutableSession {
   forced: Set<string>;
   manual: Map<string, DiscoveredSkill>;
@@ -56,8 +55,14 @@ interface MutableSession {
 export class SkillHost {
   /** REQ-WORKSPACE-058: per resolved workspace root, cleared by a rescan and by session creation. */
   private readonly catalogs = new Map<string, SkillDiscovery>();
-  /** REQ-WORKSPACE-046: the merged workspace context, on the same lifetime and cleared in the same places. */
-  private readonly contexts = new Map<string, string>();
+  /**
+   * REQ-WORKSPACE-046: the merged workspace context, on the same lifetime and cleared in the same places.
+   * REQ-WORKSPACE-050: nested by base workspace, then by the root the run EXECUTES in — a session in an
+   * isolated worktree reads its context files from that worktree while keeping the base workspace's catalog,
+   * so two sessions on one base with different execution roots hold different merges and neither answers for
+   * the other. The clear stays keyed by the base root, which is what a rescan and a session creation name.
+   */
+  private readonly contexts = new Map<string, Map<string, string>>();
   private readonly sessions = new Map<string, MutableSession>();
 
   constructor(private readonly deps: SkillHostDeps) {}
@@ -126,6 +131,7 @@ export class SkillHost {
     }
   }
 
+
   /** A session that is gone takes its forced set and its manual skills with it (REQ-WORKSPACE-057/073). */
   onSessionEnded(sessionId: string): void {
     this.sessions.delete(sessionId);
@@ -144,21 +150,31 @@ export class SkillHost {
    * section is: a switch the user has just saved gates the next session, and a run that started earlier
    * keeps what it was given. With the master switch false nothing is read at all (REQ-WORKSPACE-048).
    */
-  workspaceContext(workspaceRoot: string): string {
-    const held = this.contexts.get(workspaceRoot);
+  workspaceContext(workspaceRoot: string, executionRoot?: string): string {
+    /*
+     * REQ-WORKSPACE-050: the files are read from the run's EXECUTION root — the worktree of an isolated
+     * session — while the policy, the catalog and persona memory stay with the base workspace the user
+     * selected. A worktree's branch may have changed `AGENTS.md`, and the run working in that tree is the
+     * run those instructions are for. The per-file switches are unaffected: they key on a stable identity
+     * (`workspace:AGENTS.md`), not on a path, so the switch the user set governs either root.
+     */
+    const readRoot = executionRoot === undefined || executionRoot === '' ? workspaceRoot : executionRoot;
+    const held = this.contexts.get(workspaceRoot)?.get(readRoot);
     if (held !== undefined) return held;
     const policy = this.deps.instructions?.(workspaceRoot);
     let merged = '';
     if (policy === undefined || policy.master) {
-      const env = { workspaceRoot, globalDir: policy?.globalDir ?? '', home: this.home, platform: this.deps.platform ?? process.platform };
+      const env = { workspaceRoot: readRoot, globalDir: policy?.globalDir ?? '', home: this.home, platform: this.deps.platform ?? process.platform };
       const present = discoverInstructionFiles(env, (p) => this.ports.isFile(p));
       const enabled = enabledInstructionFiles(present, true, policy?.section.overrides ?? {});
       merged = mergeInstructionContext(enabled, this.ports, (m) => this.deps.log(`workspace context: ${m}`, 'warn'));
-      this.deps.log(`workspace context: ${enabled.length} of ${present.length} instruction file(s) enabled for ${workspaceRoot}${enabled.length === 0 ? '' : ` (${enabled.map((f) => f.id).join(', ')})`}`);
+      this.deps.log(`workspace context: ${enabled.length} of ${present.length} instruction file(s) enabled for ${readRoot}${readRoot === workspaceRoot ? '' : ` (the worktree of ${workspaceRoot}, REQ-WORKSPACE-050)`}${enabled.length === 0 ? '' : ` (${enabled.map((f) => f.id).join(', ')})`}`);
     } else {
       this.deps.log(`workspace context: injection is switched off for ${workspaceRoot}; no instruction file was read`);
     }
-    this.contexts.set(workspaceRoot, merged);
+    const byRoot = this.contexts.get(workspaceRoot) ?? new Map<string, string>();
+    byRoot.set(readRoot, merged);
+    this.contexts.set(workspaceRoot, byRoot);
     return merged;
   }
 
@@ -234,12 +250,12 @@ export class SkillHost {
    * first three exist; persona memory does not, so the list is the seam where it will sit — an empty slot
    * in a sequence, not a shape a later part has to re-cut.
    */
-  contextUnits(workspaceRoot: string, sessionId?: string): readonly string[] {
+  contextUnits(workspaceRoot: string, sessionId?: string, executionRoot?: string): readonly string[] {
     const resolved = this.resolved(workspaceRoot, sessionId);
     const units: string[] = [];
     // REQ-WORKSPACE-047: ahead of the catalog, ahead of every force-loaded body. Empty merged content
     // constructs no unit — "with no context files, or injection disabled, no such unit SHALL be built".
-    const context = this.workspaceContext(workspaceRoot);
+    const context = this.workspaceContext(workspaceRoot, executionRoot);
     if (context !== '') units.push(context);
     const catalog = skillCatalogBlock(resolved);
     if (catalog !== null) units.push(catalog);

@@ -302,8 +302,10 @@ export function createRunHost() {
       if (r.ok) { configuredRuns.set(ctx.sessionId, r.value); runBearers.set(ctx.sessionId, leased.get(workspaceRoot) ?? {}); }
       // REQ-WORKSPACE-060: the units as a GETTER, read at every agent construction, so a skill invoked between
       // prompts reaches the next agent built and never retracts one already running (REQ-CONFIG-166).
-      // REQ-WORKSPACE-050: from the base workspace, which is what `configure` is called with.
-      return r.ok ? { ok: true as const, value: { ...r.value, contextUnits: () => skills.contextUnits(workspaceRoot, ctx.sessionId) } } : { ok: false as const, error: { reason: r.error.reason } };
+      // REQ-WORKSPACE-050: the catalog from the BASE workspace, which is what `configure` is called with; the
+      // context files from the run's EXECUTION root, which the session carries and which differs only for an
+      // isolated session. The two halves of one sentence, and the second was the recorded defect.
+      return r.ok ? { ok: true as const, value: { ...r.value, contextUnits: () => skills.contextUnits(workspaceRoot, ctx.sessionId, ctx.executionRoot) } } : { ok: false as const, error: { reason: r.error.reason } };
     },
     /**
      * REQ-MONITOR-049 / REQ-CONFIG-085 (Part AH): a model's own maximum input tokens, from the configuration

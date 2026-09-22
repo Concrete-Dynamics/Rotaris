@@ -251,6 +251,24 @@ describe('the workspace context unit (REQ-WORKSPACE-041..048, PD-WORKSPACE-002)'
     } finally { t.cleanup(); }
   });
 
+  it('REQ-WORKSPACE-050: a run executing in an isolated worktree reads its context files from the execution root', () => {
+    const t = tree();
+    try {
+      const worktree = join(t.root, '..', 'wt');
+      mkdirSync(worktree, { recursive: true });
+      writeFileSync(join(t.root, 'AGENTS.md'), 'BASE INSTRUCTIONS\n');
+      writeFileSync(join(worktree, 'AGENTS.md'), 'WORKTREE INSTRUCTIONS\n');
+      const h = contextHost(t.home, join(t.home, 'cfg'));
+      const unit = h.contextUnits(t.root, 's1', worktree)[0]!;
+      expect(unit).toContain('WORKTREE INSTRUCTIONS');
+      expect(unit).not.toContain('BASE INSTRUCTIONS');
+      // The skill catalog stays with the BASE workspace, which is the other half of the same sentence.
+      expect(h.contextUnits(t.root, 's1', worktree)[1]).toContain('- alpha: Alpha does things.');
+      // A session on the base workspace itself is unaffected, and the two are cached apart.
+      expect(h.contextUnits(t.root, 's2')[0]).toContain('BASE INSTRUCTIONS');
+    } finally { t.cleanup(); }
+  });
+
   it('REQ-WORKSPACE-046: the merge is cached per root until a session is created or a rescan clears it', () => {
     const t = tree();
     try {

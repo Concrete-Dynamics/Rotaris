@@ -220,8 +220,10 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
           if (req.effectiveRoot !== undefined && req.effectiveRoot !== s.root) log(`session ${sessionId} is isolated: the run works in ${req.effectiveRoot}${req.worktree ? ` on branch ${req.worktree.branch}` : ''}; the record stays under ${s.root}`);
           try {
             // REQ-WORKSPACE-060 (ADR-0063): the session's context units reach the launch as a getter, read at every
-            // agent construction. REQ-WORKSPACE-050: against the BASE workspace even when the run works in a worktree.
-            const r = sessions.start(s.dal!, s.root, req.prompt, { setup: { ...setup, contextUnits: () => skills.contextUnits(s.root, sessionId) }, sessionId, runType: req.runType ?? 'task_run', ...(req.worktree === undefined ? {} : { worktree: req.worktree }), ...(req.sandboxMode === undefined ? {} : { sandboxMode: req.sandboxMode }), ...(req.attachments === undefined ? {} : { attachments: req.attachments }), ...(req.initialTodo === undefined ? {} : { initialTodo: req.initialTodo }) });
+            // agent construction. REQ-WORKSPACE-050: the catalog from the BASE workspace, the context files from the
+            // root the run EXECUTES in — the worktree's own `AGENTS.md` where the branch changed it.
+            const executionRoot = req.worktree?.worktree_path ?? req.effectiveRoot ?? s.root;
+            const r = sessions.start(s.dal!, s.root, req.prompt, { setup: { ...setup, contextUnits: () => skills.contextUnits(s.root, sessionId, executionRoot) }, sessionId, runType: req.runType ?? 'task_run', ...(req.worktree === undefined ? {} : { worktree: req.worktree }), ...(req.sandboxMode === undefined ? {} : { sandboxMode: req.sandboxMode }), ...(req.attachments === undefined ? {} : { attachments: req.attachments }), ...(req.initialTodo === undefined ? {} : { initialTodo: req.initialTodo }) });
             if (r.ok) log(`session ${r.value} started; row 0 recorded; the run is executing`);
             else restore();
             return r;

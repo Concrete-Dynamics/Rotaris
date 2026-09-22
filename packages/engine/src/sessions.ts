@@ -206,7 +206,7 @@ export interface SessionsDeps {
    * ADR-0036/0037: the run's configuration, resolved at run start from the files with the live state on top
    * (Tier B). Present, it supplies the model and the runtime for that run; absent, `model` and `runtime` stand.
    */
-  readonly configure?: ((workspaceRoot: string, ctx: { readonly attended: boolean; readonly sessionId: SessionId }) => Result<RunSetup, { readonly reason: string }>) | undefined;
+  readonly configure?: ((workspaceRoot: string, ctx: { readonly attended: boolean; readonly sessionId: SessionId; readonly executionRoot: string }) => Result<RunSetup, { readonly reason: string }>) | undefined;
 }
 
 /** What a run starts with once configuration resolves it. */
@@ -790,7 +790,7 @@ export class Sessions {
     if (storeFailure) return err({ code: 'store-failed', reason: `The workspace store requires recovery before starting work: ${storeFailure}` });
     const attendedNow = this.deps.attended?.() ?? false;
     const sessionId = asSessionId(opts.sessionId ?? this.deps.mintSessionId());
-    const setup = opts.setup ? ok(opts.setup) : this.setupFor(workspaceRoot, attendedNow, sessionId);
+    const setup = opts.setup ? ok(opts.setup) : this.setupFor(workspaceRoot, attendedNow, sessionId, opts.worktree?.worktree_path ?? workspaceRoot);
     if (!setup.ok) return err(setup.error);
     const { model, runtime } = setup.value;
     const inputs = opts.attachments ?? [];
@@ -914,7 +914,8 @@ export class Sessions {
     const storeFailure = SessionWriter.storeFailure(s.dal) ?? s.writer.failed;
     if (storeFailure) return err({ code: 'store-failed', reason: `The workspace store requires recovery before continuing work: ${storeFailure}` });
     if (s.run && !s.run.isEnded) return err({ code: 'run-active', reason: 'A run is already active.' });
-    const setup = this.setupFor(s.dal.getSession(sessionId)?.workspace_root ?? '', this.deps.attended?.() ?? false, sessionId);
+    const storedForSetup = s.dal.getSession(sessionId);
+    const setup = this.setupFor(storedForSetup?.workspace_root ?? '', this.deps.attended?.() ?? false, sessionId, storedForSetup ? effectiveRootOf(storedForSetup).root : '');
     if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
     if (inputs.length > 0 && setup.value.model.config.model.acceptsImageInput !== true) return err({ code: 'image-input-unsupported', reason: 'The selected model does not declare image input support.' });
     const stored = s.dal.getSession(sessionId);
@@ -942,11 +943,18 @@ export class Sessions {
     return ok(row.value);
   }
 
-  /** The run's setup: the root's `configure` (files + live state, ADR-0037 Tier B) or the process-wide model and runtime. */
-  private setupFor(workspaceRoot: string, attended: boolean, sessionId: SessionId): Result<RunSetup, StartRefusal> {
+  /**
+   * The run's setup: the root's `configure` (files + live state, ADR-0037 Tier B) or the process-wide model and runtime.
+   *
+   * REQ-WORKSPACE-050: `executionRoot` is the root the run WORKS in — the worktree of an isolated session, the
+   * base workspace otherwise. Configuration itself is loaded from the base (REQ-GIT-019); the execution root is
+   * carried because the workspace CONTEXT FILES are read from it, which is the half of that requirement the
+   * recorded defect found unbuilt. A caller that has no binding passes the base root.
+   */
+  private setupFor(workspaceRoot: string, attended: boolean, sessionId: SessionId, executionRoot: string): Result<RunSetup, StartRefusal> {
     const refused = (code: string, summary: string): StartRefusal => ({ code, reason: summary, failedBeforeStart: true, result: { status: 'error', session_id: '', stop_reason: '', summary, error: summary } });
     if (this.deps.configure) {
-      const r = this.deps.configure(workspaceRoot, { attended, sessionId });
+      const r = this.deps.configure(workspaceRoot, { attended, sessionId, executionRoot });
       // REQ-EVENTS-021 / REQ-CONFIG-478: refused before it starts, carrying the report.
       return r.ok ? ok(r.value) : err(refused('configuration', r.error.reason));
     }
@@ -1349,7 +1357,7 @@ export class Sessions {
       return ok({ resumed: false, messageLimit: limit });
     }
     // The continuation: the last user request stands, nothing new is appended (REQ-MONITOR-125's "resumed from the composer").
-    const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId);
+    const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId, effectiveRootOf(stored).root);
     if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
     const lastPrompt = [...s.dal.residentRows(sessionId)].reverse().find((row) => row.kind === 'user')?.body ?? stored.session_id;
     const todo = parseTodoDocument(stored);
@@ -1459,7 +1467,7 @@ export class Sessions {
       s.owner.reconcile();
       return ok({ relaunched: false, cycle });
     }
-    const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId);
+    const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId, effectiveRootOf(stored).root);
     if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
     const gone = missingWorktree(stored);
     if (gone) return err(gone);

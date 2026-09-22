@@ -9,6 +9,7 @@ import {
 import type { DisplayRow } from './types.js';
 import { buildOffsets, captureAnchor, estimateHeight, indexAt, newUpdatesLabel, restoreAnchor, updateShape, visibleRange } from './pool.js';
 import { countLabel, indexAll, indexSuffix, matchRow, step } from './search.js';
+import { SCROLL_ORIGIN_EPSILON, isOwnScroll } from './scroll.js';
 import { LruCache, identityOf, measureKey, reuseKey } from './cache.js';
 import { H_MAX, POOL_CAPACITY, ROW_MIN_HEIGHT, capacityFor } from './constants.js';
 
@@ -656,5 +657,27 @@ describe('REQ-CHAT-074 — search over displayed rows', () => {
   it('the index is updated over the changed suffix, never rebuilt whole', () => {
     const whole = indexAll(display, 'read_file');
     expect(indexSuffix(whole, display, 'read_file', 1)).toEqual(whole);
+  });
+});
+
+describe("REQ-CHAT-070: telling the pane's own scroll from the reader's", () => {
+  it("reads the position the pane set as the pane's, and any other position as the reader's", () => {
+    // Nothing outstanding: every event is the reader's, which is the resting state of a pane at the tail.
+    expect(isOwnScroll(null, 0)).toBe(false);
+    expect(isOwnScroll(null, 1200)).toBe(false);
+    // The pin landed where the pane put it.
+    expect(isOwnScroll(1200, 1200)).toBe(true);
+    // THE DEFECT, as a number. The pane pinned to 1200 and the reader scrolled to 640 before the pin's own
+    // event was delivered. The flag this replaced answered 'mine' here, swallowed the release, and pinned
+    // again on the next render; the position says whose it is whatever order the events arrive in.
+    expect(isOwnScroll(1200, 640)).toBe(false);
+  });
+
+  it('tolerates the sub-pixel readback a device pixel ratio produces, and nothing wider', () => {
+    expect(isOwnScroll(1200, 1200 + SCROLL_ORIGIN_EPSILON)).toBe(true);
+    expect(isOwnScroll(1200, 1200 - SCROLL_ORIGIN_EPSILON)).toBe(true);
+    expect(isOwnScroll(1200, 1201)).toBe(false);
+    // One scroll-wheel notch is tens of pixels, so the tolerance can never absorb a reader's gesture.
+    expect(isOwnScroll(1200, 1140)).toBe(false);
   });
 });

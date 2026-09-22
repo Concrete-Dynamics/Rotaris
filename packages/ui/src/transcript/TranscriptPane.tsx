@@ -6,6 +6,7 @@ import {
 import { createMeasurementCache, createRenderCache, identityOf, measureKey, reuseKey, sourceTextOf, type TranscriptCacheStats } from './cache.js';
 import { CAP_DEFAULTS, isLive, projectDisplay, rowKey, type DisplayCaps } from './project.js';
 import { buildOffsets, captureAnchor, estimateHeight, newUpdatesLabel, restoreAnchor, updateShape, visibleRange, type Anchor } from './pool.js';
+import { isOwnScroll } from './scroll.js';
 import { countLabel, indexAll, step as stepMatch, type Match } from './search.js';
 import { Row, TranscriptSurfaceProvider, isReasoningRow, placements, rowMenuEntries, type RowMenuRequest, type TranscriptSurface } from './Row.js';
 import { RowContextMenu, copyRowEntry, moveCurrentRow, type Acknowledger } from '../TranscriptSurface.js';
@@ -90,8 +91,30 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
   } = props;
 
   const scroller = useRef<HTMLDivElement | null>(null);
-  /** A programmatic scroll must not change the follow state (REQ-CHAT-070): only reader-caused movement may. */
-  const programmatic = useRef(false);
+  /**
+   * A programmatic scroll must not change the follow state (REQ-CHAT-070): only reader-caused movement may.
+   *
+   * FALSIFIED 2026-09-22, kept beside its replacement: this was `programmatic = useRef(false)`, a flag set
+   * before the pane scrolled itself and cleared by **the next scroll event, whoever caused it**. A scroll
+   * event carries no origin, so a reader's scroll arriving between the pin and the pin's own event was
+   * consumed as the pane's: the follow was never released and the pane pinned again on its next render.
+   * For a wheel gesture that is one swallowed event out of many, which is why it was never reported as a
+   * product complaint; it is decisive for anything that scrolls ONCE and expects it to hold, and the
+   * capture seam's `releaseProbe` had to nudge repeatedly to get past it.
+   *
+   * What the pane actually knows is not "I scrolled" but **where I scrolled to**, so that is what it keeps.
+   * An event whose `scrollTop` is the position the pane last set is the pane's own; any other position is
+   * the reader's, whatever order the events arrive in. The value is read back AFTER the assignment because
+   * the browser clamps it, and it is armed only when the assignment actually moved the element — setting
+   * `scrollTop` to what it already holds fires no event, and an armed position with no event behind it
+   * would swallow the reader's next scroll to that same place.
+   */
+  const expectedTop = useRef<number | null>(null);
+  const scrollSelf = (el: HTMLElement, top: number): void => {
+    const before = el.scrollTop;
+    el.scrollTop = top;
+    if (el.scrollTop !== before) expectedTop.current = el.scrollTop;
+  };
   const pendingAnchor = useRef<Anchor | null>(null);
   const previousDisplay = useRef<readonly DisplayRow[]>([]);
   const previousTable = useRef(buildOffsets([]));
@@ -256,8 +279,12 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
     if (!el) return;
     setScrollTop(el.scrollTop);
     // A scroll the application performed — pinning to the bottom, restoring an anchor, jumping to a search match —
-    // leaves the state unchanged; only movement the reader causes may change it.
-    if (programmatic.current) { programmatic.current = false; return; }
+    // leaves the state unchanged; only movement the reader causes may change it. The two are told apart by
+    // POSITION rather than by a flag, so a reader's scroll that lands between the pane's own and its event is
+    // read as the reader's: it is at a different offset, which is the whole of what makes it theirs.
+    const expected = expectedTop.current;
+    expectedTop.current = null;
+    if (isOwnScroll(expected, el.scrollTop)) return;
     // The reader has moved for themselves, so an anchor being held across a settle is no longer theirs.
     pendingAnchor.current = null;
     const atMax = el.scrollHeight - el.clientHeight - el.scrollTop <= TAIL_EPSILON;
@@ -323,8 +350,7 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
     previousTable.current = table;
     if (!el) return;
     if (following) {
-      programmatic.current = true;
-      el.scrollTop = el.scrollHeight;
+      scrollSelf(el, el.scrollHeight);
       pendingAnchor.current = null;
       return;
     }
@@ -342,7 +368,7 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
     // about 260 px was estimate against measurement. This effect re-runs whenever the measured total changes, so
     // the held anchor is re-applied until it stops moving, and `onScroll` drops it the moment the reader scrolls.
     const restored = restoreAnchor(display, table, pendingAnchor.current);
-    if (restored !== null && Math.abs(restored - el.scrollTop) > 0.5) { programmatic.current = true; el.scrollTop = restored; }
+    if (restored !== null && Math.abs(restored - el.scrollTop) > 0.5) scrollSelf(el, restored);
     el.dataset['shape'] = shape;
     if (restored === null) pendingAnchor.current = null;
     // `table` is rebuilt every render, so depending on the object itself re-pinned the tail continuously; its
@@ -376,8 +402,7 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
     const el = scroller.current;
     if (!el || matchAt === null) return;
     const top = previousTable.current.offsets[matchAt] ?? 0;
-    programmatic.current = true;
-    el.scrollTop = Math.max(0, top - el.clientHeight / 2);
+    scrollSelf(el, Math.max(0, top - el.clientHeight / 2));
     // Jumping to a match is the application deliberately MOVING the reader, so any anchor held across a settle is
     // stale and is dropped; the next update captures a fresh one at the centred position. Without this the held
     // anchor pulled the transcript straight back off the match — the same failure the pin had, one layer down.

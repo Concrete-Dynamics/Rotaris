@@ -35,3 +35,26 @@ longer agree on the file set, and that nothing says which is intended.
 - `apps/desktop/src/run-host/skills.ts` — `workspaceContext`, which reads the policy and applies the
   master switch; the pattern a repair would follow.
 - `docs/product/directives.md` — `PD-WORKSPACE-002` (the switches) and `PD-LIBRARY-002` (the read).
+
+**Repaired 2026-09-22.** The retrospective no longer decides which files an instruction file is. The set
+arrives on `CaptureRetrospectiveInput.instructionFiles`, computed by the run host, which owns the
+configuration; `INSTRUCTION_FILES` is gone and the falsified constant is kept above its replacement with
+the reason. An absent set reads nothing — never a fallback to the workspace root, which is the behaviour
+the note was about.
+
+**One computation, both readers.** `SkillsHost.instructionFiles(workspaceRoot, executionRoot)` is lifted
+out of `workspaceContext`, which now calls it, and `dispatch.ts`'s `retrospective.capture` calls the same
+method. The two readers cannot drift apart again without the compiler seeing it: injection and the
+retrospective are handed one list from one discovery under one policy — the widened discovery
+(`PD-WORKSPACE-002`: four names at the workspace root, two at each of five further bases), the per-file
+switches, and REQ-WORKSPACE-048's master switch.
+
+**The half the note said belongs to the owner is raised, not decided quietly.** It is **OQ-65** in
+`docs/architecture/open-questions.md`, which states both readings and what the build proceeds under: a
+retrospective consumes exactly what injection consumes. The deciding reason is the one this note named —
+an analysis that may still propose an `agents_md_update` against a file the product has been told not to
+use is a worse outcome than a thinner analysis. A ruling can reverse it in one call site.
+
+Measured: a new case pins all three states — a file on disk but not in the handed set is never read, an
+empty set reads nothing, and an omitted set reads nothing; `retrospective.test.ts` 8 passed, the run-host
+and `config` instruction suites 63 passed, `pnpm typecheck` clean.

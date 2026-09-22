@@ -320,7 +320,14 @@ export function GitView(props: GitViewProps) {
             {rows.length === 0 ? (
               <DesignEmptyState className="empty-state git__empty" data-testid="git-worktrees-empty"><span className="empty-state-title">No Git worktrees found for this workspace.</span></DesignEmptyState>
             ) : (
-              <DesignTable className="table git__table" aria-multiselectable="true" aria-label="Worktrees">
+              <DesignTable className="table git__table git__worktree-table" aria-multiselectable="true" aria-label="Worktrees" aria-description="Scroll horizontally when the worktree columns exceed the card width.">
+                {/* Seven columns whose content floor is wider than this pane at the minimum window. The five
+                    that cannot give way take the width they need; Branch and Session elide (UIR-002) and share
+                    whatever is left. See `.git__worktree-table` in shell.css for the measured figures. */}
+                <colgroup>
+                  <col className="git__col-branch" /><col className="git__col-session" /><col className="git__col-state" />
+                  <col className="git__col-count" /><col className="git__col-count" /><col className="git__col-files" /><col className="git__col-actions" />
+                </colgroup>
                 <thead><tr><th>Branch</th><th>Session</th><th>State</th><th>Ahead</th><th>Behind</th><th>Files</th><th>Actions</th></tr></thead>
                 <tbody>
                   {rows.map((row) => {

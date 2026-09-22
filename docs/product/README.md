@@ -174,6 +174,18 @@ anchors inside an HTML comment, which renders nothing and therefore defines no a
 confidently wrong about its own document's template is a checker somebody switches off, so it strips
 comments before reading and keeps the reason beside the fix.
 
+**The register is gated on the same terms, since 2026-09-22.** It drifted the same way and for the same
+reason: `directives.md` said **Thirteen** above fourteen entries from the commit that added `PD-LIBRARY-002`
+until somebody noticed while writing `PD-ORCH-003`.
+[`tools/check-directive-register.mjs`](../../tools/check-directive-register.mjs) runs in `pnpm lint` beside
+its sibling and refuses a duplicate, a heading with no anchor above it, an anchor disagreeing with the
+identifier its heading prints, a `directives.md#pd-…` citation reaching no entry, and a declared total that
+is not the total. Two rules are this register's own rather than the request log's, and the gate reads both:
+identifiers are contiguous from 001 **within each domain**, not across one sequence; and the total is the
+number of **headings**, because a revision keeps its number and adds no entry. The count stays written in
+words — that is the register's voice, and the gate carries the number table rather than asking the document
+to change form for a machine.
+
 ## What binds a change
 
 - **Consult before building.** A request is classified against the table above *before* code is

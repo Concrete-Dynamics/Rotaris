@@ -100,6 +100,47 @@ export function sourceTextOf(d: DisplayRow): string {
 }
 
 /**
+ * The content part of a key, held against the row object it was taken from.
+ *
+ * REQ-CHAT-055 fixes appending at depth as costing no more than appending to an empty transcript, and the
+ * pane was paying the whole transcript for every append: `TranscriptPane` builds one `measureKey` per
+ * DISPLAYED row on each render, each key hashes `sourceTextOf`, and `sourceTextOf` for a row concatenates
+ * its body, input, output and diff. One appended row therefore re-hashed 1,200 rows' text — work that
+ * grows with depth by construction, which is exactly the growth the requirement forbids. Measured on this
+ * branch before the memo: appending at 1,200 rows showed in **62.4 ms** against **37.9 ms** empty, past
+ * the one-frame slack, and a second run of four passed at 45.8 against 29.7, which is the marginal,
+ * sometimes-red distribution the defect note recorded.
+ *
+ * The memo is keyed on the row OBJECT because the replica replaces a changed row rather than mutating it
+ * (`ui-core/replica.ts` upserts by index and keeps the untouched objects), so object identity is a sound
+ * proxy for "this content has not changed". A row that changes is a new object and misses, which is the
+ * only case that should pay. `WeakMap` means the entries leave with the rows and nothing needs evicting.
+ *
+ * Only the `row` shape is held. A group's text is rebuilt from `segments` on every projection, so its
+ * object identity says nothing; a group is a folded RUN and there are few of them beside the rows.
+ */
+const rowSourceHashes = new WeakMap<object, string>();
+
+function sourceHashOf(d: DisplayRow): string {
+  if (d.shape !== 'row') return hash(sourceTextOf(d));
+  const held = rowSourceHashes.get(d.row);
+  if (held !== undefined) return held;
+  const computed = hash(sourceTextOf(d));
+  rowSourceHashes.set(d.row, computed);
+  return computed;
+}
+
+/**
+ * The whole key, for the one call shape the height pass makes — no match, no place.
+ *
+ * That pass is the one REQ-CHAT-055 measures: `TranscriptPane` builds a key per displayed row on every
+ * render to look its height up, so at 1,200 rows an append built 1,200 template strings on top of the
+ * hashing `sourceHashOf` now holds. Width and expansion are part of the key and both can change without
+ * the row changing, so they are stored beside it and compared rather than assumed.
+ */
+const rowFullKeys = new WeakMap<object, { width: number; expanded: boolean; key: string }>();
+
+/**
  * ADR-0045's reuse predicate as one value. Null means "never reuse": a live row is redrawn every repaint
  * (REQ-CHAT-058), and a rendering that could go stale must not be keyed at all rather than keyed carelessly.
  */
@@ -135,7 +176,14 @@ export function measureKey(
   place?: { readonly blockStart: boolean; readonly recentTool: boolean } | undefined,
 ): string {
   const p = place === undefined ? '' : `${place.blockStart ? 'b' : ''}${place.recentTool ? 'r' : ''}`;
-  return `${d.key}|${hash(sourceTextOf(d))}|${Math.round(width)}|${expanded ? 'o' : 'c'}|${match === null ? '' : `${match.start}-${match.end}`}|${p}`;
+  const plain = match === null && place === undefined && d.shape === 'row';
+  if (plain) {
+    const held = rowFullKeys.get(d.row);
+    if (held !== undefined && held.width === width && held.expanded === expanded) return held.key;
+  }
+  const key = `${d.key}|${sourceHashOf(d)}|${Math.round(width)}|${expanded ? 'o' : 'c'}|${match === null ? '' : `${match.start}-${match.end}`}|${p}`;
+  if (plain) rowFullKeys.set(d.row, { width, expanded, key });
+  return key;
 }
 
 /** The identity part of a `measureKey` — everything before the first separator. */

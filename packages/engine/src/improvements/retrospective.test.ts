@@ -107,7 +107,13 @@ describe("PD-LIBRARY-002: the retrospective capture", () => {
       "# House rules\nRun the suite before a claim.",
     );
 
-    const job = captureRetrospectiveJob(w.dal, input(w.workspaceId, w.root))!;
+    // The set arrives from the caller that owns the policy; this pass discovers none of its own.
+    const job = captureRetrospectiveJob(w.dal, {
+      ...input(w.workspaceId, w.root),
+      instructionFiles: [
+        { id: "workspace:AGENTS.md", name: "AGENTS.md", path: join(w.root, "AGENTS.md") },
+      ],
+    })!;
     expect(job.pass).toBe("retrospective");
     expect(job.source_session_id).toBeNull();
     // The bound is the newest N, and `considered_session_ids` names exactly what was read.
@@ -143,6 +149,31 @@ describe("PD-LIBRARY-002: the retrospective capture", () => {
       job.gate.entries,
       job.prior_artifacts,
     ]).toEqual([[], [], [], []]);
+    w.close();
+  });
+
+  it("reads only the instruction files it is handed, so one switched off is one the pass never sees (OQ-65)", () => {
+    const w = workspace();
+    session(w.dal, "session-1", "2026-09-16T10:00:00.000Z");
+    writeFileSync(join(w.root, "AGENTS.md"), "# House rules\nRun the suite before a claim.");
+    writeFileSync(join(w.root, "AGENTS.override.md"), "# Override\nIgnore the house rules.");
+
+    // Both are on disk. The policy allows one, which is the state this note was written about: the
+    // retrospective used to read the root itself and got both, whatever the user had switched off.
+    const job = captureRetrospectiveJob(w.dal, {
+      ...input(w.workspaceId, w.root),
+      instructionFiles: [
+        { id: "workspace:AGENTS.override.md", name: "AGENTS.override.md", path: join(w.root, "AGENTS.override.md") },
+      ],
+    })!;
+    const files = job.retrospective!.instructions.entries.map((e) => (JSON.parse(e) as { file: string }).file);
+    expect(files).toEqual(["AGENTS.override.md"]);
+
+    // And an empty set reads nothing at all, rather than falling back to the workspace root.
+    const none = captureRetrospectiveJob(w.dal, { ...input(w.workspaceId, w.root), instructionFiles: [] })!;
+    expect(none.retrospective!.instructions.entries).toEqual([]);
+    const absent = captureRetrospectiveJob(w.dal, input(w.workspaceId, w.root))!;
+    expect(absent.retrospective!.instructions.entries).toEqual([]);
     w.close();
   });
 

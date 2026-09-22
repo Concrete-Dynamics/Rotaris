@@ -40,3 +40,42 @@ which a 1,200-row transcript does more of than an empty one.
 
 Noticed 2026-09-22 while repairing the two driven transcript proofs; recorded rather than repaired, because
 finding out which of the two readings is true is its own measurement.
+
+**Diagnosed and part-repaired 2026-09-22; still open, and now open about something narrower.**
+
+The note left two readings on the table — the product violates REQ-CHAT-055, or the measurement includes
+work the requirement does not mean. **The first is true**, and the mechanism is no longer a guess:
+`TranscriptPane` builds one `measureKey` per DISPLAYED row on every render, and `measureKey` hashes
+`sourceTextOf(d)`, which for a row concatenates its body, input, output and diff. One appended row
+therefore re-hashed the text of all 1,200. That is work that grows with depth by construction, which is
+precisely the growth the requirement forbids, and it is on the apply path the proof times.
+
+Two memos now hold the content part and the whole key against the row **object**, which is a sound proxy
+for "this content has not changed" because `ui-core/replica.ts` upserts by index and keeps the untouched
+objects rather than mutating them — a changed row is a new object and misses, which is the only case that
+should pay. `WeakMap`, so nothing needs evicting.
+
+**Measured, three runs of the proof at each step, same machine, same session** (loaded median against
+empty median, one frame of slack at 16.7 ms):
+
+| | run 1 | run 2 | run 3 |
+| --- | --- | --- | --- |
+| before | 45.8 / 29.7 (**+16.1**, pass) | 62.4 / 37.9 (**+24.5**, fail) | fail |
+| content hash held | 33.3 / 29.1 (**+4.2**, pass) | 47.3 / 27.1 (**+20.2**, fail) | 50.3 / 26.1 (**+24.2**, fail) |
+| whole key held | 54.9 / 34.3 (**+20.6**, fail) | 37.1 / 41.6 (**−4.5**, pass) | 39.2 / 30.7 (**+8.5**, pass) |
+
+The number moved and the repair is kept — a run in which the loaded transcript appended **faster** than the
+empty one did not happen before — but two passes in three is not a pass, and the spread across identical
+runs is wider than the effect being measured. The comparison is still not reliably inside the slack.
+
+**What remains, and why it is not done here.** The other term that grows with depth is the projection
+itself: `projectDisplay` runs whole-state over every row on every render, and `placements(display)` beside
+it. `projectDisplay` already HAS an incremental form — `{ previous, from }`, with `cleanCut` for the
+boundary — and the pane does not use it, because the pane is not told which row changed: `earliestChanged`
+lives in the replica and there is no prop carrying it. Wiring it is a contract change across a seam, not a
+memo, and nothing measured here says that term is what is left rather than the variance. Taking it on a
+guess is the thing `.agents/skills/debug-ui` step 8 exists to forbid.
+
+So the note stays open on a narrower question than it was recorded with: **not** whether the product is at
+fault — it is — but which of the remaining depth-dependent terms is worth a seam change, measured under a
+harness whose own spread is currently ±20 ms.

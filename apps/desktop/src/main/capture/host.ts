@@ -186,6 +186,32 @@ export function centre(win: BrowserWindow, finder: string): Promise<{ x: number;
   return win.webContents.executeJavaScript(`(() => { const b = ${finder}; if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`) as Promise<{ x: number; y: number } | null>;
 }
 
+/**
+ * `centre`, but as a DEADLINE rather than an appointment: polls until the element is there, or gives up.
+ *
+ * `ROTARIS_CAPTURE_EVAL_AT` has had the `~` "until" form for a while and `ROTARIS_CAPTURE_RESUME` never did,
+ * which is the asymmetry `plan-gate-proof`'s one-run-in-four resume failure was recorded against: the seam
+ * clicked "Sessions", waited a fixed 700 ms, read the list once, and logged `no session row for "latest"`
+ * when the browser had not finished listing it. The store held the session, the pending cycle and the
+ * `plan_gate_opened` entry — the previous and following runs both read them — so nothing was wrong except
+ * the appointment.
+ *
+ * Returns `null` at the deadline, and logs how much time was left when it hit, so a reader can tell a slow
+ * list from an absent one.
+ */
+export async function centreWhen(host: CaptureHost, finder: string, timeoutMs: number, what: string): Promise<{ x: number; y: number } | null> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const point = await centre(host.win, finder).catch(() => null);
+    if (point) {
+      host.log(`capture: ${what} appeared with ${deadline - Date.now()} ms to spare`);
+      return point;
+    }
+    if (Date.now() >= deadline) return null;
+    await pause(host, 50);
+  }
+}
+
 /** Resolves when the step's selector (and its optional exact text) matches, or at the deadline. Never throws. */
 export async function settleAt(host: CaptureHost, step: CaptureStep): Promise<void> {
   if (!step.until) { await pause(host, step.at); return; }

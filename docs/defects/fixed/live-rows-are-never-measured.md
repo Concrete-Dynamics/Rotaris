@@ -92,3 +92,9 @@ to **51.9 ms against 22.7 ms** on an empty transcript, past the requirement's on
 refused it. `wrappedLines` walks the string instead of splitting it and the group sums its segment lengths
 without building the summary; **30.4 ms against 25.4 ms**, inside the slack. A correctness fix that is paid for
 in the render loop is not free, and the bound that made it visible was already there.
+
+*Confirmed landed and filed 2026-09-22: `measureKey` is exported from
+`packages/ui/src/transcript/cache.ts:133` with `reuseKey` built on it, and `wrappedLines` models the wrap
+in `pool.ts:51`, gutter included (`roleLines`, line 72). The note recorded its own repair and was never
+moved. What the repair's own measurement found — the append comparison — is open separately as
+[`appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md`](../appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md).*

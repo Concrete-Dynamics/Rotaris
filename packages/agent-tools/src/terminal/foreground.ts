@@ -143,6 +143,18 @@ export function killTree(pid: number, force: boolean): boolean {
 }
 
 /**
+ * A pager is a hang, not a convenience, in a session no one can press RETURN in. The shell runs under a REAL
+ * pseudo-terminal, so `isatty(stdout)` is true and git sets its pager up BEFORE it writes a byte — measured
+ * 2026-09-22, `git diff --no-index` in the product's own PTY answered
+ * `WARNING: terminal is not fully functional` / `Press RETURN to continue` and then nothing, because `TERM`
+ * is `dumb` and `less` waits for a keystroke that only a human sends. The command never reaches its end
+ * marker and the call dies at the hard timeout with exit 124 (REQ-TOOLS-099) whatever it was going to say.
+ * Naming the pager `cat` is the one thing that makes `git diff`, `git log` and `git show` answerable here;
+ * `GIT_PAGER` covers git even where a user's `core.pager` names something else, and `PAGER` covers the rest.
+ */
+const NO_PAGER: Record<string, string> = { GIT_PAGER: 'cat', PAGER: 'cat' };
+
+/**
  * ADR-0020's exit-status expression, over whichever flag carried "the last statement succeeded": `$?` on the
  * single-line path, and the payload's own flag on the multi-line one. A native command's status is in
  * `$LASTEXITCODE` either way (REQ-TOOLS-179).
@@ -387,7 +399,7 @@ export class ForegroundSession {
     const args = backend.kind === 'powershell'
       ? ['-NoLogo', '-NoProfile', '-NoExit', '-Command', "Remove-Module PSReadLine -ErrorAction SilentlyContinue; function prompt { '' }; $ProgressPreference = 'SilentlyContinue'"]
       : ['-i'];
-    const p = this.deps.factory.spawn(backend.file, args, { cwd: this.deps.cwd, env: { ...this.deps.env, TERM: 'dumb', PSModuleAnalysisCachePath: '' }, cols: this.size.cols, rows: this.size.rows, name: 'dumb' });
+    const p = this.deps.factory.spawn(backend.file, args, { cwd: this.deps.cwd, env: { ...this.deps.env, ...NO_PAGER, TERM: 'dumb', PSModuleAnalysisCachePath: '' }, cols: this.size.cols, rows: this.size.rows, name: 'dumb' });
     p.onData((d) => this.onData(d));
     p.onExit(() => { if (this.pty === p) this.pty = null; });
     this.pty = p;

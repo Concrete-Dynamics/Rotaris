@@ -29,3 +29,7 @@ REQ-TOOLS-099 — narrowed by PD-TOOLS-001, with the back-pointer in `docs/spec/
   survives the respawn.
 
 Noticed 2026-09-18 by the run-autopsy of run `cc6191a2`; repaired on the same branch.
+
+*Confirmed landed and filed 2026-09-22: `snapshotCommand`, `restoreState` and `clearSnapshot` are in
+`packages/agent-tools/src/terminal/foreground.ts` (227, 665, 631), and the timed-out path calls
+`restoreState()` at 561. The note recorded its own repair and was never moved.*

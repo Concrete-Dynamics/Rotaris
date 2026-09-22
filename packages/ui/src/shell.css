@@ -1152,6 +1152,33 @@
    `.git__body` hands the checkpoint column its full 480px and the remainder to the worktrees — and
    choosing between a narrower checkpoint column, a stacked layout, and fewer columns at the minimum
    size is the design material's call, not a CSS nudge at the end of a repair round. */
+/* FALSIFIED IN PART, 2026-09-22, kept above its replacement. Everything the paragraph measures is still
+   true, and its conclusion is still the design material's to make — but it treats "fit the columns" as the
+   only repair, and the finding it was written against is not that the table is cramped. It is that twelve
+   pixels are UNREACHABLE: "not truncated with a marker, not scrollable to, simply outside the box". Those
+   are two faults, and the second has an answer that takes none of the three decisions above, because this
+   view already made it once — the checkpoint table sits in `.git__table-scroll` and scrolls when its
+   columns exceed the card.
+   Re-measured live at 1000x680 before changing anything, the content floor per column is: Branch 59
+   (heading; the cell elides), Session 53, State 59, Ahead 49, Behind 49, Files 73, Actions 58 — 400px of
+   floor for a 340px pane. Seven columns CANNOT fit here, whatever the CSS does, which is why the two
+   earlier nudges could not move the number and why neither was kept. So the columns take the width they
+   need, the two that elide share the remainder, and the card — which already carries `overflow-x: auto` —
+   does the scrolling. Nothing is dropped and nothing is decided that belongs to the design. */
+/* In `ch`, not pixels, because every floor below is set by a WORD — a heading, a status phrase, a button's
+   label — and a column sized in characters keeps holding its content when the type does. `.git__cell-branch`
+   already measured itself this way at `22ch`.
+   `1ch` INSIDE THE TABLE is 6.45px, and it is measured rather than assumed: a first pass took 7.547px from a
+   probe in the surrounding card, and the columns it produced came out 1 to 4 px UNDER their content — the
+   card carries the shell's type and the table does not. Each floor is the whole `ch` at or above it:
+   Session 53→9, State 59→10, Ahead/Behind 49→8, Files 73→12, the Delete button 58→9, and 63ch of table so
+   Branch keeps the ~45px remainder it elides into. */
+.git__worktree-table { min-width: 63ch; }
+.git__col-session { width: 9ch; }
+.git__col-state { width: 10ch; }
+.git__col-count { width: 8ch; }
+.git__col-files { width: 12ch; }
+.git__col-actions { width: 9ch; }
 .git__cell-branch, .git__cell-session { min-width: 0; max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .git__cell-branch .git__branch-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* UIR-012: the history ran 2229.56 px inside a 754.75 px view, so its last row was cut by the status

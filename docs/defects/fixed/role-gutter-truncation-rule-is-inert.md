@@ -53,3 +53,7 @@ The height that costs is no longer invisible: `estimateHeight` models the role g
 takes the greater of that and the main column's. Measured in the built product by `pnpm transcript-proof`'s
 `geometry` stage — `requirements-engineer` draws a **32 px** two-line gutter and the row it sits in overlaps its
 neighbour by **0 px**, where before the second line was height nothing accounted for.
+
+*Confirmed landed and filed 2026-09-22: `.row__role` in `packages/ui/src/shell.css:294` carries
+`overflow-wrap: anywhere` and neither `overflow: hidden` nor `text-overflow: ellipsis`. The note recorded
+its own repair and was never moved.*

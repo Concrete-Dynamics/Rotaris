@@ -19,3 +19,7 @@ No requirement contradicted — tooling hygiene for the driver seam (`AGENTS.md`
 - `apps/desktop/scripts/lib/harness.mjs` — the `repo` root it computes against.
 
 Noticed 2026-09-18 by the run-autopsy session itself; repaired on the same branch.
+
+*Confirmed landed and filed 2026-09-22: `apps/desktop/scripts/drive.mjs:74-76` computes the path against
+`repo` and refuses with `refusing --workspace inside the checkout: …`. The note recorded its own repair
+and was never moved.*

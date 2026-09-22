@@ -48,3 +48,28 @@ stale, recording the seventeen-rows-under-"Sixteen" case as the reason the reque
 - `tools/symbol-artifact/generate.mjs` — writes `DIRECTIVE_COUNT` from its own parse, which is why the
   generated artifact cannot catch this.
 - `packages/kernel/src/generated/requirements.ts` — the generated artifact; never hand-written.
+
+**Repaired 2026-09-22.** [`tools/check-directive-register.mjs`](../../tools/check-directive-register.mjs)
+is written and runs in `pnpm lint`, beside the sibling it is modelled on. It holds five things: the anchor
+agrees with the identifier its heading prints; no identifier appears twice; identifiers are contiguous from
+001 within each domain; the declared total is the number of entries; and every `directives.md#pd-…` citation
+anywhere in `docs/` resolves. A sixth fault the note did not name is refused too — a heading with no anchor
+above it, which no citation in the repository could reach.
+
+The two obstacles this note raised are why the file is as long as it is, and neither was dodged:
+
+- **The count is spelled in words.** The gate carries the number table (one to ninety-nine, hyphenated or
+  spaced, bare digits accepted too) rather than asking the register to change voice for a machine. The
+  request log was allowed to take the other route because `R-001 to R-020` was already its form.
+- **A revised directive adds nothing to the total.** The gate counts **headings**, never the highest
+  identifier, so `PD-CHAT-004` at revision 3 is one entry — the shortcut the request log takes does not
+  hold here, and the code says so where it counts.
+
+The commented worked example at the foot of the register is stripped before reading, for the reason the
+request log's gate learned: counted, it is a twentieth directive that does not exist and a second
+`PD-CHAT-001`.
+
+Measured: the gate reads `19 entries (CHAT×6, CONFIG×1, LIBRARY×2, MONITOR×1, ORCH×3, SHELL×2, TOOLS×2,
+WORKSPACE×2), no duplicate and no gap`, which agrees with the register's **Nineteen**; and it was checked
+against its own negation — the count set to **Eighteen** fails `pnpm lint` naming both figures, and passes
+again when restored. `docs/product/README.md` records the gate beside the one it follows.

@@ -215,6 +215,10 @@ any of three surfaces sends main `improvements.retrospective {workspaceRoot}`; m
 context exists), leases its bearers through `leaseForContinuation`, and answers the existing `improvement.job` event —
 carrying `pass: 'retrospective'` and a `retrospective` sources block (session digests, prior proposals, saved prompts,
 persona memory, instruction files, each entry naming its record) — or `retrospective.no-model` when nothing resolves.
+The **instruction files are decided by the run host, not by the engine**: `dispatch` passes
+`skills.instructionFiles(root)` — the same discovery and the same per-file and master switches that workspace-context
+injection consumes — on the capture input, and `captureRetrospectiveJob` reads what it is handed and discovers
+nothing itself. An omitted set reads nothing rather than falling back to the workspace root (OQ-65).
 From there the path is the post-run one, unchanged: the same application-wide FIFO, the same `improvement.analyze`
 (whose run-free branch takes its backend and `credentialFor` from the configured workspace rather than from
 `improvementContexts`), the same `save-collected` to the workspace service, the same canonical reread and bump. Two

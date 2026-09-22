@@ -72,6 +72,31 @@ const log = (m: string) => console.log(`[main ${new Date().toISOString()}] ${m}`
 // ADR-0019's prohibition, from the other side: an uncaught exception in main would raise the platform's native
 // error box — a synchronous modal that blocks the loop and every poll reply. Log it instead; nothing here may hang.
 process.on('uncaughtException', (e) => { log(`UNCAUGHT in main: ${e.stack ?? String(e)}`); });
+process.on('unhandledRejection', (reason) => { log(`UNHANDLED rejection in main: ${reason instanceof Error ? reason.stack ?? reason.message : String(reason)}`); });
+
+/*
+ * Why the process is going away, written down while it still can be.
+ *
+ * Run `7bd9c19d` (2026-09-20) ended orderly in the store — `session.end`, a result, a final transcript row —
+ * and afterwards there was no electron process, no dump directory, and nothing anywhere saying whether the
+ * application had crashed or simply been closed. The owner reported "it crashed somehow" and the record could
+ * neither confirm nor refute it, because a crash and a quiet quit left the same trace: none.
+ *
+ * These lines cost nothing and make the two distinguishable. An orderly close writes `quit:` and its status.
+ * A renderer or a utility child that dies writes its reason and its exit code — `render-process-gone` carries
+ * `crashed`, `oom`, `killed` and the rest, which is the vocabulary a reader actually wants. And
+ * `process.on('exit')` is the last line the main process can write, so a log that ends with NONE of them is
+ * itself the finding: the process went away without passing through its own shutdown.
+ */
+app.on('before-quit', () => { log('quit: requested (before-quit)'); });
+app.on('quit', (_e, code) => { log(`quit: exiting with status ${code}`); });
+app.on('render-process-gone', (_e, contents, details) => {
+  log(`RENDERER GONE (${details.reason}, exit ${details.exitCode}) for ${contents.getURL() || 'a destroyed frame'}`);
+});
+app.on('child-process-gone', (_e, details) => {
+  log(`CHILD PROCESS GONE (${details.type}${details.name === undefined ? '' : ` ${details.name}`}: ${details.reason}, exit ${details.exitCode})`);
+});
+process.on('exit', (code) => { log(`main process exiting with status ${code}`); });
 
 function workspaceFromArgv(argv: readonly string[]): string | undefined {
   // REQ-STARTUP-163: a directory the OS hands a launch. The product defines no argument vocabulary

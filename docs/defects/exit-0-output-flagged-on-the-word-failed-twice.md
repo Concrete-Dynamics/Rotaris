@@ -12,3 +12,24 @@ REQ-TOOLS-113 — literal failure markers searched case-insensitively, `FAILED `
 - `packages/agent-tools/src/gate.ts` — the `terminal_suspicious_success` issue on `suspicious_success`.
 
 Noticed 2026-09-20 by the run-autopsy of run `2e21e324`.
+
+**Improved 2026-09-22, and not closed — the half that remains is the owner's.** The warning now quotes the
+line the marker matched on, capped at 120 characters:
+
+```
+Output contains the failure marker 'FAILED', in: failed to connect to the docker API
+```
+
+REQ-TOOLS-113's own clause — the text "names the marker that matched" — is untouched, and the marker is
+still named first; the line is added after it. That is what the run paid for twice: from the warning alone
+neither the agent nor a reader could tell docker's connection notice, or git's chatter, from a test runner's
+`FAILED test_a`, so the judgement cost a second pass over the whole output. It is now one read.
+
+**What is not repaired, and why it may not be here.** Which outputs warn is fixed by the requirement —
+literal markers, case-insensitive, anywhere in the output, `FAILED ` with its trailing space — and the code
+is faithful to every word of it. Narrowing the match is *behaviour the owner wants instead of a live
+requirement*, which `docs/product/README.md`'s table sends to a `PD`, not to a repair; an implementer may
+not mint one. Until the owner rules, the two commands in this run would warn again, with a better message.
+
+Measured: `packages/agent-tools/src/terminal/terminal.test.ts`'s REQ-TOOLS-113 case, extended with this
+run's own docker line and with the cap, is green.

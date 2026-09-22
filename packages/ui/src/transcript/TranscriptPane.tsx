@@ -40,7 +40,6 @@ export interface TranscriptPaneProps {
    */
   readonly onOpenTrailer?: ((trailer: TrailerRow) => void) | undefined;
   readonly questionAgent?: string | undefined;
-  readonly scopeAgent?: string | null | undefined;
   /**
    * PD-CHAT-005: how deep a named agent sits in the delegation tree, for the row's indentation. The view above
    * holds the tree (REQ-MONITOR-036/037); the pane holds none and asks. Absent leaves every row at depth 0.
@@ -85,7 +84,7 @@ const EMPTY_BODY = 'Describe the outcome you want. Rotaris will show agent activ
 
 export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
   const {
-    rows, running, groupTools, caps = CAP_DEFAULTS, pendingQuestions, pendingApprovals, questionAgent, scopeAgent, agentDepth,
+    rows, running, groupTools, caps = CAP_DEFAULTS, pendingQuestions, pendingApprovals, questionAgent, agentDepth,
     onPageOlder, reachedOldest = false, onFocusComposer, renderRow = Row, onOpenTrailer,
     showReasoning = false, autoCollapseTools = false, onOpenLink, onReadAttachment, onAcknowledge, nowMs = 0,
   } = props;
@@ -183,7 +182,7 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
   })();
 
   // ---- ADR-0046 step 4 ------------------------------------------------------------------------------------
-  const display = projectDisplay({ rows, running, groupTools, showReasoning, caps, expanded, pendingQuestions, pendingApprovals, questionAgent, scopeAgent });
+  const display = projectDisplay({ rows, running, groupTools, showReasoning, caps, expanded, pendingQuestions, pendingApprovals, questionAgent });
 
   /**
    * The services and preferences every row in THIS pane shares (Part AA's `TranscriptSurface`). One value per

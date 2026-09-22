@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentRecord, QuestionPrompt, TranscriptRow } from '@rotaris/contracts';
+import { RUN_AGENT_ID, type AgentRecord, type QuestionPrompt, type TranscriptRow } from '@rotaris/contracts';
 import { trailerRows } from './transcript/project.js';
 import {
   compactTask, defaultExpanded, delegationSummary, expansionKey, groupDurationMs, groupSeverity, groupSummary, isLiveTerminalRow,
@@ -276,5 +276,27 @@ describe('rows — REQ-CHAT-068/069, delegation and scope', () => {
     expect(scopedRows(rows, null)).toEqual(rows);
     expect(RUN_OWNED_KINDS.has('verifier')).toBe(true);
     expect(SCOPE_NO_AGENT).toMatch(/Select an agent/);
+  });
+
+  it('REQ-CHAT-069: the kept kinds are the five the requirement names, another agent\'s question and approval included', () => {
+    // The five, in the requirement's own order. The second implementation this replaced knew three of them
+    // (docs/defects/fixed/the-in-projection-scope-filter-is-never-reached.md), so the list is asserted whole.
+    expect([...RUN_OWNED_KINDS]).toEqual(['user', 'system', 'question', 'approval', 'verifier']);
+    const rows = [
+      row({ index: 0, kind: 'question', name: 'other' }),
+      row({ index: 1, kind: 'approval', name: 'other' }),
+      row({ index: 2, kind: 'tool', name: 'other' }),
+    ];
+    expect(scopedRows(rows, agent).map((r) => r.index)).toEqual([0, 1]);
+  });
+
+  it('REQ-CHAT-069: the run-level agent owns the rows named for its persona, and the unnamed ones it produced', () => {
+    const runLevel: AgentRecord = { ...agent, id: RUN_AGENT_ID, name: 'orchestrator', persona: 'orchestrator' };
+    const rows = [
+      row({ index: 0, kind: 'agent', name: 'orchestrator' }),
+      row({ index: 1, kind: 'agent', persona: 'orchestrator' }),
+      row({ index: 2, kind: 'agent', name: 'helper', persona: 'coding-agent' }),
+    ];
+    expect(scopedRows(rows, runLevel).map((r) => r.index)).toEqual([0, 1]);
   });
 });

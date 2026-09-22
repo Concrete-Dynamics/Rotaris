@@ -607,11 +607,13 @@ describe('PD-CHAT-004 — the activity line', () => {
   });
 });
 
-describe('ADR-0046 step 4 — scope and the incremental bound', () => {
-  it('REQ-CHAT-069: the scope filter keeps user, system and verifier rows plus the named agent\'s', () => {
+describe('ADR-0046 step 4 — the incremental bound', () => {
+  it('REQ-CHAT-069: the projection does not filter by agent — the surface that owns the toggle does', () => {
+    // One requirement, one implementation: `scopedRows` in `TranscriptSurface.tsx` is it, and the projection
+    // draws whatever rows it is given (docs/defects/fixed/the-in-projection-scope-filter-is-never-reached.md).
     const rows = [row(0, { kind: 'user' }), row(1, { name: 'alpha' }), row(2, { name: 'beta' }), row(3, { kind: 'verifier', name: 'beta' })];
-    const display = projectDisplay(options(rows, { scopeAgent: 'alpha', groupTools: false }));
-    expect(display.map((d) => (d.shape === 'row' ? d.row.index : -1))).toEqual([0, 1, 3]);
+    const display = projectDisplay(options(rows, { groupTools: false }));
+    expect(display.map((d) => (d.shape === 'row' ? d.row.index : -1))).toEqual([0, 1, 2, 3]);
   });
 
   it('ADR-0046: the projection is bounded by what changed, and the bounded form equals the whole one', () => {

@@ -3,7 +3,7 @@ import { writeFileSync } from 'node:fs';
 import { type BrowserWindow, screen } from 'electron';
 import { millis } from '@rotaris/kernel';
 import { CHANNEL, CONTRACT_SCHEMA_VERSION, type NoticeAction, type NoticeSeverity } from '@rotaris/contracts';
-import { type CaptureHost, type CaptureStep, centre, chordEvent, clickAt, doubleClickAt, onStep, parseSelectors, parseSteps, pause, settleAt } from './host.js';
+import { type CaptureHost, type CaptureStep, type CaptureTarget, centre, chordEvent, clickAt, doubleClickAt, onStep, parseSelectors, parseSteps, pause, settleAt, targetProbe } from './host.js';
 
 /**
  * THE SCRIPTABLE SEAMS — clicks, typed text, chords, renderer `eval`, notices, prompts, drags, OS input,
@@ -100,12 +100,20 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
     });
   }
 
+  /** The point a click step presses — and a covered element REPORTED rather than pressed through in silence. */
+  const aimAt = async (step: CaptureStep): Promise<CaptureTarget | null> => {
+    const target = await win.webContents.executeJavaScript(targetProbe(step.selector, step.arg)) as CaptureTarget | null;
+    if (!target) { log(`capture: no "${step.arg ?? step.selector}" control on screen`); return null; }
+    if (target.under !== null) log(`capture: "${step.arg ?? step.selector}" is not under the pointer at ${Math.round(target.x)},${Math.round(target.y)} — "${target.under}" is`);
+    return target;
+  };
+
   // ROTARIS_CAPTURE_CLICKS="selector>>text@ms;;…": real clicks on Settings controls, for the configuration proof.
   for (const step of steps(process.env['ROTARIS_CAPTURE_CLICKS'])) {
     onStep(host, step, async () => {
-      const rect = await win.webContents.executeJavaScript(`(() => { const b = [...document.querySelectorAll(${JSON.stringify(step.selector)})].find((x) => ${step.arg === null ? 'true' : `x.textContent.trim() === ${JSON.stringify(step.arg)}`}); if (!b) return null; b.scrollIntoView({ block: 'center' }); const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`) as { x: number; y: number } | null;
-      if (!rect) { log(`capture: no "${step.arg ?? step.selector}" control on screen`); return; }
-      clickAt(win, rect);
+      const target = await aimAt(step);
+      if (!target) return;
+      clickAt(win, target);
       log(`capture: clicked "${step.arg ?? step.selector}"`);
     });
   }
@@ -116,9 +124,9 @@ export function installSeams(host: CaptureHost, options: SeamOptions): void {
   // a control the foot may not render (a selected-but-unopened card shows no foot) cannot be pressed at all.
   for (const step of steps(process.env['ROTARIS_CAPTURE_DOUBLE_CLICKS'])) {
     onStep(host, step, async () => {
-      const rect = await win.webContents.executeJavaScript(`(() => { const b = [...document.querySelectorAll(${JSON.stringify(step.selector)})].find((x) => ${step.arg === null ? 'true' : `x.textContent.trim() === ${JSON.stringify(step.arg)}`}); if (!b) return null; b.scrollIntoView({ block: 'center' }); const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; })()`) as { x: number; y: number } | null;
-      if (!rect) { log(`capture: no "${step.arg ?? step.selector}" control on screen`); return; }
-      doubleClickAt(win, rect);
+      const target = await aimAt(step);
+      if (!target) return;
+      doubleClickAt(win, target);
       log(`capture: double-clicked "${step.arg ?? step.selector}"`);
     });
   }

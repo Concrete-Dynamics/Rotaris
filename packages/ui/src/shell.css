@@ -357,8 +357,13 @@
 .row__menu-item { font: inherit; font-size: var(--rt-text-sm, 13px); color: var(--rt-text); background: none; border: 0; padding: var(--rt-space-1, 4px) var(--rt-space-2, 8px); text-align: left; cursor: pointer; border-radius: var(--rt-radius-sm, 4px); }
 .row__menu-item:hover:not(:disabled) { background: var(--rt-hover); }
 .row__menu-item:disabled { color: var(--rt-text-disabled); cursor: default; }
-/* Verification only: Part AA's `rows-proof` role draws both surfaces at once (`pnpm rows-proof`). */
-.rows-proof { display: grid; grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); height: 100vh; overflow: auto; }
+/* Verification only: Part AA's `rows-proof` role draws SIX surfaces at once (`pnpm rows-proof`). The template
+   named three fractional rows from when there were three of them; every surface added since took an implicit
+   auto row, whose content then squeezed the three fractional ones to a single pixel each and painted over
+   them. The probes read the DOM and did not notice, but a CLICK is delivered at a coordinate: the first
+   surfaces were one pixel tall behind a neighbour, so the pointer landed on the neighbour. Each surface keeps
+   a floor now and the page scrolls to whatever a step reaches for. */
+.rows-proof { display: grid; grid-template-rows: auto; grid-auto-rows: minmax(320px, auto); height: 100vh; overflow: auto; }
 .rows-proof__controls { display: flex; gap: var(--rt-space-2, 8px); padding: var(--rt-space-2, 8px); }
 .rows-proof__surface { min-height: 0; overflow: auto; border-top: 1px solid var(--rt-border); }
 /* REQ-CHAT-010: minimum 110 px for the block, 48 px for the widget; the block scrolls rather than clipping a control.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chordEvent, matchProbe, parseSelectors, parseSteps } from './host.js';
+import { chordEvent, matchProbe, parseSelectors, parseSteps, targetProbe } from './host.js';
 
 /**
  * The capture script's grammar, which every `*-proof` script writes and which — until this module
@@ -52,6 +52,16 @@ describe('the capture script grammar (verification seams)', () => {
     expect(matchProbe('.x', null)).toContain('=> true');
     // With it, the exact trimmed text is the condition, and it is quoted too.
     expect(matchProbe('.x', 'Accept')).toContain('x.textContent.trim() === "Accept"');
+  });
+
+  it('aims a click at a point AND asks what is drawn there, so a covered element is not pressed in silence', () => {
+    const probe = targetProbe('.row--system', null);
+    expect(probe).toContain(JSON.stringify('.row--system'));
+    // The two halves that make a miss visible: the hit test, and the covering element being named.
+    expect(probe).toContain('document.elementFromPoint(x, y)');
+    expect(probe).toContain('over === b || b.contains(over) || over.contains(b)');
+    // The text form quotes what it was given, exactly as the match probe does.
+    expect(targetProbe('.btn', `it's`)).toContain(`x.textContent.trim() === "it's"`);
   });
 
   it('carries `~` on a step whose selector holds a tilde of its own', () => {

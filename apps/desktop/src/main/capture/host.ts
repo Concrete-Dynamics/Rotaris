@@ -115,6 +115,27 @@ export function matchProbe(selector: string, text: string | null): string {
   return `(() => [...document.querySelectorAll(${JSON.stringify(selector)})].some((x) => ${text === null ? 'true' : `x.textContent.trim() === ${JSON.stringify(text)}`}))()`;
 }
 
+/**
+ * The renderer expression a CLICK reads: the point to press, and whether the element named is the one the
+ * pointer would actually reach there.
+ *
+ * A click is delivered at a coordinate, so a matched element is not yet a clicked element — a neighbour
+ * drawn over it takes the press while the step still reads as performed. That is what made `rows-proof`'s
+ * pointer steps move between runs of one build: the proof page had squeezed three of its surfaces to a
+ * pixel behind a fourth, and the log said "clicked" every time. `under` names the intruder when there is
+ * one; the click is delivered either way, so no existing proof changes except in what its log can say.
+ */
+export function targetProbe(selector: string, text: string | null): string {
+  return `(() => { const b = [...document.querySelectorAll(${JSON.stringify(selector)})].find((x) => ${text === null ? 'true' : `x.textContent.trim() === ${JSON.stringify(text)}`}); if (!b) return null; b.scrollIntoView({ block: 'center' }); const r = b.getBoundingClientRect(); const x = r.x + r.width / 2, y = r.y + r.height / 2; const over = document.elementFromPoint(x, y); const reached = over !== null && (over === b || b.contains(over) || over.contains(b)); return { x, y, under: reached ? null : (over === null ? 'nothing' : (over.getAttribute('data-testid') || (typeof over.className === 'string' && over.className !== '' ? over.className : over.tagName))) }; })()`;
+}
+
+/** What `targetProbe` answers with: the point to press, and the intruder over it when the element is covered. */
+export interface CaptureTarget {
+  readonly x: number;
+  readonly y: number;
+  readonly under: string | null;
+}
+
 /** A promise that resolves after `ms` on the clock ports — never a bare timer (`rotaris/no-bare-timers`). */
 export function pause(host: CaptureHost, ms: number): Promise<void> {
   return new Promise<void>((resolve) => { host.clocks.timers.after(millis(ms), () => resolve()); });

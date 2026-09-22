@@ -22,12 +22,13 @@ describe('minimum-window layout regressions', () => {
   });
 
   it('gives the worktree columns their content floor and the card the scroll that reaches it', () => {
-    // Measured live at 1000x680: the five columns that cannot give way need 56 + 64 + 52 + 52 + 76 + 64,
-    // and Branch and Session elide (UIR-002) into whatever is left. `width: 100%` alone guaranteed the
-    // card never scrolled, so the last column's overflow — 12 px — was simply outside the box.
-    expect(rule('.git__worktree-table')).toContain('min-width: 408px');
-    expect(rule('.git__col-files')).toContain('width: 76px');
-    expect(rule('.git__col-actions')).toContain('width: 64px');
+    // Measured live at 1000x680: the six columns that cannot give way need 56 + 64 + 52 + 52 + 76 + 64 px,
+    // and Branch elides (UIR-002) into whatever is left. `width: 100%` alone guaranteed the card never
+    // scrolled, so the last column's overflow — 12 px — was simply outside the box. The figures are spelled
+    // in `ch` because each floor is a word, and the adopted language takes no literal pixel.
+    expect(rule('.git__worktree-table')).toContain('min-width: 63ch');
+    expect(rule('.git__col-files')).toContain('width: 12ch');
+    expect(rule('.git__col-actions')).toContain('width: 9ch');
     expect(rule('.git-card--table')).toContain('overflow-x: auto');
   });
 

@@ -68,12 +68,20 @@ child — the role's instructions take its playbook (`withPlaybook`, REQ-ORCH-01
 context → the skill catalog → the force-loaded skill bodies → persona memory. **One of the four is not built**
 (persona memory) and is an empty slot in the list rather than a shape a later part must re-cut.
 Workspace-context injection (REQ-WORKSPACE-041..048, narrowed and extended by `PD-WORKSPACE-002`) fills the
-first: `SkillHost.workspaceContext` reads the master switch `inject_agents_md` and the per-file
-`instructions.overrides` policy from the **saved** configuration, discovers the present instruction files over
-the workspace root and the five further bases, merges the enabled set into one block
+first: `SkillHost.workspaceContext` calls **`SkillHost.instructionFiles`**, which reads the master switch
+`inject_agents_md` and the per-file `instructions.overrides` policy from the **saved** configuration and
+discovers the present instruction files over the workspace root and the five further bases; the context then
+merges the enabled set into one block
 (`mergeInstructionContext` — a source comment per file, one blank line between blocks, both size limits) and
 caches it for as long as the session lasts (REQ-WORKSPACE-046), cleared by session creation and by a rescan, the
-two events that already clear the catalog. **`REQ-WORKSPACE-050` is met on both halves:** the instruction files
+two events that already clear the catalog.
+
+**The set is decided in one place because it has two readers.** `instructionFiles` is a method rather than a
+step inside the context because the retrospective consumes the same list (`PD-LIBRARY-002` over
+REQ-WORKSPACE-041). It used to hold its own copy of the rule — two names at the workspace root, no policy —
+so it read files the user had switched off and could propose edits to them; the run host now computes the
+set once and hands it to the engine, which owns no policy of its own. Whether a switch stated over what
+agents are *given* binds an *analysis* is **OQ-65**, and what the build proceeds under is that it does. **`REQ-WORKSPACE-050` is met on both halves:** the instruction files
 are read from the root the run **executes** in — the worktree of an isolated session — while the skill catalog
 and the policy stay with the **base** workspace, so persistent workspace metadata stays with the base. The
 execution root reaches the run host through `configure`'s context (`Sessions.setupFor`, from the start

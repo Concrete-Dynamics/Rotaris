@@ -50,3 +50,18 @@ card reading **client 340, scroll 408**, so every column is reachable; and every
 equals its need exactly (`Session 56/56, State 64/64, Ahead 52/52, Behind 52/52, Files 76/76,
 Actions 64/64`). `pnpm ui-audit` over all seven views at both sizes went from **1 finding to 0**. Pinned by
 a new case in `packages/ui/src/layout-regression.test.ts`, beside the checkpoint table's own.
+
+**Spelled in `ch`, not pixels, and the figures corrected.** `tools/check-ui-language.mjs` refused the first
+version: the adopted language takes no literal pixel, and the column widths were `56px`/`64px`/`76px` with a
+`408px` table. Characters are the better unit here anyway — every floor is a WORD, a heading or a status
+phrase or a button's label — and `.git__cell-branch` had already measured itself that way at `22ch`.
+
+The conversion was measured twice, because the first measurement was taken in the wrong place: a probe in
+the surrounding card read `1ch` as 7.547px and produced columns 1 to 4 px UNDER their content, since the
+card carries the shell's type and the table does not. Inside the table `1ch` is **6.45px**. Final:
+Session 9ch, State 10ch, Ahead/Behind 8ch, Files 12ch, Actions 9ch, table `min-width: 63ch`.
+
+Re-measured in the built app at 1000×680: table **408/408**, card **340/408**, and every unyielding column
+at or above its need — `Session 58/58, State 65/65, Ahead 52/52, Behind 52/52, Files 78/78, Actions 58/58`.
+Branch is 45 against 132 and is meant to be: it elides, which is UIR-002's decision and the point of it.
+`pnpm ui-audit` 0 findings; `check-ui-language` back at its baseline with no new debt.

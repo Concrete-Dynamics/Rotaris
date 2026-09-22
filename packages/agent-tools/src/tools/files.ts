@@ -107,26 +107,42 @@ function unlistableParent(parent: string, relParent: string): string {
 }
 
 /**
- * A `memory:` path is not a file and never will be, so the parent listing REQ-TOOLS-134 owes it answers a
- * question nobody asked. Observed 2026-09-20, run `2e21e324`: an agent that had just listed memories
- * through `list_memories` reached for two of them with `read_file` and was told `Its parent directory does
- * not exist either.` — truthful, naming no tool, so the next move was a guess. The namespace belongs to the
- * code-intelligence server, whose manifest (`packages/config/src/mcp/code-intelligence-manifest.generated.ts`,
- * `read.memoryReading`) maps it to `read_memory`. The two names are repeated rather than imported: nothing
- * in the run host's tool layer may depend on `@rotaris/config`.
+ * The two code-intelligence tools that answer the `memory:` namespace, HANDED IN rather than written here.
+ *
+ * REQ-MCP-116 makes the generated manifest the only place a runtime tool name is spelled, and a literal here
+ * would be a second place — caught by `code-intelligence.test.ts` on the first run of this repair, which is
+ * what the rule is for. This layer cannot import `@rotaris/config` either, so the names arrive from the run
+ * host, which can, and reads them from `CODE_INTELLIGENCE_MEMORY_GATE`.
  */
-function namespacedElsewhere(rel: string): string | null {
+export interface MemoryNamespaceTools {
+  /** The manifest's `tiers.read.memoryReading`. */
+  readonly read: string;
+  /** The manifest's `tiers.read.memoryListing`. */
+  readonly list: string;
+}
+
+/**
+ * A `memory:` path is not a file and never will be, so the parent listing REQ-TOOLS-134 owes it answers a
+ * question nobody asked. Observed 2026-09-20, run `2e21e324`: an agent that had just listed its memories
+ * reached for two of them with `read_file` and was told `Its parent directory does not exist either.` —
+ * truthful, naming no tool, so the next move was a guess.
+ *
+ * With no tools handed in the refusal still corrects the shape of the mistake; it just cannot name the way
+ * out, which is better than naming a tool this build might not have.
+ */
+function namespacedElsewhere(rel: string, tools: MemoryNamespaceTools | undefined): string | null {
   const head = rel.split(/[\\/]/, 1)[0] ?? '';
   if (!/^memory:/i.test(head)) return null;
   const name = rel.slice(rel.indexOf(':') + 1);
-  return `Memory not found through read_file: ${rel}.\n`
-    + `'memory:' is not a path on disk — it is the code-intelligence server's own namespace. `
-    + `Read it with read_memory (memory_file_name: '${name}'), and list what is there with list_memories.`;
+  const opening = `Memory not found through read_file: ${rel}.\n`
+    + `'memory:' is not a path on disk — it is the code-intelligence server's own namespace.`;
+  if (tools === undefined) return opening;
+  return `${opening} Read it with ${tools.read} (memory_file_name: '${name}'), and list what is there with ${tools.list}.`;
 }
 
 /** REQ-TOOLS-134: the parent listing and up to five close matches at ≥ 0.45 under REQ-TOOLS-188. */
-function missingPathMessage(resolved: string, rel: string): string {
-  const namespaced = namespacedElsewhere(rel);
+function missingPathMessage(resolved: string, rel: string, memoryTools?: MemoryNamespaceTools): string {
+  const namespaced = namespacedElsewhere(rel, memoryTools);
   if (namespaced !== null) return namespaced;
   const parent = dirname(resolved);
   const wanted = basename(resolved).toLowerCase();
@@ -208,11 +224,11 @@ const readSchema = z.object({
   grep_context: z.number().int().min(0).default(3),
 }).refine((a) => a.path !== undefined || a.file_path !== undefined, { message: 'path is required' });
 
-function doRead(state: FileToolState, fence: FenceConfig, args: z.infer<typeof readSchema>, hashHeader: boolean): Observation {
+function doRead(state: FileToolState, fence: FenceConfig, args: z.infer<typeof readSchema>, hashHeader: boolean, memoryTools?: MemoryNamespaceTools): Observation {
   const path = (args.path ?? args.file_path) as string;
   const t = readTarget(fence, path, 'read');
   if (!t.ok) return t.obs;
-  if (!existsSync(t.resolved)) return errorObservation(missingPathMessage(t.resolved, t.rel));
+  if (!existsSync(t.resolved)) return errorObservation(missingPathMessage(t.resolved, t.rel, memoryTools));
   const st = statSync(t.resolved);
   if (st.isDirectory()) return observation(`[path: ${t.rel} | directory]\n${listing(t.resolved)}`);
   const bytes = readFileSync(t.resolved);
@@ -224,7 +240,7 @@ function doRead(state: FileToolState, fence: FenceConfig, args: z.infer<typeof r
   return observation(r.text);
 }
 
-export function readFileTool(state: FileToolState, fence: FenceConfig): ToolExecutor<z.infer<typeof readSchema>> {
+export function readFileTool(state: FileToolState, fence: FenceConfig, memoryTools?: MemoryNamespaceTools): ToolExecutor<z.infer<typeof readSchema>> {
   return {
     name: 'read_file',
     // The re-read rule is stated here because the corpus already answers it and nothing was telling the model:
@@ -234,7 +250,7 @@ export function readFileTool(state: FileToolState, fence: FenceConfig): ToolExec
     description: 'Read a workspace file (line-numbered; offset/limit; optional grep filter) or list a directory. Paths are relative to the workspace root. A file you have already read is unchanged unless you or a command changed it: re-read it to see an edit you did not make yourself, not to recall what it said. To edit, prefer haet_read, whose content_hash is what a later haet_edit needs.',
     schema: readSchema,
     label: (a) => `read_file ${a.path ?? a.file_path ?? ''}`,
-    execute: async (a) => doRead(state, fence, a, false),
+    execute: async (a) => doRead(state, fence, a, false, memoryTools),
   };
 }
 

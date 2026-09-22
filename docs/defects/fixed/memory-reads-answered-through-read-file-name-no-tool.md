@@ -31,3 +31,16 @@ are repeated rather than imported from the manifest: the run host's tool layer m
 
 Measured: a new case in `packages/agent-tools/src/tools/tools.test.ts` asserts the refusal names both tools
 and no longer says `Its parent directory does not exist either.`; the file is green (19 passed).
+
+**Corrected the same day, by the repository's own gate.** The first version of this repair wrote the two
+tool names as literals in `files.ts`, reasoning that the run host's tool layer may not depend on
+`@rotaris/config`. That reasoning was wrong about the rule that matters: **REQ-MCP-116 makes the generated
+manifest the only place a runtime tool name is written**, and `code-intelligence.test.ts` failed `pnpm check`
+naming both offending files. The dependency direction was the real constraint, not a licence to restate.
+
+So the names are **injected**. `readFileTool(state, fence, memoryTools?)` takes them, `run-host/tools.ts`
+reads them from `CODE_INTELLIGENCE_MEMORY_GATE` — the manifest's ordered `[listing, reading]` pair — and
+hands them over at the one place the tool is built. With no names given the refusal still corrects the
+shape of the mistake (`'memory:' is not a path on disk`) and simply cannot name the way out, which is
+better than naming a tool a build might not carry. The test uses stand-in names for the same reason a test
+file may not spell the real ones, and that is also what proves they are injected rather than baked in.

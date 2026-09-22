@@ -45,6 +45,16 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-22**
 
+**One instruction-file set, two readers (defect round, 2026-09-22).** The retrospective held its own copy
+of REQ-WORKSPACE-041's discovery rule — the two names at the workspace root, and no policy at all — so it
+read files the user had switched off and could still propose edits to them, while injection honoured every
+switch. `SkillHost.instructionFiles` is now the one computation: `workspaceContext` calls it, and
+`dispatch`'s `retrospective.capture` hands its result to `captureRetrospectiveJob`, which discovers nothing
+of its own and reads nothing when handed nothing. `02-process-view.md`'s retrospective paragraph and
+`03-runtime-view.md`'s context-unit paragraph both move. Whether a switch stated over what agents are
+*given* binds an *analysis* is **OQ-65**; the build proceeds under "it does". The defect note moves to
+`docs/defects/fixed/`.
+
 **Workspace-context injection fills the first context-unit slot (PD-WORKSPACE-002).** The slot
 `03-runtime-view.md` carried as "not built" since ADR-0063 now holds the merged instruction context:
 `SkillHost.workspaceContext` discovers the present files over the workspace root plus five further bases,

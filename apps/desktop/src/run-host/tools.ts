@@ -7,6 +7,7 @@ import {
   resolveToolSet, selectRequestedMode, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, withheldUnderPlanGate, writeFileTool, type ConfinementPort, type GateSink, type PolicyRead, type PresenterPort, type ToolExecutor,
 } from '@rotaris/agent-tools';
 import { BUILT_IN_PERSONAS, type ModeChange, type PersonaResolver, type PortToolCall, type PortToolResult, type RoleName, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
+import { CODE_INTELLIGENCE_MEMORY_GATE } from '@rotaris/config';
 import type { ConfiguredRun, RuntimeFromConfiguration } from './configuration.js';
 import type { McpHost } from './mcp.js';
 import { artifactListTool, artifactReadTool, artifactWriteTool, backgroundOutputTool, delegateTool, waitForTasksTool } from '@rotaris/agent-tools';
@@ -121,8 +122,16 @@ function executorsFor(root: string, deps: ToolPortDeps, runtime: RuntimeFromConf
   const fence = { workspaceRoot: root, allowOutsideWorkspace: runtime.allowOutsideWorkspace, additionalReadOnlyRoots: [...runtime.additionalReadOnlyRoots, ...(deps.skillReadRoots?.(root) ?? [])] };
   let state = deps.fileStates.get(root);
   if (!state) { state = new FileToolState(); deps.fileStates.set(root, state); }
+  /*
+   * REQ-MCP-116 makes the generated manifest the only place a runtime tool name is written, and this is
+   * where the two are READ. The gate is the ordered pair [listing, reading]. They are handed to
+   * `read_file` because its refusal for a `memory:` path names them: an agent that reached for a memory
+   * through the wrong tool is told the right one, instead of a parent listing for a namespace that has
+   * no parent. `packages/agent-tools` cannot import this manifest itself and must not restate it.
+   */
+  const memoryTools = { list: CODE_INTELLIGENCE_MEMORY_GATE[0], read: CODE_INTELLIGENCE_MEMORY_GATE[1] };
   const list: ToolExecutor[] = [
-    readFileTool(state, fence) as ToolExecutor, writeFileTool(state, fence) as ToolExecutor, haetReadTool(state, fence) as ToolExecutor,
+    readFileTool(state, fence, memoryTools) as ToolExecutor, writeFileTool(state, fence) as ToolExecutor, haetReadTool(state, fence) as ToolExecutor,
     haetEditTool(state, fence, 'haet_edit') as ToolExecutor, haetEditTool(state, fence, 'haet') as ToolExecutor,
     grepTool(fence) as ToolExecutor, globTool(fence) as ToolExecutor, gitReadTool(root) as ToolExecutor, todoExecutor,
     // ADR-0023: the policy is read per call from the saved files (REQ-SANDBOX-038); the gate resolved any `ask` before execution (REQ-TOOLS-091).

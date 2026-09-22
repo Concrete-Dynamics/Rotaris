@@ -83,14 +83,24 @@ describe('read_file (REQ-TOOLS-134)', () => {
     expect(linked.isError).not.toBe(true);
     expect(linked.text).toContain('gitdir:');
   });
-  it('a memory: path names the tool that answers it rather than listing a parent that never existed', async () => {
-    const r = await readFileTool(state, fence).execute({ path: 'memory:punchclock/build-and-styling-gotchas', offset: 1, limit: 2000, grep_context: 3 }, ctx());
+  it('a memory: path names the tools it is given rather than listing a parent that never existed', async () => {
+    // The names are stand-ins on purpose. REQ-MCP-116 makes the generated manifest the only place a real
+    // runtime tool name is written, so a test that spelled them would be a second place — and injecting
+    // them here is also what proves they are injected rather than baked into the refusal.
+    const named = { read: 'memory-reader', list: 'memory-lister' };
+    const args = { path: 'memory:punchclock/build-and-styling-gotchas', offset: 1, limit: 2000, grep_context: 3 };
+    const r = await readFileTool(state, fence, named).execute(args, ctx());
     expect(r.isError).toBe(true);
     expect(r.text).toContain('Memory not found through read_file: memory:punchclock/build-and-styling-gotchas.');
-    expect(r.text).toContain("read_memory (memory_file_name: 'punchclock/build-and-styling-gotchas')");
-    expect(r.text).toContain('list_memories');
+    expect(r.text).toContain("memory-reader (memory_file_name: 'punchclock/build-and-styling-gotchas')");
+    expect(r.text).toContain('memory-lister');
     // The refusal it replaced said only this, about a namespace that has no parent to speak of.
     expect(r.text).not.toContain('Its parent directory does not exist either.');
+    // With no tools handed in the shape of the mistake is still corrected; only the way out goes unnamed.
+    const bare = await readFileTool(state, fence).execute(args, ctx());
+    expect(bare.text).toContain("'memory:' is not a path on disk");
+    expect(bare.text).not.toContain('memory-reader');
+    expect(bare.text).not.toContain('Its parent directory does not exist either.');
   });
   it('the 30,000-character cap carries a continuation hint', async () => {
     writeFileSync(join(root, 'big.txt'), Array.from({ length: 3000 }, (_, i) => `line ${i + 1} ${'x'.repeat(20)}`).join('\n'));

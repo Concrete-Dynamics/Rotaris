@@ -36,3 +36,37 @@ Noticed 2026-09-22 while repairing the two driven transcript proofs, where it pr
 on nothing. Recorded rather than repaired: distinguishing the two origins properly (a sequence number, or
 comparing against the position the pane itself set) is a change to how following is decided, and wants its
 own evidence.
+
+**Repaired 2026-09-22.** The pane no longer asks *whether* it scrolled; it remembers **where to**.
+`programmatic: useRef(false)` is gone, kept above its replacement with the reason, and in its place sits
+`expectedTop: useRef<number | null>` written by one helper:
+
+```ts
+const scrollSelf = (el: HTMLElement, top: number): void => {
+  const before = el.scrollTop;
+  el.scrollTop = top;
+  if (el.scrollTop !== before) expectedTop.current = el.scrollTop;
+};
+```
+
+Two details are load-bearing and neither is decoration. The value is read back **after** the assignment,
+because the browser clamps it — `el.scrollTop = el.scrollHeight` never lands on `scrollHeight`. And it is
+armed only when the assignment actually **moved** the element: setting `scrollTop` to what it already holds
+fires no event, and an armed position with no event behind it would swallow the reader's next scroll to
+that same place — the original defect, reintroduced from the other end.
+
+`onScroll` then reads the position rather than a flag. A reader's scroll that lands between the pin and the
+pin's own event is at a different offset, so it is recognised as theirs whatever order the events arrive
+in, which is the ambiguity this note recorded. A reader who happens to land on exactly the position the
+pane was moving to is still indistinguishable, and costs nothing: the follow state computed from that
+position is the same either way. The three scroll sites — the tail pin, the anchor restore, and
+REQ-CHAT-074's jump to a match — all go through the helper.
+
+The decision is a pure function, `isOwnScroll` in the new `packages/ui/src/transcript/scroll.ts`, so it has
+a test rather than only a proof: four cases pin it, including the defect as a number (pinned to 1200, the
+reader at 640, answered `false` where the flag answered "mine"), and the sub-pixel tolerance is shown to be
+narrower than a single wheel notch by two orders of magnitude.
+
+Measured: `transcript.test.ts` 54 passed; `pnpm transcript-proof` PASSED against the built app, which is
+the harness whose `releaseProbe` had to nudge repeatedly to get past this. That workaround is left in
+place — it is harmless, and removing it wants its own evidence rather than this note's.

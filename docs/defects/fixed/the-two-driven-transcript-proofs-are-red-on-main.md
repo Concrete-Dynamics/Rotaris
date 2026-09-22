@@ -92,6 +92,30 @@ While here: the two focus readings pointed at `${W} .rowlist`, the container the
 The Workspace transcript is Part Z's pooled pane, so that selector matched nothing and the readings rested
 on `active` alone; they now name `.transcript__pool`.
 
-Evidence: `pnpm rows-proof` and `pnpm transcript-proof` both green, twice — in the branch worktree and again
-on merged `main`. `rows.log` carries **no** `is not under the pointer` line, and the 8100 ms reading shows
-`active` as the row article rather than `body`.
+**The pointer steps, measured a second time.** Giving the surfaces a real size made the Workspace pane a
+real scroller, and that turned the remaining flake into something measurable: about one click in five still
+went nowhere with the log reading `clicked`. Taking the point TWO FRAMES after the scroll — and looking the
+element up again there — named it:
+
+```
+"…row--user .md__link" is not under the pointer at 620,-1107 — "nothing" is
+```
+
+A tail-following transcript pins itself to the bottom on the render after any scroll (REQ-CHAT-070), so
+`scrollIntoView` held for about two frames: true when the point was read, stale when the press arrived. One
+nudge does not release the follow either — `onScroll` ignores one scroll after the pane's own — so the seam
+now nudges until the pane publishes `data-following="0"`, and only when the target is unreachable. That
+swallowing is recorded on its own terms in
+`docs/defects/one-readers-scroll-can-be-taken-for-the-panes-own.md`.
+
+Evidence: `pnpm rows-proof` green **five times** — three in the branch worktree where five consecutive runs
+had failed, and twice on merged `main` at `1f3bad9` — each releasing the follow exactly once and carrying no
+`is not under the pointer` line; the 8100 ms reading shows `active` as the row article rather than `body`.
+`transcript-proof`'s group expansion is green and the script now runs past it.
+
+**`transcript-proof` as a whole is still red, and further on.** It reaches REQ-CHAT-055's append comparison
+now, which the group-expansion red had been hiding, and fails it: a median of 83.9 ms at 1,200 rows against
+36.8 ms on an empty transcript. That is not one of this note's three reds and is not repaired here — it is
+recorded as `docs/defects/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md`.
+`pnpm check` is green in the branch but for `terminal.test.ts`'s real `git diff` end-to-end, which is its
+own open note and red on `main` before this change.

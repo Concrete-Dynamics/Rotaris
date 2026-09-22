@@ -132,7 +132,20 @@ const value = (name, fallback) => { const hit = argv.find((a) => a.startsWith(`-
 const GUI = has('gui');
 const BUDGET = Number(value('budget', '1.00'));
 const MAX_TOKENS = Number(value('max-tokens', '500000'));
-const MAX_ITERATIONS = Number(value('max-iterations', '15'));
+/**
+ * The iteration ceiling written into the sandbox's `runtime.max_iterations`, for every scenario in the run.
+ *
+ * It was 15 while every scenario here was a short task; the long run made that number the thing being measured
+ * rather than a bound on it — a delegating run hits 15 while it is still commissioning, and reports its own
+ * ceiling as a result about the product. Raised to 500 by the owner's decision of 2026-09-22.
+ *
+ * **What that gives up, stated rather than buried:** this is the bound that exists so one confused run cannot
+ * spend the lot, and 500 iterations against a METERED endpoint is a great deal more than 15. What still holds
+ * is the accounting gate between scenarios (`--budget`, or `--max-tokens` where no money figure exists) and the
+ * endpoint's own limits; what no longer holds is a tight bound WITHIN one run. The endpoint this was raised for
+ * is registered unmetered, where the cost of a long run is wall clock. Name `--max-iterations` on a metered one.
+ */
+const MAX_ITERATIONS = Number(value('max-iterations', '500'));
 const KEEP_RUNS = Math.max(1, Number(value('keep-runs', '10')));
 /**
  * The session log level written into the sandbox's own configuration. `WARNING` is the product's default and
@@ -180,7 +193,7 @@ for (const name of wanted) if (!SCENARIOS.includes(name)) throw new Error(`--onl
  * harder question; the scenario asserts the same things either way.
  */
 const DURESS_FIXTURE = value('duress-fixture', null);
-const DURESS_MS = Number(process.env['LIVE_RUN_DURESS_MS'] ?? 1_800_000);
+const DURESS_MS = Number(process.env['LIVE_RUN_DURESS_MS'] ?? 2_400_000);
 /*
  * A named fixture replaces the workspace for the WHOLE run, because one sandbox holds one store and
  * `oneDatabase` refuses a second. Every other scenario's prompt names files `todo-app` has, so running them
@@ -362,7 +375,7 @@ const USAGE = `pnpm live-run — the application against a real model endpoint, 
   --budget=<usd>       stop when the spend crosses this (default 1.00); needs a provider figure or prices
   --max-tokens=<n>     the ceiling when no money figure exists (default 500000)
                        an endpoint registered --unmetered carries no ceiling unless one of these two is named here
-  --max-iterations=<n> the ceiling written into the workspace's runtime configuration (default 15)
+  --max-iterations=<n> the ceiling written into the workspace's runtime configuration (default 500)
   --only=<csv>         run only some of ${OPTIONAL.join(', ')} (sign-in always runs; the sandbox is fresh)
                        and ${OPT_IN.join(', ')}, which only run when named — the long one, tens of minutes
   --duress-fixture=<dir>  the workspace duress opens (default: the same small todo-app the others use)
@@ -1539,19 +1552,45 @@ if (wanted.includes('terminal')) {
  * scenario cheap to write and hard to fool. What the model produced is NOT asserted: a weak model doing the work
  * badly is a fact about the model.
  *
- * Its wall clock is `LIVE_RUN_DURESS_MS` (default 30 minutes) and its workspace is `--duress-fixture` (default
- * the same five-file todo application the other scenarios use, which commissions delegation by instruction
- * rather than by weight — reported, never implied).
+ * Its wall clock is `LIVE_RUN_DURESS_MS` (default 40 minutes, the owner's figure of 2026-09-22).
+ *
+ * **The fixture question, ruled rather than left open (2026-09-22, delegated by the owner): the default stays
+ * `todo-app`, and the LENGTH comes from the work asked for rather than from the tree's weight.** A bigger
+ * fixture is a second tree to maintain and to keep in step with five other scenarios' prompts, and it does not
+ * actually buy what it looks like it buys — a five-file repository and a five-hundred-file one both delegate
+ * exactly as much as the prompt commissions. So the prompt below is three WAVES that each depend on the last,
+ * which is what reaches compression, re-spawn and a child that ends badly; `--duress-fixture` remains for
+ * pointing this at a real tree when the question is about size specifically.
  */
 if (wanted.includes('duress')) {
+  /*
+   * Three dependent waves. Wave two cannot start until wave one's reports exist and wave three cannot start
+   * until wave two's do, so the parent's conversation grows monotonically across all of them — which is the
+   * thing a long run is FOR. A single wave of three parallel children finishes in minutes and measures the
+   * short path under a longer deadline.
+   */
   const PROMPT = [
-    'Work through this repository as a team, delegating rather than doing it all yourself.',
-    'Commission three children and wait for all of them:',
-    '  1. document every exported function under src/ into docs/api.md, one section each, with its signature;',
-    '  2. add test/extra.test.js covering the list functions, then run `node --test` in the terminal and fix what fails;',
-    '  3. write docs/overview.md summarising the repository with a file-by-file table.',
-    'Read the files before you describe them. When all three have reported, reply with one paragraph naming what',
-    'each child did and which files changed.',
+    'Work through this repository as a team, delegating rather than doing the work yourself. Three waves, in order,',
+    'each waiting for the one before it.',
+    '',
+    'Wave 1 — commission three children and wait for all three:',
+    '  a. document every exported function under src/ into docs/api.md, one section each, with its signature,',
+    '     its parameters and an example call taken from real usage in the repository;',
+    '  b. add test/extra.test.js covering every branch of the list functions, run `node --test` in the terminal,',
+    '     and keep fixing until it is green;',
+    '  c. write docs/overview.md summarising the repository with a file-by-file table and a dependency list.',
+    '',
+    'Wave 2 — read all three outputs yourself, then commission two more children and wait for both:',
+    '  d. reconcile docs/api.md against docs/overview.md and fix every disagreement in both files;',
+    '  e. add docs/decisions.md recording, for each source file, one design decision it embodies and the',
+    '     alternative it rejected, citing the lines that show it.',
+    '',
+    'Wave 3 — commission one final child to verify the whole result: it must re-read every file the other five',
+    'touched, run `node --test` again in the terminal, and write docs/verification.md listing what it checked,',
+    'what it found and what it could not confirm.',
+    '',
+    'Read files before describing them; do not describe a file you have not opened. When wave 3 has reported,',
+    'reply with one paragraph naming what each child did and which files changed.',
   ].join('\n');
   const startedAt = Date.now();
   const log = await launch('duress', {
@@ -1590,7 +1629,11 @@ if (wanted.includes('duress')) {
 
     // A run that commissioned nobody asked none of the questions below. That is a fact about the model and the
     // fixture, not a fault of the product, so it is a NOTE — and the checks that depend on it say so too.
+    // Six were asked for, over three dependent waves. Fewer is a fact about the model, not a fault of the
+    // product, so it is reported rather than failed — but how many arrived decides whether this run reached
+    // the depth the scenario is named for, and a reader should not have to count the list to find out.
     if (children.length === 0) noted('the long run commissioned no children', `fixture ${basename(workspaceFixture)}; delegation was asked for and not taken, so the child-record checks are unasked`);
+    else if (children.length < 6) noted('the long run commissioned fewer children than it was asked for', `${children.length} of 6 across three waves — it did not reach the depth this scenario is for`);
     else {
       noted('what the long run commissioned', children.map((c) => `${c.given_name} [${c.persona}] ${c.state}, ${c.tool_calls} calls`).join('; '));
       // The eighty-second defect's shape at the child level: four of eleven children died with an empty

@@ -192,6 +192,14 @@ invocation names a ceiling itself); else the **provider's own figure** (OpenRout
 
 Crossing whichever ceiling applies stops the run there, records the figure and reports a failure.
 
+**`--max-iterations` defaults to 500, raised from 15 on 2026-09-22 by the owner's decision.** Fifteen was a
+bound while every scenario was a short task; the long run made it the thing being measured rather than a bound
+on it — a delegating run reaches 15 while it is still commissioning, and then reports its own ceiling as a
+result about the product. What the raise gives up is worth knowing before running against a metered endpoint:
+the accounting gate between scenarios still holds, and so do `--budget` and `--max-tokens`, but there is no
+longer a tight bound **within** one run. The endpoint it was raised for is registered `--unmetered`, where the
+cost of a long run is wall clock. Name `--max-iterations` yourself on an endpoint that charges.
+
 `--context=<tokens>` is for an endpoint whose `/models` payload does not declare a context window in a key
 discovery reads — vLLM's `max_model_len` is one such. The number is written into the sandbox's `agents.yaml` as
 `max_input_tokens` on a `models:` entry that **replaces** the snapshot layer's entry for the same model as
@@ -220,7 +228,7 @@ neither path depends on what the other did.
 | `frictions` | one real run engineered to trip the inducible autopsy frictions, read back from the store | first-use `write_file` with no operation repair, SIGINT delivered with no platform refusal — **red by design until the fixes land**; the exit-trace friction is recorded but not inducible on demand, and the stall-abort one moved to `faults` |
 | `faults` | two runs against an endpoint the proxy makes misbehave: a 429-then-500 ladder, and a stream that stops mid-answer with the socket open | the ladder run still completes; the stalled run does **not** report `user_cancelled` with nobody having pressed anything (defect 82's shape) — **never yet executed against a real endpoint** |
 | `terminal` | one run issuing six commands the record names verbatim: a multi-line here-string, forty long lines, a wedge with no `timeout`, an exit-0 output carrying `FAILED`, a `git diff` exiting 1, a pipeline through a pipe | the here-string terminated; all forty lines arrived, none concatenated, none carrying an escape sequence; a call with no `timeout` was still bounded; exit 1 from `git diff` was not `shell_failure`; **no end marker in anything the model read**. The other two are NOTEs — they fire as their requirements specify — and a shape the model never issued is a NOTE too |
-| `duress` | **opt-in** (`--only=duress`): one delegating run under `LIVE_RUN_DURESS_MS` (default 30 min) against `--duress-fixture` | the autopsy's coherence section is clean (no null summary on a stopped run, no tokens against a zero cost); no child ended `failed` with nothing to say; a child that ran commands reported them; the `compressions` aggregate agrees with the timeline. Length, children and compressions are **reported**, so a run that was not duress says so |
+| `duress` | **opt-in** (`--only=duress`): one delegating run of **three dependent waves, six children**, under `LIVE_RUN_DURESS_MS` (default 40 min) against `--duress-fixture` | the autopsy's coherence section is clean (no null summary on a stopped run, no tokens against a zero cost); no child ended `failed` with nothing to say; a child that ran commands reported them; the `compressions` aggregate agrees with the timeline. Length, children and compressions are **reported**, so a run that was not duress says so |
 
 An endpoint that discovers no model catalogue is not a dead end. The sign-in takes the dialog's own "Continue
 anyway" (the zero-model recovery), the catalogue check is recorded as a **NOTE** rather than a silent pass, and
@@ -302,6 +310,15 @@ other, and `apps/desktop/scripts/autopsy.mjs` already computes most of them. Wha
 asserted — a weak model doing the work badly is a fact about the model. Whether the run was long *at all* is
 reported rather than assumed, including a note when it stopped at `--max-iterations` and was therefore bounded
 by the harness rather than by the work.
+
+**Its length comes from the work asked for, not from the fixture's weight** — ruled 2026-09-22, when a larger
+fixture was considered and not taken. A five-file repository and a five-hundred-file one delegate exactly as
+much as the prompt commissions, and a second fixture is a second tree to keep in step with five other
+scenarios' prompts. So the prompt is **three dependent waves** — three children, then two that reconcile what
+the three produced, then one that verifies all of it — because the parent's conversation grows monotonically
+across waves, which is what reaches compression and re-spawn. A single wave of parallel children finishes in
+minutes and measures the short path under a longer deadline. `--duress-fixture` remains for the question that
+is about size specifically.
 
 The shapes and the two readers live in `apps/desktop/scripts/lib/terminal-shapes.mjs`, pinned by
 `terminal-shapes.test.ts` — a pattern that stopped matching its own command would turn every check in the

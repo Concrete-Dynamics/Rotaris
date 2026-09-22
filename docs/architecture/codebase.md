@@ -768,7 +768,23 @@ defect's shape at the child level), a child that ran commands and reported none 
 **reports whether it was long at all**, including when it stopped at `--max-iterations` and was bounded by the
 harness rather than by the work. `--duress-fixture` replaces the workspace for the whole run and is refused
 alongside any other scenario, because one sandbox holds one store and every other prompt names `todo-app`'s
-files. Neither scenario has run against a real endpoint; both owe their row in `first-executions.md`.
+files.
+
+**The five decisions this scenario was held on were taken on 2026-09-22**, four by the owner and one delegated:
+the endpoint is the unmetered `katalyst`, the wall clock is **40 minutes**, it stays **opt-in**, its assertions
+stay coherence-shaped, and **`--max-iterations` rises from 15 to 500**. That last one is a bound being loosened
+and is recorded as such. Fifteen was a bound while every scenario here was a short task; the long run turned it
+into the thing being measured — a delegating run reaches 15 while it is still commissioning and then reports its
+own ceiling as a result about the product. The accounting gate between scenarios still holds and so do
+`--budget` and `--max-tokens`; what no longer holds is a tight bound **within** one run, which is why the raise
+is safe on the unmetered endpoint it was made for and worth naming explicitly on one that charges. The fixture
+was the delegated decision and the ruling was **not** to add a larger tree: a five-file repository and a
+five-hundred-file one delegate exactly as much as the prompt commissions, and a second fixture is a second tree
+to keep in step with five other scenarios' prompts. The length comes from **three dependent waves** instead —
+three children, two reconciling what they produced, one verifying all of it — under which the parent's
+conversation grows monotonically, which is what reaches compression and re-spawn. A single wave of parallel
+children finishes in minutes and measures the short path under a longer deadline. Neither scenario has run
+against a real endpoint; both owe their row in `first-executions.md`.
 
 **What the board's live path found on its first execution — 2026-09-11, and the eighty-first defect.** The fifth
 scenario was written after a hand-driven precursor took the same path, and the precursor is what found the defect;

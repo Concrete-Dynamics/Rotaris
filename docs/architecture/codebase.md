@@ -783,8 +783,23 @@ five-hundred-file one delegate exactly as much as the prompt commissions, and a 
 to keep in step with five other scenarios' prompts. The length comes from **three dependent waves** instead —
 three children, two reconciling what they produced, one verifying all of it — under which the parent's
 conversation grows monotonically, which is what reaches compression and re-spawn. A single wave of parallel
-children finishes in minutes and measures the short path under a longer deadline. Neither scenario has run
-against a real endpoint; both owe their row in `first-executions.md`.
+children finishes in minutes and measures the short path under a longer deadline.
+
+**`faults` and `terminal` were first executed on 2026-09-22 and the product answered every question they were
+built to ask** — the row is in `first-executions.md`. The stall was noticed by the idle bound at **120.5 s**,
+classified `transient_llm_error` and retried, which is the **first live evidence that the eighty-second
+defect's repair holds**; `git diff` exiting 1 read as `outcome success`, which is **ESC-41's carve-out proven
+live** on the same machine whose unit test for it is red for an unrelated timeout. What was wrong was the
+harness, twice. The stalled call's record was written only on release and the product recovered first, so the
+one call the scenario exists for was the one call missing from the pack
+(`docs/defects/fixed/the-stalled-call-was-the-one-call-missing-from-the-pack.md`). And
+`stop_reason !== 'user_cancelled'` passes just as well on a run that met no fault at all, so it now carries a
+positive half read from the product's own `issues` table — the stall must be shown to have been noticed, and
+what it was classified as must not be fatal. Two smaller ones: the wedge **soft-paused before the hard cap**,
+so `hardMs`'s own question is still unmeasured live and now says so; and `duress`'s `zero cost with tokens`
+check would have reported a fault on an unmetered endpoint that has no cost to record, so it is conditioned on
+the accounting kind — caught before the forty-minute scenario was run rather than after. `duress` has not been
+executed; it owes its row.
 
 **What the board's live path found on its first execution — 2026-09-11, and the eighty-first defect.** The fifth
 scenario was written after a hand-driven precursor took the same path, and the precursor is what found the defect;

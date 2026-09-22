@@ -127,11 +127,26 @@ export async function startRecordingProxy({ upstreamUrl, redact = (s) => s, faul
         let forwarded = 0;
         let severed = false;
         let stallTimer = null;
-        const settle = () => {
+        let written = false;
+        /**
+         * Write this call's record. `outcome` names why it is being written, because a stalled call is
+         * written TWICE — once when the silence begins and once if the socket is ever let go — and a reader
+         * of the pack needs to know which one they have.
+         *
+         * **A stalled call must be recorded at the moment it stalls, not only when it is released.** Measured
+         * on the first live execution, 2026-09-22: the product's idle bound fired at 120 s and the run
+         * recovered by retrying, so the launch ended long before the proxy's 300 s hold expired, the timer
+         * (correctly `unref`'d) never ran, and the ONE call the whole scenario is about was the one call
+         * missing from the pack — five `model request POST` lines in the log against four records in
+         * `model-traffic.jsonl`.
+         */
+        const settle = (outcome) => {
+          if (written && outcome !== 'released') return;
+          written = true;
           write({
             at: new Date(started).toISOString(), ms: Date.now() - started,
             method: clientReq.method, path: clientReq.url, upstream: `${upstream.origin}${path}`,
-            status: upstreamRes.statusCode ?? null, ...note,
+            status: upstreamRes.statusCode ?? null, ...note, ...(outcome === undefined ? {} : { outcome }),
             requestHeaders: scrub(clientReq.headers), requestBody: redact(cap(sentChunks)),
             responseHeaders: upstreamRes.headers, responseBody: redact(cap(backChunks)),
           });
@@ -155,7 +170,10 @@ export async function startRecordingProxy({ upstreamUrl, redact = (s) => s, faul
             if (forwarded <= after) { clientRes.write(chunk); return; }
             if (!severed) {
               severed = true;
-              stallTimer = setTimeout(() => { try { clientRes.destroy(); upstreamReq.destroy(); } catch { /* the call is over */ } settle(); }, rule.holdMs ?? 180_000);
+              // Recorded HERE, with what had arrived before the silence, because the run may well outlive
+              // this stall and the launch may well end before the hold does. See `settle`'s note.
+              settle('stalled');
+              stallTimer = setTimeout(() => { try { clientRes.destroy(); upstreamReq.destroy(); } catch { /* the call is over */ } settle('released'); }, rule.holdMs ?? 180_000);
               stallTimer.unref?.();
             }
             return;
@@ -165,7 +183,7 @@ export async function startRecordingProxy({ upstreamUrl, redact = (s) => s, faul
             severed = true;
             clientRes.write(chunk);
             try { clientRes.destroy(); upstreamReq.destroy(); } catch { /* the call is over */ }
-            settle();
+            settle('cut');
             return;
           }
           clientRes.write(chunk);
@@ -174,7 +192,7 @@ export async function startRecordingProxy({ upstreamUrl, redact = (s) => s, faul
         });
         upstreamRes.on('end', () => {
           if (stallTimer !== null) return;
-          if (!severed) { clientRes.end(); settle(); }
+          if (!severed) { clientRes.end(); settle('complete'); }
         });
         upstreamRes.on('error', () => { clientRes.destroy(); });
       },

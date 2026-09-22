@@ -265,6 +265,41 @@ describe('the live run\'s recording proxy', () => {
       ac.abort();
     }, 20_000);
 
+    /*
+     * The record of a stalled call must exist WHILE it is stalled, not only once the hold expires.
+     *
+     * Found by the first live execution, 2026-09-22: the product's idle bound fired at 120 s and the run
+     * recovered, so the launch ended long before the proxy's 300 s hold — the timer never ran, and the one
+     * call the whole `faults-stall` scenario is about was the one call absent from the evidence pack (five
+     * `model request POST` lines against four records). A record written only on release is a record that
+     * exists only when nobody needed it.
+     */
+    it('records a stalled call at the moment it stalls, not only when the hold expires', async () => {
+      const target = await upstream((_req, res) => {
+        res.writeHead(200, { 'content-type': 'text/event-stream' });
+        res.write('data: one\n\n');
+        setTimeout(() => res.write('data: two\n\n'), 20);
+        setTimeout(() => res.end('data: [DONE]\n\n'), 40);
+      });
+      // A hold far longer than this test: if the record only appeared on release, nothing would be here.
+      const { proxy, sink } = await proxyTo(target, [{ kind: 'stall', at: 1, afterChunks: 1, holdMs: 600_000 }]);
+
+      const ac = new AbortController();
+      const answer = await fetch(`${proxy.url}/chat/completions`, { method: 'POST', body: '{"m":"x"}', signal: ac.signal });
+      const reader = (answer.body as ReadableStream<Uint8Array>).getReader();
+      await reader.read();
+      // Give the upstream's second write time to arrive and trip the stall branch.
+      await new Promise((r) => setTimeout(r, 300));
+
+      const written = records(sink);
+      expect(written).toHaveLength(1);
+      expect(written[0]['outcome']).toBe('stalled');
+      expect(written[0]['fault']).toMatchObject({ kind: 'stall', at: 1 });
+      // What had arrived before the silence is part of the record; that is the evidence a reader needs.
+      expect(String(written[0]['responseBody'])).toContain('one');
+      ac.abort();
+    }, 20_000);
+
     it('leaves every other call untouched when no rule matches', async () => {
       const target = await upstream((_req, res) => { res.writeHead(200); res.end('{"ok":true}'); });
       const { proxy, sink } = await proxyTo(target, [{ kind: 'status', at: 99, status: 500 }]);

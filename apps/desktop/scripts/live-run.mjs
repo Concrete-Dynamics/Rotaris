@@ -768,6 +768,14 @@ function readToolCalls(sessionId) {
       });
   } finally { db.close(); }
 }
+/** One session's `issues` rows — what the product itself recorded as having gone wrong, in its own words. */
+function readIssues(sessionId) {
+  const Database = require('better-sqlite3');
+  const db = new Database(oneDatabase(), { readonly: true });
+  try { return db.prepare('SELECT ordinal, id, kind, severity, actor, message FROM issues WHERE session_id = ? ORDER BY ordinal').all(sessionId); }
+  finally { db.close(); }
+}
+
 /**
  * The three records the run-autopsy skill asks for and this harness used to destroy.
  *
@@ -1376,7 +1384,14 @@ if (wanted.includes('faults')) {
     results.scenarios['faults-ladder'] = { fired: ladderFired, injected, calls: ladderTraffic.length, status: ladderRead?.session.execution_status, stopReason: ladderRead?.session.stop_reason };
     await budgetGate();
 
-    // The stall holds past any sane idle bound; the launch's own timeout is the backstop if the product has none.
+    /*
+     * The hold must OUTLAST the product's own idle bound, or this scenario measures the proxy letting go
+     * rather than the product noticing. `llm_response_timeout` is 120 s by default (REQ-CONFIG-115, re-armed
+     * per part — ADR-0027's fourth execution, which is the repair for the eighty-second defect), so 300 s
+     * leaves a wide margin. Lower this below the product's bound and the run recovers for the wrong reason.
+     * Measured on the first live execution, 2026-09-22: the product gave up at 120.5 s and retried at 121.5 s,
+     * both well inside the hold.
+     */
     const HOLD_MS = Number(process.env['LIVE_RUN_STALL_HOLD_MS'] ?? 300_000);
     proxy.setFaults([{ kind: 'stall', at: 2, afterChunks: 2, holdMs: HOLD_MS }]);
     const stalled = await launch('faults-stall', {
@@ -1390,12 +1405,28 @@ if (wanted.includes('faults')) {
     if (stallRead === null) {
       check(false, 'the stalled run left a session row', 'no session was recorded at all');
     } else {
+      /*
+       * THE POSITIVE HALF, and the reason it exists.
+       *
+       * `stop_reason !== 'user_cancelled'` is a check that also passes when nothing stalled at all — a run
+       * that never met a fault ends `tasks_complete` too. On its own it is a proof that cannot fail, which
+       * `codebase.md` rules is a finding rather than a pass. So the product must be shown to have NOTICED:
+       * its own `issues` row, in its own words, saying the stream went quiet and it is retrying.
+       *
+       * Together the two are the eighty-second defect's question in full — the stream did stall, the product
+       * did classify it, and what it classified it as was transient rather than a user's stop.
+       */
+      const issues = readIssues(stallRead.session.session_id);
+      const noticed = issues.filter((issue) => /stream activity|no stream|timed out/i.test(String(issue.message ?? '')));
+      check(noticed.length > 0, 'the product noticed the stalled stream and said so', noticed.length > 0 ? `${noticed[0].kind}: ${String(noticed[0].message).slice(0, 120)}` : `none of ${issues.length} issue(s) mentions the stream — the stall may not have reached the run at all`);
       // The eighty-second defect's signature: nobody pressed stop, so nothing may say the user cancelled.
       check(stallRead.session.stop_reason !== 'user_cancelled', 'a stalled stream is not reported as a user cancellation', `stop_reason ${stallRead.session.stop_reason} (${stallRead.session.execution_status})`);
+      if (noticed.length > 0) check(noticed.every((issue) => issue.kind !== 'fatal_llm_error'), 'the stalled stream was classified transient, not fatal', noticed.map((issue) => issue.kind).join(', '));
       noted('what the stalled run settled as', `${stallRead.session.execution_status} / ${stallRead.session.stop_reason} after ${stallRead.session.iterations_completed} iteration(s)`);
       preserveRun('faults-stall', stallRead.session.session_id);
+      results.scenarios['faults-stall'] = { fired: stallFired, holdMs: HOLD_MS, status: stallRead.session.execution_status, stopReason: stallRead.session.stop_reason, issues: issues.map((issue) => ({ kind: issue.kind, severity: issue.severity, message: issue.message })) };
     }
-    results.scenarios['faults-stall'] = { fired: stallFired, holdMs: HOLD_MS, status: stallRead?.session.execution_status, stopReason: stallRead?.session.stop_reason };
+    results.scenarios['faults-stall'] ??= { fired: stallFired, holdMs: HOLD_MS, status: null, stopReason: null, issues: [] };
     proxy.setFaults([]);
     await budgetGate();
   }
@@ -1611,7 +1642,16 @@ if (wanted.includes('duress')) {
     if (autopsy === '') check(false, 'the autopsy reader produced a reading of the long run', 'autopsy.txt is absent or empty');
     else {
       check(coherent('null summary on stopped run') === 'false', 'a stopped run did not end with a null summary', `autopsy says ${coherent('null summary on stopped run')}`);
-      check(coherent('zero cost with tokens') === 'false', 'tokens were not recorded against a zero cost', `autopsy says ${coherent('zero cost with tokens')}`);
+      /*
+       * "Zero cost with tokens" is only incoherent where a cost COULD have been computed. On an endpoint
+       * registered `--unmetered` with no prices, the product has no figure to record and `cost` is correctly
+       * `0` — asserting otherwise would report a product fault that is not one. Caught before it was spent:
+       * the 2026-09-22 `faults` pack shows this line reading `true` on katalyst against 18,810 tokens, with
+       * nothing wrong. Where a money figure DOES exist, the original question stands.
+       */
+      const priceable = accountingKind === 'provider' || accountingKind === 'priced';
+      if (priceable) check(coherent('zero cost with tokens') === 'false', 'tokens were not recorded against a zero cost', `autopsy says ${coherent('zero cost with tokens')}`);
+      else noted('the zero-cost reading is not a question on this endpoint', `accounting is ${accountingKind}: no money figure exists, so cost 0 against real tokens is correct (autopsy says ${coherent('zero cost with tokens')})`);
     }
 
     const Database = require('better-sqlite3');

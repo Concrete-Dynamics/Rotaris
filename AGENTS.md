@@ -226,7 +226,7 @@ neither path depends on what the other did.
 | `requirements` | the board: `REQ-104` selected, the move control pressed, the release confirmed, the run watched to review and its decision taken | the card's own trail `backlog → running → review → done`, exactly one release and an accept in the delivery history, the run record carrying its session identifier and the permissions it was granted (`REQ-TRACE-464/472`), real usage from the endpoint, the run confined to a worktree of its own, `completedCount` exported and tested **inside that worktree**, and **`node --test` run there by the script itself** |
 | `shell` | a relaunch with no prompt | Overview painted from the store: the sessions the runs left, the repository card's branch |
 | `frictions` | one real run engineered to trip the inducible autopsy frictions, read back from the store | first-use `write_file` with no operation repair, SIGINT delivered with no platform refusal — **red by design until the fixes land**; the exit-trace friction is recorded but not inducible on demand, and the stall-abort one moved to `faults` |
-| `faults` | two runs against an endpoint the proxy makes misbehave: a 429-then-500 ladder, and a stream that stops mid-answer with the socket open | the ladder run still completes; the stalled run does **not** report `user_cancelled` with nobody having pressed anything (defect 82's shape) — **never yet executed against a real endpoint** |
+| `faults` | two runs against an endpoint the proxy makes misbehave: a 429-then-500 ladder, and a stream that stops mid-answer with the socket open | the ladder run still completes; the stalled run does **not** report `user_cancelled` with nobody having pressed anything (defect 82's shape), **and the product is shown to have noticed the stall** in its own `issues` row — the negative alone would pass on a run that met no fault at all |
 | `terminal` | one run issuing six commands the record names verbatim: a multi-line here-string, forty long lines, a wedge with no `timeout`, an exit-0 output carrying `FAILED`, a `git diff` exiting 1, a pipeline through a pipe | the here-string terminated; all forty lines arrived, none concatenated, none carrying an escape sequence; a call with no `timeout` was still bounded; exit 1 from `git diff` was not `shell_failure`; **no end marker in anything the model read**. The other two are NOTEs — they fire as their requirements specify — and a shape the model never issued is a NOTE too |
 | `duress` | **opt-in** (`--only=duress`): one delegating run of **three dependent waves, six children**, under `LIVE_RUN_DURESS_MS` (default 40 min) against `--duress-fixture` | the autopsy's coherence section is clean (no null summary on a stopped run, no tokens against a zero cost); no child ended `failed` with nothing to say; a child that ran commands reported them; the `compressions` aggregate agrees with the timeline. Length, children and compressions are **reported**, so a run that was not duress says so |
 
@@ -279,10 +279,19 @@ This makes the first of the two frictions the `frictions` scenario reports as un
 that row's note points here. A rule names the **1-based index** of the call it fires at, deliberately: "the
 second completion" is a reproduction, "some completion" is a coincidence.
 
-**Neither product check has been executed against a real endpoint.** The fault mechanism is unit-tested against
-a loopback upstream (`apps/desktop/scripts/lib/model-traffic.test.ts`); what the two checks claim about the
-product is unverified until a live run reports back, and that first execution owes its row in
-`docs/architecture/first-executions.md`.
+**Both were executed against a real endpoint on 2026-09-22 and both passed on the product's side**
+(`docs/architecture/first-executions.md`; pack `.live-run/runs/2026-09-22T09-05-35-955Z`). The ladder made five
+calls against two refusals and completed; the stalled stream was noticed by the **idle bound at 120.5 s**,
+classified `transient_llm_error`, retried at 121.5 s and finished — the first live evidence that the
+eighty-second defect's repair holds.
+
+Two things about the scenario itself were wrong and are repaired: the stalled call was **absent from the pack**
+(its record was written only when the proxy let the socket go, and the product recovered first —
+`docs/defects/fixed/the-stalled-call-was-the-one-call-missing-from-the-pack.md`), and
+`stop_reason !== 'user_cancelled'` is a check that **cannot fail**, since a run that met no fault ends
+`tasks_complete` too. It now carries a positive half: the product's own `issues` row must show it noticed, and
+what it classified must not be fatal. `LIVE_RUN_STALL_HOLD_MS` must outlast the product's `llm_response_timeout`
+(120 s) or the scenario measures the proxy letting go instead.
 
 `faults-stall` holds the socket for `LIVE_RUN_STALL_HOLD_MS` (default five minutes) before letting go, so the
 scenario is the slow one — it is opt-in with the others under `--only=`.
@@ -325,8 +334,14 @@ The shapes and the two readers live in `apps/desktop/scripts/lib/terminal-shapes
 scenario into "never attempted" without anybody being told, so the test asserts the round trip in both
 directions: every shape matches its own command, and none matches another's.
 
-**Neither scenario has been executed against a real endpoint.** Both owe their row in
-`docs/architecture/first-executions.md`.
+**`terminal` was executed against a real endpoint on 2026-09-22 and every check passed**: all six shapes were
+issued, the here-string terminated, forty distinct lines arrived with none concatenated and no escape sequence
+surviving, `git diff` exiting 1 read as `outcome success` rather than `shell_failure` — ESC-41's carve-out
+proven live on the same machine whose unit test for it is red for an unrelated timeout — and no `__rot_` marker
+reached the model. One shape did not reach its question: the wedge **soft-paused before the hard cap**, so
+`hardMs`'s own bound is still unmeasured live, and the scenario says so rather than implying otherwise.
+
+**`duress` has not been executed.** It owes its row in `docs/architecture/first-executions.md`.
 
 **The traffic is recorded through a loopback proxy**, so the sandbox's `base_url` is the proxy and the endpoint
 is one hop further on. Two consequences worth knowing before reading a pack: a `model request POST` line in

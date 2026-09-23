@@ -227,6 +227,17 @@ A run at rest because a provider's quota is exhausted, carrying the waiting agen
 wait duration, and presented distinctly from an ordinary pause. — `REQ-MONITOR-303`,
 `REQ-NOTIFY-263`
 
+**Cost qualifier**:
+What a run's cost total rests on, recorded with it: `unknown` (no request has a figure), `incomplete` (some
+do, some do not), `reported` (every figure was the provider's) or `configured` (every request priced, at least
+one at configured rates). Each has one fixed label. — `REQ-MONITOR-166`, `PD-MONITOR-001`
+_Avoid_: estimate, price status
+
+**Configured price**:
+A model entry's `input_cost_per_token` and `output_cost_per_token`, taken as the decimals their text states.
+They price a request the provider did not, and only when both are set. — `REQ-CONFIG-088`, `PD-MONITOR-001`
+_Avoid_: rate card, tariff
+
 **Agent state**:
 A delegated child's state: `queued`, `starting`, `running`, `summarizing`,
 `waiting_on_dependencies`, `waiting_on_model_slot`, `succeeded`, `failed`, `cancelled`, `blocked`.

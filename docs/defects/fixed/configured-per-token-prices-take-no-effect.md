@@ -101,3 +101,25 @@ recommended: a mixed run reads `configured`, and discovery pricing is deferred. 
 answered and applied by amendment, ADR-0031 is accepted in narrowed form, and the behaviour is
 [`PD-MONITOR-001`](../product/directives.md#pd-monitor-001) revision 2. The note stays open until that
 revision is built.
+
+## Repaired — 2026-09-23 ([`PD-MONITOR-001`](../../product/directives.md#pd-monitor-001) revision 2 built)
+
+`effectivePricing()` has callers. `catalogueOf` puts each model's two prices on its catalogue entry, and the
+ladder prices every completed request at the entry of the model it was sent to. A reported figure is kept; else
+the input tokens times the input price plus the output tokens times the output price, multiplied exactly in
+`kernel/money.ts`; else the request is unpriced. `Aggregates.addRequest` sums the figures and folds each request
+into the qualifier, which is persisted with the total (`sessions.cost_qualifier`, v21). `costLabelOf` now renders
+all four labels from the recorded qualifier, so a user who sets both prices sees `<amount> at configured rates`.
+
+The float typing is gone: both fields are decimals read from the YAML scalar's source text (REQ-CONFIG-088 as
+amended), in the configuration files and in the discovery snapshot. `REQ-PROVIDER-121`'s rule is kept by
+construction: no amount is computed outside `money.ts`, and `rotaris/money-only-in-money-ts` fails `pnpm lint` on
+arithmetic on a money-named value anywhere else.
+
+Evidence: `ladder.test.ts` (*PD-MONITOR-001 revision 2: a request is priced at the ladder cell*, four cases),
+`run-pure.test.ts` (the qualifier table and a continuation), `load.test.ts` (exact reading in every spelling,
+both-or-neither, the validator), `store.test.ts` (v21 and its backfill), and `pnpm overview-proof`. In the built
+app, a scripted run priced at `3e-6` / `0.000015` stored `0.002421` for 162 and 129 tokens, and the Overview drew
+`0.0024 at configured rates`.
+
+OQ-62's discovery-pricing branch stays deferred as ruled; `discovery.ts` still records `pricing: {}`.

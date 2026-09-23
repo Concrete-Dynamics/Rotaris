@@ -180,6 +180,15 @@ export type TranscriptIncrement = z.infer<typeof TranscriptIncrementSchema>;
  * DERIVED from this type (ADR-0010, ADR-0043 consequence 4) so that adding a field to the
  * record is adding it to the payload by definition (REQ-MONITOR-217).
  */
+
+/**
+ * REQ-MONITOR-166 as PD-MONITOR-001 revision 2 narrows it: the four qualifiers of a run's cost label. `unknown` —
+ * no request has a figure; `incomplete` — some do and some do not; `reported` — every one does, and every figure
+ * was the provider's; `configured` — every one does, and at least one came from configured rates.
+ */
+export const COST_QUALIFIERS = ['unknown', 'incomplete', 'configured', 'reported'] as const;
+export type CostQualifier = (typeof COST_QUALIFIERS)[number];
+
 export const SessionRecordSchema = z.object({
   id: sessionId,
   executionStatus: z.string(),
@@ -260,7 +269,7 @@ export const SessionRecordSchema = z.object({
    * qualifier is PD-MONITOR-001's: a figure the PROVIDER computed and reported, which is none of the
    * first three — it rests on no configured rate, and it is neither unknown nor partial.
    */
-  costLabel: z.object({ text: z.string(), qualifier: z.enum(['unknown', 'incomplete', 'configured', 'reported']) }),
+  costLabel: z.object({ text: z.string(), qualifier: z.enum(COST_QUALIFIERS) }),
   /** REQ-MONITOR-167: the session-wide tool-call total, the agents it spans, and per-tool counts most-called first. */
   toolCalls: z.object({ total: z.number().int().nonnegative(), agents: z.number().int().nonnegative(), byTool: z.array(z.object({ tool: z.string(), count: z.number().int().nonnegative() })) }),
   /** REQ-GIT-122/161: the session's worktree branch (from its binding, REQ-GIT-015) for the status strip; null without a binding. */

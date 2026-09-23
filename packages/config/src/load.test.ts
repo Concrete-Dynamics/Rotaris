@@ -8,7 +8,7 @@ import { parseConfig } from './document.js';
 import { referentialMessages, renderFatal, renderProblems } from './validate.js';
 import { resolveSlotsAndReasoning, registeredAliases, resolveSlotBase, unwrapSynthetic } from './slots.js';
 import { readRuntimeSection, validateRuntimeField, RUNTIME_DEFAULTS } from './sections/runtime.js';
-import { readModelEntry, providerEffort } from './sections/models.js';
+import { effectivePricing, readModelEntry, providerEffort } from './sections/models.js';
 import { readCircuitBreakerSection, CIRCUIT_BREAKER_DEFAULTS } from './circuit-breaker-section.js';
 import { checkpointsEnabledFor } from './sections/checkpoints.js';
 import type { ProblemSink } from './sections/field.js';
@@ -217,6 +217,39 @@ describe('REQ-CONFIG-082..110 model and persona entries', () => {
     expect(s.errors).toEqual([]);
     expect(s.warnings.map((w) => w.path)).toEqual(['models.c.mystery']);
   });
+  it('REQ-CONFIG-088 (amended, OQ-21): a price is the decimal its text states, in any spelling, number or quoted string', () => {
+    const c = loaded([
+      'models:',
+      '  plain:    { provider: openai, model_id: a, input_cost_per_token: 0.000003,   output_cost_per_token: 0.000015 }',
+      '  exponent: { provider: openai, model_id: b, input_cost_per_token: 3e-6,       output_cost_per_token: 1.5E-5 }',
+      '  quoted:   { provider: openai, model_id: c, input_cost_per_token: "0.000003", output_cost_per_token: \'0.000015\' }',
+      '  short:    { provider: openai, model_id: d, input_cost_per_token: .000003,    output_cost_per_token: 0 }',
+      // A price a double cannot hold exactly: 0.1 + 0.2 is the classic, and 0.0000001 is the per-token reality.
+      '  tiny:     { provider: openai, model_id: e, input_cost_per_token: 0.0000001,  output_cost_per_token: 0.30000000000000004 }',
+    ].join('\n') + '\n', null);
+    for (const key of ['plain', 'exponent', 'quoted']) expect(c.models[key]).toMatchObject({ input_cost_per_token: '0.000003', output_cost_per_token: key === 'exponent' ? '0.000015' : '0.000015' });
+    expect(c.models['short']).toMatchObject({ input_cost_per_token: '0.000003', output_cost_per_token: '0' });
+    expect(c.models['tiny']).toMatchObject({ input_cost_per_token: '0.0000001', output_cost_per_token: '0.30000000000000004' });
+    expect(effectivePricing(c.models['plain']!)).toEqual({ input: '0.000003', output: '0.000015' });
+  });
+  it('REQ-CONFIG-088: one price alone has no effect; a workspace price overrides a global one exactly; models.yml is read the same way', () => {
+    const c = loaded(
+      'models:\n  m: { provider: openai, model_id: m, input_cost_per_token: 0.000001, output_cost_per_token: 0.000002 }\n  half: { provider: openai, model_id: h, input_cost_per_token: 0.000001 }\n',
+      'models:\n  m: { provider: openai, model_id: m, output_cost_per_token: 2e-7 }\n',
+      { workspaceModels: 'models:\n  y: { provider: openai, model_id: y, input_cost_per_token: 1e-6, output_cost_per_token: 2e-6 }\n' },
+    );
+    expect(effectivePricing(c.models['m']!)).toEqual({ input: '0.000001', output: '0.0000002' });
+    expect(c.models['half']).toMatchObject({ input_cost_per_token: '0.000001', output_cost_per_token: null });
+    expect(effectivePricing(c.models['half']!)).toBeNull();
+    expect(effectivePricing(c.models['y']!)).toEqual({ input: '0.000001', output: '0.000002' });
+  });
+  it('REQ-CONFIG-088: a negative or non-decimal price fails the load, naming the field', () => {
+    for (const bad of ['-0.000001', '"cheap"', '.inf', 'true']) {
+      const r = loadConfiguration(scopes(`models:\n  m: { provider: openai, model_id: m, input_cost_per_token: ${bad}, output_cost_per_token: 0.1 }\n`, null));
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error.path).toBe('models.m.input_cost_per_token');
+    }
+  });
   it('REQ-CONFIG-092/093: effort reaches a provider as low/medium/high/xhigh, the map wins, auto reaches nothing', () => {
     expect(providerEffort({ thinking: 'max', reasoning_effort: null, reasoning_effort_map: {} })).toBe('xhigh');
     expect(providerEffort({ thinking: 'max', reasoning_effort: null, reasoning_effort_map: { max: 'ultra' } })).toBe('ultra');
@@ -410,7 +443,8 @@ ${extra}`;
     expect(cfg.authenticatedProviders).toEqual(['openai-compatible--openrouter']);
     const haiku = cfg.models['openai-compatible--openrouter/anthropic/claude-haiku-4.5']!;
     expect(haiku).toMatchObject({ provider: 'openai-compatible', model_id: 'anthropic/claude-haiku-4.5', auth_provider: 'openai-compatible--openrouter', base_url: 'https://openrouter.ai/api/v1', max_input_tokens: 200000, max_output_tokens: 32000, api_key: null, api_key_env: null });
-    expect(cfg.models['openai-compatible--openrouter/openai/gpt-4o']).toMatchObject({ input_cost_per_token: 0.0000025, output_cost_per_token: 0.00001 });
+    // REQ-PROVIDER-072 (amended, OQ-21): the snapshot's prices arrive as the decimals their text states.
+    expect(cfg.models['openai-compatible--openrouter/openai/gpt-4o']).toMatchObject({ input_cost_per_token: '0.0000025', output_cost_per_token: '0.00001' });
     expect(cfg.models['deepseek/deepseek-chat']).toBeUndefined();
     expect(cfg.slots.small_model).toBe('openai-compatible--openrouter/anthropic/claude-haiku-4.5');
     expect(cfg.slots.large_model).toBe('openai-compatible--openrouter/openai/gpt-4o');

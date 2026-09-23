@@ -1,4 +1,5 @@
 import type { ModelError, ModelRef, ThinkingLevel } from '@rotaris/model';
+import type { ModelPricing } from '@rotaris/config';
 
 /**
  * Part Q — the model resilience paths, in their pure half (REQ-ORCH-091/092, REQ-NOTIFY-081..092,
@@ -40,6 +41,8 @@ export interface CatalogueEntry {
   readonly usable: boolean;
   readonly timeoutMs?: number | undefined;
   readonly retries?: number | undefined;
+  /** PD-MONITOR-001 revision 2 / REQ-CONFIG-088: the entry's two per-token prices, present only when both are set. */
+  readonly pricing?: ModelPricing | undefined;
 }
 
 export function sameRef(a: ModelRef, b: ModelRef): boolean {

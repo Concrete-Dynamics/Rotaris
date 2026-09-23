@@ -338,6 +338,8 @@ describe('store — v3: what a run records (REQ-SESSION-138, REQ-SESSION-168, RE
     r.db.exec('ALTER TABLE sessions DROP COLUMN plan_released');
     r.db.exec('ALTER TABLE sessions DROP COLUMN run_type');
     r.db.exec('ALTER TABLE sessions DROP COLUMN improvement_artifact_ids');
+    // v21's column goes too: a store stopped at v15 predates PD-MONITOR-001 revision 2's qualifier.
+    r.db.exec('ALTER TABLE sessions DROP COLUMN cost_qualifier');
     r.db.pragma('user_version = 15');
     r.db.prepare(`INSERT INTO artifacts (session_id, id, slug, title, kind, source_task_id, canonical_name, source_persona, status, summary, key_findings,
       highlight_paths, snippets, edited_files, created_files, tags, supersedes, superseded_by, created_by, consumed_by, timeline_event_id, conversation_id, importance, created_at, edited_at, body_file)
@@ -371,6 +373,8 @@ describe('store — v3: what a run records (REQ-SESSION-138, REQ-SESSION-168, RE
     r.db.exec('ALTER TABLE sessions DROP COLUMN plan_released');
     r.db.exec('ALTER TABLE sessions DROP COLUMN run_type');
     r.db.exec('ALTER TABLE sessions DROP COLUMN improvement_artifact_ids');
+    // v21's column goes too: a store stopped at v16 predates PD-MONITOR-001 revision 2's qualifier.
+    r.db.exec('ALTER TABLE sessions DROP COLUMN cost_qualifier');
     r.db.pragma('user_version = 16');
     // The migration ladder is append-only and runs to the build's own top, so the store stopped at
     // v16 climbs every appended rung — 17 and then 18 — not a v16→17 hop that never existed alone.
@@ -427,6 +431,8 @@ describe('store — v3: what a run records (REQ-SESSION-138, REQ-SESSION-168, RE
     `);
     r.db.exec(`INSERT INTO improvement_artifacts VALUES ('impart_00000001', 'S-old', 'task_run', 't1', '{"a":1}', 2, 0);`);
     r.db.exec(`INSERT INTO improvement_artifact_versions VALUES ('impart_00000001', 1, 't1', 'collected', '{"a":1}'), ('impart_00000001', 2, 't2', 'edit', '{"a":2}');`);
+    // v21's column goes too: a store stopped at v18 predates PD-MONITOR-001 revision 2's qualifier.
+    r.db.exec('ALTER TABLE sessions DROP COLUMN cost_qualifier');
     r.db.pragma('user_version = 18');
 
     expect(migrateStore(r.db)).toEqual({ kind: 'migrated', from: 18, to: CURRENT_SCHEMA_VERSION });
@@ -471,6 +477,8 @@ describe('store — v3: what a run records (REQ-SESSION-138, REQ-SESSION-168, RE
       DROP TABLE plan_cycles;
       ALTER TABLE plan_cycles_v19 RENAME TO plan_cycles;`);
     r.db.prepare("INSERT INTO plan_cycles (session_id, cycle, opened_at, plan, intent, todo) VALUES ('S-gone', 1, 't0', 'orphan', 'small_feature', '')").run();
+    // v21's column goes too: a store stopped at v19 predates PD-MONITOR-001 revision 2's qualifier.
+    r.db.exec('ALTER TABLE sessions DROP COLUMN cost_qualifier');
     r.db.pragma('user_version = 19');
 
     expect(migrateStore(r.db)).toEqual({ kind: 'migrated', from: 19, to: CURRENT_SCHEMA_VERSION });
@@ -485,6 +493,35 @@ describe('store — v3: what a run records (REQ-SESSION-138, REQ-SESSION-168, RE
     expect(dal.transaction(() => dal.deleteSession(live))).toBe(true);
     expect(dal.planCyclesOf(live)).toEqual([]);
     expect(dal.planCycle(other, 1)!.plan).toBe('the other plan');
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+
+  /**
+   * PD-MONITOR-001 revision 2 (R-049): v20→v21 adds `sessions.cost_qualifier`. Revision 1 produced only reported
+   * figures, so a total with any non-zero digit was a reported one and is backfilled so; a zero total at any scale
+   * stays `unknown`. The column refuses a qualifier outside the four, and a save writes it like every aggregate.
+   */
+  it('PD-MONITOR-001: a v20 store migrates to v21; a non-zero total reads reported, a zero one unknown, and a save carries the qualifier', () => {
+    const id = mintWorkspaceId('000000000000000000000000000000f5');
+    const r = openWorkspaceStore(root, id, 'C:/ws');
+    const setup = new StoreDal(r.db);
+    const costs: Record<string, string> = { 'S-none': '0', 'S-scaled-zero': '0.0000', 'S-priced': '0.00154', 'S-whole': '2' };
+    for (const sid of Object.keys(costs)) setup.upsertSession({ session_id: asSessionId(sid), execution_status: 'idle', workspace_root: 'C:/ws', created_at: 't', updated_at: 't' });
+    for (const [sid, cost] of Object.entries(costs)) r.db.prepare('UPDATE sessions SET cost = ? WHERE session_id = ?').run(cost, sid);
+    r.db.exec('ALTER TABLE sessions DROP COLUMN cost_qualifier');
+    r.db.pragma('user_version = 20');
+
+    expect(migrateStore(r.db)).toEqual({ kind: 'migrated', from: 20, to: CURRENT_SCHEMA_VERSION });
+    const dal = new StoreDal(r.db);
+    const qualifier = (sid: string) => dal.getSession(asSessionId(sid))!.cost_qualifier;
+    expect(Object.keys(costs).map(qualifier)).toEqual(['unknown', 'unknown', 'reported', 'reported']);
+    dal.updateSessionRun(asSessionId('S-none'), { cost: '0.003', cost_qualifier: 'configured' });
+    expect(dal.getSession(asSessionId('S-none'))).toMatchObject({ cost: '0.003', cost_qualifier: 'configured' });
+    // A patch that does not name the qualifier keeps it, as every aggregate column is kept.
+    dal.updateSessionRun(asSessionId('S-none'), { tokens_input: 5 });
+    expect(qualifier('S-none')).toBe('configured');
+    expect(() => dal.updateSessionRun(asSessionId('S-none'), { cost_qualifier: 'estimated' })).toThrow(/CHECK/);
     r.db.close();
     forgetSpelling(r.dir);
   });
@@ -658,8 +695,8 @@ describe('store — v5: the child ledger (ADR-0012, REQ-ORCH-043/049/050/151)', 
     // REQ-ORCH-153/154: v17 adds `plan_cycles` and the two session columns; v16 added `artifacts.commands`;
     // v18 (ADR-0061) added the typed-run session columns and the improvement tables; v19 (ADR-0065)
     // rebuilt `improvement_artifacts` for PD-LIBRARY-002's retrospective, which belongs to no session;
-    // v20 gives `plan_cycles` the cascade REQ-SESSION-166's delete assumes.
-    expect(CURRENT_SCHEMA_VERSION).toBe(20);
+    // v20 gives `plan_cycles` the cascade REQ-SESSION-166's delete assumes; v21 records the cost qualifier.
+    expect(CURRENT_SCHEMA_VERSION).toBe(21);
     dal.insertChild(child(sid, 'bg_00000001'));
     const c = dal.getChild(sid, 'bg_00000001')!;
     expect(c).toMatchObject({ state: 'queued', launch_generation: 0, report_stored: 0, observed: 0, context_injected: 0, tool_calls: 0, completed_at: null, report: null });
@@ -944,10 +981,10 @@ describe('store — v11: the saved prompts (Part X; REQ-LIBRARY-137/138/139, REQ
   it('is v19, and the migration list is append-only with nothing renumbered', () => {
     // Part X reserved v11, Part Y v12, Part AB v13, Part AE v14 and Part AK v15 (plan Reservations, ruled 2026-09-09: the ladder and
     // the pin ride with the v15 reservation) before any of them was written; PD-LIBRARY-001 appended v16; the plan gate appended
-    // v17; ADR-0061 appended v18; ADR-0065 appended v19; the plan_cycles cascade appended v20. The ladder is asserted whole rather than at its top, so a later part
+    // v17; ADR-0061 appended v18; ADR-0065 appended v19; the plan_cycles cascade appended v20; PD-MONITOR-001 revision 2 appended v21. The ladder is asserted whole rather than at its top, so a later part
     // that renumbers an earlier entry fails here and not on a user's disk.
-    expect(MIGRATIONS.map((m) => m.to)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]);
-    expect(CURRENT_SCHEMA_VERSION).toBe(20);
+    expect(MIGRATIONS.map((m) => m.to)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]);
+    expect(CURRENT_SCHEMA_VERSION).toBe(21);
   });
 });
 

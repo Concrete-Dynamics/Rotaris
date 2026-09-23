@@ -33,8 +33,9 @@ export interface ModelEntry {
   readonly repetition_penalty: number | null;
   readonly seed: number | null;
   readonly extra_body: PlainMap;
-  readonly input_cost_per_token: number | null;
-  readonly output_cost_per_token: number | null;
+  /** REQ-CONFIG-088 (amended, OQ-21): a decimal ≥ 0 as the canonical decimal string of `money.ts`, or null. */
+  readonly input_cost_per_token: string | null;
+  readonly output_cost_per_token: string | null;
   readonly thinking: ReasoningLevel | null;
   readonly reasoning_effort: string | null;
   readonly reasoning_effort_map: Readonly<Record<string, string>>;
@@ -100,8 +101,8 @@ export function readModelEntry(name: string, value: unknown, sink: ProblemSink):
     repetition_penalty: r.floatOrNull('repetition_penalty'),
     seed: r.intOrNull('seed'),
     extra_body: r.mappingOrNull('extra_body') ?? {},
-    input_cost_per_token: r.floatOrNull('input_cost_per_token', { min: 0 }),
-    output_cost_per_token: r.floatOrNull('output_cost_per_token', { min: 0 }),
+    input_cost_per_token: r.decimalOrNull('input_cost_per_token'),
+    output_cost_per_token: r.decimalOrNull('output_cost_per_token'),
     thinking: thinkingOf(r, 'thinking'),
     reasoning_effort: r.stringOrNull('reasoning_effort'),
     reasoning_effort_map: r.stringMapOrNull('reasoning_effort_map') ?? {},
@@ -122,8 +123,14 @@ export function readModelsSection(value: unknown, sink: ProblemSink): Record<str
   return out;
 }
 
+/** A model's per-token prices, each the decimal its configuration states (REQ-CONFIG-088). */
+export interface ModelPricing {
+  readonly input: string;
+  readonly output: string;
+}
+
 /** REQ-CONFIG-088: pricing takes effect only when both figures are set. */
-export function effectivePricing(entry: ModelEntry): { input: number; output: number } | null {
+export function effectivePricing(entry: Pick<ModelEntry, 'input_cost_per_token' | 'output_cost_per_token'>): ModelPricing | null {
   return entry.input_cost_per_token !== null && entry.output_cost_per_token !== null ? { input: entry.input_cost_per_token, output: entry.output_cost_per_token } : null;
 }
 

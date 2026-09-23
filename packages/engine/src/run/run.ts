@@ -1,7 +1,7 @@
 import { Budget, millis, toIsoUtc, type Clocks, type MachineId, type Millis, type SessionId, type TimerHandle, type Timers } from '@rotaris/kernel';
 import type { SessionRow } from '@rotaris/store';
 import { DEFAULT_CONTEXT_CAPACITY, isAnswerOnly, type ApprovalOption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RootExecutionRecord } from '@rotaris/contracts';
-import type { AgentBackend, ChatMessage, ContentPart, ModelError, ModelRef, ThinkingLevel, TurnReport, Usage } from '@rotaris/model';
+import type { AgentBackend, ChatMessage, ContentPart, ModelError, ModelRef, ThinkingLevel, TurnReport } from '@rotaris/model';
 import type { EventBus } from './event-bus.js';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { Committed, SessionWriter } from '../session-writer.js';
@@ -17,6 +17,7 @@ import type { Budget as ChildBudget } from '../children/ledger.js';
 import { canonicaliseName, mintTaskId } from '../children/naming.js';
 import type { SummariserDeps } from '../children/report.js';
 import type { ClaimHit } from '../children/write-scope.js';
+import type { PricedUsage } from './pricing.js';
 import type { HookPort, RunNotice } from '../hooks-port.js';
 import type { CheckpointPort } from '../checkpoint-port.js';
 import type { ArtifactStore } from '../artifacts/store.js';
@@ -704,11 +705,10 @@ export class Run {
    * so a run that retried a transient failure or resumed its parent spent tokens the session's own totals never
    * counted.
    */
-  private readonly onRequestUsage = (u: Usage): void => {
-    this.aggregates.addTurnUsage(u);
-    // PD-MONITOR-001: a cost the provider reported for THIS request joins the run's total here, beside the
-    // tokens of the same request, so the figure the event carries and the figure the session persists are one.
-    if (u.cost !== undefined) this.aggregates.addCost(u.cost);
+  private readonly onRequestUsage = (u: PricedUsage): void => {
+    // PD-MONITOR-001: the request's figure — reported, or priced at configured rates by the ladder — joins the run's
+    // total here, beside the tokens of the same request, so the figure the event carries and the one persisted are one.
+    this.aggregates.addRequest(u);
     const payload = this.aggregates.usagePayload();
     const totals = usageTotals(payload);
     if (totals === this.lastUsageEmitted) return;

@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-23**
 
+**Configured rates price a request (`PD-MONITOR-001` revision 2, built 2026-09-23).** A request the provider did not
+price is priced at the ladder cell from the configured rates of the model it was sent to, exactly, and the run's
+total carries one of four qualifiers, persisted in the new `sessions.cost_qualifier` column (appended migration
+**v21**). A configured price is read from the YAML scalar's source text (`config/prices.ts`), in the configuration
+files and in the discovery snapshot. The **runtime view** moves: "What a step costs" is rewritten, and §7 names v21
+and the column. No package, edge, channel or message kind changed; the `usage.update` payload is unchanged.
+
 **Money moves to `kernel` (ADR-0031 accepted narrowed, R-049).** `engine/money.ts` becomes `kernel/money.ts` and
 gains the two operations pricing needs: exact multiplication by a whole token count, and `amountFromText`, which
 reads a number's text as the decimal it states. A price is read in `config` and summed in `engine`, and `config`

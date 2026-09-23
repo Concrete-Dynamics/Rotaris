@@ -962,7 +962,9 @@ for (const slot of ['large_model', 'medium_model', 'small_model']) agents = agen
 // the run needs, never a lone field: written when discovery supplied no entry at all, and when the owner registered
 // a context window the endpoint does not declare (`/models` payloads rarely carry one discovery can read).
 if (!inCatalogue || typeof endpoint.contextTokens === 'number') {
-  const prices = priced ? `    input_cost_per_token: ${endpoint.inputUsdPerMillion / 1e6}\n    output_cost_per_token: ${endpoint.outputUsdPerMillion / 1e6}\n` : '';
+  // REQ-CONFIG-088 (amended): the product reads a price as the decimal its TEXT states, so the per-million figure is
+  // written with an `e-6` exponent rather than divided here in binary floating point (0.1 / 1e6 prints 1.0000000000000001e-7).
+  const prices = priced ? `    input_cost_per_token: ${endpoint.inputUsdPerMillion}e-6\n    output_cost_per_token: ${endpoint.outputUsdPerMillion}e-6\n` : '';
   const context = typeof endpoint.contextTokens === 'number' ? `    max_input_tokens: ${endpoint.contextTokens}\n` : '';
   agents += `models:\n  ${JSON.stringify(QUALIFIED)}:\n    provider: openai-compatible\n    model_id: ${JSON.stringify(endpoint.model)}\n    auth_provider: ${PROVIDER_ID}\n    base_url: ${appBaseUrl}\n${context}${prices}`;
 }

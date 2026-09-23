@@ -1000,6 +1000,22 @@ adding to it.
 > in place: it is not that decision's `Money` type, its library or its lint rule, all of which stay
 > blocked on OQ-21. The account is in `docs/architecture/first-executions.md`.
 
+> **First execution of revision 2, 2026-09-23, the day it was ruled:** the rule held as written, and building it
+> found three things the text did not say. (1) **A failed attempt is not a request with a price.** The ladder
+> observes every attempt, including one that failed before the provider counted a token; read literally, such an
+> attempt is a request with no figure, and one transient retry would have made every run read `incomplete`. A request
+> that counted no tokens and reported no figure is therefore none of the three, and one with tokens but no figure is
+> unpriced as the rule says. (2) **"The model the request was sent to" is the ladder's to know.** After a fallback it
+> is not the agent's model, so the price is resolved at the ladder cell, and a test prices a quota fallback at the
+> fallback's rates. (3) **The qualifier needs no history of its own.** The recorded qualifier and the run's token
+> totals together determine everything a continuation needs to count on, so `sessions.cost_qualifier` (v21) is the
+> only new column. The prices arrive exact because the loader reads each from the YAML scalar's source text, and
+> the snapshot is read the same way. In the built product, `pnpm overview-proof` ran a scripted run whose entry agent
+> and child are both priced at `3e-6` and `0.000015`: 162 and 129 tokens stored as `0.002421`, exactly, labelled
+> `0.0024 at configured rates`. A cost below 0.00005 still renders `0.0000`, which contradicts REQ-SHELL-045's
+> own promise and is recorded in `docs/defects/`. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 <a id="pd-tools-001"></a>
 
 ### PD-TOOLS-001 — a hard-timeout reset restores the shell's working directory and environment

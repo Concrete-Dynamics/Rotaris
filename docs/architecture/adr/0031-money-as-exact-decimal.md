@@ -176,3 +176,30 @@ accepted this decision with its representation narrowed to what is already built
 The sections above are kept as written. The reading "No library is chosen, no spike is discharged" is still
 true, and the spike now prices only the balance.
 
+## First execution — 2026-09-23 (R-049 built)
+
+*Reported in place, as a first execution must be.*
+
+- **The representation held.** Multiplying a decimal by a whole token count is `units × count` at the price's own
+  scale: `multiplyAmount` is four lines, and no library was needed. A configured price reaches it as the decimal its
+  text states. `amountFromText` shifts an exponent within the digit string (`3e-6` → `0.000003`), and the config
+  loader hands it each price scalar's YAML source text before the plain value's double is used.
+- **`money.ts` moved to `kernel`.** A price is read in `config` and summed in `engine`, and `config` may not import
+  `engine`, so the one money module had to sit below both. `model/reported-cost.ts` now expands a reported figure
+  through the same reader rather than its own copy of the exponent expansion.
+- **The lint rule is syntactic, by the owner's choice** (R-049's build). The repository lints without type
+  information, so "arithmetic operators on the branded type" became two halves:
+  - No bigint anywhere but `money.ts`, which is exact: there was none elsewhere.
+  - No arithmetic operator, numeric conversion or compound assignment on a value NAMED `cost`, `price` or `amount`,
+    which is a heuristic that a renamed money value escapes.
+
+  No branded type was introduced. Amounts stay canonical decimal strings, because a brand would have needed a cast
+  at every persisted and event-carried boundary while the syntactic rule cannot read types anyway.
+- **What the rule found on its first run:** three hits, all false positives on the name — an edit-distance `cost`
+  in `kernel/similarity.ts` and a colour-blend `amount` in `ui/slash/highlight.ts` (twice). They were renamed
+  (`substitution`, `fraction`) rather than disabled. The rule's own tests pin one case of each shape it reports.
+- **The balance's division (REQ-PROVIDER-130) is still not here**, and the spike this decision names still prices
+  only that.
+
+The row is in [`../first-executions.md`](../first-executions.md).
+

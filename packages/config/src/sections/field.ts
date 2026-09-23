@@ -1,3 +1,4 @@
+import { amountFromText, isZeroAmount } from '@rotaris/kernel';
 import { isPlainMap, type PlainMap } from '../merge.js';
 
 /**
@@ -104,6 +105,19 @@ export class FieldReader {
     const v = this.value[key];
     if (v === undefined || v === null) return null;
     return this.number(key, v, bounds);
+  }
+  /**
+   * REQ-CONFIG-088 (amended 2026-09-23): a decimal ≥ 0, carried as the canonical decimal string of `money.ts`. The
+   * loader has already replaced a YAML number here with the decimal its text states (`exactPrices`); a number that
+   * reaches this reader by another route is taken at its shortest round-trip spelling, and a string must be a decimal.
+   */
+  decimalOrNull(key: string): string | null {
+    const v = this.value[key];
+    if (v === undefined || v === null) return null;
+    const exact = typeof v === 'string' ? amountFromText(v) : typeof v === 'number' && Number.isFinite(v) ? amountFromText(String(v)) : null;
+    if (exact === null) { this.error(key, `must be a decimal number, written as a number or a quoted string, got ${typeof v === 'string' ? `'${v}'` : typeName(v)}`); return null; }
+    if (exact.startsWith('-') && !isZeroAmount(exact)) { this.error(key, `must be at least 0, got ${exact}`); return null; }
+    return isZeroAmount(exact) ? exact.replace(/^-/, '') : exact;
   }
   private number(key: string, v: unknown, bounds: { min?: number; max?: number; exclusiveMin?: number }): number | null {
     if (typeof v !== 'number' || !Number.isFinite(v)) { this.error(key, `must be a number, got ${typeName(v)}`); return null; }

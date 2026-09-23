@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { parse as parseYaml } from 'yaml';
+import { parseDocument } from 'yaml';
+import { exactPrices } from './prices.js';
 import { err, ok, type Result } from '@rotaris/kernel';
 import { MODEL_SLOTS, type ModelSlot } from './keys.js';
 import type { PlainMap } from './merge.js';
@@ -110,7 +111,11 @@ export function parseSnapshot(text: string, path: string, warn: (m: string) => v
   const invalid = (detail: string) => err(`Invalid project snapshot at ${path}: ${detail}`);
   let doc: unknown;
   try {
-    doc = parseYaml(text);
+    const parsed = parseDocument(text);
+    if (parsed.errors.length > 0) throw parsed.errors[0]!;
+    doc = parsed.toJS();
+    // REQ-PROVIDER-072 (amended 2026-09-23, OQ-21): a snapshot price is carried as the decimal its text states.
+    exactPrices(parsed.contents, doc);
   } catch (cause) {
     return invalid(String((cause as Error).message ?? cause));
   }
@@ -154,6 +159,8 @@ export function snapshotProviderFamily(providerId: string, family: string | unde
  */
 export const SNAPSHOT_SLOTS = ['large_model', 'medium_model', 'small_model', 'fallback_model', 'default_summary_model'] as const satisfies readonly ModelSlot[];
 
+const isPrice = (v: unknown): v is string | number => typeof v === 'string' || typeof v === 'number';
+
 export function snapshotLayer(snapshot: ProjectSnapshot): { layer: PlainMap | null; authenticated: readonly string[]; slots: Readonly<Partial<Record<ModelSlot, string>>> } {
   const ids = Object.keys(snapshot.providers).filter((id) => snapshot.providers[id]!.authenticated).sort();
   if (ids.length === 0) return { layer: null, authenticated: [], slots: {} };
@@ -170,9 +177,10 @@ export function snapshotLayer(snapshot: ProjectSnapshot): { layer: PlainMap | nu
       if (typeof input === 'number') entry['max_input_tokens'] = input;
       if (typeof output === 'number') entry['max_output_tokens'] = output;
       if (m.capabilities?.accepts_image_input === true) entry['accepts_image_input'] = true;
+      // REQ-CONFIG-088: both or neither; each already the decimal its text states (`exactPrices` at parse).
       const inCost = m.pricing['input_cost_per_token'];
       const outCost = m.pricing['output_cost_per_token'];
-      if (typeof inCost === 'number' && typeof outCost === 'number') { entry['input_cost_per_token'] = inCost; entry['output_cost_per_token'] = outCost; }
+      if (isPrice(inCost) && isPrice(outCost)) { entry['input_cost_per_token'] = inCost; entry['output_cost_per_token'] = outCost; }
       models[m.id] = entry;
     }
     for (const slot of SNAPSHOT_SLOTS) {

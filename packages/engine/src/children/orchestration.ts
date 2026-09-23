@@ -1,6 +1,6 @@
 import { millis, toIsoUtc, type Clocks, type Millis, type SessionId, type TimerHandle } from '@rotaris/kernel';
 import { isTerminalChildState, reportStatusToState, TASK_ID_PATTERN, type RootExecutionRecord } from '@rotaris/contracts';
-import type { AgentBackend, ChatMessage, ModelRef, ThinkingLevel, Usage } from '@rotaris/model';
+import type { AgentBackend, ChatMessage, ModelRef, ThinkingLevel } from '@rotaris/model';
 import type { ChildRow, StoreDal } from '@rotaris/store';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { SessionWriter } from '../session-writer.js';
@@ -21,6 +21,7 @@ import type { LoopSupervisor } from '../run/supervisor.js';
 import type { TurnResilience } from '../run/ladder.js';
 import { providerIdentity, type ModelChoice } from '../run/resilience.js';
 import type { TurnCompression } from '../run/compression.js';
+import type { PricedUsage } from '../run/pricing.js';
 import { todoLinesFromStored } from '../todo-view.js';
 
 /**
@@ -81,7 +82,7 @@ export interface ChildrenDeps {
    * reaches the run's cumulative tokens and cost through the same callback the entry agent's turn uses. Without it
    * the run's totals counted the entry agent alone (`a-delegated-childs-provider-requests-never-reach-the-runs-totals`).
    */
-  readonly onRequestUsage?: ((usage: Usage) => void) | undefined;
+  readonly onRequestUsage?: ((usage: PricedUsage) => void) | undefined;
   /** ADR-0015: `child_completed` fires once a child has finished, whatever its final state (REQ-HOOKS-003). */
   readonly hooks?: HookPort | null | undefined;
   /** REQ-ORCH-019: the rendered playbook per role; null or '' means no playbook. */

@@ -212,19 +212,28 @@ approval when needed → executor; hooks in its two slots), settled with its out
 edit); the results go back as one tool message; hook feedback follows as a user message. A reply with no tool call ends the turn — unless a steer is pending, in which case
 the agent takes another round; an empty reply with no call is the runtime's stuck report to the supervisor.
 
-**What a step costs (PD-MONITOR-001; `model/reported-cost.ts`, `kernel/money.ts`, `run/aggregates.ts`).** A
-completed provider request carries its tokens and, where the endpoint's protocol defines a field for it,
-the cost that provider computed for that request. The ask is a body field the endpoint owns, sent only to
-endpoints that define one (`COST_REPORTING_HOSTS`, today OpenRouter's `usage.include`), because a strict
-OpenAI-shaped API answers an unrecognised body key with a 400. The reading is the SDK's `metadataExtractor`,
-which sees the raw chunk before the SDK's usage mapping keeps the token fields and drops the rest; the figure
-leaves the adapter on the port's own `usage` part. `Aggregates.addCost` adds it to the run's total in exact
-decimal arithmetic on `bigint`, at whatever scale the operands carry — the only money arithmetic in the
-product, and addition only, which is why it does not wait on OQ-21 or ADR-0031's spike the way every route
-through a per-token **rate** does. The total reaches `usage.update` and `session.end` in the payload's
-existing `cost.total`, and the label reads it back under REQ-MONITOR-166's fourth qualifier, `reported`,
-rendered half-up to two places or four below one hundredth and with no currency symbol, because the provider
-named no currency and the product picks none. **Every agent's requests are counted**: the entry agent's turn
+**What a step costs (PD-MONITOR-001 revision 2; `model/reported-cost.ts`, `kernel/money.ts`, `run/pricing.ts`,
+`run/aggregates.ts`).** A completed provider request carries its tokens and, where the endpoint's protocol defines a
+field for it, the cost that provider computed for that request. The ask is a body field the endpoint owns, sent only
+to endpoints that define one (`COST_REPORTING_HOSTS`, today OpenRouter's `usage.include`), because a strict
+OpenAI-shaped API answers an unrecognised body key with a 400. The reading is the SDK's `metadataExtractor`, which
+sees the raw chunk before the SDK's usage mapping keeps the token fields and drops the rest; the figure leaves the
+adapter on the port's own `usage` part. **The request is priced at the ladder cell** (`resilientStep`), the one
+place the model it was sent to is known — after a fallback, the fallback's: `priceRequest` keeps a reported figure;
+otherwise, where that model's catalogue entry carries both configured prices (`CatalogueEntry.pricing`, filled from
+`effectivePricing` in `run-host/configuration.ts`), it multiplies input and output tokens by them exactly
+(`multiplyAmount`); otherwise the request is unpriced. A request that counted no tokens and reported no figure is
+none of the three. `Aggregates.addRequest` adds the figure to the run's total in exact decimal arithmetic on
+`bigint` in `kernel/money.ts` — the one module where arithmetic on an amount lives, which
+`rotaris/money-only-in-money-ts` enforces (ADR-0031) — and folds the request's pricing into the qualifier:
+`unknown` (no figure), `incomplete` (some requests without one), `reported` (every figure the provider's) or
+`configured` (every request priced, at least one at configured rates). The qualifier is persisted with the total
+(`sessions.cost_qualifier`, v21) and rebuilt on a continuation from it and the token totals. The total reaches
+`usage.update` and `session.end` in the payload's existing `cost.total`; the label is `costLabelOf(cost,
+qualifier)`, rendered half-up to two places or four below one hundredth and with no currency symbol, because no
+figure names a currency and the product picks none. A configured price reaches the entry exact because the loader
+reads it from the YAML scalar's source text (`config/prices.ts`, `exactPrices`) before the plain value's double is
+used — the discovery snapshot's prices likewise. **Every agent's requests are counted**: the entry agent's turn
 and every delegated child's turn, at any depth, hand each completed request to the one `Run.onRequestUsage`
 (`ChildrenDeps.onRequestUsage`), so the run's tokens, its cost and each `usage.update` cover the whole tree
 (REQ-EVENTS-053). Until 2026-09-23 a child's turn was built without it and the totals were the entry agent's
@@ -477,11 +486,11 @@ of §5 and none a channel: each is a request answered once.
   record, no run pauses, a live session exports what it holds at that instant; the file is written afterwards, outside
   the transaction, through `replaceDocument` with REQ-TRACE-061's ladder.
 
-## 7. The store the run writes (`packages/store/src/schema.ts`, v20)
+## 7. The store the run writes (`packages/store/src/schema.ts`, v21)
 
 | Table | Holds | Written by |
 |---|---|---|
-| `sessions` | the session record: status (**`waiting`** while an agent is parked on a provider limit, Part Q — REQ-SESSION-073's arm, presented as `running`; the wait's own fields live on the record's `wait`, not in a column; **pending question prompts likewise live on the record's `pendingQuestions`**, derived from the live run at every snapshot — Part AC, so REQ-SESSION-025's persistence limb is owed), workspace, run columns (stop reason, iterations, tokens, cost, summary, todo, progress, permission mode, pending approvals, message limit, paused-at count, **`token_samples`** — v7, REQ-MONITOR-166's history the run samples every 10 s and once at the end, 120 kept), truncation facts, **`worktree`** (v8, REQ-GIT-015's binding as JSON; NULL = no worktree, REQ-GIT-017), **`sandbox_mode`** (v8, REQ-SHELL-125's choice; honoured since Part AR — ADR-0022: the mode gates the run at start and wraps every new command string, and the recorded `sandboxed`/`sandbox_backend` always agree with the verdict that governed whether the run was allowed to start, REQ-SANDBOX-094) and **`last_restored_sequence`** (v9, REQ-SESSION-195 / REQ-GIT-155: NULL until a restore succeeds, written in that restore's transaction, untouched by every refusal), and **`plan_cycle` / `plan_released`** (v17, REQ-ORCH-153/154: the cycle awaiting an answer, NULL when none, and approval's one-way release, cleared only by the next user prompt) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, `recordRestore`, **`openPlanGate`/`resolvePlanGate`**; the binding and the mode at `create` only |
+| `sessions` | the session record: status (**`waiting`** while an agent is parked on a provider limit, Part Q — REQ-SESSION-073's arm, presented as `running`; the wait's own fields live on the record's `wait`, not in a column; **pending question prompts likewise live on the record's `pendingQuestions`**, derived from the live run at every snapshot — Part AC, so REQ-SESSION-025's persistence limb is owed), workspace, run columns (stop reason, iterations, tokens, cost and **`cost_qualifier`** — v21, PD-MONITOR-001 revision 2's qualifier recorded with the total, backfilled `reported` for a non-zero total written before it — summary, todo, progress, permission mode, pending approvals, message limit, paused-at count, **`token_samples`** — v7, REQ-MONITOR-166's history the run samples every 10 s and once at the end, 120 kept), truncation facts, **`worktree`** (v8, REQ-GIT-015's binding as JSON; NULL = no worktree, REQ-GIT-017), **`sandbox_mode`** (v8, REQ-SHELL-125's choice; honoured since Part AR — ADR-0022: the mode gates the run at start and wraps every new command string, and the recorded `sandboxed`/`sandbox_backend` always agree with the verdict that governed whether the run was allowed to start, REQ-SANDBOX-094) and **`last_restored_sequence`** (v9, REQ-SESSION-195 / REQ-GIT-155: NULL until a restore succeeds, written in that restore's transaction, untouched by every refusal), and **`plan_cycle` / `plan_released`** (v17, REQ-ORCH-153/154: the cycle awaiting an answer, NULL when none, and approval's one-way release, cleared only by the next user prompt) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, `recordRestore`, **`openPlanGate`/`resolvePlanGate`**; the binding and the mode at `create` only |
 | `plan_cycles` (**v17**, REQ-ORCH-154; cascade **v20**) | one row per plan cycle: `opened_at`, the role's `plan` VERBATIM (never rewritten after the insert), the classified `intent`, the `todo` the plan implies, the `changes` the user stated when choosing revise into it, the user's `edited` text (NULL until they edit � which is what makes "editing alone never approves it" structural), and the `decision` with `decided_at`. Keyed `(session_id, cycle)`, so an answer is recorded once and a second answer for the same cycle changes nothing. `session_id` carries `REFERENCES sessions(session_id) ON DELETE CASCADE` since v20 (REQ-SESSION-166: the VERBATIM plan text leaves with the session; rows already orphaned are dropped by the migration, which is the delete the user asked for) | `openPlanGate` (one durable transaction with the status and the `plan_gate_opened` entry), `recordPlanEdit`, `resolvePlanGate` |
 | `checkpoints` (v9) | REQ-GIT-016's record, one row per checkpoint keyed `(session_id, sequence)` — ref, commit, created_at, iteration, child_name, `files` as one JSON list, `kind` from REQ-GIT-067's vocabulary; `checkpoint_count` is a count over these rows, never stored (ADR-0039); the listing is `ORDER BY sequence` under the primary key (a plan the store test asserts) | `recordCheckpoint` (insert + the trim to `max_per_session`, one transaction with the timeline entry and the event) |
 | `session_locks` | `(session_id, pid, host, acquired_at)` — the capability token (ADR-0005) | `create`/`open` (INSERT OR IGNORE), `endRun`, release |

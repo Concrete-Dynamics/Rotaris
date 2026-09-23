@@ -6,7 +6,7 @@ import { asSessionId, FakeClock, mintMachineId, type MachineId, type SessionId }
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import type { SessionSnapshot, TranscriptIncrement } from '@rotaris/contracts';
 import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, type AgentBackend, type ScriptedCall, type TurnReport } from '@rotaris/model';
-import { costLabelOf, parseEventLine, ProjectionOwner, Run, RUN_CONFIG_DEFAULTS, SequenceCounters, Sessions, SessionWriter, toSessionRecord, toTranscriptRow, type Publisher, type RunConfig, type RunNotice, type RunResult } from '../index.js';
+import { parseEventLine, ProjectionOwner, Run, RUN_CONFIG_DEFAULTS, SequenceCounters, Sessions, SessionWriter, toSessionRecord, toTranscriptRow, type Publisher, type RunConfig, type RunNotice, type RunResult } from '../index.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
@@ -324,11 +324,9 @@ describe('engine/run — the run loop end to end against a real store and a scri
     expect(updates).toEqual(['0.0012', '0.00154']);
     expect(dal.getSession(sid)).toMatchObject({ cost: '0.00154' });
     expect(payload(sid, 'session.end')).toMatchObject({ cost: { total: '0.00154' } });
-    // REQ-MONITOR-166's fourth qualifier, and REQ-PROVIDER-121's four places below one hundredth, so a
-    // cost that is small but not nothing is never rendered as a zero.
-    expect(costLabelOf('0.00154')).toEqual({ text: '0.0015 reported by the provider', qualifier: 'reported' });
-    // A run no provider priced still reads as it did: the three routes through a rate are still blocked (OQ-21).
-    expect(costLabelOf('0')).toEqual({ text: 'price not established', qualifier: 'unknown' });
+    // REQ-MONITOR-166's fourth qualifier, recorded with the total, and REQ-PROVIDER-121's four places below one hundredth.
+    expect(dal.getSession(sid)).toMatchObject({ cost_qualifier: 'reported' });
+    expect(toSessionRecord(dal.getSession(sid)!).costLabel).toEqual({ text: '0.0015 reported by the provider', qualifier: 'reported' });
   });
 
   it('OQ-8 / REQ-EVENTS-053: a request that reports no figures moves no total and raises no event', async () => {

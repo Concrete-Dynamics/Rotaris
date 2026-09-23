@@ -1,5 +1,5 @@
-import { asSessionId, err, formatAmount, isZeroAmount, millis, ok, type Clocks, type MachineId, type Millis, type Result, type SessionId } from '@rotaris/kernel';
-import { APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type CheckpointKind, type CheckpointListPayload, type ControlRequest, type ControlResult, type ImageAttachmentInput, type PermissionPreset, type QuestionAnswers, type RunType, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding } from '@rotaris/contracts';
+import { asSessionId, err, formatAmount, millis, ok, type Clocks, type MachineId, type Millis, type Result, type SessionId } from '@rotaris/kernel';
+import { APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, COST_QUALIFIERS, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type CheckpointKind, type CheckpointListPayload, type ControlRequest, type ControlResult, type CostQualifier, type ImageAttachmentInput, type PermissionPreset, type QuestionAnswers, type RunType, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding } from '@rotaris/contracts';
 import { existsSync, rmSync } from 'node:fs';
 import { RELEASE_PAGE_SIZE, type CheckpointRow, type SessionRow, type StoreDal } from '@rotaris/store';
 import type { AgentBackend, ContentPart } from '@rotaris/model';
@@ -462,21 +462,26 @@ export interface StartRefusal {
  * REQ-MONITOR-166: the cost label carries its own qualifier, so no view has to invent a description for a
  * run whose price could not be established.
  *
- * PD-MONITOR-001 gives the qualifier set a fourth member. A figure in the run's total got there one way —
- * a provider reported it for a request it had completed (`Aggregates.addCost`) — so a total that is not
- * zero is a **reported** price, rendered under REQ-PROVIDER-121's rule for an amount: half-up, two decimal
- * places, four below one hundredth, and **no currency symbol**, because the provider named no currency and
- * the product does not pick one for it (the directive's narrowing).
+ * PD-MONITOR-001 revision 2 fixes four qualifiers and their labels, and the qualifier is the one the run EARNED
+ * and recorded with its total (`sessions.cost_qualifier`, v21) — read back, never re-derived from the amount,
+ * because since configured rates price requests a non-zero total no longer says how it was reached. The amount is
+ * rendered under REQ-PROVIDER-121's rule: half-up, two decimal places, four below one hundredth, and **no
+ * currency symbol**, because no figure here names a currency and the product does not pick one (the narrowing).
  *
- * The falsified reason, kept beside its replacement: "no rate is configured in this build, so the price is
- * unknown". The three routes through a *rate* are still blocked on OQ-21 and ADR-0031 and still render
- * `unknown`; the sentence was wrong only in treating a rate as the sole route to a figure.
+ * Two falsified readings, kept beside their replacement: "no rate is configured in this build, so the price is
+ * unknown" (revision 0), and "a total that is not zero is a reported price" (revision 1, when a provider's report
+ * was the only route to a figure).
  */
-export function costLabelOf(cost: string): SessionRecord['costLabel'] {
-  if (cost === '' || isZeroAmount(cost)) return { text: 'price not established', qualifier: 'unknown' };
+export function costLabelOf(cost: string, qualifier: string): SessionRecord['costLabel'] {
+  const unknown = { text: 'price not established', qualifier: 'unknown' } as const;
+  if (qualifier === 'unknown' || !(COST_QUALIFIERS as readonly string[]).includes(qualifier)) return unknown;
   const amount = formatAmount(cost);
   if (amount === null) return { text: `${cost} (price not established)`, qualifier: 'unknown' };
-  return { text: `${amount} reported by the provider`, qualifier: 'reported' };
+  switch (qualifier as Exclude<CostQualifier, 'unknown'>) {
+    case 'incomplete': return { text: `at least ${amount}; some requests have no price`, qualifier: 'incomplete' };
+    case 'configured': return { text: `${amount} at configured rates`, qualifier: 'configured' };
+    case 'reported': return { text: `${amount} reported by the provider`, qualifier: 'reported' };
+  }
 }
 
 /**
@@ -530,7 +535,7 @@ export function toSessionRecord(r: SessionRow, queued: readonly { id: string; co
     // an armed `plan` from a released one rather than promising a gate that will not open.
     planReleased: r.plan_released === 1,
     usageHistory: parseTokenSamples(r.token_samples),
-    costLabel: costLabelOf(r.cost),
+    costLabel: costLabelOf(r.cost, r.cost_qualifier),
     toolCalls: { total: r.tool_calls, agents: Math.max(0, ...toolCalls.map((t) => t.agents)), byTool: toolCalls.map((t) => ({ tool: t.tool_name, count: t.count })) },
     worktreeBranch: parseBinding(r.worktree)?.branch ?? null,
     wait: null,

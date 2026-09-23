@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { WORKSPACE_SCOPE_DIR } from '@rotaris/platform';
 import { err, ok, type Result } from '@rotaris/kernel';
 import { parseConfig, plainOf, triOf, asMap, vocabularyText, type ParsedConfig } from './document.js';
+import { exactPrices } from './prices.js';
 import { builtInDefaults } from './defaults.js';
 import { canonicaliseRoles, isPlainMap, mergeLayers, type Layer, type PlainMap } from './merge.js';
 import { MODEL_SLOTS, thinkingKeyOf, type ModelSlot, type ReasoningLevel, type TierAlias, REASONING_LEVELS } from './keys.js';
@@ -146,6 +147,8 @@ function readConfigFile(path: string): ReadFile {
     return { state: 'fatal', report: { file: path, path: '', message: `top-level content must be a mapping, got ${parsed.value.topLevelType}`, kind: 'top-level' } };
   }
   const plain = plainOf(parsed.value.root);
+  // REQ-CONFIG-088: a price is the decimal its text states, read before the plain value's double is used anywhere.
+  exactPrices(parsed.value.root, plain);
   return { state: 'read', parsed: parsed.value, plain: isPlainMap(plain) ? plain : null };
 }
 

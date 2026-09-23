@@ -1,11 +1,12 @@
+import { amountFromText } from '@rotaris/kernel';
+
 /**
  * PD-MONITOR-001 — a cost figure the PROVIDER computed, carried rather than derived.
  *
- * The product multiplies no rates: OQ-21 and ADR-0031 still hold every route that would
- * (configured rates, discovery pricing), because each of them multiplies a per-token price by a
- * token count and REQ-PROVIDER-121 forbids doing that in binary floating point. The route this
- * file opens needs no multiplication at all — the provider states the amount, the product adds it
- * to the run's running total and to nothing else.
+ * This file multiplies no rates. A request the provider did not price may be priced from configured
+ * rates (PD-MONITOR-001 revision 2), and that multiplication is the engine's, at the ladder cell where
+ * the request's model is known; a figure read here takes precedence over it. The route this file opens
+ * needs no arithmetic at all — the provider states the amount, and the product carries it.
  *
  * Two halves, both of them protocol-shaped:
  *
@@ -54,19 +55,12 @@ export function costAskFor(baseUrl: string | undefined): Record<string, unknown>
  * fails: nothing here rounds, scales or adds. `String(n)` gives the shortest decimal that reads
  * back as the same double, which for an amount a provider stated is the amount it stated; the only
  * work done on it is expanding an exponent form (`1.2e-7`) into positional digits, which moves
- * characters and computes nothing.
+ * characters and computes nothing. That expansion is `amountFromText`'s, the same reader a configured
+ * price's text goes through, so the two routes into a total cannot spell one amount two ways.
  */
 export function decimalFromNumber(value: unknown): string | null {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return null;
-  const text = String(value);
-  if (!text.includes('e') && !text.includes('E')) return text;
-  const m = /^(\d+)(?:\.(\d+))?e([+-]?\d+)$/i.exec(text);
-  if (m === null) return null;
-  const digits = `${m[1]}${m[2] ?? ''}`;
-  const point = m[1]!.length + Number(m[3]);
-  if (point <= 0) return `0.${'0'.repeat(-point)}${digits}`;
-  if (point >= digits.length) return `${digits}${'0'.repeat(point - digits.length)}`;
-  return `${digits.slice(0, point)}.${digits.slice(point)}`;
+  return amountFromText(String(value));
 }
 
 /** The `usage.cost` of one streamed chunk or one whole response body, as a decimal string. */

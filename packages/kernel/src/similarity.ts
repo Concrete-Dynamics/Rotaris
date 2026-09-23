@@ -16,8 +16,8 @@ export function editDistance(a: string, b: string): number {
   for (let i = 1; i <= x.length; i += 1) {
     cur[0] = i;
     for (let j = 1; j <= y.length; j += 1) {
-      const cost = x[i - 1] === y[j - 1] ? 0 : 1;
-      cur[j] = Math.min((prev[j] ?? 0) + 1, (cur[j - 1] ?? 0) + 1, (prev[j - 1] ?? 0) + cost);
+      const substitution = x[i - 1] === y[j - 1] ? 0 : 1;
+      cur[j] = Math.min((prev[j] ?? 0) + 1, (cur[j - 1] ?? 0) + 1, (prev[j - 1] ?? 0) + substitution);
     }
     [prev, cur] = [cur, prev];
   }

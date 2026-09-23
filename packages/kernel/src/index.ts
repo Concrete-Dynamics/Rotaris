@@ -7,4 +7,5 @@ export * from './generated/requirements.js';
 export * from './redaction.js';
 export * from './similarity.js';
 export * from './glob.js';
+export * from './money.js';
 export * from './order.js';

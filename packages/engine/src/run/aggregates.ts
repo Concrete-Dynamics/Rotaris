@@ -1,5 +1,5 @@
 import type { SessionRow, SessionRunPatch } from '@rotaris/store';
-import { addAmounts } from '../money.js';
+import { addAmounts } from '@rotaris/kernel';
 
 /**
  * ADR-0008 "The metric aggregates are maintained, not recomputed":

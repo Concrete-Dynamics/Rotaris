@@ -212,7 +212,7 @@ approval when needed → executor; hooks in its two slots), settled with its out
 edit); the results go back as one tool message; hook feedback follows as a user message. A reply with no tool call ends the turn — unless a steer is pending, in which case
 the agent takes another round; an empty reply with no call is the runtime's stuck report to the supervisor.
 
-**What a step costs (PD-MONITOR-001; `model/reported-cost.ts`, `engine/money.ts`, `run/aggregates.ts`).** A
+**What a step costs (PD-MONITOR-001; `model/reported-cost.ts`, `kernel/money.ts`, `run/aggregates.ts`).** A
 completed provider request carries its tokens and, where the endpoint's protocol defines a field for it,
 the cost that provider computed for that request. The ask is a body field the endpoint owns, sent only to
 endpoints that define one (`COST_REPORTING_HOSTS`, today OpenRouter's `usage.include`), because a strict

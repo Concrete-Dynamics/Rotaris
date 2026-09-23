@@ -63,9 +63,76 @@ const noElectronOutsideRoots = {
   },
 };
 
+/** ADR-0031 (accepted narrowed, R-049): arithmetic on an amount lives in `packages/kernel/src/money.ts` and
+ * nowhere else. The repository's lint runs without type information, so the rule is syntactic and has two
+ * halves. (1) The exact arithmetic's own material — `BigInt(...)` and bigint literals — appears nowhere else,
+ * so a second exact-money path cannot be written beside the first. (2) A value whose NAME says it is money
+ * (`cost`, `price`, `amount`, in any case, as an identifier or a member) is never an operand of an arithmetic
+ * operator, of a numeric conversion (`Number`, `parseFloat`, `parseInt`, unary `+`) or of a compound
+ * assignment, which is how a binary float gets back in. Its limit is the heuristic's: a money value renamed to
+ * something else escapes half (2). The rule is what makes that the exception rather than the habit. */
+const MONEY_NAME = /cost|price|amount/i;
+const ARITHMETIC = new Set(['+', '-', '*', '/', '%', '**']);
+const CONVERSIONS = new Set(['Number', 'parseFloat', 'parseInt']);
+
+/** The name an operand is known by — an identifier, or the last property of a member access — or null. */
+function nameOf(node) {
+  if (!node) return null;
+  if (node.type === 'Identifier') return node.name;
+  if (node.type === 'MemberExpression' && !node.computed && node.property.type === 'Identifier') return node.property.name;
+  if (node.type === 'TSNonNullExpression' || node.type === 'TSAsExpression') return nameOf(node.expression);
+  return null;
+}
+const isMoney = (node) => { const name = nameOf(node); return name !== null && MONEY_NAME.test(name); };
+
+const moneyOnlyInMoneyTs = {
+  meta: {
+    type: 'problem',
+    docs: { description: 'ADR-0031 — arithmetic on an amount lives in kernel/src/money.ts only' },
+    schema: [],
+    messages: {
+      bigint: 'ADR-0031: exact arithmetic lives in packages/kernel/src/money.ts; use addAmounts or multiplyAmount there instead of a bigint here.',
+      operator: "ADR-0031: `{{name}}` is money and `{{op}}` would compute on it here, in binary floating point or as string concatenation. Use packages/kernel/src/money.ts (addAmounts, multiplyAmount, formatAmount).",
+      conversion: 'ADR-0031: `{{name}}` is money and converting it to a number loses its exactness. Keep it a decimal string and use packages/kernel/src/money.ts.',
+    },
+  },
+  create(context) {
+    const report = (node, messageId, data = {}) => context.report({ node, messageId, data });
+    return {
+      Literal(node) {
+        if (typeof node.bigint === 'string') report(node, 'bigint');
+      },
+      CallExpression(node) {
+        const c = node.callee;
+        if (c.type === 'Identifier' && c.name === 'BigInt') { report(node, 'bigint'); return; }
+        const conversion = c.type === 'Identifier' ? c.name : c.type === 'MemberExpression' && c.object.type === 'Identifier' && c.object.name === 'Number' && c.property.type === 'Identifier' ? c.property.name : null;
+        if (conversion !== null && CONVERSIONS.has(conversion) && isMoney(node.arguments[0])) report(node, 'conversion', { name: nameOf(node.arguments[0]) });
+      },
+      BinaryExpression(node) {
+        if (!ARITHMETIC.has(node.operator)) return;
+        const money = isMoney(node.left) ? node.left : isMoney(node.right) ? node.right : null;
+        if (money !== null) report(node, 'operator', { name: nameOf(money), op: node.operator });
+      },
+      AssignmentExpression(node) {
+        const op = node.operator.slice(0, -1);
+        if (node.operator === '=' || !ARITHMETIC.has(op)) return;
+        const money = isMoney(node.left) ? node.left : isMoney(node.right) ? node.right : null;
+        if (money !== null) report(node, 'operator', { name: nameOf(money), op: node.operator });
+      },
+      UnaryExpression(node) {
+        if ((node.operator === '+' || node.operator === '-') && isMoney(node.argument)) report(node, 'conversion', { name: nameOf(node.argument) });
+      },
+      UpdateExpression(node) {
+        if (isMoney(node.argument)) report(node, 'operator', { name: nameOf(node.argument), op: node.operator });
+      },
+    };
+  },
+};
+
 export default {
   rules: {
     'no-bare-timers': noBareTimers,
     'no-electron-outside-roots': noElectronOutsideRoots,
+    'money-only-in-money-ts': moneyOnlyInMoneyTs,
   },
 };

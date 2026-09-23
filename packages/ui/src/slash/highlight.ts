@@ -61,10 +61,10 @@ const formatOklch = (l: number, c: number, h: number): string => `oklch(${Math.r
  * REQ-CHAT-027's "blended toward the surface behind it": a mix in OKLCH — lightness and chroma move toward the
  * surface's, the hue stays the accent's, so the result reads as the accent washed out rather than as another hue.
  */
-export function blendToward(colour: string, surface: string, amount: number): string {
+export function blendToward(colour: string, surface: string, fraction: number): string {
   const a = parseOklch(colour);
   const b = parseOklch(surface);
-  return formatOklch(a.l + (b.l - a.l) * amount, a.c + (b.c - a.c) * amount, a.h);
+  return formatOklch(a.l + (b.l - a.l) * fraction, a.c + (b.c - a.c) * fraction, a.h);
 }
 
 /** The mirror image of `raiseLightness` for a light surface: hue and chroma kept, lightness lowered until the floor is reached. */
@@ -118,13 +118,13 @@ export function slashRoleColours(theme: Theme, surfaceKey: `--rt-${string}` = '-
   const resolved = ensureContrast(accent, surface, theme.dark);
   const unknown = ensureContrast(fail, surface, theme.dark);
   const argument = ensureContrast(secondary, surface, theme.dark);
-  let amount = 0.5;
-  let partial = ensureContrast(blendToward(accent, surface, amount), surface, theme.dark);
+  let fraction = 0.5;
+  let partial = ensureContrast(blendToward(accent, surface, fraction), surface, theme.dark);
   const taken = () => new Set([resolved, unknown, argument].map(rendered));
   for (let i = 0; i < 20 && taken().has(rendered(partial)); i += 1) {
     // Step the blend back toward the accent (less washed out) and, failing that, past it; every candidate is re-floored.
-    amount = Math.max(0, amount - 0.05);
-    const base = parseOklch(blendToward(accent, surface, amount));
+    fraction = Math.max(0, fraction - 0.05);
+    const base = parseOklch(blendToward(accent, surface, fraction));
     partial = ensureContrast(formatOklch(Math.min(0.98, base.l + (theme.dark ? 0.02 * i : -0.02 * i)), base.c, base.h), surface, theme.dark);
   }
   assertDistinctRoleColours([resolved, partial, unknown, argument].map(rendered));

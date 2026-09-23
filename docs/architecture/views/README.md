@@ -45,6 +45,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-23**
 
+**Money moves to `kernel` (ADR-0031 accepted narrowed, R-049).** `engine/money.ts` becomes `kernel/money.ts` and
+gains the two operations pricing needs: exact multiplication by a whole token count, and `amountFromText`, which
+reads a number's text as the decimal it states. A price is read in `config` and summed in `engine`, and `config`
+may not import `engine`. `model/reported-cost.ts` now expands a reported figure through the same reader.
+`rotaris/money-only-in-money-ts` (ADR-0031 consequence 2) makes `money.ts` the one place arithmetic on an amount
+lives. The **component view** (the kernel box), `module-map.md` (the kernel row) and the runtime view's file
+reference move. No edge changed: `model` → `kernel` was already allowed.
+
 **A delegated child's write scope (`PD-TOOLS-006`, built 2026-09-23).** `delegate` takes `write_scope`; a live
 scoped child claims the paths it matches, and the gate refuses a `write_file` or `haet_edit` write into a claimed
 path to every other agent of the run except the child's descendants, ahead of the permission resolution. Each child

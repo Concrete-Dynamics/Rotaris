@@ -17,3 +17,9 @@ Noticed 2026-09-20 by the run-autopsy of run `2e21e324`.
 changing behaviour a live requirement states exactly, which `docs/product/README.md` sends to a `PD` and
 an implementer may not mint. The request is logged with the requirements a directive would have to name,
 so the decision is in front of the owner rather than waiting in a defect note.
+
+**Ruled 2026-09-23 — [`PD-ORCH-004`](../product/directives.md#pd-orch-004), [R-048](../product/requests.md#r-048).** The limit stays at
+1200 seconds. A child that completed a tool call within its final stall window when the limit expired still
+ends `failed`, and its report now also carries the paths it changed and offers the parent one continuation,
+which a continuation child never offers again. Both children here qualified. The note stays open until the
+directive is built.

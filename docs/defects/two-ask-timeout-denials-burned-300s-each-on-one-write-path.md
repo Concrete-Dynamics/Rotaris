@@ -17,3 +17,9 @@ Noticed 2026-09-21 by the run-autopsy of run `1ddeb71b`.
 changing behaviour a live requirement states exactly, which `docs/product/README.md` sends to a `PD` and
 an implementer may not mint. The request is logged with the requirements a directive would have to name,
 so the decision is in front of the owner rather than waiting in a defect note.
+
+**Ruled 2026-09-23 — [`PD-TOOLS-005`](../product/directives.md#pd-tools-005), [R-048](../product/requests.md#r-048).** After one approval
+wait in a run ends by timeout, the run treats the user as away and resolves every further ask at once under
+`runtime.headless_approval_policy`, until the user next sends input to the session. In this run the second
+`write_file` ask would have been refused without its 300-second wait. The note stays open until the
+directive is built.

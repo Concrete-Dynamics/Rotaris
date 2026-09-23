@@ -224,7 +224,11 @@ product, and addition only, which is why it does not wait on OQ-21 or ADR-0031's
 through a per-token **rate** does. The total reaches `usage.update` and `session.end` in the payload's
 existing `cost.total`, and the label reads it back under REQ-MONITOR-166's fourth qualifier, `reported`,
 rendered half-up to two places or four below one hundredth and with no currency symbol, because the provider
-named no currency and the product picks none.
+named no currency and the product picks none. **Every agent's requests are counted**: the entry agent's turn
+and every delegated child's turn, at any depth, hand each completed request to the one `Run.onRequestUsage`
+(`ChildrenDeps.onRequestUsage`), so the run's tokens, its cost and each `usage.update` cover the whole tree
+(REQ-EVENTS-053). Until 2026-09-23 a child's turn was built without it and the totals were the entry agent's
+alone.
 
 What the model is handed for each of them is `toolSpec` (`run-host/tools.ts`): an MCP tool's own input schema where
 ADR-0034 supplies one, otherwise the zod schema converted **as an input** (`io: 'input'`) — the shape of a call about to

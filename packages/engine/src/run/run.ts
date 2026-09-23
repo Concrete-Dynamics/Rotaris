@@ -773,6 +773,8 @@ export class Run {
         budget: clampBudget(this.deps.budget ?? { maxDepth: 3, maxTotal: 20, maxActive: 6 }, this.preflight?.budgetCell ?? null), modelCap: this.deps.modelCap ?? (() => null), toolsFor: this.portFor,
         // REQ-MONITOR-102: a child's tool calls are the session's too; the entry agent's own are added at the turn below.
         countToolCalls: (n) => this.aggregates.addToolCalls(n),
+        // REQ-EVENTS-053, PD-MONITOR-001: a child's provider requests are the run's, counted where the entry agent's are.
+        onRequestUsage: this.onRequestUsage,
         summariser: this.deps.summariser ?? null, hooks: this.hooks, playbookFor: this.preflight?.playbookFor ?? null, route: this.preflight?.route ?? 'work', ...(this.deps.childTimeoutMs === undefined ? {} : { childTimeoutMs: this.deps.childTimeoutMs }), runSignal: this.abort.signal, warn: this.deps.warn,
         // REQ-WORKSPACE-060/065 (ADR-0063): a child is an agent, so it receives the SAME units the entry agent
         // does — the getter is passed through, not a copy, which is what makes "a skill can never be visible to

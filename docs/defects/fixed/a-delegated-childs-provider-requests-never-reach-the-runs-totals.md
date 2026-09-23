@@ -27,3 +27,20 @@ live run; established by reading the call path.
 - `packages/engine/src/run/run.ts`: `onRequestUsage`, the one place usage joins the aggregates.
 - `packages/engine/src/run/turn.ts`: `observeRequestUsage`, which forwards only when a callback is given.
 - `packages/engine/src/run/aggregates.ts`: `addTurnUsage` and `addCost`, reached only for the entry agent.
+
+## Repaired — 2026-09-23
+
+`ChildrenDeps` gains `onRequestUsage`, and `Run.turn()` passes the run's own `onRequestUsage` into it beside
+`countToolCalls`. `IterationChildren.execute` hands it to the child's `runTurn`, so every completed provider
+request a child makes, at any depth (grandchildren launch through the same `IterationChildren`), reaches
+`Aggregates` and emits its own `usage.update` exactly as the entry agent's do. Part of building
+[`PD-MONITOR-001`](../../product/directives.md#pd-monitor-001) revision 2 ([R-049](../../product/requests.md#r-049)),
+which names this repair as its prerequisite.
+
+Evidence: `children.test.ts` — *a delegated child's provider requests reach the run's tokens, cost and
+usage.update*: the entry agent's two requests and a child's one give `tokens_input` 122, `tokens_output` 25 and
+`cost` `0.0135`, with three `usage.update` events. With the change reverted the same test reads
+`tokens_input` 22, the entry agent's alone.
+
+The model calls made outside any agent's turn (the child report summariser, compression, the intent
+classifier) still report no usage. That is a separate gap and is recorded as its own note.

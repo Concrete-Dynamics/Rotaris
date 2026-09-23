@@ -1,6 +1,6 @@
 import { millis, toIsoUtc, type Clocks, type Millis, type SessionId, type TimerHandle } from '@rotaris/kernel';
 import { isTerminalChildState, reportStatusToState, TASK_ID_PATTERN, type RootExecutionRecord } from '@rotaris/contracts';
-import type { AgentBackend, ChatMessage, ModelRef, ThinkingLevel } from '@rotaris/model';
+import type { AgentBackend, ChatMessage, ModelRef, ThinkingLevel, Usage } from '@rotaris/model';
 import type { ChildRow, StoreDal } from '@rotaris/store';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { SessionWriter } from '../session-writer.js';
@@ -75,6 +75,12 @@ export interface ChildrenDeps {
    * zero on any run that delegated. Found by the live run's first execution, 2026-09-11.
    */
   readonly countToolCalls?: ((n: number) => void) | undefined;
+  /**
+   * REQ-EVENTS-053, PD-MONITOR-001: every completed provider request a child makes is a request of the run, so it
+   * reaches the run's cumulative tokens and cost through the same callback the entry agent's turn uses. Without it
+   * the run's totals counted the entry agent alone (`a-delegated-childs-provider-requests-never-reach-the-runs-totals`).
+   */
+  readonly onRequestUsage?: ((usage: Usage) => void) | undefined;
   /** ADR-0015: `child_completed` fires once a child has finished, whatever its final state (REQ-HOOKS-003). */
   readonly hooks?: HookPort | null | undefined;
   /** REQ-ORCH-019: the rendered playbook per role; null or '' means no playbook. */
@@ -347,6 +353,7 @@ export class IterationChildren implements DelegationOps {
         shouldPause: () => landing || (deps.shouldPause?.() ?? false),
         ...(resilience ? { resilience } : {}),
         ...(compression ? { compression } : {}),
+        ...(deps.onRequestUsage ? { onRequestUsage: deps.onRequestUsage } : {}),
         // REQ-ORCH-093: the resume limb — a child's turn after its first is a parent being resumed with reports.
         parentResume: !wasFirst,
       }, task, history, controller.signal); };

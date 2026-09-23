@@ -43,7 +43,15 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-09-22**
+## Last reconciled with the code: **2026-09-23**
+
+**A child's provider requests reach the run's totals (defect round, 2026-09-23).** `IterationChildren` built a
+child's turn with no `onRequestUsage`, so the session's tokens, its cost and every `usage.update` counted the
+entry agent alone. `ChildrenDeps` now carries the run's own callback into every child's turn, at every depth.
+Only the **runtime view** moves: one sentence in "What a step costs". No package, edge, message kind or store
+column changed. It is the prerequisite `PD-MONITOR-001` revision 2 names; the defect note moves to
+`docs/defects/fixed/`.
+
 
 **One instruction-file set, two readers (defect round, 2026-09-22).** The retrospective held its own copy
 of REQ-WORKSPACE-041's discovery rule — the two names at the workspace root, and no policy at all — so it

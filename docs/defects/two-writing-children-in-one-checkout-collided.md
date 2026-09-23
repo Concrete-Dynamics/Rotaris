@@ -49,3 +49,32 @@ sibling's declared scope is refused with a message naming that sibling; a child 
 behaves as today. It would be a new directive, since no requirement covers sibling writers. A separate
 worktree per writing child was considered and not proposed, because it needs a merge mechanism of its own.
 The note stays open on the owner's decision.
+
+## Design proposed 2026-09-23, awaiting the owner's ruling
+
+Worked out after the proposal above and put to the owner. **Not ruled**; recorded so it is not lost.
+Directive it would become: `PD-TOOLS-006`. It would narrow REQ-TOOLS-152 and REQ-TOOLS-154 and extend REQ-ORCH-028.
+
+- `delegate` gains an optional `write_scope`: path globs relative to the workspace root, in the `glob`
+  tool's dialect (`*`, `**`, `?`, `{a,b}`). A glob reaching outside the root rejects the delegation.
+- While a scoped child is live, it claims the paths its scope matches. A write to a claimed path through
+  `write_file` or `haet_edit`/`haet` by any other agent in the run is refused before it executes. "Any other
+  agent" includes siblings, the parent and the entry agent; the claiming child and its own descendants are
+  exempt. Where scopes overlap, the earlier-spawned child owns the overlap. The claim lapses when the child
+  reaches a terminal state.
+- The refusal names the owner, its persona and the matching glob, and points to `wait_for_tasks`.
+- The child's payload gains a block after the workspace-root prefix listing its own scope and the scopes of
+  siblings still running.
+- A child without a scope behaves as today. A scope never fences the child that declared it.
+- Build: the engine's children ledger holds the claims in memory. The gate asks through a predicate injected
+  from the tool-port context (the `planGateHeld` precedent). `globToRegExp` moves out of `search.ts` into a
+  shared helper. Nothing is persisted, because a resume closes non-terminal children as cancelled.
+- Cost: `terminal`, `git_commit` and MCP tools can still write claimed paths. An undo of a claimed path by
+  another agent is a write and is refused too.
+- Alternative considered: automatic claims (first writer owns the path). It needs no planning, but the
+  collision is still found at write time.
+- Open forks put to the owner: declared scopes rather than automatic claims; whether the parent and the entry
+  agent are refused too (proposed: yes).
+
+Related: [`the-create-guard-tells-an-agent-it-read-a-file-its-sibling-wrote.md`](the-create-guard-tells-an-agent-it-read-a-file-its-sibling-wrote.md),
+found while designing this. The "Improved 2026-09-22" message above answers wrongly in exactly this note's case.

@@ -63,3 +63,35 @@ never pass through a binary float), accept ADR-0031 with scaled-integer arithmet
 feed `effectivePricing()` into `Aggregates.addCost` under the `configured` qualifier, a provider-reported
 figure taking precedence. OQ-62's discovery-pricing branch was offered as a separate, lower-ranked source.
 Nothing about the block described above has moved.
+
+## Design proposed 2026-09-23, awaiting the owner's ruling
+
+Worked out after the proposal above and put to the owner. **Not ruled**; recorded so it is not lost. It takes three records.
+
+1. **OQ-21 answered as it recommends.** This is an amendment round, because REQ-PROVIDER-072 and REQ-PROVIDER-121
+   contradict each other. REQ-CONFIG-088 becomes a decimal ≥ 0, written as a YAML number or a quoted string;
+   REQ-PROVIDER-072 and the two snapshot format blocks carry prices as decimal strings.
+2. **ADR-0031 accepted in narrowed form.** The Decimal is `money.ts`'s scaled `bigint`, with no scale fixed in
+   advance. Pricing adds one operation: exact multiplication by a non-negative integer token count. The lint
+   rule banning arithmetic on the type is built with it. The library question stays open only for the balance
+   division of REQ-PROVIDER-130; pricing needs no spike.
+3. **`PD-MONITOR-001` revision 2.** A revision rather than a new directive, because only one directive may
+   narrow REQ-MONITOR-166.
+   - Prices are read from the YAML scalar's source text (the node's range), so `0.000003`, `3e-6` and
+     `"0.000003"` arrive exact. The snapshot layer is read the same way.
+   - Per request: the provider-reported figure if there is one. Otherwise, if the request's model has both
+     prices: input tokens × input price + output tokens × output price, exact. Otherwise the request is unpriced.
+   - The run's qualifier: none priced → `unknown` ("price not established"); some unpriced → `incomplete`
+     ("at least $X; some requests have no price"); all priced and all reported → `reported`; all priced with
+     any configured → `configured` ("$X at configured rates").
+   - Build: the price is resolved at the ladder cell, where the request's model is known. `Usage` carries the
+     figure and its source. The session gains a `cost_qualifier` column in an appended migration, because
+     `costLabelOf` currently derives the label from the cost string alone.
+   - Cost: cached input is charged at the full input price, because `Usage` has no cached-token field.
+     Image pricing (REQ-PROVIDER-150) is excluded.
+
+**Prerequisite:** [`a-delegated-childs-provider-requests-never-reach-the-runs-totals.md`](a-delegated-childs-provider-requests-never-reach-the-runs-totals.md).
+Without that repair, configured prices would miss every delegated child's requests.
+
+Open forks put to the owner: a reported-plus-configured mix reads `configured` (proposed: yes); OpenRouter
+discovery prices, OQ-62's first half (proposed: deferred).

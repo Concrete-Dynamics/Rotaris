@@ -8,6 +8,19 @@ status: resolved
 # Open-Question Resolutions — Settings and Configuration
 
 
+> ## Amendment, 2026-09-23 — per-token prices are decimals (OQ-21)
+>
+> `REQ-CONFIG-088` types the two price fields as decimal ≥ 0 instead of float ≥ 0. A price may still be
+> written as a YAML number, and it is taken as the decimal its text states. The project-settings snapshot's
+> `pricing` map carries decimal strings. The both-or-neither rule is unchanged.
+>
+> **Why this is an amendment and not a directive.** Two live requirements disagreed: `REQ-PROVIDER-072` and
+> the snapshot format typed prices as floats, while `REQ-PROVIDER-121` forbids computing any amount, "including
+> the per-token pricing carried through discovery", in binary floating point. A value that has been through a
+> binary float cannot afterwards be made exact, so the float typing was the defect. The owner ruled OQ-21 as it
+> recommended ([R-049](../../product/requests.md#r-049)); `owner-decisions.md` holds the ruling.
+
+
 > ## Superseded by the storage rulings (2026-09-01)
 >
 > The product owner's rulings **SR-4** to **SR-8** and **ESC-11**, **ESC-13**, **ESC-15**, **ESC-16** and

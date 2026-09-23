@@ -42,7 +42,8 @@ payload, and whether a provider-reported cost has a qualifier — the reason eve
 which **one branch was ruled on 2026-09-16** by `PD-MONITOR-001` and two stay open. **One more was raised on
 2026-09-16 by reading a launch log: OQ-63** (what level threshold, if any, governs the **application** log —
 every level requirement in the corpus governs the per-session log instead), **ruled on 2026-09-23 by
-`PD-MONITOR-002`**. **One more was raised on
+`PD-MONITOR-002`**. **OQ-21**, open since the gate, was **ruled on 2026-09-23** as it recommended and applied by
+amendment (R-049), and OQ-62's configured-rate branch with it; OQ-62's discovery branch stays open. **One more was raised on
 2026-09-21 by building `PD-WORKSPACE-002`'s per-file switches: OQ-64** (whether an instruction override
 suppresses its base when the override is itself switched off — a third state REQ-WORKSPACE-042's "given
 both exist" has no word for). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
@@ -1202,6 +1203,13 @@ discovery**" — is computed in binary floating point anywhere. The same format 
 cost as a decimal string. **Recommended reading:** the price is carried and persisted as a decimal string
 and the float typing is the defect, because a value that has been through a binary float cannot
 afterwards be made exact.
+
+> **Disposition, 2026-09-23 (R-049). RULED as recommended.** The price is carried and persisted as a decimal
+> string and the float typing was the defect. Applied by amendment the same day: `REQ-CONFIG-088` types the
+> fields as decimal ≥ 0 and takes a YAML number as the decimal its text states; `REQ-PROVIDER-072` and both
+> snapshot formats carry decimal strings. ADR-0031 is accepted on the back of it, narrowed, and `PD-MONITOR-001`
+> revision 2 makes configured rates produce a figure. See `owner-decisions.md`, "OQ-21 — per-token prices are
+> decimal strings, ruled".
 
 **OQ-22 — Does a spawned stdio child inherit the parent process environment?** *(ADR-0034; the
 environment-resolution stage's signature differs by the answer.)* `REQ-MCP-087` and `REQ-MCP-090` fix the
@@ -2707,6 +2715,12 @@ figure at all — which cannot be built until OQ-21 says what a price is.
 > rates, which stay unbuilt. The paragraph "What the build proceeds under" continues to hold for both: cost
 > reads `"0"` under the `unknown` qualifier wherever no provider-reported figure exists, which after the
 > ruling is every provider but OpenRouter.
+>
+> **Configured rates ruled, 2026-09-23 (R-049).** With OQ-21 answered, the third branch is ruled by
+> `PD-MONITOR-001` revision 2: a request the provider did not price is priced from the model's configured rates
+> where both are set, exactly, under the `configured` qualifier, and `incomplete` marks a total some requests
+> could not contribute to. **Discovery pricing stays open**: the owner deferred it, so `REQ-PROVIDER-072`'s
+> `concrete-cloud`-only clause still governs.
 >
 > **Built the same day.** The ruled branch is no longer only ruled: the adapter asks OpenRouter for the figure
 > and reads it back, `Aggregates.addCost` adds it in exact decimal arithmetic, and the label carries the fourth

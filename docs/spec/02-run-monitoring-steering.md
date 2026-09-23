@@ -400,6 +400,11 @@ While a task run is executing, a user must be able to watch what every agent is 
 > incomplete price, a price derived from configured rates — gain a **fourth** member, `reported`, for a
 > figure the provider computed and the product only carried. The reason the set could stay at three was
 > that every route to a figure ran through a rate; a provider-reported cost runs through none.
+>
+> **Revision 2, 2026-09-23.** All four qualifiers now have a producer. A request the provider did not price
+> is priced from the model's configured rates where both are set; `incomplete` marks a total some requests
+> could not contribute to, and `configured` a total at least one configured figure entered. The directive
+> fixes each qualifier's label text.
 
 **REQ-MONITOR-167** — The tool-calls card shows the session-wide tool-call total, a caption naming the number of agents it spans, and up to five per-tool chips of the form `{tool} {count}` sorted by count descending, aggregated from per-agent metrics.
 

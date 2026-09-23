@@ -8,6 +8,20 @@ status: resolved
 # Resolution Record — Domain 04, Model Providers, Sign-In, and Model Routing
 
 
+> ## Amendment, 2026-09-23 — per-token prices are decimal strings (OQ-21)
+>
+> `REQ-PROVIDER-072` now carries `concrete-cloud`'s decimal-string prices as decimal strings rather than
+> mapping them to floating point, and rejects a malformed value where it rejected a non-finite one. The
+> discovery snapshot's `pricing` block types `input_cost_per_token` and `output_cost_per_token` as decimal
+> strings, beside `image_cost_per_image`, which already was one.
+>
+> **Why this is an amendment and not a directive.** Two live requirements disagreed: `REQ-PROVIDER-072` and
+> the snapshot format typed prices as floats, while `REQ-PROVIDER-121` forbids computing any amount, "including
+> the per-token pricing carried through discovery", in binary floating point. A value that has been through a
+> binary float cannot afterwards be made exact, so the float typing was the defect. The owner ruled OQ-21 as it
+> recommended ([R-049](../../product/requests.md#r-049)); `owner-decisions.md` holds the ruling.
+
+
 > ## Amendment, 2026-09-02 — the Copilot gateway staging directory leaves the workspace
 >
 > **Row 14 below is superseded.** It settled the staging directory as

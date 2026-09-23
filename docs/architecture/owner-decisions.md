@@ -1515,3 +1515,28 @@ shape the question named.
 **What this ruling does not do.** It builds nothing. Until the directive is built the log keeps every level,
 and the directive owes its first execution into `first-executions.md` when it is.
 
+### OQ-21 — per-token prices are decimal strings, ruled; OQ-62's configured-rate branch with it
+
+**Ruled 2026-09-23 (R-049).** The owner approved the design recorded on
+`docs/defects/configured-per-token-prices-take-no-effect.md`. Three records carry it:
+
+- **OQ-21, answered as it recommended, by amendment.** `REQ-PROVIDER-072` and the snapshot formats typed
+  prices as floats while `REQ-PROVIDER-121` forbids float money, so the corpus disagreed with itself and is
+  corrected in place: `REQ-CONFIG-088` (decimal ≥ 0, a YAML number taken as the decimal its text states),
+  `REQ-PROVIDER-072`, and the two `pricing` format blocks in domains 04 and 15. Each carries an inline
+  amendment mark, and each domain's resolution record carries the amendment note.
+- **ADR-0031, accepted in narrowed form.** The Decimal is `money.ts`'s scaled `bigint` with no scale fixed in
+  advance. Pricing adds exact multiplication by a whole token count, which needs no library and no spike. The
+  lint rule banning arithmetic on the branded type is built with it. The library question stays open only for
+  the balance division of `REQ-PROVIDER-130`.
+- **`PD-MONITOR-001` revision 2.** A request the provider did not price is priced from configured rates, and
+  all four of `REQ-MONITOR-166`'s qualifiers get a producer and a fixed label. A revision rather than a new
+  directive, because one requirement carries one narrowing directive.
+
+**Deferred:** OQ-62's discovery-pricing branch. **Prerequisite for building:** the repair of
+`docs/defects/a-delegated-childs-provider-requests-never-reach-the-runs-totals.md`.
+
+**What this ruling does not do.** It builds nothing. Every configured run still reads `"0"` under `unknown`
+until the revision is built, and its first execution reports into `first-executions.md`, ADR-0031 and the
+directive.
+

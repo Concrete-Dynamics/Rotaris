@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Twenty-four.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Twenty-five.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -872,13 +872,44 @@ and deliberately not repaired here. The row is in
 
 ### PD-MONITOR-001 — a cost the provider reported is carried and shown under its own qualifier
 
-**The rule.** Where a provider's own protocol defines a way for a request to ask for the cost of that
-request, the product SHALL ask, and SHALL carry the figure the provider answers with. A run's cost
-total is the **exact decimal sum** of the per-request figures it received and of nothing else: no rate
-is multiplied, no figure is estimated, and no figure is invented for a request the provider priced at
-nothing it reported. `REQ-MONITOR-166`'s cost label SHALL carry a fourth qualifier, **`reported`**,
-for a total reached this way, and a run holding no reported figure SHALL keep the `unknown` qualifier
-and the label it has today.
+*Revision 2 (2026-09-23, [R-049](requests.md#r-049)) — **configured rates price a request the provider did
+not**, below. Revision 1 (2026-09-16, [R-026](requests.md#r-026)) is quoted where it is replaced, never
+deleted. A changed directive takes a revision and never a new number ([`README.md`](README.md)).*
+
+**The rule — revision 2.** Where a provider's own protocol defines a way for a request to ask for the
+cost of that request, the product SHALL ask, and SHALL carry the figure the provider answers with.
+Every completed provider request of the run, whichever agent made it, is then priced by the first of
+these that applies:
+
+1. **Reported.** The provider reported a cost for the request: that figure.
+2. **Configured.** The model the request was sent to has both `input_cost_per_token` and
+   `output_cost_per_token` set (`REQ-CONFIG-088`): the request's input tokens multiplied by the input
+   price, plus its output tokens multiplied by the output price, computed in exact decimal arithmetic
+   (`REQ-PROVIDER-121`) with no rounding before display.
+3. **Unpriced.** Otherwise the request has no figure. None is estimated or invented for it.
+
+A price SHALL be taken as the decimal its configuration states, read from the text as written, so a
+price never passes through binary floating point on its way in. A run's cost total is the **exact
+decimal sum** of its requests' figures. `REQ-MONITOR-166`'s cost label SHALL carry a fourth qualifier,
+**`reported`**, and the four qualifiers and their labels SHALL be:
+
+| The run's requests | Qualifier | Label |
+|---|---|---|
+| none has a figure | `unknown` | `price not established` |
+| some have a figure, some do not | `incomplete` | `at least <amount>; some requests have no price` |
+| every one has a figure, and every figure was reported | `reported` | `<amount> reported by the provider` |
+| every one has a figure, and at least one was configured | `configured` | `<amount> at configured rates` |
+
+The qualifier is recorded with the total, so a label read back later is the label the run earned.
+
+> **Revision 1 said, and no longer governs:** "A run's cost total is the **exact decimal sum** of the
+> per-request figures it received and of nothing else: no rate is multiplied, no figure is estimated,
+> and no figure is invented for a request the provider priced at nothing it reported.
+> `REQ-MONITOR-166`'s cost label SHALL carry a fourth qualifier, **`reported`**, for a total reached this
+> way, and a run holding no reported figure SHALL keep the `unknown` qualifier and the label it has today."
+> It forbade multiplying a rate because the representation that makes the multiplication exact was
+> undecided (OQ-21, ADR-0031). Both are now decided: prices are decimal strings, and multiplying a decimal
+> by a whole token count is exact in `money.ts`'s representation with no library.
 
 A figure whose currency the provider does not name SHALL be rendered as the amount alone, under the
 rounding of `REQ-PROVIDER-121` — half-up, two decimal places, four below one hundredth — and SHALL NOT
@@ -937,9 +968,24 @@ adding to it.
 - **Not per agent.** `REQ-MONITOR-102` persists a per-agent cost. This carries the run's total only;
   the per-agent figure stays as it is, owed rather than quietly filled.
 
+**What revision 2 costs.**
+
+- **Cached input is charged at the full input price.** The product's usage record has no cached-token
+  figure, so on a provider that discounts cached input a configured figure is higher than the provider's
+  charge. A reported figure, where there is one, takes precedence and carries the discount.
+- **Image pricing is not included.** `REQ-PROVIDER-150`'s image token cost is outside this revision.
+- **A mixed run reads `configured`.** One configured figure among reported ones makes the whole total
+  partly an estimate, and the label says so.
+- **Discovery prices are not read.** Whether a price may come from a provider's model list is the first
+  half of OQ-62 and stays open.
+- **Children must be counted.** A delegated child's requests are the run's requests. The repair of
+  [`a-delegated-childs-provider-requests-never-reach-the-runs-totals.md`](../defects/a-delegated-childs-provider-requests-never-reach-the-runs-totals.md)
+  is part of building this revision.
+
 > **Narrows:** REQ-MONITOR-166, REQ-PROVIDER-121
 
-*Raised by the owner, 2026-09-16; logged as [R-026](requests.md#r-026).*
+*Raised by the owner, 2026-09-16; logged as [R-026](requests.md#r-026). Revised 2026-09-23; logged as
+[R-049](requests.md#r-049).*
 
 > **First execution, 2026-09-16, the day it was raised:** it found the reading half harder than the
 > asking half, and the corpus friendlier than expected. The SDK's usage mapping keeps the token fields
@@ -1460,6 +1506,63 @@ are not recorded, and cannot be recovered afterwards.
 > **New:** no live requirement covers this.
 
 *Raised by the owner, 2026-09-23; logged as [R-048](requests.md#r-048).*
+
+---
+
+<a id="pd-tools-006"></a>
+
+### PD-TOOLS-006 — a delegated child may declare a write scope that its siblings may not write into
+
+**The argument.** `delegate` SHALL accept one further optional action field, `write_scope`: a list of
+path patterns relative to the workspace root, in the pattern dialect of the `glob` tool (REQ-TOOLS-138 to
+REQ-TOOLS-141: `*`, `**`, `?` and `{a,b}`). A delegation whose `write_scope` holds an empty pattern, an
+absolute pattern, or a pattern that reaches outside the workspace root SHALL be rejected, with a reason
+naming the pattern.
+
+**The claim.** From the moment a child carrying a `write_scope` is accepted until it reaches a terminal
+state, it **claims** every workspace path its patterns match. A call of `write_file` or `haet_edit`
+(including its alias `haet`) whose target path is claimed SHALL be refused before it executes when the
+calling agent is any agent of the same run other than the claiming child and that child's own descendants.
+The refused callers therefore include the claiming child's siblings, its parent and the run's entry agent.
+Every `write_file` operation counts as a write, `undo` included. Where the patterns of two live children
+match the same path, the child accepted first holds that path. A claim lapses when its child reaches a
+terminal state.
+
+**The refusal.** The call's status is `blocked`. The reason names the path, the claiming child's canonical
+name and persona, and the pattern that matched, and it points to the two ways forward, in this form:
+`<rel> is inside the write scope of <canonical_name> (<persona>), which is still running: '<pattern>'. The
+write was not executed. Choose a path outside that scope, or wait for <canonical_name> with wait_for_tasks.`
+
+**The disclosure.** A child's payload SHALL carry one further block, immediately after the workspace-root
+prefix of REQ-TOOLS-154: the child's own `write_scope` when it has one, and the `write_scope` of every
+other child of the run that is live when this child is accepted, each under that child's canonical name.
+The block is omitted when there is nothing to list.
+
+**What is unchanged.** A child delegated without a `write_scope` claims nothing and is refused only where a
+live sibling's claim reaches. A `write_scope` never limits the child that declared it: that child may write
+outside its own patterns wherever no other claim reaches. Claims belong to one run and are never persisted,
+so a resumed session starts with none. Reading is never refused by a claim.
+
+**Why, and what it costs.** In run `2e21e324` two children writing in one checkout refused each other three
+times and one of them spent turns discovering its sibling's file by hand. Both of the product's guards held
+(the hash guard and the create-guard), so nothing was lost; the cost was that each child learned about the
+other only at the moment of writing. A declared scope moves that knowledge to the start: the parent says
+which paths each child will write, each child is told at start which paths belong to someone else, and a
+write that crosses a live claim is stopped with the name of its owner. What it costs:
+
+- **The file tools only.** `terminal`, `git_commit`, MCP tools and plugin tools can still write a claimed
+  path, because none of them passes through the file tools' path handling. The claim is a coordination
+  mechanism for agents that use the file tools, which is the case the run observed.
+- **The parent has to declare.** A parent that spawns parallel writers without scopes gets exactly today's
+  behaviour. Claims made automatically by the first writer were considered and not chosen, because they
+  would still surface the collision only at write time.
+- **The parent is refused too.** A parent that wants to write into a live child's scope waits for the child
+  or writes elsewhere.
+
+> **Narrows:** REQ-TOOLS-152, REQ-TOOLS-154
+> **Extends:** REQ-ORCH-028
+
+*Raised by the owner, 2026-09-23; logged as [R-049](requests.md#r-049).*
 
 ---
 

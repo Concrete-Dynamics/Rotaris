@@ -144,7 +144,7 @@ The product is configured by optional YAML files kept in two directory scopes �
 - **REQ-CONFIG-085** — Budget fields: `max_input_tokens` and `max_output_tokens` (int or null, back-filled from a known-limits table when unset), `context_compression_threshold` (int or null, per-model compression trigger).
 - **REQ-CONFIG-086** — Timeout and retry fields: `timeout` (int seconds or null; overrides `runtime.model_timeout`; null means use the global value), `num_retries` (int or null; overrides the dispatch layer's default of **5**).
 - **REQ-CONFIG-087** — Sampling fields, all null by default unless noted: `temperature` (float), `top_p` (float), `top_k` (int, applied only where the target provider accepts it), `presence_penalty` (float), `repetition_penalty` (float), `seed` (int), `extra_body` (mapping, default empty — extra provider-specific request-body fields).
-- **REQ-CONFIG-088** — Pricing fields `input_cost_per_token` and `output_cost_per_token` (float ≥ 0, null default) **only take effect when both are set**. Setting one alone has no observable effect.
+- **REQ-CONFIG-088** — Pricing fields `input_cost_per_token` and `output_cost_per_token` (decimal ≥ 0, null default) **only take effect when both are set**. Setting one alone has no observable effect. A price may be written as a YAML number or as a quoted decimal string, and in either spelling it is taken as the decimal the text states, never as the binary floating-point value a YAML number parses to (accepted amendment 2026-09-23, OQ-21; REQ-PROVIDER-121).
 - **REQ-CONFIG-089** — Reasoning fields: `thinking` (level or null) and `reasoning_effort` (string or null). An explicit `reasoning_effort` **overrides** the value derived from `thinking`.
 - **REQ-CONFIG-090** — `thinking` accepts legacy boolean spellings for backward compatibility: `true` is read as `high`, `false` is read as unset.
 - **REQ-CONFIG-091** — `reasoning_effort_map` (mapping from a normalized reasoning level to a provider-dialect string, default empty) adapts the normalized vocabulary to a custom endpoint's own spelling.
@@ -777,7 +777,7 @@ providers:
         display_name: <string|null>
         capabilities: {…}
         limits: {…}
-        pricing: {<name>: <float>}
+        pricing: {<name>: <decimal string>}   # accepted amendment 2026-09-23, OQ-21
         discovered_at: <ISO-8601 UTC>   # required
 ```
 

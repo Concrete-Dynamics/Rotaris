@@ -130,6 +130,14 @@ export default tseslint.config(
     },
   },
   {
+    // ADR-0031 (accepted narrowed, R-049): money.ts is the one place arithmetic on an amount lives.
+    files: ['packages/*/src/**/*.{ts,tsx}', 'apps/desktop/src/**/*.{ts,tsx}'],
+    ignores: ['**/*.test.ts', '**/*.test.tsx', 'packages/kernel/src/money.ts'],
+    rules: {
+      'rotaris/money-only-in-money-ts': 'error',
+    },
+  },
+  {
     files: ['packages/ui/src/**/*.{ts,tsx}', 'apps/desktop/src/renderer/**/*.{ts,tsx}'],
     plugins: { 'react-hooks': reactHooks },
     rules: {

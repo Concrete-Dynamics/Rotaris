@@ -119,6 +119,13 @@ _Avoid_: subagent, worker, sub-task
 An explicit `delegate` tool call naming a target role, a task name and a task. It never suspends the
 parent's conversation. — `REQ-ORCH-031`, `REQ-TOOLS-153`
 
+**Write scope**:
+The path patterns a delegation may declare for its child, in the `glob` tool's dialect and relative to the
+workspace root. While the child is live it **claims** every path they match; any other agent of the run except the
+child's own descendants is refused a `write_file` or `haet_edit` write into a claimed path, and the child accepted
+first holds a path two scopes share. A scope never limits the child that declared it. — `PD-TOOLS-006`
+_Avoid_: lease, lock, partition, ownership (ownership is per todo item, `REQ-ORCH-028`)
+
 **Implementation delegation**:
 A delegation whose target role holds a tool the public tool-name registry declares as writing
 workspace files. Exclusive ownership is measured per todo item and at no other granularity. —
@@ -219,6 +226,17 @@ _Avoid_: summarisation (a child's **summarizing** state is a different thing), t
 A run at rest because a provider's quota is exhausted, carrying the waiting agent, the model and the
 wait duration, and presented distinctly from an ordinary pause. — `REQ-MONITOR-303`,
 `REQ-NOTIFY-263`
+
+**Cost qualifier**:
+What a run's cost total rests on, recorded with it: `unknown` (no request has a figure), `incomplete` (some
+do, some do not), `reported` (every figure was the provider's) or `configured` (every request priced, at least
+one at configured rates). Each has one fixed label. — `REQ-MONITOR-166`, `PD-MONITOR-001`
+_Avoid_: estimate, price status
+
+**Configured price**:
+A model entry's `input_cost_per_token` and `output_cost_per_token`, taken as the decimals their text states.
+They price a request the provider did not, and only when both are set. — `REQ-CONFIG-088`, `PD-MONITOR-001`
+_Avoid_: rate card, tariff
 
 **Agent state**:
 A delegated child's state: `queued`, `starting`, `running`, `summarizing`,

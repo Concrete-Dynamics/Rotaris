@@ -43,7 +43,39 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-09-22**
+## Last reconciled with the code: **2026-09-23**
+
+**Configured rates price a request (`PD-MONITOR-001` revision 2, built 2026-09-23).** A request the provider did not
+price is priced at the ladder cell from the configured rates of the model it was sent to, exactly, and the run's
+total carries one of four qualifiers, persisted in the new `sessions.cost_qualifier` column (appended migration
+**v21**). A configured price is read from the YAML scalar's source text (`config/prices.ts`), in the configuration
+files and in the discovery snapshot. The **runtime view** moves: "What a step costs" is rewritten, and §7 names v21
+and the column. No package, edge, channel or message kind changed; the `usage.update` payload is unchanged.
+
+**Money moves to `kernel` (ADR-0031 accepted narrowed, R-049).** `engine/money.ts` becomes `kernel/money.ts` and
+gains the two operations pricing needs: exact multiplication by a whole token count, and `amountFromText`, which
+reads a number's text as the decimal it states. A price is read in `config` and summed in `engine`, and `config`
+may not import `engine`. `model/reported-cost.ts` now expands a reported figure through the same reader.
+`rotaris/money-only-in-money-ts` (ADR-0031 consequence 2) makes `money.ts` the one place arithmetic on an amount
+lives. The **component view** (the kernel box), `module-map.md` (the kernel row) and the runtime view's file
+reference move. No edge changed: `model` → `kernel` was already allowed.
+
+**A delegated child's write scope (`PD-TOOLS-006`, built 2026-09-23).** `delegate` takes `write_scope`; a live
+scoped child claims the paths it matches, and the gate refuses a `write_file` or `haet_edit` write into a claimed
+path to every other agent of the run except the child's descendants, ahead of the permission resolution. Each child
+is told the live scopes in a block after the workspace-root line of its payload. The glob compiler moved from
+`agent-tools/tools/search.ts` to `kernel/glob.ts`, because the engine and the tools both read the dialect and
+import neither each other. The **component view** (the kernel box), the **runtime view** (§4 gains "Write scopes"),
+the **state-ownership view** (one in-memory row) and `module-map.md` (the kernel row) move. No edge, channel, message
+kind or store column changed.
+
+**A child's provider requests reach the run's totals (defect round, 2026-09-23).** `IterationChildren` built a
+child's turn with no `onRequestUsage`, so the session's tokens, its cost and every `usage.update` counted the
+entry agent alone. `ChildrenDeps` now carries the run's own callback into every child's turn, at every depth.
+Only the **runtime view** moves: one sentence in "What a step costs". No package, edge, message kind or store
+column changed. It is the prerequisite `PD-MONITOR-001` revision 2 names; the defect note moves to
+`docs/defects/fixed/`.
+
 
 **One instruction-file set, two readers (defect round, 2026-09-22).** The retrospective held its own copy
 of REQ-WORKSPACE-041's discovery rule — the two names at the workspace root, and no policy at all — so it

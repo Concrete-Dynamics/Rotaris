@@ -788,6 +788,22 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE plan_cycles_v20 RENAME TO plan_cycles;
     `,
   },
+  {
+    to: 21,
+    /*
+     * PD-MONITOR-001 revision 2 (R-049) / REQ-MONITOR-166: the qualifier a run's cost total earned — `unknown`,
+     * `incomplete`, `reported` or `configured` — recorded beside the total, because the label can no longer be read
+     * off the amount alone once a total may rest on configured rates. A row written before this version could only
+     * have held figures the provider reported (revision 1 multiplied no rate), so a total with any non-zero digit is
+     * backfilled `reported`, which is the label it already showed, and every other row stays `unknown`. The test is
+     * on the decimal string's digits, so no amount is compared in floating point here either.
+     */
+    sql: `
+      ALTER TABLE sessions ADD COLUMN cost_qualifier TEXT NOT NULL DEFAULT 'unknown'
+        CHECK (cost_qualifier IN ('unknown', 'incomplete', 'reported', 'configured'));
+      UPDATE sessions SET cost_qualifier = 'reported' WHERE cost GLOB '*[1-9]*';
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

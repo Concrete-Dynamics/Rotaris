@@ -3,11 +3,12 @@ import { millis, toIsoUtc, type Clocks, type TimerHandle } from '@rotaris/kernel
 /** REQ-CHAT-164: ten seconds of provider silence on a call in flight. */
 const STALL_AFTER = millis(10_000);
 import { terminalRowStreamId, type ApprovalOption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt } from '@rotaris/contracts';
-import type { AgentBackend, ChatMessage, ContentPart, ModelRef, ThinkingLevel, ToolSpec, TurnReport, Usage } from '@rotaris/model';
+import type { AgentBackend, ChatMessage, ContentPart, ModelRef, ThinkingLevel, ToolSpec, TurnReport } from '@rotaris/model';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { SessionWriter } from '../session-writer.js';
 import type { LoopSupervisor, SupervisorEscalation } from './supervisor.js';
 import { resilientStep, type StepOutcome, type TurnResilience } from './ladder.js';
+import { priceRequest, type PricedUsage } from './pricing.js';
 import type { ModelChoice } from './resilience.js';
 import { CompressionRunner, type TurnCompression } from './compression.js';
 import { Conversation } from './conversation.js';
@@ -126,7 +127,7 @@ export interface TurnDeps {
    * cumulative figures takes them from here rather than from `TurnOutcome.report.usage`, which carries only what
    * one turn's surviving attempts spent.
    */
-  readonly onRequestUsage?: ((usage: Usage) => void) | undefined;
+  readonly onRequestUsage?: ((usage: PricedUsage) => void) | undefined;
 }
 
 export interface SteeringPrompt {
@@ -173,7 +174,7 @@ export async function runTurn(deps: TurnDeps, task: string, history: readonly Ch
    * cumulative figures both come from here, so a request the ladder retried past is counted exactly once rather
    * than dropped with the report it belonged to.
    */
-  const observeRequestUsage = (u: Usage): void => {
+  const observeRequestUsage = (u: PricedUsage): void => {
     usage = { input: usage.input + u.input, output: usage.output + u.output };
     deps.onRequestUsage?.(u);
   };
@@ -233,9 +234,11 @@ export async function runTurn(deps: TurnDeps, task: string, history: readonly Ch
     const resilience: TurnResilience | undefined = deps.resilience && compression
       ? { ...deps.resilience, condense: async () => { const ok = await compression.run(conv, 'rejection', condensed, signal); if (ok) condensed = true; return ok; }, resumeIssue: deps.parentResume === true && steps === 1 }
       : deps.resilience;
+    // PD-MONITOR-001 revision 2: the ladder prices each request at its cell's model. The bare path has no catalogue to read
+    // rates from — it runs only where no resilience was configured — so it keeps a reported figure and prices nothing itself.
     const report = resilience
       ? await resilientStep({ writer, clocks, warn: deps.warn, agent: deps.agentName, onRequestUsage: observeRequestUsage }, resilience, (choice, unresponsiveMs) => step(stepDeps, choice, conv.snapshot(), specs, signal, unresponsiveMs, segment), signal)
-      : await (async () => { const o = await step(stepDeps, { model: deps.model, thinking: deps.thinking }, conv.snapshot(), specs, signal, null, segment); observeRequestUsage(o.report.usage); return o.report; })();
+      : await (async () => { const o = await step(stepDeps, { model: deps.model, thinking: deps.thinking }, conv.snapshot(), specs, signal, null, segment); observeRequestUsage(priceRequest(o.report.usage, null)); return o.report; })();
     lastReport = report;
     // REQ-MONITOR-049 (Part R): the step's input count is this agent's latest prompt-token reading; the surface reads it from the record.
     // REQ-MONITOR-089: after a compression the reading FALLS, because the step that follows one reports the shorter prompt.

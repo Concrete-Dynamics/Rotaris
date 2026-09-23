@@ -45,7 +45,7 @@ flowchart TB
     store["store<br/>schema (v16), delivery/, StoreDal, open/migrate,<br/>lock, rings,<br/>saved prompts, session artifacts"]
     platform["platform<br/>dirs, document (ADR-0004), instance,<br/>machine id, liveness, clocks, preferences"]
     contracts["contracts<br/>channels, commands, control, process protocol,<br/>requirements, terminal, terminal-keys,<br/>status, tools, children, hooks, intent, roles,<br/>config projections, theme data"]
-    kernel["kernel<br/>Result, ids, time & clocks,<br/>redaction, similarity, generated requirement symbols"]
+    kernel["kernel<br/>Result, ids, time & clocks,<br/>redaction, similarity, glob, money,<br/>generated requirement symbols"]
   end
 
   main --> shell & providers & config & platform & contracts & kernel

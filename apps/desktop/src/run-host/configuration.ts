@@ -3,7 +3,7 @@ import { isAbsolute, join } from 'node:path';
 import type { Clocks, Result } from '@rotaris/kernel';
 import { err, ok } from '@rotaris/kernel';
 import { resolvePreset, SANDBOX_MODE_NAMES, type HeadlessPolicy, type ModelTier, type SandboxModeName } from '@rotaris/contracts';
-import { compressionTrigger, isPlainMap, launchConfigurationSnapshot, loadConfiguration, overlayLiveState, PROJECT_SETTINGS_FILE, readProjectSnapshot, renderFatal, type BuiltinLaunch, type LiveState, type LoadedConfiguration, type ModelEntry, type ProjectSnapshot } from '@rotaris/config';
+import { compressionTrigger, effectivePricing, isPlainMap, launchConfigurationSnapshot, loadConfiguration, overlayLiveState, PROJECT_SETTINGS_FILE, readProjectSnapshot, renderFatal, type BuiltinLaunch, type LiveState, type LoadedConfiguration, type ModelEntry, type ProjectSnapshot } from '@rotaris/config';
 import { renderUnavailability, type AvailabilityVerdict, type PolicyRead } from '@rotaris/agent-tools';
 import { BUILT_IN_PERSONAS, parseLogLevel, resolveRole, RUN_CONFIG_DEFAULTS, TIER_ROLES, type CatalogueEntry, type ClassifierSlots, type McpGrantEvidence, type ModelChoice, type ModelLookup, type ModelSetup, type Persona, type PersonaResolver, type ResolvedTrigger, type RoleName, type RunSetup, type RuntimePosture, type TierRole } from '@rotaris/engine';
 import { AiSdkModelClient, DefaultAgentBackend, type AgentBackend, type ModelClient, type ModelRef, type ThinkingLevel } from '@rotaris/model';
@@ -320,7 +320,10 @@ export function catalogueOf(cfg: LoadedConfiguration, scripted: boolean, leased:
     const ref = modelRefOf(cfg, key, scripted);
     if (!ref) continue;
     const usable = scripted || !e.auth_provider || !leased || Boolean(leased[e.auth_provider]);
-    out.push({ key, provider: e.auth_provider ?? e.provider, model: ref, thinking: thinkingOf(e), roles: [...(roles.get(key) ?? [])], origin: discovered.has(key) && !configured.has(key) ? 'discovered' : 'configured', usable, ...settingsOf(e) });
+    // PD-MONITOR-001 revision 2 / REQ-CONFIG-088: the entry's prices ride with it, so the ladder prices a request at
+    // the rates of the model it was sent to; absent unless both are set.
+    const pricing = effectivePricing(e);
+    out.push({ key, provider: e.auth_provider ?? e.provider, model: ref, thinking: thinkingOf(e), roles: [...(roles.get(key) ?? [])], origin: discovered.has(key) && !configured.has(key) ? 'discovered' : 'configured', usable, ...settingsOf(e), ...(pricing ? { pricing } : {}) });
   }
   return out;
 }

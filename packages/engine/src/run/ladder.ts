@@ -1,8 +1,9 @@
 import { millis, type Clocks } from '@rotaris/kernel';
-import type { TurnReport, Usage } from '@rotaris/model';
+import type { TurnReport } from '@rotaris/model';
 import type { SessionWriter } from '../session-writer.js';
 import { classifyFailure, describeCondition, describeError, entryOf, localBackoffMs, pairKey, providerIdentity, retryAfterMs, sameTierCandidates, withSettings, type CatalogueEntry, type ModelChoice, type ResilienceMemory } from './resilience.js';
 import type { WaitRegistry } from './waits.js';
+import { priceRequest, type PricedUsage } from './pricing.js';
 
 /**
  * The ladder over one model step (REQ-ORCH-088/090/091/092, REQ-NOTIFY-081..090/094/096/099). It sits at the
@@ -77,8 +78,10 @@ export interface LadderDeps {
    * with it. A request the ladder discards — a transient failure it retries, a context rejection it condenses past,
    * an attempt superseded by a fallback — still reported whatever usage the provider reported, and that usage is
    * spent. Reading the usage off the ladder's return value alone loses it.
+   *
+   * PD-MONITOR-001 revision 2: the request arrives PRICED — here is where the model it was sent to is known.
    */
-  readonly onRequestUsage?: ((usage: Usage) => void) | undefined;
+  readonly onRequestUsage?: ((usage: PricedUsage) => void) | undefined;
 }
 
 function pause(clocks: Clocks, ms: number, signal: AbortSignal): Promise<void> {
@@ -105,8 +108,9 @@ export async function resilientStep(deps: LadderDeps, r: TurnResilience, call: (
   let condensations = 0;
   for (;;) {
     const { report, unresponsive } = await call(cell.model, unresponsiveThreshold(r));
-    // OQ-8: one observation per completed provider request, before the ladder decides what to do with it.
-    deps.onRequestUsage?.(report.usage);
+    // OQ-8: one observation per completed provider request, before the ladder decides what to do with it — priced at
+    // the rates of the model this attempt was sent to, which after a fallback is not the model the agent started on.
+    deps.onRequestUsage?.(priceRequest(report.usage, entryOf(catalogue, cell.model.model)?.pricing));
     const provider = providerIdentity(catalogue, cell.model.model);
     const modelId = cell.model.model.modelId;
     if (unresponsive && !signal.aborted && cell.fallback !== null && !cell.fallbackAttempted) {

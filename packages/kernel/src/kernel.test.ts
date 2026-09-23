@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Budget, FakeClock, millis, mintWorkspaceId, parseWorkspaceId, fileStamp, instant, ok, err, unwrap, REQ } from './index.js';
+import { Budget, FakeClock, globToRegExp, millis, mintWorkspaceId, parseWorkspaceId, fileStamp, instant, ok, err, unwrap, REQ } from './index.js';
 
 describe('kernel — Result', () => {
   it('unwrap returns the value of an Ok and throws on an Err', () => {
@@ -59,5 +59,30 @@ describe('kernel — generated requirement symbols (ADR-0040 #4)', () => {
   it('the symbol module is generated before collection and carries live identifiers', () => {
     expect(REQ['REQ-SESSION-197']).toBeDefined();
     expect(REQ['REQ-SHELL-023']).toBeDefined();
+  });
+});
+
+describe('kernel — the glob dialect (REQ-TOOLS-138..141, PD-TOOLS-006)', () => {
+  it('REQ-TOOLS-141: brace alternatives are globs, nested groups split at their own level, and an unclosed brace is literal', () => {
+    expect(globToRegExp('{a,{b,c}}.ts').test('c.ts')).toBe(true);
+    // A `/` inside an alternative stays a path separator.
+    expect(globToRegExp('{x/y,z}.md').test('x/y.md')).toBe(true);
+    expect(globToRegExp('{x/y,z}.md').test('z.md')).toBe(true);
+    expect(globToRegExp('packages/*/{*.json,*.ts}').test('packages/kernel/package.json')).toBe(true);
+    expect(globToRegExp('a{b').test('a{b')).toBe(true);
+  });
+
+  it('star stays inside one segment, double star crosses segments, and a leading ./ or / is dropped', () => {
+    expect(globToRegExp('src/*.ts').test('src/a.ts')).toBe(true);
+    expect(globToRegExp('src/*.ts').test('src/deep/a.ts')).toBe(false);
+    expect(globToRegExp('src/**').test('src/deep/a.ts')).toBe(true);
+    expect(globToRegExp('**/*.test.ts').test('a.test.ts')).toBe(true);
+    expect(globToRegExp('./src/?.ts').test('src/a.ts')).toBe(true);
+    expect(globToRegExp('src\\a.ts').test('src/a.ts')).toBe(true);
+  });
+
+  it('PD-TOOLS-006: matching is case-sensitive unless asked otherwise, as a write scope asks', () => {
+    expect(globToRegExp('src/**').test('SRC/a.ts')).toBe(false);
+    expect(globToRegExp('src/**', { caseInsensitive: true }).test('SRC/a.ts')).toBe(true);
   });
 });

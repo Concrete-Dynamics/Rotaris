@@ -1,5 +1,5 @@
-import { asSessionId, err, millis, ok, type Clocks, type MachineId, type Millis, type Result, type SessionId } from '@rotaris/kernel';
-import { APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type CheckpointKind, type CheckpointListPayload, type ControlRequest, type ControlResult, type ImageAttachmentInput, type PermissionPreset, type QuestionAnswers, type RunType, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding } from '@rotaris/contracts';
+import { asSessionId, err, formatAmount, millis, ok, type Clocks, type MachineId, type Millis, type Result, type SessionId } from '@rotaris/kernel';
+import { APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, COST_QUALIFIERS, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type CheckpointKind, type CheckpointListPayload, type ControlRequest, type ControlResult, type CostQualifier, type ImageAttachmentInput, type PermissionPreset, type QuestionAnswers, type RunType, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding } from '@rotaris/contracts';
 import { existsSync, rmSync } from 'node:fs';
 import { RELEASE_PAGE_SIZE, type CheckpointRow, type SessionRow, type StoreDal } from '@rotaris/store';
 import type { AgentBackend, ContentPart } from '@rotaris/model';
@@ -10,7 +10,6 @@ import type { CheckpointPort, CheckpointPortContext } from './checkpoint-port.js
 import { EventBus } from './run/event-bus.js';
 import { parseTokenSamples, Run, type ModelLookup, type PermissionPosture, type RunConfig, type RunResult } from './run/run.js';
 import { planSection } from './run/plan-text.js';
-import { formatAmount, isZeroAmount } from './money.js';
 export { planRequestSection, planSection } from './run/plan-text.js';
 import { ResilienceMemory, type CatalogueEntry, type ModelChoice } from './run/resilience.js';
 import type { ResolvedTrigger } from './run/compression.js';
@@ -115,6 +114,19 @@ export interface ToolPortContext {
    * built while the gate held stops withholding the moment the run says the hold is over.
    */
   readonly planGateHeld?: (() => boolean) | undefined;
+  /**
+   * PD-TOOLS-006: the live write-scope claim, if any, that refuses THIS agent a `write_file` or `haet_edit` write to
+   * a workspace-relative POSIX path. Bound to the agent's own task id, because the gate knows a caller only by its
+   * canonical name; a live read through the run, on the terms of `planGateHeld` above.
+   */
+  readonly writeClaimFor?: ((rel: string) => WriteClaimHolder | null) | undefined;
+}
+
+/** PD-TOOLS-006: what a write-scope refusal names — the holding child, its persona and the pattern that matched. */
+export interface WriteClaimHolder {
+  readonly canonicalName: string;
+  readonly persona: string;
+  readonly pattern: string;
 }
 
 /** Decision 1 of the plan: runtime keys the configuration loader (ADR-0036) will own; read from the environment until then. */
@@ -450,21 +462,26 @@ export interface StartRefusal {
  * REQ-MONITOR-166: the cost label carries its own qualifier, so no view has to invent a description for a
  * run whose price could not be established.
  *
- * PD-MONITOR-001 gives the qualifier set a fourth member. A figure in the run's total got there one way —
- * a provider reported it for a request it had completed (`Aggregates.addCost`) — so a total that is not
- * zero is a **reported** price, rendered under REQ-PROVIDER-121's rule for an amount: half-up, two decimal
- * places, four below one hundredth, and **no currency symbol**, because the provider named no currency and
- * the product does not pick one for it (the directive's narrowing).
+ * PD-MONITOR-001 revision 2 fixes four qualifiers and their labels, and the qualifier is the one the run EARNED
+ * and recorded with its total (`sessions.cost_qualifier`, v21) — read back, never re-derived from the amount,
+ * because since configured rates price requests a non-zero total no longer says how it was reached. The amount is
+ * rendered under REQ-PROVIDER-121's rule: half-up, two decimal places, four below one hundredth, and **no
+ * currency symbol**, because no figure here names a currency and the product does not pick one (the narrowing).
  *
- * The falsified reason, kept beside its replacement: "no rate is configured in this build, so the price is
- * unknown". The three routes through a *rate* are still blocked on OQ-21 and ADR-0031 and still render
- * `unknown`; the sentence was wrong only in treating a rate as the sole route to a figure.
+ * Two falsified readings, kept beside their replacement: "no rate is configured in this build, so the price is
+ * unknown" (revision 0), and "a total that is not zero is a reported price" (revision 1, when a provider's report
+ * was the only route to a figure).
  */
-export function costLabelOf(cost: string): SessionRecord['costLabel'] {
-  if (cost === '' || isZeroAmount(cost)) return { text: 'price not established', qualifier: 'unknown' };
+export function costLabelOf(cost: string, qualifier: string): SessionRecord['costLabel'] {
+  const unknown = { text: 'price not established', qualifier: 'unknown' } as const;
+  if (qualifier === 'unknown' || !(COST_QUALIFIERS as readonly string[]).includes(qualifier)) return unknown;
   const amount = formatAmount(cost);
   if (amount === null) return { text: `${cost} (price not established)`, qualifier: 'unknown' };
-  return { text: `${amount} reported by the provider`, qualifier: 'reported' };
+  switch (qualifier as Exclude<CostQualifier, 'unknown'>) {
+    case 'incomplete': return { text: `at least ${amount}; some requests have no price`, qualifier: 'incomplete' };
+    case 'configured': return { text: `${amount} at configured rates`, qualifier: 'configured' };
+    case 'reported': return { text: `${amount} reported by the provider`, qualifier: 'reported' };
+  }
 }
 
 /**
@@ -518,7 +535,7 @@ export function toSessionRecord(r: SessionRow, queued: readonly { id: string; co
     // an armed `plan` from a released one rather than promising a gate that will not open.
     planReleased: r.plan_released === 1,
     usageHistory: parseTokenSamples(r.token_samples),
-    costLabel: costLabelOf(r.cost),
+    costLabel: costLabelOf(r.cost, r.cost_qualifier),
     toolCalls: { total: r.tool_calls, agents: Math.max(0, ...toolCalls.map((t) => t.agents)), byTool: toolCalls.map((t) => ({ tool: t.tool_name, count: t.count })) },
     worktreeBranch: parseBinding(r.worktree)?.branch ?? null,
     wait: null,
@@ -888,7 +905,7 @@ export class Sessions {
       ...(supervisors ? { supervisorFor: (conversationId: string) => supervisors.forConversation(conversationId) } : {}),
       ...(preflight ? { preflight: async (signal: AbortSignal) => { const p = await preflight({ sessionId, workspaceRoot, prompt, signal, warn }); decided.grant = p.grant; decided.intent = p.intent.category; return p; } } : {}),
       ...(this.deps.tools ? {
-        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, modeOverride: modeOverride.value, grant: decided.grant, intent: decided.intent, artifacts: artifactOps(artifacts, { canonicalName: agentName, persona, conversationId: parentId }), readTodo: () => runRef.run?.agentTodoFor(parentId, depth === 0) ?? null, writeTodo: (document) => runRef.run?.replaceAgentTodo(parentId, depth === 0, document) ?? false, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false }),
+        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, modeOverride: modeOverride.value, grant: decided.grant, intent: decided.intent, artifacts: artifactOps(artifacts, { canonicalName: agentName, persona, conversationId: parentId }), readTodo: () => runRef.run?.agentTodoFor(parentId, depth === 0) ?? null, writeTodo: (document) => runRef.run?.replaceAgentTodo(parentId, depth === 0, document) ?? false, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false, writeClaimFor: (rel) => runRef.run?.writeClaimFor(parentId, rel) ?? null }),
         dal, artifacts, budget, modelCap: capFor,
         summariser: { backend: model.backend, model: model.summariser?.model ?? model.config.model, thinking: model.summariser?.thinking ?? model.config.thinking, timers: this.deps.clocks.timers, credentialFor: model.config.credentialFor },
       } : {}),
@@ -1031,7 +1048,7 @@ export class Sessions {
       onSaved: (generation) => summary.rebuild(generation, () => s.dal.getSession(sessionId)),
       ...(preflight ? { preflight: async (signal: AbortSignal) => { const p = await preflight({ sessionId, workspaceRoot, prompt, signal, warn, previousIntent: priorIntent, hasUnfinishedWork: true }); decided.grant = p.grant; decided.intent = p.intent.category; return p; } } : {}),
       ...(this.deps.tools ? {
-        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, modeOverride: modeOverride.value, grant: decided.grant, intent: decided.intent, artifacts: artifactOps(artifacts, { canonicalName: agentName, persona, conversationId: parentId }), readTodo: () => runRef.run?.agentTodoFor(parentId, depth === 0) ?? null, writeTodo: (document) => runRef.run?.replaceAgentTodo(parentId, depth === 0, document) ?? false, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false }),
+        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, modeOverride: modeOverride.value, grant: decided.grant, intent: decided.intent, artifacts: artifactOps(artifacts, { canonicalName: agentName, persona, conversationId: parentId }), readTodo: () => runRef.run?.agentTodoFor(parentId, depth === 0) ?? null, writeTodo: (document) => runRef.run?.replaceAgentTodo(parentId, depth === 0, document) ?? false, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false, writeClaimFor: (rel) => runRef.run?.writeClaimFor(parentId, rel) ?? null }),
         dal: s.dal, artifacts, budget, modelCap: capFor,
         summariser: { backend: model.backend, model: model.summariser?.model ?? model.config.model, thinking: model.summariser?.thinking ?? model.config.thinking, timers: this.deps.clocks.timers, credentialFor: model.config.credentialFor },
       } : {}),

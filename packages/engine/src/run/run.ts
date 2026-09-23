@@ -1,7 +1,7 @@
 import { Budget, millis, toIsoUtc, type Clocks, type MachineId, type Millis, type SessionId, type TimerHandle, type Timers } from '@rotaris/kernel';
 import type { SessionRow } from '@rotaris/store';
 import { DEFAULT_CONTEXT_CAPACITY, isAnswerOnly, type ApprovalOption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RootExecutionRecord } from '@rotaris/contracts';
-import type { AgentBackend, ChatMessage, ContentPart, ModelError, ModelRef, ThinkingLevel, TurnReport, Usage } from '@rotaris/model';
+import type { AgentBackend, ChatMessage, ContentPart, ModelError, ModelRef, ThinkingLevel, TurnReport } from '@rotaris/model';
 import type { EventBus } from './event-bus.js';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { Committed, SessionWriter } from '../session-writer.js';
@@ -16,6 +16,8 @@ import type { DelegationOps } from '../children/delegation.js';
 import type { Budget as ChildBudget } from '../children/ledger.js';
 import { canonicaliseName, mintTaskId } from '../children/naming.js';
 import type { SummariserDeps } from '../children/report.js';
+import type { ClaimHit } from '../children/write-scope.js';
+import type { PricedUsage } from './pricing.js';
 import type { HookPort, RunNotice } from '../hooks-port.js';
 import type { CheckpointPort } from '../checkpoint-port.js';
 import type { ArtifactStore } from '../artifacts/store.js';
@@ -397,6 +399,14 @@ export class Run {
   get isPlanGateHeld(): boolean {
     return this.planHeld;
   }
+  /**
+   * PD-TOOLS-006: the live write-scope claim that refuses the agent `callerId` a write to the workspace-relative
+   * `rel`, or null. Read through the iteration's children on every call, so a claim lapses the moment its child
+   * settles and a port built before a child was accepted still sees that child's scope.
+   */
+  writeClaimFor(callerId: string, rel: string): ClaimHit | null {
+    return this.children?.writeClaimFor(callerId, rel) ?? null;
+  }
   /** REQ-NOTIFY-263: the wait the record carries; null while no agent is parked on a provider limit. */
   get currentWait(): WaitState | null {
     return this.waits.current();
@@ -695,11 +705,10 @@ export class Run {
    * so a run that retried a transient failure or resumed its parent spent tokens the session's own totals never
    * counted.
    */
-  private readonly onRequestUsage = (u: Usage): void => {
-    this.aggregates.addTurnUsage(u);
-    // PD-MONITOR-001: a cost the provider reported for THIS request joins the run's total here, beside the
-    // tokens of the same request, so the figure the event carries and the figure the session persists are one.
-    if (u.cost !== undefined) this.aggregates.addCost(u.cost);
+  private readonly onRequestUsage = (u: PricedUsage): void => {
+    // PD-MONITOR-001: the request's figure — reported, or priced at configured rates by the ladder — joins the run's
+    // total here, beside the tokens of the same request, so the figure the event carries and the one persisted are one.
+    this.aggregates.addRequest(u);
     const payload = this.aggregates.usagePayload();
     const totals = usageTotals(payload);
     if (totals === this.lastUsageEmitted) return;
@@ -773,6 +782,8 @@ export class Run {
         budget: clampBudget(this.deps.budget ?? { maxDepth: 3, maxTotal: 20, maxActive: 6 }, this.preflight?.budgetCell ?? null), modelCap: this.deps.modelCap ?? (() => null), toolsFor: this.portFor,
         // REQ-MONITOR-102: a child's tool calls are the session's too; the entry agent's own are added at the turn below.
         countToolCalls: (n) => this.aggregates.addToolCalls(n),
+        // REQ-EVENTS-053, PD-MONITOR-001: a child's provider requests are the run's, counted where the entry agent's are.
+        onRequestUsage: this.onRequestUsage,
         summariser: this.deps.summariser ?? null, hooks: this.hooks, playbookFor: this.preflight?.playbookFor ?? null, route: this.preflight?.route ?? 'work', ...(this.deps.childTimeoutMs === undefined ? {} : { childTimeoutMs: this.deps.childTimeoutMs }), runSignal: this.abort.signal, warn: this.deps.warn,
         // REQ-WORKSPACE-060/065 (ADR-0063): a child is an agent, so it receives the SAME units the entry agent
         // does — the getter is passed through, not a copy, which is what makes "a skill can never be visible to

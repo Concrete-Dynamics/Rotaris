@@ -48,3 +48,29 @@ describe('lint — electron is a composition-root dependency', () => {
     expect(rules).toContain('rotaris/no-electron-outside-roots');
   });
 });
+
+describe('lint — ADR-0031: arithmetic on an amount lives in kernel/src/money.ts', () => {
+  const money = (rules: string[]) => rules.filter((r) => r === 'rotaris/money-only-in-money-ts');
+  it('a bigint outside money.ts is reported, in any package', async () => {
+    expect(money(await lintAs('packages/engine/src/violation.ts', 'export const a = BigInt(3);\nexport const b = 10n;\n'))).toHaveLength(2);
+    expect(money(await lintAs('packages/ui/src/violation.ts', 'export const a = BigInt(3);\n'))).toHaveLength(1);
+  });
+  it('arithmetic, a numeric conversion or a compound assignment on a money-named value is reported', async () => {
+    const code = [
+      'declare const cost: string; declare const usage: { inputPrice: number }; declare let total: number; declare const tokens: number;',
+      'export const a = usage.inputPrice * tokens;',
+      'export const b = Number(cost);',
+      'export const c = parseFloat(cost);',
+      'export const d = +cost;',
+      'export let totalCost = 0; totalCost += tokens;',
+      'total = total + usage.inputPrice;',
+    ].join('\n');
+    expect(money(await lintAs('packages/engine/src/violation.ts', code))).toHaveLength(6);
+  });
+  it('money.ts itself, a test, and code that only carries or compares an amount are not reported', async () => {
+    expect(money(await lintAs('packages/kernel/src/money.ts', 'export const a = BigInt(3) * 2n;\n'))).toEqual([]);
+    expect(money(await lintAs('packages/engine/src/x.test.ts', 'export const a = 0.1 * 3; declare const cost: number; export const b = cost * 2;\n'))).toEqual([]);
+    const carried = "import { addAmounts } from '@rotaris/kernel';\ndeclare const cost: string;\nexport const total = addAmounts(cost, '0.1');\nexport const same = cost === '0';\nexport const label = `${cost} reported`;\n";
+    expect(money(await lintAs('packages/engine/src/fine.ts', carried))).toEqual([]);
+  });
+});

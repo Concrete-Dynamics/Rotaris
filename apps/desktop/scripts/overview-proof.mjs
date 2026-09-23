@@ -77,7 +77,8 @@ writeFileSync(join(workspace, 'README.md'), '# Overview proof workspace\n');
 writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), [
   '# scratch configuration written by the proof script',
   'models:',
-  '  scripted: { provider: scripted, model_id: scripted }',
+  // PD-MONITOR-001 revision 2: both prices set, one written as an exponent, so the run is priced at configured rates.
+  '  scripted: { provider: scripted, model_id: scripted, input_cost_per_token: 3e-6, output_cost_per_token: 0.000015 }',
   'small_model: scripted',
   'medium_model: scripted',
   'large_model: scripted',
@@ -125,7 +126,7 @@ const run = launch('run', workspace, local, preferences, {
   // the divider dragged in by keyboard is not scriptable; the split is written through the preference command instead
 }, RUN_WAIT_MS + 120_000);
 const db = new Database(oneDatabase(local), { readonly: true });
-const session = db.prepare('SELECT session_id, execution_status, stop_reason, tokens_input, tokens_output, tool_calls, token_samples, run_started_at FROM sessions ORDER BY created_at DESC, rowid DESC LIMIT 1').get();
+const session = db.prepare('SELECT session_id, execution_status, stop_reason, tokens_input, tokens_output, cost, cost_qualifier, tool_calls, token_samples, run_started_at FROM sessions ORDER BY created_at DESC, rowid DESC LIMIT 1').get();
 const toolCounts = db.prepare('SELECT tool_name, COUNT(*) AS count, COUNT(DISTINCT agent_name) AS agents FROM tool_calls WHERE session_id = ? GROUP BY tool_name ORDER BY count DESC, tool_name').all(session.session_id);
 const children = db.prepare('SELECT task_id, state, depth FROM children WHERE session_id = ?').all(session.session_id);
 db.close();
@@ -141,8 +142,13 @@ const totalStored = session.tokens_input + session.tokens_output;
 if (Number(tokensShown) !== totalStored) throw new Error(`the tokens card shows ${tokensShown}; the store holds ${totalStored}`);
 const sparkSamples = Number(first(run.probes, '.ov-spark')?.data?.['data-samples'] ?? -1);
 if (sparkSamples !== samples.length) throw new Error(`the sparkline carries ${sparkSamples} samples; the store holds ${samples.length}`);
+// PD-MONITOR-001 revision 2: every request of the run — the entry agent's and the child's — priced at the configured
+// rates, recorded with its qualifier, and the label the Overview draws is the one the store holds.
 const cost = first(run.probes, '[data-testid="overview-cost"]');
-if (cost?.data?.['data-qualifier'] !== 'unknown') throw new Error(`the cost label's qualifier is ${cost?.data?.['data-qualifier'] ?? 'absent'}`);
+if (session.cost_qualifier !== 'configured' || !/[1-9]/.test(session.cost)) throw new Error(`the run's cost is ${session.cost} (${session.cost_qualifier}); configured rates should have priced it`);
+if (cost?.data?.['data-qualifier'] !== 'configured') throw new Error(`the cost label's qualifier is ${cost?.data?.['data-qualifier'] ?? 'absent'}`);
+const costShown = text(run.probes, '[data-testid="overview-cost"]')[0] ?? '';
+if (!/\b\d+\.\d{2,4} at configured rates$/.test(costShown.trim())) throw new Error(`the cost label reads "${costShown}"`);
 const toolTotalShown = Number(text(run.probes, '[data-testid="overview-tool-calls"]')[0] ?? -1);
 if (toolTotalShown !== session.tool_calls) throw new Error(`the tool-calls card shows ${toolTotalShown}; the session row holds ${session.tool_calls}`);
 const chips = text(run.probes, '[data-testid="overview-tool-chips"] .tag');

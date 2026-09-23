@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Aggregates } from './aggregates.js';
+import { priceRequest, type PricedUsage } from './pricing.js';
 import { classifyStop, EXECUTION_STATUSES, isBusy, presentationStatus, resultFromStatus, statusForResult, stopCondition, STOP_REASONS, summarise, TERMINAL_RESULTS } from './stop-conditions.js';
 import { StopRequest } from './stop-request.js';
 import { Todo } from './todo.js';
@@ -93,11 +94,55 @@ describe('engine/run — the todo in miniature (REQ-ORCH-004/067/077)', () => {
 });
 
 describe('engine/run — aggregates are maintained, not recomputed (REQ-SESSION-168/169)', () => {
-  it('rehydrates from the row, adds a turn, and its patch copies every figure', () => {
-    const a = Aggregates.rehydrate({ tokens_input: 5, tokens_output: 1, cost: '0', tool_calls: 0, compressions: 0 });
-    a.addTurnUsage({ input: 10, output: 4 });
-    expect(a.patch()).toEqual({ tokens_input: 15, tokens_output: 5, cost: '0', tool_calls: 0, compressions: 0 });
+  it('rehydrates from the row, adds a request, and its patch copies every figure', () => {
+    const a = Aggregates.rehydrate({ tokens_input: 5, tokens_output: 1, cost: '0', cost_qualifier: 'unknown', tool_calls: 0, compressions: 0 });
+    a.addRequest({ input: 10, output: 4, pricing: 'unpriced' });
+    expect(a.patch()).toEqual({ tokens_input: 15, tokens_output: 5, cost: '0', cost_qualifier: 'unknown', tool_calls: 0, compressions: 0 });
     expect(a.usagePayload().tokens.total).toBe(20);
     expect(Aggregates.rehydrate(undefined).totalTokens).toBe(0);
+  });
+});
+
+describe('engine/run — pricing a request and the qualifier the run earns (PD-MONITOR-001 revision 2)', () => {
+  const rates = { input: '0.000003', output: '0.000015' };
+
+  it('the reported figure wins; otherwise both configured prices, multiplied exactly; otherwise no figure at all', () => {
+    expect(priceRequest({ input: 1000, output: 200, cost: '0.01' }, rates)).toEqual({ input: 1000, output: 200, cost: '0.01', pricing: 'reported' });
+    // 1000 × 0.000003 + 200 × 0.000015 = 0.003 + 0.003, with no double anywhere.
+    expect(priceRequest({ input: 1000, output: 200 }, rates)).toEqual({ input: 1000, output: 200, cost: '0.006000', pricing: 'configured' });
+    expect(priceRequest({ input: 1000, output: 200 }, null)).toEqual({ input: 1000, output: 200, pricing: 'unpriced' });
+    // An attempt the provider counted nothing for is not a configured figure of zero.
+    expect(priceRequest({ input: 0, output: 0 }, rates)).toEqual({ input: 0, output: 0, pricing: 'unpriced' });
+  });
+
+  it('the four qualifiers follow the directive\'s table, and an empty attempt moves none of them', () => {
+    const run = (...requests: PricedUsage[]) => { const a = Aggregates.rehydrate(undefined); for (const r of requests) a.addRequest(r); return a; };
+    const reported: PricedUsage = { input: 10, output: 5, cost: '0.001', pricing: 'reported' };
+    const configured: PricedUsage = { input: 10, output: 5, cost: '0.002', pricing: 'configured' };
+    const unpriced: PricedUsage = { input: 10, output: 5, pricing: 'unpriced' };
+    const empty: PricedUsage = { input: 0, output: 0, pricing: 'unpriced' };
+    expect(run().costQualifier).toBe('unknown');
+    expect(run(unpriced).costQualifier).toBe('unknown');
+    expect(run(reported, empty).costQualifier).toBe('reported');
+    expect(run(configured).costQualifier).toBe('configured');
+    // A mix of reported and configured figures reads configured (the ruled fork).
+    expect(run(reported, configured).costQualifier).toBe('configured');
+    expect(run(reported, unpriced).costQualifier).toBe('incomplete');
+    expect(run(configured, unpriced, reported).figures).toMatchObject({ cost: '0.003', costQualifier: 'incomplete', tokensInput: 30 });
+  });
+
+  it('a continuation counts on from the recorded qualifier and totals', () => {
+    const after = (qualifier: string, tokens: number, next: PricedUsage) => {
+      const a = Aggregates.rehydrate({ tokens_input: tokens, tokens_output: 0, cost: qualifier === 'unknown' ? '0' : '0.01', cost_qualifier: qualifier, tool_calls: 0, compressions: 0 });
+      a.addRequest(next);
+      return a.costQualifier;
+    };
+    const priced: PricedUsage = { input: 1, output: 1, cost: '0.001', pricing: 'reported' };
+    expect(after('unknown', 0, priced)).toBe('reported');
+    // Unknown WITH tokens means earlier requests went unpriced, so a figure now makes the run incomplete, not reported.
+    expect(after('unknown', 40, priced)).toBe('incomplete');
+    expect(after('reported', 40, { ...priced, pricing: 'configured' })).toBe('configured');
+    expect(after('configured', 40, priced)).toBe('configured');
+    expect(after('incomplete', 40, priced)).toBe('incomplete');
   });
 });

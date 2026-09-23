@@ -63,6 +63,8 @@ export interface SessionRow {
   // v18 — REQ-LIBRARY-002/036: immutable run classification and durable artifact association.
   readonly run_type: 'task_run' | 'improvement_run' | 'integration_run';
   readonly improvement_artifact_ids: string;
+  // v21 — PD-MONITOR-001 revision 2 / REQ-MONITOR-166: the qualifier the run's cost total earned, recorded with it.
+  readonly cost_qualifier: string;
 }
 /** v17 — REQ-ORCH-154's durable record: one row per plan cycle, the decision taken and the text that was approved. */
 export interface PlanCycleRow {
@@ -103,6 +105,7 @@ export interface SessionRunPatch {
   readonly tokens_input?: number;
   readonly tokens_output?: number;
   readonly cost?: string;
+  readonly cost_qualifier?: string;
   readonly tool_calls?: number;
   readonly compressions?: number;
   readonly summary_status?: string | null;
@@ -353,6 +356,7 @@ export class StoreDal {
           tokens_input = coalesce(@tokens_input, tokens_input),
           tokens_output = coalesce(@tokens_output, tokens_output),
           cost = coalesce(@cost, cost),
+          cost_qualifier = coalesce(@cost_qualifier, cost_qualifier),
           tool_calls = coalesce(@tool_calls, tool_calls),
           compressions = coalesce(@compressions, compressions),
           summary_status = coalesce(@summary_status, summary_status),
@@ -694,7 +698,7 @@ export class StoreDal {
       session_id: id,
       permission_mode: patch.permission_mode ?? null, sandboxed: patch.sandboxed ?? null, pending_approvals: patch.pending_approvals ?? null,
       stop_reason: patch.stop_reason ?? null, iterations_completed: patch.iterations_completed ?? null, run_started_at: patch.run_started_at ?? null,
-      tokens_input: patch.tokens_input ?? null, tokens_output: patch.tokens_output ?? null, cost: patch.cost ?? null,
+      tokens_input: patch.tokens_input ?? null, tokens_output: patch.tokens_output ?? null, cost: patch.cost ?? null, cost_qualifier: patch.cost_qualifier ?? null,
       tool_calls: patch.tool_calls ?? null, compressions: patch.compressions ?? null,
       summary_status: patch.summary_status ?? null, summary_severity: patch.summary_severity ?? null, summary_text: patch.summary_text ?? null,
       todo: patch.todo ?? null, progress: patch.progress ?? null, message_limit: patch.message_limit ?? null,

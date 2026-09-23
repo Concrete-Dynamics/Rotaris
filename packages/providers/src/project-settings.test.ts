@@ -62,6 +62,16 @@ describe('project_settings.yaml (REQ-PROVIDER-084..087)', () => {
     expect((parseSnapshot('version: 1\nproviders:\n  q:\n    id: q\n    display_name: Q\n    authenticated: true\n    discovered_at: 2026-09-05T10:00:00Z\n    models: []\n    colour: red\n', p) as { error: string }).error).toContain("unknown key 'colour'");
     expect(parseSnapshot(': [', p).ok).toBe(false);
   });
+  it('REQ-PROVIDER-072 (amended, OQ-21): a decimal-string price survives the write and the read exactly, and a hand-written number reads as its text', () => {
+    const rec: ProviderRecord = { id: 'p', display_name: 'P', authenticated: true, discovered_at: NOW, models: [{ id: 'p/m', capabilities: {}, limits: {}, pricing: { input_cost_per_token: '0.0000025', output_cost_per_token: '0.00001' }, discovered_at: NOW }] };
+    const text = serializeSnapshot({ version: 1, providers: { p: rec } });
+    const back = parseSnapshot(text, 'p.yaml');
+    expect(back.ok && back.value.providers['p']!.models[0]!.pricing).toEqual({ input_cost_per_token: '0.0000025', output_cost_per_token: '0.00001' });
+    // Written quoted, so the file states a string and no reader takes it as a double.
+    expect(text).toContain('input_cost_per_token: "0.0000025"');
+    const edited = parseSnapshot(text.replace('"0.0000025"', '2.5e-6'), 'p.yaml');
+    expect(edited.ok && edited.value.providers['p']!.models[0]!.pricing['input_cost_per_token']).toBe('0.0000025');
+  });
   it('the secret screen refuses secret-like keys and values, exempting only the price and limit keys (REQ-PROVIDER-086)', async () => {
     const rec: ProviderRecord = { id: 'p', display_name: 'P', authenticated: true, discovered_at: NOW, models: [{ id: 'p/m', capabilities: {}, limits: { context_window: 1, max_tokens: 2 }, pricing: { input_cost_per_token: 0.1, output_cost_per_token: 0.2 }, discovered_at: NOW }] };
     expect(screenSecrets({ version: 1, providers: { p: rec } })).toBeNull();

@@ -6,6 +6,8 @@ import type { ApprovalOutcome, PendingApprovals, PresenterPort } from './approva
 import { argumentSummary, permissionRequest, requestSummary, type DecisionRecord, type PermissionRequest, type PolicyContext } from './policy.js';
 import { canonicalToolName, isPublicToolName, META_TOOL_NAMES } from './registry.js';
 import { planGateRefusal, withheldUnderPlanGate } from './planning-grants.js';
+import { checkFence } from './tools/fence.js';
+import { fencedByWriteScope, writeScopeRefusal, type WriteClaimHolder } from './write-scope.js';
 import type { Observation, ToolExecutor } from './tools/types.js';
 
 /**
@@ -120,6 +122,11 @@ export interface GateDeps {
    * dispatch check for why that distinction is worth a dependency.
    */
   readonly planGateWithheldNames?: (() => ReadonlySet<string>) | undefined;
+  /**
+   * PD-TOOLS-006: the live write-scope claim, if any, that refuses THIS port's agent a write to a workspace-relative
+   * POSIX path. Read at each dispatch of `write_file` and `haet_edit`; absent means no claim can reach this agent.
+   */
+  readonly writeClaimFor?: ((rel: string) => WriteClaimHolder | null) | undefined;
 }
 
 /** REQ-TOOLS-032's first repair: close the strings, objects and arrays still open at the cut. */
@@ -255,6 +262,17 @@ export class Gate {
       return finish({ text: `The arguments for '${call.name}' do not match its schema (${detail}). Re-issue the call with corrected arguments.`, isError: true, status: 'failed', decision: null, observation: null }, { failure_kind: 'invalid_request' });
     }
 
+    /*
+     * PD-TOOLS-006: a write into a live sibling's declared scope is refused before it executes. It sits after the
+     * schema parse, because the target path is an argument, and ahead of the permission resolution, so a write the
+     * claim would refuse never costs the user an approval first. The path is read exactly as the file tools' fence
+     * reads it; a path the fence would refuse is left for the executor to refuse in its own words.
+     */
+    const claimRefusal = this.writeScopeRefusal(call.name, parsed.data as Readonly<Record<string, unknown>>);
+    if (claimRefusal !== null) {
+      return finish({ text: claimRefusal, isError: true, status: 'blocked', decision: null, observation: null, blockedReason: claimRefusal }, { failure_kind: 'write_scope_claimed', error: 'inside a live write scope' });
+    }
+
     // (1) permission resolution — never raises; an ask is resolved here, so nothing below sees one.
     const req = permissionRequest(call.name, call.persona, repaired);
     const attended = deps.attended();
@@ -320,6 +338,18 @@ export class Gate {
     });
     this.outcomeIssues(call, obs);
     return result;
+  }
+
+  /** PD-TOOLS-006: the refusal for a file-tool write whose target a live claim holds for this agent, or null. */
+  private writeScopeRefusal(toolName: string, args: Readonly<Record<string, unknown>>): string | null {
+    const claimFor = this.deps.writeClaimFor;
+    if (!claimFor || !fencedByWriteScope(toolName)) return null;
+    const target = args['path'] ?? args['file_path'];
+    if (typeof target !== 'string' || target === '') return null;
+    const verdict = checkFence({ workspaceRoot: this.deps.workspaceRoot, allowOutsideWorkspace: false, additionalReadOnlyRoots: [] }, target, 'write');
+    if (!verdict.ok || !verdict.inside) return null;
+    const holder = claimFor(verdict.rel);
+    return holder === null ? null : writeScopeRefusal(verdict.rel, holder);
   }
 
   /** REQ-SESSION-136's outcome-driven issues, each referencing the tool-call record. */

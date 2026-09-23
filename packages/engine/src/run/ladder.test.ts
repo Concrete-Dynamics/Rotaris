@@ -6,7 +6,7 @@ import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotar
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import type { SessionSnapshot } from '@rotaris/contracts';
 import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, toolCalls, type ModelRef, type ScriptedCall } from '@rotaris/model';
-import { BUILT_IN_PERSONAS, RUN_CONFIG_DEFAULTS, Sessions, type CatalogueEntry, type DelegationOps, type ModelChoice, type ModelLookup, type PortToolResult, type Publisher, type RoleName, type RunConfig, type ToolPort } from '../index.js';
+import { BUILT_IN_PERSONAS, RUN_CONFIG_DEFAULTS, Sessions, toSessionRecord, type CatalogueEntry, type DelegationOps, type ModelChoice, type ModelLookup, type PortToolResult, type Publisher, type RoleName, type RunConfig, type ToolPort } from '../index.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000d') as MachineId;
 const ref = (providerId: string, modelId: string): ModelRef => ({ providerId, modelId, dialect: 'chat' });
@@ -185,6 +185,60 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(JSON.parse(dal.timelineOf(sid).find((t) => t.name === 'model_exhausted')!.metadata)).toMatchObject({ provider: 'a', model: 'a1' });
     expect(issues(sid)).not.toContain('model_wait');
     expect(pub.snapshots.every((s) => s.wait === null)).toBe(true);
+  });
+
+  describe('PD-MONITOR-001 revision 2: a request is priced at the ladder cell, by the model it was sent to', () => {
+    const A_RATES = { input: '0.000003', output: '0.000015' };
+    const B_RATES = { input: '0.0000001', output: '0.0000002' };
+    const label = (sid: SessionId) => toSessionRecord(dal.getSession(sid)!).costLabel;
+    const costs = (sid: SessionId) => dal.eventsOfKind(sid, 'usage.update').map((e) => (JSON.parse(e.payload) as { cost: { total: string } }).cost.total);
+
+    it('a request the provider did not price is priced at its model\'s configured rates, exactly, and the run reads configured', async () => {
+      const { sessions } = sessionsWith(() => answer('priced here', { input: 1000, output: 200 }), { catalogue: [entry('a1', 'a', A1, ['small_model'], { pricing: A_RATES })] });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      // 1000 × 0.000003 + 200 × 0.000015 = 0.006, with no binary float anywhere on the way.
+      expect(dal.getSession(sid)).toMatchObject({ cost: '0.006000', cost_qualifier: 'configured' });
+      expect(costs(sid)).toEqual(['0.006000']);
+      expect(label(sid)).toEqual({ text: '0.0060 at configured rates', qualifier: 'configured' });
+    });
+
+    it('a reported figure takes precedence, and one configured figure beside it makes the whole run read configured', async () => {
+      const failedWithCost: ScriptedCall = { parts: [{ part: { kind: 'usage', usage: { input: 10, output: 5, cost: '0.0012' } } }, { error: modelError({ code: 'http', status: 503, headline: 'overloaded' }) }] };
+      const { sessions } = sessionsWith((_p, turn) => (turn === 1 ? failedWithCost : answer('second', { input: 1000, output: 200 })), { catalogue: [entry('a1', 'a', A1, ['small_model'], { pricing: A_RATES })] });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await tick();
+      clock.advance(1_000);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      // The reported 0.0012 is kept as reported (its tokens are NOT re-priced); the second request adds 0.006000.
+      expect(costs(sid)).toEqual(['0.0012', '0.007200']);
+      expect(label(sid)).toEqual({ text: '0.0072 at configured rates', qualifier: 'configured' });
+    });
+
+    it('without rates a reported figure beside an unpriced request reads incomplete; with no figure at all, unknown', async () => {
+      const failedWithCost: ScriptedCall = { parts: [{ part: { kind: 'usage', usage: { input: 10, output: 5, cost: '0.0012' } } }, { error: modelError({ code: 'http', status: 503, headline: 'overloaded' }) }] };
+      const mixed = sessionsWith((_p, turn) => (turn === 1 ? failedWithCost : answer('unpriced', { input: 1000, output: 200 })));
+      const sid = (mixed.sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await tick();
+      clock.advance(1_000);
+      await mixed.sessions.running(sid)!;
+      expect(label(sid)).toEqual({ text: 'at least 0.0012; some requests have no price', qualifier: 'incomplete' });
+      const none = sessionsWith(() => answer('unpriced', { input: 1000, output: 200 }));
+      const sid2 = (none.sessions.start(dal, 'C:/ws', 'y') as { value: SessionId }).value;
+      await none.sessions.running(sid2)!;
+      expect(dal.getSession(sid2)).toMatchObject({ cost: '0', cost_qualifier: 'unknown' });
+      expect(label(sid2)).toEqual({ text: 'price not established', qualifier: 'unknown' });
+    });
+
+    it('after a fallback the request is priced at the fallback\'s rates, not the rates of the model the agent started on', async () => {
+      const catalogue = [entry('a1', 'a', A1, ['small_model'], { pricing: A_RATES }), entry('b1', 'b', B1, ['small_model'], { pricing: B_RATES })];
+      const { sessions, client } = sessionsWith((_p, turn) => (turn === 1 ? failing(quota()) : answer('from b', { input: 1000, output: 200 })), { catalogue });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(client.requests.map((r) => r.model.modelId)).toEqual(['a1', 'b1']);
+      // 1000 × 0.0000001 + 200 × 0.0000002 = 0.00014 at b1's rates; a1's would have been 0.006. The quota refusal counted nothing.
+      expect(dal.getSession(sid)).toMatchObject({ cost: '0.0001400', cost_qualifier: 'configured' });
+    });
   });
 
   it('a generic rate limit also takes the one same-tier fallback before any wait; the second limit on the fallback waits (REQ-ORCH-091 b then c)', async () => {

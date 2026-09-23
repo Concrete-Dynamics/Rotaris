@@ -1,10 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { z } from 'zod';
 import { FakeClock } from '@rotaris/kernel';
 import type { ApprovalPayload } from '@rotaris/contracts';
 import { PendingApprovals, PresenterRegistry, type PresenterPort } from './approvals.js';
 import type { ToolHooks } from './gate.js';
-import { completeTruncatedJson, Gate, repairPayload, simpleExecutor, type GateSink, type ToolCall } from './gate.js';
+import { completeTruncatedJson, Gate, repairPayload, simpleExecutor, type GateDeps, type GateSink, type ToolCall } from './gate.js';
 import { buildPolicy, PolicyContext } from './policy.js';
 import { terminalTool, TERMINAL_DEFAULTS, type TerminalManager } from './terminal/index.js';
 import { askQuestionsTool, PendingQuestions } from './tools/questions.js';
@@ -57,7 +60,7 @@ function recordingSink() {
   return { sink, decisions, requested, issues, timeline, opens, settles, pending, warnings };
 }
 
-function harness(opts: { preset?: string; attended?: boolean; presenter?: PresenterPort | null; headless?: 'deny' | 'abort'; abortHook?: (() => void) | null; timeoutMs?: number; extraExecutors?: [string, ReturnType<typeof simpleExecutor>][]; hooks?: ToolHooks | null; planGateHeld?: boolean; planGateWithheldNames?: readonly string[] } = {}) {
+function harness(opts: { preset?: string; attended?: boolean; presenter?: PresenterPort | null; headless?: 'deny' | 'abort'; abortHook?: (() => void) | null; timeoutMs?: number; extraExecutors?: [string, ReturnType<typeof simpleExecutor>][]; hooks?: ToolHooks | null; planGateHeld?: boolean; planGateWithheldNames?: readonly string[]; writeClaimFor?: GateDeps['writeClaimFor']; root?: string } = {}) {
   const clock = new FakeClock();
   const rec = recordingSink();
   const approvals = new PendingApprovals(clock);
@@ -71,12 +74,13 @@ function harness(opts: { preset?: string; attended?: boolean; presenter?: Presen
   for (const [n, e] of opts.extraExecutors ?? []) executors.set(n, e);
   let seq = 0;
   const gate = new Gate({
-    sessionId: 'S1', workspaceRoot: ROOT, policy, approvals, attended: () => opts.attended ?? true, presenter: opts.presenter === undefined ? { present: async () => ({ ok: true }), close: () => undefined } : opts.presenter,
+    sessionId: 'S1', workspaceRoot: opts.root ?? ROOT, policy, approvals, attended: () => opts.attended ?? true, presenter: opts.presenter === undefined ? { present: async () => ({ ok: true }), close: () => undefined } : opts.presenter,
     headlessPolicy: opts.headless ?? 'deny', abortHook: opts.abortHook ?? null, approvalTimeoutMs: opts.timeoutMs ?? 300_000, executors, resolvePath: (p) => (p.startsWith('D:/') ? p : `${ROOT}/${p}`),
     monotonic: clock, wall: clock, timers: clock, sink: rec.sink, nextSequence: () => ++seq, newRequestId: () => `req${++seq}`,
     hooks: opts.hooks ?? null,
     planGateHeld: () => opts.planGateHeld ?? false,
     planGateWithheldNames: () => new Set(opts.planGateWithheldNames ?? []),
+    ...(opts.writeClaimFor ? { writeClaimFor: opts.writeClaimFor } : {}),
   });
   const call = (name: string, args: unknown): ToolCall => ({ callId: `c-${name}`, name, rawArgs: typeof args === 'string' ? args : (args as Record<string, unknown>), persona: 'orchestrator', agentId: 'orchestrator', agentName: 'orchestrator' });
   return { gate, clock, rec, approvals, policy, executed, call };
@@ -419,5 +423,63 @@ describe('the plan gate at dispatch (REQ-ORCH-153, ADR-0062)', () => {
     const released = harness({ preset: 'autonomous', planGateHeld: false });
     const write = await released.gate.dispatch(released.call('write_file', { operation: 'create', path: 'a.txt' }), new AbortController().signal);
     expect(write).toMatchObject({ status: 'ok', text: 'wrote a.txt' });
+  });
+});
+
+describe('write scopes at dispatch (PD-TOOLS-006)', () => {
+  // A real directory: the claim is asked about the path exactly as the file tools' fence resolves it, real path and all.
+  let root = '';
+  beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'rotaris-scope-')); });
+  afterEach(() => { rmSync(root, { recursive: true, force: true }); });
+  const HOLDER = { canonicalName: 'api', persona: 'coding-agent', pattern: 'src/api/**' };
+  /** A claim on `src/api/**` for every caller, recording each path the gate asked about. */
+  function claimOnApi() {
+    const asked: string[] = [];
+    return { asked, writeClaimFor: (rel: string) => { asked.push(rel); return rel.startsWith('src/api/') ? HOLDER : null; } };
+  }
+  const HASH = 'a'.repeat(64);
+
+  it('refuses a write into a claimed path as blocked, in the directive\'s words, before any approval is asked or anything runs', async () => {
+    const claims = claimOnApi();
+    const h = harness({ preset: 'ask', writeClaimFor: claims.writeClaimFor, root });
+    const r = await h.gate.dispatch(h.call('write_file', { operation: 'create', path: 'src/api/users.ts' }), new AbortController().signal);
+    expect(r).toMatchObject({ status: 'blocked', isError: true });
+    expect(r.text).toBe("src/api/users.ts is inside the write scope of api (coding-agent), which is still running: 'src/api/**'. The write was not executed. Choose a path outside that scope, or wait for api with wait_for_tasks.");
+    expect(r.blockedReason).toBe(r.text);
+    expect(h.executed).toEqual([]);
+    // Under `ask` a write would have been brokered to the user: the claim answers first, so nobody is asked.
+    expect(h.rec.requested).toEqual([]);
+    expect(h.rec.decisions).toEqual([]);
+    expect(h.rec.settles[0]).toMatchObject({ status: 'blocked', failure_kind: 'write_scope_claimed' });
+  });
+
+  it('every write_file operation counts, undo included, and the path is read as the fence reads it', async () => {
+    const claims = claimOnApi();
+    const h = harness({ preset: 'autonomous', writeClaimFor: claims.writeClaimFor, root });
+    const undo = await h.gate.dispatch(h.call('write_file', { operation: 'undo', path: 'src/api/users.ts' }), new AbortController().signal);
+    expect(undo.status).toBe('blocked');
+    const dotted = await h.gate.dispatch(h.call('write_file', { operation: 'overwrite', path: './src/ui/../api/users.ts' }), new AbortController().signal);
+    expect(dotted.status).toBe('blocked');
+    expect(claims.asked).toEqual(['src/api/users.ts', 'src/api/users.ts']);
+  });
+
+  it('refuses haet_edit and its alias haet on the same terms', async () => {
+    const claims = claimOnApi();
+    const h = harness({ preset: 'autonomous', writeClaimFor: claims.writeClaimFor, root, extraExecutors: [['haet_edit', haetEditReal()], ['haet', haetEditReal()]] });
+    for (const name of ['haet_edit', 'haet']) {
+      const r = await h.gate.dispatch(h.call(name, { path: 'src/api/users.ts', content_hash: HASH, old_string: 'a', new_string: 'b' }), new AbortController().signal);
+      expect(r.status).toBe('blocked');
+      expect(r.text).toContain('inside the write scope of api (coding-agent)');
+    }
+  });
+
+  it('lets a write outside every claim through, and never consults the claims for a tool that is not a file write', async () => {
+    const claims = claimOnApi();
+    const h = harness({ preset: 'autonomous', writeClaimFor: claims.writeClaimFor, root });
+    const write = await h.gate.dispatch(h.call('write_file', { operation: 'create', path: 'src/ui/view.ts' }), new AbortController().signal);
+    expect(write).toMatchObject({ status: 'ok', text: 'wrote src/ui/view.ts' });
+    await h.gate.dispatch(h.call('terminal', { command: 'echo src/api/users.ts' }), new AbortController().signal);
+    await h.gate.dispatch(h.call('todo', { operation: 'list' }), new AbortController().signal);
+    expect(claims.asked).toEqual(['src/ui/view.ts']);
   });
 });

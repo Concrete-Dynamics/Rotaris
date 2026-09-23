@@ -94,12 +94,15 @@ describe('REQ-MONITOR-166 the run samples the token history', () => {
     expect(durationLabel(null, '2026-09-05T10:00:00.000Z')).toBe('');
     expect(durationLabel('2026-09-05T10:00:00.000Z', '2026-09-05T10:00:42.000Z')).toBe('0:42');
     expect(durationLabel('2026-09-05T10:00:00.000Z', '2026-09-05T11:05:03.000Z')).toBe('1:05:03');
-    expect(costLabelOf('0')).toEqual({ text: 'price not established', qualifier: 'unknown' });
-    // PD-MONITOR-001: a figure in the total got there one way — a provider reported it — so the label
-    // says so and renders it under REQ-PROVIDER-121's rule. It read "0.12 (price not established)" while
-    // the only route to a figure was a configured rate, which is still blocked (OQ-21).
-    expect(costLabelOf('0.12')).toEqual({ text: '0.12 reported by the provider', qualifier: 'reported' });
-    expect(costLabelOf('0.00154')).toEqual({ text: '0.0015 reported by the provider', qualifier: 'reported' });
-    expect(costLabelOf('nonsense')).toEqual({ text: 'nonsense (price not established)', qualifier: 'unknown' });
+    // PD-MONITOR-001 revision 2: the four qualifiers, each with its fixed label, the amount under REQ-PROVIDER-121's rule.
+    expect(costLabelOf('0', 'unknown')).toEqual({ text: 'price not established', qualifier: 'unknown' });
+    expect(costLabelOf('0.12', 'reported')).toEqual({ text: '0.12 reported by the provider', qualifier: 'reported' });
+    expect(costLabelOf('0.00154', 'reported')).toEqual({ text: '0.0015 reported by the provider', qualifier: 'reported' });
+    expect(costLabelOf('0.006', 'configured')).toEqual({ text: '0.0060 at configured rates', qualifier: 'configured' });
+    expect(costLabelOf('1.5', 'incomplete')).toEqual({ text: 'at least 1.50; some requests have no price', qualifier: 'incomplete' });
+    // The label is the RECORDED qualifier's, never re-derived from the amount; a malformed total or qualifier reads unknown.
+    expect(costLabelOf('0.12', 'unknown')).toEqual({ text: 'price not established', qualifier: 'unknown' });
+    expect(costLabelOf('nonsense', 'reported')).toEqual({ text: 'nonsense (price not established)', qualifier: 'unknown' });
+    expect(costLabelOf('0.12', 'estimated')).toEqual({ text: 'price not established', qualifier: 'unknown' });
   });
 });

@@ -2318,7 +2318,7 @@ two should expect the offset.
 | 0028 | Providers as frozen data plus capability registries | |
 | 0029 | Credentials stay individual protected files | |
 | 0030 | Sign-in flows and credential leasing | |
-| 0031 | Money as an exact-decimal type | |
+| 0031 | Money as an exact-decimal type *(accepted, narrowed, 2026-09-23 — OQ-21 ruled; the library question is left to the balance alone)* | |
 | 0032 | Discovery, snapshot and effective configuration | |
 | 0033 | The tool-server client: the official SDK's protocol layer, our own stdio transport *(escalation ruled — ESC-12)* | |
 | 0034 | Tool-server connections and configuration resolution | |

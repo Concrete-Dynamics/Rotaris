@@ -1,10 +1,10 @@
 # ADR-0031 — Money is an exact-decimal type carried end to end
 
-- **Status:** proposed
+- **Status:** accepted, narrowed — 2026-09-23 (R-049; see "Accepted, narrowed" at the end). Proposed 2026-08-31.
 - **Date:** 2026-08-31
 - **Origin:** MODEL (ADR-MODEL-06)
 - **Depends on:** ADR-0001
-- **Blocked by an open question (OQ-21) that changes a persisted format.**
+- ~~**Blocked by an open question (OQ-21) that changes a persisted format.**~~ OQ-21 ruled 2026-09-23: prices are decimal strings.
 
 ## Context
 
@@ -154,3 +154,25 @@ rule for an amount — half-up, two places, four below one hundredth.
 One reading in the section above is falsified by the build and kept beside its replacement: *"`Aggregates`
 has no mutator for cost"*. It has one — `addCost` — reached only by a figure a provider reported. The
 sentence was true of every route this decision was blocking and was never true of the route it was not.
+
+## Accepted, narrowed — 2026-09-23 (R-049)
+
+*A ruling, not a first execution: nothing new is built by it.*
+
+OQ-21 is answered as consequence 1 needed: prices are carried and persisted as decimal strings. The owner
+accepted this decision with its representation narrowed to what is already built and what pricing needs.
+
+- **The Decimal is `money.ts`'s representation**: a decimal string parsed to a scaled `bigint`, at the
+  operand's own scale, with no scale fixed in advance. Alternative B's library is **not adopted for pricing**.
+  Alternative C's objection still holds, because no scale is fixed in advance.
+- **Pricing needs one operation beyond addition**: exact multiplication of a Decimal by a non-negative
+  integer token count. That is exact in this representation, so pricing needs no library and no spike.
+- **The lint rule of consequence 2 is built with the pricing work**, and `money.ts` stays the one place
+  arithmetic on an amount lives.
+- **Still open under this decision**: the balance of `REQ-PROVIDER-130`, `balance_atomic` divided by a
+  provider-supplied `atomic_scale`. Division by an arbitrary integer is the one operation that may need a
+  library, and the spike this decision names is now scoped to it alone.
+
+The sections above are kept as written. The reading "No library is chosen, no spike is discharged" is still
+true, and the spike now prices only the balance.
+

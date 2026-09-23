@@ -164,7 +164,8 @@ mutation.
 
 ## Revisit if
 
-OQ-21 changes the persisted price type, which changes the snapshot record; or the suggestions endpoint
+OQ-21 changes the persisted price type, which changes the snapshot record (**triggered 2026-09-23**: OQ-21
+ruled that prices are decimal strings, so the snapshot's two price fields change type when it is built); or the suggestions endpoint
 gains roles beyond the four `REQ-PROVIDER-077` names; or a requirement moves the snapshot into a
 workspace-scoped store, which `REQ-CONFIG-477`'s ground 4 says would split one total merge across two
 storage models and which must therefore be argued against that requirement rather than against this ADR.

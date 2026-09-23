@@ -78,3 +78,7 @@ Directive it would become: `PD-TOOLS-006`. It would narrow REQ-TOOLS-152 and REQ
 
 Related: [`the-create-guard-tells-an-agent-it-read-a-file-its-sibling-wrote.md`](the-create-guard-tells-an-agent-it-read-a-file-its-sibling-wrote.md),
 found while designing this. The "Improved 2026-09-22" message above answers wrongly in exactly this note's case.
+
+**Ruled 2026-09-23 — [`PD-TOOLS-006`](../product/directives.md#pd-tools-006), [R-049](../product/requests.md#r-049).**
+The design above is approved as proposed, with both forks as recommended: declared scopes, and the parent and
+the entry agent refused too. The note stays open until the directive is built.

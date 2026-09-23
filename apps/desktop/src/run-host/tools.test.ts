@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, FakeClock, mintMachineId } from '@rotaris/kernel';
 import { TOOL_IMPLEMENTATIONS, type PermissionPreset } from '@rotaris/contracts';
 import { loadConfiguration } from '@rotaris/config';
 import { gitReadTool, permissivePolicyRead, TodoList, todoTool } from '@rotaris/agent-tools';
-import { SessionWriter } from '@rotaris/engine';
+import { SessionWriter, type ToolPortContext } from '@rotaris/engine';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import { personaResolverFor, runtimeFromConfiguration } from './configuration.js';
 import { createToolPort, isEntryPort, toolSpec, type ToolPortDeps } from './tools.js';
@@ -110,7 +110,7 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}runtime:
   });
   afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
 
-  function portFor(pin: string | null, modeOverride: string | null) {
+  function portFor(pin: string | null, modeOverride: string | null, extra: Pick<ToolPortContext, 'writeClaimFor'> = {}) {
     mkdirSync(join(dir, '.rotaris'), { recursive: true });
     writeFileSync(join(dir, '.rotaris', 'agents.yaml'), yaml(pin));
     const loaded = loadConfiguration({ globalDir: join(dir, 'global'), workspaceRoot: dir });
@@ -125,9 +125,22 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}runtime:
     };
     return createToolPort({
       sessionId: asSessionId('S1'), workspaceRoot: dir, writer, persona: 'coding-agent', agentName: 'coding-agent',
-      requestedMode: 'ask', modeOverride, attended: () => true, warn: (m) => warnings.push(m), abortRun: () => undefined,
+      requestedMode: 'ask', modeOverride, attended: () => true, warn: (m) => warnings.push(m), abortRun: () => undefined, ...extra,
     }, deps);
   }
+
+  it('PD-TOOLS-006: the engine\'s write-claim predicate reaches the gate, which refuses a claimed write before it runs', async () => {
+    const asked: string[] = [];
+    const port = portFor(null, 'autonomous', { writeClaimFor: (rel) => { asked.push(rel); return rel.startsWith('src/api/') ? { canonicalName: 'api', persona: 'coding-agent', pattern: 'src/api/**' } : null; } });
+    const call = (path: string) => ({ callId: `c-${path}`, name: 'write_file', rawArgs: JSON.stringify({ operation: 'create', path, content: 'x' }), persona: 'coding-agent', agentId: 'coding-agent', agentName: 'coding-agent' });
+    const refused = await port.dispatch(call('src/api/users.ts'), new AbortController().signal);
+    expect(refused).toMatchObject({ status: 'blocked', isError: true });
+    expect(refused.text).toContain('inside the write scope of api (coding-agent)');
+    expect(existsSync(join(dir, 'src', 'api', 'users.ts'))).toBe(false);
+    const written = await port.dispatch(call('src/ui/view.ts'), new AbortController().signal);
+    expect(written.status).toBe('ok');
+    expect(asked).toEqual(['src/api/users.ts', 'src/ui/view.ts']);
+  });
 
   it('an agent built after a mid-run switch takes the session override, not the start-of-run mode', () => {
     expect(portFor(null, 'autonomous').currentMode()).toBe<PermissionPreset>('autonomous');

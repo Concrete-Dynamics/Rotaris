@@ -83,12 +83,15 @@ export function priorAgentContext(deps: readonly ChildRow[]): string {
  * artifact blocks — `PRIOR SIBLING ARTIFACT INDEX` and, where the launch attached any, `PRIOR AGENT CONTEXT
  * (FULL)` (REQ-LIBRARY-097, REQ-LIBRARY-098). They sit after the dependency reports and before the workspace
  * root and the task, so the child reads what its dependencies found first and the session's wider index next.
+ * PD-TOOLS-006's write-scope block follows the workspace root directly.
  */
-export function childPayload(workspaceRoot: string, task: string, priorContext: string, artifactBlocks: readonly string[] = []): string {
+export function childPayload(workspaceRoot: string, task: string, priorContext: string, artifactBlocks: readonly string[] = [], writeScopes = ''): string {
   const parts: string[] = [];
   if (priorContext) parts.push(priorContext);
   for (const block of artifactBlocks) if (block !== '') parts.push(block);
   parts.push(`Workspace root: ${workspaceRoot}. Treat any other absolute path you encounter as stale; every path you use is relative to this root.`);
+  // PD-TOOLS-006: the write scopes, immediately after the workspace-root prefix, and nothing when there are none.
+  if (writeScopes !== '') parts.push(writeScopes);
   parts.push(task);
   return parts.join('\n\n');
 }

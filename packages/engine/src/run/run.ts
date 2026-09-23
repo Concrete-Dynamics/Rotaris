@@ -16,6 +16,7 @@ import type { DelegationOps } from '../children/delegation.js';
 import type { Budget as ChildBudget } from '../children/ledger.js';
 import { canonicaliseName, mintTaskId } from '../children/naming.js';
 import type { SummariserDeps } from '../children/report.js';
+import type { ClaimHit } from '../children/write-scope.js';
 import type { HookPort, RunNotice } from '../hooks-port.js';
 import type { CheckpointPort } from '../checkpoint-port.js';
 import type { ArtifactStore } from '../artifacts/store.js';
@@ -396,6 +397,14 @@ export class Run {
    */
   get isPlanGateHeld(): boolean {
     return this.planHeld;
+  }
+  /**
+   * PD-TOOLS-006: the live write-scope claim that refuses the agent `callerId` a write to the workspace-relative
+   * `rel`, or null. Read through the iteration's children on every call, so a claim lapses the moment its child
+   * settles and a port built before a child was accepted still sees that child's scope.
+   */
+  writeClaimFor(callerId: string, rel: string): ClaimHit | null {
+    return this.children?.writeClaimFor(callerId, rel) ?? null;
   }
   /** REQ-NOTIFY-263: the wait the record carries; null while no agent is parked on a provider limit. */
   get currentWait(): WaitState | null {

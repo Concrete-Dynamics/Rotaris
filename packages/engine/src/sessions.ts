@@ -115,6 +115,19 @@ export interface ToolPortContext {
    * built while the gate held stops withholding the moment the run says the hold is over.
    */
   readonly planGateHeld?: (() => boolean) | undefined;
+  /**
+   * PD-TOOLS-006: the live write-scope claim, if any, that refuses THIS agent a `write_file` or `haet_edit` write to
+   * a workspace-relative POSIX path. Bound to the agent's own task id, because the gate knows a caller only by its
+   * canonical name; a live read through the run, on the terms of `planGateHeld` above.
+   */
+  readonly writeClaimFor?: ((rel: string) => WriteClaimHolder | null) | undefined;
+}
+
+/** PD-TOOLS-006: what a write-scope refusal names — the holding child, its persona and the pattern that matched. */
+export interface WriteClaimHolder {
+  readonly canonicalName: string;
+  readonly persona: string;
+  readonly pattern: string;
 }
 
 /** Decision 1 of the plan: runtime keys the configuration loader (ADR-0036) will own; read from the environment until then. */
@@ -888,7 +901,7 @@ export class Sessions {
       ...(supervisors ? { supervisorFor: (conversationId: string) => supervisors.forConversation(conversationId) } : {}),
       ...(preflight ? { preflight: async (signal: AbortSignal) => { const p = await preflight({ sessionId, workspaceRoot, prompt, signal, warn }); decided.grant = p.grant; decided.intent = p.intent.category; return p; } } : {}),
       ...(this.deps.tools ? {
-        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, modeOverride: modeOverride.value, grant: decided.grant, intent: decided.intent, artifacts: artifactOps(artifacts, { canonicalName: agentName, persona, conversationId: parentId }), readTodo: () => runRef.run?.agentTodoFor(parentId, depth === 0) ?? null, writeTodo: (document) => runRef.run?.replaceAgentTodo(parentId, depth === 0, document) ?? false, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false }),
+        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, modeOverride: modeOverride.value, grant: decided.grant, intent: decided.intent, artifacts: artifactOps(artifacts, { canonicalName: agentName, persona, conversationId: parentId }), readTodo: () => runRef.run?.agentTodoFor(parentId, depth === 0) ?? null, writeTodo: (document) => runRef.run?.replaceAgentTodo(parentId, depth === 0, document) ?? false, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false, writeClaimFor: (rel) => runRef.run?.writeClaimFor(parentId, rel) ?? null }),
         dal, artifacts, budget, modelCap: capFor,
         summariser: { backend: model.backend, model: model.summariser?.model ?? model.config.model, thinking: model.summariser?.thinking ?? model.config.thinking, timers: this.deps.clocks.timers, credentialFor: model.config.credentialFor },
       } : {}),
@@ -1031,7 +1044,7 @@ export class Sessions {
       onSaved: (generation) => summary.rebuild(generation, () => s.dal.getSession(sessionId)),
       ...(preflight ? { preflight: async (signal: AbortSignal) => { const p = await preflight({ sessionId, workspaceRoot, prompt, signal, warn, previousIntent: priorIntent, hasUnfinishedWork: true }); decided.grant = p.grant; decided.intent = p.intent.category; return p; } } : {}),
       ...(this.deps.tools ? {
-        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, modeOverride: modeOverride.value, grant: decided.grant, intent: decided.intent, artifacts: artifactOps(artifacts, { canonicalName: agentName, persona, conversationId: parentId }), readTodo: () => runRef.run?.agentTodoFor(parentId, depth === 0) ?? null, writeTodo: (document) => runRef.run?.replaceAgentTodo(parentId, depth === 0, document) ?? false, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false }),
+        toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => this.deps.tools!({ ...baseCtx, persona, agentName, delegation, parentId, depth, modeOverride: modeOverride.value, grant: decided.grant, intent: decided.intent, artifacts: artifactOps(artifacts, { canonicalName: agentName, persona, conversationId: parentId }), readTodo: () => runRef.run?.agentTodoFor(parentId, depth === 0) ?? null, writeTodo: (document) => runRef.run?.replaceAgentTodo(parentId, depth === 0, document) ?? false, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false, writeClaimFor: (rel) => runRef.run?.writeClaimFor(parentId, rel) ?? null }),
         dal: s.dal, artifacts, budget, modelCap: capFor,
         summariser: { backend: model.backend, model: model.summariser?.model ?? model.config.model, thinking: model.summariser?.thinking ?? model.config.thinking, timers: this.deps.clocks.timers, credentialFor: model.config.credentialFor },
       } : {}),

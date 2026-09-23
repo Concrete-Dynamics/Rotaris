@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock, millis, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling, type ChildRow } from '@rotaris/store';
-import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ScriptedCall } from '@rotaris/model';
+import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ModelRequest, type ScriptedCall } from '@rotaris/model';
 import { CHILD_STATES, CHILD_TRANSITIONS, isLegalChildMove, TASK_ID_PATTERN, TERMINAL_CHILD_STATES, type PermissionPreset } from '@rotaris/contracts';
-import { canonicaliseName, ChildLedger, RUN_CONFIG_DEFAULTS, Scheduler, Sessions, SessionWriter, uniqueUnderParent, type DelegationOps, type PortToolResult, type Publisher, type RunConfig, type ToolPort } from '../index.js';
+import { canonicaliseName, ChildLedger, RUN_CONFIG_DEFAULTS, Scheduler, Sessions, SessionWriter, uniqueUnderParent, type DelegationOps, type PortToolResult, type Publisher, type RunConfig, type ToolPort, type ToolPortContext } from '../index.js';
 import type { ProjectionOwner } from '../projection-owner.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
@@ -191,7 +191,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       const a = JSON.parse(raw) as Record<string, unknown>;
       const ok = (text: string): PortToolResult => ({ text, isError: false, status: 'ok', durationMs: 1, label: name, args: a });
       if (name === 'delegate') {
-        const r = await ops.delegate(parentId, { persona: String(a['persona']), taskName: String(a['task_name']), task: String(a['task']), dependsOn: (a['depends_on'] as string[]) ?? [], inheritedContext: [], category: '', runInBackground: a['run_in_background'] !== false });
+        const r = await ops.delegate(parentId, { persona: String(a['persona']), taskName: String(a['task_name']), task: String(a['task']), dependsOn: (a['depends_on'] as string[]) ?? [], inheritedContext: [], category: '', runInBackground: a['run_in_background'] !== false, writeScope: (a['write_scope'] as string[] | undefined) ?? [] });
         if (r.status === 'rejected') return { ...ok(`Task '${r.canonicalName}': rejected — ${r.message}`), isError: true, status: 'failed' };
         let text = `Task '${r.canonicalName}': ${r.status} — ${r.message}\ntask_id: ${r.taskId}`;
         if (a['run_in_background'] === false) { const w = await ops.waitForTasks(parentId, [r.taskId]); text += `\n\n${'refused' in w ? w.refused : w.text}`; }
@@ -207,7 +207,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     };
   }
 
-  function sessionsWith(script: (persona: string, turn: number) => ScriptedCall, over: { cap?: number | null; childTimeoutMs?: number } = {}) {
+  function sessionsWith(script: (persona: string, turn: number, req: ModelRequest) => ScriptedCall, over: { cap?: number | null; childTimeoutMs?: number } = {}) {
     // The scripted client answers by persona and by the number of calls that persona has made.
     const counts = new Map<string, number>();
     const client = new ScriptedModelClient([]);
@@ -216,11 +216,13 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       const persona = /^You are the orchestrator/.test(req.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') ?? '') ? 'orchestrator' : /summarise/i.test(req.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') ?? '') ? 'summariser' : 'child';
       const n = (counts.get(persona) ?? 0) + 1;
       counts.set(persona, n);
-      client.push(script(persona, n));
+      client.push(script(persona, n, req));
       return original(req);
     };
     let n = 0;
     const built: { persona: string; mode: PermissionPreset }[] = [];
+    /** Each agent's tool-port context, by canonical name, as the engine built it. */
+    const contexts = new Map<string, ToolPortContext>();
     const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k' };
     const sessions = new Sessions({
       clocks: clock, publisher: NONE, pid: 77, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), mintSessionId: () => `S${++n}`,
@@ -232,6 +234,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
         // start-of-run mode, which is the half this run's engine owns (REQ-TOOLS-073's second).
         const selected = (ctx.modeOverride ?? ctx.requestedMode) as PermissionPreset;
         built.push({ persona: ctx.persona, mode: selected });
+        contexts.set(ctx.agentName, ctx);
         let mode: PermissionPreset = selected;
         const base = { cancelPending: () => 0, setMode: (m: string) => { const previous = mode; mode = m as PermissionPreset; return { requested: mode, effective: mode, downgraded: false, reason: '', previous }; }, currentMode: () => mode, answerApproval: () => false };
         return ctx.delegation
@@ -242,7 +245,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', modelConcurrencyCap: over.cap ?? null, drainTimeoutMs: 0 },
     });
     void over.childTimeoutMs;
-    return { sessions, client, counts, built };
+    return { sessions, client, counts, built, contexts };
   }
   const children = (sid: SessionId): ChildRow[] => dal.childrenOf(sid);
   const kinds = (sid: SessionId) => dal.eventsFrom(sid, 1, 10_000).map((e) => e.kind);
@@ -301,6 +304,96 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     expect(updates).toHaveLength(3);
     expect(updates.at(-1)).toMatchObject({ tokens: { input: 122, output: 25, total: 147 }, cost: { total: '0.0135' } });
     expect(updates.map((u) => u.cost.total)).toContain('0.0115');
+  });
+
+  describe('PD-TOOLS-006: write scopes', () => {
+    const textOf = (req: ModelRequest): string => req.messages.map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : p.kind === 'tool-result' ? p.result : '')).join('')).join('\n');
+    const heldByApi = { canonicalName: 'api', persona: 'codebase-analyst', pattern: 'src/api/**' };
+    /** Until `ready()` holds, yielding to the run between looks; the scripted children park on a hold meanwhile. */
+    async function until(ready: () => boolean): Promise<void> {
+      for (let i = 0; i < 500 && !ready(); i += 1) await new Promise((r) => setTimeout(r, 1));
+      expect(ready()).toBe(true);
+    }
+
+    it('a live scope refuses its sibling and the entry agent but not its holder; each child is told the live scopes; the claim lapses when its child ends', async () => {
+      let release!: () => void;
+      const hold = new Promise<void>((r) => { release = r; });
+      const payloads = new Map<string, string>();
+      const { sessions, contexts } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          return turn === 1 ? toolCalls([
+            { callId: 'd1', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'api', task: 'TASK: api', write_scope: ['src/api/**'] } },
+            { callId: 'd2', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'ui', task: 'TASK: ui' } },
+          ], 'Delegating.') : answer('Done.');
+        }
+        if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+        const text = textOf(req);
+        const name = text.includes('TASK: api') ? 'api' : 'ui';
+        if (!payloads.has(name)) payloads.set(name, text);
+        return { parts: [{ hold }, ...answer(`${name}: read.`).parts] };
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'split the work') as { value: SessionId }).value;
+      const running = sessions.running(sid)!;
+      await until(() => payloads.size === 2);
+      const claim = (agent: string, rel: string) => contexts.get(agent)!.writeClaimFor!(rel);
+      // The entry agent and the unscoped sibling are refused inside the scope; the holder is not, and nobody is outside it.
+      expect(claim('orchestrator', 'src/api/users.ts')).toMatchObject(heldByApi);
+      expect(claim('ui', 'src/api/users.ts')).toMatchObject(heldByApi);
+      expect(claim('ui', 'SRC/API/users.ts')).toMatchObject(heldByApi);
+      expect(claim('api', 'src/api/users.ts')).toBeNull();
+      expect(claim('ui', 'src/ui/view.ts')).toBeNull();
+      expect(claim('api', 'src/ui/view.ts')).toBeNull();
+      // The disclosure sits immediately after the workspace-root prefix: the holder's own scope, the sibling's view of it.
+      expect(payloads.get('api')).toMatch(/Workspace root: [^\n]*\n\nWrite scopes:\n- Yours: 'src\/api\/\*\*'\./);
+      expect(payloads.get('ui')).toMatch(/Workspace root: [^\n]*\n\nWrite scopes:\n- Held by other agents[^\n]*\n {2}- api: 'src\/api\/\*\*'\n/);
+      release();
+      expect((await running).status).toBe('completed');
+      expect(claim('orchestrator', 'src/api/users.ts')).toBeNull();
+    });
+
+    it('the holder\'s own descendants are not refused, and are told the scope belongs to an agent they work under', async () => {
+      let release!: () => void;
+      const hold = new Promise<void>((r) => { release = r; });
+      const payloads = new Map<string, string>();
+      const calls = new Map<string, number>();
+      const { sessions, contexts } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'api', task: 'TASK: api', write_scope: ['src/api/**'] } }], 'Delegating.') : answer('Done.');
+        }
+        if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+        const text = textOf(req);
+        const name = text.includes('TASK: deep') ? 'deep' : 'api';
+        const n = (calls.get(name) ?? 0) + 1;
+        calls.set(name, n);
+        if (!payloads.has(name)) payloads.set(name, text);
+        if (name === 'api' && n === 1) return toolCalls([{ callId: 'g1', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'deep', task: 'TASK: deep' } }], 'Delegating further.');
+        return name === 'deep' ? { parts: [{ hold }, ...answer('deep: read.').parts] } : answer('api: done.');
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'nest the work') as { value: SessionId }).value;
+      const running = sessions.running(sid)!;
+      await until(() => payloads.has('deep'));
+      const claim = (agent: string, rel: string) => contexts.get(agent)!.writeClaimFor!(rel);
+      expect(claim('deep', 'src/api/users.ts')).toBeNull();
+      expect(claim('orchestrator', 'src/api/users.ts')).toMatchObject(heldByApi);
+      expect(payloads.get('deep')).toContain("  - api: 'src/api/**' (you work under this agent, so its scope does not fence you)");
+      release();
+      expect((await running).status).toBe('completed');
+    });
+
+    it('a scope reaching outside the workspace root rejects the delegation: no child, no task id, the reason names the pattern', async () => {
+      const { sessions, client } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') {
+          return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coder', task_name: 'escape', task: 'TASK: x', write_scope: ['src/**', '../elsewhere/**'] } }], 'Delegating.') : answer('Understood.');
+        }
+        return answer('unreachable');
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'try it') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(children(sid)).toEqual([]);
+      const resumed = textOf(client.requests.at(-1)!);
+      expect(resumed).toContain("Task 'escape': rejected — write_scope pattern '../elsewhere/**' reaches outside the workspace root.");
+      expect(resumed).not.toContain('task_id:');
+    });
   });
 
   it('REQ-TOOLS-030/073 (PD-TOOLS-002): a mid-run switch to autonomous reaches the children built after it', async () => {

@@ -305,6 +305,8 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     // whatever route the tool reached it, including a name this port's narrowing never saw.
     planGateHeld,
     planGateWithheldNames: () => withheldAtPlanGate,
+    // PD-TOOLS-006: the live write-scope claims, bound to this port's agent by the engine.
+    ...(ctx.writeClaimFor ? { writeClaimFor: ctx.writeClaimFor } : {}),
   });
 
   // ADR-0034 (Part S): the persona's MCP surface — demanded on `ready()`, after the discovery the run start kicked off, and

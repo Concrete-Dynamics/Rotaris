@@ -45,6 +45,15 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-23**
 
+**A delegated child's write scope (`PD-TOOLS-006`, built 2026-09-23).** `delegate` takes `write_scope`; a live
+scoped child claims the paths it matches, and the gate refuses a `write_file` or `haet_edit` write into a claimed
+path to every other agent of the run except the child's descendants, ahead of the permission resolution. Each child
+is told the live scopes in a block after the workspace-root line of its payload. The glob compiler moved from
+`agent-tools/tools/search.ts` to `kernel/glob.ts`, because the engine and the tools both read the dialect and
+import neither each other. The **component view** (the kernel box), the **runtime view** (§4 gains "Write scopes"),
+the **state-ownership view** (one in-memory row) and `module-map.md` (the kernel row) move. No edge, channel, message
+kind or store column changed.
+
 **A child's provider requests reach the run's totals (defect round, 2026-09-23).** `IterationChildren` built a
 child's turn with no `onRequestUsage`, so the session's tokens, its cost and every `usage.update` counted the
 entry agent alone. `ChildrenDeps` now carries the run's own callback into every child's turn, at every depth.

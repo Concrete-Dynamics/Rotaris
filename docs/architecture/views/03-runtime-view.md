@@ -365,6 +365,22 @@ on `succeeded` + report stored, promote one held child per freed model slot, cla
 turn loop under its persona's tools, model, credential and supervisor; its **report** comes from a bounded summarising pass on `default_summary_model` (REQ-CONFIG-065) or the entry model;
 the parent resumes with the report. Every exit from an iteration leaves every child record terminal.
 
+**Write scopes (PD-TOOLS-006; `children/write-scope.ts`).** A `delegate` call may carry `write_scope`, path
+patterns in the `glob` tool's dialect (the one compiler, `kernel/glob.ts`). `IterationChildren.delegate` validates
+them before admission (an empty, absolute or root-escaping pattern is a `rejected` delegation with no record) and,
+once the ledger has accepted the child, records its **claim** in `WriteClaims` — in memory, in acceptance order,
+never persisted — together with the child's **disclosure**: its own scope and the live scopes of the others as they
+stand at that moment. The disclosure is rendered as a block immediately after the workspace-root line of the child's
+payload (`childPayload`). A claim is live while its child's ledger state is non-terminal, read at every query, so
+it lapses on every terminal path without a hook of its own. The refusal is the **gate's**: each agent's
+`ToolPortContext.writeClaimFor` is bound to that agent's task id and reaches `Run.writeClaimFor` →
+`IterationChildren.writeClaimFor`, which answers with the earliest live claim matching the path unless the caller
+is that claim's child or one of its descendants (a walk up the ledger's parent links). `Gate.dispatch` asks it for
+`write_file` and `haet_edit`/`haet` after the schema parse and ahead of the permission resolution, with the path
+resolved by the fence, so a claimed write settles `blocked` (`failure_kind: write_scope_claimed`) without costing
+the user an approval. `terminal`, `git_commit`, MCP and plugin tools are not fenced: that is the directive's stated
+cost.
+
 **The record the agent surfaces read (Part R; REQ-MONITOR-044).** Each child's `AgentRecord` carries, beside what Part B
 projected, `reasoning` (the persona's configured level, `medium` when none), `contextUsed` (the input count of its latest
 model step) and `contextLimit` — **from Part AH the model's own `max_input_tokens`** where the configuration states one

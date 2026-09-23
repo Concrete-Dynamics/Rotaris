@@ -31,6 +31,7 @@ credentials     → main, and main alone
 | Session locks this instance holds | run host | `packages/engine/src/sessions.ts` | run host |
 | Live runs, writers, projection owners | run host | `engine/sessions.ts`, `session-writer.ts` | run host |
 | The tool gate, per session; hooks, per run | run host | `packages/agent-tools`, `packages/hooks` | run host |
+| Live write-scope claims and each child's scope disclosure (PD-TOOLS-006) | run host | `packages/engine/src/children/write-scope.ts`, held by the iteration's `IterationChildren` | `IterationChildren.delegate` only; never persisted, so a resumed session holds none |
 | Configuration resolved for a run (Tier B) | run host | `run-host/configuration.ts` | resolved at run start; never re-read mid-run |
 | The portable-skill catalog | run host | `run-host/skills.ts` | cleared at **session** creation, not per run |
 | MCP connections and their stdio children | run host | `run-host/mcp.ts` | run host, per session |

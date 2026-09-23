@@ -1564,6 +1564,18 @@ write that crosses a live claim is stopped with the name of its owner. What it c
 
 *Raised by the owner, 2026-09-23; logged as [R-049](requests.md#r-049).*
 
+> **First execution, 2026-09-23, the day it was ruled:** the mechanism was built as written, and one clause of
+> the disclosure proved false for one reader. The block lists "the `write_scope` of every other child of the run
+> that is live", and a child's own descendants are exempt from its claim, so a grandchild delegated by a scoped
+> child is shown its ancestor's scope among the paths that are refused to it. The build lists the scope as the
+> directive requires and marks it as belonging to an agent the reader works under, whose scope does not fence it.
+> Two placements were decided by the code rather than by the text: the refusal is the **gate's** (an executor can
+> answer only `ok` or `failed`, and `blocked` is the gate's status), and it is taken **ahead of the permission
+> resolution**, so a write the claim refuses never costs the user an approval first. The block follows the
+> workspace-root line, which `childPayload` places after the artifact blocks rather than first, as
+> `REQ-TOOLS-154` requires; that order is recorded as a defect of its own and is not changed here. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <!--

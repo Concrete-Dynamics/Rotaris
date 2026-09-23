@@ -31,6 +31,7 @@ export * from './children/notify.js';
 export * from './children/report.js';
 export * from './children/delegation.js';
 export * from './children/orchestration.js';
+export * from './children/write-scope.js';
 export * from './artifacts/index.js';
 export * from './improvements/index.js';
 export * from './hooks-port.js';

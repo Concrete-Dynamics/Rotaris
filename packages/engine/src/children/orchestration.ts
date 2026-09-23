@@ -13,6 +13,7 @@ import { childPayload, completionNotification, parseReport, priorAgentContext, r
 import { BUILT_IN_PERSONAS, type Persona, type PersonaResolver, type RoleName } from './personas.js';
 import { produceReport, type SummariserDeps } from './report.js';
 import { Scheduler } from './scheduler.js';
+import { validateWriteScope, WriteClaims, writeScopeBlock, type ClaimHit, type ScopeDisclosure } from './write-scope.js';
 import type { HookPort } from '../hooks-port.js';
 import { withContextUnits, withPlaybook } from '../run/run.js';
 import { STOP_GRACE } from '../run/grace.js';
@@ -132,11 +133,18 @@ export class IterationChildren implements DelegationOps {
   private readonly resumeWaiters = new Map<string, () => void>();
   /** REQ-LIBRARY-098: the artifacts each launch attached explicitly, by reference, for as long as the run lives. */
   private readonly attached = new Map<string, readonly string[]>();
+  /** PD-TOOLS-006: the live write scopes' claims, in acceptance order, and each child's disclosure as fixed at its acceptance. */
+  private readonly claims = new WriteClaims();
+  private readonly disclosures = new Map<string, ScopeDisclosure>();
 
   constructor(private readonly deps: ChildrenDeps, readonly iteration: number) {
     this.ledger = new ChildLedger({ dal: deps.dal, writer: deps.writer, sessionId: deps.sessionId, iteration, budget: deps.budget, modelCap: deps.modelCap, warn: deps.warn , personas: deps.personas, ...(deps.artifacts ? { artifacts: deps.artifacts } : {}), ...(deps.rootRecord ? { rootRecord: deps.rootRecord } : {}) });
     this.scheduler = new Scheduler({ ledger: this.ledger, runChild: (row) => this.execute(row), warn: deps.warn });
     this.scheduler.onTerminal((row) => { const w = this.resumeWaiters.get(row.parent_id); if (w) { this.resumeWaiters.delete(row.parent_id); w(); } });
+    // PD-TOOLS-006: a claim lapses at its child's terminal state. Liveness is also read from the ledger at every
+    // query, so a child settled by a path that fires no listener (a stale sweep) holds nothing either; this only
+    // keeps the map from growing with the run.
+    this.scheduler.onTerminal((row) => { this.claims.release(row.task_id); this.disclosures.delete(row.task_id); });
   }
 
   children(): readonly ChildRow[] {
@@ -163,6 +171,9 @@ export class IterationChildren implements DelegationOps {
         return { status: 'rejected', canonicalName: req.taskName, message: `The '${req.persona}' role was not started: this run is held at the plan gate, and that role holds ${withheld.join(', ')} — tools that write workspace files or run commands (REQ-ORCH-153). Delegate to a role that only reads, or write the plan as the final message of this turn and let the user's approval release execution.` };
       }
     }
+    // PD-TOOLS-006: a scope that cannot be honoured refuses the delegation before a record exists, like every refusal here.
+    const scope = validateWriteScope(req.writeScope ?? []);
+    if (!scope.ok) return { status: 'rejected', canonicalName: req.taskName, message: scope.reason };
     const r = this.ledger.spawn({
       parentId, parentDepth, persona: req.persona, taskName: req.taskName, task: req.task, dependsOn: req.dependsOn, inheritedContext: req.inheritedContext,
       category: req.category, background: req.runInBackground, modelKey: persona?.modelRef?.modelId ?? this.deps.model.modelId, grantedTools: persona?.tools ?? [],
@@ -172,6 +183,9 @@ export class IterationChildren implements DelegationOps {
     // REQ-LIBRARY-098: the attachment list belongs to THIS launch, not to the record — a child does not outlive
     // the run that spawned it, so it is remembered here for the moment the child's payload is assembled.
     const attachments = this.rememberAttachments(row.task_id, req.attachArtifacts ?? []);
+    // PD-TOOLS-006: the claim starts at acceptance, and the disclosure is fixed now — before the pass below, which
+    // may start the child and assemble its payload before this call returns.
+    this.acceptScope(row, scope.patterns);
     const alias = aliasResolved ? ` Alias '${aliasResolved}' resolved to '${row.persona}'.` : '';
     // REQ-ORCH-056/058: a state change triggers a pass; the delegate observation returns at once.
     this.scheduler.pass();
@@ -182,6 +196,37 @@ export class IterationChildren implements DelegationOps {
     }
     if (now.state === 'waiting_on_dependencies') return { status: 'waiting_on_dependencies', canonicalName: row.canonical_name, taskId: row.task_id, message: `Waiting on ${req.dependsOn.join(', ')}.${alias}`, attachments };
     return { status: 'queued', canonicalName: row.canonical_name, taskId: row.task_id, message: `Accepted; the child runs in the ${req.runInBackground ? 'background' : 'foreground'}.${alias}`, attachments };
+  }
+
+  // ---- PD-TOOLS-006: write scopes ---------------------------------------------------------------
+
+  private readonly isLive = (taskId: string): boolean => {
+    const row = this.ledger.get(taskId);
+    return row !== undefined && !isTerminalChildState(row.state);
+  };
+
+  private acceptScope(row: ChildRow, patterns: readonly string[]): void {
+    const others = this.claims.live(this.isLive).map((o) => ({ ...o, heldByAncestor: this.isSelfOrDescendant(row.task_id, o.taskId) }));
+    this.claims.claim(row.task_id, row.canonical_name, row.persona, patterns);
+    if (patterns.length > 0 || others.length > 0) this.disclosures.set(row.task_id, { own: patterns, others });
+  }
+
+  /** Whether `callerId` is `claimTaskId` itself or one of its descendants, walking the ledger's parent links. */
+  private isSelfOrDescendant(callerId: string, claimTaskId: string): boolean {
+    const seen = new Set<string>();
+    for (let id: string | undefined = callerId; id !== undefined && !seen.has(id); id = this.ledger.get(id)?.parent_id) {
+      if (id === claimTaskId) return true;
+      seen.add(id);
+    }
+    return false;
+  }
+
+  /**
+   * PD-TOOLS-006: the claim that refuses the agent `callerId` (its own task id; the root's for the entry agent) a
+   * write to the workspace-relative path `rel`, or null when no live claim reaches it for this caller.
+   */
+  writeClaimFor(callerId: string, rel: string): ClaimHit | null {
+    return this.claims.refusalFor(rel, this.isLive, (claimTaskId) => this.isSelfOrDescendant(callerId, claimTaskId));
   }
 
   /**
@@ -358,7 +403,7 @@ export class IterationChildren implements DelegationOps {
         parentResume: !wasFirst,
       }, task, history, controller.signal); };
       try {
-        outcome = await this.runWithChildren(row.task_id, turn, childPayload(deps.workspaceRoot, row.task, prior, artifactBlocks), controller.signal);
+        outcome = await this.runWithChildren(row.task_id, turn, childPayload(deps.workspaceRoot, row.task, prior, artifactBlocks, writeScopeBlock(this.disclosures.get(row.task_id))), controller.signal);
         // REQ-ORCH-095: one re-prompt for a child that neither worked nor answered — and, on a work route, for an implementer
         // that produced text and acted on nothing; on the answer route the answered category is accepted at once (REQ-ORCH-015).
         const textOnly = outcome.toolCallCount === 0 && outcome.report.text.trim() !== '';

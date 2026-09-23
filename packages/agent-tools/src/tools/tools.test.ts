@@ -257,12 +257,8 @@ describe('grep and glob (REQ-TOOLS-138..141)', () => {
     const gl = globTool(fence);
     expect((await gl.execute({ pattern: '{src,docs}/*.ts' }, ctx())).text).toBe('src/a.ts\nsrc/b.ts');
     expect((await gl.execute({ pattern: '**/{*.ts,*.md}' }, ctx())).text).toBe('README.md\nsrc/a.ts\nsrc/b.ts');
-    // Nested groups split at their own level, and a `/` inside an alternative stays a path separator.
+    // The compiler's own cases (nested groups, `/` inside an alternative, an unclosed brace) are `kernel.test.ts`'s.
     expect(globToRegExp('{a,{b,c}}.ts').test('c.ts')).toBe(true);
-    expect(globToRegExp('{x/y,z}.md').test('x/y.md')).toBe(true);
-    expect(globToRegExp('{x/y,z}.md').test('z.md')).toBe(true);
-    // An unclosed brace is the literal a caller who typed one meant.
-    expect(globToRegExp('a{b').test('a{b')).toBe(true);
     /*
      * REQ-TOOLS-138: whatever the caller writes, the answer is an observation. The compiler escapes everything it
      * does not translate, so no pattern should reach the RegExp constructor invalid any more — and the guard at the

@@ -20,6 +20,11 @@ export interface DelegateRequest {
    * be resolved. Absent where no artifact store exists (the tool then carries none).
    */
   readonly attachArtifacts?: readonly string[] | undefined;
+  /**
+   * PD-TOOLS-006: path patterns, relative to the workspace root in the `glob` tool's dialect, that the child claims
+   * while it is live. Absent or empty claims nothing.
+   */
+  readonly writeScope?: readonly string[] | undefined;
 }
 
 /** REQ-LIBRARY-098: what became of the caller's attachments, so the tool reports it rather than guessing. */

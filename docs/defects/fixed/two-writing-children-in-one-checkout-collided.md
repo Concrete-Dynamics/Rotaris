@@ -82,3 +82,21 @@ found while designing this. The "Improved 2026-09-22" message above answers wron
 **Ruled 2026-09-23 — [`PD-TOOLS-006`](../product/directives.md#pd-tools-006), [R-049](../product/requests.md#r-049).**
 The design above is approved as proposed, with both forks as recommended: declared scopes, and the parent and
 the entry agent refused too. The note stays open until the directive is built.
+
+## Repaired — 2026-09-23 ([`PD-TOOLS-006`](../../product/directives.md#pd-tools-006) built)
+
+The coordination half is built as ruled. `delegate` takes `write_scope`. A live scoped child claims the paths
+its patterns match, and `Gate.dispatch` refuses a `write_file` or `haet_edit` write into a claimed path to every
+other agent of the run except the child's own descendants. The refusal is `blocked`, is taken before the
+permission resolution, and names the holder, its persona and the pattern. Each child is told the live scopes in a
+block after the workspace-root line of its payload. In run `2e21e324`'s shape, a parent that gives the two writers
+scopes now has the second writer refused at its first write into the first writer's paths, with the owner named,
+where it previously found the sibling's file by hand. A parent that gives no scopes gets exactly the old behaviour,
+which is the cost the directive states.
+
+Evidence: `children.test.ts` (*PD-TOOLS-006: write scopes*, three end-to-end cases against the run),
+`write-scope.test.ts`, `gate.test.ts` (*write scopes at dispatch*), and `run-host/tools.test.ts` (the predicate
+reaching the gate through a real port).
+
+The create-guard's message about whose file it is remains a separate open note,
+[`the-create-guard-tells-an-agent-it-read-a-file-its-sibling-wrote.md`](../the-create-guard-tells-an-agent-it-read-a-file-its-sibling-wrote.md).

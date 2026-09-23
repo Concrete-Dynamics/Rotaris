@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync, type Dirent } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { z } from 'zod';
+import { globToRegExp } from '@rotaris/kernel';
 import { ignoredBy, loadRules, parseGitignore, type IgnoreRule } from '@rotaris/config';
 import { checkFence, isInside, realPathOf, type FenceConfig } from './fence.js';
 import { errorObservation, observation, type ToolExecutor } from './types.js';
@@ -26,9 +27,6 @@ export const MAX_FILE_BYTES = 2 * 1024 * 1024;
  */
 export { ignoredBy, loadRules, parseGitignore };
 export type { IgnoreRule };
-
-/** The glob compiler below has its own escaping; gitignore's lives with the grammar it serves. */
-const escapeRe = (s: string): string => s.replace(/[.+^${}()|[\]\\]/g, '\\$&');
 
 /** Read off the leading `(?flags)` groups, one after another, so that `(?i)(?m)x` sets both. */
 const INLINE_FLAG_GROUP = /^\(\?([A-Za-z]+)\)/;
@@ -114,65 +112,11 @@ function probablyBinary(bytes: Buffer): boolean {
   return bytes.subarray(0, 1024).includes(0);
 }
 
-/** The index of the `}` that closes the `{` at `start`, or -1 when the group is never closed. */
-function closingBrace(p: string, start: number): number {
-  let depth = 0;
-  for (let i = start; i < p.length; i += 1) {
-    if (p[i] === '{') depth += 1;
-    else if (p[i] === '}') { depth -= 1; if (depth === 0) return i; }
-  }
-  return -1;
-}
-
-/** A brace group's alternatives: split on the commas at ITS level, so `{a,{b,c}}` is two, not three. */
-function braceAlternatives(body: string): string[] {
-  const out: string[] = [];
-  let depth = 0;
-  let from = 0;
-  for (let i = 0; i < body.length; i += 1) {
-    if (body[i] === '{') depth += 1;
-    else if (body[i] === '}') depth -= 1;
-    else if (body[i] === ',' && depth === 0) { out.push(body.slice(from, i)); from = i + 1; }
-  }
-  out.push(body.slice(from));
-  return out;
-}
-
 /**
- * One glob, translated. Recursive, and that recursion is the whole point of the function existing apart from
- * `globToRegExp`: a brace alternative is a glob like any other, and until 2026-09-16 each one was passed through
- * `escapeRe` instead — which escapes `.` but leaves `*` alone, so `{*.json,*.ts}` compiled to `(?:*\.json|*\.ts)`
- * and the engine refused it as `Nothing to repeat`. The alternative that reached a user was
- * a `{*.json,*.js,*.ts,*.cjs,*.mjs}` group under a `packages` wildcard step — a shape ripgrep and every shell
- * accept, and REQ-TOOLS-141 holds that what an accelerator accepts the in-process path may not refuse.
- *
- * Character classes (`[abc]`) are still literal here, as they have always been; that is a separate gap and is
- * recorded as one rather than widened into silently.
+ * The glob compiler moved to `@rotaris/kernel` when PD-TOOLS-006's write scope became its second reader; it is
+ * re-exported here so every existing caller keeps reading one definition.
  */
-function translateGlob(p: string): string {
-  let re = '';
-  for (let i = 0; i < p.length; i += 1) {
-    const ch = p[i] as string;
-    if (ch === '*' && p[i + 1] === '*') {
-      i += 1;
-      if (p[i + 1] === '/') { re += '(?:.*/)?'; i += 1; } else re += '.*';
-    } else if (ch === '*') re += '[^/]*';
-    else if (ch === '?') re += '[^/]';
-    else if (ch === '{') {
-      const end = closingBrace(p, i);
-      // An unclosed `{` is a literal brace, which is what a caller who typed one meant.
-      if (end > i) { re += `(?:${braceAlternatives(p.slice(i + 1, end)).map(translateGlob).join('|')})`; i = end; }
-      else re += '\\{';
-    } else re += escapeRe(ch);
-  }
-  return re;
-}
-
-/** Glob patterns (double-star, star, question mark, braces) to a regex over POSIX relative paths. */
-export function globToRegExp(pattern: string): RegExp {
-  const p = pattern.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\//, '');
-  return new RegExp(`^${translateGlob(p)}$`);
-}
+export { globToRegExp };
 
 const grepSchema = z.object({
   pattern: z.string(),

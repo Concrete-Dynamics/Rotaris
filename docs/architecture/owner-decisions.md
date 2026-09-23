@@ -1495,3 +1495,23 @@ to R-026 settles exactly one of them.
 **What this ruling does not do.** It does not make every run's cost non-zero. A provider that reports no
 cost still yields `unknown`, which is what `REQ-MONITOR-166` provides for, and a configured rate still
 produces nothing at all. The `0` the owner saw is closed for OpenRouter and open everywhere else.
+
+## Rulings after the gate — 2026-09-23
+
+### OQ-63 — the application log's threshold, ruled
+
+**Ruled 2026-09-23 (R-048).** The owner accepted the proposal put to them for the open defect note
+`the-application-log-keeps-every-level-because-nothing-reads-one.md`: the application log records `info`
+and above by default, carries each line's level as a field, and restores `debug` only through the
+environment variable `ROTARIS_APP_LOG_LEVEL`. No configuration key or settings control governs it, and
+`session_log_level` keeps governing the per-session log alone (REQ-CONFIG-121, REQ-MONITOR-238).
+
+The disposition is **`PD-MONITOR-002`**. It is a directive rather than an amendment round because the
+specification is silent about this log's level and the owner is deciding new behaviour, which
+`docs/product/README.md` routes to a `PD`. The answers to OQ-63's three questions: a threshold, yes; its
+own switch, not `session_log_level`'s key; and an environment switch that restores `debug`, which is the
+shape the question named.
+
+**What this ruling does not do.** It builds nothing. Until the directive is built the log keeps every level,
+and the directive owes its first execution into `first-executions.md` when it is.
+

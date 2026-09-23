@@ -121,3 +121,16 @@ What is kept from this round is the falsification, as a test rather than as pros
 `append-cost.test.ts` are two orders above what was measured, so they cannot flake, and they can only fail
 if one of these terms ever becomes the dominant one — which is the only condition under which the seam
 change would be worth revisiting.
+
+## Measurement round authorized — 2026-09-23 ([R-048](../product/requests.md#r-048))
+
+No directive is owed: REQ-CHAT-055 is correct and the product fails it. The owner authorized the round this
+note ends on, in this order:
+
+1. **Tighten the proof.** Interleave the empty and 1,200-row samples, take about thirty of each, and report
+   the result in frames as well as milliseconds, so the harness's own spread is small enough for a verdict.
+2. **Trace the built app** over the same two fixtures, to name which of style recalculation, layout, paint or
+   the `ResizeObserver` measurement pass carries the extra frames.
+3. **Repair only the cause the trace names.** The candidates on record are a full-height scroll container
+   laid out again on every append and a pin-to-bottom scroll write forcing a synchronous layout; neither is
+   to be taken on a guess (`.agents/skills/debug-ui` step 8).

@@ -84,6 +84,7 @@ Both classes are stated against the capability declaration of REQ-TOOLS-001 and 
 **REQ-TOOLS-023** — Approvals granted for the session are matched before any policy rule, most recent grant first, and they outlive the policy: after the policy is replaced or the permission mode is changed mid-session, every session approval granted earlier still matches exactly the calls it matched before — none is dropped, and none starts matching a call it did not match already. Their rule ids are `session:allow:<n>`, numbered from 1 in grant order.
 
 **REQ-TOOLS-024** — A session approval matches only a call carrying the same tool name (compared case-insensitively), the same persona, and — when the approved call had a command facet — a command facet identical to the approved one character for character, compared before redaction. When the approved call had no command facet, the call must carry the same exact argument set as defined in REQ-TOOLS-017. Consequences a test can check: after `git push origin main` is approved for the session, `git push origin release` from that persona asks again, and `git push origin main` from a different persona asks again. The session rule's description reads `Approved for this session: <request summary>`, using the request summary of REQ-TOOLS-016.
+  > **Narrowed by [`PD-TOOLS-004`](../product/directives.md#pd-tools-004), 2026-09-23.** The rule above still governs every tool but `write_file` and `haet_edit`; for those two, a session approval matches a later call from the same persona whose path arguments resolve to the same set of paths, whatever its other arguments.
 
 **REQ-TOOLS-025** — When the policy in force is replaced while a run is live, the agent's very next tool call is decided under the replacement, with no restart, no reconnection, and no agent rebuild in between. Decisions already returned keep the outcome they had.
 
@@ -168,12 +169,14 @@ Every pattern listed above is matched under the token rules of REQ-TOOLS-033: ea
 - approve once → allow, rule id `approval:once`, source `user-once`, reason `The user approved '<tool>' once (rule '<pending rule>' asked).`
 - approve for session → allow, rule id `approval:session`, source `user-session`, and a session rule is added per REQ-TOOLS-024.
 - deny → deny, source `user-deny`, reason ending `…the user denied the request.`
+  > **Narrowed by [`PD-TOOLS-005`](../product/directives.md#pd-tools-005), 2026-09-23.** The mappings above still govern; after one timeout the run treats the user as away, and until they next send input to the session further asks resolve at once under the headless approval policy of REQ-TOOLS-065.
 
 **REQ-TOOLS-053** — A session counts as interactive exactly when an approval prompt for that session can be put in front of a person. A session that cannot prompt anyone is not interactive and never borrows another session's ability to prompt. Everything handed to the prompt is JSON-serializable in full (REQ-TOOLS-056). Prompting never stalls the rest of the session: while one agent waits for its answer, the session's other agents keep running and can raise approvals of their own. Registering a run-abort hook for a session (REQ-TOOLS-065) neither makes that session interactive nor takes away prompting it already has.
 
 **REQ-TOOLS-054** — Approval wait semantics: creating a wait with an empty request id is rejected; creating a duplicate pending id is rejected with `Approval '<id>' is already pending.`; resolving or cancelling an unknown id reports failure without side effect; waiting on an unknown id resolves cancelled immediately; a request discarded before it was ever shown counts as cancelled; a bulk-cancel releases every waiter (used on run cancellation, shutdown, and host teardown).
 
 **REQ-TOOLS-055** — The approval timeout is `runtime.approval_timeout_seconds`, the single key REQ-CONFIG-126 registers for this bound, carrying the default that requirement states, which is not restated here; this domain declares no second key and no second default. Its value space is a free-floating number of seconds — any float at least 0 — and not a fixed ladder of offered waits, so every surface that writes the setting accepts any value the space permits. A negative value is rejected when the configuration is loaded. A value of 0 means the wait never expires by itself, and such a wait is still released by run cancellation, shutdown, or host teardown (REQ-TOOLS-054). The same setting and the same zero-means-indefinite reading govern the user-question wait (REQ-TOOLS-158, REQ-TOOLS-178).
+  > **Narrowed by [`PD-TOOLS-005`](../product/directives.md#pd-tools-005), 2026-09-23.** The key, its value space and its reading of 0 still govern; while a run treats the user as away, an approval ask is not put to the wait at all.
 
 **REQ-TOOLS-056** — The approval payload (rendered by hosts and persisted into session state) carries: `request_id` (hexadecimal UUID), `session_id`, `agent_id` (falling back to persona for display), `persona`, `tool_name`, `command` (secret-redacted), `argument_summary`, `rule_id`, `reason`.
 
@@ -351,6 +354,7 @@ Captured foreground output is capped at 100,000 characters per call. When a comm
 - **A test-runner failure banner**: a line consisting of one or more `=` characters, then text, then one or more `=` characters, whose text contains `failed` case-insensitively.
 
 Independently of exit code, a pipeline check adds the warning `Pipeline command may have hidden an upstream failure exit code.` when the command line contains `|` and the output contains, case-insensitively, any of `error:`, `failed`, `traceback`, or `no tests ran`. That warning is the only output-derived warning a non-zero-exit (`shell_failure`) observation can carry. Warnings are de-duplicated with the first occurrence keeping its position, and the resulting list appears both in the observation's `warnings` field and in the `[terminal_diagnostic]` block.
+  > **Narrowed by [`PD-TOOLS-003`](../product/directives.md#pd-tools-003), 2026-09-23.** Every check above still governs; the fifth marker, `FAILED `, matches case-sensitively — only `FAILED ` in capitals warns.
 
 ### 13. OS-Level Sandbox
 

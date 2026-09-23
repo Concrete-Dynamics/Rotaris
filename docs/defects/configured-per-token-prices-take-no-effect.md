@@ -56,3 +56,10 @@ a provider-reported per-request cost — are not covered at all; they are **OQ-6
 **Confirmed still blocked, 2026-09-22 — [R-047](../product/requests.md#r-047).** Re-read against the code
 under the instruction that every open defect be repaired. The block named above has not moved, and nothing
 in this note can be built without pre-empting it.
+
+**Proposed 2026-09-23, not ruled — [R-048](../product/requests.md#r-048).** Put to the owner and held back from the ruling: answer OQ-21 as it
+recommends (prices carried and persisted as decimal strings, read from the YAML scalar's source text so they
+never pass through a binary float), accept ADR-0031 with scaled-integer arithmetic in one money module, and
+feed `effectivePricing()` into `Aggregates.addCost` under the `configured` qualifier, a provider-reported
+figure taking precedence. OQ-62's discovery-pricing branch was offered as a separate, lower-ranked source.
+Nothing about the block described above has moved.

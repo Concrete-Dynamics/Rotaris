@@ -48,3 +48,10 @@ refusal must not do; 19 passed.
 changing behaviour a live requirement states exactly, which `docs/product/README.md` sends to a `PD` and
 an implementer may not mint. The request is logged with the requirements a directive would have to name,
 so the decision is in front of the owner rather than waiting in a defect note.
+
+**Ruled 2026-09-23 — [`PD-TOOLS-004`](../product/directives.md#pd-tools-004), [R-048](../product/requests.md#r-048).** The approval-per-retry
+half is decided: a session approval of a `write_file` or `haet_edit` call now covers later calls from the same
+persona on the same set of paths, whatever their other arguments, so one "approve for session" covers a retry
+loop like this one. The MCP edit tool (`replace_content`) is outside the directive, because its arguments
+declare no path the policy can read; its regex-needle failure stays as recorded. The note stays open until
+the directive is built.

@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Nineteen.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Twenty-four.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -1284,6 +1284,182 @@ are unrelated subjects that no single revision could honestly hold. Its back-poi
 > **Extends:** REQ-CONFIG-040, REQ-CONFIG-047, REQ-WORKSPACE-043, REQ-WORKSPACE-048, REQ-CONFIG-256, REQ-CONFIG-258, REQ-CONFIG-417, REQ-WORKSPACE-039
 
 *Raised by the owner, 2026-09-21; logged as [R-046](requests.md#r-046).*
+
+---
+
+<a id="pd-tools-003"></a>
+
+### PD-TOOLS-003 — the `FAILED ` marker matches in capitals only
+
+Of the five literal failure markers REQ-TOOLS-113 searches for in the output of a command that exited 0,
+the fifth, `FAILED ` (with its trailing space), SHALL match **case-sensitively**: the output must contain
+exactly `FAILED ` in capitals for it to warn. `failed `, `Failed ` and every other casing SHALL NOT
+produce the marker warning.
+
+Everything else REQ-TOOLS-113 fixes still governs unchanged. The other four markers are still searched
+case-insensitively; the order of the five, the single marker warning naming the earliest marker present,
+the error-count check, the test-runner banner check (which still matches `failed` in any casing inside a
+`=`-framed line), the pipeline check, and the de-duplication rule are untouched.
+
+**Why, and what it costs.** Test runners print this marker in capitals (`FAILED tests/test_a.py::test_x`,
+`FAILED (failures=1)`), and the false warnings the product raised came from ordinary lower-case prose —
+Docker's `failed to connect to the docker API` and a line of git output. Each false warning cost the
+agent a second pass over the whole output to decide it was harmless. What is given up: a tool that
+reports a real failure in lower case with `failed ` and still exits 0 is no longer flagged by this
+marker. That combination is rare, because a runner whose tests fail exits non-zero; and a `=`-framed
+banner containing `failed` in any casing still warns through the banner check.
+
+> **Narrows:** REQ-TOOLS-113
+
+*Raised by the owner, 2026-09-23; logged as [R-048](requests.md#r-048).*
+
+---
+
+<a id="pd-tools-004"></a>
+
+### PD-TOOLS-004 — a session approval of a file write covers that path
+
+A session approval (REQ-TOOLS-052, "approve for session") granted to a call of `write_file` or `haet_edit`
+(including its alias `haet`) SHALL match a later call when all three of these hold, whatever the rest of
+its arguments:
+
+- the later call names the **same tool**, the alias `haet` counting as `haet_edit`;
+- it comes from the **same persona**;
+- its path arguments — the argument keys REQ-TOOLS-018 considers, resolved against the workspace root as
+  that requirement resolves them — resolve to **exactly the same set of paths** as the approved call's.
+
+The `write_file` operation (REQ-TOOLS-135) is not part of the match: approving an `edit` of a path for the
+session also covers a later `overwrite`, `insert` or `undo` of the same path from the same persona. A call
+any of whose paths cannot be resolved never matches under this directive, and a call carrying none of
+REQ-TOOLS-018's path keys falls back to the exact-argument match REQ-TOOLS-024 states.
+
+Everything else REQ-TOOLS-024 fixes still governs: every other tool — `terminal`, `fetch`, `git_commit`,
+the remaining public tools, every MCP tool and every plugin tool — is still matched on the command facet or
+the exact argument set; the tool name is still compared case-insensitively; and the session rule's
+description still reads `Approved for this session: <request summary>`.
+
+**Why, and what it costs.** An agent whose edit is refused retries it with a different `old_string`, and
+under the exact-argument rule no session approval could ever cover a retry. "Approve once" was the only
+answer that did anything, and the user paid one approval per retry: a single edit loop on one file in run
+`1ddeb71b` interleaved six approvals with its failures. With this directive one session approval covers
+the loop. What is given up: approving one write to a path for the session now also approves, for that
+persona, every later write to that path in the session, including an overwrite of the whole file. The grant
+is still bounded by the path, the tool and the persona. MCP edit tools are left out because their arguments
+declare no path the policy can read, so for them a path-scoped match could only be guessed.
+
+> **Narrows:** REQ-TOOLS-024
+
+*Raised by the owner, 2026-09-23; logged as [R-048](requests.md#r-048).*
+
+---
+
+<a id="pd-tools-005"></a>
+
+### PD-TOOLS-005 — after one unanswered approval, a run treats the user as away
+
+When an approval wait in a run ends by **timeout** (REQ-TOOLS-052's first mapping), the run SHALL treat
+the user as **away**. While the user is away, every further ask in that run that would put an approval
+prompt in front of the user SHALL instead be resolved at once, with no prompt and no wait, exactly as
+REQ-TOOLS-065 resolves an ask in a session with no approval presenter: under `runtime.headless_approval_policy`
+`deny` the call is refused and the agent may re-plan; under `abort` the call is refused and the run is
+stopped on the terms that requirement states. The decision source is `headless-policy`. The reason SHALL
+state that the user is treated as away because an earlier approval in this run went unanswered for `<N>`
+seconds, where `<N>` is the timeout that expired; it SHALL NOT claim that no approval UI is available.
+
+The user **returns** — and the run stops treating them as away — on the first input they send to that run's
+session: an answer to an approval or to a question, a message, a run control, or a permission-mode change.
+The away state belongs to one run: it reaches every agent in that run, delegated children included, and it
+ends when the run ends, so no later run starts with it.
+
+Unchanged: the first approval still waits the full `runtime.approval_timeout_seconds` and still ends with
+REQ-TOOLS-052's timeout reason; a timeout of 0 still waits without limit, so a run configured that way is
+never marked away; questions put to the user (REQ-TOOLS-158, REQ-TOOLS-178) still prompt and wait while
+the user is away; and asks resolved by a rule without prompting are unaffected.
+
+**Why, and what it costs.** Run `1ddeb71b` spent about 600 seconds on two approvals nobody was present to
+answer, each one denied only after its own full wait. An unattended stretch of a run paid the whole timeout
+per ask before failing closed. After this directive it pays one timeout, and every later ask in that
+stretch fails closed at once. The default stays 300 seconds, so a user at the desk still gets the full
+window for the first prompt. What is given up: a user who steps away for longer than one timeout and comes
+back finds the asks raised in between already denied (or the run stopped, under `abort`) rather than
+waiting for them; answering or writing anything to the session ends that.
+
+> **Narrows:** REQ-TOOLS-052, REQ-TOOLS-055
+
+*Raised by the owner, 2026-09-23; logged as [R-048](requests.md#r-048).*
+
+---
+
+<a id="pd-orch-004"></a>
+
+### PD-ORCH-004 — a child cut off while making progress hands its work back to the parent
+
+REQ-ORCH-088's expiry path still runs in its order: the child is gracefully paused; if the role has a
+configured fallback model not yet attempted for this child, it is retried once on it; otherwise it is
+recorded failed with a timeout issue and a report of the form "Child timed out after <N>s" carrying the
+last response extracted from its transcript. This directive adds to that last step, and only for a child
+that was **making progress** when it was cut off.
+
+A child is **making progress** when it completed at least one tool call within the final
+`runtime.child_stall_timeout` seconds before its `runtime.child_timeout` expired. For such a child the
+failed record's report SHALL additionally carry:
+
+- a statement that the child was cut off while making progress;
+- the workspace paths the child's own file-writing calls changed during its run, in the order first
+  changed, or a statement that it changed none;
+- a **continuation offer** to the parent: the remaining work may be delegated to a new child as a
+  continuation of this one.
+
+A child delegated as a continuation carries that relationship in its record. A continuation that itself
+times out while making progress SHALL receive the first two items and SHALL NOT receive a continuation
+offer, so a piece of work is continued once and never chained.
+
+Unchanged: the child still ends `failed` with its timeout issue; the per-child limit and its default are
+untouched; a child that was not making progress gets exactly REQ-ORCH-088's report; and REQ-NOTIFY-112
+still holds that a child whose own `runtime.child_timeout` was exceeded is not recovery-eligible and earns
+no corrective message — the continuation is the parent's decision, never an automatic resume.
+
+**Why, and what it costs.** In run `2e21e324` two children were cut off at 1200 seconds after 110 and 113
+tool calls. They were working, and the failure discarded what they knew about their own progress, leaving
+the parent to rediscover it. The report now hands back what a continuation needs. What it costs: a longer
+report for these children, and one more relationship in the child record. The limit itself is not raised,
+so a child that genuinely loops is still stopped at the same point.
+
+> **Narrows:** REQ-ORCH-088
+
+*Raised by the owner, 2026-09-23; logged as [R-048](requests.md#r-048).*
+
+---
+
+<a id="pd-monitor-002"></a>
+
+### PD-MONITOR-002 — the application log keeps `info` and above
+
+The application log — the main process's log, distinct from the per-session debug log of REQ-MONITOR-238
+and REQ-SESSION-142 — SHALL carry a level on every line as a field rather than as text inside the message,
+and SHALL record a line only when its level is at or above a threshold. The threshold is `info` by default.
+Lines forwarded from a child process (the run host, the workspace service) keep the level the child gave
+them and are filtered by it like any other line.
+
+The threshold SHALL be changeable only through the environment variable `ROTARIS_APP_LOG_LEVEL`, read once
+at start, accepting `debug`, `info`, `warning` and `error` in any casing; an unset or unrecognized value
+means `info`. No configuration key, settings control or other surface sets it, and `session_log_level`
+(REQ-CONFIG-121) does not reach it.
+
+A line that another requirement obliges the product to write to the application log (REQ-TOOLS-171,
+REQ-HOOKS-102, REQ-HOOKS-138, REQ-SANDBOX-071, REQ-LIBRARY-035, REQ-LIBRARY-047, REQ-LIBRARY-124) SHALL be
+written at `info` or above, so the default threshold never drops it.
+
+**Why, and what it costs.** A launch log measured on 2026-09-16 held 195 lines, 141 of them one MCP
+server's `debug` stderr. Nothing in the specification set a level for this log, which is why OQ-63 was
+raised; this directive is the owner's ruling on it. A developer diagnosing a child process restores the
+detail with one variable, and the log a packaged build keeps is the one a person can read after an
+incident. What is given up: `debug` lines from a packaged build that was not started with the variable
+are not recorded, and cannot be recovered afterwards.
+
+> **New:** no live requirement covers this.
+
+*Raised by the owner, 2026-09-23; logged as [R-048](requests.md#r-048).*
 
 ---
 

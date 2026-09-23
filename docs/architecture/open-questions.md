@@ -41,7 +41,8 @@ the fence's two designators covers), **and OQ-62** (whether a price may come fro
 payload, and whether a provider-reported cost has a qualifier — the reason every run's cost reads zero), of
 which **one branch was ruled on 2026-09-16** by `PD-MONITOR-001` and two stay open. **One more was raised on
 2026-09-16 by reading a launch log: OQ-63** (what level threshold, if any, governs the **application** log —
-every level requirement in the corpus governs the per-session log instead). **One more was raised on
+every level requirement in the corpus governs the per-session log instead), **ruled on 2026-09-23 by
+`PD-MONITOR-002`**. **One more was raised on
 2026-09-21 by building `PD-WORKSPACE-002`'s per-file switches: OQ-64** (whether an instruction override
 suppresses its base when the override is itself switched off — a third state REQ-WORKSPACE-042's "given
 both exist" has no word for). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
@@ -2749,6 +2750,17 @@ about **packaged** builds specifically, where nobody is watching a terminal.
 key is `session_log_level`'s (which would make one key govern two logs of different audiences) or its
 own; and whether a packaged build suppresses `debug` with an environment switch to restore it — which is
 the shape every other desktop product settles on and which no requirement here states.
+
+> **Disposition, 2026-09-23 (R-048). RULED.** The paragraphs above stay as written; they are what the record
+> said before the owner answered. The application log takes a threshold, **`info`** by default, with the
+> level carried as a field on every line rather than as text inside it. It has **its own switch and no key**:
+> the environment variable `ROTARIS_APP_LOG_LEVEL`, read once at start, restores `debug`, and
+> `session_log_level` does not reach this log. Every line another requirement obliges into the application
+> log is written at `info` or above. The disposition is **`PD-MONITOR-002`** (`docs/product/directives.md`),
+> a directive with a `New` disposition, because the corpus is silent here and nothing it states is displaced.
+> "What the build proceeds under" no longer holds once the directive is built; until then the log keeps
+> every level, as that paragraph says. See `owner-decisions.md`, "OQ-63 — the application log's threshold,
+> ruled".
 
 **OQ-64 — Does an instruction override suppress its base when the override is switched off?** *(REQ-WORKSPACE-042, narrowed by `PD-WORKSPACE-002`; REQ-WORKSPACE-043/047/048. Raised 2026-09-21 by building the per-file switches and the injection that consumes them.)*
 

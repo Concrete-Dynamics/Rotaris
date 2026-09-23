@@ -42,3 +42,10 @@ right refusal: the create-guard and the hash guard both held, which is what the 
 siblings in one checkout aware of each other — a claim, a lease, a partition of the tree — is behaviour
 no requirement states, so it is a `PD` and it is logged at [R-047](../product/requests.md#r-047) with the
 requirements a directive would have to name.
+
+**Proposed 2026-09-23, not ruled — [R-048](../product/requests.md#r-048).** Put to the owner and held back from the ruling: `delegate` takes an
+optional **write scope** (path globs the child will write), and a child writing into a path inside a live
+sibling's declared scope is refused with a message naming that sibling; a child spawned without a scope
+behaves as today. It would be a new directive, since no requirement covers sibling writers. A separate
+worktree per writing child was considered and not proposed, because it needs a merge mechanism of its own.
+The note stays open on the owner's decision.

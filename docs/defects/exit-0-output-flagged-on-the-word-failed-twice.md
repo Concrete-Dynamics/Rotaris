@@ -38,3 +38,9 @@ run's own docker line and with the cap, is green.
 changing behaviour a live requirement states exactly, which `docs/product/README.md` sends to a `PD` and
 an implementer may not mint. The request is logged with the requirements a directive would have to name,
 so the decision is in front of the owner rather than waiting in a defect note.
+
+**Ruled 2026-09-23 — [`PD-TOOLS-003`](../product/directives.md#pd-tools-003), [R-048](../product/requests.md#r-048).** The owner took the half
+this note left to them: the `FAILED ` marker matches case-sensitively, so only `FAILED ` in capitals warns,
+and the other four markers stay case-insensitive. Both warnings this run raised came from lower-case text and
+would not fire under the directive. The note stays open until the directive is built; the repair cites
+`PD-TOOLS-003` and owes its first execution.

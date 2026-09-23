@@ -64,3 +64,8 @@ volume half of the note stays open until that question is ruled; the mechanism h
 
 Measured: `pnpm check` green (2,119 passed); `pnpm overview-proof` and `pnpm rows-proof` exit 0 with the
 log lines unchanged in shape.
+
+**Ruled 2026-09-23 — OQ-63, by [`PD-MONITOR-002`](../product/directives.md#pd-monitor-002), [R-048](../product/requests.md#r-048).** The
+application log carries each line's level as a field and records `info` and above; `ROTARIS_APP_LOG_LEVEL`
+restores `debug`, and no configuration key reaches it. Under the directive the 141 `run host debug:` lines
+measured above are not recorded by default. The note stays open until the directive is built.

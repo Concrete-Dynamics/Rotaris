@@ -110,7 +110,10 @@ it was not given; the request is attributed to the window that sent it, REQ-SHEL
 `PD-SHELL-001`'s add route, decided by the gesture before the chooser opens — a palette entry or the chip with the
 platform's secondary-activation modifier — on which REQ-SHELL-021's three gates are not evaluated and no window is
 closed; a folder another window already holds surfaces that window and builds none, on REQ-STARTUP-163's rule),
-`shell.switchView`, `window.modality {active}` (Part W: the main window's application-modal surface — the command
+`shell.switchView`, **`window.state` / `window.minimize` / `window.toggleMaximize` / `window.close`**
+(PD-SHELL-003: the frameless main window's renderer asks main to operate the BrowserWindow that sent the command;
+close calls `BrowserWindow.close()` so the existing guarded close event remains the only decision point),
+`window.modality {active}` (Part W: the main window's application-modal surface — the command
 palette, the keyboard help — registering itself open or closed; main's registry disables input in every persona window
 of that family for the duration, ADR-0048; a persona window sending it is refused `window.notMain`),
 `hooks.summary/review/reviewPayload/reviewDecide/clearDecision/setToggle`,

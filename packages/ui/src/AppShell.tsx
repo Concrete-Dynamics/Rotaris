@@ -7,6 +7,7 @@ import { useShellState } from './shell-state.js';
 import { Acknowledgements } from './Acknowledgements.js';
 import { NoticeBanner } from './Notice.js';
 import { ImprovementActivity } from './ImprovementActivity.js';
+import { WindowControls } from './WindowControls.js';
 import { CommandPalette } from './commands/CommandPalette.js';
 import { KeyboardHelp } from './commands/KeyboardHelp.js';
 import { commandById, detectPlatform, type CommandContext } from './commands/registry.js';
@@ -69,6 +70,13 @@ export interface AppShellProps {
   readonly onOpenSessions?: (() => void) | undefined;
   /** ADR-0048 (Part W): the application-modal registration with main's window registry (`window.modality`). */
   readonly onModality?: ((active: boolean) => void) | undefined;
+  /** PD-SHELL-003: the main window's product-drawn frame. */
+  readonly windowControls?: {
+    readonly maximized: boolean;
+    readonly onMinimize: () => void;
+    readonly onToggleMaximize: () => void;
+    readonly onClose: () => void;
+  } | undefined;
 }
 
 /**
@@ -106,7 +114,7 @@ export function useCommandContext(): CommandContext {
   }), [activeView]);
 }
 
-export function AppShell({ version, workspacePath, home, sessionName, onChooseWorkspace, statusItems, views = {}, notice = null, onAcknowledge, onAction, acknowledgements, onOpenSessions, onModality }: AppShellProps) {
+export function AppShell({ version, workspacePath, home, sessionName, onChooseWorkspace, statusItems, views = {}, notice = null, onAcknowledge, onAction, acknowledgements, onOpenSessions, onModality, windowControls }: AppShellProps) {
   const activeView = useShellState((s) => s.activeView);
   const switchView = useShellState((s) => s.switchView);
   const paletteOpen = useShellState((s) => s.paletteOpen);
@@ -130,7 +138,9 @@ export function AppShell({ version, workspacePath, home, sessionName, onChooseWo
     <div className="app-shell" data-view={activeView} {...layoutContractAttributes(SHELL_LAYOUT.root)}>
       <CommandPalette open={paletteOpen} ctx={ctx} onClose={closePalette} onModality={onModality} platform={platform} />
       <KeyboardHelp open={helpOpen} onClose={closeKeyboardHelp} onModality={onModality} platform={platform} />
-      <header className="title-bar" {...layoutContractAttributes(SHELL_LAYOUT.title)}>
+      <header className="title-bar" onDoubleClick={(event) => {
+        if (event.target === event.currentTarget) windowControls?.onToggleMaximize();
+      }} {...layoutContractAttributes(SHELL_LAYOUT.title)}>
         <span className="brand-mark" aria-hidden="true" />
         <span className="title-bar__name">Rotaris</span>
         <span className="title-bar__version mono">{version}</span>
@@ -144,6 +154,7 @@ export function AppShell({ version, workspacePath, home, sessionName, onChooseWo
             kept — the session control stays last — and no control is disabled while it shows. */}
         <ImprovementActivity active={improvementAnalysis.active} pass={improvementAnalysis.pass} placement="title-bar" />
         {onOpenSessions && <DesignButton type="button" className="btn btn-ghost title-bar__sessions" onClick={onOpenSessions}>Sessions</DesignButton>}
+        {windowControls && <WindowControls {...windowControls} />}
       </header>
       <div className="notice-slot" aria-live="polite">
         {notice && <NoticeBanner notice={notice} onAcknowledge={onAcknowledge} onAction={onAction} />}

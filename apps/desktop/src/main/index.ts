@@ -41,7 +41,7 @@ import { requirementsCommands } from './commands/requirements.js';
 import { sessionCommands } from './commands/session.js';
 import { shellCommands } from './commands/shell.js';
 import { skillsCommands } from './commands/skills.js';
-import { windowsCommands } from './commands/windows.js';
+import { windowCommands, windowsCommands } from './commands/windows.js';
 import { exitAfterChildWindows } from './exit.js';
 import { workspaceCommands } from './commands/workspace.js';
 // The answer every command ends in, and the inventory the facets above are given (ADR-0019, REQ-SHELL-020).
@@ -1323,6 +1323,7 @@ async function main(): Promise<void> {
     ...sessionCommands(commandContext),
     ...shellCommands(commandContext),
     ...skillsCommands(commandContext),
+    ...windowCommands(),
     ...windowsCommands(commandContext),
     ...workspaceCommands(commandContext),
   };

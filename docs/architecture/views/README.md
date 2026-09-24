@@ -45,6 +45,11 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-24**
 
+**Product-drawn main-window chrome (`PD-SHELL-003`, built 2026-09-24).** On Windows and Linux the main
+`BrowserWindow` is frameless with its native menu hidden. The existing title bar now ends in minimize,
+maximize/restore and guarded close controls; four renderer commands reach the sending window in main.
+The **process view** gains those command kinds. No package, process, channel or state owner changed.
+
 **The terminal on Linux (defect round, 2026-09-24).** Two repairs, no structure moved. A background session is started
 as the leader of its own process group on POSIX (`spawnChild`'s new `processGroup`), so `send_signal` and the tree kill
 reach it. PD-TOOLS-001's POSIX capture is encoded so the emulated screen cannot wrap it. No view text describes either

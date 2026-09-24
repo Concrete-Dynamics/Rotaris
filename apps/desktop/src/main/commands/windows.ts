@@ -59,3 +59,18 @@ export function windowsCommands(
     },
   };
 }
+
+/** PD-SHELL-003 — commands from the product-drawn main-window frame. */
+export function windowCommands(): Pick<CommandHandlers, 'window.state' | 'window.minimize' | 'window.toggleMaximize' | 'window.close'> {
+  return {
+    'window.state': (_req, { w }) => ({ ok: true, value: { maximized: w.win.isMaximized() } }),
+    'window.minimize': (_req, { w }) => { w.win.minimize(); return { ok: true }; },
+    'window.toggleMaximize': (_req, { w }) => {
+      const restore = w.win.isMaximized();
+      if (restore) w.win.unmaximize(); else w.win.maximize();
+      return { ok: true, value: { maximized: !restore } };
+    },
+    // BrowserWindow.close emits the existing guarded close event; destroy would bypass it.
+    'window.close': (_req, { w }) => { w.win.close(); return { ok: true }; },
+  };
+}

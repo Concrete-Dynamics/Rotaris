@@ -271,6 +271,11 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('window.openPersona'), persona: z.string().min(1), agentId: z.string().min(1), focusSteer: z.boolean().optional() }),
   /** The persona window asks main what it was opened for: its persona, the session the main window follows, the tab to select. */
   z.object({ kind: z.literal('window.personaPayload') }),
+  /** PD-SHELL-003: the product-drawn main-window frame. Close still enters BrowserWindow's guarded close event. */
+  z.object({ kind: z.literal('window.state') }),
+  z.object({ kind: z.literal('window.minimize') }),
+  z.object({ kind: z.literal('window.toggleMaximize') }),
+  z.object({ kind: z.literal('window.close') }),
   /**
    * ADR-0048's application modality, second execution (Part W; REQ-SHELL-051/054): a main window's application-modal
    * surface (the command palette, the keyboard help) registers itself open or closed, and main's registry disables

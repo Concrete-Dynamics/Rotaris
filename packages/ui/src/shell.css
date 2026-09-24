@@ -25,6 +25,26 @@
 .title-bar__name { font-family: var(--rt-font-display, 'Space Grotesk', sans-serif); font-weight: 600; }
 .title-bar__version { color: var(--rt-text-tertiary); font-size: var(--rt-text-sm, 12px); }
 .title-bar__sessions { -webkit-app-region: no-drag; }
+.window-controls {
+  align-self: stretch;
+  display: flex;
+  margin-right: calc(-1 * var(--rt-space-3));
+  -webkit-app-region: no-drag;
+}
+.window-control {
+  width: var(--rt-title-bar-height);
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--rt-text-secondary);
+  cursor: default;
+}
+.window-control:hover { background: var(--rt-hover); color: var(--rt-text); }
+.window-control:focus-visible { outline: var(--rt-focus-ring-width) solid var(--rt-focus); outline-offset: calc(-1 * var(--rt-focus-ring-width)); }
+.window-control--close:hover, .window-control--close:focus-visible { color: var(--rt-fail); }
+.window-control i { font-size: var(--rt-text-sm); line-height: 1; }
 /*
  * REQ-LIBRARY-125's two indicators (PD-LIBRARY-002 labels them per pass). Both are the Tag the run header
  * already uses for a run's state, so they inherit its colour, radius and type; only the things a Tag cannot

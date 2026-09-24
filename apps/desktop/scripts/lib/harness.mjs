@@ -55,6 +55,15 @@ export function findDatabases(root) {
 }
 
 /**
+ * A path in POSIX spelling whichever separator it was written with. Splitting on the HOST's `sep` left a
+ * Windows-spelled path untouched on Linux, which is why `proof-isolation.test.ts` — written to be decidable on any
+ * host — could only pass on Windows (`docs/defects/fixed/the-proof-isolation-test-passes-only-on-a-windows-host.md`).
+ */
+function toPosix(path) {
+  return path.split(/[\\/]/).join(posix.sep);
+}
+
+/**
  * Where a launch isolated at `local` keeps its workspace stores, **by the platform that will read them**.
  *
  * The product's own rule, and it is not the same shape on both sides: `resolveUserDirs` answers
@@ -84,7 +93,7 @@ export function tokensDirFor(local, platform = process.platform) {
 
 function dataSubdirFor(local, leaf, platform) {
   if (platform === 'win32') return win32.join(local, 'rotaris', 'data', leaf);
-  const data = posix.join(local.split(sep).join(posix.sep), 'rotaris', 'data');
+  const data = posix.join(toPosix(local), 'rotaris', 'data');
   return posix.join(data, 'rotaris', leaf);
 }
 
@@ -161,8 +170,8 @@ export function proofIsolationEnv({ profileRoot, local, preferences, home }) {
   // reads these values, and a Windows-spelled value is a path no POSIX machine would resolve. `dirs.ts`
   // reads them as opaque strings (the platform parameter supplies the separator), so spelling them here
   // is what makes the isolation decidable on the platform that reads them.
-  const data = posix.join(local.split(sep).join(posix.sep), 'rotaris', 'data');
-  const config = posix.join(local.split(sep).join(posix.sep), 'rotaris', 'config');
+  const data = posix.join(toPosix(local), 'rotaris', 'data');
+  const config = posix.join(toPosix(local), 'rotaris', 'config');
   const digest = createHash('sha256').update(data).digest('hex').slice(0, 12);
   const runtime = join(tmpdir(), `rotaris-proof-${digest}`);
   const roaming = profileRoot !== undefined

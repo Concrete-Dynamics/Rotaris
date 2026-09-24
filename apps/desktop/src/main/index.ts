@@ -42,6 +42,7 @@ import { sessionCommands } from './commands/session.js';
 import { shellCommands } from './commands/shell.js';
 import { skillsCommands } from './commands/skills.js';
 import { windowsCommands } from './commands/windows.js';
+import { exitAfterChildWindows } from './exit.js';
 import { workspaceCommands } from './commands/workspace.js';
 // The answer every command ends in, and the inventory the facets above are given (ADR-0019, REQ-SHELL-020).
 import { refusal, type ApprovalDialogState, type CommandContext, type CommandHandler, type CommandHandlers, type MainWindowState, type Recovery } from './commands/context.js';
@@ -59,6 +60,8 @@ import { refusal, type ApprovalDialogState, type CommandContext, type CommandHan
  * behaviour beyond it.
  */
 const clocks = nodeClocks();
+/** Every immediate exit goes through this: on Linux, `app.exit` over an open modal child segfaults (`exit.ts`). */
+const exitCleanly = (code: number): void => exitAfterChildWindows({ windows: () => BrowserWindow.getAllWindows(), exit: (c) => app.exit(c), timers: clocks.timers, nextTurn: (fn) => setImmediate(fn) }, code);
 const dirs = resolveUserDirs();
 const layout = dataLayout(dirs);
 mkdirSync(dirs.data, { recursive: true });
@@ -1411,7 +1414,7 @@ async function main(): Promise<void> {
       log,
       command: (request, selectedWindow) => runCommand(request, selectedWindow.webContents.id),
       deferProjectOffer: (selectedWindow, delayMs) => mainWindows.deferProjectOffer(selectedWindow.webContents.id, delayMs),
-      quit: () => app.exit(0),
+      quit: () => exitCleanly(0),
     });
     app.on('will-quit', () => driver.close());
   }
@@ -1436,7 +1439,7 @@ async function main(): Promise<void> {
     runHost,
     themeName: () => currentTheme.name,
     resultSeen: () => resultSeen,
-    exit: (code) => { app.exit(code); },
+    exit: (code) => { exitCleanly(code); },
   });
 
   app.on('window-all-closed', () => {

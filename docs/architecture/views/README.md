@@ -43,7 +43,12 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-09-23**
+## Last reconciled with the code: **2026-09-24**
+
+**An immediate exit closes the child windows first (defect round, 2026-09-24).** On Linux, `app.exit` over an open
+modal child window segfaults inside Electron, which is how every live-run sign-in there ended. The capture seam's exit
+and the driver's `quit` now go through `exitCleanly` (`main/exit.ts`). The **process view** gains one sentence; no
+package, edge or message kind changed.
 
 **Configured rates price a request (`PD-MONITOR-001` revision 2, built 2026-09-23).** A request the provider did not
 price is priced at the ladder cell from the configured rates of the model it was sent to, exactly, and the run's

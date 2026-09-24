@@ -1003,14 +1003,16 @@ if (wanted.includes('ask')) {
    * ENDPOINT answered. It also proves the hop the check above can no longer see: the product reached the proxy,
    * and this says the proxy reached the endpoint and got a 200.
    */
+  let askTraffic = null;
   if (proxy !== null) {
     const traffic = readTraffic('ask');
     const completions = traffic.filter((r) => String(r.path ?? '').includes('/chat/completions'));
     check(completions.some((r) => r.status === 200), 'the endpoint answered a completion, read from the recorded traffic', `${traffic.length} record(s), ${completions.length} completion(s), statuses ${[...new Set(completions.map((r) => r.status))].join(', ') || 'none'}`);
     check(completions.every((r) => r.requestHeaders?.authorization === '[redacted]'), 'the traffic record carries no bearer', `${completions.length} completion record(s)`);
-    results.scenarios.ask.traffic = { records: traffic.length, completions: completions.length, slowestMs: Math.max(0, ...traffic.map((r) => r.ms ?? 0)) };
+    askTraffic = { records: traffic.length, completions: completions.length, slowestMs: Math.max(0, ...traffic.map((r) => r.ms ?? 0)) };
   }
-  results.scenarios.ask = { status: read?.session.execution_status, iterations: read?.session.iterations_completed, tokens: { input: read?.session.tokens_input, output: read?.session.tokens_output }, tools: tools.map((row) => row.tool_name), answer: answer.trim().slice(0, 400) };
+  // The summary joins the scenario's record rather than being written onto it before it exists.
+  results.scenarios.ask = { ...(askTraffic === null ? {} : { traffic: askTraffic }), status: read?.session.execution_status, iterations: read?.session.iterations_completed, tokens: { input: read?.session.tokens_input, output: read?.session.tokens_output }, tools: tools.map((row) => row.tool_name), answer: answer.trim().slice(0, 400) };
   if (read) preserveRun('ask', read.session.session_id);
   await budgetGate();
 }

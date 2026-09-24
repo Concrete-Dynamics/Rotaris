@@ -69,9 +69,23 @@ export function findDatabases(root) {
  * drifting — a drift is a failed test, not a proof that quietly finds nothing.
  */
 export function workspacesRootFor(local, platform = process.platform) {
-  if (platform === 'win32') return win32.join(local, 'rotaris', 'data', 'workspaces');
+  return dataSubdirFor(local, 'workspaces', platform);
+}
+
+/**
+ * The credential directory (`dataLayout().tokens`, REQ-PROVIDER-014) below `local`, by the same copied rule. The live
+ * run waited for, and deleted, the Windows spelling `local/rotaris/data/tokens` on every platform: on Linux the app
+ * writes `<XDG_DATA_HOME>/rotaris/tokens`, so sign-in timed out, and `dropCredentials` removed a directory that never
+ * held the key — the key's own directory survived a `--keep`. Found by the first live run on Linux, 2026-09-24.
+ */
+export function tokensDirFor(local, platform = process.platform) {
+  return dataSubdirFor(local, 'tokens', platform);
+}
+
+function dataSubdirFor(local, leaf, platform) {
+  if (platform === 'win32') return win32.join(local, 'rotaris', 'data', leaf);
   const data = posix.join(local.split(sep).join(posix.sep), 'rotaris', 'data');
-  return posix.join(data, 'rotaris', 'workspaces');
+  return posix.join(data, 'rotaris', leaf);
 }
 
 /** The one store below `local`, or a thrown error naming how many there were — a proof that opened the wrong store is the defect this refuses to become. */

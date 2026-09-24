@@ -17,7 +17,7 @@
 import { describe, expect, it } from 'vitest';
 import { posix, win32 } from 'node:path';
 import { resolveUserDirs, dataLayout } from '@rotaris/platform';
-import { proofIsolationEnv, workspacesRootFor } from './harness.mjs';
+import { proofIsolationEnv, tokensDirFor, workspacesRootFor } from './harness.mjs';
 
 const PROFILE = 'D:\\repo\\.proof\\transcript-proof\\profile';
 const LOCAL = `${PROFILE}\\local`;
@@ -106,6 +106,8 @@ describe('proof isolation lands inside the scratch profile on every platform', (
       const dirs = resolveUserDirs({ platform, env, home: platform === 'win32' ? OPERATOR.win32Home : OPERATOR.home });
       if (platform === 'darwin') continue; // composed from HOME, not from the pairs; not a `local`-rooted answer.
       expect(workspacesRootFor(LOCAL, platform)).toBe(dataLayout(dirs, platform).workspaces);
+      // The credential directory by the same rule: the live run waits for, and deletes, exactly this directory.
+      expect(tokensDirFor(LOCAL, platform)).toBe(dataLayout(dirs, platform).tokens);
     }
     // And the two answers really do differ, so the test above is not agreeing with itself.
     expect(workspacesRootFor(LOCAL, 'win32')).not.toBe(workspacesRootFor(LOCAL, 'linux'));

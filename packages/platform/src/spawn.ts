@@ -16,6 +16,13 @@ export interface SpawnSpec {
   readonly stdio?: SpawnOptions['stdio'];
   /** ADR-0015: a hook's command reaches the interpreter as ONE argument, unquoted by Node (Windows only). */
   readonly windowsVerbatimArguments?: boolean;
+  /**
+   * POSIX only: the child leads a process group of its own, so the caller can signal the child and everything it
+   * started as one (`process.kill(-pid, …)`). Without it that call finds no group and fails with ESRCH, which is
+   * how a background terminal session on Linux refused every signal (REQ-TOOLS-110, OQ-10). On Windows `detached`
+   * would open a new console instead, so the flag is ignored there and the product's tree kill stays `taskkill /T`.
+   */
+  readonly processGroup?: boolean;
 }
 
 export function spawnChild(spec: SpawnSpec): ChildProcess {
@@ -24,7 +31,7 @@ export function spawnChild(spec: SpawnSpec): ChildProcess {
     env: { ...spec.env },
     stdio: spec.stdio ?? 'pipe',
     windowsHide: true,
-    detached: false,
+    detached: spec.processGroup === true && process.platform !== 'win32',
   } as SpawnOptions;
   if (spec.cwd !== undefined) opts.cwd = spec.cwd;
   if (spec.windowsVerbatimArguments !== undefined) opts.windowsVerbatimArguments = spec.windowsVerbatimArguments;

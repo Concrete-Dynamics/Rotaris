@@ -165,7 +165,8 @@ export class BackgroundManager {
     const args = backend.kind === 'powershell' ? ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', line] : ['-c', line];
     let child: ChildProcess;
     try {
-      child = spawnChild({ command: backend.file, args, cwd: this.deps.cwd, env: this.deps.env, stdio: ['pipe', 'pipe', 'pipe'] });
+      // REQ-TOOLS-110: its own process group on POSIX, so a signal and the tree kill reach the command, not only the shell.
+      child = spawnChild({ command: backend.file, args, cwd: this.deps.cwd, env: this.deps.env, stdio: ['pipe', 'pipe', 'pipe'], processGroup: true });
     } catch (cause) {
       return { ok: false, error: `The background command could not be started: ${String(cause)}` };
     }

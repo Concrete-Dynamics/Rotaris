@@ -161,7 +161,10 @@ asks back to main** (`ServiceAsk`, beside `credentials.lease`): `checkpoint.capt
 — main relays each to the workspace service of `workspaceRoot` and answers the run host with the service's reply; the two
 children still never talk directly (ADR-0002 c.4). The service tracks its in-flight checkpoint operations and its `shutdown`
 waits for them (REQ-GIT-101); main sends every service `shutdown` after the run host's and awaits it, bounded by REQ-GIT-033's
-limits, before it quits.
+limits, before it quits. The two paths that end the process at once rather than through `app.quit()` — the capture
+seam's exit and the driver's `quit` — go through `exitCleanly` (`main/exit.ts`): every child window is destroyed, its
+`closed` awaited (bounded at 2 s), and `app.exit` runs on the next turn, because on Linux `app.exit` over an open modal
+child segfaults.
 
 **The session browser's actions (Part U).** Renderer → main: `session.repair {sessionId?}` (one stale session, or every
 stale session when the id is absent — REQ-SESSION-060/182) → `{report: {repaired[{sessionId, from, to: interrupted,

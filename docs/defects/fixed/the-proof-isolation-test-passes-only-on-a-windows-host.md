@@ -26,3 +26,10 @@ non-Windows host this suite is red on an unmodified tree.
 
 - `apps/desktop/scripts/lib/harness.mjs`: `proofIsolationEnv`, splitting on the host `sep`.
 - `apps/desktop/scripts/lib/proof-isolation.test.ts`: the Windows-spelled `PROFILE` fixture and the two assertions.
+
+## Repaired — 2026-09-24
+
+`harness.mjs` converts a path to POSIX spelling with `toPosix`, which splits on both separators, instead of on the
+host's `sep`. `proofIsolationEnv`, `workspacesRootFor` and `tokensDirFor` all use it, so the answer no longer depends
+on the host the harness runs on. On a POSIX path the conversion is the identity. Evidence: `apps/desktop/scripts/lib`,
+59 tests passing on Linux, including the two this note named.

@@ -91,6 +91,17 @@ export function tokensDirFor(local, platform = process.platform) {
   return dataSubdirFor(local, 'tokens', platform);
 }
 
+/**
+ * The configuration directory (`resolveUserDirs().config`) below `local`, by the same copied rule: on Windows
+ * `local/rotaris/config`, elsewhere `<XDG_CONFIG_HOME>/rotaris`. The live run read the discovery snapshot
+ * (`project_settings.yaml`) at the Windows spelling on every platform, so on Linux it reported the authenticated
+ * provider missing from a file it never opened. Found by the Linux live run, 2026-09-24.
+ */
+export function configDirFor(local, platform = process.platform) {
+  if (platform === 'win32') return win32.join(local, 'rotaris', 'config');
+  return posix.join(toPosix(local), 'rotaris', 'config', 'rotaris');
+}
+
 function dataSubdirFor(local, leaf, platform) {
   if (platform === 'win32') return win32.join(local, 'rotaris', 'data', leaf);
   const data = posix.join(toPosix(local), 'rotaris', 'data');

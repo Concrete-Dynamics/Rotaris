@@ -138,9 +138,7 @@ export function AppShell({ version, workspacePath, home, sessionName, onChooseWo
     <div className="app-shell" data-view={activeView} {...layoutContractAttributes(SHELL_LAYOUT.root)}>
       <CommandPalette open={paletteOpen} ctx={ctx} onClose={closePalette} onModality={onModality} platform={platform} />
       <KeyboardHelp open={helpOpen} onClose={closeKeyboardHelp} onModality={onModality} platform={platform} />
-      <header className="title-bar" onDoubleClick={(event) => {
-        if (event.target === event.currentTarget) windowControls?.onToggleMaximize();
-      }} {...layoutContractAttributes(SHELL_LAYOUT.title)}>
+      <header className="title-bar" {...layoutContractAttributes(SHELL_LAYOUT.title)}>
         <span className="brand-mark" aria-hidden="true" />
         <span className="title-bar__name">Rotaris</span>
         <span className="title-bar__version mono">{version}</span>

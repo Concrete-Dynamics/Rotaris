@@ -20,6 +20,7 @@ describe('PD-SHELL-003 window controls', () => {
     expect(markup).toContain('ph-minus');
     expect(markup).toContain('ph-square');
     expect(markup).toContain('ph-x');
+    expect(markup).toContain('role="group"');
   });
 
   it('changes the middle control to restore while maximized', () => {

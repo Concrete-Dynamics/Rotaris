@@ -1323,7 +1323,7 @@ async function main(): Promise<void> {
     ...sessionCommands(commandContext),
     ...shellCommands(commandContext),
     ...skillsCommands(commandContext),
-    ...windowCommands(),
+    ...windowCommands(commandContext),
     ...windowsCommands(commandContext),
     ...workspaceCommands(commandContext),
   };

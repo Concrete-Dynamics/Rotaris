@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { windowCommands } from './windows.js';
 
-function harness(maximized = false) {
+function harness(maximized = false, mainSender = true) {
   const minimize = vi.fn();
   const maximize = vi.fn();
   const unmaximize = vi.fn();
@@ -14,7 +14,7 @@ function harness(maximized = false) {
     unmaximize,
     close,
   };
-  const handlers = windowCommands();
+  const handlers = windowCommands({ windowFor: () => mainSender ? ({ win } as never) : undefined });
   const at = { w: { win }, senderId: 7, awaitWorkspace: async () => undefined } as never;
   return { handlers, at, minimize, maximize, unmaximize, close };
 }
@@ -45,5 +45,18 @@ describe('PD-SHELL-003 main window commands', () => {
 
     expect(h.handlers['window.close']({ kind: 'window.close' }, h.at)).toEqual({ ok: true });
     expect(h.close).toHaveBeenCalledOnce();
+  });
+
+  it('refuses every window-frame command from an auxiliary renderer', () => {
+    const h = harness(false, false);
+    const refused = { ok: false, code: 'window.notMain', headline: 'Only a main window controls its frame' };
+
+    expect(h.handlers['window.state']({ kind: 'window.state' }, h.at)).toEqual(refused);
+    expect(h.handlers['window.minimize']({ kind: 'window.minimize' }, h.at)).toEqual(refused);
+    expect(h.handlers['window.toggleMaximize']({ kind: 'window.toggleMaximize' }, h.at)).toEqual(refused);
+    expect(h.handlers['window.close']({ kind: 'window.close' }, h.at)).toEqual(refused);
+    expect(h.minimize).not.toHaveBeenCalled();
+    expect(h.maximize).not.toHaveBeenCalled();
+    expect(h.close).not.toHaveBeenCalled();
   });
 });

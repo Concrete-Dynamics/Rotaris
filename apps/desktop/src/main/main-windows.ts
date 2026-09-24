@@ -533,8 +533,8 @@ export interface ElectronMainWindowAdapterDependencies {
   readonly log: (message: string) => void;
 }
 
-/** PD-SHELL-003: only the main window replaces the host frame, and only on the two platforms the directive names. */
-export function mainWindowOptions(backgroundColor: string, platform: NodeJS.Platform = process.platform): BrowserWindowConstructorOptions {
+/** PD-SHELL-003: only the main window replaces the host frame, consistently on every supported desktop. */
+export function mainWindowOptions(backgroundColor: string): BrowserWindowConstructorOptions {
   return {
     width: 1440,
     height: 900,
@@ -544,7 +544,7 @@ export function mainWindowOptions(backgroundColor: string, platform: NodeJS.Plat
     backgroundColor,
     title: 'Rotaris',
     autoHideMenuBar: true,
-    ...(platform === 'win32' || platform === 'linux' ? { frame: false } : {}),
+    frame: false,
     webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
   };
 }

@@ -1213,9 +1213,9 @@ refusal to protect them.
 
 <a id="pd-shell-003"></a>
 
-### PD-SHELL-003 — the main window carries product-drawn window chrome on Windows and Linux
+### PD-SHELL-003 — the main window carries one product-drawn frame on every desktop
 
-On Windows and Linux, the main window SHALL show no native application menu, menu bar or toolbar above
+On Windows, Linux and macOS, the main window SHALL show no native frame, application menu, menu bar or toolbar above
 the product. Its product-drawn title bar SHALL be the window's visible top frame and SHALL retain the
 title "Rotaris" together with every item and ordering REQ-SHELL-033 already fixes.
 
@@ -1231,13 +1231,13 @@ bypass or duplicate them.
 The controls and draggable region SHALL use the adopted design language: title-bar ground, neutral icon
 ink, hover wash, an in-bounds focus ring, and danger ink only while the close control is hovered or
 focused. Interactive title-bar contents and all three controls SHALL remain outside the draggable region.
-The product SHALL use the same controls and command path on Windows and Linux rather than branching to a
+The product SHALL use the same controls and command path on Windows, Linux and macOS rather than branching to a
 different renderer surface per platform. Other application windows retain their existing native frame.
 
 **Why, and what it costs.** The native Electron menu bar adds a second, host-styled band above the shell
 and makes the product's specified title bar read as content rather than window chrome. One product-drawn
-frame removes that duplicate hierarchy and keeps the main window visually consistent across the two
-supported desktop hosts named by the request. The cost is that the product now owns three pieces of
+frame removes that duplicate hierarchy and keeps the main window visually consistent across every
+supported desktop host. The cost is that the product now owns three pieces of
 platform behaviour that the host previously drew: the controls must remain operable by keyboard and
 pointer, the maximize state must stay truthful after host-driven changes, and the close control must
 continue through the guard rather than destroying the window directly. Auxiliary dialogs and pop-outs
@@ -1254,6 +1254,12 @@ answering the duplicate main-window toolbar the owner identified.
 > could not connect to this host's Wayland socket. A normal development launch then painted the main window;
 > its log records `main window 1 loaded`. The driver/CUA interfaces still exposed no target for inspecting its
 > pixels or exercising pointer gestures, so the screenshot and live control gestures remain unverified.
+>
+> **Revision 2, 2026-09-24:** the owner extended the same product-drawn frame to macOS after reviewing the
+> first implementation. The main window is now frameless on all three supported desktops; auxiliary senders
+> are refused before any frame command acts, and the control group has an exposed accessible name. Electron's
+> draggable region owns native double-click maximize/restore; the renderer listens to resize to keep its icon
+> truthful rather than expecting a pointer event that Electron deliberately withholds from draggable regions.
 
 ---
 

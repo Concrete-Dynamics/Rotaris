@@ -59,3 +59,25 @@ export function windowsCommands(
     },
   };
 }
+
+/** PD-SHELL-003 — commands from the product-drawn main-window frame. */
+export function windowCommands(
+  ctx: Pick<CommandContext, 'windowFor'>,
+): Pick<CommandHandlers, 'window.state' | 'window.minimize' | 'window.toggleMaximize' | 'window.close'> {
+  const forMain = (senderId: number, act: () => CommandOutcome): CommandOutcome => (
+    ctx.windowFor(senderId) === undefined
+      ? { ok: false, code: 'window.notMain', headline: 'Only a main window controls its frame' }
+      : act()
+  );
+  return {
+    'window.state': (_req, { w, senderId }) => forMain(senderId, () => ({ ok: true as const, value: { maximized: w.win.isMaximized() } })),
+    'window.minimize': (_req, { w, senderId }) => forMain(senderId, () => { w.win.minimize(); return { ok: true as const }; }),
+    'window.toggleMaximize': (_req, { w, senderId }) => forMain(senderId, () => {
+      const restore = w.win.isMaximized();
+      if (restore) w.win.unmaximize(); else w.win.maximize();
+      return { ok: true as const, value: { maximized: !restore } };
+    }),
+    // BrowserWindow.close emits the existing guarded close event; destroy would bypass it.
+    'window.close': (_req, { w, senderId }) => forMain(senderId, () => { w.win.close(); return { ok: true as const }; }),
+  };
+}

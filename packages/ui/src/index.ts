@@ -1,4 +1,5 @@
 export * from './AppShell.js';
+export * from './WindowControls.js';
 export * from './WorkspaceChip.js';
 export * from './workspace-host.js';
 export * from './workspace-label.js';

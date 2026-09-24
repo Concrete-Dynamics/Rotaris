@@ -1188,6 +1188,21 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
   // and the keyboard help register with main's window registry through `window.modality`, and main disables input in the
   // persona windows for the duration.
   const onModality = useCallback((active: boolean) => { void bridge.command({ kind: 'window.modality', active }); }, []);
+  // PD-SHELL-003: state is re-read after every toggle and whenever the host resizes the window (snap/maximize included).
+  const [windowMaximized, setWindowMaximized] = useState(false);
+  const readWindowState = useCallback(() => {
+    void bridge.command({ kind: 'window.state' }).then((r) => {
+      if (r.ok) setWindowMaximized((r.value as { maximized: boolean }).maximized);
+    });
+  }, []);
+  useEffect(() => {
+    readWindowState();
+    window.addEventListener('resize', readWindowState);
+    return () => window.removeEventListener('resize', readWindowState);
+  }, [readWindowState]);
+  const toggleWindowMaximize = useCallback(() => {
+    void bridge.command({ kind: 'window.toggleMaximize' }).then(readWindowState);
+  }, [readWindowState]);
   /**
    * Stage B — REQ-SHELL-035: the chip asks, and main decides. The command carries NO folder: main
    * evaluates REQ-SHELL-021's three gates, opens the native chooser and interprets the answer, so no
@@ -1215,6 +1230,12 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
   return (<>
     <AppShell
       onModality={onModality}
+      windowControls={{
+        maximized: windowMaximized,
+        onMinimize: () => { void bridge.command({ kind: 'window.minimize' }); },
+        onToggleMaximize: toggleWindowMaximize,
+        onClose: () => { void bridge.command({ kind: 'window.close' }); },
+      }}
       version={version}
       workspacePath={workspace}
       home={home}

@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Twenty-five.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Twenty-six.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -1208,6 +1208,59 @@ refusal to protect them.
 > guard stands). `pnpm check` green on symbols, typecheck and lint; tests 2020 passed with
 > 2 failures in `terminal.test.ts` real-PTY under full-suite load, each passing isolated —
 > the known parallelism flake, unrelated to this change.
+
+---
+
+<a id="pd-shell-003"></a>
+
+### PD-SHELL-003 — the main window carries one product-drawn frame on every desktop
+
+On Windows, Linux and macOS, the main window SHALL show no native frame, application menu, menu bar or toolbar above
+the product. Its product-drawn title bar SHALL be the window's visible top frame and SHALL retain the
+title "Rotaris" together with every item and ordering REQ-SHELL-033 already fixes.
+
+At the right edge of that title bar, after the existing title-bar contents, the product SHALL draw three
+keyboard-reachable window controls in this order: minimize, maximize or restore, and close. Each SHALL
+carry an accessible name and a matching tooltip. The middle control SHALL read and perform "Maximize"
+while the window is not maximized and "Restore" while it is maximized. Double-clicking an otherwise
+inactive part of the title bar SHALL make the same maximize-or-restore transition. Minimize and
+maximize/restore SHALL act on the main window that raised the command. Close SHALL enter the existing
+close flow, including the unsaved-settings, worktree-integration and active-run guards; it SHALL NOT
+bypass or duplicate them.
+
+The controls and draggable region SHALL use the adopted design language: title-bar ground, neutral icon
+ink, hover wash, an in-bounds focus ring, and danger ink only while the close control is hovered or
+focused. Interactive title-bar contents and all three controls SHALL remain outside the draggable region.
+The product SHALL use the same controls and command path on Windows, Linux and macOS rather than branching to a
+different renderer surface per platform. Other application windows retain their existing native frame.
+
+**Why, and what it costs.** The native Electron menu bar adds a second, host-styled band above the shell
+and makes the product's specified title bar read as content rather than window chrome. One product-drawn
+frame removes that duplicate hierarchy and keeps the main window visually consistent across every
+supported desktop host. The cost is that the product now owns three pieces of
+platform behaviour that the host previously drew: the controls must remain operable by keyboard and
+pointer, the maximize state must stay truthful after host-driven changes, and the close control must
+continue through the guard rather than destroying the window directly. Auxiliary dialogs and pop-outs
+keep their native frame because extending custom chrome to every role would enlarge the change without
+answering the duplicate main-window toolbar the owner identified.
+
+> **Extends:** REQ-SHELL-022, REQ-SHELL-033, REQ-SHELL-119
+
+*Raised by the owner, 2026-09-24; logged as [R-050](requests.md#r-050).*
+
+> **First execution, 2026-09-24:** the frameless-window options, all four command outcomes and the three
+> rendered controls passed their focused tests; the whole unit suite passed 2,168 tests with 26 skipped;
+> typecheck, lint and the production build passed. `pnpm app:drive` was attempted twice and its child Electron
+> could not connect to this host's Wayland socket. A normal development launch then painted the main window;
+> its log records `main window 1 loaded`. The driver/CUA interfaces still exposed no target for inspecting its
+> pixels or exercising pointer gestures, so the screenshot and live control gestures remain unverified.
+>
+> **Revision 2, 2026-09-24:** the owner extended the same product-drawn frame to macOS after reviewing the
+> first implementation. The main window is now frameless on all three supported desktops; auxiliary senders
+> are refused before any frame command acts, Electron's default application menu is removed rather than merely
+> hidden, and the control group has an exposed accessible name. Electron's
+> draggable region owns native double-click maximize/restore; the renderer listens to resize to keep its icon
+> truthful rather than expecting a pointer event that Electron deliberately withholds from draggable regions.
 
 ---
 

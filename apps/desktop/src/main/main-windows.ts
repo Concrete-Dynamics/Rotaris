@@ -533,6 +533,27 @@ export interface ElectronMainWindowAdapterDependencies {
   readonly log: (message: string) => void;
 }
 
+/** PD-SHELL-003: auto-hide is not removal — null is what suppresses Electron's default app menu on every host. */
+export function removeApplicationMenu(menu: { setApplicationMenu: (value: null) => void }): void {
+  menu.setApplicationMenu(null);
+}
+
+/** PD-SHELL-003: only the main window replaces the host frame, consistently on every supported desktop. */
+export function mainWindowOptions(backgroundColor: string): BrowserWindowConstructorOptions {
+  return {
+    width: 1440,
+    height: 900,
+    minWidth: 1000,
+    minHeight: 680,
+    show: false,
+    backgroundColor,
+    title: 'Rotaris',
+    autoHideMenuBar: true,
+    frame: false,
+    webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
+  };
+}
+
 /** Electron's concrete half of the lifecycle seam. Tests use an in-memory adapter with the same ordering. */
 export function createElectronMainWindowAdapter(
   dependencies: ElectronMainWindowAdapterDependencies,
@@ -546,16 +567,8 @@ export function createElectronMainWindowAdapter(
 
   return {
     create: async ({ workspace, origin }) => {
-      const win = dependencies.createWindow({
-        width: 1440,
-        height: 900,
-        minWidth: 1000,
-        minHeight: 680,
-        show: false,
-        backgroundColor: dependencies.themeBackground(),
-        title: 'Rotaris',
-        webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
-      });
+      const win = dependencies.createWindow(mainWindowOptions(dependencies.themeBackground()));
+      win.setMenuBarVisibility(false);
       const wcId = win.webContents.id;
       if (dependencies.capturing) win.webContents.setBackgroundThrottling(false);
       dependencies.relayAttach(win);

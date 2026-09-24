@@ -1257,7 +1257,8 @@ answering the duplicate main-window toolbar the owner identified.
 >
 > **Revision 2, 2026-09-24:** the owner extended the same product-drawn frame to macOS after reviewing the
 > first implementation. The main window is now frameless on all three supported desktops; auxiliary senders
-> are refused before any frame command acts, and the control group has an exposed accessible name. Electron's
+> are refused before any frame command acts, Electron's default application menu is removed rather than merely
+> hidden, and the control group has an exposed accessible name. Electron's
 > draggable region owns native double-click maximize/restore; the renderer listens to resize to keep its icon
 > truthful rather than expecting a pointer event that Electron deliberately withholds from draggable regions.
 

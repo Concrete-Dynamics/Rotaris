@@ -2,7 +2,7 @@
 // first on the command line it hands the process to the bundled runtime and exits before anything below is evaluated.
 import './sentinel.js';
 import type { PersonaWindows, TerminalWindows } from './windows.js'; // Part AL2: the terminal window's registry beside the persona windows'
-import { createElectronMainWindowAdapter, createElectronProjectFolderChooser, MainWindows } from './main-windows.js';
+import { createElectronMainWindowAdapter, createElectronProjectFolderChooser, MainWindows, removeApplicationMenu } from './main-windows.js';
 import { createNoticeStore } from './notices.js';
 import { createLibraryRevision } from './library.js';
 // The driver seam (verification only; `ROTARIS_DRIVER` names its endpoint file). Never reached by a product surface.
@@ -15,7 +15,7 @@ import { createRequirementsRuns } from './requirements-runs.js';
 import { createImprovementCoordinator } from './improvements.js';
 import { homedir } from 'node:os';
 import { FrameDeliveryLimiter } from './terminal.js';
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, utilityProcess, type UtilityProcess } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, utilityProcess, type UtilityProcess } from 'electron';
 import { join } from 'node:path';
 import { mkdirSync, statSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
@@ -171,6 +171,7 @@ async function main(): Promise<void> {
   if (captureScale) app.commandLine.appendSwitch('force-device-scale-factor', captureScale);
 
   await app.whenReady();
+  removeApplicationMenu(Menu);
 
   // ADR-0029/0030: the credential store and the provider service live HERE, in main; the run host is leased bearers.
   const lockDeps = { pid: process.pid, startedAt: toIsoUtc(clocks.wall.instant()), timers: clocks.timers, monotonic: clocks.monotonic };

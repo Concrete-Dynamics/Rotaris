@@ -7,7 +7,7 @@ export interface WindowControlsProps {
   readonly onClose: () => void;
 }
 
-/** PD-SHELL-003 — one product-drawn control set for the main window on Windows and Linux. */
+/** PD-SHELL-003 — one product-drawn control set for the main window on every supported desktop. */
 export function WindowControls({ maximized, onMinimize, onToggleMaximize, onClose }: WindowControlsProps) {
   const maximizeLabel = maximized ? 'Restore' : 'Maximize';
   return (

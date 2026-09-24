@@ -533,6 +533,11 @@ export interface ElectronMainWindowAdapterDependencies {
   readonly log: (message: string) => void;
 }
 
+/** PD-SHELL-003: auto-hide is not removal — null is what suppresses Electron's default app menu on every host. */
+export function removeApplicationMenu(menu: { setApplicationMenu: (value: null) => void }): void {
+  menu.setApplicationMenu(null);
+}
+
 /** PD-SHELL-003: only the main window replaces the host frame, consistently on every supported desktop. */
 export function mainWindowOptions(backgroundColor: string): BrowserWindowConstructorOptions {
   return {

@@ -6,7 +6,8 @@ import { FakeClock, type Clocks } from '@rotaris/kernel';
 import { foregroundStreamId } from '@rotaris/contracts';
 import { nodeClocks } from '@rotaris/platform';
 import { classifyOutcome, diagnosticBlock, outputWarnings, stripVt } from './classify.js';
-import { wrapCommand } from './foreground.js';
+import { parseSnapshot, snapshotCommand, wrapCommand } from './foreground.js';
+import { execFileSync } from 'node:child_process';
 import { findShell, nodePtyFactory, TerminalManager, terminalTool, TERMINAL_DEFAULTS } from './index.js';
 import type { ToolContext } from '../tools/types.js';
 
@@ -40,7 +41,8 @@ const SH = {
   fails: () => (PS ? 'Get-Item C:\\definitely\\not\\here.txt' : 'false'),
   sleep: (seconds: number) => (PS ? `Start-Sleep -Seconds ${seconds}` : `sleep ${seconds}`),
   /** A variable the NEXT call must still see. */
-  setVar: (name: string, value: string) => (PS ? `$env:${name} = '${value}'` : `${name}='${value}'`),
+  // Exported on POSIX, as `$env:` is on PowerShell: PD-TOOLS-001 restores the shell's EXPORTED variables.
+  setVar: (name: string, value: string) => (PS ? `$env:${name} = '${value}'` : `export ${name}='${value}'`),
   /** The variable's value, alone. */
   echoVar: (name: string) => (PS ? `Write-Output $env:${name}` : `printf '%s\\n' "$${name}"`),
   /** The variable's value in brackets, so an empty one is still visible. */
@@ -116,6 +118,24 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113)', () => {
     // POSIX first execution 2026-09-16).
     expect(wrapCommand({ kind: 'posix', file: '/bin/sh' }, 'a\nb', 'S', 'E')).toBe("printf '%s\\n' 'S'; eval \"$(printf '%b' 'a\\nb')\"; printf 'E:%s\\n' \"$?\"");
     expect(wrapCommand({ kind: 'posix', file: '/bin/sh' }, "x='q'\ny", 'S', 'E')).toContain(`'x='\\''q'\\''\\ny'`);
+  });
+});
+
+describe.skipIf(process.platform === 'win32')('PD-TOOLS-001: the POSIX shell-state capture survives a screen that wraps', () => {
+  it('reads the directory and every variable back exactly — a value longer than the 240-column screen, and one holding a newline', () => {
+    const long = `/opt/${'x'.repeat(600)}/bin`;
+    const out = execFileSync('/bin/sh', ['-c', snapshotCommand({ kind: 'posix', file: '/bin/sh' })], { cwd: root, encoding: 'utf8', env: { PATH: process.env['PATH'] ?? '', LONG_PATHISH: long, MULTI: 'first\nsecond' } });
+    // Every captured line fits well inside the screen, so the emulator never wraps one.
+    expect(Math.max(...out.split('\n').map((l) => l.length))).toBeLessThanOrEqual(80);
+    const snap = parseSnapshot(out);
+    expect(snap?.cwd).toBe(root);
+    expect(snap?.env['LONG_PATHISH']).toBe(long);
+    expect(snap?.env['MULTI']).toBe('first\nsecond');
+  });
+
+  it('refuses a capture that names no variable, rather than restoring an empty environment over the fresh shell', () => {
+    const cwdOnly = Buffer.from(`${root}\0`, 'utf8').toString('base64');
+    expect(parseSnapshot(`__rot_b64__:${cwdOnly}\n`)).toBeNull();
   });
 });
 

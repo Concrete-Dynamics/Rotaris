@@ -240,11 +240,32 @@ export function snapshotCommand(backend: ShellBackend): string {
   if (backend.kind === 'powershell') {
     return `$__p = '__rot_cwd__'; Write-Output ($__p + ':' + (Get-Location).Path); $__q = '__rot_env__'; Get-ChildItem Env: | ForEach-Object { Write-Output ($__q + ':' + $_.Name + '=' + $_.Value) }`;
   }
-  return `P='__rot_cwd__'; printf '%s:%s\\n' "$P" "$PWD"; Q='__rot_env__'; env | sed "s/^/$Q:/"`;
+  // POSIX: the directory and `env -0`, NUL-separated, as base64 folded to 64 columns. The capture is the EMULATED
+  // screen (ADR-0021), which wraps a line at its width, and a wrapped line cannot be told from a value's own newline:
+  // a PATH longer than the 240 columns came back with a newline inside it and the restore broke every command lookup
+  // (`sleep: not found`), measured on Linux 2026-09-24. A 64-column line never wraps, and NUL separates entries even
+  // where a value holds a newline.
+  return `Q='__rot_b64__'; { printf '%s\\0' "$PWD"; env -0; } | base64 | fold -w 64 | sed "s/^/$Q:/"`;
 }
 
-/** PD-TOOLS-001's parse: the last cwd line wins; env lines after it; indented continuations rejoin. */
+/** PD-TOOLS-001, POSIX: the decoded capture — the directory, then `NAME=value` entries, NUL-separated. */
+function parseEncodedSnapshot(chunks: readonly string[]): ShellState | null {
+  const [cwd, ...entries] = Buffer.from(chunks.join(''), 'base64').toString('utf8').split('\0');
+  const env: Record<string, string> = {};
+  for (const entry of entries) {
+    const eq = entry.indexOf('=');
+    if (eq > 0) env[entry.slice(0, eq)] = entry.slice(eq + 1);
+  }
+  // A capture with no variables is a shell that could not list them (no `env -0`), never an empty environment:
+  // restoring it would unset every variable the fresh shell has, so it is refused and the previous capture kept.
+  if (cwd === undefined || cwd === '' || Object.keys(env).length === 0) return null;
+  return { cwd, env };
+}
+
+/** PD-TOOLS-001's parse: POSIX's encoded capture when present; otherwise (PowerShell) the last cwd line wins, env lines after it, continuations rejoin. */
 export function parseSnapshot(output: string): ShellState | null {
+  const encoded = output.split('\n').filter((line) => line.startsWith('__rot_b64__:')).map((line) => line.slice('__rot_b64__:'.length).trim());
+  if (encoded.length > 0) return parseEncodedSnapshot(encoded);
   let cwd: string | null = null;
   let env: Record<string, string> = {};
   let cur: string | null = null;

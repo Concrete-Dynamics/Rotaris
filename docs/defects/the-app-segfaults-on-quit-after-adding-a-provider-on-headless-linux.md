@@ -27,3 +27,7 @@ None contradicted on a supported platform. `REQ-PROVIDER-014`'s credential write
 - `apps/desktop/scripts/live-run.mjs`: `launch`, which fails a scenario on a non-zero exit.
 - `apps/desktop/src/main/index.ts`: the credential store and the provider dialog's owner.
 - `packages/providers/src/credentials/protect.ts`: the protector used on this platform.
+
+**Windows confirmed, 2026-09-24.** The owner reports that the live run works on Windows against this build (`main`
+at `d9ba3ef` or later), so the crash is specific to the headless Linux container. The note stays open until a Linux
+build host exists (IC-3) to reproduce or clear it there.

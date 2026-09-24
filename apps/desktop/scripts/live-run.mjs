@@ -95,7 +95,7 @@ import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
-import { cleanEnvironment, findDatabases, proofIsolationEnv, tokensDirFor } from './lib/harness.mjs';
+import { cleanEnvironment, configDirFor, findDatabases, proofIsolationEnv, tokensDirFor } from './lib/harness.mjs';
 import { startRecordingProxy } from './lib/model-traffic.mjs';
 import { LONG_OUTPUT_LINES, diagnosticOf, longOutputReading, terminalShapes } from './lib/terminal-shapes.mjs';
 
@@ -594,7 +594,7 @@ git('commit', '-q', '-m', `${basename(workspaceFixture)}, before the live run`);
 const head = git('rev-parse', 'HEAD');
 
 const tokensFile = join(tokensDirFor(local), `${PROVIDER_ID}.json`);
-const snapshotFile = join(local, 'rotaris', 'config', 'project_settings.yaml');
+const snapshotFile = join(configDirFor(local), 'project_settings.yaml');
 const agentsFile = join(workspace, '.rotaris', 'agents.yaml');
 
 function oneDatabase() {

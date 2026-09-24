@@ -123,3 +123,8 @@ app, a scripted run priced at `3e-6` / `0.000015` stored `0.002421` for 162 and 
 `0.0024 at configured rates`.
 
 OQ-62's discovery-pricing branch stays deferred as ruled; `discovery.ts` still records `pricing: {}`.
+
+**Live, 2026-09-24.** `pnpm live-run` on Linux against the Katalyst vLLM endpoint (`qwen3.8-flash-next`, registered at
+0.10 / 0.40 USD per million tokens). All seven sessions read `configured`, each total exact, for example
+8291 × 0.0000001 + 208 × 0.0000004 = `0.0009123`. The edit and board runs delegated, and their totals include their
+children's requests (319,959 and 387,299 input tokens). Pack: `.live-run/runs/2026-09-24T14-04-12-242Z/`.

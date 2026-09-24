@@ -95,7 +95,7 @@ import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
-import { cleanEnvironment, findDatabases, proofIsolationEnv } from './lib/harness.mjs';
+import { cleanEnvironment, findDatabases, proofIsolationEnv, tokensDirFor } from './lib/harness.mjs';
 import { startRecordingProxy } from './lib/model-traffic.mjs';
 import { LONG_OUTPUT_LINES, diagnosticOf, longOutputReading, terminalShapes } from './lib/terminal-shapes.mjs';
 
@@ -555,7 +555,7 @@ const KEPT = 'KEPT';
  * the owner's machine — so the credential directory is deleted on every exit path there is, including `--keep`,
  * a thrown error and a Ctrl-C. `--keep` keeps the workspace and the store to read, never the key.
  */
-const dropCredentials = (dir) => rmSync(join(dir, 'local', 'rotaris', 'data', 'tokens'), { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+const dropCredentials = (dir) => rmSync(tokensDirFor(join(dir, 'local')), { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 function cleanup(keep) {
   dropCredentials(sandbox);
   if (keep) writeFileSync(join(sandbox, KEPT), `kept by --keep at ${new Date().toISOString()}; its credential store was deleted.\n`);
@@ -593,7 +593,7 @@ git('add', '.');
 git('commit', '-q', '-m', `${basename(workspaceFixture)}, before the live run`);
 const head = git('rev-parse', 'HEAD');
 
-const tokensFile = join(local, 'rotaris', 'data', 'tokens', `${PROVIDER_ID}.json`);
+const tokensFile = join(tokensDirFor(local), `${PROVIDER_ID}.json`);
 const snapshotFile = join(local, 'rotaris', 'config', 'project_settings.yaml');
 const agentsFile = join(workspace, '.rotaris', 'agents.yaml');
 

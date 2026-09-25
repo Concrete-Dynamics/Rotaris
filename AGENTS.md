@@ -166,6 +166,11 @@ pnpm live-run --confirm --gui        # the same run, with the window on screen t
 `--session-log-level`, `--no-record-traffic`, `--duress-fixture`) is in the script's own header —
 `pnpm live-run --help` prints it.
 
+**The default scenarios measure several mechanisms at once, so a feature is proved working beside the others and
+costs no scenario of its own.** `edit` splits REQ-103 between two children writing in parallel under declared write
+scopes (PD-TOOLS-006), and every scenario that reads a session asserts its price exactly (PD-MONITOR-001 revision 2).
+A new mechanism joins an existing scenario where one exercises it; a scenario of its own is the exception.
+
 **One scenario is not in the default set and only runs when named**: `duress`, the long run. The ordinary live
 run is a smoke test and stays one; a scenario that trebles its wall clock belongs behind `--only=duress`, and a
 scenario nobody can leave out is a scenario people stop running.

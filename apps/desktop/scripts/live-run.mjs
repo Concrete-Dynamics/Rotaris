@@ -33,7 +33,13 @@
  *                 the `models:` entry the run needs by hand (REQ-CONFIG-082..097) rather than pretending.
  *   2. ask      — one real run that reads a file and answers. The lease, the request, a settled tool row, usage.
  *   3. edit     — one real run that implements REQ-103 and runs the suite in the terminal. Asserted from the
- *                 files on disk, from `git diff`, and by running `node --test` again in this script.
+ *                 files on disk, from `git diff`, and by running `node --test` again in this script. The work is
+ *                 split between two children writing IN PARALLEL, each under a declared write scope (PD-TOOLS-006):
+ *                 both delegated with a scope, live at once, told the live scopes at start, and any refusal named.
+ *
+ * Every scenario that reads a session also asserts its PRICE (PD-MONITOR-001 revision 2): at registered prices the
+ * cost reads `configured` and equals the store's tokens times those prices exactly. One run, several mechanisms —
+ * so a feature is measured working beside the others, and the run costs no extra scenario for it.
  *   4. requirements — the REQUIREMENTS BOARD, driven as a person drives it: REQ-104 selected, the move control
  *                 pressed, the release confirmed, and the run that follows watched from `backlog` through
  *                 `running` to `review`, its review decision taken and the card left resting in `done`. Asserted
@@ -172,6 +178,13 @@ let proxy = null;
 const closeProxy = () => { try { proxy?.close(); } catch { /* the run is ending either way */ } };
 const SIGN_IN_WAIT_MS = Number(process.env['LIVE_RUN_SIGN_IN_WAIT_MS'] ?? 120_000);
 const RUN_WAIT_MS = Number(process.env['LIVE_RUN_WAIT_MS'] ?? 420_000);
+/**
+ * The edit scenario carries two children writing in parallel and a verifier after them, so it needs more wall clock
+ * than one agent editing alone. The first run with them measured the work done at about five minutes and the run
+ * still open at seven, the entry agent having delegated an unasked-for inspection; twice the ordinary wait covers the
+ * work, and the prompt closes the detour.
+ */
+const EDIT_WAIT_MS = Number(process.env['LIVE_RUN_EDIT_WAIT_MS'] ?? RUN_WAIT_MS * 2);
 const OPTIONAL = ['ask', 'edit', 'requirements', 'shell', 'frictions', 'faults', 'terminal'];
 /**
  * Scenarios that `--only` accepts and the default set never contains.
@@ -736,11 +749,49 @@ async function launch(name, extra, timeoutMs = 180_000) {
   return log;
 }
 /** The store as the run left it: the newest session, its rows, its events, and the totals across every session. */
+/**
+ * PD-MONITOR-001 revision 2, asserted by EVERY scenario that reads a session rather than by one of its own: the run's
+ * cost carries the qualifier it earned, and where the only prices are the ones registered here, the total is exactly
+ * the store's tokens times those prices — computed in scaled integers, so the check is as exact as the product must be.
+ * A provider that reports its own figure takes precedence over a configured one, so there only the qualifier is read.
+ */
+const decimalOf = (text) => {
+  const [whole, fraction = ''] = String(text).split('.');
+  return { units: BigInt(`${whole}${fraction}` || '0'), scale: fraction.length };
+};
+const canonicalDecimal = (units, scale) => {
+  const digits = units.toString().padStart(scale + 1, '0');
+  const text = scale === 0 ? digits : `${digits.slice(0, digits.length - scale)}.${digits.slice(digits.length - scale)}`;
+  return text.includes('.') ? text.replace(/0+$/, '').replace(/\.$/, '') : text;
+};
+function expectedConfiguredCost(tokensIn, tokensOut) {
+  // Registered as USD per MILLION tokens: six more places of scale, never a division in binary floating point.
+  const a = decimalOf(endpoint.inputUsdPerMillion);
+  const b = decimalOf(endpoint.outputUsdPerMillion);
+  const scale = Math.max(a.scale, b.scale);
+  const units = BigInt(tokensIn) * a.units * 10n ** BigInt(scale - a.scale) + BigInt(tokensOut) * b.units * 10n ** BigInt(scale - b.scale);
+  return canonicalDecimal(units, scale + 6);
+}
+function checkPricing(name, session) {
+  if (!session) return;
+  const counted = (session.tokens_input ?? 0) + (session.tokens_output ?? 0) > 0;
+  if (!counted) { noted(`${name}: no tokens were counted, so no price is asserted`, `${session.cost} (${session.cost_qualifier})`); return; }
+  if (accountingKind === 'priced') {
+    check(session.cost_qualifier === 'configured', `${name}: the run's cost reads at configured rates`, `${session.cost} (${session.cost_qualifier})`);
+    const expected = expectedConfiguredCost(session.tokens_input, session.tokens_output);
+    const stored = canonicalDecimal(decimalOf(session.cost).units, decimalOf(session.cost).scale);
+    check(stored === expected, `${name}: the cost is exactly its tokens at the registered prices`, `${session.tokens_input} in × ${endpoint.inputUsdPerMillion}/M + ${session.tokens_output} out × ${endpoint.outputUsdPerMillion}/M = ${expected}; stored ${session.cost}`);
+  } else if (accountingKind === 'provider') {
+    check(['reported', 'configured', 'incomplete'].includes(session.cost_qualifier), `${name}: the run's cost carries a qualifier a figure earns`, `${session.cost} (${session.cost_qualifier})`);
+  } else {
+    check(session.cost_qualifier === 'unknown', `${name}: an unpriced endpoint's run reads price not established`, `${session.cost} (${session.cost_qualifier})`);
+  }
+}
 function readSession() {
   const Database = require('better-sqlite3');
   const db = new Database(oneDatabase(), { readonly: true });
   try {
-    const session = db.prepare('SELECT session_id, execution_status, stop_reason, iterations_completed, tool_calls, tokens_input, tokens_output FROM sessions ORDER BY created_at DESC, rowid DESC LIMIT 1').get();
+    const session = db.prepare('SELECT session_id, execution_status, stop_reason, iterations_completed, tool_calls, tokens_input, tokens_output, cost, cost_qualifier FROM sessions ORDER BY created_at DESC, rowid DESC LIMIT 1').get();
     if (!session) return null;
     const rows = db.prepare('SELECT kind, settled, tool_name, tool_status, body FROM transcript_rows WHERE session_id = ? ORDER BY row_index').all(session.session_id);
     const events = db.prepare('SELECT kind, payload FROM events WHERE session_id = ? ORDER BY ordinal').all(session.session_id);
@@ -989,6 +1040,7 @@ if (wanted.includes('ask')) {
   check(requests.some((url) => url.startsWith(`${appBaseUrl}/chat/completions`)), 'a request reached the endpoint', requests.join(', '));
   check(!/capture: wait for result timed out/.test(log), 'the run reached its result inside the wait');
   const read = readSession();
+  checkPricing('ask', read?.session);
   const answer = (read?.rows ?? []).filter((row) => row.kind === 'agent').map((row) => row.body).join(' ');
   const tools = (read?.rows ?? []).filter((row) => row.kind === 'tool');
   const usage = (read?.events ?? []).filter((event) => event.kind === 'usage.update').map((event) => JSON.parse(event.payload));
@@ -1020,11 +1072,14 @@ if (wanted.includes('ask')) {
 // ── 3. One real run that changes the workspace and verifies it ───────────────────────────────────────────────
 if (wanted.includes('edit')) {
   const log = await launch('edit', {
-    ROTARIS_CAPTURE_PROMPT: 'Implement REQ-103 from docs/requirements: add a clearCompleted(todos) function to src/todos.js, export it, add tests for it to src/todos.test.js, then run `node --test` in the terminal and tell me whether it passed.',
-    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000',
-  }, RUN_WAIT_MS + 90_000);
+    // One run, several mechanisms at once: the implementation and its tests are written by two children working in
+    // PARALLEL, each under a declared write scope (PD-TOOLS-006), and priced at configured rates (PD-MONITOR-001).
+    ROTARIS_CAPTURE_PROMPT: 'Implement REQ-103 from docs/requirements: add a clearCompleted(todos) function to src/todos.js and export it, and add tests for it to src/todos.test.js. Do the two in parallel: in ONE turn, delegate two coding-agent children in the background, one for the implementation with write_scope ["src/todos.js"] and one for the tests with write_scope ["src/todos.test.js"], then wait for both with wait_for_tasks. Afterwards run `node --test` in the terminal yourself and tell me whether it passed. Delegate nothing else, and answer as soon as the suite has run.',
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(EDIT_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '3000',
+  }, EDIT_WAIT_MS + 90_000);
   check(!/capture: wait for result timed out/.test(log), 'the run reached its result inside the wait');
   const read = readSession();
+  checkPricing('edit', read?.session);
   const tools = (read?.rows ?? []).filter((row) => row.kind === 'tool');
   const names = [...new Set(tools.map((row) => row.tool_name))];
   const source = readFileSync(join(workspace, 'src', 'todos.js'), 'utf8');
@@ -1048,9 +1103,35 @@ if (wanted.includes('edit')) {
   const diff = git('diff', head, '--stat');
   writeFileSync(join(scenarioDir('edit'), 'diff.txt'), `${git('diff', head)}\n`);
   check(diff !== '', 'git sees the change', diff.split('\n').pop() ?? '');
+  /*
+   * PD-TOOLS-006 in the same run, asserted from the store and the recorded traffic, never from the model's prose:
+   * the two scoped children were delegated, were live at the same time, and were each told the live scopes at start.
+   * A write the gate refused for a scope is RECORDED rather than required — whether a model tries to cross a claim is
+   * its choice — but every such refusal must name its holder, in the directive's words.
+   */
+  const calls = read ? readToolCalls(read.session.session_id) : [];
+  const scoped = calls.filter((c) => c.tool_name === 'delegate' && Array.isArray(c.args.write_scope) && c.args.write_scope.length > 0);
+  const scopedIds = scoped.map((c) => /task_id: (bg_[0-9a-f]{8})/.exec(c.result)?.[1]).filter((id) => id !== undefined);
+  check(scopedIds.length >= 2, 'two children were delegated with a write scope each (PD-TOOLS-006)', scoped.map((c) => `${c.args.task_name}: ${JSON.stringify(c.args.write_scope)}`).join('; ') || 'no delegate carried a write_scope');
+  // Live at once: each reached `running` before the other reached a terminal state, read off the ordered events.
+  const moves = (read?.events ?? []).filter((e) => e.kind === 'child.transition').map((e, i) => ({ i, ...JSON.parse(e.payload) }));
+  const firstAt = (id, pick) => moves.find((m) => m.child_id === id && pick(m.to_state))?.i ?? Infinity;
+  const TERMINAL = new Set(['succeeded', 'failed', 'cancelled', 'blocked']);
+  const overlapped = scopedIds.some((a) => scopedIds.some((b) => a !== b
+    && firstAt(a, (s) => s === 'running') < firstAt(b, (s) => TERMINAL.has(s))
+    && firstAt(b, (s) => s === 'running') < firstAt(a, (s) => TERMINAL.has(s))));
+  check(overlapped, 'two scoped children were live at the same time', `${moves.length} transition(s) across ${scopedIds.length} scoped child(ren)`);
+  // The disclosure block each child's payload carries after the workspace-root line.
+  const told = readTraffic('edit').filter((r) => String(r.requestBody ?? '').includes('Write scopes:'));
+  check(told.length > 0, 'the scoped children were told the write scopes at start', `${told.length} request(s) carried the block`);
+  check(told.some((r) => String(r.requestBody).includes('Held by other agents')), "a child accepted beside a live scope was told whose it is", told.length === 0 ? 'none' : 'the block names the other child');
+  // Only the file-write tools can be refused for a scope; a report QUOTING a refusal (wait_for_tasks) is not one.
+  const refusals = calls.filter((c) => ['write_file', 'haet_edit', 'haet'].includes(c.tool_name) && /is inside the write scope of /.test(c.result));
+  check(refusals.every((c) => c.status === 'blocked' && /which is still running: '.+'\. The write was not executed\./.test(c.result)), 'every write-scope refusal was blocked and named its holder', `${refusals.length} refusal(s)`);
+  noted('writes the gate refused for a live scope', refusals.length === 0 ? 'none — no agent tried to write into another agent\'s scope' : refusals.map((c) => `${c.agent_name} → ${c.tool_name}`).join(', '));
   mkdirSync(join(scenarioDir('edit'), 'changed'), { recursive: true });
   cpSync(join(workspace, 'src'), join(scenarioDir('edit'), 'changed'), { recursive: true });
-  results.scenarios.edit = { status: read?.session.execution_status, iterations: read?.session.iterations_completed, tokens: { input: read?.session.tokens_input, output: read?.session.tokens_output }, tools: names, toolCallTotal: read?.session.tool_calls ?? null, toolCallsByAgent: byAgent, diffstat: diff, suiteExit: suiteRun.status };
+  results.scenarios.edit = { writeScopes: { scopedChildren: scopedIds.length, overlapped, told: told.length, refusals: refusals.length }, cost: { total: read?.session.cost ?? null, qualifier: read?.session.cost_qualifier ?? null }, status: read?.session.execution_status, iterations: read?.session.iterations_completed, tokens: { input: read?.session.tokens_input, output: read?.session.tokens_output }, tools: names, toolCallTotal: read?.session.tool_calls ?? null, toolCallsByAgent: byAgent, diffstat: diff, suiteExit: suiteRun.status };
   if (read) preserveRun('edit', read.session.session_id);
   await budgetGate();
 }
@@ -1248,6 +1329,7 @@ if (wanted.includes('requirements')) {
   check(runRows.length === 1 && typeof run?.session_id === 'string' && run.session_id.length > 0, 'the run record carries the session identifier', `${runRows.length} run row(s)`);
   check(String(run?.permissions ?? '').length > 0, 'the run record says what permissions it was granted', String(run?.permissions ?? 'nothing'));
   const read = readSession();
+  checkPricing('requirements', read?.session);
   const tools = (read?.rows ?? []).filter((row) => row.kind === 'tool');
   const names = [...new Set(tools.map((row) => row.tool_name))];
   check((read?.session.tokens_input ?? 0) > 0 && (read?.session.tokens_output ?? 0) > 0, 'the board-started run carries real usage from the endpoint', `${read?.session.tokens_input} in / ${read?.session.tokens_output} out over ${read?.session.iterations_completed} iteration(s)`);
@@ -1312,6 +1394,7 @@ if (wanted.includes('frictions')) {
   }, RUN_WAIT_MS + 90_000);
   check(!/capture: wait for result timed out/.test(log), 'the probe run reached its result inside the wait');
   const read = readSession();
+  checkPricing('frictions', read?.session);
   check(read?.session.execution_status === 'completed', 'the probe run completed', `${read?.session.execution_status} (${read?.session.stop_reason})`);
   const tools = (read?.rows ?? []).filter((row) => row.kind === 'tool');
   const names = [...new Set(tools.map((row) => row.tool_name))];
@@ -1380,6 +1463,7 @@ if (wanted.includes('faults')) {
     const ladderTraffic = readTraffic('faults-ladder');
     const injected = ladderTraffic.filter((r) => r.fault !== undefined).map((r) => r.status);
     const ladderRead = readSession();
+    checkPricing('faults-ladder', ladderRead?.session);
     check(ladderFired.length === 2, 'both injected refusals reached the product', `${ladderFired.length} of 2 fired; statuses recorded: ${injected.join(', ') || 'none'}`);
     check(ladderRead?.session.execution_status === 'completed', 'the run completed despite a 429 and a 500', `${ladderRead?.session.execution_status} (${ladderRead?.session.stop_reason})`);
     // A ladder that waited and retried made MORE calls than the faults it was given; one that gave up made fewer.
@@ -1405,6 +1489,7 @@ if (wanted.includes('faults')) {
     void stalled;
     const stallFired = proxy.stats().faultsFired;
     const stallRead = readSession();
+    checkPricing('faults-stall', stallRead?.session);
     check(stallFired.length === 1, 'the stall was injected', `${stallFired.length} of 1 fired`);
     if (stallRead === null) {
       check(false, 'the stalled run left a session row', 'no session was recorded at all');
@@ -1483,6 +1568,7 @@ if (wanted.includes('terminal')) {
   }, RUN_WAIT_MS + 120_000);
   check(!/capture: wait for result timed out/.test(log), 'the terminal run reached its result inside the wait');
   const read = readSession();
+  checkPricing('terminal', read?.session);
   const calls = read === null ? [] : readToolCalls(read.session.session_id);
   const terminals = calls.filter((call) => call.tool_name === 'terminal');
   const shapeOf = (id) => SHAPES.find((shape) => shape.id === id);
@@ -1635,6 +1721,7 @@ if (wanted.includes('duress')) {
   const elapsed = Date.now() - startedAt;
   check(!/capture: wait for result timed out/.test(log), 'the long run reached its result inside the wait', `${Math.round(elapsed / 1000)} s of ${Math.round(DURESS_MS / 1000)} s`);
   const read = readSession();
+  checkPricing('duress', read?.session);
   if (read === null) check(false, 'the long run left a session row', 'no session was recorded at all');
   else {
     const sessionId = read.session.session_id;

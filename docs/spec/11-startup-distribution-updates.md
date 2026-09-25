@@ -101,6 +101,11 @@ That outcome SHALL be reported, and it is the one preparation outcome that is: o
 
 **REQ-STARTUP-026** — The platform keys a release publishes for SHALL be exactly the three of REQ-STARTUP-030. A release's asset list SHALL therefore contain no filename bearing a Windows-ARM64 or macOS-Intel platform key, and no download surface SHALL present a download for either. A visitor on Windows ARM64 SHALL be presented the `windows-x64` artifacts, those being the only Windows downloads offered at all. Running a `windows-x64` artifact under Windows-on-ARM x64 emulation is an expectation and not a supported configuration: it carries no acceptance criterion of its own, no release is blocked by a failure observed only under emulation, and the release gate of REQ-STARTUP-156 exercises exactly the three platform keys of REQ-STARTUP-030 and no fourth. A download surface reached from a platform for which the release publishes no artifact — Windows ARM64 and Intel macOS being the two such platforms — SHALL state which artifact it is offering instead, SHALL state that the artifact is built for a different processor architecture and is not tested on the visitor's platform, and SHALL still offer the download rather than withholding it; on Intel macOS, where no artifact can run at all, it SHALL instead state that this release publishes no macOS build for that architecture and offer no macOS download. The wording is left to the implementation.
 
+> **Narrowed by [`PD-STARTUP-001`](../product/directives.md#pd-startup-001), 2026-09-25.** Until the directive is
+> withdrawn a release publishes for `windows-x64` alone, so the gate exercises that one key rather than three.
+> A download surface reached from macOS or Linux states that this release publishes no build for that platform
+> and offers none. Everything this requirement says about Windows ARM64 and Intel macOS still holds.
+
 ### Release pipeline
 
 **REQ-STARTUP-027** — A release SHALL be triggered only by pushing a tag of the exact grammar `v<major>.<minor>.<patch>`, optionally followed by a PEP 440 prerelease suffix `a<N>`, `b<N>`, or `rc<N>` (e.g. `v1.2.3`, `v1.2.3rc1`). Refs that do not match this grammar — `vlatest`, `v1.2.3dev1`, `1.2.3`, `v1.2`, `v1.2.3-rc1`, and branch refs among them — SHALL NOT trigger a release; when a candidate string is validated, the rejection message SHALL name the offending tag and describe the expected shape.
@@ -110,6 +115,10 @@ That outcome SHALL be reported, and it is the one preparation outcome that is: o
 **REQ-STARTUP-029** — Release-channel classification SHALL map plain `X.Y.Z` to `stable` and any `aN`/`bN`/`rcN` suffix to `prerelease`; an invalid version string SHALL be an error stating it is not a supported product version.
 
 **REQ-STARTUP-030** — The build matrix SHALL cover exactly `windows-x64`, `macos-arm64`, and `linux-x86_64`, and a failure on one platform SHALL NOT cancel the others. The final release SHALL publish whatever artifacts survived, and a separate overall status SHALL still report failure when any platform failed, so a partial release is visible.
+
+> **Narrowed by [`PD-STARTUP-001`](../product/directives.md#pd-startup-001), 2026-09-25.** Until the directive is
+> withdrawn the build matrix covers `windows-x64` alone. A failure of that one platform is a failed release
+> rather than a partial one; the overall status still reports it.
 
 **REQ-STARTUP-031** — Artifact names SHALL come from a single authority shared with the updater, with these exact shapes: `Rotaris-{v}-windows-x64-setup.exe` (installer), `Rotaris-{v}-windows-x64-portable.exe` (portable), `Rotaris-{v}-macos-arm64.dmg`, and `Rotaris-{v}-linux-x86_64.AppImage`. Requesting an unknown artifact kind SHALL error listing the known kinds. Per-platform kinds: windows-x64 → setup, portable; macos-arm64 → dmg; linux-x86_64 → appimage. No console archive kind exists, the console binaries it carried having been withdrawn with REQ-STARTUP-002.
 
@@ -139,6 +148,12 @@ A release published without a signature this build can verify SHALL NOT be insta
 
 **REQ-STARTUP-035** — The release body SHALL contain the following elements, each individually checkable, in this order: (1) the heading `## Rotaris {v}`; (2) a line stating the release was built from tag `v{v}`, containing that tag string literally; (3) a table with exactly one row per published asset except `SHA256SUMS.txt` and the signature published over it (REQ-STARTUP-032), each row carrying that asset's filename and its SHA-256 hex digest, the digest being the same value that release's `SHA256SUMS.txt` lists for the same filename (REQ-STARTUP-032); (4) present if and only if at least one platform of REQ-STARTUP-030 contributed no asset, a blockquote reading `**Not built in this release: <platform labels>.** Those builds failed; the artifacts above are unaffected. Use the previous release for the missing platforms.`; (5) a verification hint naming the command `sha256sum -c SHA256SUMS.txt` for macOS and Linux and, for Windows, the command `certutil -hashfile <filename> SHA256` — chosen because it is present on every supported Windows installation and needs nothing installed — together with a statement that the hexadecimal digest the Windows command prints is compared, ignoring case and ignoring any spacing the command inserts, against the line of `SHA256SUMS.txt` carrying that filename; (6) a caveat stating that the binaries carry no code signature, naming both SmartScreen and Gatekeeper, and stating that the checksum manifest published with the release is signed and that the product verifies that signature before it installs an update (REQ-STARTUP-167), so a reader does not take the absence of a code signature to mean the update path establishes nothing about who published the release; (7) a `## Changes` section whose content is the changelog of REQ-STARTUP-033.
 
+> **Narrowed by [`PD-STARTUP-001`](../product/directives.md#pd-startup-001), 2026-09-25.** Element (4) is not
+> written for `macos-arm64` or `linux-x86_64` while the directive stands, because those builds were not
+> attempted and did not fail. In its place the body states, in one line, that this release publishes Windows
+> builds only. The other six elements, their order and their wording are unchanged, element (5)'s
+> `sha256sum -c` hint and element (6)'s naming of Gatekeeper included.
+
 **REQ-STARTUP-036** — *Withdrawn.* Its whole surface was the publication of two packages of one language ecosystem to that ecosystem's package index, which describes a different product; where and how the product is published is an architecture decision, not a behavior a user observes. Nothing a user can see is lost: the artifacts a release publishes are exactly those of REQ-STARTUP-031, a release carries one product version (REQ-STARTUP-158), and a prerelease tag publishes those same artifacts under a release flagged prerelease (REQ-STARTUP-029, REQ-STARTUP-034).
 
 **REQ-STARTUP-037** — A licence-inventory generation and validation step (REQ-STARTUP-143) SHALL run per platform before freezing, and its failure SHALL fail that platform's release.
@@ -152,6 +167,11 @@ The launch check SHALL be performed on a machine brought to those conditions, an
 Every published artifact of a platform key is checked, not one artifact per platform key, because REQ-STARTUP-159 makes the claim of each published artifact and two flavours of one platform key do not share a launch path (REQ-STARTUP-031, REQ-STARTUP-013). For an artifact that prepares itself (REQ-STARTUP-165) the check SHALL observe two runs on that same machine: the run that prepares, which establishes that the artifact starts and is exempt from the first-paint bound under REQ-STARTUP-155, and a later run of that same artifact, which is where that bound is observed. Recording only the first would leave the bound untested for exactly the artifact the exemption was written for.
 
 Behaviors owned outside the product SHALL NOT be release gates and SHALL NOT be asserted as requirements: how the release page renders, what the release host does with the prerelease flag, how the release API answers when rate limits are exhausted, the exact wording or sequence of the operating system's own first-launch trust warnings, and what a silent installation contributes to shell integration are each observed and disclosed rather than guaranteed, and none of them SHALL block or retract a release. This is consistent with REQ-STARTUP-110: an update check that fails because an externally owned behavior changed is invisible by design, so no release needs to be held against it.
+
+> **Narrowed by [`PD-STARTUP-001`](../product/directives.md#pd-startup-001), 2026-09-25.** The gate's launch
+> check runs on the one platform key the directive leaves, `windows-x64`, and "every platform that contributed
+> an asset" is that one. Every other member of the set, and the four conditions of the paragraphs above, are
+> unchanged.
 
 ### Single running instance
 

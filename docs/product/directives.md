@@ -1689,6 +1689,44 @@ so a child that genuinely loops is still stopped at the same point.
 > No live run was made, so the offer's wording has not met a real model. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **First execution of revision 3, 2026-09-27, ruled by [R-059](requests.md#r-059) and built with PD-ORCH-005 under [R-062](requests.md#r-062):** the rule was
+> built as written, and the text met the code in three places. OQ-72 records each reading.
+>
+> **(1) Who "that iteration's root" is for an offer.** A resumed iteration keeps its number across runs, so "an earlier
+> iteration" alone would have given its root none of the offers its own children left in a run before. The build's
+> first cut read it that way, and the review found it: the words "or a later run of the session" had become redundant.
+> The root of a later run now takes up an offer from any earlier iteration, or from its own iteration if the child ended
+> in an earlier run, whoever delegated it. Within an iteration, only the delegating agent takes it up, while that agent
+> runs. The refusal names both routes.
+>
+> **(2) How a later root learns an offer exists.** The text gives the right and no channel. A new iteration's root reads
+> the open offers, the newest ten, in the handoff's progress context. A resumed root is told, at the continue, the
+> offers its conversation does not already hold. An offer counts as held when it came in a child's report or in a list
+> the root was told, and a passing mention of the task id does not count. Three reviews shaped that rule: the second
+> made the list told at every continue; the third found a root that had answered taking a step to read it each time;
+> the fourth found a mention counted as the offer. Each falsified reading is kept in OQ-72.
+>
+> **(3) REQ-SESSION-115's "latest orchestrator artifact".** The built-in orchestrator publishes no artifact of its own.
+> The handoff therefore states the latest artifact of any kind that nothing supersedes, id first, cut to 6,000
+> characters without splitting a character. This replaces the placeholder that said none was recorded, repairing
+> [`the-continuation-payload-says-no-artifact-is-recorded.md`](../defects/fixed/the-continuation-payload-says-no-artifact-is-recorded.md).
+> Two limits stand, each recorded:
+> - a report re-materialised under a reused canonical name keeps its first creation time;
+> - a document edited after publishing is stated as published.
+>
+> **What was measured.** Unit and scripted end-to-end tests in `children.test.ts`, `session-resume.test.ts` and
+> `turn.test.ts`:
+> - the earlier-iteration offer, the earlier-run offer of the resumed iteration's own child, and a grandchild's;
+> - the refusals;
+> - the list's cap, and the told-once rule;
+> - the artifact's choice, cut and rendering.
+>
+> Each limb turned a test red when reverted.
+>
+> **What was not measured.** No built-app run took up an offer, because the scripted client cannot time a child out
+> while it is making progress. No live run was made. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-monitor-002"></a>
@@ -1838,6 +1876,23 @@ write that crosses a live claim is stopped with the name of its owner. What it c
 > resolution**, so a write the claim refuses never costs the user an approval first. The block follows the
 > workspace-root line, which `childPayload` places after the artifact blocks rather than first, as
 > `REQ-TOOLS-154` requires; that order is recorded as a defect of its own and is not changed here. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **First execution of revision 2, 2026-09-27, ruled by [R-059](requests.md#r-059) and built with PD-ORCH-005 under [R-062](requests.md#r-062):** the rule was
+> built as written, and it found nothing the text got wrong.
+>
+> The declared scope is stored with the child's record at spawn (`children.write_scope`, store v23). When a child
+> resumes, its scope is claimed again from the moment it is accepted.
+>
+> Covering the re-claim order found one thing: the store listed children accepted in the same millisecond by their
+> random task ids. So "the child accepted first holds that path" could fall to the later child on a resume. The
+> child queries now order by insertion (`spawned_at, rowid`), and the order is pinned in `store.test.ts`.
+>
+> **What was measured.** Two scripted end-to-end cases in `children.test.ts`, each red when its limb is reverted:
+> - a resumed child's stored scope refuses a sibling's write;
+> - two children accepted in one millisecond re-claim in acceptance order.
+>
+> **What was not measured.** No built-app run declared a scope. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
@@ -2028,6 +2083,130 @@ column (`children.interruption`) are added, with `children.write_scope` stored f
 
 *Raised by the owner, 2026-09-27; logged as [R-058](requests.md#r-058) and ruled as drafted, every fork as recommended,
 by [R-059](requests.md#r-059). Revision 2 logged as [R-060](requests.md#r-060), revision 3 as [R-061](requests.md#r-061).*
+
+> **First execution of revisions 2 and 3, 2026-09-27, ruled by [R-060](requests.md#r-060) and
+> [R-061](requests.md#r-061) and built under [R-062](requests.md#r-062):** the mechanism was built as written, in a spike and seven phases, and each phase was
+> reviewed adversarially until no blocking or should-fix finding remained. The text met the code in these places.
+>
+> **The spike** ([`../architecture/spikes/agent-resume.md`](../architecture/spikes/agent-resume.md)) recorded one agent,
+> paused it, restored it into a new conversation and continued it. It found five things no clause states:
+> - the original request was read from the conversation's constructor only;
+> - a stop dropped the results of the calls in its step that had completed;
+> - a compression has to be written into the record as a replacement;
+> - an agent's position is its record read with the ledger, since a parent waiting on its children resumes into waiting
+>   and takes no model step;
+> - `runTurn` needed a way to continue a history with no new message.
+>
+> Each was built.
+>
+> **(1) The record.** Store v23 appends `iterations`, `agent_messages` and `agent_terminals`, and
+> `children.interruption`, `resume_state` and `write_scope`. Every agent's conversation is recorded as it changes, and a
+> compression is one replacement entry, so a resume reads from the last replacement forward. The transcript's rows are
+> written as before, and OQ-68 records how the build reads "the same record a session's transcript is drawn from".
+> Building it found that a crashed iteration's number was reused by the next run. That is
+> [`a-crashed-iteration-number-is-reused-by-the-next-run.md`](../defects/fixed/a-crashed-iteration-number-is-reused-by-the-next-run.md),
+> repaired.
+>
+> **(2) The rest (clauses 2, 3 and 8 to 11).** A pause, a stop and a quit leave every unfinished agent `paused` with its
+> interruption, and leave the iteration open. A crash is recorded from the store at the next repair or continue, and
+> never at a load.
+>
+> The text was silent in four places, and OQ-69 records each reading:
+> - a model step already streaming when the pause lands finishes, and it is the last one;
+> - a parent holding a child's unread report is unfinished;
+> - no summarising call, retry, fallback or condensation follows the rest;
+> - an execution that a stop's 30-second grace gives up on is detached.
+>
+> A paused agent presents as `queued` and is never settled for display. That departs from four requirements the
+> directive does not name, and OQ-67 records it.
+>
+> Clause 3 also repaired two defects:
+> [`a-pause-settles-children-instead-of-holding-them.md`](../defects/fixed/a-pause-settles-children-instead-of-holding-them.md)
+> and [`cancelling-one-child-does-not-stop-it.md`](../defects/fixed/cancelling-one-child-does-not-stop-it.md).
+>
+> **(3) The resume (clauses 4, 5, 7 and 10).** Every continue resumes the open iteration first. The root and each
+> paused agent carry on from their records under their identity. A call recorded as interrupted is handed back
+> "not run", or "interrupted" with whatever output it had. A continue's message is recorded as the resumed root's next
+> message at the continue. Each resumed child has a fresh `child_timeout` and re-claims its write scope in acceptance
+> order. OQ-70 records the readings: the persona a resumed root runs as, what a resumed child's count holds, and the
+> plan-decision route.
+>
+> **(4) The Continue action (clause 6).** It states the count: the root and every unfinished agent. The count is shown
+> on a paused session, on one a crash left interrupted, and on one opened in REQ-CHAT-008's recovery state. "Continue
+> without them" is offered on a paused session and is confirmed. OQ-71 records this, with two readings against
+> PD-CHAT-001 and the short label `Message`, which is put to the owner.
+>
+> **What building it found against the build's own readings.** Both were found in the built app and repaired, and the
+> falsified readings are kept beside their replacements:
+> - Every confirmed "Cancel the run?" sent the stop, so the cancel was resumable. The composer's stop was itself
+>   confirmed as a cancel. See [`every-run-cancel-surface-sends-the-stop.md`](../defects/fixed/every-run-cancel-surface-sends-the-stop.md).
+>   OQ-69 now names the surface each control belongs to.
+> - A quit with an approval open recorded the call as denied, and the agent stepped on the denial, against clause 9.
+>   REQ-TOOLS-063's "closing the window answers Deny" fired as the main window took its dialog down. A quit with a
+>   question open was recorded as cancelled, through REQ-CHAT-101's cancellation on unload. A quit Electron starts
+>   itself (SIGTERM, a logout, `app.quit()`) closed the dialog even before the window's guard. See
+>   [`a-quit-denies-the-approval-it-should-withdraw.md`](../defects/fixed/a-quit-denies-the-approval-it-should-withdraw.md).
+>   Main now tells a quit apart (`QuitState`) and sends neither answer during one. OQ-69 records the departure from
+>   REQ-TOOLS-063 and REQ-CHAT-101.
+>
+> The build repaired two further defects:
+> - [`the-continuation-payload-says-no-artifact-is-recorded.md`](../defects/fixed/the-continuation-payload-says-no-artifact-is-recorded.md),
+>   with PD-ORCH-004 revision 3;
+> - [`a-stale-settled-childs-report-is-never-an-artifact.md`](../defects/fixed/a-stale-settled-childs-report-is-never-an-artifact.md),
+>   and the decline, which had the same gap.
+>
+> Two defects were read and left unrepaired:
+> - [`a-graceful-stop-persists-paused-where-one-requirement-says-stopped.md`](../defects/a-graceful-stop-persists-paused-where-one-requirement-says-stopped.md),
+>   which is still the corpus's contradiction;
+> - [`delegate-drops-session-id-and-suppress-auto-context.md`](../defects/delegate-drops-session-id-and-suppress-auto-context.md),
+>   because the resume gives `session_id` no meaning.
+>
+> Other defects noticed along the way are recorded in `docs/defects/`.
+>
+> **What was measured.** Unit and scripted end-to-end tests: more than a hundred cases in 29 test files cite this
+> directive. Each phase ran a mutation pass over its new limbs, and each limb turned a test red, with the exceptions its
+> commits name:
+> - two guards removed as redundant;
+> - the tool deadline's cancel at a run's exit, which is timer hygiene;
+> - `track`'s change, which no test can observe while
+>   [`a-child-whose-execution-raises-before-its-turn-stays-running.md`](../defects/a-child-whose-execution-raises-before-its-turn-stays-running.md)
+>   stands;
+> - main's `before-quit`, which only the built app reaches.
+>
+> In the built app, driven, one session went through three rests with one child (`bg_d5cb3784`):
+> - **A pause with the child's write waiting on approval.** The approval was withdrawn by the pause, the call was
+>   recorded "not run", and the Continue action read "2 agents will resume". The continue resumed the same child, and
+>   its write asked for approval afresh.
+> - **A stop during its next model step.** The child and the iteration were paused by `stop`, and the continue resumed
+>   them.
+> - **A quit by closing the window, with the write waiting on approval again.** The approval was withdrawn by the
+>   quit, and nothing was recorded as denied. The relaunch, and then opening the session, changed no record. The
+>   continue resumed the child, whose next answer quoted the first message and the last tool result of the request it
+>   was sent. Both were written by the previous process, so the relaunched agent resumed its own conversation. The
+>   iteration then closed `succeeded`.
+>
+>
+> Three quits were driven on their own, each with a call waiting on a person: a window close with an approval open,
+> SIGTERM with an approval open, and a window close with the question dock open. Each came to rest by the quit, with
+> the approval or question withdrawn and the call recorded "not run".
+>
+> The reviews also drove the app:
+> - a crash (`kill -9`), relaunch and continue by message: the count was shown, and the agents resumed;
+> - the confirmed decline;
+> - the confirmed run cancel from the Mission view and from a persona window;
+> - the strip at seven window sizes.
+>
+> **What was not measured.**
+> - No live run was made, so a real model has not yet resumed from its record.
+> - Only Linux under Xvfb was driven.
+> - The scripted model client restarts its script for every run
+>   ([`the-scripted-client-restarts-its-script-for-every-run.md`](../defects/the-scripted-client-restarts-its-script-for-every-run.md)),
+>   so a driven agent's steps after a continue are the script's first steps again. Its record is what is resumed.
+> - The driver's own quit is an immediate exit that skips the shutdown
+>   ([`the-drivers-quit-skips-the-applications-shutdown.md`](../defects/the-drivers-quit-skips-the-applications-shutdown.md));
+>   the quit above was a window close.
+>
+> The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

@@ -55,7 +55,7 @@ sequenceDiagram
     end
     RH->>WR: SessionWriter.create — session row (with the worktree binding as JSON and the sandbox mode, v8) + lock row (INSERT OR IGNORE) in one transaction; the run's EFFECTIVE root (the tool fence, the terminal's and the hooks' cwd, the child payload's root) is the worktree path, the record stays anchored to the base (REQ-GIT-019)
     RH->>WR: appendRow('user', prompt) — row 0 and its transcript.row event
-    RH->>RH: settleStaleChildren (REQ-ORCH-053), SupervisorRegistry, hooks resolved once (ADR-0015)
+    RH->>RH: settleStaleChildren (REQ-ORCH-053; each report materialised as an artifact, REQ-LIBRARY-092), SupervisorRegistry, hooks resolved once (ADR-0015)
     RH->>RH: new Run(...) then run.start()
     RH-->>M: session.started {sessionId}
     M-->>W: {ok:true}; the window subscribes → attach → snapshot then the resident rows (REQ-MONITOR-214)

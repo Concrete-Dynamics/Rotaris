@@ -530,6 +530,10 @@ export interface ElectronMainWindowAdapterDependencies {
   readonly registerPresenter: (wcId: number) => void;
   readonly revokePresenter: (wcId: number) => void;
   readonly forgetTerminalFrames: (wcId: number) => void;
+  /** A main window's close was confirmed and is now under way: what an application quit is recognised by (`exit.ts`). */
+  readonly closeConfirmed?: ((wcId: number) => void) | undefined;
+  /** Each main window's close guard as it is built, and `null` once the window has closed. */
+  readonly closeGuard?: ((wcId: number, guard: CloseGuard | null) => void) | undefined;
   readonly log: (message: string) => void;
 }
 
@@ -552,6 +556,44 @@ export function mainWindowOptions(backgroundColor: string): BrowserWindowConstru
     frame: false,
     webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
   };
+}
+
+/** The part of a main window its close guard needs. */
+export interface GuardedWindow {
+  on(event: 'close', listener: (event: { preventDefault(): void }) => void): unknown;
+  isDestroyed(): boolean;
+  close(): void;
+}
+
+/** A main window's close guard, as the application's quit drives it (`exit.ts`, `closeThroughGuards`). */
+export interface CloseGuard {
+  /** Asks the renderer's guard; a guard that cannot answer allows. Nothing closes. */
+  ask(): Promise<boolean>;
+  /** Marks the close as confirmed and reports it; the next close of the window passes. */
+  confirm(): void;
+  close(): void;
+}
+
+/**
+ * The main window's close guard. The first close is held while the renderer's guard is asked; a close it allows — or
+ * one it cannot answer — is reported as confirmed and then made, and that second close passes. Reporting before closing
+ * is what lets main tell the application's quit from a person closing a dialog (PD-ORCH-005 clause 9, `exit.ts`): the
+ * window's modal dialogs close as the window does, after the report. The guard is returned so the application's quit
+ * can ask every window's guard before confirming any.
+ */
+export function guardClose(win: GuardedWindow, ask: () => Promise<unknown>, confirmed: () => void): CloseGuard {
+  let closeConfirmed = false;
+  const guard: CloseGuard = {
+    ask: () => ask().then((proceed) => proceed !== false, () => true),
+    confirm: () => { if (closeConfirmed) return; closeConfirmed = true; confirmed(); },
+    close: () => { if (!win.isDestroyed()) win.close(); },
+  };
+  win.on('close', (event) => {
+    if (closeConfirmed || win.isDestroyed()) return;
+    event.preventDefault();
+    void guard.ask().then((allowed) => { if (allowed) { guard.confirm(); guard.close(); } });
+  });
+  return guard;
 }
 
 /** Electron's concrete half of the lifecycle seam. Tests use an in-memory adapter with the same ordering. */
@@ -640,22 +682,13 @@ export function createElectronMainWindowAdapter(
         log: dependencies.log,
       });
 
-      let closeConfirmed = false;
-      win.on('close', (event) => {
-        if (closeConfirmed || win.isDestroyed()) return;
-        event.preventDefault();
-        void win.webContents
-          .executeJavaScript('typeof window.__rotarisCloseGuard === "function" ? window.__rotarisCloseGuard() : true')
-          .then((proceed: unknown) => {
-            if (proceed === false) return;
-            closeConfirmed = true;
-            win.close();
-          })
-          .catch(() => {
-            closeConfirmed = true;
-            win.close();
-          });
-      });
+      const guard = guardClose(
+        win,
+        () => win.webContents.executeJavaScript('typeof window.__rotarisCloseGuard === "function" ? window.__rotarisCloseGuard() : true'),
+        () => dependencies.closeConfirmed?.(wcId),
+      );
+      dependencies.closeGuard?.(wcId, guard);
+      win.once('closed', () => dependencies.closeGuard?.(wcId, null));
       win.once('ready-to-show', () => win.show());
 
       if (dependencies.capturing && process.env['ROTARIS_CAPTURE_NET'] === '1') {

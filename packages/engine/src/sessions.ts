@@ -1022,7 +1022,7 @@ export class Sessions {
     const tools: ToolPort | null = null;
     live.tools = tools;
     // REQ-ORCH-053: a run that has just taken the lock settles every non-terminal child a previous run left, before its first iteration.
-    const stale = settleStaleChildren(dal, writer, sessionId, warn);
+    const stale = settleStaleChildren(dal, writer, sessionId, warn, artifacts);
     if (stale > 0) warn(`${stale} child record(s) from a previous run were settled cancelled before the first iteration (REQ-ORCH-053)`);
     // REQ-ORCH-024: the configured policy; the run clamps it by the pre-flight's BUDGET cell (the `normal` cell stood in until playbooks existed).
     const budget = runtime?.childBudget ?? DEFAULT_BUDGET;
@@ -1167,7 +1167,7 @@ export class Sessions {
     s.tools = null;
     // PD-ORCH-005 clause 3: what a crash left is recorded before the settle, which leaves every `paused` agent as it is.
     this.recordCrashOf(s.dal, s.writer, sessionId, warn);
-    const stale = settleStaleChildren(s.dal, s.writer, sessionId, warn);
+    const stale = settleStaleChildren(s.dal, s.writer, sessionId, warn, artifacts);
     if (stale > 0) warn(`${stale} child record(s) from a previous run were settled cancelled before the first continuation iteration (REQ-ORCH-053)`);
     const open = s.dal.openIterationOf(sessionId);
     /*

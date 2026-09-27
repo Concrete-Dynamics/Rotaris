@@ -171,7 +171,13 @@ seam's exit and the driver's `quit` — go through `exitCleanly` (`main/exit.ts`
 `closed` awaited (bounded at 2 s), and `app.exit` runs on the next turn, because on Linux `app.exit` over an open modal
 child segfaults. Neither sends `shutdown`; both are verification seams (`ROTARIS_CAPTURE_PNG`, and the driver under
 `ROTARIS_DRIVER`), and every quit a user can reach goes through `window-all-closed`, the main window's close guard
-turning an `app.quit()` into one.
+turning an `app.quit()` into one. A quit Electron starts on its own account (SIGTERM, the desktop's logout, `app.quit()`)
+is turned into the same path: `before-quit` is held while any main window is open, and the main windows are closed
+through their guards, all or none (`closeThroughGuards`: every guard asked, every close confirmed, then every window
+closed). Nothing a quit closes answers for a person. `QuitState` (`main/exit.ts`) knows the quit from
+`exitCleanly` and from each main window's confirmed close, which `guardClose` reports before closing. While it is under
+way an approval dialog that closes sends no Deny, and the question dock's cancellation is not forwarded. The run host's
+`shutdown` withdraws both instead (PD-ORCH-005 clause 9, OQ-69).
 
 **The session browser's actions (Part U).** Renderer → main: `session.repair {sessionId?}` (one stale session, or every
 stale session when the id is absent — REQ-SESSION-060/182) → `{report: {repaired[{sessionId, from, to: interrupted,

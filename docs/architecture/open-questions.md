@@ -42,16 +42,18 @@ payload, and whether a provider-reported cost has a qualifier — the reason eve
 which **one branch was ruled on 2026-09-16** by `PD-MONITOR-001` and two stay open. **One more was raised on
 2026-09-16 by reading a launch log: OQ-63** (what level threshold, if any, governs the **application** log —
 every level requirement in the corpus governs the per-session log instead), **ruled on 2026-09-23 by
-`PD-MONITOR-002`**. **OQ-21**, open since the gate, was **ruled on 2026-09-23** as it recommended and applied by
+`PD-MONITOR-002`** and built on 2026-09-27. **OQ-21**, open since the gate, was **ruled on 2026-09-23** as it recommended and applied by
 amendment (R-049), and OQ-62's configured-rate branch with it; OQ-62's discovery branch stays open. **One more was raised on
 2026-09-21 by building `PD-WORKSPACE-002`'s per-file switches: OQ-64** (whether an instruction override
 suppresses its base when the override is itself switched off — a third state REQ-WORKSPACE-042's "given
 both exist" has no word for). **OQ-64 was ruled on 2026-09-27** as built (R-052), together with ESC-37,
 ESC-38 and ESC-39. **One more was raised on 2026-09-22 by repairing the retrospective's reads: OQ-65** (whether the
-instruction-file switches reach the retrospective as well as the agents). **One more was raised on 2026-09-27 by building the `/skills` listing: OQ-67**
-(raised as OQ-66; every question from OQ-67 to OQ-75 moved up by one when the first-release work reached `main`, where OQ-66 was already taken)
+instruction-file switches reach the retrospective as well as the agents). **One more was raised on 2026-09-27 by building `PD-ORCH-004`: OQ-66** (how `delegate` names the
+child a continuation continues, which REQ-TOOLS-152's fields do not provide and the directive does not name), **ruled
+on 2026-09-27** as recommended by `PD-ORCH-004` revision 2 ([R-058](../product/requests.md#r-058)). **One more was raised on 2026-09-27 by building the `/skills` listing: OQ-67**
 (where the listing goes when there is no transcript to write it into — from the Settings Skills tab, whose
-header actions REQ-WORKSPACE-067 fixes at two, and from a window following no session), **and one the same day by building
+header actions REQ-WORKSPACE-067 fixes at two, and from a window following no session; raised as OQ-66, and
+every question from OQ-67 to OQ-75 moved up by one when the first-release work reached `main`, where OQ-66 was already taken), **and one the same day by building
 REQ-WORKSPACE-049's fixture: OQ-68** (what "up to 20 context files" measures when discovery can reach fourteen; raised as
 OQ-66 on its own branch and renumbered when it reached `main` after the `/skills` listing's). **Two more were raised on 2026-09-27 by building the version guard** (first-release plan §4.1):
 **OQ-69** (whether a default entry shipped switched off counts as one the default configuration launches, which
@@ -2796,6 +2798,10 @@ the shape every other desktop product settles on and which no requirement here s
 > "What the build proceeds under" no longer holds once the directive is built; until then the log keeps
 > every level, as that paragraph says. See `owner-decisions.md`, "OQ-63 — the application log's threshold,
 > ruled".
+>
+> **Built 2026-09-27 (R-055).** "What the build proceeds under" no longer holds: the log records `info` and above by
+> default (`apps/desktop/src/main/app-log.ts`), and the first execution is under `PD-MONITOR-002` in
+> `docs/product/directives.md` and in `first-executions.md`.
 
 **OQ-64 — Does an instruction override suppress its base when the override is switched off?** *(REQ-WORKSPACE-042, narrowed by `PD-WORKSPACE-002`; REQ-WORKSPACE-043/047/048. Raised 2026-09-21 by building the per-file switches and the injection that consumes them.)*
 
@@ -2856,6 +2862,41 @@ handed to the engine, which owns neither.
 **What a ruling decides.** Whether an analysis reads what injection may not; and, if not, whether the
 retrospective should say in its own output that a file was present and withheld, so a user reading a thin
 retrospective can tell it apart from an empty workspace.
+
+**OQ-66 — How does `delegate` name the child a continuation continues?** *(`PD-ORCH-004` over REQ-ORCH-088; REQ-TOOLS-152, with REQ-TOOLS-153/154, none of which the directive names. Raised 2026-09-27 by building `PD-ORCH-004` under [R-057](../product/requests.md#r-057).)*
+
+`PD-ORCH-004` lets a parent delegate a cut-off child's remaining work "to a new child as a continuation of this
+one", and requires the continuation to carry that relationship in its record. It does not say how the parent names
+the child it continues, and it narrows REQ-ORCH-088 alone. REQ-TOOLS-152 lists `delegate`'s fields and states that it,
+REQ-TOOLS-153 and REQ-TOOLS-154 are "the whole of the `delegate` contract". Under `docs/product/README.md` a requirement
+no directive names governs exactly as it did, so the build departs from a requirement nothing narrowed.
+
+**None of the existing fields fits.** `session_id` means "reuse a previous delegation's session for a retry or a
+follow-up": a resumed session, which the directive rules out ("never an automatic resume"; a *new* child). And
+REQ-NOTIFY-112 holds that the timed-out child is not recovery-eligible. `inherited_context` carries a completed
+sibling's report into the child without ordering, and ignores an id naming a failed task, which is exactly what a
+timed-out child is. So reusing it would carry nothing and record no relationship. `depends_on` waits for the upstream
+task to finish *successfully*, which a cut-off child never does.
+
+**What the build proceeds under.** One new optional field, `continuation_of`, the task id of the child continued. The
+name is the directive's own word. `delegate` refuses it with status `rejected` and no record, beside REQ-TOOLS-152's
+other refusals, unless it names the caller's own direct child whose stored report made the offer and which no child
+of the session already continues. The relationship is stored in `children.continuation_of` (store v22). REQ-TOOLS-152
+is not edited.
+
+**What a ruling decides.** Either amend `PD-ORCH-004` to name REQ-TOOLS-152 as well, with `continuation_of` as the
+field it adds (the shape `PD-TOOLS-006` took for `write_scope`, whose requirement carries a back-pointer), or choose
+another way for the parent to say what it continues. Two limits of the reading built belong to the same ruling. The
+caller's "own child" is the same ownership test `background_output` uses (REQ-TOOLS-155), and each iteration mints a new
+root task. So a later iteration's root, or the next run after a stop, is refused a continuation of an earlier
+iteration's child, and the offer's text does not say so. And nothing but the task id carries over: the continuation's
+payload is assembled as any child's is.
+
+**Ruled 2026-09-27 — by [`PD-ORCH-004`](../product/directives.md#pd-orch-004) revision 2, [R-058](../product/requests.md#r-058).**
+The owner took the recommendation: the directive now states `continuation_of` and its refusals, and extends REQ-TOOLS-152,
+which carries the back-pointer. The two limits named above are not settled by this ruling. Which agent may take up an
+offer after the iteration that raised it has ended belongs to the run-continuation policy the same request opened, and
+until that is ruled the build keeps the same-iteration reading.
 
 **OQ-67 — Where does the `/skills` listing go when there is no transcript to write it into?** *(REQ-CHAT-162 with REQ-WORKSPACE-067 and REQ-WORKSPACE-151; OQ-58. Raised 2026-09-27 by building the listing, `first-release-plan.md` §2.2; raised as OQ-66 and renumbered OQ-67 when it reached `main`, where OQ-66 had been taken by the question `PD-ORCH-004` revision 2 rules.)*
 

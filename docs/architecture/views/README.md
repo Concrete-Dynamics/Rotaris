@@ -45,6 +45,63 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-27**
 
+**A session approval of a file write covers that path (`PD-TOOLS-004`, built 2026-09-27, R-057).** A grant made by
+"approve for session" on a call of the public `write_file` or `haet_edit` (`haet` folded in) now stores the set of
+paths its REQ-TOOLS-018 path arguments resolved to, against the workspace root, when it was made, and matches a later
+call of that tool from that persona whose set is exactly that one, whatever its other arguments and its
+`write_file` operation. An unresolvable path never matches; a call carrying no path key falls back to REQ-TOOLS-024's exact
+match, which every other tool keeps — an MCP tool offered under the name `write_file` or `haet` included, since a
+server's tool is prefixed only when its name is taken. The rule is `resolvedPathSet` and `approvalMatches` in
+`agent-tools/src/policy.ts`; `PolicyContext.grant` now takes the root, the resolver and `publicTool`, which the gate
+passes from its new `GateDeps.publicTool`, and `run-host/tools.ts` supplies that predicate: true when the callable map
+holds the very executor `executorsFor` built for the name. The **sequences view** gains one bullet on the grant in §2;
+no package, edge, process, channel, message kind or store column changed.
+
+**`PD-ORCH-004` repaired after review (2026-09-27, R-057).** One behaviour moved: a file-writing call is recognised by
+its lower-cased name, as the gate's own fallback dispatches `Write_File` to `write_file`, so such a write is now listed
+among a cut-off child's changed paths. The rest is record: four end-to-end cases in `run/ladder.test.ts` pin the paths
+across REQ-ORCH-088's retry, the rule read at the failing attempt's expiry, the landing grace and a role's
+`stall_timeout`. The `delegate` field `continuation_of` is raised as **OQ-66** against REQ-TOOLS-152. The **runtime
+view**'s child-timeout passage names the lower-case match and the lexical resolution, and its continuation paragraph
+names the same-iteration limit and OQ-66. No package, edge, process, channel, message kind or store column changed.
+
+**A child cut off while making progress hands its work back (`PD-ORCH-004`, built 2026-09-27, R-057).** REQ-ORCH-088's
+expiry path is unchanged; at the expiry instant a child's `ProgressLog` (`engine/children/cut-off.ts`, fed by the turn's
+new `onToolCompleted`) answers whether it completed a tool call within the final stall window, and if it did, its failed
+report gains a runner-owned `cut_off`: the statement, the workspace paths its own file-writing calls changed, and —
+unless it is a continuation — the offer. `delegate` takes `continuation_of`; `IterationChildren.delegate` refuses it
+before a record exists unless it names the caller's own child that made the offer and was not yet continued.
+`runtime.child_stall_timeout` and a role's `stall_timeout` reach the run for the first time. The **runtime view** moves:
+the child-timeout passage, a §4 paragraph, and §7 names v22 and `children.continuation_of`; the **state-ownership view**
+gains the progress log. No package, edge, process, channel or message kind changed; one store column was appended.
+
+**The application log keeps `info` and above (`PD-MONITOR-002`, built 2026-09-27, R-055).** Main's standard output
+carried the level of a forwarded line as text inside it and none on main's own, and recorded every level. Each line now
+carries its level in a column of its own, and a line below the threshold is not written; the threshold is `info`, moved
+only by `ROTARIS_APP_LOG_LEVEL`, read once at start. Main's own reports of a loss are `error` — a `shutdown` a child
+refused or left unanswered while still running among them, since an exit of 0 does not prove one — so a crash is still
+recorded at a higher threshold. The quit races each child's `shutdown` against its exit (`main/exit.ts`), so an answer
+lost to the exit neither stalls the quit for the bound nor writes that line. The level, the predicate and the line are
+the new `main/app-log.ts`; `index.ts` keeps the wiring. The **process view** gains a paragraph on the application log,
+the `log` event names its fields, and the MCP-child paragraph says `debug` is now a filter; the **state-ownership view**
+gains the threshold as a fact nobody writes after start. No package, edge, process, channel, message kind or store
+column changed.
+
+**The `FAILED ` marker matches in capitals only (`PD-TOOLS-003`, built 2026-09-27, R-055).** Of REQ-TOOLS-113's five
+literal failure markers, `FAILED ` alone is now matched case-sensitively; the other four, the error count, the banner
+and the pipeline check keep their casing. The rule lives in the marker list in `agent-tools/src/terminal/classify.ts`,
+and the search and the quoted line share one predicate. No view states the terminal's marker rule at this depth, so
+no view changes beyond this entry; no package, edge, process, channel, message kind or store column changed.
+
+**The run's model calls outside an agent's turn are counted (defect round, 2026-09-27, R-054).** Compression, the
+child-report summariser, the intent classifier and the loop supervisor's classifier discarded the usage their
+requests reported, so the run's tokens, its cost and `usage.update` missed them (REQ-EVENTS-053, PD-MONITOR-001).
+Each now calls through `meteredBackend` (`engine/run/metered.ts`), a decorator on the `AgentBackend` port that hands
+every completed request to the new `Run.countUsage`. `PreflightContext` gains `countUsage` and the `Sessions`
+`supervisor` factory a third argument, so the run host's two classifiers are wrapped where they are built. The
+**runtime view** moves: one passage in "What a step costs". No package, edge, process, channel, message kind or
+store column changed.
+
 **The `/skills` listing (REQ-CHAT-162, `first-release-plan.md` §2.2, built 2026-09-27).** One renderer command,
 `skills.list`, relayed by main's skills facet to the run host with the followed session named by main (a window
 following none is refused there, OQ-67); the run host writes the listing as ONE `system` row through that session's

@@ -234,7 +234,9 @@ for (const [i, c] of INTENTS.entries()) {
     ROTARIS_CAPTURE_PROMPT: c.prompt, ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: String(RUN_WAIT_MS), ROTARIS_CAPTURE_AFTER_MS: '1500',
   }, RUN_WAIT_MS + 60_000);
   assertNoCredential(log, name);
-  const line = log.split('\n').find((l) => /run host info: intent: /.test(l)) ?? '';
+  // PD-MONITOR-002 moved the level out of the message (`… info    run host: intent: …`); a log replayed from before it
+  // still reads `run host info: intent: …`, so both are the run host's `info` intent line.
+  const line = log.split('\n').find((l) => /\] info +run host: intent: |run host info: intent: /.test(l)) ?? '';
   const m = /intent: ([a-z_]+)(?: \(([^)]*)\))?(?: via (json_schema|json_object|text))?/.exec(line);
   if (!m) throw new Error(`${name}: no intent line in the log`);
   const [, category, detail, rung] = m;

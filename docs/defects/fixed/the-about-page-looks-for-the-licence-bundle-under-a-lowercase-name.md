@@ -38,6 +38,11 @@ file present, the page showed "This build does not carry a third-party license b
 described it, reproduced. The file was removed and the repaired build's proof passed as before. Giving
 `settings-proof` a present branch of its own belongs to the bundled-assets step (§4.4), with the packaging wiring.
 
+**Repaired twice, merged once.** The same one-line repair landed on `main` independently the same day, under
+[R-054](../../product/requests.md#r-054), with a test of the present and absent branches. When the first-release
+work reached `main`, the two notes and the two tests were merged into this one: the absent-branch case and its
+`resourcesPath` reset came from R-054's test.
+
 ## Relevant files after the repair
 
 - `apps/desktop/src/main/about.ts`: `THIRD_PARTY_LICENSES_ASSET = 'THIRD-PARTY-LICENSES.txt'`.

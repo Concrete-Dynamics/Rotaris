@@ -17,7 +17,8 @@ import type { Budget as ChildBudget } from '../children/ledger.js';
 import { canonicaliseName, mintTaskId } from '../children/naming.js';
 import type { SummariserDeps } from '../children/report.js';
 import type { ClaimHit } from '../children/write-scope.js';
-import type { PricedUsage } from './pricing.js';
+import { priceRequest, type PricedUsage } from './pricing.js';
+import type { CountUsage } from './metered.js';
 import type { HookPort, RunNotice } from '../hooks-port.js';
 import type { CheckpointPort } from '../checkpoint-port.js';
 import type { ArtifactStore } from '../artifacts/store.js';
@@ -27,7 +28,7 @@ import type { ChildRow, StoreDal } from '@rotaris/store';
 import type { LoopSupervisor } from './supervisor.js';
 import type { Persona, PersonaResolver } from '../children/personas.js';
 import { agentCell, type AgentResilienceCell, type TurnResilience } from './ladder.js';
-import { pairKey, providerIdentity, ResilienceMemory, sameRef, withSettings, type CatalogueEntry, type ModelChoice } from './resilience.js';
+import { entryOf, pairKey, providerIdentity, ResilienceMemory, sameRef, withSettings, type CatalogueEntry, type ModelChoice } from './resilience.js';
 import { WaitRegistry, type WaitState } from './waits.js';
 import type { ResolvedTrigger, TurnCompression } from './compression.js';
 import { ConversationRegistry, type ManualCompressionReport } from './conversations.js'; // Part AO
@@ -151,6 +152,8 @@ export interface RunDeps {
   /** Part AH (ADR-0060): what an agent needs to compress its own context; null or absent means neither trigger fires. */
   readonly compression?: RunCompression | null | undefined;
   readonly childTimeoutMs?: Millis | undefined;
+  /** PD-ORCH-004 / REQ-CONFIG-113: `runtime.child_stall_timeout`, the window of the progress rule; absent means 90 s. */
+  readonly childStallTimeoutMs?: Millis | undefined;
   /** REQ-ORCH-080: default 120 s; 0 disables. */
   readonly drainTimeoutMs?: Millis | undefined;
   readonly permission: PermissionPosture;
@@ -716,6 +719,14 @@ export class Run {
     this.deps.writer.recordEvent('usage.update', payload, this.iterationsCompleted + 1);
   };
 
+  /**
+   * REQ-EVENTS-053, PD-MONITOR-001: a request the run made outside any agent's turn (`meteredBackend`), priced at the
+   * rates of the model it was sent to and counted exactly as an agent's own request is.
+   */
+  readonly countUsage: CountUsage = (usage, model) => {
+    this.onRequestUsage(priceRequest(usage, entryOf(this.catalogue, model)?.pricing));
+  };
+
   /** REQ-MONITOR-084 (4): the run-level plan as lines, for the entry agent's own compression. */
   private plannerTodoLines(): readonly string[] {
     return this.todo.toDocument().phases.flatMap((phase) => phase.tasks.map((task) => `[${task.state}] ${phase.name} — ${task.text}`));
@@ -784,7 +795,7 @@ export class Run {
         countToolCalls: (n) => this.aggregates.addToolCalls(n),
         // REQ-EVENTS-053, PD-MONITOR-001: a child's provider requests are the run's, counted where the entry agent's are.
         onRequestUsage: this.onRequestUsage,
-        summariser: this.deps.summariser ?? null, hooks: this.hooks, playbookFor: this.preflight?.playbookFor ?? null, route: this.preflight?.route ?? 'work', ...(this.deps.childTimeoutMs === undefined ? {} : { childTimeoutMs: this.deps.childTimeoutMs }), runSignal: this.abort.signal, warn: this.deps.warn,
+        summariser: this.deps.summariser ?? null, hooks: this.hooks, playbookFor: this.preflight?.playbookFor ?? null, route: this.preflight?.route ?? 'work', ...(this.deps.childTimeoutMs === undefined ? {} : { childTimeoutMs: this.deps.childTimeoutMs }), ...(this.deps.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: this.deps.childStallTimeoutMs }), runSignal: this.abort.signal, warn: this.deps.warn,
         // REQ-WORKSPACE-060/065 (ADR-0063): a child is an agent, so it receives the SAME units the entry agent
         // does — the getter is passed through, not a copy, which is what makes "a skill can never be visible to
         // one persona and hidden from another" true by construction rather than by two call sites agreeing.

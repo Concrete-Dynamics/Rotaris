@@ -8,7 +8,7 @@ const clocks = {} as Parameters<typeof toAgentRecord>[1];
 const row = (over: Partial<ChildRow> = {}): ChildRow => ({
   session_id: 's', task_id: 'bg_00000001', canonical_name: 'helper', given_name: 'Helper', persona: 'coding-agent', state: 'running', parent_id: 'root:1', depth: 1, iteration: 1,
   launch_generation: 0, model_key: 'scripted/alpha', category: 'quick', background: 1, task: 'do the thing', depends_on: '[]', inherited_context: '["a","b"]', granted_tools: '["read_file","grep"]', granted_mcp: '{}',
-  todo: null, spawned_at: '2026-09-05T10:00:00.000Z', completed_at: null, report: null, report_stored: 0, observed: 0, context_injected: 0, tool_calls: 0, ...over,
+  todo: null, spawned_at: '2026-09-05T10:00:00.000Z', completed_at: null, report: null, report_stored: 0, observed: 0, context_injected: 0, tool_calls: 0, continuation_of: null, ...over,
 });
 
 describe('AgentActivity — REQ-MONITOR-044/049/060 kept incrementally (Part R)', () => {

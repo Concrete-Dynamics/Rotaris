@@ -1,5 +1,6 @@
 import type { IntentGrant, IntentResult, PlaybookSlot } from '@rotaris/contracts';
 import type { Budget } from './children/ledger.js';
+import type { CountUsage } from './run/metered.js';
 
 /**
  * REQ-ORCH-005: what is settled before the coordinator is initialised — the classified intent, the grant
@@ -29,6 +30,8 @@ export interface PreflightContext {
   readonly warn: (message: string) => void;
   readonly previousIntent?: IntentResult['category'] | null | undefined;
   readonly hasUnfinishedWork?: boolean | null | undefined;
+  /** REQ-EVENTS-053: the run's counter for the classification requests the pre-flight makes (`meteredBackend`). */
+  readonly countUsage?: CountUsage | undefined;
 }
 
 export const NO_PREFLIGHT_INTENT: IntentResult = { category: 'moderate_feature', confidence: null, reason: 'intent classification is not wired for this run; fallback', fallback: true, carried_over: false };

@@ -100,6 +100,11 @@ export interface GateDeps {
   readonly approvalTimeoutMs: number;
   readonly executors: ReadonlyMap<string, ToolExecutor>;
   readonly resolvePath: (p: string) => string | null;
+  /**
+   * PD-TOOLS-004: whether `executors` serves this callable name with the public tool of that name rather than an MCP
+   * or plugin tool offered under it. Only the root that assembled the surface knows where each executor came from.
+   */
+  readonly publicTool: (name: string) => boolean;
   readonly monotonic: MonotonicClock;
   readonly wall: WallClock;
   readonly timers: Timers;
@@ -276,7 +281,7 @@ export class Gate {
     // (1) permission resolution — never raises; an ask is resolved here, so nothing below sees one.
     const req = permissionRequest(call.name, call.persona, repaired);
     const attended = deps.attended();
-    let decision = deps.policy.evaluate(req, { attended, workspaceRoot: deps.workspaceRoot, resolvePath: deps.resolvePath });
+    let decision = deps.policy.evaluate(req, { attended, workspaceRoot: deps.workspaceRoot, resolvePath: deps.resolvePath, publicTool: deps.publicTool });
     let requestId: string | undefined;
     if (decision.decision === 'ask') {
       const brokered = await this.broker(call, req, decision, attended);
@@ -414,7 +419,7 @@ export class Gate {
       case 'resolved':
         if (outcome.option === 'once') return { decision: 'allow', ruleId: 'approval:once', source: 'user-once', reason: `The user approved '${call.name}' once (rule '${asked.ruleId}' asked).`, description: asked.description };
         if (outcome.option === 'session') {
-          const grant = this.deps.policy.grant(req);
+          const grant = this.deps.policy.grant(req, { workspaceRoot: this.deps.workspaceRoot, resolvePath: this.deps.resolvePath, publicTool: this.deps.publicTool });
           return { decision: 'allow', ruleId: 'approval:session', source: 'user-session', reason: `The user approved '${call.name}' for this session (rule '${asked.ruleId}' asked); session rule '${grant.id}' added.`, description: grant.description };
         }
         return { decision: 'deny', ruleId: asked.ruleId, source: 'user-deny', reason: `${asked.reason} Denied because the user denied the request.`, description: asked.description };

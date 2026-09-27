@@ -25,6 +25,7 @@ credentials     → main, and main alone
 | Window registry, keyed by `webContents` id; focus order | main | `apps/desktop/src/main/main-windows.ts` | main |
 | Approval dialog queue, per window | main | `main/index.ts` | main; the run host asks, main presents |
 | The single current notice, and its serialised chain | main | `main/notices.ts` | main |
+| The application log's threshold (`PD-MONITOR-002`) | main | `main/index.ts`, over `main/app-log.ts` | nobody: read once from `ROTARIS_APP_LOG_LEVEL` when main starts; no command, key or setting reaches it |
 | The improvement queue, the one active job and **which pass it is** (`post_run` / `retrospective`, Part AT — `PD-LIBRARY-002`) | main | `main/improvements.ts` | main; the run host analyses the job it is handed and owns no queue, and a retrospective is an ordinary member of the same FIFO |
 | The improvement activity a surface draws (`active`, `pass`) | renderer (per window) | `packages/ui/src/shell-state.ts` — `improvementAnalysis` | channel 11's publisher only; the two indicators (REQ-LIBRARY-125/126) read it and never set it |
 | Credential leases handed out for a run | main | `packages/providers` | main |
@@ -32,6 +33,7 @@ credentials     → main, and main alone
 | Live runs, writers, projection owners | run host | `engine/sessions.ts`, `session-writer.ts` | run host |
 | The tool gate, per session; hooks, per run | run host | `packages/agent-tools`, `packages/hooks` | run host |
 | Live write-scope claims and each child's scope disclosure (PD-TOOLS-006) | run host | `packages/engine/src/children/write-scope.ts`, held by the iteration's `IterationChildren` | `IterationChildren.delegate` only; never persisted, so a resumed session holds none |
+| A child's progress log — when its last tool call completed, the workspace paths it changed (PD-ORCH-004) | run host | `packages/engine/src/children/cut-off.ts` (`ProgressLog`), one per child execution in `IterationChildren.execute` | that child's own turn only (`onToolCompleted`); never persisted — what outlives it is the report's `cut_off` and the continuation's `children.continuation_of` |
 | Configuration resolved for a run (Tier B) | run host | `run-host/configuration.ts` | resolved at run start; never re-read mid-run |
 | The portable-skill catalog | run host | `run-host/skills.ts` | cleared at **session** creation, not per run |
 | MCP connections and their stdio children | run host | `run-host/mcp.ts` | run host, per session |

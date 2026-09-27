@@ -298,6 +298,10 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     sessionId: ctx.sessionId, workspaceRoot: root, policy, approvals, attended: ctx.attended, presenter: deps.presenter,
     headlessPolicy: runtime.headlessPolicy, abortHook: ctx.abortRun, approvalTimeoutMs: runtime.approvalTimeoutMs,
     executors: callable, resolvePath: (p) => { try { return realPathOf(p); } catch { return null; } },
+    // PD-TOOLS-004: a name is the public tool's when the callable map holds the very executor `executorsFor` built
+    // for it. An MCP tool offered under a free public name (a server's own `write_file` on a persona whose public
+    // set lacks one) is a different object, and its session approval keeps REQ-TOOLS-024's exact match.
+    publicTool: (name) => { const e = callable.get(name) ?? callable.get(name.toLowerCase()); return e !== undefined && executors.get(e.name) === e; },
     monotonic: deps.clocks.monotonic, wall: deps.clocks.wall, timers: deps.clocks.timers,
     sink: writerSink(ctx.writer, ctx.sessionId, deps.clocks, ctx.warn), nextSequence: deps.nextSequence,
     hooks: ctx.hooks ?? null,

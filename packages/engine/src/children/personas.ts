@@ -27,6 +27,11 @@ export interface Persona {
    */
   readonly permissionMode?: PermissionPreset | undefined;
   /**
+   * REQ-CONFIG-108: the role's `stall_timeout`, which substitutes for `runtime.child_stall_timeout` on this role's
+   * children and no others. Read by PD-ORCH-004's progress rule; absent means the run's value.
+   */
+  readonly stallTimeoutMs?: number | undefined;
+  /**
    * REQ-MCP-065 / REQ-MCP-114 (Part S): the MCP grant evidence recorded on a child's row at spawn — the granted tools per
    * server and every carried server's fate. Supplied by the run host's resolver from the same memoised resolution the
    * tool port reads; absent for the built-in table, which carries no MCP surface.

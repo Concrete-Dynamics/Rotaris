@@ -1,4 +1,5 @@
 import type { ChildRow } from '@rotaris/store';
+import { cutOffLines, type CutOff } from './cut-off.js';
 
 /**
  * REQ-ORCH-055..060, REQ-ORCH-063, REQ-MONITOR-023, REQ-TOOLS-154: the messages a parent receives — the
@@ -18,6 +19,8 @@ export interface StoredReport {
   readonly last_response?: string;
   readonly final_response?: string;
   readonly errors?: readonly { type: string; message: string }[];
+  /** PD-ORCH-004: a child cut off while making progress (see `ChildReport.cut_off`). */
+  readonly cut_off?: Partial<CutOff>;
 }
 
 export function parseReport(row: ChildRow): StoredReport | null {
@@ -30,11 +33,15 @@ function cap(text: string): string {
   return `${text.slice(0, REPORT_BLOCK_CAP)}\n… [${text.length - REPORT_BLOCK_CAP} characters omitted]`;
 }
 
-/** REQ-ORCH-060: canonical name, role, status, then the result text (final, else last, else key findings). */
+/**
+ * REQ-ORCH-060: canonical name, role, status, then the result text (final, else last, else key findings). PD-ORCH-004:
+ * for a child cut off while making progress, its report's additions follow the capped result text — outside the
+ * 4,000-character cap, which bounds the result text, so the path list and the offer are never the part cut away.
+ */
 export function reportBlock(row: ChildRow): string {
   const r = parseReport(row);
   const result = r?.final_response || r?.last_response || (r?.key_findings ?? []).map((k) => `- ${k}`).join('\n') || r?.summary || '(no report)';
-  return [`### ${row.canonical_name} (${row.persona}) — ${r?.status ?? row.state}`, cap(result)].join('\n');
+  return [`### ${row.canonical_name} (${row.persona}) — ${r?.status ?? row.state}`, cap(result), ...cutOffLines(r?.cut_off)].join('\n');
 }
 
 /** REQ-ORCH-058: the background pass's immediate resume. */
@@ -79,19 +86,19 @@ export function priorAgentContext(deps: readonly ChildRow[]): string {
 }
 
 /**
- * REQ-TOOLS-154 (1) and (6), with REQ-ORCH-047's block ahead of everything when present, then Part Y's
- * artifact blocks — `PRIOR SIBLING ARTIFACT INDEX` and, where the launch attached any, `PRIOR AGENT CONTEXT
- * (FULL)` (REQ-LIBRARY-097, REQ-LIBRARY-098). They sit after the dependency reports and before the workspace
- * root and the task, so the child reads what its dependencies found first and the session's wider index next.
- * PD-TOOLS-006's write-scope block follows the workspace root directly.
+ * REQ-TOOLS-154's order: REQ-ORCH-047's prior-agent context ahead of everything when present (REQ-ORCH-035), then
+ * (1) the workspace root with PD-TOOLS-006's write scopes immediately after it, then Part Y's artifact blocks —
+ * (3) `PRIOR SIBLING ARTIFACT INDEX` and (4), where the launch attached any, `PRIOR AGENT CONTEXT (FULL)`
+ * (REQ-LIBRARY-097, REQ-LIBRARY-098) — and (6) the task last. `artifactBlocks` arrives in that (3), (4) order.
+ * Items (2) and (5) have no block here: the verification suite REQ-ORCH-129 fills (2) from is not built, and (5) is
+ * `docs/defects/the-inherited-context-reports-never-reach-the-child.md`.
  */
 export function childPayload(workspaceRoot: string, task: string, priorContext: string, artifactBlocks: readonly string[] = [], writeScopes = ''): string {
   const parts: string[] = [];
   if (priorContext) parts.push(priorContext);
-  for (const block of artifactBlocks) if (block !== '') parts.push(block);
   parts.push(`Workspace root: ${workspaceRoot}. Treat any other absolute path you encounter as stale; every path you use is relative to this root.`);
-  // PD-TOOLS-006: the write scopes, immediately after the workspace-root prefix, and nothing when there are none.
   if (writeScopes !== '') parts.push(writeScopes);
+  for (const block of artifactBlocks) if (block !== '') parts.push(block);
   parts.push(task);
   return parts.join('\n\n');
 }

@@ -42,7 +42,8 @@ import { sessionCommands } from './commands/session.js';
 import { shellCommands } from './commands/shell.js';
 import { skillsCommands } from './commands/skills.js';
 import { windowCommands, windowsCommands } from './commands/windows.js';
-import { exitAfterChildWindows } from './exit.js';
+import { exitAfterChildWindows, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
+import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, type AppLogLevel } from './app-log.js'; // PD-MONITOR-002
 import { workspaceCommands } from './commands/workspace.js';
 // The answer every command ends in, and the inventory the facets above are given (ADR-0019, REQ-SHELL-020).
 import { refusal, type ApprovalDialogState, type CommandContext, type CommandHandler, type CommandHandlers, type MainWindowState, type Recovery } from './commands/context.js';
@@ -72,26 +73,23 @@ const catalogue = validateCatalog();
 if (!catalogue.ok) throw new Error(`the provider catalogue is invalid: ${catalogue.error.join('; ')}`);
 
 /**
- * The application log. The level is a PARAMETER, not text a caller interpolates into the message:
- * `docs/defects/the-application-log-keeps-every-level-because-nothing-reads-one.md` recorded that the two
- * forwarders wrote `run host ${e.level}: …` and nothing could read it back, so a `debug` line and an
- * `error` line were indistinguishable to anything but a person.
+ * The application log — main's standard output — and PD-MONITOR-002's threshold over it. `app-log.ts` holds the
+ * level, the predicate and the line; this is the wiring. `ROTARIS_APP_LOG_LEVEL` is read here, once, before
+ * anything is written, and never again: nothing a running application does moves the threshold, and no
+ * configuration key or setting reaches it (`session_log_level` governs the per-session log alone).
  *
- * **No threshold is applied, and applying one is not this function's to decide.** What a packaged build's
- * diagnostics are worth after an incident is OQ-63, and the build proceeds under "the log keeps every
- * level". This only makes the level a value the log HAS. The rendered line is unchanged: `run host debug:`
- * still reads `run host debug:`, so a reader and a proof that greps for it see exactly what they did.
+ * `logAt` is the one writer. The two forwarders pass a child's line through it with the level the child gave it,
+ * so a run host `debug` line is filtered like one of main's; `log` is main's own line, `info` unless the caller
+ * names a level — which a collaborator whose port distinguishes a warning (`improvements.ts`, `initialization.ts`,
+ * the credential store, the settings store, the provider service) now does, rather than having its `warn` dropped.
  */
-type LogLevel = 'debug' | 'info' | 'warn' | 'error';
-const logAt = (level: LogLevel, source: string | null, m: string): void => {
-  const prefix = source === null ? '' : `${source} ${level}: `;
-  console.log(`[main ${new Date().toISOString()}] ${prefix}${m}`);
-};
-const log = (m: string) => { logAt('info', null, m); };
+const appLogLevel = appLogThreshold(process.env[APP_LOG_LEVEL_VARIABLE]);
+const logAt = createAppLog({ threshold: appLogLevel.threshold, now: () => toIsoUtc(clocks.wall.instant()), write: (line) => console.log(line) });
+const log = (m: string, level: AppLogLevel = 'info'): void => { logAt(level, null, m); };
 // ADR-0019's prohibition, from the other side: an uncaught exception in main would raise the platform's native
 // error box — a synchronous modal that blocks the loop and every poll reply. Log it instead; nothing here may hang.
-process.on('uncaughtException', (e) => { log(`UNCAUGHT in main: ${e.stack ?? String(e)}`); });
-process.on('unhandledRejection', (reason) => { log(`UNHANDLED rejection in main: ${reason instanceof Error ? reason.stack ?? reason.message : String(reason)}`); });
+process.on('uncaughtException', (e) => { log(`UNCAUGHT in main: ${e.stack ?? String(e)}`, 'error'); });
+process.on('unhandledRejection', (reason) => { log(`UNHANDLED rejection in main: ${reason instanceof Error ? reason.stack ?? reason.message : String(reason)}`, 'error'); });
 
 /*
  * Why the process is going away, written down while it still can be.
@@ -109,11 +107,13 @@ process.on('unhandledRejection', (reason) => { log(`UNHANDLED rejection in main:
  */
 app.on('before-quit', () => { log('quit: requested (before-quit)'); });
 app.on('quit', (_e, code) => { log(`quit: exiting with status ${code}`); });
+// PD-MONITOR-002: a process lost for any reason but `clean-exit` is an `error`, so a log kept at `warning` or `error`
+// still says a crash happened; `clean-exit` is the one reason in Electron's vocabulary that is not a loss.
 app.on('render-process-gone', (_e, contents, details) => {
-  log(`RENDERER GONE (${details.reason}, exit ${details.exitCode}) for ${contents.getURL() || 'a destroyed frame'}`);
+  log(`RENDERER GONE (${details.reason}, exit ${details.exitCode}) for ${contents.getURL() || 'a destroyed frame'}`, details.reason === 'clean-exit' ? 'info' : 'error');
 });
 app.on('child-process-gone', (_e, details) => {
-  log(`CHILD PROCESS GONE (${details.type}${details.name === undefined ? '' : ` ${details.name}`}: ${details.reason}, exit ${details.exitCode})`);
+  log(`CHILD PROCESS GONE (${details.type}${details.name === undefined ? '' : ` ${details.name}`}: ${details.reason}, exit ${details.exitCode})`, details.reason === 'clean-exit' ? 'info' : 'error');
 });
 process.on('exit', (code) => { log(`main process exiting with status ${code}`); });
 
@@ -151,11 +151,13 @@ async function main(): Promise<void> {
     return;
   }
   if (claim.outcome === 'refused') {
-    console.error(`[main] launch refused: ${claim.reason}`);
+    log(`launch refused: ${claim.reason}`, 'error');
     app.exit(2);
     return;
   }
   log(`instance claimed (pid ${process.pid}, host ${machineId})`);
+  // A value the variable does not accept is said once, here: after the claim, so a handed-over launch still writes nothing.
+  if (appLogLevel.warning !== null) log(appLogLevel.warning, 'warn');
   app.on('will-quit', () => { void claim.close(); });
 
   const preferenceRoot = resolvePreferenceRoot();
@@ -176,12 +178,14 @@ async function main(): Promise<void> {
   // ADR-0029/0030: the credential store and the provider service live HERE, in main; the run host is leased bearers.
   const lockDeps = { pid: process.pid, startedAt: toIsoUtc(clocks.wall.instant()), timers: clocks.timers, monotonic: clocks.monotonic };
   const random = () => Math.random().toString(36).slice(2, 10);
-  const credentials = new CredentialStore({ dir: layout.tokens, protector: createProtector({ scratchDir: dirs.data }), lock: lockDeps, random, warn: (m) => log(`credentials: ${m}`), info: (m) => log(`credentials: ${m}`) });
-  const projectSettings = new ProjectSettingsStore({ path: join(dirs.config, PROJECT_SETTINGS_FILE), lock: lockDeps, timers: clocks.timers, warn: (m) => log(`project settings: ${m}`) });
-  const providers = new ProviderService({ credentials, settings: projectSettings, wall: clocks.wall, log: (m) => log(`providers: ${m}`), warn: (m) => log(`providers: ${m}`) });
+  const credentials = new CredentialStore({ dir: layout.tokens, protector: createProtector({ scratchDir: dirs.data }), lock: lockDeps, random, warn: (m) => log(`credentials: ${m}`, 'warn'), info: (m) => log(`credentials: ${m}`) });
+  const projectSettings = new ProjectSettingsStore({ path: join(dirs.config, PROJECT_SETTINGS_FILE), lock: lockDeps, timers: clocks.timers, warn: (m) => log(`project settings: ${m}`, 'warn') });
+  const providers = new ProviderService({ credentials, settings: projectSettings, wall: clocks.wall, log: (m) => log(`providers: ${m}`), warn: (m) => log(`providers: ${m}`, 'warn') });
 
   // ADR-0002: one run host for the application's lifetime; one workspace service per open workspace.
   const runHostChild = utilityProcess.fork(join(__dirname, 'run-host.js'), [], { serviceName: 'rotaris-run-host' });
+  // Watched from the fork so the quit can race its `shutdown` against it and never miss the event (`exit.ts`).
+  const runHostExit = watchChildExit(runHostChild);
   const runHost = new ProcessLink<RunHostRequest>(portOf(runHostChild), clocks.timers);
   let lastLeaseLine = '';
   // ADR-0030: the run host's one ask — the bearers for the providers a run names. Never logged.
@@ -204,9 +208,14 @@ async function main(): Promise<void> {
     if (line !== lastLeaseLine) { lastLeaseLine = line; log(line); }
     return { kind: 'credentials.leased', bearers, report: { authenticated: [...report.authenticated], renewed: [...report.renewed], unresolved: { ...report.unresolved } } };
   });
-  runHostChild.on('exit', (code) => log(`run host exited (${code}); NOT re-forked — every in-flight run is lost and settles through stale detection (ADR-0002)`));
+  // PD-MONITOR-002: 0 is an orderly end — main's own `shutdown` (`dispatch.ts`), or Electron tearing the process down at
+  // quit, which also reports 0 (measured on a scratch Electron 44.1.1 app: `app.quit()`, `app.exit(0)` and
+  // `utilityProcess.kill()` all report 0; an uncaught throw, `process.exit(3)`, SIGABRT, SIGKILL, SIGSEGV and SIGTERM
+  // reported 1, 3, 6, 9, 11 and 15). Any other status is the process lost, and an `error`. A run host still running when
+  // its `shutdown` bound elapses at quit is said on the quit path (`window-all-closed`, below).
+  runHostChild.on('exit', (code) => log(`run host exited (${code}); NOT re-forked — every in-flight run is lost and settles through stale detection (ADR-0002)`, code === 0 ? 'info' : 'error'));
 
-  const services = new Map<string, { child: UtilityProcess; link: ProcessLink<WorkspaceServiceRequest> }>();
+  const services = new Map<string, { child: UtilityProcess; link: ProcessLink<WorkspaceServiceRequest>; exit: ChildExit }>();
   let cancelImprovementWorkspace = (_workspaceRoot: string): void => undefined;
   /**
    * Step A1 of the window builder (ADR-0048's registry over main windows; ADR-0055 consequences 5 and 6).
@@ -263,10 +272,13 @@ async function main(): Promise<void> {
     let svc = services.get(key);
     if (!svc) {
       const child = utilityProcess.fork(join(__dirname, 'workspace-service.js'), [], { serviceName: `rotaris-workspace:${key}` });
-      svc = { child, link: new ProcessLink<WorkspaceServiceRequest>(portOf(child), clocks.timers) };
+      svc = { child, link: new ProcessLink<WorkspaceServiceRequest>(portOf(child), clocks.timers), exit: watchChildExit(child) };
       services.set(key, svc);
-      child.on('exit', (code) => { log(`workspace service for ${key} exited (${code})`); services.delete(key); cancelImprovementWorkspace(key); });
-      // The service's log lines reach main's log too (Part P: the checkpoint capture, preview and restore lines the proof reads).
+      // PD-MONITOR-002: 0 is an orderly end — main's own `shutdown`, or Electron tearing the service down at quit (see the
+      // run host's exit above); any other status is the service lost, and an `error`.
+      child.on('exit', (code) => { log(`workspace service for ${key} exited (${code})`, code === 0 ? 'info' : 'error'); services.delete(key); cancelImprovementWorkspace(key); });
+      // The service's log lines reach main's log too (Part P: the checkpoint capture, preview and restore lines the proof reads),
+      // at the level the service gave them and under the same threshold as main's own (PD-MONITOR-002).
       svc.link.onEvent((e) => { if (e.kind === 'log') logAt(e.level, 'workspace service', e.message); });
       // ADR-0002 c.7 / ADR-0058: the service's narrow requests back to main are forwarded to the run host, bounded.
       svc.link.onAsk((a) => {
@@ -308,7 +320,9 @@ async function main(): Promise<void> {
   };
 
   const rhHello = await runHost.request({ kind: 'hello' }, millis(5_000));
-  log(`run host: ${JSON.stringify(rhHello)}`);
+  // Main's own line about the handshake: named `run host hello:` so it cannot be read as a line the run host forwarded,
+  // which the log writes as `run host: …` (PD-MONITOR-002's source column).
+  log(`run host hello: ${JSON.stringify(rhHello)}`);
 
   const relay = new UpdateRelay();
   // Verification only: the capture may wait for the first terminal result (ROTARIS_CAPTURE_WAIT=result).
@@ -449,7 +463,7 @@ async function main(): Promise<void> {
       dlg.show();
       dlg.focus();
     } catch (cause) {
-      log(`pause dialog could not be shown: ${String(cause)}`);
+      log(`pause dialog could not be shown: ${String(cause)}`, 'warn');
     }
   };
 
@@ -524,7 +538,7 @@ async function main(): Promise<void> {
         });
       }
     } catch (cause) {
-      log(`provider dialog could not be shown: ${String(cause)}`);
+      log(`provider dialog could not be shown: ${String(cause)}`, 'warn');
     }
   };
   /** After any change to the credential store or the snapshot: the workspace's starter file if absent, the load again, every window told. */
@@ -617,7 +631,7 @@ async function main(): Promise<void> {
         });
       }
     } catch (cause) {
-      log(`approval ${payload.request_id} could not be presented: ${String(cause)}`);
+      log(`approval ${payload.request_id} could not be presented: ${String(cause)}`, 'warn');
       entry.answered = true;
       await runHost.request({ kind: 'approval.shown', requestId: payload.request_id, ok: false, error: String(cause) }, millis(5_000)).catch(() => undefined);
       if (!dlg.isDestroyed()) dlg.close();
@@ -676,7 +690,7 @@ async function main(): Promise<void> {
       }
       return { ok: true, value: { opened: true } };
     } catch (cause) {
-      log(`the hook review could not be opened: ${String(cause)}`);
+      log(`the hook review could not be opened: ${String(cause)}`, 'warn');
       entry.decided = true;
       if (!dlg.isDestroyed()) dlg.close();
       return { ok: false, code: 'hooks.review', headline: 'The review dialog could not be opened', detail: String(cause) };
@@ -826,6 +840,7 @@ async function main(): Promise<void> {
       resultSeen = true;
       log(`run ${e.sessionId} ended ${e.result.status} (${e.result.stop_reason}) → ${e.result.execution_status}`);
     }
+    // PD-MONITOR-002: the run host's level, under the same threshold as main's own — its MCP children's stderr is `debug`.
     else if (e.kind === 'log') logAt(e.level, 'run host', e.message);
   });
   // Part AL — channel 3 (ADR-0021 first executed): a terminal frame is delivered to each subscribed window under
@@ -840,7 +855,7 @@ async function main(): Promise<void> {
    */
   const initialization = new InitializationCoordinator({
     clocks,
-    log: (m) => log(m),
+    log,
     writeMarker: async (root, patch) => {
       const svc = services.get(root);
       if (!svc) return { ok: false, reason: 'the workspace service is not running' };
@@ -1379,7 +1394,7 @@ async function main(): Promise<void> {
    */
   const win = mainWin.win;
 
-  surface = (h) => { void mainWindows.handOver(h).catch((cause) => log(`hand-over failed: ${String(cause)}`)); };
+  surface = (h) => { void mainWindows.handOver(h).catch((cause) => log(`hand-over failed: ${String(cause)}`, 'error')); };
   for (const h of pendingHandOvers.splice(0)) surface(h);
 
   /**
@@ -1450,9 +1465,13 @@ async function main(): Promise<void> {
     void (async () => {
       // REQ-GIT-101: a desktop checkpoint operation in flight finishes first — bounded only by REQ-GIT-033's limits.
       if (checkpointOp.current) { log('quit: waiting for the in-flight checkpoint operation (REQ-GIT-101)'); await checkpointOp.current.catch(() => undefined); }
-      await runHost.request({ kind: 'shutdown', deadlineMs: 30_000 }, millis(30_000)).catch(() => undefined);
+      // PD-MONITOR-002: each `shutdown` is raced against its child's own exit (`shutdownAtQuit`, `exit.ts`). A child that
+      // exits has ended, whether or not its answer arrived; one still running when the bound elapses is said at `error`,
+      // and the quit goes on. Electron then tears it down, and its exit — when it is reported before main is gone — reads
+      // 0, so this line is the only record that the work was cut off.
+      await shutdownAtQuit(() => runHost.request({ kind: 'shutdown', deadlineMs: 30_000 }, millis(30_000)), runHostExit, (cause) => { log(`quit: the run host did not complete its shutdown (${String(cause)}); its in-flight runs may be lost`, 'error'); });
       // REQ-GIT-101 again, one process down: each workspace service finishes its in-flight checkpoint Git before it exits.
-      await Promise.all([...services.values()].map((s) => s.link.request({ kind: 'shutdown', deadlineMs: 30_000 }, millis(330_000)).catch(() => undefined)));
+      await Promise.all([...services].map(([key, s]) => shutdownAtQuit(() => s.link.request({ kind: 'shutdown', deadlineMs: 30_000 }, millis(330_000)), s.exit, (cause) => { log(`quit: the workspace service for ${key} did not complete its shutdown (${String(cause)}); its in-flight work may be lost`, 'error'); })));
       app.quit();
     })();
   });

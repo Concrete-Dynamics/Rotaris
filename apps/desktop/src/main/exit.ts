@@ -1,3 +1,4 @@
+import type { ProcessReply } from '@rotaris/contracts';
 import { millis, type Timers } from '@rotaris/kernel';
 
 /**
@@ -46,4 +47,54 @@ export function exitAfterChildWindows(deps: ExitDeps, code: number): void {
     w.once('closed', () => { open -= 1; if (open === 0) { bound.cancel(); finish(); } });
     w.destroy();
   }
+}
+
+/**
+ * A child process's exit, watched from the moment it is forked so the event can never be missed: `exited` settles with
+ * the exit code, and `code` reads it synchronously once it has (`null` while the child runs).
+ */
+export interface ChildExit {
+  readonly exited: Promise<number>;
+  readonly code: number | null;
+}
+
+export function watchChildExit(child: { once(event: 'exit', listener: (code: number) => void): unknown }): ChildExit {
+  let code: number | null = null;
+  const exited = new Promise<number>((resolve) => { child.once('exit', (c) => { code = c; resolve(c); }); });
+  return { exited, get code() { return code; } };
+}
+
+/**
+ * A child's `shutdown` at quit, raced against the child's own exit (PD-MONITOR-002; defect
+ * `docs/defects/fixed/a-childs-shutdown-ack-can-lose-the-race-with-its-exit.md`).
+ *
+ * The run host answers `shutdown` and then exits on a 0 ms timer, and its reply is posted asynchronously, so the exit
+ * sometimes arrives and the answer never does: measured 3 quits in 26. Waiting on the answer alone then stalled the quit
+ * for the whole bound and reported an orderly end as a failure. So the exit counts as an answer:
+ *
+ * - answered `ack` → nothing to say;
+ * - answered anything else → `notCompleted`: a child whose `shutdown` threw (a store that would not release, a
+ *   connection that would not close) answers `refused` rather than staying silent, has not closed what it holds and has
+ *   not scheduled its exit, and Electron's teardown will then report 0 — so this answer is the only record of it;
+ * - the child exits first → nothing more: 0 is the orderly end whose answer was lost, and any other status has already
+ *   been written, at `error`, by that child's exit handler;
+ * - the request fails (its bound elapsed) while the child still runs → `notCompleted`, once;
+ * - the child was gone before the quit began → nothing is asked, and this resolves at once.
+ *
+ * The request is never left to reject unobserved, whichever side of the race loses.
+ */
+export async function shutdownAtQuit(request: () => Promise<ProcessReply>, exit: ChildExit, notCompleted: (cause: unknown) => void): Promise<void> {
+  if (exit.code !== null) return;
+  const answer = Promise.resolve().then(request).then(
+    (reply) => (reply.kind === 'ack' ? { failed: false as const } : { failed: true as const, cause: new Error(unacknowledged(reply)) }),
+    (cause: unknown) => ({ failed: true as const, cause }),
+  );
+  const outcome = await Promise.race([answer, exit.exited.then(() => null)]);
+  if (outcome === null || !outcome.failed || exit.code !== null) return;
+  notCompleted(outcome.cause);
+}
+
+/** What a `shutdown` answer other than `ack` said, for the line that reports it. */
+function unacknowledged(reply: ProcessReply): string {
+  return reply.kind === 'refused' ? `refused (${reply.code}): ${reply.headline}` : `answered '${reply.kind}' rather than 'ack'`;
 }

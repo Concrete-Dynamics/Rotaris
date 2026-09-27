@@ -128,6 +128,12 @@ export interface TurnDeps {
    * one turn's surviving attempts spent.
    */
   readonly onRequestUsage?: ((usage: PricedUsage) => void) | undefined;
+  /**
+   * PD-ORCH-004: every tool call this agent dispatched, as its result returns — ok, failed or blocked alike. A replayed
+   * call id (REQ-ORCH-141) is not dispatched and is not reported. The children's orchestration reads it for the
+   * progress rule and the list of paths a child changed; absent means nobody is listening.
+   */
+  readonly onToolCompleted?: ((call: PortToolCall, result: PortToolResult) => void) | undefined;
 }
 
 export interface SteeringPrompt {
@@ -276,7 +282,9 @@ export async function runTurn(deps: TurnDeps, task: string, history: readonly Ch
       const streamId = terminalRowStreamId(c.name, c.args, deps.agentName);
       const rowResult = writer.appendRow('tool', `${c.name}`, false, { persona: deps.persona, name: deps.agentName, toolName: c.name, toolStatus: 'running', callKey: c.callId, startedAt, input: c.args, ...(streamId === undefined ? {} : { streamId }) });
       const rowIndex = rowResult.ok ? rowResult.value.index : null;
-      const r = await tools.dispatch({ callId: c.callId, name: c.name, rawArgs: c.args, persona: deps.persona, agentId: deps.agentName, agentName: deps.agentName }, signal);
+      const call: PortToolCall = { callId: c.callId, name: c.name, rawArgs: c.args, persona: deps.persona, agentId: deps.agentName, agentName: deps.agentName };
+      const r = await tools.dispatch(call, signal);
+      deps.onToolCompleted?.(call, r);
       deps.dispatched.set(c.callId, r.text);
       if (rowIndex !== null) {
         writer.settleRow(rowIndex, r.label, { toolStatus: r.status, durationMs: r.durationMs, output: r.text, ...(r.blockedReason === undefined ? {} : { blockedReason: r.blockedReason }) });

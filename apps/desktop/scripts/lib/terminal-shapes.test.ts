@@ -12,12 +12,13 @@
  * shape matches ANOTHER's. The second is what stops one shape's checks running against another shape's call.
  *
  * The long-output reading is verified against a real shell, so the arithmetic the scenario asserts is measured
- * rather than assumed.
+ * rather than assumed. So is the `failed-word` shape's command, whose printed line the PD-TOOLS-003 guard depends
+ * on, and `outputOf` is pinned to read that printed output and never the command the diagnostic repeats.
  */
 import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 // @ts-expect-error — the shapes are plain ESM beside the script that replays them.
-import { LONG_OUTPUT_LINES, diagnosticOf, longOutputReading, terminalShapes } from './terminal-shapes.mjs';
+import { LONG_OUTPUT_LINES, diagnosticOf, longOutputReading, outputOf, terminalShapes } from './terminal-shapes.mjs';
 
 interface Shape { readonly id: string; readonly match: RegExp; readonly command: string }
 
@@ -91,6 +92,49 @@ describe('the terminal diagnostic reader', () => {
       '[terminal_diagnostic] {"exit_code":124,"outcome_kind":"timeout"}',
     ].join('\n');
     expect(diagnosticOf(nested)).toMatchObject({ exit_code: 124 });
+  });
+});
+
+describe('the terminal output reader', () => {
+  const observe = (command: string, printed: string) => [
+    'The command exited with code 0.',
+    '[terminal_output]',
+    printed,
+    `[terminal_diagnostic] ${JSON.stringify({ command, exit_code: 0, outcome_kind: 'success', warnings: [] })}`,
+  ].join('\n');
+
+  /*
+   * The reason it exists: the diagnostic repeats the command, so a pattern taken from the command matches the
+   * whole result even when the command printed nothing — and a check reading the whole result cannot fail.
+   */
+  it('reads what the command printed, never the command the diagnostic repeats', () => {
+    const command = "node -e \"console.log('failed to connect to the docker API')\"";
+    expect(outputOf(observe(command, 'failed to connect to the docker API'))).toBe('failed to connect to the docker API');
+    expect(outputOf(observe(command, '(no output)'))).toBe('(no output)');
+    expect(observe(command, '(no output)')).toMatch(/failed to connect to the docker API/);
+  });
+
+  it('keeps every printed line, a quoted observation included, and answers null where there is no section', () => {
+    const quoting = observe('cat log', ['a', '[terminal_output]', 'b', '[terminal_diagnostic] {"exit_code":1}'].join('\n'));
+    expect(outputOf(quoting)).toBe(['a', '[terminal_output]', 'b', '[terminal_diagnostic] {"exit_code":1}'].join('\n'));
+    expect(outputOf('the tool was blocked before it ran')).toBeNull();
+    expect(outputOf(undefined)).toBeNull();
+  });
+});
+
+describe('the docker line the failed-word shape replays', () => {
+  /*
+   * PD-TOOLS-003's guard asserts that this line does NOT warn, which is only a guard while the command prints the
+   * record's line in lower case and exits 0. Run for real, as the long-output shape is, so that is measured.
+   */
+  it('prints run 2e21e324\'s docker line in lower case and exits 0, run for real', () => {
+    const shapes: Shape[] = terminalShapes();
+    const command = shapes.find((s) => s.id === 'failed-word')!.command;
+    const run = process.platform === 'win32'
+      ? spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], { encoding: 'utf8', timeout: 60_000 })
+      : spawnSync('sh', ['-c', command], { encoding: 'utf8', timeout: 60_000 });
+    expect(run.status, String(run.error ?? run.stderr)).toBe(0);
+    expect(run.stdout.trim()).toBe('failed to connect to the docker API');
   });
 });
 

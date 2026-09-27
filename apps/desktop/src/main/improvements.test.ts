@@ -180,7 +180,7 @@ describe("REQ-LIBRARY-124/127 a worker failure is not silent", () => {
       stored: () => undefined,
       failed: (failedJob, reason) =>
         failures.push({ id: failedJob.artifact_id, reason }),
-      log: (message) => logged.push(message),
+      log: (message, level = "info") => logged.push(`${level} ${message}`),
     });
     coordinator.enqueue(only);
     await vi.waitFor(() => expect(coordinator.pending()).toBe(0));
@@ -214,9 +214,10 @@ describe("REQ-LIBRARY-124/127 a worker failure is not silent", () => {
           "the analyst could not start — the collector model is not configured: medium_model is unset",
       },
     ]);
-    // REQ-LIBRARY-124: the log entry stays IN ADDITION to the notice.
+    // REQ-LIBRARY-124: the log entry stays IN ADDITION to the notice. It is REQ-LIBRARY-035(b)'s warning, and
+    // PD-MONITOR-002 requires it at `info` or above so the application log's default threshold keeps it.
     expect(logged).toEqual([
-      "improvements: the analyst could not start for session session-1",
+      "warn improvements: the analyst could not start for session session-1",
     ]);
   });
 

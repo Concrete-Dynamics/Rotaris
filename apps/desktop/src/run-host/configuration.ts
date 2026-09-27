@@ -101,6 +101,9 @@ export function runtimeFromConfiguration(cfg: LoadedConfiguration, verdict: Avai
     loopClassificationTimeoutS: r.loop_classification_timeout,
     // REQ-ORCH-088: `runtime.child_timeout` reaches the run (it was read by the loader and never handed over before Part Q).
     childTimeoutMs: Math.round(r.child_timeout * 1000),
+    // PD-ORCH-004: `runtime.child_stall_timeout` reaches the run as the window of the progress rule — the first reader
+    // of a key the loader validated from the start.
+    childStallTimeoutMs: Math.round(r.child_stall_timeout * 1000),
     // REQ-ORCH-152 / REQ-CONFIG-476: the run-start mode reaches the run. The loader validated the key from Part I
     // and nothing read it until the plan gate was built (ADR-0062).
     runStartMode: r.run_start_mode,
@@ -236,6 +239,9 @@ export function personaResolverFor(cfg: LoadedConfiguration, scripted: boolean, 
       // REQ-CONFIG-109 / REQ-TOOLS-048: the role's `permission_mode` pin, parsed by the loader and read at agent
       // construction and at every mid-session change (REQ-TOOLS-074). Absent means the role takes the session's mode.
       ...(entry?.permission_mode ? { permissionMode: entry.permission_mode } : {}),
+      // REQ-CONFIG-108: the role's `stall_timeout` substitutes for `runtime.child_stall_timeout` on its children
+      // (PD-ORCH-004's progress rule is its reader); null or absent means the run's value.
+      ...(typeof entry?.stall_timeout === 'number' ? { stallTimeoutMs: Math.round(entry.stall_timeout * 1000) } : {}),
       // REQ-MCP-065 (Part S): the grant evidence the ledger records at spawn, read from the run host's memoised surface at that moment.
       ...(mcpEvidence ? { mcpEvidence: () => mcpEvidence(role) } : {}),
     };

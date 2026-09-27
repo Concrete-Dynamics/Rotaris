@@ -27,6 +27,11 @@ export const app = join(repo, 'apps', 'desktop');
 export const electron = process.platform === 'win32'
   ? join(repo, 'node_modules', 'electron', 'dist', 'electron.exe')
   : join(repo, 'node_modules', 'electron', 'dist', 'electron');
+/**
+ * The switches this host needs on every launch of `electron`. Chromium refuses to start as root with its sandbox on
+ * (crbug.com/638180), and a Linux container runs everything as root; on any other host the list is empty.
+ */
+export const hostSwitches = process.getuid?.() === 0 ? ['--no-sandbox'] : [];
 /** The built main entry the proofs launch (never the packaged binary; `pnpm package` has its own probe). */
 export const mainEntry = join(app, 'out', 'main', 'index.js');
 

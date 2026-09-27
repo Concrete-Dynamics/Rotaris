@@ -3,6 +3,7 @@ import { type Decision, type DecisionSource, type PermissionPreset, presetRank, 
 import { isRemoteUrl } from './egress.js';
 import { canonicalToolName, META_TOOL_NAMES, NETWORK_CLASS, READ_ONLY_CLASS } from './registry.js';
 import { decompose, escalationMatcherFires, patternMatcherFires, pipeToShellMatcherFires, type Segment, tokenizePattern } from './scanner.js';
+import { resolveInWorkspace } from './tools/fence.js';
 
 /**
  * ADR-0017: the policy is an immutable ordered value whose matchers are compiled once at build.
@@ -193,26 +194,114 @@ export interface SessionApproval {
   readonly commandFacet: string | null;
   /** REQ-TOOLS-024: the exact argument set when the approved call had no facet. */
   readonly args: Readonly<Record<string, string>> | null;
+  /**
+   * PD-TOOLS-004: for an approved call of the public `write_file` / `haet_edit` (as `EvaluationEnv.publicTool` answers)
+   * carrying REQ-TOOLS-018's path keys, the set of paths they resolved to when the grant was made (sorted, distinct), or
+   * `unresolvable` when one of them did not resolve. Null for every other approval — a server's own `write_file`
+   * included — which REQ-TOOLS-024 alone matches.
+   */
+  readonly paths: readonly string[] | 'unresolvable' | null;
   /** REQ-TOOLS-024: `Approved for this session: <request summary>`. */
   readonly description: string;
 }
 
-export function sessionApprovalFor(n: number, req: PermissionRequest): SessionApproval {
+/** What resolving a request's path arguments needs: REQ-TOOLS-018's root and the injected real-path resolver. */
+export type PathResolution = Pick<EvaluationEnv, 'workspaceRoot' | 'resolvePath'>;
+
+/** What making a session approval needs: the path resolution, and which names the surface serves with the public tool. */
+export type GrantEnv = Pick<EvaluationEnv, 'workspaceRoot' | 'resolvePath' | 'publicTool'>;
+
+/**
+ * PD-TOOLS-004: the two tools whose session approval covers a path, compared case-insensitively, `haet` folded into
+ * `haet_edit` — and only as the PUBLIC tools of those names. An MCP or plugin tool offered under the same callable
+ * name (a server's own `write_file`, on a persona whose public set lacks one) keeps REQ-TOOLS-024's exact match, as
+ * the directive says every MCP and plugin tool does; `env.publicTool` is what tells the two apart.
+ */
+const PATH_SCOPED_APPROVAL_TOOLS: ReadonlySet<string> = new Set(['write_file', 'haet_edit']);
+
+function approvalToolOf(toolName: string): string {
+  return canonicalToolName(toolName.toLowerCase());
+}
+
+/**
+ * PD-TOOLS-004: the set of paths a request's REQ-TOOLS-018 path arguments resolve to — relative paths against the
+ * workspace root, then through the resolver — or `none` when the request carries none of those keys. Fail-closed as
+ * REQ-TOOLS-018 is: a value that is neither a string nor a list of strings, or a path the resolver cannot resolve
+ * (null, or a throw), makes the whole request `unresolvable`.
+ *
+ * Deliberately stricter than `pathArguments`, which the path scope reads and which skips a value that is not a string:
+ * a value the policy cannot read may still name a file the tool writes, so an approval refuses to guess which paths it
+ * covers rather than leave one out (reading 3 of PD-TOOLS-004's first execution).
+ */
+export function resolvedPathSet(args: Readonly<Record<string, unknown>>, env: PathResolution): readonly string[] | 'none' | 'unresolvable' {
+  const raw: string[] = [];
+  let carried = false;
+  for (const k of PATH_KEYS) {
+    if (!Object.hasOwn(args, k)) continue;
+    carried = true;
+    const v = args[k];
+    if (typeof v === 'string') raw.push(v);
+    else if (Array.isArray(v) && v.every((x) => typeof x === 'string')) raw.push(...(v as string[]));
+    else return 'unresolvable';
+  }
+  if (!carried) return 'none';
+  const out = new Set<string>();
+  for (const p of raw) {
+    let real: string | null;
+    try {
+      real = env.resolvePath(resolveInWorkspace(env, p));
+    } catch {
+      real = null;
+    }
+    if (real === null) return 'unresolvable';
+    out.add(real);
+  }
+  return [...out].sort();
+}
+
+/** PD-TOOLS-004: whether this call is the public `write_file` / `haet_edit` (alias folded), whose approval covers a path. */
+function pathScopedCall(req: PermissionRequest, env: Pick<EvaluationEnv, 'publicTool'>): boolean {
+  return PATH_SCOPED_APPROVAL_TOOLS.has(approvalToolOf(req.toolName)) && env.publicTool(req.toolName);
+}
+
+export function sessionApprovalFor(n: number, req: PermissionRequest, env: GrantEnv): SessionApproval {
+  const scoped = pathScopedCall(req, env) ? resolvedPathSet(req.args, env) : 'none';
   return {
     id: `session:allow:${n}`,
     toolName: req.toolName.toLowerCase(),
     persona: req.persona,
     commandFacet: req.commandFacet,
     args: req.commandFacet === null ? canonicalArguments(req.args) : null,
+    paths: scoped === 'none' ? null : scoped,
     description: `Approved for this session: ${requestSummary(req)}`,
   };
 }
 
-function approvalMatches(a: SessionApproval, req: PermissionRequest): boolean {
+/**
+ * PD-TOOLS-004 over REQ-TOOLS-024. A path-scoped approval matches a later call of the same tool (alias folded) from
+ * the same persona whose path arguments resolve to exactly its set, whatever the rest of the arguments — the
+ * `write_file` operation included. A later call with an unresolvable path never matches; one carrying no path key,
+ * or one that is not the public tool (`laterPaths` answers `none` for it), falls back to REQ-TOOLS-024's exact
+ * match. Every other approval is REQ-TOOLS-024's, unchanged.
+ */
+function approvalMatches(a: SessionApproval, req: PermissionRequest, laterPaths: () => readonly string[] | 'none' | 'unresolvable'): boolean {
+  if (a.paths !== null && approvalToolOf(a.toolName) === approvalToolOf(req.toolName) && a.persona === req.persona) {
+    const later = laterPaths();
+    if (later !== 'none') return a.paths !== 'unresolvable' && later !== 'unresolvable' && sameStrings(a.paths, later);
+  }
+  return exactApprovalMatches(a, req);
+}
+
+/** REQ-TOOLS-024: same tool (case-insensitive), same persona, and the identical facet or the exact argument set. */
+function exactApprovalMatches(a: SessionApproval, req: PermissionRequest): boolean {
   if (a.toolName !== req.toolName.toLowerCase() || a.persona !== req.persona) return false;
   if (a.commandFacet !== null) return req.commandFacet === a.commandFacet;
   if (req.commandFacet !== null) return false;
   return sameArguments(a.args ?? {}, canonicalArguments(req.args));
+}
+
+function sameStrings(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((x, i) => x === b[i]);
 }
 
 function sameArguments(a: Readonly<Record<string, string>>, b: Readonly<Record<string, string>>): boolean {
@@ -239,6 +328,12 @@ export interface EvaluationEnv {
   readonly workspaceRoot: string;
   /** Resolves a path to its real path (following links); null = unresolvable → outside (REQ-TOOLS-018). */
   readonly resolvePath: (p: string) => string | null;
+  /**
+   * PD-TOOLS-004: whether the surface serves this callable name with the public tool of that name (REQ-TOOLS-001),
+   * rather than with an MCP or plugin tool offered under it. Only the public `write_file` and `haet_edit` have their
+   * session approvals scoped by path; the name alone cannot say which one a call reached.
+   */
+  readonly publicTool: (toolName: string) => boolean;
 }
 
 const PATH_KEYS = ['path', 'file_path', 'filename', 'paths', 'base_path', 'dir', 'directory'] as const;
@@ -306,9 +401,11 @@ export function evaluate(policy: Policy, approvals: readonly SessionApproval[], 
       return { decision: 'allow', ruleId: 'builtin:meta-tool', source: 'builtin', reason: `'${req.toolName}' is a loop-control tool and is never gated.`, description: 'loop-control tool' };
     }
     validatePolicy(policy);
+    let laterPaths: readonly string[] | 'none' | 'unresolvable' | undefined;
+    const pathsOfReq = () => { laterPaths ??= pathScopedCall(req, env) ? resolvedPathSet(req.args, env) : 'none'; return laterPaths; };
     for (let i = approvals.length - 1; i >= 0; i -= 1) {
       const a = approvals[i] as SessionApproval;
-      if (approvalMatches(a, req)) {
+      if (approvalMatches(a, req, pathsOfReq)) {
         return { decision: 'allow', ruleId: a.id, source: 'session-rule', reason: `Rule '${a.id}' (${a.description}) resolved '${req.toolName}' to allow.`, description: a.description };
       }
     }
@@ -341,10 +438,13 @@ export class PolicyContext {
     validatePolicy(policy);
     this.policy = policy;
   }
-  /** REQ-TOOLS-023: grants outlive replacement; ids numbered from 1 in grant order. */
-  grant(req: PermissionRequest): SessionApproval {
+  /**
+   * REQ-TOOLS-023: grants outlive replacement; ids numbered from 1 in grant order. PD-TOOLS-004: a path-scoped grant
+   * resolves its paths here, once, so it covers the paths the user approved and not wherever a link points later.
+   */
+  grant(req: PermissionRequest, env: GrantEnv): SessionApproval {
     this.grants += 1;
-    const a = sessionApprovalFor(this.grants, req);
+    const a = sessionApprovalFor(this.grants, req, env);
     this.approvals.push(a);
     return a;
   }

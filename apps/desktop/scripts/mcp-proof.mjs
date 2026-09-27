@@ -125,6 +125,9 @@ function launch(name, extra, { files = {}, timeout = 150_000 } = {}) {
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_INTENT_SCRIPT: 'explicit_trivial', ROTARIS_CIRCUIT_BREAKER: 'off', ROTARIS_CAPTURE_PNG: png,
       PROOF_SHELL_VALUE: 'from-the-shell', ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
+      // PD-MONITOR-002: a child's stderr is `debug`, which the application log leaves out at its `info` default. This
+      // proof counts those lines and asserts no stored secret reaches ANY log line, so it records every level.
+      ROTARIS_APP_LOG_LEVEL: 'debug',
       ...extra,
     },
   });

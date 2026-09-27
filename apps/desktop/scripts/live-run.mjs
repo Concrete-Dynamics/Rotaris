@@ -58,9 +58,10 @@
  *                 so the ladder half costs nothing but retries.
  *   8. terminal  — the TERMINAL under duress, one run, six named shapes replayed from the record: a
  *                 multi-line here-string, forty lines of long output, a wedge with no `timeout` supplied,
- *                 an exit-0 output carrying the word FAILED, a `git diff` with differences exiting 1, and a
- *                 read-only git pipeline through a pipe. Asserted from `tool_calls`, never from the model's
- *                 prose; a shape the model never attempted is a NOTE, not a failure.
+ *                 an exit-0 output carrying docker's lower-case `failed to connect` line, a `git diff` with
+ *                 differences exiting 1, and a read-only git pipeline through a pipe. Asserted from
+ *                 `tool_calls`, never from the model's prose; a shape the model never attempted is a NOTE,
+ *                 not a failure.
  *   9. duress    — OPT-IN (`--only=duress`), tens of minutes: a delegating run long enough to reach
  *                 compression, re-spawn and a child that ends badly. Its assertions are coherence
  *                 questions the autopsy reader already computes, which is what makes a long run cheap to
@@ -76,7 +77,8 @@
  * the newest, `--keep-runs` (default 10) prunes the oldest — with `results.json` and the copied `workspace.db` at
  * its root and one directory per scenario holding:
  *
- *   app.log            the launch verbatim, key substituted out and asserted free of a bearer
+ *   app.log            the launch verbatim, key substituted out and asserted free of a bearer, at `--app-log-level`
+ *                      (default: the product's own, `info`)
  *   app.filtered.log   the same log without a child MCP server's stderr, consecutive repeats collapsed, the
  *                      sandbox path shortened — two thirds of a launch log is one language server booting
  *   autopsy.txt        `apps/desktop/scripts/autopsy.mjs` over this scenario's session
@@ -103,7 +105,7 @@ import { homedir, tmpdir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
 import { cleanEnvironment, configDirFor, findDatabases, proofIsolationEnv, tokensDirFor } from './lib/harness.mjs';
 import { startRecordingProxy } from './lib/model-traffic.mjs';
-import { LONG_OUTPUT_LINES, diagnosticOf, longOutputReading, terminalShapes } from './lib/terminal-shapes.mjs';
+import { LONG_OUTPUT_LINES, diagnosticOf, longOutputReading, outputOf, terminalShapes } from './lib/terminal-shapes.mjs';
 
 const require = createRequire(import.meta.url);
 const repo = resolve(import.meta.dirname, '..', '..', '..');
@@ -160,6 +162,19 @@ const KEEP_RUNS = Math.max(1, Number(value('keep-runs', '10')));
  * `INFO` are the same file and naming the louder one would imply a detail that does not exist.
  */
 const SESSION_LOG_LEVEL = value('session-log-level', 'INFO');
+/**
+ * The APPLICATION log's threshold, the one `session_log_level` never reaches (PD-MONITOR-002). The product reads it
+ * from `ROTARIS_APP_LOG_LEVEL` alone, and `cleanEnvironment()` strips that name from every launch, so an exported
+ * variable never gets through: this flag is how a live run asks for `debug` — a child MCP server's stderr among it.
+ * Unnamed, nothing is set and the launch keeps the product's default, `info`. The value is checked against the
+ * directive's four words here, because the product answers a word it does not know by recording `info` and
+ * writing one warning line, which a pack read afterwards would show as a run that quietly did not ask.
+ */
+const APP_LOG_LEVEL = value('app-log-level', null);
+if (APP_LOG_LEVEL !== null && !/^(?:debug|info|warning|error)$/i.test(APP_LOG_LEVEL)) {
+  console.error(`--app-log-level=${APP_LOG_LEVEL}: expected debug, info, warning or error (PD-MONITOR-002)`);
+  process.exit(2);
+}
 /**
  * `--no-record-traffic`: talk to the endpoint directly instead of through the recording proxy.
  *
@@ -394,6 +409,8 @@ const USAGE = `pnpm live-run — the application against a real model endpoint, 
   --duress-fixture=<dir>  the workspace duress opens (default: the same small todo-app the others use)
   --keep-runs=<n>      evidence packs to keep under .live-run/runs (default 10; the oldest are pruned)
   --session-log-level=<lvl>  the sandbox's session_log_level (default INFO; WARNING is the product's own default)
+  --app-log-level=<lvl>      the application log's threshold, ROTARIS_APP_LOG_LEVEL (debug|info|warning|error;
+                             default: unset, the product's own info)
   --no-record-traffic  talk to the endpoint directly; do not record request and response bodies
   --gui                show the window each scenario drives, to watch it (hidden by default; nothing else changes)
   --keep               keep the sandbox workspace instead of deleting it
@@ -637,10 +654,12 @@ function scenarioDir(name) {
  * recoverable, so nothing here is a substitute for `app.log`, only a way to read it.
  *
  * Three reductions, in order of how much they take:
- *   1. a child MCP server's stderr, forwarded into the application log by `packages/mcp/src/transport.ts`. Two
- *      thirds of a live launch log is one language server's boot noise (190 of 288 lines, measured on the
- *      2026-09-21 pack; 141 of 195 measured independently on 2026-09-16). OQ-63 rules that the application log
- *      keeps every level, so this is the READER filtering, never the product — which is why `app.log` stays.
+ *   1. a child MCP server's stderr, forwarded into the application log at `debug` by `packages/mcp/src/transport.ts`.
+ *      Two thirds of a live launch log was one language server's boot noise (190 of 288 lines, measured on the
+ *      2026-09-21 pack; 141 of 195 measured independently on 2026-09-16). Since PD-MONITOR-002 the product records
+ *      `info` and above unless `ROTARIS_APP_LOG_LEVEL` says otherwise, and `cleanEnvironment()` strips that name from
+ *      this launch, so those lines are absent from `app.log` unless `--app-log-level=debug` or a scenario's own
+ *      `extra` sets it to `debug`.
  *   2. consecutive repeats of one line, collapsed to the line and a count, the shape `transport.ts` already uses.
  *   3. the sandbox's absolute path, which prefixes most lines at about ninety characters, shortened to `<sandbox>`.
  */
@@ -654,7 +673,7 @@ function filterLog(text, sandboxPath) {
     if (previous !== null && run > 1) { out.push(`  … the line above repeated ${run} times`); dropped.repeats += run - 1; }
   };
   for (const raw of text.split('\n')) {
-    if (/ (?:run host|workspace service) debug: mcp \S+ stderr: /.test(raw)) { dropped.mcpStderr += 1; continue; }
+    if (/\] debug +(?:run host|workspace service): mcp \S+ stderr: /.test(raw)) { dropped.mcpStderr += 1; continue; }
     const body = short(raw).replace(/^\[[^\]]*\] /, '');
     if (body === previous) { run += 1; continue; }
     flush();
@@ -733,6 +752,8 @@ async function launch(name, extra, timeoutMs = 180_000) {
       ...cleanEnvironment(),
       ...proofIsolationEnv({ profileRoot: sandbox, local, preferences: join(sandbox, 'preferences') }),
       ROTARIS_CAPTURE_PNG: png, ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
+      // `--app-log-level`, ahead of `extra` so a scenario that names its own threshold keeps it.
+      ...(APP_LOG_LEVEL === null ? {} : { ROTARIS_APP_LOG_LEVEL: APP_LOG_LEVEL }),
       ...paced,
       ...extra,
     },
@@ -1022,6 +1043,9 @@ if (!inCatalogue || typeof endpoint.contextTokens === 'number') {
 // `session_log_level` is the one level knob the product actually honours (REQ-SESSION-142; the APPLICATION log
 // filters on nothing, which is OQ-63's open question). It governs `<store>/sessions/<id>/session.log`, which
 // `preserveRun` copies into the pack.
+// No longer true since 2026-09-27: OQ-63 was ruled as PD-MONITOR-002 and built. The application log records `info`
+// and above, and its one switch is the environment variable ROTARIS_APP_LOG_LEVEL, never a configuration key —
+// `session_log_level` is still the only level knob in `agents.yaml`, and it still reaches the session log alone.
 if (!agents.includes('permission_mode:')) agents += `runtime:\n  permission_mode: autonomous\n  allow_unsandboxed_autonomous: true\n  max_iterations: ${MAX_ITERATIONS}\n  session_log_level: ${SESSION_LOG_LEVEL}\n`;
 writeFileSync(agentsFile, agents);
 cpSync(agentsFile, join(output, 'agents.yaml'));
@@ -1537,14 +1561,14 @@ if (wanted.includes('faults')) {
  * | `here-string`   | a multi-line command lost its newlines in the PTY, so a here-string never terminated |
  * | `long-output`   | the concatenation above, and the agent's capture VT-stripped where the window's was not |
  * | `wedge`         | `hardMs` passed and read nowhere: a call supplying no `timeout` had the soft pause and no hard cap (REQ-TOOLS-097) |
- * | `failed-word`   | `exit-0-output-flagged-on-the-word-failed-twice.md` — fired as REQ-TOOLS-113 specifies, recorded for cost |
+ * | `failed-word`   | `exit-0-output-flagged-on-the-word-failed-twice.md` — PD-TOOLS-003's capitals-only marker, and a real regression guard |
  * | `diff-exit-1`   | `git-diff-with-differences-read-as-a-failure.md` — ESC-41's carve-out, and a real regression guard |
  * | `pipe-to-shell` | `a-read-only-git-pipeline-was-withheld-by-the-pipe-to-shell-rule.md` — also cost, not contradiction |
  *
- * **A shape the model never attempted is a NOTE, not a failure.** Three of these are cost observations whose
- * behaviour is faithful to a requirement, and reporting them as faults would train a reader to ignore this
- * scenario — the mistake the board scenario made twice. Only `here-string`, `long-output`, `diff-exit-1` and the
- * marker leak are asserted as product facts.
+ * **A shape the model never attempted is a NOTE, not a failure.** `pipe-to-shell` is a cost observation whose
+ * behaviour is faithful to a requirement, and reporting it as a fault would train a reader to ignore this
+ * scenario — the mistake the board scenario made twice. `here-string`, `long-output`, the wedge's bound,
+ * `failed-word`, `diff-exit-1` and the marker leak are asserted as product facts.
  */
 if (wanted.includes('terminal')) {
   /*
@@ -1617,12 +1641,20 @@ if (wanted.includes('terminal')) {
   }
 
   const failedWord = attempted('failed-word')[0];
-  if (failedWord === undefined) noted('the exit-0 FAILED command was not attempted', 'no terminal call carried it');
+  if (failedWord === undefined) noted('the docker line was not attempted', 'no terminal call carried it; PD-TOOLS-003 is unasked');
   else {
     const d = diagnosticOf(failedWord.result);
-    // REQ-TOOLS-113 searches literal markers case-insensitively and this output carries one. The warning is
-    // FAITHFUL; what the record wanted measured is what it costs — an agent explaining a false positive away.
-    noted('an exit-0 output carrying the word FAILED', `exit ${d?.exit_code ?? 'none'}, outcome ${d?.outcome_kind ?? 'none'}, warnings: ${(d?.warnings ?? []).join(' ') || 'none'}`);
+    // PD-TOOLS-003: REQ-TOOLS-113's `FAILED ` marker matches in capitals only. This is the lower-case docker line
+    // that warned in run `2e21e324` and cost the agent a second pass to explain it away — a real regression guard,
+    // not a cost note. Its positive half reads the output alone: the diagnostic repeats the command, and with the
+    // line absent from the output, "no marker warning" would pass for nothing.
+    const printed = /failed to connect to the docker API/.test(outputOf(failedWord.result) ?? '');
+    check(d?.exit_code === 0 && printed, 'the docker line was printed and exited 0, as the shape needs', `exit ${d?.exit_code ?? 'none'}, line ${printed ? 'present' : 'absent'} in the output`);
+    if (d?.exit_code === 0 && printed) {
+      const warnings = d.warnings ?? [];
+      check(d.outcome_kind !== 'suspicious_success', 'a lower-case failed at exit 0 was not classified suspicious_success', `outcome ${d.outcome_kind ?? 'none'}`);
+      check(!warnings.some((w) => /failure marker/.test(w)), 'no failure-marker warning on the lower-case line', `warnings: ${warnings.join(' ') || 'none'}`);
+    }
   }
 
   const diffExitOne = attempted('diff-exit-1')[0];

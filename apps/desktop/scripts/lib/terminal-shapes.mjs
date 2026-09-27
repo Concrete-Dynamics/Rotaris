@@ -29,15 +29,16 @@ export const LONG_OUTPUT_LINES = 40;
  */
 export function terminalShapes(platform = process.platform) {
   const node = 'node -e "setTimeout(() => {}, 45000)"';
-  const failed = `node -e "console.log('step one FAILED to connect, retrying'); process.exit(0)"`;
+  const failed = `node -e "console.log('failed to connect to the docker API'); process.exit(0)"`;
   const diff = 'git --no-pager diff --no-index -- package.json src/todos.js';
   const common = [
     // `hardMs` was passed by `index.ts` and read nowhere, so a call supplying no `timeout` had the soft pause
     // and no hard cap at all — REQ-TOOLS-097 wants both bounds with the first to fire governing.
     { id: 'wedge', match: /setTimeout/, command: node },
-    // REQ-TOOLS-113 searches literal markers case-insensitively; this output carries one and exits 0. The
-    // warning is faithful. What the record wanted measured is what it costs.
-    { id: 'failed-word', match: /FAILED to connect/, command: failed },
+    // Run `2e21e324`'s docker line, in the lower case it was recorded in, at exit 0. It warned as REQ-TOOLS-113's
+    // `FAILED ` marker; PD-TOOLS-003 matches that marker in capitals only, so it must not warn now. A regression
+    // guard, as `diff-exit-1` is for ESC-41.
+    { id: 'failed-word', match: /failed\s+to\s+connect\s+to\s+the\s+docker\s+API/, command: failed },
     // ESC-41's carve-out: `git diff` exiting 1 IS the answer, and classifying it a failure made the agent
     // explain away its own evidence.
     { id: 'diff-exit-1', match: /--no-index/, command: diff },
@@ -73,6 +74,20 @@ export function diagnosticOf(result) {
   const blocks = [...String(result ?? '').matchAll(/\[terminal_diagnostic\] (\{.*\})\s*$/gm)];
   if (blocks.length === 0) return null;
   try { return JSON.parse(blocks[blocks.length - 1][1]); } catch { return null; }
+}
+
+/**
+ * What the command printed — the `[terminal_output]` section (`[partial_terminal_output]` after a hard timeout),
+ * or null. A check about the output reads this rather than the whole result, because the diagnostic block below
+ * it repeats the command: a pattern taken from the command matches the whole result whether or not the command
+ * printed anything. The first section header and the last diagnostic, for the reason `diagnosticOf` gives.
+ */
+export function outputOf(result) {
+  const text = String(result ?? '');
+  const start = text.search(/^\[(?:partial_)?terminal_output\]$/m);
+  const end = text.lastIndexOf('\n[terminal_diagnostic] ');
+  if (start === -1 || end <= start) return null;
+  return text.slice(text.indexOf('\n', start) + 1, end);
 }
 
 /**

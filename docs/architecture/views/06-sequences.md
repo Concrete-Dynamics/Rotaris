@@ -125,6 +125,14 @@ The parts that are easy to get wrong:
   discarded, and the call is denied with source `presenter-error`.
 - Only an **answer or a cancellation** releases the wait. A wait with no limit is still cancellable — `run.stop`
   cancels whatever is blocked on a person as its first act.
+- **Approve for the session adds a grant to the agent's `PolicyContext`**, matched before any policy rule on
+  every later call (`policy.ts`, REQ-TOOLS-023/024). A grant for the public `write_file` or `haet_edit` (`haet`
+  folded in) covers a path, not an argument set (`PD-TOOLS-004`): the gate hands `grant` the workspace root, the
+  resolver and the run host's `publicTool` predicate (an MCP tool offered under either name is not the public one),
+  the grant stores the set of paths its REQ-TOOLS-018 path arguments resolved to, and a later call of that tool
+  from that persona is allowed without a dialog when its own set is exactly that one — a retried edit with a new
+  `old_string` included. Every other tool's grant, an MCP tool's under a public name among them, still needs the
+  identical command facet or argument set.
 
 ---
 

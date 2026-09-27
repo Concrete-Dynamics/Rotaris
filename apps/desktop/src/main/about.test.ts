@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BUILD_ID_ASSET, THIRD_PARTY_LICENSES_ASSET, buildIdentifier, thirdPartyLicensesPath } from './about.js';
@@ -20,11 +20,16 @@ function sourceTreeAnswer(name: string): string | null {
 }
 
 describe('REQ-STARTUP-141 / REQ-SHELL-142: the About page opens the file the notices generator writes', () => {
-  const holder = process as NodeJS.Process & { resourcesPath?: string };
+  const holder = process as unknown as { resourcesPath?: string };
   const before = holder.resourcesPath;
   let resources: string;
   beforeEach(() => { resources = mkdtempSync(join(tmpdir(), 'rotaris-about-')); holder.resourcesPath = resources; });
-  afterEach(() => { holder.resourcesPath = before; rmSync(resources, { recursive: true, force: true }); });
+  afterEach(() => {
+    // Electron declares `resourcesPath` on every process; under Vitest it is absent until a test sets it.
+    if (before === undefined) delete holder.resourcesPath;
+    else holder.resourcesPath = before;
+    rmSync(resources, { recursive: true, force: true });
+  });
 
   it('names the bundle exactly as REQ-STARTUP-141 does, and as the generator writes it', () => {
     expect(THIRD_PARTY_LICENSES_ASSET).toBe('THIRD-PARTY-LICENSES.txt');
@@ -35,6 +40,13 @@ describe('REQ-STARTUP-141 / REQ-SHELL-142: the About page opens the file the not
     const bundled = join(resources, NOTICES_FILE);
     writeFileSync(bundled, 'Rotaris — third-party software notices\n');
     expect(thirdPartyLicensesPath()).toBe(bundled);
+  });
+
+  it('takes the absent branch when the resources path carries no bundle', () => {
+    // The source tree's `resources/` is the reader's second candidate, and a build of this worktree may have written
+    // the bundle there (first-release-plan.md §4.4); absent means neither candidate holds it.
+    const sourceTree = join(__dirname, '..', '..', 'resources', NOTICES_FILE);
+    expect(thirdPartyLicensesPath()).toBe(existsSync(sourceTree) ? sourceTree : null);
   });
 
   it('names the build identifier\'s asset as the writer does (REQ-SHELL-140, first-release-plan.md §4.4)', () => {

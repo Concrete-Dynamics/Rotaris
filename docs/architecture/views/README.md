@@ -43,7 +43,16 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-09-24**
+## Last reconciled with the code: **2026-09-27**
+
+**The run's model calls outside an agent's turn are counted (defect round, 2026-09-27, R-054).** Compression, the
+child-report summariser, the intent classifier and the loop supervisor's classifier discarded the usage their
+requests reported, so the run's tokens, its cost and `usage.update` missed them (REQ-EVENTS-053, PD-MONITOR-001).
+Each now calls through `meteredBackend` (`engine/run/metered.ts`), a decorator on the `AgentBackend` port that hands
+every completed request to the new `Run.countUsage`. `PreflightContext` gains `countUsage` and the `Sessions`
+`supervisor` factory a third argument, so the run host's two classifiers are wrapped where they are built. The
+**runtime view** moves: one passage in "What a step costs". No package, edge, process, channel, message kind or
+store column changed.
 
 **Product-drawn main-window chrome (`PD-SHELL-003`, built and revised 2026-09-24).** On Windows, Linux and macOS the main
 `BrowserWindow` is frameless with its native menu hidden. The existing title bar now ends in minimize,

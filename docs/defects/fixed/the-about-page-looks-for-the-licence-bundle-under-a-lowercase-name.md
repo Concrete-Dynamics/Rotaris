@@ -17,3 +17,13 @@ absent branch wrongly on a case-sensitive filesystem.
 
 - `apps/desktop/src/main/about.ts`: `THIRD_PARTY_LICENSES_ASSET`, the lowercase name the reader looks for.
 - `docs/spec/11-startup-distribution-updates.md`: `REQ-STARTUP-141`, the required name.
+
+## Repaired 2026-09-27 ([R-054](../../product/requests.md#r-054))
+
+`THIRD_PARTY_LICENSES_ASSET` is `THIRD-PARTY-LICENSES.txt`, the name `REQ-STARTUP-141` fixes, and its comment says
+why the capitals matter on Linux alone. Nothing else reads the name, so the About page's reader and the notices
+generator ADR-0054 owes now agree by construction.
+
+Evidence: `apps/desktop/src/main/about.test.ts` points `process.resourcesPath` at a temporary directory holding
+`THIRD-PARTY-LICENSES.txt` and expects `thirdPartyLicensesPath()` to return it, beside the absent branch
+`REQ-SHELL-142` shows. On this Linux host, with the old constant restored, the test reads `null` and fails.

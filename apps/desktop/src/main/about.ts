@@ -14,7 +14,11 @@ import { join } from 'node:path';
  */
 
 export const BUILD_ID_ASSET = 'build-id.txt';
-export const THIRD_PARTY_LICENSES_ASSET = 'third-party-licenses.txt';
+/**
+ * REQ-STARTUP-141 fixes this name, capitals included. A case-insensitive volume (Windows, a default macOS one) would
+ * find the file under any spelling, and a Linux artifact finds it only under this one.
+ */
+export const THIRD_PARTY_LICENSES_ASSET = 'THIRD-PARTY-LICENSES.txt';
 
 function candidates(name: string): readonly string[] {
   const out: string[] = [];

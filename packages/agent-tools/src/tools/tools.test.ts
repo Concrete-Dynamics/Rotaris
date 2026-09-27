@@ -114,15 +114,11 @@ describe('write_file (REQ-TOOLS-132/133/135/136) and the diff row (REQ-CHAT-050)
   it('create refuses an existing file; edit needs a prior read; edits match at four levels; multiple occurrences are reported; undo pops', async () => {
     const w = writeFileTool(state, fence);
     const r = readFileTool(state, fence);
-    // The refusal names the file, its size, and whether THIS agent has read it — the fact that separates
-    // "a file I forgot writing" from "a sibling wrote this while I worked", which cost a turn to discover
-    // by hand in run `2e21e324`. It quotes no content, which the last assertion here pins.
+    // REQ-TOOLS-135's text exactly. It says nothing about who read or wrote the file, because the read record is
+    // the workspace's, shared by every agent (REQ-TOOLS-133), and cannot answer for the caller.
     const clash = await w.execute({ operation: 'create', path: 'src/a.ts', content: 'x', replace_all: false }, ctx());
     expect(clash.isError).toBe(true);
-    expect(clash.text).toContain('File already exists: src/a.ts');
-    expect(clash.text).toContain('You have NOT read it in this session');
-    expect(clash.text).toContain("use 'overwrite' or 'edit'");
-    expect(clash.text).not.toContain('const a = 1;');
+    expect(clash.text).toBe("File already exists: src/a.ts. Use 'overwrite' or 'edit'.");
     const gated = await w.execute({ operation: 'edit', path: 'src/a.ts', old_string: 'const a = 1;', new_string: 'const a = 10;', replace_all: false }, ctx());
     expect(gated.text).toBe('You must read src/a.ts before editing it. Call read_file(path="src/a.ts") first, then retry your edit.');
     await r.execute({ path: 'src/a.ts', offset: 1, limit: 2000, grep_context: 3 }, ctx());

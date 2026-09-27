@@ -98,5 +98,8 @@ Evidence: `children.test.ts` (*PD-TOOLS-006: write scopes*, three end-to-end cas
 `write-scope.test.ts`, `gate.test.ts` (*write scopes at dispatch*), and `run-host/tools.test.ts` (the predicate
 reaching the gate through a real port).
 
-The create-guard's message about whose file it is remains a separate open note,
-[`the-create-guard-tells-an-agent-it-read-a-file-its-sibling-wrote.md`](../the-create-guard-tells-an-agent-it-read-a-file-its-sibling-wrote.md).
+The create-guard's message about whose file it is was a separate note,
+[`the-create-guard-tells-an-agent-it-read-a-file-its-sibling-wrote.md`](the-create-guard-tells-an-agent-it-read-a-file-its-sibling-wrote.md).
+It was repaired 2026-09-27 by returning the refusal to REQ-TOOLS-135's text, the first block quoted above. The
+2026-09-22 improvement read a workspace-wide record as the caller's own, so its second sentence was false in
+exactly the sibling case it was written for; PD-TOOLS-006's write scopes carry that case now.

@@ -21,3 +21,19 @@ this order later moves both together. Not repaired here, because it is outside w
 
 - `packages/engine/src/children/notify.ts`: `childPayload`, the assembly order and the comment choosing it.
 - `packages/engine/src/children/orchestration.ts`: `execute`, the one caller, passing the artifact blocks.
+
+## Repaired 2026-09-27 ([R-054](../../product/requests.md#r-054))
+
+`childPayload` now emits REQ-ORCH-047's prior-agent context, then (1) the workspace root with PD-TOOLS-006's
+write-scope block immediately after it, then (3) the sibling-artifact index and (4) the attached artifacts, then
+(6) the task. The write-scope block moved with the workspace-root line, as the note foresaw. The comment that
+chose the old order is replaced by one that states REQ-TOOLS-154's.
+
+Items (2) and (5) still have no block. The verification suite that fills (2) is not built. Item (5) was found
+missing while making this repair and is its own note:
+[`the-inherited-context-reports-never-reach-the-child.md`](../the-inherited-context-reports-never-reach-the-child.md).
+
+Evidence: `packages/engine/src/children/notify.test.ts` asserts the positions of all six present blocks in
+order, and that a child with no dependencies starts at the workspace root. With the old `childPayload`
+restored, both tests fail. `children.test.ts`'s PD-TOOLS-006 cases, which pin the write scopes directly after the
+workspace-root line, still pass.

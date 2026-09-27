@@ -25,3 +25,17 @@ The message also no longer carries the exact text `REQ-TOOLS-135` fixes.
 - `docs/defects/two-writing-children-in-one-checkout-collided.md`: the note whose improvement introduced this.
 
 Noticed 2026-09-23 while designing sibling write scopes (R-048, item 5).
+
+## Repaired 2026-09-27 ([R-054](../../product/requests.md#r-054))
+
+The `create` refusal is REQ-TOOLS-135's text again, character for character:
+`File already exists: <p>. Use 'overwrite' or 'edit'.` The line count and the sentence about whose file it is are
+gone. Keeping a truthful half of the extension was considered and not taken, because any addition departs from
+the text the requirement fixes, and the case the extension was written for, sibling children colliding in one
+checkout, is what PD-TOOLS-006's write scopes now refuse before the write reaches this guard. The code comment
+states the falsified reason beside its replacement.
+
+Evidence: `packages/agent-tools/src/tools/tools.test.ts` asserts the refusal with `toBe` on the exact string, which
+also covers the old assertion that no content is quoted. With the 2026-09-22 message restored, it fails.
+[`two-writing-children-in-one-checkout-collided.md`](two-writing-children-in-one-checkout-collided.md) now says the
+improvement it records was reverted, and why.

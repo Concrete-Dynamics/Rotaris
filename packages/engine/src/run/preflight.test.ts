@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, type ScriptedCall } from '@rotaris/model';
-import { intentStatusOf, RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type Publisher, type ToolPort, type ToolPortContext } from '../index.js';
+import { intentStatusOf, RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type PreflightContext, type Publisher, type ToolPort, type ToolPortContext } from '../index.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000c') as MachineId;
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
@@ -31,7 +31,7 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
       playbookFor: (role) => (role === 'orchestrator' ? 'PLAYBOOK\nROUTE: routed text' : ''), budgetCell: { maxActive: 2, maxTotal: 6, maxDepth: 2 }, warnings: [],
     };
   }
-  function sessionsWith(calls: ScriptedCall[], preflight: Preflight | null, onTools?: (ctx: ToolPortContext) => void) {
+  function sessionsWith(calls: ScriptedCall[], preflight: Preflight | null, onTools?: (ctx: ToolPortContext) => void, onPreflight?: (ctx: PreflightContext) => void) {
     const client = new ScriptedModelClient(calls);
     let n = 0;
     const seen: string[] = [];
@@ -41,7 +41,7 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
       model: { backend: new DefaultAgentBackend(client), config: { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k' } }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
       tools: (ctx) => { onTools?.(ctx); return port; }, attended: () => true,
       runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING' },
-      ...(preflight ? { preflight: async (ctx) => { seen.push(ctx.prompt); return preflight; } } : {}),
+      ...(preflight ? { preflight: async (ctx) => { seen.push(ctx.prompt); onPreflight?.(ctx); return preflight; } } : {}),
     });
     return { sessions, client, seen };
   }
@@ -76,6 +76,15 @@ describe('engine/run — the pre-flight in the run (REQ-ORCH-005/014/016/019/024
     const system = client.requests[0]!.messages[0]!.content.map((p) => (p.kind === 'text' ? p.text : '')).join('');
     expect(system).not.toContain('PLAYBOOK');
     expect(ctxs[0]!.grant).toBe('none');
+  });
+  it('REQ-EVENTS-053 / PD-MONITOR-001: the pre-flight is handed the run\'s counter, and its classification request joins the totals', async () => {
+    // What the run host does with the counter: wrap its classifier's backend (`meteredBackend`), which reports this.
+    const onPreflight = (ctx: PreflightContext) => { ctx.countUsage?.({ input: 40, output: 4, cost: '0.0004' }, MODEL); };
+    const { sessions } = sessionsWith([answer('done', { input: 10, output: 1, cost: '0.001' })], preflightOf('none', 'single_file_change'), undefined, onPreflight);
+    const sid = (sessions.start(dal, 'C:/ws', 'fix the typo') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(dal.getSession(sid)).toMatchObject({ tokens_input: 50, tokens_output: 5, cost: '0.0014' });
+    expect(dal.eventsOfKind(sid, 'usage.update')).toHaveLength(2);
   });
   it('REQ-ORCH-014: classifying while starting with no audit; null for a session that never ran', () => {
     const row = { execution_status: 'starting' } as Parameters<typeof intentStatusOf>[0];

@@ -17,7 +17,8 @@ import type { Budget as ChildBudget } from '../children/ledger.js';
 import { canonicaliseName, mintTaskId } from '../children/naming.js';
 import type { SummariserDeps } from '../children/report.js';
 import type { ClaimHit } from '../children/write-scope.js';
-import type { PricedUsage } from './pricing.js';
+import { priceRequest, type PricedUsage } from './pricing.js';
+import type { CountUsage } from './metered.js';
 import type { HookPort, RunNotice } from '../hooks-port.js';
 import type { CheckpointPort } from '../checkpoint-port.js';
 import type { ArtifactStore } from '../artifacts/store.js';
@@ -27,7 +28,7 @@ import type { ChildRow, StoreDal } from '@rotaris/store';
 import type { LoopSupervisor } from './supervisor.js';
 import type { Persona, PersonaResolver } from '../children/personas.js';
 import { agentCell, type AgentResilienceCell, type TurnResilience } from './ladder.js';
-import { pairKey, providerIdentity, ResilienceMemory, sameRef, withSettings, type CatalogueEntry, type ModelChoice } from './resilience.js';
+import { entryOf, pairKey, providerIdentity, ResilienceMemory, sameRef, withSettings, type CatalogueEntry, type ModelChoice } from './resilience.js';
 import { WaitRegistry, type WaitState } from './waits.js';
 import type { ResolvedTrigger, TurnCompression } from './compression.js';
 import { ConversationRegistry, type ManualCompressionReport } from './conversations.js'; // Part AO
@@ -714,6 +715,14 @@ export class Run {
     if (totals === this.lastUsageEmitted) return;
     this.lastUsageEmitted = totals;
     this.deps.writer.recordEvent('usage.update', payload, this.iterationsCompleted + 1);
+  };
+
+  /**
+   * REQ-EVENTS-053, PD-MONITOR-001: a request the run made outside any agent's turn (`meteredBackend`), priced at the
+   * rates of the model it was sent to and counted exactly as an agent's own request is.
+   */
+  readonly countUsage: CountUsage = (usage, model) => {
+    this.onRequestUsage(priceRequest(usage, entryOf(this.catalogue, model)?.pricing));
   };
 
   /** REQ-MONITOR-084 (4): the run-level plan as lines, for the entry agent's own compression. */

@@ -14,7 +14,7 @@ that writes it.
 
 ## Count
 
-**Twenty-seven.** The count here is the number of entries below, written nowhere else so that it cannot go
+**Twenty-eight.** The count here is the number of entries below, written nowhere else so that it cannot go
 stale. A **revised** directive keeps its number and does not add to it (`README.md`: "a changed
 directive gets a new revision, not a new number"); `PD-CHAT-004` is at revision 3.
 
@@ -1581,8 +1581,9 @@ waiting for them; answering or writing anything to the session ends that.
 
 ### PD-ORCH-004 — a child cut off while making progress hands its work back to the parent
 
-*Revision 2 (2026-09-27, [R-058](requests.md#r-058)) — **how the parent names the child it continues**, below, which
-rules OQ-66. Revision 1 (2026-09-23, [R-048](requests.md#r-048)) is otherwise unchanged.*
+*Revision 3 (2026-09-27, [R-059](requests.md#r-059)) — **an offer outlives its run**, the last sentence of "Naming the
+continuation", ruled with PD-ORCH-005. Revision 2 (2026-09-27, [R-058](requests.md#r-058)) — **how the parent names the
+child it continues**, which rules OQ-66. Revision 1 (2026-09-23, [R-048](requests.md#r-048)) is otherwise unchanged.*
 
 REQ-ORCH-088's expiry path still runs in its order: the child is gracefully paused; if the role has a
 configured fallback model not yet attempted for this child, it is retried once on it; otherwise it is
@@ -1609,10 +1610,13 @@ offer, so a piece of work is continued once and never chained.
 with status `rejected`, before any record is created and with a reason naming the cause, unless the id names a
 direct child of the calling agent whose report carries a continuation offer and which no child of the session
 already continues. The new child's record carries the id it continues; its payload is assembled as any child's
-is, and nothing of the continued child is injected into it. Which agent may take up an offer once the iteration
-that raised it has ended — after a stop, a pause or an interruption — is for the run-continuation policy
-[R-058](requests.md#r-058) opened; until that is ruled, only the agent that delegated the child can, within the
-same iteration.
+is, and nothing of the continued child is injected into it. **An offer outlives its run (revision 3):** it stays
+open until it is taken up once — by the agent that delegated the child while that agent runs, or, in a later iteration
+or a later run of the session, by that iteration's root agent.
+
+> Revision 2 said, and no longer governs: "Which agent may take up an offer once the iteration that raised it has
+> ended — after a stop, a pause or an interruption — is for the run-continuation policy R-058 opened; until that is
+> ruled, only the agent that delegated the child can, within the same iteration."
 
 > Revision 1 said nothing of how the parent names the child it continues, and it narrowed REQ-ORCH-088 alone,
 > so the field built under [R-057](requests.md#r-057) departed from REQ-TOOLS-152, which no directive named for it.
@@ -1632,7 +1636,7 @@ so a child that genuinely loops is still stopped at the same point.
 > **Narrows:** REQ-ORCH-088
 > **Extends:** REQ-TOOLS-152 (revision 2)
 
-*Raised by the owner, 2026-09-23; logged as [R-048](requests.md#r-048). Revision 2 logged as [R-058](requests.md#r-058).*
+*Raised by the owner, 2026-09-23; logged as [R-048](requests.md#r-048). Revision 2 logged as [R-058](requests.md#r-058), revision 3 as [R-059](requests.md#r-059).*
 
 > **First execution, 2026-09-27, built under [R-057](requests.md#r-057):** the mechanism was built as written, and the
 > text met the code in four places. **(1) The stall window had no reader.** `runtime.child_stall_timeout` and a role's
@@ -1763,6 +1767,9 @@ are not recorded, and cannot be recovered afterwards.
 
 ### PD-TOOLS-006 — a delegated child may declare a write scope that its siblings may not write into
 
+*Revision 2 (2026-09-27, [R-059](requests.md#r-059)) — **a resumed child re-claims its scope**, in "What is unchanged",
+ruled with PD-ORCH-005. Revision 1 (2026-09-23, [R-049](requests.md#r-049)) is otherwise unchanged.*
+
 **The argument.** `delegate` SHALL accept one further optional action field, `write_scope`: a list of
 path patterns relative to the workspace root, in the pattern dialect of the `glob` tool (REQ-TOOLS-138 to
 REQ-TOOLS-141: `*`, `**`, `?` and `{a,b}`). A delegation whose `write_scope` holds an empty pattern, an
@@ -1790,8 +1797,13 @@ The block is omitted when there is nothing to list.
 
 **What is unchanged.** A child delegated without a `write_scope` claims nothing and is refused only where a
 live sibling's claim reaches. A `write_scope` never limits the child that declared it: that child may write
-outside its own patterns wherever no other claim reaches. Claims belong to one run and are never persisted,
-so a resumed session starts with none. Reading is never refused by a claim.
+outside its own patterns wherever no other claim reaches. A claim belongs to one run and lapses with its child, so a
+continued session starts with none of the previous run's claims; the `write_scope` a child declared is stored with its
+record, and a child resumed under PD-ORCH-005 claims it again from the moment it is accepted, under the same rules as
+any child (revision 2). Reading is never refused by a claim.
+
+> Revision 1 said, and no longer governs: "Claims belong to one run and are never persisted, so a resumed session
+> starts with none."
 
 **Why, and what it costs.** In run `2e21e324` two children writing in one checkout refused each other three
 times and one of them spent turns discovering its sibling's file by hand. Both of the product's guards held
@@ -1812,7 +1824,7 @@ write that crosses a live claim is stopped with the name of its owner. What it c
 > **Narrows:** REQ-TOOLS-152, REQ-TOOLS-154
 > **Extends:** REQ-ORCH-028
 
-*Raised by the owner, 2026-09-23; logged as [R-049](requests.md#r-049).*
+*Raised by the owner, 2026-09-23; logged as [R-049](requests.md#r-049). Revision 2 logged as [R-059](requests.md#r-059).*
 
 > **First execution, 2026-09-23, the day it was ruled:** the mechanism was built as written, and one clause of
 > the disclosure proved false for one reader. The block lists "the `write_scope` of every other child of the run
@@ -1871,6 +1883,72 @@ builds "failed". That would be false, and it would read as a broken pipeline. Wh
 > **Narrows:** REQ-STARTUP-026, REQ-STARTUP-030, REQ-STARTUP-035, REQ-STARTUP-156
 
 *Raised by the owner, 2026-09-25; logged as [R-051](requests.md#r-051).*
+
+---
+
+<a id="pd-orch-005"></a>
+
+### PD-ORCH-005 — a continued session resumes the children its last run left unfinished
+
+**(1) The interruption is recorded on each unfinished child.** When a run comes to rest with children that have not
+reached a terminal state, each such child's record SHALL carry an **interruption**: `pause`, `stop`, `quit` or `crash`
+(a crash is recorded when the session is next repaired or continued). The child still ends `cancelled`, so every exit
+from an iteration still leaves every child record terminal and terminal states stay absorbing. Its report SHALL state
+that it was interrupted and by what, and its progress: the workspace paths its own file-writing calls changed, its last
+response and its tool-call count. A child that had not started (`queued`, `waiting_on_dependencies`,
+`waiting_on_model_slot`) is recorded the same way, with no progress.
+
+**(2) A pause holds.** An accepted whole-run pause SHALL stop every agent before its next model step, let in-flight
+tool calls finish within REQ-ORCH-134's deadline, start no queued child, and make no summarising or other model call
+after it is accepted. The run then comes to rest as it does today, and its unfinished children are recorded with
+interruption `pause`.
+
+**(3) An explicit cancel is final.** The cancel control (REQ-MONITOR-126, "cannot be undone in this session") and the
+cancellation of one agent record no interruption, and the children they end are never resumed. A graceful stop, a quit
+and a crash leave their unfinished children resumable.
+
+**(4) Continuing resumes them.** When the session is next continued — the Continue action, a new message or a plan
+decision — then before the first iteration begins, every child the previous run left with an interruption SHALL be
+**resumed**: a new child record is created under that iteration's root with the same persona, task, background flag
+and write scope, and a `resumed_from` link to the record it resumes. Its payload is its original task and a **resume
+brief** assembled from its record within a fixed budget: that it is resuming and why it stopped, the paths it had
+changed, its own todo, its last response, and the tail of its transcript. Dependencies among resumed children carry
+over to the new records. The root's payload lists the resumed agents, and the root owns them as it owns any child it
+delegated: it may wait on them, read their results and cancel them. A resumed child gets a fresh `child_timeout` and
+counts toward every child limit of the run that resumed it.
+
+**(5) What is never resumed.** A child that ended `succeeded`, `failed` (a timed-out child among them, whose route is
+PD-ORCH-004's continuation offer), `blocked` (REQ-ORCH-048), or cancelled under clause 3.
+
+**(6) The user decides at each continue.** The Continue action SHALL state how many agents will resume, and SHALL offer
+to continue without them; choosing that records those children as not resumed, and they are never resumed later.
+Resuming is the default.
+
+**(7) A piece of work is resumed each time the user continues.** There is no cap: every resume follows a user's act of
+continuing, and a resumed child that is itself interrupted is resumable in turn.
+
+**(8) Opening a session is not continuing it.** Loading a session to view it SHALL change no child record; settling,
+recording interruptions and resuming happen only when a run of the session is about to start.
+
+**What is unchanged.** A continuation is still not a resume: a timed-out child is never resumed and earns no corrective
+message (REQ-NOTIFY-112). The message-limit pause and the plan gate keep their durable holds. The run host is still
+never re-forked, and a crashed session still needs repair or a continue before anything runs (ADR-0002). How a
+continuation offer outlives its run is PD-ORCH-004 revision 3; how a resumed child re-claims its write scope is
+PD-TOOLS-006 revision 2.
+
+**Why, and what it costs.** Every stop, pause, quit or crash ended every child, and the next run's root was told
+nothing about them and could not address them: in run `2e21e324` the user stopped a run whose children had been
+working for twenty minutes, and nothing of their work could be continued. A continued session now brings its agents
+back unless the user declines. What it costs: a resumed child starts a fresh conversation and pays for its brief, so
+continuing a session whose agents were mid-way through is no longer free; a pause no longer lets children finish their
+turn and summarise, so a paused child's report is its progress, never its conclusion; and four columns are appended to
+the store (`children.interruption`, `children.resumed_from`, `children.write_scope`, and a task id on transcript rows).
+
+> **Narrows:** REQ-MONITOR-256, REQ-MONITOR-123, REQ-TOOLS-155, REQ-ORCH-072
+> **Extends:** REQ-ORCH-053, REQ-SESSION-065, REQ-NOTIFY-121
+
+*Raised by the owner, 2026-09-27; logged as [R-058](requests.md#r-058) and ruled as drafted, every fork as recommended,
+by [R-059](requests.md#r-059).*
 
 ---
 

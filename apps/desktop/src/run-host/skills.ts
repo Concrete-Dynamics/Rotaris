@@ -1,5 +1,6 @@
 import { homedir } from 'node:os';
-import type { SkillsState, SkillRow } from '@rotaris/contracts';
+import { skillListing, skillListingBody, type SkillsState, type SkillRow } from '@rotaris/contracts';
+import type { SessionWriter } from '@rotaris/engine';
 import type { MonotonicClock } from '@rotaris/kernel';
 import {
   discoverInstructionFiles, discoverSkills, enabledInstructionFiles, loadManualSkill, mergeInstructionContext,
@@ -310,4 +311,34 @@ export class SkillHost {
     }
     return units;
   }
+}
+
+/**
+ * REQ-CHAT-162 — `/skills`: the session's catalog, listed into its transcript as **one system row** and saved with
+ * it. The row goes through the session's own writer, the one every other row of that session goes through, so the
+ * three things the requirement and the plan ask of it are what that writer already guarantees rather than three
+ * paths of this module's: the row and its `transcript.row` event commit in one transaction (saved with the session,
+ * and in the trajectory export, which reads those events), the projection owner is fed on commit (drawn in every
+ * window following the session), and a reopened session reads it back from the store like any other row.
+ *
+ * `writer` is `Sessions.writer(sessionId)`: present exactly while the session is loaded in this process, which a
+ * session a window follows is (`session.subscribe` attaches, `session.resume` loads). A live run's writer and a
+ * loaded idle session's are the same object — REQ-CHAT-084's clear relies on the same fact — so the listing lands
+ * in order whether or not a run is going. An absent writer is refused rather than written around: a row appended
+ * under the store alone would skip the event record, the projection and the session's lock.
+ *
+ * The `state` is `SkillHost.state` for that session, so a skill loaded by hand for it (REQ-WORKSPACE-057, scope
+ * `manual`) is listed and one loaded for another session is not. Every discovered skill is listed whatever its load
+ * or invocation policy and whether or not `skills.enabled` is on: the requirement lists "the discovered skills",
+ * and the Settings table lists the same set.
+ */
+export function writeSkillListing(
+  writer: Pick<SessionWriter, 'appendRow'> | undefined,
+  state: SkillsState,
+): { ok: true; count: number; index: number } | { ok: false; code: 'session.not-loaded' | 'skills.list-failed'; reason: string } {
+  if (writer === undefined) return { ok: false, code: 'session.not-loaded', reason: 'The session this window follows is not loaded, so its transcript cannot be written.' };
+  const listing = skillListing(state.skills);
+  const r = writer.appendRow('system', skillListingBody(listing), true);
+  if (!r.ok) return { ok: false, code: 'skills.list-failed', reason: 'reason' in r.error ? r.error.reason : r.error.code };
+  return { ok: true, count: listing.count, index: r.value.index };
 }

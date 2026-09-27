@@ -19,6 +19,16 @@
  *                   dismissal changes nothing and a bad path reports REQ-WORKSPACE-057's own sentence.
  *   6. disabled   — `skills.enabled: false`: no catalog unit, nothing invocable, the switch off.
  *
+ * REQ-CHAT-162's `/skills` (first-release-plan §2.2) adds two launches after the commands launch, before the policy
+ * launch changes anything the listing reads:
+ *
+ *   1c. listing        — `/skills` typed into a session's composer: ONE system row drawn as the listing, carrying
+ *                        per skill the normalized name, the scope, the triggers, the description and the path, and
+ *                        the count; no in-context indicator anywhere (ESC-37); a bare URL in a description drawn as
+ *                        a link (REQ-CHAT-076). The run host logs the row it wrote.
+ *   1d. listing-reopen — the same session reopened from the session browser in a new launch: the row is still
+ *                        there, read back from the store, and nothing was listed again.
+ *
  * Evidence under `.proof/skills-proof/`: one PNG and one log per launch, plus `results.json`.
  * `--skip-build` skips the build.
  */
@@ -45,6 +55,10 @@ const PROBES = [
   '[data-testid="transcript-clear"]',
   '.save-bar__status',
   '.slash-popup__row',
+  // REQ-CHAT-162: the listing as the one row renderer draws it, inside the system notice that carries it.
+  '[data-testid="row-system"] [data-testid="skill-listing"]',
+  '[data-testid="skill-listing-entry"]',
+  '[data-testid="skill-listing-entry"] .md__link',
 ];
 
 const results = [];
@@ -109,7 +123,9 @@ write(join(workspace, '.agents', 'skills', 'broken', 'SKILL.md'), 'no frontmatte
 write(join(workspace, '.agents', 'skills', 'stop', 'SKILL.md'), skill('stop', 'A skill whose name a built-in holds.'));
 // REQ-WORKSPACE-056: `user-invocable: false` is auto-only — in the catalog, never a command.
 write(join(workspace, '.agents', 'skills', 'auto-only', 'SKILL.md'), skill('auto-only', 'Model-facing only.', 'user-invocable: false\n'));
-write(join(scratch.home, '.agents', 'skills', 'home-skill', 'SKILL.md'), skill('home-skill', 'A skill from the user scope.'));
+// A bare URL in a description, ending a sentence: REQ-CHAT-076 makes it activatable in any row's text, the `/skills`
+// listing's included, with the trailing full stop left out of the target (launch 1c).
+write(join(scratch.home, '.agents', 'skills', 'home-skill', 'SKILL.md'), skill('home-skill', 'A skill from the user scope, see https://skills-proof.invalid/home-skill.'));
 write(join(scratch.home, '.openhands', 'skills', 'installed', 'kept', 'SKILL.md'), skill('kept', 'An installed skill that stays.'));
 write(join(scratch.home, '.openhands', 'skills', 'installed', 'dropped', 'SKILL.md'), skill('dropped', 'An installed skill the manifest disables.'));
 write(join(scratch.home, '.openhands', 'skills', '.installed.json'), JSON.stringify({ disabled: ['dropped'] }));
@@ -155,6 +171,61 @@ for (const name of ['ws-skill', 'render', 'pdf', 'home-skill', 'stop-2']) {
 if (registered.includes('auto-only')) fail('an auto-only skill was offered as a command');
 if (registered.includes('stop')) fail('a skill took the built-in /stop');
 results.push({ launch: 'commands', commands: registered });
+
+// ── 1c. /skills — REQ-CHAT-162's listing, one saved system row ─────────────────────────────────────────────
+// A session first, because the row is written into ITS transcript and saved with it (OQ-66 (b): a window following
+// no session is refused). Then `/skills` typed into the composer; the launch ends when the row is DRAWN, not at an
+// appointment, and the command is listed in the same popup the generated skill commands are.
+const listingWait = `js:document.querySelector('[data-testid="row-system"] [data-testid="skill-listing"]') !== null`;
+const listingLaunch = launch('listing', workspace, {
+  ROTARIS_CAPTURE_PROMPT: 'Say hello and stop.',
+  ROTARIS_CAPTURE_TYPE: '/skills>>composer@9000',
+  ROTARIS_CAPTURE_WAIT: listingWait,
+  ROTARIS_CAPTURE_WAIT_MS: '45000',
+  ROTARIS_CAPTURE_AFTER_MS: '900',
+}, 180_000);
+const listed = rows(listingLaunch.probes, '[data-testid="row-system"] [data-testid="skill-listing"]');
+if (listed.length !== 1) fail(`/skills drew ${listed.length} listing rows, not one system row: ${JSON.stringify(listed)}`);
+// REQ-CHAT-162: "MUST report how many skills were listed" — the same six the Settings table listed, in its order.
+if (listed[0].data['data-count'] !== String(expected.length)) fail(`the listing reported ${listed[0].data['data-count']} skills, not ${expected.length}`);
+if (listed[0].data['data-names'] !== expected.join(',')) fail(`the listing named ${listed[0].data['data-names']}, not ${expected.join(',')}`);
+if (!listed[0].text.startsWith(`${expected.length} skills listed`)) fail(`the row's text did not open with its count: ${listed[0].text.slice(0, 80)}`);
+const entries = Object.fromEntries(rows(listingLaunch.probes, '[data-testid="skill-listing-entry"]').map((r) => [r.data['data-name'], r.data]));
+const wsEntry = entries['ws-skill'];
+if (!wsEntry) fail(`the listing drew no entry for ws-skill: ${JSON.stringify(Object.keys(entries))}`);
+// The five facts per skill: normalized name (the key above), scope, trigger keywords, description, SKILL.md path.
+if (wsEntry['data-scope'] !== 'project' || entries['home-skill']?.['data-scope'] !== 'user') fail(`the scopes read ${wsEntry['data-scope']} / ${entries['home-skill']?.['data-scope']}`);
+if (wsEntry['data-triggers'] !== 'render, /pdf') fail(`ws-skill's triggers read ${JSON.stringify(wsEntry['data-triggers'])}`);
+if (wsEntry['data-description'] !== 'The workspace skill.') fail(`ws-skill's description read ${JSON.stringify(wsEntry['data-description'])}`);
+if (wsEntry['data-path'] !== join(workspace, '.agents', 'skills', 'ws-skill', 'SKILL.md')) fail(`ws-skill's path read ${wsEntry['data-path']}`);
+// REQ-CHAT-076: the URL in home-skill's description is the one link form, its trailing full stop outside the target,
+// and it is the only link the listing draws.
+const listingLinks = rows(listingLaunch.probes, '[data-testid="skill-listing-entry"] .md__link');
+if (listingLinks.length !== 1 || listingLinks[0].data['data-href'] !== 'https://skills-proof.invalid/home-skill') fail(`the listing drew links ${JSON.stringify(listingLinks.map((l) => l.data['data-href']))}, not home-skill's one`);
+if (entries['home-skill']?.['data-description'] !== 'A skill from the user scope, see https://skills-proof.invalid/home-skill.') fail(`home-skill's description read ${JSON.stringify(entries['home-skill']?.['data-description'])}`);
+// ESC-37, ruled, and the amended REQ-CHAT-162: no per-skill in-context indicator on the listing.
+if (Object.values(entries).some((e) => 'data-forced' in e || 'data-in-context' in e) || /in[ _-]?context/i.test(listed[0].text)) fail('the listing carries an in-context indicator');
+// The run host wrote it through the session's writer, and says which session and which row.
+const listedLine = /skills: listed (\d+) skill\(s\) into session (\S+) as transcript row (\d+)/.exec(listingLaunch.log);
+if (!listedLine) fail('the run host logged no listing row');
+if (listedLine[1] !== String(expected.length)) fail(`the run host listed ${listedLine[1]} skills`);
+const listingSession = listedLine[2];
+results.push({ launch: 'listing', session: listingSession, row: Number(listedLine[3]), count: listed[0].data['data-count'], names: listed[0].data['data-names'], wsSkill: wsEntry, link: listingLinks[0].data['data-href'] });
+
+// ── 1d. the session reopened: the row is read back, not written again ─────────────────────────────────────
+// A new launch reopens THAT session from the session browser (REQ-SHELL-126, REQ-SESSION-118); nothing is typed.
+const listingReopen = launch('listing-reopen', workspace, {
+  ROTARIS_CAPTURE_RESUME: listingSession,
+  ROTARIS_CAPTURE_WAIT: listingWait,
+  ROTARIS_CAPTURE_WAIT_MS: '30000',
+  ROTARIS_CAPTURE_AFTER_MS: '900',
+}, 120_000);
+const reread = rows(listingReopen.probes, '[data-testid="row-system"] [data-testid="skill-listing"]');
+if (reread.length !== 1) fail(`the reopened session drew ${reread.length} listing rows: ${JSON.stringify(reread)}`);
+if (reread[0].data['data-count'] !== listed[0].data['data-count'] || reread[0].data['data-names'] !== listed[0].data['data-names']) fail(`the reopened row differs: ${JSON.stringify(reread[0].data)} vs ${JSON.stringify(listed[0].data)}`);
+if (!listingReopen.log.includes(`capture: opened session "${listingSession}" from the browser`)) fail(`the launch did not reopen session ${listingSession}`);
+if (/skills: listed \d+ skill/.test(listingReopen.log)) fail('the reopened launch listed the skills again instead of reading the saved row');
+results.push({ launch: 'listing-reopen', session: listingSession, count: reread[0].data['data-count'] });
 
 // ── 2. policy ───────────────────────────────────────────────────────────────────────────────────────
 /*
@@ -249,8 +320,9 @@ if (toggle.data['aria-checked'] === 'true') fail('the switch read on while the f
 results.push({ launch: 'disabled', commands: disabledCommands, toggle: toggle.data['aria-checked'] });
 
 writeFileSync(join(output, 'results.json'), JSON.stringify(results, null, 2));
-console.log(`skills-proof: ${results.length} checks over 7 launches, evidence in ${output}`);
+console.log(`skills-proof: ${results.length} checks over 9 launches, evidence in ${output}`);
 console.log(`  discovered ${expected.length} skills; commands ${JSON.stringify(registered)}`);
 console.log(`  policy written sparsely to ${agentsYaml}`);
 console.log(`  rescan found ${afterRescan.length}; with skills off the catalogue offers none`);
+console.log(`  /skills wrote one saved system row listing ${listed[0].data['data-count']} skills into ${listingSession}; reopened, it was still there`);
 if (!existsSync(join(repo, '.proof'))) fail('the evidence directory vanished');

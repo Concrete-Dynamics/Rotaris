@@ -79,6 +79,12 @@ The one in-progress composer text, persisted per workspace. Distinct from the
 **Slash command**:
 A typeable command invoked from the composer, with inline discovery and validation. — `REQ-CHAT-018`
 
+**Skill listing**:
+What `/skills` writes: the discovered skills listed into the transcript as a single system row, each with its
+normalized name, scope, trigger keywords, clipped description and `SKILL.md` path, and the count listed; saved
+with the session. It carries no in-context indicator. — `REQ-CHAT-162`
+_Avoid_: skill catalog (the model-facing block — [Workspace](../workspace/CONTEXT.md)'s term)
+
 **Transcript**:
 The live rendering of a session's rows. There is exactly one transcript store, on disk or anywhere
 else, and the transcript projects from it. — `REQ-CHAT-165`, `REQ-CHAT` transcript model and

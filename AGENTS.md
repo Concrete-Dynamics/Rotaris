@@ -43,7 +43,7 @@ wrong.
 | | `artifacts-proof` | the session artifact store, the Artifacts tab, the inspector |
 | | `mcp-proof` | MCP declared three ways, against a real fixture server (ADR-0033/0034) |
 | | `code-intel-proof` | the bundled code-intelligence runtime and its manifest (ADR-0035) |
-| | `skills-proof` | portable skill discovery, with a scratch home (ADR-0063) |
+| | `skills-proof` | portable skill discovery, with a scratch home (ADR-0063); the `/skills` listing written as one saved system row and read back after a reopen (REQ-CHAT-162) |
 | | `sandbox-proof` | OS-level confinement (ADR-0022) — **`win32` is outside the platform set; read what it says it cannot prove** |
 | | `terminal-stream-proof` | the stream in the run host against a **real PTY** (ADR-0021) |
 | **Configuration and startup** | `config-proof` | hand-authored, commented files surviving every write (ADR-0036/0037) |

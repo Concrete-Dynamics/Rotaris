@@ -493,6 +493,20 @@
  * pattern the design already fixed (§1, G1: a rule and a glyph, never a filled background). */
 .row--system { border-left: var(--rt-notice-rule-width, 2px) solid var(--rt-border-strong); border-radius: 0; color: var(--rt-text-secondary); }
 .row--system .row__body { color: var(--rt-text-secondary); font-size: var(--rt-text-xs, 12px); }
+/* REQ-CHAT-162 — the `/skills` listing: a system notice drawn as the listing its text is. The count is the notice's
+   own line; beneath it the design's revealed block (the artifact and tool cards: the surface, a hairline border, the
+   medium radius) holding one entry per skill — the name as the entry's title, its facts after it in the tertiary
+   ink, the description as secondary prose, the path last and quietest, wrapping anywhere so it never widens the
+   block. No rail colour of its own: the notice's rule is already the row's. Tokens only, no literal geometry. */
+.skill-listing { display: flex; flex-direction: column; gap: var(--rt-space-2); white-space: normal; }
+.skill-listing__skills { display: flex; flex-direction: column; gap: var(--rt-space-2); margin: 0; padding: var(--rt-space-2) var(--rt-space-3); list-style: none; background: var(--rt-surface); border: var(--rt-hairline-width) solid var(--rt-border); border-radius: var(--rt-radius-md); }
+.skill-listing__skill { display: flex; flex-direction: column; gap: var(--rt-space-1); min-width: 0; }
+.skill-listing__skill + .skill-listing__skill { padding-top: var(--rt-space-2); border-top: var(--rt-hairline-width) solid var(--rt-divider); }
+.skill-listing__line { overflow-wrap: anywhere; }
+.skill-listing__name { color: var(--rt-text); font-weight: var(--rt-weight-medium); }
+.skill-listing__facts, .skill-listing__label { color: var(--rt-text-tertiary); }
+.skill-listing__description { color: var(--rt-text-secondary); }
+.skill-listing__path { font-size: var(--rt-text-2xs); color: var(--rt-text-tertiary); overflow-wrap: anywhere; }
 /* PD-CHAT-006: a row still being written draws no animated indicator of its own. The falsified rules, kept beside
    their replacement — there is no replacement, which is the point; the row's own growth says it is being written:
      .row__streaming { color: var(--rt-accent-300); font-size: var(--rt-text-2xs, 10px); animation: rt-pulse …; }

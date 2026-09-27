@@ -1,4 +1,5 @@
 import type { PromptFile, PromptsRootsResult } from '@rotaris/contracts';
+import { FIXED_SKILL_COMMAND_NAMES } from './skills.js';
 import type { SlashCommand, SlashContext, SlashOutcome, SlashRegistry } from './types.js';
 
 /**
@@ -193,7 +194,17 @@ export function registerPromptCommands(registry: SlashRegistry, result: PromptsR
   // `buildCatalogue` register the cached answer as it builds a registry and this registrar re-apply a fresh answer to the
   // same registry, without either mistaking the other's work for a holder it must respect. A built-in or a palette mirror
   // keeps its name, which is REQ-CHAT-160's rule and unchanged.
-  const { registrations, skipped } = promptRegistrations(result.files, (name) => { const held = registry.lookup(name); return held !== undefined && held.kind !== 'prompt' && !previouslyRegistered.has(name); });
+  //
+  // `/skill` and `/skills` (REQ-CHAT-162) are held whether or not their effects have registered yet, exactly as the skill
+  // registrar holds them. They register by effect, AFTER `buildCatalogue` has put the cached prompt files on the registry
+  // and after this registrar's mount has recorded the bare stems as its own, so a `skills.md` took `/skills` there and a
+  // re-read, trusting its record, took it back from the listing the fixed command had put over it —
+  // docs/defects/fixed/a-prompt-file-named-skills-takes-the-skills-command.md.
+  const { registrations, skipped } = promptRegistrations(result.files, (name) => {
+    if (FIXED_SKILL_COMMAND_NAMES.has(name)) return true;
+    const held = registry.lookup(name);
+    return held !== undefined && held.kind !== 'prompt' && !previouslyRegistered.has(name);
+  });
   for (const r of registrations) registry.register(promptCommand(r.name, r.file));
   return { names: registrations.map((r) => r.name), skipped: [...result.skipped, ...skipped] };
 }

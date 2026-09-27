@@ -19,7 +19,7 @@ record already decides, and every ruling it needs is named as the owner's rather
 | In the first release | Where it stands | Section |
 |---|---|---|
 | Skills — discovery, the catalog, load modes, the Settings tab, skill commands, `/skill <path>` | built 2026-09-15 (ADR-0063; `pnpm skills-proof`) | §2 |
-| Skills — `/skills`, REQ-CHAT-162's listing | **not built** (`SKILLS_LISTING_NOT_BUILT`, `packages/ui/src/slash/skills.ts`) | §2 |
+| Skills — `/skills`, REQ-CHAT-162's listing | ~~**not built** (`SKILLS_LISTING_NOT_BUILT`, `packages/ui/src/slash/skills.ts`)~~ **built 2026-09-27** (`pnpm skills-proof`, launches 1c and 1d); OQ-66 open against its reach from Settings | §2 |
 | Skills — ESC-37, ESC-38, ESC-39 | **ruled 2026-09-27** as recommended ([R-052](../product/requests.md#r-052)); amended | §2 |
 | Workspace-context injection, REQ-WORKSPACE-041..050 | built 2026-09-22 under `PD-WORKSPACE-002` | §3 |
 | Injection — REQ-WORKSPACE-049's latency bound, a built-app proof | **owed**; OQ-64 **ruled 2026-09-27** | §3 |
@@ -32,7 +32,10 @@ record already decides, and every ruling it needs is named as the owner's rather
   PKCE authenticators, Git integration and merge, the manual compression part, and persona memory.
 - The open notes in `../defects/`.
 - The four red proofs: `transcript-proof`, `library-proof`, `part-h-proof`, and `theme-proof`'s contrast section
-  (OQ-56).
+  (OQ-56). *Two more were measured red on 2026-09-27 while §2.2 was built, both before it and unchanged by it:*
+  `slash-proof` at its first catalogue assertion since ADR-0063
+  ([note](../defects/slash-proof-expects-every-built-in-to-carry-the-action-badge.md)), and `skills-proof`'s policy
+  launch on Linux only ([note](../defects/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md)).
 - The unbuilt directives `PD-TOOLS-003`, `PD-TOOLS-004`, `PD-TOOLS-005`, `PD-ORCH-004` and `PD-MONITOR-002`.
 - The macOS and Linux artifacts, which are bound by IC-3 and IC-8 and now also by `PD-STARTUP-001`.
 
@@ -86,6 +89,61 @@ run host, and no renderer command reaches it today.
 The skills catalog is already the run host's, so no new owner of state appears. The command replaces
 `SKILLS_LISTING_NOT_BUILT` where it would register. `skills-proof` gains one scenario: `/skills` in a session,
 the row drawn, the session reopened, and the row still there.
+
+*First execution — 2026-09-27. Reported in place, with one row in `first-executions.md`.* **The three-step path
+held as written, the reason it was not built held, and building it found one defect and one open question.**
+
+- *The path.* `skills.list` renderer → main (`main/commands/skills.ts`, which names the followed session) → run
+  host (`dispatch.ts` → `run-host/skills.ts`'s `writeSkillListing`) → the session's own writer's `appendRow`. "Only
+  the run host can do it" was exactly right: the writer that saves the row, records its `transcript.row` event and
+  feeds the projection owner is the one every other row of the session goes through, so *saved with the session*,
+  *drawn in every window following it* and *exported with it* (the trajectory reads those events) came from that
+  writer rather than from new code. A live run's writer and a loaded idle session's are one object, so the row lands
+  in order whether or not a run is going.
+- *"A system-row kind".* Read as a kind **of** system row, not a new persisted role: REQ-CHAT-047 maps the role
+  `system` to the system-notice category and any other role to a message, and REQ-CHAT-046 closes the categories
+  at twelve and gives a row its text and no field shaped like a listing. So the row is `system`, its body IS the
+  listing, and the one row renderer draws a system row whose text has the listing's shape as the listing. The text
+  is fixed once, in `contracts/skills.ts` — one writer, one reader, a round-trip test — and a body the reader does
+  not accept is drawn as the plain notice it also is. **No store column and no migration.** No in-context column,
+  per ESC-37. The description is clipped as REQ-CHAT-068's task text already is: at most 120 characters, the last
+  the ellipsis where the text was cut.
+- *The defect.* `/skills` is the second fixed catalogue command with the `skill` kind badge, and the registrar read
+  any `skill`-kind holder as its own earlier work — so a skill named `skill` took `/skill <path>`'s name or lost its
+  own, depending on which React effect ran first (REQ-SHELL-056, both halves). Repaired with it:
+  [`a-skill-named-skill-takes-the-skill-command.md`](../defects/fixed/a-skill-named-skill-takes-the-skill-command.md).
+- *The open question.* [OQ-66](open-questions.md): REQ-CHAT-162 wants the listing reachable from the settings
+  surface, and REQ-WORKSPACE-067 fixes that tab's header actions at two, so no action was added — the tab's table
+  already shows every fact the listing carries; and `/skills` from a window following no session has no transcript
+  to save a row into, so it is refused with a stated reason rather than creating a session.
+- *The evidence.* `skills-proof` launch 1c types `/skills` into a scripted session and reads one system row listing
+  the six discovered skills in the table's order, with `ws-skill`'s scope, triggers, description and path; 1d
+  reopens that session from the browser in a new launch and reads the same row back, with no second listing
+  logged. Both sit before the policy launch, which fails on Linux before and after this change at "the baseline
+  over a global override was not written explicitly"; on Linux the two new launches are therefore the last that
+  pass, and the cause is recorded as
+  [`skills-proof-writes-its-global-policy-where-only-windows-reads-it.md`](../defects/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md).
+  A temporary copy of the proof with that one path spelled for Linux passed all 10 checks over 9 launches with
+  `/skills` built, so the later launches are unaffected by it; the copy was not committed.
+  `rows-proof` passes unchanged. `slash-proof` stops at its first catalogue assertion with and without this change —
+  it expects every built-in to carry the `action` badge, which `/skill` has not since ADR-0063 — recorded as
+  [`slash-proof-expects-every-built-in-to-carry-the-action-badge.md`](../defects/slash-proof-expects-every-built-in-to-carry-the-action-badge.md).
+- *Gate round 1 of the same change found two more defects, both repaired before it merged.* (1) Drawing the listing
+  as its own block took the system row off `PlainText`, so a bare URL in a skill's description stopped being a link
+  (REQ-CHAT-076). Every field is now drawn through `PlainText`; `rows.test.ts` renders a listing and reads the link,
+  and launch 1c gives `home-skill` a description ending in a URL and reads the link drawn for it, the full stop
+  outside the target. `skills-proof` passes to the same Linux-only policy check as before, and `rows-proof` passes.
+  (2) A prompt file named `skills.md` took `/skills` back from the listing on the first prompt re-read after mount
+  (REQ-CHAT-160, REQ-CHAT-162): the collision repaired above held for the skill registrar only —
+  [`a-prompt-file-named-skills-takes-the-skills-command.md`](../defects/fixed/a-prompt-file-named-skills-takes-the-skills-command.md).
+- *Readings stated here rather than left in code.* Search matches the row's text (REQ-CHAT-074), and the text's
+  punctuation between fields (`- `, the brackets round the scope, ` triggers: `) is not drawn, so a match falling
+  only there selects the row and paints nothing in it. `/skills` is sent from `renderer/main.tsx`'s slash host
+  beside `/skill`'s `loadSkillFile`, not from `renderer/session-actions.ts`, where `views/04-seams.md` §1 step 5
+  puts a gesture against the followed session: main, not the renderer, names the session here, as it does for
+  `skills.forceLoad` and `skills.loadFile` (ADR-0063). The listing's other readings — which skills it lists, when
+  its refusal is stated, how the 120 is counted, the badge, and the improvement analyst reading the row — are
+  OQ-66 (c) to (g).
 
 **2.3 A skills live run.** One `pnpm live-run` scenario invokes a skill command and asserts that the model's
 first turn shows the skill's body was in its context. It spends the owner's money, so it runs only when the
@@ -281,7 +339,7 @@ supply, and each stays owed (R-053).
 1. ~~**Rulings.** O-1 and O-10, then one amendment round for whichever ESC readings stand.~~ **Done 2026-09-27**
    ([R-052](../product/requests.md#r-052)): every ruling as recommended, and the amendment round landed with it.
 2. **In parallel, after step 1.** Each item is its own worktree with its own first-execution row:
-   - §2.2 `/skills`;
+   - ~~§2.2 `/skills`;~~ **built 2026-09-27** (§2.2's first-execution note);
    - §3.2 the latency measurement plus §3.3 the injection proof;
    - §4.1 the version guard;
    - §4.3 the notices generator with the About defect;

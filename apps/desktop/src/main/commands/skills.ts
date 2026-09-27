@@ -1,6 +1,6 @@
 import { canonicalPath } from '@rotaris/platform';
 import { millis } from '@rotaris/kernel';
-import { type CommandOutcome, type CommandRequest } from '@rotaris/contracts';
+import { SKILL_LISTING_NO_SESSION, type CommandOutcome, type CommandRequest } from '@rotaris/contracts';
 import { refusal, type CommandAt, type CommandContext, type CommandHandlers } from './context.js';
 
 /**
@@ -10,7 +10,7 @@ import { refusal, type CommandAt, type CommandContext, type CommandHandlers } fr
  */
 export function skillsCommands(
   ctx: Pick<CommandContext, 'chooseSkillFile' | 'runHost'>,
-): Pick<CommandHandlers, 'skills.read' | 'skills.rescan' | 'skills.forceLoad' | 'skills.loadFile'> {
+): Pick<CommandHandlers, 'skills.read' | 'skills.rescan' | 'skills.forceLoad' | 'skills.loadFile' | 'skills.list'> {
   const { chooseSkillFile, runHost } = ctx;
   /*
    * ADR-0063 — portable skills (REQ-WORKSPACE-051..073, 151). The run host answers because it owns the
@@ -52,6 +52,17 @@ export function skillsCommands(
       }
       const r = await runHost.request({ kind: 'skills.loadFile', workspaceRoot: canonicalPath(w.workspace), path, ...(w.followedSessionId === null ? {} : { sessionId: w.followedSessionId }) }, millis(10_000));
       return r.kind === 'skills.state' ? { ok: true, value: { cancelled: false, name: r.loaded, state: r.state } } : refusal(r, 'The skill file could not be loaded');
+    },
+    /*
+     * REQ-CHAT-162 — `/skills`: the listing written into the followed session's transcript as one saved system
+     * row. Unlike the three gestures above there is no pending bucket to fall back to: a row must be saved WITH a
+     * session, so a window following none is refused here, before anything crosses to the run host (OQ-66).
+     */
+    'skills.list': async (_req, { w }) => {
+      if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };
+      if (w.followedSessionId === null) return { ok: false, code: 'session.none', headline: SKILL_LISTING_NO_SESSION };
+      const r = await runHost.request({ kind: 'skills.list', workspaceRoot: canonicalPath(w.workspace), sessionId: w.followedSessionId }, millis(10_000));
+      return r.kind === 'skills.listed' ? { ok: true, value: { count: r.count, index: r.index } } : refusal(r, 'The skills could not be listed in the transcript');
     },
   };
 }

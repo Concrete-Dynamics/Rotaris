@@ -47,7 +47,9 @@ amendment (R-049), and OQ-62's configured-rate branch with it; OQ-62's discovery
 2026-09-21 by building `PD-WORKSPACE-002`'s per-file switches: OQ-64** (whether an instruction override
 suppresses its base when the override is itself switched off — a third state REQ-WORKSPACE-042's "given
 both exist" has no word for). **OQ-64 was ruled on 2026-09-27** as built (R-052), together with ESC-37,
-ESC-38 and ESC-39. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+ESC-38 and ESC-39. **One more was raised on 2026-09-27 by building the `/skills` listing: OQ-66**
+(where the listing goes when there is no transcript to write it into — from the Settings Skills tab, whose
+header actions REQ-WORKSPACE-067 fixes at two, and from a window following no session). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -2836,6 +2838,64 @@ handed to the engine, which owns neither.
 **What a ruling decides.** Whether an analysis reads what injection may not; and, if not, whether the
 retrospective should say in its own output that a file was present and withheld, so a user reading a thin
 retrospective can tell it apart from an empty workspace.
+
+**OQ-66 — Where does the `/skills` listing go when there is no transcript to write it into?** *(REQ-CHAT-162 with REQ-WORKSPACE-067 and REQ-WORKSPACE-151; OQ-58. Raised 2026-09-27 by building the listing, `first-release-plan.md` §2.2.)*
+
+REQ-CHAT-162 makes the listing "a single system row" in the transcript and requires that "a system row a skill
+command writes MUST be saved with the session". Two routes to the capability have no session transcript to
+write into, and the requirement does not say what either does.
+
+**(a) The settings surface.** "Both capabilities MUST also be reachable from the settings surface that manages
+skills, so neither depends on the user knowing a command name." For *loading* the surface has its own route —
+REQ-WORKSPACE-151's "Load skill file…", which loads into the session exactly as `/skill <path>` does. For
+*listing* it does not: the Settings Skills tab is not a transcript, and REQ-WORKSPACE-067 fixes that tab's
+contents, including "two header actions, 'Rescan skills' … and 'Load skill file…'". A third action writing the
+row into the followed session would contradict that count; no action leaves the listing reachable from Settings
+only in the sense that the tab's table shows every fact the listing carries — Skill (the normalized name),
+Source (the scope), Path, Trigger and Description, unclipped — without the count stated as a sentence and without
+writing a row.
+
+**(b) A window following no session.** OQ-58 already records that "the current session" can have no referent
+when a gesture is made from a window showing none, and answers it for session *state* with a pending bucket the
+next session adopts. A transcript row cannot wait in a bucket: it is a row of a session or it is not saved.
+
+**What the build proceeds under.** (a) The tab's table is read as the listing capability's reach from the
+settings surface, and nothing is added to the tab: the requirement that fixes the tab's actions is specific and
+the one that asks for reachability is general, and the facts a user needs are all on the tab. (b) `/skills` from
+a window following no session fails, and says why — "Open or start a session first: /skills writes its listing
+into that session's transcript." (`SKILL_LISTING_NO_SESSION`) — rather than creating a session nobody asked for
+or drawing a row nothing saves. A followed session that is not loaded in the run host is refused the same way
+rather than written to under the store alone, which would skip its event record, its projection and its lock.
+
+**What a ruling decides.** (a) Whether the Skills tab gains a third header action that lists the skills into the
+followed session's transcript — amending REQ-WORKSPACE-067's two to three — or REQ-CHAT-162's reachability clause
+is read as met by the table; and if the latter, whether the tab should state the count. (b) Whether `/skills`
+with no session refuses (built), starts a session, or lists into the next session created in the window.
+
+**Readings the listing was also built under, named here so a ruling can reach them** *(added 2026-09-27, gate
+round 1 of the same change; each was stated only in a code comment or the plan's note before)*:
+
+- **(c) Which skills are listed.** Every discovered skill — auto-only ones, ones whose load mode is `off`
+  ("hidden"), and all of them while `skills.enabled` is off. REQ-CHAT-162 lists "the discovered skills" and the
+  Settings table lists the same set; `/skill <path>` is not refused while skills are off either. The contrary
+  reading: the requirement's last sentence calls these "skill commands", and REQ-CHAT-034 fails a skill command
+  with "Skills are disabled. Enable them in Settings." while the switch is off. *(`writeSkillListing`,
+  `apps/desktop/src/run-host/skills.ts`.)*
+- **(d) When a refusal is stated.** `/skills` is always listed as available and states the no-session refusal of
+  (b) only once invoked. REQ-CHAT-025 and REQ-CHAT-029/030 already allow "listed but unavailable, with the reason"
+  before invocation; the composer's context carries no "a session is followed" fact today, so the build did not
+  add one. *(`skillsListCommand`, `packages/ui/src/slash/skills.ts`.)*
+- **(e) How the 120 is counted.** At most 120 characters, the last of them the ellipsis where the text was cut,
+  after whitespace runs collapse to one space — REQ-CHAT-068's `compactTask` reading of the same kind of clause.
+  Counted in code points, so a cut can separate a combining mark or a joined emoji from its base.
+  *(`clipSkillDescription`, `packages/contracts/src/skills.ts`.)*
+- **(f) Which badge the two fixed commands carry.** `skill`, as ADR-0063 chose for `/skill`; REQ-CHAT-025 names the
+  set and does not say. `slash-proof` asserts the other reading, and has been red on it since ADR-0063
+  (`../defects/slash-proof-expects-every-built-in-to-carry-the-action-badge.md`).
+- **(g) Who else reads the row.** The row is a system row, and the improvement analyst takes every recent row's
+  text as evidence (`packages/engine/src/improvements/capture.ts`), so a listing carries the names, descriptions
+  and paths of skills set to "hidden" to that model. The agent path does not (it keeps user and agent rows only).
+  Whether "hidden" (REQ-WORKSPACE-062) reaches that far is not stated; nothing withholds them today.
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

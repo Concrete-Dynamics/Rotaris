@@ -11,6 +11,11 @@ was found because `gate.test.ts`'s fixed root `D:/ws` is relative on Linux: a ga
 answer inside the root cannot use that harness root there. Noticed 2026-09-23 while writing PD-TOOLS-006's gate
 tests, which use a real temporary directory instead.
 
+> **2026-09-27:** "No production caller is known to pass a relative path" is false. The permission policy's path
+> scope hands the resolver the raw argument, so a workspace-relative path reaches `realPathOf` relative to the run
+> host's process directory: recorded as
+> [`path-scope-resolves-a-relative-path-against-the-process-directory.md`](path-scope-resolves-a-relative-path-against-the-process-directory.md).
+
 ## Specs
 
 None contradicted by a reachable path. `REQ-TOOLS-129` makes this the one workspace-boundary check, so the

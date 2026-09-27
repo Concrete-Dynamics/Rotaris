@@ -49,7 +49,8 @@ export function isInside(root: string, candidate: string): boolean {
   return c === r || c.startsWith(`${r}/`);
 }
 
-export function resolveInWorkspace(cfg: FenceConfig, input: string): string {
+/** REQ-TOOLS-018/129: a relative path resolves against the workspace root; an absolute one stands. */
+export function resolveInWorkspace(cfg: Pick<FenceConfig, 'workspaceRoot'>, input: string): string {
   return isAbsolute(input) ? resolve(input) : resolve(cfg.workspaceRoot, input);
 }
 

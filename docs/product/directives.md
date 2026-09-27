@@ -1490,6 +1490,54 @@ declare no path the policy can read, so for them a path-scoped match could only 
 
 *Raised by the owner, 2026-09-23; logged as [R-048](requests.md#r-048).*
 
+> **First execution, 2026-09-27, built under [R-057](requests.md#r-057):** the rule held as written; building it
+> found that it is silent on when the approved call's paths are resolved, and that the policy's existing path
+> resolution does not do what REQ-TOOLS-018 says. The persona needed nothing: it was already carried on every call
+> and stored in every grant. **When:** the grant resolves its paths once, when it is made, and a later call's paths
+> are resolved when it is evaluated. Resolving both at evaluation would let a link retargeted after the approval
+> carry the grant to a file the user never approved; a test pins a retargeted link asking again, and a link to the
+> approved file matching. **How:** each path is joined to the workspace root first (`resolveInWorkspace`) and then
+> handed to the gate's real-path resolver. The path scope of REQ-TOOLS-018 skips the join and hands the resolver the
+> raw argument, which the run host resolves against its process directory, dropping a character when none of the
+> path exists there; that is recorded as
+> [`path-scope-resolves-a-relative-path-against-the-process-directory.md`](../defects/path-scope-resolves-a-relative-path-against-the-process-directory.md)
+> and not changed here. **Which tool:** the name alone does not say it. A persona's MCP surface prefixes a server's
+> tool only when its name is already taken, so a server's own `write_file` reaches a persona whose public set lacks
+> one as plain `write_file`, and the first build, keyed on the name, scoped its approval by path against the
+> directive's "every MCP tool". The independent review found it; the gate now takes a `publicTool` predicate from the
+> run host, true only when the callable map holds the very executor `executorsFor` built for the name, and only the
+> public `write_file` and `haet_edit` are scoped by path, on the grant and on the later call alike, so a public
+> `haet_edit` grant does not reach a server's `haet` through the alias. The policy's other readers still take such a
+> tool for the public one by name; that is recorded as
+> [`an-mcp-tool-offered-under-a-public-name-is-ruled-as-that-public-tool.md`](../defects/an-mcp-tool-offered-under-a-public-name-is-ruled-as-that-public-tool.md)
+> and not changed here. **Readings taken where the text leaves room**, each the most literal one found: a call with
+> an unresolvable path never matches and does not fall back to the exact match, so an approval whose own path did
+> not resolve covers nothing, not even the identical call; a path key whose value is neither a string nor a list of
+> strings counts as unresolvable; the fallback for a call with no path key is REQ-TOOLS-024 whole, so it compares
+> tool names without folding `haet`; resolved paths compare as exact strings, so two spellings differing only in
+> case are two paths; and a path named twice counts once. The rule is `resolvedPathSet` and `approvalMatches` in
+> `packages/agent-tools/src/policy.ts`, and `PolicyContext.grant` takes the root and the resolver, which the gate
+> passes. One unit assertion had pinned the old reading, a `write_file` grant refusing a call with an extra
+> argument; it now pins the same on an MCP edit tool, which REQ-TOOLS-024 still governs alone. The tests name a
+> stand-in for it, because REQ-MCP-116 lets the code-intelligence server's real tool names be written only in its
+> manifest, and `code-intelligence.test.ts` failed the first `pnpm check` on `replace_content` written in a test.
+> Measured by unit tests only: nine `PD-TOOLS-004` cases in `policy.test.ts` over a real temporary directory with a
+> copy of the run host's resolver, and one in `gate.test.ts` taking an edit and two retries, one through the
+> alias, through the gate on one approval while another persona and another path each ask again. With `policy.ts` restored to its
+> previous text (and a stub for the one new export the tests import) all ten fail, the gate case by its 30-second
+> timeout waiting for an approval nobody answered; two of them, the unresolvable-path and no-path-key cases, fail
+> only on the new `paths` field, because their negatives hold under the old, narrower rule too. The repair of the
+> review added three: one in `policy.test.ts` (a server's `write_file`, and a server's `haet` beside a public
+> `haet_edit`), one in `gate.test.ts` (a server's `write_file` asking again for another content on the approved
+> path), and one in `run-host/tools.test.ts` building the real port twice — once with a stand-in MCP host offering
+> `write_file` to a persona without it, once with the public `write_file` — and answering the approvals through the
+> port. With the `publicTool` check taken out of `policy.ts` all three fail; with the run host's predicate true for
+> any served name the port case fails, and with it false for every name the port case fails on its public half, by
+> the test's timeout waiting for an approval nobody answered. These three were not run against `policy.ts`'s text
+> from before the directive. The built app was
+> not driven and no live run was made, so the loop of run `1ddeb71b` has not been replayed against a real model. The
+> row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-tools-005"></a>

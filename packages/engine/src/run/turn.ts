@@ -2,7 +2,7 @@ import { millis, toIsoUtc, type Clocks, type TimerHandle } from '@rotaris/kernel
 
 /** REQ-CHAT-164: ten seconds of provider silence on a call in flight. */
 const STALL_AFTER = millis(10_000);
-import { terminalRowStreamId, type ApprovalOption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt } from '@rotaris/contracts';
+import { terminalRowStreamId, type ApprovalOption, type Interruption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ContentPart, ModelRef, ThinkingLevel, ToolSpec, TurnReport } from '@rotaris/model';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { SessionWriter } from '../session-writer.js';
@@ -12,6 +12,7 @@ import { priceRequest, type PricedUsage } from './pricing.js';
 import type { ModelChoice } from './resilience.js';
 import { CompressionRunner, type TurnCompression } from './compression.js';
 import { Conversation, type ConversationRecorder } from './conversation.js';
+import { interruptedResult } from './interruption.js';
 
 /**
  * The tool loop inside one iteration (REQ-TOOLS-180, REQ-ORCH-146's non-native case): step the model;
@@ -43,6 +44,11 @@ export interface PortToolResult {
   readonly blockedReason?: string;
   /** REQ-HOOKS-074: post_tool feedback for a call that produced no observation — delivered as a following user message. */
   readonly followUp?: string;
+  /**
+   * PD-ORCH-005: the run's rest cut this call short — its approval or question was withdrawn (clause 9), or its executor
+   * reported the rest interrupted it. The turn records it as interrupted and never re-run.
+   */
+  readonly interrupted?: boolean;
 }
 export interface ModeChange {
   readonly requested: PermissionPreset;
@@ -69,6 +75,12 @@ export interface ToolPort {
   dispatch(call: PortToolCall, signal: AbortSignal): Promise<PortToolResult>;
   /** REQ-MONITOR-012 / REQ-TOOLS-177: every waiting approval released, before the run stops. */
   cancelPending(): number;
+  /**
+   * PD-ORCH-005 clause 9: the run comes to rest — every approval and question this port's calls wait on is WITHDRAWN,
+   * never denied: each waiting call settles as interrupted and never run, and the withdrawal is recorded. Optional
+   * because a port with nothing to wait on has nothing to withdraw.
+   */
+  withdrawPending?(cause: Interruption): number;
   /** REQ-TOOLS-025/073: the next call is decided under the replacement. */
   setMode(mode: string, source: string): ModeChange;
   currentMode(): PermissionPreset;
@@ -111,6 +123,13 @@ export interface TurnDeps {
   readonly steering?: (() => readonly SteeringPrompt[]) | undefined;
   /** REQ-MONITOR-123: a graceful pause — the turn stops before its next model step. */
   readonly shouldPause?: (() => boolean) | undefined;
+  /**
+   * PD-ORCH-005 clause 2 / REQ-ORCH-134: aborted when the pause's tool deadline passes, cutting every call still in flight;
+   * absent means only the turn's own signal cuts a call.
+   */
+  readonly cutCalls?: AbortSignal | undefined;
+  /** PD-ORCH-005: what the run is coming to rest by, for the interrupted results it records; null while it is not. */
+  readonly interruption?: (() => Interruption | null) | undefined;
   /** Part Q: the ladder over every model step of this agent (REQ-ORCH-090/091/092); absent means the bare step. */
   readonly resilience?: TurnResilience | undefined;
   /**
@@ -138,6 +157,8 @@ export interface TurnDeps {
   readonly recorder?: ConversationRecorder | undefined;
 }
 
+type ToolResultPart = { kind: 'tool-result'; callId: string; name: string; result: string; isError: boolean };
+
 export interface SteeringPrompt {
   readonly id: string;
   readonly text: string;
@@ -149,7 +170,10 @@ export interface TurnOutcome {
   readonly messages: readonly ChatMessage[];
   readonly toolCallCount: number;
   readonly escalation?: SupervisorEscalation | undefined;
-  /** REQ-MONITOR-123: the turn stopped for a pause; the task is left where it was. */
+  /**
+   * REQ-MONITOR-123 / PD-ORCH-005: the turn stopped where it stood because the run is coming to rest — before its next
+   * model step, or mid-step with its calls' results recorded (interrupted ones as such); the task is left where it was.
+   */
   readonly paused?: boolean | undefined;
 }
 
@@ -267,16 +291,34 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
       if (calls.length === 0 && !signal.aborted && injectSteering(deps, conv) > 0) continue;
       return { report: { ...report, usage }, messages: conv.snapshot(), toolCallCount };
     }
-    const results: ChatMessage['content'] = [];
+    const results: ToolResultPart[] = [];
     const followUps: string[] = [];
+    /**
+     * PD-ORCH-005 clauses 2, 3 and 9: whether the run's rest cut this step short. Every call of the step still gets a
+     * result, so the conversation never ends on calls with none (the spike's finding: a stop used to return without
+     * the step's `tool` message, losing the results of the calls that DID complete): a completed call its own, a call
+     * cut off or withdrawn the interrupted statement with whatever it produced, and a call the step asked for but had
+     * not started when the rest began the statement that it never ran — no new call starts once the run is coming to
+     * rest, and a paused agent makes no model step after this one.
+     */
+    let cut = false;
+    const cause = (): Interruption | null => deps.interruption?.() ?? null;
     for (const c of calls) {
-      if (signal.aborted) break;
+      // Only the run's rest (or the turn's own abort) skips a call: REQ-ORCH-088's landing lets the step's calls run.
+      if (signal.aborted || cause() !== null) {
+        cut = true;
+        const text = interruptedResult(cause(), false, '');
+        results.push({ kind: 'tool-result', callId: c.callId, name: c.name, result: text, isError: true });
+        // REQ-MONITOR-105 / REQ-SESSION-129: `blocked` is a call skipped before it ran; no row is ever left `running`.
+        writer.appendRow('tool', `${c.name}`, true, { persona: deps.persona, name: deps.agentName, toolName: c.name, toolStatus: 'blocked', callKey: c.callId, startedAt: toIsoUtc(clocks.wall.instant()), input: c.args, output: text, blockedReason: text });
+        continue;
+      }
       toolCallCount += 1;
       deps.supervisor?.observe({ kind: 'tool', name: c.name, args: c.args });
       const prior = deps.dispatched.get(c.callId);
       if (prior !== undefined) {
         // REQ-ORCH-141: a replayed id is not dispatched again.
-        (results as { kind: 'tool-result'; callId: string; name: string; result: string; isError: boolean }[]).push({ kind: 'tool-result', callId: c.callId, name: c.name, result: prior, isError: false });
+        results.push({ kind: 'tool-result', callId: c.callId, name: c.name, result: prior, isError: false });
         continue;
       }
       const startedAt = toIsoUtc(clocks.wall.instant());
@@ -287,22 +329,31 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
       const rowResult = writer.appendRow('tool', `${c.name}`, false, { persona: deps.persona, name: deps.agentName, toolName: c.name, toolStatus: 'running', callKey: c.callId, startedAt, input: c.args, ...(streamId === undefined ? {} : { streamId }) });
       const rowIndex = rowResult.ok ? rowResult.value.index : null;
       const call: PortToolCall = { callId: c.callId, name: c.name, rawArgs: c.args, persona: deps.persona, agentId: deps.agentName, agentName: deps.agentName };
-      const r = await tools.dispatch(call, signal);
+      // REQ-ORCH-134 (PD-ORCH-005 clause 2): the call runs under the turn's signal and the pause's tool deadline.
+      const callSignal = deps.cutCalls ? AbortSignal.any([signal, deps.cutCalls]) : signal;
+      const r = await tools.dispatch(call, callSignal);
+      const interrupted = r.interrupted === true || callSignal.aborted;
       deps.onToolCompleted?.(call, r);
-      deps.dispatched.set(c.callId, r.text);
+      if (!interrupted) deps.dispatched.set(c.callId, r.text);
       if (rowIndex !== null) {
         writer.settleRow(rowIndex, r.label, { toolStatus: r.status, durationMs: r.durationMs, output: r.text, ...(r.blockedReason === undefined ? {} : { blockedReason: r.blockedReason }) });
         // REQ-CHAT-050: the user-only edit-diff row directly beneath the tool row that produced it.
         if (r.diff !== undefined && r.status === 'ok') writer.appendRow('diff', r.diff, true, { persona: deps.persona, name: deps.agentName, callKey: c.callId, diff: r.diff });
       }
-      (results as { kind: 'tool-result'; callId: string; name: string; result: string; isError: boolean }[]).push({ kind: 'tool-result', callId: c.callId, name: c.name, result: r.text, isError: r.isError });
+      if (interrupted) {
+        cut = true;
+        // Clause 3: "recorded as interrupted, with whatever output it had produced"; a withdrawn call (`blocked`) never ran.
+        results.push({ kind: 'tool-result', callId: c.callId, name: c.name, result: interruptedResult(cause(), r.status !== 'blocked', r.text), isError: true });
+      } else {
+        results.push({ kind: 'tool-result', callId: c.callId, name: c.name, result: r.text, isError: r.isError });
+      }
       if (r.followUp !== undefined && r.followUp !== '') followUps.push(r.followUp);
     }
-    if (signal.aborted) return { report: { status: 'succeeded', text: report.text, usage }, messages: conv.snapshot(), toolCallCount };
-    conv.push({ role: 'tool', content: results as { kind: 'tool-result'; callId: string; name: string; result: string; isError: boolean }[] });
+    conv.push({ role: 'tool', content: results });
     // REQ-HOOKS-074: nothing is placed between the assistant's calls and their results; feedback for an errored call follows as a user message.
     if (followUps.length > 0) conv.push({ role: 'user', content: [{ kind: 'text', text: followUps.join('\n') }] });
     owner.flushPending();
+    if (cut || signal.aborted) return { report: { status: 'succeeded', text: report.text, usage }, messages: conv.snapshot(), toolCallCount, paused: true };
   }
   } finally {
     unregister?.(); // Part AO

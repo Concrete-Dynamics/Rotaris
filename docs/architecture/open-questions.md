@@ -51,9 +51,10 @@ ESC-38 and ESC-39. **One more was raised on 2026-09-27 by building `PD-ORCH-004`
 child a continuation continues, which REQ-TOOLS-152's fields do not provide and the directive does not name), **ruled
 on 2026-09-27** as recommended by `PD-ORCH-004` revision 2 ([R-058](../product/requests.md#r-058)). **More were raised on
 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3: OQ-67** (how a `paused` agent presents, and whether it is settled
-for display with a session at rest, which four requirements the directive does not name would do) **and OQ-68** (whether
-the transcript is drawn from the conversation record, and what of a model exchange the record holds), each stating the
-reading the build proceeds under. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+for display with a session at rest, which four requirements the directive does not name would do), **OQ-68** (whether
+the transcript is drawn from the conversation record, and what of a model exchange the record holds) **and OQ-69** (which
+control is a stop and which the final cancel, and what a rest does at the edges the directive does not reach), each
+stating the reading the build proceeds under. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -2945,6 +2946,54 @@ record's content and the transcript's rows one fact with one writer, at the pric
 projection — or whether the two stay parallel records of the same run, as built; and whether the record should also
 keep the system prompt and tool definitions each request carried, so a resume replays the instructions the agent had
 rather than the persona's current ones.
+
+**OQ-69 — Which control is a stop and which the final cancel, and what does a rest do at the edges the directive does not reach?** *(`PD-ORCH-005` clauses 2, 3, 9, 10 and 11; REQ-MONITOR-009, REQ-MONITOR-126, REQ-SESSION-092, REQ-SESSION-186 and REQ-SESSION-025, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3 under [R-060](../product/requests.md#r-060) and [R-061](../product/requests.md#r-061).)*
+
+Clause 3 leaves every unfinished agent `paused` after "a graceful stop" and keeps "the cancel control
+(REQ-MONITOR-126, 'cannot be undone in this session')" final. The product has one stop control and one cancel. The stop
+control is REQ-SESSION-186's: its first activation requests REQ-SESSION-092's graceful stop, and a second activation
+while that is pending forces it; the engine receives both as the `cancel` operation. The cancel is REQ-MONITOR-126's
+confirmed control, which reaches the engine as the cancellation of the run's reserved agent id (REQ-MONITOR-009). The
+directive does not say whether a forced stop is still a stop. Nor does it say what becomes of a run the product ends on
+its own account, or of a plan cycle a stop reaches. It also leaves open several edges of a rest: a model step in flight
+when the pause is accepted, a rest that finds nothing unfinished, and what a crash can withdraw.
+
+**What the build proceeds under.**
+
+- **The stop and the cancel.** The `cancel` operation is the stop, graceful or forced alike, and brings the run to rest
+  (`stop`, or `quit` for the application's shutdown). The reserved run id is the explicit cancel: its stop request is
+  marked final (`StopRequest.final`), and it ends every agent `cancelled` and closes the iteration, as before. A stop the
+  run raises on its own account (`agent_session_aborted`: a recording failure, the headless abort hook, a supervisor
+  escalation) is no user's act and ends its agents as before.
+- **A plan cycle is never at rest.** Clause 11 says no agent is unfinished while the plan gate holds, and a plan cycle
+  runs while it holds. A stop or a quit during a plan cycle ends the cycle's agents as before and records no
+  interruption, and a crash during one leaves no open iteration: a plan cycle has no `iterations` row, and its children
+  are settled by REQ-ORCH-053 at the continue.
+- **The step in flight.** A model step already streaming when the pause is accepted finishes (REQ-MONITOR-123: "the
+  current step finishes"), and it is the last one. The calls it asks for were not in flight when the pause was
+  accepted, so none of them starts; each is recorded as never run. A stop aborts that step, as REQ-SESSION-092 always has.
+- **Nothing unfinished.** When a pause or a stop finds the root finished and no child unfinished, there is nothing to
+  hold, and the iteration closes as REQ-MONITOR-123 and REQ-ORCH-135 have it close: `cancelled`, its task pending.
+- **Background sessions (clause 10).** A session is its starting agent's, by task id. Its "last recorded output" is its
+  last 2,000 characters. Its end is recorded once: a stop records `stop` before it ends the session, and the `killed`
+  that the stop's kill then produces is refused. A quit records `quit` for the sessions this process still holds. A
+  session still recorded `running` that this process does not hold ended with the process that did, and the crash
+  record marks it `crash`.
+- **What a crash can withdraw (clause 9).** The approvals a dead run left listed in `pending_approvals` are withdrawn by
+  the crash record, one `approval_withdrawn` entry each, and the list is emptied. Pending questions are not persisted
+  in this build (REQ-SESSION-025's question half is owed), so a crash leaves none to withdraw.
+- **Cancelling one paused agent.** The cancellation of one agent is a control on a live run, as it is today. A session
+  at rest has no run, so a paused agent is ended by clause 6's "continue without them" or resumed; it cannot be
+  cancelled on its own while the session rests.
+- **Loading is not continuing (clause 8).** Loading a session no longer runs the stale-child settle. Every settle, and
+  the crash record before it, happens when a run of the session is about to start, and at a repair. The load's answer
+  no longer carries a settled count.
+
+**What a ruling decides.** Whether a forced stop should be final, as REQ-SESSION-186's persisted `paused` for a forced
+stop hints (a forced stop and a cancel persist the same status). Whether a stop during a plan cycle should leave the
+cycle's agents to be resumed, which clause 11's durable hold arguably forbids. And whether one paused agent should be
+cancellable while its session rests. Each would change a control's reach or a surface's offer, and none is decided by
+the directive.
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

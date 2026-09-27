@@ -101,6 +101,33 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     expect(dal.eventsOfKind(sid, 'iteration.start')).toEqual([]);
   });
 
+  it('PD-ORCH-005 clause 11: while the plan gate holds no agent is unfinished — a pause is refused during the plan cycle and at the gate', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    const sessions = sessionsWith(scripted([{ parts: [{ hold }, ...answer('Step 1: do it.').parts] }]).backend);
+    const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+    await new Promise((r) => setTimeout(r, 10));
+    expect(sessions.run(sid)!.isPlanGateHeld).toBe(true);
+    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: false });
+    expect(dal.timelineOf(sid).map((t) => t.name)).not.toContain('run_pause_requested');
+    release();
+    const result = await sessions.running(sid)!;
+    expect(result.execution_status).toBe('awaiting_plan_decision');
+    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: false });
+  });
+
+  it('PD-ORCH-005 clause 11: a quit leaves the hold as it stands and records no interruption', async () => {
+    const sessions = sessionsWith(scripted([answer('Step 1: do it.')]).backend);
+    const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    const before = dal.getSession(sid)!;
+    await sessions.closeAll();
+    const after = dal.getSession(sid)!;
+    expect(after).toMatchObject({ execution_status: 'awaiting_plan_decision', plan_cycle: before.plan_cycle, stop_reason: before.stop_reason });
+    expect(dal.iterationsOf(sid)).toEqual([]);
+    expect(dal.childrenOf(sid).filter((c) => c.interruption !== null)).toEqual([]);
+  });
+
   it('the producing role is told what a plan cycle is: the task carries the request, and so does the content', async () => {
     /*
      * REQ-ORCH-153, found by building: the held run takes ONE turn, and on the first cycle its task is the

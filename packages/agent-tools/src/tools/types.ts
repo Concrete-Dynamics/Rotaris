@@ -46,6 +46,13 @@ export interface ToolExecutor<A = unknown> {
   readonly parameters?: Readonly<Record<string, unknown>> | undefined;
 }
 
+/**
+ * PD-ORCH-005: the failure kind of an observation the run's rest cut short — a question withdrawn, a wait on children
+ * released by the pause. The gate carries it through to the run host's port, which marks the result interrupted, and
+ * the turn records the call as interrupted and never re-run.
+ */
+export const INTERRUPTED_FAILURE_KIND = 'interrupted';
+
 export function observation(text: string, extra: Omit<Observation, 'text' | 'isError'> & { isError?: boolean } = {}): Observation {
   return { text, isError: extra.isError ?? false, ...extra };
 }

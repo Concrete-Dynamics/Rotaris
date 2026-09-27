@@ -1,5 +1,5 @@
 import type { SessionId } from '@rotaris/kernel';
-import { isTerminalChildState, type ChildState, type RootExecutionRecord, type SettlingPath } from '@rotaris/contracts';
+import { isTerminalChildState, type ChildState, type Interruption, type ResumeState, type RootExecutionRecord, type SettlingPath } from '@rotaris/contracts';
 import type { ChildInsert, ChildRow, StoreDal } from '@rotaris/store';
 import type { SessionWriter } from '../session-writer.js';
 import type { ArtifactStore } from '../artifacts/store.js';
@@ -137,18 +137,7 @@ export class ChildLedger {
    * store's spawn order.
    */
   all(): ChildRow[] {
-    const rows = this.deps.dal.childrenOfIteration(this.deps.sessionId, this.deps.iteration);
-    const tree = new Set<string>();
-    let grew = true;
-    while (grew) {
-      grew = false;
-      for (const c of rows) {
-        if (tree.has(c.task_id) || !(this.isRoot(c.parent_id) || tree.has(c.parent_id))) continue;
-        tree.add(c.task_id);
-        grew = true;
-      }
-    }
-    return rows.filter((c) => tree.has(c.task_id));
+    return treeOf(this.deps.dal.childrenOfIteration(this.deps.sessionId, this.deps.iteration), (id) => this.isRoot(id));
   }
   get(taskId: string): ChildRow | undefined {
     return this.deps.dal.getChild(this.deps.sessionId, taskId);
@@ -241,6 +230,15 @@ export class ChildLedger {
     if (r.ok) return { ok: true, row: r.value };
     return { ok: false, reason: r.error.code === 'illegal-move' ? r.error.reason : `recording failed: ${r.error.code}` };
   }
+  /**
+   * PD-ORCH-005 clauses 2 and 3: the child comes to rest in `paused`, recording what interrupted it, the state it resumes
+   * into and its tool-call count so far — the writer's one transaction. A refusal names both states and changes nothing.
+   */
+  rest(taskId: string, interruption: Interruption, resumeState: ResumeState, toolCalls: number | null = null): { ok: true; row: ChildRow } | { ok: false; reason: string } {
+    const r = this.deps.writer.restChild(taskId, interruption, resumeState, toolCalls);
+    if (r.ok) return { ok: true, row: r.value };
+    return { ok: false, reason: r.error.code === 'illegal-move' ? r.error.reason : `recording failed: ${r.error.code}` };
+  }
   claimStart(taskId: string): boolean {
     const row = this.get(taskId);
     const r = this.deps.writer.claimChildStart(taskId, row?.canonical_name ?? taskId);
@@ -288,4 +286,24 @@ export class ChildLedger {
   slotQueue(modelKey: string): string[] {
     return this.deps.dal.slotQueueOf(this.deps.sessionId, modelKey);
   }
+}
+
+/**
+ * The children of `rows` that descend from a root `isRoot` recognises, in the order `rows` holds them. The tree is
+ * walked to a fixpoint, since children spawned in one instant are ordered by task id and a child can be read before
+ * its parent. The live ledger reads its iteration through it, and so does a stored iteration's crash record and its
+ * decline (PD-ORCH-005), which have no ledger.
+ */
+export function treeOf(rows: readonly ChildRow[], isRoot: (id: string) => boolean): ChildRow[] {
+  const tree = new Set<string>();
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const c of rows) {
+      if (tree.has(c.task_id) || !(isRoot(c.parent_id) || tree.has(c.parent_id))) continue;
+      tree.add(c.task_id);
+      grew = true;
+    }
+  }
+  return rows.filter((c) => tree.has(c.task_id));
 }

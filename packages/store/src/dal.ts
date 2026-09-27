@@ -557,7 +557,7 @@ export class StoreDal {
       upsertAgentTerminal: db.prepare(`INSERT INTO agent_terminals (session_id, terminal_id, task_id, command, started_at, state, exit_code, output_tail, updated_at)
         VALUES (@session_id, @terminal_id, @task_id, @command, @started_at, @state, @exit_code, @output_tail, @updated_at)
         ON CONFLICT (session_id, terminal_id) DO UPDATE SET state = excluded.state, exit_code = excluded.exit_code, output_tail = excluded.output_tail, updated_at = excluded.updated_at
-        WHERE agent_terminals.task_id = excluded.task_id AND agent_terminals.command = excluded.command`),
+        WHERE agent_terminals.task_id = excluded.task_id AND agent_terminals.command = excluded.command AND agent_terminals.state = 'running'`),
       agentTerminalsOf: db.prepare('SELECT * FROM agent_terminals WHERE session_id = ? ORDER BY started_at, terminal_id'),
       enqueueSlot: db.prepare('INSERT INTO model_slot_queue (session_id, model_key, position, task_id) VALUES (?, ?, (SELECT coalesce(max(position), 0) + 1 FROM model_slot_queue WHERE session_id = ? AND model_key = ?), ?)'),
       slotQueueOf: db.prepare('SELECT task_id FROM model_slot_queue WHERE session_id = ? AND model_key = ? ORDER BY position'),
@@ -723,8 +723,9 @@ export class StoreDal {
     return this.stmts['clearClosedAgentMessages']!.run(id, id).changes;
   }
   /**
-   * A new terminal, or the state, exit code and tail of a recorded one; `false` when the id names a terminal another agent
-   * started with another command (an id collision across two managers), which is left as it was.
+   * A new terminal, or the state, exit code and tail of a recorded one that is still `running`; `false` when the id names
+   * a terminal another agent started with another command (an id collision across two managers), or one already recorded
+   * as ended — an end is recorded once, so the kill a stop sends is not later overwritten by the exit it causes.
    */
   upsertAgentTerminal(row: AgentTerminalRow): boolean {
     return this.stmts['upsertAgentTerminal']!.run(row).changes === 1;

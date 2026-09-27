@@ -45,6 +45,23 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-27**
 
+**A pause, a stop, a quit and a crash leave every unfinished agent paused (`PD-ORCH-005` phase 3, 2026-09-27, R-060/R-061).**
+A run comes to rest by a pause, a stop or a quit (`Run.restCause`); the reserved run id's cancel is final
+(`StopRequest.final`). A pause is refused at the plan gate, withdraws every approval and question (the gate's and
+`ask_questions`' new `withdrawn` outcome, recorded interrupted and never denied), arms REQ-ORCH-134's tool deadline from
+`runtime.graceful_pause_tool_deadline`, and holds the scheduler; every agent stops before its next model step, and the
+turn records every call of the step it stopped in. Each unfinished child is left `paused` with its interruption and
+the state it resumes into, the root execution record `paused`, and the iteration open with its interruption. Background
+terminal sessions are attributed to their agent and recorded in `agent_terminals` (a pause leaves them running; a stop
+and a quit end them). A crash is recorded from the store at the next repair or continue (`run/crash.ts`); loading a
+session no longer settles anything, so `session.resumed` loses its settled count. Cancelling one child aborts its
+execution and its descendants'. Until the resume lands, a continue declines the open iteration. Repairs
+`a-pause-settles-children-instead-of-holding-them.md` and `cancelling-one-child-does-not-stop-it.md`. The **runtime
+view** gains §2's rest and crash paragraphs and diagram arm, §4's and §5's rows move, §6's teardown and §7's four rows'
+writers; the **state-ownership view** gains the rest's runtime and durable facts and the background session's owner;
+the **sequences view** gains §4. The process protocol's `session.resumed` message drops `settledChildren`; no package,
+edge, process or channel changed.
+
 **Every agent's conversation is recorded as it happens (`PD-ORCH-005` phase 2, 2026-09-27, R-060).** A `Conversation`
 now carries a recorder (the spike's seam), so each `push` is one `agent_messages` entry under the agent's task id and
 each `replace` — a compression — one replacement entry; the root records under the iteration's root task id and a

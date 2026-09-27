@@ -22,3 +22,18 @@ model request made after the pause was accepted, and starting a queued child is 
 - `packages/engine/src/children/orchestration.ts` — `execute`: the re-prompt, the summariser and the terminal state after a paused turn.
 - `packages/engine/src/children/scheduler.ts` — `startQueued`, which does not check for a pause.
 - `packages/engine/src/run/turn.ts` — `TurnOutcome.paused`, never read.
+
+## Repaired — 2026-09-27
+
+By `PD-ORCH-005` phase 3, whose clause 2 is this defect's opposite: a pause stops every agent where it stands. An
+accepted pause stops the scheduler (`Scheduler.hold`: no child is admitted, promoted or started from there), wakes
+every parent waiting on children, and has every agent stop before its next model step. A child execution that comes to
+rest makes no re-prompt, no summary and no report and reaches no terminal state: it is left `paused` with its
+interruption and the state it resumes into (`IterationChildren.execute`), and every child that had not started is
+paused where it stood (`IterationChildren.rest`). `TurnOutcome.paused` is read: a turn that stopped mid-way resumes
+`running`. The pause also withdraws every approval and question (clause 9) and cuts the calls still in flight at
+REQ-ORCH-134's deadline. The iteration is left open, and the session persists `paused`.
+
+Evidence: `children.test.ts` ("clause 2, the repair of a-pause-settles-children-instead-of-holding-them…": no
+summarising call, no step of the parked child, both children paused, the iteration open), red when the rest in
+`execute` or the scheduler's hold is reverted.

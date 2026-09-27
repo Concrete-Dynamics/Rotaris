@@ -19,3 +19,18 @@ cancellation's.
 - `packages/engine/src/run/run.ts` — `cancelAgent`.
 - `packages/engine/src/children/orchestration.ts` — `execute`, `storeReport` after the turn.
 - `packages/engine/src/children/ledger.ts` — `storeReport`, which writes whatever the state.
+
+## Repaired — 2026-09-27
+
+By `PD-ORCH-005` phase 3, whose clause 3 keeps "the cancellation of one agent" final and needs it to be real. Each child
+execution now holds its own `AbortController` (`IterationChildren.controllers`), and `IterationChildren.cancel` settles
+the child and every live descendant `cancelled` (REQ-MONITOR-128's cascade), stores each report ("The user cancelled
+this child." / "Cancelled with <name>, which the user cancelled."), records `child_user_cancelled` for each, and
+aborts each execution. An execution that finds its record terminal writes nothing, so the cancellation's report is the
+one that stays, and REQ-ORCH-088's fallback retry reads the cancel from the record, not from the signal. `Run.cancelAgent`
+delegates to it; the run's reserved id is the explicit, final cancel. REQ-ORCH-133's bulk cancel with its 5 s wait is
+not built here and is unchanged.
+
+Evidence: `children.test.ts` ("REQ-ORCH-133 / REQ-MONITOR-128, the repair of cancelling-one-child-does-not-stop-it…":
+neither aborted execution takes another step or summarises, and both reports are the cancellation's), red when the
+per-child abort is reverted.

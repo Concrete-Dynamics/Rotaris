@@ -2,10 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { Millis, TimerHandle, Timers } from '@rotaris/kernel';
 import {
-  QUESTION_OPTIONS_MAX, QUESTION_STEPS_MAX, stepsPhrase,
+  interruptionPhrase, QUESTION_OPTIONS_MAX, QUESTION_STEPS_MAX, stepsPhrase,
   type QuestionAnswer, type QuestionAnswers, type QuestionPrompt, type QuestionStep,
 } from '@rotaris/contracts';
-import { errorObservation, observation, type ToolExecutor } from './types.js';
+import { errorObservation, INTERRUPTED_FAILURE_KIND, observation, type ToolExecutor } from './types.js';
 
 /**
  * REQ-TOOLS-157/158 and REQ-CHAT-092..096 — `ask_questions`, the one tool that blocks on a **person** rather than on
@@ -26,7 +26,9 @@ import { errorObservation, observation, type ToolExecutor } from './types.js';
 export type QuestionOutcome =
   | { readonly kind: 'resolved'; readonly answers: QuestionAnswers }
   | { readonly kind: 'cancelled' }
-  | { readonly kind: 'timed_out'; readonly afterSeconds: number };
+  | { readonly kind: 'timed_out'; readonly afterSeconds: number }
+  /** PD-ORCH-005 clause 9: the run came to rest while the prompt waited; the call is interrupted, and no answer is replayed later. */
+  | { readonly kind: 'withdrawn'; readonly cause: string };
 
 interface Waiter {
   readonly prompt: QuestionPrompt;
@@ -77,6 +79,12 @@ export class PendingQuestions {
   cancelAll(): number {
     const ids = [...this.waiters.keys()];
     for (const id of ids) this.finish(id, { kind: 'cancelled' });
+    return ids.length;
+  }
+  /** PD-ORCH-005 clause 9: every pending prompt withdrawn by the rest `cause`; the count withdrawn. */
+  withdrawAll(cause: string): number {
+    const ids = [...this.waiters.keys()];
+    for (const id of ids) this.finish(id, { kind: 'withdrawn', cause });
     return ids.length;
   }
   has(requestId: string): boolean {
@@ -163,6 +171,10 @@ export function userAnswersText(steps: readonly QuestionStep[], answers: Questio
 export const QUESTIONS_CANCELLED = 'Questions were cancelled.';
 /** REQ-CHAT-094: the prompt could not be published, so it is discarded and the call sees this. */
 export const QUESTIONS_NOT_SHOWN = 'Questions could not be shown to the user.';
+/** PD-ORCH-005 clause 9: what a withdrawn prompt's call observes. */
+export function questionsWithdrawn(cause: string): string {
+  return `The questions were withdrawn by ${interruptionPhrase(cause)} before the user answered. Nothing was answered; ask again if the answers are still needed.`;
+}
 
 export interface AskQuestionsDeps {
   readonly pending: PendingQuestions;
@@ -232,6 +244,9 @@ export function askQuestionsTool(deps: AskQuestionsDeps): ToolExecutor<AskQuesti
         }
         const outcome = await wait;
         if (outcome.kind === 'cancelled') return observation(QUESTIONS_CANCELLED, { outcomeKind: 'cancelled' });
+        // PD-ORCH-005 clause 9: the run came to rest while the user had not answered — the prompt is withdrawn, the call
+        // interrupted and never answered, and nothing is replayed later; issuing it again asks afresh.
+        if (outcome.kind === 'withdrawn') return errorObservation(questionsWithdrawn(outcome.cause), { outcomeKind: 'withdrawn', failureKind: INTERRUPTED_FAILURE_KIND });
         if (outcome.kind === 'timed_out') {
           // REQ-CHAT-095: the OUTCOME reads "User did not respond within <N> seconds."; the MODEL sees the other
           // sentence. `Observation.text` is by construction the model-visible content (tools/types.ts), so the

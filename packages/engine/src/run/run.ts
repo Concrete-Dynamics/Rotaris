@@ -1,6 +1,6 @@
 import { Budget, millis, toIsoUtc, type Clocks, type MachineId, type Millis, type SessionId, type TimerHandle, type Timers } from '@rotaris/kernel';
-import type { SessionRow } from '@rotaris/store';
-import { DEFAULT_CONTEXT_CAPACITY, isAnswerOnly, type ApprovalOption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RootExecutionRecord } from '@rotaris/contracts';
+import type { IterationRow, SessionRow } from '@rotaris/store';
+import { DEFAULT_CONTEXT_CAPACITY, interruptionPhrase, isAnswerOnly, type ApprovalOption, type Interruption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RootExecutionRecord } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ContentPart, ModelError, ModelRef, ThinkingLevel, TurnReport } from '@rotaris/model';
 import type { EventBus } from './event-bus.js';
 import type { ProjectionOwner } from '../projection-owner.js';
@@ -10,7 +10,7 @@ import { classifyStop, statusForResult, stopCondition, summarise, type StopReaso
 import { StopRequest } from './stop-request.js';
 import { Todo, type TodoDocument } from './todo.js';
 import { planRequestSection } from './plan-text.js';
-import { runTurn, type ToolPort } from './turn.js';
+import { runTurn, type ToolPort, type TurnOutcome } from './turn.js';
 import { IterationChildren } from '../children/orchestration.js';
 import type { DelegationOps } from '../children/delegation.js';
 import type { Budget as ChildBudget } from '../children/ledger.js';
@@ -33,6 +33,7 @@ import { WaitRegistry, type WaitState } from './waits.js';
 import type { ResolvedTrigger, TurnCompression } from './compression.js';
 import { ConversationRegistry, type ManualCompressionReport } from './conversations.js'; // Part AO
 import { ConversationRecord } from './record.js';
+import { iterationAgents } from './crash.js';
 import { randomUUID } from 'node:crypto';
 import { decodeStoredTodo, editAgentTodo, encodeStoredTodo, isAgentTodoDocument, type AgentTodoDocument } from '../todo-view.js';
 
@@ -157,6 +158,16 @@ export interface RunDeps {
   readonly childStallTimeoutMs?: Millis | undefined;
   /** REQ-ORCH-080: default 120 s; 0 disables. */
   readonly drainTimeoutMs?: Millis | undefined;
+  /**
+   * REQ-ORCH-134 / REQ-CONFIG (`runtime.graceful_pause_tool_deadline`, 5–120 s, default 30 s): how long a pause lets the
+   * tool calls in flight finish before it cuts them (PD-ORCH-005 clause 2). Absent means 30 s.
+   */
+  readonly pauseToolDeadlineMs?: Millis | undefined;
+  /**
+   * PD-ORCH-005 clause 10: the background terminal sessions this session's agents started, as the process that holds
+   * them sees them, and the one act a stop and a quit take on them. Absent means the run has no terminal.
+   */
+  readonly terminals?: AgentTerminals | undefined;
   readonly permission: PermissionPosture;
   /** ADR-0015: the session's hooks; null or absent means none exist and nothing about hooks is observable (REQ-HOOKS-041). */
   readonly hooks?: HookPort | null | undefined;
@@ -207,6 +218,25 @@ export interface RunDeps {
   readonly contextUnits?: (() => readonly string[]) | undefined;
 }
 
+/** PD-ORCH-005 clause 10: one background terminal session an agent of the session started, as its process holds it. */
+export interface LiveTerminal {
+  readonly id: string;
+  /** The task id of the agent that started it. */
+  readonly taskId: string;
+  readonly command: string;
+  readonly startedAt: string;
+  /** REQ-TOOLS-109's status vocabulary. */
+  readonly status: 'running' | 'completed' | 'failed' | 'killed' | 'timeout';
+  readonly exitCode: number | null;
+  /** The last output it produced, bounded. */
+  readonly tail: string;
+}
+/** PD-ORCH-005 clause 10: the session's background terminal sessions, and ending the named ones (REQ-TOOLS-111's act). */
+export interface AgentTerminals {
+  list(): readonly LiveTerminal[];
+  end(ids: readonly string[]): Promise<void>;
+}
+
 /** REQ-ORCH-091 (d): a change-model choice resolves to a model, or to the reason it cannot be applied (the user is told). */
 export type ModelLookup = { readonly ok: true; readonly key: string; readonly choice: ModelChoice } | { readonly ok: false; readonly reason: string };
 
@@ -249,6 +279,8 @@ export interface RunResult {
  * oldest readers look for it; `grace.ts` says why it may not be declared in this file. */
 export { STOP_GRACE } from './grace.js';
 import { STOP_GRACE } from './grace.js';
+/** REQ-ORCH-134 / REQ-ORCH-143: the graceful pause's tool deadline when the run is given none — 30 s, bounded 5–120 by configuration. */
+export const PAUSE_TOOL_DEADLINE = millis(30_000);
 
 export class Run {
   readonly stop = new StopRequest();
@@ -306,6 +338,14 @@ export class Run {
   private preflight: Preflight | null = null;
   /** REQ-MONITOR-123: a graceful pause requested; honoured at the next model step and at the iteration boundary. */
   private pauseRequested = false;
+  /**
+   * PD-ORCH-005 clause 2 / REQ-ORCH-134: aborted when the pause's tool deadline passes, cutting every tool call still in
+   * flight in every agent; the timer that aborts it is armed when the pause is accepted.
+   */
+  private readonly toolCut = new AbortController();
+  private toolDeadline: TimerHandle | null = null;
+  /** PD-ORCH-005 clause 2: the interruption the current iteration came to rest by, leaving it open; null while it has not. */
+  private iterationRest: Interruption | null = null;
   private pausedAtLimit: { count: number; limit: number | null } | null = null;
   /**
    * REQ-ORCH-153: whether this run is held at the plan gate. Settled once, after the pre-flight and before the
@@ -364,8 +404,12 @@ export class Run {
     this.initialIterations = this.iterationsCompleted;
     // Sticky and observable: a request before the loop exists replays here (REQ-SESSION-092).
     this.stop.onRequested((s) => {
-      // REQ-MONITOR-012: whatever is blocked on a person is released first, then the run stops.
-      try { this.cancelPending(); } catch (cause) { this.deps.warn(`releasing pending approvals on ${this.sessionId} failed: ${String(cause)}`); }
+      // REQ-MONITOR-012: whatever is blocked on a person is released first, then the run stops. PD-ORCH-005 clause 9: a
+      // stop or a quit brings the run to rest, so the waits are WITHDRAWN (the calls interrupted, never denied) and every
+      // agent is left paused; only the explicit cancel releases them as REQ-TOOLS-052's cancellation, as before.
+      const rest = this.restCause;
+      try { if (rest !== null) this.withdrawPending(rest); else this.cancelPending(); } catch (cause) { this.deps.warn(`releasing pending approvals on ${this.sessionId} failed: ${String(cause)}`); }
+      if (rest !== null) this.children?.beginRest();
       this.abort.abort();
       if (s.forced || this.hardCancel) return;
       // REQ-SESSION-092 / REQ-MONITOR-129: graceful first; the 30 s deadline hard-cancels and sweeps again.
@@ -391,6 +435,24 @@ export class Run {
         sessionId: this.sessionId, key: `recording-failure:${this.sessionId}`,
       });
     });
+  }
+
+  /**
+   * PD-ORCH-005: the interruption this run is coming to rest by — `stop` or `quit` for a stop request that is not the
+   * explicit cancel, `pause` for an accepted pause — or null when it is not coming to rest: running, cancelled (clause 3:
+   * "an explicit cancel is final"), aborted on its own account (`agent_session_aborted`: a recording failure, the headless
+   * abort hook, an escalation), or held at the plan gate (clause 11: a durable hold leaves no agent unfinished, so a stop
+   * or a quit during a plan cycle ends its agents as before — OQ-69).
+   */
+  get restCause(): Interruption | null {
+    if (this.planHeld) return null;
+    if (this.stop.requested) {
+      if (this.stop.final) return null;
+      if (this.stop.reason === 'user_cancelled') return 'stop';
+      if (this.stop.reason === 'application_shutdown') return 'quit';
+      return null;
+    }
+    return this.pauseRequested ? 'pause' : null;
   }
 
   /** Whether the 30 s hard-cancel budget is armed (ADR-0014). */
@@ -593,7 +655,11 @@ export class Run {
       const modelTask = this.deps.continuation && task.id === this.deps.taskId ? this.deps.task : task.text;
       const report = await this.turnWithRetry(modelTask);
       summary = report.text.slice(0, 200);
-      if (this.stop.requested) {
+      if (this.iterationRest !== null) {
+        // PD-ORCH-005 clause 2 (narrowing REQ-MONITOR-123 and REQ-ORCH-135): the iteration came to rest with work
+        // unfinished, so it is neither closed nor re-queued — it is left open below, its task still held. A rest that
+        // found nothing unfinished closes the iteration as the two branches below always have.
+      } else if (this.stop.requested) {
         // REQ-ORCH-135: an iteration cancelled mid-run closes as cancelled; the task stays anchored.
         outcome = 'cancelled';
         task.state = 'pending';
@@ -622,13 +688,18 @@ export class Run {
         if (this.rootRecord) this.rootRecord.state = 'failed';
       }
     } catch (cause) {
-      // REQ-ORCH-073 / REQ-ORCH-135: an iteration that raises closes as failed, the task abandoned.
-      this.lastFailure = String(cause);
-      summary = `the iteration ended with an unhandled error: ${String(cause)}`;
-      this.todo.abandon(task);
-      escalate = true;
-      if (this.rootRecord) this.rootRecord.state = 'failed';
+      if (this.iterationRest === null) {
+        // REQ-ORCH-073 / REQ-ORCH-135: an iteration that raises closes as failed, the task abandoned.
+        this.lastFailure = String(cause);
+        summary = `the iteration ended with an unhandled error: ${String(cause)}`;
+        this.todo.abandon(task);
+        escalate = true;
+        if (this.rootRecord) this.rootRecord.state = 'failed';
+      } else {
+        this.deps.warn(`iteration ${iteration} raised while coming to rest, and is left open to be resumed: ${String(cause)}`);
+      }
     }
+    if (this.iterationRest !== null) return await this.leaveIterationOpen(iteration, this.iterationRest);
     // PD-ORCH-005 clause 1: `iteration.end` and the iteration's record closing with its outcome, in one transaction.
     writer.endIteration(iteration, { task: task.text, outcome, summary }, outcome);
     this.iterationTask = null;
@@ -649,6 +720,25 @@ export class Run {
   }
 
   /**
+   * PD-ORCH-005 clause 2: the iteration came to rest with work unfinished — its root and every unfinished child are
+   * `paused` (the turn's rest did that) — so it stays OPEN: no `iteration.end`, no checkpoint (REQ-GIT-051 captures at a
+   * close), no `iteration_end` hook, the count not moved and its todo task still held. What left it open is recorded
+   * on its row. Never an escalation: the loop then finds the stop or the pause and ends the run.
+   */
+  private async leaveIterationOpen(iteration: number, rest: Interruption): Promise<boolean> {
+    const { writer } = this.deps;
+    this.iterationRest = null;
+    writer.recordIterationInterruption(iteration, rest);
+    // The root and every paused child.
+    const paused = 1 + (this.children?.ledger.all().filter((c) => c.state === 'paused').length ?? 0);
+    writer.appendTimeline('iteration_paused', 'rotaris', `Iteration ${iteration} was left open by ${interruptionPhrase(rest)}; its unfinished agents are paused and resume when the session is continued.`, { iteration, interruption: rest, paused_agents: paused });
+    this.iterationTask = null;
+    this.saveRunning({});
+    await this.drain();
+    return false;
+  }
+
+  /**
    * PD-ORCH-005, and the repair of `a-crashed-iteration-number-is-reused-by-the-next-run.md`: an iteration a previous
    * run left open — a run host that died mid-iteration leaves its row open, since nothing ran to close it — closes as
    * cancelled before this run's first iteration (REQ-ORCH-135): `iteration.end` and the row's close in one transaction,
@@ -656,8 +746,10 @@ export class Run {
    * this run's first iteration takes the next number rather than the dead one's. It counts toward no limit of this run.
    */
   private async closeLeftOpenIteration(): Promise<void> {
-    const open = this.deps.dal?.openIterationOf(this.sessionId);
-    if (!open) return;
+    const dal = this.deps.dal;
+    const open = dal?.openIterationOf(this.sessionId);
+    if (!dal || !open) return;
+    this.cancelPausedAgents(dal, open);
     this.deps.writer.endIteration(open.iteration, { task: this.todo.textOf(open.todo_task_id) ?? open.task, outcome: 'cancelled', summary: 'the run that owned this iteration ended before it closed' }, 'cancelled');
     // REQ-GIT-051: the iteration closes here, so its one capture is attempted here — it records the work the dead run
     // left. No child is credited: that run's children are not this run's. Its hooks' `iteration_end` is not fired; the
@@ -667,6 +759,20 @@ export class Run {
     this.iterationsCompleted = Math.max(this.iterationsCompleted, open.iteration);
     this.initialIterations = this.iterationsCompleted;
     this.saveRunning({});
+  }
+
+  /**
+   * PD-ORCH-005 clause 6's "continue without them": every `paused` agent of the open iteration ends `cancelled`, with a
+   * report saying so, before the iteration closes as cancelled. Until the resume is built this is what every continue
+   * does with an iteration a rest left open; once it is, only the user's declining does.
+   */
+  private cancelPausedAgents(dal: StoreDal, open: IterationRow): void {
+    for (const c of iterationAgents(dal, this.sessionId, open)) {
+      if (c.state !== 'paused') continue;
+      const r = this.deps.writer.transitionChild(c.task_id, 'cancelled', 'cancellation');
+      if (!r.ok) { this.deps.warn(r.error.code === 'illegal-move' ? r.error.reason : `cancelling paused ${c.task_id} failed: ${r.error.code}`); continue; }
+      this.deps.writer.storeChildReport(c.task_id, { agent_name: c.canonical_name, role: c.persona, status: 'cancelled', summary: `Cancelled: the session was continued without this agent, which ${interruptionPhrase(c.interruption ?? '')} had left paused.`, key_findings: [], last_response: '', final_response: '', errors: [] });
+    }
   }
 
   /** REQ-GIT-051 / REQ-GIT-045: the one capture an iteration that closes is owed, which never raises and never aborts the run. */
@@ -848,6 +954,8 @@ export class Run {
         ...(this.deps.supervisorFor ? { supervisorFor: this.deps.supervisorFor } : {}),
         ...(this.deps.personas ? { personas: this.deps.personas } : {}),
         steeringFor: (id: string) => this.steeringFor(id), shouldPause: () => this.pauseRequested,
+        // PD-ORCH-005: the rest the run is coming to, and the pause's tool deadline every child's calls run under.
+        restCause: () => this.restCause, cutCalls: this.toolCut.signal,
         // PD-ORCH-005 clause 1: every child's conversation is recorded under its task id.
         record: this.record,
         // Part Y (REQ-LIBRARY-092/097/098): the session artifact store — child reports materialise into it and its
@@ -879,6 +987,8 @@ export class Run {
       // turn; the hold itself is settled once and never cleared in place (REQ-ORCH-153), so the two agree.
       ...(this.deps.supervisorFor && !this.planHeld ? { supervisor: this.deps.supervisorFor(this.rootId) } : {}),
       steering: this.steeringFor('root'), shouldPause: () => this.pauseRequested,
+      // PD-ORCH-005: the pause's tool deadline, and what the root's interrupted calls are recorded as interrupted by.
+      cutCalls: this.toolCut.signal, interruption: () => this.restCause,
       resilience: this.rootResilience(),
       // Part AH: the entry agent compresses against its own model's capacity, carrying the run-level plan.
       ...(compression ? { compression } : {}),
@@ -890,15 +1000,31 @@ export class Run {
       recorder: this.record.recorder(rootTaskId, iteration),
       }, text, history, this.abort.signal, content);
     };
+    let outcome: TurnOutcome | null = null;
     try {
-      const outcome = children ? await children.runWithChildren(this.rootId, turnFn, task, this.abort.signal) : await turnFn(task, []);
+      outcome = children ? await children.runWithChildren(this.rootId, turnFn, task, this.abort.signal) : await turnFn(task, []);
       this.aggregates.addToolCalls(outcome.toolCallCount);
-      // REQ-ORCH-080: a stop with active background children drains before anything is cancelled.
-      if (children && this.stop.requested && children.scheduler.hasNonTerminal) await children.drain(this.deps.drainTimeoutMs ?? millis(120_000));
+      // REQ-ORCH-080: a stop with active background children drains before anything is cancelled — only a stop that
+      // cancels them (the explicit cancel); a stop that brings the run to rest leaves them paused (PD-ORCH-005).
+      if (children && this.stop.requested && this.restCause === null && children.scheduler.hasNonTerminal) await children.drain(this.deps.drainTimeoutMs ?? millis(120_000));
       return outcome.report;
     } finally {
-      // REQ-ORCH-052: every exit path from an iteration leaves every child record terminal.
-      if (children) { const n = children.finalize(this.stop.requested ? 'cancelled: the run was stopped while this child was in flight' : 'cancelled during iteration cleanup'); if (n > 0) this.deps.warn(`iteration ${iteration}: ${n} child(ren) settled cancelled at exit (REQ-ORCH-052)`); }
+      /*
+       * PD-ORCH-005 clause 2 (narrowing REQ-ORCH-052): an iteration that comes to rest with work unfinished — the root
+       * stopped where it stood, or a child is not terminal — leaves every unfinished agent `paused` and the iteration
+       * open. Every other exit, a plan cycle's among them, still leaves every child record terminal.
+       */
+      const rest = iterationOverride === undefined ? this.restCause : null;
+      const rootFinished = outcome !== null && outcome.paused !== true && !this.abort.signal.aborted && outcome.report.status !== 'failed';
+      if (rest !== null && (!rootFinished || (children?.scheduler.hasNonTerminal ?? false))) {
+        this.iterationRest = rest;
+        rootRecord.state = 'paused';
+        if (children) { const n = await children.rest(rest); if (n > 0) this.deps.warn(`iteration ${iteration}: ${n} child(ren) left paused by ${rest} (PD-ORCH-005)`); }
+      } else if (children) {
+        // REQ-ORCH-052: every exit path from an iteration leaves every child record terminal.
+        const n = children.finalize(this.stop.requested ? 'cancelled: the run was stopped while this child was in flight' : 'cancelled during iteration cleanup');
+        if (n > 0) this.deps.warn(`iteration ${iteration}: ${n} child(ren) settled cancelled at exit (REQ-ORCH-052)`);
+      }
     }
   }
 
@@ -928,12 +1054,20 @@ export class Run {
     return () => { const list = this.steering.get(key) ?? []; this.steering.delete(key); return list; };
   }
 
-  /** REQ-MONITOR-123/124: graceful, whole-run only; the status reads `pausing` until the current step finishes. */
+  /**
+   * REQ-MONITOR-123/124: graceful, whole-run only; the status reads `pausing` until the current step finishes.
+   * PD-ORCH-005: refused while the plan gate holds (clause 11: the durable hold wins). Accepted, it withdraws every approval
+   * and question an agent waits on at once (clause 9), arms REQ-ORCH-134's tool deadline for every other call in flight,
+   * and stops every child from starting (clause 2); each agent then stops before its next model step.
+   */
   pause(): boolean {
-    if (this.ended || this.stop.requested || this.pauseRequested) return false;
+    if (this.ended || this.stop.requested || this.pauseRequested || this.planHeld) return false;
     this.pauseRequested = true;
     this.deps.writer.save('pausing');
     this.deps.writer.appendTimeline('run_pause_requested', 'user', 'The user asked the run to pause; the current step finishes first.', {});
+    try { this.withdrawPending('pause'); } catch (cause) { this.deps.warn(`withdrawing pending approvals on ${this.sessionId} failed: ${String(cause)}`); }
+    this.toolDeadline = this.deps.clocks.timers.after(this.deps.pauseToolDeadlineMs ?? PAUSE_TOOL_DEADLINE, () => this.toolCut.abort());
+    this.children?.beginRest();
     return true;
   }
   get isPausedByUser(): boolean {
@@ -1191,20 +1325,46 @@ export class Run {
     return out;
   }
 
-  /** REQ-MONITOR-009 / REQ-ORCH-133: cancel one child; the reserved run id is a full cancellation. */
+  /**
+   * REQ-MONITOR-009 / REQ-ORCH-133: cancel one child — it and its live descendants stop and settle `cancelled`
+   * (`IterationChildren.cancel`, the per-child abort). The reserved run id is the full cancellation, which PD-ORCH-005
+   * clause 3 keeps final: REQ-MONITOR-126's cancel control, "cannot be undone in this session" (OQ-69).
+   */
   cancelAgent(taskId: string): boolean {
     if (this.ended) return false;
-    if (this.isRootAgent(taskId)) { this.stop.request('user_cancelled'); return true; }
-    const ch = this.children;
-    if (!ch) return false;
-    const row = ch.ledger.get(taskId);
-    if (!row || ['succeeded', 'failed', 'cancelled', 'blocked'].includes(row.state)) return false;
-    const r = ch.ledger.transition(taskId, 'cancelled', 'cancellation');
-    if (!r.ok) return false;
-    ch.ledger.storeReport(taskId, { agent_name: row.canonical_name, role: row.persona, status: 'cancelled', summary: 'The user cancelled this child.', key_findings: [], last_response: '', final_response: '', errors: [] });
-    this.deps.writer.appendTimeline('child_user_cancelled', 'user', `The user cancelled child ${row.canonical_name} (${taskId}).`, { task_id: taskId });
-    ch.scheduler.settled(r.row);
-    return true;
+    if (this.isRootAgent(taskId)) { this.stop.request('user_cancelled', false, true); return true; }
+    return this.children?.cancel(taskId) ?? false;
+  }
+
+  /**
+   * PD-ORCH-005 clause 9: every approval and question every agent of this run waits on, withdrawn by `cause`; each
+   * waiting call settles as interrupted and never run, and nothing is denied.
+   */
+  withdrawPending(cause: Interruption): number {
+    let n = 0;
+    for (const p of this.ports) n += p.withdrawPending?.(cause) ?? 0;
+    if (this.deps.tools && !this.ports.has(this.deps.tools)) n += this.deps.tools.withdrawPending?.(cause) ?? 0;
+    return n;
+  }
+
+  /**
+   * PD-ORCH-005 clause 10: at a rest, what became of the background terminal sessions this session's agents started. A
+   * pause leaves the running ones running; a stop and a quit end them (REQ-TOOLS-111). Each is recorded with its state —
+   * the rest that ended it, or how it ended by itself — and its last output, so a resumed agent can be told, even after
+   * the process that held them is gone.
+   */
+  private async restTerminals(cause: Interruption): Promise<void> {
+    const port = this.deps.terminals;
+    if (!port) return;
+    const all = port.list();
+    // Recorded before any is ended: the kill a stop sends ends each one again, as `killed`, and an end is recorded once.
+    for (const t of all) {
+      const state = t.status === 'running' && cause !== 'pause' ? cause : t.status;
+      this.deps.writer.recordAgentTerminal({ terminal_id: t.id, task_id: t.taskId, command: t.command, started_at: t.startedAt, state, exit_code: t.exitCode, output_tail: t.tail });
+    }
+    const running = all.filter((t) => t.status === 'running').map((t) => t.id);
+    if (cause === 'pause' || running.length === 0) return;
+    try { await port.end(running); } catch (cause2) { this.deps.warn(`ending the background terminal sessions of ${this.sessionId} failed: ${String(cause2)}`); }
   }
 
   /** REQ-GIT-051: the one child that succeeded in the closing iteration; '' when none or more than one (no joining format, no winner). */
@@ -1280,6 +1440,10 @@ export class Run {
   /** REQ-SESSION-094: the ordered pipeline, each step guarded, the whole of it run even on exception. */
   private async teardown(reasonIn: StopReason): Promise<RunResult> {
     const { writer, owner, bus, clocks } = this.deps;
+    this.toolDeadline?.cancel();
+    // PD-ORCH-005 clause 10: a run that comes to rest records its agents' background sessions — a stop and a quit end them.
+    const rest = this.restCause;
+    if (rest !== null) await this.restTerminals(rest);
     // REQ-EVENTS-028 / REQ-SESSION-092: a requested cancellation wins over any other outcome.
     const stopReason: StopReason = this.stop.requested ? (this.stop.reason ?? 'user_cancelled') : reasonIn;
     const classified = classifyStop(stopReason);

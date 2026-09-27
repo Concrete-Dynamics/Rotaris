@@ -176,10 +176,13 @@ personas:
     model: selected
 runtime:
   child_stall_timeout: 45
+  graceful_pause_tool_deadline: 12
 `);
     const loaded = loadConfiguration({ globalDir: join(dir, 'global'), workspaceRoot: join(dir, 'ws') });
     if (!loaded.ok) throw new Error('configuration');
     expect(runtimeFromConfiguration(loaded.value).childStallTimeoutMs).toBe(45_000);
+    // REQ-ORCH-134 / PD-ORCH-005 clause 2: the pause's tool deadline reaches the run.
+    expect(runtimeFromConfiguration(loaded.value).pauseToolDeadlineMs).toBe(12_000);
     const personas = personaResolverFor(loaded.value, true, () => undefined);
     expect(personas.resolve('coding-agent')!.persona.stallTimeoutMs).toBe(30_000);
     expect(personas.resolve('tester')!.persona.stallTimeoutMs).toBeUndefined();

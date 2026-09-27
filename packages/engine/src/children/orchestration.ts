@@ -1,5 +1,5 @@
 import { millis, toIsoUtc, type Clocks, type Millis, type SessionId, type TimerHandle } from '@rotaris/kernel';
-import { isTerminalChildState, reportStatusToState, TASK_ID_PATTERN, type RootExecutionRecord } from '@rotaris/contracts';
+import { interruptionPhrase, isTerminalChildState, reportStatusToState, resumeStateFor, TASK_ID_PATTERN, type ChildState, type Interruption, type RootExecutionRecord } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ModelRef, ThinkingLevel } from '@rotaris/model';
 import type { ChildRow, StoreDal } from '@rotaris/store';
 import type { ProjectionOwner } from '../projection-owner.js';
@@ -106,6 +106,13 @@ export interface ChildrenDeps {
   /** REQ-MONITOR-133: the pending steering prompts per child conversation. */
   readonly steeringFor?: ((conversationId: string) => () => readonly SteeringPrompt[]) | undefined;
   readonly shouldPause?: (() => boolean) | undefined;
+  /**
+   * PD-ORCH-005: the interruption the run is coming to rest by — a pause, a stop or a quit — or null when it is not, or
+   * when its stop is the explicit cancel (which ends its children `cancelled`, as before).
+   */
+  readonly restCause?: (() => Interruption | null) | undefined;
+  /** PD-ORCH-005 clause 2 / REQ-ORCH-134: aborted when the pause's tool deadline passes; every child's calls run under it. */
+  readonly cutCalls?: AbortSignal | undefined;
   /** Part Q: the ladder for a child — its own cell (one fallback across both routes, REQ-ORCH-144) over the run's memory and waits. */
   readonly resilience?: { readonly forChild: (persona: Persona | undefined, current: ModelChoice, unresponsiveBoundMs: number) => TurnResilience } | undefined;
   /**
@@ -143,10 +150,16 @@ export class IterationChildren implements DelegationOps {
   /** PD-TOOLS-006: the live write scopes' claims, in acceptance order, and each child's disclosure as fixed at its acceptance. */
   private readonly claims = new WriteClaims();
   private readonly disclosures = new Map<string, ScopeDisclosure>();
+  /** PD-ORCH-005: every child execution in flight, so a rest can wait for each to come to rest before it sweeps. */
+  private readonly executing = new Set<Promise<void>>();
+  /** REQ-ORCH-133 / REQ-MONITOR-128: each executing child's own abort, so cancelling one child stops it (and only it). */
+  private readonly controllers = new Map<string, AbortController>();
+  /** PD-ORCH-005 clause 2: the run is coming to rest — no child starts, every agent stops before its next model step. */
+  private resting = false;
 
   constructor(private readonly deps: ChildrenDeps, readonly iteration: number) {
     this.ledger = new ChildLedger({ dal: deps.dal, writer: deps.writer, sessionId: deps.sessionId, iteration, budget: deps.budget, modelCap: deps.modelCap, warn: deps.warn , personas: deps.personas, ...(deps.artifacts ? { artifacts: deps.artifacts } : {}), ...(deps.rootRecord ? { rootRecord: deps.rootRecord } : {}) });
-    this.scheduler = new Scheduler({ ledger: this.ledger, runChild: (row) => this.execute(row), warn: deps.warn });
+    this.scheduler = new Scheduler({ ledger: this.ledger, runChild: (row) => this.track(this.execute(row)), warn: deps.warn });
     this.scheduler.onTerminal((row) => { const w = this.resumeWaiters.get(row.parent_id); if (w) { this.resumeWaiters.delete(row.parent_id); w(); } });
     // PD-TOOLS-006: a claim lapses at its child's terminal state. Liveness is also read from the ledger at every
     // query, so a child settled by a path that fires no listener (a stale sweep) holds nothing either; this only
@@ -293,7 +306,7 @@ export class IterationChildren implements DelegationOps {
   }
 
   /** REQ-TOOLS-156: only direct children, never the caller's own task, no deadline; N = 0 is valid. */
-  async waitForTasks(parentId: string, taskIds: readonly string[]): Promise<WaitOutcome | { readonly refused: string }> {
+  async waitForTasks(parentId: string, taskIds: readonly string[]): Promise<WaitOutcome | { readonly refused: string } | { readonly interrupted: string }> {
     const isCallerRoot = this.ledger.isRoot(parentId);
     for (const id of taskIds) {
       if (id === parentId || (isCallerRoot && this.ledger.isRoot(id))) {
@@ -316,15 +329,87 @@ export class IterationChildren implements DelegationOps {
       return { immediate: true, requested: set.length, text: set.length === 0 ? 'There was nothing to wait for: no task ids were given and no background children are active.' : `All ${set.length} requested task(s) were already complete.\n\n${rows.map(reportBlock).join('\n\n')}` };
     }
     await this.scheduler.waitFor(set);
+    // PD-ORCH-005: the run came to rest while the caller waited; the tasks it waited on are paused with the run.
+    if (this.resting && !set.every((id) => { const r = this.ledger.get(id); return !r || isTerminalChildState(r.state); })) {
+      return { interrupted: `The wait for ${set.join(', ')} was interrupted by ${interruptionPhrase(this.deps.restCause?.() ?? '')}: the tasks were paused with the run and resume when it is continued. Wait for them again then.` };
+    }
     const rows = set.map((id) => this.ledger.get(id)).filter((r): r is ChildRow => r !== undefined);
     for (const r of rows) this.ledger.markObserved(r.task_id);
     return { immediate: false, requested: set.length, text: `The waited-for background tasks completed (${set.length}).\n\n${rows.map(reportBlock).join('\n\n')}` };
+  }
+
+  // ---- PD-ORCH-005: coming to rest, and cancelling one child ------------------------------------
+
+  private track(execution: Promise<void>): Promise<void> {
+    this.executing.add(execution);
+    void execution.finally(() => this.executing.delete(execution));
+    return execution;
+  }
+
+  /**
+   * PD-ORCH-005 clause 2: the run is coming to rest. No queued child starts from here (the scheduler holds), every child
+   * and parent stops before its next model step (`shouldPause`), and every parent waiting on children — in the resume
+   * loop or in `wait_for_tasks` — is woken to find the rest. Idempotent.
+   */
+  beginRest(): void {
+    if (this.resting) return;
+    this.resting = true;
+    this.scheduler.hold();
+    for (const [parent, wake] of [...this.resumeWaiters]) { this.resumeWaiters.delete(parent); wake(); }
+  }
+  get isResting(): boolean {
+    return this.resting;
+  }
+
+  /**
+   * PD-ORCH-005 clauses 2 and 3: every agent of the iteration that has not reached a terminal state is left `paused` with
+   * `cause` recorded. The children executing come to rest themselves, each in its own execution (its in-flight calls
+   * finish or are cut at the deadline, and it stops before its next model step); this waits for all of them, then pauses
+   * every child that never started where it stood. Nothing summarises and nothing is settled. Returns how many ended
+   * paused.
+   */
+  async rest(cause: Interruption): Promise<number> {
+    this.beginRest();
+    await Promise.allSettled([...this.executing]);
+    for (const c of this.ledger.all()) {
+      const current = this.ledger.get(c.task_id);
+      if (!current || isTerminalChildState(current.state) || current.state === 'paused') continue;
+      const into = resumeStateFor(current.state as ChildState);
+      if (into === null) continue;
+      const r = this.ledger.rest(c.task_id, cause, into);
+      if (!r.ok) this.deps.warn(r.reason);
+    }
+    return this.ledger.all().filter((c) => this.ledger.get(c.task_id)?.state === 'paused').length;
+  }
+
+  /**
+   * REQ-ORCH-133 / REQ-MONITOR-128, the repair of `cancelling-one-child-does-not-stop-it.md`: the user cancels one child.
+   * It and each of its live descendants settle `cancelled` with a report saying so, and each one's own execution is
+   * ABORTED, so it stops rather than working on under a cancelled record; the execution finds its record terminal and
+   * writes nothing over the cancellation's report. False when the child is unknown or already terminal.
+   */
+  cancel(taskId: string): boolean {
+    const row = this.ledger.get(taskId);
+    if (!row || isTerminalChildState(row.state)) return false;
+    const targets = [row, ...this.ledger.all().filter((c) => c.task_id !== taskId && !isTerminalChildState(c.state) && this.isSelfOrDescendant(c.task_id, taskId))];
+    for (const t of targets) {
+      const r = this.ledger.transition(t.task_id, 'cancelled', 'cancellation');
+      if (!r.ok) { this.deps.warn(r.reason); continue; }
+      const summary = t.task_id === taskId ? 'The user cancelled this child.' : `Cancelled with ${row.canonical_name}, which the user cancelled.`;
+      this.ledger.storeReport(t.task_id, { agent_name: t.canonical_name, role: t.persona, status: 'cancelled', summary, key_findings: [], last_response: '', final_response: '', errors: [] });
+      this.deps.writer.appendTimeline('child_user_cancelled', 'user', `The user cancelled child ${t.canonical_name} (${t.task_id})${t.task_id === taskId ? '' : ` with ${row.canonical_name}`}.`, { task_id: t.task_id, ...(t.task_id === taskId ? {} : { cancelled_with: taskId }) });
+      this.controllers.get(t.task_id)?.abort();
+      this.scheduler.settled(r.row);
+    }
+    this.scheduler.pass();
+    return true;
   }
 
   // ---- the resume loop ---------------------------------------------------------------------
 
   /** Resolves when a direct child of `parentId` reaches a terminal state the parent has not observed, or when none remains. */
   private awaitTerminal(parentId: string): Promise<void> {
+    if (this.resting) return Promise.resolve();
     const mine = this.ledger.childrenOf(parentId);
     if (mine.some((c) => isTerminalChildState(c.state) && c.observed === 0)) return Promise.resolve();
     if (!mine.some((c) => !isTerminalChildState(c.state))) return Promise.resolve();
@@ -341,14 +426,15 @@ export class IterationChildren implements DelegationOps {
     let history = outcome.messages;
     let toolCalls = outcome.toolCallCount;
     for (;;) {
-      if (signal.aborted || outcome.report.status === 'failed') break;
+      // PD-ORCH-005 clause 2: an agent whose turn stopped where it stood, or whose run is coming to rest, waits for no child.
+      if (signal.aborted || outcome.report.status === 'failed' || outcome.paused === true || this.resting) break;
       this.scheduler.pass();
       const mine = this.ledger.childrenOf(agentId);
       const pending = mine.filter((c) => !isTerminalChildState(c.state));
       const unobserved = mine.filter((c) => isTerminalChildState(c.state) && c.observed === 0);
       if (pending.length === 0 && unobserved.length === 0) break;
       if (unobserved.length === 0) await this.awaitTerminal(agentId);
-      if (signal.aborted) break;
+      if (signal.aborted || this.resting) break;
       const newly = this.ledger.takeNewlyTerminal(agentId);
       if (newly.length === 0) continue;
       const stillRunning = this.ledger.childrenOf(agentId).filter((c) => !isTerminalChildState(c.state)).length;
@@ -400,6 +486,8 @@ export class IterationChildren implements DelegationOps {
     let error: { type: string; message: string } | null = null;
     let timedOut = false;
     let landing = false;
+    /** PD-ORCH-005: REQ-ORCH-095's one re-prompt was due when the run came to rest, so it is owed to the resumed child. */
+    let rePromptOwed = false;
     /** PD-ORCH-004: whether the child was making progress at the instant its limit expired. */
     let progressing = false;
     let childSignal: AbortSignal = deps.runSignal;
@@ -407,6 +495,8 @@ export class IterationChildren implements DelegationOps {
     for (;;) {
       const controller = new AbortController();
       childSignal = controller.signal;
+      // REQ-ORCH-133: this child's own abort, which cancelling it (and only it, with its descendants) fires.
+      this.controllers.set(row.task_id, controller);
       const onRunAbort = () => controller.abort();
       deps.runSignal.addEventListener('abort', onRunAbort, { once: true });
       timedOut = false;
@@ -435,8 +525,11 @@ export class IterationChildren implements DelegationOps {
         credentialFor: deps.credentialFor, maxStepsPerTurn: deps.maxStepsPerTurn, warn: deps.warn, dispatched,
         ...(deps.supervisorFor ? { supervisor: deps.supervisorFor(row.task_id) } : {}),
         ...(deps.steeringFor ? { steering: deps.steeringFor(row.task_id) } : {}),
-        // REQ-MONITOR-123's pause and REQ-ORCH-088's landing are the same act, so they are the same flag here.
-        shouldPause: () => landing || (deps.shouldPause?.() ?? false),
+        // REQ-MONITOR-123's pause and REQ-ORCH-088's landing are the same act, so they are the same flag here — and so is
+        // PD-ORCH-005's rest, whatever brought it: every agent stops before its next model step.
+        shouldPause: () => landing || this.resting || (deps.shouldPause?.() ?? false),
+        ...(deps.cutCalls ? { cutCalls: deps.cutCalls } : {}),
+        interruption: () => (this.resting ? deps.restCause?.() ?? null : null),
         ...(resilience ? { resilience } : {}),
         ...(compression ? { compression } : {}),
         ...(deps.onRequestUsage ? { onRequestUsage: deps.onRequestUsage } : {}),
@@ -452,9 +545,13 @@ export class IterationChildren implements DelegationOps {
         // that produced text and acted on nothing; on the answer route the answered category is accepted at once (REQ-ORCH-015).
         const textOnly = outcome.toolCallCount === 0 && outcome.report.text.trim() !== '';
         const rePrompt = outcome.toolCallCount === 0 && outcome.report.text.trim() === '' || ((deps.route ?? 'work') === 'work' && textOnly && persona?.implementer === true);
-        if (!controller.signal.aborted && outcome.report.status !== 'failed' && rePrompt) {
-          const again = await turn('Carry out the task now, using your tools where the task needs them, then answer with what you did.', outcome.messages);
-          outcome = { ...again, toolCallCount: outcome.toolCallCount + again.toolCallCount };
+        if (!controller.signal.aborted && outcome.report.status !== 'failed' && outcome.paused !== true && rePrompt) {
+          // PD-ORCH-005 clause 2: no model call once the run is coming to rest — the re-prompt waits for the resume.
+          if (this.resting) rePromptOwed = true;
+          else {
+            const again = await turn('Carry out the task now, using your tools where the task needs them, then answer with what you did.', outcome.messages);
+            outcome = { ...again, toolCallCount: outcome.toolCallCount + again.toolCallCount };
+          }
         }
       } catch (cause) {
         error = { type: 'child_exception', message: String(cause instanceof Error ? cause.message : cause) };
@@ -463,9 +560,13 @@ export class IterationChildren implements DelegationOps {
         timer.cancel();
         backstop.handle?.cancel();
         deps.runSignal.removeEventListener('abort', onRunAbort);
+        this.controllers.delete(row.task_id);
       }
       const fb = resilience?.cell.fallback ?? null;
-      if (timedOut && !deps.runSignal.aborted && resilience && fb !== null && !resilience.cell.fallbackAttempted) {
+      // Not after a rest (PD-ORCH-005: the retry is a model call) nor after the user cancelled this child (REQ-ORCH-133):
+      // the landing grace aborts the controller too, so the cancel is read from the record rather than from the signal.
+      const cancelled = isTerminalChildState(this.ledger.get(row.task_id)?.state ?? 'cancelled');
+      if (timedOut && !deps.runSignal.aborted && !this.resting && !cancelled && resilience && fb !== null && !resilience.cell.fallbackAttempted) {
         const cell = resilience.cell;
         const from = cell.model;
         cell.fallbackAttempted = true;
@@ -492,6 +593,29 @@ export class IterationChildren implements DelegationOps {
     // call count while preserving that document for the scoped transcript and later session refreshes.
     const persistedTodo = deps.dal.childrenOf(deps.sessionId).find((child) => child.task_id === row.task_id)?.todo ?? null;
     deps.dal.setChildTodo(deps.sessionId, row.task_id, persistedTodo, toolCalls);
+    /*
+     * REQ-ORCH-133 (the repair of `cancelling-one-child-does-not-stop-it.md`): the user cancelled this child while it ran.
+     * The cancel already settled its record, stored the report that says so and aborted this execution; nothing is
+     * written over either.
+     */
+    if (isTerminalChildState(this.ledger.get(row.task_id)?.state ?? 'cancelled')) return;
+    /*
+     * PD-ORCH-005 clauses 2 and 3: the run is coming to rest. This child stopped where it stood — before its next model
+     * step, its in-flight calls finished or cut — and it is left `paused` with the interruption recorded: no re-prompt,
+     * no summary, no report, no terminal state (the repair of `a-pause-settles-children-instead-of-holding-them.md`). It
+     * resumes into writing its report only when its turn truly finished — it answered, owes no re-prompt and waits on no
+     * child of its own; otherwise (its turn stopped where it stood, or the rest's abort cut its model step, which reads
+     * as a failed step) it resumes `running` from its record.
+     */
+    const rest = this.resting ? deps.restCause?.() ?? null : null;
+    if (rest !== null) {
+      const waitingOnChildren = this.ledger.childrenOf(row.task_id).some((c) => !isTerminalChildState(c.state));
+      const finished = outcome !== null && outcome.paused !== true && outcome.report.status !== 'failed' && !rePromptOwed && !waitingOnChildren;
+      const into = finished ? 'summarizing' : 'running';
+      const r = this.ledger.rest(row.task_id, rest, into, toolCalls);
+      if (!r.ok) deps.warn(r.reason);
+      return;
+    }
     const messages = outcome?.messages ?? [];
     const textOf = (m: ChatMessage): string => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('');
     const reversed = [...messages].reverse();
@@ -600,7 +724,9 @@ export class IterationChildren implements DelegationOps {
 export function settleStaleChildren(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, warn: (m: string) => void): number {
   let n = 0;
   for (const c of dal.childrenOf(sessionId)) {
-    if (isTerminalChildState(c.state)) continue;
+    // PD-ORCH-005 (narrowing REQ-ORCH-053 / REQ-SESSION-065 / REQ-NOTIFY-121): a `paused` agent is left as it is; it is
+    // resumed with its iteration, or ended by the user continuing without it.
+    if (isTerminalChildState(c.state) || c.state === 'paused') continue;
     const r = writer.transitionChild(c.task_id, 'cancelled', 'cancellation');
     if (r.ok) { n += 1; writer.storeChildReport(c.task_id, { agent_name: c.canonical_name, role: c.persona, status: 'cancelled', summary: 'Cancelled: the run that owned this child ended (killed host or hard cancel) before it settled.', key_findings: [], last_response: '', final_response: '', errors: [{ type: 'cancelled', message: 'settled on continue (REQ-ORCH-053)' }] }); }
     else warn(r.error.code === 'illegal-move' ? r.error.reason : r.error.code);

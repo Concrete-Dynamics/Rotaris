@@ -12,6 +12,7 @@ import { buildPolicy, PolicyContext } from './policy.js';
 import { terminalTool, TERMINAL_DEFAULTS, type TerminalManager } from './terminal/index.js';
 import { askQuestionsTool, PendingQuestions } from './tools/questions.js';
 import { FileToolState, haetEditTool, writeFileTool } from './tools/files.js';
+import { INTERRUPTED_FAILURE_KIND } from './tools/types.js';
 
 const ROOT = 'D:/ws';
 
@@ -213,6 +214,36 @@ describe('gate (ADR-0017, ADR-0019, REQ-TOOLS-011..013, 027, 032, 050..066, 175)
     expect((await c).status).toBe('blocked');
     expect(h.rec.decisions[2]).toMatchObject({ source: 'cancelled' });
     expect(String(h.rec.decisions[2]!['reason'])).toMatch(/the approval request was cancelled\.$/);
+  });
+
+  it('PD-ORCH-005 clause 9: an approval withdrawn by a rest is never a denial — nothing is audited or raised, the timeline names the interruption, the call settles blocked, interrupted and never run, and asked again it asks afresh', async () => {
+    const h = harness();
+    const s = new AbortController().signal;
+    const a = h.gate.dispatch(h.call('write_file', { operation: 'create', path: 'a.txt' }), s);
+    await Promise.resolve();
+    expect(h.approvals.withdrawAll('stop')).toBe(1);
+    const r = await a;
+    expect(r).toMatchObject({ status: 'blocked', isError: true, interrupted: true, decision: null, text: 'The approval this call was waiting on was withdrawn by the stop; the call was not run.' });
+    expect(h.executed).toEqual([]);
+    expect(h.rec.decisions).toEqual([]);
+    expect(h.rec.issues).toEqual([]);
+    expect(h.rec.timeline).toEqual(['approval_withdrawn']);
+    expect(h.rec.pending.at(-1)).toEqual([]);
+    expect(h.rec.settles.at(-1)).toMatchObject({ failure_kind: 'interrupted' });
+    const again = h.gate.dispatch(h.call('write_file', { operation: 'create', path: 'a.txt' }), s);
+    await Promise.resolve();
+    expect(h.rec.requested).toHaveLength(2);
+    expect(h.approvals.resolve(h.approvals.pending()[0]!.request_id, 'once')).toBe(true);
+    expect(await again).toMatchObject({ status: 'ok' });
+    expect(h.executed).toHaveLength(1);
+  });
+
+  it('PD-ORCH-005: an executor that reports its rest cut it short (the interrupted failure kind) settles the call interrupted', async () => {
+    const h = harness({ preset: 'autonomous', extraExecutors: [['todo', simpleExecutor('todo', 'todo', z.object({ operation: z.string() }), async () => ({ text: 'released by the pause', isError: true, failureKind: INTERRUPTED_FAILURE_KIND }))]] });
+    const r = await h.gate.dispatch(h.call('todo', { operation: 'list' }), new AbortController().signal);
+    expect(r).toMatchObject({ status: 'failed', interrupted: true, text: 'released by the pause' });
+    const plain = harness({ preset: 'autonomous', extraExecutors: [['todo', simpleExecutor('todo', 'todo', z.object({ operation: z.string() }), async () => ({ text: 'broke', isError: true, failureKind: 'execution_error' }))]] });
+    expect((await plain.gate.dispatch(plain.call('todo', { operation: 'list' }), new AbortController().signal)).interrupted).toBeUndefined();
   });
 
   it('REQ-TOOLS-055: a timeout of 0 registers no deadline; only an answer or a cancellation releases the wait', async () => {

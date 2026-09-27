@@ -50,6 +50,16 @@ export type Interruption = (typeof INTERRUPTIONS)[number];
 export function isInterruption(s: unknown): s is Interruption {
   return typeof s === 'string' && (INTERRUPTIONS as readonly string[]).includes(s);
 }
+/** PD-ORCH-005: the interruption as the object of a sentence — "interrupted by the pause", "withdrawn by a crash". */
+export function interruptionPhrase(i: string): string {
+  switch (i) {
+    case 'pause': return 'the pause';
+    case 'stop': return 'the stop';
+    case 'quit': return 'quitting the application';
+    case 'crash': return 'a crash';
+    default: return 'the run coming to rest';
+  }
+}
 
 /**
  * PD-ORCH-005 clause 4: "a `paused` agent moves back to the state it resumes into". The state an agent resumes into,

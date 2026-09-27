@@ -273,6 +273,24 @@ time. An explicit cancel is not an interruption: it ends its agents `cancelled`,
 `PD-ORCH-005`
 _Avoid_: stop reason (that is the run's, `REQ-MONITOR-301`), cancellation
 
+**Comes to rest** (a run):
+A run stops by a pause, a stop (the stop control, graceful or forced) or a quit and leaves its unfinished agents
+`paused`, its iteration open; a crash leaves the same state once it is recorded. The explicit cancel, a stop the run
+raises on its own account, and a plan cycle never come to rest (OQ-69). — `PD-ORCH-005` clauses 2 and 3
+_Avoid_: suspend, park (a run **parks** at the plan gate, which is a durable hold)
+
+**Withdrawn** (an approval or a question):
+Taken back because the run came to rest while a call waited on a person: it leaves the pending list, the timeline
+records which interruption withdrew it, and the call is recorded as interrupted and never run. Never a denial, and no
+answer is replayed later. — `PD-ORCH-005` clause 9, narrowing `REQ-TOOLS-054` and `REQ-SESSION-025`
+_Avoid_: denied, cancelled (REQ-TOOLS-052's cancellation is a denial)
+
+**Explicit cancel**:
+REQ-MONITOR-126's confirmed control, which cancels the run by its reserved agent id: final — every agent it ends is
+`cancelled` and never resumed. Distinct from the stop control. — `PD-ORCH-005` clause 3, `REQ-MONITOR-009`,
+`REQ-MONITOR-126`
+_Avoid_: stop (the stop control comes to rest)
+
 **Presentation agent state**:
 The smaller vocabulary an engine state is mapped onto for display — `running`, `waiting`, `queued`,
 `done`, `failed`, `cancelled`. Never store one of these. — `REQ-MONITOR-046`

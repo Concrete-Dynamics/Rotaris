@@ -150,6 +150,19 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
     expect(asked).toEqual(['src/api/users.ts', 'src/ui/view.ts']);
   });
 
+  it('PD-ORCH-005 clause 9 through the port: a rest withdraws the approval a call waits on, and the call reaches the turn marked interrupted', async () => {
+    const port = portFor(null, null);
+    const pending = port.dispatch({ callId: 'c1', name: 'write_file', rawArgs: JSON.stringify({ operation: 'create', path: 'w.txt', content: 'x' }), persona: 'coding-agent', agentId: 'coding-agent', agentName: 'coding-agent' }, new AbortController().signal);
+    await vi.waitFor(() => expect(presented).toHaveLength(1));
+    expect(port.withdrawPending?.('pause')).toBe(1);
+    const r = await pending;
+    expect(r).toMatchObject({ status: 'blocked', isError: true, interrupted: true });
+    expect(existsSync(join(dir, 'w.txt'))).toBe(false);
+    expect(dal.timelineOf(asSessionId('S1')).map((t) => t.name)).toContain('approval_withdrawn');
+    expect(dal.auditOf(asSessionId('S1'))).toEqual([]);
+    expect(port.withdrawPending?.('pause')).toBe(0);
+  });
+
   /**
    * PD-TOOLS-004 through the port: the gate's `publicTool` is what keeps a server's own `write_file` — offered under
    * that name to a persona whose public set lacks one — on REQ-TOOLS-024's exact match, while the public `write_file`

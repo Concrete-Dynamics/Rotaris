@@ -46,6 +46,11 @@
    has to push the `tool` message on every exit mid-step: completed calls with their results, the call that was cut
    off and the calls never started as interrupted. A crash is the one case where the record ends on an unanswered
    `assistant` message, and the continue that records the crash is where those results are written.
+
+   > **Built in phase 3 (2026-09-27).** `runTurn` now pushes the step's `tool` message on every exit mid-step, and the
+   > crash record writes the missing one (`run/crash.ts`). The spike's second case asserted the pre-build shape — the
+   > `tool` message lost — so it was removed when the turn changed; `run/interruption.test.ts` asserts the built
+   > behaviour in its place (a stop mid-step, a pause and its deadline, a withdrawn approval, the landing unchanged).
 3. **A compression must be written into the record, not beside it.** `replace` swaps the whole array (ADR-0060). If
    the record only appended, a resume would re-send what was compressed away, which clause 12 forbids. The record
    takes the replacement as an entry of its own, and a resume reads from the last replacement forward — the full

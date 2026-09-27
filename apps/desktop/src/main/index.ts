@@ -42,7 +42,7 @@ import { sessionCommands } from './commands/session.js';
 import { shellCommands } from './commands/shell.js';
 import { skillsCommands } from './commands/skills.js';
 import { windowCommands, windowsCommands } from './commands/windows.js';
-import { dialogCloseAnswersDeny, exitAfterChildWindows, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
+import { dialogCloseAnswersDeny, exitAfterChildWindows, QuitState, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
 import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, type AppLogLevel } from './app-log.js'; // PD-MONITOR-002
 import { workspaceCommands } from './commands/workspace.js';
 // The answer every command ends in, and the inventory the facets above are given (ADR-0019, REQ-SHELL-020).
@@ -61,13 +61,10 @@ import { refusal, type ApprovalDialogState, type CommandContext, type CommandHan
  * behaviour beyond it.
  */
 const clocks = nodeClocks();
-/**
- * PD-ORCH-005 clause 9: what tells a dialog closed by the application's quit from one a user closed (`exit.ts`,
- * `dialogCloseAnswersDeny`) — the process exiting at once, and the main windows whose close is confirmed.
- */
-const quit = { exiting: false, closing: new Set<number>() };
+/** PD-ORCH-005 clause 9: what tells a surface the application's quit closed from one a person closed (`exit.ts`). */
+const quit = new QuitState();
 /** Every immediate exit goes through this: on Linux, `app.exit` over an open modal child segfaults (`exit.ts`). */
-const exitCleanly = (code: number): void => { quit.exiting = true; exitAfterChildWindows({ windows: () => BrowserWindow.getAllWindows(), exit: (c) => app.exit(c), timers: clocks.timers, nextTurn: (fn) => setImmediate(fn) }, code); };
+const exitCleanly = (code: number): void => { quit.exiting(); exitAfterChildWindows({ windows: () => BrowserWindow.getAllWindows(), exit: (c) => app.exit(c), timers: clocks.timers, nextTurn: (fn) => setImmediate(fn) }, code); };
 const dirs = resolveUserDirs();
 const layout = dataLayout(dirs);
 mkdirSync(dirs.data, { recursive: true });
@@ -244,6 +241,8 @@ async function main(): Promise<void> {
    * the moment there are two.
    */
   let mainWindows!: MainWindows<BrowserWindow, PersonaWindows, TerminalWindows, ApprovalPayload, ApprovalDialogState>;
+  /** PD-ORCH-005 clause 9: whether the application is quitting (`QuitState`), over the main windows as they are now. */
+  const quitting = (): boolean => quit.quitting(mainWindows.ordered().map((m) => ({ wcId: m.wcId, destroyed: m.win.isDestroyed() })));
   /** The window a message came from, when that sender is a main window at all (a dialog or a persona window is not). */
   const windowFor = (senderId: number): MainWindowState | undefined => mainWindows?.forSender(senderId);
   /**
@@ -610,8 +609,7 @@ async function main(): Promise<void> {
       if (mainWindows.openDialog(w.wcId) === entry) mainWindows.setOpenDialog(w.wcId, null);
       // REQ-TOOLS-063: closing the window answers Deny; a request already answered or cancelled asks nothing more.
       // PD-ORCH-005 clause 9: a dialog the application's quit closed answers nothing — the shutdown withdraws it.
-      const staying = mainWindows.ordered().filter((m) => !m.win.isDestroyed() && !quit.closing.has(m.wcId)).length;
-      if (dialogCloseAnswersDeny({ answered: entry.answered, exiting: quit.exiting, mainWindowsStaying: staying })) void runHost.request({ kind: 'session.control', request: { op: 'answerApproval', sessionId: payload.session_id, args: { requestId: payload.request_id, option: 'deny' } } }, millis(5_000)).catch(() => undefined);
+      if (dialogCloseAnswersDeny({ answered: entry.answered, quitting: quitting() })) void runHost.request({ kind: 'session.control', request: { op: 'answerApproval', sessionId: payload.session_id, args: { requestId: payload.request_id, option: 'deny' } } }, millis(5_000)).catch(() => undefined);
       clocks.timers.after(millis(50), () => { void presentNext(w); });
     });
     try {
@@ -1003,7 +1001,7 @@ async function main(): Promise<void> {
       void runHost.request({ kind: 'presenter.revoke', windowId: String(wcId) }, millis(5_000)).catch(() => undefined);
     },
     forgetTerminalFrames: (wcId) => terminalFrames.forget(wcId),
-    closeConfirmed: (wcId) => { quit.closing.add(wcId); },
+    closeConfirmed: (wcId) => { quit.closeConfirmed(wcId); },
     log,
   });
 
@@ -1325,7 +1323,7 @@ async function main(): Promise<void> {
     initialization, libraryRevision, requirementsRuns, improvementUndo, improvementRuns,
     enqueueImprovement: (job) => improvementCoordinator.enqueue(job),
     chooseSave, chooseExportPath, chooseDirectory, chooseSkillFile,
-    openHookReview, restoreFlow, checkpointOp,
+    openHookReview, restoreFlow, checkpointOp, quitting,
   };
   /**
    * Every command this product answers, filed under its kind. `CommandHandlers` is total over
@@ -1465,6 +1463,22 @@ async function main(): Promise<void> {
     themeName: () => currentTheme.name,
     resultSeen: () => resultSeen,
     exit: (code) => { exitCleanly(code); },
+  });
+
+  /*
+   * PD-ORCH-005 clause 9: a quit Electron starts on its own account — SIGTERM, the desktop's logout, `app.quit()` —
+   * closes every window at once, an approval dialog before its main window's close guard has answered, and the dialog's
+   * close would be sent as the person's Deny. Such a quit is turned into each main window's own guarded close, so a
+   * dialog only ever closes with a main window whose close is confirmed; the last one's close reaches
+   * `window-all-closed`, which shuts the children down and quits. The quit that handler makes finds no main window open
+   * and goes ahead. A guard that refuses keeps its window, its dialog and the application, as a refused close always did.
+   */
+  app.on('before-quit', (event) => {
+    const open = mainWindows.ordered().filter((m) => !m.win.isDestroyed() && !quit.isClosing(m.wcId));
+    if (open.length === 0) return;
+    event.preventDefault();
+    log(`quit: closing ${open.length} main window(s) through their close guard first (PD-ORCH-005 clause 9)`);
+    for (const m of open) m.win.close();
   });
 
   app.on('window-all-closed', () => {

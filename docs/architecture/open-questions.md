@@ -2950,7 +2950,7 @@ projection — or whether the two stay parallel records of the same run, as buil
 keep the system prompt and tool definitions each request carried, so a resume replays the instructions the agent had
 rather than the persona's current ones.
 
-**OQ-69 — Which control is a stop and which the final cancel, and what does a rest do at the edges the directive does not reach?** *(`PD-ORCH-005` clauses 2, 3, 8, 9, 10 and 11; REQ-MONITOR-009, REQ-MONITOR-126, REQ-MONITOR-130, REQ-MONITOR-092, REQ-SESSION-092, REQ-SESSION-108, REQ-SESSION-186, REQ-SESSION-025, REQ-ORCH-080, REQ-ORCH-135 and REQ-GIT-094, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3 under [R-060](../product/requests.md#r-060) and [R-061](../product/requests.md#r-061).)*
+**OQ-69 — Which control is a stop and which the final cancel, and what does a rest do at the edges the directive does not reach?** *(`PD-ORCH-005` clauses 2, 3, 8, 9, 10 and 11; REQ-MONITOR-009, REQ-MONITOR-126, REQ-MONITOR-130, REQ-MONITOR-092, REQ-SESSION-092, REQ-SESSION-108, REQ-SESSION-186, REQ-SESSION-025, REQ-ORCH-080, REQ-ORCH-135, REQ-GIT-094, REQ-TOOLS-063 and REQ-CHAT-101, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3 under [R-060](../product/requests.md#r-060) and [R-061](../product/requests.md#r-061).)*
 
 Clause 3 leaves every unfinished agent `paused` after "a graceful stop" and keeps "the cancel control
 (REQ-MONITOR-126, 'cannot be undone in this session')" final. The product has one stop control and one cancel. The stop
@@ -3009,8 +3009,8 @@ when the pause is accepted, a rest that finds nothing unfinished, and what a cra
 - **Listing checkpoints is not continuing either (clause 8, REQ-GIT-094).** The checkpoint listing repairs the
   session's status first, as REQ-GIT-094 requires, and that repair records no crash: viewing a session's checkpoints
   changes no agent record. The crash is recorded by the repair the user asks for and by the continue.
-- **Requirements the directive does not name.** Three requirements the Narrows list omits say otherwise where clauses 2
-  and 3 decide, and the build follows the clauses. REQ-ORCH-135 closes an iteration cancelled mid-run `cancelled`; a
+- **Requirements the directive does not name.** Five requirements the Narrows list omits say otherwise where clauses 2,
+  3 and 9 decide, and the build follows the clauses. REQ-ORCH-135 closes an iteration cancelled mid-run `cancelled`; a
   pause, a stop or a quit with an agent unfinished leaves it open, and REQ-ORCH-135 still governs the explicit cancel, a
   run the product ends on its own account, and a rest that finds nothing unfinished. REQ-MONITOR-130 settles every
   non-terminal agent `cancelled` when a run is cancelled; the build reads its cancel as REQ-MONITOR-126's explicit
@@ -3018,7 +3018,14 @@ when the pause is accepted, a rest that finds nothing unfinished, and what a cra
   REQ-SESSION-108 puts the pause at the outer-loop boundary so that no agent is part-way through execution and no model
   request is outstanding; clause 2 stops every agent before its next model step instead, and the build reads "part-way
   through execution" as executing: once the pause has landed a paused agent executes nothing and no request is
-  outstanding.
+  outstanding. REQ-TOOLS-063 has closing the approval dialog answer Deny, "no exit path leaves the request
+  unanswered", and REQ-CHAT-101 has closing the window emit the question's cancellation. At a quit, clause 9 withdraws
+  both instead, so main sends neither when the application's quit closes the surface (`exit.ts`'s `QuitState`): the
+  approval or question stays pending until the run host's `shutdown` withdraws it. A quit Electron starts on its own
+  account (SIGTERM, the desktop's logout, `app.quit()`) first closes each main window through its guard, so a dialog
+  never closes ahead of its window's confirmed close. While the application stays, both requirements govern unchanged.
+  *Until phase 7's repairs the quit's close sent the Deny and the cancellation first, and the agent stepped on them
+  (`docs/defects/fixed/a-quit-denies-the-approval-it-should-withdraw.md`).*
 - **No model call after the pause, wherever one is made (clause 2).** The step in flight is the only model call that
   finishes, and its report stands: a transient failure of it is not retried, no fallback model is tried, a context
   rejection is not condensed, and a provider limit it meets is not waited on. An agent already parked on a provider limit
@@ -3089,7 +3096,8 @@ stop hints (a forced stop and a cancel persist the same status). Whether a stop 
 cycle's agents to be resumed, which clause 11's durable hold arguably forbids. And whether one paused agent should be
 cancellable while its session rests. Whether `/stop`, which REQ-CHAT-029 describes as "Cancel the active run" and says
 "MUST cancel that run", should be the final cancel (and then confirmed) rather than the stop, or be reworded. Whether
-REQ-ORCH-135, REQ-MONITOR-130 and REQ-SESSION-108 should join the Narrows list, as the build reads them. Each would change a control's reach, a surface's offer or the record's traceability, and
+REQ-ORCH-135, REQ-MONITOR-130, REQ-SESSION-108, REQ-TOOLS-063 and REQ-CHAT-101 should join the Narrows list, as the
+build reads them. Each would change a control's reach, a surface's offer or the record's traceability, and
 none is decided by the directive.
 
 **OQ-70 — How does a resumed iteration carry on where the directive says what and not how?** *(`PD-ORCH-005` clauses 4, 5, 6, 7 and 10; PD-TOOLS-006 revision 2; REQ-ORCH-095, REQ-ORCH-088, REQ-ORCH-152, REQ-HOOKS-075 and REQ-MONITOR-125, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3 under [R-060](../product/requests.md#r-060) and [R-061](../product/requests.md#r-061).)*

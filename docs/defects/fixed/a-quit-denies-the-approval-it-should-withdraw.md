@@ -15,18 +15,40 @@ but with the call denied. The driver's immediate exit denied it the same way.
 `PD-ORCH-005` clause 9: an approval pending when the run comes to rest "by a pause, a stop, a quit or a crash" is
 withdrawn, "never recorded as denied". REQ-TOOLS-063 still governs a dialog the user closes.
 
+The question dock does the same with a question. Its `beforeunload` sends REQ-CHAT-101's cancellation, which reaches
+the run host before the shutdown and is recorded as "Questions were cancelled."
+
 ## Relevant files
 
-- `apps/desktop/src/main/index.ts` — the approval dialog's `closed` handler, and `exitCleanly`.
-- `apps/desktop/src/main/main-windows.ts` — the main window's confirmed close.
-- `apps/desktop/src/main/exit.ts` — `dialogCloseAnswersDeny`.
+- `apps/desktop/src/main/index.ts` — the approval dialog's `closed` handler, `exitCleanly`, and `before-quit`.
+- `apps/desktop/src/main/main-windows.ts` — the main window's close guard (`guardClose`).
+- `apps/desktop/src/main/exit.ts` — `QuitState` and `dialogCloseAnswersDeny`.
+- `apps/desktop/src/main/commands/session.ts` — the `cancelQuestions` control.
+- `packages/ui/src/QuestionStepper.tsx` — the dock's `beforeunload` cancellation.
 
 ## Repaired — 2026-09-27
 
-By PD-ORCH-005's phase 7. A dialog that closes unanswered answers Deny only while the application stays. That covers
-the user closing the dialog, and one main window of several closing. A dialog closed by the quit answers nothing. The
-quit means the process exiting at once (`exitCleanly`), or every main window's close confirmed; the Electron adapter now
-reports each confirmed close. The run host's shutdown then withdraws the approval by the quit.
+By PD-ORCH-005's phase 7.
+- Main tells the quit apart through `QuitState`: the process exiting at once (`exitCleanly`), or every main window's
+  close confirmed by its guard (`guardClose` reports the confirmation before it closes).
+- While the quit is under way, an approval dialog that closes unanswered sends no Deny, and the dock's cancellation is
+  not forwarded. The run host's shutdown withdraws both by the quit.
+- While the application stays, the user closing a dialog or one main window of several, REQ-TOOLS-063 and
+  REQ-CHAT-101 govern as before.
+- A quit Electron starts on its own account (SIGTERM, the desktop's logout, `app.quit()`) would close every window at
+  once, a dialog ahead of its window's guard. `before-quit` now turns it into each main window's guarded close.
 
-Evidence: `exit.test.ts`, "PD-ORCH-005 clause 9…", covers the three cases. The built app is quit by closing its window
-with an approval pending; its evidence is in PD-ORCH-005's first-execution record.
+The first repair covered the window close only. Phase 7's review found the `app.quit()` path and the dock, and both are
+repaired in the second. OQ-69 records the departure from REQ-TOOLS-063 and REQ-CHAT-101.
+
+Evidence:
+- `exit.test.ts`: `QuitState` and the dialog rule.
+- `main-windows.test.ts`: the guard reports a confirmed close before closing, and never a refused one.
+- `commands/session.test.ts`: the dock's cancellation is dropped while quitting, and forwarded otherwise.
+- The built app: see PD-ORCH-005's first-execution record, which drove a window-close quit, a SIGTERM quit and a quit
+  with a question open.
+
+Residual: a window whose confirmed close never completes stays counted as closing, so a dialog it later closes sends
+no Deny. The approval then waits with nothing on screen. This needs a renderer that hangs in `beforeunload`, and it is
+not repaired. [`an-approval-asked-after-the-last-window-closes-is-denied.md`](../an-approval-asked-after-the-last-window-closes-is-denied.md)
+is the same class of defect, on a path this repair does not reach.

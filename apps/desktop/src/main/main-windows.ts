@@ -556,6 +556,29 @@ export function mainWindowOptions(backgroundColor: string): BrowserWindowConstru
   };
 }
 
+/** The part of a main window its close guard needs. */
+export interface GuardedWindow {
+  on(event: 'close', listener: (event: { preventDefault(): void }) => void): unknown;
+  isDestroyed(): boolean;
+  close(): void;
+}
+
+/**
+ * The main window's close guard. The first close is held while the renderer's guard is asked; a close it allows — or
+ * one it cannot answer — is reported as confirmed and then made, and that second close passes. Reporting before closing
+ * is what lets main tell the application's quit from a person closing a dialog (PD-ORCH-005 clause 9, `exit.ts`): the
+ * window's modal dialogs close as the window does, after the report.
+ */
+export function guardClose(win: GuardedWindow, ask: () => Promise<unknown>, confirmed: () => void): void {
+  let closeConfirmed = false;
+  const close = (): void => { closeConfirmed = true; confirmed(); win.close(); };
+  win.on('close', (event) => {
+    if (closeConfirmed || win.isDestroyed()) return;
+    event.preventDefault();
+    void ask().then((proceed) => { if (proceed !== false) close(); }).catch(close);
+  });
+}
+
 /** Electron's concrete half of the lifecycle seam. Tests use an in-memory adapter with the same ordering. */
 export function createElectronMainWindowAdapter(
   dependencies: ElectronMainWindowAdapterDependencies,
@@ -642,24 +665,11 @@ export function createElectronMainWindowAdapter(
         log: dependencies.log,
       });
 
-      let closeConfirmed = false;
-      win.on('close', (event) => {
-        if (closeConfirmed || win.isDestroyed()) return;
-        event.preventDefault();
-        void win.webContents
-          .executeJavaScript('typeof window.__rotarisCloseGuard === "function" ? window.__rotarisCloseGuard() : true')
-          .then((proceed: unknown) => {
-            if (proceed === false) return;
-            closeConfirmed = true;
-            dependencies.closeConfirmed?.(wcId);
-            win.close();
-          })
-          .catch(() => {
-            closeConfirmed = true;
-            dependencies.closeConfirmed?.(wcId);
-            win.close();
-          });
-      });
+      guardClose(
+        win,
+        () => win.webContents.executeJavaScript('typeof window.__rotarisCloseGuard === "function" ? window.__rotarisCloseGuard() : true'),
+        () => dependencies.closeConfirmed?.(wcId),
+      );
       win.once('ready-to-show', () => win.show());
 
       if (dependencies.capturing && process.env['ROTARIS_CAPTURE_NET'] === '1') {

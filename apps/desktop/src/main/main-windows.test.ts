@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  guardClose,
   MainWindows,
+  type GuardedWindow,
   type MainWindowAdapter,
   type MainWindowsDependencies,
   type MainWindowTimer,
@@ -263,5 +265,45 @@ describe('MainWindows', () => {
     expect(h.mainWindows.ordered()).toHaveLength(0);
     expect(h.actions).toContain('destroy:C:/broken');
     expect(h.actions).toContain('dispose:personas:1:terminal:1');
+  });
+});
+describe('the main window\'s close guard reports a confirmed close before it closes (PD-ORCH-005 clause 9)', () => {
+  function fakeWindow(log: string[]) {
+    let listener: ((event: { preventDefault(): void }) => void) | null = null;
+    const win: GuardedWindow & { attempt(): void } = {
+      on: (_event, l) => { listener = l; },
+      isDestroyed: () => false,
+      close: () => { log.push('close'); win.attempt(); },
+      attempt: () => { let prevented = false; listener?.({ preventDefault: () => { prevented = true; } }); log.push(prevented ? 'held' : 'passed'); },
+    };
+    return win;
+  }
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+
+  it('a close the guard allows is reported, then made, and passes', async () => {
+    const log: string[] = [];
+    const win = fakeWindow(log);
+    guardClose(win, async () => true, () => log.push('confirmed'));
+    win.attempt();
+    await settle();
+    expect(log).toEqual(['held', 'confirmed', 'close', 'passed']);
+  });
+
+  it('a close the guard refuses is never reported, and the window stays', async () => {
+    const log: string[] = [];
+    const win = fakeWindow(log);
+    guardClose(win, async () => false, () => log.push('confirmed'));
+    win.attempt();
+    await settle();
+    expect(log).toEqual(['held']);
+  });
+
+  it('a guard that cannot answer lets the close through, reported first', async () => {
+    const log: string[] = [];
+    const win = fakeWindow(log);
+    guardClose(win, async () => { throw new Error('the renderer is gone'); }, () => log.push('confirmed'));
+    win.attempt();
+    await settle();
+    expect(log).toEqual(['held', 'confirmed', 'close', 'passed']);
   });
 });

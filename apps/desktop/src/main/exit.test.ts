@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ProcessReply } from '@rotaris/contracts';
 import { FakeClock } from '@rotaris/kernel';
-import { CHILD_CLOSE_BOUND_MS, dialogCloseAnswersDeny, exitAfterChildWindows, shutdownAtQuit, watchChildExit, type ClosableWindow } from './exit.js';
+import { CHILD_CLOSE_BOUND_MS, dialogCloseAnswersDeny, exitAfterChildWindows, QuitState, shutdownAtQuit, watchChildExit, type ClosableWindow } from './exit.js';
 
 /** A window whose destruction reports `closed` at once, later, or never. */
 function win(opts: { parent: boolean; closes?: 'now' | 'never' }, log: string[], name: string): ClosableWindow & { closed: () => void } {
@@ -156,20 +156,32 @@ describe("a child's shutdown at quit, raced against its own exit (exit.ts)", () 
   });
 });
 
-describe('PD-ORCH-005 clause 9: an approval dialog the quit closed answers nothing (exit.ts)', () => {
-  it('a dialog closed unanswered while a main window stays answers Deny (REQ-TOOLS-063)', () => {
-    // The user closed the dialog, or one main window of two.
-    expect(dialogCloseAnswersDeny({ answered: false, exiting: false, mainWindowsStaying: 1 })).toBe(true);
-    expect(dialogCloseAnswersDeny({ answered: false, exiting: false, mainWindowsStaying: 2 })).toBe(true);
+describe('PD-ORCH-005 clause 9: what the application\'s quit closes answers nothing (exit.ts)', () => {
+  const windows = (...ws: [number, boolean][]) => ws.map(([wcId, destroyed]) => ({ wcId, destroyed }));
+
+  it('the application stays while a main window neither destroyed nor confirmed closing remains', () => {
+    const q = new QuitState();
+    expect(q.quitting(windows([1, false]))).toBe(false);
+    // One main window of two closes: the other stays.
+    q.closeConfirmed(1);
+    expect(q.quitting(windows([1, false], [2, false]))).toBe(false);
+    expect(q.isClosing(1)).toBe(true);
+    expect(q.isClosing(2)).toBe(false);
   });
 
-  it('a dialog closed by the quit answers nothing: the run host\'s shutdown withdraws the approval, never denies it', () => {
-    // The last main window's close confirmed, and the immediate exit (the capture seam, the driver's quit).
-    expect(dialogCloseAnswersDeny({ answered: false, exiting: false, mainWindowsStaying: 0 })).toBe(false);
-    expect(dialogCloseAnswersDeny({ answered: false, exiting: true, mainWindowsStaying: 1 })).toBe(false);
+  it('the application is quitting once every main window\'s close is confirmed or done, or the process exits', () => {
+    const q = new QuitState();
+    q.closeConfirmed(1);
+    expect(q.quitting(windows([1, false]))).toBe(true);
+    expect(q.quitting(windows([1, false], [2, true]))).toBe(true);
+    const exiting = new QuitState();
+    exiting.exiting();
+    expect(exiting.quitting(windows([1, false]))).toBe(true);
   });
 
-  it('an answered dialog asks nothing more, whatever closes it', () => {
-    expect(dialogCloseAnswersDeny({ answered: true, exiting: false, mainWindowsStaying: 1 })).toBe(false);
+  it('a dialog closed unanswered answers Deny (REQ-TOOLS-063) unless the quit closed it; an answered one asks nothing more', () => {
+    expect(dialogCloseAnswersDeny({ answered: false, quitting: false })).toBe(true);
+    expect(dialogCloseAnswersDeny({ answered: false, quitting: true })).toBe(false);
+    expect(dialogCloseAnswersDeny({ answered: true, quitting: false })).toBe(false);
   });
 });

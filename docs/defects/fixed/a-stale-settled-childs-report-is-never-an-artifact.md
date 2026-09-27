@@ -20,7 +20,7 @@ materialisation it feeds elsewhere is skipped for this one path.
 ## Repaired — 2026-09-27
 
 By PD-ORCH-005's phase 7. The report write and its artifact now live in one function, `storeChildReport` in
-`children/ledger.ts`. Every path that settles a child goes through it:
+`children/ledger.ts`. Every path that stores a child's report goes through it:
 - the ledger's own `storeReport`;
 - `settleStaleChildren`, given the session's artifact store by both of its callers;
 - the decline of a resumable iteration (`Run.cancelPausedAgents`, PD-ORCH-005 clause 6). That is a second path, built
@@ -34,4 +34,9 @@ Evidence:
   artifact, `cancelled`.
 - `children.test.ts`, "clause 6, declined": each declined agent's report is one.
 - `session-resume.test.ts`: the orphan a continue settles is one.
-- Each assertion fails when its path's store is taken away.
+- The continue path's and the decline's assertions fail when their store is taken away. The same settle at a new
+  session's start has no test that reaches it, because a new session has no earlier children.
+
+A child REQ-ORCH-048's cascade blocks gets no report to materialise
+([`a-child-blocked-by-its-dependency-gets-no-report.md`](../a-child-blocked-by-its-dependency-gets-no-report.md), found by
+phase 7's review).

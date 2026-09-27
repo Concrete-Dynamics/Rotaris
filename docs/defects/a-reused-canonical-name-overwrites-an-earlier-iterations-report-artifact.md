@@ -20,3 +20,12 @@ report updates in place): the fallback to the canonical name treats two children
 - `packages/store/src/dal.ts` — `artifactByCanonical` and `rematerialiseArtifact`, which leaves `source_task_id` and
   `created_at` as they were.
 - `packages/engine/src/sessions.ts` — `latestArtifactText`, which reads the listing's order.
+
+## Reached by more paths since PD-ORCH-005's phase 7 — 2026-09-27
+
+The stale settle and "continue without them" now materialise their reports (REQ-LIBRARY-092,
+`a-stale-settled-childs-report-is-never-an-artifact.md`). Their stub reports reach this fallback too: a declined
+`writer` in iteration 2 rewrites iteration 1's `writer` report in place, to `cancelled` with the stub's summary. Phase
+7's review reproduced this with a probe. The ledger's explicit and user cancels did the same before. The fallback is
+REQ-LIBRARY-092's own ("falling back to the canonical agent name"), so narrowing it is a question for the owner. One
+narrowing would use the fallback only for a record that carries no task id. It is not repaired here.

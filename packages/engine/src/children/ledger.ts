@@ -28,10 +28,11 @@ export function commandsForArtifact(v: unknown): RanCommand[] {
 
 /**
  * REQ-LIBRARY-092: EVERY terminal child report is materialised as an artifact. The materialisation lives beside the one
- * write every report passes through — the ledger's own reports, the scheduler's cancellation, the user's cancel, the
- * settle of a child a previous run left (REQ-ORCH-053) and the decline of a resumable iteration (PD-ORCH-005 clause 6) —
- * so no caller can store a report without one, exactly as the adjacent-duplicate rule lives beside its insert rather
- * than in a caller. The last two wrote the report alone until 2026-09-27
+ * write every stored report passes through — the ledger's own reports, the scheduler's cancellation, the user's cancel,
+ * the settle of a child a previous run left (REQ-ORCH-053) and the decline of a resumable iteration (PD-ORCH-005
+ * clause 6) — so no caller can store a report without one, exactly as the adjacent-duplicate rule lives beside its
+ * insert rather than in a caller. A child REQ-ORCH-048's cascade blocks gets no report at all
+ * (`docs/defects/a-child-blocked-by-its-dependency-gets-no-report.md`). The last two wrote the report alone until 2026-09-27
  * (`docs/defects/fixed/a-stale-settled-childs-report-is-never-an-artifact.md`). The row names the artifact; without
  * one, the report is stored and no artifact is made.
  */

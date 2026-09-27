@@ -122,9 +122,10 @@ The parts that are easy to get wrong:
   `cancelled`, and the application is unattended until main answers again (`ADR-0019`).
 - **Closing the dialog answers Deny** while the application stays: the user closed the dialog, or one main window
   of several. A request already answered or cancelled asks nothing more. A dialog that the application's quit closes
-  answers nothing, and the quit's `shutdown` withdraws the approval instead (PD-ORCH-005 clause 9). *Until phase 7 the
-  quit's close sent a Deny first, and the agent stepped on it:
-  `docs/defects/fixed/a-quit-denies-the-approval-it-should-withdraw.md`.*
+  answers nothing (`QuitState`, `main/exit.ts`). The quit's `shutdown` then comes to rest and withdraws the approval,
+  or, during a plan cycle, which never comes to rest, cancels it as OQ-69 has it (PD-ORCH-005 clause 9). The question
+  dock's cancellation is held back at a quit the same way. *Until phase 7 the quit's close sent a Deny first, and the
+  agent stepped on it: `docs/defects/fixed/a-quit-denies-the-approval-it-should-withdraw.md`.*
 - Presentation order is **oldest first by the published sequence**, and that sequence orders presentation
   *across* windows, not within one.
 - A dialog that cannot be shown is not a hang: `approval.shown {ok: false}` comes back, the pending request is

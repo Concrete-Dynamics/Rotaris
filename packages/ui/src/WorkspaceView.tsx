@@ -315,7 +315,7 @@ function QueuePanel({ prompts, onEdit, onRemove, onError }: { prompts: SessionRe
 }
 
 /** A warning prompt in the design's dialog language; the confirm label is explicit (REQ-MONITOR-126/128). */
-function ConfirmDialog({ title, body, confirmLabel, lines = [], onConfirm, onCancel }: { title: string; body: string; confirmLabel: string; lines?: readonly string[]; onConfirm: () => void; onCancel: () => void }) {
+function ConfirmDialog({ title, body, confirmLabel, cancelLabel = 'Keep running', lines = [], onConfirm, onCancel }: { title: string; body: string; confirmLabel: string; cancelLabel?: string; lines?: readonly string[]; onConfirm: () => void; onCancel: () => void }) {
   return (
     <div className="dialog-backdrop" role="presentation">
       <div className="dialog" role="alertdialog" aria-modal="true" aria-labelledby="ws-confirm-title">
@@ -323,7 +323,7 @@ function ConfirmDialog({ title, body, confirmLabel, lines = [], onConfirm, onCan
         <p className="dialog-body">{body}</p>
         {lines.length > 0 && <ul className="dialog-body">{lines.map((l) => <li key={l}>{l}</li>)}</ul>}
         <div className="dialog-actions">
-          <DesignButton type="button" className="btn btn-secondary" autoFocus onClick={onCancel}>Keep running</DesignButton>
+          <DesignButton type="button" className="btn btn-secondary" autoFocus onClick={onCancel}>{cancelLabel}</DesignButton>
           <DesignButton type="button" className="btn btn-danger" onClick={onConfirm}>{confirmLabel}</DesignButton>
         </div>
       </div>
@@ -370,11 +370,20 @@ export function composerPlaceholder(session: SessionRecord | null, localRunActiv
   return composerPlaceholderFor(session !== null, localRunActive, busy);
 }
 /** PD-ORCH-005 clause 6: what declining does, as the tooltip of "Continue without them". */
-export const CONTINUE_WITHOUT_THEM_HINT = 'The agents that would resume end cancelled; the open iteration closes and the session continues in a new one.';
-
-/** PD-ORCH-005 clause 6: the Continue action states how many agents resume — the open iteration's root and every paused agent. */
+/** PD-ORCH-005 clause 6: the Continue action states how many agents will resume — the open iteration's root and every unfinished agent. */
 export function resumeCountText(agents: number): string {
-  return agents === 1 ? '1 agent resumes' : `${agents} agents resume`;
+  return agents === 1 ? '1 agent will resume' : `${agents} agents will resume`;
+}
+
+/**
+ * PD-ORCH-005 clauses 3, 5 and 6: what declining does — the paused agents end `cancelled`, which cannot be undone, and
+ * the open iteration's task is taken up again by a new iteration's root. A count of one is the root alone, which no
+ * agent record names as cancelled.
+ */
+export function declineText(agents: number): string {
+  const others = agents - 1;
+  const ended = others === 0 ? '' : `${others === 1 ? 'The paused agent ends' : `The ${others} paused agents end`} cancelled and cannot be resumed. `;
+  return `${ended}The open iteration closes, and its task is taken up again in a new iteration.`;
 }
 
 /** REQ-CHAT-005: the primary action states the mode; `Queue` needs a LOCAL run, not merely a busy session. */
@@ -674,7 +683,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
   const [attachments, setAttachments] = useState<ImageAttachmentInput[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
   const [stopRequested, setStopRequested] = useState(false);
-  const [confirming, setConfirming] = useState<'stop' | { agent: { id: string; name: string }; descendants: string[] } | null>(null);
+  const [confirming, setConfirming] = useState<'stop' | 'decline' | { agent: { id: string; name: string }; descendants: string[] } | null>(null);
   const [steering, setSteering] = useState<{ id: string; name: string } | null>(null);
   const [pausePending, setPausePending] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -1186,7 +1195,9 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
   }
   const paused = session !== null && (session.executionStatus === 'paused' || session.executionStatus === 'paused_message_limit' || session.executionStatus === 'awaiting_plan_decision');
   /** PD-ORCH-005 clause 6: what the Continue action resumes; only a `paused` session offers it. */
-  const resumable = session?.executionStatus === 'paused' ? session.resumable : null;
+  // PD-ORCH-005 clause 6 (OQ-71): a session at rest states what its continue resumes — a paused one, and one a crash left
+  // `interrupted`, whose continue is a message; only the Continue action offers to decline.
+  const resumable = session?.executionStatus === 'paused' || session?.executionStatus === 'interrupted' ? session.resumable : null;
   /** The send control's accessible name, by composer mode (PD-CHAT-001 revision 2, R-040). Set beside the
     * gate and the pause it reads, so no declaration order can break it again. */
   const sendName = runActive
@@ -1518,16 +1529,14 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
             <DesignButton type="submit" className="btn btn-primary" disabled aria-describedby="plan-gate-hint">Answer the plan first</DesignButton>
           ) : paused && onContinue ? (
             <>
-              {/* PD-ORCH-005 clause 6: the Continue action states how many agents resume and offers to continue without
-                * them. The count is the strip's own quiet figure, as the agents panel states its count, and it describes
-                * both continues: a message resumes them too. Declining is the Continue action's alone. */}
-              {resumable && <span id="composer-resume-count" className="composer__resume mono" data-testid="composer-resume-count">{resumeCountText(resumable.agents)}</span>}
-              <DesignButton type="button" className="btn btn-primary" onClick={() => { void continueRun(); }} aria-describedby={resumable ? 'composer-resume-count' : undefined}>Continue run</DesignButton>
-              {resumable && (
-                <DesignButton type="button" className="btn btn-ghost" data-testid="composer-continue-without" onClick={() => { void continueRun(true); }}
-                  title={CONTINUE_WITHOUT_THEM_HINT}>Continue without them</DesignButton>
-              )}
-              <DesignButton type="submit" className="btn btn-secondary" disabled={busy} aria-describedby={resumable ? 'composer-resume-count' : undefined}>Continue with a message</DesignButton>
+              {/* PD-ORCH-005 clause 6: both continues resume the open iteration's agents, so the count below describes
+                * both. The strip keeps its one band (PD-CHAT-001): the count and the decline stand in the notices row,
+                * and at the narrow density each continue shows a short label with its full name as the accessible name
+                * and the tooltip, as the send pill does (found by phase 5's review: the labels wrapped the strip). */}
+              <DesignButton type="button" className="btn btn-primary composer__continue" onClick={() => { void continueRun(); }} aria-describedby={resumable ? 'composer-resume-count' : undefined}
+                {...(density === 'narrow' ? { 'aria-label': 'Continue run', title: 'Continue run' } : {})}>{density === 'narrow' ? 'Continue' : 'Continue run'}</DesignButton>
+              <DesignButton type="submit" className="btn btn-secondary composer__continue" disabled={busy} aria-describedby={resumable ? 'composer-resume-count' : undefined}
+                {...(density === 'narrow' ? { 'aria-label': 'Continue with a message', title: 'Continue with a message' } : {})}>{density === 'narrow' ? 'Message' : 'Continue with a message'}</DesignButton>
             </>
           ) : (
             /*
@@ -1539,7 +1548,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
               * short label visible ("Run" / "Continue" / "Queue"), the spec's own wording as the
               * accessible name, so REQ-CHAT-005 still states the mode and the strip stays one band.
               */
-            <DesignSendPill shortLabel={sendShortLabel} sendName={projectSetupPending ? PROJECT_SETUP_SEND_REASON : sendName} disabled={busy || projectSetupPending} title={projectSetupPending ? PROJECT_SETUP_SEND_REASON : undefined} aria-describedby={projectSetupPending ? sendReasonId : undefined} data-testid="composer-send" />
+            <DesignSendPill shortLabel={sendShortLabel} sendName={projectSetupPending ? PROJECT_SETUP_SEND_REASON : sendName} disabled={busy || projectSetupPending} title={projectSetupPending ? PROJECT_SETUP_SEND_REASON : undefined} aria-describedby={projectSetupPending ? sendReasonId : resumable ? 'composer-resume-count' : undefined} data-testid="composer-send" />
           )}
         </div>
         </div>
@@ -1555,12 +1564,29 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
           {projectSetupPending && <span id={sendReasonId} className="visually-hidden">{PROJECT_SETUP_SEND_REASON}</span>}
           {planGate && <span id="plan-gate-hint" className="composer__hint">A plan is waiting for your decision above. Approve, revise, or cancel the run to continue.</span>}
           {paused && !planGate && <span className="composer__hint">Paused. Run controls need the run continued before they can be used.</span>}
+          {resumable && (
+            /* PD-ORCH-005 clause 6 (OQ-71): the continue states how many agents will resume, and the Continue action
+             * offers to continue without them — confirmed, since it ends them `cancelled` for good (clauses 3 and 5). */
+            <div className="composer__resume" data-testid="composer-resume">
+              <span id="composer-resume-count" className="composer__hint" data-testid="composer-resume-count">{resumeCountText(resumable.agents)}</span>
+              {session?.executionStatus === 'paused' && onContinue && (
+                <>
+                  <DesignButton type="button" className="btn btn-ghost btn-compact" data-testid="composer-continue-without" onClick={() => setConfirming('decline')}
+                    title={declineText(resumable.agents)} aria-describedby="composer-decline-hint">Continue without them</DesignButton>
+                  <span id="composer-decline-hint" className="visually-hidden">{declineText(resumable.agents)}</span>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </form>
       {confirming === 'stop' && (
         <ConfirmDialog title="Cancel the run?" body="Cancellation cannot be undone in this session. The active run and every active task agent will be cancelled." confirmLabel="Cancel the run" onCancel={() => setConfirming(null)} onConfirm={() => { setConfirming(null); void stop(); }} />
       )}
-      {confirming !== null && confirming !== 'stop' && (
+      {confirming === 'decline' && resumable && (
+        <ConfirmDialog title="Continue without them?" body={declineText(resumable.agents)} confirmLabel="Continue without them" cancelLabel="Keep them" onCancel={() => setConfirming(null)} onConfirm={() => { setConfirming(null); void continueRun(true); }} />
+      )}
+      {confirming !== null && confirming !== 'stop' && confirming !== 'decline' && (
         <ConfirmDialog title={`Cancel ${confirming.agent.name}?`} body={confirming.descendants.length > 0 ? 'Its live descendants will be cancelled with it:' : 'The agent will be cancelled.'} lines={confirming.descendants} confirmLabel={`Cancel ${confirming.agent.name}`} onCancel={() => setConfirming(null)} onConfirm={() => { const target = confirming.agent; setConfirming(null); void onCancelAgent?.(target.id).then((r) => { if (!r.ok) setError(r.reason); }); }} />
       )}
       {steering && onSteer && <SteerDialog target={steering} onSteer={onSteer} onClose={() => setSteering(null)} />}

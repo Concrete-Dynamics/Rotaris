@@ -2,7 +2,7 @@
 .composer__attachments { display: flex; align-items: center; flex-wrap: wrap; gap: var(--rt-space-2); }
 .composer__attachment-list, .row__attachments { display: grid; gap: var(--rt-space-1); margin: 0; padding: 0; list-style: none; width: 100%; }
 .composer__attachment-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--rt-space-2); align-items: center; }
-.composer__estimate { margin-inline-start: auto; color: var(--rt-text-secondary); }
+.composer__estimate { margin-inline-start: auto; color: var(--rt-text-secondary); white-space: nowrap; }
 .row__attachment { border: 1px solid var(--rt-border); border-radius: var(--rt-radius-sm); padding: var(--rt-space-2); }
 .row__attachment summary { cursor: pointer; }
 .row__attachment-thumb { display: inline-grid; place-items: center; width: 2rem; height: 2rem; background: var(--rt-surface-raised); border-radius: var(--rt-radius-sm); }

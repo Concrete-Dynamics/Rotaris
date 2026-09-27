@@ -3169,15 +3169,21 @@ decline too.
   it on a read), so the count does not change when the crash is recorded. A session whose root was the only
   unfinished agent states "1 agent resumes". The count is read from the store (`SessionRecord.resumable`,
   `resumableOf`), as the plan gate is, because a session at rest has no process behind it.
-- **Where.** In the composer strip's paused state (REQ-SHELL-023 places the Continue action there; no screen, tab or
-  panel is added): the count as the strip's quiet figure just before the continue buttons, in the mono face at the
-  smallest size and the tertiary text colour, as the agents panel states its own count in the design material. It
-  describes both continues (each carries it as its accessible description), because a continue by message resumes
-  the same agents. "Continue without them" is a ghost button beside "Continue run", with a tooltip saying what
-  declining does.
+- **Where.** In the composer's notices row, below the field and its strip, on a `paused` session and on one a crash left
+  `interrupted` (REQ-SHELL-023 places the Continue action in the composer; no screen, tab or panel is added): the count
+  as a sentence ("3 agents will resume") in the row's quiet hint style, which describes every continue that resumes
+  them — each carries it as its accessible description — and on a `paused` session a compact ghost "Continue without
+  them" beside it. The design material draws no paused composer; its nearest pattern is the queue card above the field,
+  a quiet line and its action, which the row follows. *The first build put the count and the decline in the strip
+  itself; at the product's default window the strip then wrapped to three lines, and at 1280×800 the decline sat past
+  its clipped edge (found by phase 5's review, measured in the built app).*
+- **Declining is confirmed.** It ends the paused agents `cancelled`, which clauses 3 and 5 make final, so it asks first,
+  as the two other controls that end agents `cancelled` do (REQ-MONITOR-126, REQ-MONITOR-128), stating what ends and that
+  it cannot be undone (found by phase 5's review).
 - **Which continues offer the decline.** The Continue action only. A continue by message resumes (clause 4: the
   message goes to the resumed root) and offers no decline; a plan decision resumes as OQ-70 has it. A session a crash
-  left `interrupted` is continued by a message, as today, and states no count (OQ-70's second question stands).
+  left `interrupted` is continued by a message, as today: it states the count, and offers no decline (OQ-70's second
+  question stands).
 - **What the decline carries.** `session.continue` gains an optional `withoutPaused`; absent, the Continue action
   resumes, which clause 6 makes the default.
 

@@ -74,9 +74,9 @@ _Avoid_: input box, prompt bar, chat box
 
 **Continue action**:
 On a `paused` session, the composer's "Continue run": it continues the session, and where the last run left an
-iteration open it states how many agents resume (the open iteration's root and every paused agent) and offers
-"Continue without them", which ends those agents `cancelled` and continues as a new iteration. Resuming is the
-default. — `PD-ORCH-005` clause 6, `REQ-MONITOR-125`
+iteration open the composer states how many agents will resume (the open iteration's root and every unfinished agent)
+and offers "Continue without them", which, once confirmed, ends those agents `cancelled` and continues as a new
+iteration. Resuming is the default. — `PD-ORCH-005` clause 6, `REQ-MONITOR-125`
 _Avoid_: resume button, restart
 
 **Draft**:

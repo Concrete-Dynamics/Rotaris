@@ -2,13 +2,13 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CONTEXT_CAPACITY, type SessionRecord } from '@rotaris/contracts';
-import { CONTINUE_WITHOUT_THEM_HINT, resumeCountText, WorkspaceView } from './WorkspaceView.js';
+import { declineText, resumeCountText, WorkspaceView } from './WorkspaceView.js';
 
 /**
  * PD-ORCH-005 clause 6: "The Continue action SHALL state how many agents will resume, and SHALL offer to continue without
- * them." What a unit test can prove here is the markup of each state — which controls exist, what they say and what
- * describes them; the click reaching the command is driven against the built product (`pnpm app:drive`), because this
- * repository has no DOM in vitest.
+ * them." What a unit test can prove here is the markup of each state — which controls exist, what they say, what
+ * describes them and where they stand; the click reaching the command, and the confirmation it opens, are driven
+ * against the built product (`pnpm app:drive`), because this repository has no DOM in vitest.
  */
 const session = (over: Partial<SessionRecord>): SessionRecord => ({
   id: 's1', executionStatus: 'paused', workspaceRoot: 'C:\\ws', createdAt: 'x', updatedAt: '2026-09-27T10:05:00.000Z', historyOpen: true, truncation: { truncated: false, droppedCount: 0, cap: null, lastTrimAt: null }, agents: [], pendingApprovals: [], pendingQuestions: [],
@@ -19,22 +19,38 @@ const render = (s: SessionRecord) => renderToStaticMarkup(createElement(Workspac
   session: s, rows: [],
   onSubmit: async () => ({ ok: true as const }), onStop: async () => ({ ok: true as const }), onContinue: async () => ({ ok: true as const }),
 }));
+/** The markup of one region, from its opening tag to the end of the composer. */
+const strip = (html: string) => html.slice(html.indexOf('data-testid="composer-strip"'), html.indexOf('composer__notices'));
+const notices = (html: string) => html.slice(html.indexOf('composer__notices'));
 
-describe('PD-ORCH-005 clause 6: the Continue action states how many agents resume and offers to continue without them', () => {
-  it('the count reads as a sentence, singular and plural', () => {
-    expect(resumeCountText(1)).toBe('1 agent resumes');
-    expect(resumeCountText(3)).toBe('3 agents resume');
+describe('PD-ORCH-005 clause 6: the Continue action states how many agents will resume and offers to continue without them', () => {
+  it('the count reads as a sentence, singular and plural; the decline says what ends, and that it cannot be undone', () => {
+    expect(resumeCountText(1)).toBe('1 agent will resume');
+    expect(resumeCountText(3)).toBe('3 agents will resume');
+    expect(declineText(3)).toBe('The 2 paused agents end cancelled and cannot be resumed. The open iteration closes, and its task is taken up again in a new iteration.');
+    expect(declineText(2)).toBe('The paused agent ends cancelled and cannot be resumed. The open iteration closes, and its task is taken up again in a new iteration.');
+    // The root alone: no agent record ends cancelled.
+    expect(declineText(1)).toBe('The open iteration closes, and its task is taken up again in a new iteration.');
   });
 
-  it('a paused session with an open iteration: the count, which describes both continues, and "Continue without them"', () => {
+  it('a paused session with an open iteration: the strip keeps its two continues, both described by the count, which stands with the decline in the notices row (found by phase 5\'s review: the strip lost its one band)', () => {
     const html = render(session({ resumable: { iteration: 2, agents: 3 } }));
-    expect(html).toContain('<span id="composer-resume-count" class="composer__resume mono" data-testid="composer-resume-count">3 agents resume</span>');
-    // Continue run and Continue with a message both resume them, so the count describes both.
-    expect(html.match(/aria-describedby="composer-resume-count"/g)).toHaveLength(2);
-    expect(html).toMatch(/>Continue run</);
-    expect(html).toMatch(/data-testid="composer-continue-without"[^>]*>Continue without them</);
-    expect(html).toContain(`title="${CONTINUE_WITHOUT_THEM_HINT}"`);
-    expect(html).toMatch(/>Continue with a message</);
+    expect(strip(html).match(/aria-describedby="composer-resume-count"/g)).toHaveLength(2);
+    expect(strip(html)).toMatch(/>Continue run</);
+    expect(strip(html)).toMatch(/>Continue with a message</);
+    expect(strip(html)).not.toContain('Continue without them');
+    expect(strip(html)).not.toContain('agents will resume');
+    expect(notices(html)).toContain('<span id="composer-resume-count" class="composer__hint" data-testid="composer-resume-count">3 agents will resume</span>');
+    // The decline carries what it does on both channels: the tooltip and the accessible description.
+    expect(notices(html)).toMatch(/data-testid="composer-continue-without"[^>]*title="The 2 paused agents end cancelled[^"]*"[^>]*aria-describedby="composer-decline-hint"[^>]*>Continue without them</);
+    expect(notices(html)).toContain(`<span id="composer-decline-hint" class="visually-hidden">${declineText(3)}</span>`);
+  });
+
+  it('a session a crash left interrupted states the count too, and offers no decline — its continue is a message (OQ-71)', () => {
+    const html = render(session({ executionStatus: 'interrupted', resumable: { iteration: 2, agents: 4 } }));
+    expect(notices(html)).toContain('4 agents will resume');
+    expect(html).not.toContain('Continue without them');
+    expect(strip(html)).toMatch(/data-testid="composer-send"[^>]*aria-describedby="composer-resume-count"|aria-describedby="composer-resume-count"[^>]*data-testid="composer-send"/);
   });
 
   it('a paused session with nothing to resume offers the Continue action as before: no count and no decline', () => {
@@ -44,9 +60,11 @@ describe('PD-ORCH-005 clause 6: the Continue action states how many agents resum
     expect(html).not.toContain('Continue without them');
   });
 
-  it('only a `paused` session offers it: a session at the message limit or the plan gate states no count', () => {
-    for (const executionStatus of ['paused_message_limit', 'interrupted', 'completed']) {
-      expect(render(session({ executionStatus, resumable: { iteration: 1, agents: 2 } }))).not.toContain('Continue without them');
+  it('a session at the message limit, at the plan gate or finished states no count', () => {
+    for (const executionStatus of ['paused_message_limit', 'awaiting_plan_decision', 'completed']) {
+      const html = render(session({ executionStatus, resumable: { iteration: 1, agents: 2 } }));
+      expect(html, executionStatus).not.toContain('composer-resume-count');
+      expect(html, executionStatus).not.toContain('Continue without them');
     }
   });
 });

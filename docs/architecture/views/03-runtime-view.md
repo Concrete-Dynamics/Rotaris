@@ -592,8 +592,9 @@ that run resumes it first (§2), and `session.continue`'s `withoutPaused` declin
 without them" (renderer `continueSession(action, {withoutPaused})` → main → run host → `Sessions.continueSession`). The
 Continue action states what it resumes from `SessionRecord.resumable` (`resumableOf`: the open iteration, and its root
 plus every agent of it not in a terminal state — the paused ones after a rest, and the ones a crash not yet recorded
-left, which its record will pause — read from the store as `planGate` is) — the count in the composer strip before the
-continue buttons, and "Continue without them" beside "Continue run" — on a `paused` session only (OQ-71).
+left, which its record will pause — read from the store as `planGate` is) — the count in the composer's notices row,
+describing every continue that resumes them, on a `paused` session and on one a crash left `interrupted`, and on a
+`paused` one "Continue without them" beside it, behind a confirmation; the strip keeps its one band (OQ-71).
 
 ## 6. End
 

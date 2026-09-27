@@ -50,7 +50,10 @@ is a build-time tool, not a package: `pnpm notices` computes the shipped closure
 `apps/desktop/resources/THIRD-PARTY-LICENSES.txt` only when REQ-STARTUP-143's validation passes. Main's About reader now
 looks for the file under REQ-STARTUP-141's name; it had looked for a lowercase name. The **component view** gains a
 section for the tool, and the **process view** gains the file's row in "Files and directories on disk" and a corrected
-About paragraph. No package, edge, process, channel, command or message kind changed.
+About paragraph. No package, edge, process, channel, command or message kind changed. The gate review later that day
+changed two things inside the tool. A licence file that only refers to the licence, or only attributes, is no longer
+counted as the text (OQ-69). The LGPL address must now have an address's shape. No view changed for either: both
+are internal to `notices.mjs`, and it still reads and writes what the component view says.
 
 **Product-drawn main-window chrome (`PD-SHELL-003`, built and revised 2026-09-24).** On Windows, Linux and macOS the main
 `BrowserWindow` is frameless with its native menu hidden. The existing title bar now ends in minimize,

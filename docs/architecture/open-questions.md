@@ -52,7 +52,9 @@ ESC-38 and ESC-39. **Three more were raised on 2026-09-27 by building the notice
 compiled into one — Electron's 779 credited components carry no version and no identifier), **OQ-67** (REQ-STARTUP-142
 names Manrope and a machine-tool manifest, neither of which the first release carries) **and OQ-68** (whether the
 reviewed-exceptions table may supply an identifier a dependency does not declare — `dotenv` 0.9.9 in the bundled
-runtime). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+runtime). **One more was raised the same day by that generator's gate review: OQ-69** (when a component carries "its
+full license text": a licence file that only pointed elsewhere, or only carried a licence's per-file notice, had
+counted as the text, and 4 components without text became 12). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -2874,6 +2876,14 @@ distribution, the interpreter, a font — and what is compiled into one is that 
 - The interpreter's linked libraries are **not listed**. That is a known gap, not a reading, and it is stated here so
   it is not mistaken for coverage. The file says so too, at the head of its runtime section, and its header claims
   "the third-party components" of the build rather than every one.
+- *Added 2026-09-27 by the gate review.* Two consequences of reading the closure from production edges:
+  - The icon set appears twice: as `@phosphor-icons/web` 2.1.1, a production dependency of the application, and as
+    "Phosphor Icons", which REQ-STARTUP-142 names on its own.
+  - Two type-only packages are listed that no artifact carries: `json-schema` 0.4.0 and `@standard-schema/spec`
+    1.1.0, production dependencies of `@ai-sdk/provider` and `@ai-sdk/provider-utils`. The review read a scratch
+    build's sourcemaps and found that the bundler inlines neither.
+
+  Both errors list more than ships, never less.
 
 **What a ruling decides.** Whether the credits of a component the build takes whole (Electron's, and any other
 bundled distribution's) satisfy REQ-STARTUP-142 when they are reproduced beneath it, or whether each credited
@@ -2906,6 +2916,10 @@ it can:
   pins none, so this build downloads neither Git nor ripgrep. It then lists the language servers with their four
   fields, as IC-7 requires. When machine setup is built its manifest carries `machineTools`, and the section lists them
   as downloaded and not contained. The generator already renders that shape, and it is tested with ripgrep.
+  *Added 2026-09-27 by the gate review:* that shape is the generator's own assumption: one `{name, version, source,
+  license}` object per tool, under a `machineTools` key. REQ-STARTUP-058 describes the machine-tool manifest per
+  platform, with archives, digests and layouts. Neither the key nor its shape is decided anywhere yet. Machine setup
+  decides both, and the generator's reader follows.
 
 **What a ruling decides.** Whether the first release ships without Manrope, and if so whether REQ-STARTUP-142's
 font clause is narrowed to the faces the build carries; and whether machine setup belongs in the first release —
@@ -2933,6 +2947,67 @@ name inside it: the interpreter, SQLite and winpty.
 **What a ruling decides.** Whether a table entry, being a reviewed and expiring claim of an identifier, may also
 cover a dependency that declares none. That ruling would change REQ-STARTUP-143's wording and one condition in
 `collectNotices`. Until then the first release is blocked on `dotenv` as surely as on O-3.
+
+*Added 2026-09-27 by the generator's gate review:* an identifier is copied as the component declares it and is never
+normalised. The runtime's distributions declare `BSD License` (`itsdangerous`, `Jinja2`, `pywebview`), `MIT License`,
+`Apache Software License 2.0`, `LGPLv2+` and `BSD 3-Clause`. REQ-STARTUP-142 does not ask for an SPDX identifier, but
+`BSD License` names a family rather than one licence. Whether an identifier must be an SPDX expression, and who
+supplies one where the component does not, belongs to the same ruling.
+
+**OQ-69 — When does a component carry "its full license text"?** *(REQ-STARTUP-142, REQ-STARTUP-143. Raised 2026-09-27 by the notices generator's gate review.)*
+
+REQ-STARTUP-142 wants each entry to carry the component's "full license text", and REQ-STARTUP-143 fails a release on
+a dependency that "carries no license text" unless a reviewed exception covers it. Neither says what a licence file
+that does not carry the licence counts as. The first build counted any non-empty licence-named file as the text. The
+gate review found `@workflow/serde` 4.1.0, which the main bundle inlines. Its only licence file reads, in full, "Apache
+License 2.0" and "See the LICENSE file in the root of this repository.", and the package ships no such file.
+Reading the rest of the closure found three more kinds:
+
+- **A licence's per-file notice, and nothing else.** The notice is what a licence asks to be applied to each file
+  with. Apache-2.0's reads "You may obtain a copy of the License at …". Five npm packages carry only that: `ai` 7.0.92,
+  `@ai-sdk/gateway`, `@ai-sdk/openai`, `@ai-sdk/openai-compatible` and `@ai-sdk/provider`. So does `mslex` 1.3.0 in
+  the runtime. `certifi` 2026.7.22 carries only MPL-2.0's Exhibit A.
+- **An attribution declared as a licence file:** `mslex`'s `AUTHORS.rst`, beside its notice.
+- **A short file that sends the reader to its siblings:** "the licenses found in LICENSE.APACHE or LICENSE.BSD"
+  (`cryptography`, `sniffio`, and pip's vendored `packaging`). Their siblings carry the texts.
+
+**What the build proceeds under.** A licence file is one of three things (`licenseTextKind` in
+`tools/notices/notices.mjs`), and only the first is the component's licence text:
+
+- **text**: it carries a licence;
+- **a reference**: it only names a licence on one line. Or it is at most 2,000 characters, it sends the reader
+  elsewhere, and it carries no grant of its own. "Sends elsewhere" is one of: "see the LICENSE", "found in LICENSE",
+  "obtain a copy of the License", "can obtain one at", "should have received a copy of the". The grants checked are
+  those of the licences short enough to sit beside such words: MIT and Boost, ISC and 0BSD, the BSD family, zlib, the
+  Unlicense and SQLite's blessing. Every full text that quotes its own notice in an appendix (Apache-2.0, the GPL
+  family, MPL-2.0) is far longer than the bound;
+- **an attribution**: a file named NOTICE, AUTHORS, CONTRIBUTORS or CREDITS.
+
+References and attributions are still reproduced with the component, because they carry its copyright and
+attribution notices; Apache-2.0's NOTICE must travel with the work. A component that carries no text fails
+validation, and the message names each file and what it does instead. Only a reviewed exception lets it pass, as for
+a component that ships no file at all.
+
+Electron, the interpreter, a compiled-in library and a bundled asset each have one named licence file. If that file
+is only a reference, validation fails and no reviewed exception can cover it. REQ-STARTUP-143 gives the table to "a
+dependency" in general, so this is stricter than the requirement. It is recorded here as a reading. No such case
+exists in the first release.
+
+Over this tree the rule leaves 12 shipped components without licence text. The first run counted 4.
+
+Two limits are stated here, so that neither is read as coverage:
+
+- The classifier reads words, so a pointer worded differently from the phrases above passes as text.
+- A file that carries one licence's text and refers elsewhere for another counts as text. `tqdm` 4.67.1 declares
+  `MPL-2.0 AND MIT` and carries the MIT text in full beside MPL-2.0's Exhibit A, so its entry has no MPL-2.0 text.
+  The generator does not match the texts a component carries against the expression it declares.
+
+**What a ruling decides.** Whether a component that ships only a licence's notice should instead get the canonical
+text of the identifier it declares, reproduced by the generator from a version-controlled copy beside it (as
+`bundled-assets.json` does for the fonts). The reviewed table asks "why no license text is obtainable". For
+Apache-2.0 or MPL-2.0 the honest answer is that the text is obtainable and the package left it out. That ruling
+would change REQ-STARTUP-143's route for such a component, and it would close `tqdm`'s gap as well. Until then,
+eight of O-11's twelve reviews are for a notice or a pointer.
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

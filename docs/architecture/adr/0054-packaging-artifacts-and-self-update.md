@@ -1130,7 +1130,28 @@ six problems, each correctly:**
 6. `dotenv` 0.9.9, in the runtime, declares no licence identifier.
 
 Four of those wait on a maintainer's reviewed exception, which only a maintainer may write (plan §6, O-11). The sixth
-has no reviewed route under REQ-STARTUP-143 as worded (OQ-68). Two premises of REQ-STARTUP-142 are not true of this
+has no reviewed route under REQ-STARTUP-143 as worded (OQ-68).
+
+*Corrected 2026-09-27 by the gate review: the list above is short by eight.* The generator had counted any non-empty
+licence-named file as the component's licence text. `@workflow/serde` 4.1.0 is inlined into the main bundle. Its only
+licence file reads "Apache License 2.0" and then "See the LICENSE file in the root of this repository", and the
+package ships no such file. The generator now reads a file that only names the licence, or only sends the reader
+elsewhere for it, as a reference. It reads a NOTICE or an authors list as an attribution. Neither counts as the text,
+and both are still reproduced (OQ-69). **Run again, validation refuses on fourteen problems:**
+
+- O-3;
+- `dotenv`;
+- the four components above that ship no licence file;
+- eight that ship only a reference:
+  - `@workflow/serde` 4.1.0;
+  - `ai` 7.0.92 and `@ai-sdk/gateway`, `@ai-sdk/openai`, `@ai-sdk/openai-compatible` and `@ai-sdk/provider`, each
+    with Apache-2.0's per-file notice only;
+  - in the runtime, `certifi` 2026.7.22, with MPL-2.0's Exhibit A only;
+  - in the runtime, `mslex` 1.3.0, with the Apache-2.0 notice and an `AUTHORS.rst`.
+
+O-11 names twelve reviews.
+
+Two premises of REQ-STARTUP-142 are not true of this
 build: Manrope is named and not bundled, and no setup manifest pins a machine tool (OQ-67). **Nothing in this record
 changes.** The step sits where REQ-STARTUP-037 puts it, before freezing. The `extraResources` entry
 that carries the file into the artifact, and `package.mjs`'s call to the step, are §4.4's, with `build-id.txt`.

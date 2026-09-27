@@ -225,7 +225,13 @@ site-packages, 73 on the Linux bundle, with the identifier each declares and its
 read found in this record's tree:** `dotenv` 0.9.9, which `serena-agent` requires, declares `License: UNKNOWN` (OQ-68),
 and `proxy_tools` 0.1.0, which `pywebview` requires, ships no licence text at all. Both fail notices validation until
 a ruling or a maintainer's review. The runtime's own `LICENSE`, the one copy this record's bundle note named, is now
-one entry among those.
+one entry among those. *Corrected the same day by the generator's gate review:* two more distributions carry no
+licence text. `certifi` 2026.7.22 carries only MPL-2.0's Exhibit A. `mslex` 1.3.0 carries only Apache-2.0's per-file
+notice, beside an `AUTHORS.rst`. Each file only refers to the licence. The first run had counted any non-empty licence
+file as the text (OQ-69). Both now wait on a maintainer's review (O-11), as `proxy_tools` does.
+
+REQ-STARTUP-015's "exactly one copy" of the tool server's licence text meets a second copy when first-release-plan.md
+§4.4 carries the notices file into the artifact. That step decides which copy stands.
 
 **The client's owed halves, alive** (ADR-0034's note beside this one): `code_intelligence` ships **enabled** —
 `REQ-CONFIG-181`'s deviation of 2026-09-05 reverted, its record kept in `defaults.ts`; the grant tiers on the built-in

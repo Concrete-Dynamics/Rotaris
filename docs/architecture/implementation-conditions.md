@@ -392,9 +392,14 @@ signing, `REQ-STARTUP-156`'s gate, an icon, and the per-runner half (IC-3 item 3
 > **What this does not show, stated so it is not read as shown:** a notices file frozen into a release. The first run
 > wrote none, because REQ-STARTUP-143's validation failed on six things IC-7 does not own: the LGPL address (O-3),
 > `dotenv` 0.9.9's missing identifier (OQ-68), and three npm packages and one Python distribution that carry no
-> licence text and await a maintainer's review (O-11). That binds every release by itself, so IC-7 no longer binds
-> anything REQ-STARTUP-143 does not. The machine tools this section also names in REQ-STARTUP-142 are OQ-67's, not
-> IC-7's. Reported into ADR-0035 and ADR-0054 in place.
+> licence text and await a maintainer's review (O-11). *Corrected the same day by the gate review: fourteen things.*
+> Eight more components carry only a file that refers to their licence without carrying its text: six npm packages
+> (`@workflow/serde`, `ai` and four `@ai-sdk` packages) and two Python distributions (`certifi`, `mslex`). The first
+> run had counted such a file as the text (OQ-69). O-11 is now twelve reviews. That binds every release by itself, so
+> IC-7 no longer binds anything REQ-STARTUP-143 does not. The machine tools this section also names in
+> REQ-STARTUP-142 are OQ-67's, not IC-7's. Of the three records this entry is "discharged into", the notes on
+> ADR-0035 and ADR-0054 are written in place. **The third, the release pipeline's evidence, is owed**: no pipeline
+> exists yet (first-release-plan.md §4.2). Its first run must show this section in a frozen file.
 
 > **ADOPTED 2026-09-06 by the owner — option 2, ESC-32 (`owner-decisions.md`).** The language servers are tools
 > provisioned after installation, like Git and ripgrep. **Shown so far, the same day:** `REQ-STARTUP-159`, `058`,

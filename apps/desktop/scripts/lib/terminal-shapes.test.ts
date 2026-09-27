@@ -12,7 +12,8 @@
  * shape matches ANOTHER's. The second is what stops one shape's checks running against another shape's call.
  *
  * The long-output reading is verified against a real shell, so the arithmetic the scenario asserts is measured
- * rather than assumed.
+ * rather than assumed. So is the `failed-word` shape's command, whose printed line the PD-TOOLS-003 guard depends
+ * on, and `outputOf` is pinned to read that printed output and never the command the diagnostic repeats.
  */
 import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';

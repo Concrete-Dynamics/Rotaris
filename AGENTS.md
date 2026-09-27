@@ -336,7 +336,7 @@ across waves, which is what reaches compression and re-spawn. A single wave of p
 minutes and measures the short path under a longer deadline. `--duress-fixture` remains for the question that
 is about size specifically.
 
-The shapes and the two readers live in `apps/desktop/scripts/lib/terminal-shapes.mjs`, pinned by
+The shapes and the three readers (`diagnosticOf`, `longOutputReading`, `outputOf`) live in `apps/desktop/scripts/lib/terminal-shapes.mjs`, pinned by
 `terminal-shapes.test.ts` — a pattern that stopped matching its own command would turn every check in the
 scenario into "never attempted" without anybody being told, so the test asserts the round trip in both
 directions: every shape matches its own command, and none matches another's.

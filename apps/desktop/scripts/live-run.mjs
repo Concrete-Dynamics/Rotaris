@@ -77,7 +77,8 @@
  * the newest, `--keep-runs` (default 10) prunes the oldest — with `results.json` and the copied `workspace.db` at
  * its root and one directory per scenario holding:
  *
- *   app.log            the launch verbatim, key substituted out and asserted free of a bearer
+ *   app.log            the launch verbatim, key substituted out and asserted free of a bearer, at `--app-log-level`
+ *                      (default: the product's own, `info`)
  *   app.filtered.log   the same log without a child MCP server's stderr, consecutive repeats collapsed, the
  *                      sandbox path shortened — two thirds of a launch log is one language server booting
  *   autopsy.txt        `apps/desktop/scripts/autopsy.mjs` over this scenario's session
@@ -161,6 +162,19 @@ const KEEP_RUNS = Math.max(1, Number(value('keep-runs', '10')));
  * `INFO` are the same file and naming the louder one would imply a detail that does not exist.
  */
 const SESSION_LOG_LEVEL = value('session-log-level', 'INFO');
+/**
+ * The APPLICATION log's threshold, the one `session_log_level` never reaches (PD-MONITOR-002). The product reads it
+ * from `ROTARIS_APP_LOG_LEVEL` alone, and `cleanEnvironment()` strips that name from every launch, so an exported
+ * variable never gets through: this flag is how a live run asks for `debug` — a child MCP server's stderr among it.
+ * Unnamed, nothing is set and the launch keeps the product's default, `info`. The value is checked against the
+ * directive's four words here, because the product answers a word it does not know by recording `info` and
+ * writing one warning line, which a pack read afterwards would show as a run that quietly did not ask.
+ */
+const APP_LOG_LEVEL = value('app-log-level', null);
+if (APP_LOG_LEVEL !== null && !/^(?:debug|info|warning|error)$/i.test(APP_LOG_LEVEL)) {
+  console.error(`--app-log-level=${APP_LOG_LEVEL}: expected debug, info, warning or error (PD-MONITOR-002)`);
+  process.exit(2);
+}
 /**
  * `--no-record-traffic`: talk to the endpoint directly instead of through the recording proxy.
  *
@@ -395,6 +409,8 @@ const USAGE = `pnpm live-run — the application against a real model endpoint, 
   --duress-fixture=<dir>  the workspace duress opens (default: the same small todo-app the others use)
   --keep-runs=<n>      evidence packs to keep under .live-run/runs (default 10; the oldest are pruned)
   --session-log-level=<lvl>  the sandbox's session_log_level (default INFO; WARNING is the product's own default)
+  --app-log-level=<lvl>      the application log's threshold, ROTARIS_APP_LOG_LEVEL (debug|info|warning|error;
+                             default: unset, the product's own info)
   --no-record-traffic  talk to the endpoint directly; do not record request and response bodies
   --gui                show the window each scenario drives, to watch it (hidden by default; nothing else changes)
   --keep               keep the sandbox workspace instead of deleting it
@@ -642,7 +658,8 @@ function scenarioDir(name) {
  *      Two thirds of a live launch log was one language server's boot noise (190 of 288 lines, measured on the
  *      2026-09-21 pack; 141 of 195 measured independently on 2026-09-16). Since PD-MONITOR-002 the product records
  *      `info` and above unless `ROTARIS_APP_LOG_LEVEL` says otherwise, and `cleanEnvironment()` strips that name from
- *      this launch, so those lines are absent from `app.log` unless a scenario's own `extra` sets it to `debug`.
+ *      this launch, so those lines are absent from `app.log` unless `--app-log-level=debug` or a scenario's own
+ *      `extra` sets it to `debug`.
  *   2. consecutive repeats of one line, collapsed to the line and a count, the shape `transport.ts` already uses.
  *   3. the sandbox's absolute path, which prefixes most lines at about ninety characters, shortened to `<sandbox>`.
  */
@@ -735,6 +752,8 @@ async function launch(name, extra, timeoutMs = 180_000) {
       ...cleanEnvironment(),
       ...proofIsolationEnv({ profileRoot: sandbox, local, preferences: join(sandbox, 'preferences') }),
       ROTARIS_CAPTURE_PNG: png, ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
+      // `--app-log-level`, ahead of `extra` so a scenario that names its own threshold keeps it.
+      ...(APP_LOG_LEVEL === null ? {} : { ROTARIS_APP_LOG_LEVEL: APP_LOG_LEVEL }),
       ...paced,
       ...extra,
     },

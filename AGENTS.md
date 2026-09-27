@@ -164,7 +164,7 @@ pnpm live-run --confirm --gui        # the same run, with the window on screen t
 
 `--confirm` is required. The full flag list (`--endpoint`, `--model`, `--base-url`, `--budget`,
 `--max-tokens`, `--only`, `--max-iterations`, `--gui`, `--keep`, `--skip-build`, `--keep-runs`,
-`--session-log-level`, `--no-record-traffic`, `--duress-fixture`) is in the script's own header —
+`--session-log-level`, `--app-log-level`, `--no-record-traffic`, `--duress-fixture`) is in the script's own header —
 `pnpm live-run --help` prints it.
 
 **The default scenarios measure several mechanisms at once, so a feature is proved working beside the others and
@@ -254,8 +254,8 @@ directory per scenario:
 
 | file | what it holds |
 |---|---|
-| `app.log` | the launch verbatim, key substituted out and asserted free of a bearer |
-| `app.filtered.log` | the same log with consecutive repeats collapsed and the sandbox path shortened, and a child MCP server's stderr dropped where the log holds any — two thirds of a launch log used to be one language server booting. Since `PD-MONITOR-002` the product's own log records `info` and above and that stderr is `debug`, so a live-run log carries none of it unless a scenario sets `ROTARIS_APP_LOG_LEVEL=debug`, the one switch that restores it |
+| `app.log` | the launch verbatim, key substituted out and asserted free of a bearer, at `--app-log-level` (default: the product's own, `info`) |
+| `app.filtered.log` | the same log with consecutive repeats collapsed and the sandbox path shortened, and a child MCP server's stderr dropped where the log holds any — two thirds of a launch log used to be one language server booting. Since `PD-MONITOR-002` the product's own log records `info` and above and that stderr is `debug`, so a live-run log carries none of it unless the run names `--app-log-level=debug` or a scenario sets `ROTARIS_APP_LOG_LEVEL=debug`, the one switch that restores it |
 | `autopsy.txt` | `apps/desktop/scripts/autopsy.mjs` over that scenario's session |
 | `session.log` | the product's own per-session log, at `--session-log-level` (default `INFO`) |
 | `transcript.md` | every transcript row in full, not the 400 characters `results.json` keeps |

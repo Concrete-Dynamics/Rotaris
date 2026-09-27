@@ -1600,8 +1600,9 @@ export class Sessions {
     const row = dal.getSession(sessionId);
     if (!row || row.workspace_root !== workspaceRoot) return err({ code: 'no-session', reason: `The session store holds no session under ${sessionId}, so nothing can be previewed or restored for it.` });
     const { root, binding } = effectiveRootOf(row);
-    // Part U: the repair is the one unit REQ-SESSION-060 fixes, shared with the browser's explicit Repair.
-    const r = this.repairOne(dal, sessionId);
+    // Part U: the repair is the one unit REQ-SESSION-060 fixes, shared with the browser's explicit Repair. PD-ORCH-005
+    // clause 8: opening a session's checkpoints is viewing it, so this repair records no crash on its agents (OQ-69).
+    const r = this.repairOne(dal, sessionId, false);
     const repaired: CheckpointListPayload['repaired'] = r.repaired ? { previous: r.repaired.from, reason: r.repaired.reason } : null;
     const rows = dal.listCheckpoints(sessionId).map(toCheckpointPayload);
     const unavailable = binding !== null && !existsSync(binding.worktree_path) ? CHECKPOINTS_NO_TREE : null;
@@ -1629,7 +1630,7 @@ export class Sessions {
     if (r.iteration !== null) warn(`iteration ${r.iteration} of ${sessionId} was left open by a crash: ${r.paused} agent(s) recorded paused (PD-ORCH-005)`);
   }
 
-  private repairOne(dal: StoreDal, sessionId: SessionId): { repaired: RepairedSession | null; skipped: string | null } {
+  private repairOne(dal: StoreDal, sessionId: SessionId, recordsCrash = true): { repaired: RepairedSession | null; skipped: string | null } {
     const row = dal.getSession(sessionId);
     if (!row) return { repaired: null, skipped: 'no session exists under that id' };
     if (!isActiveStatus(row.execution_status)) return { repaired: null, skipped: `its status is '${row.execution_status || 'idle'}', which asserts no run in progress` };
@@ -1654,7 +1655,7 @@ export class Sessions {
        */
       writer.appendTimeline('session.interrupted_recovered', 'rotaris', `Session was still marked '${previous}' but ${reason}; status set to 'interrupted'.`, { previous_execution_status: previous, execution_status: 'interrupted', reason }, 'warning');
       // PD-ORCH-005 clause 3: the repair is one of the two moments a crash is recorded.
-      this.recordCrashOf(dal, writer, sessionId, (m) => this.deps.warn(m));
+      if (recordsCrash) this.recordCrashOf(dal, writer, sessionId, (m) => this.deps.warn(m));
     });
     if (!r.ok) { this.deps.warn(`session ${sessionId} could not be marked interrupted: ${r.error.reason}`); return { repaired: null, skipped: `the correction could not be made durable (${r.error.reason}); nothing was changed` }; }
     this.live.get(sessionId)?.owner.reconcile();

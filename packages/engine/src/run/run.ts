@@ -466,6 +466,18 @@ export class Run {
     return this.pauseRequested ? 'pause' : null;
   }
 
+  /**
+   * PD-ORCH-005 clause 10: what the run's end does to its agents' background sessions — `pause` leaves them running, `stop`
+   * and `quit` end them — or null, for a run that ended on its own account or at a durable hold, which leaves them as
+   * before. The explicit cancel is a stop here.
+   */
+  private terminalsEndedBy(): Interruption | null {
+    if (this.restCause !== null) return this.restCause;
+    if (!this.stop.requested || this.planHeld) return null;
+    if (this.stop.reason === 'application_shutdown') return 'quit';
+    return this.stop.reason === 'user_cancelled' ? 'stop' : null;
+  }
+
   /** Whether the 30 s hard-cancel budget is armed (ADR-0014). */
   get hardCancelArmed(): boolean {
     return this.hardCancel !== null;
@@ -585,6 +597,14 @@ export class Run {
        */
       // PD-ORCH-005: a run that resumes an open iteration is not held — the work it resumes was released already (OQ-70).
       this.planHeld = this.deps.plan !== undefined && !isAnswerOnly((this.preflight?.intent ?? NO_PREFLIGHT_INTENT).category) && this.resumeFrom === null;
+      // PD-ORCH-005 clause 11: a pause accepted before the hold was settled is refused now that it is — a plan cycle leaves
+      // no agent unfinished, so there is nothing for it to hold (found by phase 3's review).
+      if (this.planHeld && this.pauseRequested) {
+        this.pauseRequested = false;
+        this.toolDeadline?.cancel();
+        writer.appendTimeline('run_pause_refused', 'rotaris', 'The pause was not applied: this run is held at the plan gate, which leaves no agent unfinished (PD-ORCH-005 clause 11).', {});
+        writer.save('starting');
+      }
       if (this.stop.requested) return await this.teardown(this.stop.reason ?? 'user_cancelled');
       const auditPayload = {
         session_id: this.sessionId, workspace_root: this.deps.workspaceRoot, created_at: this.deps.readSession()?.created_at ?? null,
@@ -652,6 +672,9 @@ export class Run {
       this.lastFailure = this.lastFailure ?? String(cause);
       this.deps.warn(`run ${this.sessionId} raised outside an iteration: ${String(cause)}`);
       return await this.teardown('agent_session_aborted');
+    } finally {
+      // The pause's tool deadline outlives no run, whichever way it ended.
+      this.toolDeadline?.cancel();
     }
   }
 
@@ -806,7 +829,10 @@ export class Run {
     const open = dal?.openIterationOf(this.sessionId);
     if (!dal || !open) return;
     this.cancelPausedAgents(dal, open);
-    this.deps.writer.endIteration(open.iteration, { task: this.todo.textOf(open.todo_task_id) ?? open.task, outcome: 'cancelled', summary: 'the run that owned this iteration ended before it closed' }, 'cancelled');
+    const summary = open.interruption === null || open.interruption === 'crash'
+      ? 'the run that owned this iteration ended before it closed'
+      : `the session was continued without the agents ${interruptionPhrase(open.interruption)} had left paused`;
+    this.deps.writer.endIteration(open.iteration, { task: this.todo.textOf(open.todo_task_id) ?? open.task, outcome: 'cancelled', summary }, 'cancelled');
     // REQ-GIT-051: the iteration closes here, so its one capture is attempted here — it records the work the dead run
     // left. No child is credited: that run's children are not this run's. Its hooks' `iteration_end` is not fired; the
     // hooks that saw the iteration begin belonged to the run that died.
@@ -936,7 +962,7 @@ export class Run {
   /** The per-agent ladder deps shared by the root and every child (the cell is the agent's own). */
   private resilienceFor(cell: AgentResilienceCell, unresponsiveBoundMs: number): TurnResilience {
     const { config } = this.deps;
-    return { cell, memory: this.memory, catalogue: this.catalogue, waits: this.waits, transientRetries: config.transientRetries, validationRetries: config.validationRetries, llmResponseTimeoutMs: config.llmResponseTimeoutMs, unresponsiveBoundMs };
+    return { cell, memory: this.memory, catalogue: this.catalogue, waits: this.waits, transientRetries: config.transientRetries, validationRetries: config.validationRetries, llmResponseTimeoutMs: config.llmResponseTimeoutMs, unresponsiveBoundMs, resting: () => this.restCause !== null };
   }
 
   /** The root's cell lives for the run; the entry model (and a mid-run switch of it) enters through the session memory. */
@@ -1078,9 +1104,19 @@ export class Run {
       const rest = iterationOverride === undefined ? this.restCause : null;
       const rootFinished = outcome !== null && outcome.paused !== true && !this.abort.signal.aborted && outcome.report.status !== 'failed';
       if (rest !== null && (!rootFinished || (children?.scheduler.hasNonTerminal ?? false))) {
-        this.iterationRest = rest;
-        rootRecord.state = 'paused';
         if (children) { const n = await children.rest(rest); if (n > 0) this.deps.warn(`iteration ${iteration}: ${n} child(ren) left paused by ${rest} (PD-ORCH-005)`); }
+        /*
+         * Clause 3: the explicit cancel is final even when it arrives while the run is coming to rest — the rest waits on
+         * every execution, which can take the pause's whole tool deadline. Read again once the rest is done: cancelled
+         * meanwhile, every agent it paused ends `cancelled` and the iteration closes (found by phase 3's review).
+         */
+        if (this.restCause === null) {
+          rootRecord.state = 'cancelled';
+          if (children) children.finalize('cancelled: the run was cancelled while it was coming to rest');
+        } else {
+          this.iterationRest = this.restCause;
+          rootRecord.state = 'paused';
+        }
       } else if (children) {
         // REQ-ORCH-052: every exit path from an iteration leaves every child record terminal.
         const n = children.finalize(this.stop.requested ? 'cancelled: the run was stopped while this child was in flight' : 'cancelled during iteration cleanup');
@@ -1127,6 +1163,8 @@ export class Run {
     this.deps.writer.save('pausing');
     this.deps.writer.appendTimeline('run_pause_requested', 'user', 'The user asked the run to pause; the current step finishes first.', {});
     try { this.withdrawPending('pause'); } catch (cause) { this.deps.warn(`withdrawing pending approvals on ${this.sessionId} failed: ${String(cause)}`); }
+    // Clause 2: no model call after the pause is accepted, so an agent parked on a provider limit stops waiting now.
+    this.waits.releaseForRest();
     this.toolDeadline = this.deps.clocks.timers.after(this.deps.pauseToolDeadlineMs ?? PAUSE_TOOL_DEADLINE, () => this.toolCut.abort());
     this.children?.beginRest();
     return true;
@@ -1501,10 +1539,12 @@ export class Run {
   /** REQ-SESSION-094: the ordered pipeline, each step guarded, the whole of it run even on exception. */
   private async teardown(reasonIn: StopReason): Promise<RunResult> {
     const { writer, owner, bus, clocks } = this.deps;
-    this.toolDeadline?.cancel();
-    // PD-ORCH-005 clause 10: a run that comes to rest records its agents' background sessions — a stop and a quit end them.
-    const rest = this.restCause;
-    if (rest !== null) await this.restTerminals(rest);
+    // PD-ORCH-005 clause 10: a run that comes to rest records its agents' background sessions — a stop and a quit end them,
+    // and so does the explicit cancel, which is a stop the user made final (OQ-69). Guarded like every teardown step.
+    const ended = this.terminalsEndedBy();
+    if (ended !== null) {
+      try { await this.restTerminals(ended); } catch (cause) { this.deps.warn(`recording the background sessions of ${this.sessionId} failed: ${String(cause)}`); }
+    }
     // REQ-EVENTS-028 / REQ-SESSION-092: a requested cancellation wins over any other outcome.
     const stopReason: StopReason = this.stop.requested ? (this.stop.reason ?? 'user_cancelled') : reasonIn;
     const classified = classifyStop(stopReason);

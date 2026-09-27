@@ -20,6 +20,11 @@ export interface Observation {
   readonly diff?: string;
   /** A one-line rendering of the call for the tool row's header (`▸ toolname args`). */
   readonly label?: string;
+  /**
+   * PD-ORCH-005 clause 9: the call waited on a person and the run's rest withdrew it (`ask_questions`), naming the
+   * interruption. The gate records the withdrawal and settles the call as never run.
+   */
+  readonly withdrawnBy?: string;
 }
 
 export interface ToolContext {

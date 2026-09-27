@@ -352,9 +352,15 @@ export class Gate {
       }
     }
     // (5) diagnostics.
-    const status: Exclude<ToolStatus, 'running'> = obs.isError ? 'failed' : 'ok';
-    // PD-ORCH-005: an executor the run's rest cut short (a withdrawn question, a released wait) says so by its failure kind.
-    const result = finish({ text, isError: obs.isError, status, decision, observation: obs, ...(followUp === undefined ? {} : { followUp }), ...(obs.failureKind === INTERRUPTED_FAILURE_KIND ? { interrupted: true } : {}) }, {
+    /*
+     * PD-ORCH-005: an executor the run's rest cut short (a withdrawn question, a released wait) says so by its failure
+     * kind. A question withdrawn by the rest (clause 9) was never answered and never run: it settles `blocked`
+     * (REQ-MONITOR-105's "refused or skipped before it ran") and the timeline records which interruption withdrew it.
+     */
+    const withdrawnBy = obs.withdrawnBy;
+    const status: Exclude<ToolStatus, 'running'> = withdrawnBy !== undefined ? 'blocked' : obs.isError ? 'failed' : 'ok';
+    if (withdrawnBy !== undefined) deps.sink.timeline('question_withdrawn', call.agentId || call.persona, `The ${call.name} call was withdrawn by ${interruptionPhrase(withdrawnBy)} before the user answered; it was not run.`, { tool: call.name, persona: call.persona, interruption: withdrawnBy });
+    const result = finish({ text, isError: obs.isError, status, decision, observation: obs, ...(followUp === undefined ? {} : { followUp }), ...(obs.failureKind === INTERRUPTED_FAILURE_KIND ? { interrupted: true } : {}), ...(withdrawnBy !== undefined ? { blockedReason: text } : {}) }, {
       ...(obs.outcomeKind === undefined ? {} : { outcome_kind: obs.outcomeKind }), ...(obs.exitCode === undefined ? {} : { exit_code: obs.exitCode }),
       ...(obs.failureKind === undefined ? {} : { failure_kind: obs.failureKind }), ...(obs.warnings === undefined ? {} : { warnings: obs.warnings }),
       error: obs.isError ? obs.text.slice(0, 500) : null,
@@ -383,7 +389,8 @@ export class Gate {
     if (obs.outcomeKind === 'shell_failure') this.deps.sink.issue({ kind: 'terminal_shell_failure', severity: 'error', actor, message: `A terminal command failed (exit ${obs.exitCode ?? '?'}).`, evidence_ref: ref, metadata: meta });
     else if (obs.outcomeKind === 'suspicious_success') this.deps.sink.issue({ kind: 'terminal_suspicious_success', severity: 'warning', actor, message: `A terminal command exited 0 with output that looks like a failure: ${(obs.warnings ?? []).join('; ')}`, evidence_ref: ref, metadata: meta });
     else if (obs.outcomeKind === 'timeout' || obs.failureKind === 'timeout') this.deps.sink.issue({ kind: 'terminal_timeout', severity: 'error', actor, message: 'A terminal command exceeded its timeout.', evidence_ref: ref, metadata: meta });
-    else if (obs.isError) this.deps.sink.issue({ kind: 'tool_error', severity: 'warning', actor, message: `The '${call.name}' call failed: ${obs.text.slice(0, 200)}`, evidence_ref: ref, metadata: meta });
+    // PD-ORCH-005: a call the run's rest cut short did not fail; it is recorded as interrupted, and raises no issue.
+    else if (obs.isError && obs.failureKind !== INTERRUPTED_FAILURE_KIND) this.deps.sink.issue({ kind: 'tool_error', severity: 'warning', actor, message: `The '${call.name}' call failed: ${obs.text.slice(0, 200)}`, evidence_ref: ref, metadata: meta });
   }
 
   /** ADR-0019's flow: publish, then either the headless policy (no wait at all) or the brokered wait. */

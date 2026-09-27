@@ -315,6 +315,26 @@ describe('engine/run/compression — in a run (REQ-ORCH-093, REQ-MONITOR-076/086
     expect(warnings.some((w) => w.includes('REQ-MONITOR-082'))).toBe(true);
   });
 
+  it('PD-ORCH-005 clause 2: a pause accepted while the threshold compresses allows no step after the compression', async () => {
+    let release!: () => void;
+    const held = new Promise<void>((r) => { release = r; });
+    const { sessions, counts } = sessionsWith((persona, turn) => {
+      if (persona === 'compressor') return { parts: [{ hold: held }, ...answer('Work performed: a lot. Findings reached: some. Questions left open: none.').parts] };
+      if (turn === 1) return toolCalls([{ callId: 'c1', name: 'glob', args: {} }], 'looking', { input: 20, output: 10 });
+      if (turn === 2) return toolCalls([{ callId: 'c2', name: 'glob', args: {} }], 'looking again', { input: 900, output: 10 });
+      return answer('never');
+    }, { triggerTokens: 600, preserveRecentTurns: 1 });
+    const sid = (sessions.start(dal, 'C:/ws', 'do the thing') as { value: SessionId }).value;
+    for (let i = 0; i < 60 && counts.get('compressor') !== 1; i++) await tick();
+    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    release();
+    await sessions.running(sid)!;
+    const steps = [...counts.entries()].filter(([persona]) => persona !== 'compressor').reduce((n, [, c]) => n + c, 0);
+    expect(steps).toBe(2);
+    expect(timeline(sid).some((t) => t.name === 'context_compressed')).toBe(true);
+    expect(dal.iterationsOf(sid)).toMatchObject([{ state: 'open', interruption: 'pause' }]);
+  });
+
   it('REQ-MONITOR-076/081/086: the threshold compresses BEFORE the next call, the count rises once, and the reading falls', async () => {
     // The first step reports 900 prompt tokens against a trigger of 600, so the SECOND step compresses first.
     const { sessions, pub, counts } = sessionsWith((persona, turn) => {

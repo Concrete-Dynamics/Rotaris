@@ -127,8 +127,9 @@ The parts that are easy to get wrong:
   discarded, and the call is denied with source `presenter-error`.
 - Only an **answer, a cancellation or a withdrawal** releases the wait. A wait with no limit is still released —
   the explicit cancel cancels whatever is blocked on a person as its first act, and a rest (a pause, a stop, a quit)
-  **withdraws** it: the call settles blocked and interrupted, `approval_withdrawn` names the interruption, and no
-  decision is audited (PD-ORCH-005 clause 9; §4).
+  **withdraws** it: the call settles blocked and interrupted, `approval_withdrawn` (or `question_withdrawn` for a
+  question) names the interruption, no decision is audited, and no `tool_error` issue is filed (PD-ORCH-005 clause 9;
+  §4).
 - **Approve for the session adds a grant to the agent's `PolicyContext`**, matched before any policy rule on
   every later call (`policy.ts`, REQ-TOOLS-023/024). A grant for the public `write_file` or `haet_edit` (`haet`
   folded in) covers a path, not an argument set (`PD-TOOLS-004`): the gate hands `grant` the workspace root, the
@@ -218,12 +219,13 @@ sequenceDiagram
   else accepted
     R->>W: save('pausing'), run_pause_requested
     R->>P: withdrawPending('pause') — each waiting call: blocked, interrupted
-    R->>R: arm the tool deadline (clock port)
+    R->>R: release every provider-limit wait; arm the tool deadline (clock port)
     R->>IC: beginRest() — scheduler held, waiting parents woken
     Note over R,C: a stop or a quit: the same withdrawal and beginRest from the stop listener, then the run signal aborts
-    C->>C: the step in flight finishes; calls not started are recorded "not run"
+    C->>C: the step in flight finishes; calls not started are recorded "not run"; no retry, fallback or summarising call
     C->>W: restChild(task, 'pause', resume state) — paused, child_paused
-    R->>IC: rest('pause') — waits for every execution, pauses the unstarted where they stood
+    R->>IC: rest('pause') — waits for every execution (a stop or a quit: within 30 s), pauses the unstarted where they stood
+    R->>R: read the cause again — the explicit cancel meanwhile: every agent cancelled, the iteration closed
     R->>W: recordIterationInterruption, iteration_paused — the iteration stays open
     R->>W: teardown: agent_terminals (a pause leaves them running; a stop or a quit records its end, then ends them)
     R->>W: endRun('paused') — the lock released
@@ -236,7 +238,8 @@ sequenceDiagram
   open row, its unfinished agents paused, a dead run's unanswered calls answered, its approvals withdrawn, its
   background sessions ended. Loading the session writes nothing.
 - **The explicit cancel is not a rest.** The reserved run id's final stop cancels the waits, drains and finalizes as
-  before: every agent `cancelled`, the iteration closed.
+  before: every agent `cancelled`, the iteration closed — including when it arrives while a pause or a stop is still
+  coming to rest. It ends the agents' background sessions as a stop does (OQ-69).
 - **The next continue resumes it** (`03-runtime-view.md` §2): the open iteration first, the same root and task, every
   paused agent moved back and carrying on from its record, told of its background sessions, the root handed a new
   message as its next. Declined ("continue without them"), its paused agents end `cancelled` and it closes before the

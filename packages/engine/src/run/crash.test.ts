@@ -152,6 +152,16 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       expect(dal.getSession(sid)!.pending_approvals).not.toBe('[]');
     });
 
+    it('clause 8 (OQ-69): opening the session\'s checkpoints repairs its status (REQ-GIT-094) and records nothing of its agents', async () => {
+      const sid = await crashed();
+      const listed = sessionsAs(88).checkpointListing(dal, 'C:/ws', sid);
+      expect(listed.ok && listed.value.repaired).toBeTruthy();
+      expect(dal.getSession(sid)!.execution_status).toBe('interrupted');
+      expect(dal.getIteration(sid, 2)!.interruption).toBeNull();
+      expect(dal.getChild(sid, 'bg_000000c1')!.state).toBe('running');
+      expect(dal.getSession(sid)!.pending_approvals).not.toBe('[]');
+    });
+
     it('the repair records it', async () => {
       const sid = await crashed();
       const report = sessionsAs(88).repair(dal, 'C:/ws', { sessionId: sid });

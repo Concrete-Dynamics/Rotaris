@@ -1586,8 +1586,12 @@ are not recorded, and cannot be recovered afterwards.
 > one `warning` line after the instance claim, rather than silently. **(2) "Every line".** Main's own lines carried no
 > level at all, and the collaborators that already told a warning apart (the improvement coordinator, initialization,
 > the credential store, the settings store, the provider service) had it dropped by the wiring, so REQ-LIBRARY-035(b)'s *warning* reached
-> the log as an unlabelled line; each now arrives at `warning`. A message of several lines (a stack) is written with
-> the stamp and level on each line. **(3) The obliged lines.** Every line the seven named requirements oblige reaches
+> the log as an unlabelled line; each now arrives at `warning`. Main's own reports of a loss are `error` — an uncaught
+> exception or rejection, a refused launch, a failed hand-over, a renderer or child process gone for any reason but
+> `clean-exit`, and the run host or a workspace service exiting with any status but the 0 that follows main's own
+> `shutdown` — and a dialog or review that could not be presented is `warning`; every other line of main's stays
+> `info`. A message of several lines (a stack) is written with the stamp and level on each line. **(3) The obliged
+> lines.** Every line the seven named requirements oblige reaches
 > the log at `info` or above: the confinement verdict (REQ-SANDBOX-071) at `info`, REQ-LIBRARY-035(b)/124's failure and
 > REQ-LIBRARY-047's unrecorded version at `warning`; REQ-TOOLS-171 and REQ-HOOKS-102 oblige no line, they constrain
 > text, which a threshold can only drop. REQ-HOOKS-138's hook lines in this log are `info` and `warning`, but the hook
@@ -1599,8 +1603,9 @@ are not recorded, and cannot be recovered afterwards.
 > Measured on a driven launch in a Linux container as root, without the bundled runtime, so the 141 stderr lines of
 > 2026-09-16 could not recur: 72 lines at the default (66 `info`, 6 `warning`, 0 `debug`); 69 with the variable at
 > `debug`, the same lines plus the code-intelligence child's two `debug` lines, less five the first launch's own
-> driving wrote. At `warning` a launch and quit wrote nothing, the `quit:` lines that tell a crash from a close among
-> it — which is what a threshold above `info` costs. The row is in
+> driving wrote. At `warning` a clean launch and quit writes nothing, its `quit:` lines included, which is what a
+> threshold above `info` costs; a crash still writes its `error` line, because the loss lines above are `error` for
+> exactly that reason. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---

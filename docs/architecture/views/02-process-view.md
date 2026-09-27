@@ -408,14 +408,22 @@ lines and the `log {level, message}` events both children send — the run host'
 written through one writer, `logAt` in `main/index.ts`, built over `main/app-log.ts`. A line carries its level as a
 field, a column of its own ahead of the message: `[main <instant>] <level> <source>: <message>`, the level one of
 `debug`, `info`, `warning` (the protocol's `warn`) and `error`, the source present only on a forwarded line (`run host`,
-`workspace service`). A forwarded line keeps the level its child gave it — the event's `level` is the logger's own
-type, so no mapping stands between them — and a line below the threshold is not written. The threshold is `info`, and
-the environment variable `ROTARIS_APP_LOG_LEVEL`, read once when main's module is evaluated, is the only thing that
-moves it; no message kind, command, configuration key or setting reaches it, and it is a different thing from the
-per-session `session.log`, whose level is `session_log_level` (REQ-CONFIG-121). The per-session log is the run host's
+`workspace service`); main's own line about the run host's handshake reads `run host hello:` so it is never taken for
+one. A forwarded line keeps the level its child gave it — the event's `level` is the logger's own type, so no mapping
+stands between them. Main's own lines are `info`, except its reports of a loss — a crash, a renderer or child process
+gone for any reason but `clean-exit`, a child exiting with any status but the 0 of an ordered `shutdown`, a failed
+hand-over, a refused launch — which are `error`, and a dialog it could not present, which is `warning`. A line below
+the threshold is not written. The threshold is `info`, and the environment variable `ROTARIS_APP_LOG_LEVEL`, read
+once when main's module is evaluated, is the only thing that moves it; no message kind, command, configuration key or
+setting reaches it, and it is a different thing from the per-session `session.log`, whose level is `session_log_level`
+(REQ-CONFIG-121). The per-session log is the run host's
 file; the application log is not a file the product writes — whoever launched the process keeps it or does not. The
-sentinel's one diagnostic (`main/sentinel.ts`) goes to its own stderr, which is the MCP child's stderr as the run host
-reads it, and is not a line of this log.
+sentinel (`main/sentinel.ts`) is not main and does not write this log itself: its two diagnostics — the bundled runtime
+absent, or present and unable to start — go to its own stderr. The token process is an MCP stdio child, so that stderr
+reaches this log through the run host like any child's: line by line at `debug` (`run host: mcp code_intelligence
+stderr: …`, `packages/mcp/src/transport.ts`), and quoted in the failure lines — REQ-MCP-107's stderr tail in a failed
+discovery's line at `warning`, and a failed setup step's last output at `info` (`mcp setup: create failed — …; its last
+output: …`, the detail `packages/mcp/src/setup.ts` builds). At the default threshold only the quoted route is written.
 
 **Every window subscribes for itself (Part R).** `session.subscribe` / `session.unsubscribe` bind the relay subscription to the **sender's** webContents id — the persona window's when it asks — not the main window's (the twenty-seventh defect, ADR-0043's note); the run host's `session.attach` then re-delivers the whole-session update and the resident rows to every subscriber of the session. A persona window subscribes on show and unsubscribes on hide (ADR-0048's zero-work rule).
 

@@ -107,11 +107,13 @@ process.on('unhandledRejection', (reason) => { log(`UNHANDLED rejection in main:
  */
 app.on('before-quit', () => { log('quit: requested (before-quit)'); });
 app.on('quit', (_e, code) => { log(`quit: exiting with status ${code}`); });
+// PD-MONITOR-002: a process lost for any reason but `clean-exit` is an `error`, so a log kept at `warning` or `error`
+// still says a crash happened; `clean-exit` is the one reason in Electron's vocabulary that is not a loss.
 app.on('render-process-gone', (_e, contents, details) => {
-  log(`RENDERER GONE (${details.reason}, exit ${details.exitCode}) for ${contents.getURL() || 'a destroyed frame'}`);
+  log(`RENDERER GONE (${details.reason}, exit ${details.exitCode}) for ${contents.getURL() || 'a destroyed frame'}`, details.reason === 'clean-exit' ? 'info' : 'error');
 });
 app.on('child-process-gone', (_e, details) => {
-  log(`CHILD PROCESS GONE (${details.type}${details.name === undefined ? '' : ` ${details.name}`}: ${details.reason}, exit ${details.exitCode})`);
+  log(`CHILD PROCESS GONE (${details.type}${details.name === undefined ? '' : ` ${details.name}`}: ${details.reason}, exit ${details.exitCode})`, details.reason === 'clean-exit' ? 'info' : 'error');
 });
 process.on('exit', (code) => { log(`main process exiting with status ${code}`); });
 
@@ -204,7 +206,9 @@ async function main(): Promise<void> {
     if (line !== lastLeaseLine) { lastLeaseLine = line; log(line); }
     return { kind: 'credentials.leased', bearers, report: { authenticated: [...report.authenticated], renewed: [...report.renewed], unresolved: { ...report.unresolved } } };
   });
-  runHostChild.on('exit', (code) => log(`run host exited (${code}); NOT re-forked — every in-flight run is lost and settles through stale detection (ADR-0002)`));
+  // PD-MONITOR-002: the run host exits 0 only after main's own `shutdown` (`dispatch.ts`), which every orderly quit sends;
+  // any other status is the process lost, and an `error`.
+  runHostChild.on('exit', (code) => log(`run host exited (${code}); NOT re-forked — every in-flight run is lost and settles through stale detection (ADR-0002)`, code === 0 ? 'info' : 'error'));
 
   const services = new Map<string, { child: UtilityProcess; link: ProcessLink<WorkspaceServiceRequest> }>();
   let cancelImprovementWorkspace = (_workspaceRoot: string): void => undefined;
@@ -265,7 +269,8 @@ async function main(): Promise<void> {
       const child = utilityProcess.fork(join(__dirname, 'workspace-service.js'), [], { serviceName: `rotaris-workspace:${key}` });
       svc = { child, link: new ProcessLink<WorkspaceServiceRequest>(portOf(child), clocks.timers) };
       services.set(key, svc);
-      child.on('exit', (code) => { log(`workspace service for ${key} exited (${code})`); services.delete(key); cancelImprovementWorkspace(key); });
+      // PD-MONITOR-002: 0 follows main's own `shutdown`; any other status is the service lost, and an `error`.
+      child.on('exit', (code) => { log(`workspace service for ${key} exited (${code})`, code === 0 ? 'info' : 'error'); services.delete(key); cancelImprovementWorkspace(key); });
       // The service's log lines reach main's log too (Part P: the checkpoint capture, preview and restore lines the proof reads),
       // at the level the service gave them and under the same threshold as main's own (PD-MONITOR-002).
       svc.link.onEvent((e) => { if (e.kind === 'log') logAt(e.level, 'workspace service', e.message); });
@@ -309,7 +314,9 @@ async function main(): Promise<void> {
   };
 
   const rhHello = await runHost.request({ kind: 'hello' }, millis(5_000));
-  log(`run host: ${JSON.stringify(rhHello)}`);
+  // Main's own line about the handshake: named `run host hello:` so it cannot be read as a line the run host forwarded,
+  // which the log writes as `run host: …` (PD-MONITOR-002's source column).
+  log(`run host hello: ${JSON.stringify(rhHello)}`);
 
   const relay = new UpdateRelay();
   // Verification only: the capture may wait for the first terminal result (ROTARIS_CAPTURE_WAIT=result).
@@ -450,7 +457,7 @@ async function main(): Promise<void> {
       dlg.show();
       dlg.focus();
     } catch (cause) {
-      log(`pause dialog could not be shown: ${String(cause)}`);
+      log(`pause dialog could not be shown: ${String(cause)}`, 'warn');
     }
   };
 
@@ -525,7 +532,7 @@ async function main(): Promise<void> {
         });
       }
     } catch (cause) {
-      log(`provider dialog could not be shown: ${String(cause)}`);
+      log(`provider dialog could not be shown: ${String(cause)}`, 'warn');
     }
   };
   /** After any change to the credential store or the snapshot: the workspace's starter file if absent, the load again, every window told. */
@@ -618,7 +625,7 @@ async function main(): Promise<void> {
         });
       }
     } catch (cause) {
-      log(`approval ${payload.request_id} could not be presented: ${String(cause)}`);
+      log(`approval ${payload.request_id} could not be presented: ${String(cause)}`, 'warn');
       entry.answered = true;
       await runHost.request({ kind: 'approval.shown', requestId: payload.request_id, ok: false, error: String(cause) }, millis(5_000)).catch(() => undefined);
       if (!dlg.isDestroyed()) dlg.close();
@@ -677,7 +684,7 @@ async function main(): Promise<void> {
       }
       return { ok: true, value: { opened: true } };
     } catch (cause) {
-      log(`the hook review could not be opened: ${String(cause)}`);
+      log(`the hook review could not be opened: ${String(cause)}`, 'warn');
       entry.decided = true;
       if (!dlg.isDestroyed()) dlg.close();
       return { ok: false, code: 'hooks.review', headline: 'The review dialog could not be opened', detail: String(cause) };
@@ -1381,7 +1388,7 @@ async function main(): Promise<void> {
    */
   const win = mainWin.win;
 
-  surface = (h) => { void mainWindows.handOver(h).catch((cause) => log(`hand-over failed: ${String(cause)}`)); };
+  surface = (h) => { void mainWindows.handOver(h).catch((cause) => log(`hand-over failed: ${String(cause)}`, 'error')); };
   for (const h of pendingHandOvers.splice(0)) surface(h);
 
   /**

@@ -1023,6 +1023,9 @@ if (!inCatalogue || typeof endpoint.contextTokens === 'number') {
 // `session_log_level` is the one level knob the product actually honours (REQ-SESSION-142; the APPLICATION log
 // filters on nothing, which is OQ-63's open question). It governs `<store>/sessions/<id>/session.log`, which
 // `preserveRun` copies into the pack.
+// No longer true since 2026-09-27: OQ-63 was ruled as PD-MONITOR-002 and built. The application log records `info`
+// and above, and its one switch is the environment variable ROTARIS_APP_LOG_LEVEL, never a configuration key —
+// `session_log_level` is still the only level knob in `agents.yaml`, and it still reaches the session log alone.
 if (!agents.includes('permission_mode:')) agents += `runtime:\n  permission_mode: autonomous\n  allow_unsandboxed_autonomous: true\n  max_iterations: ${MAX_ITERATIONS}\n  session_log_level: ${SESSION_LOG_LEVEL}\n`;
 writeFileSync(agentsFile, agents);
 cpSync(agentsFile, join(output, 'agents.yaml'));

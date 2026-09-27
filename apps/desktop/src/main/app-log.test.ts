@@ -77,6 +77,18 @@ describe('PD-MONITOR-002: a line carries its level as a field', () => {
       '[main 2026-09-27T10:00:00.000Z] info    run host: two',
     ]);
   });
+
+  it('ends a message that ends in a line break on its last line, with no line holding only the stamp and level', () => {
+    expect(formatAppLogLine(AT, 'warn', 'run host', 'one\ntwo\n').split('\n')).toEqual([
+      '[main 2026-09-27T10:00:00.000Z] warning run host: one',
+      '[main 2026-09-27T10:00:00.000Z] warning run host: two',
+    ]);
+    expect(formatAppLogLine(AT, 'info', null, 'one\r\n')).toBe('[main 2026-09-27T10:00:00.000Z] info    one');
+    // Only the one final break: a blank line inside a message, or a message of breaks, keeps what it holds.
+    expect(formatAppLogLine(AT, 'info', null, 'a\n\nb').split('\n')).toHaveLength(3);
+    expect(formatAppLogLine(AT, 'info', null, '\n\n').split('\n')).toHaveLength(2);
+    expect(formatAppLogLine(AT, 'info', null, '')).toBe('[main 2026-09-27T10:00:00.000Z] info    ');
+  });
 });
 
 describe('PD-MONITOR-002: a line is recorded only at or above the threshold', () => {

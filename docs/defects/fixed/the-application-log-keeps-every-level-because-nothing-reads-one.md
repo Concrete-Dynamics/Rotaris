@@ -92,18 +92,21 @@ own (`Extract<ProcessEvent, { kind: 'log' }>['level']`), so a forwarded line's l
 mapping, and a level the protocol adds fails to compile until the rank table has it. The protocol's `warn` is
 written `warning`, the directive's word, so the variable accepts what the column shows.
 
-What else changed with it: main's uncaught-exception and unhandled-rejection lines and the refused launch (previously
-`console.error('[main] launch refused: …')`, on stderr and in a shape of its own) are written at `error`; the
-collaborators whose port already tells a warning apart — the improvement coordinator, initialization, the
-credential store, the settings store and the provider service — now reach the log at `warning` instead of having
-the level dropped, which is how REQ-LIBRARY-035(b)'s warning arrives as one. Readers of the old shape were updated
+What else changed with it: main's uncaught-exception and unhandled-rejection lines, the refused launch (previously
+`console.error('[main] launch refused: …')`, on stderr and in a shape of its own), a failed hand-over, a renderer or
+child process gone for any reason but `clean-exit`, and the run host or a workspace service exiting with any status
+but the 0 that follows main's own `shutdown` are written at `error`; a dialog or review that could not be presented is
+`warning`; main's own line about the run host's handshake reads `run host hello:` rather than `run host:`, which is
+now a forwarded line's source; the collaborators whose port already tells a warning apart — the improvement
+coordinator, initialization, the credential store, the settings store and the provider service — now reach the log
+at `warning` instead of having the level dropped, which is how REQ-LIBRARY-035(b)'s warning arrives as one. Readers of the old shape were updated
 in the same change: `questions-proof.mjs` (the probe-at line, anchored after the stamp), `slice-proof.mjs` (the intent
 line, reading both shapes because it replays stored logs) and `live-run.mjs`'s filter; `code-intel-proof.mjs` and
 `mcp-proof.mjs` read `debug` lines and now launch with `ROTARIS_APP_LOG_LEVEL=debug`. `AGENTS.md` says how to drive
 the app at `debug`.
 
-Evidence: `apps/desktop/src/main/app-log.test.ts` (13 cases: every accepted word in three casings, unset and
-unrecognized values, the column, a stack's every line, the four thresholds, a forwarded line filtered by its child's
+Evidence: `apps/desktop/src/main/app-log.test.ts` (14 cases: every accepted word in three casings, unset and
+unrecognized values, the column, a stack's every line, a final line break, the four thresholds, a forwarded line filtered by its child's
 level, and 141 dropped `debug` lines that are neither stamped nor written); `improvements.test.ts` now pins the
 REQ-LIBRARY-035(b) line at `warn`. A driven launch with one scripted run wrote 72 application-log lines at the
 default (66 `info`, 6 `warning`, 0 `debug`) and 69 with the variable at `debug`: the same lines plus the

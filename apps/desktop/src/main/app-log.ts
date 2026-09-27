@@ -56,11 +56,14 @@ export function appLogThreshold(value: string | undefined): { readonly threshold
  * One record as written: `[main <instant>] <level> <source>: <message>`. The level is padded to one width so the
  * column lines up; the source is present only on a line forwarded from a child (`run host`, `workspace service`).
  * A message of several lines — a stack — is written as several lines, each with the same stamp, level and source,
- * so no line of the log is without its level.
+ * so no line of the log is without its level. A message's own final line break ends its last line rather than
+ * opening an empty one; an empty message is still one line.
  */
 export function formatAppLogLine(at: string, level: AppLogLevel, source: string | null, message: string): string {
   const head = `[main ${at}] ${WORD[level].padEnd(WORD_WIDTH)} ${source === null ? '' : `${source}: `}`;
-  return message.split(/\r?\n/).map((line) => `${head}${line}`).join('\n');
+  const lines = message.split(/\r?\n/);
+  if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
+  return lines.map((line) => `${head}${line}`).join('\n');
 }
 
 /** Write one line: at `level`, from `source` (`null` for main's own), unless the threshold leaves it out. */

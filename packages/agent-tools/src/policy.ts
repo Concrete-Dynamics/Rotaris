@@ -195,9 +195,10 @@ export interface SessionApproval {
   /** REQ-TOOLS-024: the exact argument set when the approved call had no facet. */
   readonly args: Readonly<Record<string, string>> | null;
   /**
-   * PD-TOOLS-004: for an approved `write_file` / `haet_edit` call carrying REQ-TOOLS-018's path keys, the set of
-   * paths they resolved to when the grant was made (sorted, distinct), or `unresolvable` when one of them did not
-   * resolve. Null for every other approval, which REQ-TOOLS-024 alone matches.
+   * PD-TOOLS-004: for an approved call of the public `write_file` / `haet_edit` (as `EvaluationEnv.publicTool` answers)
+   * carrying REQ-TOOLS-018's path keys, the set of paths they resolved to when the grant was made (sorted, distinct), or
+   * `unresolvable` when one of them did not resolve. Null for every other approval — a server's own `write_file`
+   * included — which REQ-TOOLS-024 alone matches.
    */
   readonly paths: readonly string[] | 'unresolvable' | null;
   /** REQ-TOOLS-024: `Approved for this session: <request summary>`. */

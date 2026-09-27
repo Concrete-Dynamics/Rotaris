@@ -16,7 +16,8 @@
  *                              earlier one is removed), which its About page states and which is not releasable; refused
  *                              on a build for a tag (scripts/lib/about-assets.mjs says why the flag exists and what such a
  *                              package lacks). Its installer carries a release artifact's name: nothing on the file tells
- *                              the two apart, only this script's lines and load-proof.json
+ *                              the two apart, only this script's lines and load-proof.json. Any value but 1 or empty is a
+ *                              usage error: exit 2 before any step (REQ-STARTUP-149)
  * ROTARIS_IC6_COUNTERFACTUAL   see build-hooks.cjs; the build must then fail and this script reports where — or that it
  *                              was not exercised, when the package ended before electron-builder ran (while `pnpm notices`
  *                              refuses, that needs ROTARIS_PACKAGE_WITHOUT_NOTICES=1 as well)
@@ -28,7 +29,14 @@ import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { proofIsolationEnv, workspacesRootFor } from './lib/harness.mjs';
 import { closingLines, reached, STEPS } from './lib/package-verdict.mjs';
-import { ABOUT_ASSETS, settleNoticesStep, WITHOUT_NOTICES } from './lib/about-assets.mjs';
+import { ABOUT_ASSETS, flagUsage, settleNoticesStep, WITHOUT_NOTICES } from './lib/about-assets.mjs';
+
+// A flag value this script does not understand is a usage error (REQ-STARTUP-149's 2), reported before any step runs.
+const usage = flagUsage(process.env);
+if (usage !== null) {
+  process.stderr.write(`error: ${usage}\n`);
+  process.exit(2);
+}
 
 const APP = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = resolve(APP, '..', '..');
@@ -54,9 +62,13 @@ function run(cmd, args, opts = {}) {
   const r = spawnSync(cmd, args, { cwd: APP, stdio: 'inherit', shell: process.platform === 'win32', ...opts });
   if (r.status !== 0) throw new Error(`${cmd} ${args.join(' ')} exited ${r.status ?? r.signal}`);
 }
-/** A pipeline step whose exit code is the answer (REQ-STARTUP-149): its lines go to the terminal, its code comes back. */
+/**
+ * A pipeline step whose exit code is the answer (REQ-STARTUP-149): its lines go to the terminal, its code comes back —
+ * null for a signal. A step that could not be started has no code, so that is thrown rather than read as either.
+ */
 function exitOf(script) {
   const r = spawnSync(process.execPath, [join(REPO, script)], { cwd: REPO, stdio: 'inherit' });
+  if (r.error) throw new Error(`${script} could not be run (${r.error.code ?? r.error.message})`);
   return r.status ?? null;
 }
 function finish(ok, why) {

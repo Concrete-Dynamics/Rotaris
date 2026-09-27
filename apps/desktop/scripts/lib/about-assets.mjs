@@ -13,8 +13,9 @@
  *    puts that text in the notices file, so the copy under the distribution's dist-info — which stays in the source
  *    tree, where the generator reads it — is left out of the artifact (`electron-builder.yml`'s filter).
  *
- * Not REQ-STARTUP-143's "bundled asset": that is a font family or the icon set, whose licence file the notices file
- * reproduces (`tools/notices/bundled-assets.json`). The two files here are the About page's, hence the module's name.
+ * Both files are bundled assets in the specification's sense (docs/spec/12's "Bundled assets read by the shell"), as the
+ * fonts and the icon set are. `tools/notices/bundled-assets.json` holds only those that carry a licence file
+ * (REQ-STARTUP-143), so this module is named for the surface its two files serve.
  *
  * **A development package without notices.** While owner item O-3 (the LGPL address) and the reviews of O-11 and OQ-68
  * stand, `pnpm notices` refuses, and a package made on the release path fails with it (REQ-STARTUP-143). Setting
@@ -35,12 +36,23 @@ export const ABOUT_ASSETS = Object.freeze({ buildId: BUILD_ID_FILE, notices: NOT
 export const WITHOUT_NOTICES = 'ROTARIS_PACKAGE_WITHOUT_NOTICES';
 
 /**
+ * Whether the flag's value is one `pnpm package` understands: unset or empty (off), or `1`. Any other value is a usage
+ * error, which the package reports before any step runs and exits 2 on (REQ-STARTUP-149), rather than finding out after
+ * the notices step and exiting 1 as though validation had refused. Answers the `error:` line's text, or null.
+ * @param {NodeJS.ProcessEnv} env @returns {string | null}
+ */
+export function flagUsage(env) {
+  const flag = env[WITHOUT_NOTICES];
+  return flag === undefined || flag === '' || flag === '1' ? null : `${WITHOUT_NOTICES} is "${flag}"; only 1 turns it on, and unset or empty leaves it off`;
+}
+
+/**
  * A build for a release tag, as GitHub Actions states one: the release path, where the flag has no standing. Only
  * GitHub's variables are read, because §4.2's workflow is the one release route; a release built any other way is not
  * recognised here (ADR-0054).
  * @param {NodeJS.ProcessEnv} env
  */
-export function tagBuild(env) {
+function tagBuild(env) {
   return env['GITHUB_REF_TYPE'] === 'tag' || /^refs\/tags\//.test(env['GITHUB_REF'] ?? '');
 }
 
@@ -63,6 +75,7 @@ export function afterNoticesStep({ code, env }) {
   if (flag === undefined || flag === '') {
     return { proceed: false, carried: false, line: `notices validation refused (REQ-STARTUP-143), so this package may not be made. A development package without the notices file needs ${WITHOUT_NOTICES}=1, and is not releasable` };
   }
+  // `package.mjs` refuses such a value before any step (`flagUsage`); a caller that did not ask still never proceeds on it.
   if (flag !== '1') return { proceed: false, carried: false, line: `${WITHOUT_NOTICES} is "${flag}"; only 1 turns it on` };
   if (tagBuild(env)) return { proceed: false, carried: false, line: `${WITHOUT_NOTICES} is set on a build for a tag, which is the release path: REQ-STARTUP-143 fails it, and no flag passes over that` };
   return { proceed: true, carried: false, line: `DEVELOPMENT PACKAGE: the notices step exited 1 and ${WITHOUT_NOTICES}=1 passes over it. This package carries no ${ABOUT_ASSETS.notices} (its About page says so) and no licence text for its shipped closure, the tool server's included (REQ-STARTUP-015/141/142). It is not releasable` };
@@ -123,7 +136,9 @@ export function aboutAssetProblems({ resourcesDir, sourceDir, env, toolServerLic
     else if (text.trim() !== build.id) problems.push(`REQ-SHELL-140: ${ABOUT_ASSETS.buildId} in the artifact says ${JSON.stringify(text.trim())}, and the tree being packed is ${build.id}: a file an earlier build left, which pnpm build-id replaces`);
   }
 
-  // REQ-STARTUP-141: the notices file, byte for byte the one validation passed; or none, only by the flag, never for a tag.
+  // REQ-STARTUP-141: the notices file, byte for byte the one in the source tree; or none, only by the flag, never for a tag.
+  // Validation is not run again here. `pnpm package` has just regenerated that file or removed it (`settleNoticesStep`),
+  // so on its path the file is this tree's; an `electron-builder` called directly carries whatever a passing run left.
   const notices = read(resourcesDir, ABOUT_ASSETS.notices);
   const noticesSource = read(sourceDir, ABOUT_ASSETS.notices);
   if (noticesSource !== null) {
@@ -140,7 +155,7 @@ export function aboutAssetProblems({ resourcesDir, sourceDir, env, toolServerLic
   if (toolServerLicense === null) problems.push('REQ-STARTUP-015: the bundle marker names no licence file for the tool server, so its copies cannot be counted');
   else {
     const inRuntime = join(resourcesDir, 'code-intelligence', 'runtime', ...toolServerLicense.split('/'));
-    if (existsSync(inRuntime)) problems.push(`REQ-STARTUP-015: the tool server's licence text is carried under its dist-info (${inRuntime}) as well as in ${ABOUT_ASSETS.notices}; electron-builder.yml's filter no longer matches it`);
+    if (existsSync(inRuntime)) problems.push(`REQ-STARTUP-015: the tool server's licence text is carried under its dist-info (${inRuntime})${notices === null ? '' : ` as well as in ${ABOUT_ASSETS.notices}`}; electron-builder.yml's filter no longer matches it`);
     const source = read(join(sourceDir, 'code-intelligence', 'runtime'), toolServerLicense);
     if (source === null) problems.push(`REQ-STARTUP-015: the tool server's licence file ${toolServerLicense} is missing from the source tree's runtime`);
     else if (notices !== null) {

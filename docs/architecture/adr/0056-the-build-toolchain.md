@@ -494,4 +494,6 @@ a store at v15 and settling a terminal call. Nothing in rules 1a or 4 moved.
 Part AA's `rows-proof` role; it is a fixture surface with no input injection, and leaving it is a decision recorded
 here rather than an oversight. A second trap was closed on the way: this script leaves `out/` holding the seam-free
 build, and every `*-proof` launches `out/main/index.js` expecting the seams, so it now says on exit that `pnpm build`
-must come before the next proof.
+must come before the next proof. *Since 2026-09-27 it says so only when the build ran: a run refused before
+`electron-vite build` had left `out/` as it was and said otherwise
+(`docs/defects/fixed/pnpm-package-announced-a-seam-free-build-it-had-not-made.md`).*

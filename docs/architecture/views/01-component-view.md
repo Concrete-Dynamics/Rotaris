@@ -257,13 +257,16 @@ asks the local git for HEAD's commit and whether the tree differs from it, and w
 `apps/desktop/scripts/package.mjs` runs both tools before freezing. `electron-builder.yml`'s `extraResources` carries
 both files to the root of the artifact's resources, and leaves the tool server's dist-info licence out
 (REQ-STARTUP-015). `scripts/lib/about-assets.mjs` holds the rules `package.mjs` and `build-hooks.cjs`'s `afterPack`
-share: whether a refused notices step may be passed over, and what the artifact must carry. It takes the two names,
-and the generator's `normalize`, from the two tools, and `afterPack` asks `build-id.mjs`'s `identifyBuild` again for
-the tree being packed. It is not REQ-STARTUP-143's "bundled asset" (a font family or the icon set, `bundled-assets.json`
-above). `scripts/lib/package-verdict.mjs` holds the lines `package.mjs` closes on, each printed only when the steps
-that ran make it true. `scripts/lib/staged-resources.mjs` is `settings-proof`'s, for staging the two files and giving
-them back. **Edges unchanged**: `apps/desktop/scripts/**` and `tools/**` are outside the boundary rule, the scripts
-reach the tools and never the reverse, and no product code imports either.
+share: whether a refused notices step may be passed over (and, for `package.mjs` alone, whether the flag's value is one
+it understands), and what the artifact must carry. It takes the two names, and the generator's `normalize`, from the two
+tools, and `afterPack` asks `build-id.mjs`'s `identifyBuild` again for the tree being packed. Its two files are bundled
+assets in the specification's sense, as the fonts and the icon set are; `bundled-assets.json` above holds only those
+that carry a licence file (REQ-STARTUP-143), so this module is named for the surface it serves.
+`scripts/lib/package-verdict.mjs` holds the lines `package.mjs` closes on, each printed only when the steps that ran
+make it true. `scripts/lib/staged-resources.mjs` is `settings-proof`'s, for staging the two files and giving them back;
+the proof also takes the writer's list of git's redirecting variables from `build-id.mjs`. **Edges unchanged**:
+`apps/desktop/scripts/**` and `tools/**` are outside the boundary rule, the scripts reach the tools and never the
+reverse, and no product code imports either.
 
 ### `ui/design-system` (2026-09-12)
 

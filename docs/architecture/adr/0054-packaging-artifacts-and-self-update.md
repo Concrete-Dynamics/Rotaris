@@ -1220,6 +1220,9 @@ So the flag passes over a crash as well, and an uncaught one removes nothing. `p
 itself when it goes on without one (`settleNoticesStep`), and what it makes is a development package with no notices
 file whatever ended the step. *Corrected 2026-09-27 by the gate review: the struck text claimed the flag never passed
 over a crash, and it did, with a stale notices file left for `electron-builder` to carry and `afterPack` to accept.*
+*A value other than `1` or empty is a usage error, and `pnpm package` exits 2 on it before any step runs
+(REQ-STARTUP-149, `flagUsage`). Added 2026-09-27 by the review's second round: before it, such a value was found only
+after the notices step, and the package exited 1 as though validation had refused.*
 Such a package:
 
 - shows REQ-SHELL-142's caption on its About page;
@@ -1244,16 +1247,28 @@ filters it out of the artifact (`!runtime/**/serena_agent-*.dist-info/licenses/L
 because that is where the generator reads it. Nothing reads it at run time: the product never does, and `afterPack`'s
 interpreter check reads `METADATA`. The requirements decide this between them, so no question is raised. On this tree's
 real inputs the rendered notices text carries `serena-agent`'s MIT text exactly once (20.4 MB rendered, 1 occurrence).
+The distribution's `RECORD` still lists the file it no longer carries in the artifact. Nothing in the artifact reads
+`RECORD`; a tool that checks an installed distribution against it, as `pip uninstall` does, would find the file missing.
+*Noted 2026-09-27 by the review's second round.*
 
 **The evidence, and what it does not cover.**
 
 - `afterPack` gains an "assets" rule (`apps/desktop/scripts/lib/about-assets.mjs`; *named `bundled-assets.mjs` until the
-  gate review, which found the name taken: REQ-STARTUP-143's "bundled asset" is a font family or the icon set*), which
-  checks the artifact:
+  gate review, which found the name taken: ~~REQ-STARTUP-143's "bundled asset" is a font family or the icon set~~
+  `tools/notices/bundled-assets.json` already holds the bundled assets that carry a licence file, the three font
+  families and the icon set. Corrected 2026-09-27 by the review's second round: the struck clause read REQ-STARTUP-143's
+  licence-file clause as a definition. The specification lists both of this module's files among the bundled assets
+  the shell reads (`docs/spec/12-desktop-shell-windows.md`, "Bundled assets read by the shell"; REQ-SHELL-140's
+  "bundled text asset"), and the Distribution glossary now says so. The name stands: it says which surface the module
+  serves*), which checks the artifact:
   - `build-id.txt` is one line, byte-identical to the file the step wrote, and names the tree being packed
     (`identifyBuild`, asked again at `afterPack`), so an identifier an earlier build left cannot be carried by an
     `electron-builder` called directly;
-  - the notices file is byte-identical to the one validation passed, or is absent only under the flag and never for a tag;
+  - the notices file is byte-identical to ~~the one validation passed~~ the one in the source tree, or is absent only
+    under the flag and never for a tag. *Corrected 2026-09-27 by the review's second round: `afterPack` does not run
+    validation again, and nothing ties that file to the tree being packed as `identifyBuild` ties the identifier. On
+    `pnpm package`'s path the file is this tree's, because the notices step has just regenerated or removed it; an
+    `electron-builder` called directly carries whatever an earlier passing run left;*
   - no copy of the tool server's licence remains under its `dist-info`;
   - the notices file carries that licence text exactly once, read by the generator's own `normalize`.
 
@@ -1287,6 +1302,21 @@ real inputs the rendered notices text carries `serena-agent`'s MIT text exactly 
   handler around a `spawnSync` showed that a SIGTERM during a launch was held until the launch ended, then ignored,
   and the script exited 0. The handlers are gone. `finally` covers a launch whose Electron dies, and the next run
   covers the proof's own death.
+
+  *Corrected again 2026-09-27 by the review's second round, on two more points, each confirmed by its probe.* First,
+  when the proof's fixture had been removed by another writer, the next run put the older stashed file back: a
+  `pnpm notices` that refused after a killed run removed the fixture, and the notices file of an earlier passing run
+  returned. A removal is now newer than the stash, like a write, so the name is left empty and the stashed file dropped.
+  `restore` moves the stashed file over the proof's instead of removing the proof's first, so it never makes that state
+  itself. Measured in the built app: a real identifier and an older notices file were staged, the proof was sent
+  `SIGKILL` during 1′, and `pnpm notices` then refused and removed the fixture. The next run left the notices name
+  empty, dropped the older file, put the identifier back byte for byte, and passed. Second, the ledger was written in
+  place, and a kill during that write left it unreadable, so the fixture was kept and the real file dropped. The ledger
+  is now written beside itself and renamed over. Two windows stay open, both while the proof has written nothing under
+  a name, and `lib/staged-resources.mjs` names them: a write killed part-way, and a refusal during the absent-branch
+  launch, which leaves no trace for the next run to read. *The same round added two smaller repairs: `package.mjs`
+  reports a step it could not start as that, not as a signal, and `settings-proof` asks git for HEAD without the
+  variables of an enclosing git process, as the writer does.*
 
 **What this found.** No defect in the mechanism the record decided. It found one false statement nearby: `package.mjs`
 said "`out/` now holds a SEAM-FREE build" after every run, including one refused before the build. That line now

@@ -68,10 +68,12 @@ dependency without licence text pass validation for a version range until its ex
 _Avoid_: allow-list, waiver
 
 **Bundled asset**:
-A font family or the icon set the artifact carries, whose licence text the notices file reproduces; a missing or
-empty licence file for one fails notices validation. — `REQ-STARTUP-142`, `REQ-STARTUP-143`
-_Avoid_: for the About surface's two files — the notices file above, and the text asset carrying the Shell
-context's **build identifier** ([Shell](../ui/CONTEXT.md), `REQ-SHELL-140`)
+A file shipped inside the installed build, which the product reads from there. The desktop shell's are the notices
+file, the text asset holding the [Shell](../ui/CONTEXT.md) context's **build identifier**, the vector brand mark and
+the three font families (`docs/spec/12-desktop-shell-windows.md`, "Bundled assets read by the shell"). REQ-STARTUP-143's
+clause on "a bundled asset's license file" concerns those that carry a third-party licence, whose texts REQ-STARTUP-142
+names: the three font families and the Phosphor Icons set. — `REQ-SHELL-140`, `REQ-SHELL-142`, `REQ-STARTUP-141`,
+`REQ-STARTUP-142`, `REQ-STARTUP-143`
 
 **Release feed**:
 The product's public source of the latest release, consulted exactly once per launch of a supported

@@ -15,18 +15,27 @@
  * tell the proof's file from one written by someone else after the proof took the name — a `pnpm build-id` or
  * `pnpm notices` run between an interrupted proof and the next. The proof's file goes, and what was moved aside comes
  * back. A file someone else wrote since is newer than the one moved aside, so it stays and the stashed one is dropped.
- * A proof killed at any point (a signal, a power cut) is repaired by the next run's `restore`, which is why the stash
- * lives outside the proof's evidence directory — that one is deleted at the start of every run.
+ * So does a removal: when the file the proof wrote is gone, another writer removed it (a refusing `pnpm notices` or a
+ * failing `pnpm build-id` removes any earlier file), because `restore` itself never empties a name it then fills — it
+ * moves the stashed file over the proof's. The name stays empty and the stashed one is dropped, since a validation that
+ * has since refused must not have an older file it once passed put back. A proof killed at any point (a signal, a power
+ * cut) is repaired by the next run's `restore`, which is why the stash lives outside the proof's evidence directory —
+ * that one is deleted at the start of every run. The ledger is replaced by a rename, never written through, so a kill
+ * during its write leaves the previous ledger whole.
  *
- * One window is not closed: while a name is being written, whatever stands there is taken for the proof's. A proof
- * killed during that write, followed by a real generation before the next run, loses the real file. The window is the
- * length of one write — for `settings-proof`, one run of `pnpm build-id`.
+ * Two windows are not closed, both while the proof has written nothing under a name. While a name is being written,
+ * whatever stands there is taken for the proof's: a proof killed during that write, followed by a real generation
+ * before the next run, loses the real file. And a real writer that refuses while the name is still empty leaves no
+ * trace, so the next run puts back the older file it moved aside. The first is the length of one write — for
+ * `settings-proof`, one run of `pnpm build-id` — and the second the length of the launch that measures the absent branch.
  */
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 
 const LEDGER = 'owned.json';
+/** The ledger's next content, renamed over it once whole. Neither is a staged name. */
+const LEDGER_NEXT = 'owned.json.next';
 /** What the proof has put under an owned name. */
 const NOTHING = null;
 const WRITING = 'writing';
@@ -56,7 +65,10 @@ function ledger(stash) {
     return value !== null && typeof value === 'object' && !Array.isArray(value) ? value : {};
   } catch { return {}; }
 }
-function record(stash, entries) { writeFileSync(join(stash, LEDGER), JSON.stringify(entries)); }
+function record(stash, entries) {
+  writeFileSync(join(stash, LEDGER_NEXT), JSON.stringify(entries));
+  renameSync(join(stash, LEDGER_NEXT), join(stash, LEDGER));
+}
 
 /**
  * Give `dir` back what a stage (this run's, or an interrupted earlier run's) took from it, and forget the stage.
@@ -69,7 +81,7 @@ export function restore(dir, stash) {
   const entries = ledger(stash);
   // Every declared name, and every file in the stash whether declared or not: a file moved aside by a stage that died
   // before declaring it is still the real one, and removing the stash without it would lose it.
-  const names = new Set([...Object.keys(entries), ...readdirSync(stash).filter((n) => n !== LEDGER)]);
+  const names = new Set([...Object.keys(entries), ...readdirSync(stash).filter((n) => n !== LEDGER && n !== LEDGER_NEXT)]);
   for (const name of names) {
     const here = join(dir, name);
     const stashed = join(stash, name);
@@ -83,9 +95,17 @@ export function restore(dir, stash) {
       did.push(`${name}: a file written since the proof took the name stands there; kept${dropped ? ', and the older one moved aside dropped' : ''}`);
       continue;
     }
-    rmSync(here, { force: true });
+    if (standing === null && state !== NOTHING && state !== WRITING) {
+      // The proof wrote a file here and another writer has removed it since: that removal is newer than the stash too.
+      const dropped = existsSync(stashed);
+      rmSync(stashed, { force: true });
+      did.push(`${name}: the file the proof wrote was removed since by another writer; left absent${dropped ? ', and the older one moved aside dropped' : ''}`);
+      continue;
+    }
+    // Moved over the proof's file rather than after removing it, so this name is never empty while the ledger still
+    // says the proof wrote it — which the branch above would read as another writer's removal.
     if (existsSync(stashed)) { move(stashed, here); did.push(`${name}: the file that was there is back`); }
-    else did.push(`${name}: removed; nothing was there before`);
+    else { rmSync(here, { force: true }); did.push(`${name}: removed; nothing was there before`); }
   }
   rmSync(stash, { recursive: true, force: true });
   return did;

@@ -17,7 +17,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // @ts-expect-error — plain ESM beside the scripts that run it.
-import { ABOUT_ASSETS, aboutAssetProblems, afterNoticesStep, settleNoticesStep, WITHOUT_NOTICES } from './about-assets.mjs';
+import { ABOUT_ASSETS, aboutAssetProblems, afterNoticesStep, flagUsage, settleNoticesStep, WITHOUT_NOTICES } from './about-assets.mjs';
 import { BUILD_ID_ASSET, THIRD_PARTY_LICENSES_ASSET } from '../../src/main/about.js';
 
 const APP = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -104,6 +104,15 @@ describe('REQ-STARTUP-143 / first-release-plan.md §4.4: what `pnpm package` doe
     expect(d.line).toMatch(/^DEVELOPMENT PACKAGE: .*not releasable$/);
     expect(afterNoticesStep({ code: 1, env: { [WITHOUT_NOTICES]: 'true' } }).proceed).toBe(false);
     expect(afterNoticesStep({ code: 1, env: { [WITHOUT_NOTICES]: '0' } }).proceed).toBe(false);
+  });
+
+  it('REQ-STARTUP-149: a flag value other than 1 or empty is a usage error, found before any step runs', () => {
+    expect(flagUsage({})).toBeNull();
+    expect(flagUsage({ [WITHOUT_NOTICES]: '' })).toBeNull();
+    expect(flagUsage({ [WITHOUT_NOTICES]: '1' })).toBeNull();
+    expect(flagUsage({ [WITHOUT_NOTICES]: 'true' })).toBe(`${WITHOUT_NOTICES} is "true"; only 1 turns it on, and unset or empty leaves it off`);
+    expect(flagUsage({ [WITHOUT_NOTICES]: '0' })).not.toBeNull();
+    expect(flagUsage({ [WITHOUT_NOTICES]: ' 1' })).not.toBeNull();
   });
 
   it('a build for a tag refuses the flag: the release path fails on REQ-STARTUP-143', () => {
@@ -217,6 +226,13 @@ describe('the "assets" rule afterPack applies, one condition at a time', () => {
   it('REQ-STARTUP-015: a second copy under the dist-info, or a notices file carrying the text twice or not at all', () => {
     put(resources, `code-intelligence/runtime/${WINDOWS_LICENSE}`, SERVER_LICENSE);
     expect(problems()[0]).toMatch(/^REQ-STARTUP-015: the tool server's licence text is carried under its dist-info .* as well as in THIRD-PARTY-LICENSES\.txt/);
+    // A development package carries no notices file, so the sentence names only the copy it does carry.
+    rmSync(join(source, NOTICES));
+    rmSync(join(resources, NOTICES));
+    const without = problems({ [WITHOUT_NOTICES]: '1' });
+    expect(without).toEqual([`REQ-STARTUP-015: the tool server's licence text is carried under its dist-info (${join(resources, 'code-intelligence', 'runtime', ...WINDOWS_LICENSE.split('/'))}); electron-builder.yml's filter no longer matches it`]);
+    put(source, NOTICES, notices());
+    put(resources, NOTICES, notices());
     rmSync(join(resources, `code-intelligence/runtime/${WINDOWS_LICENSE}`));
     put(source, NOTICES, notices(2));
     put(resources, NOTICES, notices(2));

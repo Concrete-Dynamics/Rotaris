@@ -405,6 +405,10 @@ signing, `REQ-STARTUP-156`'s gate, an icon, and the per-runner half (IC-3 item 3
 > REQ-STARTUP-142 are OQ-67's, not IC-7's. Of the three records this entry is "discharged into", the notes on
 > ADR-0035 and ADR-0054 are written in place. **The third, the release pipeline's evidence, is owed**: no pipeline
 > exists yet (first-release-plan.md §4.2). Its first run must show this section in a frozen file.
+> *Pointer added 2026-09-27 (first-release-plan.md §4.4): `electron-builder.yml`'s `extraResources` now carries the
+> file into the artifact, and `afterPack`'s "assets" rule compares it byte for byte with the one in the source tree. No
+> Windows package has run since, so the first one to pass validation freezes this section for the first time and runs
+> that rule for the first time too (ADR-0054, "The two bundled assets").*
 
 > **ADOPTED 2026-09-06 by the owner — option 2, ESC-32 (`owner-decisions.md`).** The language servers are tools
 > provisioned after installation, like Git and ripgrep. **Shown so far, the same day:** `REQ-STARTUP-159`, `058`,

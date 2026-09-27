@@ -124,16 +124,22 @@ you declare; a timing alone reads as "slow", not as "dead".
 
 ## What `pnpm package` does, and refuses
 
-`apps/desktop/scripts/package.mjs`: `electron-vite build` **with `ROTARIS_BUILD=package`, which compiles the
+`apps/desktop/scripts/package.mjs`: the code-intelligence bundle and its manifest check; then **the About page's two
+files** — `pnpm notices` (REQ-STARTUP-143's validation, before freezing; its refusal refuses the package) and
+`pnpm build-id` (REQ-SHELL-140), both writing into `apps/desktop/resources/` (first-release-plan.md §4.4); then
+`electron-vite build` **with `ROTARIS_BUILD=package`, which compiles the
 verification seams out** (`__ROTARIS_SEAMS__`; the driver and every scriptable capture seam leave the bundle, the
 probe's three below stay), then **the seam check** — the built bundle read back and asserted to carry those three and
 none of the scriptable ones, an assertion about the artifact for rule 1a's reason and deliberately not numbered into
 N3's five; then `electron-builder --win` with two hooks
 (`scripts/build-hooks.cjs`) — `beforeBuild` removes every copy's `build/`, stamps the rebuild marker and runs
 @electron/rebuild by name over the binding set, cold, from source; `afterPack` holds rule 1a (a compiled
-binary newer than the marker, byte-identical in `app.asar.unpacked`, no prebuild in the asar index), rule 4
+binary newer than the marker, byte-identical in `app.asar.unpacked`, no prebuild in the asar index), the
+`REQ-STARTUP-031` name, the "runtime" rule (the bundled interpreter answers its pins from inside the artifact), the
+"assets" rule (both files at the root of the artifact's resources as their steps wrote them, the identifier naming the
+tree being packed, the tool server's licence text once — `scripts/lib/about-assets.mjs`) and rule 4
 (`scripts/native-load-probe.cjs` as the packaged `Rotaris.exe` under `ELECTRON_RUN_AS_NODE`, reporting what
-`dlopen` opened) and the `REQ-STARTUP-031` name; then the packaged application runs a scripted session with a
+`dlopen` opened); then the packaged application runs a scripted session with a
 terminal call against a scratch store under `release/scratch/`. Evidence in `release/load-proof.json`.
 `ROTARIS_IC6_COUNTERFACTUAL=no-force|keep-prebuild` constructs D10's condition; the build must refuse, and a run
 that ends before `electron-builder` says the counterfactual was not exercised. `ROTARIS_PACKAGE_DIR_ONLY=1` stops at
@@ -1203,7 +1209,8 @@ artifact.
 
 **A trap closed on the way:** `pnpm package` leaves `out/` holding the seam-free build, and every `*-proof` script
 launches `out/main/index.js` and drives those seams — so the next proof run after a package would have failed for a
-reason nobody would have guessed from its output. The script now says so on exit.
+reason nobody would have guessed from its output. The script now says so on exit — since 2026-09-27 only when the
+build ran (`docs/defects/fixed/pnpm-package-announced-a-seam-free-build-it-had-not-made.md`).
 
 Verified on 2026-09-11: `pnpm package` (`ROTARIS_PACKAGE_DIR_ONLY=1`) **PASSED** in 277 s with the seam check as
 its fourth step — rule 1a and rule 4 holding as before, and the packaged app, built without the seams, opening a

@@ -2,10 +2,11 @@
  * Spike 4 (ADR-0033 consequence 3, REQ-MCP-113): console-window suppression, measured on the PACKAGED build.
  *
  * `pnpm package` must have produced `apps/desktop/release/win-unpacked/Rotaris.exe` (ROTARIS_PACKAGE_DIR_ONLY=1
- * ROTARIS_PACKAGE_SKIP_APP=1 are enough, with ROTARIS_PACKAGE_WITHOUT_NOTICES=1 while `pnpm notices` refuses). The packaged application — a graphical process owning no console — runs a
- * scripted session whose persona carries two servers: `console`, declared as `cmd.exe /c node <fixture>` (a console
- * application launched through a console application, the worst case), and `token`, declared with the reserved
- * `builtin:code-intelligence` command (expected to fail until ADR-0035 exists — the launch error, not a window).
+ * ROTARIS_PACKAGE_SKIP_APP=1 are enough, with ROTARIS_PACKAGE_WITHOUT_NOTICES=1 while `pnpm notices` refuses). The
+ * packaged application — a graphical process owning no console — runs a scripted session whose persona carries two
+ * servers: `console`, declared as `cmd.exe /c node <fixture>` (a console application launched through a console
+ * application, the worst case), and `token`, declared with the reserved `builtin:code-intelligence` command (expected
+ * to fail until ADR-0035 exists — the launch error, not a window).
  * While it runs, this script samples every 200 ms with PowerShell: every `cmd`, `node`, `conhost` process started after
  * the launch, its `MainWindowHandle` and `MainWindowTitle`, and `tasklist /v` window titles. The verdict is that no
  * sampled process ever had a window handle other than 0, no `conhost.exe` appeared, and no console-shaped window

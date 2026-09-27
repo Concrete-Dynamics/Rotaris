@@ -37,13 +37,14 @@
  *
  * Evidence under `.proof/settings-proof/`: one PNG and one log per launch, `results.json`. `--skip-build` skips the build.
  */
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { cleanEnvironment, proofIsolationEnv } from './lib/harness.mjs';
 import { ABOUT_ASSETS } from './lib/about-assets.mjs';
 import { produce, put, restore, stage } from './lib/staged-resources.mjs';
+import { REDIRECTING } from '../../../tools/build-id/build-id.mjs';
 
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
@@ -142,7 +143,13 @@ const openCategory = (label, atMs = 900) => ({ ROTARIS_CAPTURE_VIEW: '7', ROTARI
 // this launch measures the absent branch of each. `finally` gives them back when a launch fails or its Electron dies.
 // A signal to this process is not caught: Node would run a handler only once `spawnSync` returned, so a handler would
 // hold a SIGTERM until the launch ended and then swallow it. The process goes, and the next run's `restore` repairs it.
-const giveBack = () => { for (const line of restore(resources, stash)) console.log(`settings proof: ${line}`); };
+// In a clone that has never built, the directory itself is the proof's: `pnpm build-id` makes it during 1′.
+const hadResources = existsSync(resources);
+const emptyAndNew = () => !hadResources && existsSync(resources) && readdirSync(resources).length === 0;
+const giveBack = () => {
+  for (const line of restore(resources, stash)) console.log(`settings proof: ${line}`);
+  if (emptyAndNew()) rmdirSync(resources);
+};
 const digest = (name) => (existsSync(join(resources, name)) ? createHash('sha256').update(readFileSync(join(resources, name))).digest('hex') : null);
 const found = { [BUILD_ID]: digest(BUILD_ID), [NOTICES]: digest(NOTICES) };
 stage(resources, stash, [BUILD_ID, NOTICES]);
@@ -199,7 +206,8 @@ results.about = { rows: aboutRows, legal: legal.length, opened: 'https://rotaris
 
 // REQ-SHELL-140 / REQ-SHELL-142, the present branch of each (first-release-plan.md §4.4).
 const presentRows = Object.fromEntries(rows(present.probes, '[data-testid="about-row"]').map((r) => [r.data['data-name'], r.data['data-value']]));
-const head = spawnSync('git', ['-C', repo, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim();
+// Asked of this repository as the writer asks it: without an enclosing git process's variables, which would name another.
+const head = spawnSync('git', ['-C', repo, 'rev-parse', 'HEAD'], { encoding: 'utf8', env: Object.fromEntries(Object.entries(process.env).filter(([k]) => !REDIRECTING.includes(k))) }).stdout.trim();
 // One line, exactly as the writer wrote it, and naming this tree's commit: `-dirty` when the tree differs from it.
 if (!/^[^\n]+\n$/.test(written)) throw new Error(`pnpm build-id wrote ${JSON.stringify(written)}, not one line`);
 if (presentRows.Build !== written.trim()) throw new Error(`the Build row was "${presentRows.Build}", not the identifier pnpm build-id wrote ("${written.trim()}")`);

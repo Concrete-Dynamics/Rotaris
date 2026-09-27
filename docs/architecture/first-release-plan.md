@@ -278,16 +278,18 @@ Two facts from §4.3 bear on this step:
   `electron-builder.yml` carries both files to the root of `process.resourcesPath`, and `afterPack`'s "assets" rule
   checks them in the artifact.
 - **While O-3 is owed, a local `pnpm package` fails** at the notices step (REQ-STARTUP-143). `ROTARIS_PACKAGE_WITHOUT_NOTICES=1`
-  makes a development package without the notices file instead, removing any earlier one. Its About page shows the
-  absent caption, the package says it is not releasable, and a build for a tag refuses the flag, in `package.mjs` and
-  in `afterPack` alike. Its installer still carries a release artifact's name (ADR-0054 records this).
+  makes a development package without the notices file instead, removing any earlier one; any other value is a usage
+  error (exit 2). Its About page shows the absent caption, the package says it is not releasable, and a build for a
+  tag refuses the flag, in `package.mjs` and in `afterPack` alike. Its installer still carries a release artifact's
+  name (ADR-0054 records this).
 - **The licence copy.** The notices file's copy stands, because REQ-STARTUP-142 requires it there. The dist-info copy
   is filtered out of the artifact and kept in the source tree for the generator. The requirements decide this between
   them, so no question is raised.
 - **The proof.** `settings-proof` launch 1′ measures the present branch of each asset. The notices file there is a
   fixture, as the first fact above says it must be. The proof puts back whatever `apps/desktop/resources/` held, byte
   for byte, so a successful `pnpm notices` no longer turns the absent check red. A real file written between a killed
-  run and the next is kept, not taken for the proof's (the gate review's correction, ADR-0054).
+  run and the next is kept, not taken for the proof's (the gate review's correction, ADR-0054); so is a real writer's
+  removal of the proof's file, which leaves the name empty (its second round's).
 
 **Owed:** the "assets" rule's first run against a real `win-unpacked`, at the next Windows `pnpm package`. No package
 was run here (IC-3).

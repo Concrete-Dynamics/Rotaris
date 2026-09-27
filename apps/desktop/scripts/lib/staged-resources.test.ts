@@ -1,8 +1,9 @@
 /**
- * `settings-proof` stages the About page's two files in `apps/desktop/resources/`, a directory the build also writes
- * (first-release-plan.md §4.4). What is pinned: the directory is left exactly as found — a real file comes back byte for
- * byte, a fixture never outlives the proof — including when the proof is killed mid-way and the next run repairs it,
- * and a real file generated between that kill and the next run is never taken for the proof's.
+ * `settings-proof` stages the About page's two files (REQ-SHELL-140's build identifier, REQ-SHELL-142's licence bundle)
+ * in `apps/desktop/resources/`, a directory the build also writes (first-release-plan.md §4.4). What is pinned: the
+ * directory is left exactly as found — a real file comes back byte for byte, a fixture never outlives the proof —
+ * including when the proof is killed mid-way and the next run repairs it, and a real writer's file, or its removal of
+ * the proof's, between that kill and the next run is never undone.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
@@ -127,6 +128,35 @@ describe('a real file generated after an interrupted proof is newer than anythin
     generate('build-id.txt', 'HEAD\n');
     restore(dir, stash);
     expect(read('build-id.txt')).toBe('HEAD\n');
+  });
+
+  it('a writer that removed the proof\'s file since leaves the name empty: the older file is not put back', () => {
+    // The second round's sequence: a real notices file from an earlier passing run staged, the fixture written, the
+    // process killed; then `pnpm notices` refuses, removing the file it finds (the fixture), before the next proof.
+    writeFileSync(join(dir, 'THIRD-PARTY-LICENSES.txt'), 'OLD notices from an earlier passing run');
+    stage(dir, stash, NAMES);
+    put(dir, stash, 'THIRD-PARTY-LICENSES.txt', 'a fixture');
+    rmSync(join(dir, 'THIRD-PARTY-LICENSES.txt'));
+    expect(restore(dir, stash)).toEqual([
+      'build-id.txt: removed; nothing was there before',
+      'THIRD-PARTY-LICENSES.txt: the file the proof wrote was removed since by another writer; left absent, and the older one moved aside dropped',
+    ]);
+    expect(listing()).toEqual(['code-intelligence']);
+    expect(existsSync(stash)).toBe(false);
+  });
+
+  it('a ledger write killed before its rename leaves the previous ledger whole, and its partial file is no staged name', () => {
+    writeFileSync(join(dir, 'build-id.txt'), 'abc-real\n');
+    stage(dir, stash, NAMES);
+    put(dir, stash, 'build-id.txt', 'FIXTURE\n');
+    // The state a kill leaves part-way through the next ledger write: the whole ledger beside a truncated successor.
+    const whole = readFileSync(join(stash, 'owned.json'), 'utf8');
+    writeFileSync(join(stash, 'owned.json.next'), whole.slice(0, 9));
+    expect(JSON.parse(whole)).toHaveProperty(['build-id.txt', 'sha256']);
+    restore(dir, stash);
+    expect(read('build-id.txt')).toBe('abc-real\n');
+    expect(listing()).toEqual(['build-id.txt', 'code-intelligence']);
+    expect(existsSync(stash)).toBe(false);
   });
 
   it('a file appearing under a name the proof took and never wrote is someone else\'s', () => {

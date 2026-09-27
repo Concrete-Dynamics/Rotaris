@@ -52,10 +52,15 @@ server's dist-info licence out of the artifact (REQ-STARTUP-015). The **componen
 and the two script modules, and the **process view** gains the identifier's row in "Files and directories on disk", an
 updated notices row and a corrected About paragraph. No package, edge, process, channel, command or message kind
 changed. `about.ts` reads what it read before. The gate review later that day renamed `lib/bundled-assets.mjs` to
-`lib/about-assets.mjs`, because REQ-STARTUP-143's "bundled asset" is a font family or the icon set. It moved
+`lib/about-assets.mjs`, ~~because REQ-STARTUP-143's "bundled asset" is a font family or the icon set~~ because
+`tools/notices/bundled-assets.json` already holds the bundled assets that carry a licence file. It moved
 `package.mjs`'s closing lines into a third script module, `lib/package-verdict.mjs`. The **component view**'s section
 says both. The scripts now import two constants and `normalize` from the tools, which is not an edge the boundary rule
-governs. Nothing else in the views moved.
+governs. Nothing else in the views moved. *The review's second round struck the reason: the specification counts both
+About files among its bundled assets (domain 12's appendix, REQ-SHELL-140). The component view's sentence saying
+otherwise is corrected, and the section now names the flag's usage check and the proof's use of the writer's list of
+git's redirecting variables. The stash's ledger and removal branch stay inside its module. Nothing else in the views
+moved.*
 
 **The notices generator, and the About page's lookup (first-release-plan.md §4.3, built 2026-09-27).** `tools/notices/`
 is a build-time tool, not a package: `pnpm notices` computes the shipped closure offline and writes

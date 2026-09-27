@@ -77,12 +77,13 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
       client.push(script(persona, n));
       return original(req);
     };
+    const warnings: string[] = [];
     const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k' };
     const backend = new DefaultAgentBackend(client);
     const models = (key: string): ModelLookup => ({ ok: false, reason: `'${key}' is not a configured model` });
     const personas = { resolve: (name: string) => { const base = BUILT_IN_PERSONAS[name as RoleName]; return base ? { persona: base, alias: null } : null; }, knownRoles: () => Object.keys(BUILT_IN_PERSONAS) };
     const sessions = new Sessions({
-      clocks: clock, publisher: NONE, pid: 79, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => `S-rec-${++minted}`,
+      clocks: clock, publisher: NONE, pid: 79, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), mintSessionId: () => `S-rec-${++minted}`,
       model: null, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid), attended: () => true, onRunResult: () => undefined,
       tools: (ctx) => port(ctx.delegation, ctx.parentId ?? 'root'),
       ...(checkpoints ? { checkpoints } : {}),
@@ -96,7 +97,7 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
         resilience: { catalogue: [], fallbackModel: null },
       } }),
     });
-    return { sessions, client };
+    return { sessions, client, warnings };
   }
   /** What a request carried, less the system message the backend puts first. */
   const sent = (req: ModelRequest): ChatMessage[] => req.messages.slice(1) as ChatMessage[];
@@ -146,7 +147,7 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
   }
 
   it('PD-ORCH-005 clause 4, and the repair of a-crashed-iteration-number-is-reused-by-the-next-run: a dead run\'s open iteration is resumed — its number, its root and its task — and the new message is its root\'s next message', async () => {
-    const { sessions, client } = sessionsWith(() => answer('Answered.'));
+    const { sessions, client, warnings } = sessionsWith(() => answer('Answered.'));
     const sid = (sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
     expect((await sessions.running(sid)!).status).toBe('completed');
     const root = dal.iterationsOf(sid)[0]!.root_task_id;
@@ -165,6 +166,8 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
     expect(sent(last)).toEqual([...before, { role: 'user', content: [{ kind: 'text', text: 'second' }] }]);
     expect(recorded(sid, root)).toEqual([...before, { role: 'user', content: [{ kind: 'text', text: 'second' }] }, assistant('Answered.')]);
     expect(dal.timelineOf(sid).map((t) => t.name)).toEqual(expect.arrayContaining(['iteration_paused', 'iteration_resumed']));
+    // The resumed iteration is the open row itself: no second row is opened for it, so none is refused.
+    expect(warnings.filter((w) => /was not recorded open/.test(w))).toEqual([]);
   });
 
   it('PD-ORCH-005 clause 6, declined: the open iteration closes cancelled, its task goes back to pending, and the next iteration takes the next number', async () => {

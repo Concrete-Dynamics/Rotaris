@@ -411,7 +411,7 @@ export class Run {
     // PD-ORCH-005: the count is never below the highest iteration recorded closed, so the next iteration's number is
     // always free even where a process death landed between an iteration's close and the save that counts it.
     const closedIterations = deps.dal?.iterationsOf(deps.sessionId).filter((i) => i.state === 'closed').map((i) => i.iteration) ?? [];
-    this.iterationsCompleted = Math.max(stored?.iterations_completed ?? 0, ...closedIterations, (this.resumeFrom?.iteration ?? 1) - 1);
+    this.iterationsCompleted = Math.max(stored?.iterations_completed ?? 0, ...closedIterations);
     this.initialIterations = this.iterationsCompleted;
     // Sticky and observable: a request before the loop exists replays here (REQ-SESSION-092).
     this.stop.onRequested((s) => {
@@ -694,7 +694,7 @@ export class Run {
     const { writer } = this.deps;
     const task = resume ? this.resumedTask(resume) : this.todo.selectNext();
     if (!task) return false;
-    if (task.state !== 'in_progress') this.todo.begin(task);
+    this.todo.begin(task);
     const iteration = resume?.iteration ?? this.iterationsCompleted + 1;
     this.iterationTask = { id: task.id, text: task.text };
     if (resume) {

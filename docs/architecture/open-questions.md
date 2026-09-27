@@ -3094,16 +3094,23 @@ treat a resumed child.
   resume (below) takes a step to read the notice, so it moves back `running` rather than `summarizing`, and works, and is
   counted, as a running child (found by phase 4's review).
 - **The new message is not a task.** A continue that resumes an open iteration appends no todo task. The message is the
-  resumed root's next message, recorded in its conversation at the continue itself, with the images attached to it, and
-  REQ-SESSION-115's continuation payload is not sent (the directive narrows it so). The iteration's own task is the one
+  resumed root's next message, recorded in its conversation at the continue itself, with the images attached to it —
+  after the root's notice of its background sessions, so the user's message is the last it reads — and
+  REQ-SESSION-115's continuation payload is not sent (the directive narrows it so). The explicit cancel of that continue
+  ends the iteration the message was delivered to, and the message with it: it stays in that iteration's record and in
+  the transcript, and is not kept as a task. The iteration's own task is the one
   it holds, and it closes with it. *The first build recorded the message at the resumed iteration's first turn; a rest,
   a quit or a cancel that landed before that turn lost it while the transcript still showed it sent (found by phase 4's
   review).*
 - **The resumed root keeps its persona.** A continue that resumes an open iteration is set up as the persona its root
   ran as (`iterations.root_persona`), whatever `default_persona` says now, since clause 4 names persona among the
-  identity restored (found by phase 4's review). A persona the configuration no longer knows refuses that continue and
-  names "continue without them" as the way on. The pre-flight classifies the continue's message as it classifies any
-  continuation's, and its route, grant and playbook reach the resumed agents as they reach the agents of any run.
+  identity restored (found by phase 4's review). The persona holds for the whole run, so an iteration the run goes on
+  to after the resumed one runs as it too, and a session model override made for the current entry role does not
+  reach it. A persona the configuration no longer knows cannot be restored: the run is set up as the entry role, and
+  its warnings say so. *The first repair refused that continue and named "continue without them"; a crashed session
+  cannot take that route, which needs a `paused` one, so it was left no way on (found by phase 4's second review).*
+  The pre-flight classifies the continue's message as it classifies any continuation's, and its route, grant and
+  playbook reach the resumed agents as they reach the agents of any run.
 - **One iteration, one start.** The resumed iteration keeps its number and its root's task id. It emits no second
   `iteration.start`; `iteration_resumed` records the resume. It closes as any iteration does, with `iteration.end`, its
   capture and the hooks' `iteration_end` (REQ-HOOKS-075).
@@ -3127,8 +3134,11 @@ treat a resumed child.
 - **REQ-ORCH-095's re-prompt counts the calls made before the rest.** A child that worked before it was paused, and
   answers without a call after its resume, is not re-prompted. A child whose only call was never run is re-prompted, as
   any child that acted on nothing. The calls are counted from its row and from its record, whichever holds more, since
-  a crash writes no count; a call the record answers as never started is not counted (found by phase 4's review). A
-  child restored `summarizing` was assessed when it answered, before the rest, and is not assessed again.
+  a crash writes no count; a call the record answers as never started, with nothing it produced, is not counted, while
+  a call whose approval or question was withdrawn was dispatched and is counted, as its row counts it (found by phase
+  4's reviews). Calls the record shows and no count held join the session's total at the resume, once. A child restored
+  `summarizing` was assessed when it answered, before the rest, and its attempt from the record is not assessed again;
+  REQ-ORCH-088's retry from its payload is a new attempt, assessed as any.
 - **REQ-ORCH-088's retry starts from the payload.** A resumed child that times out and is retried on its role's
   fallback starts its conversation again from its payload, as every retried child does. The payload's disclosure block
   is rebuilt from the claims as they stand at that moment.

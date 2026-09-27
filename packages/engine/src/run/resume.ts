@@ -1,6 +1,7 @@
 import { interruptionPhrase } from '@rotaris/contracts';
 import type { ChatMessage } from '@rotaris/model';
-import type { AgentTerminalRow } from '@rotaris/store';
+import type { SessionId } from '@rotaris/kernel';
+import type { AgentTerminalRow, StoreDal } from '@rotaris/store';
 import type { TurnOutcome } from './turn.js';
 
 /**
@@ -41,6 +42,21 @@ export function firstTurn(turn: (task: string | null, history: readonly ChatMess
   if (start.kind === 'fresh') return turn(start.task, []);
   if (start.waiting) return Promise.resolve({ report: { status: 'succeeded', text: lastAssistantText(start.history), usage: { input: 0, output: 0 } }, messages: start.history, toolCallCount: 0 });
   return turn(null, start.history);
+}
+
+/** What `resumeNoticeOf` reads of the sessions this process still holds. */
+export interface HeldTerminals {
+  list(): readonly { readonly id: string; readonly status: string; readonly exitCode: number | null; readonly tail: string }[];
+}
+
+/**
+ * PD-ORCH-005 clause 10: the notice the agent `taskId` is given when it resumes, of the background sessions it had
+ * started — each as the store recorded it, or as this process still holding it reports it now. Null when it had started none.
+ */
+export function resumeNoticeOf(dal: StoreDal, sessionId: SessionId, taskId: string, held: HeldTerminals | undefined): ChatMessage | null {
+  const rows = dal.agentTerminalsOf(sessionId).filter((t) => t.task_id === taskId);
+  const live = new Map((held?.list() ?? []).map((t) => [t.id, t]));
+  return terminalNotice(rows.map((row) => { const l = live.get(row.terminal_id); return { row, live: l ? { status: l.status, exitCode: l.exitCode, tail: l.tail } : null }; }));
 }
 
 /** One background session as a resumed agent is told of it: the record, with the state its process now reports. */

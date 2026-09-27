@@ -2,11 +2,14 @@
  * The Settings proof (Part AG): the four categories that were the placeholder — Display (REQ-CONFIG-403,
  * REQ-CONFIG-472), Instructions and Tools (REQ-CONFIG-276/277, REQ-TOOLS-165) and About (REQ-CONFIG-398,
  * REQ-SHELL-138..143) — plus the save bar every category now shows (REQ-CONFIG-270) and the corrected
- * `display:` keys of REQ-CONFIG-172. Scripted client, scratch profile, six launches:
+ * `display:` keys of REQ-CONFIG-172. Scripted client, scratch profile, seven launches:
  *
  *   1. no-workspace — Electron started with no workspace: About carries the version, an em dash for Build and
  *                     REQ-SHELL-142's caption; the Tools inventory is fully populated (REQ-CONFIG-277 populates
  *                     it unconditionally); Instructions is empty and names the file to create.
+ *   1′. about-present — the same About page with both bundled assets present (first-release-plan.md §4.4): the Build
+ *                     row carries the identifier `pnpm build-id` wrote for this tree, no caption stands under the
+ *                     licensing control, and the control opens the notices file where about.ts found it.
  *   2. instructions — the same workspace with `AGENTS.md` and `AGENTS.override.md` on disk: two rows, in the
  *                     requirement's order, source `workspace`, described by absolute path; the first row's switch
  *                     is turned off and saved, and the `instructions.overrides` policy lands in the file
@@ -25,18 +28,36 @@
  * The legal links and the licence bundle are exercised through the capture seam's scripted opener
  * (`ROTARIS_CAPTURE_OPEN_EXTERNAL`), which reports success or the platform refusal without launching a browser.
  *
+ * **The two bundled assets are staged, and given back.** Launched as `electron out/main/index.js`, the app reads them from
+ * `apps/desktop/resources/` (about.ts's source-tree fallback), where `pnpm build-id` and `pnpm notices` also write the real
+ * ones. Before launch 1 any real file is moved into `.proof/settings-proof.assets/` so the absent branch is measured
+ * whatever an earlier build left; launch 1′ writes the build identifier with the real writer and a notices fixture; and
+ * the directory is restored as found the moment 1′ ends, or by the next run if this one is killed
+ * (`lib/staged-resources.mjs`).
+ *
  * Evidence under `.proof/settings-proof/`: one PNG and one log per launch, `results.json`. `--skip-build` skips the build.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { cleanEnvironment, proofIsolationEnv } from './lib/harness.mjs';
+import { put, restore, stage } from './lib/staged-resources.mjs';
 
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
 const electron = process.platform === 'win32' ? join(repo, 'node_modules', 'electron', 'dist', 'electron.exe') : join(repo, 'node_modules', 'electron', 'dist', 'electron');
 const output = resolve(repo, '.proof', 'settings-proof');
 if (relative(repo, output).startsWith(`..${sep}`) || relative(repo, output) === '..') throw new Error(`proof output escaped the repository: ${output}`);
+// first-release-plan.md §4.4: the About page's two assets, where the built app reads them from the source tree, and the
+// stash that holds what was there while the proof owns those names. The stash sits beside `output`, never inside it,
+// because `output` is removed below and a stash an interrupted run left must survive until it is given back.
+const resources = join(app, 'resources');
+const stash = resolve(repo, '.proof', 'settings-proof.assets');
+const BUILD_ID = 'build-id.txt';
+const NOTICES = 'THIRD-PARTY-LICENSES.txt';
+const recovered = restore(resources, stash);
+if (recovered.length > 0) console.log(`settings proof: an earlier run was interrupted; ${recovered.join('; ')}`);
 rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });
 
@@ -117,16 +138,50 @@ const results = {};
 const openCategory = (label, atMs = 900) => ({ ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_VIEW_MS: String(atMs), ROTARIS_CAPTURE_SETTINGS: label });
 
 // ── 1. No workspace: About, Tools and the empty Instructions ────────────────────────────────────────────────
-const noWorkspace = launch('no-workspace', null, local, preferences, {
+// The About page's two assets are the proof's from here until launch 1′ ends: whatever a build left is moved aside, so
+// this launch measures the absent branch of each. A signal gives them back before the process goes.
+const giveBack = () => { for (const line of restore(resources, stash)) console.log(`settings proof: ${line}`); };
+const onSignal = (signal) => { giveBack(); process.exit(signal === 'SIGINT' ? 130 : 143); };
+process.once('SIGINT', onSignal);
+process.once('SIGTERM', onSignal);
+const digest = (name) => (existsSync(join(resources, name)) ? createHash('sha256').update(readFileSync(join(resources, name))).digest('hex') : null);
+const found = { [BUILD_ID]: digest(BUILD_ID), [NOTICES]: digest(NOTICES) };
+stage(resources, stash, [BUILD_ID, NOTICES]);
+let noWorkspace;
+let present;
+let written;
+try {
+noWorkspace = launch('no-workspace', null, local, preferences, {
   ...openCategory('About'),
   ROTARIS_CAPTURE_OPEN_EXTERNAL: 'record',
   // Click the first legal link and the licence bundle: one reports success, the other the absent bundle.
   ROTARIS_CAPTURE_CLICKS: '[data-testid="legal-link"]>>Privacy Policy@2200;;[data-testid="licenses-open"]@2600',
   ROTARIS_CAPTURE_AFTER_MS: '3600',
 });
+
+// ── 1′. The same About page with both assets present (first-release-plan.md §4.4) ───────────────────────────────
+// The build identifier is the real writer's, over this tree, so the row shows what a package of this tree would carry.
+// The notices file is a fixture: `pnpm notices` refuses until O-3, O-11 and OQ-68 are answered, and the About page asks
+// only that the file exist and open (REQ-SHELL-142).
+const writer = spawnSync(process.execPath, [join(repo, 'tools', 'build-id', 'write.mjs')], { cwd: repo, encoding: 'utf8' });
+writeFileSync(join(output, 'build-id.log'), `${writer.stdout ?? ''}\n${writer.stderr ?? ''}`);
+if (writer.status !== 0) throw new Error(`pnpm build-id exited ${writer.status ?? writer.signal}: ${writer.stderr}`);
+written = readFileSync(join(resources, BUILD_ID), 'utf8');
+put(resources, stash, NOTICES, 'THIRD-PARTY-LICENSES.txt — a fixture written by settings-proof (first-release-plan.md §4.4), removed when the launch ends.\n');
+present = launch('about-present', null, local, preferences, {
+  ...openCategory('About'),
+  ROTARIS_CAPTURE_OPEN_EXTERNAL: 'record',
+  ROTARIS_CAPTURE_CLICKS: '[data-testid="licenses-open"]@2200',
+  ROTARIS_CAPTURE_AFTER_MS: '3200',
+});
+} finally {
+  giveBack();
+  process.removeListener('SIGINT', onSignal);
+  process.removeListener('SIGTERM', onSignal);
+}
 const aboutRows = Object.fromEntries(rows(noWorkspace.probes, '[data-testid="about-row"]').map((r) => [r.data['data-name'], r.data['data-value']]));
 if (!/^v\d/.test(aboutRows.Version ?? '')) throw new Error(`the Version row did not carry a version: ${JSON.stringify(aboutRows)}`);
-// REQ-SHELL-140: no build asset ships, so the row is the em dash rather than an invented identifier.
+// REQ-SHELL-140: with no build asset where the app reads it, the row is the em dash rather than an invented identifier.
 if (aboutRows.Build !== '—') throw new Error(`the Build row was "${aboutRows.Build}", not the em dash`);
 if (aboutRows.Publisher !== 'Concrete Dynamics UG (haftungsbeschränkt)') throw new Error(`the publisher row was "${aboutRows.Publisher}"`);
 if (aboutRows['Security contact'] !== 'security@concrete-dynamics.com') throw new Error(`the security contact row was "${aboutRows['Security contact']}"`);
@@ -139,11 +194,29 @@ const expectedLegal = [
 if (JSON.stringify(legal) !== JSON.stringify(expectedLegal)) throw new Error(`the legal documents were ${JSON.stringify(legal)}`);
 if (!noWorkspace.log.includes('capture: open-external https://rotaris.ai/privacy')) throw new Error('the Privacy Policy link did not reach the system browser');
 if (text(noWorkspace.probes, '[data-testid="legal-error"]').length !== 0) throw new Error('a successful open left an error caption on screen');
-// REQ-SHELL-142: no bundle ships, so the caption says so and the click is refused with the same sentence.
+// REQ-SHELL-142: with no bundle where the app reads it, the caption says so and the click is refused.
 const caption = text(noWorkspace.probes, '[data-testid="licenses-caption"]')[0] ?? '';
 if (caption !== 'This build does not carry a third-party license bundle.') throw new Error(`the licensing caption was "${caption}"`);
 if (text(noWorkspace.probes, '[data-testid="licenses-error"]')[0] !== 'Could not open the third-party license bundle.') throw new Error('clicking the bundle control reported no refusal');
 results.about = { rows: aboutRows, legal: legal.length, opened: 'https://rotaris.ai/privacy', caption };
+
+// REQ-SHELL-140 / REQ-SHELL-142, the present branch of each (first-release-plan.md §4.4).
+const presentRows = Object.fromEntries(rows(present.probes, '[data-testid="about-row"]').map((r) => [r.data['data-name'], r.data['data-value']]));
+const head = spawnSync('git', ['-C', repo, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim();
+// One line, exactly as the writer wrote it, and naming this tree's commit: `-dirty` when the tree differs from it.
+if (!/^[^\n]+\n$/.test(written)) throw new Error(`pnpm build-id wrote ${JSON.stringify(written)}, not one line`);
+if (presentRows.Build !== written.trim()) throw new Error(`the Build row was "${presentRows.Build}", not the identifier pnpm build-id wrote ("${written.trim()}")`);
+if (!new RegExp(`^${head}(-dirty)?$`).test(presentRows.Build)) throw new Error(`the Build row "${presentRows.Build}" does not name HEAD (${head})`);
+if (text(present.probes, '[data-testid="licenses-caption"]').length !== 0) throw new Error(`the absent caption stood beside a bundle that is present: "${text(present.probes, '[data-testid="licenses-caption"]')[0]}"`);
+const openedLicenses = `capture: open-licenses ${join(resources, NOTICES)}`;
+if (!present.log.includes(openedLicenses)) throw new Error(`the licensing control did not open the bundled file (${openedLicenses} not in the log)`);
+if (text(present.probes, '[data-testid="licenses-error"]').length !== 0) throw new Error('opening the present bundle left a refusal on screen');
+results.aboutPresent = { build: presentRows.Build, head, caption: null, opened: relative(repo, join(resources, NOTICES)) };
+// And the directory is as the proof found it: no fixture outlives the launch.
+if (existsSync(stash)) throw new Error(`the stash ${stash} was not given back`);
+const after = { [BUILD_ID]: digest(BUILD_ID), [NOTICES]: digest(NOTICES) };
+if (JSON.stringify(after) !== JSON.stringify(found)) throw new Error(`apps/desktop/resources was not left as found: before ${JSON.stringify(found)}, after ${JSON.stringify(after)}`);
+results.assetsRestored = { [BUILD_ID]: found[BUILD_ID] ? 'the file that was there, byte for byte' : 'absent, as before', [NOTICES]: found[NOTICES] ? 'the file that was there, byte for byte' : 'absent, as before' };
 
 // The Tools inventory, and the empty Instructions, in the same launch profile (no workspace at all).
 const tools = launch('tools', null, local, preferences, { ...openCategory('Tools'), ROTARIS_CAPTURE_AFTER_MS: '2600' });

@@ -1888,67 +1888,120 @@ builds "failed". That would be false, and it would read as a broken pipeline. Wh
 
 <a id="pd-orch-005"></a>
 
-### PD-ORCH-005 — a continued session resumes the children its last run left unfinished
+### PD-ORCH-005 — a continued session resumes the agents its last run left unfinished, from their full record
 
-**(1) The interruption is recorded on each unfinished child.** When a run comes to rest with children that have not
-reached a terminal state, each such child's record SHALL carry an **interruption**: `pause`, `stop`, `quit` or `crash`
-(a crash is recorded when the session is next repaired or continued). The child still ends `cancelled`, so every exit
-from an iteration still leaves every child record terminal and terminal states stay absorbing. Its report SHALL state
-that it was interrupted and by what, and its progress: the workspace paths its own file-writing calls changed, its last
-response and its tool-call count. A child that had not started (`queued`, `waiting_on_dependencies`,
-`waiting_on_model_slot`) is recorded the same way, with no progress.
+*Revision 2 (2026-09-27, [R-060](requests.md#r-060)) — **the full record**: every agent's conversation is kept as it
+happens, and continuing resumes the same agents where they stood, in the iteration they stood in; clauses 1, 2 and 4
+and the two closing paragraphs are replaced, and clauses 3 and 5 to 8 are adjusted to match. Revision 1 (2026-09-27,
+[R-059](requests.md#r-059)) is quoted below where it is replaced.*
 
-**(2) A pause holds.** An accepted whole-run pause SHALL stop every agent before its next model step, let in-flight
-tool calls finish within REQ-ORCH-134's deadline, start no queued child, and make no summarising or other model call
-after it is accepted. The run then comes to rest as it does today, and its unfinished children are recorded with
-interruption `pause`.
+**(1) Every agent's conversation is recorded as it happens.** The session record SHALL keep the full conversation of
+every agent of a run — the iteration's root and every child at every depth — appended as it happens: each message sent
+to and received from the model, each tool call with its arguments, and each tool result, under the agent's task id. The
+root's task id is recorded with its iteration. This is the record a resume is made from, and the same record a
+session's transcript is drawn from.
 
-**(3) An explicit cancel is final.** The cancel control (REQ-MONITOR-126, "cannot be undone in this session") and the
-cancellation of one agent record no interruption, and the children they end are never resumed. A graceful stop, a quit
-and a crash leave their unfinished children resumable.
+**(2) A pause stops every agent where it stands.** An accepted whole-run pause SHALL let every in-flight tool call
+finish, within REQ-ORCH-134's deadline, and then stop every agent before its next model step: no queued child starts,
+no child summarises, and no model call is made after the pause is accepted. Every agent that has not reached a terminal
+state is left in the child state **`paused`**, with its **interruption** recorded as `pause`, and the iteration is left
+open: it is neither closed nor re-queued. The session persists `paused`.
 
-**(4) Continuing resumes them.** When the session is next continued — the Continue action, a new message or a plan
-decision — then before the first iteration begins, every child the previous run left with an interruption SHALL be
-**resumed**: a new child record is created under that iteration's root with the same persona, task, background flag
-and write scope, and a `resumed_from` link to the record it resumes. Its payload is its original task and a **resume
-brief** assembled from its record within a fixed budget: that it is resuming and why it stopped, the paths it had
-changed, its own todo, its last response, and the tail of its transcript. Dependencies among resumed children carry
-over to the new records. The root's payload lists the resumed agents, and the root owns them as it owns any child it
-delegated: it may wait on them, read their results and cancel them. A resumed child gets a fresh `child_timeout` and
-counts toward every child limit of the run that resumed it.
+**(3) A stop, a quit and a crash leave the same state; an explicit cancel is final.** A graceful stop, an application
+quit and a crash likewise leave every agent that has not reached a terminal state `paused`, with interruption `stop`,
+`quit` or `crash` (a crash is recorded when the session is next repaired or continued), and the iteration open. A tool
+call cut off before its result arrived is recorded as interrupted, with whatever output it had produced. The cancel
+control (REQ-MONITOR-126, "cannot be undone in this session") and the cancellation of one agent end their agents
+`cancelled` as today, and those are never resumed.
 
-**(5) What is never resumed.** A child that ended `succeeded`, `failed` (a timed-out child among them, whose route is
-PD-ORCH-004's continuation offer), `blocked` (REQ-ORCH-048), or cancelled under clause 3.
+**(4) Continuing resumes the iteration where it stood.** When a session whose last run left an open iteration is next
+continued — the Continue action, a new message or a plan decision — that iteration SHALL resume before anything else
+runs. Its root and every `paused` agent are restored from their record with their identity (task id, canonical name,
+persona, parent, dependencies, background flag and write scope) and their conversation, and each carries on from its
+last message; a `paused` agent moves back to the state it resumes into. A tool call recorded as interrupted is given to
+its agent as a result stating that it was interrupted before it completed and was not re-run, so the agent decides
+whether to issue it again. A continue made by a new message delivers that message to the resumed root as the user's
+next message in its conversation. A conversation too long for its model is compressed as any conversation is. A resumed
+agent's `child_timeout` starts afresh, and each agent keeps the place in every child limit it already held.
+
+**(5) What is never resumed.** An agent that ended `succeeded`, `failed` (a timed-out child among them, whose route is
+PD-ORCH-004's continuation offer), `blocked` (REQ-ORCH-048), or `cancelled`.
 
 **(6) The user decides at each continue.** The Continue action SHALL state how many agents will resume, and SHALL offer
-to continue without them; choosing that records those children as not resumed, and they are never resumed later.
-Resuming is the default.
+to continue without them; choosing that ends those agents `cancelled`, the open iteration closes as cancelled, and the
+session continues as a new iteration, as today. Resuming is the default.
 
-**(7) A piece of work is resumed each time the user continues.** There is no cap: every resume follows a user's act of
-continuing, and a resumed child that is itself interrupted is resumable in turn.
+**(7) An iteration is resumed each time the user continues.** There is no cap: every resume follows a user's act of
+continuing, and an iteration interrupted again after a resume is resumable in turn.
 
-**(8) Opening a session is not continuing it.** Loading a session to view it SHALL change no child record; settling,
+**(8) Opening a session is not continuing it.** Loading a session to view it SHALL change no agent record; settling,
 recording interruptions and resuming happen only when a run of the session is about to start.
 
 **What is unchanged.** A continuation is still not a resume: a timed-out child is never resumed and earns no corrective
 message (REQ-NOTIFY-112). The message-limit pause and the plan gate keep their durable holds. The run host is still
 never re-forked, and a crashed session still needs repair or a continue before anything runs (ADR-0002). How a
 continuation offer outlives its run is PD-ORCH-004 revision 3; how a resumed child re-claims its write scope is
-PD-TOOLS-006 revision 2.
+PD-TOOLS-006 revision 2. A pause and a stop share one mechanism, so an agent paused while the application stays open
+and an agent left by a quit resume the same way.
 
 **Why, and what it costs.** Every stop, pause, quit or crash ended every child, and the next run's root was told
 nothing about them and could not address them: in run `2e21e324` the user stopped a run whose children had been
-working for twenty minutes, and nothing of their work could be continued. A continued session now brings its agents
-back unless the user declines. What it costs: a resumed child starts a fresh conversation and pays for its brief, so
-continuing a session whose agents were mid-way through is no longer free; a pause no longer lets children finish their
-turn and summarise, so a paused child's report is its progress, never its conclusion; and four columns are appended to
-the store (`children.interruption`, `children.resumed_from`, `children.write_scope`, and a task id on transcript rows).
+working for twenty minutes, and nothing of their work could be continued. Keeping every agent's full conversation is
+how a paused or stopped run can pick up exactly where it stood, the way Claude Code and the Codex CLI resume a session
+from the conversation they record. What it costs: a table of agent conversations that grows with every message; every
+resumed agent sends its whole conversation to its model again, compressed when it no longer fits; a pause no longer lets
+children finish their turn, so a paused agent has no report until it ends; and one child state (`paused`) and one
+column (`children.interruption`) are added, with `children.write_scope` stored for PD-TOOLS-006.
 
-> **Narrows:** REQ-MONITOR-256, REQ-MONITOR-123, REQ-TOOLS-155, REQ-ORCH-072
-> **Extends:** REQ-ORCH-053, REQ-SESSION-065, REQ-NOTIFY-121
+> Revision 1 said, and no longer governs, clause (1):
+> **(1) The interruption is recorded on each unfinished child.** When a run comes to rest with children that have not
+> reached a terminal state, each such child's record SHALL carry an **interruption**: `pause`, `stop`, `quit` or `crash`
+> (a crash is recorded when the session is next repaired or continued). The child still ends `cancelled`, so every exit
+> from an iteration still leaves every child record terminal and terminal states stay absorbing. Its report SHALL state
+> that it was interrupted and by what, and its progress: the workspace paths its own file-writing calls changed, its last
+> response and its tool-call count. A child that had not started (`queued`, `waiting_on_dependencies`,
+> `waiting_on_model_slot`) is recorded the same way, with no progress.
+>
+> Clause (2):
+> **(2) A pause holds.** An accepted whole-run pause SHALL stop every agent before its next model step, let in-flight
+> tool calls finish within REQ-ORCH-134's deadline, start no queued child, and make no summarising or other model call
+> after it is accepted. The run then comes to rest as it does today, and its unfinished children are recorded with
+> interruption `pause`.
+>
+> Clause (4):
+> **(4) Continuing resumes them.** When the session is next continued — the Continue action, a new message or a plan
+> decision — then before the first iteration begins, every child the previous run left with an interruption SHALL be
+> **resumed**: a new child record is created under that iteration's root with the same persona, task, background flag
+> and write scope, and a `resumed_from` link to the record it resumes. Its payload is its original task and a **resume
+> brief** assembled from its record within a fixed budget: that it is resuming and why it stopped, the paths it had
+> changed, its own todo, its last response, and the tail of its transcript. Dependencies among resumed children carry
+> over to the new records. The root's payload lists the resumed agents, and the root owns them as it owns any child it
+> delegated: it may wait on them, read their results and cancel them. A resumed child gets a fresh `child_timeout` and
+> counts toward every child limit of the run that resumed it.
+>
+> And:
+> **What is unchanged.** A continuation is still not a resume: a timed-out child is never resumed and earns no corrective
+> message (REQ-NOTIFY-112). The message-limit pause and the plan gate keep their durable holds. The run host is still
+> never re-forked, and a crashed session still needs repair or a continue before anything runs (ADR-0002). How a
+> continuation offer outlives its run is PD-ORCH-004 revision 3; how a resumed child re-claims its write scope is
+> PD-TOOLS-006 revision 2.
+>
+> **Why, and what it costs.** Every stop, pause, quit or crash ended every child, and the next run's root was told
+> nothing about them and could not address them: in run `2e21e324` the user stopped a run whose children had been
+> working for twenty minutes, and nothing of their work could be continued. A continued session now brings its agents
+> back unless the user declines. What it costs: a resumed child starts a fresh conversation and pays for its brief, so
+> continuing a session whose agents were mid-way through is no longer free; a pause no longer lets children finish their
+> turn and summarise, so a paused child's report is its progress, never its conclusion; and four columns are appended to
+> the store (`children.interruption`, `children.resumed_from`, `children.write_scope`, and a task id on transcript rows).
+>
+> Revision 1 narrowed REQ-TOOLS-155; revision 2 does not, because a resumed child keeps its parent, and its
+> back-pointer is removed. It extended REQ-ORCH-053, REQ-SESSION-065 and REQ-NOTIFY-121; revision 2 narrows them,
+> because the settle no longer cancels a `paused` agent.
+
+> **Narrows:** REQ-MONITOR-256, REQ-MONITOR-123, REQ-ORCH-072, REQ-ORCH-002, REQ-ORCH-052, REQ-MONITOR-300, REQ-ORCH-053, REQ-SESSION-065, REQ-NOTIFY-121, REQ-SESSION-115, REQ-SESSION-129
 
 *Raised by the owner, 2026-09-27; logged as [R-058](requests.md#r-058) and ruled as drafted, every fork as recommended,
-by [R-059](requests.md#r-059).*
+by [R-059](requests.md#r-059). Revision 2 logged as [R-060](requests.md#r-060).*
 
 ---
 

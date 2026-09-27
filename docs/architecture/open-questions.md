@@ -53,8 +53,9 @@ on 2026-09-27** as recommended by `PD-ORCH-004` revision 2 ([R-058](../product/r
 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3: OQ-67** (how a `paused` agent presents, and whether it is settled
 for display with a session at rest, which four requirements the directive does not name would do), **OQ-68** (whether
 the transcript is drawn from the conversation record, and what of a model exchange the record holds), **OQ-69** (which
-control is a stop and which the final cancel, and what a rest does at the edges the directive does not reach) **and
-OQ-70** (how a resumed iteration carries on where the directive gives the what and not the how), each stating the
+control is a stop and which the final cancel, and what a rest does at the edges the directive does not reach), **OQ-70**
+(how a resumed iteration carries on where the directive gives the what and not the how) **and OQ-72** (which artifact
+REQ-SESSION-115's handoff carries, and who takes up an earlier offer), each stating the
 reading the build proceeds under. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
@@ -3094,7 +3095,8 @@ treat a resumed child.
   counted, as a running child (found by phase 4's review).
 - **The new message is not a task.** A continue that resumes an open iteration appends no todo task. The message is the
   resumed root's next message, recorded in its conversation at the continue itself, with the images attached to it —
-  after the root's notice of its background sessions, so the user's message is the last it reads — and
+  after the root's notice of its background sessions, so the user's message is the last it reads; a notice the root has
+  not yet answered is not recorded again by a later continue — and
   REQ-SESSION-115's continuation payload is not sent (the directive narrows it so). The explicit cancel of that continue
   ends the iteration the message was delivered to, and the message with it: it stays in that iteration's record and in
   the transcript, and is not kept as a task. The iteration's own task is the one
@@ -3151,6 +3153,60 @@ iteration that closes without addressing it leaves the message pending? Should a
 the Continue action, and with it "continue without them"? And should a re-armed session hold its plan gate before the
 resume, after it, or not at all — as built, the run that resumes is not held, and neither are the iterations it runs
 after the resumed one?
+
+**OQ-72 — Which artifact is REQ-SESSION-115's "latest orchestrator artifact", and how does a later root take up an offer?** *(`PD-ORCH-004` revision 3; REQ-SESSION-115, which `PD-ORCH-005` narrows for a resumed iteration and which nothing narrows here, and REQ-TOOLS-155, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-004` revision 3 with `PD-ORCH-005` under [R-059](../product/requests.md#r-059), and by the repair of `the-continuation-payload-says-no-artifact-is-recorded.md`.)*
+
+REQ-SESSION-115's handoff carries "at most 6000 characters for the latest orchestrator artifact against an
+8000-character artifact baseline". The session's artifact store holds child reports and the documents agents
+published. The built-in orchestrator publishes no artifact of its own, so no record of a default configuration is an
+"orchestrator artifact" by author. PD-ORCH-004 revision 3 keeps an offer open until it is taken up once, "by the agent
+that delegated the child while that agent runs, or, in a later iteration or a later run of the session, by that
+iteration's root agent". It does not say which iteration's children count as "left" for a resumed iteration, which
+keeps its number across runs, nor how a later root learns an offer exists.
+
+**What the build proceeds under.**
+
+- **The artifact.** The latest record of the session's store that nothing has superseded, of any kind. It is where
+  the run's work is recorded, and the handoff states it in place of the placeholder that claimed none existed. It is
+  rendered as its id, title, kind and status — the id first, so no cut reaches it (REQ-SESSION-194) — then its summary
+  and key findings, cut to 6,000 characters without splitting a character. A published document is stated once, as its
+  body: its summary is its body's first line and its key findings its body (REQ-LIBRARY-093). The 8,000-character
+  baseline is not applied: nothing larger is assembled before the cut. A session with none says so. "Latest" is the
+  last created, in the listing's own index order (REQ-LIBRARY-096), so artifacts created in the same millisecond — a
+  cancellation writes several reports at once — fall to their ids, a stable order but not the order they were written.
+  *The first repair broke that tie by insertion order, which cost the index's order (a sort per read, found by phase 6's
+  second review).* Two more limits stand, both found by phase 6's review: a report re-materialised in place keeps its creation time (REQ-LIBRARY-092), so a later iteration's report
+  that reuses a canonical name does not become the latest (and overwrites the earlier one:
+  `a-reused-canonical-name-overwrites-an-earlier-iterations-report-artifact.md`); and a body edited after publishing
+  (REQ-LIBRARY-094) is stated as it was published.
+- **Who takes up an earlier offer.** The agent that delegated the child, while it runs. Otherwise only an iteration's
+  root, of an offer the session left before that root's run took the iteration up: any earlier iteration's (the
+  child's `iteration` is lower), a grandchild's as readily as a direct child's, and — a resumed iteration keeping its
+  number — its own iteration's children that had ended in an earlier run, whoever delegated them ("a later run of the
+  session"; *the first build admitted only lower iterations, which read those words as redundant — found by phase 6's
+  review*). A child of a later iteration is refused: the directive gives the offer to "that iteration's root agent", and
+  REQ-TOOLS-155 keeps a child to its own children. A plan cycle's root takes up none, since a plan cycle is not an
+  iteration (REQ-ORCH-153), and its refusal names only its own children; a plan cycle a continuation starts is still
+  shown the open offers in its handoff, which it cannot take up there.
+- **How a later root learns of an offer.** The offers no child has taken up are stated as `Open continuation offers`,
+  with the way to take one up, each by the offering child's name and task id — the newest ten, the rest elided behind
+  one line, since every part of the handoff is budgeted (found by phase 6's second review) — and only when there is one.
+  A new iteration's root reads them in the handoff's progress context. A resumed root, which is sent no handoff, is told
+  them at the continue that resumes it, after the notice of its background sessions and before the continue's message
+  (found by phase 6's second review) — only the offers its conversation does not already hold, since its own children's
+  reports carry theirs and an offer told once is not told again. An offer is held when the conversation carries the
+  offer itself: a report's `continuation_of: "<id>"`, in a message or a tool result, or a line of an offers list it was
+  told, alone or inside a handoff. A root that had answered and waits therefore takes a step only to read an offer it
+  has not seen; *the second repair told the whole list at every continue, which had such a root step for it each time
+  (found by phase 6's third review)*; *the third repair counted any mention of a task id as the offer told, so a root
+  that had only named a task in passing was never told its offer (found by phase 6's fourth review)*. A compression
+  that summarises the held offer away has it told again at the next continue, once. A later iteration of the same run starts from the launch content, which states
+  none, so there an offer is taken up only by a root that already knows its task id.
+
+**What a ruling decides.** Whether "orchestrator artifact" should instead name only what the root itself publishes,
+leaving the line empty until it does. Whether the open offers belong in the handoff, which REQ-SESSION-115 defines as
+"artifact, todo, and progress context", or should reach a later root some other way — and whether a later iteration of
+the same run should be told of them too.
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

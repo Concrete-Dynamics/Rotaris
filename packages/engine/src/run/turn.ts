@@ -230,8 +230,12 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
     ? deps.compression.registry.register({ agent: deps.agentName, compress: async (s) => { const r = await compression.manual(conv, condensed, s); if (r.kind === 'compressed') condensed = true; return r; } })
     : null;
   try {
+  // REQ-MONITOR-123 / PD-ORCH-005 clause 2: the turn stops before its next model call — checked again after every awaited
+  // piece that precedes the step, since a pause accepted meanwhile allows no model call (found by phase 3's review).
+  const stopsHere = (): TurnOutcome | null => (deps.shouldPause?.() === true ? { report: { status: 'succeeded', text: lastReport.text, usage }, messages: conv.snapshot(), toolCallCount, paused: true } : null);
   for (;;) {
-    if (deps.shouldPause?.()) return { report: { status: 'succeeded', text: lastReport.text, usage }, messages: conv.snapshot(), toolCallCount, paused: true };
+    const before = stopsHere();
+    if (before) return before;
     injectSteering(deps, conv);
     const supervision = await deps.supervisor?.check();
     if (supervision?.kind === 'inject') {
@@ -253,8 +257,12 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
      * call goes out over the compressed context. This sits where ADR-0059's `check()` sits — between steps,
      * with no request in flight, which is the only place the conversation may be replaced.
      */
+    const afterSupervision = stopsHere();
+    if (afterSupervision) return afterSupervision;
     if (compression && !signal.aborted && compression.due(conv, condensed)) {
       if (await compression.run(conv, 'automatic', condensed, signal)) condensed = true;
+      const afterCompression = stopsHere();
+      if (afterCompression) return afterCompression;
     }
     // REQ-CHAT-054: one stable message key per response SEGMENT. A tool boundary ends a segment, so the next step's
     // response is a distinct row; the ladder re-running THIS step on a fallback reuses the key and so persists once.
@@ -334,7 +342,7 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
       const r = await tools.dispatch(call, callSignal);
       const interrupted = r.interrupted === true || callSignal.aborted;
       deps.onToolCompleted?.(call, r);
-      if (!interrupted) deps.dispatched.set(c.callId, r.text);
+      deps.dispatched.set(c.callId, r.text);
       if (rowIndex !== null) {
         writer.settleRow(rowIndex, r.label, { toolStatus: r.status, durationMs: r.durationMs, output: r.text, ...(r.blockedReason === undefined ? {} : { blockedReason: r.blockedReason }) });
         // REQ-CHAT-050: the user-only edit-diff row directly beneath the tool row that produced it.

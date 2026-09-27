@@ -238,10 +238,11 @@ function shape(raw: unknown, input: ReportInput): ChildReport | null {
 }
 
 /** The bounded pass: two attempts, a timeout, a report whatever happens. */
-export async function produceReport(input: ReportInput, s: SummariserDeps | null, signal: AbortSignal): Promise<ChildReport> {
+/** `unsummarised`: why no summariser is passed, when one is withheld on purpose (PD-ORCH-005: a run coming to rest). */
+export async function produceReport(input: ReportInput, s: SummariserDeps | null, signal: AbortSignal, unsummarised = 'no summariser is configured'): Promise<ChildReport> {
   const tester = deterministicTesterReport(input);
   if (tester) return tester;
-  if (!s) return fallbackReport(input, 'no summariser is configured');
+  if (!s) return fallbackReport(input, unsummarised);
   const transcript = transcriptText(input.messages);
   const timeout = s.timeoutMs ?? SUMMARY_TIMEOUT_MS;
   let complaint = '';

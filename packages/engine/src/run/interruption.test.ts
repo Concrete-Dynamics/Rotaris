@@ -10,6 +10,7 @@ import { ProjectionOwner } from '../projection-owner.js';
 import { SequenceCounters } from '../sequence.js';
 import { SessionWriter } from '../session-writer.js';
 import { runTurn, type PortToolCall, type PortToolResult, type ToolPort, type TurnDeps } from './turn.js';
+import type { LoopSupervisor } from './supervisor.js';
 import { answerUnanswered, interruptedResult } from './interruption.js';
 
 /**
@@ -104,7 +105,6 @@ describe('PD-ORCH-005: a turn comes to rest (runTurn)', () => {
     // The record is the conversation: before the build, the whole `tool` message was lost with the stop (the spike's finding 2).
     expect(recorded.map((m) => m.role)).toEqual(['user', 'assistant', 'tool']);
     expect(client.requests).toHaveLength(1);
-    // Only a completed call is kept against REQ-ORCH-141's replay: an interrupted one is issued again as a new call.
   });
 
   it('clause 2, a pause: the call in flight finishes, no later call of the step starts, and no model step follows', async () => {
@@ -119,6 +119,21 @@ describe('PD-ORCH-005: a turn comes to rest (runTurn)', () => {
       { callId: 'c2', result: interruptedResult('pause', false, '') },
       { callId: 'c3', result: interruptedResult('pause', false, '') },
     ]);
+    expect(client.requests).toHaveLength(1);
+  });
+
+  it('clause 2: a pause accepted while the loop supervisor checks (which may call its classifier) allows no model step after the check', async () => {
+    const client = new ScriptedModelClient([toolCalls([{ callId: 'c1', name: 'probe', args: {} }], 'One.'), answer('never')]);
+    let rest: Interruption | null = null;
+    let checks = 0;
+    const supervisor = {
+      check: async () => { checks += 1; if (checks === 2) rest = 'pause'; return { kind: 'continue' as const }; },
+      observe: () => undefined, noteUserInstruction: () => undefined,
+    } as unknown as LoopSupervisor;
+    const { tools } = port((c) => ok(`${c.callId}-done`));
+    const out = await runTurn(deps(client, tools, { supervisor, interruption: () => rest, shouldPause: () => rest !== null }), 'Do it.', [], new AbortController().signal);
+    expect(out.paused).toBe(true);
+    expect(checks).toBe(2);
     expect(client.requests).toHaveLength(1);
   });
 

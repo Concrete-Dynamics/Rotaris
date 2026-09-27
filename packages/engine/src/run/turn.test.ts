@@ -7,6 +7,7 @@ import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/stor
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ScriptedCall } from '@rotaris/model';
 import { RUN_CONFIG_DEFAULTS, Sessions, type ModeChange, type PortToolCall, type PortToolResult, type Publisher, type RunConfig, type SessionsDeps, type ToolPort } from '../index.js';
 import { conversationOf } from './record.js';
+import { decodeStoredTodo } from '../todo-view.js';
 import type { LiveTerminal } from './run.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
@@ -308,6 +309,33 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
       expect(ended).toEqual([['ts_serve']]);
       // Recorded before the kill: the kill's own `killed` is not the end the record keeps.
       expect(dal.agentTerminalsOf(sid).map((t) => [t.terminal_id, t.state, t.output_tail])).toEqual([['ts_serve', 'stop', 'listening'], ['ts_build', 'completed', 'built']]);
+    });
+
+    it('clause 10 (OQ-69): the explicit cancel is a stop for the background sessions — it ends them and records it', async () => {
+      const { terminals, ended } = withTerminals();
+      const { port } = fakePort({ hold: new Promise<void>(() => undefined), holdOn: 'glob' });
+      const { sessions } = sessionsWith([toolCalls([{ callId: 'c1', name: 'glob', args: {} }]), answer('never')], port, { terminals });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => dal.residentRows(sid).some((r) => r.kind === 'tool'));
+      sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: 'run' } });
+      await sessions.running(sid)!;
+      expect(ended).toEqual([['ts_serve']]);
+      expect(dal.agentTerminalsOf(sid).map((t) => [t.terminal_id, t.state])).toEqual([['ts_serve', 'stop'], ['ts_build', 'completed']]);
+    });
+
+    it('a call that raises while the run comes to rest leaves the iteration open to be resumed, not failed and abandoned', async () => {
+      let raise!: () => void;
+      const raised = new Promise<void>((r) => { raise = r; });
+      const port: ToolPort = { ...fakePort().port, dispatch: async () => { await raised; throw new Error('the tool host went away'); } };
+      const { sessions } = sessionsWith([toolCalls([{ callId: 'c1', name: 'glob', args: {} }]), answer('never')], port);
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => dal.residentRows(sid).some((r) => r.kind === 'tool'));
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      raise();
+      const result = await sessions.running(sid)!;
+      expect(result.status).toBe('interrupted');
+      expect(dal.iterationsOf(sid)).toMatchObject([{ state: 'open', interruption: 'pause' }]);
+      expect(decodeStoredTodo(dal.getSession(sid)!.todo).planner!.phases[0]!.tasks[0]!.state).toBe('in_progress');
     });
 
     it('clause 10: a pause leaves them running while the application stays open; the quit that follows ends them and records it', async () => {

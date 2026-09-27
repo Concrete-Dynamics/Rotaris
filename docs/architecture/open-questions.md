@@ -2947,7 +2947,7 @@ projection — or whether the two stay parallel records of the same run, as buil
 keep the system prompt and tool definitions each request carried, so a resume replays the instructions the agent had
 rather than the persona's current ones.
 
-**OQ-69 — Which control is a stop and which the final cancel, and what does a rest do at the edges the directive does not reach?** *(`PD-ORCH-005` clauses 2, 3, 9, 10 and 11; REQ-MONITOR-009, REQ-MONITOR-126, REQ-SESSION-092, REQ-SESSION-186 and REQ-SESSION-025, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3 under [R-060](../product/requests.md#r-060) and [R-061](../product/requests.md#r-061).)*
+**OQ-69 — Which control is a stop and which the final cancel, and what does a rest do at the edges the directive does not reach?** *(`PD-ORCH-005` clauses 2, 3, 8, 9, 10 and 11; REQ-MONITOR-009, REQ-MONITOR-126, REQ-MONITOR-130, REQ-SESSION-092, REQ-SESSION-108, REQ-SESSION-186, REQ-SESSION-025, REQ-ORCH-135 and REQ-GIT-094, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3 under [R-060](../product/requests.md#r-060) and [R-061](../product/requests.md#r-061).)*
 
 Clause 3 leaves every unfinished agent `paused` after "a graceful stop" and keeps "the cancel control
 (REQ-MONITOR-126, 'cannot be undone in this session')" final. The product has one stop control and one cancel. The stop
@@ -2988,12 +2988,49 @@ when the pause is accepted, a rest that finds nothing unfinished, and what a cra
 - **Loading is not continuing (clause 8).** Loading a session no longer runs the stale-child settle. Every settle, and
   the crash record before it, happens when a run of the session is about to start, and at a repair. The load's answer
   no longer carries a settled count.
+- **Listing checkpoints is not continuing either (clause 8, REQ-GIT-094).** The checkpoint listing repairs the
+  session's status first, as REQ-GIT-094 requires, and that repair records no crash: viewing a session's checkpoints
+  changes no agent record. The crash is recorded by the repair the user asks for and by the continue.
+- **Requirements the directive does not name.** Three requirements the Narrows list omits say otherwise where clauses 2
+  and 3 decide, and the build follows the clauses. REQ-ORCH-135 closes an iteration cancelled mid-run `cancelled`; a
+  pause, a stop or a quit with an agent unfinished leaves it open, and REQ-ORCH-135 still governs the explicit cancel, a
+  run the product ends on its own account, and a rest that finds nothing unfinished. REQ-MONITOR-130 settles every
+  non-terminal agent `cancelled` when a run is cancelled; the build reads its cancel as REQ-MONITOR-126's explicit
+  cancel, which still does exactly that from every surface, and a stop leaves the agents `paused` as clause 3 says.
+  REQ-SESSION-108 puts the pause at the outer-loop boundary so that no agent is part-way through execution and no model
+  request is outstanding; clause 2 stops every agent before its next model step instead, and the build reads "part-way
+  through execution" as executing: once the pause has landed a paused agent executes nothing and no request is
+  outstanding.
+- **No model call after the pause, wherever one is made (clause 2).** The step in flight is the only model call that
+  finishes, and its report stands: a transient failure of it is not retried, no fallback model is tried, a context
+  rejection is not condensed, and a provider limit it meets is not waited on. An agent already parked on a provider limit
+  stops waiting at once and makes no further request, so a pause during the wait on an exhausted provider completes;
+  the turn checks the rest again after supervision and after compression, so neither leads to another step; and no
+  child summarises. The same holds from a stop's acceptance, which also aborts the step in flight.
+- **Calls in flight at a stop or a quit (clauses 3 and 9).** Clause 9's last sentence gives every other in-flight call
+  REQ-ORCH-134's deadline, and read alone it would give it on a stop and a quit too. Clause 3 has a stop's call "cut off
+  before its result arrived", and REQ-SESSION-092's stop aborts at once, so the deadline is the pause's: a stop and a quit
+  cut every call in flight at once, each recorded as interrupted with what it had produced.
+- **A child that times out or raises during a rest.** "What is unchanged" keeps a timed-out child failed and never
+  resumed. A child whose `child_timeout` fires, or whose execution raises, while the run is coming to rest ends `failed`
+  as it would have without the rest. Clause 2 permits no summarising call, so its report is the unsummarised one, whose
+  `summary_failure` says the run was coming to rest.
+- **A child finished and unreported is unfinished work.** A child that reached its terminal state but whose report its
+  parent has not received leaves the parent unfinished: the parent is left `paused`, and a root in that state leaves the
+  iteration open, so the report is delivered when the parent resumes instead of being lost with a closed iteration.
+- **The explicit cancel meanwhile.** A rest waits for every execution — a pause as long as the steps in flight take, a
+  stop or a quit within REQ-SESSION-092's 30 s. The explicit cancel that arrives in that window is final: every agent
+  the rest had paused ends `cancelled` and the iteration closes.
+- **Background sessions at the other ends (clause 10).** The explicit cancel is a stop made final, so it records `stop`
+  and ends them as a stop does. A run the product ends on its own account and a stop or a quit during a plan cycle do
+  not come to rest, and record nothing of them, as before the build.
 
 **What a ruling decides.** Whether a forced stop should be final, as REQ-SESSION-186's persisted `paused` for a forced
 stop hints (a forced stop and a cancel persist the same status). Whether a stop during a plan cycle should leave the
 cycle's agents to be resumed, which clause 11's durable hold arguably forbids. And whether one paused agent should be
-cancellable while its session rests. Each would change a control's reach or a surface's offer, and none is decided by
-the directive.
+cancellable while its session rests. Whether REQ-ORCH-135, REQ-MONITOR-130 and REQ-SESSION-108 should join the Narrows
+list, as the build reads them. Each would change a control's reach, a surface's offer or the record's traceability, and
+none is decided by the directive.
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

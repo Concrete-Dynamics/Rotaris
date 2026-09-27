@@ -246,7 +246,7 @@ export function askQuestionsTool(deps: AskQuestionsDeps): ToolExecutor<AskQuesti
         if (outcome.kind === 'cancelled') return observation(QUESTIONS_CANCELLED, { outcomeKind: 'cancelled' });
         // PD-ORCH-005 clause 9: the run came to rest while the user had not answered — the prompt is withdrawn, the call
         // interrupted and never answered, and nothing is replayed later; issuing it again asks afresh.
-        if (outcome.kind === 'withdrawn') return errorObservation(questionsWithdrawn(outcome.cause), { outcomeKind: 'withdrawn', failureKind: INTERRUPTED_FAILURE_KIND });
+        if (outcome.kind === 'withdrawn') return errorObservation(questionsWithdrawn(outcome.cause), { outcomeKind: 'withdrawn', failureKind: INTERRUPTED_FAILURE_KIND, withdrawnBy: outcome.cause });
         if (outcome.kind === 'timed_out') {
           // REQ-CHAT-095: the OUTCOME reads "User did not respond within <N> seconds."; the MODEL sees the other
           // sentence. `Observation.text` is by construction the model-visible content (tools/types.ts), so the

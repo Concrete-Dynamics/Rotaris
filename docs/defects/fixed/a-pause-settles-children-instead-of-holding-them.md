@@ -27,13 +27,27 @@ model request made after the pause was accepted, and starting a queued child is 
 
 By `PD-ORCH-005` phase 3, whose clause 2 is this defect's opposite: a pause stops every agent where it stands. An
 accepted pause stops the scheduler (`Scheduler.hold`: no child is admitted, promoted or started from there), wakes
-every parent waiting on children, and has every agent stop before its next model step. A child execution that comes to
-rest makes no re-prompt, no summary and no report and reaches no terminal state: it is left `paused` with its
-interruption and the state it resumes into (`IterationChildren.execute`), and every child that had not started is
-paused where it stood (`IterationChildren.rest`). `TurnOutcome.paused` is read: a turn that stopped mid-way resumes
-`running`. The pause also withdraws every approval and question (clause 9) and cuts the calls still in flight at
-REQ-ORCH-134's deadline. The iteration is left open, and the session persists `paused`.
+every parent waiting on children, and has every agent stop before its next model call: the turn checks the rest at the
+top of its loop, after supervision and after compression; the resilience ladder makes no retry and no fallback once the
+run rests; and a provider-limit wait is released at once. A child execution that comes to rest makes no re-prompt, no
+summary and no report and reaches no terminal state: it is left `paused` with its interruption and the state it resumes
+into (`IterationChildren.execute`), and every child that had not started is paused where it stood
+(`IterationChildren.rest`). `TurnOutcome.paused` is read: a turn that stopped mid-way resumes `running`, and so does a
+parent with a finished child whose report it has not yet received, so the report is not lost with a closed iteration.
+The pause also withdraws every approval and question (clause 9) and cuts the calls still in flight at REQ-ORCH-134's
+deadline. The iteration is left open, and the session persists `paused`.
 
-Evidence: `children.test.ts` ("clause 2, the repair of a-pause-settles-children-instead-of-holding-them…": no
-summarising call, no step of the parked child, both children paused, the iteration open), red when the rest in
-`execute` or the scheduler's hold is reverted.
+The phase's adversarial review found the first version incomplete. A finished but unreported child was ignored, a
+transient retry and a provider-limit wait still made a request after the pause, and a timed-out child was left `paused`.
+Each is repaired in the same phase, and the readings are in OQ-69.
+
+This does not make the pause REQ-SESSION-108's outer-loop pause. Clause 2 stops agents mid-iteration, and OQ-69 records
+how the build reads REQ-SESSION-108 against it.
+
+Evidence:
+- `children.test.ts`, "clause 2, the repair of a-pause-settles-children-instead-of-holding-them…": no summarising call,
+  no step of the parked child, both children paused, the iteration open. It fails when the rest in `execute` or the
+  scheduler's hold is reverted.
+- `children.test.ts`, "…a child that ended with a report its parent has not been given leaves the parent unfinished…".
+- `ladder.test.ts`, "…a pause accepted during a provider-limit wait releases it at once…" and "…a pause accepted during
+  a transient retry's backoff makes no retry".

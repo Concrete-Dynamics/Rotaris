@@ -898,7 +898,7 @@ describe('Part U — the delete and its cascade (REQ-SESSION-166, ADR-0058)', ()
       dal.insertPlanCycle(sid, 1, 't', 'the plan, verbatim', 'small_feature', '', '');
       // v23 (PD-ORCH-005 clause 12): "The conversation record belongs to its session and is deleted with it" — the
       // iteration, every agent's messages and the background terminals it recorded.
-      dal.insertIteration({ session_id: sid, iteration: 1, root_task_id: 'bg_00000000', root_name: 'orchestrator', root_persona: 'orchestrator', task_id: 't', task: 't', opened_at: 't' });
+      dal.insertIteration({ session_id: sid, iteration: 1, root_task_id: 'bg_00000000', root_canonical_name: 'orchestrator', root_persona: 'orchestrator', todo_task_id: 't', task: 't', opened_at: 't' });
       dal.insertAgentMessage({ session_id: sid, task_id: 'bg_00000000', iteration: 1, kind: 'message', body: '{"role":"user","content":[]}', at: 't' });
       dal.upsertAgentTerminal({ session_id: sid, terminal_id: 'ts_00000001', task_id: 'bg_00000000', command: 'c', started_at: 't', state: 'running', exit_code: null, output_tail: '', updated_at: 't' });
       // Part Y (v12): the artifact record goes with its session, so its body file is the only thing left to remove.
@@ -1087,7 +1087,7 @@ describe('store — v23: the record a paused run resumes from (PD-ORCH-005, PD-T
     dal.upsertSession({ session_id: sid, execution_status: 'running', workspace_root: 'C:/ws', created_at: 't', updated_at: 't' });
     return { r, dal, sid };
   }
-  const iteration = (sid: string, n: number, root: string) => ({ session_id: sid, iteration: n, root_task_id: root, root_name: 'orchestrator', root_persona: 'orchestrator', task_id: `${sid}:main:1`, task: 'the task', opened_at: 't' });
+  const iteration = (sid: string, n: number, root: string) => ({ session_id: sid, iteration: n, root_task_id: root, root_canonical_name: 'orchestrator', root_persona: 'orchestrator', todo_task_id: `${sid}:main:1`, task: 'the task', opened_at: 't' });
   const message = (sid: string, taskId: string, n: number, text: string, kind: 'message' | 'replacement' = 'message') => ({
     session_id: sid, task_id: taskId, iteration: n, kind, at: 't',
     body: JSON.stringify(kind === 'message' ? { role: 'user', content: [{ kind: 'text', text }] } : [{ role: 'user', content: [{ kind: 'text', text }] }]),
@@ -1107,6 +1107,13 @@ describe('store — v23: the record a paused run resumes from (PD-ORCH-005, PD-T
     // A plan cycle is not an iteration and has no row: 0 is refused by the table itself.
     expect(() => dal.insertIteration(iteration(sid, 0, 'bg_000000a0'))).toThrow(/CHECK/);
     expect(() => r.db.prepare("UPDATE iterations SET interruption = 'cancel' WHERE session_id = ? AND iteration = 1").run(sid)).toThrow(/CHECK/);
+    expect(() => r.db.prepare("UPDATE iterations SET outcome = 'done' WHERE session_id = ? AND iteration = 1").run(sid)).toThrow(/CHECK/);
+    // At most one iteration is open per session — the table's index enforces it, not a caller.
+    dal.insertIteration(iteration(sid, 2, 'bg_000000a2'));
+    expect(() => dal.insertIteration(iteration(sid, 3, 'bg_000000a3'))).toThrow(/UNIQUE/);
+    dal.closeIteration(sid, 2, 'cancelled', 't');
+    dal.insertIteration(iteration(sid, 3, 'bg_000000a3'));
+    expect(dal.openIterationOf(sid)!.iteration).toBe(3);
     r.db.close();
     forgetSpelling(r.dir);
   });
@@ -1126,11 +1133,13 @@ describe('store — v23: the record a paused run resumes from (PD-ORCH-005, PD-T
     // The full history stays in the table: a compression replaces what a resume sends, never what was recorded.
     expect(dal.agentMessagesOf(sid, 'bg_000000a1')).toHaveLength(4);
     expect(() => dal.insertAgentMessage({ ...message(sid, 'bg_000000a1', 1, 'x'), kind: 'note' as never })).toThrow(/CHECK/);
-    // Both reads are primary-key prefix reads; no index was declared and none is scanned (spike 8's rule).
-    for (const sql of ['SELECT * FROM agent_messages WHERE session_id = ? AND task_id = ? ORDER BY seq', 'SELECT * FROM iterations WHERE session_id = ? ORDER BY iteration']) {
-      const plan = (r.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(sql.includes('task_id') ? [sid, 'bg_000000a1'] : [sid])) as { detail: string }[]).map((p) => p.detail).join(' | ');
-      expect(plan).toMatch(/USING INDEX sqlite_autoindex|PRIMARY KEY/);
-      expect(plan).not.toMatch(/TEMP B-TREE/);
+    // The DAL's own statements, as prepared, are primary-key prefix reads — the conversation read with its subquery among
+    // them; no index was declared for them and none is scanned (spike 8's rule).
+    const statements = (dal as unknown as { stmts: Record<string, { source: string }> }).stmts;
+    for (const [name, args] of [['agentConversation', [sid, 'bg_000000a1', sid, 'bg_000000a1']], ['agentMessagesOf', [sid, 'bg_000000a1']], ['iterationsOf', [sid]], ['openIterationOf', [sid]]] as const) {
+      const plan = (r.db.prepare(`EXPLAIN QUERY PLAN ${statements[name]!.source}`).all(...args) as { detail: string }[]).map((p) => p.detail).join(' | ');
+      expect(plan, name).toMatch(/USING INDEX sqlite_autoindex|PRIMARY KEY|USING INDEX iterations_one_open/);
+      expect(plan, name).not.toMatch(/TEMP B-TREE|SCAN agent_messages|SCAN iterations/);
     }
     r.db.close();
     forgetSpelling(r.dir);
@@ -1138,6 +1147,11 @@ describe('store — v23: the record a paused run resumes from (PD-ORCH-005, PD-T
 
   it('clause 12: the transcript clear removes the records of closed iterations and keeps the open one\'s; the session delete removes them all', () => {
     const { r, dal, sid } = open('3');
+    // Another session with an OPEN iteration of the same number: the clear of this session must not read it as open.
+    const other = asSessionId('S-v23-other');
+    dal.upsertSession({ session_id: other, execution_status: 'paused', workspace_root: 'C:/ws', created_at: 't', updated_at: 't' });
+    dal.insertIteration(iteration(other, 1, 'bg_000000f1'));
+    dal.insertAgentMessage(message(other, 'bg_000000f1', 1, 'the other session'));
     dal.insertIteration(iteration(sid, 1, 'bg_000000a1'));
     dal.closeIteration(sid, 1, 'succeeded', 't');
     dal.insertIteration(iteration(sid, 2, 'bg_000000a2'));
@@ -1147,11 +1161,13 @@ describe('store — v23: the record a paused run resumes from (PD-ORCH-005, PD-T
     expect(dal.clearClosedAgentMessages(sid)).toBe(2);
     expect(dal.agentMessagesOf(sid, 'bg_000000a2')).toHaveLength(1);
     expect(dal.agentMessagesOf(sid, 'bg_000000a1')).toHaveLength(0);
+    expect(dal.agentMessagesOf(other, 'bg_000000f1')).toHaveLength(1);
     dal.upsertAgentTerminal({ session_id: sid, terminal_id: 'ts_00000001', task_id: 'bg_000000a2', command: 'npm run dev', started_at: 't', state: 'running', exit_code: null, output_tail: '', updated_at: 't' });
     dal.insertChild({ session_id: sid, task_id: 'bg_000000d1', canonical_name: 'x', given_name: 'x', persona: 'coding-agent', state: 'queued', parent_id: 'bg_000000a2', depth: 1, iteration: 2, model_key: 'm', category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't', write_scope: '["src/**"]' });
     expect(dal.getChild(sid, 'bg_000000d1')!.write_scope).toBe('["src/**"]');
     expect(dal.deleteSession(sid)).toBe(true);
-    for (const table of ['iterations', 'agent_messages', 'agent_terminals', 'children']) expect((r.db.prepare(`SELECT count(*) AS c FROM ${table}`).get() as { c: number }).c, table).toBe(0);
+    for (const table of ['iterations', 'agent_messages', 'agent_terminals', 'children']) expect((r.db.prepare(`SELECT count(*) AS c FROM ${table} WHERE session_id = ?`).get(sid) as { c: number }).c, table).toBe(0);
+    expect(dal.agentMessagesOf(other, 'bg_000000f1')).toHaveLength(1);
     r.db.close();
     forgetSpelling(r.dir);
   });
@@ -1164,13 +1180,18 @@ describe('store — v23: the record a paused run resumes from (PD-ORCH-005, PD-T
     expect(dal.getChild(sid, 'bg_000000e1')).toMatchObject({ state: 'paused', interruption: 'quit', resume_state: 'running' });
     expect(dal.pausedChildrenOfIteration(sid, 1).map((c) => c.task_id)).toEqual(['bg_000000e1']);
     expect(() => dal.setChildRest(sid, 'bg_000000e1', 'cancel', null)).toThrow(/CHECK/);
+    expect(() => dal.setChildRest(sid, 'bg_000000e1', 'pause', 'starting')).toThrow(/CHECK/);
     dal.setChildRest(sid, 'bg_000000e1', null, null);
     expect(dal.getChild(sid, 'bg_000000e1')).toMatchObject({ interruption: null, resume_state: null });
     const t = { session_id: sid, terminal_id: 'ts_00000002', task_id: 'bg_000000e1', command: 'make test', started_at: 't', state: 'running' as const, exit_code: null, output_tail: '', updated_at: 't' };
-    dal.upsertAgentTerminal(t);
-    dal.upsertAgentTerminal({ ...t, state: 'quit', output_tail: 'last lines', updated_at: 't2' });
+    expect(dal.upsertAgentTerminal(t)).toBe(true);
+    expect(dal.upsertAgentTerminal({ ...t, state: 'quit', output_tail: 'last lines', updated_at: 't2' })).toBe(true);
     expect(dal.agentTerminalsOf(sid)).toEqual([{ ...t, state: 'quit', output_tail: 'last lines', updated_at: 't2' }]);
-    expect(() => dal.upsertAgentTerminal({ ...t, state: 'gone' as never })).toThrow(/CHECK/);
+    // REQ-TOOLS-109's status vocabulary is the column's, with the three rests beside it; nothing else.
+    expect(() => dal.upsertAgentTerminal({ ...t, state: 'exited' as never })).toThrow(/CHECK/);
+    // The same id from another agent's command is a collision, and the recorded terminal is left as it was.
+    expect(dal.upsertAgentTerminal({ ...t, task_id: 'bg_000000e2', command: 'other', state: 'killed' })).toBe(false);
+    expect(dal.agentTerminalsOf(sid)[0]!.state).toBe('quit');
     r.db.close();
     forgetSpelling(r.dir);
   });

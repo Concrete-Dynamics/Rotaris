@@ -74,12 +74,16 @@ describe('toAgentRecord — the new fields of REQ-MONITOR-044 (Part R)', () => {
     expect(toAgentRecord(row({ state: 'running' }), clocks, { session: { executionStatus: 'idle', updatedAt: 'x' } }).presentationState).toBe('running');
     expect(toAgentRecord(row({ state: 'succeeded', completed_at: 't' }), clocks, { session: ended }).completedAt).toBe('t');
   });
-  it('PD-ORCH-005: a paused agent of a session at rest is presented paused with its interruption, never settled to the run\'s outcome', () => {
+  it('PD-ORCH-005 / OQ-67: a paused agent of a session at rest is presented paused with its interruption, never settled to the run\'s outcome', () => {
     const atRest = { executionStatus: 'paused', updatedAt: '2026-09-05T10:09:00.000Z' };
-    const r = toAgentRecord(row({ state: 'paused', interruption: 'stop', resume_state: 'running', tool_calls: 4 }), clocks, { session: atRest });
-    expect(r).toMatchObject({ state: 'paused', presentationState: 'waiting', interruption: 'stop', activity: 'do the thing', completedAt: null, live: false, toolCalls: 4 });
-    // Beside it, an unfinished agent a crash left behind is still presented settled (REQ-MONITOR-211) until a repair or a
-    // continue records the crash, and an agent that is not paused never carries an interruption.
+    // A call a crash left `running` in the ring seeds an active chip; nothing runs for a paused agent, so it shows none.
+    const activity = new AgentActivity();
+    activity.started('helper', 'c1', 'terminal');
+    const r = toAgentRecord(row({ state: 'paused', interruption: 'stop', resume_state: 'running', tool_calls: 4 }), clocks, { activity, session: atRest });
+    expect(r).toMatchObject({ state: 'paused', presentationState: 'queued', interruption: 'stop', activity: 'do the thing', completedAt: null, live: false, toolCalls: 4, activeTools: [] });
+    // Beside it, any other unfinished agent of a session at rest is still presented settled (REQ-MONITOR-211) — the
+    // shape a killed host leaves until a repair or a continue records the crash — and only a paused agent carries an
+    // interruption.
     expect(toAgentRecord(row({ state: 'running' }), clocks, { session: atRest })).toMatchObject({ state: 'cancelled', interruption: null });
     expect(toAgentRecord(row({ state: 'running', interruption: 'pause' }), clocks, { session: { executionStatus: 'running', updatedAt: 'x' } }).interruption).toBeNull();
   });

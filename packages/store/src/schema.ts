@@ -822,16 +822,25 @@ export const MIGRATIONS: readonly Migration[] = [
      * PD-ORCH-005 revisions 2 and 3 (R-060, R-061), with PD-TOOLS-006 revision 2 (R-059): the record a paused, stopped,
      * quit or crashed run is resumed from.
      *
-     * On `children`: `interruption` is what left the agent `paused` (`pause | stop | quit | crash`, NULL for an agent
-     * that is not paused), `resume_state` the state it moves back into when its iteration resumes, and `write_scope` the
-     * patterns it declared, which a resumed child claims again (PD-TOOLS-006 revision 2) — `'[]'` for every row written
-     * before this version, which is what a child that declared nothing reads as, and true of them: no row before this
-     * version could be resumed.
+     * This migration lands ahead of most of its writers, which is the one exception to the rule stated at the top of
+     * this file: PD-ORCH-005 is built in phases on one branch, the schema first, and every table and column here gains its
+     * writer in a later phase of the same build, before the build reaches `main`. Its shape was settled against every
+     * clause before it was appended, because once it ships it is never edited.
      *
-     * `iterations`: one row per execution iteration, carrying the ROOT's task id (clause 1: "the root's task id is
-     * recorded with its iteration") and whether the iteration is open. An iteration opens when it begins and closes when
-     * it ends; a pause, a stop, a quit and a crash leave it open (clause 2), and it is resumed from here. A plan cycle is
-     * not an iteration (REQ-ORCH-153's ruling) and has no row. `interruption` is the last interruption while open.
+     * On `children`: `interruption` is what left the agent `paused` (`pause | stop | quit | crash`, NULL for an agent that
+     * is not paused), `resume_state` the state it moves back into when its iteration resumes (REQ-MONITOR-300 narrowed:
+     * `queued | waiting_on_dependencies | waiting_on_model_slot | running | summarizing`), and `write_scope` the patterns it
+     * declared, which a resumed child claims again (PD-TOOLS-006 revision 2) — `'[]'` for every row written before this
+     * version, which is what a child that declared nothing reads as, and true of them: no row before this version could be
+     * resumed. The writer keeps `interruption` and `resume_state` set or cleared together.
+     *
+     * `iterations`: one row per execution iteration, carrying the ROOT's task id and canonical name (clause 1: "the root's
+     * task id is recorded with its iteration") and the todo task it works on (`todo_task_id`, a todo item's id — not a
+     * child's `bg_` task id, REQ-ORCH-036). An iteration opens when it begins and closes when it ends; a pause, a stop, a
+     * quit and a crash leave it open (clause 2), and it is resumed from here. At most one is open per session, which the
+     * partial unique index enforces rather than trusts. A plan cycle is not an iteration (REQ-ORCH-153's ruling) and has
+     * no row: it runs while the plan gate holds, and clause 11 leaves no agent unfinished there. `interruption` is the last
+     * interruption while open, cleared when the iteration resumes; `outcome` is REQ-ORCH-135's at close.
      *
      * `agent_messages`: every agent's conversation, appended as it happens (clause 1) under the agent's task id — the
      * root's and every child's. `kind = 'message'` is one message; `kind = 'replacement'` is a compression, whose body is
@@ -841,32 +850,35 @@ export const MIGRATIONS: readonly Migration[] = [
      *
      * `agent_terminals`: the background terminal sessions an agent started (clause 10), what became of each and the last
      * output recorded for it, so a resumed agent can be told — after a quit or a crash, when the process that held them
-     * is gone.
+     * is gone. `state` is REQ-TOOLS-109's closed vocabulary (`running | completed | failed | killed | timeout`) with the
+     * three ways a rest ends a session beside it (`stop | quit | crash`).
      *
-     * Every table cascades with its session: the record is deleted with it (clause 12). NO new index: every read is by
-     * a primary-key prefix — one session's iterations, one agent's messages in order, one session's terminals.
+     * Every table cascades with its session: the record is deleted with it (clause 12). Every read is a primary-key prefix
+     * except the terminal listing's order by start time over one session's few rows; the one index is the constraint.
      */
     sql: `
       ALTER TABLE children ADD COLUMN interruption TEXT
         CHECK (interruption IS NULL OR interruption IN ('pause', 'stop', 'quit', 'crash'));
-      ALTER TABLE children ADD COLUMN resume_state TEXT;
+      ALTER TABLE children ADD COLUMN resume_state TEXT
+        CHECK (resume_state IS NULL OR resume_state IN ('queued', 'waiting_on_dependencies', 'waiting_on_model_slot', 'running', 'summarizing'));
       ALTER TABLE children ADD COLUMN write_scope TEXT NOT NULL DEFAULT '[]';
 
       CREATE TABLE iterations (
-        session_id   TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
-        iteration    INTEGER NOT NULL CHECK (iteration >= 1),
-        root_task_id TEXT NOT NULL,
-        root_name    TEXT NOT NULL,
-        root_persona TEXT NOT NULL,
-        task_id      TEXT NOT NULL,
-        task         TEXT NOT NULL,
-        state        TEXT NOT NULL CHECK (state IN ('open', 'closed')),
-        outcome      TEXT,
-        interruption TEXT CHECK (interruption IS NULL OR interruption IN ('pause', 'stop', 'quit', 'crash')),
-        opened_at    TEXT NOT NULL,
-        closed_at    TEXT,
+        session_id          TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+        iteration           INTEGER NOT NULL CHECK (iteration >= 1),
+        root_task_id        TEXT NOT NULL,
+        root_canonical_name TEXT NOT NULL,
+        root_persona        TEXT NOT NULL,
+        todo_task_id        TEXT NOT NULL,
+        task                TEXT NOT NULL,
+        state               TEXT NOT NULL CHECK (state IN ('open', 'closed')),
+        outcome             TEXT CHECK (outcome IS NULL OR outcome IN ('succeeded', 'failed', 'partial', 'cancelled', 'abandoned')),
+        interruption        TEXT CHECK (interruption IS NULL OR interruption IN ('pause', 'stop', 'quit', 'crash')),
+        opened_at           TEXT NOT NULL,
+        closed_at           TEXT,
         PRIMARY KEY (session_id, iteration)
       );
+      CREATE UNIQUE INDEX iterations_one_open ON iterations(session_id) WHERE state = 'open';
 
       CREATE TABLE agent_messages (
         session_id TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
@@ -885,7 +897,7 @@ export const MIGRATIONS: readonly Migration[] = [
         task_id     TEXT NOT NULL,
         command     TEXT NOT NULL,
         started_at  TEXT NOT NULL,
-        state       TEXT NOT NULL CHECK (state IN ('running', 'exited', 'killed', 'timeout', 'stop', 'quit', 'crash')),
+        state       TEXT NOT NULL CHECK (state IN ('running', 'completed', 'failed', 'killed', 'timeout', 'stop', 'quit', 'crash')),
         exit_code   INTEGER,
         output_tail TEXT NOT NULL DEFAULT '',
         updated_at  TEXT NOT NULL,

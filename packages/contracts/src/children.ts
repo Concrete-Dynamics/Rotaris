@@ -116,9 +116,9 @@ export function reconciledState(executionStatus: string): ChildState {
 }
 
 /**
- * REQ-MONITOR-046: engine state → presentation state. PD-ORCH-005's `paused` presents as `waiting` — an agent that is
- * not running and will run again when something else happens, here the user continuing — because REQ-MONITOR-046's
- * vocabulary is closed and the directive names none of its own (OQ-67 records the reading).
+ * REQ-MONITOR-046: engine state → presentation state. PD-ORCH-005's `paused` takes the requirement's own catch-all,
+ * "anything else→queued": the directive does not name REQ-MONITOR-046, so it governs exactly as it did. Whether a paused
+ * agent should present as something else is OQ-67's.
  */
 export const PRESENTATION_CHILD_STATES = ['running', 'waiting', 'queued', 'done', 'failed', 'cancelled'] as const;
 export type PresentationChildState = (typeof PRESENTATION_CHILD_STATES)[number];
@@ -129,7 +129,6 @@ export function presentationChildState(s: string): PresentationChildState {
     case 'summarizing': return 'running';
     case 'waiting_on_dependencies': return 'waiting';
     case 'waiting_on_model_slot': return 'waiting';
-    case 'paused': return 'waiting';
     case 'failed': return 'failed';
     case 'cancelled': return 'cancelled';
     case 'blocked': return 'failed';

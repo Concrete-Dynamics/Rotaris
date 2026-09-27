@@ -43,7 +43,18 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-09-24**
+## Last reconciled with the code: **2026-09-27**
+
+**Workspace-context injection, measured and proven in the built app (first-release-plan §3.2 and §3.3, 2026-09-27).**
+`SkillHost.workspaceContext` times its cold path on the monotonic clock port. It covers the policy read, the
+discovery and the merge, and logs one line, which is REQ-WORKSPACE-049's figure. The policy read moved into
+`enabledUnder`, a private step, so that it can be timed apart. The machine-wide instruction base's directory is
+injectable (`machineDir`, `/etc/codex` when absent). Two verification seams, both compiled out of a packaged build,
+reach the built app: `ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE`, read by the run host and the workspace service, and
+`ROTARIS_CAPTURE_MODEL_REQUESTS`, through which the scripted client alone appends what each call received. The
+**runtime view** gains the timing and the injectable base. The **process view**'s file table gains the instruction
+files, which it had never listed, and the capture file. No package, edge, process, channel, message kind or owner
+of state changed.
 
 **Product-drawn main-window chrome (`PD-SHELL-003`, built and revised 2026-09-24).** On Windows, Linux and macOS the main
 `BrowserWindow` is frameless with its native menu hidden. The existing title bar now ends in minimize,

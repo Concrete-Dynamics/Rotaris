@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FileToolState, grepTool, readFileTool, writeFileTool } from '@rotaris/agent-tools';
 import { SKILLS_DEFAULTS, type SkillsSection } from '@rotaris/config';
-import { SkillHost } from './skills.js';
+import { millis } from '@rotaris/kernel';
+import { SkillHost, type SkillHostDeps } from './skills.js';
 
 /**
  * ADR-0063's catalog, and the fence defect its first execution found. Everything here runs against a real
@@ -192,12 +193,15 @@ describe('the per-port fence (REQ-CONFIG-468, REQ-WORKSPACE-059 — ADR-0063 fir
  * actually reach. The discovery and the merge are pure and are tested in `packages/config`; what is
  * here is the run host's half — the order in the unit list, the cache lifetime, and the two switches.
  */
-const contextHost = (home: string, globalDir: string, overrides: Record<string, 'on' | 'off'> = {}, master = true) =>
+const contextHost = (home: string, globalDir: string, overrides: Record<string, 'on' | 'off'> = {}, master = true, extra: Partial<SkillHostDeps> = {}) =>
   new SkillHost({
     home,
+    // A scratch machine-wide base, so a Linux host's own `/etc/codex` never reaches a test's merge.
+    machineDir: join(home, 'machine'),
     section: () => SKILLS_DEFAULTS,
     instructions: () => ({ section: { overrides }, master, globalDir }),
     log: () => undefined,
+    ...extra,
   });
 
 describe('the workspace context unit (REQ-WORKSPACE-041..048, PD-WORKSPACE-002)', () => {
@@ -239,6 +243,44 @@ describe('the workspace context unit (REQ-WORKSPACE-041..048, PD-WORKSPACE-002)'
       expect(unit).toContain('STANDING INSTRUCTIONS');
       expect(unit).not.toContain('GLOBAL AGENTS');
       expect(unit).not.toContain(join(globalDir, 'AGENTS.md'));
+    } finally { t.cleanup(); }
+  });
+
+  it('PD-WORKSPACE-002: the machine-wide base reaches the agent last, read from the directory the host was given', () => {
+    const t = tree();
+    try {
+      mkdirSync(join(t.home, 'machine'), { recursive: true });
+      mkdirSync(join(t.home, '.openhands'), { recursive: true });
+      writeFileSync(join(t.home, '.openhands', 'CLAUDE.md'), 'USER OPENHANDS\n');
+      writeFileSync(join(t.home, 'machine', 'AGENTS.md'), 'MACHINE AGENTS\n');
+      const unit = contextHost(t.home, join(t.home, 'cfg'), {}, true, { platform: 'linux' }).contextUnits(t.root, 's1')[0]!;
+      expect(unit.indexOf('USER OPENHANDS')).toBeLessThan(unit.indexOf('MACHINE AGENTS'));
+      expect(unit).toContain(`<!-- source: ${join(t.home, 'machine', 'AGENTS.md')} -->`);
+      // …and on a platform with no `/etc` hierarchy the base is not consulted at all, wherever it points.
+      expect(contextHost(t.home, join(t.home, 'cfg'), {}, true, { platform: 'win32' }).contextUnits(t.root, 's1')[0]).not.toContain('MACHINE AGENTS');
+    } finally { t.cleanup(); }
+  });
+
+  it('REQ-WORKSPACE-049: the cold path is timed on the clock port in its three parts, and a cache hit is not timed', () => {
+    const t = tree();
+    try {
+      writeFileSync(join(t.root, 'AGENTS.md'), 'STANDING INSTRUCTIONS\n');
+      // Four readings: before the policy read, after it, after discovery, after the merge.
+      const readings = [100, 101.5, 104, 110];
+      const lines: string[] = [];
+      const h = contextHost(t.home, join(t.home, 'cfg'), {}, true, {
+        monotonic: { now: () => millis(readings.shift() ?? 999) },
+        log: (m) => { lines.push(m); },
+      });
+      const merged = h.workspaceContext(t.root);
+      const timed = lines.filter((l) => / merged into /.test(l));
+      expect(timed).toEqual([
+        `workspace context: the enabled set of 1 instruction file(s) merged into ${Buffer.byteLength(merged, 'utf8')} bytes in 10.00 ms (policy read 1.50 ms, discovery 2.50 ms, merge 6.00 ms) for ${t.root}`,
+      ]);
+      // The cached answer reads no file and takes no reading.
+      h.workspaceContext(t.root);
+      expect(lines.filter((l) => / merged into /.test(l))).toHaveLength(1);
+      expect(readings).toEqual([]);
     } finally { t.cleanup(); }
   });
 

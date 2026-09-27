@@ -2,6 +2,17 @@ import { millis, ok, type Clocks } from '@rotaris/kernel';
 import { type ModelClient, type ModelRequest, type StreamPart } from '@rotaris/model';
 
 /**
+ * One call as the scripted client received it: the model it was addressed to, the agent it answered as, and the
+ * system text — the role's instructions with the session's context units after them (REQ-WORKSPACE-060).
+ */
+export interface ScriptedCallRecord {
+  readonly call: number;
+  readonly who: string;
+  readonly model: string;
+  readonly system: string;
+}
+
+/**
  * THE SCRIPTED MODEL CLIENT — verification only, and the reason every proof script in this repository runs
  * without a provider, a key or a network.
  *
@@ -17,10 +28,16 @@ import { type ModelClient, type ModelRequest, type StreamPart } from '@rotaris/m
  * rather than about the double.
  *
  * It was two hundred and fifty-seven lines in the middle of the run host's composition root, read past by
- * everyone editing the dispatch and edited by almost no one. Its interface is two dependencies: the clocks it
- * waits on, and the line it writes for a proof to read back.
+ * everyone editing the dispatch and edited by almost no one. Its interface is three dependencies: the clocks it
+ * waits on, the line it writes for a proof to read back, and — optionally — `record`, which is handed every call
+ * as it was received.
+ *
+ * `record` is the injection proof's reading of what the model port RECEIVED — the model-call capture seam `host.ts`
+ * wires, compiled out of a packaged build (the variable is not named here because this comment ships in the bundle).
+ * It sits in the scripted client and nowhere else, so it can only ever see a call no provider was going to answer:
+ * there is no path by which it records traffic bound for a real endpoint.
  */
-export function scriptedClient(c: Clocks, log: (message: string) => void): ModelClient {
+export function scriptedClient(c: Clocks, log: (message: string) => void, record?: (call: ScriptedCallRecord) => void): ModelClient {
   const parse = (v: string | undefined) => (v ?? '').split(',').map((x) => x.trim()).filter((x) => x.length > 0);
   // ROTARIS_SCRIPT drives the orchestrator; ROTARIS_CHILD_SCRIPT every child (a `delegate:<persona>:<name>` step delegates).
   const loopScript = /^loop:([^:]+):(\d+)$/.exec(process.env['ROTARIS_SCRIPT'] ?? '');
@@ -54,6 +71,7 @@ export function scriptedClient(c: Clocks, log: (message: string) => void): Model
       calls[who] = calls[counterKey]!;
       // Verification only: the model each call went to, so a proof can read a fallback or an override from the log (Part Q).
       log(`scripted model call: ${req.model.providerId}/${req.model.modelId} (${who})`);
+      record?.({ call, who, model: `${req.model.providerId}/${req.model.modelId}`, system });
       if (who === 'classifier') {
         // ROTARIS_INTENT_SCRIPT: <category> | garbage | timeout | reject (the two JSON rungs refused, then text) — verification only.
         const want = (process.env['ROTARIS_INTENT_SCRIPT'] ?? 'moderate_feature').trim();

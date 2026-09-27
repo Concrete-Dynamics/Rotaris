@@ -28,6 +28,8 @@ export interface InstructionSnapshotEnv {
   /** The operator's home; defaults to this process's, so unit tests pass an isolated one. */
   readonly home?: string | undefined;
   readonly platform?: NodeJS.Platform | undefined;
+  /** The machine-wide base's directory; `/etc/codex` unless a verification seam names another (`InstructionDiscoveryEnv`). */
+  readonly machineDir?: string | undefined;
 }
 
 /**
@@ -43,6 +45,7 @@ export function instructionFiles(workspaceRoot: string, env: InstructionSnapshot
     globalDir: env.globalDir ?? '',
     home: env.home ?? homedir(),
     platform: env.platform ?? process.platform,
+    machineDir: env.machineDir,
   });
 }
 

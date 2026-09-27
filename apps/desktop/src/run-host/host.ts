@@ -16,9 +16,10 @@ import { SkillHost } from './skills.js'; // ADR-0063
 import { classifierSlotsOf, configureRun, egressReader, improvementCollectorOf, modelRefOf, type ConfiguredRun } from './configuration.js';
 import { leaseForContinuation, LeaseReportLog } from './launch.js';
 import { randomUUID } from 'node:crypto';
+import { appendFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 // The step-driven stand-in every proof runs against (`scripted-client.ts`); no provider, no key, no network.
-import { scriptedClient } from './scripted-client.js';
+import { scriptedClient, type ScriptedCallRecord } from './scripted-client.js';
 
 /**
  * RUN HOST — one utilityProcess, forked after `app.ready`, living exactly as
@@ -178,8 +179,18 @@ export function createRunHost() {
     if (first) log(`confinement: ${verdict.available ? `available (${verdict.backend})` : `unavailable — ${renderUnavailability(verdict).replace(/\n/g, ' ')}`}`);
     return verdict;
   };
+  /*
+   * Verification only, and compiled out of a packaged build (`__ROTARIS_SEAMS__`): `ROTARIS_CAPTURE_MODEL_REQUESTS`
+   * names a file the scripted client appends one JSON line to per call — what the model port RECEIVED, system text
+   * included — which is how the injection proof reads the merged context an agent was actually given rather than a
+   * log line saying it was built. The scripted client is the only writer, so no real provider's traffic can reach it.
+   */
+  const modelCallFile = __ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_MODEL_REQUESTS'] : undefined;
+  const recordModelCall = modelCallFile === undefined || modelCallFile === '' ? undefined : (call: ScriptedCallRecord): void => {
+    try { appendFileSync(modelCallFile, `${JSON.stringify(call)}\n`); } catch (cause) { log(`capture: the model call could not be recorded (${String(cause)})`, 'warn'); }
+  };
   const configurationDeps = {
-    clocks, globalDir: configDir, env: process.env, scriptedClient: () => scriptedClient(clocks, log), codeIntelligenceLaunch,
+    clocks, globalDir: configDir, env: process.env, scriptedClient: () => scriptedClient(clocks, log, recordModelCall), codeIntelligenceLaunch,
     onRequest: (i: { method: string; url: string; headers: Record<string, string> }) => log(`model request ${i.method} ${i.url}${i.headers['authorization'] ? '' : ' (no authorization header)'}`),
     log: (m: string) => log(m), liveState: () => liveState, bearers: (root: string) => leased.get(root) ?? {},
     mcpEvidence: (cfg: ConfiguredRun['cfg'], root: string, role: string) => mcp.evidenceFor(cfg, root, role),
@@ -195,6 +206,7 @@ export function createRunHost() {
    * the `fetch` tool's per-call policy read (REQ-SANDBOX-038) is the existing precedent for that. A load that
    * fails leaves the shipped defaults standing — a broken configuration must not silently switch skills off.
    */
+  const machineInstructions = __ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE'] : undefined;
   const skills = new SkillHost({
     log: (m, level) => log(m, level ?? 'info'),
     monotonic: clocks.monotonic,
@@ -214,6 +226,13 @@ export function createRunHost() {
     ...(process.env['ROTARIS_CAPTURE_SKILLS_HOME'] ?? process.env['ROTARIS_CAPTURE_INSTRUCTIONS_HOME']
       ? { home: (process.env['ROTARIS_CAPTURE_SKILLS_HOME'] ?? process.env['ROTARIS_CAPTURE_INSTRUCTIONS_HOME'])! }
       : {}),
+    /*
+     * `ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE` is the same seam for the machine-wide base (`/etc/codex`), read here and
+     * in the workspace service for the reason above: a proof that lays a file down at every base must not write into
+     * the machine's own `/etc`, and one that isolated only the inventory would still inject whatever is there.
+     * Unlike the two above it is compiled out of a packaged build.
+     */
+    ...(machineInstructions === undefined || machineInstructions === '' ? {} : { machineDir: machineInstructions }),
     section: (workspaceRoot) => {
       const loaded = loadConfiguration({ globalDir: configDir, workspaceRoot });
       if (loaded.ok) return loaded.value.skills;

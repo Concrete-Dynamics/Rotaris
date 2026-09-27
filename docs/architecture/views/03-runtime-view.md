@@ -76,6 +76,18 @@ merges the enabled set into one block
 caches it for as long as the session lasts (REQ-WORKSPACE-046), cleared by session creation and by a rescan, the
 two events that already clear the catalog.
 
+**The cold path is timed, and it runs after first input.** `workspaceContext` reads the monotonic clock port four
+times on a cache miss: before the saved-policy read, after it, after the discovery and after the merge. It then logs
+one line, `workspace context: the enabled set of N instruction file(s) merged into B bytes in T ms (policy read …,
+discovery …, merge …)`. That line is REQ-WORKSPACE-049's figure as the built app reports it, and `injection-proof`
+reads it back. The policy read counts towards the figure because `PD-WORKSPACE-002` made the per-file policy part of
+deciding what is merged. Nothing warms the merge at workspace open, as the catalog is warmed. The first read happens
+at the first agent built for a session, in the run host, after the typed prompt has been recorded as row 0. It
+therefore cannot delay the window's first input, and it never runs in the window's process. The first measurement
+(2026-09-27, Linux) is in `first-release-plan.md` §3.2. The machine-wide base's directory is injectable
+(`SkillHostDeps.machineDir`, `/etc/codex` when absent). It is a verification seam in the built app and never
+widens the platform rule.
+
 **The set is decided in one place because it has two readers.** `instructionFiles` is a method rather than a
 step inside the context because the retrospective consumes the same list (`PD-LIBRARY-002` over
 REQ-WORKSPACE-041). It used to hold its own copy of the rule — two names at the workspace root, no policy —
@@ -540,6 +552,9 @@ of §5 and none a channel: each is a request answered once.
   what is switched on, and the screen holds the second pending while the first is a fact about the disk. The
   discovery is **pure over an injected home and platform** (`ROTARIS_CAPTURE_INSTRUCTIONS_HOME` in the workspace
   service), the same seam the skills proof uses and for the same reason: overriding `HOME` kills Electron on Windows.
+  The machine-wide base's directory is injected too (`ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE`, read by the workspace
+  service and the run host alike, compiled out of a packaged build), so a proof can place a file at every base
+  without writing into the machine's own `/etc`.
 - **The MCP layer (Part S)** — the two `mcp.json` files are layer 2 of the load (defaults → discovered → global → workspace,
   REQ-MCP-025), the merged `mcp_servers` map is resolved at load (origin, command, availability, environment with secrets
   overlaid, the URL, the normalised description) and rides on `LoadedConfiguration.mcp`; Tier B resolves it again over the

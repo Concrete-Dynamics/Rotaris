@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { FileToolState, grepTool, readFileTool, writeFileTool } from '@rotaris/agent-tools';
-import { SKILLS_DEFAULTS, type SkillsSection } from '@rotaris/config';
+import { NODE_DISCOVERY_PORTS, SKILLS_DEFAULTS, type DiscoveryPorts, type SkillsSection } from '@rotaris/config';
 import { parseSkillListing } from '@rotaris/contracts';
 import { readTrajectory, Sessions } from '@rotaris/engine';
-import { asSessionId, FakeClock, mintMachineId, type MachineId } from '@rotaris/kernel';
+import { asSessionId, FakeClock, millis, mintMachineId, type MachineId } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
-import { SkillHost, writeSkillListing } from './skills.js';
+import { SkillHost, writeSkillListing, type SkillHostDeps } from './skills.js';
 
 /**
  * ADR-0063's catalog, and the fence defect its first execution found. Everything here runs against a real
@@ -26,8 +26,13 @@ function tree(): { root: string; home: string; cleanup: () => void } {
   return { root, home, cleanup: () => rmSync(base, { recursive: true, force: true }) };
 }
 
-const host = (_root: string, home: string, section: SkillsSection = SKILLS_DEFAULTS) =>
-  new SkillHost({ home, section: () => section, log: () => undefined });
+/*
+ * `contextUnits` always runs instruction discovery too, so the catalog cases name a scratch machine-wide base as
+ * `contextHost` does: on a Linux host the default is the real `/etc/codex`, and a file there made three exact
+ * assertions below fail on what the machine held (the gap the first repair of the `/etc/codex` defect left).
+ */
+const host = (_root: string, home: string, section: SkillsSection = SKILLS_DEFAULTS, extra: Partial<SkillHostDeps> = {}) =>
+  new SkillHost({ home, machineDir: join(home, 'machine'), section: () => section, log: () => undefined, ...extra });
 
 describe('the skill catalog (REQ-WORKSPACE-058, 069, 073, 057)', () => {
   it('discovers on a cold cache and caches the answer until something clears it', () => {
@@ -196,15 +201,45 @@ describe('the per-port fence (REQ-CONFIG-468, REQ-WORKSPACE-059 — ADR-0063 fir
  * actually reach. The discovery and the merge are pure and are tested in `packages/config`; what is
  * here is the run host's half — the order in the unit list, the cache lifetime, and the two switches.
  */
-const contextHost = (home: string, globalDir: string, overrides: Record<string, 'on' | 'off'> = {}, master = true) =>
+const contextHost = (home: string, globalDir: string, overrides: Record<string, 'on' | 'off'> = {}, master = true, extra: Partial<SkillHostDeps> = {}) =>
   new SkillHost({
     home,
+    // A scratch machine-wide base, so a Linux host's own `/etc/codex` never reaches a test's merge.
+    machineDir: join(home, 'machine'),
     section: () => SKILLS_DEFAULTS,
     instructions: () => ({ section: { overrides }, master, globalDir }),
     log: () => undefined,
+    ...extra,
   });
 
 describe('the workspace context unit (REQ-WORKSPACE-041..048, PD-WORKSPACE-002)', () => {
+  it('isolation: neither helper here probes the machine’s own `/etc/codex` for an instruction file, whatever the host holds', () => {
+    /*
+     * An exact assertion over a merge fails only on a host that HOLDS an `/etc/codex/AGENTS.md`, which is how the
+     * first repair of that defect missed `host()` on a host that holds none. The probes are recorded instead, so the
+     * isolation is decided on any host. The platform is pinned so the machine-wide base is consulted on Windows too.
+     * The skill search's own machine-wide root, `/etc/codex/skills`, has no seam yet and is not asked about here
+     * (`docs/defects/three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md`).
+     */
+    const t = tree();
+    try {
+      const probesOf = (make: (ports: DiscoveryPorts) => SkillHost): string[] => {
+        const probed: string[] = [];
+        const ports: DiscoveryPorts = { ...NODE_DISCOVERY_PORTS, isFile: (p) => { probed.push(p); return NODE_DISCOVERY_PORTS.isFile(p); } };
+        make(ports).contextUnits(t.root, 's1');
+        return probed.filter((p) => /^(AGENTS|CLAUDE)(\.override)?\.md$/.test(basename(p)));
+      };
+      for (const probed of [
+        probesOf((ports) => host(t.root, t.home, SKILLS_DEFAULTS, { ports, platform: 'linux' })),
+        probesOf((ports) => contextHost(t.home, join(t.home, 'cfg'), {}, true, { ports, platform: 'linux' })),
+      ]) {
+        // The machine-wide base WAS consulted — at the scratch directory, and nowhere under the real one.
+        expect(probed).toContain(join(t.home, 'machine', 'AGENTS.md'));
+        expect(probed.filter((p) => p.startsWith(join('/etc', 'codex')))).toEqual([]);
+      }
+    } finally { t.cleanup(); }
+  });
+
   it('REQ-WORKSPACE-047: the context leads the unit list, ahead of the skill catalog', () => {
     const t = tree();
     try {
@@ -243,6 +278,46 @@ describe('the workspace context unit (REQ-WORKSPACE-041..048, PD-WORKSPACE-002)'
       expect(unit).toContain('STANDING INSTRUCTIONS');
       expect(unit).not.toContain('GLOBAL AGENTS');
       expect(unit).not.toContain(join(globalDir, 'AGENTS.md'));
+    } finally { t.cleanup(); }
+  });
+
+  it('PD-WORKSPACE-002: the machine-wide base reaches the agent last, read from the directory the host was given', () => {
+    const t = tree();
+    try {
+      mkdirSync(join(t.home, 'machine'), { recursive: true });
+      mkdirSync(join(t.home, '.openhands'), { recursive: true });
+      writeFileSync(join(t.home, '.openhands', 'CLAUDE.md'), 'USER OPENHANDS\n');
+      writeFileSync(join(t.home, 'machine', 'AGENTS.md'), 'MACHINE AGENTS\n');
+      const unit = contextHost(t.home, join(t.home, 'cfg'), {}, true, { platform: 'linux' }).contextUnits(t.root, 's1')[0]!;
+      expect(unit.indexOf('USER OPENHANDS')).toBeLessThan(unit.indexOf('MACHINE AGENTS'));
+      expect(unit).toContain(`<!-- source: ${join(t.home, 'machine', 'AGENTS.md')} -->`);
+      // …and on a platform with no `/etc` hierarchy the base is not consulted at all, wherever it points.
+      expect(contextHost(t.home, join(t.home, 'cfg'), {}, true, { platform: 'win32' }).contextUnits(t.root, 's1')[0]).not.toContain('MACHINE AGENTS');
+    } finally { t.cleanup(); }
+  });
+
+  it('REQ-WORKSPACE-049: the cold path is timed on the clock port in its three parts, and a cache hit is not timed', () => {
+    const t = tree();
+    try {
+      writeFileSync(join(t.root, 'AGENTS.md'), 'STANDING INSTRUCTIONS\n');
+      // Four readings: before the policy read, after it, after discovery, after the merge.
+      const readings = [100, 101.5, 104, 110];
+      let taken = 0;
+      const lines: string[] = [];
+      const h = contextHost(t.home, join(t.home, 'cfg'), {}, true, {
+        monotonic: { now: () => { taken += 1; return millis(readings.shift() ?? 999); } },
+        log: (m) => { lines.push(m); },
+      });
+      const merged = h.workspaceContext(t.root);
+      const timed = lines.filter((l) => / merged into /.test(l));
+      expect(timed).toEqual([
+        `workspace context: the enabled set of 1 instruction file(s) merged into ${Buffer.byteLength(merged, 'utf8')} bytes in 10.00 ms (policy read 1.50 ms, discovery 2.50 ms, merge 6.00 ms) for ${t.root}`,
+      ]);
+      // The cached answer reads no file and takes no reading.
+      const takenCold = taken;
+      h.workspaceContext(t.root);
+      expect(lines.filter((l) => / merged into /.test(l))).toHaveLength(1);
+      expect(taken).toBe(takenCold);
     } finally { t.cleanup(); }
   });
 

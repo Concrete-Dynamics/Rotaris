@@ -56,6 +56,18 @@ No package, edge, channel, store column or state owner changed. The two repairs 
 fields drawn through the plain-text path so a URL stays a link, and the prompt-file registrar holding `/skill` and
 `/skills` — are below the depth any view describes, so no view changes beyond this entry.
 
+**Workspace-context injection, measured and proven in the built app (first-release-plan §3.2 and §3.3, 2026-09-27).**
+`SkillHost.workspaceContext` times its cold path on the monotonic clock port. It covers the policy read, the
+discovery and the merge, and logs one line, which is REQ-WORKSPACE-049's figure. The policy read moved **out** of
+the discovery step into its two callers, `workspaceContext` and `instructionFiles`, so that it can be timed apart;
+`enabledUnder`, a private step, now takes a policy already read. The machine-wide instruction base's directory is
+injectable (`machineDir`, `/etc/codex` when absent). Two verification seams, both compiled out of a packaged build,
+reach the built app: `ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE`, read by the run host and the workspace service, and
+`ROTARIS_CAPTURE_MODEL_REQUESTS`, through which the scripted client alone appends what each call received. The
+**runtime view** gains the timing and the injectable base. The **process view**'s file table gains the instruction
+files, which it had never listed, and the capture file. No package, edge, process, channel, message kind or owner
+of state changed.
+
 **Product-drawn main-window chrome (`PD-SHELL-003`, built and revised 2026-09-24).** On Windows, Linux and macOS the main
 `BrowserWindow` is frameless with its native menu hidden. The existing title bar now ends in minimize,
 maximize/restore and guarded close controls; four renderer commands reach the sending window in main.

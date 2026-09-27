@@ -47,9 +47,12 @@ amendment (R-049), and OQ-62's configured-rate branch with it; OQ-62's discovery
 2026-09-21 by building `PD-WORKSPACE-002`'s per-file switches: OQ-64** (whether an instruction override
 suppresses its base when the override is itself switched off — a third state REQ-WORKSPACE-042's "given
 both exist" has no word for). **OQ-64 was ruled on 2026-09-27** as built (R-052), together with ESC-37,
-ESC-38 and ESC-39. **One more was raised on 2026-09-27 by building the `/skills` listing: OQ-66**
+ESC-38 and ESC-39. **One more was raised on 2026-09-22 by repairing the retrospective's reads: OQ-65** (whether the
+instruction-file switches reach the retrospective as well as the agents). **One more was raised on 2026-09-27 by building the `/skills` listing: OQ-66**
 (where the listing goes when there is no transcript to write it into — from the Settings Skills tab, whose
-header actions REQ-WORKSPACE-067 fixes at two, and from a window following no session). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+header actions REQ-WORKSPACE-067 fixes at two, and from a window following no session), **and one the same day by building
+REQ-WORKSPACE-049's fixture: OQ-67** (what "up to 20 context files" measures when discovery can reach fourteen; raised as
+OQ-66 on its own branch and renumbered when it reached `main` after the `/skills` listing's). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -2896,6 +2899,30 @@ round 1 of the same change; each was stated only in a code comment or the plan's
   text as evidence (`packages/engine/src/improvements/capture.ts`), so a listing carries the names, descriptions
   and paths of skills set to "hidden" to that model. The agent path does not (it keeps user and agent rows only).
   Whether "hidden" (REQ-WORKSPACE-062) reaches that far is not stated; nothing withholds them today.
+
+**OQ-67 — What does REQ-WORKSPACE-049's "up to 20 context files" measure, when discovery can reach fourteen?** *(REQ-WORKSPACE-049 with REQ-WORKSPACE-041/042, both narrowed by `PD-WORKSPACE-002`; first-release-plan §3.2. Raised 2026-09-27 by building the fixture "at exactly that bound"; raised as OQ-66 and renumbered OQ-67 when it reached `main`, the `/skills` listing's OQ-66 having reached it first.)*
+
+REQ-WORKSPACE-049 states its 200 ms figure over "a workspace holding up to 20 context files totalling 1 MiB". No
+discovery rule the record has held can present twenty. REQ-WORKSPACE-041 as written read one file. `PD-WORKSPACE-002`
+names four at the workspace root and two at each of five further bases: **fourteen** on a platform with an `/etc`
+hierarchy and **twelve** on Windows, which has no machine-wide base. The merge reads fewer still. An override that
+is on suppresses its base, and one that is off is not read, so each workspace pair gives the merge one file: **twelve**
+read where there is an `/etc` hierarchy, **ten** on Windows. The byte half of the bound is reachable. The count half
+is not, on any platform.
+
+"Up to" makes twenty a ceiling, so a fourteen-file fixture is inside the reference conditions, and a reading taken
+over one is a conforming reading. Two things are left undecided. The first is what the plan's "a fixture at exactly
+that bound" means when the bound's count cannot be built. The second is whether twenty was meant to be reachable: a
+scheme with ancestors or several levels would reach it, and `PD-WORKSPACE-002` expressly declines one.
+
+**What the build proceeds under.** The count is read as the ceiling it says it is. The fixture fills every slot
+discovery can reach (fourteen here), with exactly 1,048,576 bytes across them. The two workspace bases that the on
+overrides suppress hold one line each, so the bytes the merge actually reads are as close to 1 MiB as the rule allows
+(`pnpm injection-proof`'s latency section). A Windows reading on the same fixture has twelve files and reads ten.
+
+**What a ruling decides.** Whether REQ-WORKSPACE-049's count is restated as the reachable maximum (an amendment
+naming fourteen and twelve, or "every instruction file discovery can reach"), or left as a ceiling that nothing
+reaches. And if the count is ever to be reached, what discovery rule reaches it.
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

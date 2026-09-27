@@ -14,8 +14,11 @@ const dir = (prefix: string): string => {
 };
 afterEach(() => { for (const d of made.splice(0)) rmSync(d, { recursive: true, force: true }); });
 
-/** An isolated discovery env: a scratch global dir and a scratch home holding no files. */
-const isolated = () => ({ globalDir: dir('rotaris-instructions-global-'), home: dir('rotaris-instructions-home-'), platform: 'linux' as const });
+/**
+ * An isolated discovery env: a scratch global dir, a scratch home and a scratch machine-wide base, all holding no
+ * files. The machine-wide base is named too, because on a Linux host the default is the real `/etc/codex`.
+ */
+const isolated = () => ({ globalDir: dir('rotaris-instructions-global-'), home: dir('rotaris-instructions-home-'), machineDir: dir('rotaris-instructions-machine-'), platform: 'linux' as const });
 
 describe('PD-WORKSPACE-002 — the Instructions inventory', () => {
   it('lists nothing without a workspace, and nothing in a workspace that has no file', () => {
@@ -54,7 +57,7 @@ describe('PD-WORKSPACE-002 — the Instructions inventory', () => {
   it('lists the global pair after the workspace files', () => {
     const home = dir('rotaris-instructions-home-');
     const globalDir = dir('rotaris-instructions-global-');
-    const env = { globalDir, home, platform: 'linux' as const };
+    const env = { globalDir, home, machineDir: dir('rotaris-instructions-machine-'), platform: 'linux' as const };
     const root = dir('rotaris-instructions-');
     writeFileSync(join(root, 'AGENTS.md'), 'standing\n');
     writeFileSync(join(globalDir, 'AGENTS.md'), 'global standing\n');
@@ -74,7 +77,7 @@ describe('PD-WORKSPACE-002 — the Instructions inventory', () => {
     mkdirSync(join(home, '.config', 'opencode'), { recursive: true });
     writeFileSync(join(home, '.agents', 'CLAUDE.md'), 'user agents claude\n');
     writeFileSync(join(home, '.config', 'opencode', 'AGENTS.md'), 'user opencode agents\n');
-    const env = { globalDir, home, platform: 'linux' as const };
+    const env = { globalDir, home, machineDir: dir('rotaris-instructions-machine-'), platform: 'linux' as const };
     const listed = instructionFiles(root, env);
     expect(listed.map((f) => f.id)).toEqual(['user-agents:CLAUDE.md', 'user-opencode:AGENTS.md']);
     expect(listed[0]).toMatchObject({ name: 'CLAUDE.md', source: 'user (~/.agents)' });
@@ -83,5 +86,19 @@ describe('PD-WORKSPACE-002 — the Instructions inventory', () => {
     expect(hasEtcHierarchy('linux')).toBe(true);
     expect(hasEtcHierarchy('darwin')).toBe(true);
     expect(hasEtcHierarchy('win32')).toBe(false);
+  });
+
+  it('reads the machine-wide base from the directory it is given, keeping its identity and label, and never on Windows', () => {
+    const env = isolated();
+    const root = dir('rotaris-instructions-');
+    writeFileSync(join(env.machineDir, 'AGENTS.md'), 'machine agents\n');
+    writeFileSync(join(env.machineDir, 'CLAUDE.md'), 'machine claude\n');
+    // The directory moves; the base does not — the same stable identity and the same label the inventory shows.
+    expect(instructionFiles(root, env)).toEqual([
+      { id: 'machine-codex:AGENTS.md', name: 'AGENTS.md', path: join(env.machineDir, 'AGENTS.md'), source: 'machine (/etc/codex)' },
+      { id: 'machine-codex:CLAUDE.md', name: 'CLAUDE.md', path: join(env.machineDir, 'CLAUDE.md'), source: 'machine (/etc/codex)' },
+    ]);
+    // The platform rule stands above the directory: a platform with no `/etc` hierarchy reads no machine-wide file.
+    expect(instructionFiles(root, { ...env, platform: 'win32' })).toEqual([]);
   });
 });

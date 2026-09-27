@@ -554,6 +554,13 @@ export function isMessageRow(row: Pick<TranscriptRow, 'kind'>): boolean { return
  * ESC-37, ruled, and REQ-CHAT-162 as amended forbid one on this and every other surface.
  *
  * Search paints onto the fields: a match's offsets are into the row text, and each field knows where it sits there.
+ * The text's own punctuation between fields (`- `, the brackets round the scope, ` triggers: `) is not drawn, so a
+ * match that falls only there selects the row (REQ-CHAT-074 searches the row's text) and paints nothing in it.
+ *
+ * REQ-CHAT-076: every field is drawn through `PlainText`, so a bare `http(s)` URL in a skill's description — or in
+ * any other field — is the same clickable link, trailing punctuation left out, that it was while every system row
+ * went through `PlainText` whole; and on PlainText's own terms, so a field holding a link draws the link rather than
+ * a match painted across it.
  */
 const SKILL_LISTING_LAYOUT = { id: 'skill-listing', relations: [{ kind: 'text-fit', axis: 'x' }] } satisfies UiLayoutContract;
 
@@ -565,8 +572,8 @@ function spanMatch(match: RowRenderProps['match'], span: SkillListingSpan): { st
   return from < to ? { start: from - span.start, end: to - span.start } : null;
 }
 
-function SkillListingBlock({ listing, match }: { listing: ParsedSkillListing; match: RowRenderProps['match'] }) {
-  const field = (span: SkillListingSpan) => <Highlighted text={span.text} match={spanMatch(match, span)} />;
+function SkillListingBlock({ listing, match, onOpenLink }: { listing: ParsedSkillListing; match: RowRenderProps['match']; onOpenLink: ((href: string) => void) | undefined }) {
+  const field = (span: SkillListingSpan) => <PlainText text={span.text} match={spanMatch(match, span)} onOpenLink={onOpenLink} />;
   return (
     <div className="row__body skill-listing" data-testid="skill-listing" data-count={listing.count} data-names={listing.skills.map((s) => s.name.text).join(',')} {...layoutContractAttributes(SKILL_LISTING_LAYOUT)}>
       <div className="skill-listing__count">{field(listing.header)}</div>
@@ -813,7 +820,7 @@ export function Row(p: RowProps) {
           {markdown
             ? <Markdown source={row.body} onOpenLink={surface.openLink} className="row__body row__body--md" testId="row-markdown" />
             : listing !== null
-              ? <SkillListingBlock listing={listing} match={match} />
+              ? <SkillListingBlock listing={listing} match={match} onOpenLink={surface.openLink} />
               : <div className={`row__body${row.kind === 'diff' ? ' mono row__body--diff' : ''}`}><PlainText text={row.body} match={match} onOpenLink={surface.openLink} /></div>}
           {row.attachments && row.attachments.length > 0 && (
             <ol className="row__attachments" aria-label="Image attachments">

@@ -24,7 +24,8 @@
  *
  *   1c. listing        — `/skills` typed into a session's composer: ONE system row drawn as the listing, carrying
  *                        per skill the normalized name, the scope, the triggers, the description and the path, and
- *                        the count; no in-context indicator anywhere (ESC-37). The run host logs the row it wrote.
+ *                        the count; no in-context indicator anywhere (ESC-37); a bare URL in a description drawn as
+ *                        a link (REQ-CHAT-076). The run host logs the row it wrote.
  *   1d. listing-reopen — the same session reopened from the session browser in a new launch: the row is still
  *                        there, read back from the store, and nothing was listed again.
  *
@@ -57,6 +58,7 @@ const PROBES = [
   // REQ-CHAT-162: the listing as the one row renderer draws it, inside the system notice that carries it.
   '[data-testid="row-system"] [data-testid="skill-listing"]',
   '[data-testid="skill-listing-entry"]',
+  '[data-testid="skill-listing-entry"] .md__link',
 ];
 
 const results = [];
@@ -121,7 +123,9 @@ write(join(workspace, '.agents', 'skills', 'broken', 'SKILL.md'), 'no frontmatte
 write(join(workspace, '.agents', 'skills', 'stop', 'SKILL.md'), skill('stop', 'A skill whose name a built-in holds.'));
 // REQ-WORKSPACE-056: `user-invocable: false` is auto-only — in the catalog, never a command.
 write(join(workspace, '.agents', 'skills', 'auto-only', 'SKILL.md'), skill('auto-only', 'Model-facing only.', 'user-invocable: false\n'));
-write(join(scratch.home, '.agents', 'skills', 'home-skill', 'SKILL.md'), skill('home-skill', 'A skill from the user scope.'));
+// A bare URL in a description, ending a sentence: REQ-CHAT-076 makes it activatable in any row's text, the `/skills`
+// listing's included, with the trailing full stop left out of the target (launch 1c).
+write(join(scratch.home, '.agents', 'skills', 'home-skill', 'SKILL.md'), skill('home-skill', 'A skill from the user scope, see https://skills-proof.invalid/home-skill.'));
 write(join(scratch.home, '.openhands', 'skills', 'installed', 'kept', 'SKILL.md'), skill('kept', 'An installed skill that stays.'));
 write(join(scratch.home, '.openhands', 'skills', 'installed', 'dropped', 'SKILL.md'), skill('dropped', 'An installed skill the manifest disables.'));
 write(join(scratch.home, '.openhands', 'skills', '.installed.json'), JSON.stringify({ disabled: ['dropped'] }));
@@ -194,6 +198,11 @@ if (wsEntry['data-scope'] !== 'project' || entries['home-skill']?.['data-scope']
 if (wsEntry['data-triggers'] !== 'render, /pdf') fail(`ws-skill's triggers read ${JSON.stringify(wsEntry['data-triggers'])}`);
 if (wsEntry['data-description'] !== 'The workspace skill.') fail(`ws-skill's description read ${JSON.stringify(wsEntry['data-description'])}`);
 if (wsEntry['data-path'] !== join(workspace, '.agents', 'skills', 'ws-skill', 'SKILL.md')) fail(`ws-skill's path read ${wsEntry['data-path']}`);
+// REQ-CHAT-076: the URL in home-skill's description is the one link form, its trailing full stop outside the target,
+// and it is the only link the listing draws.
+const listingLinks = rows(listingLaunch.probes, '[data-testid="skill-listing-entry"] .md__link');
+if (listingLinks.length !== 1 || listingLinks[0].data['data-href'] !== 'https://skills-proof.invalid/home-skill') fail(`the listing drew links ${JSON.stringify(listingLinks.map((l) => l.data['data-href']))}, not home-skill's one`);
+if (entries['home-skill']?.['data-description'] !== 'A skill from the user scope, see https://skills-proof.invalid/home-skill.') fail(`home-skill's description read ${JSON.stringify(entries['home-skill']?.['data-description'])}`);
 // ESC-37, ruled, and the amended REQ-CHAT-162: no per-skill in-context indicator on the listing.
 if (Object.values(entries).some((e) => 'data-forced' in e || 'data-in-context' in e) || /in[ _-]?context/i.test(listed[0].text)) fail('the listing carries an in-context indicator');
 // The run host wrote it through the session's writer, and says which session and which row.
@@ -201,7 +210,7 @@ const listedLine = /skills: listed (\d+) skill\(s\) into session (\S+) as transc
 if (!listedLine) fail('the run host logged no listing row');
 if (listedLine[1] !== String(expected.length)) fail(`the run host listed ${listedLine[1]} skills`);
 const listingSession = listedLine[2];
-results.push({ launch: 'listing', session: listingSession, row: Number(listedLine[3]), count: listed[0].data['data-count'], names: listed[0].data['data-names'], wsSkill: wsEntry });
+results.push({ launch: 'listing', session: listingSession, row: Number(listedLine[3]), count: listed[0].data['data-count'], names: listed[0].data['data-names'], wsSkill: wsEntry, link: listingLinks[0].data['data-href'] });
 
 // ── 1d. the session reopened: the row is read back, not written again ─────────────────────────────────────
 // A new launch reopens THAT session from the session browser (REQ-SHELL-126, REQ-SESSION-118); nothing is typed.

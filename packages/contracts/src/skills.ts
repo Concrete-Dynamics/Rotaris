@@ -224,11 +224,15 @@ const ENTRY_LINE = new RegExp(`^- ([^\\s\\[\\]]+) \\[(${SKILL_SCOPE_NAMES.join('
  * The reader of `skillListingBody`'s shape, and nothing looser: the count line, then exactly three lines per
  * skill, and the stated count equal to the entries that follow it. Anything else answers null, and the row is
  * drawn as the plain system notice it also is.
+ *
+ * The row renderer asks this of every system row it draws, so the count line is read before the body is split:
+ * a notice that is not a listing costs one short match, never a split of its whole text (REQ-CHAT-055).
  */
 export function parseSkillListing(body: string): ParsedSkillListing | null {
-  const lines = body.split('\n');
-  const header = COUNT_LINE.exec(lines[0] ?? '');
+  const firstBreak = body.indexOf('\n');
+  const header = COUNT_LINE.exec(firstBreak === -1 ? body : body.slice(0, firstBreak));
   if (!header) return null;
+  const lines = body.split('\n');
   const count = Number(header[1]);
   if (!Number.isSafeInteger(count) || lines.length !== 1 + 3 * count) return null;
   const starts: number[] = [];

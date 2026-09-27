@@ -354,6 +354,29 @@ describe('engine/run/compression — in a run (REQ-ORCH-093, REQ-MONITOR-076/086
     expect(dal.iterationsOf(sid)).toMatchObject([{ state: 'open', interruption: 'pause' }]);
   });
 
+  it('PD-ORCH-005 clause 4 (found by phase 4\'s review): a context rejection of a resumed root\'s first call is an ordinary one — the resume carries on from its record, and is not REQ-ORCH-093\'s parent resume', async () => {
+    let release!: () => void;
+    const held = new Promise<void>((r) => { release = r; });
+    const { sessions } = sessionsWith((persona, turn) => {
+      if (persona === 'compressor') return answer('Work performed: looked. Findings reached: none. Questions left open: none.');
+      if (turn === 1) return toolCalls([{ callId: 'c1', name: 'glob', args: {} }], 'looking');
+      if (turn === 2) return { parts: [{ hold: held }, ...toolCalls([{ callId: 'c2', name: 'glob', args: {} }], 'looking again').parts] };
+      if (turn === 3) return contextRejection();
+      return answer('done');
+    });
+    const sid = (sessions.start(dal, 'C:/ws', 'do the thing') as { value: SessionId }).value;
+    for (let i = 0; i < 60 && dal.residentRows(sid).filter((r) => r.kind === 'tool').length < 1; i++) await tick();
+    await tick();
+    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    release();
+    await sessions.running(sid)!;
+    expect(dal.iterationsOf(sid)).toMatchObject([{ state: 'open', interruption: 'pause' }]);
+    expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+    await sessions.running(sid)!;
+    expect(issues(sid)).toContain('llm_bad_request');
+    expect(issues(sid)).not.toContain('parent_resume_bad_request');
+  });
+
   it('REQ-MONITOR-076/081/086: the threshold compresses BEFORE the next call, the count rises once, and the reading falls', async () => {
     // The first step reports 900 prompt tokens against a trigger of 600, so the SECOND step compresses first.
     const { sessions, pub, counts } = sessionsWith((persona, turn) => {

@@ -583,6 +583,8 @@ export class IterationChildren implements DelegationOps {
     // The column is written at a rest or a settle, and a crash writes neither, so the record's own calls count too (found
     // by phase 4's review: a child that worked before a crash counted none).
     const priorCalls = resume ? Math.max(row.tool_calls, callsRun(resume.history)) : 0;
+    // REQ-MONITOR-102: calls the record shows that no count held join the session's total now, once (phase 4's review).
+    if (priorCalls > row.tool_calls) deps.countToolCalls?.(priorCalls - row.tool_calls);
     let outcome: TurnOutcome | null = null;
     let error: { type: string; message: string } | null = null;
     let timedOut = false;
@@ -639,6 +641,8 @@ export class IterationChildren implements DelegationOps {
         // REQ-ORCH-093: the resume limb — a child's turn after its first is a parent being resumed with reports.
         parentResume: !wasFirst,
       }, task, history, controller.signal); };
+      // A resumed child's first attempt carries on from its record; REQ-ORCH-088's retry starts again from its payload.
+      const fromRecord = start !== null;
       try {
         outcome = await this.runWithChildren(row.task_id, turn, start ?? { kind: 'fresh', task: payload() }, controller.signal);
         start = null;
@@ -648,8 +652,10 @@ export class IterationChildren implements DelegationOps {
         const calls = priorCalls + outcome.toolCallCount;
         const textOnly = calls === 0 && outcome.report.text.trim() !== '';
         const rePrompt = calls === 0 && outcome.report.text.trim() === '' || ((deps.route ?? 'work') === 'work' && textOnly && persona?.implementer === true);
-        // A child resumed from `summarizing` had answered, and was assessed then: it is not assessed twice (phase 4's review).
-        if (!controller.signal.aborted && outcome.report.status !== 'failed' && outcome.paused !== true && rePrompt && resume?.assessed !== true) {
+        // A child resumed from `summarizing` had answered, and was assessed then: its attempt from the record is not
+        // assessed twice, and a retry from its payload is a new attempt, assessed as any (phase 4's reviews).
+        const assessed = fromRecord && resume?.assessed === true;
+        if (!controller.signal.aborted && outcome.report.status !== 'failed' && outcome.paused !== true && rePrompt && !assessed) {
           // PD-ORCH-005 clause 2: no model call once the run is coming to rest — the re-prompt waits for the resume.
           if (this.resting) rePromptOwed = true;
           else {

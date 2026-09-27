@@ -334,6 +334,22 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
       expect(conversationOf(dal.agentConversation(sid, root)).some((m) => m.role === 'user' && m.content.some((p) => p.kind === 'text' && p.text === told))).toBe(true);
     });
 
+    it('clauses 4 and 10 (found by phase 4\'s second review): a continue by message tells the resumed root of its background sessions first, so the user\'s message is the last it reads', async () => {
+      const { terminals } = withTerminals();
+      const { port } = fakePort({ hold: new Promise<void>(() => undefined), holdOn: 'glob' });
+      const { sessions, client } = sessionsWith([toolCalls([{ callId: 'c1', name: 'glob', args: {} }]), answer('resumed')], port, { terminals: (sid) => { const t = terminals!(sid); return { ...t, list: () => t.list().map((l) => ({ ...l, taskId: dal.iterationsOf(sid)[0]?.root_task_id ?? '' })) }; }, runtime: { permissionMode: 'ask', pauseToolDeadlineMs: 5_000 } });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => dal.residentRows(sid).some((r) => r.kind === 'tool'));
+      sessions.control({ op: 'pause', sessionId: sid, args: {} });
+      clock.advance(5_000);
+      await sessions.running(sid)!;
+      expect(sessions.prompt(sid, 'NOW DO Y').ok).toBe(true);
+      await sessions.running(sid)!;
+      const last = client.requests.at(-1)!.messages.slice(-2).map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join(''));
+      expect(last[0]).toMatch(/^You were paused and have now resumed\./);
+      expect(last[1]).toBe('NOW DO Y');
+    });
+
     it('clause 3 (found by phase 3\'s second review): the explicit cancel that lands while teardown ends the background sessions still closes the iteration cancelled', async () => {
       const live: { -readonly [K in keyof LiveTerminal]: LiveTerminal[K] }[] = [{ id: 'ts_serve', taskId: 'bg_agent01', command: 'serve', startedAt: '2026-09-27T00:00:00.000Z', status: 'running', exitCode: null, tail: 'listening' }];
       let ending = false;

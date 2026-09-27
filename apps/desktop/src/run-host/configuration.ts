@@ -530,24 +530,27 @@ export function prepareRun(workspaceRoot: string, attended: boolean, deps: Confi
   const moded: LoadedConfiguration = granted.runtime.sandbox_mode === mode.value
     ? granted
     : { ...granted, runtime: { ...granted.runtime, sandbox_mode: mode.value } };
-  // PD-ORCH-005 clause 4: a continue that resumes an open iteration sets the run up as its root's persona, folded in the
-  // same way, so the entry role, its model tier and the log read one persona.
-  const cfg: LoadedConfiguration = options?.entryPersona === undefined ? moded : { ...moded, defaultPersona: options.entryPersona };
-  const warnings: string[] = [...cfg.warnings.map((w) => `configuration: ${w}`)];
-  if (cfg.referential.length > 0) {
-    const lines = cfg.referential.map((m) => `configuration: ${m}`);
+  const warnings: string[] = [...moded.warnings.map((w) => `configuration: ${w}`)];
+  if (moded.referential.length > 0) {
+    const lines = moded.referential.map((m) => `configuration: ${m}`);
     // REQ-CONFIG-246: with no person present, referential errors are always fatal to the run.
-    if (!attended) return err({ reason: `The configuration has ${cfg.referential.length} unresolved reference(s) and no one is present to correct them: ${cfg.referential.join('; ')}`, cfg });
+    if (!attended) return err({ reason: `The configuration has ${moded.referential.length} unresolved reference(s) and no one is present to correct them: ${moded.referential.join('; ')}`, cfg: moded });
     warnings.push(...lines);
   }
   const scripted = deps.env['ROTARIS_MODEL_DIALECT'] === 'scripted';
-  const personas = personaResolverFor(cfg, scripted, (m) => warnings.push(m), deps.mcpEvidence ? (role) => deps.mcpEvidence!(cfg, workspaceRoot, role) : undefined);
+  const personas = personaResolverFor(moded, scripted, (m) => warnings.push(m), deps.mcpEvidence ? (role) => deps.mcpEvidence!(moded, workspaceRoot, role) : undefined);
+  /*
+   * PD-ORCH-005 clause 4: a continue that resumes an open iteration sets the run up as the persona its root ran as,
+   * folded into the captured configuration so the entry role, its model tier and the log read one persona. A persona the
+   * configuration no longer knows cannot be restored: the run is set up as the entry role, and says so — refusing left a
+   * crashed session no way on (found by phase 4's second review).
+   */
+  const wanted = options?.entryPersona;
+  const restored = wanted !== undefined && personas.resolve(wanted) !== null ? wanted : undefined;
+  if (wanted !== undefined && restored === undefined) warnings.push(`configuration: the open iteration's root ran as '${wanted}', which this configuration no longer knows; it resumes as the entry role '${moded.defaultPersona}' (PD-ORCH-005).`);
+  const cfg: LoadedConfiguration = restored === undefined ? moded : { ...moded, defaultPersona: restored };
   const entryRole = personas.resolve(cfg.defaultPersona);
-  if (!entryRole) {
-    return err({ reason: options?.entryPersona === undefined
-      ? `default_persona '${cfg.defaultPersona}' names no role this build knows.`
-      : `The open iteration's root ran as '${cfg.defaultPersona}', which names no role this build knows now; continue without its agents to start a new iteration.`, cfg });
-  }
+  if (!entryRole) return err({ reason: `default_persona '${cfg.defaultPersona}' names no role this build knows.`, cfg });
   const entryModelName = cfg.personas[cfg.defaultPersona]?.model ?? null;
   const entry = entryModelName ? cfg.models[entryModelName] : undefined;
   const model = entryRole.persona.modelRef ?? modelRefOf(cfg, entryModelName, scripted);

@@ -162,7 +162,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       });
     }
     /** A session whose first run finished, then a host that died in iteration 2 with the session still marked running. */
-    async function crashed(more: (w: SessionWriter) => void = () => undefined): Promise<SessionId> {
+    async function crashed(more: (w: SessionWriter) => void = () => undefined, status: 'running' | 'paused' = 'running'): Promise<SessionId> {
       const first = sessionsAs(77);
       const sid = (first.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
       await first.running(sid);
@@ -170,7 +170,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       if (!w.ok) throw new Error('writer');
       dieIn(w.value, sid);
       more(w.value);
-      w.value.save('running');
+      w.value.save(status);
       w.value.release(66, HOST);
       return sid;
     }
@@ -240,6 +240,17 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       expect(personas).toEqual(['orchestrator', undefined]);
     });
 
+    it('clause 6 (found by phase 4\'s second review): a continue that declines the open iteration is set up as the entry role — its root is not restored', async () => {
+      const sid = await crashed(() => undefined, 'paused');
+      const personas: (string | undefined)[] = [];
+      const next = sessionsAs(88, (p) => personas.push(p));
+      expect(next.resume(dal, 'C:/ws', sid).ok).toBe(true);
+      expect(next.continueSession(sid, 'continue', { withoutPaused: true }).ok).toBe(true);
+      await next.running(sid);
+      expect(personas).toEqual([undefined]);
+      expect(dal.getIteration(sid, 2)).toMatchObject({ state: 'closed', outcome: 'cancelled' });
+    });
+
     it('clause 4 with REQ-ORCH-095 (found by phase 4\'s review): a child that worked before the crash counts its calls from its record — the crash wrote no count — so it is not re-prompted', async () => {
       asked.length = 0;
       const sid = await crashed((w) => {
@@ -252,6 +263,8 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       expect(next.prompt(sid, 'second').ok).toBe(true);
       await next.running(sid);
       expect(dal.getChild(sid, 'bg_000000c1')).toMatchObject({ state: 'succeeded', tool_calls: 1 });
+      // REQ-MONITOR-102: the session's total counts that call too, once — no other agent made one.
+      expect(dal.getSession(sid)!.tool_calls).toBe(1);
       // Its own requests are the ones carrying its call before the crash; none of them re-prompts it.
       const its = asked.filter((r) => r.messages.some((m) => m.content.some((p) => p.kind === 'tool-result' && p.callId === 'p1')));
       expect(its.length).toBeGreaterThan(0);

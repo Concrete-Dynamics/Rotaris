@@ -10,6 +10,7 @@ import type { CheckpointPort, CheckpointPortContext } from './checkpoint-port.js
 import { EventBus } from './run/event-bus.js';
 import { parseTokenSamples, Run, type AgentTerminals, type ModelLookup, type PermissionPosture, type RunConfig, type RunResult } from './run/run.js';
 import { recordCrash } from './run/crash.js';
+import { resumeNoticeOf } from './run/resume.js';
 import { planSection } from './run/plan-text.js';
 export { planRequestSection, planSection } from './run/plan-text.js';
 import { ResilienceMemory, type CatalogueEntry, type ModelChoice } from './run/resilience.js';
@@ -1073,12 +1074,16 @@ export class Sessions {
     if (stale > 0) warn(`${stale} child record(s) from a previous run were settled cancelled before the first continuation iteration (REQ-ORCH-053)`);
     const open = s.dal.openIterationOf(sessionId);
     /*
-     * PD-ORCH-005 clause 4: a continue by message delivers it to the resumed root as the user's next message in its
-     * conversation — recorded here, at the continue, so a rest, a quit or the explicit cancel that lands before the
-     * resumed iteration's first turn never loses it (found by phase 4's review: it lived in memory until that turn).
+     * PD-ORCH-005 clauses 4 and 10: what the resumed root is told — the notice of its background sessions, then the new
+     * message a continue by message delivers as the user's next message in its conversation, so the user's message is
+     * the last it reads — recorded here, at the continue, so a rest, a quit or the explicit cancel that lands before the
+     * resumed iteration's first turn never loses it (found by phase 4's review: the message lived in memory until that
+     * turn, and the notice followed it).
      */
-    if (open && openIteration !== 'decline' && openIteration.message !== null && openIteration.message.length > 0) {
-      s.writer.recordAgentMessage(open.root_task_id, open.iteration, 'message', { role: 'user', content: [...openIteration.message] });
+    if (open && openIteration !== 'decline') {
+      const notice = resumeNoticeOf(s.dal, sessionId, open.root_task_id, this.deps.terminals?.(sessionId));
+      if (notice !== null) s.writer.recordAgentMessage(open.root_task_id, open.iteration, 'message', notice);
+      if (openIteration.message !== null && openIteration.message.length > 0) s.writer.recordAgentMessage(open.root_task_id, open.iteration, 'message', { role: 'user', content: [...openIteration.message] });
     }
     // REQ-EVENTS-053, PD-MONITOR-001: the run's model calls that are no agent's turn count against the run itself.
     const countUsage: CountUsage = (usage, ref) => { runRef.run?.countUsage(usage, ref); };

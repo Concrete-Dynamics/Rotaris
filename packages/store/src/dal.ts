@@ -533,7 +533,7 @@ export class StoreDal {
       setChildTodo: db.prepare('UPDATE children SET todo = ?, tool_calls = ? WHERE session_id = ? AND task_id = ?'),
       // PD-ORCH-005: the two facts a rest records beside the move to `paused`, and their clearing when the child resumes.
       setChildRest: db.prepare('UPDATE children SET interruption = ?, resume_state = ? WHERE session_id = ? AND task_id = ?'),
-      pausedChildrenOfIteration: db.prepare("SELECT * FROM children WHERE session_id = ? AND iteration = ? AND state = 'paused' ORDER BY spawned_at, task_id"),
+      pausedChildrenOfIteration: db.prepare("SELECT * FROM children WHERE session_id = ? AND iteration = ? AND state = 'paused' ORDER BY spawned_at, rowid"),
 
       // v23 — PD-ORCH-005: the iterations, each carrying its root's task id.
       insertIteration: db.prepare(`INSERT INTO iterations (session_id, iteration, root_task_id, root_canonical_name, root_persona, todo_task_id, task, state, opened_at)

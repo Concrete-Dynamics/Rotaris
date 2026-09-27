@@ -34,7 +34,7 @@ import type { ResolvedTrigger, TurnCompression } from './compression.js';
 import { ConversationRegistry, type ManualCompressionReport } from './conversations.js'; // Part AO
 import { ConversationRecord } from './record.js';
 import { answerOpenCalls, iterationAgents } from './crash.js';
-import { firstTurn, resumedStart, terminalNotice, type TurnStart } from './resume.js';
+import { firstTurn, resumedStart, resumeNoticeOf, type TurnStart } from './resume.js';
 import { randomUUID } from 'node:crypto';
 import { decodeStoredTodo, editAgentTodo, encodeStoredTodo, isAgentTodoDocument, type AgentTodoDocument } from '../todo-view.js';
 
@@ -795,25 +795,17 @@ export class Run {
   }
 
   /**
-   * PD-ORCH-005 clauses 4 and 10: the resumed root's conversation — its record, which already holds the new message a
-   * continue by message delivered (`Sessions.launchContinuation` records it at the continue); then, as its next message,
-   * what became of the background sessions it had started, recorded as it joins the conversation.
+   * PD-ORCH-005 clauses 4 and 10: the resumed root's conversation — its record, which already holds what the continue
+   * told it: the notice of its background sessions, then the new message a continue by message delivers, so the user's
+   * message is the last it reads (`Sessions.launchContinuation` records both at the continue).
    */
-  private resumedRootStart(rootTaskId: string, iteration: number): TurnStart {
-    const history = this.record.load(rootTaskId);
-    const notice = this.resumeNotice(rootTaskId);
-    if (notice !== null) {
-      this.record.recorder(rootTaskId, iteration).appended(notice);
-      history.push(notice);
-    }
-    return resumedStart(history);
+  private resumedRootStart(rootTaskId: string): TurnStart {
+    return resumedStart(this.record.load(rootTaskId));
   }
 
   /** PD-ORCH-005 clause 10: what the agent `taskId` is told, when it resumes, of the background sessions it had started. */
   private resumeNotice(taskId: string): ChatMessage | null {
-    const rows = this.deps.dal?.agentTerminalsOf(this.sessionId).filter((t) => t.task_id === taskId) ?? [];
-    const live = new Map((this.deps.terminals?.list() ?? []).map((t) => [t.id, t]));
-    return terminalNotice(rows.map((row) => { const l = live.get(row.terminal_id); return { row, live: l ? { status: l.status, exitCode: l.exitCode, tail: l.tail } : null }; }));
+    return this.deps.dal ? resumeNoticeOf(this.deps.dal, this.sessionId, taskId, this.deps.terminals) : null;
   }
 
   /**
@@ -1122,7 +1114,7 @@ export class Run {
     };
     let outcome: TurnOutcome | null = null;
     try {
-      const start: TurnStart = resume ? this.resumedRootStart(rootTaskId, iteration) : { kind: 'fresh', task };
+      const start: TurnStart = resume ? this.resumedRootStart(rootTaskId) : { kind: 'fresh', task };
       outcome = children ? await children.runWithChildren(this.rootId, turnFn, start, this.abort.signal) : await firstTurn(turnFn, start);
       this.aggregates.addToolCalls(outcome.toolCallCount);
       // REQ-ORCH-080: a stop with active background children drains before anything is cancelled — only a stop that

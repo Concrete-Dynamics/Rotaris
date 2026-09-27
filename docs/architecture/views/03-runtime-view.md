@@ -214,8 +214,9 @@ them). The explicit cancel keeps REQ-ORCH-080's drain and REQ-ORCH-052's finaliz
 **A crash (clause 3; `run/crash.ts`).** A run host that died wrote none of that, so `recordCrash` writes it from the
 store when the session is next repaired (`repairOne`) or continued (`launchContinuation`, before the stale-child settle,
 which now leaves a `paused` agent alone): the open iteration's interruption `crash`, its unfinished agents `paused`, an
-unanswered last `assistant` message answered (`answerOpenCalls`: a call whose row settled keeps its result, every other
-is answered as interrupted and its `running` row settles), the stored approvals withdrawn, and the background
+unanswered last `assistant` message answered (`answerOpenCalls`: a call whose row settled keeps its result, one whose
+row is `running` is answered as interrupted and its row settles, and one with no row, which never started, is answered
+as not run), the stored approvals withdrawn, and the background
 sessions still recorded running and not held by this process ended by the crash. Loading a session records and
 settles nothing (clause 8).
 

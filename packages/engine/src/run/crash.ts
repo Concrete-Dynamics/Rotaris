@@ -28,8 +28,10 @@ export interface OpenCallsAgent {
  * whose every call has its result.
  *
  * A call's row is the latest resident `tool` row this agent has for its id: REQ-ORCH-141 dispatches an id once and
- * replays it after, so a row with that id is the call's. A row released past the resident window is not read, and its
- * call is answered as interrupted.
+ * replays it after, so a row with that id is the call's. Rows carry the agent's name and not its task id, so this
+ * assumes two agents that share a name — the root's persona across iterations, same-named children — never share a
+ * call id as well; the provider mints the ids. A row released past the resident window is not read, and its call is
+ * answered as never started.
  */
 export function answerOpenCalls(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, agent: OpenCallsAgent, iteration: number, cause: Interruption): void {
   const rowOf = new Map(dal.residentRows(sessionId).flatMap((r) => (r.kind === 'tool' && r.name === agent.name && r.call_key !== null ? [[r.call_key, r] as const] : [])));

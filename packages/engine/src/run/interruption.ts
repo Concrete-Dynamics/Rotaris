@@ -36,10 +36,11 @@ export interface KnownResult {
  * message is an assistant message with tool calls and no results — the shape a process death leaves, and the shape a
  * rest leaves when the step raised or was detached before its `tool` message was recorded — gains one `tool` message
  * answering every such call. A call `known` answers keeps that result, so a finished write is never presented as
- * undone; every other is answered as interrupted before it completed and not re-run. Anything else is returned as it
- * stands. Pure; the caller records what it returns.
+ * undone. Every other call has no row, and a call's row is appended before it is dispatched, so it never started: it
+ * is answered as not run, interrupted before it started (as the live step answers a call it skips). Anything else is
+ * returned as it stands. Pure; the caller records what it returns.
  */
-export function answerUnanswered(messages: readonly ChatMessage[], cause: Interruption, known: (callId: string) => KnownResult | undefined = () => undefined): ChatMessage | null {
+export function answerUnanswered(messages: readonly ChatMessage[], cause: Interruption, known: (callId: string) => KnownResult | undefined): ChatMessage | null {
   const last = messages[messages.length - 1];
   if (!last || last.role !== 'assistant') return null;
   const calls = last.content.flatMap((p) => (p.kind === 'tool-call' ? [p] : []));
@@ -47,8 +48,7 @@ export function answerUnanswered(messages: readonly ChatMessage[], cause: Interr
   return {
     role: 'tool',
     content: calls.map((c) => {
-      // Whether an unknown call had started is not known from the record; "before it completed" is true either way.
-      const r = known(c.callId) ?? { result: interruptedResult(cause, true, ''), isError: true };
+      const r = known(c.callId) ?? { result: interruptedResult(cause, false, ''), isError: true };
       return { kind: 'tool-result' as const, callId: c.callId, name: c.name, isError: r.isError, result: r.result };
     }),
   };

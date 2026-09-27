@@ -83,10 +83,11 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
     expect(state('bg_000000c4')).toMatchObject({ state: 'succeeded', interruption: null });
     // Not this iteration's agent: left for the stale-child settle.
     expect(state('bg_000000x1')).toMatchObject({ state: 'running', interruption: null });
-    // The root's two calls are answered as interrupted by the crash; the child, whose record ends on an answer, gains nothing.
+    // The root's two calls, which have no rows and so never started, are answered as not run by the crash; the child,
+    // whose record ends on an answer, gains nothing.
     expect(conversationOf(dal.agentConversation(sid, ROOT)).at(-1)).toEqual({ role: 'tool', content: [
-      { kind: 'tool-result', callId: 'a', name: 'grep', isError: true, result: interruptedResult('crash', true, '') },
-      { kind: 'tool-result', callId: 'b', name: 'glob', isError: true, result: interruptedResult('crash', true, '') },
+      { kind: 'tool-result', callId: 'a', name: 'grep', isError: true, result: interruptedResult('crash', false, '') },
+      { kind: 'tool-result', callId: 'b', name: 'glob', isError: true, result: interruptedResult('crash', false, '') },
     ] });
     expect(conversationOf(dal.agentConversation(sid, 'bg_000000c1')).map((m) => m.role)).toEqual(['user', 'assistant']);
     // Clause 9: withdrawn, never denied — the list is emptied and the timeline names the crash.

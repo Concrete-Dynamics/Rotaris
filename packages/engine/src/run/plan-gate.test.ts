@@ -53,7 +53,7 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
   });
 
-  function sessionsWith(backend: AgentBackend, opts: { mode?: 'auto' | 'plan'; intent?: IntentCategory; classifier?: LoopClassifier } = {}) {
+  function sessionsWith(backend: AgentBackend, opts: { mode?: 'auto' | 'plan'; intent?: IntentCategory; classifier?: LoopClassifier; grep?: boolean } = {}) {
     const runtime: RuntimePosture = {
       permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' },
       sessionLogLevel: 'WARNING', runStartMode: opts.mode ?? 'plan',
@@ -68,7 +68,7 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
       ...(opts.intent ? { preflight: async () => preflightOf(opts.intent!) } : {}),
       // PD-ORCH-001: supervision is only constructed when this dependency answers, which is how the directive's
       // "no supervisor is attached" is observable at all — a run without it looks the same from the outside.
-      ...(opts.classifier ? { supervisor: () => ({ config: { ...SUPERVISOR_DEFAULTS, repetitionThreshold: 3 }, classifier: opts.classifier! }), tools: () => grepPort() } : {}),
+      ...(opts.classifier ? { supervisor: () => ({ config: { ...SUPERVISOR_DEFAULTS, repetitionThreshold: 3 }, classifier: opts.classifier! }), tools: () => grepPort() } : opts.grep ? { tools: () => grepPort() } : {}),
     });
     return sessions;
   }
@@ -114,6 +114,29 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     const result = await sessions.running(sid)!;
     expect(result.execution_status).toBe('awaiting_plan_decision');
     expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: false });
+  });
+
+  it('PD-ORCH-005 (OQ-70): a continue that resumes an open iteration is not held — the work it resumes was released already', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    // The execution segment's step is in flight when the pause is accepted; the call it asks for is never run, so the root is mid-turn.
+    const sessions = sessionsWith(scripted([answer('Step 1: do it.'), { parts: [{ hold }, ...toolCalls([{ callId: 'g1', name: 'grep', args: { pattern: 'x' } }]).parts] }, answer('resumed and done'), answer('the approved run\'s own task, done')]).backend, { grep: true });
+    const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    expect(sessions.planDecision(sid, 'approve').ok).toBe(true);
+    await new Promise((r) => setTimeout(r, 10));
+    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    release();
+    await sessions.running(sid)!;
+    expect(dal.iterationsOf(sid)).toMatchObject([{ iteration: 1, state: 'open', interruption: 'pause' }]);
+    // Re-armed, a fresh prompt would be held; this one resumes the open iteration instead, and no plan cycle opens.
+    expect(sessions.planRearm(sid).ok).toBe(true);
+    expect(sessions.prompt(sid, 'go on').ok).toBe(true);
+    const result = await sessions.running(sid)!;
+    expect(result.execution_status).toBe('completed');
+    expect(dal.getSession(sid)!.plan_cycle).toBeNull();
+    expect(dal.iterationsOf(sid)[0]).toMatchObject({ iteration: 1, state: 'closed', outcome: 'succeeded', interruption: null });
+    expect(dal.timelineOf(sid).filter((t) => t.name === 'plan_gate_opened')).toHaveLength(1);
   });
 
   it('PD-ORCH-005 clause 11: a quit leaves the hold as it stands and records no interruption', async () => {

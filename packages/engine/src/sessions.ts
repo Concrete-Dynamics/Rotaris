@@ -370,6 +370,9 @@ function missingWorktree(row: SessionRow): { readonly code: string; readonly rea
  * What loading a session answers. PD-ORCH-005 clause 8: loading changes no agent record, so it settles nothing — the
  * stale-child settle and the crash record happen when a run of the session is about to start.
  */
+/** PD-ORCH-005 clauses 4 and 6: resume the open iteration, with the message delivered to its root, or decline it. */
+type OpenIterationChoice = { readonly message: readonly ContentPart[] | null } | 'decline';
+
 export interface ResumeSuccess {
   readonly sessionId: SessionId;
 }
@@ -995,7 +998,8 @@ export class Sessions {
     // it" is widened to one-way for the SESSION, because the unit a user plans is the piece of work and not the
     // run — re-planning a follow-up to a plan they just approved is the ceremony the directive was raised against.
     // What re-arms is explicit and never inferred: a new session (the column defaults to 0), or `planRearm`.
-    this.launchContinuation(s, prompt, payload, todo.value, previousIntent(s.dal, sessionId), setup.value, attachments.content);
+    // PD-ORCH-005 clause 4: where an iteration is open, the new message is the resumed root's next message.
+    this.launchContinuation(s, prompt, payload, todo.value, previousIntent(s.dal, sessionId), setup.value, attachments.content, undefined, { message: [{ kind: 'text', text: prompt }, ...attachments.content] });
     return ok(row.value);
   }
 
@@ -1018,7 +1022,11 @@ export class Sessions {
     return ok({ model: this.deps.model, ...(this.deps.runtime ? { runtime: this.deps.runtime } : { runtime: { permissionMode: '', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING' } }) });
   }
 
-  private launchContinuation(s: Live, prompt: string, payload: string, todo: TodoDocument | undefined, priorIntent: IntentCategory | null, setupIn: RunSetup, attachmentContent: readonly ContentPart[] = [], plan?: { readonly cycle: number; readonly changes: string }): void {
+  /**
+   * `openIteration` is PD-ORCH-005 clauses 4 and 6 for a session whose last run left an iteration open: resume it — with
+   * the message a continue by message delivers to its root — or decline it. Every route resumes unless told to decline.
+   */
+  private launchContinuation(s: Live, prompt: string, payload: string, todo: TodoDocument | undefined, priorIntent: IntentCategory | null, setupIn: RunSetup, attachmentContent: readonly ContentPart[] = [], plan?: { readonly cycle: number; readonly changes: string }, openIteration: OpenIterationChoice = { message: null }): void {
     const { model, runtime } = setupIn;
     const sessionId = s.writer.sessionId;
     const storedRow = s.dal.getSession(sessionId)!;
@@ -1054,6 +1062,7 @@ export class Sessions {
     this.recordCrashOf(s.dal, s.writer, sessionId, warn);
     const stale = settleStaleChildren(s.dal, s.writer, sessionId, warn);
     if (stale > 0) warn(`${stale} child record(s) from a previous run were settled cancelled before the first continuation iteration (REQ-ORCH-053)`);
+    const open = s.dal.openIterationOf(sessionId);
     // REQ-EVENTS-053, PD-MONITOR-001: the run's model calls that are no agent's turn count against the run itself.
     const countUsage: CountUsage = (usage, ref) => { runRef.run?.countUsage(usage, ref); };
     const supervisorSetup = this.deps.supervisor?.(workspaceRoot, sessionId, countUsage) ?? null;
@@ -1091,6 +1100,7 @@ export class Sessions {
       // PD-ORCH-005: the store the conversation record, the iteration record and a left-open iteration are read from —
       // every run's, with or without a tool port.
       dal: s.dal,
+      ...(open ? { openIteration: openIteration === 'decline' ? { resume: false } : { resume: true, message: openIteration.message } } : {}),
       tools: null, permission, pid: this.deps.pid, host: this.deps.host, readSession: () => s.dal.getSession(sessionId), warn,
       continuation: true, ...(todo ? { resumeTodo: todo } : {}), ...(hooks ? { hooks } : {}), checkpoints,
       ...(supervisors ? { supervisorFor: (conversationId: string) => supervisors.forConversation(conversationId) } : {}),
@@ -1390,7 +1400,12 @@ export class Sessions {
    * double → the limit doubled for this session (null stays null), then continue; cancel → `paused` with stop reason
    * `message_limit_reached`. A manually paused session continues the same way. Nothing here appends a user row.
    */
-  continueSession(sessionId: SessionId, action: 'continue' | 'double' | 'cancel'): Result<{ readonly resumed: boolean; readonly messageLimit: number | null }, { readonly code: string; readonly reason: string }> {
+  /**
+   * `withoutPaused` is PD-ORCH-005 clause 6's "continue without them": the agents the last run left paused end
+   * `cancelled`, the open iteration closes as cancelled, and the session continues as a new iteration. Otherwise the
+   * Continue action resumes them (the default).
+   */
+  continueSession(sessionId: SessionId, action: 'continue' | 'double' | 'cancel', opts: { readonly withoutPaused?: boolean } = {}): Result<{ readonly resumed: boolean; readonly messageLimit: number | null }, { readonly code: string; readonly reason: string }> {
     const s = this.live.get(sessionId);
     if (!s) return err({ code: 'not-live', reason: `${sessionId} is not a live session` });
     if (s.run && !s.run.isEnded) return err({ code: 'run-active', reason: 'A run is already active.' });
@@ -1430,7 +1445,7 @@ export class Sessions {
     if (!todo.ok) return todo;
     const payload = buildContinuationPayload(s.dal, stored, lastPrompt, todo.value);
     const runtimeWithLimit: RunSetup = { ...setup.value, runtime: { ...setup.value.runtime, messageLimit: limit } };
-    this.launchContinuation(s, lastPrompt, payload, todo.value, previousIntent(s.dal, sessionId), runtimeWithLimit);
+    this.launchContinuation(s, lastPrompt, payload, todo.value, previousIntent(s.dal, sessionId), runtimeWithLimit, [], undefined, opts.withoutPaused === true ? 'decline' : { message: null });
     return ok({ resumed: true, messageLimit: limit });
   }
 

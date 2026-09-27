@@ -52,9 +52,10 @@ child a continuation continues, which REQ-TOOLS-152's fields do not provide and 
 on 2026-09-27** as recommended by `PD-ORCH-004` revision 2 ([R-058](../product/requests.md#r-058)). **More were raised on
 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3: OQ-67** (how a `paused` agent presents, and whether it is settled
 for display with a session at rest, which four requirements the directive does not name would do), **OQ-68** (whether
-the transcript is drawn from the conversation record, and what of a model exchange the record holds) **and OQ-69** (which
-control is a stop and which the final cancel, and what a rest does at the edges the directive does not reach), each
-stating the reading the build proceeds under. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+the transcript is drawn from the conversation record, and what of a model exchange the record holds), **OQ-69** (which
+control is a stop and which the final cancel, and what a rest does at the edges the directive does not reach) **and
+OQ-70** (how a resumed iteration carries on where the directive gives the what and not the how), each stating the
+reading the build proceeds under. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -2994,6 +2995,54 @@ stop hints (a forced stop and a cancel persist the same status). Whether a stop 
 cycle's agents to be resumed, which clause 11's durable hold arguably forbids. And whether one paused agent should be
 cancellable while its session rests. Each would change a control's reach or a surface's offer, and none is decided by
 the directive.
+
+**OQ-70 — How does a resumed iteration carry on where the directive says what and not how?** *(`PD-ORCH-005` clauses 4, 5, 6, 7 and 10; PD-TOOLS-006 revision 2; REQ-ORCH-095, REQ-ORCH-088, REQ-ORCH-152, REQ-HOOKS-075 and REQ-MONITOR-125, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3 under [R-060](../product/requests.md#r-060) and [R-061](../product/requests.md#r-061).)*
+
+Clause 4 restores the iteration's agents "with their identity … and their conversation, and each carries on from its
+last message". A continue by message "delivers that message to the resumed root as the user's next message". The
+clause fixes the outcome and leaves the mechanism open, and several requirements it does not name meet the resumed
+iteration. Open: where an agent's last message is its own answer, what a continued prompt becomes, whether a plan-mode
+continue holds, what the iteration's events and hooks say, and how REQ-ORCH-095's re-prompt and REQ-ORCH-088's retry
+treat a resumed child.
+
+**What the build proceeds under.**
+
+- **Carrying on from the last message.** A resumed agent whose last message is a tool result, a user message or a
+  message delivered at the resume takes a model step over its record. An agent whose last message is its own answer had
+  finished its turn and was waiting on children of its own. It resumes into waiting and takes no step until one of them
+  ends. A child restored `summarizing` is that case, and it writes its report. A step straight after its own answer
+  would ask the model to go on from nothing.
+- **The new message is not a task.** A continue that resumes an open iteration appends no todo task. The message is the
+  resumed root's next message, recorded as it joins the conversation, and REQ-SESSION-115's continuation payload is not
+  sent (the directive narrows it so). The iteration's own task is the one it holds, and it closes with it.
+- **One iteration, one start.** The resumed iteration keeps its number and its root's task id. It emits no second
+  `iteration.start`; `iteration_resumed` records the resume. It closes as any iteration does, with `iteration.end`, its
+  capture and the hooks' `iteration_end` (REQ-HOOKS-075).
+- **Not held at the plan gate.** A continue that resumes an open iteration is not held, even on a session the user
+  re-armed. The work it resumes was released before it came to rest, and clause 4 resumes it "before anything else
+  runs". A later run of the session is held as REQ-ORCH-152 has it.
+- **Which continues resume.** The three routes the clause names: a new message (`Sessions.prompt`), the Continue action
+  on a `paused` session (`continueSession`) and a plan decision. Only the Continue action offers "continue without
+  them" (clause 6), so declining is an option of `continueSession`. A session a crash left `interrupted` is continued
+  by a new message, as today.
+- **The notice of background sessions (clause 10).** One user message, "You were paused and have now resumed…", lists
+  each session the agent had started: still running, with its id, or ended and by what, with its exit code, and its
+  last recorded output. Where this process still holds the session, the state is the process's own, since a session
+  a pause left running may have ended since. The notice is recorded as part of the agent's conversation, and it counts
+  as something said to the agent, so an agent that had answered takes a step to read it.
+- **REQ-ORCH-095's re-prompt counts the calls made before the rest.** A child that worked before it was paused, and
+  answers without a call after its resume, is not re-prompted. A child whose only call was never run is re-prompted, as
+  any child that acted on nothing.
+- **REQ-ORCH-088's retry starts from the payload.** A resumed child that times out and is retried on its role's
+  fallback starts its conversation again from its payload, as every retried child does. The payload's disclosure block
+  is rebuilt from the claims as they stand at that moment.
+- **The write scope (PD-TOOLS-006 revision 2).** Each resumed child re-claims its stored scope when it resumes, in the
+  order the children were first accepted, so the child accepted first still holds a path both scopes match.
+
+**What a ruling decides.** Three questions. Should the new message also be recorded as a task, so that a resumed
+iteration that closes without addressing it leaves the message pending? Should a crashed, `interrupted` session offer
+the Continue action, and with it "continue without them"? And should a re-armed session hold its plan gate before the
+resume, after it, or not at all, as built?
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

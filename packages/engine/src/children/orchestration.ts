@@ -25,6 +25,7 @@ import type { TurnCompression } from '../run/compression.js';
 import type { PricedUsage } from '../run/pricing.js';
 import { todoLinesFromStored } from '../todo-view.js';
 import type { ConversationRecord } from '../run/record.js';
+import { firstTurn, resumedStart, type TurnStart } from '../run/resume.js';
 
 /**
  * One iteration's children (REQ-ORCH-072: a fresh ledger per iteration under the clamped policy): the
@@ -113,6 +114,8 @@ export interface ChildrenDeps {
   readonly restCause?: (() => Interruption | null) | undefined;
   /** PD-ORCH-005 clause 2 / REQ-ORCH-134: aborted when the pause's tool deadline passes; every child's calls run under it. */
   readonly cutCalls?: AbortSignal | undefined;
+  /** PD-ORCH-005 clause 10: what a resumed agent is told of the background sessions it had started; null for none. */
+  readonly resumeNotice?: ((taskId: string) => ChatMessage | null) | undefined;
   /** Part Q: the ladder for a child — its own cell (one fallback across both routes, REQ-ORCH-144) over the run's memory and waits. */
   readonly resilience?: { readonly forChild: (persona: Persona | undefined, current: ModelChoice, unresponsiveBoundMs: number) => TurnResilience } | undefined;
   /**
@@ -383,6 +386,41 @@ export class IterationChildren implements DelegationOps {
   }
 
   /**
+   * PD-ORCH-005 clause 4: every `paused` agent of the iteration is restored from its record — moved back to the state it
+   * resumes into, in the order the children were accepted, each re-claiming its stored write scope under the same rules
+   * as any child (PD-TOOLS-006 revision 2). A child that waited is left to the scheduler; one that was running carries on
+   * from its recorded conversation, and one that was summarising writes its report — each under a fresh
+   * `child_timeout`. Every child keeps the place in every limit its record already holds. Returns how many resumed.
+   */
+  resumePaused(): number {
+    let n = 0;
+    for (const c of this.ledger.all()) {
+      if (c.state !== 'paused') continue;
+      const r = this.ledger.resume(c.task_id);
+      if (!r.ok) { this.deps.warn(r.reason); continue; }
+      n += 1;
+      this.acceptScope(r.row, storedScope(r.row));
+      if (r.row.state === 'running' || r.row.state === 'summarizing') this.track(this.execute(r.row, true));
+    }
+    this.scheduler.pass();
+    return n;
+  }
+
+  /**
+   * PD-ORCH-005 clauses 4 and 10: a resumed agent's conversation — its record, then, as its next message, what became of
+   * the background sessions it had started. The notice is recorded as it joins the conversation.
+   */
+  resumedConversation(taskId: string, iteration: number): ChatMessage[] {
+    const history = this.deps.record?.load(taskId) ?? [];
+    const notice = this.deps.resumeNotice?.(taskId) ?? null;
+    if (notice !== null) {
+      this.deps.record?.recorder(taskId, iteration).appended(notice);
+      history.push(notice);
+    }
+    return history;
+  }
+
+  /**
    * REQ-ORCH-133 / REQ-MONITOR-128, the repair of `cancelling-one-child-does-not-stop-it.md`: the user cancels one child.
    * It and each of its live descendants settle `cancelled` with a report saying so, and each one's own execution is
    * ABORTED, so it stops rather than working on under a cancelled record; the execution finds its record terminal and
@@ -421,8 +459,9 @@ export class IterationChildren implements DelegationOps {
    * terminal and unobserved — wait, collect the newly terminal ones, and resume the parent with their reports.
    * The parent is left idle once nothing of its can change without a child changing state.
    */
-  async runWithChildren(agentId: string, turn: (task: string, history: readonly ChatMessage[]) => Promise<TurnOutcome>, task: string, signal: AbortSignal): Promise<TurnOutcome> {
-    let outcome = await turn(task, []);
+  async runWithChildren(agentId: string, turn: (task: string | null, history: readonly ChatMessage[]) => Promise<TurnOutcome>, start: TurnStart, signal: AbortSignal): Promise<TurnOutcome> {
+    // PD-ORCH-005 clause 4: a fresh agent's payload, or a resumed agent's record — into a model step, or into waiting.
+    let outcome = await firstTurn(turn, start);
     let history = outcome.messages;
     let toolCalls = outcome.toolCallCount;
     for (;;) {
@@ -454,12 +493,20 @@ export class IterationChildren implements DelegationOps {
 
   // ---- a child's execution -----------------------------------------------------------------
 
-  private async execute(row: ChildRow): Promise<void> {
+  /**
+   * A child's execution. `resumed` is PD-ORCH-005's resume: the child was restored `running` or `summarizing` and carries
+   * on from its recorded conversation under a fresh `child_timeout`, its tool-call count carried on from its record. One
+   * restored `summarizing` had answered, so its record ends on its answer: it resumes into waiting, takes no step, and
+   * writes its report.
+   */
+  private async execute(row: ChildRow, resumed = false): Promise<void> {
     const { deps } = this;
     const started = deps.clocks.monotonic.now();
     this.startedAt.set(row.task_id, started);
-    const moved = this.ledger.transition(row.task_id, 'running');
-    if (!moved.ok) { deps.warn(moved.reason); return; }
+    if (!resumed) {
+      const moved = this.ledger.transition(row.task_id, 'running');
+      if (!moved.ok) { deps.warn(moved.reason); return; }
+    }
     const persona = personaOf(deps, row.persona);
     const childTimeoutMs = deps.childTimeoutMs ?? CHILD_TIMEOUT_MS;
     // PD-ORCH-004: the progress rule's window — the role's own `stall_timeout` (REQ-CONFIG-108), else the run's
@@ -480,8 +527,13 @@ export class IterationChildren implements DelegationOps {
       if (prior) this.ledger.markContextInjected(row.task_id);
     }
     // REQ-LIBRARY-097/098: the automatic sibling index and the explicitly attached artifacts, assembled from the
-    // store as it stands at launch — a newly created agent is given them, so they are built here and not at spawn.
-    const artifactBlocks = this.artifactContext(row);
+    // store as it stands at launch — a newly created agent is given them, so they are built when its payload is, and a
+    // resumed agent, whose payload is already in its record, is given them only if REQ-ORCH-088's retry restarts it.
+    let artifactBlocks: readonly string[] | null = null;
+    const payload = (): string => childPayload(deps.workspaceRoot, row.task, prior, artifactBlocks ??= this.artifactContext(row), writeScopeBlock(this.disclosures.get(row.task_id)));
+    // PD-ORCH-005 clause 4: a resumed child's first attempt starts from its record; a retry starts from its payload.
+    let start: TurnStart | null = resumed ? resumedStart(this.resumedConversation(row.task_id, row.iteration)) : null;
+    const priorCalls = resumed ? row.tool_calls : 0;
     let outcome: TurnOutcome | null = null;
     let error: { type: string; message: string } | null = null;
     let timedOut = false;
@@ -517,7 +569,7 @@ export class IterationChildren implements DelegationOps {
         backstop.handle = deps.clocks.timers.after(CHILD_LANDING_GRACE, () => { controller.abort(); });
       });
       let firstCall = true;
-      const turn = (task: string, history: readonly ChatMessage[]) => { const wasFirst = firstCall; firstCall = false; return runTurn({
+      const turn = (task: string | null, history: readonly ChatMessage[]) => { const wasFirst = firstCall; firstCall = false; return runTurn({
         writer: deps.writer, owner: deps.owner, backend: deps.backend, tools, clocks: deps.clocks, persona: row.persona, agentName: row.canonical_name,
         // REQ-WORKSPACE-060 (ADR-0063): the session's context units follow the role's instructions and its playbook,
         // read at THIS construction so a skill force-loaded since the last child reaches this one.
@@ -540,11 +592,14 @@ export class IterationChildren implements DelegationOps {
         parentResume: !wasFirst,
       }, task, history, controller.signal); };
       try {
-        outcome = await this.runWithChildren(row.task_id, turn, childPayload(deps.workspaceRoot, row.task, prior, artifactBlocks, writeScopeBlock(this.disclosures.get(row.task_id))), controller.signal);
+        outcome = await this.runWithChildren(row.task_id, turn, start ?? { kind: 'fresh', task: payload() }, controller.signal);
+        start = null;
         // REQ-ORCH-095: one re-prompt for a child that neither worked nor answered — and, on a work route, for an implementer
         // that produced text and acted on nothing; on the answer route the answered category is accepted at once (REQ-ORCH-015).
-        const textOnly = outcome.toolCallCount === 0 && outcome.report.text.trim() !== '';
-        const rePrompt = outcome.toolCallCount === 0 && outcome.report.text.trim() === '' || ((deps.route ?? 'work') === 'work' && textOnly && persona?.implementer === true);
+        // A resumed child's calls before the rest count: it worked, even if its resumed turn made no call.
+        const calls = priorCalls + outcome.toolCallCount;
+        const textOnly = calls === 0 && outcome.report.text.trim() !== '';
+        const rePrompt = calls === 0 && outcome.report.text.trim() === '' || ((deps.route ?? 'work') === 'work' && textOnly && persona?.implementer === true);
         if (!controller.signal.aborted && outcome.report.status !== 'failed' && outcome.paused !== true && rePrompt) {
           // PD-ORCH-005 clause 2: no model call once the run is coming to rest — the re-prompt waits for the resume.
           if (this.resting) rePromptOwed = true;
@@ -585,10 +640,11 @@ export class IterationChildren implements DelegationOps {
       break;
     }
     const cancelled = deps.runSignal.aborted;
-    const toolCalls = outcome?.toolCallCount ?? 0;
+    // A resumed child's count carries on from its record; only this run's calls join this run's total.
+    const toolCalls = priorCalls + (outcome?.toolCallCount ?? 0);
     this.toolCalls.set(row.task_id, toolCalls);
     // REQ-MONITOR-102: this child's calls join the session-wide total, counted once, here, whatever it ended as.
-    deps.countToolCalls?.(toolCalls);
+    deps.countToolCalls?.(outcome?.toolCallCount ?? 0);
     // REQ-CHAT-088: the tool port may have persisted this child's own plan while it ran; settling updates the
     // call count while preserving that document for the scoped transcript and later session refreshes.
     const persistedTodo = deps.dal.childrenOf(deps.sessionId).find((child) => child.task_id === row.task_id)?.todo ?? null;
@@ -643,8 +699,9 @@ export class IterationChildren implements DelegationOps {
     else if (toolCalls === 0 && lastText.trim() === '') { status = 'failed'; errors.push({ type: 'incomplete_execution', message: 'no_activity' }); deps.writer.recordIssue({ kind: 'incomplete_execution', severity: 'warning', actor: row.canonical_name, message: `Child ${row.canonical_name} ended with no activity after one re-prompt (category no_activity).` }); }
     else status = 'succeeded';
 
-    // REQ-MONITOR-018: summarizing until the report exists, then terminal; cancellation settles from anywhere.
-    if (!cancelled) { const s = this.ledger.transition(row.task_id, 'summarizing'); if (!s.ok) deps.warn(s.reason); }
+    // REQ-MONITOR-018: summarizing until the report exists, then terminal; cancellation settles from anywhere. A child
+    // resumed `summarizing` is there already.
+    if (!cancelled && this.ledger.get(row.task_id)?.state !== 'summarizing') { const s = this.ledger.transition(row.task_id, 'summarizing'); if (!s.ok) deps.warn(s.reason); }
     /*
      * PD-ORCH-004: REQ-ORCH-088's report stands as it is — status, timeout error, last response — and a child that was
      * making progress when the limit expired additionally carries the statement, the paths it changed and, unless it
@@ -718,6 +775,11 @@ export class IterationChildren implements DelegationOps {
   finalize(reason: string): number {
     return this.scheduler.finalizeIncomplete(reason);
   }
+}
+
+/** PD-TOOLS-006 revision 2: the write scope a child's record stores, as the patterns it declared; none when unreadable. */
+function storedScope(row: ChildRow): string[] {
+  try { const v = JSON.parse(row.write_scope) as unknown; return Array.isArray(v) ? v.filter((p): p is string => typeof p === 'string') : []; } catch { return []; }
 }
 
 /** REQ-ORCH-053: on a later run of the same session, settle every non-terminal child of any previous iteration before the first iteration. */

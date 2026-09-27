@@ -285,6 +285,13 @@ records which interruption withdrew it, and the call is recorded as interrupted 
 answer is replayed later. — `PD-ORCH-005` clause 9, narrowing `REQ-TOOLS-054` and `REQ-SESSION-025`
 _Avoid_: denied, cancelled (REQ-TOOLS-052's cancellation is a denial)
 
+**Resume** (an iteration):
+What a continue does with the iteration a rest left open: the same iteration carries on before anything else runs, its
+root and every `paused` agent restored from its record with its identity, each from its last message. Declining it —
+"continue without them" — ends those agents `cancelled` and closes the iteration. A resume is never a
+**continuation** (PD-ORCH-004's new child that carries on a cut-off child's work). — `PD-ORCH-005` clauses 4, 6 and 7
+_Avoid_: restart, replay, rerun
+
 **Explicit cancel**:
 REQ-MONITOR-126's confirmed control, which cancels the run by its reserved agent id: final — every agent it ends is
 `cancelled` and never resumed. Distinct from the stop control. — `PD-ORCH-005` clause 3, `REQ-MONITOR-009`,

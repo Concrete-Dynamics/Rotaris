@@ -237,5 +237,7 @@ sequenceDiagram
   background sessions ended. Loading the session writes nothing.
 - **The explicit cancel is not a rest.** The reserved run id's final stop cancels the waits, drains and finalizes as
   before: every agent `cancelled`, the iteration closed.
-- **Until the resume lands**, the next continue declines the open iteration: its paused agents end `cancelled` and it
-  closes before the new run's first iteration (`closeLeftOpenIteration`).
+- **The next continue resumes it** (`03-runtime-view.md` §2): the open iteration first, the same root and task, every
+  paused agent moved back and carrying on from its record, told of its background sessions, the root handed a new
+  message as its next. Declined ("continue without them"), its paused agents end `cancelled` and it closes before the
+  new run's first iteration (`closeLeftOpenIteration`).

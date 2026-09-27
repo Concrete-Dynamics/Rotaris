@@ -45,6 +45,19 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-27**
 
+**A continue resumes the open iteration from every agent's record (`PD-ORCH-005` phase 4, 2026-09-27, R-060/R-061).**
+Every continue — a new message, the Continue action, a plan decision — resumes the iteration a rest or a crash left open
+before anything else runs: the same number, root and task (`iterate(openRow)`, `iteration_resumed`, no second
+`iteration.start`), not held at the plan gate. Each paused child moves back to the state it resumes into
+(`resumeChild`, `child_resumed`), re-claims its stored write scope (PD-TOOLS-006 revision 2) and carries on from its
+record under a fresh `child_timeout`; the root carries on from its own; an agent whose record ends on its own answer
+resumes into waiting (`run/resume.ts`). A resumed agent is told of its background sessions (clause 10) and the root is
+handed a continue's new message, each recorded as its next message; no todo task is appended. Declining is
+`continueSession`'s `withoutPaused` option. Readings in OQ-70. The **runtime view**'s §2 gains the resume paragraph and
+diagram arm and its declined paragraph, §4, §5's Continue paragraph and §7's two rows move; the **state-ownership
+view** names the resume as the record's reader; the **sequences view**'s §4 closes with the resume. No package, edge,
+process, channel or message kind changed.
+
 **A pause, a stop, a quit and a crash leave every unfinished agent paused (`PD-ORCH-005` phase 3, 2026-09-27, R-060/R-061).**
 A run comes to rest by a pause, a stop or a quit (`Run.restCause`); the reserved run id's cancel is final
 (`StopRequest.final`). A pause is refused at the plan gate, withdraws every approval and question (the gate's and

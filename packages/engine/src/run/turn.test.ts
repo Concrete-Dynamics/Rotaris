@@ -310,6 +310,26 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
       expect(dal.agentTerminalsOf(sid).map((t) => [t.terminal_id, t.state, t.output_tail])).toEqual([['ts_serve', 'stop', 'listening'], ['ts_build', 'completed', 'built']]);
     });
 
+    it('clause 10: when an agent resumes it is told, for each background session it had started, whether it still runs or how it ended, with its last recorded output', async () => {
+      const { terminals } = withTerminals();
+      const { port } = fakePort({ hold: new Promise<void>(() => undefined), holdOn: 'glob' });
+      const { sessions, client } = sessionsWith([toolCalls([{ callId: 'c1', name: 'glob', args: {} }]), answer('resumed')], port, { terminals: (sid) => { const t = terminals!(sid); return { ...t, list: () => t.list().map((l) => ({ ...l, taskId: dal.iterationsOf(sid)[0]?.root_task_id ?? '' })) }; }, runtime: { permissionMode: 'ask', pauseToolDeadlineMs: 5_000 } });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => dal.residentRows(sid).some((r) => r.kind === 'tool'));
+      sessions.control({ op: 'pause', sessionId: sid, args: {} });
+      clock.advance(5_000);
+      await sessions.running(sid)!;
+      expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+      await sessions.running(sid)!;
+      const told = client.requests.at(-1)!.messages.at(-1)!.content.map((p) => (p.kind === 'text' ? p.text : '')).join('');
+      expect(told).toMatch(/^You were paused and have now resumed\. The background terminal sessions you had started:/);
+      expect(told).toContain('- ts_serve (`serve`) is still running; query or kill it by that id. Its last recorded output:\n```\nlistening\n```');
+      expect(told).toContain('- ts_build (`build`) has ended: it completed, exit code 0. Its last recorded output:\n```\nbuilt\n```');
+      // The notice is part of the record, as every message of the conversation is.
+      const root = dal.iterationsOf(sid)[0]!.root_task_id;
+      expect(conversationOf(dal.agentConversation(sid, root)).some((m) => m.role === 'user' && m.content.some((p) => p.kind === 'text' && p.text === told))).toBe(true);
+    });
+
     it('clause 10: a pause leaves them running while the application stays open; the quit that follows ends them and records it', async () => {
       const { terminals, ended } = withTerminals();
       const { port } = fakePort({ hold: new Promise<void>(() => undefined), holdOn: 'glob' });

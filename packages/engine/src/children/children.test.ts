@@ -267,9 +267,8 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
           : { specs: () => [], dispatch: async () => ({ text: '', isError: true, status: 'failed', durationMs: 0, label: '', args: {} }), ...base };
       },
       attended: () => true,
-      runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', modelConcurrencyCap: over.cap ?? null, drainTimeoutMs: 0, ...(over.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: over.childStallTimeoutMs }) },
+      runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', modelConcurrencyCap: over.cap ?? null, drainTimeoutMs: 0, ...(over.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: over.childStallTimeoutMs }), ...(over.childTimeoutMs === undefined ? {} : { childTimeoutMs: over.childTimeoutMs }) },
     });
-    void over.childTimeoutMs;
     return { sessions, client, counts, built, contexts };
   }
   const children = (sid: SessionId): ChildRow[] => dal.childrenOf(sid);
@@ -858,17 +857,18 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       let release!: () => void;
       const hold = new Promise<void>((r) => { release = r; });
       const seen = { summaries: 0, childSteps: 0, orchestratorSteps: 0 };
-      const { sessions } = sessionsWith((persona, turn) => {
+      const { sessions, client } = sessionsWith((persona, turn) => {
         if (persona === 'orchestrator') {
           seen.orchestratorSteps += 1;
           return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'one', task: 'TASK: one' } }, { callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'two', task: 'TASK: two' } }]) : answer('both delegated');
         }
         if (persona === 'summariser') { seen.summaries += 1; return answer('{"summary":"x"}'); }
         seen.childSteps += 1;
-        // The step in flight when the pause is accepted finishes by asking for a call.
+        // The step in flight when the pause is accepted finishes by asking for a call; every later step answers.
+        if (seen.childSteps > 1) return answer('done');
         return { parts: [{ hold }, ...toolCalls([{ callId: 'p1', name: 'background_output', args: { task_id: 'bg_00000000' } }], 'Checking.').parts] };
       }, { cap: 1 });
-      return { sessions, seen, release: () => release() };
+      return { sessions, client, seen, release: () => release() };
     }
 
     it('clause 2, the repair of a-pause-settles-children-instead-of-holding-them: no model call after the pause, no queued child starts, nothing summarises — every unfinished agent is left paused where it stood and the iteration open', async () => {
@@ -921,21 +921,163 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(children(sid).map((c) => c.state)).toEqual(['paused', 'paused']);
     });
 
-    it('until the resume is built, a continue ends the paused agents cancelled — clause 6\'s "continue without them" — closes the open iteration cancelled, and works in a new one', async () => {
+    it('clause 4: the Continue action resumes the open iteration — each paused child carries on from its record under its identity (the parked one from its slot), and the root from its own', async () => {
+      const { sessions, client, seen, release } = heldPair();
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => children(sid).length === 2 && byName(sid, 'two').state === 'waiting_on_model_slot');
+      sessions.control({ op: 'pause', sessionId: sid, args: {} });
+      release();
+      await sessions.running(sid)!;
+      const [iteration] = dal.iterationsOf(sid);
+      const rootRequestsBefore = seen.orchestratorSteps;
+      const identity = (name: string) => { const c = byName(sid, name); return { task_id: c.task_id, canonical_name: c.canonical_name, persona: c.persona, parent_id: c.parent_id, depends_on: c.depends_on, background: c.background, write_scope: c.write_scope, iteration: c.iteration }; };
+      const before = { one: identity('one'), two: identity('two') };
+      const oneRecord = conversationOf(dal.agentConversation(sid, before.one.task_id));
+
+      expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      // The same iteration, closed now, under the same root; nothing new appended to the todo.
+      expect(dal.iterationsOf(sid)).toMatchObject([{ iteration: 1, state: 'closed', outcome: 'succeeded', root_task_id: iteration!.root_task_id, interruption: null }]);
+      for (const name of ['one', 'two'] as const) {
+        expect(identity(name)).toEqual(before[name]);
+        expect(byName(sid, name)).toMatchObject({ state: 'succeeded', interruption: null, resume_state: null, report_stored: 1 });
+      }
+      // `one` carried on from its record — the call its step asked for recorded as never run — and answered. (Its only call
+      // never ran, so REQ-ORCH-095's one re-prompt follows, as for any child that acted on nothing.)
+      expect(conversationOf(dal.agentConversation(sid, before.one.task_id)).slice(0, oneRecord.length + 1)).toEqual([...oneRecord, { role: 'assistant', content: [{ kind: 'text', text: 'done' }] }]);
+      // `two` never started before the pause, so it starts now from its payload; each child summarised once, after the resume.
+      expect(seen.summaries).toBe(2);
+      // The root had answered and was waiting on its children, so it resumed into waiting: every step it took after the
+      // resume answered a child's end, and none followed its own answer.
+      const orchestrator = client.requests.filter((r) => /^You are the orchestrator/.test(r.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') ?? ''));
+      const resumedSteps = orchestrator.slice(rootRequestsBefore);
+      expect(resumedSteps.length).toBeGreaterThan(0);
+      for (const r of resumedSteps) expect(r.messages.at(-1)!.role).toBe('user');
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'child_resumed').map((t) => (JSON.parse(t.metadata) as { resume_state: string }).resume_state).sort()).toEqual(['running', 'waiting_on_model_slot']);
+      const trans = dal.eventsOfKind(sid, 'child.transition').map((e) => JSON.parse(e.payload) as { child_id: string; from_state: string; to_state: string });
+      expect(trans.filter((t) => t.child_id === before.two.task_id).map((t) => t.to_state)).toEqual(['paused', 'waiting_on_model_slot', 'queued', 'starting', 'running', 'summarizing', 'succeeded']);
+    });
+
+    /** One background child whose steps the test scripts one by one; each step may wait on the promise it is given. */
+    function scriptedChild(steps: readonly ((n: number) => ScriptedCall)[], over: { childTimeoutMs?: number } = {}) {
+      const seen = { summaries: 0, childSteps: 0 };
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'work', task: 'TASK: work', write_scope: ['src/**'] } }]) : answer('ok');
+        if (persona === 'summariser') { seen.summaries += 1; return answer('{"summary":"x"}'); }
+        seen.childSteps += 1;
+        return (steps[seen.childSteps - 1] ?? (() => answer('done')))(seen.childSteps);
+      }, over);
+      return { sessions, seen };
+    }
+    const gate = () => { let open!: () => void; const hold = new Promise<void>((r) => { open = r; }); return { hold, open: () => open() }; };
+    const look = (): ScriptedCall => toolCalls([{ callId: 'b1', name: 'background_output', args: { task_id: 'bg_00000000' } }], 'Looking.');
+    async function pauseAt(sessions: Sessions, sid: SessionId, reached: () => boolean, release: () => void): Promise<void> {
+      await settle(reached);
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      release();
+      await sessions.running(sid)!;
+    }
+
+    it('clause 4: a child whose turn had finished resumes `summarizing` and writes its report from its record, with no step of its own', async () => {
+      const g = gate();
+      const { sessions, seen } = scriptedChild([look, () => ({ parts: [{ hold: g.hold }, ...answer('Finished the work.').parts] })]);
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await pauseAt(sessions, sid, () => seen.childSteps === 2, g.open);
+      expect(byName(sid, 'work')).toMatchObject({ state: 'paused', resume_state: 'summarizing' });
+      expect(seen.summaries).toBe(0);
+      expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+      await sessions.running(sid)!;
+      expect(byName(sid, 'work')).toMatchObject({ state: 'succeeded', report_stored: 1 });
+      expect(seen).toEqual({ summaries: 1, childSteps: 2 });
+      expect(JSON.parse(byName(sid, 'work').report!)).toMatchObject({ final_response: 'Finished the work.' });
+    });
+
+    it('clause 4 with REQ-ORCH-095: a resumed child that worked before the rest is not re-prompted for answering without a call after it', async () => {
+      const g = gate();
+      const { sessions, seen } = scriptedChild([look, () => ({ parts: [{ hold: g.hold }, ...look().parts] }), () => answer('Finished.')]);
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await pauseAt(sessions, sid, () => seen.childSteps === 2, g.open);
+      expect(byName(sid, 'work')).toMatchObject({ state: 'paused', resume_state: 'running', tool_calls: 1 });
+      expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+      await sessions.running(sid)!;
+      // One step after the resume, and no "Carry out the task now": its call before the rest counts.
+      expect(seen.childSteps).toBe(3);
+      expect(byName(sid, 'work')).toMatchObject({ state: 'succeeded', tool_calls: 1 });
+      expect(JSON.parse(byName(sid, 'work').report!)).toMatchObject({ final_response: 'Finished.' });
+    });
+
+    it('clause 7: an iteration interrupted again after a resume is resumed in turn — the same iteration, the same agents', async () => {
+      const g1 = gate();
+      const g2 = gate();
+      const { sessions, seen } = scriptedChild([() => ({ parts: [{ hold: g1.hold }, ...look().parts] }), () => ({ parts: [{ hold: g2.hold }, ...look().parts] })]);
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await pauseAt(sessions, sid, () => seen.childSteps === 1, g1.open);
+      const work = byName(sid, 'work').task_id;
+      expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+      await pauseAt(sessions, sid, () => seen.childSteps === 2, g2.open);
+      expect(byName(sid, 'work')).toMatchObject({ task_id: work, state: 'paused', interruption: 'pause' });
+      expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(byName(sid, 'work')).toMatchObject({ task_id: work, state: 'succeeded' });
+      expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.state, r.outcome])).toEqual([[1, 'closed', 'succeeded']]);
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'iteration_resumed')).toHaveLength(2);
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'child_paused')).toHaveLength(2);
+    });
+
+    it('PD-TOOLS-006 revision 2: a resumed child claims its stored write scope again from the moment it is resumed', async () => {
+      const g1 = gate();
+      const g2 = gate();
+      const { sessions, seen } = scriptedChild([() => ({ parts: [{ hold: g1.hold }, ...look().parts] }), () => ({ parts: [{ hold: g2.hold }, ...answer('done').parts] })]);
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await pauseAt(sessions, sid, () => seen.childSteps === 1, g1.open);
+      expect(byName(sid, 'work').write_scope).toBe('["src/**"]');
+      expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+      await settle(() => seen.childSteps === 2);
+      const root = dal.iterationsOf(sid)[0]!.root_task_id;
+      // The root is refused a write into the resumed child's scope, and the child itself is not.
+      expect(sessions.run(sid)!.writeClaimFor(root, 'src/a.ts')).toMatchObject({ canonicalName: 'work', pattern: 'src/**' });
+      expect(sessions.run(sid)!.writeClaimFor(byName(sid, 'work').task_id, 'src/a.ts')).toBeNull();
+      g2.open();
+      await sessions.running(sid)!;
+    });
+
+    it('clause 4: a resumed child\'s child_timeout starts afresh', async () => {
+      const g1 = gate();
+      const g2 = gate();
+      const { sessions, seen } = scriptedChild([() => ({ parts: [{ hold: g1.hold }, ...look().parts] }), () => ({ parts: [{ hold: g2.hold }, ...answer('done').parts] })], { childTimeoutMs: 10_000 });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => seen.childSteps === 1);
+      clock.advance(9_000);
+      await pauseAt(sessions, sid, () => true, g1.open);
+      expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+      await settle(() => seen.childSteps === 2);
+      // 18 s in all, 9 s since the resume: under a fresh 10 s limit the child is not asked to land.
+      clock.advance(9_000);
+      g2.open();
+      await sessions.running(sid)!;
+      expect(byName(sid, 'work')).toMatchObject({ state: 'succeeded' });
+      expect(dal.timelineOf(sid).map((t) => t.name)).not.toContain('child_timeout_fallback');
+      expect(JSON.parse(byName(sid, 'work').report!).errors).toEqual([]);
+    });
+
+    it('clause 6, declined: "continue without them" ends the paused agents cancelled, closes the open iteration cancelled, and works in a new one', async () => {
       const { sessions, release } = heldPair();
       const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
       await settle(() => children(sid).length === 2 && byName(sid, 'two').state === 'waiting_on_model_slot');
       sessions.control({ op: 'pause', sessionId: sid, args: {} });
       release();
       await sessions.running(sid)!;
-      expect(sessions.prompt(sid, 'go on').ok).toBe(true);
+      expect(sessions.continueSession(sid, 'continue', { withoutPaused: true }).ok).toBe(true);
       await sessions.running(sid)!;
       for (const name of ['one', 'two']) {
         expect(byName(sid, name)).toMatchObject({ state: 'cancelled', interruption: 'pause', report_stored: 1 });
         expect(JSON.parse(byName(sid, name).report!)).toMatchObject({ status: 'cancelled', summary: expect.stringMatching(/continued without this agent, which the pause had left paused/) });
       }
-      // The open iteration's task stays anchored (REQ-ORCH-135): it is worked again first, then the new prompt.
-      expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.state, r.outcome])).toEqual([[1, 'closed', 'cancelled'], [2, 'closed', 'succeeded'], [3, 'closed', 'succeeded']]);
+      // The declined iteration's task stays anchored (REQ-ORCH-135): it is worked again, in a new iteration.
+      const rows = dal.iterationsOf(sid);
+      expect(rows.slice(0, 2).map((r) => [r.iteration, r.state, r.outcome])).toEqual([[1, 'closed', 'cancelled'], [2, 'closed', 'succeeded']]);
+      expect(rows[1]!.todo_task_id).toBe(rows[0]!.todo_task_id);
+      expect(rows[1]!.root_task_id).not.toBe(rows[0]!.root_task_id);
     });
 
     it('REQ-TOOLS-156 at a rest: a parent waiting in wait_for_tasks is released at once, and its wait is recorded as interrupted', async () => {

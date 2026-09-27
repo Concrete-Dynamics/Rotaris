@@ -6,7 +6,7 @@ import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotar
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, type ChatMessage } from '@rotaris/model';
 import type { ApprovalPayload } from '@rotaris/contracts';
-import { RUN_CONFIG_DEFAULTS, Sessions, SessionWriter, type Publisher, type RunConfig } from '../index.js';
+import { RUN_CONFIG_DEFAULTS, Sessions, SessionWriter, type Publisher, type RunConfig, type ToolPort } from '../index.js';
 import { recordCrash } from './crash.js';
 import { conversationOf } from './record.js';
 import { interruptedResult } from './interruption.js';
@@ -119,9 +119,15 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       const original = client.stream.bind(client);
       client.stream = (req) => { client.push(answer('Answered.')); return original(req); };
       const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k' };
+      // A tool port offering nothing: its presence is what gives the run its children, so the crash's can be resumed.
+      const port = (): ToolPort => ({
+        specs: () => [], dispatch: async () => ({ text: 'none', isError: true, status: 'failed', durationMs: 1, label: 'x', args: {} }),
+        cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
+      });
       return new Sessions({
         clocks: clock, publisher: NONE, pid, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-dead', isProcessAlive: () => false,
         model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
+        tools: () => port(),
       });
     }
     /** A session whose first run finished, then a host that died in iteration 2 with the session still marked running. */
@@ -155,18 +161,28 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       expect(dal.getSession(sid)!.pending_approvals).toBe('[]');
     });
 
-    it('a continue records it before the stale-child settle, so what the crash left unfinished is paused by the crash — and, until the resume is built, then declined', async () => {
+    it('a continue records it before the stale-child settle, then resumes what the crash left: every unfinished agent carries on from its record, the root with the crash\'s answers and the new message', async () => {
       const sid = await crashed();
       const next = sessionsAs(88);
       expect(next.resume(dal, 'C:/ws', sid).ok).toBe(true);
       expect(next.prompt(sid, 'second').ok).toBe(true);
-      await next.running(sid);
-      // Paused by the crash, then ended by the decline — never by the settle, whose report says the run ended.
-      expect(dal.getChild(sid, 'bg_000000c1')).toMatchObject({ state: 'cancelled', interruption: 'crash' });
-      expect(JSON.parse(dal.getChild(sid, 'bg_000000c1')!.report!)).toMatchObject({ summary: expect.stringMatching(/which a crash had left paused/) });
+      expect((await next.running(sid))!.status).toBe('completed');
+      // Paused by the crash and resumed — never cancelled by the settle, whose report says the run ended.
+      for (const id of ['bg_000000c1', 'bg_000000c2', 'bg_000000c3']) expect(dal.getChild(sid, id), id).toMatchObject({ state: 'succeeded', interruption: null, resume_state: null });
+      // Clause 5: an agent that had ended is never resumed — the succeeded one is as it was, and took no step.
+      expect(dal.getChild(sid, 'bg_000000c4')).toMatchObject({ state: 'succeeded', report_stored: 0 });
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'child_paused').map((t) => (JSON.parse(t.metadata) as { interruption: string }).interruption)).toEqual(['crash', 'crash', 'crash']);
       // Another root's orphan is the settle's, as before (REQ-ORCH-053).
       expect(JSON.parse(dal.getChild(sid, 'bg_000000x1')!.report!)).toMatchObject({ summary: expect.stringMatching(/^Cancelled: the run that owned this child ended/) });
-      expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.state, r.outcome, r.interruption])).toEqual([[1, 'closed', 'succeeded', null], [2, 'closed', 'cancelled', 'crash'], [3, 'closed', 'succeeded', null]]);
+      expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.state, r.outcome, r.interruption])).toEqual([[1, 'closed', 'succeeded', null], [2, 'closed', 'succeeded', null]]);
+      const root = conversationOf(dal.agentConversation(sid, ROOT));
+      expect(root.slice(2, 4)).toEqual([
+        { role: 'tool', content: [
+          { kind: 'tool-result', callId: 'a', name: 'grep', isError: true, result: interruptedResult('crash', true, '') },
+          { kind: 'tool-result', callId: 'b', name: 'glob', isError: true, result: interruptedResult('crash', true, '') },
+        ] },
+        { role: 'user', content: [{ kind: 'text', text: 'second' }] },
+      ]);
     });
   });
 });

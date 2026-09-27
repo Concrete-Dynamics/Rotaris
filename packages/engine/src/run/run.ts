@@ -8,7 +8,7 @@ import type { Committed, SessionWriter } from '../session-writer.js';
 import { Aggregates } from './aggregates.js';
 import { classifyStop, statusForResult, stopCondition, summarise, type StopReason, type TerminalResult } from './stop-conditions.js';
 import { StopRequest } from './stop-request.js';
-import { Todo, type TodoDocument } from './todo.js';
+import { Todo, type Task, type TodoDocument } from './todo.js';
 import { planRequestSection } from './plan-text.js';
 import { runTurn, type ToolPort, type TurnOutcome } from './turn.js';
 import { IterationChildren } from '../children/orchestration.js';
@@ -34,6 +34,7 @@ import type { ResolvedTrigger, TurnCompression } from './compression.js';
 import { ConversationRegistry, type ManualCompressionReport } from './conversations.js'; // Part AO
 import { ConversationRecord } from './record.js';
 import { iterationAgents } from './crash.js';
+import { firstTurn, resumedStart, terminalNotice, type TurnStart } from './resume.js';
 import { randomUUID } from 'node:crypto';
 import { decodeStoredTodo, editAgentTodo, encodeStoredTodo, isAgentTodoDocument, type AgentTodoDocument } from '../todo-view.js';
 
@@ -168,6 +169,12 @@ export interface RunDeps {
    * them sees them, and the one act a stop and a quit take on them. Absent means the run has no terminal.
    */
   readonly terminals?: AgentTerminals | undefined;
+  /**
+   * PD-ORCH-005 clauses 4 and 6: what this run does with the iteration a rest left open — resume it, the default of every
+   * continue, with the new message a continue by message delivers to its root; or decline it, clause 6's "continue
+   * without them". Absent means decline; a run with no open iteration ignores it.
+   */
+  readonly openIteration?: { readonly resume: true; readonly message: readonly ContentPart[] | null } | { readonly resume: false } | undefined;
   readonly permission: PermissionPosture;
   /** ADR-0015: the session's hooks; null or absent means none exist and nothing about hooks is observable (REQ-HOOKS-041). */
   readonly hooks?: HookPort | null | undefined;
@@ -346,6 +353,8 @@ export class Run {
   private toolDeadline: TimerHandle | null = null;
   /** PD-ORCH-005 clause 2: the interruption the current iteration came to rest by, leaving it open; null while it has not. */
   private iterationRest: Interruption | null = null;
+  /** PD-ORCH-005 clause 4: the open iteration this run resumes before anything else, or null. */
+  private readonly resumeFrom: IterationRow | null;
   private pausedAtLimit: { count: number; limit: number | null } | null = null;
   /**
    * REQ-ORCH-153: whether this run is held at the plan gate. Settled once, after the pre-flight and before the
@@ -393,14 +402,16 @@ export class Run {
       : deps.resumeTodo
         ? Todo.fromDocument(deps.resumeTodo, deps.config.consecutiveRetryLimit)
         : Todo.fresh(deps.taskId, deps.taskLabel ?? deps.task, deps.config.consecutiveRetryLimit);
-    if (deps.resumeTodo) this.todo.appendTask('Continued Prompts', deps.taskId, deps.taskLabel ?? deps.task);
+    // PD-ORCH-005 clause 4: a continue that resumes an open iteration adds no task — a new message goes to the resumed root.
+    this.resumeFrom = deps.openIteration?.resume === true ? deps.dal?.openIterationOf(deps.sessionId) ?? null : null;
+    if (deps.resumeTodo && this.resumeFrom === null) this.todo.appendTask('Continued Prompts', deps.taskId, deps.taskLabel ?? deps.task);
     this.aggregates = Aggregates.rehydrate(stored);
     this.lastUsageEmitted = usageTotals(this.aggregates.usagePayload());
     this.tokenSamples = parseTokenSamples(stored?.token_samples ?? '[]');
     // PD-ORCH-005: the count is never below the highest iteration recorded closed, so the next iteration's number is
     // always free even where a process death landed between an iteration's close and the save that counts it.
     const closedIterations = deps.dal?.iterationsOf(deps.sessionId).filter((i) => i.state === 'closed').map((i) => i.iteration) ?? [];
-    this.iterationsCompleted = Math.max(stored?.iterations_completed ?? 0, ...closedIterations);
+    this.iterationsCompleted = Math.max(stored?.iterations_completed ?? 0, ...closedIterations, (this.resumeFrom?.iteration ?? 1) - 1);
     this.initialIterations = this.iterationsCompleted;
     // Sticky and observable: a request before the loop exists replays here (REQ-SESSION-092).
     this.stop.onRequested((s) => {
@@ -572,7 +583,8 @@ export class Run {
        * the one exemption; a run with no pre-flight falls back to `moderate_feature`, which is outside it, so a
        * plan-mode run with no classifier still holds rather than silently proceeding.
        */
-      this.planHeld = this.deps.plan !== undefined && !isAnswerOnly((this.preflight?.intent ?? NO_PREFLIGHT_INTENT).category);
+      // PD-ORCH-005: a run that resumes an open iteration is not held — the work it resumes was released already (OQ-70).
+      this.planHeld = this.deps.plan !== undefined && !isAnswerOnly((this.preflight?.intent ?? NO_PREFLIGHT_INTENT).category) && this.resumeFrom === null;
       if (this.stop.requested) return await this.teardown(this.stop.reason ?? 'user_cancelled');
       const auditPayload = {
         session_id: this.sessionId, workspace_root: this.deps.workspaceRoot, created_at: this.deps.readSession()?.created_at ?? null,
@@ -604,25 +616,31 @@ export class Run {
       // REQ-HOOKS-003/081: session_start once, ahead of the first iteration, in line with the loop (REQ-HOOKS-080).
       if (this.hooks) await this.hooks.fireLifecycle('session_start', { task: this.deps.task });
 
-      // PD-ORCH-005: an iteration a previous run left open is settled before anything else runs.
-      await this.closeLeftOpenIteration();
+      // PD-ORCH-005 clauses 4 and 6: an iteration a previous run left open resumes before anything else runs, as the
+      // loop's first iteration below; declined, it closes here.
+      if (this.resumeFrom === null) await this.closeLeftOpenIteration();
       // REQ-ORCH-153: a held run produces its plan and parks; it never enters the iteration loop, so it selects no
       // task, judges no completion and runs no check suite — the prohibition is structural rather than a branch.
       if (this.planHeld) return await this.parkAtPlanGate();
 
       // REQ-ORCH-069: stop conditions between iterations, first match wins; the stop request wins over all.
+      let resuming = this.resumeFrom;
       for (;;) {
         if (this.stop.requested) { stopReason = this.stop.reason ?? 'user_cancelled'; break; }
         if (this.pauseRequested) { stopReason = 'user_cancelled'; break; }
         // REQ-CHAT-040: every QUEUED prompt becomes a task before completion is judged, so a run never reports done while prompts wait.
         this.consumeQueued();
-        stopReason = stopCondition({
-          allTasksComplete: this.todo.allTasksComplete, pendingTasks: this.todo.pendingCount,
-          iterationsCompleted: this.iterationsCompleted - this.initialIterations, iterationLimit: config.iterationLimit,
-          elapsedMs: clocks.monotonic.now() - (this.startedAt ?? clocks.monotonic.now()), timeLimitMs: config.timeLimitMs,
-        });
-        if (stopReason) break;
-        const escalated = await this.iterate();
+        // PD-ORCH-005 clause 4: the resumed iteration runs whatever the stop conditions say — its task is already held.
+        if (resuming === null) {
+          stopReason = stopCondition({
+            allTasksComplete: this.todo.allTasksComplete, pendingTasks: this.todo.pendingCount,
+            iterationsCompleted: this.iterationsCompleted - this.initialIterations, iterationLimit: config.iterationLimit,
+            elapsedMs: clocks.monotonic.now() - (this.startedAt ?? clocks.monotonic.now()), timeLimitMs: config.timeLimitMs,
+          });
+          if (stopReason) break;
+        }
+        const escalated = await this.iterate(resuming);
+        resuming = null;
         if (escalated) { stopReason = 'agent_session_aborted'; break; }
         // REQ-ORCH-085/087: the limit in force is checked at the boundary; the pause is recorded durably before the loop stops.
         const limit = this.deps.messageLimit ?? null;
@@ -637,15 +655,24 @@ export class Run {
     }
   }
 
-  /** One iteration (REQ-ORCH-067/068/072/073/074/135). Returns true when the run must end as agent_session_aborted. */
-  private async iterate(): Promise<boolean> {
+  /**
+   * One iteration (REQ-ORCH-067/068/072/073/074/135). Returns true when the run must end as agent_session_aborted.
+   * `resume` is PD-ORCH-005 clause 4: the open iteration a rest left, carried on where it stood — its number, its root
+   * and its task — with no second `iteration.start`; it closes like any other iteration.
+   */
+  private async iterate(resume: IterationRow | null = null): Promise<boolean> {
     const { writer } = this.deps;
-    const task = this.todo.selectNext();
+    const task = resume ? this.resumedTask(resume) : this.todo.selectNext();
     if (!task) return false;
-    this.todo.begin(task);
-    const iteration = this.iterationsCompleted + 1;
+    if (task.state !== 'in_progress') this.todo.begin(task);
+    const iteration = resume?.iteration ?? this.iterationsCompleted + 1;
     this.iterationTask = { id: task.id, text: task.text };
-    writer.recordEvent('iteration.start', { task: task.text }, iteration);
+    if (resume) {
+      writer.recordIterationInterruption(iteration, null);
+      writer.appendTimeline('iteration_resumed', 'rotaris', `Iteration ${iteration}, left open by ${interruptionPhrase(resume.interruption ?? '')}, resumed.`, { iteration, interruption: resume.interruption, root_task_id: resume.root_task_id });
+    } else {
+      writer.recordEvent('iteration.start', { task: task.text }, iteration);
+    }
     await this.drain();
 
     let outcome: 'succeeded' | 'failed' | 'partial' | 'cancelled' | 'abandoned' = 'failed';
@@ -653,7 +680,9 @@ export class Run {
     let escalate = false;
     try {
       const modelTask = this.deps.continuation && task.id === this.deps.taskId ? this.deps.task : task.text;
-      const report = await this.turnWithRetry(modelTask);
+      const report = resume
+        ? await this.turn(resume.task, undefined, undefined, { row: resume, message: this.deps.openIteration?.resume === true ? this.deps.openIteration.message : null })
+        : await this.turnWithRetry(modelTask);
       summary = report.text.slice(0, 200);
       if (this.iterationRest !== null) {
         // PD-ORCH-005 clause 2 (narrowing REQ-MONITOR-123 and REQ-ORCH-135): the iteration came to rest with work
@@ -717,6 +746,33 @@ export class Run {
     this.saveRunning({});
     await this.drain();
     return escalate;
+  }
+
+  /** PD-ORCH-005 clause 4: the todo task the open iteration holds — a stand-in carrying its text when the todo lost it. */
+  private resumedTask(row: IterationRow): Task {
+    return this.todo.task(row.todo_task_id) ?? { id: row.todo_task_id, text: row.task, state: 'in_progress', consecutiveRetries: 0 };
+  }
+
+  /**
+   * PD-ORCH-005 clauses 4 and 10: the resumed root's conversation — its record; then, as its next messages, what became of
+   * the background sessions it had started and the new message a continue by message delivers; each recorded as it
+   * joins the conversation.
+   */
+  private resumedRootStart(rootTaskId: string, iteration: number, message: readonly ContentPart[] | null): TurnStart {
+    const history = this.record.load(rootTaskId);
+    const recorder = this.record.recorder(rootTaskId, iteration);
+    const add = (m: ChatMessage): void => { recorder.appended(m); history.push(m); };
+    const notice = this.resumeNotice(rootTaskId);
+    if (notice !== null) add(notice);
+    if (message !== null && message.length > 0) add({ role: 'user', content: [...message] });
+    return resumedStart(history);
+  }
+
+  /** PD-ORCH-005 clause 10: what the agent `taskId` is told, when it resumes, of the background sessions it had started. */
+  private resumeNotice(taskId: string): ChatMessage | null {
+    const rows = this.deps.dal?.agentTerminalsOf(this.sessionId).filter((t) => t.task_id === taskId) ?? [];
+    const live = new Map((this.deps.terminals?.list() ?? []).map((t) => [t.id, t]));
+    return terminalNotice(rows.map((row) => { const l = live.get(row.terminal_id); return { row, live: l ? { status: l.status, exitCode: l.exitCode, tail: l.tail } : null }; }));
   }
 
   /**
@@ -905,15 +961,16 @@ export class Run {
    * (REQ-ORCH-153's owner ruling), so it numbers itself 0 and leaves `root:1` upwards to the execution segment —
    * `isEntryPort` reads `root:0` as the entry by depth and by spelling alike.
    */
-  private async turn(task: string, iterationOverride?: number, contentOverride?: readonly ContentPart[]): Promise<TurnReport> {
+  private async turn(task: string, iterationOverride?: number, contentOverride?: readonly ContentPart[], resume?: { readonly row: IterationRow; readonly message: readonly ContentPart[] | null }): Promise<TurnReport> {
     const { writer, owner, backend, config } = this.deps;
-    const iteration = iterationOverride ?? this.iterationsCompleted + 1;
+    const iteration = resume?.row.iteration ?? iterationOverride ?? this.iterationsCompleted + 1;
     this.rootIterationId = `root:${iteration}`;
     // REQ-ORCH-072: the iteration's root execution record with the entry role and task payload, in the children namespace.
     // PD-ORCH-005: every earlier root's id is taken too — roots are recorded now, and the conversation record is keyed by
     // task id across the whole session, so a root minted over an earlier one would merge two agents' records.
-    const rootTaskId = mintTaskId(takenTaskIds(this.deps.dal, this.sessionId));
-    const rootCanonical = canonicaliseName(config.persona);
+    // PD-ORCH-005 clause 4: a resumed iteration's root is restored with its identity — its task id and canonical name.
+    const rootTaskId = resume?.row.root_task_id ?? mintTaskId(takenTaskIds(this.deps.dal, this.sessionId));
+    const rootCanonical = resume?.row.root_canonical_name ?? canonicaliseName(config.persona);
     const rootRecord: RootExecutionRecord = {
       taskId: rootTaskId,
       canonicalName: rootCanonical,
@@ -926,7 +983,7 @@ export class Run {
     this.rootRecord = rootRecord;
     this.rootId = rootTaskId;
     // PD-ORCH-005 clause 1: "The root's task id is recorded with its iteration." A plan cycle (0) is not an iteration.
-    if (iterationOverride === undefined) {
+    if (iterationOverride === undefined && resume === undefined) {
       const opened = writer.openIteration({ iteration, root_task_id: rootTaskId, root_canonical_name: rootCanonical, root_persona: config.persona, todo_task_id: this.iterationTask?.id ?? '', task });
       if (opened.ok && !opened.value) this.deps.warn(`iteration ${iteration} of ${this.sessionId} was not recorded open: its number is taken or another iteration is open`);
     }
@@ -955,7 +1012,7 @@ export class Run {
         ...(this.deps.personas ? { personas: this.deps.personas } : {}),
         steeringFor: (id: string) => this.steeringFor(id), shouldPause: () => this.pauseRequested,
         // PD-ORCH-005: the rest the run is coming to, and the pause's tool deadline every child's calls run under.
-        restCause: () => this.restCause, cutCalls: this.toolCut.signal,
+        restCause: () => this.restCause, cutCalls: this.toolCut.signal, resumeNotice: (taskId: string) => this.resumeNotice(taskId),
         // PD-ORCH-005 clause 1: every child's conversation is recorded under its task id.
         record: this.record,
         // Part Y (REQ-LIBRARY-092/097/098): the session artifact store — child reports materialise into it and its
@@ -967,9 +1024,12 @@ export class Run {
       : null;
     this.children = children;
     const tools = children && this.deps.toolsFor ? this.portFor(config.persona, config.persona, children, this.rootId, 0) : this.register(this.deps.tools);
-    let initial = true;
+    // PD-ORCH-005 clause 4: a resumed iteration's agents are restored first, so the root resumes among them.
+    if (resume && children) { const n = children.resumePaused(); if (n > 0) this.deps.warn(`iteration ${iteration}: ${n} paused child(ren) resumed (PD-ORCH-005)`); }
+    // The launch content goes to a fresh root's first call only; a resumed root carries on from its record.
+    let initial = resume === undefined;
     const compression = this.compressionFor(this.rootResilience().cell.model, () => this.plannerTodoLines());
-    const turnFn = (text: string, history: readonly ChatMessage[]) => {
+    const turnFn = (text: string | null, history: readonly ChatMessage[]) => {
       const content = initial ? (contentOverride ?? this.deps.taskContent) : undefined;
       const initialCall = initial;
       initial = false;
@@ -1002,7 +1062,8 @@ export class Run {
     };
     let outcome: TurnOutcome | null = null;
     try {
-      outcome = children ? await children.runWithChildren(this.rootId, turnFn, task, this.abort.signal) : await turnFn(task, []);
+      const start: TurnStart = resume ? this.resumedRootStart(rootTaskId, iteration, resume.message) : { kind: 'fresh', task };
+      outcome = children ? await children.runWithChildren(this.rootId, turnFn, start, this.abort.signal) : await firstTurn(turnFn, start);
       this.aggregates.addToolCalls(outcome.toolCallCount);
       // REQ-ORCH-080: a stop with active background children drains before anything is cancelled — only a stop that
       // cancels them (the explicit cancel); a stop that brings the run to rest leaves them paused (PD-ORCH-005).

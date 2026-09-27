@@ -98,9 +98,13 @@ export function transcriptText(messages: readonly ChatMessage[]): string {
 /** `REQ-TOOLS-001`: `haet` resolves to the same tool as `haet_edit`; all three write to a path. */
 const WRITE_TOOLS: ReadonlySet<string> = new Set(['write_file', 'haet_edit', 'haet']);
 
-/** Whether a call of `toolName` writes a file at the path its arguments name — the one list the report and PD-ORCH-004's path list share. */
+/**
+ * Whether a call of `toolName` writes a file at the path its arguments name — the one list the report and PD-ORCH-004's
+ * path list share. Compared in lower case, as REQ-TOOLS-024 compares a tool's name, so both readers agree on a call
+ * dispatched under another casing.
+ */
 export function isFileWritingTool(toolName: string): boolean {
-  return WRITE_TOOLS.has(toolName);
+  return WRITE_TOOLS.has(toolName.toLowerCase());
 }
 /** `REQ-TOOLS-100`: every terminal observation ends with this block, sorted, with null-valued keys DROPPED. */
 const DIAGNOSTIC = '[terminal_diagnostic] ';

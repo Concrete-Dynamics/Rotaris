@@ -60,7 +60,7 @@ export class ProgressLog {
    */
   completed(at: Millis, toolName: string, args: Readonly<Record<string, unknown>>, ok: boolean): void {
     this.lastCompletedAt = at;
-    if (!ok || !isFileWritingTool(toolName.toLowerCase())) return;
+    if (!ok || !isFileWritingTool(toolName)) return;
     const target = args['path'] ?? args['file_path'];
     const path = typeof target === 'string' ? workspacePath(this.workspaceRoot, target) : null;
     if (path !== null && !this.changed.includes(path)) this.changed.push(path);

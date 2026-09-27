@@ -298,6 +298,7 @@ While a task run is executing, a user must be able to watch what every agent is 
 ### 14. Pause, cancel, and shutdown
 
 **REQ-MONITOR-123** — Pause is graceful and applies to the whole run only: the run finishes its current step and then stops. A pause request naming any agent other than the run itself must be refused; there is no per-agent pause.
+  > **Narrowed by [`PD-ORCH-005`](../product/directives.md#pd-orch-005), 2026-09-27.** Pause still applies to the whole run only; an accepted pause now stops every agent before its next model step, starts no queued child and makes no further model call, and its unfinished children are recorded as interrupted by the pause.
 
 **REQ-MONITOR-124** — Given an accepted pause, the session status becomes `pausing` and a message states that the current step will finish first. Given a refused pause, an error message states that pause is unavailable because no active run exists.
 
@@ -621,6 +622,7 @@ The failure this prevents is invisible to every other detector this document has
 **REQ-MONITOR-255** — Shutdown must request every run handle to stop before waiting on any of them.
 
 **REQ-MONITOR-256** — Continuing a session must never inherit the previous run's live agents. Resuming a base-workspace session must be refused while a run is active there.
+  > **Narrowed by [`PD-ORCH-005`](../product/directives.md#pd-orch-005), 2026-09-27.** A continued session never inherits a live agent; the children its last run left unfinished are resumed as new agents built from their records, unless the user declines.
 
 **REQ-MONITOR-257** — Changing focus re-binds every per-session surface: sandbox indicator, terminal streams (an open terminal window re-opens onto the newly focused session's terminals, because the intent is to keep a terminal in view, and after the switch it is the newly focused session's terminals that matter), composer submission target, and recovery state. Notices carry their session id so cross-session news survives a focus change.
 

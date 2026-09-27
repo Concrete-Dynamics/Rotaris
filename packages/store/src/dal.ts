@@ -519,8 +519,10 @@ export class StoreDal {
       insertChild: db.prepare(`INSERT INTO children (session_id, task_id, canonical_name, given_name, persona, state, parent_id, depth, iteration, model_key, category, background, task, depends_on, inherited_context, granted_tools, granted_mcp, todo, spawned_at, continuation_of, write_scope)
         VALUES (@session_id, @task_id, @canonical_name, @given_name, @persona, @state, @parent_id, @depth, @iteration, @model_key, @category, @background, @task, @depends_on, @inherited_context, @granted_tools, @granted_mcp, @todo, @spawned_at, @continuation_of, @write_scope)`),
       getChild: db.prepare('SELECT * FROM children WHERE session_id = ? AND task_id = ?'),
-      childrenOf: db.prepare('SELECT * FROM children WHERE session_id = ? ORDER BY spawned_at, task_id'),
-      childrenOfIteration: db.prepare('SELECT * FROM children WHERE session_id = ? AND iteration = ? ORDER BY spawned_at, task_id'),
+      // Acceptance order: children accepted in the same millisecond keep the order they were inserted in, which the
+      // resume's re-claim of their write scopes depends on (PD-TOOLS-006 revision 2; found by phase 4's review).
+      childrenOf: db.prepare('SELECT * FROM children WHERE session_id = ? ORDER BY spawned_at, rowid'),
+      childrenOfIteration: db.prepare('SELECT * FROM children WHERE session_id = ? AND iteration = ? ORDER BY spawned_at, rowid'),
       // The transition's one write: state and, on a terminal state, the completion timestamp (REQ-MONITOR-017).
       setChildState: db.prepare('UPDATE children SET state = ?, completed_at = coalesce(?, completed_at) WHERE session_id = ? AND task_id = ?'),
       // REQ-ORCH-049: the start claim is ONE conditional update; its affected-row count is the claim's outcome.

@@ -742,6 +742,13 @@ describe('store — v5: the child ledger (ADR-0012, REQ-ORCH-043/049/050/151)', 
     session_id: asSessionId(sid), task_id: taskId, canonical_name: taskId, given_name: taskId, persona: 'coding-agent', state, parent_id: 'root', depth: 1, iteration: 1,
     model_key: 'm', category: '', background: 1, task: 'do it', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't',
   });
+  it('PD-TOOLS-006 revision 2 (found by phase 4\'s review): children accepted in the same millisecond are listed in the order they were accepted, not by their random ids', () => {
+    const { r, dal, sid } = open('95');
+    for (const id of ['bg_0000ffff', 'bg_00000001', 'bg_00008000']) dal.insertChild(child(sid, id));
+    expect(dal.childrenOf(sid).map((c) => c.task_id)).toEqual(['bg_0000ffff', 'bg_00000001', 'bg_00008000']);
+    expect(dal.childrenOfIteration(sid, 1).map((c) => c.task_id)).toEqual(['bg_0000ffff', 'bg_00000001', 'bg_00008000']);
+    r.db.close();
+  });
   it('the schema is v19; a child row round-trips with its defaults; the claim is one conditional update that wins exactly once', () => {
     const { r, dal, sid } = open('96');
     // REQ-ORCH-153/154: v17 adds `plan_cycles` and the two session columns; v16 added `artifacts.commands`;

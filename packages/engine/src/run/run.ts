@@ -33,7 +33,7 @@ import { WaitRegistry, type WaitState } from './waits.js';
 import type { ResolvedTrigger, TurnCompression } from './compression.js';
 import { ConversationRegistry, type ManualCompressionReport } from './conversations.js'; // Part AO
 import { ConversationRecord } from './record.js';
-import { iterationAgents } from './crash.js';
+import { answerOpenCalls, iterationAgents } from './crash.js';
 import { firstTurn, resumedStart, terminalNotice, type TurnStart } from './resume.js';
 import { randomUUID } from 'node:crypto';
 import { decodeStoredTodo, editAgentTodo, encodeStoredTodo, isAgentTodoDocument, type AgentTodoDocument } from '../todo-view.js';
@@ -171,10 +171,10 @@ export interface RunDeps {
   readonly terminals?: AgentTerminals | undefined;
   /**
    * PD-ORCH-005 clauses 4 and 6: what this run does with the iteration a rest left open — resume it, the default of every
-   * continue, with the new message a continue by message delivers to its root; or decline it, clause 6's "continue
-   * without them". Absent means decline; a run with no open iteration ignores it.
+   * continue (the new message a continue by message delivers is already in its root's record); or decline it, clause 6's
+   * "continue without them". Absent means decline; a run with no open iteration ignores it.
    */
-  readonly openIteration?: { readonly resume: true; readonly message: readonly ContentPart[] | null } | { readonly resume: false } | undefined;
+  readonly openIteration?: { readonly resume: boolean } | undefined;
   readonly permission: PermissionPosture;
   /** ADR-0015: the session's hooks; null or absent means none exist and nothing about hooks is observable (REQ-HOOKS-041). */
   readonly hooks?: HookPort | null | undefined;
@@ -355,6 +355,15 @@ export class Run {
   private iterationRest: Interruption | null = null;
   /** PD-ORCH-005 clause 4: the open iteration this run resumes before anything else, or null. */
   private readonly resumeFrom: IterationRow | null;
+  /**
+   * PD-ORCH-005 clause 3: the open iteration this run holds — from construction the one a rest left open, which it
+   * resumes or declines, and later the one it left open at its own rest — which a later explicit cancel closes. The
+   * continuing run owns that iteration before its loop reaches it, so a cancel during the pre-flight still ends what it
+   * would have resumed (found by phase 4's review).
+   */
+  private restedIteration: number | null;
+  /** PD-ORCH-005 clause 3: teardown has passed the point where the explicit cancel can still close anything. */
+  private cancelWindowClosed = false;
   private pausedAtLimit: { count: number; limit: number | null } | null = null;
   /**
    * REQ-ORCH-153: whether this run is held at the plan gate. Settled once, after the pre-flight and before the
@@ -403,7 +412,9 @@ export class Run {
         ? Todo.fromDocument(deps.resumeTodo, deps.config.consecutiveRetryLimit)
         : Todo.fresh(deps.taskId, deps.taskLabel ?? deps.task, deps.config.consecutiveRetryLimit);
     // PD-ORCH-005 clause 4: a continue that resumes an open iteration adds no task — a new message goes to the resumed root.
-    this.resumeFrom = deps.openIteration?.resume === true ? deps.dal?.openIterationOf(deps.sessionId) ?? null : null;
+    const open = deps.openIteration === undefined ? null : deps.dal?.openIterationOf(deps.sessionId) ?? null;
+    this.resumeFrom = deps.openIteration?.resume === true ? open : null;
+    this.restedIteration = open?.iteration ?? null;
     if (deps.resumeTodo && this.resumeFrom === null) this.todo.appendTask('Continued Prompts', deps.taskId, deps.taskLabel ?? deps.task);
     this.aggregates = Aggregates.rehydrate(stored);
     this.lastUsageEmitted = usageTotals(this.aggregates.usagePayload());
@@ -531,7 +542,7 @@ export class Run {
    * own abort signal bounds it, so a cancel during the pass ends it as it ends any model call.
    */
   async forceCompression(): Promise<ManualCompressionReport | null> {
-    if (this.ended || this.comingToRest || this.conversations.size === 0) return null;
+    if (this.ended || this.conversations.size === 0) return null;
     return this.conversations.compressAll(this.abort.signal);
   }
   /**
@@ -711,7 +722,7 @@ export class Run {
     try {
       const modelTask = this.deps.continuation && task.id === this.deps.taskId ? this.deps.task : task.text;
       const report = resume
-        ? await this.turn(resume.task, undefined, undefined, { row: resume, message: this.deps.openIteration?.resume === true ? this.deps.openIteration.message : null })
+        ? await this.turn(resume.task, undefined, undefined, resume)
         : await this.turnWithRetry(modelTask);
       summary = report.text.slice(0, 200);
       if (this.iterationRest !== null) {
@@ -784,17 +795,17 @@ export class Run {
   }
 
   /**
-   * PD-ORCH-005 clauses 4 and 10: the resumed root's conversation — its record; then, as its next messages, what became of
-   * the background sessions it had started and the new message a continue by message delivers; each recorded as it
-   * joins the conversation.
+   * PD-ORCH-005 clauses 4 and 10: the resumed root's conversation — its record, which already holds the new message a
+   * continue by message delivered (`Sessions.launchContinuation` records it at the continue); then, as its next message,
+   * what became of the background sessions it had started, recorded as it joins the conversation.
    */
-  private resumedRootStart(rootTaskId: string, iteration: number, message: readonly ContentPart[] | null): TurnStart {
+  private resumedRootStart(rootTaskId: string, iteration: number): TurnStart {
     const history = this.record.load(rootTaskId);
-    const recorder = this.record.recorder(rootTaskId, iteration);
-    const add = (m: ChatMessage): void => { recorder.appended(m); history.push(m); };
     const notice = this.resumeNotice(rootTaskId);
-    if (notice !== null) add(notice);
-    if (message !== null && message.length > 0) add({ role: 'user', content: [...message] });
+    if (notice !== null) {
+      this.record.recorder(rootTaskId, iteration).appended(notice);
+      history.push(notice);
+    }
     return resumedStart(history);
   }
 
@@ -814,6 +825,7 @@ export class Run {
   private async leaveIterationOpen(iteration: number, rest: Interruption): Promise<boolean> {
     const { writer } = this.deps;
     this.iterationRest = null;
+    this.restedIteration = iteration;
     writer.recordIterationInterruption(iteration, rest);
     // The root and every paused child.
     const paused = 1 + (this.children?.ledger.all().filter((c) => c.state === 'paused').length ?? 0);
@@ -834,25 +846,27 @@ export class Run {
   private async closeLeftOpenIteration(): Promise<void> {
     const closed = await this.closeOpenIteration((open) => (open.interruption === null || open.interruption === 'crash'
       ? 'the run that owned this iteration ended before it closed'
-      : `the session was continued without the agents ${interruptionPhrase(open.interruption)} had left paused`));
+      : `the session was continued without the agents ${interruptionPhrase(open.interruption)} had left paused`),
+    (c) => `Cancelled: the session was continued without this agent, which ${interruptionPhrase(c.interruption ?? '')} had left paused.`);
     if (!closed) return;
     this.initialIterations = this.iterationsCompleted;
     this.saveRunning({});
   }
 
   /**
-   * The open iteration closes `cancelled` with every agent it left paused: `iteration.end` and the row's close in one
-   * transaction, its capture, its todo task back to `pending`, and the count moved past it. False when none is open.
+   * The open iteration closes `cancelled` with every agent it left paused, each with `agentReport`'s words: `iteration.end`
+   * and the row's close in one transaction, its capture, its todo task back to `pending`, and the count moved past it.
+   * `only` names the one iteration the caller may close. False when none is open, or the open one is not that one.
    */
-  private async closeOpenIteration(summary: (open: IterationRow) => string): Promise<boolean> {
+  private async closeOpenIteration(summary: (open: IterationRow) => string, agentReport: (c: ChildRow) => string, only?: number | null): Promise<boolean> {
     const dal = this.deps.dal;
     const open = dal?.openIterationOf(this.sessionId);
-    if (!dal || !open) return false;
-    this.cancelPausedAgents(dal, open);
+    if (!dal || !open || (only !== undefined && open.iteration !== only)) return false;
+    this.cancelPausedAgents(dal, open, agentReport);
     this.deps.writer.endIteration(open.iteration, { task: this.todo.textOf(open.todo_task_id) ?? open.task, outcome: 'cancelled', summary: summary(open) }, 'cancelled');
-    // REQ-GIT-051: the iteration closes here, so its one capture is attempted here — it records the work the run that
-    // left it open had done. No child is credited: those children are not this run's. Its hooks' `iteration_end` is not
-    // fired; the hooks that saw the iteration begin belonged to that run.
+    // REQ-GIT-051: the iteration closes here, so its one capture is attempted here — it records the work done in it. No
+    // child is credited: none finished the iteration. Its hooks' `iteration_end` is not fired: an iteration left open by
+    // an earlier run began under that run's hooks, and one this run left open ends with the run.
     await this.captureCheckpoint(open.iteration, '');
     this.todo.reopen(open.todo_task_id);
     this.iterationsCompleted = Math.max(this.iterationsCompleted, open.iteration);
@@ -864,12 +878,12 @@ export class Run {
    * report saying so, before the iteration closes as cancelled. Until the resume is built this is what every continue
    * does with an iteration a rest left open; once it is, only the user's declining does.
    */
-  private cancelPausedAgents(dal: StoreDal, open: IterationRow): void {
+  private cancelPausedAgents(dal: StoreDal, open: IterationRow, report: (c: ChildRow) => string): void {
     for (const c of iterationAgents(dal, this.sessionId, open)) {
       if (c.state !== 'paused') continue;
       const r = this.deps.writer.transitionChild(c.task_id, 'cancelled', 'cancellation');
       if (!r.ok) { this.deps.warn(r.error.code === 'illegal-move' ? r.error.reason : `cancelling paused ${c.task_id} failed: ${r.error.code}`); continue; }
-      this.deps.writer.storeChildReport(c.task_id, { agent_name: c.canonical_name, role: c.persona, status: 'cancelled', summary: `Cancelled: the session was continued without this agent, which ${interruptionPhrase(c.interruption ?? '')} had left paused.`, key_findings: [], last_response: '', final_response: '', errors: [] });
+      this.deps.writer.storeChildReport(c.task_id, { agent_name: c.canonical_name, role: c.persona, status: 'cancelled', summary: report(c), key_findings: [], last_response: '', final_response: '', errors: [] });
     }
   }
 
@@ -1003,16 +1017,16 @@ export class Run {
    * (REQ-ORCH-153's owner ruling), so it numbers itself 0 and leaves `root:1` upwards to the execution segment —
    * `isEntryPort` reads `root:0` as the entry by depth and by spelling alike.
    */
-  private async turn(task: string, iterationOverride?: number, contentOverride?: readonly ContentPart[], resume?: { readonly row: IterationRow; readonly message: readonly ContentPart[] | null }): Promise<TurnReport> {
+  private async turn(task: string, iterationOverride?: number, contentOverride?: readonly ContentPart[], resume?: IterationRow): Promise<TurnReport> {
     const { writer, owner, backend, config } = this.deps;
-    const iteration = resume?.row.iteration ?? iterationOverride ?? this.iterationsCompleted + 1;
+    const iteration = resume?.iteration ?? iterationOverride ?? this.iterationsCompleted + 1;
     this.rootIterationId = `root:${iteration}`;
     // REQ-ORCH-072: the iteration's root execution record with the entry role and task payload, in the children namespace.
     // PD-ORCH-005: every earlier root's id is taken too — roots are recorded now, and the conversation record is keyed by
     // task id across the whole session, so a root minted over an earlier one would merge two agents' records.
     // PD-ORCH-005 clause 4: a resumed iteration's root is restored with its identity — its task id and canonical name.
-    const rootTaskId = resume?.row.root_task_id ?? mintTaskId(takenTaskIds(this.deps.dal, this.sessionId));
-    const rootCanonical = resume?.row.root_canonical_name ?? canonicaliseName(config.persona);
+    const rootTaskId = resume?.root_task_id ?? mintTaskId(takenTaskIds(this.deps.dal, this.sessionId));
+    const rootCanonical = resume?.root_canonical_name ?? canonicaliseName(config.persona);
     const rootRecord: RootExecutionRecord = {
       taskId: rootTaskId,
       canonicalName: rootCanonical,
@@ -1067,13 +1081,16 @@ export class Run {
     this.children = children;
     const tools = children && this.deps.toolsFor ? this.portFor(config.persona, config.persona, children, this.rootId, 0) : this.register(this.deps.tools);
     // PD-ORCH-005 clause 4: a resumed iteration's agents are restored first, so the root resumes among them.
-    if (resume && children) { const n = children.resumePaused(); if (n > 0) this.deps.warn(`iteration ${iteration}: ${n} paused child(ren) resumed (PD-ORCH-005)`); }
+    // The timeline records each agent resumed (`child_resumed`), so a resume is not a warning (phase 4's review).
+    if (resume && children) children.resumePaused();
     // The launch content goes to a fresh root's first call only; a resumed root carries on from its record.
-    let initial = resume === undefined;
+    let launching = resume === undefined;
+    let initial = true;
     const compression = this.compressionFor(this.rootResilience().cell.model, () => this.plannerTodoLines());
     const turnFn = (text: string | null, history: readonly ChatMessage[]) => {
-      const content = initial ? (contentOverride ?? this.deps.taskContent) : undefined;
+      const content = launching ? (contentOverride ?? this.deps.taskContent) : undefined;
       const initialCall = initial;
+      launching = false;
       initial = false;
       return runTurn({
       writer, owner, backend, tools, clocks: this.deps.clocks, persona: config.persona, agentName: config.persona,
@@ -1094,7 +1111,8 @@ export class Run {
       resilience: this.rootResilience(),
       // Part AH: the entry agent compresses against its own model's capacity, carrying the run-level plan.
       ...(compression ? { compression } : {}),
-      // REQ-ORCH-093: after the first call this turn resumes the parent with its children's reports.
+      // REQ-ORCH-093: after the first call this turn resumes the parent with its children's reports. A resumed root's
+      // first call carries on from its record, as a resumed child's does, and is not flagged either (phase 4's review).
       parentResume: !initialCall,
       // OQ-8: the entry agent's provider requests, each counted and published as it completes.
       onRequestUsage: this.onRequestUsage,
@@ -1104,7 +1122,7 @@ export class Run {
     };
     let outcome: TurnOutcome | null = null;
     try {
-      const start: TurnStart = resume ? this.resumedRootStart(rootTaskId, iteration, resume.message) : { kind: 'fresh', task };
+      const start: TurnStart = resume ? this.resumedRootStart(rootTaskId, iteration) : { kind: 'fresh', task };
       outcome = children ? await children.runWithChildren(this.rootId, turnFn, start, this.abort.signal) : await firstTurn(turnFn, start);
       this.aggregates.addToolCalls(outcome.toolCallCount);
       // REQ-ORCH-080: a stop with active background children drains before anything is cancelled — only a stop that
@@ -1132,6 +1150,8 @@ export class Run {
         } else {
           this.iterationRest = this.restCause;
           rootRecord.state = 'paused';
+          // Clauses 3 and 4: a root that raised out of a call has that call answered as interrupted, as a child's is.
+          if (this.deps.dal) answerOpenCalls(this.deps.dal, writer, this.sessionId, { taskId: rootTaskId, name: config.persona }, iteration, this.restCause);
         }
       } else if (children) {
         // REQ-ORCH-052: every exit path from an iteration leaves every child record terminal.
@@ -1447,7 +1467,12 @@ export class Run {
    */
   cancelAgent(taskId: string): boolean {
     if (this.ended) return false;
-    if (this.isRootAgent(taskId)) { this.stop.request('user_cancelled', false, true); return true; }
+    if (this.isRootAgent(taskId)) {
+      // Clause 3: a cancel that lands after teardown can no longer close what the rest left open is refused, not lost.
+      if (this.cancelWindowClosed) return false;
+      this.stop.request('user_cancelled', false, true);
+      return true;
+    }
     return this.children?.cancel(taskId) ?? false;
   }
 
@@ -1575,6 +1600,25 @@ export class Run {
     const elapsed = this.startedAt === null ? null : (clocks.monotonic.now() - this.startedAt) / 1000;
     // REQ-NOTIFY-093: a wait the user cancelled ends the run with the limit condition as its error, so main classifies it (REQ-NOTIFY-063).
     const error = this.lastFailure ?? this.waits.cancelledReason;
+    // REQ-HOOKS-003/081: session_end on every exit path, after the status is decided and before shutdown; `classified.result`
+    // is the one string the payload, the result and the session.end event below all carry.
+    if (this.hooks) {
+      try { await this.hooks.fireLifecycle('session_end', { status: classified.result }); } catch (cause) { this.deps.warn(`the session_end hooks raised on ${this.sessionId}: ${String(cause)}`); }
+    }
+    /*
+     * PD-ORCH-005 clause 3: the explicit cancel is final even when it lands after the rest was recorded — while this
+     * teardown ended background sessions or ran the hooks. The iteration this run left open closes `cancelled` with every
+     * agent it paused, and the background sessions a pause had left running end (found by phase 3's second review) —
+     * before the result is built, so every terminal record counts the iteration it closes (the third review). From here
+     * the cancel has nothing left to close, and a later one is refused (`cancelAgent`).
+     */
+    if (this.stop.final) {
+      try {
+        if (ended === 'pause') await this.restTerminals('stop');
+        if (await this.closeOpenIteration(() => 'the run was cancelled after it had come to rest', () => 'Cancelled: the user cancelled the run after it had come to rest.', this.restedIteration) && this.rootRecord) this.rootRecord.state = 'cancelled';
+      } catch (cause) { this.deps.warn(`closing the rested iteration of ${this.sessionId} after the cancel failed: ${String(cause)}`); }
+    }
+    this.cancelWindowClosed = true;
     const result: RunResult = {
       status: classified.result, session_id: this.sessionId, stop_reason: stopReason, summary: summary.message,
       iterations_completed: this.iterationsCompleted, report: null, tokens: this.aggregates.usagePayload().tokens, cost: this.aggregates.usagePayload().cost,
@@ -1583,22 +1627,6 @@ export class Run {
     this.result = result;
     try {
     const step = (name: string, fn: () => void) => { try { fn(); } catch (cause) { this.deps.warn(`teardown step ${name} failed on ${this.sessionId}: ${String(cause)}`); } };
-    // REQ-HOOKS-003/081: session_end on every exit path, after the status is decided and before shutdown; `result.status` is
-    // the one string the payload and the session.end event below both carry.
-    if (this.hooks) {
-      try { await this.hooks.fireLifecycle('session_end', { status: result.status }); } catch (cause) { this.deps.warn(`the session_end hooks raised on ${this.sessionId}: ${String(cause)}`); }
-    }
-    /*
-     * PD-ORCH-005 clause 3: the explicit cancel is final even when it lands after the rest was recorded — while this
-     * teardown ended background sessions or ran the hooks. The iteration the rest left open closes `cancelled` with
-     * every agent it paused, and the background sessions a pause had left running end (found by phase 3's second review).
-     */
-    if (this.stop.final) {
-      try {
-        if (ended === 'pause') await this.restTerminals('stop');
-        if (await this.closeOpenIteration(() => 'the run was cancelled after it had come to rest') && this.rootRecord) this.rootRecord.state = 'cancelled';
-      } catch (cause) { this.deps.warn(`closing the rested iteration of ${this.sessionId} after the cancel failed: ${String(cause)}`); }
-    }
 
     step('run_end', () => { writer.appendTimeline('run_end', 'rotaris', `The run ended ${status}.`, { execution_status: status, stop_reason: stopReason }); });
     step('flush-publications', () => owner.flushPending());
@@ -1608,7 +1636,7 @@ export class Run {
       // REQ-MONITOR-166: once more at the terminal state, then the sampler goes.
       this.sampler?.cancel();
       this.sampleTokens(false);
-      const systemRow = classified.result === 'interrupted' ? (this.pauseRequested ? 'Run paused at the user\'s request; continue it from the composer.' : 'Run paused: interrupted by user.')
+      const systemRow = classified.result === 'interrupted' ? (this.pauseRequested && !this.stop.final ? 'Run paused at the user\'s request; continue it from the composer.' : 'Run paused: interrupted by user.')
         : classified.result === 'failed' || classified.result === 'error' || status === 'failed' ? `Run failed: ${this.lastFailure ?? stopReason}`
           : summary.message;
       const r = writer.endRun({

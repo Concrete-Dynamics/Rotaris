@@ -1,4 +1,4 @@
-import { interruptionPhrase, type Interruption } from '@rotaris/contracts';
+import { INTERRUPTIONS, interruptionPhrase, type Interruption } from '@rotaris/contracts';
 import type { ChatMessage } from '@rotaris/model';
 
 /**
@@ -25,16 +25,43 @@ export function interruptedResult(cause: Interruption | null, ran: boolean, outp
   return `${head} ${tail}${produced}`;
 }
 
+/** The statements a call that never started is answered with — by a rest, a crash, or a cut that names no rest. */
+const NOT_RUN = new Set([null, ...INTERRUPTIONS].map((cause) => interruptedResult(cause, false, '')));
+
 /**
- * PD-ORCH-005 clause 3, for a crash: a record whose last message is an assistant message with tool calls and no results
- * — the shape a process death leaves, since nothing ran to answer them — gains one `tool` message answering every such
- * call as interrupted and never run. Anything else is returned as it stands. Pure; the caller records what it returns.
+ * The tool calls a conversation records as run: every call it holds, less those answered as never started. REQ-ORCH-095
+ * counts what an agent did, and a call the rest or a crash cut before it started did nothing.
  */
-export function answerUnanswered(messages: readonly ChatMessage[], cause: Interruption): ChatMessage | null {
+export function callsRun(messages: readonly ChatMessage[]): number {
+  const notRun = new Set(messages.flatMap((m) => m.content.flatMap((p) => (p.kind === 'tool-result' && NOT_RUN.has(p.result) ? [p.callId] : []))));
+  return messages.reduce((n, m) => n + (m.role === 'assistant' ? m.content.filter((p) => p.kind === 'tool-call' && !notRun.has(p.callId)).length : 0), 0);
+}
+
+/** A call's result as its transcript row knows it: what a completed call returned, or what a cut-off one had produced. */
+export interface KnownResult {
+  readonly result: string;
+  readonly isError: boolean;
+}
+
+/**
+ * PD-ORCH-005 clauses 3 and 4, for an agent whose step was cut before its results were recorded: a record whose last
+ * message is an assistant message with tool calls and no results — the shape a process death leaves, and the shape a
+ * rest leaves when the step raised or was detached before its `tool` message was recorded — gains one `tool` message
+ * answering every such call. A call `known` answers keeps that result, so a finished write is never presented as
+ * undone. Every other call has no row, and a call's row is appended before it is dispatched, so it never started: it
+ * is answered as not run, interrupted before it started (as the live step answers a call it skips). Anything else is
+ * returned as it stands. Pure; the caller records what it returns.
+ */
+export function answerUnanswered(messages: readonly ChatMessage[], cause: Interruption, known: (callId: string) => KnownResult | undefined): ChatMessage | null {
   const last = messages[messages.length - 1];
   if (!last || last.role !== 'assistant') return null;
   const calls = last.content.flatMap((p) => (p.kind === 'tool-call' ? [p] : []));
   if (calls.length === 0) return null;
-  // Whether each call had started is not known after a crash; "before it completed" is true either way.
-  return { role: 'tool', content: calls.map((c) => ({ kind: 'tool-result' as const, callId: c.callId, name: c.name, isError: true, result: interruptedResult(cause, true, '') })) };
+  return {
+    role: 'tool',
+    content: calls.map((c) => {
+      const r = known(c.callId) ?? { result: interruptedResult(cause, false, ''), isError: true };
+      return { kind: 'tool-result' as const, callId: c.callId, name: c.name, isError: r.isError, result: r.result };
+    }),
+  };
 }

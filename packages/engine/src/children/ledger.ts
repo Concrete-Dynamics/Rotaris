@@ -240,8 +240,8 @@ export class ChildLedger {
     return { ok: false, reason: r.error.code === 'illegal-move' ? r.error.reason : `recording failed: ${r.error.code}` };
   }
   /** PD-ORCH-005 clause 4: a `paused` child moves back to the state it resumes into — the writer's one transaction. */
-  resume(taskId: string): { ok: true; row: ChildRow } | { ok: false; reason: string } {
-    const r = this.deps.writer.resumeChild(taskId);
+  resume(taskId: string, into?: 'running'): { ok: true; row: ChildRow } | { ok: false; reason: string } {
+    const r = this.deps.writer.resumeChild(taskId, into);
     if (r.ok) return { ok: true, row: r.value };
     return { ok: false, reason: r.error.code === 'illegal-move' ? r.error.reason : `recording failed: ${r.error.code}` };
   }

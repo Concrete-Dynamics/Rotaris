@@ -453,6 +453,11 @@ export interface ConfigureDeps {
 export interface PrepareOptions {
   readonly boardPermissions?: 'permissive' | undefined;
   readonly sandboxMode?: string | undefined;
+  /**
+   * PD-ORCH-005 clause 4: the role the run's entry agent is set up as, in place of `default_persona` — the persona an
+   * open iteration's root ran as, which a continue that resumes it restores. Absent means `default_persona`.
+   */
+  readonly entryPersona?: string | undefined;
 }
 
 /**
@@ -469,8 +474,8 @@ export interface PreparedRun {
   readonly complete: (bearers: Readonly<Record<string, string>>) => ConfiguredRun;
 }
 
-export function configureRun(workspaceRoot: string, attended: boolean, deps: ConfigureDeps): Result<ConfiguredRun, ConfigureRefusal> {
-  const prepared = prepareRun(workspaceRoot, attended, deps);
+export function configureRun(workspaceRoot: string, attended: boolean, deps: ConfigureDeps, options?: PrepareOptions): Result<ConfiguredRun, ConfigureRefusal> {
+  const prepared = prepareRun(workspaceRoot, attended, deps, undefined, options);
   return prepared.ok ? ok(prepared.value.complete(deps.bearers(workspaceRoot))) : prepared;
 }
 
@@ -522,9 +527,12 @@ export function prepareRun(workspaceRoot: string, attended: boolean, deps: Confi
   }
   // The override is folded into the captured configuration, so the run, its snapshot and its audit
   // all read one mode rather than the file's and the dialog's separately (REQ-SANDBOX-104, -122).
-  const cfg: LoadedConfiguration = granted.runtime.sandbox_mode === mode.value
+  const moded: LoadedConfiguration = granted.runtime.sandbox_mode === mode.value
     ? granted
     : { ...granted, runtime: { ...granted.runtime, sandbox_mode: mode.value } };
+  // PD-ORCH-005 clause 4: a continue that resumes an open iteration sets the run up as its root's persona, folded in the
+  // same way, so the entry role, its model tier and the log read one persona.
+  const cfg: LoadedConfiguration = options?.entryPersona === undefined ? moded : { ...moded, defaultPersona: options.entryPersona };
   const warnings: string[] = [...cfg.warnings.map((w) => `configuration: ${w}`)];
   if (cfg.referential.length > 0) {
     const lines = cfg.referential.map((m) => `configuration: ${m}`);
@@ -535,7 +543,11 @@ export function prepareRun(workspaceRoot: string, attended: boolean, deps: Confi
   const scripted = deps.env['ROTARIS_MODEL_DIALECT'] === 'scripted';
   const personas = personaResolverFor(cfg, scripted, (m) => warnings.push(m), deps.mcpEvidence ? (role) => deps.mcpEvidence!(cfg, workspaceRoot, role) : undefined);
   const entryRole = personas.resolve(cfg.defaultPersona);
-  if (!entryRole) return err({ reason: `default_persona '${cfg.defaultPersona}' names no role this build knows.`, cfg });
+  if (!entryRole) {
+    return err({ reason: options?.entryPersona === undefined
+      ? `default_persona '${cfg.defaultPersona}' names no role this build knows.`
+      : `The open iteration's root ran as '${cfg.defaultPersona}', which names no role this build knows now; continue without its agents to start a new iteration.`, cfg });
+  }
   const entryModelName = cfg.personas[cfg.defaultPersona]?.model ?? null;
   const entry = entryModelName ? cfg.models[entryModelName] : undefined;
   const model = entryRole.persona.modelRef ?? modelRefOf(cfg, entryModelName, scripted);

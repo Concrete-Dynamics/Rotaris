@@ -337,7 +337,7 @@ Requirements are grouped by the scope of what they govern, from surfaces shared 
 **REQ-NOTIFY-120** — Where a loaded snapshot's session status states that no run can still be active, agents still marked running are settled: `completed`, `succeeded` and `done` become done; `failed` and `error` become failed; every other value becomes cancelled. Their activity text states that they ended with the run, and their active tools are cleared. A session status of `idle` leaves agents untouched. A stale or older-format snapshot therefore never renders a finished run above a live activity indicator.
 
 **REQ-NOTIFY-121** — Once a process holds a session's `lock`, no child record left by an earlier occupant of that session reads as unfinished: every such record reads `cancelled`, carries a completion time, and shows no tool call in progress. Performing this again on the same session changes nothing further.
-  > **Extended by [`PD-ORCH-005`](../product/directives.md#pd-orch-005), 2026-09-27.** The settle still runs; each child it settles also carries the interruption that left it unfinished, and those children are then resumed.
+  > **Narrowed by [`PD-ORCH-005`](../product/directives.md#pd-orch-005), 2026-09-27 (revision 2).** The settle still runs, and no longer touches a `paused` agent: that agent is resumed with its iteration instead of being cancelled.
 
 ### C2. Child reports and re-delegation
 

@@ -1,4 +1,4 @@
-import { interruptionPhrase, type Interruption } from '@rotaris/contracts';
+import { INTERRUPTIONS, interruptionPhrase, type Interruption } from '@rotaris/contracts';
 import type { ChatMessage } from '@rotaris/model';
 
 /**
@@ -23,6 +23,18 @@ export function interruptedResult(cause: Interruption | null, ran: boolean, outp
   const tail = 'Issue it again if it is still needed.';
   const produced = output.trim() === '' ? '' : `\n${ran ? 'What it had produced before it was cut off' : 'Detail'}:\n${output}`;
   return `${head} ${tail}${produced}`;
+}
+
+/** The statements a call that never started is answered with — by a rest, a crash, or a cut that names no rest. */
+const NOT_RUN = new Set([null, ...INTERRUPTIONS].map((cause) => interruptedResult(cause, false, '')));
+
+/**
+ * The tool calls a conversation records as run: every call it holds, less those answered as never started. REQ-ORCH-095
+ * counts what an agent did, and a call the rest or a crash cut before it started did nothing.
+ */
+export function callsRun(messages: readonly ChatMessage[]): number {
+  const notRun = new Set(messages.flatMap((m) => m.content.flatMap((p) => (p.kind === 'tool-result' && NOT_RUN.has(p.result) ? [p.callId] : []))));
+  return messages.reduce((n, m) => n + (m.role === 'assistant' ? m.content.filter((p) => p.kind === 'tool-call' && !notRun.has(p.callId)).length : 0), 0);
 }
 
 /** A call's result as its transcript row knows it: what a completed call returned, or what a cut-off one had produced. */

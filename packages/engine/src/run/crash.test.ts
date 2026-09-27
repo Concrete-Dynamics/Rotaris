@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
+import { FakeClock, mintMachineId, ok, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
-import { answer, DefaultAgentBackend, ScriptedModelClient, type ChatMessage } from '@rotaris/model';
+import { answer, DefaultAgentBackend, ScriptedModelClient, type ChatMessage, type ModelRequest } from '@rotaris/model';
 import type { ApprovalPayload } from '@rotaris/contracts';
 import { RUN_CONFIG_DEFAULTS, Sessions, SessionWriter, type Publisher, type RunConfig, type ToolPort } from '../index.js';
 import { recordCrash } from './crash.js';
@@ -140,11 +140,15 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
   });
 
   describe('when it is recorded (Sessions)', () => {
-    function sessionsAs(pid: number) {
+    /** Every model request any of these processes made. */
+    const asked: ModelRequest[] = [];
+    /** `configured`: the process resolves each run's setup through `configure`, which reports the entry persona asked for. */
+    function sessionsAs(pid: number, configured?: (entryPersona: string | undefined) => void) {
       const client = new ScriptedModelClient([]);
       const original = client.stream.bind(client);
-      client.stream = (req) => { client.push(answer('Answered.')); return original(req); };
+      client.stream = (req) => { asked.push(req); client.push(answer('Answered.')); return original(req); };
       const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k' };
+      const runtime = { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING' as const };
       // A tool port offering nothing: its presence is what gives the run its children, so the crash's can be resumed.
       const port = (): ToolPort => ({
         specs: () => [], dispatch: async () => ({ text: 'none', isError: true, status: 'failed', durationMs: 1, label: 'x', args: {} }),
@@ -154,16 +158,18 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         clocks: clock, publisher: NONE, pid, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-dead', isProcessAlive: () => false,
         model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
         tools: () => port(),
+        ...(configured ? { configure: (_ws: string, ctx: { readonly entryPersona?: string | undefined }) => { configured(ctx.entryPersona); return ok({ model: { backend: new DefaultAgentBackend(client), config }, runtime }); } } : {}),
       });
     }
     /** A session whose first run finished, then a host that died in iteration 2 with the session still marked running. */
-    async function crashed(): Promise<SessionId> {
+    async function crashed(more: (w: SessionWriter) => void = () => undefined): Promise<SessionId> {
       const first = sessionsAs(77);
       const sid = (first.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
       await first.running(sid);
       const w = SessionWriter.open({ dal, sessionId: sid, wall: clock, retentionCap: 0, warn: () => undefined, onCommitted: () => undefined }, { pid: 66, host: HOST, isProcessAlive: () => false });
       if (!w.ok) throw new Error('writer');
       dieIn(w.value, sid);
+      more(w.value);
       w.value.save('running');
       w.value.release(66, HOST);
       return sid;
@@ -220,6 +226,36 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         ] },
         { role: 'user', content: [{ kind: 'text', text: 'second' }] },
       ]);
+    });
+
+    it('clause 4 (found by phase 4\'s review): a continue that resumes the open iteration is set up as the persona its root ran as; one that finds none, as the entry role', async () => {
+      const sid = await crashed();
+      const personas: (string | undefined)[] = [];
+      const next = sessionsAs(88, (p) => personas.push(p));
+      expect(next.resume(dal, 'C:/ws', sid).ok).toBe(true);
+      expect(next.prompt(sid, 'second').ok).toBe(true);
+      await next.running(sid);
+      expect(next.prompt(sid, 'third').ok).toBe(true);
+      await next.running(sid);
+      expect(personas).toEqual(['orchestrator', undefined]);
+    });
+
+    it('clause 4 with REQ-ORCH-095 (found by phase 4\'s review): a child that worked before the crash counts its calls from its record — the crash wrote no count — so it is not re-prompted', async () => {
+      asked.length = 0;
+      const sid = await crashed((w) => {
+        w.recordAgentMessage('bg_000000c1', 2, 'message', { role: 'assistant', content: [{ kind: 'tool-call', callId: 'p1', name: 'grep', args: '{}' }] });
+        w.recordAgentMessage('bg_000000c1', 2, 'message', { role: 'tool', content: [{ kind: 'tool-result', callId: 'p1', name: 'grep', isError: false, result: 'found' }] });
+      });
+      expect(dal.getChild(sid, 'bg_000000c1')!.tool_calls).toBe(0);
+      const next = sessionsAs(88);
+      expect(next.resume(dal, 'C:/ws', sid).ok).toBe(true);
+      expect(next.prompt(sid, 'second').ok).toBe(true);
+      await next.running(sid);
+      expect(dal.getChild(sid, 'bg_000000c1')).toMatchObject({ state: 'succeeded', tool_calls: 1 });
+      // Its own requests are the ones carrying its call before the crash; none of them re-prompts it.
+      const its = asked.filter((r) => r.messages.some((m) => m.content.some((p) => p.kind === 'tool-result' && p.callId === 'p1')));
+      expect(its.length).toBeGreaterThan(0);
+      expect(its.filter((r) => r.messages.some((m) => m.role === 'user' && m.content.some((p) => p.kind === 'text' && p.text.startsWith('Carry out the task now'))))).toEqual([]);
     });
   });
 });

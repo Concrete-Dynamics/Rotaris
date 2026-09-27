@@ -194,7 +194,13 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     expect(result.execution_status).toBe('awaiting_plan_decision');
   });
 
-  it('PD-ORCH-005 clause 3 (found by phase 3\'s third review): an explicit cancel before a continue has taken up the iteration an earlier rest left open leaves it to the next continue', async () => {
+  /*
+   * Phase 3's third review had this cancel leave the iteration to the next continue: then every continue declined an
+   * open iteration at its first iteration, so the iteration was not yet the continue's. Once a continue resumes it
+   * before anything else, the continue holds it from its start, and leaving it open would have the next Continue resume
+   * what the user cancelled (found by phase 4's review).
+   */
+  for (const route of ['a message, which resumes it', '"continue without them", which declines it'] as const) it(`PD-ORCH-005 clause 3 (found by phase 4's review): an explicit cancel before a continue by ${route} has taken up the iteration an earlier rest left open closes it — the continue already held it`, async () => {
     let finish!: () => void;
     const finishing = new Promise<void>((r) => { finish = r; });
     const tools: ToolPort = { ...grepPort(), dispatch: async () => { await finishing; return { text: 'found', isError: false, status: 'ok', durationMs: 1, label: 'grep', args: {} }; } };
@@ -209,12 +215,12 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     // The continue's pre-flight is held; the user cancels the run before it takes the open iteration up.
     let release!: () => void;
     next = new Promise<void>((r) => { release = r; });
-    expect(sessions.prompt(sid, 'go on').ok).toBe(true);
+    expect((route === 'a message, which resumes it' ? sessions.prompt(sid, 'go on') : sessions.continueSession(sid, 'continue', { withoutPaused: true })).ok).toBe(true);
     await new Promise((r) => setTimeout(r, 10));
     expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: 'run' } })).toEqual({ ok: true });
     release();
     await sessions.running(sid)!;
-    expect(dal.iterationsOf(sid)).toMatchObject([{ iteration: 1, state: 'open', interruption: 'pause' }]);
+    expect(dal.iterationsOf(sid)).toMatchObject([{ iteration: 1, state: 'closed', outcome: 'cancelled' }]);
   });
 
   it('PD-ORCH-005 clause 11: a quit leaves the hold as it stands and records no interruption', async () => {

@@ -207,8 +207,9 @@ returned from or raised out of answered in its record as interrupted, its row se
 record uses for a dead run's agents too), so a resume sends a conversation whose every call has its result; a call of
 that step that completed keeps what it returned, read back from its settled row. A rest that finds nothing unfinished closes the iteration as before. The cause is
 read again once the rest is done: the explicit cancel that arrived meanwhile ends every agent the rest paused
-`cancelled` and closes the iteration; one that arrives later, during teardown, closes the iteration this run left open
-the same way before the run's result is built, and one after that is refused. The explicit cancel does not abort a
+`cancelled` and closes the iteration; one that arrives later, during teardown, closes the iteration this run holds —
+the one it left open, or the one a continue resumes or declines, which it holds from its start, so a cancel during the
+pre-flight closes it too — the same way before the run's result is built, and one after that is refused. The explicit cancel does not abort a
 child's summarising pass: REQ-ORCH-080's drain lets it finish, as before. At teardown a run records what became of its agents' background sessions (clause 10:
 `restTerminals` — a pause leaves them running, a stop, a quit and the explicit cancel record their end and then end
 them). The explicit cancel keeps REQ-ORCH-080's drain and REQ-ORCH-052's finalize.
@@ -224,15 +225,21 @@ settles nothing (clause 8).
 
 **Resuming the open iteration (PD-ORCH-005 clauses 4, 5, 7, 10; OQ-70).** Every continue — a new message, the Continue
 action, a plan decision — resumes an iteration a rest or a crash left open before anything else runs (`RunDeps.openIteration`,
-set by `Sessions.launchContinuation` once the crash record and the settle are done). The run is not held at the plan gate,
+set by `Sessions.launchContinuation` once the crash record and the settle are done). That continue is set up as the
+persona the open iteration's root ran as (`configure`'s `entryPersona` → the run host's `prepareRun`, in place of
+`default_persona`), and its new message, with its images, is recorded in the root's conversation there and then, so no
+early end of the run loses it. The run holds the open iteration from its construction, so the explicit cancel during its
+pre-flight closes it (OQ-69). The run is not held at the plan gate,
 and the loop's first iteration is the open one (`iterate(openRow)`): its number, its root's task id and canonical name,
 and its todo task, with no second `iteration.start`, the row's interruption cleared and `iteration_resumed` recorded.
 `turn()` builds the iteration's children over the same root, `IterationChildren.resumePaused` moves each `paused` child
-back to the state it resumes into (the writer's `resumeChild`, `child_resumed`), re-claims its stored write scope in
+back to the state it resumes into (the writer's `resumeChild`, `child_resumed`) — `running` instead of `summarizing` for
+one told of its background sessions, which takes a step to read the notice — re-claims its stored write scope in
 acceptance order (PD-TOOLS-006 revision 2), and restarts the executions of those that were `running` or `summarizing`
-from their records (`execute(row, true)`, a fresh `child_timeout`, the tool-call count carried on). The waiting ones are
-left to the scheduler. The root carries on from its own record. Clause 10's notice of the agent's background sessions
-(`run/resume.ts`'s `terminalNotice`) and a continue's new message join each conversation as its next messages, recorded.
+from their records (`execute(row, resume)`, a fresh `child_timeout`, the tool-call count carried on from the row or the
+record, whichever holds more) through the scheduler's own wrapper, so each resumed child's end is a scheduler pass. The
+waiting ones are left to the scheduler. The root carries on from its own record. Clause 10's notice of the agent's
+background sessions (`run/resume.ts`'s `terminalNotice`) joins each conversation as its next message, recorded.
 An agent whose record ends on its own answer resumes into waiting (`resumedStart`); any other takes a model step,
 compressed first when the conversation is too long, as any is. A continue by message appends no todo task. A resumed
 iteration closes like any other, and it can rest and be resumed again (clause 7).

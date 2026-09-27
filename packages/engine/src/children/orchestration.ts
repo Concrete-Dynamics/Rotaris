@@ -6,6 +6,7 @@ import type { ProjectionOwner } from '../projection-owner.js';
 import type { SessionWriter } from '../session-writer.js';
 import { runTurn, type SteeringPrompt, type ToolPort, type TurnOutcome } from '../run/turn.js';
 import { answerOpenCalls } from '../run/crash.js';
+import { callsRun } from '../run/interruption.js';
 import type { AttachmentOutcome, BackgroundOutput, DelegateOutcome, DelegateRequest, DelegationOps, WaitOutcome } from './delegation.js';
 import { fullContextBlock, siblingIndexBlock, type AttachedResolution } from '../artifacts/context.js';
 import type { ArtifactStore } from '../artifacts/store.js';
@@ -141,6 +142,14 @@ export interface ChildrenDeps {
 
 function personaOf(deps: ChildrenDeps, name: string): Persona | undefined {
   return deps.personas ? deps.personas.resolve(name)?.persona : BUILT_IN_PERSONAS[name as RoleName];
+}
+
+/** How a resumed child carries on (PD-ORCH-005 clause 4). */
+interface ChildResume {
+  /** Its recorded conversation, with anything it is told at its resume. */
+  readonly history: readonly ChatMessage[];
+  /** It had answered and was summarising: REQ-ORCH-095's assessment was made before the rest. */
+  readonly assessed: boolean;
 }
 
 export class IterationChildren implements DelegationOps {
@@ -351,7 +360,9 @@ export class IterationChildren implements DelegationOps {
 
   private track(execution: Promise<void>): Promise<void> {
     this.executing.add(execution);
-    void execution.finally(() => this.executing.delete(execution));
+    // Both ways out: a `finally` here would re-raise an execution's rejection where nothing handles it.
+    const done = () => { this.executing.delete(execution); };
+    void execution.then(done, done);
     return execution;
   }
 
@@ -417,11 +428,20 @@ export class IterationChildren implements DelegationOps {
     let n = 0;
     for (const c of this.ledger.all()) {
       if (c.state !== 'paused') continue;
-      const r = this.ledger.resume(c.task_id);
+      // Clause 10: an agent told of its background sessions takes a step to read it, so one that had answered and was
+      // summarising resumes `running` instead — it works, and the limits count it (found by phase 4's review).
+      const notice = this.deps.resumeNotice?.(c.task_id) ?? null;
+      const summarising = c.resume_state === 'summarizing';
+      const r = this.ledger.resume(c.task_id, summarising && notice !== null ? 'running' : undefined);
       if (!r.ok) { this.deps.warn(r.reason); continue; }
       n += 1;
       this.acceptScope(r.row, storedScope(r.row));
-      if (r.row.state === 'running' || r.row.state === 'summarizing') this.track(this.execute(r.row, true));
+      if (r.row.state !== 'running' && r.row.state !== 'summarizing') continue;
+      const row = r.row;
+      const resume: ChildResume = { history: this.resumedConversation(row.task_id, row.iteration, notice), assessed: summarising };
+      // Started as the scheduler starts a child (`startOne`): a raise is warned, and its end is a pass, so a sibling held
+      // on the model slot it frees, or on it as a dependency, starts then (found by phase 4's review).
+      void this.track(this.execute(row, resume)).catch((e) => this.deps.warn(`child ${row.task_id} raised out of its resumed execution: ${String(e)}`)).finally(() => this.scheduler.pass());
     }
     this.scheduler.pass();
     return n;
@@ -429,11 +449,10 @@ export class IterationChildren implements DelegationOps {
 
   /**
    * PD-ORCH-005 clauses 4 and 10: a resumed agent's conversation — its record, then, as its next message, what became of
-   * the background sessions it had started. The notice is recorded as it joins the conversation.
+   * the background sessions it had started (`notice`). The notice is recorded as it joins the conversation.
    */
-  resumedConversation(taskId: string, iteration: number): ChatMessage[] {
+  private resumedConversation(taskId: string, iteration: number, notice: ChatMessage | null): ChatMessage[] {
     const history = this.deps.record?.load(taskId) ?? [];
-    const notice = this.deps.resumeNotice?.(taskId) ?? null;
     if (notice !== null) {
       this.deps.record?.recorder(taskId, iteration).appended(notice);
       history.push(notice);
@@ -521,12 +540,13 @@ export class IterationChildren implements DelegationOps {
   // ---- a child's execution -----------------------------------------------------------------
 
   /**
-   * A child's execution. `resumed` is PD-ORCH-005's resume: the child was restored `running` or `summarizing` and carries
+   * A child's execution. `resume` is PD-ORCH-005's resume: the child was restored `running` or `summarizing` and carries
    * on from its recorded conversation under a fresh `child_timeout`, its tool-call count carried on from its record. One
    * restored `summarizing` had answered, so its record ends on its answer: it resumes into waiting, takes no step, and
    * writes its report.
    */
-  private async execute(row: ChildRow, resumed = false): Promise<void> {
+  private async execute(row: ChildRow, resume: ChildResume | null = null): Promise<void> {
+    const resumed = resume !== null;
     const { deps } = this;
     const started = deps.clocks.monotonic.now();
     this.startedAt.set(row.task_id, started);
@@ -559,8 +579,10 @@ export class IterationChildren implements DelegationOps {
     let artifactBlocks: readonly string[] | null = null;
     const payload = (): string => childPayload(deps.workspaceRoot, row.task, prior, artifactBlocks ??= this.artifactContext(row), writeScopeBlock(this.disclosures.get(row.task_id)));
     // PD-ORCH-005 clause 4: a resumed child's first attempt starts from its record; a retry starts from its payload.
-    let start: TurnStart | null = resumed ? resumedStart(this.resumedConversation(row.task_id, row.iteration)) : null;
-    const priorCalls = resumed ? row.tool_calls : 0;
+    let start: TurnStart | null = resume ? resumedStart(resume.history) : null;
+    // The column is written at a rest or a settle, and a crash writes neither, so the record's own calls count too (found
+    // by phase 4's review: a child that worked before a crash counted none).
+    const priorCalls = resume ? Math.max(row.tool_calls, callsRun(resume.history)) : 0;
     let outcome: TurnOutcome | null = null;
     let error: { type: string; message: string } | null = null;
     let timedOut = false;
@@ -626,7 +648,8 @@ export class IterationChildren implements DelegationOps {
         const calls = priorCalls + outcome.toolCallCount;
         const textOnly = calls === 0 && outcome.report.text.trim() !== '';
         const rePrompt = calls === 0 && outcome.report.text.trim() === '' || ((deps.route ?? 'work') === 'work' && textOnly && persona?.implementer === true);
-        if (!controller.signal.aborted && outcome.report.status !== 'failed' && outcome.paused !== true && rePrompt) {
+        // A child resumed from `summarizing` had answered, and was assessed then: it is not assessed twice (phase 4's review).
+        if (!controller.signal.aborted && outcome.report.status !== 'failed' && outcome.paused !== true && rePrompt && resume?.assessed !== true) {
           // PD-ORCH-005 clause 2: no model call once the run is coming to rest — the re-prompt waits for the resume.
           if (this.resting) rePromptOwed = true;
           else {

@@ -67,11 +67,11 @@ The version-controlled, dated table of reviewed exceptions beside the notices ge
 dependency without licence text pass validation for a version range until its expiry. — `REQ-STARTUP-143`
 _Avoid_: allow-list, waiver
 
-**Build identifier**:
-The one line in the bundled text asset `build-id.txt` that the About page's Build row shows. When the asset is missing
-or unreadable there is none, and the row shows an em dash. This build writes the full name of the commit the artifact was made from, with `-dirty`
-when the working tree differed from it. — `REQ-SHELL-140`
-_Avoid_: build number, version (a version is the release's single value; many builds may carry one version)
+**Bundled asset**:
+A font family or the icon set the artifact carries, whose licence text the notices file reproduces; a missing or
+empty licence file for one fails notices validation. — `REQ-STARTUP-142`, `REQ-STARTUP-143`
+_Avoid_: for the About surface's two files — the notices file above, and the text asset carrying the Shell
+context's **build identifier** ([Shell](../ui/CONTEXT.md), `REQ-SHELL-140`)
 
 **Release feed**:
 The product's public source of the latest release, consulted exactly once per launch of a supported

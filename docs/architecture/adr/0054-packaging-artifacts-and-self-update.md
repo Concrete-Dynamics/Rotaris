@@ -1201,6 +1201,9 @@ appendix that the asset is one stripped line. The rest follows from what an iden
 - No tag and no `git describe`: whether a clone fetched its tags is not a property of the commit either.
 - It reads the local repository only and never reaches the network. A tree git cannot name a commit for fails the step
   (exit 1, one `error:` line) and removes any earlier file, so a stale identifier is never frozen in its place.
+- A build for a tag is not refused for `-dirty`. The specification does not forbid it, the identifier says it, and a
+  release job's checkout is clean: `.gitattributes` forces LF and every file the build generates is ignored. *Decided
+  2026-09-27, at the gate review's suggestion to record the choice.*
 
 **2. `pnpm package` runs both steps before freezing, notices first.** After the code-intelligence bundle, because the
 notices generator reads the runtime, and before `electron-vite build`, because a refusal should cost seconds. Both
@@ -1210,16 +1213,28 @@ files go to the root of the artifact's resources through two `extraResources` en
 address, a maintainer signs O-11's twelve reviews and OQ-68 is ruled, and the package refuses with it, exiting 1 and
 naming the flag below (REQ-STARTUP-143). This was measured: `REFUSED` at the notices step in 6.2 s, with the notices
 step's fourteen `error:` lines above it. **`ROTARIS_PACKAGE_WITHOUT_NOTICES=1` is the one explicit way on.** Only the
-value `1` sets it, and it passes over exit 1 only, never a usage error or a crash. What it makes is a development package
-with no notices file, because the refused step has already removed any earlier one. Such a package:
+value `1` sets it, and it passes over exit 1 only, never a usage error ~~or a crash~~ or a signal. ~~What it makes is a
+development package with no notices file, because the refused step has already removed any earlier one.~~ Exit 1 is also
+what a crash exits with: Node exits 1 on an uncaught exception, and the step makes exit 1 of an exception it catches.
+So the flag passes over a crash as well, and an uncaught one removes nothing. `package.mjs` therefore removes any notices file
+itself when it goes on without one (`settleNoticesStep`), and what it makes is a development package with no notices
+file whatever ended the step. *Corrected 2026-09-27 by the gate review: the struck text claimed the flag never passed
+over a crash, and it did, with a stale notices file left for `electron-builder` to carry and `afterPack` to accept.*
+Such a package:
 
 - shows REQ-SHELL-142's caption on its About page;
 - carries no licence text for its shipped closure, and so not the tool server's (REQ-STARTUP-015/141/142);
-- is announced as not releasable, in the step's line and again as the script's last line.
+- is announced as not releasable, in the step's line and again as the script's last line;
+- carries a release artifact's name all the same. Its installer is `Rotaris-<version>-windows-x64-setup.exe`,
+  REQ-STARTUP-031's name, and nothing on the file tells it from a release. Only `package.mjs`'s lines and
+  `release/load-proof.json` do. What keeps it out of a release is the tag refusal below, because §4.2's workflow is the
+  only route to one.
 
 A build for a tag refuses the flag: `GITHUB_REF_TYPE=tag`, or `GITHUB_REF` under `refs/tags/`. §4.2's workflow therefore
-cannot take this route even if it sets the flag. `afterPack` refuses an artifact without the notices file unless the
-flag is set, so calling `electron-builder` directly does not get past it either.
+cannot take this route even if it sets the flag. Only GitHub's variables are read, so a release built by any other route
+is not recognised as one. `afterPack` refuses an artifact without the notices file unless the flag is set, and on a
+build for a tag even when it is. So calling `electron-builder` directly does not get past either refusal. *The tag
+half was added 2026-09-27 by the gate review. Before it, `afterPack` accepted the flag on a tag build.*
 
 **4. Which copy of the tool server's licence text stands (plan §4.4's second fact).** REQ-STARTUP-015 wants exactly one
 copy inside the bundle and cites REQ-STARTUP-142. REQ-STARTUP-142 requires the notices file to carry every shipped
@@ -1232,14 +1247,20 @@ real inputs the rendered notices text carries `serena-agent`'s MIT text exactly 
 
 **The evidence, and what it does not cover.**
 
-- `afterPack` gains an "assets" rule (`apps/desktop/scripts/lib/bundled-assets.mjs`), which checks the artifact:
-  - `build-id.txt` is one line, byte-identical to the file the step wrote;
-  - the notices file is byte-identical to the one validation passed, or is absent only under the flag;
+- `afterPack` gains an "assets" rule (`apps/desktop/scripts/lib/about-assets.mjs`; *named `bundled-assets.mjs` until the
+  gate review, which found the name taken: REQ-STARTUP-143's "bundled asset" is a font family or the icon set*), which
+  checks the artifact:
+  - `build-id.txt` is one line, byte-identical to the file the step wrote, and names the tree being packed
+    (`identifyBuild`, asked again at `afterPack`), so an identifier an earlier build left cannot be carried by an
+    `electron-builder` called directly;
+  - the notices file is byte-identical to the one validation passed, or is absent only under the flag and never for a tag;
   - no copy of the tool server's licence remains under its `dist-info`;
-  - the notices file carries that licence text exactly once.
+  - the notices file carries that licence text exactly once, read by the generator's own `normalize`.
 
   It fails the build naming each problem, including the case where a renamed distribution stops matching the filter.
-- `bundled-assets.test.ts` runs the repository's own `electron-builder.yml` through electron-builder's own
+  The count looks for a second copy at the `dist-info` path only, not across the rest of the artifact. On this tree
+  the runtime carries the tool server's copyright line in that one file and no other.
+- `about-assets.test.ts` runs the repository's own `electron-builder.yml` through electron-builder's own
   `getFileMatchers` and `copyFiles` (app-builder-lib 26.15.3, the yml parsed by the `js-yaml` it loads). The fixture
   tree is in both runtime layouts, with and without the notices file. Removing the filter or the build-id entry fails
   those cases.
@@ -1255,8 +1276,23 @@ real inputs the rendered notices text carries `serena-agent`'s MIT text exactly 
   it back byte for byte (`lib/staged-resources.mjs`). A run killed mid-launch is repaired by the next run. Both were
   measured: with real files present, with none, and after a `SIGKILL` during 1′.
 
+  *Corrected 2026-09-27 by the gate review, on two points.* First, the repair could clobber a real file. If a real
+  `pnpm build-id` or `pnpm notices` ran between a killed run and the next, the next run's restore put the stale file
+  back over the new identifier, and deleted the new notices file. The stash's ledger now records each file the proof
+  wrote by SHA-256 and modification time. A file that does not match is kept as newer, and the stashed one is dropped.
+  The time is compared because `pnpm build-id` over the same tree writes the same bytes. Measured in the built app: a
+  real identifier was staged, the proof was sent `SIGKILL` during 1′, and `pnpm build-id` then ran. The next run kept
+  the new file, dropped the stashed one, removed the notices fixture, and passed. Second, the proof caught SIGINT and
+  SIGTERM to give the files back. Node runs such a handler only after `spawnSync` returns. A script holding the same
+  handler around a `spawnSync` showed that a SIGTERM during a launch was held until the launch ended, then ignored,
+  and the script exited 0. The handlers are gone. `finally` covers a launch whose Electron dies, and the next run
+  covers the proof's own death.
+
 **What this found.** No defect in the mechanism the record decided. It found one false statement nearby: `package.mjs`
 said "`out/` now holds a SEAM-FREE build" after every run, including one refused before the build. That line now
-prints only when the build ran. It also found one craft note on the About page, recorded in `docs/defects/`.
-**Nothing in this record's decision changes.**
+prints only when the build ran (`docs/defects/fixed/pnpm-package-announced-a-seam-free-build-it-had-not-made.md`; the
+closing lines are `scripts/lib/package-verdict.mjs`'s, tested). With it, a refusal writes an `error:` line to stderr
+(REQ-STARTUP-149), and a counterfactual that ended before `electron-builder` is reported as not exercised. It also
+found one craft note on the About page, recorded in `docs/defects/`. **Nothing in this record's decision changes.**
+The gate review's corrections above change how decision 3 is carried out. They do not change the decision.
 

@@ -2,7 +2,8 @@ import { asSessionId, err, formatAmount, millis, ok, type Clocks, type MachineId
 import { APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, COST_QUALIFIERS, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type CheckpointKind, type CheckpointListPayload, type ControlRequest, type ControlResult, type CostQualifier, type ImageAttachmentInput, type PermissionPreset, type QuestionAnswers, type RunType, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding } from '@rotaris/contracts';
 import { existsSync, rmSync } from 'node:fs';
 import { RELEASE_PAGE_SIZE, type CheckpointRow, type SessionRow, type StoreDal } from '@rotaris/store';
-import type { AgentBackend, ContentPart } from '@rotaris/model';
+import type { AgentBackend, ChatMessage, ContentPart } from '@rotaris/model';
+import { conversationOf } from './run/record.js';
 import { ProjectionOwner, type Publisher } from './projection-owner.js';
 import { SequenceCounters } from './sequence.js';
 import { SessionWriter, toTranscriptRow, type CheckpointRecordInput, type Committed, type RestoreRecordInput } from './session-writer.js';
@@ -452,18 +453,33 @@ export function latestArtifactText(dal: StoreDal, sessionId: SessionId): string 
   return cut(`${header}\n${body}`, 6_000);
 }
 
+/** The text of a message, its text parts joined. */
+function textOfMessage(m: ChatMessage): string {
+  return m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('');
+}
+
+/** The texts of the user messages a conversation holds after its last assistant message — what it has not yet answered. */
+function toldSinceLastAnswer(messages: readonly ChatMessage[]): ReadonlySet<string> {
+  const lastAnswer = messages.map((m) => m.role).lastIndexOf('assistant');
+  return new Set(messages.slice(lastAnswer + 1).filter((m) => m.role === 'user').map(textOfMessage));
+}
+
+/** PD-ORCH-004 revision 3: how many open offers a later root is told of — the newest; the rest are elided. */
+const OFFERS_TOLD = 10;
+
 /**
- * PD-ORCH-004 revision 3: every continuation offer the session holds that no child has taken up, which a later run's
- * root may take up — stated in the handoff's progress context, so that root learns of them (OQ-72). Empty when none.
+ * PD-ORCH-004 revision 3: the continuation offers the session holds that no child has taken up, which a later root may
+ * take up — each by its child's name and task id, the newest ten, with the way to take one up (OQ-72). A new iteration's
+ * root reads it in the handoff's progress context, a resumed root at the continue. Empty when there is none.
  */
 export function openOffersText(dal: StoreDal, sessionId: SessionId): string {
   const all = dal.childrenOf(sessionId);
   const continued = new Set(all.flatMap((c) => (c.continuation_of === null ? [] : [c.continuation_of])));
-  const open = all.flatMap((c) => {
-    const offer = parseReport(c)?.cut_off?.continuation_offer;
-    return typeof offer === 'string' && !continued.has(c.task_id) ? [`- ${c.canonical_name} (${c.task_id}): ${cut(offer, 700)}`] : [];
-  });
-  return open.length === 0 ? '' : `Open continuation offers:\n${open.join('\n')}`;
+  const open = all.filter((c) => typeof parseReport(c)?.cut_off?.continuation_offer === 'string' && !continued.has(c.task_id));
+  if (open.length === 0) return '';
+  const told = open.slice(-OFFERS_TOLD).map((c) => `- ${cut(c.canonical_name, 80)} (${c.task_id})`);
+  const elided = open.length > OFFERS_TOLD ? ['- [... earlier continuation offers elided]'] : [];
+  return ['Open continuation offers (delegate with `continuation_of` set to the task id to take one up):', ...elided, ...told].join('\n');
 }
 
 export function buildContinuationPayload(dal: StoreDal, row: SessionRow, prompt: string, todo: TodoDocument | undefined): string {
@@ -1121,9 +1137,17 @@ export class Sessions {
      * turn, and the notice followed it).
      */
     if (open && openIteration !== 'decline') {
+      const tell = (m: ChatMessage): void => { s.writer.recordAgentMessage(open.root_task_id, open.iteration, 'message', m); };
+      // A continue whose run came to rest before the resumed root took a step has told it already: a notice or an offer
+      // list it has not yet answered is not repeated (found by phase 4's third review).
+      const unanswered = toldSinceLastAnswer(conversationOf(s.dal.agentConversation(sessionId, open.root_task_id)));
       const notice = resumeNoticeOf(s.dal, sessionId, open.root_task_id, this.deps.terminals?.(sessionId));
-      if (notice !== null) s.writer.recordAgentMessage(open.root_task_id, open.iteration, 'message', notice);
-      if (openIteration.message !== null && openIteration.message.length > 0) s.writer.recordAgentMessage(open.root_task_id, open.iteration, 'message', { role: 'user', content: [...openIteration.message] });
+      if (notice !== null && !unanswered.has(textOfMessage(notice))) tell(notice);
+      // PD-ORCH-004 revision 3: a resumed root is told the offers it may take up, as a new iteration's reads them in the
+      // handoff it is not sent (found by phase 6's second review).
+      const offers = openOffersText(s.dal, sessionId);
+      if (offers !== '' && !unanswered.has(offers)) tell({ role: 'user', content: [{ kind: 'text', text: offers }] });
+      if (openIteration.message !== null && openIteration.message.length > 0) tell({ role: 'user', content: [...openIteration.message] });
     }
     // REQ-EVENTS-053, PD-MONITOR-001: the run's model calls that are no agent's turn count against the run itself.
     const countUsage: CountUsage = (usage, ref) => { runRef.run?.countUsage(usage, ref); };

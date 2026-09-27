@@ -170,13 +170,12 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
     const tail = emoji.slice(emoji.indexOf('Artifact: '), emoji.indexOf('\nTodo:'));
     expect(tail.endsWith('...')).toBe(true);
     expect(/[\uD800-\uDBFF]$/.test(tail.slice(0, -3))).toBe(false);
+    // A title is cut to 80 characters; the id before it never is.
+    artifact('a0000007', 'T'.repeat(100), 'Long.', '2026-09-27T05:30:00.000Z');
+    expect(buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined)).toContain(`Artifact: a0000007 — ${'T'.repeat(77)}... (child_report, succeeded)`);
     // A published document states its body once: its summary is the body's first line (REQ-LIBRARY-093).
     artifact('a0000006', 'notes', 'First line.', '2026-09-27T06:00:00.000Z', null, 'agent_published', 'First line.\nSecond line.');
     expect(buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined)).toContain('Artifact: a0000006 — notes (agent_published, published)\nFirst line.\nSecond line.\nTodo:');
-    // Two artifacts created in the same millisecond: the one written last is the latest, whatever their ids.
-    artifact('zzzzzzz7', 'first written', 'One.', '2026-09-27T07:00:00.000Z');
-    artifact('aaaaaaa8', 'second written', 'Two.', '2026-09-27T07:00:00.000Z');
-    expect(buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined)).toContain('Artifact: aaaaaaa8 — second written');
   });
 
   it('PD-ORCH-004 revision 3: the handoff states every continuation offer no child has taken up, so a later run\'s root learns of it (OQ-72)', () => {
@@ -192,8 +191,19 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
     dal.setChildReport(sid, 'bg_00000a02', offering('bg_00000a02'));
     child('bg_00000a03', 'lint-rest', 'bg_00000a02');
     const payload = buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined);
-    expect(payload).toContain('Open continuation offers:\n- build (bg_00000a01): Continue with continuation_of: "bg_00000a01".\nRecent iterations:');
+    expect(payload).toContain('Open continuation offers (delegate with `continuation_of` set to the task id to take one up):\n- build (bg_00000a01)\nRecent iterations:');
     expect(payload).not.toContain('- lint (bg_00000a02)');
+    // Budgeted as every part of the handoff is: the newest ten, the rest elided (found by phase 6's second review).
+    for (let i = 10; i < 21; i += 1) {
+      const id = `bg_00000b${i}`;
+      child(id, `task-${i}`);
+      dal.setChildReport(sid, id, offering(id));
+    }
+    const many = buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined);
+    const told = many.slice(many.indexOf('Open continuation offers'), many.indexOf('\nRecent iterations:')).split('\n');
+    expect(told.slice(1, 3)).toEqual(['- [... earlier continuation offers elided]', '- task-11 (bg_00000b11)']);
+    expect(told).toHaveLength(12);
+    expect(told.at(-1)).toBe('- task-20 (bg_00000b20)');
   });
 
   it('reaps one dead local lock and preserves live local and foreign holders with distinct refusals', () => {

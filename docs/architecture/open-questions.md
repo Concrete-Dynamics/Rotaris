@@ -3095,7 +3095,8 @@ treat a resumed child.
   counted, as a running child (found by phase 4's review).
 - **The new message is not a task.** A continue that resumes an open iteration appends no todo task. The message is the
   resumed root's next message, recorded in its conversation at the continue itself, with the images attached to it —
-  after the root's notice of its background sessions, so the user's message is the last it reads — and
+  after the root's notice of its background sessions, so the user's message is the last it reads; a notice the root has
+  not yet answered is not recorded again by a later continue — and
   REQ-SESSION-115's continuation payload is not sent (the directive narrows it so). The explicit cancel of that continue
   ends the iteration the message was delivered to, and the message with it: it stays in that iteration's record and in
   the transcript, and is not kept as a task. The iteration's own task is the one
@@ -3171,8 +3172,10 @@ keeps its number across runs, nor how a later root learns an offer exists.
   and key findings, cut to 6,000 characters without splitting a character. A published document is stated once, as its
   body: its summary is its body's first line and its key findings its body (REQ-LIBRARY-093). The 8,000-character
   baseline is not applied: nothing larger is assembled before the cut. A session with none says so. "Latest" is the
-  last created, ties in the same millisecond falling to the one written last. Two limits stand, both found by phase 6's
-  review: a report re-materialised in place keeps its creation time (REQ-LIBRARY-092), so a later iteration's report
+  last created, in the listing's own index order (REQ-LIBRARY-096), so artifacts created in the same millisecond — a
+  cancellation writes several reports at once — fall to their ids, a stable order but not the order they were written.
+  *The first repair broke that tie by insertion order, which cost the index's order (a sort per read, found by phase 6's
+  second review).* Two more limits stand, both found by phase 6's review: a report re-materialised in place keeps its creation time (REQ-LIBRARY-092), so a later iteration's report
   that reuses a canonical name does not become the latest (and overwrites the earlier one:
   `a-reused-canonical-name-overwrites-an-earlier-iterations-report-artifact.md`); and a body edited after publishing
   (REQ-LIBRARY-094) is stated as it was published.
@@ -3183,11 +3186,15 @@ keeps its number across runs, nor how a later root learns an offer exists.
   session"; *the first build admitted only lower iterations, which read those words as redundant — found by phase 6's
   review*). A child of a later iteration is refused: the directive gives the offer to "that iteration's root agent", and
   REQ-TOOLS-155 keeps a child to its own children. A plan cycle's root takes up none, since a plan cycle is not an
-  iteration (REQ-ORCH-153), and its refusal names only its own children.
-- **How a later root learns of an offer.** The handoff's progress context lists every offer no child has taken up — the
-  offering child's name and task id and its offer — under `Open continuation offers:`, and only when there is one. A
-  later run's root reads it in its continuation payload. A later iteration of the same run starts from the launch
-  content, which states none, so there an offer is taken up only by a root that already knows its task id.
+  iteration (REQ-ORCH-153), and its refusal names only its own children; a plan cycle a continuation starts is still
+  shown the open offers in its handoff, which it cannot take up there.
+- **How a later root learns of an offer.** The offers no child has taken up are stated as `Open continuation offers`,
+  with the way to take one up, each by the offering child's name and task id — the newest ten, the rest elided behind
+  one line, since every part of the handoff is budgeted (found by phase 6's second review) — and only when there is one.
+  A new iteration's root reads them in the handoff's progress context. A resumed root, which is sent no handoff, is told
+  them at the continue that resumes it, after the notice of its background sessions and before the continue's message
+  (found by phase 6's second review). A later iteration of the same run starts from the launch content, which states
+  none, so there an offer is taken up only by a root that already knows its task id.
 
 **What a ruling decides.** Whether "orchestrator artifact" should instead name only what the root itself publishes,
 leaving the line empty until it does. Whether the open offers belong in the handoff, which REQ-SESSION-115 defines as

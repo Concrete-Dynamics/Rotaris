@@ -693,15 +693,23 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
           if (run === 2 && !acted.has(2)) { acted.add(2); return toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'build-rest', task: 'TASK: continue', continuation_of: buildId() } }]); }
           if (run === 3 && !acted.has(3)) {
             acted.add(3);
-            // An offer this iteration holds that another agent delegated (its grandchild's, say): the root does not take it up.
-            // A grandchild's offer an earlier iteration left is the root's like any other of that iteration's.
-            for (const [id, name, iteration] of [[PEER, 'peer', 3], [GRAND, 'grand', 1]] as const) {
-              dal.insertChild({ session_id: sid, task_id: id, canonical_name: name, given_name: name, persona: 'coding-agent', state: 'failed', parent_id: 'bg_0000a11e', depth: 2, iteration, model_key: 'm', category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't' });
-              dal.setChildReport(sid, id, JSON.stringify({ ...reportOf(children(sid)[0]!), task_id: id }));
-            }
             return toolCalls([
               { callId: 'd3', name: 'delegate', args: { persona: 'coding-agent', task_name: 'again', task: 'TASK: again', continuation_of: buildId() } },
               { callId: 'd4', name: 'delegate', args: { persona: 'coding-agent', task_name: 'helper', task: 'TASK: helper' } },
+            ]);
+          }
+          if (run === 3 && !acted.has(30)) {
+            acted.add(30);
+            // An offer this iteration's `helper` delegated and this run cut off (its child's): the root does not take it
+            // up, for the delegating agent still runs (found by phase 6's second review: a seed outside the root's tree
+            // could not tell "ended before this run" from "ended at all"). A grandchild's offer an earlier iteration left
+            // is the root's like any other of that iteration's.
+            const helper = children(sid).find((c) => c.canonical_name === 'helper')!.task_id;
+            for (const [id, name, iteration, parent] of [[PEER, 'peer', 3, helper], [GRAND, 'grand', 1, 'bg_0000a11e']] as const) {
+              dal.insertChild({ session_id: sid, task_id: id, canonical_name: name, given_name: name, persona: 'coding-agent', state: 'failed', parent_id: parent, depth: 2, iteration, model_key: 'm', category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't' });
+              dal.setChildReport(sid, id, JSON.stringify({ ...reportOf(children(sid)[0]!), task_id: id }));
+            }
+            return toolCalls([
               { callId: 'd5', name: 'delegate', args: { persona: 'coding-agent', task_name: 'peer-rest', task: 'TASK: peer-rest', continuation_of: PEER } },
               { callId: 'd6', name: 'delegate', args: { persona: 'coding-agent', task_name: 'grand-rest', task: 'TASK: grand-rest', continuation_of: GRAND } },
             ]);
@@ -739,7 +747,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       const refusals = client.requests.map((r) => textOf(r.messages.at(-1)!)).join('\n');
       expect(refusals).toContain(`Task 'again': rejected — Task 'build' (${buildId()}) was already continued by 'build-rest' (${rest.task_id})`);
       // Within its iteration an offer is taken up by the agent that delegated the child, the root included.
-      expect(refusals).toContain(`Task 'peer-rest': rejected — continuation_of '${PEER}' names no child task of yours, nor a child an earlier iteration of this session left`);
+      expect(refusals).toContain(`Task 'peer-rest': rejected — continuation_of '${PEER}' names no child task of yours, nor a child an earlier iteration or an earlier run of this one left`);
       expect(refusals).toContain(`Task 'sneak': rejected — continuation_of '${buildId()}' names no child task of yours: a continuation continues one of your own children`);
     });
 
@@ -771,6 +779,11 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(sessions.prompt(sid, 'take up what was left').ok).toBe(true);
       await sessions.running(sid)!;
       expect(children(sid).find((c) => c.canonical_name === 'left-rest')).toMatchObject({ continuation_of: LEFT, iteration: 1 });
+      // It was told of the offer at the continue, before the user's message (found by phase 6's second review).
+      const root = dal.iterationsOf(sid)[0]!.root_task_id;
+      const told = conversationOf(dal.agentConversation(sid, root)).map((m) => textOf(m));
+      const at = told.indexOf('take up what was left');
+      expect(told[at - 1]).toBe(`Open continuation offers (delegate with \`continuation_of\` set to the task id to take one up):\n- left (${LEFT})`);
     });
 
     it('runtime.child_stall_timeout is the window: at 60 s, a call completed 60.001 s before the expiry is not progress', async () => {

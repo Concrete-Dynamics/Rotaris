@@ -155,8 +155,8 @@ A new child a parent delegates to take up the remaining work of a child whose re
 record names the child it continues. A piece of work is continued once and a continuation is never offered one of its
 own. An offer outlives its run: the agent that delegated the child takes it up while that agent runs, and the root of a
 later iteration or a later run takes up one the session left before — including a resumed iteration's own, from an
-earlier run — learning of it from the handoff's open offers. Not a resume: the timed-out child is never restarted and
-earns no corrective message (`REQ-NOTIFY-112`). — `PD-ORCH-004` (revision 3)
+earlier run — told of it in the handoff, or at the continue that resumes it. Not a resume: the timed-out child is never
+restarted and earns no corrective message (`REQ-NOTIFY-112`). — `PD-ORCH-004` (revision 3)
 _Avoid_: resume, retry (the one retry is REQ-ORCH-088's fallback model), and "continuation" alone where a session's
 next run is meant
 

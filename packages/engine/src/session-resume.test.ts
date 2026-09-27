@@ -138,6 +138,33 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
     expect(context.length).toBeLessThanOrEqual(3_200);
   });
 
+  it('REQ-SESSION-115\'s artifact is the latest one the session holds, never a line saying none is recorded (the repair of the-continuation-payload-says-no-artifact-is-recorded)', () => {
+    const sid = asSessionId('S-artifact');
+    const at = new Date(clock.instant()).toISOString();
+    dal.upsertSession({ session_id: sid, execution_status: 'completed', workspace_root: 'C:/ws', created_at: at, updated_at: at });
+    expect(buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined)).toContain('Artifact: (none recorded in this session)');
+    const artifact = (id: string, title: string, summary: string, createdAt: string, supersededBy: string | null = null) => dal.insertArtifact({
+      session_id: sid, id, slug: id, title, kind: 'child_report', source_task_id: 'bg_00000001', canonical_name: 'build', source_persona: 'coding-agent', status: 'succeeded',
+      summary, key_findings: '- found the bug', highlight_paths: '[]', snippets: '[]', edited_files: '[]', created_files: '[]', commands: '[]', tags: '[]',
+      supersedes: null, superseded_by: supersededBy, created_by: 'build', consumed_by: '[]', timeline_event_id: null, conversation_id: null, importance: 'normal',
+      created_at: createdAt, edited_at: null, body_file: `${id}.md`,
+    });
+    artifact('a0000001', 'build report', 'The build was fixed.', '2026-09-27T01:00:00.000Z');
+    artifact('a0000002', 'review report', 'The review found nothing.', '2026-09-27T02:00:00.000Z');
+    // A superseded record is never the latest.
+    artifact('a0000003', 'draft report', 'A draft.', '2026-09-27T03:00:00.000Z', 'a0000002');
+    const payload = buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined);
+    expect(payload).not.toContain('no orchestrator artifact is recorded');
+    expect(payload).toContain('Artifact: review report (child_report, succeeded; a0000002)\nThe review found nothing.\nKey findings:\n- found the bug');
+    expect(payload).not.toContain('A draft.');
+    // At most 6,000 characters of it (REQ-SESSION-115's budget).
+    artifact('a0000004', 'long report', 'w'.repeat(9_000), '2026-09-27T04:00:00.000Z');
+    const long = buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined);
+    const part = long.slice(long.indexOf('Artifact: '), long.indexOf('\nTodo:'));
+    expect(part.length).toBe(6_000);
+    expect(part.endsWith('...')).toBe(true);
+  });
+
   it('reaps one dead local lock and preserves live local and foreign holders with distinct refusals', () => {
     const backend = new DefaultAgentBackend(new ScriptedModelClient([]));
     const makeRow = (id: string) => {

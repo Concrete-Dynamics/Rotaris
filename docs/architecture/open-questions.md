@@ -53,8 +53,9 @@ on 2026-09-27** as recommended by `PD-ORCH-004` revision 2 ([R-058](../product/r
 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3: OQ-67** (how a `paused` agent presents, and whether it is settled
 for display with a session at rest, which four requirements the directive does not name would do), **OQ-68** (whether
 the transcript is drawn from the conversation record, and what of a model exchange the record holds), **OQ-69** (which
-control is a stop and which the final cancel, and what a rest does at the edges the directive does not reach) **and
-OQ-70** (how a resumed iteration carries on where the directive gives the what and not the how), each stating the
+control is a stop and which the final cancel, and what a rest does at the edges the directive does not reach), **OQ-70**
+(how a resumed iteration carries on where the directive gives the what and not the how) **and OQ-72** (which artifact
+REQ-SESSION-115's handoff carries, and who takes up an earlier offer), each stating the
 reading the build proceeds under. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
@@ -3100,6 +3101,29 @@ treat a resumed child.
 iteration that closes without addressing it leaves the message pending? Should a crashed, `interrupted` session offer
 the Continue action, and with it "continue without them"? And should a re-armed session hold its plan gate before the
 resume, after it, or not at all, as built?
+
+**OQ-72 — Which artifact is REQ-SESSION-115's "latest orchestrator artifact", and who is "that iteration's root" for an offer?** *(`PD-ORCH-004` revision 3; REQ-SESSION-115 and REQ-TOOLS-155, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-004` revision 3 with `PD-ORCH-005` under [R-059](../product/requests.md#r-059), and by the repair of `the-continuation-payload-says-no-artifact-is-recorded.md`.)*
+
+REQ-SESSION-115's handoff carries "at most 6000 characters for the latest orchestrator artifact against an
+8000-character artifact baseline". The session's artifact store holds child reports and the documents agents
+published. The root agent publishes no artifact of its own in this build, so no record is an "orchestrator artifact"
+by author. PD-ORCH-004 revision 3 lets "that iteration's root agent" take up an offer "in a later iteration or a later
+run". It does not say whether a resumed iteration's root is a later iteration's, or whether a later iteration's child
+may take the offer up.
+
+**What the build proceeds under.**
+
+- **The artifact.** The latest record of the session's store that nothing has superseded, of any kind. It is where
+  the run's work is recorded, and the handoff states it in place of the placeholder that claimed none existed. It is
+  rendered as its title, kind, status and id, then its summary and key findings, cut to 6,000 characters. The
+  8,000-character baseline is not applied: nothing larger is assembled before the cut. A session with none says so.
+- **Who takes up an earlier offer.** Only a root, and only of an iteration after the one whose child made the offer
+  (the child's `iteration` is lower). A resumed iteration keeps its number, so its root takes up its own children's
+  offers as the delegating agent and earlier iterations' offers as a later root. A child of a later iteration is
+  refused: the offer is the parent's decision, and REQ-TOOLS-155 keeps a child to its own children.
+
+**What a ruling decides.** Whether "orchestrator artifact" should instead name only what the root itself publishes,
+leaving the line empty until it does. And whether a later iteration's children may take up an earlier offer.
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

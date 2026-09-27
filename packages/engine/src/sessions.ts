@@ -25,6 +25,7 @@ import { SummaryWriter } from './run/summary.js';
 import { isActiveStatus } from './run/stop-conditions.js';
 import type { HookPort, HookPortContext, RunNotice, ToolHookBridge } from './hooks-port.js';
 import { ArtifactStore } from './artifacts/store.js';
+import { toArtifactRecord } from './artifacts/record.js';
 import { persistAttachments, projectAttachments, readAttachmentBody, validateAttachmentInputs } from './attachments.js';
 import { artifactOps, type ArtifactOps } from './artifacts/port.js';
 import type { Preflight, PreflightContext } from './preflight.js';
@@ -426,6 +427,19 @@ function continuedTaskId(dal: StoreDal, sessionId: SessionId, todo: TodoDocument
   return `${sessionId}:continued:${n}`;
 }
 
+/**
+ * REQ-SESSION-115's artifact: the latest artifact the session's store holds and nothing has superseded — the child
+ * reports and the documents its agents published are where a run's work is recorded — cut to the requirement's 6,000
+ * characters. The repair of `the-continuation-payload-says-no-artifact-is-recorded.md` (OQ-72).
+ */
+export function latestArtifactText(dal: StoreDal, sessionId: SessionId): string {
+  const records = dal.artifactsOf(sessionId).flatMap((r) => { const a = toArtifactRecord(r); return a && a.supersededBy === null ? [a] : []; });
+  const latest = records.at(-1);
+  if (!latest) return 'Artifact: (none recorded in this session)';
+  const findings = latest.keyFindings.trim();
+  return cut(`Artifact: ${latest.title} (${latest.kind}, ${latest.status}; ${latest.id})\n${latest.summary}${findings === '' ? '' : `\nKey findings:\n${findings}`}`, 6_000);
+}
+
 export function buildContinuationPayload(dal: StoreDal, row: SessionRow, prompt: string, todo: TodoDocument | undefined): string {
   const recentRows = dal.residentRows(row.session_id as SessionId)
     .filter((event) => (event.kind === 'user' || event.kind === 'agent') && event.body.trim() !== '')
@@ -441,7 +455,7 @@ export function buildContinuationPayload(dal: StoreDal, row: SessionRow, prompt:
     'This is a follow-up within an existing session. Prior session context is authoritative; continue from its recorded state.',
     '', 'Latest user request:', prompt,
     '', 'Authoritative session handoff:',
-    'Artifacts: (no orchestrator artifact is recorded in this build)',
+    latestArtifactText(dal, row.session_id as SessionId),
     `Todo:\n${shownTasks.join('\n') || '- (empty)'}`,
     `Progress: ${cut(row.progress ?? '(none recorded)', 700)}`,
     `Recent iterations:\n${iterations.map((item) => `- ${item}`).join('\n') || '- (none recorded)'}`,

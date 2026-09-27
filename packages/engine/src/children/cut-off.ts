@@ -116,10 +116,15 @@ export function cutOffLines(cutOff: Partial<CutOff> | undefined): readonly strin
 /**
  * Admission of `delegate`'s `continuation_of`, before any record exists (the refusals beside it in `delegate` are
  * of the same kind). `target` is the named child when the caller owns it; `offered` is whether its stored report
- * carries a continuation offer; `continuedBy` is a child already recorded as its continuation. Null admits.
+ * carries a continuation offer; `continuedBy` is a child already recorded as its continuation. `asRoot`: the caller is
+ * its iteration's root, which may also take up an offer an earlier iteration left (revision 3). Null admits.
  */
-export function continuationRefusal(reference: string, target: ChildRow | undefined, offered: boolean, continuedBy: ChildRow | undefined): string | null {
-  if (!target) return `continuation_of '${reference}' names no child task of yours: a continuation continues one of your own children (PD-ORCH-004).`;
+export function continuationRefusal(reference: string, target: ChildRow | undefined, offered: boolean, continuedBy: ChildRow | undefined, asRoot = false): string | null {
+  if (!target) {
+    return asRoot
+      ? `continuation_of '${reference}' names no child task of yours, nor a child an earlier iteration of this session left: a continuation continues one of your own children or an offer an earlier iteration left (PD-ORCH-004).`
+      : `continuation_of '${reference}' names no child task of yours: a continuation continues one of your own children (PD-ORCH-004).`;
+  }
   if (!offered) return `Task '${target.canonical_name}' (${target.task_id}) made no continuation offer: only a child cut off by its time limit while making progress offers one, and a continuation never offers another (PD-ORCH-004).`;
   if (continuedBy) return `Task '${target.canonical_name}' (${target.task_id}) was already continued by '${continuedBy.canonical_name}' (${continuedBy.task_id}); a piece of work is continued once (PD-ORCH-004).`;
   return null;

@@ -242,14 +242,20 @@ export class IterationChildren implements DelegationOps {
   /**
    * PD-ORCH-004: the refusal of a `continuation_of` naming `reference`, or null. The offer is read from the named
    * child's stored report, so only a child the limit cut off while making progress — and never a continuation — can be
-   * continued; a child already recorded as its continuation refuses a second one, anywhere in the session.
+   * continued; a child already recorded as its continuation refuses a second one, anywhere in the session. Revision 3,
+   * "an offer outlives its run": within this iteration only the agent that delegated the child takes its offer up; the
+   * root of a later iteration or a later run takes up one any earlier iteration of the session left.
    */
   private continuationRefusalFor(parentId: string, reference: string): string | null {
     const row = this.ledger.get(reference);
-    const target = row !== undefined && this.owns(parentId, row) ? row : undefined;
+    const own = row !== undefined && this.owns(parentId, row) ? row : undefined;
+    const earlier = own === undefined && this.ledger.isRoot(parentId)
+      ? this.deps.dal.childrenOf(this.deps.sessionId).find((c) => c.task_id === reference && c.iteration < this.iteration)
+      : undefined;
+    const target = own ?? earlier;
     const offered = target !== undefined && typeof parseReport(target)?.cut_off?.continuation_offer === 'string';
     const continuedBy = this.deps.dal.childrenOf(this.deps.sessionId).find((c) => c.continuation_of === reference);
-    return continuationRefusal(reference, target, offered, continuedBy);
+    return continuationRefusal(reference, target, offered, continuedBy, this.ledger.isRoot(parentId));
   }
 
   // ---- PD-TOOLS-006: write scopes ---------------------------------------------------------------

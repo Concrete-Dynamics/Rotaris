@@ -189,7 +189,8 @@ export function ClearTranscriptControl({ runState, rowCount, control, onAcknowle
   /*
    * REQ-CHAT-162 — `/skills`: the listing, written by the run host into the followed session as one saved system
    * row. Fixed, like `/skill`, and for the same reason registered on its own; a skill declaring the name `skills`
-   * is offered `skills-2` whichever of the two registers first (`FIXED_SKILL_COMMAND_NAMES`).
+   * is offered `skills-2` whichever of the two registers first, and a prompt file `skills.md` keeps only
+   * `/prompts:skills`, although it reaches this registry before this effect does (`FIXED_SKILL_COMMAND_NAMES`).
    */
   useEffect(() => {
     if (!listSkills) return;

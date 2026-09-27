@@ -24,6 +24,10 @@ name is offered `skill-2` / `skills-2` with its description naming the skill, wh
 run in. `packages/ui/src/slash/skills.test.ts` asserts both orders and a rescan; with the one-line rule removed,
 all three of its new cases fail.
 
+**"Whatever order" held for the skill registrar only.** The prompt-file registrar had the same hole, and gate round 1
+of the same change found it: a `skills.md` took `/skills` back on the first re-read after mount. Repaired the same
+day by the same rule — `a-prompt-file-named-skills-takes-the-skills-command.md`.
+
 ## Specs
 
 `REQ-SHELL-056`: "Built-in commands SHALL always win a name collision … so a skill is never silently unreachable

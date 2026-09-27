@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { SkillRow, SkillsState } from '@rotaris/contracts';
+import type { PromptFile, PromptsRootsResult, SkillRow, SkillsState } from '@rotaris/contracts';
 import { buildCatalogue, type CatalogueOptions } from './catalogue.js';
+import { registerPromptCommands } from './prompts.js';
 import { createSlashRegistry } from './registry.js';
 import {
   bindSkillsReader, cachedSkills, catalogueNormalForm, freeName, readSkills, registerSkillCommands,
@@ -14,6 +15,7 @@ const row = (over: Partial<SkillRow> = {}): SkillRow => ({
   ...over,
 });
 const state = (skills: SkillRow[], enabled = true): SkillsState => ({ enabled, skills, skipped: [] });
+const prompt = (stem: string): PromptFile => ({ root: 'workspace', path: `/ws/.agents/prompts/${stem}.md`, stem, body: 'body' });
 
 describe('REQ-SHELL-056 — the catalogue normal form a generated entry takes', () => {
   it('lower-cases, collapses whitespace and underscore runs to one hyphen, and REMOVES everything else', () => {
@@ -228,5 +230,28 @@ describe('REQ-SHELL-056 — `/skill` and `/skills` are built-ins and keep their 
     expect(registry.lookup('skill')).toBeDefined();
     expect(registry.lookup('skills')).toBeDefined();
     expect(registry.lookup('skill-2')).toBeUndefined();
+  });
+
+  it('REQ-CHAT-160: a prompt file named `skills.md` or `skill.md` never takes either name, in the order the composer mounts', () => {
+    // The sequence the window runs: `buildCatalogue` applies the cached prompt roots to a fresh registry, the registrar's
+    // mount effect applies them again and records its names, the fixed commands' effects register, and the next re-read
+    // (the configuration key's, or any composer focus) applies a fresh answer with the names it recorded. Before the fix
+    // the bare stems were free at the first step, recorded as the registrar's own at the second, and taken back from the
+    // fixed commands at the fourth — `/skills` then ran the prompt, not the listing.
+    const prompts: PromptsRootsResult = { files: [prompt('skills'), prompt('skill')], skipped: [] };
+    const registry = createSlashRegistry();
+    registerPromptCommands(registry, prompts);
+    const mounted = registerPromptCommands(registry, prompts, new Set());
+    fixed(registry);
+    const reread = registerPromptCommands(registry, prompts, new Set(mounted.names));
+    for (const r of [mounted, reread]) {
+      expect(r.names).toEqual(['prompts:skills', 'prompts:skill']);
+      expect(r.skipped.map((s) => s.path)).toEqual([]);
+    }
+    expect(registry.lookup('skills')!.description).toBe(SKILLS_LIST_DESCRIPTION);
+    expect(registry.lookup('skill')!.argumentHint).toBe('<path>');
+    // The files stay reachable under REQ-CHAT-160's prefixed names, which is all the requirement promises a held stem.
+    expect(registry.lookup('prompts:skills')!.kind).toBe('prompt');
+    expect(registry.lookup('prompts:skill')!.kind).toBe('prompt');
   });
 });

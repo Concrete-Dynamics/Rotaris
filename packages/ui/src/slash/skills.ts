@@ -239,6 +239,11 @@ export function skillsListCommand(list: () => Promise<{ ok: true; count: number 
  * Found by building `/skills` (2026-09-27): before this, a skill named `skill` REPLACED `/skill <path>` when the
  * generated commands registered after it, and was itself silently replaced when they registered before —
  * `docs/defects/fixed/a-skill-named-skill-takes-the-skill-command.md`.
+ *
+ * The prompt-file registrar holds the same two names for the same reason (REQ-CHAT-160: "the command already
+ * holding it keeps it"): both fixed commands register by effect, after the prompt files have already been put on a
+ * rebuilt registry, and a re-read took the name back from them —
+ * `docs/defects/fixed/a-prompt-file-named-skills-takes-the-skills-command.md`.
  */
 export const FIXED_SKILL_COMMAND_NAMES: ReadonlySet<string> = new Set([SKILL_COMMAND_NAME, SKILLS_LIST_COMMAND_NAME]);
 

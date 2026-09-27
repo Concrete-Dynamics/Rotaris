@@ -59,6 +59,8 @@ export interface SpawnInput {
   readonly background: boolean;
   readonly modelKey: string;
   readonly grantedTools: readonly string[];
+  /** PD-ORCH-004: the child this one continues, admitted by the caller before the spawn; absent for ordinary work. */
+  readonly continuationOf?: string | undefined;
 }
 
 export type SpawnRejection = { readonly reason: string };
@@ -201,6 +203,8 @@ export class ChildLedger {
       depends_on: JSON.stringify(input.dependsOn), inherited_context: JSON.stringify(input.inheritedContext), granted_tools: JSON.stringify(input.grantedTools),
       // REQ-MCP-065 / REQ-MCP-114 (Part S): the grant evidence at spawn — `{ granted: {server: [tool…]}, servers: [{name, transport, origin, fate, reason?}] }` — from the persona's resolver; `{}` was written until then.
       granted_mcp: JSON.stringify(role.persona.mcpEvidence?.() ?? EMPTY_MCP_EVIDENCE),
+      // PD-ORCH-004: "A child delegated as a continuation carries that relationship in its record."
+      continuation_of: input.continuationOf ?? null,
     };
     const r = this.deps.writer.spawnChild(row);
     if (!r.ok) return { ok: false, error: { reason: `The child could not be recorded: ${r.error.code}` } };

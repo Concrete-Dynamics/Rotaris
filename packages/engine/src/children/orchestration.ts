@@ -10,6 +10,7 @@ import { fullContextBlock, siblingIndexBlock, type AttachedResolution } from '..
 import type { ArtifactStore } from '../artifacts/store.js';
 import { ChildLedger, type Budget } from './ledger.js';
 import { childPayload, completionNotification, parseReport, priorAgentContext, reportBlock, resumeMessage } from './notify.js';
+import { CHILD_STALL_TIMEOUT_MS, continuationRefusal, cutOffLines, cutOffReport, ProgressLog, type CutOff } from './cut-off.js';
 import { BUILT_IN_PERSONAS, type Persona, type PersonaResolver, type RoleName } from './personas.js';
 import { produceReport, type SummariserDeps } from './report.js';
 import { Scheduler } from './scheduler.js';
@@ -27,10 +28,10 @@ import { todoLinesFromStored } from '../todo-view.js';
 /**
  * One iteration's children (REQ-ORCH-072: a fresh ledger per iteration under the clamped policy): the
  * delegation operations the tools call, the child's execution from `starting` to a terminal state
- * (REQ-ORCH-088's hard timeout, REQ-ORCH-095's assessment with one re-prompt, the report, REQ-ORCH-098's
- * teardown), and the parent's resume loop (REQ-ORCH-055/056/057/059: resumed with the newly terminal
- * children's reports whenever one reaches a terminal state it has not observed; idle otherwise; the same
- * loop serves the root and a child that delegated).
+ * (REQ-ORCH-088's hard timeout, with PD-ORCH-004's hand-back for a child cut off while making progress;
+ * REQ-ORCH-095's assessment with one re-prompt; the report; REQ-ORCH-098's teardown), and the parent's resume
+ * loop (REQ-ORCH-055/056/057/059: resumed with the newly terminal children's reports whenever one reaches a
+ * terminal state it has not observed; idle otherwise; the same loop serves the root and a child that delegated).
  */
 export const CHILD_TIMEOUT_MS: Millis = millis(1_200_000);
 
@@ -68,6 +69,8 @@ export interface ChildrenDeps {
   readonly toolsFor: (persona: string, agentName: string, delegation: DelegationOps, parentId: string, depth: number) => ToolPort | null;
   readonly summariser: SummariserDeps | null;
   readonly childTimeoutMs?: Millis;
+  /** PD-ORCH-004 / REQ-CONFIG-113: `runtime.child_stall_timeout`, the progress rule's window; absent means the engine's 90 s. */
+  readonly childStallTimeoutMs?: Millis | undefined;
   readonly runSignal: AbortSignal;
   readonly warn: (m: string) => void;
   /**
@@ -175,9 +178,16 @@ export class IterationChildren implements DelegationOps {
     // PD-TOOLS-006: a scope that cannot be honoured refuses the delegation before a record exists, like every refusal here.
     const scope = validateWriteScope(req.writeScope ?? []);
     if (!scope.ok) return { status: 'rejected', canonicalName: req.taskName, message: scope.reason };
+    // PD-ORCH-004: a continuation is admitted only for the caller's own child that offered one, and only once.
+    const continuationOf = req.continuationOf ?? '';
+    if (continuationOf !== '') {
+      const refusal = this.continuationRefusalFor(parentId, continuationOf);
+      if (refusal !== null) return { status: 'rejected', canonicalName: req.taskName, message: refusal };
+    }
     const r = this.ledger.spawn({
       parentId, parentDepth, persona: req.persona, taskName: req.taskName, task: req.task, dependsOn: req.dependsOn, inheritedContext: req.inheritedContext,
       category: req.category, background: req.runInBackground, modelKey: persona?.modelRef?.modelId ?? this.deps.model.modelId, grantedTools: persona?.tools ?? [],
+      ...(continuationOf !== '' ? { continuationOf } : {}),
     });
     if (!r.ok) return { status: 'rejected', canonicalName: req.taskName, message: r.error.reason };
     const { row, held, aliasResolved } = r.value;
@@ -197,6 +207,24 @@ export class IterationChildren implements DelegationOps {
     }
     if (now.state === 'waiting_on_dependencies') return { status: 'waiting_on_dependencies', canonicalName: row.canonical_name, taskId: row.task_id, message: `Waiting on ${req.dependsOn.join(', ')}.${alias}`, attachments };
     return { status: 'queued', canonicalName: row.canonical_name, taskId: row.task_id, message: `Accepted; the child runs in the ${req.runInBackground ? 'background' : 'foreground'}.${alias}`, attachments };
+  }
+
+  /** REQ-TOOLS-155: whether `row` is a direct child of the agent `parentId` — the root's children whichever name the root goes by. */
+  private owns(parentId: string, row: ChildRow): boolean {
+    return row.parent_id === parentId || (this.ledger.isRoot(parentId) && this.ledger.isRoot(row.parent_id));
+  }
+
+  /**
+   * PD-ORCH-004: the refusal of a `continuation_of` naming `reference`, or null. The offer is read from the named
+   * child's stored report, so only a child the limit cut off while making progress — and never a continuation — can be
+   * continued; a child already recorded as its continuation refuses a second one, anywhere in the session.
+   */
+  private continuationRefusalFor(parentId: string, reference: string): string | null {
+    const row = this.ledger.get(reference);
+    const target = row !== undefined && this.owns(parentId, row) ? row : undefined;
+    const offered = target !== undefined && typeof parseReport(target)?.cut_off?.continuation_offer === 'string';
+    const continuedBy = this.deps.dal.childrenOf(this.deps.sessionId).find((c) => c.continuation_of === reference);
+    return continuationRefusal(reference, target, offered, continuedBy);
   }
 
   // ---- PD-TOOLS-006: write scopes ---------------------------------------------------------------
@@ -252,11 +280,10 @@ export class IterationChildren implements DelegationOps {
     }
     const row = this.ledger.get(taskId);
     // REQ-TOOLS-155: parent-scoped — another parent's child reads as not_found.
-    const isOwned = row && (row.parent_id === parentId || (this.ledger.isRoot(parentId) && this.ledger.isRoot(row.parent_id)));
-    if (!row || !isOwned) return { status: 'not_found', state: '', text: '' };
+    if (!row || !this.owns(parentId, row)) return { status: 'not_found', state: '', text: '' };
     if (!isTerminalChildState(row.state)) return { status: 'still_running', state: row.state, text: '' };
     const r = parseReport(row);
-    const lines = [`agent: ${row.canonical_name} (${row.persona})`, `status: ${r?.status ?? row.state}`, `summary: ${r?.summary ?? ''}`, `key findings:\n${(r?.key_findings ?? []).map((k) => `- ${k}`).join('\n') || '(none)'}`, `last reply: ${r?.last_response ?? ''}`];
+    const lines = [`agent: ${row.canonical_name} (${row.persona})`, `status: ${r?.status ?? row.state}`, `summary: ${r?.summary ?? ''}`, `key findings:\n${(r?.key_findings ?? []).map((k) => `- ${k}`).join('\n') || '(none)'}`, `last reply: ${r?.last_response ?? ''}`, ...cutOffLines(r?.cut_off)];
     if (detail === 'verbatim') lines.push(`final reply (verbatim): ${r?.final_response ?? ''}`);
     return { status: 'ok', state: row.state, text: lines.join('\n') };
   }
@@ -345,6 +372,10 @@ export class IterationChildren implements DelegationOps {
     if (!moved.ok) { deps.warn(moved.reason); return; }
     const persona = personaOf(deps, row.persona);
     const childTimeoutMs = deps.childTimeoutMs ?? CHILD_TIMEOUT_MS;
+    // PD-ORCH-004: the progress rule's window — the role's own `stall_timeout` (REQ-CONFIG-108), else the run's
+    // `runtime.child_stall_timeout` — and the log it reads, kept across both attempts of REQ-ORCH-088's retry.
+    const stallMs = millis(persona?.stallTimeoutMs ?? deps.childStallTimeoutMs ?? CHILD_STALL_TIMEOUT_MS);
+    const progress = new ProgressLog(deps.workspaceRoot);
     // Part Q: the child's own cell — its model (an override of the session applied), its role's fallback, one fallback across both routes.
     const resilience = deps.resilience?.forChild(persona, { model: persona?.modelRef ?? deps.model, thinking: persona?.thinking ?? deps.thinking }, childTimeoutMs) ?? null;
     // Part AH: this child's own capacity and its own plan — the ledger row is where a child's task plan lives.
@@ -365,6 +396,8 @@ export class IterationChildren implements DelegationOps {
     let error: { type: string; message: string } | null = null;
     let timedOut = false;
     let landing = false;
+    /** PD-ORCH-004: whether the child was making progress at the instant its limit expired. */
+    let progressing = false;
     let childSignal: AbortSignal = deps.runSignal;
     // REQ-ORCH-088: the child runs under the hard timeout; on expiry, once, it is retried on the role's fallback when one is untried.
     for (;;) {
@@ -374,6 +407,7 @@ export class IterationChildren implements DelegationOps {
       deps.runSignal.addEventListener('abort', onRunAbort, { once: true });
       timedOut = false;
       landing = false;
+      progressing = false;
       // REQ-ORCH-088: expiry asks the child to land — the turn stops before its next model step — and only
       // the backstop CHILD_LANDING_GRACE later cuts it off. `timedOut` is set at the ceiling, not at the
       // backstop, so the fallback-retry limb below and the report's `Child timed out after <N>s` are
@@ -384,6 +418,8 @@ export class IterationChildren implements DelegationOps {
       const timer = deps.clocks.timers.after(childTimeoutMs, () => {
         timedOut = true;
         landing = true;
+        // PD-ORCH-004: read AT the expiry, so a call completed during the landing that follows never counts.
+        progressing = progress.madeProgress(deps.clocks.monotonic.now(), stallMs);
         backstop.handle = deps.clocks.timers.after(CHILD_LANDING_GRACE, () => { controller.abort(); });
       });
       let firstCall = true;
@@ -400,6 +436,7 @@ export class IterationChildren implements DelegationOps {
         ...(resilience ? { resilience } : {}),
         ...(compression ? { compression } : {}),
         ...(deps.onRequestUsage ? { onRequestUsage: deps.onRequestUsage } : {}),
+        onToolCompleted: (call, result) => progress.completed(deps.clocks.monotonic.now(), call.name, result.args, result.status === 'ok' && !result.isError),
         // REQ-ORCH-093: the resume limb — a child's turn after its first is a parent being resumed with reports.
         parentResume: !wasFirst,
       }, task, history, controller.signal); };
@@ -476,7 +513,16 @@ export class IterationChildren implements DelegationOps {
 
     // REQ-MONITOR-018: summarizing until the report exists, then terminal; cancellation settles from anywhere.
     if (!cancelled) { const s = this.ledger.transition(row.task_id, 'summarizing'); if (!s.ok) deps.warn(s.reason); }
-    const report = await produceReport({ agentName: row.canonical_name, role: row.persona, status, messages, toolCallCount: toolCalls, toolsUsed: [...new Set(messages.flatMap((m) => m.content.flatMap((p) => (p.kind === 'tool-call' ? [p.name] : []))))], lastText, finalTextIsFinal: finalIsFinal, errors }, cancelled ? null : deps.summariser, childSignal);
+    /*
+     * PD-ORCH-004: REQ-ORCH-088's report stands as it is — status, timeout error, last response — and a child that was
+     * making progress when the limit expired additionally carries the statement, the paths it changed and, unless it
+     * is itself a continuation, the offer. A child that was not making progress gets exactly REQ-ORCH-088's report.
+     */
+    const cutOff: CutOff | null = timedOut && !cancelled && progressing
+      ? cutOffReport({ taskId: row.task_id, limitS: childTimeoutMs / 1000, stallS: stallMs / 1000, changedPaths: progress.changedPaths(), isContinuation: row.continuation_of !== null })
+      : null;
+    const produced = await produceReport({ agentName: row.canonical_name, role: row.persona, status, messages, toolCallCount: toolCalls, toolsUsed: [...new Set(messages.flatMap((m) => m.content.flatMap((p) => (p.kind === 'tool-call' ? [p.name] : []))))], lastText, finalTextIsFinal: finalIsFinal, errors }, cancelled ? null : deps.summariser, childSignal);
+    const report = cutOff === null ? produced : { ...produced, cut_off: cutOff };
     this.ledger.storeReport(row.task_id, report as unknown as Record<string, unknown>);
     const terminal = cancelled ? 'cancelled' : status === 'failed' ? 'failed' : reportStatusToState(report.status);
     const t = cancelled ? this.ledger.transition(row.task_id, 'cancelled', 'cancellation') : this.ledger.transition(row.task_id, terminal);

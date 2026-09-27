@@ -47,7 +47,8 @@ amendment (R-049), and OQ-62's configured-rate branch with it; OQ-62's discovery
 2026-09-21 by building `PD-WORKSPACE-002`'s per-file switches: OQ-64** (whether an instruction override
 suppresses its base when the override is itself switched off — a third state REQ-WORKSPACE-042's "given
 both exist" has no word for). **OQ-64 was ruled on 2026-09-27** as built (R-052), together with ESC-37,
-ESC-38 and ESC-39. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+ESC-38 and ESC-39. **One more was raised on 2026-09-27 by building `PD-ORCH-004`: OQ-66** (how `delegate` names the
+child a continuation continues, which REQ-TOOLS-152's fields do not provide and the directive does not name). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -2840,6 +2841,35 @@ handed to the engine, which owns neither.
 **What a ruling decides.** Whether an analysis reads what injection may not; and, if not, whether the
 retrospective should say in its own output that a file was present and withheld, so a user reading a thin
 retrospective can tell it apart from an empty workspace.
+
+**OQ-66 — How does `delegate` name the child a continuation continues?** *(`PD-ORCH-004` over REQ-ORCH-088; REQ-TOOLS-152, with REQ-TOOLS-153/154, none of which the directive names. Raised 2026-09-27 by building `PD-ORCH-004` under [R-057](../product/requests.md#r-057).)*
+
+`PD-ORCH-004` lets a parent delegate a cut-off child's remaining work "to a new child as a continuation of this
+one", and requires the continuation to carry that relationship in its record. It does not say how the parent names
+the child it continues, and it narrows REQ-ORCH-088 alone. REQ-TOOLS-152 lists `delegate`'s fields and states that it,
+REQ-TOOLS-153 and REQ-TOOLS-154 are "the whole of the `delegate` contract". Under `docs/product/README.md` a requirement
+no directive names governs exactly as it did, so the build departs from a requirement nothing narrowed.
+
+**None of the existing fields fits.** `session_id` means "reuse a previous delegation's session for a retry or a
+follow-up": a resumed session, which the directive rules out ("never an automatic resume"; a *new* child). And
+REQ-NOTIFY-112 holds that the timed-out child is not recovery-eligible. `inherited_context` carries a completed
+sibling's report into the child without ordering, and ignores an id naming a failed task, which is exactly what a
+timed-out child is. So reusing it would carry nothing and record no relationship. `depends_on` waits for the upstream
+task to finish *successfully*, which a cut-off child never does.
+
+**What the build proceeds under.** One new optional field, `continuation_of`, the task id of the child continued. The
+name is the directive's own word. `delegate` refuses it with status `rejected` and no record, beside REQ-TOOLS-152's
+other refusals, unless it names the caller's own direct child whose stored report made the offer and which no child
+of the session already continues. The relationship is stored in `children.continuation_of` (store v22). REQ-TOOLS-152
+is not edited.
+
+**What a ruling decides.** Either amend `PD-ORCH-004` to name REQ-TOOLS-152 as well, with `continuation_of` as the
+field it adds (the shape `PD-TOOLS-006` took for `write_scope`, whose requirement carries a back-pointer), or choose
+another way for the parent to say what it continues. Two limits of the reading built belong to the same ruling. The
+caller's "own child" is the same ownership test `background_output` uses (REQ-TOOLS-155), and each iteration mints a new
+root task. So a later iteration's root, or the next run after a stop, is refused a continuation of an earlier
+iteration's child, and the offer's text does not say so. And nothing but the task id carries over: the continuation's
+payload is assembled as any child's is.
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

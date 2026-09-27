@@ -185,13 +185,18 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
   });
   afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
 
+  /** A tool the test answers itself, in place of the gate's executors; undefined leaves the call to the delegation tools. */
+  type TestTool = (name: string, args: Record<string, unknown>) => Promise<PortToolResult> | undefined;
+
   /** A tool port whose only tools are the three delegation tools, dispatched straight to the ops (the gate is Part A's, tested there). */
-  function delegationPort(ops: DelegationOps, parentId: string): ToolPort {
+  function delegationPort(ops: DelegationOps, parentId: string, tool?: TestTool): ToolPort {
     const dispatch = async (name: string, raw: string): Promise<PortToolResult> => {
       const a = JSON.parse(raw) as Record<string, unknown>;
       const ok = (text: string): PortToolResult => ({ text, isError: false, status: 'ok', durationMs: 1, label: name, args: a });
+      const own = tool?.(name, a);
+      if (own) return own;
       if (name === 'delegate') {
-        const r = await ops.delegate(parentId, { persona: String(a['persona']), taskName: String(a['task_name']), task: String(a['task']), dependsOn: (a['depends_on'] as string[]) ?? [], inheritedContext: [], category: '', runInBackground: a['run_in_background'] !== false, writeScope: (a['write_scope'] as string[] | undefined) ?? [] });
+        const r = await ops.delegate(parentId, { persona: String(a['persona']), taskName: String(a['task_name']), task: String(a['task']), dependsOn: (a['depends_on'] as string[]) ?? [], inheritedContext: [], category: '', runInBackground: a['run_in_background'] !== false, writeScope: (a['write_scope'] as string[] | undefined) ?? [], ...(typeof a['continuation_of'] === 'string' ? { continuationOf: a['continuation_of'] } : {}) });
         if (r.status === 'rejected') return { ...ok(`Task '${r.canonicalName}': rejected — ${r.message}`), isError: true, status: 'failed' };
         let text = `Task '${r.canonicalName}': ${r.status} — ${r.message}\ntask_id: ${r.taskId}`;
         if (a['run_in_background'] === false) { const w = await ops.waitForTasks(parentId, [r.taskId]); text += `\n\n${'refused' in w ? w.refused : w.text}`; }
@@ -207,7 +212,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     };
   }
 
-  function sessionsWith(script: (persona: string, turn: number, req: ModelRequest) => ScriptedCall, over: { cap?: number | null; childTimeoutMs?: number } = {}) {
+  function sessionsWith(script: (persona: string, turn: number, req: ModelRequest) => ScriptedCall, over: { cap?: number | null; childTimeoutMs?: number; childStallTimeoutMs?: number; tool?: TestTool } = {}) {
     // The scripted client answers by persona and by the number of calls that persona has made.
     const counts = new Map<string, number>();
     const client = new ScriptedModelClient([]);
@@ -238,11 +243,11 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
         let mode: PermissionPreset = selected;
         const base = { cancelPending: () => 0, setMode: (m: string) => { const previous = mode; mode = m as PermissionPreset; return { requested: mode, effective: mode, downgraded: false, reason: '', previous }; }, currentMode: () => mode, answerApproval: () => false };
         return ctx.delegation
-          ? { ...delegationPort(ctx.delegation, ctx.parentId ?? 'root'), ...base }
+          ? { ...delegationPort(ctx.delegation, ctx.parentId ?? 'root', over.tool), ...base }
           : { specs: () => [], dispatch: async () => ({ text: '', isError: true, status: 'failed', durationMs: 0, label: '', args: {} }), ...base };
       },
       attended: () => true,
-      runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', modelConcurrencyCap: over.cap ?? null, drainTimeoutMs: 0 },
+      runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', modelConcurrencyCap: over.cap ?? null, drainTimeoutMs: 0, ...(over.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: over.childStallTimeoutMs }) },
     });
     void over.childTimeoutMs;
     return { sessions, client, counts, built, contexts };
@@ -549,6 +554,167 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     // Cut before it could speak — the grace is a chance to land, not an extension of the ceiling.
     expect(report.last_response).toBe('');
     expect(dal.issuesOf(sid).map((i) => i.kind)).toContain('timeout');
+  });
+
+  describe('PD-ORCH-004: a child cut off while making progress hands its work back', () => {
+    const tick = () => new Promise((r) => setTimeout(r, 10));
+    const textOf = (m: ModelRequest['messages'][number]) => m.content.map((p) => (p.kind === 'text' ? p.text : p.kind === 'tool-result' ? p.result : '')).join('');
+    /** A gate the test opens: a tool call waiting on it completes at whatever the clock reads when it is opened. */
+    const gate = () => { let open!: () => void; const p = new Promise<void>((r) => { open = r; }); return { p, open }; };
+    type StoredCutOff = { statement: string; changed_paths: string[]; changes: string; continuation_offer: string | null };
+    type Stored = { status: string; last_response: string; errors: { type: string; message: string }[]; cut_off?: StoredCutOff };
+    const reportOf = (row: ChildRow) => JSON.parse(row.report!) as Stored;
+    /** The file tools and `read_file`, answered here: a write to `fail.ts` fails, a read of a gate waits for it. */
+    const fileTools = (gates: Record<string, Promise<void>>) => (name: string, a: Record<string, unknown>): Promise<PortToolResult> | undefined => {
+      if (!['write_file', 'haet_edit', 'read_file'].includes(name)) return undefined;
+      const failed = String(a['path']).endsWith('fail.ts');
+      const result: PortToolResult = { text: failed ? 'the edit did not apply' : 'ok', isError: failed, status: failed ? 'failed' : 'ok', durationMs: 1, label: name, args: a };
+      const waitOn = gates[String(a['path'])];
+      return waitOn ? waitOn.then(() => result) : Promise.resolve(result);
+    };
+    /** A child's step number is the count of its own assistant messages so far, plus one. */
+    const stepOf = (req: ModelRequest) => req.messages.filter((m) => m.role === 'assistant').length + 1;
+    const hasTask = (req: ModelRequest, task: string) => req.messages.some((m) => m.role === 'user' && textOf(m).includes(task));
+
+    /**
+     * One child, delegated by the root, whose last tool call completes when the clock reads `completedAt` (the child
+     * started at 0, so its 1,200 s limit expires at 1,200,000); it then speaks once more and is cut off. At its next
+     * turn the root tries to continue it and then ends.
+     */
+    async function cutOffAt(completedAt: number, over: { childStallTimeoutMs?: number } = {}) {
+      const g = gate();
+      const hold = gate();
+      let sid = '' as SessionId;
+      const { sessions, client } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'build', task: 'TASK: build' } }]);
+          if (turn === 3) return toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'build-rest', task: 'TASK: continue', continuation_of: children(sid)[0]!.task_id } }]);
+          return answer(`root turn ${turn}`);
+        }
+        if (persona === 'summariser') return answer('not json');
+        if (stepOf(req) === 1) return toolCalls([{ callId: 'w1', name: 'write_file', args: { path: 'src/a.ts', content: 'a' } }, { callId: 'r1', name: 'read_file', args: { path: 'gate' } }]);
+        return { parts: [{ hold: hold.p }, { part: { kind: 'text', delta: 'I wrote a and was reading on' } }, { part: { kind: 'finish', reason: 'stop' } }] };
+      }, { tool: fileTools({ gate: g.p }), ...over });
+      sid = (sessions.start(dal, '/ws', 'x') as { value: SessionId }).value;
+      await tick();
+      clock.advance(completedAt);
+      g.open();
+      await tick();
+      clock.advance(1_200_000 - completedAt);
+      hold.open();
+      const result = await sessions.running(sid)!;
+      return { sid, result, client, row: children(sid)[0]! };
+    }
+
+    it('a call completed exactly at the start of the final 90 s is progress: the report adds the statement, the paths and the offer, and the parent reads them', async () => {
+      const { sid, result, client, row } = await cutOffAt(1_110_000);
+      expect(result.status).toBe('completed');
+      expect(row.state).toBe('failed');
+      const report = reportOf(row);
+      // REQ-ORCH-088's report stands as it was.
+      expect(report.errors).toEqual(expect.arrayContaining([{ type: 'timeout', message: 'Child timed out after 1200s' }]));
+      expect(report.last_response).toBe('I wrote a and was reading on');
+      expect(report.cut_off).toEqual({
+        statement: 'Cut off while making progress: this child completed a tool call within the final 90s before its 1200s limit expired.',
+        changed_paths: ['src/a.ts'],
+        changes: 'Workspace paths its file-writing calls changed, in the order first changed: src/a.ts.',
+        continuation_offer: expect.stringContaining(`continuation_of: "${row.task_id}"`),
+      });
+      // The parent's resume message carries all three, after the report's result text.
+      const resume = client.requests.filter((r) => /^You are the orchestrator/.test(textOf(r.messages[0]!)))[2]!;
+      const block = textOf([...resume.messages].reverse().find((m) => m.role === 'user')!);
+      expect(block).toContain(`### build (coding-agent) — failed\nI wrote a and was reading on\n${report.cut_off!.statement}\n${report.cut_off!.changes}\n${report.cut_off!.continuation_offer}`);
+      // The continuation was admitted and carries the relationship in its record.
+      const rest = children(sid).find((c) => c.canonical_name === 'build-rest')!;
+      expect(rest.continuation_of).toBe(row.task_id);
+      expect(row.continuation_of).toBeNull();
+    });
+
+    it('a call completed one millisecond before the final 90 s is not progress: exactly REQ-ORCH-088\'s report, and no continuation is admitted', async () => {
+      const { sid, client, row } = await cutOffAt(1_109_999);
+      expect(row.state).toBe('failed');
+      const report = reportOf(row);
+      expect(report.errors).toEqual(expect.arrayContaining([{ type: 'timeout', message: 'Child timed out after 1200s' }]));
+      expect(report.cut_off).toBeUndefined();
+      const resume = client.requests.filter((r) => /^You are the orchestrator/.test(textOf(r.messages[0]!)))[2]!;
+      expect(textOf([...resume.messages].reverse().find((m) => m.role === 'user')!)).not.toMatch(/Cut off|continuation/);
+      // The root's attempt to continue it is refused before a record exists.
+      expect(children(sid)).toHaveLength(1);
+      const after = client.requests.filter((r) => /^You are the orchestrator/.test(textOf(r.messages[0]!)))[3]!;
+      expect(textOf(after.messages.at(-1)!)).toMatch(/rejected — Task 'build' \(bg_[0-9a-f]{8}\) made no continuation offer/);
+    });
+
+    it('runtime.child_stall_timeout is the window: at 60 s, a call completed 60.001 s before the expiry is not progress', async () => {
+      const { row } = await cutOffAt(1_139_999, { childStallTimeoutMs: 60_000 });
+      expect(reportOf(row).cut_off).toBeUndefined();
+    });
+
+    it('the paths are listed in the order first changed, once each; the continuation says it changed none and is never continued in turn; work is continued once', async () => {
+      const g1 = gate(); const hold1 = gate(); const g2 = gate(); const hold2 = gate();
+      let sid = '' as SessionId;
+      const idOf = (name: string) => children(sid).find((c) => c.canonical_name === name)!.task_id;
+      const { sessions, client } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'build', task: 'TASK: build' } }]);
+          if (turn === 3) {
+            // The offer named the id to use: take it from the resume message rather than from the store.
+            const offered = /continuation_of: "(bg_[0-9a-f]{8})"/.exec(textOf([...req.messages].reverse().find((m) => m.role === 'user')!))![1]!;
+            return toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'build-rest', task: 'TASK: continue', continuation_of: offered } }]);
+          }
+          if (turn === 5) return toolCalls([
+            { callId: 'd3', name: 'delegate', args: { persona: 'coding-agent', task_name: 'chain', task: 'TASK: chain', continuation_of: idOf('build-rest') } },
+            { callId: 'd4', name: 'delegate', args: { persona: 'coding-agent', task_name: 'again', task: 'TASK: again', continuation_of: idOf('build') } },
+            { callId: 'd5', name: 'delegate', args: { persona: 'coding-agent', task_name: 'nobody', task: 'TASK: nobody', continuation_of: 'bg_00000000' } },
+          ]);
+          return answer(`root turn ${turn}`);
+        }
+        if (persona === 'summariser') return answer('not json');
+        if (hasTask(req, 'TASK: build')) {
+          const step = stepOf(req);
+          if (step === 1) return toolCalls([
+            { callId: 'b1', name: 'write_file', args: { path: 'src/b.ts', content: 'b' } },
+            { callId: 'b2', name: 'haet_edit', args: { path: './src/a.ts' } },
+            { callId: 'b3', name: 'write_file', args: { path: 'src/fail.ts', content: 'x' } },
+          ]);
+          if (step === 2) return toolCalls([
+            { callId: 'b4', name: 'write_file', args: { path: '/ws/src/b.ts', content: 'b2' } },
+            { callId: 'b5', name: 'haet_edit', args: { file_path: 'docs/c.md' } },
+            { callId: 'b6', name: 'read_file', args: { path: 'gate1' } },
+          ]);
+          return { parts: [{ hold: hold1.p }, { part: { kind: 'text', delta: 'halfway' } }, { part: { kind: 'finish', reason: 'stop' } }] };
+        }
+        if (stepOf(req) === 1) return toolCalls([{ callId: 'c1', name: 'read_file', args: { path: 'gate2' } }]);
+        return { parts: [{ hold: hold2.p }, { part: { kind: 'text', delta: 'still reading' } }, { part: { kind: 'finish', reason: 'stop' } }] };
+      }, { tool: fileTools({ gate1: g1.p, gate2: g2.p }) });
+      sid = (sessions.start(dal, '/ws', 'x') as { value: SessionId }).value;
+      await tick();
+      clock.advance(1_150_000); g1.open(); await tick();
+      clock.advance(50_000); hold1.open(); await tick(); await tick();
+      // The continuation started when the root delegated it, at 1,200,000; its own limit expires at 2,400,000.
+      expect(children(sid).find((c) => c.canonical_name === 'build-rest')?.state).toBe('running');
+      clock.advance(1_150_000); g2.open(); await tick();
+      clock.advance(50_000); hold2.open();
+      const result = await sessions.running(sid)!;
+      expect(result.status).toBe('completed');
+
+      const build = children(sid).find((c) => c.canonical_name === 'build')!;
+      const rest = children(sid).find((c) => c.canonical_name === 'build-rest')!;
+      expect(reportOf(build).cut_off!.changed_paths).toEqual(['src/b.ts', 'src/a.ts', 'docs/c.md']);
+      expect(rest.continuation_of).toBe(build.task_id);
+      expect(rest.state).toBe('failed');
+      const restReport = reportOf(rest);
+      expect(restReport.errors).toEqual(expect.arrayContaining([{ type: 'timeout', message: 'Child timed out after 1200s' }]));
+      expect(restReport.cut_off).toMatchObject({ changed_paths: [], changes: 'Its file-writing calls changed no workspace paths.', continuation_offer: null });
+      expect(restReport.cut_off!.statement).toMatch(/^Cut off while making progress/);
+      // The three refused continuations created no record, and each says why.
+      expect(children(sid).map((c) => c.canonical_name)).toEqual(['build', 'build-rest']);
+      const last = client.requests.filter((r) => /^You are the orchestrator/.test(textOf(r.messages[0]!))).at(-1)!;
+      const refusals = textOf(last.messages.at(-1)!);
+      expect(refusals).toContain(`Task 'chain': rejected — Task 'build-rest' (${rest.task_id}) made no continuation offer`);
+      expect(refusals).toContain(`Task 'again': rejected — Task 'build' (${build.task_id}) was already continued by 'build-rest' (${rest.task_id})`);
+      expect(refusals).toContain("Task 'nobody': rejected — continuation_of 'bg_00000000' names no child task of yours");
+      expect(dal.issuesOf(sid).filter((i) => i.kind === 'timeout')).toHaveLength(2);
+    });
   });
 
   it('REQ-ORCH-052 / REQ-ORCH-133: a stop while a child runs settles it cancelled through the normal path with a report, and the run ends interrupted', async () => {

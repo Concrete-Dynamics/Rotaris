@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { childPayload } from './notify.js';
+import type { ChildRow } from '@rotaris/store';
+import { cutOffReport } from './cut-off.js';
+import { childPayload, REPORT_BLOCK_CAP, reportBlock } from './notify.js';
 
 describe('the child payload order — REQ-TOOLS-154, REQ-ORCH-035, PD-TOOLS-006', () => {
   const prior = '[Prior agent context — authoritative: rely on these findings rather than repeating the investigation]';
@@ -20,5 +22,23 @@ describe('the child payload order — REQ-TOOLS-154, REQ-ORCH-035, PD-TOOLS-006'
     const payload = childPayload('/ws', 'the task', '', [index, ''], '');
     expect(payload.split('\n\n')[0]).toMatch(/^Workspace root: \/ws\./);
     expect(payload.split('\n\n').slice(1)).toEqual([...index.split('\n\n'), 'the task']);
+  });
+});
+
+describe('the report block — REQ-ORCH-060, PD-ORCH-004', () => {
+  const row = (report: Record<string, unknown>): ChildRow => ({ task_id: 'bg_0000000a', canonical_name: 'build', persona: 'coding-agent', state: 'failed', report: JSON.stringify(report) } as ChildRow);
+  const timeout = { status: 'failed', last_response: 'working on b', errors: [{ type: 'timeout', message: 'Child timed out after 1200s' }] };
+
+  it('a child cut off while making progress shows the statement, its paths and the offer after the capped result text', () => {
+    const cut_off = cutOffReport({ taskId: 'bg_0000000a', limitS: 1200, stallS: 90, changedPaths: ['src/a.ts'], isContinuation: false });
+    const block = reportBlock(row({ ...timeout, last_response: 'x'.repeat(REPORT_BLOCK_CAP + 10), cut_off }));
+    const lines = block.split('\n');
+    expect(lines[0]).toBe('### build (coding-agent) — failed');
+    expect(lines.slice(-3)).toEqual([cut_off.statement, cut_off.changes, cut_off.continuation_offer]);
+    expect(block).toContain('… [10 characters omitted]');
+  });
+
+  it('a timed-out child that was not making progress gets exactly the block it had before', () => {
+    expect(reportBlock(row(timeout))).toBe('### build (coding-agent) — failed\nworking on b');
   });
 });

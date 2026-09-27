@@ -148,6 +148,8 @@ export interface RuntimePosture {
   readonly messageLimit?: number | null;
   /** REQ-ORCH-088 / REQ-CONFIG-114: `runtime.child_timeout` in milliseconds; absent means the engine's 1,200 s. */
   readonly childTimeoutMs?: number | undefined;
+  /** PD-ORCH-004 / REQ-CONFIG-113: `runtime.child_stall_timeout` in milliseconds; absent means the engine's 90 s. */
+  readonly childStallTimeoutMs?: number | undefined;
   /** REQ-ORCH-152 / REQ-CONFIG-476: `runtime.run_start_mode`; absent means `auto` and no gate applies. */
   readonly runStartMode?: 'auto' | 'plan' | undefined;
 }
@@ -896,6 +898,7 @@ export class Sessions {
       ...(setup.value.contextUnits ? { contextUnits: setup.value.contextUnits } : {}),
       resilience: { memory: live.memory!, catalogue: setup.value.resilience?.catalogue ?? [], fallbackModel: setup.value.resilience?.fallbackModel ?? null },
       ...(runtime?.childTimeoutMs === undefined ? {} : { childTimeoutMs: runtime.childTimeoutMs as Millis }),
+      ...(runtime?.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: runtime.childStallTimeoutMs as Millis }),
       messageLimit: runtime?.messageLimit ?? null, onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),
       // REQ-ORCH-152/153: the plan gate as a launch input; the run settles the hold itself once the intent is known.
       ...(this.planLaunchFor(dal, sessionId, runtime) ?? {}),
@@ -1039,6 +1042,7 @@ export class Sessions {
       ...(setupIn.contextUnits ? { contextUnits: setupIn.contextUnits } : {}),
       resilience: { memory: s.memory, catalogue: setupIn.resilience?.catalogue ?? [], fallbackModel: setupIn.resilience?.fallbackModel ?? null },
       ...(runtime?.childTimeoutMs === undefined ? {} : { childTimeoutMs: runtime.childTimeoutMs as Millis }),
+      ...(runtime?.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: runtime.childStallTimeoutMs as Millis }),
       messageLimit: runtime?.messageLimit ?? null, onPaused: (info) => this.deps.onRunPaused?.(sessionId, info),
       // REQ-ORCH-152/153/154: a continuation holds again unless approval already released this run, and a revise
       // cycle passes its own number and the changes the user stated.

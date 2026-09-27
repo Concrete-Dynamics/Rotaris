@@ -144,6 +144,20 @@ transcript. Its status is one of exactly `succeeded`, `partial`, `failed`, `canc
 Verification results, the gate decision and the repair record are runner-owned and unwritable by the
 model. — `REQ-ORCH-109`, `REQ-ORCH-112`
 
+**Making progress** (a child):
+Having completed at least one tool call within the final `runtime.child_stall_timeout` seconds before the child's
+`runtime.child_timeout` expired. A child cut off while making progress still ends `failed`, and its report also
+carries the workspace paths it changed and, unless it is itself a continuation, a **continuation offer**. —
+`PD-ORCH-004`
+
+**Continuation** (of a child):
+A new child a parent delegates to take up the remaining work of a child whose report made a continuation offer; its
+record names the child it continues. A piece of work is continued once and a continuation is never offered one of its
+own. Not a resume: the timed-out child is never restarted and earns no corrective message (`REQ-NOTIFY-112`). —
+`PD-ORCH-004`
+_Avoid_: resume, retry (the one retry is REQ-ORCH-088's fallback model), and "continuation" alone where a session's
+next run is meant
+
 ### What shapes a run
 
 **Intent**:

@@ -1568,6 +1568,55 @@ so a child that genuinely loops is still stopped at the same point.
 
 *Raised by the owner, 2026-09-23; logged as [R-048](requests.md#r-048).*
 
+> **First execution, 2026-09-27, built under [R-057](requests.md#r-057):** the mechanism was built as written, and the
+> text met the code in four places. **(1) The stall window had no reader.** `runtime.child_stall_timeout` and a role's
+> `stall_timeout` were loaded and validated and reached no run; the progress rule is their first reader. Both are now
+> handed to the run, and the role's value substitutes for the run's on that role's children (REQ-CONFIG-108). The
+> stall recovery REQ-NOTIFY-111/112 describe for the same window is not built, and that is recorded in
+> [`a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md`](../defects/a-child-that-produces-no-output-is-never-given-its-one-corrective-message.md),
+> not changed. **(2) How a parent names a continuation.** REQ-TOOLS-152's fields have none. `session_id` reuses a
+> delegation's session, and this directive asks for a new child and never a resume, so `delegate` takes one new
+> optional field, `continuation_of`, the task id of the child continued. It is recorded on the new child as
+> `children.continuation_of` (store v22). REQ-TOOLS-152 calls itself the whole of the `delegate` contract, and this
+> directive does not name it; the tension is reported, not settled, and is raised as
+> [OQ-66](../architecture/open-questions.md) with why `session_id`, `inherited_context` and `depends_on` do not fit. **(3) Where the parent reads the report.**
+> REQ-ORCH-060's block shows, of the report, its status and its result text and nothing else, so the three additions
+> would never have reached a parent through it. They follow the capped result text in the resume block and in `background_output`, outside the 4,000-character
+> cap. **(4) The literal readings taken**, each an open question for the owner. A call is "completed" when its result
+> returns to the child, whatever the outcome, so an error or a refusal counts. The window's bound is inclusive: a call
+> completed exactly `child_stall_timeout` seconds before the expiry is progress, and one a millisecond earlier is not.
+> The rule is read at the expiry of the attempt that ended failed, so calls completed during the landing do not
+> count. A path "changed" when a `write_file`, `haet_edit` or `haet` call naming it returned `ok`; the name is matched
+> in lower case, as the gate's own fallback dispatches `Write_File` to `write_file`. Paths are collected across both
+> attempts of REQ-ORCH-088's retry and resolved lexically against the workspace root, so a write outside the root is not
+> a workspace path and is left out. Lexical is not what the file tools' fence does, which decides "inside" on real
+> paths. So a write spelled through the real path of a root reached by a symbolic link (macOS `/var` →
+> `/private/var`) is accepted by the fence and left out of the list, and on a case-insensitive filesystem `Src/A.ts`
+> and `src/a.ts` are listed as two paths. "Continued once" is enforced at admission: a
+> second continuation of the same child, a continuation of a child that made no offer (a continuation among them) and
+> one naming anything but the caller's own child are refused with no record. The caller's "own child" is
+> REQ-TOOLS-155's ownership test, and every iteration mints a new root task. So a continuation can be taken up only
+> within the iteration whose child was cut off: a later iteration, or the next run after a stop, is refused with
+> "names no child task of yours", and the offer's text does not say so (OQ-66); this limit is read from `run/run.ts`
+> and `owns()`, not exercised by a test. The continuation's payload is
+> assembled as any child's is; nothing of the timed-out child is injected into it. What was measured: unit and scripted
+> end-to-end tests only. These cover the rule at a call completed exactly at the window's start and one millisecond
+> before it, a 60 s window set through the run's configuration, the path list's order, de-duplication and failed
+> writes, the "changed none" statement, the offer, the continuation's record, the refused chain and the refused
+> second continuation. Each end-to-end case goes red when its limb of the mechanism is reverted. *Added after review,
+> the same day:* four more end-to-end cases in `ladder.test.ts` exercise REQ-ORCH-088's own machinery. Attempt 1's
+> write is listed beside attempt 2's across the fallback retry. A child progressing at attempt 1's expiry and not at
+> attempt 2's gets REQ-ORCH-088's report alone. A call completing 5 s into the landing grace is not progress. A role's
+> `stall_timeout` of 2 s replaces a run window of 5 s, and one of 3 s keeps the bound inclusive, with the run's window
+> alone as the positive control. Each went red under its mutation: a log built per attempt, progress carried over from
+> an earlier expiry, progress read when the report is built, and the role's value dropped. A unit case covers the
+> lower-case name. What was not
+> measured: no built-app run exercised the mechanism. `pnpm resilience-proof`, the proof nearest this path, could not
+> launch the app as root and made no assertion
+> ([`resilience-proof-cannot-launch-the-app-as-root.md`](../defects/resilience-proof-cannot-launch-the-app-as-root.md)).
+> No live run was made, so the offer's wording has not met a real model. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-monitor-002"></a>

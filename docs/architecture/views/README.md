@@ -45,6 +45,18 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-27**
 
+**The record a paused run resumes from, in contracts and the store (`PD-ORCH-005` phase 1, 2026-09-27, R-060/R-061).**
+The child machine gains its eleventh state, `paused` (`contracts/children.ts`: every non-terminal state may move to it,
+and it moves back to the state the child resumes into), with the `Interruption` vocabulary (`pause | stop | quit |
+crash`); it presents as `queued`, REQ-MONITOR-046's catch-all, and the agent projection never settles it for display
+(OQ-67 records the departure from REQ-MONITOR-211/213). Store **v23** appends `children.interruption`,
+`children.resume_state` and `children.write_scope` (PD-TOOLS-006 revision 2, written at spawn), and three
+session-scoped tables that cascade with their session: `iterations` (each execution iteration with its root's task id,
+open or closed, one open per session), `agent_messages` (every agent's conversation, a compression written as a
+replacement) and `agent_terminals` (the background sessions an agent started). The **runtime view** moves: §7's heading
+and four rows, and §4's write-scope, paused-state and projection paragraphs; the **state-ownership view**'s write-scope
+row says the declared patterns are now stored. No package, edge, process, channel or message kind changed.
+
 **A session approval of a file write covers that path (`PD-TOOLS-004`, built 2026-09-27, R-057).** A grant made by
 "approve for session" on a call of the public `write_file` or `haet_edit` (`haet` folded in) now stores the set of
 paths its REQ-TOOLS-018 path arguments resolved to, against the workspace root, when it was made, and matches a later

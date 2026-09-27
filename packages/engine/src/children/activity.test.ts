@@ -8,7 +8,7 @@ const clocks = {} as Parameters<typeof toAgentRecord>[1];
 const row = (over: Partial<ChildRow> = {}): ChildRow => ({
   session_id: 's', task_id: 'bg_00000001', canonical_name: 'helper', given_name: 'Helper', persona: 'coding-agent', state: 'running', parent_id: 'root:1', depth: 1, iteration: 1,
   launch_generation: 0, model_key: 'scripted/alpha', category: 'quick', background: 1, task: 'do the thing', depends_on: '[]', inherited_context: '["a","b"]', granted_tools: '["read_file","grep"]', granted_mcp: '{}',
-  todo: null, spawned_at: '2026-09-05T10:00:00.000Z', completed_at: null, report: null, report_stored: 0, observed: 0, context_injected: 0, tool_calls: 0, continuation_of: null, ...over,
+  todo: null, spawned_at: '2026-09-05T10:00:00.000Z', completed_at: null, report: null, report_stored: 0, observed: 0, context_injected: 0, tool_calls: 0, continuation_of: null, interruption: null, resume_state: null, write_scope: '[]', ...over,
 });
 
 describe('AgentActivity — REQ-MONITOR-044/049/060 kept incrementally (Part R)', () => {
@@ -73,5 +73,18 @@ describe('toAgentRecord — the new fields of REQ-MONITOR-044 (Part R)', () => {
     expect(toAgentRecord(row({ state: 'running' }), clocks, { activity, session: { executionStatus: 'running', updatedAt: 'x' } })).toMatchObject({ presentationState: 'running', activeTools: ['grep'] });
     expect(toAgentRecord(row({ state: 'running' }), clocks, { session: { executionStatus: 'idle', updatedAt: 'x' } }).presentationState).toBe('running');
     expect(toAgentRecord(row({ state: 'succeeded', completed_at: 't' }), clocks, { session: ended }).completedAt).toBe('t');
+  });
+  it('PD-ORCH-005 / OQ-67: a paused agent of a session at rest is presented paused with its interruption, never settled to the run\'s outcome', () => {
+    const atRest = { executionStatus: 'paused', updatedAt: '2026-09-05T10:09:00.000Z' };
+    // A call a crash left `running` in the ring seeds an active chip; nothing runs for a paused agent, so it shows none.
+    const activity = new AgentActivity();
+    activity.started('helper', 'c1', 'terminal');
+    const r = toAgentRecord(row({ state: 'paused', interruption: 'stop', resume_state: 'running', tool_calls: 4 }), clocks, { activity, session: atRest });
+    expect(r).toMatchObject({ state: 'paused', presentationState: 'queued', interruption: 'stop', activity: 'do the thing', completedAt: null, live: false, toolCalls: 4, activeTools: [] });
+    // Beside it, any other unfinished agent of a session at rest is still presented settled (REQ-MONITOR-211) — the
+    // shape a killed host leaves until a repair or a continue records the crash — and only a paused agent carries an
+    // interruption.
+    expect(toAgentRecord(row({ state: 'running' }), clocks, { session: atRest })).toMatchObject({ state: 'cancelled', interruption: null });
+    expect(toAgentRecord(row({ state: 'running', interruption: 'pause' }), clocks, { session: { executionStatus: 'running', updatedAt: 'x' } }).interruption).toBeNull();
   });
 });

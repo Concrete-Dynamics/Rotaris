@@ -18,7 +18,7 @@ import type { ToolPort } from './run/turn.js';
 import { settleStaleChildren } from './children/orchestration.js';
 import type { DelegationOps } from './children/delegation.js';
 import { DEFAULT_BUDGET, type Budget } from './children/ledger.js';
-import { DEFAULT_CONTEXT_CAPACITY, isTerminalChildState, presentationChildState, reconciledState, type AgentRecord, type ChildState } from '@rotaris/contracts';
+import { DEFAULT_CONTEXT_CAPACITY, isInterruption, isTerminalChildState, presentationChildState, reconciledState, type AgentRecord, type ChildState } from '@rotaris/contracts';
 import type { ChildRow } from '@rotaris/store';
 import { SummaryWriter } from './run/summary.js';
 import { isActiveStatus } from './run/stop-conditions.js';
@@ -632,7 +632,8 @@ export interface AgentFacts {
    * REQ-MONITOR-211/213 (Part R's reading, ADR-0043 note): the session's execution status and its last update. A
    * non-terminal child of a session whose status neither claims a live run nor is `idle` is PRESENTED settled to the
    * run's own outcome — its activity replaced, its active chips cleared — by this one projection, so no surface applies
-   * a settling rule of its own; the ledger's own settling (REQ-ORCH-053) writes the row at the next run start.
+   * a settling rule of its own; the ledger's own settling (REQ-ORCH-053) writes the row at the next run start. A
+   * `paused` child (PD-ORCH-005) is the exception, recorded as OQ-67: it waits in its open iteration to be resumed.
    */
   readonly session?: { readonly executionStatus: string; readonly updatedAt: string } | undefined;
 }
@@ -644,7 +645,12 @@ export function toAgentRecord(c: ChildRow, clocks: Clocks, facts: AgentFacts = {
   void clocks;
   const activity = facts.activity;
   const status = facts.session?.executionStatus ?? null;
-  const reconcile = status !== null && status !== 'idle' && !isActiveStatus(status) && !isTerminalChildState(state);
+  // PD-ORCH-005 / OQ-67: a `paused` agent is not a leftover of a run that ended — it waits in its open iteration to be
+  // resumed, so it is presented as it is and never settled to the run's outcome. REQ-MONITOR-211/213 and
+  // REQ-SESSION-078/180, which the directive does not name, would present it `cancelled`; clauses 2, 4 and 6 make that
+  // false, and the departure is OQ-67's. Nothing runs for it, so it shows no active tool (a crash can leave one).
+  const paused = state === 'paused';
+  const reconcile = status !== null && status !== 'idle' && !isActiveStatus(status) && !isTerminalChildState(state) && !paused;
   const shownState: ChildState = reconcile ? reconciledState(status) : state;
   const shownPs = reconcile ? presentationChildState(shownState) : ps;
   const terminal = c.completed_at !== null || reconcile;
@@ -660,12 +666,13 @@ export function toAgentRecord(c: ChildRow, clocks: Clocks, facts: AgentFacts = {
     compressions: activity?.compressions(c.canonical_name) ?? 0,
     grantedTools: parseList(c.granted_tools),
     calledTools: activity?.calledTools(c.canonical_name) ?? [],
-    // REQ-MONITOR-211/213: a settled agent presents no active tool, whatever a crash left in the ring.
-    activeTools: terminal ? [] : activity?.activeTools(c.canonical_name) ?? [],
+    // REQ-MONITOR-211/213: a settled agent presents no active tool, whatever a crash left in the ring; nor does a paused one.
+    activeTools: terminal || paused ? [] : activity?.activeTools(c.canonical_name) ?? [],
     delegationSessionId: null,
     inheritedContext: parseList(c.inherited_context).join(String.fromCharCode(10)),
     live: shownPs === 'running',
     ...mcpEvidenceOf(c.granted_mcp),
+    interruption: paused && isInterruption(c.interruption) ? c.interruption : null,
   };
 }
 

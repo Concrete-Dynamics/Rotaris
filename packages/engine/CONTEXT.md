@@ -111,8 +111,8 @@ override. The constraints that bind it hold whatever instruction text is in forc
 _Avoid_: manager, supervisor (the **loop supervisor** is a different thing)
 
 **Child**:
-An agent spawned by a delegation, occupying one of ten states of which four are terminal and
-absorbing. — `REQ-ORCH-031`, `REQ-MONITOR-014`, `REQ-MONITOR-300`
+An agent spawned by a delegation, occupying one of eleven states of which four are terminal and
+absorbing. — `REQ-ORCH-031`, `REQ-MONITOR-014`, `REQ-MONITOR-300`, `PD-ORCH-005`
 _Avoid_: subagent, worker, sub-task
 
 **Delegation**:
@@ -254,8 +254,24 @@ _Avoid_: rate card, tariff
 
 **Agent state**:
 A delegated child's state: `queued`, `starting`, `running`, `summarizing`,
-`waiting_on_dependencies`, `waiting_on_model_slot`, `succeeded`, `failed`, `cancelled`, `blocked`.
-The last four are terminal. — `REQ-MONITOR-014`, `REQ-MONITOR-300`
+`waiting_on_dependencies`, `waiting_on_model_slot`, `succeeded`, `failed`, `cancelled`, `blocked`, `paused`.
+`succeeded`, `failed`, `cancelled` and `blocked` are terminal. — `REQ-MONITOR-014`, `REQ-MONITOR-300`, `PD-ORCH-005`
+
+**Paused** (an agent):
+The one non-terminal state a run leaves an unfinished agent in when it comes to rest by a pause, a stop, a quit or a
+crash, with its **interruption** recorded and its iteration left open. It is left again when the iteration resumes,
+for the state the agent **resumes into**: where it waited if it had not started, `running` from its recorded
+conversation if it had, `summarizing` if it was writing its report. It presents as `queued`, REQ-MONITOR-046's catch-all
+(OQ-67), and is not settled for display with its session. Not a terminal state and not an outcome: a `paused` agent has
+no report until it ends. — `PD-ORCH-005`, `REQ-MONITOR-300`
+_Avoid_: suspended, frozen, held (the **plan gate** and the **message-limit pause** hold a run; they leave no agent paused)
+
+**Interruption**:
+What left an agent `paused` — exactly one of `pause`, `stop`, `quit` or `crash` — recorded on the agent and on its open
+iteration. A crash is recorded when the session is next repaired or continued, since nothing runs to record it at the
+time. An explicit cancel is not an interruption: it ends its agents `cancelled`, and those are never resumed. —
+`PD-ORCH-005`
+_Avoid_: stop reason (that is the run's, `REQ-MONITOR-301`), cancellation
 
 **Presentation agent state**:
 The smaller vocabulary an engine state is mapped onto for display — `running`, `waiting`, `queued`,

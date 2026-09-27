@@ -35,6 +35,19 @@ The one record carrying everything a session needs to be continued — transcrip
 states, metrics, pending questions and approvals, permission mode, worktree binding, checkpoints.
 Bulk content is referenced rather than copied. — `REQ-SESSION-029`
 
+**Conversation record**:
+Every agent's conversation — the iteration root's and every child's at every depth — kept as it happens under the
+agent's task id: each message the model was sent and answered, each tool call with its arguments, each tool result. A
+compression is written into it as a replacement, so a resume sends the compressed conversation while the full history
+stays. It belongs to its session and is deleted with it; paging the transcript never touches it, and clearing the
+transcript clears the record of closed iterations only. — `PD-ORCH-005`
+_Avoid_: transcript (the transcript is the rows a surface draws), log, "history" alone (the event history is REQ-EVENTS')
+
+**Open iteration**:
+An iteration that has begun and not closed, recorded with its root's task id. One left open by a pause, a stop, a quit
+or a crash is what the next continue resumes before anything else runs, or closes as cancelled when the user continues
+without its agents. At most one iteration of a session is open. — `PD-ORCH-005`, `REQ-ORCH-072`
+
 **Listing record**:
 The small, fixed record a session browser reads, so that listing sessions never opens their full
 state. A listing reads nothing else but the lock record. — `REQ-SESSION-030`, `REQ-SESSION-042`

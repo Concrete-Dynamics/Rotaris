@@ -2,12 +2,16 @@ import { z } from 'zod';
 
 /**
  * The delegated-child machine, in ONE place (REQ-MONITOR-014, REQ-MONITOR-300, REQ-MONITOR-046,
- * REQ-ORCH-112, REQ-TOOLS-153): the ten states, the four absorbing ones, the legal-transition table AS
+ * REQ-ORCH-112, REQ-TOOLS-153): the eleven states, the four absorbing ones, the legal-transition table AS
  * DATA, the two settling paths, the report-status vocabulary and its mapping to a terminal state, and the
  * presentation mapping a surface reads. Every other package cites this and restates nothing.
+ *
+ * PD-ORCH-005 (narrowing REQ-MONITOR-300) adds the eleventh, `paused`: where a run comes to rest by a pause, a stop, a
+ * quit or a crash, every agent that has not reached a terminal state is left in it, with its interruption recorded,
+ * and it moves back to the state it resumes into when its iteration resumes.
  */
 export const CHILD_STATES = [
-  'queued', 'starting', 'running', 'summarizing', 'waiting_on_dependencies', 'waiting_on_model_slot', 'succeeded', 'failed', 'cancelled', 'blocked',
+  'queued', 'starting', 'running', 'summarizing', 'waiting_on_dependencies', 'waiting_on_model_slot', 'succeeded', 'failed', 'cancelled', 'blocked', 'paused',
 ] as const;
 export type ChildState = (typeof CHILD_STATES)[number];
 
@@ -16,19 +20,62 @@ export function isTerminalChildState(s: string): boolean {
   return TERMINAL_CHILD_STATES.has(s as ChildState);
 }
 
-/** REQ-MONITOR-300's table, exactly; terminal states have no row because nothing leaves them. */
+/**
+ * REQ-MONITOR-300's table, exactly, with PD-ORCH-005's `paused`: every non-terminal state may move to it when the run
+ * comes to rest, and it moves back to the state it resumes into (`RESUME_STATES`). Terminal states have no row
+ * because nothing leaves them, and `paused` is not one of them: it is left again, and the two settling paths reach a
+ * terminal state from it as from any other non-terminal state (a user who continues without the paused agents ends
+ * them `cancelled`).
+ */
 export const CHILD_TRANSITIONS: Readonly<Record<ChildState, readonly ChildState[]>> = Object.freeze({
-  waiting_on_dependencies: ['queued', 'blocked'],
-  queued: ['starting', 'waiting_on_model_slot', 'blocked'],
-  waiting_on_model_slot: ['queued', 'blocked'],
-  starting: ['running', 'failed'],
-  running: ['summarizing', 'succeeded', 'failed'],
-  summarizing: ['succeeded', 'failed'],
+  waiting_on_dependencies: ['queued', 'blocked', 'paused'],
+  queued: ['starting', 'waiting_on_model_slot', 'blocked', 'paused'],
+  waiting_on_model_slot: ['queued', 'blocked', 'paused'],
+  starting: ['running', 'failed', 'paused'],
+  running: ['summarizing', 'succeeded', 'failed', 'paused'],
+  summarizing: ['succeeded', 'failed', 'paused'],
+  paused: ['queued', 'waiting_on_dependencies', 'waiting_on_model_slot', 'running', 'summarizing'],
   succeeded: [],
   failed: [],
   cancelled: [],
   blocked: [],
 });
+
+/**
+ * PD-ORCH-005: what interrupted an agent left `paused` — the four ways a run comes to rest with agents unfinished.
+ * An explicit cancel is not among them: it ends its agents `cancelled`, and those are never resumed.
+ */
+export const INTERRUPTIONS = ['pause', 'stop', 'quit', 'crash'] as const;
+export type Interruption = (typeof INTERRUPTIONS)[number];
+export function isInterruption(s: unknown): s is Interruption {
+  return typeof s === 'string' && (INTERRUPTIONS as readonly string[]).includes(s);
+}
+
+/**
+ * PD-ORCH-005 clause 4: "a `paused` agent moves back to the state it resumes into". The state an agent resumes into,
+ * given the state the rest found it in: an agent that had not begun executing goes back to where it waited, one that
+ * was claimed but not yet running (`starting`) goes back to `queued` and is claimed again, one that was running
+ * resumes running from its record, and one that was summarising resumes summarising.
+ */
+export const RESUME_STATES = ['queued', 'waiting_on_dependencies', 'waiting_on_model_slot', 'running', 'summarizing'] as const;
+export type ResumeState = (typeof RESUME_STATES)[number];
+export function resumeStateFor(from: ChildState): ResumeState | null {
+  switch (from) {
+    case 'queued':
+    case 'waiting_on_dependencies':
+    case 'waiting_on_model_slot':
+    case 'running':
+    case 'summarizing':
+      return from;
+    case 'starting':
+      return 'queued';
+    default:
+      return null;
+  }
+}
+export function isResumeState(s: unknown): s is ResumeState {
+  return typeof s === 'string' && (RESUME_STATES as readonly string[]).includes(s);
+}
 
 /** The two settling paths REQ-MONITOR-300 admits from every non-terminal state, as arguments and never a bypass. */
 export type SettlingPath = 'cancellation' | 'reconciliation';
@@ -68,7 +115,11 @@ export function reconciledState(executionStatus: string): ChildState {
   return 'cancelled';
 }
 
-/** REQ-MONITOR-046: engine state → presentation state. */
+/**
+ * REQ-MONITOR-046: engine state → presentation state. PD-ORCH-005's `paused` takes the requirement's own catch-all,
+ * "anything else→queued": the directive does not name REQ-MONITOR-046, so it governs exactly as it did. Whether a paused
+ * agent should present as something else is OQ-67's.
+ */
 export const PRESENTATION_CHILD_STATES = ['running', 'waiting', 'queued', 'done', 'failed', 'cancelled'] as const;
 export type PresentationChildState = (typeof PRESENTATION_CHILD_STATES)[number];
 export function presentationChildState(s: string): PresentationChildState {
@@ -142,6 +193,8 @@ export const AgentRecordSchema = z.object({
   grantedMcp: z.record(z.string(), z.array(z.string())),
   /** REQ-MCP-114: every server the agent carried, with its fate — connected, or dropped with the rule's reason. */
   mcpServers: z.array(z.object({ name: z.string(), transport: z.string(), origin: z.string(), fate: z.enum(['connected', 'dropped']), reason: z.string().optional() })),
+  /** PD-ORCH-005: what left this agent `paused`; null for an agent that is not paused. */
+  interruption: z.enum(INTERRUPTIONS).nullable(),
 });
 export type AgentRecord = z.infer<typeof AgentRecordSchema>;
 
@@ -176,5 +229,6 @@ export interface RootExecutionRecord {
   readonly task: string;
   readonly iteration: number;
   readonly depth: 0;
-  state: 'running' | 'succeeded' | 'failed' | 'cancelled';
+  /** PD-ORCH-005: `paused` while its iteration is open after a pause, a stop, a quit or a crash. */
+  state: 'running' | 'succeeded' | 'failed' | 'cancelled' | 'paused';
 }

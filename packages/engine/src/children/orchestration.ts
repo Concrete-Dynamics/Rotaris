@@ -188,6 +188,7 @@ export class IterationChildren implements DelegationOps {
       parentId, parentDepth, persona: req.persona, taskName: req.taskName, task: req.task, dependsOn: req.dependsOn, inheritedContext: req.inheritedContext,
       category: req.category, background: req.runInBackground, modelKey: persona?.modelRef?.modelId ?? this.deps.model.modelId, grantedTools: persona?.tools ?? [],
       ...(continuationOf !== '' ? { continuationOf } : {}),
+      ...(scope.patterns.length > 0 ? { writeScope: scope.patterns } : {}),
     });
     if (!r.ok) return { status: 'rejected', canonicalName: req.taskName, message: r.error.reason };
     const { row, held, aliasResolved } = r.value;

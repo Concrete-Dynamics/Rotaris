@@ -414,7 +414,7 @@ export class Gate {
       case 'resolved':
         if (outcome.option === 'once') return { decision: 'allow', ruleId: 'approval:once', source: 'user-once', reason: `The user approved '${call.name}' once (rule '${asked.ruleId}' asked).`, description: asked.description };
         if (outcome.option === 'session') {
-          const grant = this.deps.policy.grant(req);
+          const grant = this.deps.policy.grant(req, { workspaceRoot: this.deps.workspaceRoot, resolvePath: this.deps.resolvePath });
           return { decision: 'allow', ruleId: 'approval:session', source: 'user-session', reason: `The user approved '${call.name}' for this session (rule '${asked.ruleId}' asked); session rule '${grant.id}' added.`, description: grant.description };
         }
         return { decision: 'deny', ruleId: asked.ruleId, source: 'user-deny', reason: `${asked.reason} Denied because the user denied the request.`, description: asked.description };

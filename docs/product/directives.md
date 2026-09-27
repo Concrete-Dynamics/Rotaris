@@ -1490,6 +1490,37 @@ declare no path the policy can read, so for them a path-scoped match could only 
 
 *Raised by the owner, 2026-09-23; logged as [R-048](requests.md#r-048).*
 
+> **First execution, 2026-09-27, built under [R-057](requests.md#r-057):** the rule held as written; building it
+> found that it is silent on when the approved call's paths are resolved, and that the policy's existing path
+> resolution does not do what REQ-TOOLS-018 says. The persona needed nothing: it was already carried on every call
+> and stored in every grant. **When:** the grant resolves its paths once, when it is made, and a later call's paths
+> are resolved when it is evaluated. Resolving both at evaluation would let a link retargeted after the approval
+> carry the grant to a file the user never approved; a test pins a retargeted link asking again, and a link to the
+> approved file matching. **How:** each path is joined to the workspace root first (`resolveInWorkspace`) and then
+> handed to the gate's real-path resolver. The path scope of REQ-TOOLS-018 skips the join and hands the resolver the
+> raw argument, which the run host resolves against its process directory, dropping a character when none of the
+> path exists there; that is recorded as
+> [`path-scope-resolves-a-relative-path-against-the-process-directory.md`](../defects/path-scope-resolves-a-relative-path-against-the-process-directory.md)
+> and not changed here. **Readings taken where the text leaves room**, each the most literal one found: a call with
+> an unresolvable path never matches and does not fall back to the exact match, so an approval whose own path did
+> not resolve covers nothing, not even the identical call; a path key whose value is neither a string nor a list of
+> strings counts as unresolvable; the fallback for a call with no path key is REQ-TOOLS-024 whole, so it compares
+> tool names without folding `haet`; resolved paths compare as exact strings, so two spellings differing only in
+> case are two paths; and a path named twice counts once. The rule is `resolvedPathSet` and `approvalMatches` in
+> `packages/agent-tools/src/policy.ts`, and `PolicyContext.grant` takes the root and the resolver, which the gate
+> passes. One unit assertion had pinned the old reading, a `write_file` grant refusing a call with an extra
+> argument; it now pins the same on an MCP edit tool, which REQ-TOOLS-024 still governs alone. The tests name a
+> stand-in for it, because REQ-MCP-116 lets the code-intelligence server's real tool names be written only in its
+> manifest, and `code-intelligence.test.ts` failed the first `pnpm check` on `replace_content` written in a test.
+> Measured by unit tests only: nine `PD-TOOLS-004` cases in `policy.test.ts` over a real temporary directory with a
+> copy of the run host's resolver, and one in `gate.test.ts` taking an edit and two retries, one through the
+> alias, through the gate on one approval while another persona and another path each ask again. With `policy.ts` restored to its
+> previous text (and a stub for the one new export the tests import) all ten fail, the gate case by its 30-second
+> timeout waiting for an approval nobody answered; two of them, the unresolvable-path and no-path-key cases, fail
+> only on the new `paths` field, because their negatives hold under the old, narrower rule too. The built app was
+> not driven and no live run was made, so the loop of run `1ddeb71b` has not been replayed against a real model. The
+> row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-tools-005"></a>

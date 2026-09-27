@@ -7,7 +7,7 @@ import { FakeClock } from '@rotaris/kernel';
 import type { ApprovalPayload } from '@rotaris/contracts';
 import { PendingApprovals, PresenterRegistry, type PresenterPort } from './approvals.js';
 import type { ToolHooks } from './gate.js';
-import { completeTruncatedJson, Gate, repairPayload, simpleExecutor, type GateDeps, type GateSink, type ToolCall } from './gate.js';
+import { anySchema, completeTruncatedJson, Gate, repairPayload, simpleExecutor, type GateDeps, type GateSink, type ToolCall } from './gate.js';
 import { buildPolicy, PolicyContext } from './policy.js';
 import { terminalTool, TERMINAL_DEFAULTS, type TerminalManager } from './terminal/index.js';
 import { askQuestionsTool, PendingQuestions } from './tools/questions.js';
@@ -136,6 +136,36 @@ describe('gate (ADR-0017, ADR-0019, REQ-TOOLS-011..013, 027, 032, 050..066, 175)
     expect(r2.status).toBe('ok');
     expect(h.rec.requested).toHaveLength(1);
     expect(h.rec.decisions[1]).toMatchObject({ source: 'session-rule', rule_id: 'session:allow:1' });
+  });
+
+  it('PD-TOOLS-004: approve for session on an edit covers the retry loop on that path through the gate, for that persona only', async () => {
+    const edits: Record<string, unknown>[] = [];
+    const haet = simpleExecutor('haet_edit', 'e', anySchema, async (a) => { edits.push(a); return { text: 'edited', isError: false }; });
+    const h = harness({ extraExecutors: [['haet_edit', haet], ['haet', haet]] });
+    const s = new AbortController().signal;
+    const first = h.gate.dispatch(h.call('haet_edit', { path: 'specs/index.md', content_hash: '1'.repeat(64), old_string: 'a (b', new_string: 'c' }), s);
+    await Promise.resolve();
+    h.approvals.resolve('req1', 'session');
+    expect((await first).status).toBe('ok');
+    expect(h.rec.decisions[0]).toMatchObject({ source: 'user-session', rule_id: 'approval:session' });
+    expect(h.rec.decisions[0]!['reason']).toBe("The user approved 'haet_edit' for this session (rule 'preset:ask' asked); session rule 'session:allow:1' added.");
+    // the retries: another old_string, another hash, the alias — no approval is asked for any of them
+    expect((await h.gate.dispatch(h.call('haet_edit', { path: 'specs/index.md', content_hash: '2'.repeat(64), old_string: 'a', new_string: 'c' }), s)).status).toBe('ok');
+    expect((await h.gate.dispatch(h.call('haet', { path: './specs/index.md', content_hash: '3'.repeat(64), old_string: 'b', new_string: 'c' }), s)).status).toBe('ok');
+    expect(h.rec.requested).toHaveLength(1);
+    expect(h.rec.decisions.slice(1).map((d) => d['rule_id'])).toEqual(['session:allow:1', 'session:allow:1']);
+    // the same edit from another persona, and another path from this one, each ask again
+    const coder = h.gate.dispatch({ ...h.call('haet_edit', { path: 'specs/index.md', content_hash: '2'.repeat(64), old_string: 'a', new_string: 'c' }), persona: 'coder' }, s);
+    await Promise.resolve();
+    expect(h.rec.requested).toHaveLength(2);
+    h.approvals.resolve(String(h.rec.requested[1]!['request_id']), 'deny');
+    expect((await coder).status).toBe('blocked');
+    const other = h.gate.dispatch(h.call('haet_edit', { path: 'specs/other.md', content_hash: '2'.repeat(64), old_string: 'a', new_string: 'c' }), s);
+    await Promise.resolve();
+    expect(h.rec.requested).toHaveLength(3);
+    h.approvals.resolve(String(h.rec.requested[2]!['request_id']), 'deny');
+    expect((await other).status).toBe('blocked');
+    expect(edits).toHaveLength(3);
   });
 
   it('ask → deny, timeout, cancel: the three deny sources with their reason clauses', async () => {

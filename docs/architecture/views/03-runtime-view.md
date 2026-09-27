@@ -227,8 +227,9 @@ settles nothing (clause 8).
 action, a plan decision — resumes an iteration a rest or a crash left open before anything else runs (`RunDeps.openIteration`,
 set by `Sessions.launchContinuation` once the crash record and the settle are done). That continue is set up as the
 persona the open iteration's root ran as (`configure`'s `entryPersona` → the run host's `prepareRun`, in place of
-`default_persona`), and its new message, with its images, is recorded in the root's conversation there and then, so no
-early end of the run loses it. The run holds the open iteration from its construction, so the explicit cancel during its
+`default_persona`, or the entry role with a warning when that persona is gone), and what the root is told — the notice
+of its background sessions, then its new message with its images — is recorded in the root's conversation there and
+then, so no early end of the run loses it and the user's message is the last the root reads. The run holds the open iteration from its construction, so the explicit cancel during its
 pre-flight closes it (OQ-69). The run is not held at the plan gate,
 and the loop's first iteration is the open one (`iterate(openRow)`): its number, its root's task id and canonical name,
 and its todo task, with no second `iteration.start`, the row's interruption cleared and `iteration_resumed` recorded.
@@ -238,8 +239,9 @@ one told of its background sessions, which takes a step to read the notice — r
 acceptance order (PD-TOOLS-006 revision 2), and restarts the executions of those that were `running` or `summarizing`
 from their records (`execute(row, resume)`, a fresh `child_timeout`, the tool-call count carried on from the row or the
 record, whichever holds more) through the scheduler's own wrapper, so each resumed child's end is a scheduler pass. The
-waiting ones are left to the scheduler. The root carries on from its own record. Clause 10's notice of the agent's
-background sessions (`run/resume.ts`'s `terminalNotice`) joins each conversation as its next message, recorded.
+waiting ones are left to the scheduler. The root carries on from its own record. Clause 10's notice of a child's
+background sessions (`run/resume.ts`'s `resumeNoticeOf`) joins its conversation as its next message, recorded, at its
+resume; the root's was recorded at the continue.
 An agent whose record ends on its own answer resumes into waiting (`resumedStart`); any other takes a model step,
 compressed first when the conversation is too long, as any is. A continue by message appends no todo task. A resumed
 iteration closes like any other, and it can rest and be resumed again (clause 7).

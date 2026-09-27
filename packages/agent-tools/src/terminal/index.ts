@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import type { Clocks } from '@rotaris/kernel';
 import { errorObservation, observation, type Observation, type ToolContext, type ToolExecutor } from '../tools/types.js';
-import { BackgroundManager, DEFAULT_BACKGROUND_TIMEOUT_S } from './background.js';
+import { BackgroundManager, DEFAULT_BACKGROUND_TIMEOUT_S, type BackgroundOwner, type BackgroundSession } from './background.js';
 import { classifyOutcome, diagnosticBlock, outputSection, outputWarnings, renderAction, type FailureKind } from './classify.js';
 import { ForegroundSession, keystroke, type PtyFactory, type ShellBackend } from './foreground.js';
 import { backgroundStreamId, foregroundStreamId, streamDisplayName } from '@rotaris/contracts';
@@ -158,6 +158,12 @@ export class TerminalManager {
   get maxBackgroundSessions(): number {
     return this.backgroundLimits?.maxSessions ?? this.deps.config.maxBackgroundSessions;
   }
+  /** PD-ORCH-005 clause 10: every background session an agent of `sessionId` started, in any workspace, in start order. */
+  backgroundOwnedBy(sessionId: string): BackgroundSession[] {
+    const out: BackgroundSession[] = [];
+    for (const b of this.background.values()) for (const s of b.list()) if (s.owner?.sessionId === sessionId) out.push(s);
+    return out.sort((a, b) => a.startedAt.localeCompare(b.startedAt));
+  }
   /** REQ-TOOLS-184: background sessions in the running state, across the workspaces this host serves. */
   get runningBackground(): number {
     let n = 0;
@@ -234,7 +240,18 @@ function relabelIfLauncherFailed(confined: boolean, failureKind: FailureKind | n
 /** REQ-SANDBOX-085's detail: the cause lies in the host's configuration, not in the command. */
 const LAUNCHER_FAILED_DETAIL = 'Confinement could not be started, so the command never executed. The cause lies in the host\'s configuration rather than in the command; neither retrying nor rewording the command changes the outcome.';
 
-export function terminalTool(manager: TerminalManager, config: TerminalConfig, confinement?: ConfinementPort): ToolExecutor<TerminalArgs> {
+/**
+ * PD-ORCH-005 clause 10: which agent's port this terminal executor serves, so each background session it starts is
+ * attributed to that agent, and the two moments the run host records — the start, and an end the session reaches by
+ * itself (its own exit, its timeout, the agent's kill).
+ */
+export interface BackgroundAttribution {
+  readonly owner: BackgroundOwner;
+  readonly onStarted?: ((session: BackgroundSession) => void) | undefined;
+  readonly onEnded?: ((session: BackgroundSession) => void) | undefined;
+}
+
+export function terminalTool(manager: TerminalManager, config: TerminalConfig, confinement?: ConfinementPort, attribution?: BackgroundAttribution): ToolExecutor<TerminalArgs> {
   return {
     name: 'terminal',
     description: 'Run a command in a persistent shell session (working directory and variables persist across calls). On Windows the shell is PowerShell, not bash: `&&`, `;`, `2>&1` and `$env:VAR` work; a bash heredoc never returns, and bash arrays, `[[ … ]]` and `source` are unavailable. One command per call; use `&&` or `;` for sequences. `background=true` runs a command in its own process and returns a session id for later `query` / `kill`. A command that prints nothing for 30 s returns early with exit −1 while it keeps running; poll with an empty command, interrupt with `C-c` and `is_input=true`; stdout and stderr share the captured terminal stream. failure_kind is one of `timeout`, `invalid_request`, `execution_error`, `sandbox_unavailable`; `sandbox_unavailable` means the command never executed because this host could not apply the OS-level confinement the session requires — the cause is the host\'s configuration, neither a retry nor a reformulated command helps, and the detail and output should be relayed to the user.',
@@ -257,7 +274,7 @@ export function terminalTool(manager: TerminalManager, config: TerminalConfig, c
       // REQ-SANDBOX-080/081: a background spawn IS confined, on exactly the terms its foreground
       // equivalent would be — and a request carrying both a background flag and a session id counts
       // as a new spawn, which the `background` outranks `session_id` ordering above already makes so.
-      if (a.background) return startBackground(a, manager, ctx, config, confinement);
+      if (a.background) return startBackground(a, manager, ctx, config, confinement, attribution);
 
       const key = `${ctx.sessionId}:${ctx.agentName}`;
       let session = manager.session(key, cwd);
@@ -346,7 +363,7 @@ export function terminalTool(manager: TerminalManager, config: TerminalConfig, c
   };
 }
 
-function startBackground(a: TerminalArgs, manager: TerminalManager, ctx: ToolContext, config: TerminalConfig, confinement?: ConfinementPort): Observation {
+function startBackground(a: TerminalArgs, manager: TerminalManager, ctx: ToolContext, config: TerminalConfig, confinement?: ConfinementPort, attribution?: BackgroundAttribution): Observation {
   const bg = manager.backgroundFor(ctx.workspaceRoot);
   // REQ-SANDBOX-080: a background command is confined on exactly the terms its foreground
   // equivalent would be, so asking for background execution is not a way around the sandbox.
@@ -361,6 +378,12 @@ function startBackground(a: TerminalArgs, manager: TerminalManager, ctx: ToolCon
     return errorObservation(`${started.error}\n${outputSection('', false)}\n${diag}`, { outcomeKind: 'execution_error', failureKind: 'execution_error', exitCode: null, warnings: [] });
   }
   const s = started.session;
+  // PD-ORCH-005 clause 10: the session is the starting agent's, recorded at its start and at an end it reaches by itself.
+  if (attribution) {
+    s.owner = attribution.owner;
+    attribution.onStarted?.(s);
+    if (attribution.onEnded) { const onEnded = attribution.onEnded; void s.whenExited().then(() => onEnded(s)); }
+  }
   // Part AL / REQ-TOOLS-107/127/128: its own `bg:<id>` stream — a pipe, so no real terminal to resize (ADR-0020 c.3),
   // send-keys through stdin, interrupt as SIGINT, kill as the session's own termination — on a Windows
   // pipe both end the tree, there being no graceful interrupt to deliver (OQ-10, ruled in R-044).

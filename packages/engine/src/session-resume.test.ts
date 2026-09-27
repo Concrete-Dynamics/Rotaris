@@ -72,7 +72,7 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
     expect(roots).toEqual([{ workspaceRoot: 'C:/ws', executionRoot: tree }, { workspaceRoot: 'C:/ws', executionRoot: tree }]);
   });
 
-  it('reopens the same identity, sweeps orphans, continues ordinals and carries prior intent', async () => {
+  it('reopens the same identity, sweeps orphans at the continue (never at the load, PD-ORCH-005 clause 8), continues ordinals and carries prior intent', async () => {
     const client = new ScriptedModelClient([answer('first answer', { input: 10, output: 4 }), answer('second answer', { input: 7, output: 3 })]);
     const backend = new DefaultAgentBackend(client);
     const priorContexts: (string | null | undefined)[] = [];
@@ -95,13 +95,16 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
 
     const resumed = makeSessions(88, backend, { preflight, isProcessAlive: () => false });
     const opened = resumed.resume(dal, 'C:/ws', sid);
-    expect(opened).toEqual({ ok: true, value: { sessionId: sid, settledChildren: 1 } });
+    expect(opened).toEqual({ ok: true, value: { sessionId: sid } });
     expect(dal.getSession(sid)).toEqual(persisted);
-    expect(dal.getChild(sid, 'bg_00000001')).toMatchObject({ state: 'cancelled', report_stored: 1 });
+    // Loading a session to view it changes no agent record; the settle happens when a run is about to start.
+    expect(dal.getChild(sid, 'bg_00000001')).toMatchObject({ state: 'running', report_stored: 0 });
     expect(dal.getLock(sid)).toMatchObject({ pid: 88, host: HOST });
 
     expect(resumed.prompt(sid, 'continue').ok).toBe(true);
     await resumed.running(sid);
+    // REQ-ORCH-053: the orphan belongs to no open iteration, so the continue settles it cancelled before its first iteration.
+    expect(dal.getChild(sid, 'bg_00000001')).toMatchObject({ state: 'cancelled', report_stored: 1 });
     expect(priorContexts).toEqual([undefined, 'single_file_change']);
     const continuation = client.requests[1]!.messages
       .flatMap((message) => message.content.map((part) => part.kind === 'text' ? part.text : null))

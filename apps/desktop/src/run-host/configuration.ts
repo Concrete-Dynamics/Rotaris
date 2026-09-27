@@ -104,6 +104,9 @@ export function runtimeFromConfiguration(cfg: LoadedConfiguration, verdict: Avai
     // PD-ORCH-004: `runtime.child_stall_timeout` reaches the run as the window of the progress rule — the first reader
     // of a key the loader validated from the start.
     childStallTimeoutMs: Math.round(r.child_stall_timeout * 1000),
+    // REQ-ORCH-134 / PD-ORCH-005 clause 2: `runtime.graceful_pause_tool_deadline` reaches the run as the pause's tool
+    // deadline — the first reader of a key the loader validated from the start.
+    pauseToolDeadlineMs: Math.round(r.graceful_pause_tool_deadline * 1000),
     // REQ-ORCH-152 / REQ-CONFIG-476: the run-start mode reaches the run. The loader validated the key from Part I
     // and nothing read it until the plan gate was built (ADR-0062).
     runStartMode: r.run_start_mode,

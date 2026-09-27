@@ -167,6 +167,75 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(lastWait(pub)).toBeNull();
   });
 
+  it('PD-ORCH-005 clause 2: a pause accepted during a provider-limit wait releases it at once — no request follows, and the wait was not the user\'s cancel', async () => {
+    const { sessions, client, pub } = sessionsWith((_p, turn) => (turn === 1 ? failing(rateLimit()) : answer('never')));
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    await tick();
+    expect(lastWait(pub)).not.toBeNull();
+    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    // REQ-MONITOR-124 (found by phase 3's second review): releasing the wait does not read `running` again.
+    expect(dal.getSession(sid)!.execution_status).toBe('pausing');
+    const result = await sessions.running(sid)!;
+    expect(result.status).toBe('interrupted');
+    expect(result.error).toBeNull();
+    expect(client.requests).toHaveLength(1);
+    expect(dal.iterationsOf(sid)).toMatchObject([{ state: 'open', interruption: 'pause' }]);
+    expect(lastWait(pub)).toBeNull();
+  });
+
+  it('PD-ORCH-005 clause 2: the step in flight when the pause is accepted meets a provider limit — its report stands, and nothing waits or retries', async () => {
+    let release!: () => void;
+    const held = new Promise<void>((r) => { release = r; });
+    const { sessions, client, pub } = sessionsWith((_p, turn) => (turn === 1 ? { parts: [{ hold: held }, { error: rateLimit() }] } : answer('never')));
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    await tick();
+    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    release();
+    const result = await sessions.running(sid)!;
+    expect(result.status).toBe('interrupted');
+    expect(client.requests).toHaveLength(1);
+    expect(issues(sid)).not.toContain('model_wait');
+    expect(lastWait(pub)).toBeNull();
+    expect(dal.iterationsOf(sid)).toMatchObject([{ state: 'open', interruption: 'pause' }]);
+  });
+
+  it('PD-ORCH-005 clause 2: a pause accepted during a transient retry\'s backoff makes no retry', async () => {
+    const { sessions, client } = sessionsWith((_p, turn) => (turn === 1 ? failing(modelError({ code: 'http', status: 503, headline: 'Service Unavailable' })) : answer('never')));
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    await tick();
+    expect(issues(sid)).toEqual(['transient_llm_error']);
+    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    clock.advance(1000);
+    const result = await sessions.running(sid)!;
+    expect(result.status).toBe('interrupted');
+    expect(client.requests).toHaveLength(1);
+    expect(dal.iterationsOf(sid)).toMatchObject([{ state: 'open', interruption: 'pause' }]);
+  });
+
+  it('PD-ORCH-005 clause 5: a child whose limit expires while the run comes to rest ends failed with REQ-ORCH-088\'s report — never paused, never retried on the fallback, and not summarised', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('f1', 'f', F1, [])];
+    let summaries = 0;
+    const script = (persona: string, turn: number): ScriptedCall => {
+      if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'slow', task: 'TASK: be slow' } }]) : answer('never');
+      if (persona === 'summariser') { summaries += 1; return answer('{"summary":"done"}'); }
+      return hanging(NEVER);
+    };
+    const t = sessionsWith(script, { catalogue, roleFallback: F1, childTimeoutMs: 10_000, delegation: true });
+    const sid = (t.sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    await tick();
+    expect(t.sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    // The pause waits for the step in flight; the child's limit expires meanwhile, and the backstop ends the step.
+    clock.advance(10_000);
+    await tick();
+    clock.advance(30_000);
+    await t.sessions.running(sid)!;
+    const child = dal.childrenOf(sid)[0]!;
+    expect(child).toMatchObject({ state: 'failed', interruption: null });
+    expect(JSON.parse(child.report!)).toMatchObject({ status: 'failed', errors: [{ type: 'timeout', message: 'Child timed out after 10s' }, { type: 'summary_failure', message: 'the run was coming to rest, so no summarising call was made' }] });
+    expect(timeline(sid)).not.toContain('child_timeout_fallback');
+    expect(summaries).toBe(0);
+  });
+
   it('the second wait on the same agent doubles the local backoff (REQ-NOTIFY-085)', async () => {
     const { sessions, pub } = sessionsWith((_p, turn) => (turn <= 2 ? failing(rateLimit()) : answer('third time')));
     const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;

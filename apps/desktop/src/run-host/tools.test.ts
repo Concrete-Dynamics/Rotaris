@@ -150,6 +150,37 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
     expect(asked).toEqual(['src/api/users.ts', 'src/ui/view.ts']);
   });
 
+  it('PD-ORCH-005 clause 9 through the port: a rest withdraws the approval a call waits on, and the call reaches the turn marked interrupted', async () => {
+    const port = portFor(null, null);
+    const pending = port.dispatch({ callId: 'c1', name: 'write_file', rawArgs: JSON.stringify({ operation: 'create', path: 'w.txt', content: 'x' }), persona: 'coding-agent', agentId: 'coding-agent', agentName: 'coding-agent' }, new AbortController().signal);
+    await vi.waitFor(() => expect(presented).toHaveLength(1));
+    expect(port.withdrawPending?.('pause')).toBe(1);
+    const r = await pending;
+    expect(r).toMatchObject({ status: 'blocked', isError: true, interrupted: true });
+    expect(existsSync(join(dir, 'w.txt'))).toBe(false);
+    expect(dal.timelineOf(asSessionId('S1')).map((t) => t.name)).toContain('approval_withdrawn');
+    expect(dal.auditOf(asSessionId('S1'))).toEqual([]);
+    expect(port.withdrawPending?.('pause')).toBe(0);
+  });
+
+  it('PD-ORCH-005 clause 9 through the port (found by phase 3\'s review): a rest withdraws a waiting question — recorded as withdrawn, the call never run, no tool error raised', async () => {
+    const port = portFor(null, null, {}, { tools: '[read_file, ask_questions]' });
+    const call = { callId: 'q1', name: 'ask_questions', rawArgs: JSON.stringify({ steps: [{ id: 'a', title: 'Which one?' }] }), persona: 'coding-agent', agentId: 'coding-agent', agentName: 'coding-agent' };
+    const pending = port.dispatch(call, new AbortController().signal);
+    // Under `ask` the call is approved first; the question it then puts is the wait the rest withdraws.
+    await vi.waitFor(() => expect(presented).toHaveLength(1));
+    expect(port.answerApproval(presented[0]!.request_id, 'once')).toBe(true);
+    await vi.waitFor(() => expect(port.pendingQuestions?.()).toHaveLength(1));
+    expect(port.withdrawPending?.('stop')).toBe(1);
+    const r = await pending;
+    expect(r).toMatchObject({ status: 'blocked', isError: true, interrupted: true });
+    expect(r.text).toBe('The questions were withdrawn by the stop before the user answered. Nothing was answered; ask again if the answers are still needed.');
+    expect(port.pendingQuestions?.()).toEqual([]);
+    const timeline = dal.timelineOf(asSessionId('S1'));
+    expect(JSON.parse(timeline.find((t) => t.name === 'question_withdrawn')!.metadata)).toMatchObject({ tool: 'ask_questions', interruption: 'stop' });
+    expect(dal.issuesOf(asSessionId('S1')).map((i) => i.kind)).not.toContain('tool_error');
+  });
+
   /**
    * PD-TOOLS-004 through the port: the gate's `publicTool` is what keeps a server's own `write_file` — offered under
    * that name to a persona whose public set lacks one — on REQ-TOOLS-024's exact match, while the public `write_file`

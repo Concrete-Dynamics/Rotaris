@@ -53,7 +53,7 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
   });
 
-  function sessionsWith(backend: AgentBackend, opts: { mode?: 'auto' | 'plan'; intent?: IntentCategory; classifier?: LoopClassifier } = {}) {
+  function sessionsWith(backend: AgentBackend, opts: { mode?: 'auto' | 'plan'; intent?: IntentCategory; classifier?: LoopClassifier; preflightHold?: Promise<void> | (() => Promise<void>); tools?: ToolPort } = {}) {
     const runtime: RuntimePosture = {
       permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' },
       sessionLogLevel: 'WARNING', runStartMode: opts.mode ?? 'plan',
@@ -65,10 +65,11 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
       sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
       // The registry predicate the run host injects; here just enough to exercise the child-admission refusal.
       planWithholds: (tool) => ['write_file', 'terminal', 'haet', 'haet_edit', 'git_commit'].includes(tool),
-      ...(opts.intent ? { preflight: async () => preflightOf(opts.intent!) } : {}),
+      ...(opts.intent ? { preflight: async () => { await (typeof opts.preflightHold === 'function' ? opts.preflightHold() : opts.preflightHold); return preflightOf(opts.intent!); } } : {}),
       // PD-ORCH-001: supervision is only constructed when this dependency answers, which is how the directive's
       // "no supervisor is attached" is observable at all — a run without it looks the same from the outside.
       ...(opts.classifier ? { supervisor: () => ({ config: { ...SUPERVISOR_DEFAULTS, repetitionThreshold: 3 }, classifier: opts.classifier! }), tools: () => grepPort() } : {}),
+      ...(opts.tools ? { tools: () => opts.tools! } : {}),
     });
     return sessions;
   }
@@ -99,6 +100,110 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     // A plan cycle is not an iteration (the owner's ruling): nothing was judged complete and no iteration closed.
     expect(row.iterations_completed).toBe(0);
     expect(dal.eventsOfKind(sid, 'iteration.start')).toEqual([]);
+  });
+
+  it('PD-ORCH-005 clause 11: while the plan gate holds no agent is unfinished — a pause is refused during the plan cycle and at the gate', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    const sessions = sessionsWith(scripted([{ parts: [{ hold }, ...answer('Step 1: do it.').parts] }]).backend);
+    const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+    await new Promise((r) => setTimeout(r, 10));
+    expect(sessions.run(sid)!.isPlanGateHeld).toBe(true);
+    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: false });
+    expect(dal.timelineOf(sid).map((t) => t.name)).not.toContain('run_pause_requested');
+    release();
+    const result = await sessions.running(sid)!;
+    expect(result.execution_status).toBe('awaiting_plan_decision');
+    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: false });
+  });
+
+  it('PD-ORCH-005 clause 11 (found by phase 3\'s review): a pause accepted before the hold is settled is refused once it is — the plan cycle runs and parks', async () => {
+    let release!: () => void;
+    const preflightHold = new Promise<void>((r) => { release = r; });
+    const sessions = sessionsWith(scripted([answer('Step 1: do it.')]).backend, { intent: 'moderate_feature', preflightHold });
+    const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+    await new Promise((r) => setTimeout(r, 10));
+    // The hold is not settled until the pre-flight answers, so the pause is accepted…
+    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    release();
+    // …and refused once the hold is known: the plan cycle is produced and parks, as it would have without it.
+    const result = await sessions.running(sid)!;
+    expect(result.execution_status).toBe('awaiting_plan_decision');
+    expect(dal.planCycle(sid, 1)!.plan).toBe('Step 1: do it.');
+    expect(dal.timelineOf(sid).map((t) => t.name)).toContain('run_pause_refused');
+  });
+
+  it('PD-ORCH-005 clause 2 (found by phase 3\'s second review): a deadline that passed before the refusal cuts no plan-cycle call', async () => {
+    let release!: () => void;
+    const preflightHold = new Promise<void>((r) => { release = r; });
+    let cut: boolean | null = null;
+    const tools: ToolPort = { ...grepPort(), dispatch: async (_c, signal) => { cut = signal.aborted; return { text: 'found', isError: false, status: 'ok', durationMs: 1, label: 'grep', args: {} }; } };
+    const sessions = sessionsWith(scripted([toolCalls([{ callId: 'g1', name: 'grep', args: {} }], 'Reading first.'), answer('Step 1: do it.')]).backend, { intent: 'moderate_feature', preflightHold, tools });
+    const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+    await new Promise((r) => setTimeout(r, 10));
+    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    // A slow pre-flight: the pause's deadline passes before the hold is known.
+    clock.advance(30_000);
+    release();
+    const result = await sessions.running(sid)!;
+    expect(cut).toBe(false);
+    expect(result.execution_status).toBe('awaiting_plan_decision');
+    expect(dal.planCycle(sid, 1)!.plan).toBe('Step 1: do it.');
+  });
+
+  it('PD-ORCH-005 clause 2: the refused pause\'s tool deadline goes with it — a plan-cycle call past 30 s is not cut', async () => {
+    let release!: () => void;
+    const preflightHold = new Promise<void>((r) => { release = r; });
+    let finish!: () => void;
+    const finishing = new Promise<void>((r) => { finish = r; });
+    let cut: boolean | null = null;
+    const tools: ToolPort = { ...grepPort(), dispatch: async (_c, signal) => { await finishing; cut = signal.aborted; return { text: 'found', isError: false, status: 'ok', durationMs: 1, label: 'grep', args: {} }; } };
+    const sessions = sessionsWith(scripted([toolCalls([{ callId: 'g1', name: 'grep', args: {} }]), answer('Step 1: do it.')]).backend, { intent: 'moderate_feature', preflightHold, tools });
+    const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+    await new Promise((r) => setTimeout(r, 10));
+    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    release();
+    for (let i = 0; i < 100 && !dal.residentRows(sid).some((r) => r.kind === 'tool'); i++) await new Promise((r) => setTimeout(r, 5));
+    clock.advance(30_000);
+    finish();
+    const result = await sessions.running(sid)!;
+    expect(cut).toBe(false);
+    expect(result.execution_status).toBe('awaiting_plan_decision');
+  });
+
+  it('PD-ORCH-005 clause 3 (found by phase 3\'s third review): an explicit cancel before a continue has taken up the iteration an earlier rest left open leaves it to the next continue', async () => {
+    let finish!: () => void;
+    const finishing = new Promise<void>((r) => { finish = r; });
+    const tools: ToolPort = { ...grepPort(), dispatch: async () => { await finishing; return { text: 'found', isError: false, status: 'ok', durationMs: 1, label: 'grep', args: {} }; } };
+    let next: Promise<void> = Promise.resolve();
+    const sessions = sessionsWith(scripted([toolCalls([{ callId: 'g1', name: 'grep', args: {} }]), answer('never')]).backend, { mode: 'auto', intent: 'moderate_feature', preflightHold: () => next, tools });
+    const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+    for (let i = 0; i < 100 && !dal.residentRows(sid).some((r) => r.kind === 'tool'); i++) await new Promise((r) => setTimeout(r, 5));
+    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    finish();
+    await sessions.running(sid)!;
+    expect(dal.iterationsOf(sid)).toMatchObject([{ iteration: 1, state: 'open', interruption: 'pause' }]);
+    // The continue's pre-flight is held; the user cancels the run before it takes the open iteration up.
+    let release!: () => void;
+    next = new Promise<void>((r) => { release = r; });
+    expect(sessions.prompt(sid, 'go on').ok).toBe(true);
+    await new Promise((r) => setTimeout(r, 10));
+    expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: 'run' } })).toEqual({ ok: true });
+    release();
+    await sessions.running(sid)!;
+    expect(dal.iterationsOf(sid)).toMatchObject([{ iteration: 1, state: 'open', interruption: 'pause' }]);
+  });
+
+  it('PD-ORCH-005 clause 11: a quit leaves the hold as it stands and records no interruption', async () => {
+    const sessions = sessionsWith(scripted([answer('Step 1: do it.')]).backend);
+    const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    const before = dal.getSession(sid)!;
+    await sessions.closeAll();
+    const after = dal.getSession(sid)!;
+    expect(after).toMatchObject({ execution_status: 'awaiting_plan_decision', plan_cycle: before.plan_cycle, stop_reason: before.stop_reason });
+    expect(dal.iterationsOf(sid)).toEqual([]);
+    expect(dal.childrenOf(sid).filter((c) => c.interruption !== null)).toEqual([]);
   });
 
   it('the producing role is told what a plan cycle is: the task carries the request, and so does the content', async () => {

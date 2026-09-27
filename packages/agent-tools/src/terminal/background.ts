@@ -37,6 +37,11 @@ export class BackgroundSession {
   exitCode: number | null = null;
   /** REQ-SANDBOX-085: this spawn was confined, so its failure may be the launcher's rather than the command's. */
   confined = false;
+  /**
+   * PD-ORCH-005 clause 10: the session and the agent (its task id) that started this background session, so a resumed
+   * agent can be told which of its own still run; null for one started by no agent of a run (a test, a proof).
+   */
+  owner: BackgroundOwner | null = null;
   private buffer = '';
   /** How many characters have been dropped from the oldest end; the read cursor is relative to the whole stream. */
   private dropped = 0;
@@ -98,6 +103,10 @@ export class BackgroundSession {
   readAll(): string {
     return this.buffer;
   }
+  /** PD-ORCH-005 clause 10: the last output, at most `BACKGROUND_TAIL_CHARS`, without moving the read cursor. */
+  tail(chars = BACKGROUND_TAIL_CHARS): string {
+    return this.buffer.length <= chars ? this.buffer : this.buffer.slice(this.buffer.length - chars);
+  }
   sendInput(data: string): boolean {
     if (!this.child.stdin || this.child.stdin.destroyed) { this.deps.warn(`background session ${this.id}: stdin is closed`); return false; }
     this.child.stdin.write(data);
@@ -129,6 +138,15 @@ export class BackgroundSession {
     try { process.kill(-pid, name); return true; } catch { return false; }
   }
 }
+
+/** PD-ORCH-005 clause 10: who started a background session — the session and the agent's task id. */
+export interface BackgroundOwner {
+  readonly sessionId: string;
+  readonly taskId: string;
+}
+
+/** PD-ORCH-005 clause 10: how many characters of a session's output are its "last recorded output". */
+export const BACKGROUND_TAIL_CHARS = 2_000;
 
 export class BackgroundManager {
   private readonly sessions = new Map<string, BackgroundSession>();

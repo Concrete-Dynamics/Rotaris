@@ -133,10 +133,10 @@ export function sessionCommands(
         if (r.kind === 'refused') raiseNotice('error', r.headline, r.detail);
         return refusal(r, 'The session could not be loaded');
       }
-      raiseNotice('info', `Loaded session ${r.sessionId}.`, r.settledChildren > 0 ? `${r.settledChildren} unfinished child record(s) were settled before continuation.` : undefined);
+      raiseNotice('info', `Loaded session ${r.sessionId}.`);
       // REQ-SHELL-078 read for a loaded session too: the windows were opened onto the previous session's agents and would otherwise show them (Part R's reading, ADR-0048 note).
       if (w.followedSessionId !== null && w.followedSessionId !== r.sessionId) w.personaWindows.destroyAll('a different session was loaded');
-      return { ok: true, value: { sessionId: r.sessionId, settledChildren: r.settledChildren } };
+      return { ok: true, value: { sessionId: r.sessionId } };
     },
     'session.control': async (req, { senderId }) => {
       // ADR-0010 channel 1 across ADR-0013's boundary: the same arguments, the same `{ok, value?}`.

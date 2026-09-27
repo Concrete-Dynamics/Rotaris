@@ -217,7 +217,10 @@ describe('engine/run — the run loop end to end against a real store and a scri
     expect(rows(sid).at(-1)).toEqual({ kind: 'system', body: 'Run paused: interrupted by user.', settled: 1 });
     expect(dal.residentRows(sid)[1]).toMatchObject({ kind: 'agent', body: 'partial', settled: 1 });
     expect(events(sid).slice(-2)).toEqual(['session.end', 'result']);
-    expect(payload(sid, 'iteration.end')).toMatchObject({ outcome: 'cancelled' });
+    // PD-ORCH-005 clauses 2 and 3: the stop cut the root mid-step, so the iteration is left open — no `iteration.end` —
+    // with the stop recorded, and the root execution record is paused rather than cancelled.
+    expect(events(sid)).not.toContain('iteration.end');
+    expect(dal.iterationsOf(sid)).toMatchObject([{ iteration: 1, state: 'open', interruption: 'stop' }]);
     expect(dal.getLock(sid)).toBeUndefined();
     expect(sessions.isRunActive(sid)).toBe(false);
     // Controls on an ended run answer false (REQ-MONITOR-011); the unbuilt ops answer false (REQ-MONITOR-007).

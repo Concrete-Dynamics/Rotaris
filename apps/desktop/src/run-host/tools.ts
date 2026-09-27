@@ -4,7 +4,7 @@ import { toIsoUtc, type Clocks } from '@rotaris/kernel';
 import { presetRank, resolvePreset, type ApprovalPayload, type PermissionPreset, type ToolStatus } from '@rotaris/contracts';
 import {
   askQuestionsTool, buildPolicy, directWorkBundle, fetchTool, FileToolState, findShell, Gate, gitReadTool, globTool, grepTool, haetEditTool, haetReadTool, nodePtyFactory, PendingApprovals, PendingQuestions, PolicyContext, readFileTool, realPathOf,
-  resolveToolSet, selectRequestedMode, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, withheldUnderPlanGate, writeFileTool, type ConfinementPort, type GateSink, type PolicyRead, type PresenterPort, type ToolExecutor,
+  resolveToolSet, selectRequestedMode, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, withheldUnderPlanGate, writeFileTool, type BackgroundAttribution, type BackgroundSession, type ConfinementPort, type GateSink, type PolicyRead, type PresenterPort, type ToolExecutor,
 } from '@rotaris/agent-tools';
 import { BUILT_IN_PERSONAS, type ModeChange, type PersonaResolver, type PortToolCall, type PortToolResult, type RoleName, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
 import { CODE_INTELLIGENCE_MEMORY_GATE } from '@rotaris/config';
@@ -103,8 +103,18 @@ function writerSink(writer: SessionWriter, sessionId: string, clocks: Clocks, wa
   };
 }
 
+/**
+ * PD-ORCH-005 clause 10: each background session an agent starts is that agent's (its task id), recorded when it
+ * starts and when it ends by itself — its own exit, its timeout, or the agent's kill. An end a rest records first is
+ * kept: the record takes one end.
+ */
+function backgroundAttribution(writer: SessionWriter, sessionId: string, taskId: string): BackgroundAttribution {
+  const record = (s: BackgroundSession): void => { writer.recordAgentTerminal({ terminal_id: s.id, task_id: taskId, command: s.command, started_at: s.startedAt, state: s.status, exit_code: s.exitCode, output_tail: s.tail() }); };
+  return { owner: { sessionId, taskId }, onStarted: record, onEnded: record };
+}
+
 /** The executors this build registers (decision 3 of the plan, plus `fetch` since Part N); the registry removes any other declared name (REQ-TOOLS-004). */
-function executorsFor(root: string, deps: ToolPortDeps, runtime: RuntimeFromConfiguration, todoExecutor: ToolExecutor): Map<string, ToolExecutor> {
+function executorsFor(root: string, deps: ToolPortDeps, runtime: RuntimeFromConfiguration, todoExecutor: ToolExecutor, attribution?: BackgroundAttribution): Map<string, ToolExecutor> {
   /*
    * REQ-CONFIG-468 and REQ-WORKSPACE-059: the additional read-only roots and the cataloged skill directories
    * reach the fence, which is built PER PORT from this run's configuration.
@@ -153,7 +163,7 @@ function executorsFor(root: string, deps: ToolPortDeps, runtime: RuntimeFromConf
       return { spec: { mode: c.mode, executionRoot, writableRoots: c.writableRoots, allowNetwork: c.allowNetwork }, verdict: c.verdict ?? { available: false, backend: 'unavailable', reason: '', remediation: '' } };
     },
   };
-  if (deps.terminal) list.push(terminalTool(deps.terminal, { ...TERMINAL_DEFAULTS, commandTimeoutS: runtime.shellCommandTimeoutS }, confinement) as ToolExecutor);
+  if (deps.terminal) list.push(terminalTool(deps.terminal, { ...TERMINAL_DEFAULTS, commandTimeoutS: runtime.shellCommandTimeoutS }, confinement, attribution) as ToolExecutor);
   return new Map(list.map((e) => [e.name, e]));
 }
 
@@ -209,7 +219,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   // handoff), and the production half of ADR-0021 obligation 2 stays open exactly that far.
   const shellLimits = deps.configured?.(ctx.workspaceRoot)?.cfg.runtime;
   if (deps.terminal && shellLimits) deps.terminal.setBackgroundLimits({ maxSessions: shellLimits.shell_max_background_sessions, timeoutS: shellLimits.shell_background_timeout });
-  const executors = executorsFor(root, deps, runtime, watchedTodo);
+  const executors = executorsFor(root, deps, runtime, watchedTodo, ctx.parentId === undefined ? undefined : backgroundAttribution(ctx.writer, ctx.sessionId, ctx.parentId));
   // ADR-0036: the configured persona over the built-in table; the built-in table alone when no configuration resolved.
   const resolver = deps.personas(ctx.workspaceRoot);
   const persona = resolver?.resolve(ctx.persona)?.persona ?? BUILT_IN_PERSONAS[ctx.persona as RoleName] ?? BUILT_IN_PERSONAS.orchestrator;
@@ -362,6 +372,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
       const status: Exclude<ToolStatus, 'running'> = r.status;
       return {
         text: r.text, isError: r.isError, status, durationMs: r.durationMs, label: r.label, args: r.args,
+        ...(r.interrupted === true ? { interrupted: true } : {}),
         ...(r.observation?.diff === undefined ? {} : { diff: r.observation.diff }),
         ...(r.status === 'blocked' ? { blockedReason: r.blockedReason ?? r.decision?.reason ?? '' } : {}),
         ...(r.followUp === undefined ? {} : { followUp: r.followUp }),
@@ -370,6 +381,8 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     // REQ-MONITOR-012 / REQ-TOOLS-054/177 and REQ-CHAT-096: run stop, shutdown and host teardown release every wait
     // on a person — the approvals AND the question prompts, on the one sweep the engine already performs.
     cancelPending: () => approvals.cancelAll() + questions.cancelAll(),
+    // PD-ORCH-005 clause 9: a rest withdraws both — each waiting call settles as interrupted and never run, never denied.
+    withdrawPending: (cause) => approvals.withdrawAll(cause) + questions.withdrawAll(cause),
     setMode: (requested, _source): ModeChange => {
       const previous = mode;
       const wanted = resolvePreset(requested).preset;

@@ -14,10 +14,16 @@ export interface StopState {
   readonly requested: boolean;
   readonly forced: boolean;
   readonly reason: StopReasonToken | null;
+  /**
+   * PD-ORCH-005 clause 3: the stop is the explicit cancel — REQ-MONITOR-126's control, "cannot be undone in this
+   * session" — rather than a stop. A stop leaves every unfinished agent `paused` to be resumed; a cancel ends its agents
+   * `cancelled`, and those are never resumed. Like `forced`, it may only be raised.
+   */
+  readonly final: boolean;
 }
 
 export class StopRequest {
-  private state: StopState = { requested: false, forced: false, reason: null };
+  private state: StopState = { requested: false, forced: false, reason: null, final: false };
   private listeners: ((s: StopState) => void)[] = [];
 
   get requested(): boolean {
@@ -29,14 +35,20 @@ export class StopRequest {
   get reason(): StopReasonToken | null {
     return this.state.reason;
   }
+  get final(): boolean {
+    return this.state.final;
+  }
   get current(): StopState {
     return this.state;
   }
 
-  /** Idempotent; a later `forced` raises the flag, a later non-forced changes nothing. The first reason stands. */
-  request(reason: StopReasonToken, forced = false): void {
-    if (this.state.requested && (!forced || this.state.forced)) return;
-    this.state = { requested: true, forced: this.state.forced || forced, reason: this.state.reason ?? reason };
+  /**
+   * Idempotent; a later `forced` or `final` raises that flag, a later request raising neither changes nothing. The first
+   * reason stands.
+   */
+  request(reason: StopReasonToken, forced = false, final = false): void {
+    if (this.state.requested && (!forced || this.state.forced) && (!final || this.state.final)) return;
+    this.state = { requested: true, forced: this.state.forced || forced, reason: this.state.reason ?? reason, final: this.state.final || final };
     for (const fn of [...this.listeners]) fn(this.state);
   }
 

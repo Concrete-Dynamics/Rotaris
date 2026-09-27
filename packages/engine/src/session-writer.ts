@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { err, maskArguments, ok, redactRowString, toIsoUtc, type Instant, type MachineId, type Result, type SessionId, type WallClock } from '@rotaris/kernel';
-import { RELEASE_PAGE_SIZE, RESIDENT_ROW_CAP, type CheckpointRow, type IterationInsert, type QueuedPromptRow, type ChildInsert, type ChildRow, type RowToolFields, type SessionRunPatch, type StoreDal, type TranscriptRowRecord } from '@rotaris/store';
-import { isLegalChildMove, isTerminalChildState, type ChildState, type ImageAttachment, type RunType, type SettlingPath, type TimelineSeverity, type TranscriptRow } from '@rotaris/contracts';
+import { RELEASE_PAGE_SIZE, RESIDENT_ROW_CAP, type AgentTerminalRow, type CheckpointRow, type IterationInsert, type QueuedPromptRow, type ChildInsert, type ChildRow, type RowToolFields, type SessionRunPatch, type StoreDal, type TranscriptRowRecord } from '@rotaris/store';
+import { interruptionPhrase, isLegalChildMove, isTerminalChildState, type ChildState, type ImageAttachment, type Interruption, type ResumeState, type RunType, type SettlingPath, type TimelineSeverity, type TranscriptRow } from '@rotaris/contracts';
 import { EVENT_SCHEMA_VERSION, locator, serializeEvent, type EventKind, type WireEvent } from './events.js';
 import { isActiveStatus, summarise } from './run/stop-conditions.js';
 import { AgentActivity } from './children/activity.js';
@@ -1010,6 +1010,68 @@ export class SessionWriter {
     if (line.ok) { const o = this.nextOrdinal++; this.deps.onCommitted({ kind: 'event', ordinal: o, events: [{ ordinal: o, event: ev, line: line.value }] }); }
     this.trimIfOverflowed(at);
     return ok(dal.getChild(sessionId, taskId)!);
+  }
+
+  /**
+   * PD-ORCH-005 clauses 2 and 3: an unfinished child comes to rest — `paused`, with what interrupted it and the state it
+   * resumes into, its tool-call count kept, `child.transition` and a `child_paused` timeline entry, in ONE transaction,
+   * so no reader sees a paused child without its interruption. The move is REQ-MONITOR-300's (narrowed), validated like
+   * any other; a paused child is not terminal, so no completion time is stamped and nothing settles.
+   */
+  restChild(taskId: string, interruption: Interruption, resumeState: ResumeState, toolCalls: number | null = null): Result<ChildRow, WriteFailure | { code: 'illegal-move'; from: string; to: string; reason: string }> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    const current = dal.getChild(sessionId, taskId);
+    if (!current) return err({ code: 'illegal-move', from: '(none)', to: 'paused', reason: `child ${taskId} does not exist in session ${sessionId}` });
+    const from = current.state as ChildState;
+    if (!isLegalChildMove(from, 'paused')) {
+      return err({ code: 'illegal-move', from, to: 'paused', reason: `child ${taskId} is in state '${from}' and cannot move to 'paused' (REQ-MONITOR-300, PD-ORCH-005)` });
+    }
+    const at = toIsoUtc(wall.instant());
+    const ev = this.envelope('child.transition', at, { child_id: taskId, from_state: from, to_state: 'paused' });
+    const line = serializeEvent(ev);
+    if (!line.ok) this.deps.warn(`event child.transition could not be serialised and was not recorded: ${line.error.reason}`);
+    try {
+      dal.transaction(() => {
+        dal.setChildState(sessionId, taskId, 'paused', null);
+        dal.setChildRest(sessionId, taskId, interruption, resumeState);
+        if (toolCalls !== null) dal.setChildTodo(sessionId, taskId, current.todo, Math.max(current.tool_calls, toolCalls));
+        if (line.ok) dal.insertEvent(sessionId, this.nextOrdinal, 'child.transition', at, EVENT_SCHEMA_VERSION, null, line.value);
+        dal.insertTimeline(sessionId, dal.nextTimelineOrdinal(sessionId), at, 'child_paused', 'rotaris', `Child ${current.canonical_name} (${taskId}) was paused by ${interruptionPhrase(interruption)}; it resumes ${resumeState === 'running' ? 'running' : `as ${resumeState}`} when the session is continued.`, JSON.stringify({ task_id: taskId, interruption, from_state: from, resume_state: resumeState }), timelineId(), 'info');
+      });
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    // A paused agent runs nothing, so it carries no active tool chip (REQ-MONITOR-211's rule, applied to a rest).
+    this.activity.clearActive(current.canonical_name);
+    if (line.ok) { const o = this.nextOrdinal++; this.deps.onCommitted({ kind: 'event', ordinal: o, events: [{ ordinal: o, event: ev, line: line.value }] }); }
+    this.trimIfOverflowed(at);
+    return ok(dal.getChild(sessionId, taskId)!);
+  }
+
+  /** PD-ORCH-005: the interruption that left the open iteration open, or NULL when it resumes. Its own transaction. */
+  recordIterationInterruption(iteration: number, interruption: Interruption | null): Result<boolean, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId } = this.deps;
+    try {
+      return ok(dal.transaction(() => dal.setIterationInterruption(sessionId, iteration, interruption)));
+    } catch (cause) {
+      return this.fail(cause);
+    }
+  }
+
+  /**
+   * PD-ORCH-005 clause 10: a background terminal session an agent started, or what became of it — its state, exit code
+   * and last output. Its own transaction; `false` when the id names another agent's terminal (left as it was).
+   */
+  recordAgentTerminal(row: Omit<AgentTerminalRow, 'session_id' | 'updated_at'>): Result<boolean, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    try {
+      return ok(dal.transaction(() => dal.upsertAgentTerminal({ ...row, session_id: sessionId, updated_at: toIsoUtc(wall.instant()) })));
+    } catch (cause) {
+      return this.fail(cause);
+    }
   }
 
   /**

@@ -5,7 +5,12 @@ import { join } from 'node:path';
 import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ScriptedCall } from '@rotaris/model';
-import { RUN_CONFIG_DEFAULTS, Sessions, type ModeChange, type PortToolCall, type PortToolResult, type Publisher, type RunConfig, type ToolPort } from '../index.js';
+import { RUN_CONFIG_DEFAULTS, Sessions, type ModeChange, type PortToolCall, type PortToolResult, type Publisher, type RunConfig, type SessionsDeps, type ToolPort } from '../index.js';
+import { conversationOf } from './record.js';
+import { interruptedResult } from './interruption.js';
+import { decodeStoredTodo } from '../todo-view.js';
+import type { LiveTerminal } from './run.js';
+import type { HookPort } from '../hooks-port.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
@@ -14,7 +19,7 @@ const NONE: Publisher = { increment: () => undefined, snapshot: () => undefined 
 /** A tool port that records calls and answers by name; `hold` parks a dispatch until released. */
 function fakePort(opts: { hold?: Promise<void>; holdOn?: string; pinnedPersona?: string } = {}) {
   const calls: PortToolCall[] = [];
-  const pending = { cancelled: 0, answered: [] as string[] };
+  const pending = { cancelled: 0, withdrawn: [] as string[], answered: [] as string[] };
   let mode: 'restricted' | 'ask' | 'autonomous' = 'ask';
   const port: ToolPort = {
     specs: () => [{ name: 'glob', description: 'find files', parameters: { type: 'object' } }, { name: 'write_file', description: 'write', parameters: { type: 'object' } }],
@@ -27,6 +32,7 @@ function fakePort(opts: { hold?: Promise<void>; holdOn?: string; pinnedPersona?:
       return { text: 'a.ts\nb.ts', isError: false, status: 'ok', durationMs: 3, label: 'glob **/*.ts', args: {} };
     },
     cancelPending: () => { pending.cancelled += 1; return 0; },
+    withdrawPending: (cause) => { pending.withdrawn.push(cause); return 0; },
     setMode: (m, _source): ModeChange => {
       const previous = mode;
       // REQ-TOOLS-074: a pinned agent refuses a loosening change and names its persona; the run collects the names.
@@ -57,7 +63,7 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
 
   const config = (over: Partial<RunConfig> = {}): RunConfig => ({ ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k', ...over });
 
-  function sessionsWith(calls: ScriptedCall[], port: ToolPort | null, extra: { attended?: boolean; runtime?: { permissionMode: string } } = {}) {
+  function sessionsWith(calls: ScriptedCall[], port: ToolPort | null, extra: { attended?: boolean; runtime?: { permissionMode: string; pauseToolDeadlineMs?: number }; terminals?: SessionsDeps['terminals']; hooks?: HookPort } = {}) {
     const client = new ScriptedModelClient(calls);
     let n = 0;
     const logLines: string[] = [];
@@ -65,8 +71,10 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
       clocks: clock, publisher: NONE, pid: 77, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), mintSessionId: () => `S${++n}`,
       model: { backend: new DefaultAgentBackend(client), config: config() }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
       ...(port ? { tools: () => port } : {}), attended: () => extra.attended ?? true,
-      runtime: { permissionMode: extra.runtime?.permissionMode ?? 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING' },
+      runtime: { permissionMode: extra.runtime?.permissionMode ?? 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', ...(extra.runtime?.pauseToolDeadlineMs === undefined ? {} : { pauseToolDeadlineMs: extra.runtime.pauseToolDeadlineMs }) },
       sessionLogAppender: () => (line) => { logLines.push(line); },
+      ...(extra.terminals ? { terminals: extra.terminals } : {}),
+      ...(extra.hooks ? { hooks: () => extra.hooks! } : {}),
     });
     return { sessions, client, logLines };
   }
@@ -126,7 +134,7 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
     expect(calls).toHaveLength(1);
   });
 
-  it('REQ-MONITOR-012: a stop releases the pending approvals first, aborts the tool in flight, and the run ends interrupted', async () => {
+  it('REQ-MONITOR-012 / PD-ORCH-005 clauses 3 and 9: a stop WITHDRAWS the pending approvals first (never cancels them), aborts the tool in flight — recorded as interrupted — and the run ends interrupted', async () => {
     let release!: () => void;
     const hold = new Promise<void>((r) => { release = r; });
     const { port, pending } = fakePort({ hold, holdOn: 'write_file' });
@@ -135,10 +143,30 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
     await new Promise((r) => setTimeout(r, 5));
     expect(dal.residentRows(sid).at(-1)).toMatchObject({ kind: 'tool', tool_status: 'running' });
     expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
-    expect(pending.cancelled).toBe(1);
+    expect(pending.withdrawn).toEqual(['stop']);
+    expect(pending.cancelled).toBe(0);
     const result = await sessions.running(sid)!;
     expect(result.status).toBe('interrupted');
     expect(dal.residentRows(sid).find((r) => r.kind === 'tool')).toMatchObject({ tool_status: 'failed' });
+    // The call's result in the root's record says it was interrupted by the stop and not re-run (clause 3).
+    const root = dal.iterationsOf(sid)[0]!.root_task_id;
+    const results = conversationOf(dal.agentConversation(sid, root)).flatMap((m) => m.content.flatMap((p) => (p.kind === 'tool-result' ? [p] : [])));
+    expect(results).toEqual([{ kind: 'tool-result', callId: 'c1', name: 'write_file', isError: true, result: expect.stringMatching(/^This call was interrupted by the stop before it completed, and it was not re-run\./) }]);
+    release();
+  });
+
+  it('REQ-MONITOR-012: the explicit cancel (REQ-MONITOR-126) still releases the pending approvals as cancelled', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    const { port, pending } = fakePort({ hold, holdOn: 'write_file' });
+    const { sessions } = sessionsWith([toolCalls([{ callId: 'c1', name: 'write_file', args: { path: 'a' } }]), answer('never')], port);
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    await new Promise((r) => setTimeout(r, 5));
+    expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: 'run' } })).toEqual({ ok: true });
+    expect(pending.cancelled).toBe(1);
+    expect(pending.withdrawn).toEqual([]);
+    expect((await sessions.running(sid)!).status).toBe('interrupted');
+    expect(dal.iterationsOf(sid)).toMatchObject([{ state: 'closed', outcome: 'cancelled', interruption: null }]);
     release();
   });
 
@@ -226,5 +254,161 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
     sessions.control({ op: 'cancel', sessionId: sid, args: {} });
     expect(logLines.length).toBe(before);
     expect(logLines.every((l) => /^\d{4}-\d\d-\d\dT.*(WARNING|ERROR)/.test(l))).toBe(true);
+  });
+
+  describe('PD-ORCH-005 clauses 2, 9 and 10: what a pause does, and what becomes of the background sessions', () => {
+    const settle = async (until: () => boolean) => { for (let i = 0; i < 400 && !until(); i += 1) await new Promise((r) => setTimeout(r, 2)); };
+    const resultOf = (sid: SessionId, callId: string) => {
+      const root = dal.iterationsOf(sid)[0]!.root_task_id;
+      return conversationOf(dal.agentConversation(sid, root)).flatMap((m) => m.content.flatMap((p) => (p.kind === 'tool-result' ? [p] : []))).find((p) => p.callId === callId);
+    };
+
+    it('clause 9: an accepted pause withdraws every approval and question at once — the calls waiting on a person are not waited for', async () => {
+      const { port, pending } = fakePort({ hold: new Promise<void>(() => undefined), holdOn: 'write_file' });
+      const { sessions } = sessionsWith([toolCalls([{ callId: 'c1', name: 'write_file', args: { path: 'a' } }]), answer('never')], port);
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => dal.residentRows(sid).some((r) => r.kind === 'tool'));
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      expect(pending.withdrawn).toEqual(['pause']);
+      expect(pending.cancelled).toBe(0);
+      clock.advance(30_000);
+      await sessions.running(sid)!;
+    });
+
+    it('REQ-ORCH-134 (clause 2): a call still in flight is awaited until the pause\'s tool deadline — `runtime.graceful_pause_tool_deadline` — then cut and recorded as interrupted', async () => {
+      const { port } = fakePort({ hold: new Promise<void>(() => undefined), holdOn: 'glob' });
+      const { sessions } = sessionsWith([toolCalls([{ callId: 'c1', name: 'glob', args: {} }]), answer('never')], port, { runtime: { permissionMode: 'ask', pauseToolDeadlineMs: 5_000 } });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => dal.residentRows(sid).some((r) => r.kind === 'tool'));
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      clock.advance(4_999);
+      await new Promise((r) => setTimeout(r, 10));
+      expect(sessions.isRunActive(sid)).toBe(true);
+      clock.advance(1);
+      const result = await sessions.running(sid)!;
+      expect(result.status).toBe('interrupted');
+      expect(resultOf(sid, 'c1')).toMatchObject({ isError: true, result: expect.stringMatching(/^This call was interrupted by the pause before it completed, and it was not re-run\.[\s\S]*cancelled$/) });
+      expect(dal.iterationsOf(sid)).toMatchObject([{ state: 'open', interruption: 'pause' }]);
+    });
+
+    function withTerminals() {
+      const live: { -readonly [K in keyof LiveTerminal]: LiveTerminal[K] }[] = [
+        { id: 'ts_serve', taskId: 'bg_agent01', command: 'serve', startedAt: '2026-09-27T00:00:00.000Z', status: 'running', exitCode: null, tail: 'listening' },
+        { id: 'ts_build', taskId: 'bg_agent01', command: 'build', startedAt: '2026-09-27T00:00:01.000Z', status: 'completed', exitCode: 0, tail: 'built' },
+      ];
+      const ended: string[][] = [];
+      const terminals: SessionsDeps['terminals'] = () => ({ list: () => live, end: async (ids) => { ended.push([...ids]); for (const t of live) if (ids.includes(t.id)) { t.status = 'killed'; t.exitCode = -1; } } });
+      return { terminals, ended };
+    }
+
+    it('clause 10: a stop ends the running background sessions and records each as ended by the stop, with its last output', async () => {
+      const { terminals, ended } = withTerminals();
+      const { port } = fakePort({ hold: new Promise<void>(() => undefined), holdOn: 'glob' });
+      const { sessions } = sessionsWith([toolCalls([{ callId: 'c1', name: 'glob', args: {} }]), answer('never')], port, { terminals });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => dal.residentRows(sid).some((r) => r.kind === 'tool'));
+      sessions.control({ op: 'cancel', sessionId: sid, args: {} });
+      await sessions.running(sid)!;
+      expect(ended).toEqual([['ts_serve']]);
+      // Recorded before the kill: the kill's own `killed` is not the end the record keeps.
+      expect(dal.agentTerminalsOf(sid).map((t) => [t.terminal_id, t.state, t.output_tail])).toEqual([['ts_serve', 'stop', 'listening'], ['ts_build', 'completed', 'built']]);
+    });
+
+    it('clause 3 (found by phase 3\'s second review): the explicit cancel that lands while teardown ends the background sessions still closes the iteration cancelled', async () => {
+      const live: { -readonly [K in keyof LiveTerminal]: LiveTerminal[K] }[] = [{ id: 'ts_serve', taskId: 'bg_agent01', command: 'serve', startedAt: '2026-09-27T00:00:00.000Z', status: 'running', exitCode: null, tail: 'listening' }];
+      let ending = false;
+      let releaseEnd!: () => void;
+      const endHold = new Promise<void>((r) => { releaseEnd = r; });
+      const terminals: SessionsDeps['terminals'] = () => ({ list: () => live, end: async () => { ending = true; await endHold; live[0]!.status = 'killed'; } });
+      const { port } = fakePort({ hold: new Promise<void>(() => undefined), holdOn: 'glob' });
+      const { sessions } = sessionsWith([toolCalls([{ callId: 'c1', name: 'glob', args: {} }]), answer('never')], port, { terminals });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => dal.residentRows(sid).some((r) => r.kind === 'tool'));
+      sessions.control({ op: 'cancel', sessionId: sid, args: {} });
+      await settle(() => ending);
+      expect(dal.iterationsOf(sid)).toMatchObject([{ state: 'open', interruption: 'stop' }]);
+      expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: 'run' } })).toEqual({ ok: true });
+      releaseEnd();
+      await sessions.running(sid)!;
+      expect(dal.iterationsOf(sid)).toMatchObject([{ state: 'closed', outcome: 'cancelled' }]);
+      const closed = dal.eventsOfKind(sid, 'iteration.end').map((e) => JSON.parse(e.payload) as { summary: string });
+      expect(closed.map((e) => e.summary)).toEqual(['the run was cancelled after it had come to rest']);
+    });
+
+    it('clause 10: the explicit cancel that lands after a pause came to rest ends the background sessions the pause had left running', async () => {
+      const { terminals, ended } = withTerminals();
+      let releaseHook!: () => void;
+      const hookHold = new Promise<void>((r) => { releaseHook = r; });
+      let ending = false;
+      const hooks: HookPort = {
+        auditSnapshot: () => [], trust: () => ({ withheld: 0, reinstated: 0, notice: '', workspace: 'C:/ws', fingerprint: 'f', loadWarning: '' }), announceWithheld: () => 0, hasHooksFor: () => true,
+        fireLifecycle: async (event) => { if (event === 'session_end') { ending = true; await hookHold; } return []; }, advisory: () => '', toolHooks: { preTool: async () => ({ blocked: false, refusal: '' }), postTool: async () => ({ feedback: '' }) },
+      };
+      const { port } = fakePort({ hold: new Promise<void>(() => undefined), holdOn: 'glob' });
+      const { sessions } = sessionsWith([toolCalls([{ callId: 'c1', name: 'glob', args: {} }]), answer('never')], port, { terminals, hooks, runtime: { permissionMode: 'ask', pauseToolDeadlineMs: 5_000 } });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => dal.residentRows(sid).some((r) => r.kind === 'tool'));
+      sessions.control({ op: 'pause', sessionId: sid, args: {} });
+      clock.advance(5_000);
+      await settle(() => ending);
+      expect(ended).toEqual([]);
+      expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: 'run' } })).toEqual({ ok: true });
+      releaseHook();
+      await sessions.running(sid)!;
+      expect(ended).toEqual([['ts_serve']]);
+      expect(dal.agentTerminalsOf(sid).map((t) => [t.terminal_id, t.state])).toEqual([['ts_serve', 'stop'], ['ts_build', 'completed']]);
+      expect(dal.iterationsOf(sid)).toMatchObject([{ state: 'closed', outcome: 'cancelled' }]);
+    });
+
+    it('clause 10 (OQ-69): the explicit cancel is a stop for the background sessions — it ends them and records it', async () => {
+      const { terminals, ended } = withTerminals();
+      const { port } = fakePort({ hold: new Promise<void>(() => undefined), holdOn: 'glob' });
+      const { sessions } = sessionsWith([toolCalls([{ callId: 'c1', name: 'glob', args: {} }]), answer('never')], port, { terminals });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => dal.residentRows(sid).some((r) => r.kind === 'tool'));
+      sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: 'run' } });
+      await sessions.running(sid)!;
+      expect(ended).toEqual([['ts_serve']]);
+      expect(dal.agentTerminalsOf(sid).map((t) => [t.terminal_id, t.state])).toEqual([['ts_serve', 'stop'], ['ts_build', 'completed']]);
+    });
+
+    it('a call that raises while the run comes to rest leaves the iteration open to be resumed, not failed and abandoned', async () => {
+      let raise!: () => void;
+      const raised = new Promise<void>((r) => { raise = r; });
+      const fake = fakePort().port;
+      const port: ToolPort = { ...fake, dispatch: async (c, signal) => { if (c.name !== 'glob') return fake.dispatch(c, signal); await raised; throw new Error('the tool host went away'); } };
+      const { sessions } = sessionsWith([toolCalls([{ callId: 'c0', name: 'write_file', args: { path: 'a.txt' } }, { callId: 'c1', name: 'glob', args: {} }]), answer('never')], port);
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => dal.residentRows(sid).some((r) => r.kind === 'tool' && r.tool_name === 'glob'));
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      raise();
+      const result = await sessions.running(sid)!;
+      expect(result.status).toBe('interrupted');
+      expect(dal.iterationsOf(sid)).toMatchObject([{ state: 'open', interruption: 'pause' }]);
+      expect(decodeStoredTodo(dal.getSession(sid)!.todo).planner!.phases[0]!.tasks[0]!.state).toBe('in_progress');
+      // The call it raised out of is answered as interrupted in the root's record, and its row settles (phase 3's third
+      // review); the call that completed before it in the same step keeps what it returned (phase 3's fourth review).
+      const root = dal.iterationsOf(sid)[0]!.root_task_id;
+      expect(conversationOf(dal.agentConversation(sid, root)).at(-1)).toEqual({ role: 'tool', content: [
+        { kind: 'tool-result', callId: 'c0', name: 'write_file', isError: false, result: 'wrote a.txt' },
+        { kind: 'tool-result', callId: 'c1', name: 'glob', isError: true, result: interruptedResult('pause', true, '') },
+      ] });
+      expect(dal.residentRows(sid).filter((r) => r.kind === 'tool').map((r) => [r.tool_name, r.tool_status])).toEqual([['write_file', 'ok'], ['glob', 'failed']]);
+    });
+
+    it('clause 10: a pause leaves them running while the application stays open; the quit that follows ends them and records it', async () => {
+      const { terminals, ended } = withTerminals();
+      const { port } = fakePort({ hold: new Promise<void>(() => undefined), holdOn: 'glob' });
+      const { sessions } = sessionsWith([toolCalls([{ callId: 'c1', name: 'glob', args: {} }]), answer('never')], port, { terminals, runtime: { permissionMode: 'ask', pauseToolDeadlineMs: 5_000 } });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => dal.residentRows(sid).some((r) => r.kind === 'tool'));
+      sessions.control({ op: 'pause', sessionId: sid, args: {} });
+      clock.advance(5_000);
+      await sessions.running(sid)!;
+      expect(ended).toEqual([]);
+      expect(dal.agentTerminalsOf(sid).map((t) => [t.terminal_id, t.state])).toEqual([['ts_serve', 'running'], ['ts_build', 'completed']]);
+      await sessions.closeAll();
+      expect(dal.agentTerminalsOf(sid).map((t) => [t.terminal_id, t.state])).toEqual([['ts_serve', 'quit'], ['ts_build', 'completed']]);
+    });
   });
 });

@@ -8,7 +8,7 @@ import { nodeClocks } from '@rotaris/platform';
 import { classifyOutcome, diagnosticBlock, outputWarnings, stripVt } from './classify.js';
 import { parseSnapshot, snapshotCommand, wrapCommand } from './foreground.js';
 import { execFileSync } from 'node:child_process';
-import { findShell, nodePtyFactory, TerminalManager, terminalTool, TERMINAL_DEFAULTS } from './index.js';
+import { findShell, nodePtyFactory, TerminalManager, terminalTool, TERMINAL_DEFAULTS, type BackgroundSession } from './index.js';
 import type { ToolContext } from '../tools/types.js';
 
 /**
@@ -410,6 +410,21 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
       await new Promise((res) => setTimeout(res, 250));
     }
     expect((await t.execute(args({ session_action: 'list' }), ctx())).text).toContain(`✗ ${id}`);
+  }, 30_000);
+  it('PD-ORCH-005 clause 10: a background session is attributed to the agent that started it, recorded at its start and at an end it reaches by itself, and listed by its session', async () => {
+    const recorded: { id: string; status: string; tail: string }[] = [];
+    const record = (b: BackgroundSession) => { recorded.push({ id: b.id, status: b.status, tail: b.tail() }); };
+    manager ??= new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });
+    const t = terminalTool(manager, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }, undefined, { owner: { sessionId: 's-attr', taskId: 'bg_agent01' }, onStarted: record, onEnded: record });
+    const started = await t.execute(args({ command: SH.echo('attributed'), background: true }), ctx());
+    const id = /ts_[0-9a-f]{8}/.exec(started.text)![0];
+    expect(recorded[0]).toMatchObject({ id, status: 'running' });
+    for (let i = 0; i < 80 && recorded.length < 2; i += 1) await new Promise((res) => setTimeout(res, 100));
+    expect(recorded[1]).toMatchObject({ id, status: 'completed' });
+    expect(recorded[1]!.tail).toContain('attributed');
+    const owned = manager.backgroundOwnedBy('s-attr');
+    expect(owned.map((b) => [b.id, b.owner])).toEqual([[id, { sessionId: 's-attr', taskId: 'bg_agent01' }]]);
+    expect(manager.backgroundOwnedBy('s-other')).toEqual([]);
   }, 30_000);
   it('REQ-TOOLS-108: the background cap is an execution_error naming the count', async () => {
     const t = await tool({ maxBackgroundSessions: 1 });

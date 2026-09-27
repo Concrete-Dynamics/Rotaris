@@ -97,30 +97,6 @@ describe('SPIKE PD-ORCH-005: one agent recorded, paused, restored and continued'
     expect(again.messages.map((m) => m.role)).toEqual(['assistant']);
   });
 
-  it('a call cut off before its result arrived leaves an assistant tool-call with no result: the restore must answer it', async () => {
-    const client = new ScriptedModelClient([
-      toolCalls([{ callId: 'c1', name: 'probe', args: {} }, { callId: 'c2', name: 'probe', args: {} }], 'Two probes.'),
-      answer('I will re-issue the interrupted probe.'),
-    ]);
-    const rec = memoryRecord();
-    const controller = new AbortController();
-    let n = 0;
-    // The first call completes; the stop arrives during the second.
-    const tools = port(async () => { n += 1; if (n === 2) { controller.abort(); return { ...ok('partial'), isError: true, status: 'failed' }; } return ok('first-done'); });
-    const first = await runTurn(deps(client, tools, { recorder: rec.recorder }), 'Do it.', [], controller.signal);
-    // Today the turn returns on the abort WITHOUT pushing the tool message: the completed call's result is lost too.
-    expect(rec.messages.map((m) => m.role)).toEqual(['user', 'assistant']);
-    expect(first.messages.at(-1)!.role).toBe('assistant');
-    // The restore owes a result for EVERY call of that assistant message, or a provider rejects the history (a 400).
-    const calls = rec.messages.at(-1)!.content.flatMap((p) => (p.kind === 'tool-call' ? [p] : []));
-    const restored: ChatMessage[] = [...rec.messages, { role: 'tool', content: calls.map((c) => ({ kind: 'tool-result' as const, callId: c.callId, name: c.name, isError: true, result: 'The call was interrupted by a stop before it completed and was not re-run.' })) }];
-    const second = await runTurn(deps(client, tools), null, restored, new AbortController().signal);
-    expect(second.report.text).toContain('re-issue');
-    const history = sent(client, 1);
-    expect(history.at(-1)!.role).toBe('tool');
-    expect(history.at(-1)!.content).toHaveLength(2);
-  });
-
   it('a compression replaces the conversation, so the record must take the replacement or a resume re-sends what was compressed away', async () => {
     const rec = memoryRecord();
     const { Conversation } = await import('./conversation.js');

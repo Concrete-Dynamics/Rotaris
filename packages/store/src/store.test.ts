@@ -1192,6 +1192,9 @@ describe('store — v23: the record a paused run resumes from (PD-ORCH-005, PD-T
     // The same id from another agent's command is a collision, and the recorded terminal is left as it was.
     expect(dal.upsertAgentTerminal({ ...t, task_id: 'bg_000000e2', command: 'other', state: 'killed' })).toBe(false);
     expect(dal.agentTerminalsOf(sid)[0]!.state).toBe('quit');
+    // PD-ORCH-005 clause 10: an end is recorded once — the `killed` the quit's own kill produces does not replace it.
+    expect(dal.upsertAgentTerminal({ ...t, state: 'killed', output_tail: 'later', updated_at: 't3' })).toBe(false);
+    expect(dal.agentTerminalsOf(sid)[0]).toMatchObject({ state: 'quit', output_tail: 'last lines', updated_at: 't2' });
     r.db.close();
     forgetSpelling(r.dir);
   });

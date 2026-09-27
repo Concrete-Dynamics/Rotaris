@@ -34,9 +34,15 @@ first met this defect as a store failure: a reused number collided with the dead
 - **The ledger.** `ChildLedger.all()` holds its own root's tree, walked from the root through the parent links, not
   every child with the iteration's number — so neither a dead run's children nor an earlier plan cycle's (every cycle
   is numbered 0) count toward `maxTotal`, resolve a `depends_on` or become the credited child.
-- **The task.** The dead iteration's todo task goes back to `pending` (`Todo.reopen`), so `selectNext` picks it again.
+- **The task.** The dead iteration's todo task goes back to `pending` (`Todo.reopen`), so `selectNext` picks it again,
+  and it is sent as its own text (`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`, repaired with it).
+- **The continued task's id.** A continuation numbers the task it appends past the stored count, the highest
+  iteration row and every id the todo already holds (`continuedTaskId`), so a new prompt never shares an id with a
+  dead iteration's reopened one — the stale count had minted the same `continued:N` twice (found by the re-review).
+- **The capture.** The dead iteration closes at that moment, so its one REQ-GIT-051 capture is attempted then, with no
+  child credited; its hooks' `iteration_end` is not fired, since the hooks that saw it begin belonged to the dead run.
 
-Evidence: `record.test.ts` ("an iteration a dead run left open closes cancelled…") and `children.test.ts` ("a ledger
-holds its own root's tree…"), each red when its limb is reverted. Once `PD-ORCH-005`'s resume lands, an open iteration
+Evidence: `record.test.ts` (the left-open close, the continued prompt's crash, the todo-id belt, the capture, the
+refused open) and `children.test.ts` ("a ledger holds its own root's tree…"), each red when its limb is reverted. Once `PD-ORCH-005`'s resume lands, an open iteration
 is resumed rather than closed unless the user continues without its agents; the closing described here becomes that
 declined path.

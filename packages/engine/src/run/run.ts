@@ -543,7 +543,7 @@ export class Run {
       if (this.hooks) await this.hooks.fireLifecycle('session_start', { task: this.deps.task });
 
       // PD-ORCH-005: an iteration a previous run left open is settled before anything else runs.
-      this.closeLeftOpenIteration();
+      await this.closeLeftOpenIteration();
       // REQ-ORCH-153: a held run produces its plan and parks; it never enters the iteration loop, so it selects no
       // task, judges no completion and runs no check suite — the prohibition is structural rather than a branch.
       if (this.planHeld) return await this.parkAtPlanGate();
@@ -590,8 +590,11 @@ export class Run {
     let summary = '';
     let escalate = false;
     try {
-      const modelTask = this.deps.continuation && task.id === this.deps.taskId ? this.deps.task : task.text;
-      const report = await this.turnWithRetry(modelTask);
+      // The run's own task goes out as the prompt it was launched with (its attachments, and a continuation's handoff);
+      // any other task the iteration selected — a queued prompt, or a dead iteration's reopened task — as its own text.
+      const own = task.id === this.deps.taskId;
+      const modelTask = this.deps.continuation && own ? this.deps.task : task.text;
+      const report = await this.turnWithRetry(modelTask, own ? undefined : [{ kind: 'text', text: modelTask }]);
       summary = report.text.slice(0, 200);
       if (this.stop.requested) {
         // REQ-ORCH-135: an iteration cancelled mid-run closes as cancelled; the task stays anchored.
@@ -636,15 +639,7 @@ export class Run {
     // `iteration.end` is recorded and BEFORE the hooks' `iteration_end`: the checkpoint records the iteration's work as
     // the agent left it, and a hook that later carries the checkpoint (REQ-HOOKS-082 with checkpoints, owed) can only
     // do so if the capture precedes it. Awaited, so it finishes before the next iteration and before teardown.
-    if (this.deps.checkpoints?.enabled) {
-      try {
-        const r = await this.deps.checkpoints.capture({ iteration, childName: this.creditedChild() });
-        if (r.outcome === 'failed') this.deps.warn(`checkpoint after iteration ${iteration} was not recorded: ${r.detail}`);
-      } catch (cause) {
-        // REQ-GIT-045: never raises, never aborts the run — the port promises that; this is the belt behind it.
-        this.deps.warn(`the checkpoint port raised after iteration ${iteration}: ${String(cause)}`);
-      }
-    }
+    await this.captureCheckpoint(iteration, this.creditedChild());
     // REQ-HOOKS-075/077/080/082: iteration_end for N finishes before N+1 begins; the iteration's own state beside the dispatched outcome.
     if (this.hooks) {
       const iterationState = outcome === 'cancelled' ? 'cancelled' : outcome === 'failed' || outcome === 'abandoned' ? 'failed' : 'succeeded';
@@ -663,14 +658,30 @@ export class Run {
    * its todo task back to `pending` so it is selected again ("the task stays anchored"), and the count moved past it, so
    * this run's first iteration takes the next number rather than the dead one's. It counts toward no limit of this run.
    */
-  private closeLeftOpenIteration(): void {
+  private async closeLeftOpenIteration(): Promise<void> {
     const open = this.deps.dal?.openIterationOf(this.sessionId);
     if (!open) return;
-    this.deps.writer.endIteration(open.iteration, { task: open.task, outcome: 'cancelled', summary: 'the run that owned this iteration ended before it closed' }, 'cancelled');
+    this.deps.writer.endIteration(open.iteration, { task: this.todo.textOf(open.todo_task_id) ?? open.task, outcome: 'cancelled', summary: 'the run that owned this iteration ended before it closed' }, 'cancelled');
+    // REQ-GIT-051: the iteration closes here, so its one capture is attempted here — it records the work the dead run
+    // left. No child is credited: that run's children are not this run's. Its hooks' `iteration_end` is not fired; the
+    // hooks that saw the iteration begin belonged to the run that died.
+    await this.captureCheckpoint(open.iteration, '');
     this.todo.reopen(open.todo_task_id);
     this.iterationsCompleted = Math.max(this.iterationsCompleted, open.iteration);
     this.initialIterations = this.iterationsCompleted;
     this.saveRunning({});
+  }
+
+  /** REQ-GIT-051 / REQ-GIT-045: the one capture an iteration that closes is owed, which never raises and never aborts the run. */
+  private async captureCheckpoint(iteration: number, childName: string): Promise<void> {
+    if (!this.deps.checkpoints?.enabled) return;
+    try {
+      const r = await this.deps.checkpoints.capture({ iteration, childName });
+      if (r.outcome === 'failed') this.deps.warn(`checkpoint after iteration ${iteration} was not recorded: ${r.detail}`);
+    } catch (cause) {
+      // REQ-GIT-045: never raises, never aborts the run — the port promises that; this is the belt behind it.
+      this.deps.warn(`the checkpoint port raised after iteration ${iteration}: ${String(cause)}`);
+    }
   }
 
   /**
@@ -679,8 +690,8 @@ export class Run {
    * already executed. (First execution of Part Q: the turn-level transient retry this method used to be would have
    * re-run executed tool calls with fresh ids; the reason is kept in ADR-0027's note.)
    */
-  private async turnWithRetry(task: string): Promise<TurnReport> {
-    return this.turn(task);
+  private async turnWithRetry(task: string, content?: readonly ContentPart[]): Promise<TurnReport> {
+    return this.turn(task, undefined, content);
   }
 
   /** REQ-ORCH-088/090/144, REQ-CONFIG-065/067/110: the role's own `fallback_model`, else the run-level slot; never the agent's own model. */

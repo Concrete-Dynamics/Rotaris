@@ -66,6 +66,11 @@ export class Todo {
     return true;
   }
 
+  /** The text of the task carrying `taskId`, or null when none does. */
+  textOf(taskId: string): string | null {
+    return this.all().find((t) => t.id === taskId)?.text ?? null;
+  }
+
   /** REQ-CHAT-090/091: validated add/update/remove; every successful edit changes the document. */
   editTask(op: 'add' | 'update' | 'remove', id: string, text: string, phaseName = 'main'): boolean {
     const body = text.trim();

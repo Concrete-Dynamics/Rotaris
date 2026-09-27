@@ -178,12 +178,17 @@ flowchart TB
 **An iteration a previous run left open (PD-ORCH-005; the repair of the crashed-iteration defect).** Every execution
 iteration has an `iterations` row from the moment its root is minted, and `iteration.end` and the row's close commit in
 one transaction (`endIteration`). A run host that died mid-iteration leaves that row open, so before its first iteration
-a run closes any open row `cancelled` (`closeLeftOpenIteration`, REQ-ORCH-135): the task it held goes back to
-`pending` (`Todo.reopen`), and the count moves past it, so the run's own first iteration takes the next number rather
-than the dead one's. The count is also never below the highest iteration recorded closed. The ledger holds its own
-root's tree, walked from the root through the parent links, rather than every child with its iteration's number — every
-plan cycle is numbered 0. Root and child task ids are minted against every child's and every recorded root's id in the
-session (`takenTaskIds`), since the record is keyed by task id session-wide.
+a run closes any open row `cancelled` (`closeLeftOpenIteration`, REQ-ORCH-135) and attempts that iteration's one
+checkpoint capture (REQ-GIT-051, no child credited; its hooks' `iteration_end` is not fired — the hooks that saw it
+begin were the dead run's): the task it held goes back to `pending` (`Todo.reopen`), and the count moves past it, so
+the run's own first iteration takes the next number rather than the dead one's. The count is also never below the
+highest iteration recorded closed, and a continuation's appended task id is numbered past the count, the highest row
+and every id the todo holds (`continuedTaskId`). An iteration sends the run's own task as it was launched
+(`taskContent`) and any other task it selects — a queued prompt, a reopened one — as that task's own text. The ledger
+holds its own root's tree, walked from the root through the parent links, rather than every child with its iteration's
+number — every plan cycle is numbered 0. Root and child task ids are minted against every child's, every recorded
+root's and every recorded conversation's id in the session (`takenTaskIds`), since the record is keyed by task id
+session-wide.
 
 **The checkpoint at iteration close (Part P; ADR-0039's first execution).** Exactly once per iteration that closes, after
 `iteration.end` is recorded and BEFORE the hooks' `iteration_end` (the checkpoint records the iteration's work as the agent

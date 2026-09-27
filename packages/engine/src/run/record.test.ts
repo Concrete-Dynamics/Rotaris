@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling, type AgentMessageRow } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ChatMessage, type ModelRequest, type ScriptedCall } from '@rotaris/model';
-import { BUILT_IN_PERSONAS, RUN_CONFIG_DEFAULTS, Sessions, type DelegationOps, type ModelLookup, type PortToolResult, type Publisher, type RoleName, type RunConfig, type ToolPort } from '../index.js';
+import { BUILT_IN_PERSONAS, RUN_CONFIG_DEFAULTS, Sessions, SessionWriter, type DelegationOps, type ModelLookup, type PortToolResult, type Publisher, type RoleName, type RunConfig, type SessionsDeps, type ToolPort } from '../index.js';
 import { conversationOf } from './record.js';
 import { takenTaskIds } from '../children/naming.js';
 import { decodeStoredTodo, encodeStoredTodo } from '../todo-view.js';
@@ -66,7 +66,7 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
     };
   }
 
-  function sessionsWith(script: (persona: string, turn: number) => ScriptedCall, compression?: { triggerTokens: number }) {
+  function sessionsWith(script: (persona: string, turn: number) => ScriptedCall, compression?: { triggerTokens: number }, checkpoints?: SessionsDeps['checkpoints']) {
     const counts = new Map<string, number>();
     const client = new ScriptedModelClient([]);
     const original = client.stream.bind(client);
@@ -85,6 +85,7 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
       clocks: clock, publisher: NONE, pid: 79, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => `S-rec-${++minted}`,
       model: null, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid), attended: () => true, onRunResult: () => undefined,
       tools: (ctx) => port(ctx.delegation, ctx.parentId ?? 'root'),
+      ...(checkpoints ? { checkpoints } : {}),
       configure: () => ({ ok: true, value: {
         model: {
           backend, config,
@@ -154,6 +155,118 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
     // Each root has its own id, and every recorded root's id is taken when the next one is minted.
     expect(new Set(rows.map((r) => r.root_task_id)).size).toBe(3);
     for (const r of rows) expect(takenTaskIds(dal, sid).has(r.root_task_id)).toBe(true);
+  });
+
+  /** The residue a run host that died mid-`iteration` leaves: its row open, the count not yet moved, its todo task in progress. */
+  function dieIn(sid: SessionId, iteration: number, taskIdPart: string): void {
+    dal.db.prepare("UPDATE iterations SET state = 'open', outcome = NULL, closed_at = NULL WHERE session_id = ? AND iteration = ?").run(sid, iteration);
+    const stored = decodeStoredTodo(dal.getSession(sid)!.todo);
+    const planner = structuredClone(stored.planner!);
+    for (const phase of planner.phases) for (const task of phase.tasks) if (task.id.endsWith(taskIdPart)) task.state = 'in_progress';
+    dal.updateSessionRun(sid, { iterations_completed: iteration - 1, todo: encodeStoredTodo({ ...stored, planner }) });
+  }
+
+  it('the same repair when the dead iteration was a continued prompt\'s: the next prompt takes its own task id, the interrupted prompt is worked with its own text, and nothing is worked twice', async () => {
+    const { sessions, client } = sessionsWith(() => answer('Answered.'));
+    const sid = (sessions.start(dal, 'C:/ws', 'FIRST') as { value: SessionId }).value;
+    await sessions.running(sid);
+    expect(sessions.prompt(sid, 'SECOND').ok).toBe(true);
+    await sessions.running(sid);
+    dieIn(sid, 2, ':continued:2');
+    const before = client.requests.length;
+
+    expect(sessions.prompt(sid, 'THIRD').ok).toBe(true);
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(SessionWriter.storeFailure(dal)).toBeUndefined();
+    const tasks = decodeStoredTodo(dal.getSession(sid)!.todo).planner!.phases.flatMap((p) => p.tasks);
+    // Before the repair the new task was minted `continued:2` from the stale count: two tasks under one id.
+    expect(new Set(tasks.map((t) => t.id)).size).toBe(tasks.length);
+    expect(tasks.map((t) => [t.text, t.state])).toEqual([['FIRST', 'complete'], ['SECOND', 'complete'], ['THIRD', 'complete']]);
+    const rows = dal.iterationsOf(sid);
+    expect(rows.map((r) => [r.iteration, r.outcome])).toEqual([[1, 'succeeded'], [2, 'cancelled'], [3, 'succeeded'], [4, 'succeeded']]);
+    expect(rows[2]!.todo_task_id).toBe(rows[1]!.todo_task_id);
+    expect(rows[3]!.todo_task_id).not.toBe(rows[2]!.todo_task_id);
+    // The interrupted prompt went back to the model as itself, and the new prompt's payload went out exactly once.
+    const firstUser = (r: ModelRequest) => r.messages.find((m) => m.role === 'user')!.content.map((p) => (p.kind === 'text' ? p.text : '')).join('');
+    const after = client.requests.slice(before).map(firstUser);
+    expect(after[0]).toBe('SECOND');
+    expect(after.filter((t) => t.includes('THIRD'))).toHaveLength(1);
+    // The dead iteration's `iteration.end` names its todo task's text, as every other one does — never the root's payload.
+    const ended = dal.eventsOfKind(sid, 'iteration.end').map((e) => JSON.parse(e.payload) as { iteration: number; task: string; outcome: string });
+    expect(ended.find((e) => e.iteration === 2 && e.outcome === 'cancelled')!.task).toBe('SECOND');
+  });
+
+  it('a continued task id steps past every id the todo holds, even one no iteration row carries (a run that died before its first iteration opened)', async () => {
+    const { sessions } = sessionsWith(() => answer('Answered.'));
+    const sid = (sessions.start(dal, 'C:/ws', 'FIRST') as { value: SessionId }).value;
+    await sessions.running(sid);
+    // The residue: the continued prompt's task was appended and saved as `continued:2`, and the run died before iteration 2 opened.
+    const stored = decodeStoredTodo(dal.getSession(sid)!.todo);
+    const planner = { ...stored.planner!, phases: [...stored.planner!.phases, { name: 'Continued Prompts', tasks: [{ id: `${sid}:continued:2`, text: 'LOST', state: 'pending' as const, consecutiveRetries: 0 }] }] };
+    dal.updateSessionRun(sid, { todo: encodeStoredTodo({ ...stored, planner }) });
+
+    expect(sessions.prompt(sid, 'SECOND').ok).toBe(true);
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    const tasks = decodeStoredTodo(dal.getSession(sid)!.todo).planner!.phases.flatMap((p) => p.tasks);
+    expect(tasks.map((t) => [t.id, t.text, t.state])).toEqual([[`${sid}:main:1`, 'FIRST', 'complete'], [`${sid}:continued:2`, 'LOST', 'complete'], [`${sid}:continued:3`, 'SECOND', 'complete']]);
+  });
+
+  it('REQ-GIT-051: the iteration a dead run left open closes here, so its one capture is attempted here — before this run\'s first', async () => {
+    const captures: { iteration: number; childName: string }[] = [];
+    const { sessions } = sessionsWith(() => answer('Answered.'), undefined, () => ({ enabled: true, capture: async (input) => { captures.push({ iteration: input.iteration, childName: input.childName }); return { outcome: 'captured', detail: '' } as never; } }));
+    const sid = (sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
+    await sessions.running(sid);
+    dieIn(sid, 1, ':main:1');
+    captures.length = 0;
+    expect(sessions.prompt(sid, 'second').ok).toBe(true);
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    // Exactly one capture per iteration that closed in this run: the dead one (no child credited), then 2 and 3.
+    expect(captures).toEqual([{ iteration: 1, childName: '' }, { iteration: 2, childName: '' }, { iteration: 3, childName: '' }]);
+  });
+
+  it('an open the store already holds is refused with a warning, never a store failure; the count never falls below a closed iteration', async () => {
+    const { sessions } = sessionsWith(() => answer('Answered.'));
+    const sid = (sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
+    await sessions.running(sid);
+    // The count behind the rows with nothing left open — a crash between the close and the count's save.
+    dal.updateSessionRun(sid, { iterations_completed: 0 });
+    expect(sessions.prompt(sid, 'second').ok).toBe(true);
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(SessionWriter.storeFailure(dal)).toBeUndefined();
+    expect(dal.iterationsOf(sid).map((r) => r.iteration)).toEqual([1, 2]);
+
+    const writer = new SessionWriter({ dal, sessionId: sid, wall: clock, retentionCap: 0, onCommitted: () => undefined, warn: () => undefined });
+    expect(writer.openIteration({ iteration: 2, root_task_id: 'bg_twice', root_canonical_name: 'orchestrator', root_persona: 'orchestrator', todo_task_id: 't', task: 't' })).toEqual({ ok: true, value: false });
+    expect(SessionWriter.storeFailure(dal)).toBeUndefined();
+  });
+
+  it('PD-ORCH-005 clause 12: a manual compression that lands after its turn ended leaves the record equal to what the model was last sent', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+    let manual: Promise<unknown> | null = null;
+    const ref: { sessions?: Sessions; sid?: SessionId } = {};
+    const { sessions, client } = sessionsWith((persona, n) => {
+      if (persona === 'compressor') return { parts: [{ hold: gate }, ...answer('Work performed: probed. Findings: none. Open: none.').parts] };
+      if (persona === 'summariser') return answer('{"summary":"probed","key_findings":[],"tags":[]}');
+      if (persona === 'orchestrator') {
+        if (n === 1) return toolCalls([{ callId: 'o1', name: 'probe', args: { what: 'a' } }], 'Probing.');
+        if (n === 2) return toolCalls([{ callId: 'o2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'work', task: 'TASK: probe it' } }], 'Delegating.');
+        if (n === 3) { manual = ref.sessions!.controlAsync({ op: 'forceCompression', sessionId: ref.sid!, args: {} }); return { parts: [{ hold: sleep(50) }, ...answer('Waiting.').parts] }; }
+        release();
+        return { parts: [{ hold: sleep(80) }, ...answer('All done.').parts] };
+      }
+      return n === 1 ? toolCalls([{ callId: 'c1', name: 'probe', args: { what: 'x' } }], 'Probing.') : answer('Probed x.');
+    }, { triggerTokens: 1e9 });
+    ref.sessions = sessions;
+    const sid = (sessions.start(dal, 'C:/ws', 'probe the thing') as { value: SessionId }).value;
+    ref.sid = sid;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    await manual;
+    const root = dal.iterationsOf(sid)[0]!.root_task_id;
+    const last = client.requests.filter((r) => personaOf(r) === 'orchestrator').at(-1)!;
+    // Without the turn closing its conversation, the late pass wrote a replacement the model never saw.
+    expect(recorded(sid, root)).toEqual([...sent(last), assistant('All done.')]);
   });
 
   it('clause 12: a compression is written into the record, so the conversation a resume sends is the compressed one', async () => {

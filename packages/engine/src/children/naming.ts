@@ -35,10 +35,11 @@ export function mintTaskId(taken: ReadonlySet<string>): string {
 }
 
 /**
- * REQ-ORCH-036 / PD-ORCH-005: every task id the session has used — each child's and each recorded iteration root's — so
- * a new id never repeats one the conversation record is keyed by (it is keyed by task id across the whole session).
+ * REQ-ORCH-036 / PD-ORCH-005: every task id the session has used — each child's, each iteration root's, and every id a
+ * conversation is recorded under (a plan cycle's root has a record and no iteration) — so a new id never repeats one
+ * the conversation record is keyed by (it is keyed by task id across the whole session).
  */
 export function takenTaskIds(dal: StoreDal | undefined, sessionId: SessionId): Set<string> {
   if (!dal) return new Set();
-  return new Set([...dal.childrenOf(sessionId).map((c) => c.task_id), ...dal.iterationsOf(sessionId).map((i) => i.root_task_id)]);
+  return new Set([...dal.childrenOf(sessionId).map((c) => c.task_id), ...dal.iterationsOf(sessionId).map((i) => i.root_task_id), ...dal.recordedTaskIds(sessionId)]);
 }

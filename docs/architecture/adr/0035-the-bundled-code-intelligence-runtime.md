@@ -231,7 +231,11 @@ notice, beside an `AUTHORS.rst`. Each file only refers to the licence. The first
 file as the text (OQ-69). Both now wait on a maintainer's review (O-11), as `proxy_tools` does.
 
 REQ-STARTUP-015's "exactly one copy" of the tool server's licence text meets a second copy when first-release-plan.md
-§4.4 carries the notices file into the artifact. That step decides which copy stands.
+§4.4 carries the notices file into the artifact. That step decides which copy stands. *Decided 2026-09-27 by §4.4: the
+notices file's copy stands, because REQ-STARTUP-142 requires it there, and the copy under `serena_agent`'s dist-info is
+filtered out of the artifact (`electron-builder.yml`). The runtime tree this record builds keeps it, because the
+generator reads it there. `afterPack` counts the copies in the artifact (ADR-0054, "The two bundled assets"). The
+runtime reads nothing from the file, so this record's mechanism is unchanged.*
 
 **The client's owed halves, alive** (ADR-0034's note beside this one): `code_intelligence` ships **enabled** —
 `REQ-CONFIG-181`'s deviation of 2026-09-05 reverted, its record kept in `defaults.ts`; the grant tiers on the built-in

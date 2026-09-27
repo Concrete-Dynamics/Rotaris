@@ -23,7 +23,7 @@ record already decides, and every ruling it needs is named as the owner's rather
 | Skills — ESC-37, ESC-38, ESC-39 | **ruled 2026-09-27** as recommended ([R-052](../product/requests.md#r-052)); amended | §2 |
 | Workspace-context injection, REQ-WORKSPACE-041..050 | built 2026-09-22 under `PD-WORKSPACE-002` | §3 |
 | Injection — REQ-WORKSPACE-049's latency bound, a built-app proof | **owed**; OQ-64 **ruled 2026-09-27** | §3 |
-| The Windows release pipeline, REQ-STARTUP-027..038, 141..143, 156, 158, 167, 168 | the installer built once (ADR-0054, 2026-09-04); **the notices generator built 2026-09-27** (§4.3), its validation refusing until O-3, O-11 and OQ-68 | §4 |
+| The Windows release pipeline, REQ-STARTUP-027..038, 141..143, 156, 158, 167, 168 | the installer built once (ADR-0054, 2026-09-04); **the notices generator built 2026-09-27** (§4.3), its validation refusing until O-3, O-11 and OQ-68; **the two bundled assets wired into `pnpm package` 2026-09-27** (§4.4), so a package refuses with it | §4 |
 | The updater, REQ-STARTUP-107..124 | **not built** — no module in `apps/desktop/src/main/`; **in the first release**, ruled 2026-09-27 | §4.6 |
 
 **Deferred by "thats it".** Each item stays owed where the record already carries it:
@@ -269,6 +269,27 @@ Two facts from §4.3 bear on this step:
   REQ-STARTUP-142. ADR-0054 recorded the dist-info `LICENSE` as that copy. The notices file reproduces the same text
   again, so carrying the file makes two copies. This step decides which copy stands, or raises the question.
 
+*Built 2026-09-27; first execution reported into ADR-0054 ("The two bundled assets") and ADR-0035.* What landed:
+
+- **The build identifier.** `pnpm build-id` (`tools/build-id/`) writes `apps/desktop/resources/build-id.txt` (git-ignored)
+  as one line: the full commit name of HEAD, with `-dirty` when the working tree differs from it. It is deterministic
+  per commit and uses no network. ADR-0054 records why neither an abbreviation nor a tag is used.
+- **The packaging.** `pnpm package` runs `pnpm notices` and then `pnpm build-id` before `electron-vite build`.
+  `electron-builder.yml` carries both files to the root of `process.resourcesPath`, and `afterPack`'s "assets" rule
+  checks them in the artifact.
+- **While O-3 is owed, a local `pnpm package` fails** at the notices step (REQ-STARTUP-143). `ROTARIS_PACKAGE_WITHOUT_NOTICES=1`
+  makes a development package without the notices file instead. Its About page shows the absent caption, the package
+  says it is not releasable, and a build for a tag refuses the flag.
+- **The licence copy.** The notices file's copy stands, because REQ-STARTUP-142 requires it there. The dist-info copy
+  is filtered out of the artifact and kept in the source tree for the generator. The requirements decide this between
+  them, so no question is raised.
+- **The proof.** `settings-proof` launch 1′ measures the present branch of each asset. The notices file there is a
+  fixture, as the first fact above says it must be. The proof puts back whatever `apps/desktop/resources/` held, byte
+  for byte, so a successful `pnpm notices` no longer turns the absent check red.
+
+**Owed:** the "assets" rule's first run against a real `win-unpacked`, at the next Windows `pnpm package`. No package
+was run here (IC-3).
+
 **4.5 The portable and its launcher stub.** REQ-STARTUP-031 names two Windows artifacts, so the portable is part of
 the first release. The stub is ADR-0054's second build technology and has never been built. It is the largest
 unknown in this plan, so its spike is taken as the first act of building it (CLAUDE.md), and the result goes
@@ -367,7 +388,7 @@ supply, and each stays owed (R-053). O-11 is the same kind of item: a review onl
    - §4.3 the notices generator with the About defect — *built 2026-09-27; validation refuses until O-3, O-11 and OQ-68.
      OQ-66 does not stop validation, but until it is ruled the file knowingly leaves out the libraries linked into
      the bundled interpreter*;
-   - §4.4 the bundled assets.
+   - §4.4 the bundled assets — *built 2026-09-27; its "assets" rule waits for the next Windows package.*
 3. **The portable stub (§4.5).** Spike first, and report the result into ADR-0054.
 4. **The updater (§4.6)** if O-10 includes it, then the manifest and signature (§4.7) against O-2's key.
 5. **Assembly.** The release body (§4.8), the icon (§4.9) and the tag workflow (§4.2), run end to end against a

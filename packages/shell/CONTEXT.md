@@ -67,6 +67,12 @@ The version-controlled, dated table of reviewed exceptions beside the notices ge
 dependency without licence text pass validation for a version range until its expiry. — `REQ-STARTUP-143`
 _Avoid_: allow-list, waiver
 
+**Build identifier**:
+The one line in the bundled text asset `build-id.txt` that the About page's Build row shows. When the asset is missing
+or unreadable there is none, and the row shows an em dash. This build writes the full name of the commit the artifact was made from, with `-dirty`
+when the working tree differed from it. — `REQ-SHELL-140`
+_Avoid_: build number, version (a version is the release's single value; many builds may carry one version)
+
 **Release feed**:
 The product's public source of the latest release, consulted exactly once per launch of a supported
 standalone build, after the window is visible. — `REQ-STARTUP` update check

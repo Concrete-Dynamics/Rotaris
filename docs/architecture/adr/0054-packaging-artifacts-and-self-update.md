@@ -1074,7 +1074,9 @@ payload moved first paint by about 10 ms" measurement above is not re-taken: the
 `implementation-conditions.md`) binds the release this artifact would be: the runtime is self-contained, its language
 servers are not — measured on the packaged binary with outbound blocked (`pnpm code-intel-proof` launch 7: `npm install
 typescript@5.9.3` attempted and failed). The licence text the bundle carries is one copy under the distribution's
-dist-info; the notices generator (`REQ-STARTUP-141/142`) is still not built.
+dist-info; the notices generator (`REQ-STARTUP-141/142`) is still not built. *2026-09-27: no longer the copy the artifact
+carries. The notices file reproduces the same text, and REQ-STARTUP-142 requires it there, so the dist-info copy is
+filtered out of the artifact and kept in the source tree for the generator. See "The two bundled assets" below.*
 **IC-7 adopted 2026-09-06 (ESC-32, option 2):** the language servers are tools provisioned after installation;
 `REQ-STARTUP-142`'s section now lists them after Git and ripgrep, from the same manifest, and the generator that
 will write that section is the one still owed here — IC-7's second half is discharged when it does. *It did, on
@@ -1092,7 +1094,9 @@ change would land them. `shell.openThirdPartyLicenses` answers `licenses.absent`
 file now has a generator (below), and the reader's name was corrected to `THIRD-PARTY-LICENSES.txt` in the same change —
 it had looked for the name in lower case, which only a case-insensitive filesystem forgives
 (`../../defects/fixed/the-about-page-looks-for-the-licence-bundle-under-a-lowercase-name.md`). Carrying the two assets
-into the artifact is `first-release-plan.md` §4.4.*
+into the artifact is `first-release-plan.md` §4.4.* *2026-09-27, later: §4.4 is built — see "The two bundled assets"
+below. Nothing in this section changes: the readers and both absent branches stand as written, and the proof now
+measures the present branch of each.*
 
 ## The notices generator — 2026-09-27, first execution (`first-release-plan.md` §4.3)
 
@@ -1176,4 +1180,83 @@ Two premises of REQ-STARTUP-142 are not true of this
 build: Manrope is named and not bundled, and no setup manifest pins a machine tool (OQ-67). **Nothing in this record
 changes.** The step sits where REQ-STARTUP-037 puts it, before freezing. The `extraResources` entry
 that carries the file into the artifact, and `package.mjs`'s call to the step, are §4.4's, with `build-id.txt`.
+*Both landed 2026-09-27; see the next section.*
+
+## The two bundled assets — 2026-09-27, first execution (`first-release-plan.md` §4.4)
+
+*REQ-SHELL-140, REQ-SHELL-142, REQ-STARTUP-015, REQ-STARTUP-037, REQ-STARTUP-141, REQ-STARTUP-143, REQ-STARTUP-149.* The
+packaged build now carries both files the About page asks this record for at the root of `process.resourcesPath`, where
+`apps/desktop/src/main/about.ts` already looked. Four decisions were taken here, each recorded with its reason.
+
+**1. What the build identifier is.** `pnpm build-id` (`tools/build-id/`) writes `apps/desktop/resources/build-id.txt`
+(git-ignored) as one line: the full object name of the commit HEAD names, with `-dirty` appended when git reports a
+change the commit does not hold — a modified, staged, deleted or untracked file that is not ignored (`git describe
+--dirty`'s word). REQ-SHELL-140 fixes only that the value comes from a bundled text asset, and the specification's
+appendix that the asset is one stripped line. The rest follows from what an identifier is for:
+
+- Two builds of one commit from a clean tree carry the same identifier on every machine, and an identifier never
+  names a commit the build did not come from.
+- The full name, not an abbreviation: the length git abbreviates to grows with the clone's object count, so it is not
+  a property of the commit.
+- No tag and no `git describe`: whether a clone fetched its tags is not a property of the commit either.
+- It reads the local repository only and never reaches the network. A tree git cannot name a commit for fails the step
+  (exit 1, one `error:` line) and removes any earlier file, so a stale identifier is never frozen in its place.
+
+**2. `pnpm package` runs both steps before freezing, notices first.** After the code-intelligence bundle, because the
+notices generator reads the runtime, and before `electron-vite build`, because a refusal should cost seconds. Both
+files go to the root of the artifact's resources through two `extraResources` entries.
+
+**3. What a local `pnpm package` does while O-3 is owed.** It fails. `pnpm notices` refuses until the owner writes O-3's
+address, a maintainer signs O-11's twelve reviews and OQ-68 is ruled, and the package refuses with it, exiting 1 and
+naming the flag below (REQ-STARTUP-143). This was measured: `REFUSED` at the notices step in 6.2 s, with the notices
+step's fourteen `error:` lines above it. **`ROTARIS_PACKAGE_WITHOUT_NOTICES=1` is the one explicit way on.** Only the
+value `1` sets it, and it passes over exit 1 only, never a usage error or a crash. What it makes is a development package
+with no notices file, because the refused step has already removed any earlier one. Such a package:
+
+- shows REQ-SHELL-142's caption on its About page;
+- carries no licence text for its shipped closure, and so not the tool server's (REQ-STARTUP-015/141/142);
+- is announced as not releasable, in the step's line and again as the script's last line.
+
+A build for a tag refuses the flag: `GITHUB_REF_TYPE=tag`, or `GITHUB_REF` under `refs/tags/`. §4.2's workflow therefore
+cannot take this route even if it sets the flag. `afterPack` refuses an artifact without the notices file unless the
+flag is set, so calling `electron-builder` directly does not get past it either.
+
+**4. Which copy of the tool server's licence text stands (plan §4.4's second fact).** REQ-STARTUP-015 wants exactly one
+copy inside the bundle and cites REQ-STARTUP-142. REQ-STARTUP-142 requires the notices file to carry every shipped
+dependency's full licence text, and `serena-agent` is one. So the copy REQ-STARTUP-142 compels is the one that stands,
+and the copy this record named on 2026-09-06, under the distribution's `dist-info`, is the second. `electron-builder.yml`
+filters it out of the artifact (`!runtime/**/serena_agent-*.dist-info/licenses/LICENSE`). The source tree keeps it,
+because that is where the generator reads it. Nothing reads it at run time: the product never does, and `afterPack`'s
+interpreter check reads `METADATA`. The requirements decide this between them, so no question is raised. On this tree's
+real inputs the rendered notices text carries `serena-agent`'s MIT text exactly once (20.4 MB rendered, 1 occurrence).
+
+**The evidence, and what it does not cover.**
+
+- `afterPack` gains an "assets" rule (`apps/desktop/scripts/lib/bundled-assets.mjs`), which checks the artifact:
+  - `build-id.txt` is one line, byte-identical to the file the step wrote;
+  - the notices file is byte-identical to the one validation passed, or is absent only under the flag;
+  - no copy of the tool server's licence remains under its `dist-info`;
+  - the notices file carries that licence text exactly once.
+
+  It fails the build naming each problem, including the case where a renamed distribution stops matching the filter.
+- `bundled-assets.test.ts` runs the repository's own `electron-builder.yml` through electron-builder's own
+  `getFileMatchers` and `copyFiles` (app-builder-lib 26.15.3, the yml parsed by the `js-yaml` it loads). The fixture
+  tree is in both runtime layouts, with and without the notices file. Removing the filter or the build-id entry fails
+  those cases.
+- **No Windows package was run.** IC-3 bars a Linux artifact, and the Windows pack needs its own host. The "assets"
+  rule's first run against a real `win-unpacked` is still owed, and it happens at the next `pnpm package` on Windows.
+- `pnpm settings-proof` gains launch 1′, the present branch of each asset in the built app:
+  - the Build row reads the identifier `pnpm build-id` wrote over this tree (`<HEAD>-dirty` while the change was
+    uncommitted);
+  - no caption stands under the licensing control;
+  - the control opens `apps/desktop/resources/THIRD-PARTY-LICENSES.txt`.
+
+  That notices file is a fixture, because `pnpm notices` refuses. The proof moves any real file aside first and gives
+  it back byte for byte (`lib/staged-resources.mjs`). A run killed mid-launch is repaired by the next run. Both were
+  measured: with real files present, with none, and after a `SIGKILL` during 1′.
+
+**What this found.** No defect in the mechanism the record decided. It found one false statement nearby: `package.mjs`
+said "`out/` now holds a SEAM-FREE build" after every run, including one refused before the build. That line now
+prints only when the build ran. It also found one craft note on the About page, recorded in `docs/defects/`.
+**Nothing in this record's decision changes.**
 

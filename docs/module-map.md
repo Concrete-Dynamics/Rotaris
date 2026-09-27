@@ -56,7 +56,10 @@ Listed foundation-first, which is also dependency order. "Root" is the compositi
 and its siblings), `tools/symbol-artifact/` (the generator behind `pnpm symbols`), `tools/release-naming/`,
 `tools/notices/` (the generator behind `pnpm notices` — `THIRD-PARTY-LICENSES.txt` and its validation, open
 `notices.mjs`; the three tables beside it are the reviewed exceptions, the release inputs and the bundled fonts;
-tests in `notices.test.ts`), and the standalone checks `pnpm lint` runs before ESLint.
+tests in `notices.test.ts`), `tools/build-id/` (the writer behind `pnpm build-id` — `build-id.txt`, REQ-SHELL-140's
+build identifier, open `build-id.mjs`; tests in `build-id.test.ts`), and the standalone checks `pnpm lint` runs
+before ESLint. `pnpm package` (`apps/desktop/scripts/package.mjs`) runs the notices and build-id steps before freezing;
+what the artifact must then carry is checked by `scripts/lib/bundled-assets.mjs`, which `afterPack` loads.
 
 ## Where a thing is not where you would guess
 

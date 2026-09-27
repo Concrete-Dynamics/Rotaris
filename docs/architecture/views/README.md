@@ -45,6 +45,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-27**
 
+**The two bundled assets (first-release-plan.md §4.4, built 2026-09-27).** `tools/build-id/` joins `tools/notices/` as a
+build-time tool: `pnpm build-id` writes `apps/desktop/resources/build-id.txt`. `pnpm package` runs both tools before
+freezing, and `electron-builder.yml` carries both files to the root of `process.resourcesPath`. It leaves the tool
+server's dist-info licence out of the artifact (REQ-STARTUP-015). The **component view** gains a section for the writer
+and the two script modules, and the **process view** gains the identifier's row in "Files and directories on disk", an
+updated notices row and a corrected About paragraph. No package, edge, process, channel, command or message kind
+changed. `about.ts` reads what it read before.
+
 **The notices generator, and the About page's lookup (first-release-plan.md §4.3, built 2026-09-27).** `tools/notices/`
 is a build-time tool, not a package: `pnpm notices` computes the shipped closure offline and writes
 `apps/desktop/resources/THIRD-PARTY-LICENSES.txt` only when REQ-STARTUP-143's validation passes. Main's About reader now

@@ -10,7 +10,7 @@ only places `electron` is imported.
 | adding a package, or asking which one work belongs in | [The packages](#the-packages) |
 | adding an import that crosses a package | [The allowed-edge matrix](#the-allowed-edge-matrix-the-lint-rule-verbatim) |
 | deciding where a responsibility sits | [Where the responsibilities sit](#where-the-responsibilities-sit) |
-| touching the transcript, the Library, MCP, the code-intelligence bundle, the notices generator or the design system | the `###` sections after it |
+| touching the transcript, the Library, MCP, the code-intelligence bundle, the notices generator, the build-identifier writer and the bundled assets, or the design system | the `###` sections after it |
 
 ## The packages
 
@@ -245,6 +245,22 @@ version-controlled tables sit beside it, as REQ-STARTUP-143 asks of the first:
 The product meets the tool at one literal: `main/about.ts`'s `THIRD_PARTY_LICENSES_ASSET` equals the generator's
 `NOTICES_FILE`, and `about.test.ts` holds them equal. **Edges unchanged**: `tools/**` is outside the boundary rule, and
 the one test that crosses is a test.
+
+### The build-identifier writer and the bundled assets (2026-09-27; `first-release-plan.md` §4.4, ADR-0054)
+
+`tools/build-id/` is the notices generator's sibling: a **build-time tool** with no `package.json`, importing nothing
+from `packages/` or `apps/`. `pnpm build-id` (`write.mjs`, a thin CLI over `build-id.mjs`, typed by `build-id.d.mts`)
+asks the local git for HEAD's commit and whether the tree differs from it, and writes
+`apps/desktop/resources/build-id.txt`. The product meets it at one literal, as it meets the generator:
+`main/about.ts`'s `BUILD_ID_ASSET` equals `BUILD_ID_FILE`, held by `about.test.ts`.
+
+`apps/desktop/scripts/package.mjs` runs both tools before freezing. `electron-builder.yml`'s `extraResources` carries
+both files to the root of the artifact's resources, and leaves the tool server's dist-info licence out
+(REQ-STARTUP-015). `scripts/lib/bundled-assets.mjs` holds the rules `package.mjs` and `build-hooks.cjs`'s `afterPack`
+share: whether a refused notices step may be passed over, and what the artifact must carry.
+`scripts/lib/staged-resources.mjs` is `settings-proof`'s, for staging the two files and giving them back. **Edges
+unchanged**: `apps/desktop/scripts/**` and `tools/**` are outside the boundary rule, and no product code imports
+either.
 
 ### `ui/design-system` (2026-09-12)
 

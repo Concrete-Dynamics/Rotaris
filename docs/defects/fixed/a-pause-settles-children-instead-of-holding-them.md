@@ -39,6 +39,12 @@ deadline. The iteration is left open, and the session persists `paused`.
 
 The phase's adversarial review found the first version incomplete. A finished but unreported child was ignored, a
 transient retry and a provider-limit wait still made a request after the pause, and a timed-out child was left `paused`.
+The second review found three more gaps:
+
+- the summariser retried an unusable answer after the pause;
+- the status read `running` again once the pause released a wait;
+- the manual compression was still accepted.
+
 Each is repaired in the same phase, and the readings are in OQ-69.
 
 This does not make the pause REQ-SESSION-108's outer-loop pause. Clause 2 stops agents mid-iteration, and OQ-69 records
@@ -51,3 +57,4 @@ Evidence:
 - `children.test.ts`, "…a child that ended with a report its parent has not been given leaves the parent unfinished…".
 - `ladder.test.ts`, "…a pause accepted during a provider-limit wait releases it at once…" and "…a pause accepted during
   a transient retry's backoff makes no retry".
+- `children.test.ts`, "clause 2: the call in flight when the pause came finishes; an unusable answer is not retried…".

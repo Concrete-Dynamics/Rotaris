@@ -235,8 +235,8 @@ export function createRunHost() {
     },
   });
 
-  const configure = (workspaceRoot: string, attended: boolean) => {
-    const r = configureRun(workspaceRoot, attended, configurationDeps);
+  const configure = (workspaceRoot: string, attended: boolean, entryPersona?: string) => {
+    const r = configureRun(workspaceRoot, attended, configurationDeps, entryPersona === undefined ? undefined : { entryPersona });
     if (r.ok) { configured.set(workspaceRoot, r.value); mcp.newConfiguration(r.value.cfg); }
     return r;
   };
@@ -298,7 +298,7 @@ export function createRunHost() {
     model: null,
     // ADR-0036/0037: the files, the live state, the loader's passes — once per run start.
     configure: (workspaceRoot, ctx) => {
-      const r = configure(workspaceRoot, ctx.attended);
+      const r = configure(workspaceRoot, ctx.attended, ctx.entryPersona);
       if (r.ok) { configuredRuns.set(ctx.sessionId, r.value); runBearers.set(ctx.sessionId, leased.get(workspaceRoot) ?? {}); }
       // REQ-WORKSPACE-060: the units as a GETTER, read at every agent construction, so a skill invoked between
       // prompts reaches the next agent built and never retracts one already running (REQ-CONFIG-166).

@@ -34,10 +34,15 @@ explicit, final cancel. REQ-ORCH-133's bulk cancel with its 5 s wait is not buil
 
 The first version of this repair checked the record only before the summarising pass and had already dropped the
 execution's controller, so a child cancelled while it summarised still stored the summariser's report. The phase's
-adversarial review reproduced it, and the controller and the second check repair it.
+adversarial review reproduced it, and the controller and the second check repair it. The second review found the
+summariser's own retry: an aborted first attempt was retried under a fresh controller that nothing could abort, so one
+more summarising call followed the cancel. `produceReport` now checks the abort before every attempt and makes none
+once it holds.
 
 Evidence:
 - `children.test.ts`, "REQ-ORCH-133 / REQ-MONITOR-128, the repair of cancelling-one-child-does-not-stop-it…": neither
   aborted execution takes another step or summarises, and both reports are the cancellation's. It fails when the
   per-child abort is reverted.
 - `children.test.ts`, "…a child cancelled while it summarises keeps the cancellation's report…".
+- `children.test.ts`, "REQ-ORCH-133: cancelling the child aborts the pass and it makes no second attempt".
+- `report.test.ts`, "an attempt the child's abort cut off is the last: no retry, and no report".

@@ -66,7 +66,8 @@ export type ControlRequest = z.infer<typeof ControlRequestSchema>;
  * `refusal.message` through it is raised in Part AO's handoff as a ruling request rather than done in a file
  * this part does not own.
  */
-export const CONTROL_REFUSAL_CODES = ['no_run', 'no_active_conversations', 'transcript_busy', 'clear_failed'] as const;
+/** `run_coming_to_rest`: PD-ORCH-005 clause 2 — a pause or a stop was accepted, and no model call follows it. */
+export const CONTROL_REFUSAL_CODES = ['no_run', 'no_active_conversations', 'transcript_busy', 'clear_failed', 'run_coming_to_rest'] as const;
 export type ControlRefusalCode = (typeof CONTROL_REFUSAL_CODES)[number];
 export const ControlRefusalSchema = z.object({ code: z.enum(CONTROL_REFUSAL_CODES), message: z.string() });
 export type ControlRefusal = z.infer<typeof ControlRefusalSchema>;

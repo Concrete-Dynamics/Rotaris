@@ -237,9 +237,13 @@ function shape(raw: unknown, input: ReportInput): ChildReport | null {
   };
 }
 
-/** The bounded pass: two attempts, a timeout, a report whatever happens. */
-/** `unsummarised`: why no summariser is passed, when one is withheld on purpose (PD-ORCH-005: a run coming to rest). */
-export async function produceReport(input: ReportInput, s: SummariserDeps | null, signal: AbortSignal, unsummarised = 'no summariser is configured'): Promise<ChildReport> {
+/**
+ * The bounded pass: two attempts, a timeout, a report whatever happens — unless the pass is cut short. `unsummarised`:
+ * why no summariser is passed, when one is withheld on purpose (PD-ORCH-005: a run coming to rest). Null is the pass cut
+ * short: `signal` aborted it (a cancel, a stop, a quit), or `halted` — PD-ORCH-005 clause 2, the run coming to rest —
+ * allowed no second attempt. No model call is made once either holds (found by phase 3's second review).
+ */
+export async function produceReport(input: ReportInput, s: SummariserDeps | null, signal: AbortSignal, unsummarised = 'no summariser is configured', halted: () => boolean = () => false): Promise<ChildReport | null> {
   const tester = deterministicTesterReport(input);
   if (tester) return tester;
   if (!s) return fallbackReport(input, unsummarised);
@@ -247,6 +251,7 @@ export async function produceReport(input: ReportInput, s: SummariserDeps | null
   const timeout = s.timeoutMs ?? SUMMARY_TIMEOUT_MS;
   let complaint = '';
   for (let attempt = 1; attempt <= 2; attempt += 1) {
+    if (signal.aborted || (attempt > 1 && halted())) return null;
     const controller = new AbortController();
     const onAbort = () => controller.abort();
     signal.addEventListener('abort', onAbort, { once: true });
@@ -272,7 +277,7 @@ export async function produceReport(input: ReportInput, s: SummariserDeps | null
       signal.removeEventListener('abort', onAbort);
     }
     if (controller.signal.aborted && !signal.aborted) return fallbackReport(input, `the summarising pass exceeded ${timeout / 1000} s`);
-    if (signal.aborted) return fallbackReport(input, 'the run was cancelled during the summarising pass');
   }
+  if (signal.aborted) return null;
   return fallbackReport(input, `two attempts produced no usable report (${complaint})`);
 }

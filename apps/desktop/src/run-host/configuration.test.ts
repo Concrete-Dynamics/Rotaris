@@ -188,3 +188,44 @@ runtime:
     expect(personas.resolve('tester')!.persona.stallTimeoutMs).toBeUndefined();
   });
 });
+
+/**
+ * PD-ORCH-005 clause 4: a continue that resumes an open iteration restores its root with its identity, persona
+ * included, so the run is set up as the persona that root ran as — even when `default_persona` has changed since.
+ */
+describe('a resumed root is set up as the persona it ran as (PD-ORCH-005 clause 4, found by phase 4\'s review)', () => {
+  const agents = `default_persona: coding-agent
+models:
+  selected:
+    provider: openai
+    model_id: first
+    api_key: k
+large_model: selected
+medium_model: selected
+small_model: selected
+personas:
+  coding-agent:
+    name: Coding agent
+    model: selected
+  tester:
+    name: Tester
+    model: selected
+`;
+
+  it('the entry persona given replaces default_persona for that run; absent, default_persona stands', () => {
+    mkdirSync(join(dir, 'ws', '.rotaris'), { recursive: true });
+    writeFileSync(join(dir, 'ws', '.rotaris', 'agents.yaml'), agents);
+    const resumed = configureRun(join(dir, 'ws'), true, deps({}), { entryPersona: 'tester' });
+    expect(resumed.ok && resumed.value.model.config.persona).toBe('tester');
+    const fresh = configureRun(join(dir, 'ws'), true, deps({}));
+    expect(fresh.ok && fresh.value.model.config.persona).toBe('coding-agent');
+  });
+
+  it('a persona the configuration no longer knows cannot be restored: the run is set up as the entry role, and says so (found by phase 4\'s second review — a refusal left a crashed session no way on)', () => {
+    mkdirSync(join(dir, 'ws', '.rotaris'), { recursive: true });
+    writeFileSync(join(dir, 'ws', '.rotaris', 'agents.yaml'), agents);
+    const r = configureRun(join(dir, 'ws'), true, deps({}), { entryPersona: 'gone-role' });
+    expect(r.ok && r.value.model.config.persona).toBe('coding-agent');
+    expect(r.ok && r.value.warnings).toContain("configuration: the open iteration's root ran as 'gone-role', which this configuration no longer knows; it resumes as the entry role 'coding-agent' (PD-ORCH-005).");
+  });
+});

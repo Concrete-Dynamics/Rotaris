@@ -10,6 +10,7 @@ import type { CheckpointPort, CheckpointPortContext } from './checkpoint-port.js
 import { EventBus } from './run/event-bus.js';
 import { parseTokenSamples, Run, type AgentTerminals, type ModelLookup, type PermissionPosture, type RunConfig, type RunResult } from './run/run.js';
 import { iterationAgents, recordCrash } from './run/crash.js';
+import { resumeNoticeOf } from './run/resume.js';
 import { planSection } from './run/plan-text.js';
 export { planRequestSection, planSection } from './run/plan-text.js';
 import { ResilienceMemory, type CatalogueEntry, type ModelChoice } from './run/resilience.js';
@@ -229,7 +230,7 @@ export interface SessionsDeps {
    * ADR-0036/0037: the run's configuration, resolved at run start from the files with the live state on top
    * (Tier B). Present, it supplies the model and the runtime for that run; absent, `model` and `runtime` stand.
    */
-  readonly configure?: ((workspaceRoot: string, ctx: { readonly attended: boolean; readonly sessionId: SessionId; readonly executionRoot: string }) => Result<RunSetup, { readonly reason: string }>) | undefined;
+  readonly configure?: ((workspaceRoot: string, ctx: { readonly attended: boolean; readonly sessionId: SessionId; readonly executionRoot: string; readonly entryPersona?: string | undefined }) => Result<RunSetup, { readonly reason: string }>) | undefined;
 }
 
 /** What a run starts with once configuration resolves it. */
@@ -521,6 +522,15 @@ export function costLabelOf(cost: string, qualifier: string): SessionRecord['cos
  * is opened again. `edited` stays separate from `plan`: the surface shows the user's own text where one exists and
  * the role's verbatim otherwise, and neither overwrites the other.
  */
+/**
+ * PD-ORCH-005 clause 4: the entry persona a continue's run is set up for. A continue that resumes an open iteration
+ * restores its root with its identity, persona included, so the run is set up as the persona that root ran as, whatever
+ * the entry role is now (found by phase 4's review); any other continue takes the configured entry role (undefined).
+ */
+function resumedPersona(dal: StoreDal, sessionId: SessionId, declines: boolean): string | undefined {
+  return declines ? undefined : dal.openIterationOf(sessionId)?.root_persona;
+}
+
 export function planGateOf(dal: StoreDal, r: SessionRow): PlanGatePayload | null {
   if (r.execution_status !== 'awaiting_plan_decision' || r.plan_cycle === null) return null;
   const row = dal.planCycle(asSessionId(r.session_id), r.plan_cycle);
@@ -988,7 +998,7 @@ export class Sessions {
     if (storeFailure) return err({ code: 'store-failed', reason: `The workspace store requires recovery before continuing work: ${storeFailure}` });
     if (s.run && !s.run.isEnded) return err({ code: 'run-active', reason: 'A run is already active.' });
     const storedForSetup = s.dal.getSession(sessionId);
-    const setup = this.setupFor(storedForSetup?.workspace_root ?? '', this.deps.attended?.() ?? false, sessionId, storedForSetup ? effectiveRootOf(storedForSetup).root : '');
+    const setup = this.setupFor(storedForSetup?.workspace_root ?? '', this.deps.attended?.() ?? false, sessionId, storedForSetup ? effectiveRootOf(storedForSetup).root : '', resumedPersona(s.dal, sessionId, false));
     if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
     if (inputs.length > 0 && setup.value.model.config.model.acceptsImageInput !== true) return err({ code: 'image-input-unsupported', reason: 'The selected model does not declare image input support.' });
     const stored = s.dal.getSession(sessionId);
@@ -1025,10 +1035,10 @@ export class Sessions {
    * carried because the workspace CONTEXT FILES are read from it, which is the half of that requirement the
    * recorded defect found unbuilt. A caller that has no binding passes the base root.
    */
-  private setupFor(workspaceRoot: string, attended: boolean, sessionId: SessionId, executionRoot: string): Result<RunSetup, StartRefusal> {
+  private setupFor(workspaceRoot: string, attended: boolean, sessionId: SessionId, executionRoot: string, entryPersona?: string): Result<RunSetup, StartRefusal> {
     const refused = (code: string, summary: string): StartRefusal => ({ code, reason: summary, failedBeforeStart: true, result: { status: 'error', session_id: '', stop_reason: '', summary, error: summary } });
     if (this.deps.configure) {
-      const r = this.deps.configure(workspaceRoot, { attended, sessionId, executionRoot });
+      const r = this.deps.configure(workspaceRoot, { attended, sessionId, executionRoot, ...(entryPersona === undefined ? {} : { entryPersona }) });
       // REQ-EVENTS-021 / REQ-CONFIG-478: refused before it starts, carrying the report.
       return r.ok ? ok(r.value) : err(refused('configuration', r.error.reason));
     }
@@ -1077,6 +1087,18 @@ export class Sessions {
     const stale = settleStaleChildren(s.dal, s.writer, sessionId, warn);
     if (stale > 0) warn(`${stale} child record(s) from a previous run were settled cancelled before the first continuation iteration (REQ-ORCH-053)`);
     const open = s.dal.openIterationOf(sessionId);
+    /*
+     * PD-ORCH-005 clauses 4 and 10: what the resumed root is told — the notice of its background sessions, then the new
+     * message a continue by message delivers as the user's next message in its conversation, so the user's message is
+     * the last it reads — recorded here, at the continue, so a rest, a quit or the explicit cancel that lands before the
+     * resumed iteration's first turn never loses it (found by phase 4's review: the message lived in memory until that
+     * turn, and the notice followed it).
+     */
+    if (open && openIteration !== 'decline') {
+      const notice = resumeNoticeOf(s.dal, sessionId, open.root_task_id, this.deps.terminals?.(sessionId));
+      if (notice !== null) s.writer.recordAgentMessage(open.root_task_id, open.iteration, 'message', notice);
+      if (openIteration.message !== null && openIteration.message.length > 0) s.writer.recordAgentMessage(open.root_task_id, open.iteration, 'message', { role: 'user', content: [...openIteration.message] });
+    }
     // REQ-EVENTS-053, PD-MONITOR-001: the run's model calls that are no agent's turn count against the run itself.
     const countUsage: CountUsage = (usage, ref) => { runRef.run?.countUsage(usage, ref); };
     const supervisorSetup = this.deps.supervisor?.(workspaceRoot, sessionId, countUsage) ?? null;
@@ -1114,7 +1136,7 @@ export class Sessions {
       // PD-ORCH-005: the store the conversation record, the iteration record and a left-open iteration are read from —
       // every run's, with or without a tool port.
       dal: s.dal,
-      ...(open ? { openIteration: openIteration === 'decline' ? { resume: false } : { resume: true, message: openIteration.message } } : {}),
+      ...(open ? { openIteration: { resume: openIteration !== 'decline' } } : {}),
       tools: null, permission, pid: this.deps.pid, host: this.deps.host, readSession: () => s.dal.getSession(sessionId), warn,
       continuation: true, ...(todo ? { resumeTodo: todo } : {}), ...(hooks ? { hooks } : {}), checkpoints,
       ...(supervisors ? { supervisorFor: (conversationId: string) => supervisors.forConversation(conversationId) } : {}),
@@ -1162,6 +1184,8 @@ export class Sessions {
     const s = this.live.get(sessionId);
     const run = s?.run;
     if (!s || !run || run.isEnded) return { ok: false, refusal: { code: 'no_run', message: 'No run is active.' } };
+    // PD-ORCH-005 clause 2: a compression is a model call, and none is made once the run is coming to rest.
+    if (run.comingToRest) return { ok: false, refusal: { code: 'run_coming_to_rest', message: 'The run is coming to rest; nothing is compressed until it is continued.' } };
     const report = await run.forceCompression();
     if (report === null) return { ok: false, refusal: { code: 'no_active_conversations', message: 'No active agent contexts are available to compress.' } };
     const total = report.compressed + report.unchanged + report.failed.length;
@@ -1452,7 +1476,7 @@ export class Sessions {
       return ok({ resumed: false, messageLimit: limit });
     }
     // The continuation: the last user request stands, nothing new is appended (REQ-MONITOR-125's "resumed from the composer").
-    const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId, effectiveRootOf(stored).root);
+    const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId, effectiveRootOf(stored).root, resumedPersona(s.dal, sessionId, opts.withoutPaused === true));
     if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
     const lastPrompt = [...s.dal.residentRows(sessionId)].reverse().find((row) => row.kind === 'user')?.body ?? stored.session_id;
     const todo = parseTodoDocument(stored);
@@ -1562,7 +1586,7 @@ export class Sessions {
       s.owner.reconcile();
       return ok({ relaunched: false, cycle });
     }
-    const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId, effectiveRootOf(stored).root);
+    const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId, effectiveRootOf(stored).root, resumedPersona(s.dal, sessionId, false));
     if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
     const gone = missingWorktree(stored);
     if (gone) return err(gone);

@@ -224,7 +224,7 @@ sequenceDiagram
     Note over R,C: a stop or a quit: the same withdrawal and beginRest from the stop listener, then the run signal aborts
     C->>C: the step in flight finishes; calls not started are recorded "not run"; no retry, fallback or summarising call
     C->>W: restChild(task, 'pause', resume state) — paused, child_paused
-    R->>IC: rest('pause') — waits for every execution (a stop or a quit: within 30 s), pauses the unstarted where they stood
+    R->>IC: rest('pause') — waits for every execution (a stop or a quit: within 30 s, then detaches the rest), pauses the unstarted where they stood
     R->>R: read the cause again — the explicit cancel meanwhile: every agent cancelled, the iteration closed
     R->>W: recordIterationInterruption, iteration_paused — the iteration stays open
     R->>W: teardown: agent_terminals (a pause leaves them running; a stop or a quit records its end, then ends them)
@@ -239,7 +239,9 @@ sequenceDiagram
   background sessions ended. Loading the session writes nothing.
 - **The explicit cancel is not a rest.** The reserved run id's final stop cancels the waits, drains and finalizes as
   before: every agent `cancelled`, the iteration closed — including when it arrives while a pause or a stop is still
-  coming to rest. It ends the agents' background sessions as a stop does (OQ-69).
+  coming to rest, or later while teardown runs (the iteration this run left open then closes before the run's result is
+  built; a cancel after that is refused). It ends the agents' background sessions as a stop does, and lets a child
+  summarising during REQ-ORCH-080's drain finish (OQ-69).
 - **The next continue resumes it** (`03-runtime-view.md` §2): the open iteration first, the same root and task, every
   paused agent moved back and carrying on from its record, told of its background sessions, the root handed a new
   message as its next. Declined ("continue without them"), its paused agents end `cancelled` and it closes before the

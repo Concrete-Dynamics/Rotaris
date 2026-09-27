@@ -344,7 +344,8 @@ export class Gate {
     // message, or follows as a user message when the call produced no observation (REQ-HOOKS-074).
     let text = obs.text;
     let followUp: string | undefined;
-    if (hooks) {
+    // PD-ORCH-005 clause 9: a question withdrawn by the rest was never run, so no post-execution hook sees it.
+    if (hooks && obs.withdrawnBy === undefined) {
       const post = await hooks.postTool({ ...hookCall, results: [{ kind: obs.isError ? 'error' : 'observation', text: obs.text }] });
       if (post.feedback !== '') {
         if (obs.isError) followUp = post.feedback;

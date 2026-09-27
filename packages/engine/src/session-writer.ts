@@ -1054,14 +1054,15 @@ export class SessionWriter {
    * `child.transition` and a `child_resumed` timeline entry, in ONE transaction. Refused unless the child is `paused`
    * with a resume state recorded.
    */
-  resumeChild(taskId: string): Result<ChildRow, WriteFailure | { code: 'illegal-move'; from: string; to: string; reason: string }> {
+  resumeChild(taskId: string, override?: 'running'): Result<ChildRow, WriteFailure | { code: 'illegal-move'; from: string; to: string; reason: string }> {
     if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
     const { dal, sessionId, wall } = this.deps;
     const current = dal.getChild(sessionId, taskId);
     if (!current || current.state !== 'paused' || !isResumeState(current.resume_state)) {
       return err({ code: 'illegal-move', from: current?.state ?? '(none)', to: current?.resume_state ?? '(none)', reason: `child ${taskId} is not paused with a state to resume into (PD-ORCH-005)` });
     }
-    const into = current.resume_state;
+    // `override`: a child that will take a step at its resume moves back `running` whatever it had reached (clause 10).
+    const into = override ?? current.resume_state;
     const at = toIsoUtc(wall.instant());
     const ev = this.envelope('child.transition', at, { child_id: taskId, from_state: 'paused', to_state: into });
     const line = serializeEvent(ev);

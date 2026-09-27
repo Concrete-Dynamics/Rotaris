@@ -173,6 +173,8 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     await tick();
     expect(lastWait(pub)).not.toBeNull();
     expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    // REQ-MONITOR-124 (found by phase 3's second review): releasing the wait does not read `running` again.
+    expect(dal.getSession(sid)!.execution_status).toBe('pausing');
     const result = await sessions.running(sid)!;
     expect(result.status).toBe('interrupted');
     expect(result.error).toBeNull();
@@ -232,6 +234,38 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(JSON.parse(child.report!)).toMatchObject({ status: 'failed', errors: [{ type: 'timeout', message: 'Child timed out after 10s' }, { type: 'summary_failure', message: 'the run was coming to rest, so no summarising call was made' }] });
     expect(timeline(sid)).not.toContain('child_timeout_fallback');
     expect(summaries).toBe(0);
+  });
+
+  it('PD-ORCH-005 (OQ-70): a resumed child that times out is retried on its fallback from its payload, not from its record', async () => {
+    const catalogue = [entry('a1', 'a', A1, ['small_model']), entry('f1', 'f', F1, [])];
+    let release!: () => void;
+    const held = new Promise<void>((r) => { release = r; });
+    const script = (persona: string, turn: number): ScriptedCall => {
+      if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'slow', task: 'TASK: be slow' } }]) : answer('ok');
+      if (persona === 'summariser') return answer('{"summary":"done"}');
+      // The step in flight at the pause asks for a call that never runs; the resumed step hangs; the fallback answers.
+      if (turn === 1) return { parts: [{ hold: held }, ...toolCalls([{ callId: 'b1', name: 'background_output', args: { task_id: 'bg_00000000' } }], 'Looking.').parts] };
+      return turn === 2 ? hanging(NEVER) : answer('done on the fallback');
+    };
+    const t = sessionsWith(script, { catalogue, roleFallback: F1, childTimeoutMs: 10_000, delegation: true });
+    const sid = (t.sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    for (let i = 0; i < 40 && (t.counts.get('child') ?? 0) < 1; i++) await tick();
+    expect(t.sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    release();
+    await t.sessions.running(sid)!;
+    expect(t.sessions.continueSession(sid, 'continue').ok).toBe(true);
+    for (let i = 0; i < 40 && (t.counts.get('child') ?? 0) < 2; i++) await tick();
+    // The limit expires; the landing backstop then ends the hung step, and REQ-ORCH-088 retries on the fallback.
+    clock.advance(10_000);
+    await tick();
+    clock.advance(30_000);
+    await t.sessions.running(sid)!;
+    const onFallback = t.client.requests.filter((r) => r.model.modelId === F1.modelId);
+    expect(onFallback.length).toBeGreaterThan(0);
+    // The retry starts its conversation again from the payload: one user message, the task, and nothing of the record.
+    const conversation = onFallback[0]!.messages.filter((m) => m.role !== 'system');
+    expect(conversation).toHaveLength(1);
+    expect(conversation[0]!.content.map((p) => (p.kind === 'text' ? p.text : '')).join('')).toContain('TASK: be slow');
   });
 
   it('the second wait on the same agent doubles the local backoff (REQ-NOTIFY-085)', async () => {

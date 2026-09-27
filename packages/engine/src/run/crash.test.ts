@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
+import { FakeClock, mintMachineId, ok, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
-import { answer, DefaultAgentBackend, ScriptedModelClient, type ChatMessage } from '@rotaris/model';
+import { answer, DefaultAgentBackend, ScriptedModelClient, type ChatMessage, type ModelRequest } from '@rotaris/model';
 import type { ApprovalPayload, SessionRecord } from '@rotaris/contracts';
 import { RUN_CONFIG_DEFAULTS, Sessions, SessionWriter, type Publisher, type RunConfig, type ToolPort } from '../index.js';
 import { recordCrash } from './crash.js';
@@ -84,10 +84,11 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
     expect(state('bg_000000c4')).toMatchObject({ state: 'succeeded', interruption: null });
     // Not this iteration's agent: left for the stale-child settle.
     expect(state('bg_000000x1')).toMatchObject({ state: 'running', interruption: null });
-    // The root's two calls are answered as interrupted by the crash; the child, whose record ends on an answer, gains nothing.
+    // The root's two calls, which have no rows and so never started, are answered as not run by the crash; the child,
+    // whose record ends on an answer, gains nothing.
     expect(conversationOf(dal.agentConversation(sid, ROOT)).at(-1)).toEqual({ role: 'tool', content: [
-      { kind: 'tool-result', callId: 'a', name: 'grep', isError: true, result: interruptedResult('crash', true, '') },
-      { kind: 'tool-result', callId: 'b', name: 'glob', isError: true, result: interruptedResult('crash', true, '') },
+      { kind: 'tool-result', callId: 'a', name: 'grep', isError: true, result: interruptedResult('crash', false, '') },
+      { kind: 'tool-result', callId: 'b', name: 'glob', isError: true, result: interruptedResult('crash', false, '') },
     ] });
     expect(conversationOf(dal.agentConversation(sid, 'bg_000000c1')).map((m) => m.role)).toEqual(['user', 'assistant']);
     // Clause 9: withdrawn, never denied — the list is emptied and the timeline names the crash.
@@ -100,6 +101,31 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
     const before = { messages: dal.agentMessagesOf(sid, ROOT).length, timeline: dal.timelineOf(sid).length };
     expect(recordCrash(dal, writer, sid, new Set(['ts_live']), () => undefined)).toEqual({ iteration: null, paused: 0, withdrawn: 0, terminals: 0 });
     expect({ messages: dal.agentMessagesOf(sid, ROOT).length, timeline: dal.timelineOf(sid).length }).toEqual(before);
+  });
+
+  it('clauses 3 and 4 (found by phase 3\'s fourth review): a call that completed before the crash keeps what it returned, and only the call still running is answered as interrupted, its row settling (docs/defects/fixed/a-crash-leaves-its-tool-rows-running.md)', () => {
+    const sid = 'S-completed' as SessionId;
+    const writer = created(sid);
+    dal.insertIteration({ session_id: sid, iteration: 1, root_task_id: ROOT, root_canonical_name: 'orchestrator', root_persona: 'orchestrator', todo_task_id: 't', task: 't', opened_at: 't' });
+    writer.recordAgentMessage(ROOT, 1, 'message', { role: 'assistant', content: [{ kind: 'tool-call', callId: 'a', name: 'write', args: '{}' }, { kind: 'tool-call', callId: 'b', name: 'grep', args: '{}' }] });
+    // An earlier step's call with an id this step reuses: the call's row is the latest (REQ-ORCH-141).
+    writer.appendRow('tool', 'grep', true, { name: 'orchestrator', toolName: 'grep', toolStatus: 'ok', callKey: 'b', output: 'an earlier answer' });
+    writer.appendRow('tool', 'write', true, { name: 'orchestrator', toolName: 'write', toolStatus: 'ok', callKey: 'a', output: 'wrote the file' });
+    writer.appendRow('tool', 'grep', false, { name: 'orchestrator', toolName: 'grep', toolStatus: 'running', callKey: 'b', output: 'a.ts:1' });
+    // Another agent's call with the same id — local providers number calls — is not the root's.
+    writer.appendRow('tool', 'glob', false, { name: 'c9', toolName: 'glob', toolStatus: 'running', callKey: 'b' });
+    recordCrash(dal, writer, sid, new Set(), () => undefined);
+    expect(conversationOf(dal.agentConversation(sid, ROOT)).at(-1)).toEqual({ role: 'tool', content: [
+      { kind: 'tool-result', callId: 'a', name: 'write', isError: false, result: 'wrote the file' },
+      { kind: 'tool-result', callId: 'b', name: 'grep', isError: true, result: interruptedResult('crash', true, 'a.ts:1') },
+    ] });
+    // REQ-SESSION-129: the row a crash left running settles `failed`, keeping the output it had recorded.
+    expect(dal.residentRows(sid).map((r) => [r.name, r.tool_name, r.tool_status, r.output])).toEqual([
+      ['orchestrator', 'grep', 'ok', 'an earlier answer'],
+      ['orchestrator', 'write', 'ok', 'wrote the file'],
+      ['orchestrator', 'grep', 'failed', interruptedResult('crash', true, 'a.ts:1')],
+      ['c9', 'glob', 'running', null],
+    ]);
   });
 
   it('clause 6 with clause 8: the Continue action counts what a crash left unfinished before the crash is recorded, and the same after', () => {
@@ -126,11 +152,18 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
   });
 
   describe('when it is recorded (Sessions)', () => {
-    function sessionsAs(pid: number, publisher: Publisher = NONE) {
+    /** Every model request any of these processes made. */
+    const asked: ModelRequest[] = [];
+    /**
+     * `configured`: the process resolves each run's setup through `configure`, which reports the entry persona asked for.
+     * `publisher`: where its projections publish.
+     */
+    function sessionsAs(pid: number, configured?: (entryPersona: string | undefined) => void, publisher: Publisher = NONE) {
       const client = new ScriptedModelClient([]);
       const original = client.stream.bind(client);
-      client.stream = (req) => { client.push(answer('Answered.')); return original(req); };
+      client.stream = (req) => { asked.push(req); client.push(answer('Answered.')); return original(req); };
       const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k' };
+      const runtime = { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING' as const };
       // A tool port offering nothing: its presence is what gives the run its children, so the crash's can be resumed.
       const port = (): ToolPort => ({
         specs: () => [], dispatch: async () => ({ text: 'none', isError: true, status: 'failed', durationMs: 1, label: 'x', args: {} }),
@@ -140,17 +173,19 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         clocks: clock, publisher, pid, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-dead', isProcessAlive: () => false,
         model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
         tools: () => port(),
+        ...(configured ? { configure: (_ws: string, ctx: { readonly entryPersona?: string | undefined }) => { configured(ctx.entryPersona); return ok({ model: { backend: new DefaultAgentBackend(client), config }, runtime }); } } : {}),
       });
     }
     /** A session whose first run finished, then a host that died in iteration 2 with the session still marked running. */
-    async function crashed(): Promise<SessionId> {
+    async function crashed(more: (w: SessionWriter) => void = () => undefined, status: 'running' | 'paused' = 'running'): Promise<SessionId> {
       const first = sessionsAs(77);
       const sid = (first.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
       await first.running(sid);
       const w = SessionWriter.open({ dal, sessionId: sid, wall: clock, retentionCap: 0, warn: () => undefined, onCommitted: () => undefined }, { pid: 66, host: HOST, isProcessAlive: () => false });
       if (!w.ok) throw new Error('writer');
       dieIn(w.value, sid);
-      w.value.save('running');
+      more(w.value);
+      w.value.save(status);
       w.value.release(66, HOST);
       return sid;
     }
@@ -158,7 +193,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
     it('clause 8: loading the session records nothing, and still states what the Continue action would resume (clause 6)', async () => {
       const sid = await crashed();
       const snapshots: SessionRecord[] = [];
-      const viewer = sessionsAs(88, { increment: () => undefined, snapshot: (p) => { snapshots.push(p.session); } });
+      const viewer = sessionsAs(88, undefined, { increment: () => undefined, snapshot: (p) => { snapshots.push(p.session); } });
       expect(viewer.resume(dal, 'C:/ws', sid).ok).toBe(true);
       viewer.owner(sid)!.attach();
       expect(snapshots.at(-1)!.resumable).toEqual({ iteration: 2, agents: 4 });
@@ -201,13 +236,57 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       expect(JSON.parse(dal.getChild(sid, 'bg_000000x1')!.report!)).toMatchObject({ summary: expect.stringMatching(/^Cancelled: the run that owned this child ended/) });
       expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.state, r.outcome, r.interruption])).toEqual([[1, 'closed', 'succeeded', null], [2, 'closed', 'succeeded', null]]);
       const root = conversationOf(dal.agentConversation(sid, ROOT));
+      // The root's two calls had no rows, so they never started: the crash's answers say they were not run.
       expect(root.slice(2, 4)).toEqual([
         { role: 'tool', content: [
-          { kind: 'tool-result', callId: 'a', name: 'grep', isError: true, result: interruptedResult('crash', true, '') },
-          { kind: 'tool-result', callId: 'b', name: 'glob', isError: true, result: interruptedResult('crash', true, '') },
+          { kind: 'tool-result', callId: 'a', name: 'grep', isError: true, result: interruptedResult('crash', false, '') },
+          { kind: 'tool-result', callId: 'b', name: 'glob', isError: true, result: interruptedResult('crash', false, '') },
         ] },
         { role: 'user', content: [{ kind: 'text', text: 'second' }] },
       ]);
+    });
+
+    it('clause 4 (found by phase 4\'s review): a continue that resumes the open iteration is set up as the persona its root ran as; one that finds none, as the entry role', async () => {
+      const sid = await crashed();
+      const personas: (string | undefined)[] = [];
+      const next = sessionsAs(88, (p) => personas.push(p));
+      expect(next.resume(dal, 'C:/ws', sid).ok).toBe(true);
+      expect(next.prompt(sid, 'second').ok).toBe(true);
+      await next.running(sid);
+      expect(next.prompt(sid, 'third').ok).toBe(true);
+      await next.running(sid);
+      expect(personas).toEqual(['orchestrator', undefined]);
+    });
+
+    it('clause 6 (found by phase 4\'s second review): a continue that declines the open iteration is set up as the entry role — its root is not restored', async () => {
+      const sid = await crashed(() => undefined, 'paused');
+      const personas: (string | undefined)[] = [];
+      const next = sessionsAs(88, (p) => personas.push(p));
+      expect(next.resume(dal, 'C:/ws', sid).ok).toBe(true);
+      expect(next.continueSession(sid, 'continue', { withoutPaused: true }).ok).toBe(true);
+      await next.running(sid);
+      expect(personas).toEqual([undefined]);
+      expect(dal.getIteration(sid, 2)).toMatchObject({ state: 'closed', outcome: 'cancelled' });
+    });
+
+    it('clause 4 with REQ-ORCH-095 (found by phase 4\'s review): a child that worked before the crash counts its calls from its record — the crash wrote no count — so it is not re-prompted', async () => {
+      asked.length = 0;
+      const sid = await crashed((w) => {
+        w.recordAgentMessage('bg_000000c1', 2, 'message', { role: 'assistant', content: [{ kind: 'tool-call', callId: 'p1', name: 'grep', args: '{}' }] });
+        w.recordAgentMessage('bg_000000c1', 2, 'message', { role: 'tool', content: [{ kind: 'tool-result', callId: 'p1', name: 'grep', isError: false, result: 'found' }] });
+      });
+      expect(dal.getChild(sid, 'bg_000000c1')!.tool_calls).toBe(0);
+      const next = sessionsAs(88);
+      expect(next.resume(dal, 'C:/ws', sid).ok).toBe(true);
+      expect(next.prompt(sid, 'second').ok).toBe(true);
+      await next.running(sid);
+      expect(dal.getChild(sid, 'bg_000000c1')).toMatchObject({ state: 'succeeded', tool_calls: 1 });
+      // REQ-MONITOR-102: the session's total counts that call too, once — no other agent made one.
+      expect(dal.getSession(sid)!.tool_calls).toBe(1);
+      // Its own requests are the ones carrying its call before the crash; none of them re-prompts it.
+      const its = asked.filter((r) => r.messages.some((m) => m.content.some((p) => p.kind === 'tool-result' && p.callId === 'p1')));
+      expect(its.length).toBeGreaterThan(0);
+      expect(its.filter((r) => r.messages.some((m) => m.role === 'user' && m.content.some((p) => p.kind === 'text' && p.text.startsWith('Carry out the task now'))))).toEqual([]);
     });
   });
 });

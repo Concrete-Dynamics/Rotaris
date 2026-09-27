@@ -47,3 +47,42 @@ export function exitAfterChildWindows(deps: ExitDeps, code: number): void {
     w.destroy();
   }
 }
+
+/**
+ * A child process's exit, watched from the moment it is forked so the event can never be missed: `exited` settles with
+ * the exit code, and `code` reads it synchronously once it has (`null` while the child runs).
+ */
+export interface ChildExit {
+  readonly exited: Promise<number>;
+  readonly code: number | null;
+}
+
+export function watchChildExit(child: { once(event: 'exit', listener: (code: number) => void): unknown }): ChildExit {
+  let code: number | null = null;
+  const exited = new Promise<number>((resolve) => { child.once('exit', (c) => { code = c; resolve(c); }); });
+  return { exited, get code() { return code; } };
+}
+
+/**
+ * A child's `shutdown` at quit, raced against the child's own exit (PD-MONITOR-002; defect
+ * `docs/defects/fixed/a-childs-shutdown-ack-can-lose-the-race-with-its-exit.md`).
+ *
+ * The run host answers `shutdown` and then exits on a 0 ms timer, and its reply is posted asynchronously, so the exit
+ * sometimes arrives and the answer never does: measured 3 quits in 24. Waiting on the answer alone then stalled the quit
+ * for the whole bound and reported an orderly end as a failure. So the exit counts as an answer:
+ *
+ * - answered → nothing to say;
+ * - the child exits first → nothing more: 0 is the orderly end whose answer was lost, and any other status has already
+ *   been written, at `error`, by that child's exit handler;
+ * - the request fails (its bound elapsed) while the child still runs → `notCompleted`, once;
+ * - the child was gone before the quit began → nothing is asked, and this resolves at once.
+ *
+ * The request is never left to reject unobserved, whichever side of the race loses.
+ */
+export async function shutdownAtQuit(request: () => Promise<unknown>, exit: ChildExit, notCompleted: (cause: unknown) => void): Promise<void> {
+  if (exit.code !== null) return;
+  const answer = Promise.resolve().then(request).then(() => ({ failed: false as const }), (cause: unknown) => ({ failed: true as const, cause }));
+  const outcome = await Promise.race([answer, exit.exited.then(() => null)]);
+  if (outcome === null || !outcome.failed || exit.code !== null) return;
+  notCompleted(outcome.cause);
+}

@@ -16,7 +16,7 @@ import { join } from 'node:path';
 
 /**
  * The version reported when the metadata declares none. REQ-STARTUP-007 says `dev` for the running desktop and
- * REQ-STARTUP-004 says `0+unknown`; the two disagree, and this is OQ-70's reading — REQ-STARTUP-007 is the one written
+ * REQ-STARTUP-004 says `0+unknown`; the two disagree, and this is OQ-71's reading — REQ-STARTUP-007 is the one written
  * for the running desktop and the About surface, and `dev` is also what REQ-STARTUP-109's unanswerable comparison
  * names. Demo mode's fixed `0.1.0` (REQ-STARTUP-007) waits for the demo entry (REQ-SHELL-162), which is not built.
  */

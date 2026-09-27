@@ -65,7 +65,7 @@ export const CHECKSUM_SIGNATURE_NAME = 'SHA256SUMS.txt.sig' as const;
  *
  * The numbers are canonical decimals — `v01.2.3` is refused — because the release version is compared as text by the
  * guard and rendered as text into every artifact name, so two spellings of one numeric tuple would be two releases. The
- * grammar does not say so itself; that is the reading OQ-69 records.
+ * grammar does not say so itself; that is the reading OQ-70 records.
  */
 export type ReleaseChannel = 'stable' | 'prerelease';
 export type PrereleaseKind = 'a' | 'b' | 'rc';

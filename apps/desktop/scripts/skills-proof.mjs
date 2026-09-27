@@ -173,7 +173,7 @@ if (registered.includes('stop')) fail('a skill took the built-in /stop');
 results.push({ launch: 'commands', commands: registered });
 
 // ── 1c. /skills — REQ-CHAT-162's listing, one saved system row ─────────────────────────────────────────────
-// A session first, because the row is written into ITS transcript and saved with it (OQ-66 (b): a window following
+// A session first, because the row is written into ITS transcript and saved with it (OQ-67 (b): a window following
 // no session is refused). Then `/skills` typed into the composer; the launch ends when the row is DRAWN, not at an
 // appointment, and the command is listed in the same popup the generated skill commands are.
 const listingWait = `js:document.querySelector('[data-testid="row-system"] [data-testid="skill-listing"]') !== null`;

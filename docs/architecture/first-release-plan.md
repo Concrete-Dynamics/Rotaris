@@ -19,11 +19,11 @@ record already decides, and every ruling it needs is named as the owner's rather
 | In the first release | Where it stands | Section |
 |---|---|---|
 | Skills — discovery, the catalog, load modes, the Settings tab, skill commands, `/skill <path>` | built 2026-09-15 (ADR-0063; `pnpm skills-proof`) | §2 |
-| Skills — `/skills`, REQ-CHAT-162's listing | ~~**not built** (`SKILLS_LISTING_NOT_BUILT`, `packages/ui/src/slash/skills.ts`)~~ **built 2026-09-27** (`pnpm skills-proof`, launches 1c and 1d); OQ-66 open against its reach from Settings | §2 |
+| Skills — `/skills`, REQ-CHAT-162's listing | ~~**not built** (`SKILLS_LISTING_NOT_BUILT`, `packages/ui/src/slash/skills.ts`)~~ **built 2026-09-27** (`pnpm skills-proof`, launches 1c and 1d); OQ-67 open against its reach from Settings | §2 |
 | Skills — ESC-37, ESC-38, ESC-39 | **ruled 2026-09-27** as recommended ([R-052](../product/requests.md#r-052)); amended | §2 |
 | Workspace-context injection, REQ-WORKSPACE-041..050 | built 2026-09-22 under `PD-WORKSPACE-002` | §3 |
-| Injection — REQ-WORKSPACE-049's latency bound, a built-app proof | **built 2026-09-27** (`pnpm injection-proof`); the bound **met on Linux**, the Windows gate-class reading **owed**; OQ-64 **ruled 2026-09-27**; OQ-67 raised | §3 |
-| The Windows release pipeline, REQ-STARTUP-027..038, 141..143, 156, 158, 167, 168 | the installer built once (ADR-0054, 2026-09-04); **the version guard built 2026-09-27** (§4.1), and the setup manifest it checks is owed; **the notices generator built 2026-09-27** (§4.3), its validation refusing until O-3, O-11 and OQ-73; **the two bundled assets wired into `pnpm package` 2026-09-27** (§4.4), so a package refuses with it | §4 |
+| Injection — REQ-WORKSPACE-049's latency bound, a built-app proof | **built 2026-09-27** (`pnpm injection-proof`); the bound **met on Linux**, the Windows gate-class reading **owed**; OQ-64 **ruled 2026-09-27**; OQ-68 raised | §3 |
+| The Windows release pipeline, REQ-STARTUP-027..038, 141..143, 156, 158, 167, 168 | the installer built once (ADR-0054, 2026-09-04); **the version guard built 2026-09-27** (§4.1), and the setup manifest it checks is owed; **the notices generator built 2026-09-27** (§4.3), its validation refusing until O-3, O-11 and OQ-74; **the two bundled assets wired into `pnpm package` 2026-09-27** (§4.4), so a package refuses with it | §4 |
 | The updater, REQ-STARTUP-107..124 | **not built** — no module in `apps/desktop/src/main/`; **in the first release**, ruled 2026-09-27 | §4.6 |
 
 **Deferred by "thats it".** Each item stays owed where the record already carries it:
@@ -112,7 +112,7 @@ held as written, the reason it was not built held, and building it found one def
   any `skill`-kind holder as its own earlier work — so a skill named `skill` took `/skill <path>`'s name or lost its
   own, depending on which React effect ran first (REQ-SHELL-056, both halves). Repaired with it:
   [`a-skill-named-skill-takes-the-skill-command.md`](../defects/fixed/a-skill-named-skill-takes-the-skill-command.md).
-- *The open question.* [OQ-66](open-questions.md): REQ-CHAT-162 wants the listing reachable from the settings
+- *The open question.* [OQ-67](open-questions.md): REQ-CHAT-162 wants the listing reachable from the settings
   surface, and REQ-WORKSPACE-067 fixes that tab's header actions at two, so no action was added — the tab's table
   already shows every fact the listing carries; and `/skills` from a window following no session has no transcript
   to save a row into, so it is refused with a stated reason rather than creating a session.
@@ -143,7 +143,7 @@ held as written, the reason it was not built held, and building it found one def
   puts a gesture against the followed session: main, not the renderer, names the session here, as it does for
   `skills.forceLoad` and `skills.loadFile` (ADR-0063). The listing's other readings — which skills it lists, when
   its refusal is stated, how the 120 is counted, the badge, and the improvement analyst reading the row — are
-  OQ-66 (c) to (g).
+  OQ-67 (c) to (g).
 
 **2.3 A skills live run.** One `pnpm live-run` scenario invokes a skill command and asserts that the model's
 first turn shows the skill's body was in its context. It spends the owner's money, so it runs only when the
@@ -182,7 +182,7 @@ If it fails, the fix is a separate change, and the reading stays next to it.
 > class, so this reading does not stand in for it.
 >
 > **Fixture.** Fourteen instruction files, every slot discovery can reach, totalling exactly 1,048,576 bytes. Twenty
-> cannot be built: **OQ-67**. Twelve of the fourteen are read by the merge. The two bases suppressed by their on
+> cannot be built: **OQ-68**. Twelve of the fourteen are read by the merge. The two bases suppressed by their on
 > overrides hold one line each. Every read file exceeds the per-file limit, and the total limit drops eight of them.
 >
 > **What was timed.** The run host's own cold path, `SkillHost.workspaceContext`, on the monotonic clock port: the
@@ -307,7 +307,7 @@ lives in `tools/release-naming`. What the build decided and found:
   repaired). The workspace root's `version` is removed. `tools/release-naming` and the other `@rotaris/*` packages keep
   `0.0.0`: they are never packed as packages, so their `0.0.0` is not a product version. A prerelease tag needs the
   declaration to match its text exactly, for example `0.1.0rc1` for step 5's `v0.1.0rc1`. With no manifest the app
-  reports `dev`, **OQ-70**'s reading of a conflict between REQ-STARTUP-004 and REQ-STARTUP-007.
+  reports `dev`, **OQ-71**'s reading of a conflict between REQ-STARTUP-004 and REQ-STARTUP-007.
 - **The setup manifest (`REQ-STARTUP-058`) does not exist, and no step of this plan builds it.** The pin half reads it,
   so on this tree `pnpm release:guard v0.1.0` exits 1 on that half alone, naming `@playwright/mcp` `0.0.80`, both files
   and the missing manifest. §5's first check therefore cannot pass until the manifest is built. §4.3 needs the same
@@ -319,8 +319,8 @@ lives in `tools/release-naming`. What the build decided and found:
 - **electron-builder hyphenates a prerelease version** (`0.1.0rc1` → `0.1.0-rc1`), so step 5's prerelease would be named
   `Rotaris-0.1.0-rc1-…` unless §4.2/§4.5 render the name from the tag through `tools/release-naming`
   (`../defects/a-prerelease-version-reaches-the-installer-hyphenated.md`).
-- Two readings were raised rather than taken silently: **OQ-68**, whether the switched-off `browser` default counts
-  (built: it does), and **OQ-69**, whether tag numbers are canonical decimals (built: they are).
+- Two readings were raised rather than taken silently: **OQ-69**, whether the switched-off `browser` default counts
+  (built: it does), and **OQ-70**, whether tag numbers are canonical decimals (built: they are).
 
 **4.2 The tag workflow.** `.github/workflows/release.yml` does not exist yet. It is triggered only by tags
 matching REQ-STARTUP-027's grammar. Channel classification follows REQ-STARTUP-029. The stages, each failing
@@ -352,10 +352,10 @@ release carries the file and the About page still says it does not.
 (`tools/notices/`) writes `apps/desktop/resources/THIRD-PARTY-LICENSES.txt` only when validation passes, and exits 1
 naming each problem otherwise (REQ-STARTUP-149). It builds under four readings, each an open question:
 
-- OQ-71, what one entry is;
-- OQ-72, Manrope and the machine tools;
-- OQ-73, an identifier a dependency does not declare;
-- OQ-74, when a licence file carries the licence's text. It was added by the gate review the same day.
+- OQ-72, what one entry is;
+- OQ-73, Manrope and the machine tools;
+- OQ-74, an identifier a dependency does not declare;
+- OQ-75, when a licence file carries the licence's text. It was added by the gate review the same day.
 
 **Where the owner writes the O-3 address.** In `tools/notices/release-inputs.json`, as the value of
 `lgplCorrespondingSourcesAddress`. That file is the one place the generator reads it. The value must be one literal
@@ -402,7 +402,7 @@ file at all:
 - `@xterm/headless` 6.0.0;
 - `proxy_tools` 0.1.0, in the code-intelligence runtime.
 
-Eight ship a file that only refers to their licence (OQ-74):
+Eight ship a file that only refers to their licence (OQ-75):
 
 - `@workflow/serde` 4.1.0, whose `LICENSE.md` points to a file it does not ship;
 - `ai` 7.0.92, `@ai-sdk/gateway` 4.0.74, `@ai-sdk/openai` 4.0.58, `@ai-sdk/openai-compatible` 3.0.43 and
@@ -416,7 +416,7 @@ files that only refer to their licence passed.*
 
 Each of the twelve passes only with a maintainer's reviewed exception in `tools/notices/reviewed-exceptions.json`
 (O-11), and the file states why each is there. `dotenv` 0.9.9, in the runtime, declares no licence identifier.
-REQ-STARTUP-143 as worded gives that no route, which is OQ-73.
+REQ-STARTUP-143 as worded gives that no route, which is OQ-74.
 
 **4.4 The two bundled assets.** The About page already has both "absent" branches (ADR-0054, 2026-09-08). The
 build must now produce two files under `process.resourcesPath`:
@@ -428,7 +428,7 @@ build must now produce two files under `process.resourcesPath`:
 
 Two facts from §4.3 bear on this step:
 
-- `pnpm notices` writes no file until O-3, O-11 and OQ-73 are answered. The notices file's present branch therefore
+- `pnpm notices` writes no file until O-3, O-11 and OQ-74 are answered. The notices file's present branch therefore
   needs a file the proof supplies itself. Once `pnpm notices` succeeds in a worktree, the built app finds its output
   through `about.ts`'s source-tree fallback, and the proof's absent-caption check turns red.
 - REQ-STARTUP-015 asks for "exactly one copy" of the bundled tool server's licence text inside the bundle, citing
@@ -542,7 +542,7 @@ cannot be the gate.
 | O-8 | The power-loss test's fault half: a forced power-off during a save (`spikes/power-loss.md` §4) | the store's sign-off |
 | O-9 | ~~Approve the §2.3 and §3.4 live runs~~ **approved 2026-09-27** (R-053). The agent still states the scenario and its spending bound immediately before each run (AGENTS.md) | §2.3, §3.4 |
 | O-10 | ~~Decide §4.6~~ **ruled 2026-09-27**: the updater ships in the first release (R-052) | §4.6 |
-| O-11 | As a maintainer, review each shipped component that carries no licence text, and record the review in `tools/notices/reviewed-exceptions.json`: the component, the version range, the identifier claimed, why no text is obtainable, the reviewer, the date and an expiry at most 365 days later (REQ-STARTUP-143). The first run named twelve (§4.3). Four ship no licence file: `@ai-sdk/provider-utils` 5.0.36, `@xterm/addon-serialize` 0.14.0, `@xterm/headless` 6.0.0 and `proxy_tools` 0.1.0. Eight ship a file that only refers to the licence (OQ-74): `@workflow/serde` 4.1.0, `ai` 7.0.92, `@ai-sdk/gateway` 4.0.74, `@ai-sdk/openai` 4.0.58, `@ai-sdk/openai-compatible` 3.0.43, `@ai-sdk/provider` 4.0.10, `certifi` 2026.7.22 and `mslex` 1.3.0. For those eight, OQ-74 asks whether the generator should reproduce the declared licence's standard text instead. *Added 2026-09-27 by §4.3's first execution. It first named only the four without a licence file; the gate review corrected it the same day* | §4.3 |
+| O-11 | As a maintainer, review each shipped component that carries no licence text, and record the review in `tools/notices/reviewed-exceptions.json`: the component, the version range, the identifier claimed, why no text is obtainable, the reviewer, the date and an expiry at most 365 days later (REQ-STARTUP-143). The first run named twelve (§4.3). Four ship no licence file: `@ai-sdk/provider-utils` 5.0.36, `@xterm/addon-serialize` 0.14.0, `@xterm/headless` 6.0.0 and `proxy_tools` 0.1.0. Eight ship a file that only refers to the licence (OQ-75): `@workflow/serde` 4.1.0, `ai` 7.0.92, `@ai-sdk/gateway` 4.0.74, `@ai-sdk/openai` 4.0.58, `@ai-sdk/openai-compatible` 3.0.43, `@ai-sdk/provider` 4.0.10, `certifi` 2026.7.22 and `mslex` 1.3.0. For those eight, OQ-75 asks whether the generator should reproduce the declared licence's standard text instead. *Added 2026-09-27 by §4.3's first execution. It first named only the four without a licence file; the gate review corrected it the same day* | §4.3 |
 
 O-2, O-3, O-4, O-7 and O-8 carry no recommendation to take: each is a value or an act only the owner can
 supply, and each stays owed (R-053). O-11 is the same kind of item: a review only a maintainer may sign.
@@ -560,8 +560,8 @@ supply, and each stays owed (R-053). O-11 is the same kind of item: a review onl
      (`REQ-STARTUP-058/059`), before §5's first check can pass. §4.3's section is generated from the same file, so
      that step is where it most naturally lands, and it lands packed: an `extraResources` entry, and either the
      guard's `toolServerPackages` field or a change to the guard's constant;
-   - §4.3 the notices generator with the About defect — *built 2026-09-27; validation refuses until O-3, O-11 and OQ-73.
-     OQ-71 does not stop validation, but until it is ruled the file knowingly leaves out the libraries linked into
+   - §4.3 the notices generator with the About defect — *built 2026-09-27; validation refuses until O-3, O-11 and OQ-74.
+     OQ-72 does not stop validation, but until it is ruled the file knowingly leaves out the libraries linked into
      the bundled interpreter*;
    - §4.4 the bundled assets — *built 2026-09-27; its "assets" rule waits for the next Windows package.*
 3. **The portable stub (§4.5).** Spike first, and report the result into ADR-0054.

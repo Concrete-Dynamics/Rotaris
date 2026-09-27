@@ -17,7 +17,7 @@
  * fonts and the icon set are. `tools/notices/bundled-assets.json` holds only those that carry a licence file
  * (REQ-STARTUP-143), so this module is named for the surface its two files serve.
  *
- * **A development package without notices.** While owner item O-3 (the LGPL address) and the reviews of O-11 and OQ-73
+ * **A development package without notices.** While owner item O-3 (the LGPL address) and the reviews of O-11 and OQ-74
  * stand, `pnpm notices` refuses, and a package made on the release path fails with it (REQ-STARTUP-143). Setting
  * `ROTARIS_PACKAGE_WITHOUT_NOTICES=1` lets `pnpm package` go on after that step's exit 1, loudly, with no notices file —
  * `settleNoticesStep` removes any earlier one itself — so the packaged About page takes REQ-SHELL-142's absent branch.

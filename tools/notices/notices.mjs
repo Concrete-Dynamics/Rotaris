@@ -11,15 +11,15 @@
 // (the target platform is a parameter), so two runs over the same inputs render byte-identical text.
 //
 // Readings this file builds under, each recorded where a ruling can replace it:
-//  - OQ-71: the closure's granularity is what a package manager enumerates. Electron is one component whose own
+//  - OQ-72: the closure's granularity is what a package manager enumerates. Electron is one component whose own
 //    credits (LICENSES.chromium.html) are reproduced beneath it; two libraries this build compiles into its native
 //    modules from vendored sources, and whose licence files the packager strips, are listed as components of their own.
-//  - OQ-72: this build's setup manifest carries the code-intelligence runtime's language servers and no machine tools,
+//  - OQ-73: this build's setup manifest carries the code-intelligence runtime's language servers and no machine tools,
 //    so the tools section says it provisions no machine tools; Manrope, which REQ-STARTUP-142 names and no build
 //    carries yet, has its licence reproduced and its entry says it is not contained.
-//  - OQ-73: a component that carries licence text but declares no licence identifier fails validation outright; the
+//  - OQ-74: a component that carries licence text but declares no licence identifier fails validation outright; the
 //    reviewed-exceptions table covers a component with no licence text only, as REQ-STARTUP-143 words it.
-//  - OQ-74: "its full license text" is a file that carries the licence. A file that only names it, only sends the
+//  - OQ-75: "its full license text" is a file that carries the licence. A file that only names it, only sends the
 //    reader elsewhere for it, or only attributes (NOTICE, AUTHORS) is reproduced with the component and never counted
 //    as its text, so a component that ships nothing else takes the reviewed route like one that ships no file at all.
 
@@ -56,7 +56,7 @@ export const PATHS = Object.freeze({
 export const WORKSPACE_DIRS = Object.freeze(['packages', 'apps', 'tools']);
 /** A file that may carry a component's licence text, by the names the ecosystems use for one. */
 const LICENSE_FILE = /^(licen[cs]e|copying|notice|unlicense)([.\-_].*)?$/i;
-/** A file that attributes rather than licenses — Apache-2.0's NOTICE, an authors list: reproduced, never the text (OQ-74). */
+/** A file that attributes rather than licenses — Apache-2.0's NOTICE, an authors list: reproduced, never the text (OQ-75). */
 const ATTRIBUTION_FILE = /^(notice|authors?|contributors?|credits)([.\-_].*)?$/i;
 /**
  * The words by which a licence file sends its reader elsewhere for the licence: a pointer ("See the LICENSE file in
@@ -175,7 +175,7 @@ function isFile(path) {
 }
 
 /**
- * What one licence file is to its component (REQ-STARTUP-142 "its full license text"; OQ-74): `text` when it carries
+ * What one licence file is to its component (REQ-STARTUP-142 "its full license text"; OQ-75): `text` when it carries
  * a licence; `reference` when it only names the licence on one line, or is short, sends the reader elsewhere for the
  * licence and grants nothing itself; `attribution` when its name says it credits rather than licenses. Only `text`
  * counts as the component's licence text; the other two are still reproduced, because they carry its copyright and
@@ -327,7 +327,7 @@ export function parseChromiumCredits(html) {
   return out;
 }
 
-/** The runtime the artifact is built around (ADR-0054): one component, and its own credits beneath it (OQ-71). */
+/** The runtime the artifact is built around (ADR-0054): one component, and its own credits beneath it (OQ-72). */
 export function electronComponent(root, problems) {
   const dir = join(root, PATHS.electron);
   if (!isFile(join(dir, 'package.json'))) { problems.push(`electron is not installed at ${PATHS.electron}`); return null; }
@@ -363,7 +363,7 @@ export function electronComponent(root, problems) {
 /**
  * Two libraries this build compiles into its own native modules from sources the host package vendors (ADR-0056
  * rule 1), whose licence files `electron-builder.yml` excludes from the archive together with those sources — so
- * the notices file is the one place they are acknowledged (OQ-71). Each is read from the installed host package.
+ * the notices file is the one place they are acknowledged (OQ-72). Each is read from the installed host package.
  */
 const COMPILED_IN = [
   {
@@ -430,7 +430,7 @@ export function parseCoreMetadata(text) {
 /**
  * The licence identifier a distribution declares, most specific first: its `License-Expression` (PEP 639), a
  * one-line `License` field, its licence classifiers, the first line of a `License` field that holds a whole text.
- * `UNKNOWN` — setuptools' default when the author wrote nothing — declares nothing (OQ-73).
+ * `UNKNOWN` — setuptools' default when the author wrote nothing — declares nothing (OQ-74).
  */
 export function pythonLicenseOf(fields) {
   const expression = fields.get('license-expression')?.[0]?.trim();
@@ -601,7 +601,7 @@ export function bundledAssetComponents(root, problems) {
         if (names[0]) copyrights.add(names[0]);
       } catch (e) { problems.push(`bundled asset ${label}: ${f} cannot be read as a font (${e instanceof Error ? e.message : String(e)})`); }
     }
-    // A font the table names and no build carries (Manrope, OQ-72) states so where its version would be.
+    // A font the table names and no build carries (Manrope, OQ-73) states so where its version would be.
     let version = files.length === 0 && typeof a?.package !== 'string' ? 'not contained in this build' : [...versions].sort(compareVersions).join(', ');
     if (typeof a?.package === 'string') {
       const dir = resolveInstalled(a.package, root, root);
@@ -617,7 +617,7 @@ export function bundledAssetComponents(root, problems) {
         const file = a.licenseFile.split('/').pop() ?? a.licenseFile;
         const kind = licenseTextKind(file, text);
         texts.push({ file, text, kind });
-        // REQ-STARTUP-142 names these texts outright, so a file that only refers to one is as good as missing (OQ-74).
+        // REQ-STARTUP-142 names these texts outright, so a file that only refers to one is as good as missing (OQ-75).
         if (kind !== 'text') problems.push(`bundled asset ${label}: license file ${a.licenseFile} ${KIND_SAYS[kind]}, not the license text`);
         for (const c of copyrights) if (!text.includes(c)) problems.push(`bundled asset ${label}: license file ${a.licenseFile} does not carry the font's own copyright notice "${c}"`);
       }
@@ -633,7 +633,7 @@ export function bundledAssetComponents(root, problems) {
 // ---- the setup manifest ----------------------------------------------------------------------------------------
 
 /**
- * REQ-STARTUP-058's manifest as this build carries it (OQ-72): the code-intelligence pins, whose `languageServers`
+ * REQ-STARTUP-058's manifest as this build carries it (OQ-73): the code-intelligence pins, whose `languageServers`
  * is the second list and which carry no machine tools. An unreadable or unparsable manifest — including one whose
  * declared package lacks one of the four fields — fails validation (REQ-STARTUP-143).
  */
@@ -807,7 +807,7 @@ export function collectNotices({ root, platform, today }) {
     const where = c.section === 'runtime' ? 'code-intelligence runtime' : c.containedIn ? `compiled into ${c.containedIn}` : c.ecosystem;
     if (!c.license) problems.push(`${c.name} ${c.version} (${where}): declares no license identifier`);
     // An empty licence file is no licence text, and neither is one that only names the licence, points elsewhere for
-    // it or attributes (OQ-74); those are kept, for the notices they carry. Electron, the interpreter and a
+    // it or attributes (OQ-75); those are kept, for the notices they carry. Electron, the interpreter and a
     // compiled-in library have one named file each, which their readers already reported missing or empty; only a
     // dependency takes the reviewed route.
     c.texts = c.texts.filter((t) => t.text !== '').map((t) => ({ ...t, kind: licenseTextKind(t.file, t.text) }));
@@ -897,7 +897,7 @@ export function renderNotices(model) {
   }
 
   out.push(heading(2, 'The bundled code-intelligence runtime'));
-  // OQ-71: what the interpreter's distributor linked into it has no record in the tree to read, and the file says so.
+  // OQ-72: what the interpreter's distributor linked into it has no record in the tree to read, and the file says so.
   out.push(wrap(`The interpreter the bundled code-intelligence runtime runs on, and every distribution installed in it. The libraries linked into the interpreter by its distributor are not listed separately.`), '');
   for (const c of [...interpreter, ...distributions]) out.push(entry(c));
 

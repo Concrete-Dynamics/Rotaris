@@ -278,7 +278,7 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
       return outcome.name === undefined ? { ok: false as const, reason: 'The skill was not loaded.' } : { ok: true as const, name: outcome.name };
     },
     /*
-     * REQ-CHAT-162 — `/skills`. Main names the followed session (a window following none is refused there, OQ-66);
+     * REQ-CHAT-162 — `/skills`. Main names the followed session (a window following none is refused there, OQ-67);
      * the run host writes the listing through that session's own writer, and the row reaches this window the way
      * every other row does — on the session's transcript channel — so nothing is drawn from this answer.
      */

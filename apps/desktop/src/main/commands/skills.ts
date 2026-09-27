@@ -56,7 +56,7 @@ export function skillsCommands(
     /*
      * REQ-CHAT-162 — `/skills`: the listing written into the followed session's transcript as one saved system
      * row. Unlike the three gestures above there is no pending bucket to fall back to: a row must be saved WITH a
-     * session, so a window following none is refused here, before anything crosses to the run host (OQ-66).
+     * session, so a window following none is refused here, before anything crosses to the run host (OQ-67).
      */
     'skills.list': async (_req, { w }) => {
       if (!w.workspaceId || w.workspace === '(no workspace)') return { ok: false, code: 'workspace.none', headline: 'Open a workspace first' };

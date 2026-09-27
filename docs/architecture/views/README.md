@@ -47,7 +47,7 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 **The `/skills` listing (REQ-CHAT-162, `first-release-plan.md` §2.2, built 2026-09-27).** One renderer command,
 `skills.list`, relayed by main's skills facet to the run host with the followed session named by main (a window
-following none is refused there, OQ-66); the run host writes the listing as ONE `system` row through that session's
+following none is refused there, OQ-67); the run host writes the listing as ONE `system` row through that session's
 own writer (`run-host/skills.ts`'s `writeSkillListing`), and the one row renderer draws a system row whose text is
 the listing as the listing (`transcript/Row.tsx`, the text fixed once in `contracts/skills.ts`). The **process view**
 gains the command and its reply, and the run host's row says it writes the listing; the **component view**'s skills
@@ -104,7 +104,7 @@ looks for the file under REQ-STARTUP-141's name; it had looked for a lowercase n
 section for the tool, and the **process view** gains the file's row in "Files and directories on disk" and a corrected
 About paragraph. No package, edge, process, channel, command or message kind changed. The gate review later that day
 changed two things inside the tool. A licence file that only refers to the licence, or only attributes, is no longer
-counted as the text (OQ-74). The LGPL address must now have an address's shape. No view changed for either: both
+counted as the text (OQ-75). The LGPL address must now have an address's shape. No view changed for either: both
 are internal to `notices.mjs`, and it still reads and writes what the component view says. The review's second round
 changed three more things inside the tool. The address check refuses the placeholders it still accepted. An input that
 is not a JSON object fails as unparsable. A directory where the output goes is a handled error. No view changed.

@@ -104,7 +104,7 @@ export const SkillListingOutcomeSchema = z.object({ count: z.number().int().nonn
 export type SkillListingOutcome = z.infer<typeof SkillListingOutcomeSchema>;
 
 /**
- * OQ-66 (b): a window following no session has no transcript to write the listing into, and REQ-CHAT-162 requires
+ * OQ-67 (b): a window following no session has no transcript to write the listing into, and REQ-CHAT-162 requires
  * the row to be saved with the session. The command fails with this sentence rather than creating a session or
  * drawing a row nothing saves.
  */

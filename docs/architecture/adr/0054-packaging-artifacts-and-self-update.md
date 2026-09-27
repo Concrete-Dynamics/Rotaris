@@ -1146,7 +1146,7 @@ development entry and every proof: `settings-proof` read `v44.1.1` and passed on
 was right only because `app.asar` is a package. Repaired in the same change: main reads
 `out/main/../../package.json`, which is the same place the guard reads in both entries, and answers `dev` when that
 file declares nothing. `REQ-STARTUP-007` says `dev` there and `REQ-STARTUP-004` says `0+unknown`; the two disagree,
-and `dev` is **OQ-70**'s reading. `settings-proof` now requires the exact `v0.1.0`, and it was measured failing on the
+and `dev` is **OQ-71**'s reading. `settings-proof` now requires the exact `v0.1.0`, and it was measured failing on the
 old build. The note is `../../defects/fixed/the-unpacked-build-reports-electrons-version-as-the-products.md`.
 
 **What it found about prereleases, not repaired here.** electron-builder 26.15.3 rewrites `0.1.0rc1` to `0.1.0-rc1`
@@ -1160,7 +1160,7 @@ rendered from the tag's version through `tools/release-naming`:
 tree. The one `npx`/`uvx` launch among the defaults is `browser`'s `npx -y @playwright/mcp@0.0.80 --headless`. It is
 resolved through the product's own `resolveCommand`, so shorthands count. It is counted although it ships
 `enabled: false`: `REQ-MCP-095` requires its pin whatever the switch says, and `REQ-STARTUP-064`'s "nothing will ever
-launch it" pulls the other way. That is **OQ-68**. So on this tree `pnpm release:guard v0.1.0` **exits 1 on the pin half
+launch it" pulls the other way. That is **OQ-69**. So on this tree `pnpm release:guard v0.1.0` **exits 1 on the pin half
 alone**, naming `@playwright/mcp`, `0.0.80`, both files and the missing manifest. That is the requirement working. It
 also means **no release is publishable until the manifest exists**, and no step of the plan builds it (the plan's §4.1
 now says so). The guard reads it at `apps/desktop/resources/setup-manifest.json` (`SETUP_MANIFEST_LOCATION`, one
@@ -1182,7 +1182,7 @@ API experimental, and the lockfile pins it. `guard.test.ts` spawns the script, s
 `pnpm check` before it can fail a release. `@rotaris/config` imports `@rotaris/kernel`, whose index re-exports the
 generated (gitignored) requirement symbols, so **the tag workflow must run `pnpm symbols` before the guard** (§4.2); a
 checkout that skips it fails closed, `error: the release guard could not run`, exit 1. One reading was taken in the
-grammar: numbers are canonical decimals, so `v01.2.3` is refused (**OQ-69**).
+grammar: numbers are canonical decimals, so `v01.2.3` is refused (**OQ-70**).
 
 The grammar lives in `tools/release-naming/src/index.ts` itself, not a second module. The packaging hook's naming check
 (`build-hooks.cjs`, `checkNaming`, inside `afterPack`) imports that file with plain Node, whose type stripping neither
@@ -1212,7 +1212,7 @@ stale one cannot be frozen in its place. The closure is computed offline, from w
 
 - the desktop application's production `dependencies` and those of every workspace package it builds from, never a
   development dependency and never a product package;
-- Electron as one component, with its own credits reproduced beneath it (OQ-71);
+- Electron as one component, with its own credits reproduced beneath it (OQ-72);
 - SQLite and winpty (win32 only), which this build compiles into its native modules from vendored sources whose
   licence files the `files` patterns above strip from the archive;
 - the bundled runtime's interpreter and every distribution in it;
@@ -1238,14 +1238,14 @@ six problems, each correctly:**
 6. `dotenv` 0.9.9, in the runtime, declares no licence identifier.
 
 Four of those wait on a maintainer's reviewed exception, which only a maintainer may write (plan §6, O-11). The sixth
-has no reviewed route under REQ-STARTUP-143 as worded (OQ-73).
+has no reviewed route under REQ-STARTUP-143 as worded (OQ-74).
 
 *Corrected 2026-09-27 by the gate review: the list above is short by eight.* The generator had counted any non-empty
 licence-named file as the component's licence text. `@workflow/serde` 4.1.0 is inlined into the main bundle. Its only
 licence file reads "Apache License 2.0" and then "See the LICENSE file in the root of this repository", and the
 package ships no such file. The generator now reads a file that only names the licence, or only sends the reader
 elsewhere for it, as a reference. It reads a NOTICE or an authors list as an attribution. Neither counts as the text,
-and both are still reproduced (OQ-74). **Run again, validation refuses on fourteen problems:**
+and both are still reproduced (OQ-75). **Run again, validation refuses on fourteen problems:**
 
 - O-3;
 - `dotenv`;
@@ -1270,7 +1270,7 @@ Each fails closed and names what it found:
 - an input file that is not a JSON object.
 
 Only the rule that Electron, the interpreter, a compiled-in library and a bundled asset must carry their text is a
-reading of the requirement (OQ-74). The rest guard the generator's own inputs.
+reading of the requirement (OQ-75). The rest guard the generator's own inputs.
 
 *Corrected 2026-09-27 by the gate review's second round, on two points.* First, an input that parsed to `null`, `false`,
 `0` or `""` had been read as having nothing to report. Over an otherwise valid fixture, a `release-inputs.json` holding
@@ -1281,7 +1281,7 @@ stock postal templates. Both are repaired. What the check refuses, and its limit
 stated in the plan's §4.3.
 
 Two premises of REQ-STARTUP-142 are not true of this
-build: Manrope is named and not bundled, and no setup manifest pins a machine tool (OQ-72). **Nothing in this record
+build: Manrope is named and not bundled, and no setup manifest pins a machine tool (OQ-73). **Nothing in this record
 changes.** The step sits where REQ-STARTUP-037 puts it, before freezing. The `extraResources` entry
 that carries the file into the artifact, and `package.mjs`'s call to the step, are §4.4's, with `build-id.txt`.
 *Both landed 2026-09-27; see the next section.*
@@ -1314,7 +1314,7 @@ notices generator reads the runtime, and before `electron-vite build`, because a
 files go to the root of the artifact's resources through two `extraResources` entries.
 
 **3. What a local `pnpm package` does while O-3 is owed.** It fails. `pnpm notices` refuses until the owner writes O-3's
-address, a maintainer signs O-11's twelve reviews and OQ-73 is ruled, and the package refuses with it, exiting 1 and
+address, a maintainer signs O-11's twelve reviews and OQ-74 is ruled, and the package refuses with it, exiting 1 and
 naming the flag below (REQ-STARTUP-143). This was measured: `REFUSED` at the notices step in 6.2 s, with the notices
 step's fourteen `error:` lines above it. **`ROTARIS_PACKAGE_WITHOUT_NOTICES=1` is the one explicit way on.** Only the
 value `1` sets it, and it passes over exit 1 only, never a usage error ~~or a crash~~ or a signal. ~~What it makes is a

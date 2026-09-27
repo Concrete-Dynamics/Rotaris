@@ -48,25 +48,26 @@ amendment (R-049), and OQ-62's configured-rate branch with it; OQ-62's discovery
 suppresses its base when the override is itself switched off — a third state REQ-WORKSPACE-042's "given
 both exist" has no word for). **OQ-64 was ruled on 2026-09-27** as built (R-052), together with ESC-37,
 ESC-38 and ESC-39. **One more was raised on 2026-09-22 by repairing the retrospective's reads: OQ-65** (whether the
-instruction-file switches reach the retrospective as well as the agents). **One more was raised on 2026-09-27 by building the `/skills` listing: OQ-66**
+instruction-file switches reach the retrospective as well as the agents). **One more was raised on 2026-09-27 by building the `/skills` listing: OQ-67**
+(raised as OQ-66; every question from OQ-67 to OQ-75 moved up by one when the first-release work reached `main`, where OQ-66 was already taken)
 (where the listing goes when there is no transcript to write it into — from the Settings Skills tab, whose
 header actions REQ-WORKSPACE-067 fixes at two, and from a window following no session), **and one the same day by building
-REQ-WORKSPACE-049's fixture: OQ-67** (what "up to 20 context files" measures when discovery can reach fourteen; raised as
+REQ-WORKSPACE-049's fixture: OQ-68** (what "up to 20 context files" measures when discovery can reach fourteen; raised as
 OQ-66 on its own branch and renumbered when it reached `main` after the `/skills` listing's). **Two more were raised on 2026-09-27 by building the version guard** (first-release plan §4.1):
-**OQ-68** (whether a default entry shipped switched off counts as one the default configuration launches, which
-REQ-STARTUP-059 and REQ-MCP-095 read one way and REQ-STARTUP-064 the other) **and OQ-69** (whether a release tag's
-numbers are canonical decimals), each with the reading the guard is built under, **and OQ-70** (whether the running
+**OQ-69** (whether a default entry shipped switched off counts as one the default configuration launches, which
+REQ-STARTUP-059 and REQ-MCP-095 read one way and REQ-STARTUP-064 the other) **and OQ-70** (whether a release tag's
+numbers are canonical decimals), each with the reading the guard is built under, **and OQ-71** (whether the running
 desktop with no version metadata reports `dev` or `0+unknown`, which REQ-STARTUP-007 and REQ-STARTUP-004 fix
 differently), raised by the gate round that reviewed it; the three were raised as OQ-66 to OQ-68 on their own branch and renumbered when they reached `main` after the
 `/skills` listing's and the injection proof's. **Three more were raised on 2026-09-27 by building the notices generator
-(`first-release-plan.md` §4.3): OQ-71** (whether an entry of `THIRD-PARTY-LICENSES.txt` is a package or everything
-compiled into one — Electron's 779 credited components carry no version and no identifier), **OQ-72** (REQ-STARTUP-142
-names Manrope and a machine-tool manifest, neither of which the first release carries) **and OQ-73** (whether the
+(`first-release-plan.md` §4.3): OQ-72** (whether an entry of `THIRD-PARTY-LICENSES.txt` is a package or everything
+compiled into one — Electron's 779 credited components carry no version and no identifier), **OQ-73** (REQ-STARTUP-142
+names Manrope and a machine-tool manifest, neither of which the first release carries) **and OQ-74** (whether the
 reviewed-exceptions table may supply an identifier a dependency does not declare — `dotenv` 0.9.9 in the bundled
-runtime). **One more was raised the same day by that generator's gate review: OQ-74** (when a component carries "its
+runtime). **One more was raised the same day by that generator's gate review: OQ-75** (when a component carries "its
 full license text": a licence file that only pointed elsewhere, or only carried a licence's per-file notice, had
 counted as the text, and 4 components without text became 12); the four were raised as OQ-66 to OQ-69 on their own branch and renumbered when they reached `main`
-after the `/skills` listing, the injection proof and the version guard had taken OQ-66 to OQ-70. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -2856,7 +2857,7 @@ handed to the engine, which owns neither.
 retrospective should say in its own output that a file was present and withheld, so a user reading a thin
 retrospective can tell it apart from an empty workspace.
 
-**OQ-66 — Where does the `/skills` listing go when there is no transcript to write it into?** *(REQ-CHAT-162 with REQ-WORKSPACE-067 and REQ-WORKSPACE-151; OQ-58. Raised 2026-09-27 by building the listing, `first-release-plan.md` §2.2.)*
+**OQ-67 — Where does the `/skills` listing go when there is no transcript to write it into?** *(REQ-CHAT-162 with REQ-WORKSPACE-067 and REQ-WORKSPACE-151; OQ-58. Raised 2026-09-27 by building the listing, `first-release-plan.md` §2.2; raised as OQ-66 and renumbered OQ-67 when it reached `main`, where OQ-66 had been taken by the question `PD-ORCH-004` revision 2 rules.)*
 
 REQ-CHAT-162 makes the listing "a single system row" in the transcript and requires that "a system row a skill
 command writes MUST be saved with the session". Two routes to the capability have no session transcript to
@@ -2914,7 +2915,7 @@ round 1 of the same change; each was stated only in a code comment or the plan's
   and paths of skills set to "hidden" to that model. The agent path does not (it keeps user and agent rows only).
   Whether "hidden" (REQ-WORKSPACE-062) reaches that far is not stated; nothing withholds them today.
 
-**OQ-67 — What does REQ-WORKSPACE-049's "up to 20 context files" measure, when discovery can reach fourteen?** *(REQ-WORKSPACE-049 with REQ-WORKSPACE-041/042, both narrowed by `PD-WORKSPACE-002`; first-release-plan §3.2. Raised 2026-09-27 by building the fixture "at exactly that bound"; raised as OQ-66 and renumbered OQ-67 when it reached `main`, the `/skills` listing's OQ-66 having reached it first.)*
+**OQ-68 — What does REQ-WORKSPACE-049's "up to 20 context files" measure, when discovery can reach fourteen?** *(REQ-WORKSPACE-049 with REQ-WORKSPACE-041/042, both narrowed by `PD-WORKSPACE-002`; first-release-plan §3.2. Raised 2026-09-27 by building the fixture "at exactly that bound"; raised as OQ-66 and renumbered OQ-68 when it reached `main`, the `/skills` listing's OQ-67 having reached it first.)*
 
 REQ-WORKSPACE-049 states its 200 ms figure over "a workspace holding up to 20 context files totalling 1 MiB". No
 discovery rule the record has held can present twenty. REQ-WORKSPACE-041 as written read one file. `PD-WORKSPACE-002`
@@ -2938,7 +2939,7 @@ overrides suppress hold one line each, so the bytes the merge actually reads are
 naming fourteen and twelve, or "every instruction file discovery can reach"), or left as a ceiling that nothing
 reaches. And if the count is ever to be reached, what discovery rule reaches it.
 
-**OQ-68 — Does a default entry shipped switched off count as one the default configuration "launches"?** *(REQ-STARTUP-059 with REQ-MCP-095 and REQ-STARTUP-064; REQ-MCP-010, REQ-CONFIG-181. Raised 2026-09-27 by building the version guard, first-release plan §4.1; raised as OQ-66 and renumbered OQ-68 when it reached `main` after the `/skills` listing's OQ-66 and the injection proof's OQ-67.)*
+**OQ-69 — Does a default entry shipped switched off count as one the default configuration "launches"?** *(REQ-STARTUP-059 with REQ-MCP-095 and REQ-STARTUP-064; REQ-MCP-010, REQ-CONFIG-181. Raised 2026-09-27 by building the version guard, first-release plan §4.1; raised as OQ-66 and renumbered OQ-69 when it reached `main` after the `/skills` listing's OQ-67 and the injection proof's OQ-68.)*
 
 REQ-STARTUP-059 has the setup manifest pin "every package that the built-in default tool-server configuration of that
 same build launches through `npx` or `uvx`". The one such default is `browser`, `npx -y @playwright/mcp@0.0.80
@@ -2958,7 +2959,7 @@ The stricter reading can only stop a release the looser one would let through, n
 a runner, or only those enabled by default. If the second, the guard stops checking `browser` under REQ-STARTUP-059,
 and REQ-MCP-095's own cross-check still requires the pin.
 
-**OQ-69 — Are the numbers in a release tag canonical decimals?** *(REQ-STARTUP-027, REQ-STARTUP-029, REQ-STARTUP-031, REQ-STARTUP-109. Raised 2026-09-27 by building the version guard, first-release plan §4.1; raised as OQ-67 and renumbered OQ-69 when it reached `main` after the `/skills` listing's OQ-66 and the injection proof's OQ-67.)*
+**OQ-70 — Are the numbers in a release tag canonical decimals?** *(REQ-STARTUP-027, REQ-STARTUP-029, REQ-STARTUP-031, REQ-STARTUP-109. Raised 2026-09-27 by building the version guard, first-release plan §4.1; raised as OQ-67 and renumbered OQ-70 when it reached `main` after the `/skills` listing's OQ-67 and the injection proof's OQ-68.)*
 
 REQ-STARTUP-027 fixes the shape `v<major>.<minor>.<patch>` with an optional PEP 440 suffix, and its counter-examples
 say nothing about leading zeros. PEP 440 permits them and normalises them away, so `v01.2.3` would be the same release
@@ -2974,7 +2975,7 @@ in the suffix number. `v01.2.3` and `v1.2.3rc01` are refused with REQ-STARTUP-02
 normalised. If it is normalised, the grammar must also say which spelling the artifact names and the declared version
 carry.
 
-**OQ-70 — With no version metadata, does the running desktop report `dev` or `0+unknown`?** *(REQ-STARTUP-004, REQ-STARTUP-007; REQ-STARTUP-109, REQ-STARTUP-158, REQ-STARTUP-159, REQ-SHELL-140. Raised 2026-09-27 by the review of the version guard, first-release plan §4.1; raised as OQ-68 and renumbered OQ-70 when it reached `main` after the `/skills` listing's OQ-66 and the injection proof's OQ-67.)*
+**OQ-71 — With no version metadata, does the running desktop report `dev` or `0+unknown`?** *(REQ-STARTUP-004, REQ-STARTUP-007; REQ-STARTUP-109, REQ-STARTUP-158, REQ-STARTUP-159, REQ-SHELL-140. Raised 2026-09-27 by the review of the version guard, first-release plan §4.1; raised as OQ-68 and renumbered OQ-71 when it reached `main` after the `/skills` listing's OQ-67 and the injection proof's OQ-68.)*
 
 Both requirements govern the same value and fix different literals for the same case. REQ-STARTUP-004: the product
 reports its version from its own installation metadata, and "when that metadata is absent, the reported version SHALL
@@ -2995,7 +2996,7 @@ sentence and REQ-STARTUP-159's About observation forbid it, and electron-builder
 **What a ruling decides.** Which literal the running desktop reports without metadata. If `0+unknown`, the constant
 changes and nothing else does; if `dev`, REQ-STARTUP-004's second sentence is amended to agree.
 
-**OQ-71 — What is one entry of the notices file: a package, or everything compiled into one?** *(REQ-STARTUP-142, REQ-STARTUP-143. Raised 2026-09-27 by building the notices generator, `first-release-plan.md` §4.3; raised as OQ-66 and renumbered OQ-71 when it reached `main`, after the `/skills` listing, the injection proof and the version guard had taken OQ-66 to OQ-70.)*
+**OQ-72 — What is one entry of the notices file: a package, or everything compiled into one?** *(REQ-STARTUP-142, REQ-STARTUP-143. Raised 2026-09-27 by building the notices generator, `first-release-plan.md` §4.3; raised as OQ-66 and renumbered OQ-72 when it reached `main`, after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71.)*
 
 REQ-STARTUP-142 wants "one entry for every dependency present in the shipped artifact", each naming "the component,
 its version, its license identifier, and its full license text", and REQ-STARTUP-143 fails the release on a
@@ -3006,7 +3007,7 @@ packages a package manager lists, and none of them can meet all four fields:
   Node.js, V8 and ffmpeg, which is under the LGPL, among them. Electron's own credits file, `LICENSES.chromium.html`, gives each a
   title, a homepage and a licence text, and **no version and no identifier**. Read as 779 entries, the release could
   not pass REQ-STARTUP-143 until someone supplied 779 identifiers the credits do not carry, and the reviewed table
-  has no route for a missing identifier (OQ-73).
+  has no route for a missing identifier (OQ-74).
 - **What this build compiles into its own native modules.** SQLite into `better-sqlite3`, and winpty into
   `node-pty` on Windows, from sources the host packages vendor. `electron-builder.yml` strips those sources and their
   licence files from the archive (ADR-0056 rule 1).
@@ -3042,7 +3043,7 @@ component must be an entry with a version and an identifier. And whether the int
 enumerated, which would mean building the runtime from a python-build-standalone archive that carries its licence
 records (the full archive, not the install-only one) or declaring them by hand in a reviewed table.
 
-**OQ-72 — REQ-STARTUP-142 names two things the first release does not carry: Manrope, and Git and ripgrep.** *(REQ-STARTUP-142 with REQ-STARTUP-040, REQ-STARTUP-058, `PD-STARTUP-001`. Raised 2026-09-27 by building the notices generator; raised as OQ-67 and renumbered OQ-72 when it reached `main`, after the `/skills` listing, the injection proof and the version guard had taken OQ-66 to OQ-70.)*
+**OQ-73 — REQ-STARTUP-142 names two things the first release does not carry: Manrope, and Git and ripgrep.** *(REQ-STARTUP-142 with REQ-STARTUP-040, REQ-STARTUP-058, `PD-STARTUP-001`. Raised 2026-09-27 by building the notices generator; raised as OQ-67 and renumbered OQ-73 when it reached `main`, after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71.)*
 
 REQ-STARTUP-142 states the file "SHALL further contain the license texts of the bundled fonts JetBrains Mono,
 Manrope and Space Grotesk", and that its tools section is "generated from the setup manifest of that same build,
@@ -3076,7 +3077,7 @@ it can:
 font clause is narrowed to the faces the build carries; and whether machine setup belongs in the first release —
 without it REQ-STARTUP-058's first list is unmet, which is a larger question than the notices file.
 
-**OQ-73 — May the reviewed-exceptions table supply a licence identifier a dependency does not declare?** *(REQ-STARTUP-143. Raised 2026-09-27 by the notices generator's first run against the bundled runtime; raised as OQ-68 and renumbered OQ-73 when it reached `main`, after the `/skills` listing, the injection proof and the version guard had taken OQ-66 to OQ-70.)*
+**OQ-74 — May the reviewed-exceptions table supply a licence identifier a dependency does not declare?** *(REQ-STARTUP-143. Raised 2026-09-27 by the notices generator's first run against the bundled runtime; raised as OQ-68 and renumbered OQ-74 when it reached `main`, after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71.)*
 
 REQ-STARTUP-143 fails the release on "a dependency in the shipped closure declares no license identifier", and
 separately on "a dependency carries no license text and is not covered by the ... maintainer-review table". The
@@ -3105,7 +3106,7 @@ normalised. The runtime's distributions declare `BSD License` (`itsdangerous`, `
 `BSD License` names a family rather than one licence. Whether an identifier must be an SPDX expression, and who
 supplies one where the component does not, belongs to the same ruling.
 
-**OQ-74 — When does a component carry "its full license text"?** *(REQ-STARTUP-142, REQ-STARTUP-143. Raised 2026-09-27 by the notices generator's gate review; raised as OQ-69 and renumbered OQ-74 when it reached `main`, after the `/skills` listing, the injection proof and the version guard had taken OQ-66 to OQ-70.)*
+**OQ-75 — When does a component carry "its full license text"?** *(REQ-STARTUP-142, REQ-STARTUP-143. Raised 2026-09-27 by the notices generator's gate review; raised as OQ-69 and renumbered OQ-75 when it reached `main`, after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71.)*
 
 REQ-STARTUP-142 wants each entry to carry the component's "full license text", and REQ-STARTUP-143 fails a release on
 a dependency that "carries no license text" unless a reviewed exception covers it. Neither says what a licence file
@@ -3152,11 +3153,11 @@ Three limits are stated here, so that none is read as coverage:
 - A file that carries one licence's text and refers elsewhere for another counts as text. `tqdm` 4.67.1 declares
   `MPL-2.0 AND MIT` and carries the MIT text in full beside MPL-2.0's Exhibit A, so its entry has no MPL-2.0 text.
   The generator does not match the texts a component carries against the expression it declares.
-- The pass is per component, and a component's vendored libraries are not components of their own (OQ-71). pip
+- The pass is per component, and a component's vendored libraries are not components of their own (OQ-72). pip
   26.2.1 passes on its own MIT text. Its vendored `certifi` ships only MPL-2.0's Exhibit A, so pip's entry carries no
   MPL-2.0 text. Its vendored `cachecontrol` and `msgpack` ship only Apache-2.0's per-file notice. The Apache-2.0 text
   is in pip's entry only because its vendored `packaging` happens to ship it as `LICENSE.APACHE`. This is `tqdm`'s gap
-  one level down. The ruling below would close it only together with OQ-71's granularity. *Added 2026-09-27 by the
+  one level down. The ruling below would close it only together with OQ-72's granularity. *Added 2026-09-27 by the
   gate review's second round, checked against the bundled runtime.*
 
 **What a ruling decides.** Whether a component that ships only a licence's notice should instead get the canonical

@@ -27,7 +27,7 @@ describe('the version the running desktop reports — REQ-STARTUP-007, REQ-START
     expect(installedProductVersion(join(app, 'out', 'main'))).toBe('1.2.3');
   });
 
-  it('is the literal dev when there is no metadata (OQ-70), and never throws (REQ-STARTUP-159)', () => {
+  it('is the literal dev when there is no metadata (OQ-71), and never throws (REQ-STARTUP-159)', () => {
     expect(VERSION_WITHOUT_METADATA).toBe('dev');
     expect(readProductVersion(join(tmpdir(), 'no-such-directory-for-product-version', 'package.json'))).toBe('dev');
     expect(readProductVersion(manifest('{ not json'))).toBe('dev');

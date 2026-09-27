@@ -167,7 +167,7 @@ try {
 
   // ── 1′. The same About page with both files present (first-release-plan.md §4.4) ──────────────────────────────
   // The build identifier is the real writer's, over this tree, so the row shows what a package of this tree would carry.
-  // The notices file is a fixture: `pnpm notices` refuses until O-3, O-11 and OQ-73 are answered, and the About page asks
+  // The notices file is a fixture: `pnpm notices` refuses until O-3, O-11 and OQ-74 are answered, and the About page asks
   // only that the file exist and open (REQ-SHELL-142).
   const writer = produce(resources, stash, BUILD_ID, () => spawnSync(process.execPath, [join(repo, 'tools', 'build-id', 'write.mjs')], { cwd: repo, encoding: 'utf8' }));
   writeFileSync(join(output, 'build-id.log'), `${writer.stdout ?? ''}\n${writer.stderr ?? ''}`);

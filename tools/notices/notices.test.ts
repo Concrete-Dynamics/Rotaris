@@ -26,9 +26,9 @@ const SITE = `${PATHS.runtime}/lib/python3.13/site-packages`;
 /** A fixture address: a literal postal route, no placeholder, no reserved domain. */
 const ADDRESS = 'Fixture Maintainers, Postfach 1234, 10115 Fixturestadt';
 const MIT = 'MIT License\n\nCopyright (c) Fixture Authors\n\nPermission is hereby granted, free of charge, to any person obtaining a copy.';
-/** A stand-in for one licence's full text: more than the one line that only names a licence (OQ-74). */
+/** A stand-in for one licence's full text: more than the one line that only names a licence (OQ-75). */
 const body = (title: string): string => `${title}\n\nThe terms of the ${title}, as the fixture carries them.`;
-/** The per-file notice Apache-2.0 asks to be applied with, which sends the reader elsewhere for the licence (OQ-74). */
+/** The per-file notice Apache-2.0 asks to be applied with, which sends the reader elsewhere for the licence (OQ-75). */
 const APACHE_NOTICE = 'Copyright 2023 Fixture, Inc.\n\nLicensed under the Apache License, Version 2.0 (the "License");\nyou may not use this file except in compliance with the License.\nYou may obtain a copy of the License at\n\n    http://www.apache.org/licenses/LICENSE-2.0';
 const OFL_BODY = 'This Font Software is licensed under the SIL Open Font License, Version 1.1.\n\nSIL OPEN FONT LICENSE Version 1.1 - 26 February 2007';
 const FONT_COPYRIGHT = 'Copyright 2020 The Fixture Sans Project Authors';
@@ -124,7 +124,7 @@ function writeFixture(): void {
   put(`${SITE}/serena_agent-1.7.0.dist-info/licenses/LICENSE`, MIT);
   put(`${SITE}/pystray-0.19.5.dist-info/METADATA`, 'Metadata-Version: 2.1\nName: pystray\nVersion: 0.19.5\nLicense: LGPLv3\nClassifier: License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)\n');
   put(`${SITE}/pystray-0.19.5.dist-info/COPYING.LGPL`, body('GNU LESSER GENERAL PUBLIC LICENSE Version 3'));
-  // The setup manifest as this build carries it: the language servers, no machine tools (OQ-72).
+  // The setup manifest as this build carries it: the language servers, no machine tools (OQ-73).
   put(PATHS.setupManifest, json({
     python: '3.13.15', distribution: 'serena-agent', version: '1.7.0',
     languageServers: [
@@ -198,7 +198,7 @@ describe('REQ-STARTUP-142: the shipped closure, and nothing else', () => {
     expect(model.interpreter[0]?.license).toBe('PSF-2.0');
     expect(names(model.distributions)).toEqual(['pystray@0.19.5', 'serena-agent@1.7.0']);
     expect(text).toContain('Component: pystray\nVersion:   0.19.5\nLicense:   LGPLv3\n');
-    // OQ-71's one unlisted part is said where a reader would look for it, not left for the reader to find missing.
+    // OQ-72's one unlisted part is said where a reader would look for it, not left for the reader to find missing.
     expect(flat(section(text, 2))).toContain('The libraries linked into the interpreter by its distributor are not listed separately.');
   });
 
@@ -209,7 +209,7 @@ describe('REQ-STARTUP-142: the shipped closure, and nothing else', () => {
     expect(text).toContain('Component: Absent Face\nVersion:   not contained in this build\n');
   });
 
-  it('reproduces Electron\'s own credits beneath it, entities decoded (OQ-71)', () => {
+  it('reproduces Electron\'s own credits beneath it, entities decoded (OQ-72)', () => {
     const { model, text } = generate();
     expect(model.electron?.credits.map((c) => c.title)).toEqual(['libfixture & friends', 'zlib-fixture']);
     expect(text).toContain('See:       section 5, the 2 components compiled into Electron');
@@ -308,7 +308,7 @@ describe('REQ-STARTUP-142: the shipped closure, and nothing else', () => {
 });
 
 describe('REQ-STARTUP-143: validation fails naming the component or path, one condition at a time', () => {
-  it('a bundled asset\'s license file is missing, empty, or only refers to the text (OQ-74)', () => {
+  it('a bundled asset\'s license file is missing, empty, or only refers to the text (OQ-75)', () => {
     rmSync(join(root, 'tools/notices/licenses/FixtureSans-OFL.txt'));
     expect(generate().problems).toEqual(['bundled asset Fixture Sans: license file tools/notices/licenses/FixtureSans-OFL.txt is missing']);
     put('tools/notices/licenses/FixtureSans-OFL.txt', '\n');
@@ -333,7 +333,7 @@ describe('REQ-STARTUP-143: validation fails naming the component or path, one co
     expect(generate().problems).toEqual(['electron 44.1.1 (npm): carries no license text — LICENSE only names its license or points elsewhere for it']);
   });
 
-  it('a dependency in the shipped closure declares no license identifier — and an exception does not excuse it (OQ-73)', () => {
+  it('a dependency in the shipped closure declares no license identifier — and an exception does not excuse it (OQ-74)', () => {
     pkg('node_modules/gamma', { name: 'gamma', version: '1.2.0', license: 'SEE LICENSE IN LICENSE' }, body('A licence of gamma'));
     put(`${SITE}/dotenv-0.9.9.dist-info/METADATA`, 'Metadata-Version: 2.1\nName: dotenv\nVersion: 0.9.9\nLicense: UNKNOWN\n');
     put(`${SITE}/dotenv-0.9.9.dist-info/LICENSE`, MIT);
@@ -362,7 +362,7 @@ describe('REQ-STARTUP-143: validation fails naming the component or path, one co
     expect(generate().problems).toEqual(['gamma 1.2.0 (npm): carries no license text and its reviewed exception covers >=1.3.0, not 1.2.0 (tools/notices/reviewed-exceptions.json)']);
   });
 
-  it('a licence file that only points elsewhere, or only carries a licence\'s per-file notice, is no license text (OQ-74)', () => {
+  it('a licence file that only points elsewhere, or only carries a licence\'s per-file notice, is no license text (OQ-75)', () => {
     // @workflow/serde 4.1.0's whole LICENSE.md, then the shape of ai 7.0.92's LICENSE: each refers to a text not shipped.
     rmSync(join(root, 'node_modules/gamma/LICENSE'));
     put('node_modules/gamma/LICENSE.md', 'Apache License 2.0\n\nSee the LICENSE file in the root of this repository.');
@@ -379,7 +379,7 @@ describe('REQ-STARTUP-143: validation fails naming the component or path, one co
     expect(flat(covered.text)).toContain(`No license text is distributed with this component. ${whyNoText} ${flat(APACHE_NOTICE)}`);
   });
 
-  it('a NOTICE or an authors list alone is no license text; beside the licence it is reproduced with it (OQ-74)', () => {
+  it('a NOTICE or an authors list alone is no license text; beside the licence it is reproduced with it (OQ-75)', () => {
     rmSync(join(root, 'node_modules/gamma/LICENSE'));
     put('node_modules/gamma/NOTICE', 'Fixture gamma\nCopyright 2024 The Gamma Authors');
     expect(generate().problems).toEqual(['gamma 1.2.0 (npm): carries no license text — NOTICE only attributes — and no reviewed exception covers it (tools/notices/reviewed-exceptions.json)']);
@@ -573,7 +573,7 @@ describe('the readers, on their own', () => {
     for (const real of ['sources@münchen.de', 'sources@xn--mnchen-3ya.de', 'rotaris@rotaris.dev', 'info@rotaris.dev', 'legal@rotaris.co.uk', 'PO Box 1234, 10115 Berlin']) expect(addressProblem(real), real).toBeNull();
   });
 
-  it('a licence file carries its licence, only refers to one, or only attributes (OQ-74)', () => {
+  it('a licence file carries its licence, only refers to one, or only attributes (OQ-75)', () => {
     expect(licenseTextKind('LICENSE.md', 'Apache License 2.0\n\nSee the LICENSE file in the root of this repository.')).toBe('reference');
     expect(licenseTextKind('LICENSE', APACHE_NOTICE)).toBe('reference');
     const mplExhibitA = 'This Source Code Form is subject to the terms of the Mozilla Public License,\nv. 2.0. If a copy of the MPL was not distributed with this file, You can obtain\none at http://mozilla.org/MPL/2.0/.';

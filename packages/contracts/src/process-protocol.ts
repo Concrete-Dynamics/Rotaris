@@ -235,7 +235,7 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   /**
    * REQ-CHAT-162 — `/skills`: the listing written into the session's transcript as one saved system row. The
    * session is REQUIRED here, unlike the three above: a row has to be saved with a session, so there is no pending
-   * bucket to fall back to (OQ-66), and main refuses before it asks when the window follows none.
+   * bucket to fall back to (OQ-67), and main refuses before it asks when the window follows none.
    */
   z.object({ kind: z.literal('skills.list'), workspaceRoot: z.string(), sessionId: z.string().min(1) }),
 ]);

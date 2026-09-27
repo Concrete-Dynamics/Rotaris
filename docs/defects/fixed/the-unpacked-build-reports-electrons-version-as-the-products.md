@@ -27,7 +27,7 @@ reported version the declared one.
 from `out/main/`, and `app.asar/package.json` from inside the archive — so both entries take one code path and read the
 one place `tools/release-guard` checks. A missing, unreadable or version-less file answers `dev` (`REQ-STARTUP-007`) and
 never throws (`REQ-STARTUP-159`). `REQ-STARTUP-004` names `0+unknown` for the same case; the two requirements disagree,
-and `dev` is the reading **OQ-70** records.
+and `dev` is the reading **OQ-71** records.
 
 *Moved by the gate round, same day:* the reader itself is now `@rotaris/platform`'s `installedProductVersion`
 (`packages/platform/src/version.ts`, with its tests), because the run host needs the same value for the MCP client's

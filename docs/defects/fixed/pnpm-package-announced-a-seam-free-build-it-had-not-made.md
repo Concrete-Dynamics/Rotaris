@@ -6,7 +6,7 @@ that build in `apps/desktop/out/`, where every `*-proof` script and `pnpm app:dr
 before any proof or `pnpm app:drive`." It printed the line after **every** run. A run refused before
 `electron-vite build` never touched `out/`, and still told the operator that it had replaced the build there. On
 `56801df` two steps could refuse that early, the code-intelligence bundle and the manifest check. The notices step of
-first-release-plan.md §4.4 added a third, and it is the one every local `pnpm package` meets while O-3, O-11 and OQ-73
+first-release-plan.md §4.4 added a third, and it is the one every local `pnpm package` meets while O-3, O-11 and OQ-74
 stand. The false line was then printed on every local run. The cost was a rebuild nobody needed, or the belief that a
 proof run had used a build it had not. Noticed 2026-09-27 while wiring the notices step into `package.mjs`, and repaired
 in the same change.

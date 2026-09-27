@@ -287,7 +287,7 @@ commands register by effect after the prompt files are on a rebuilt registry, an
 a `skills.md` — so both registrars now hold the two names
 ([`a-prompt-file-named-skills-takes-the-skills-command.md`](../../defects/fixed/a-prompt-file-named-skills-takes-the-skills-command.md)).
 
-**One gap the specification leaves is logged as OQ-66**, with the reading built: REQ-CHAT-162 asks for the listing
+**One gap the specification leaves is logged as OQ-67**, with the reading built: REQ-CHAT-162 asks for the listing
 to be reachable from the Settings tab, whose header actions REQ-WORKSPACE-067 fixes at two, so the tab's table is
 read as that reach and nothing is added; and `/skills` from a window following no session is refused with a stated
 reason, because a row must be saved with a session and OQ-58's pending bucket cannot hold one.

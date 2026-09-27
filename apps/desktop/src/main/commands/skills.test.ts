@@ -33,7 +33,7 @@ describe('skills.list — the /skills listing, relayed for the window that asked
     expect(host.asked).toEqual([]);
   });
 
-  it('OQ-66 (b): refuses before it asks when the window follows no session — a row must be saved WITH one', async () => {
+  it('OQ-67 (b): refuses before it asks when the window follows no session — a row must be saved WITH one', async () => {
     const host = fakeRunHost(() => ({ kind: 'ack' }));
     const out = await facet(host)['skills.list']({ kind: 'skills.list' }, windowOn('/work/project', null));
     expect(out).toEqual({ ok: false, code: 'session.none', headline: SKILL_LISTING_NO_SESSION });

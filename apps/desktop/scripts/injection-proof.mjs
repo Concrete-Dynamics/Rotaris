@@ -38,7 +38,7 @@
  *
  * The latency half (§3.2, REQ-WORKSPACE-049): a second scratch profile holding a fixture AT the bound — every
  * instruction-file slot discovery can reach filled (14 where the platform has an `/etc` hierarchy, 12 on Windows;
- * the requirement's 20 is unreachable, see OQ-67), totalling exactly 1 MiB — and `--latency-runs` (default and minimum
+ * the requirement's 20 is unreachable, see OQ-68), totalling exactly 1 MiB — and `--latency-runs` (default and minimum
  * 20) consecutive launches, each a separate process, each preceded by evicting the fixture files from the page cache.
  * The figure read back is the run host's own timing of the cold path (the saved-policy read, the discovery, the
  * merge), on the monotonic clock port. It reports the 95th percentile by nearest rank, checks that every separate

@@ -222,13 +222,13 @@ names this runtime (`serena-agent 1.7.0`), and each of the three packages appear
 and licence. The generator also reads the runtime itself as part of the shipped closure: the interpreter (`CPython`
 3.13.15 from the bundle marker's own answer, `PSF-2.0` read from its `LICENSE.txt`) and every distribution in its
 site-packages, 73 on the Linux bundle, with the identifier each declares and its licence files. **What that first
-read found in this record's tree:** `dotenv` 0.9.9, which `serena-agent` requires, declares `License: UNKNOWN` (OQ-73),
+read found in this record's tree:** `dotenv` 0.9.9, which `serena-agent` requires, declares `License: UNKNOWN` (OQ-74),
 and `proxy_tools` 0.1.0, which `pywebview` requires, ships no licence text at all. Both fail notices validation until
 a ruling or a maintainer's review. The runtime's own `LICENSE`, the one copy this record's bundle note named, is now
 one entry among those. *Corrected the same day by the generator's gate review:* two more distributions carry no
 licence text. `certifi` 2026.7.22 carries only MPL-2.0's Exhibit A. `mslex` 1.3.0 carries only Apache-2.0's per-file
 notice, beside an `AUTHORS.rst`. Each file only refers to the licence. The first run had counted any non-empty licence
-file as the text (OQ-74). Both now wait on a maintainer's review (O-11), as `proxy_tools` does.
+file as the text (OQ-75). Both now wait on a maintainer's review (O-11), as `proxy_tools` does.
 
 REQ-STARTUP-015's "exactly one copy" of the tool server's licence text meets a second copy when first-release-plan.md
 §4.4 carries the notices file into the artifact. That step decides which copy stands. *Decided 2026-09-27 by §4.4: the

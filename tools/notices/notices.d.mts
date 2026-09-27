@@ -14,6 +14,9 @@ export declare const PATHS: Readonly<{
   designAssets: string; electron: string; assets: string; exceptions: string; releaseInputs: string;
 }>;
 
+/** A licence text as the notices file reproduces it: no byte-order mark, LF line endings, no leading blank line, no trailing space. */
+export declare function normalize(text: string): string;
+
 /** OQ-69: only `text` is the component's licence text; a `reference` or an `attribution` is reproduced beside it. */
 export type LicenseTextKind = 'text' | 'reference' | 'attribution';
 export interface LicenseText { readonly file: string; readonly text: string; readonly kind?: LicenseTextKind }

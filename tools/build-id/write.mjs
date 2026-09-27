@@ -3,8 +3,9 @@
 // `pnpm build-id` — writes REQ-SHELL-140's build identifier to `apps/desktop/resources/build-id.txt` (git-ignored; the
 // packaging step carries it to the root of `process.resourcesPath`). `pnpm package` runs it before freezing.
 //
-// Exit codes are the pipeline's (REQ-STARTUP-149): 0 written; 1 a handled error — the identifier cannot be read, one
-// `error: …` line says why, and no file is left behind; 2 a usage error. What the identifier is: `build-id.mjs`.
+// Exit codes are the pipeline's (REQ-STARTUP-149): 0 written; 1 a handled error — the identifier cannot be read or
+// written, an `error: …` line says why, and no earlier identifier file is left behind; 2 a usage error. What the
+// identifier is: `build-id.mjs`.
 
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';

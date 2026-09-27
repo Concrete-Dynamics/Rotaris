@@ -2,7 +2,7 @@
  * Spike 4 (ADR-0033 consequence 3, REQ-MCP-113): console-window suppression, measured on the PACKAGED build.
  *
  * `pnpm package` must have produced `apps/desktop/release/win-unpacked/Rotaris.exe` (ROTARIS_PACKAGE_DIR_ONLY=1
- * ROTARIS_PACKAGE_SKIP_APP=1 are enough). The packaged application — a graphical process owning no console — runs a
+ * ROTARIS_PACKAGE_SKIP_APP=1 are enough, with ROTARIS_PACKAGE_WITHOUT_NOTICES=1 while `pnpm notices` refuses). The packaged application — a graphical process owning no console — runs a
  * scripted session whose persona carries two servers: `console`, declared as `cmd.exe /c node <fixture>` (a console
  * application launched through a console application, the worst case), and `token`, declared with the reserved
  * `builtin:code-intelligence` command (expected to fail until ADR-0035 exists — the launch error, not a window).
@@ -24,7 +24,7 @@ const Database = require('better-sqlite3');
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
 const exe = join(app, 'release', 'win-unpacked', 'Rotaris.exe');
-if (!existsSync(exe)) throw new Error(`the packaged application is absent: ${exe} (run pnpm package with ROTARIS_PACKAGE_DIR_ONLY=1 ROTARIS_PACKAGE_SKIP_APP=1 first)`);
+if (!existsSync(exe)) throw new Error(`the packaged application is absent: ${exe} (run pnpm package with ROTARIS_PACKAGE_DIR_ONLY=1 ROTARIS_PACKAGE_SKIP_APP=1 first, and ROTARIS_PACKAGE_WITHOUT_NOTICES=1 while pnpm notices refuses)`);
 const fixture = join(app, 'scripts', 'fixtures', 'mcp-fixture-server.mjs');
 const output = resolve(repo, '.proof', 'mcp-proof', 'console-spike');
 rmSync(output, { recursive: true, force: true });

@@ -59,7 +59,8 @@ and its siblings), `tools/symbol-artifact/` (the generator behind `pnpm symbols`
 tests in `notices.test.ts`), `tools/build-id/` (the writer behind `pnpm build-id` — `build-id.txt`, REQ-SHELL-140's
 build identifier, open `build-id.mjs`; tests in `build-id.test.ts`), and the standalone checks `pnpm lint` runs
 before ESLint. `pnpm package` (`apps/desktop/scripts/package.mjs`) runs the notices and build-id steps before freezing;
-what the artifact must then carry is checked by `scripts/lib/bundled-assets.mjs`, which `afterPack` loads.
+what the artifact must then carry is checked by `scripts/lib/about-assets.mjs`, which `afterPack` loads, and what it
+says when it ends is `scripts/lib/package-verdict.mjs`'s.
 
 ## Where a thing is not where you would guess
 

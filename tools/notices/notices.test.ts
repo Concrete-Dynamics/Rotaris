@@ -459,7 +459,7 @@ describe('REQ-STARTUP-143: validation fails naming the component or path, one co
     rmSync(join(root, PATHS.releaseInputs));
     expect(generate().problems).toEqual([`the release inputs ${PATHS.releaseInputs} cannot be read: ENOENT`]);
     // Windows PowerShell 5.1 writes a byte-order mark; the owner's edit is not refused for it.
-    put(PATHS.releaseInputs, `﻿${json({ lgplCorrespondingSourcesAddress: ADDRESS })}`);
+    put(PATHS.releaseInputs, `\uFEFF${json({ lgplCorrespondingSourcesAddress: ADDRESS })}`);
     expect(generate().problems).toEqual([]);
   });
 

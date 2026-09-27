@@ -34,7 +34,7 @@ const OBJECT_NAME = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
  * The variables by which an enclosing git process (a hook, `git rebase --exec`) points git at another repository or
  * index. Inherited, they would make `git -C <root>` answer for that repository instead of `root`'s.
  */
-const REDIRECTING = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_COMMON_DIR', 'GIT_NAMESPACE', 'GIT_PREFIX'];
+export const REDIRECTING = Object.freeze(['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES', 'GIT_COMMON_DIR', 'GIT_NAMESPACE', 'GIT_PREFIX']);
 
 /** @param {NodeJS.ProcessEnv} env */
 function gitEnvironment(env) {
@@ -80,7 +80,8 @@ export function identifyBuild({ root, git: executable = 'git', env = process.env
  * The step `pnpm build-id` and `pnpm package` run (REQ-SHELL-140; exit codes per REQ-STARTUP-149), answered as an exit
  * code and the lines to print rather than printed, so the tests drive it over a fixture repository. It writes the
  * identifier as one line; on a failure it removes any earlier file, so an identifier naming another commit can never be
- * carried into an artifact in place of the one that could not be read.
+ * carried into an artifact in place of the one that could not be read. A directory standing at the output path is not
+ * removed: it is named in a second `error:` line, and the About page reads no identifier from it.
  * @param {{ root: string, git?: string, env?: NodeJS.ProcessEnv }} options
  * @returns {{ code: 0 | 1, stdout: string[], stderr: string[] }}
  */

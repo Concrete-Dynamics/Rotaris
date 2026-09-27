@@ -75,7 +75,7 @@ if (!process.argv.includes('--skip-build')) {
   if (built.status !== 0) throw new Error(`desktop build exited ${built.status ?? built.signal ?? 'unknown'}`);
 }
 if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${electron}`);
-if (packaged && !existsSync(packagedExe)) throw new Error(`ROTARIS_CODE_INTEL_PACKAGED=1 but ${packagedExe} is absent (pnpm package with ROTARIS_PACKAGE_DIR_ONLY=1 ROTARIS_PACKAGE_SKIP_APP=1)`);
+if (packaged && !existsSync(packagedExe)) throw new Error(`ROTARIS_CODE_INTEL_PACKAGED=1 but ${packagedExe} is absent (pnpm package with ROTARIS_PACKAGE_DIR_ONLY=1 ROTARIS_PACKAGE_SKIP_APP=1, and ROTARIS_PACKAGE_WITHOUT_NOTICES=1 while pnpm notices refuses)`);
 
 const workspace = join(root, 'workspace');
 const noCode = join(root, 'workspace-nocode');

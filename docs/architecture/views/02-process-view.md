@@ -290,14 +290,13 @@ renderer names no path, and main answers `licenses.absent` when the build carrie
 `pnpm notices` produces the asset (below), but only once its validation passes, and `pnpm package` carries it into the
 artifact (`first-release-plan.md` §4.4). A package cannot be made without it, except a development package that
 `ROTARIS_PACKAGE_WITHOUT_NOTICES=1` asks for. That package, and any source-tree run nobody has written the file for,
-takes the absent branch. Main looks for it as `THIRD-PARTY-LICENSES.txt`, the name
-REQ-STARTUP-141 fixes and the generator writes; it looked for a lowercase name until that date, which Linux does not
-forgive. `shell.hello`'s reply gains three local facts beside the version
-for `REQ-SHELL-140`'s product card: `build` (the bundled build identifier, null when the asset is missing or
-unreadable; `pnpm build-id` writes it, below), `standalone` (`app.isPackaged`) and `thirdPartyLicenses` (whether a
-bundle exists). The About page issues
-no request of its own — `REQ-SHELL-139` requires zero network requests at render — and the same capture seam
-(`ROTARIS_CAPTURE_OPEN_EXTERNAL=record|fail`) covers both openers.
+takes the absent branch. Main looks for it as `THIRD-PARTY-LICENSES.txt`, the name REQ-STARTUP-141 fixes and the
+generator writes; it looked for a lowercase name until that date, which Linux does not forgive. `shell.hello`'s reply
+gains three local facts beside the version for `REQ-SHELL-140`'s product card: `build` (the bundled build identifier,
+null when the asset is missing or unreadable; `pnpm build-id` writes it, below), `standalone` (`app.isPackaged`) and
+`thirdPartyLicenses` (whether a bundle exists). The About page issues no request of its own — `REQ-SHELL-139` requires
+zero network requests at render — and the same capture seam (`ROTARIS_CAPTURE_OPEN_EXTERNAL=record|fail`) covers both
+openers.
 
 **The requirements board's contracts (Part AK; ADR-0041's first execution).** Renderer → main: `requirements {command}` — ONE envelope member carrying the `name`-discriminated `RequirementsCommand` (`board`, `detail {id}`, `refresh`, `reachable {id, from, to}`, `act {id, action, target?, payload?}`, `operation`, `cancel`, `queue.set`, `source.write`, `source.previewLocation`); main replaces `workspace` with the open root and stamps the `Actor` (REQ-CONFIG-198), a renderer never sends one. Main → workspace service: `requirements.command {workspaceRoot, command, actor}` → `requirements.result {value, changed?}`. Main → renderer: **channel 10 `requirements:changed {v, workspace, generation, affected | null, progress?}`**, broadcast to every window only after a reply carrying `changed` (persist before publish). The workspace service's case takes the one traceability engine `traceability.ts` holds for the process (since the merge of 2026-09-09; it shipped with `ENGINE_NOT_MERGED`).
 

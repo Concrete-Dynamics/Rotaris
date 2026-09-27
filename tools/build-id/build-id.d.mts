@@ -6,6 +6,8 @@
 export declare const BUILD_ID_FILE: string;
 /** The output, relative to the repository root. */
 export declare const PATHS: Readonly<{ output: string }>;
+/** The variables by which an enclosing git process points git at another repository; removed before git runs. */
+export declare const REDIRECTING: readonly string[];
 
 export interface BuildIdOptions {
   /** The repository root whose HEAD the build is made from. */
@@ -18,5 +20,8 @@ export interface BuildIdOptions {
 
 /** The commit's full object name, `-dirty` appended when the working tree differs from it; or why there is none. */
 export declare function identifyBuild(options: BuildIdOptions): { id: string; commit: string; dirty: boolean } | { problem: string };
-/** REQ-STARTUP-149: 0 written, 1 a handled error (every line `error: …`); on 1 no file is left behind. */
+/**
+ * REQ-STARTUP-149: 0 written, 1 a handled error (every line `error: …`). On 1 no earlier identifier file is left
+ * behind; a directory standing at the output path is left, and named in a second `error:` line.
+ */
 export declare function runBuildIdStep(options: BuildIdOptions): { code: 0 | 1; stdout: string[]; stderr: string[] };

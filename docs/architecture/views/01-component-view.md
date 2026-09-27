@@ -246,7 +246,7 @@ The product meets the tool at one literal: `main/about.ts`'s `THIRD_PARTY_LICENS
 `NOTICES_FILE`, and `about.test.ts` holds them equal. **Edges unchanged**: `tools/**` is outside the boundary rule, and
 the one test that crosses is a test.
 
-### The build-identifier writer and the bundled assets (2026-09-27; `first-release-plan.md` §4.4, ADR-0054)
+### The build-identifier writer and the About page's two files (2026-09-27; `first-release-plan.md` §4.4, ADR-0054)
 
 `tools/build-id/` is the notices generator's sibling: a **build-time tool** with no `package.json`, importing nothing
 from `packages/` or `apps/`. `pnpm build-id` (`write.mjs`, a thin CLI over `build-id.mjs`, typed by `build-id.d.mts`)
@@ -256,11 +256,14 @@ asks the local git for HEAD's commit and whether the tree differs from it, and w
 
 `apps/desktop/scripts/package.mjs` runs both tools before freezing. `electron-builder.yml`'s `extraResources` carries
 both files to the root of the artifact's resources, and leaves the tool server's dist-info licence out
-(REQ-STARTUP-015). `scripts/lib/bundled-assets.mjs` holds the rules `package.mjs` and `build-hooks.cjs`'s `afterPack`
-share: whether a refused notices step may be passed over, and what the artifact must carry.
-`scripts/lib/staged-resources.mjs` is `settings-proof`'s, for staging the two files and giving them back. **Edges
-unchanged**: `apps/desktop/scripts/**` and `tools/**` are outside the boundary rule, and no product code imports
-either.
+(REQ-STARTUP-015). `scripts/lib/about-assets.mjs` holds the rules `package.mjs` and `build-hooks.cjs`'s `afterPack`
+share: whether a refused notices step may be passed over, and what the artifact must carry. It takes the two names,
+and the generator's `normalize`, from the two tools, and `afterPack` asks `build-id.mjs`'s `identifyBuild` again for
+the tree being packed. It is not REQ-STARTUP-143's "bundled asset" (a font family or the icon set, `bundled-assets.json`
+above). `scripts/lib/package-verdict.mjs` holds the lines `package.mjs` closes on, each printed only when the steps
+that ran make it true. `scripts/lib/staged-resources.mjs` is `settings-proof`'s, for staging the two files and giving
+them back. **Edges unchanged**: `apps/desktop/scripts/**` and `tools/**` are outside the boundary rule, the scripts
+reach the tools and never the reverse, and no product code imports either.
 
 ### `ui/design-system` (2026-09-12)
 

@@ -2,12 +2,12 @@
  * The Settings proof (Part AG): the four categories that were the placeholder — Display (REQ-CONFIG-403,
  * REQ-CONFIG-472), Instructions and Tools (REQ-CONFIG-276/277, REQ-TOOLS-165) and About (REQ-CONFIG-398,
  * REQ-SHELL-138..143) — plus the save bar every category now shows (REQ-CONFIG-270) and the corrected
- * `display:` keys of REQ-CONFIG-172. Scripted client, scratch profile, seven launches:
+ * `display:` keys of REQ-CONFIG-172. Scripted client, scratch profile, nine launches — 1 is three of them:
  *
- *   1. no-workspace — Electron started with no workspace: About carries the version, an em dash for Build and
- *                     REQ-SHELL-142's caption; the Tools inventory is fully populated (REQ-CONFIG-277 populates
- *                     it unconditionally); Instructions is empty and names the file to create.
- *   1′. about-present — the same About page with both bundled assets present (first-release-plan.md §4.4): the Build
+ *   1. no-workspace, tools, instructions-empty — Electron started with no workspace: About carries the version, an em
+ *                     dash for Build and REQ-SHELL-142's caption; the Tools inventory is fully populated (REQ-CONFIG-277
+ *                     populates it unconditionally); Instructions is empty and names the file to create.
+ *   1′. about-present — the same About page with both of its files present (first-release-plan.md §4.4): the Build
  *                     row carries the identifier `pnpm build-id` wrote for this tree, no caption stands under the
  *                     licensing control, and the control opens the notices file where about.ts found it.
  *   2. instructions — the same workspace with `AGENTS.md` and `AGENTS.override.md` on disk: two rows, in the
@@ -28,12 +28,12 @@
  * The legal links and the licence bundle are exercised through the capture seam's scripted opener
  * (`ROTARIS_CAPTURE_OPEN_EXTERNAL`), which reports success or the platform refusal without launching a browser.
  *
- * **The two bundled assets are staged, and given back.** Launched as `electron out/main/index.js`, the app reads them from
- * `apps/desktop/resources/` (about.ts's source-tree fallback), where `pnpm build-id` and `pnpm notices` also write the real
- * ones. Before launch 1 any real file is moved into `.proof/settings-proof.assets/` so the absent branch is measured
+ * **The About page's two files are staged, and given back.** Launched as `electron out/main/index.js`, the app reads them
+ * from `apps/desktop/resources/` (about.ts's source-tree fallback), where `pnpm build-id` and `pnpm notices` also write the
+ * real ones. Before launch 1 any real file is moved into `.proof/settings-proof.assets/` so the absent branch is measured
  * whatever an earlier build left; launch 1′ writes the build identifier with the real writer and a notices fixture; and
- * the directory is restored as found the moment 1′ ends, or by the next run if this one is killed
- * (`lib/staged-resources.mjs`).
+ * the directory is restored as found the moment 1′ ends, or by the next run if this one is killed. A real file written
+ * between a killed run and the next is kept, not taken for the proof's (`lib/staged-resources.mjs`).
  *
  * Evidence under `.proof/settings-proof/`: one PNG and one log per launch, `results.json`. `--skip-build` skips the build.
  */
@@ -42,7 +42,8 @@ import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { cleanEnvironment, proofIsolationEnv } from './lib/harness.mjs';
-import { put, restore, stage } from './lib/staged-resources.mjs';
+import { ABOUT_ASSETS } from './lib/about-assets.mjs';
+import { produce, put, restore, stage } from './lib/staged-resources.mjs';
 
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
@@ -54,8 +55,7 @@ if (relative(repo, output).startsWith(`..${sep}`) || relative(repo, output) === 
 // because `output` is removed below and a stash an interrupted run left must survive until it is given back.
 const resources = join(app, 'resources');
 const stash = resolve(repo, '.proof', 'settings-proof.assets');
-const BUILD_ID = 'build-id.txt';
-const NOTICES = 'THIRD-PARTY-LICENSES.txt';
+const { buildId: BUILD_ID, notices: NOTICES } = ABOUT_ASSETS;
 const recovered = restore(resources, stash);
 if (recovered.length > 0) console.log(`settings proof: an earlier run was interrupted; ${recovered.join('; ')}`);
 rmSync(output, { recursive: true, force: true });
@@ -138,12 +138,11 @@ const results = {};
 const openCategory = (label, atMs = 900) => ({ ROTARIS_CAPTURE_VIEW: '7', ROTARIS_CAPTURE_VIEW_MS: String(atMs), ROTARIS_CAPTURE_SETTINGS: label });
 
 // ── 1. No workspace: About, Tools and the empty Instructions ────────────────────────────────────────────────
-// The About page's two assets are the proof's from here until launch 1′ ends: whatever a build left is moved aside, so
-// this launch measures the absent branch of each. A signal gives them back before the process goes.
+// The About page's two files are the proof's from here until launch 1′ ends: whatever a build left is moved aside, so
+// this launch measures the absent branch of each. `finally` gives them back when a launch fails or its Electron dies.
+// A signal to this process is not caught: Node would run a handler only once `spawnSync` returned, so a handler would
+// hold a SIGTERM until the launch ended and then swallow it. The process goes, and the next run's `restore` repairs it.
 const giveBack = () => { for (const line of restore(resources, stash)) console.log(`settings proof: ${line}`); };
-const onSignal = (signal) => { giveBack(); process.exit(signal === 'SIGINT' ? 130 : 143); };
-process.once('SIGINT', onSignal);
-process.once('SIGTERM', onSignal);
 const digest = (name) => (existsSync(join(resources, name)) ? createHash('sha256').update(readFileSync(join(resources, name))).digest('hex') : null);
 const found = { [BUILD_ID]: digest(BUILD_ID), [NOTICES]: digest(NOTICES) };
 stage(resources, stash, [BUILD_ID, NOTICES]);
@@ -151,33 +150,31 @@ let noWorkspace;
 let present;
 let written;
 try {
-noWorkspace = launch('no-workspace', null, local, preferences, {
-  ...openCategory('About'),
-  ROTARIS_CAPTURE_OPEN_EXTERNAL: 'record',
-  // Click the first legal link and the licence bundle: one reports success, the other the absent bundle.
-  ROTARIS_CAPTURE_CLICKS: '[data-testid="legal-link"]>>Privacy Policy@2200;;[data-testid="licenses-open"]@2600',
-  ROTARIS_CAPTURE_AFTER_MS: '3600',
-});
+  noWorkspace = launch('no-workspace', null, local, preferences, {
+    ...openCategory('About'),
+    ROTARIS_CAPTURE_OPEN_EXTERNAL: 'record',
+    // Click the first legal link and the licence bundle: one reports success, the other the absent bundle.
+    ROTARIS_CAPTURE_CLICKS: '[data-testid="legal-link"]>>Privacy Policy@2200;;[data-testid="licenses-open"]@2600',
+    ROTARIS_CAPTURE_AFTER_MS: '3600',
+  });
 
-// ── 1′. The same About page with both assets present (first-release-plan.md §4.4) ───────────────────────────────
-// The build identifier is the real writer's, over this tree, so the row shows what a package of this tree would carry.
-// The notices file is a fixture: `pnpm notices` refuses until O-3, O-11 and OQ-68 are answered, and the About page asks
-// only that the file exist and open (REQ-SHELL-142).
-const writer = spawnSync(process.execPath, [join(repo, 'tools', 'build-id', 'write.mjs')], { cwd: repo, encoding: 'utf8' });
-writeFileSync(join(output, 'build-id.log'), `${writer.stdout ?? ''}\n${writer.stderr ?? ''}`);
-if (writer.status !== 0) throw new Error(`pnpm build-id exited ${writer.status ?? writer.signal}: ${writer.stderr}`);
-written = readFileSync(join(resources, BUILD_ID), 'utf8');
-put(resources, stash, NOTICES, 'THIRD-PARTY-LICENSES.txt — a fixture written by settings-proof (first-release-plan.md §4.4), removed when the launch ends.\n');
-present = launch('about-present', null, local, preferences, {
-  ...openCategory('About'),
-  ROTARIS_CAPTURE_OPEN_EXTERNAL: 'record',
-  ROTARIS_CAPTURE_CLICKS: '[data-testid="licenses-open"]@2200',
-  ROTARIS_CAPTURE_AFTER_MS: '3200',
-});
+  // ── 1′. The same About page with both files present (first-release-plan.md §4.4) ──────────────────────────────
+  // The build identifier is the real writer's, over this tree, so the row shows what a package of this tree would carry.
+  // The notices file is a fixture: `pnpm notices` refuses until O-3, O-11 and OQ-68 are answered, and the About page asks
+  // only that the file exist and open (REQ-SHELL-142).
+  const writer = produce(resources, stash, BUILD_ID, () => spawnSync(process.execPath, [join(repo, 'tools', 'build-id', 'write.mjs')], { cwd: repo, encoding: 'utf8' }));
+  writeFileSync(join(output, 'build-id.log'), `${writer.stdout ?? ''}\n${writer.stderr ?? ''}`);
+  if (writer.status !== 0) throw new Error(`pnpm build-id exited ${writer.status ?? writer.signal}: ${writer.stderr}`);
+  written = readFileSync(join(resources, BUILD_ID), 'utf8');
+  put(resources, stash, NOTICES, 'THIRD-PARTY-LICENSES.txt — a fixture written by settings-proof (first-release-plan.md §4.4), removed when the launch ends.\n');
+  present = launch('about-present', null, local, preferences, {
+    ...openCategory('About'),
+    ROTARIS_CAPTURE_OPEN_EXTERNAL: 'record',
+    ROTARIS_CAPTURE_CLICKS: '[data-testid="licenses-open"]@2200',
+    ROTARIS_CAPTURE_AFTER_MS: '3200',
+  });
 } finally {
   giveBack();
-  process.removeListener('SIGINT', onSignal);
-  process.removeListener('SIGTERM', onSignal);
 }
 const aboutRows = Object.fromEntries(rows(noWorkspace.probes, '[data-testid="about-row"]').map((r) => [r.data['data-name'], r.data['data-value']]));
 if (!/^v\d/.test(aboutRows.Version ?? '')) throw new Error(`the Version row did not carry a version: ${JSON.stringify(aboutRows)}`);

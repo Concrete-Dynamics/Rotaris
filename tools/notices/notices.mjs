@@ -79,8 +79,11 @@ const NO_IDENTIFIER = /^(unknown|none|)$|^see licen[cs]e in /i;
 
 // ---- small readers ---------------------------------------------------------------------------------------------
 
-/** Line endings and a byte-order mark are the only things a licence text loses on its way into the file. */
-function normalize(text) {
+/**
+ * Line endings and a byte-order mark are the only things a licence text loses on its way into the file. Exported for
+ * `afterPack`'s count of the tool server's licence text (REQ-STARTUP-015), which must read the text by this same rule.
+ */
+export function normalize(text) {
   return text.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').replace(/^(?:[ \t]*\n)+/, '').replace(/\s+$/, '');
 }
 

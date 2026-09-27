@@ -64,10 +64,11 @@ const results = {
 /**
  * Part T2 — `--packaged` adds the half of REQ-TOOLS-126 no execution of ADR-0021 had reached: the key set to `false`
  * in the PACKAGED application. It is opt-in because it wants `apps/desktop/release/win-unpacked/Rotaris.exe`, which
- * `ROTARIS_PACKAGE_DIR_ONLY=1 ROTARIS_PACKAGE_SKIP_APP=1 pnpm package` builds and which takes minutes; without the
- * flag the section records that it was not run, and with the flag but no build it REFUSES and says where it stopped.
+ * `ROTARIS_PACKAGE_DIR_ONLY=1 ROTARIS_PACKAGE_SKIP_APP=1 pnpm package` builds (with `ROTARIS_PACKAGE_WITHOUT_NOTICES=1`
+ * while `pnpm notices` refuses) and which takes minutes; without the flag the section records that it was not run, and
+ * with the flag but no build it REFUSES and says where it stopped.
  */
-let packaged = { run: false, note: 'pass --packaged (after `ROTARIS_PACKAGE_DIR_ONLY=1 ROTARIS_PACKAGE_SKIP_APP=1 pnpm package`) to measure the packaged application' };
+let packaged = { run: false, note: 'pass --packaged (after `ROTARIS_PACKAGE_DIR_ONLY=1 ROTARIS_PACKAGE_SKIP_APP=1 pnpm package`, with `ROTARIS_PACKAGE_WITHOUT_NOTICES=1` while `pnpm notices` refuses) to measure the packaged application' };
 if (process.argv.includes('--packaged')) {
   const { packagedTerminalStreaming } = await import('./terminal-proof/packaged.mjs');
   packaged = { run: true, ...packagedTerminalStreaming({ repo }) };

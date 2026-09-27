@@ -30,6 +30,7 @@ const { spawnSync } = require('node:child_process');
 const { pathToFileURL } = require('node:url');
 
 const APP_DIR = path.resolve(__dirname, '..');
+const REPO_DIR = path.resolve(APP_DIR, '..', '..');
 const RELEASE_DIR = path.join(APP_DIR, 'release');
 const MARKER = path.join(RELEASE_DIR, 'rebuild-marker.json');
 const REPORT = path.join(RELEASE_DIR, 'load-proof.afterpack.json');
@@ -253,20 +254,23 @@ function checkRuntime(appOutDir) {
 /**
  * first-release-plan.md §4.4 — the "assets" rule: `build-id.txt` (REQ-SHELL-140) and `THIRD-PARTY-LICENSES.txt`
  * (REQ-STARTUP-141) at the root of the artifact's resources, each byte-identical to the file its step wrote before
- * freezing; the notices file absent only when ROTARIS_PACKAGE_WITHOUT_NOTICES=1 asked for a development package; and the
- * tool server's licence text once, in the notices file, never under its dist-info as well (REQ-STARTUP-015). The rules are
- * `scripts/lib/bundled-assets.mjs`'s, which the tests drive through electron-builder's own copier and this yml.
+ * freezing, the identifier naming the tree being packed; the notices file absent only when
+ * ROTARIS_PACKAGE_WITHOUT_NOTICES=1 asked for a development package, and never on a build for a tag; and the tool
+ * server's licence text once, in the notices file, never under its dist-info as well (REQ-STARTUP-015). The rules are
+ * `scripts/lib/about-assets.mjs`'s, which the tests drive through electron-builder's own copier and this yml.
  */
 async function checkAssets(appOutDir) {
-  const { ASSETS, bundledAssetProblems } = await import(pathToFileURL(path.join(__dirname, 'lib', 'bundled-assets.mjs')).href);
+  const { ABOUT_ASSETS, aboutAssetProblems } = await import(pathToFileURL(path.join(__dirname, 'lib', 'about-assets.mjs')).href);
+  const { identifyBuild } = await import(pathToFileURL(path.join(REPO_DIR, 'tools', 'build-id', 'build-id.mjs')).href);
   const resourcesDir = path.join(appOutDir, 'resources');
   const marker = JSON.parse(readFileSync(path.join(APP_DIR, 'resources', 'code-intelligence', 'bundle.json'), 'utf8'));
   const toolServerLicense = typeof marker.licenseFile === 'string' && marker.licenseFile !== '' ? marker.licenseFile : null;
-  const problems = bundledAssetProblems({ resourcesDir, sourceDir: path.join(APP_DIR, 'resources'), env: process.env, toolServerLicense });
+  const build = identifyBuild({ root: REPO_DIR });
+  const problems = aboutAssetProblems({ resourcesDir, sourceDir: path.join(APP_DIR, 'resources'), env: process.env, toolServerLicense, build });
   if (problems.length > 0) throw new Error(`assets: ${problems.join('; ')}`);
   return {
-    buildId: readFileSync(path.join(resourcesDir, ASSETS.buildId), 'utf8').trim(),
-    notices: existsSync(path.join(resourcesDir, ASSETS.notices)) ? 'carried' : 'absent',
+    buildId: readFileSync(path.join(resourcesDir, ABOUT_ASSETS.buildId), 'utf8').trim(),
+    notices: existsSync(path.join(resourcesDir, ABOUT_ASSETS.notices)) ? 'carried' : 'absent',
     toolServerLicense,
   };
 }

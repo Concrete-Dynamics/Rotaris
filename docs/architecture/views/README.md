@@ -51,7 +51,11 @@ freezing, and `electron-builder.yml` carries both files to the root of `process.
 server's dist-info licence out of the artifact (REQ-STARTUP-015). The **component view** gains a section for the writer
 and the two script modules, and the **process view** gains the identifier's row in "Files and directories on disk", an
 updated notices row and a corrected About paragraph. No package, edge, process, channel, command or message kind
-changed. `about.ts` reads what it read before.
+changed. `about.ts` reads what it read before. The gate review later that day renamed `lib/bundled-assets.mjs` to
+`lib/about-assets.mjs`, because REQ-STARTUP-143's "bundled asset" is a font family or the icon set. It moved
+`package.mjs`'s closing lines into a third script module, `lib/package-verdict.mjs`. The **component view**'s section
+says both. The scripts now import two constants and `normalize` from the tools, which is not an edge the boundary rule
+governs. Nothing else in the views moved.
 
 **The notices generator, and the About page's lookup (first-release-plan.md §4.3, built 2026-09-27).** `tools/notices/`
 is a build-time tool, not a package: `pnpm notices` computes the shipped closure offline and writes

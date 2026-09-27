@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BUILD_ID_FILE, identifyBuild, PATHS, runBuildIdStep } from './build-id.mjs';
+import { BUILD_ID_FILE, identifyBuild, PATHS, REDIRECTING, runBuildIdStep } from './build-id.mjs';
 
 /**
  * The build-identifier writer (REQ-SHELL-140; first-release-plan.md §4.4). Every case but the last block runs it over a
@@ -20,7 +20,7 @@ const IDENTITY = ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@invalid',
  * The fixture's git runs without the variables an enclosing git process sets (a hook running `pnpm check`), which would
  * otherwise point `init` and `commit` at the repository under test instead of the fixture.
  */
-const FIXTURE_ENV = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^GIT_(DIR|WORK_TREE|INDEX_FILE|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|COMMON_DIR|NAMESPACE|PREFIX)$/.test(k)));
+const FIXTURE_ENV = Object.fromEntries(Object.entries(process.env).filter(([k]) => !REDIRECTING.includes(k)));
 
 function run(root: string, ...args: string[]): string {
   const r = spawnSync('git', ['-C', root, ...IDENTITY, ...args], { encoding: 'utf8', env: FIXTURE_ENV });
@@ -131,12 +131,12 @@ describe('REQ-STARTUP-149: exit 1 with one `error:` line, and no file left behin
     expect(existsSync(join(root, PATHS.output))).toBe(false);
   });
 
-  it('a directory standing where the file goes is a handled error', () => {
+  it('a directory standing where the file goes is a handled error; it is left, and named a second time', () => {
     mkdirSync(join(root, PATHS.output), { recursive: true });
     const r = runBuildIdStep({ root });
     expect(r.code).toBe(1);
-    expect(r.stderr[0]).toBe(`error: ${PATHS.output} cannot be written: EISDIR`);
-    expect(r.stderr.every((l) => l.startsWith('error: '))).toBe(true);
+    expect(r.stderr).toEqual([`error: ${PATHS.output} cannot be written: EISDIR`, `error: ${PATHS.output} cannot be removed: ERR_FS_EISDIR`]);
+    expect(existsSync(join(root, PATHS.output))).toBe(true);
   });
 
   it('refuses an argument as a usage error (2), writing nothing', () => {

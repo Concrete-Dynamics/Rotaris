@@ -7,6 +7,27 @@ status: resolved
 
 # Resolution Record — Domain 03, Conversation, Composer, and Transcript
 
+> ## Amendment, 2026-09-27 — invoking a skill loads it for the session, and a taken name is suffixed (ESC-37, ESC-39)
+>
+> - **`REQ-CHAT-034`, delivery (ESC-37).** Invoking a skill command loads the skill for the current session as
+>   `REQ-WORKSPACE-073` fixes, delivered as `REQ-WORKSPACE-062`'s force-loaded block. The earlier text attached
+>   it to the next prompt alone. The notice text is unchanged.
+> - **`REQ-CHAT-162`, the listing and the payload (ESC-37).** The listing drops its "whether it is already in
+>   context" column, and "attaching a skill MUST mark it as in context" is replaced: what an agent receives is
+>   read from the load mode, as `REQ-WORKSPACE-067` fixes. The three identifying facts and the verbatim body
+>   still govern, now as the content of the force-loaded block.
+> - **`REQ-CHAT-034`, a taken name (ESC-39).** A skill whose command name is taken is offered under
+>   `REQ-SHELL-056`'s first free `-2`, `-3`, … name, with its description naming the skill. The earlier text
+>   skipped its registration. The command takes `REQ-SHELL-056`'s catalogue normal form; the skill's identity
+>   stays `REQ-WORKSPACE-054`'s normalized name. The two forms are two on purpose: one names a typed command,
+>   the other names the skill in the policy maps, the catalog block and the Skills table.
+>
+> **Why these are amendments.** In each case two live requirements stated different mechanisms for one
+> gesture. Domain 13 owns portable skills, and `REQ-WORKSPACE-067` and `REQ-WORKSPACE-072` state their
+> readings with reasons; this domain's texts were the ones left behind when those were amended. The owner
+> ruled ESC-37 and ESC-39 as they recommended ([R-052](../../product/requests.md#r-052));
+> `owner-decisions.md` holds the rulings.
+
 
 > ## Superseded by the storage rulings (2026-09-01)
 >

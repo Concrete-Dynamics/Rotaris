@@ -20,11 +20,11 @@ record already decides, and every ruling it needs is named as the owner's rather
 |---|---|---|
 | Skills — discovery, the catalog, load modes, the Settings tab, skill commands, `/skill <path>` | built 2026-09-15 (ADR-0063; `pnpm skills-proof`) | §2 |
 | Skills — `/skills`, REQ-CHAT-162's listing | **not built** (`SKILLS_LISTING_NOT_BUILT`, `packages/ui/src/slash/skills.ts`) | §2 |
-| Skills — ESC-37, ESC-38, ESC-39 | **unruled**; the build proceeds under one reading of each | §2 |
+| Skills — ESC-37, ESC-38, ESC-39 | **ruled 2026-09-27** as recommended ([R-052](../product/requests.md#r-052)); amended | §2 |
 | Workspace-context injection, REQ-WORKSPACE-041..050 | built 2026-09-22 under `PD-WORKSPACE-002` | §3 |
-| Injection — REQ-WORKSPACE-049's latency bound, a built-app proof, OQ-64 | **owed** | §3 |
+| Injection — REQ-WORKSPACE-049's latency bound, a built-app proof | **owed**; OQ-64 **ruled 2026-09-27** | §3 |
 | The Windows release pipeline, REQ-STARTUP-027..038, 141..143, 156, 158, 167, 168 | the installer built once (ADR-0054, 2026-09-04); nothing else | §4 |
-| The updater, REQ-STARTUP-107..124 | **not built** — no module in `apps/desktop/src/main/` | §4.6 |
+| The updater, REQ-STARTUP-107..124 | **not built** — no module in `apps/desktop/src/main/`; **in the first release**, ruled 2026-09-27 | §4.6 |
 
 **Deferred by "thats it".** Each item stays owed where the record already carries it:
 
@@ -51,7 +51,9 @@ item this plan would gain.
 - one composer command per user-invocable skill, using REQ-SHELL-056's catalogue normal form and `-2` suffixing;
 - `/skill <path>`.
 
-**2.1 The three rulings, owed by the owner first.** Each changes what §2.2 builds, so they come before it.
+**2.1 The three rulings.** *Ruled 2026-09-27 ([R-052](../product/requests.md#r-052)), each as recommended below.
+`REQ-CHAT-034`, `REQ-CHAT-162` and `REQ-CONFIG-343` are amended, and `owner-decisions.md` holds the rulings.*
+Each changed what §2.2 builds, so they came before it.
 
 - **ESC-37: what invoking a skill delivers.** Either a force-loaded block for the session (domain 13, which is
   what is built) or a payload attached to one prompt (domain 03). This ruling decides whether the `/skills`
@@ -70,7 +72,7 @@ that the release notes do not have to find them later.
 
 *What it must do.* The listing is one saved system row in the transcript: normalized name, scope, triggers,
 description clipped to 120 characters with an ellipsis, the `SKILL.md` path, and a count. It carries the
-in-context flag only if ESC-37 rules for domain 03.
+no in-context flag: ESC-37 ruled for domain 13, and the amended REQ-CHAT-162 drops that column.
 
 *Why it is not built.* A saved row is written through the session writer. The session writer belongs to the
 run host, and no renderer command reaches it today.
@@ -101,8 +103,8 @@ owner asks (AGENTS.md).
 These are unit-tested only.
 
 **3.1 OQ-64.** The question: when an instruction override is switched off, does it still suppress its base?
-The build computes suppression over the enabled set. This is the owner's to rule, and it comes before §3.3
-because the proof asserts one answer or the other.
+The build computes suppression over the enabled set. *Ruled 2026-09-27 as built: switching an override off
+returns its base to the merge.* §3.3's proof asserts that answer.
 
 **3.2 REQ-WORKSPACE-049's bound.** The requirement: discovering and merging the context files completes within
 200 ms for a workspace holding up to 20 context files totalling 1 MiB on local storage, and never delays first
@@ -196,7 +198,8 @@ back into ADR-0054. Dropping the portable would need a further directive. This p
 **4.6 The updater.** The updater is the one part of this plan the owner did not name. A release that carries no
 updater can never update itself: each of its users would have to download every later release by hand. The key
 record of REQ-STARTUP-168 (b) starts with whichever build first carries a key. *Recommended: build it into the
-first release*, following REQ-STARTUP-122's strict sequence:
+first release*, following REQ-STARTUP-122's strict sequence. *Ruled 2026-09-27 as recommended (O-10,
+[R-052](../product/requests.md#r-052)).* The sequence:
 
 1. fetch the manifest and the signature;
 2. verify the signature against the compiled-in key set;
@@ -259,20 +262,24 @@ cannot be the gate.
 
 | # | What | Needed by |
 |---|---|---|
-| O-1 | Rule ESC-37, ESC-38, ESC-39 and OQ-64. The recommendations are in §2.1 and §3.1 | §2.2, §3.3 |
+| O-1 | ~~Rule ESC-37, ESC-38, ESC-39 and OQ-64~~ **ruled 2026-09-27** as recommended (R-052) | §2.2, §3.3 |
 | O-2 | Generate the manifest signing key pair and store the private half as a repository secret. The public half is committed | §4.7 |
 | O-3 | Give the literal contact address for the LGPL source request (REQ-STARTUP-142). It must be reachable without an account | §4.3 |
 | O-4 | Supply an icon, with the `.ico` sizes `electron-builder` asks for | §4.9 |
-| O-5 | Choose where releases are published. REQ-STARTUP-038 says "the product repository"; this one is `theUpsider/Rotaris-crw` | §4.2 |
-| O-6 | Provide the gate machine of §5 | §5 |
+| O-5 | ~~Choose where releases are published~~ **ruled 2026-09-27** (R-053): GitHub releases of `theUpsider/Rotaris-crw`, the product repository REQ-STARTUP-038 names | §4.2 |
+| O-6 | Provide the gate machine of §5. **Form ruled 2026-09-27** (R-053): a snapshot-restored Windows x64 virtual machine, restored between releases. The owner still provides it | §5 |
 | O-7 | IC-4 half 2: rename the machine and reboot (`ROTARIS_IC4_PHASE=prepare`, then `verify`) | the restore's sign-off |
 | O-8 | The power-loss test's fault half: a forced power-off during a save (`spikes/power-loss.md` §4) | the store's sign-off |
-| O-9 | Approve the §2.3 and §3.4 live runs | §2.3, §3.4 |
-| O-10 | Decide §4.6: the updater in the first release, or the key compiled in alone | §4.6 |
+| O-9 | ~~Approve the §2.3 and §3.4 live runs~~ **approved 2026-09-27** (R-053). The agent still states the scenario and its spending bound immediately before each run (AGENTS.md) | §2.3, §3.4 |
+| O-10 | ~~Decide §4.6~~ **ruled 2026-09-27**: the updater ships in the first release (R-052) | §4.6 |
+
+O-2, O-3, O-4, O-7 and O-8 carry no recommendation to take: each is a value or an act only the owner can
+supply, and each stays owed (R-053).
 
 ## 7. Order of work
 
-1. **Rulings.** O-1 and O-10, then one amendment round for whichever ESC readings stand.
+1. ~~**Rulings.** O-1 and O-10, then one amendment round for whichever ESC readings stand.~~ **Done 2026-09-27**
+   ([R-052](../product/requests.md#r-052)): every ruling as recommended, and the amendment round landed with it.
 2. **In parallel, after step 1.** Each item is its own worktree with its own first-execution row:
    - §2.2 `/skills`;
    - §3.2 the latency measurement plus §3.3 the injection proof;

@@ -176,9 +176,9 @@ OQ; this record states the reading the build proceeds under so the two cannot dr
 
 | # | Logged | Reading built |
 | --- | --- | --- |
-| A | ESC-37 | Domain 13 governs the delivery shape: a force-loaded always-active block, carrying REQ-CHAT-162's three identifying facts |
-| B | ESC-38 | Seven columns: Skill, Source, Path, Trigger, Invocation, Load, Description |
-| C | ESC-39 | REQ-SHELL-056's `-2`, `-3` suffixing; the holder keeps the name |
+| A | ESC-37 | Domain 13 governs the delivery shape: a force-loaded always-active block, carrying REQ-CHAT-162's three identifying facts. **Ruled as built 2026-09-27** (R-052) |
+| B | ESC-38 | Seven columns: Skill, Source, Path, Trigger, Invocation, Load, Description. **Ruled as built 2026-09-27** (R-052) |
+| C | ESC-39 | REQ-SHELL-056's `-2`, `-3` suffixing; the holder keeps the name. **Ruled as built 2026-09-27** (R-052) |
 | D | OQ-58 | Session state keyed by session id, with one `pending:<root>` bucket the next session adopts |
 | E | OQ-59 | A file chooser on win32 and linux, both properties on darwin; the directory form stays reachable through `/skill <path>` |
 

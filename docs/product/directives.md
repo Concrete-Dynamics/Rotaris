@@ -1372,7 +1372,10 @@ built in the same round as the switches. It had to be: that mechanism was an emp
 context-unit list when this directive was drafted, so switches shipped without it would have been
 switches over nothing. Within the enabled set an override suppresses its own base, which is where
 REQ-WORKSPACE-042 meets a third state it has no word for — a file that exists and is switched off —
-resolved over the enabled set rather than over presence and logged as **OQ-64**.
+resolved over the enabled set rather than over presence and logged as **OQ-64**. The owner ruled OQ-64
+on 2026-09-27 ([R-052](requests.md#r-052)) for that reading: an override suppresses its base only while the
+override is itself switched on, so switching an override off returns its base to the merge, and the
+inventory shows no *suppressed* row state.
 
 **Why, and what it costs.** The owner keeps standing instructions in more than one place — a
 global `AGENTS.md`, a project's `CLAUDE.md` in the Claude Code convention — and wants individual

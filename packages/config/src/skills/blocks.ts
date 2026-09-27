@@ -51,7 +51,7 @@ export function skillCatalogBlock(resolved: readonly ResolvedSkill[]): string | 
  *
  * It also carries REQ-CHAT-162's three identifying facts — that this is the body of a skill document,
  * which skill, and the absolute path it was read from — which is how one block satisfies both domains
- * (ESC-37: what a ruling may still move is the block's LIFETIME, not what it says).
+ * (ESC-37, ruled 2026-09-27: the block lives for the session, and REQ-CHAT-162 now describes this block).
  */
 export function skillActivationStatement(name: string, path: string): string {
   return [

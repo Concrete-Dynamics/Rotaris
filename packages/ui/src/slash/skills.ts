@@ -17,10 +17,10 @@ import type { SlashCommand, SlashContext, SlashOutcome, SlashRegistry } from './
  * trimmed. A declared name reducing to the empty string yields no entry at all.
  *
  * It is NOT REQ-WORKSPACE-054's skill normal form, which replaces every non-alphanumeric run with a hyphen
- * rather than deleting the characters: `c++ build` is the skill `c-build` and the command `/cbuild`. The two
- * disagree, that disagreement is **ESC-39**, and until it is ruled the skill's own form stays its identity
- * everywhere (the policy maps, the catalog block, the table) while this form names the typed command alone —
- * which is what REQ-SHELL-056 says it contributes.
+ * rather than deleting the characters: `c++/build` is the skill `c-build` and the command `/cbuild`. ESC-39,
+ * ruled 2026-09-27, keeps the two forms deliberately apart: the skill's own form is its identity everywhere
+ * (the policy maps, the catalog block, the table) while this form names the typed command alone — which is
+ * what REQ-SHELL-056 says it contributes and what the amended REQ-CHAT-034 cites.
  */
 export function catalogueNormalForm(declared: string): string {
   return declared.toLowerCase().replace(/[\s_]+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/^-+|-+$/g, '');
@@ -36,9 +36,8 @@ export function triggerCommandName(keyword: string): string {
  * name is taken is offered under the first free `-2`, `-3`, … so that a skill is never silently unreachable
  * and a built-in never changes meaning because a skill was installed.
  *
- * REQ-CHAT-034 states the opposite — the registration "is skipped" — and that is **ESC-39**. Suffixing is the
- * reading built: under it the command holding the name does keep it, which is REQ-CHAT-034's own first
- * clause, whereas under skipping REQ-SHELL-056's "never silently unreachable" is simply false.
+ * REQ-CHAT-034 once skipped the registration instead. ESC-39 ruled for suffixing on 2026-09-27 and
+ * REQ-CHAT-034 now cites this rule: the command holding the name keeps it, and no skill is unreachable.
  */
 export function freeName(name: string, taken: (candidate: string) => boolean): string {
   if (!taken(name)) return name;

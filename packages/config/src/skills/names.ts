@@ -6,10 +6,10 @@
  *
  * **This is not the catalogue's normal form, deliberately.** `REQ-SHELL-056` fixes a different one for a
  * typed command — whitespace and underscore runs become `-`, every *other* character outside
- * `[a-z0-9-]` is REMOVED rather than replaced — so `c++ build` is the skill `c-build` and the command
- * `/cbuild`. The two disagree and the disagreement is logged as ESC-39; until it is ruled, this form is
- * the skill's identity everywhere (the policy maps, the catalog block, the table, the shadowing rule)
- * and `ui/src/slash/skills.ts` applies the other form to the command alone, which is exactly what
+ * `[a-z0-9-]` is REMOVED rather than replaced — so `c++/build` is the skill `c-build` and the command
+ * `/cbuild`. ESC-39, ruled 2026-09-27, keeps the two forms deliberately apart: this form is the skill's
+ * identity everywhere (the policy maps, the catalog block, the table, the shadowing rule) and
+ * `ui/src/slash/skills.ts` applies the other form to the command alone, which is exactly what
  * REQ-SHELL-056 says it contributes.
  */
 export function normalizeSkillName(declared: string): string {

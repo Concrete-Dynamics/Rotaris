@@ -115,7 +115,8 @@ export interface InstructionMergePorts {
  * it against presence would let a user switch an override off and get *nothing* — the base silently
  * suppressed by a file no longer being read — while the inventory still showed that base switched on.
  * A screen that says a file is on and an agent that is not given it is the worse failure of the two,
- * so an override suppresses its base only while the override is itself enabled. Logged as **OQ-64**.
+ * so an override suppresses its base only while the override is itself enabled. **OQ-64**, ruled this way
+ * on 2026-09-27.
  */
 export function enabledInstructionFiles(
   files: readonly InstructionFileEntry[],

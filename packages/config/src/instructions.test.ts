@@ -108,7 +108,7 @@ describe('PD-WORKSPACE-002 — the enabled set injection consumes', () => {
     ]);
   });
 
-  it('OQ-64: suppression is computed over the ENABLED set, so switching the override off returns the base', () => {
+  it('OQ-64 (ruled): suppression is computed over the ENABLED set, so switching the override off returns the base', () => {
     expect(enabledInstructionFiles(files, true, { 'workspace:AGENTS.override.md': 'off' }).map((f) => f.id)).toEqual([
       'workspace:AGENTS.md', 'workspace:CLAUDE.md', 'global:AGENTS.md',
     ]);

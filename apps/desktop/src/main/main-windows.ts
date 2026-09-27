@@ -530,6 +530,8 @@ export interface ElectronMainWindowAdapterDependencies {
   readonly registerPresenter: (wcId: number) => void;
   readonly revokePresenter: (wcId: number) => void;
   readonly forgetTerminalFrames: (wcId: number) => void;
+  /** A main window's close was confirmed and is now under way: what an application quit is recognised by (`exit.ts`). */
+  readonly closeConfirmed?: ((wcId: number) => void) | undefined;
   readonly log: (message: string) => void;
 }
 
@@ -649,10 +651,12 @@ export function createElectronMainWindowAdapter(
           .then((proceed: unknown) => {
             if (proceed === false) return;
             closeConfirmed = true;
+            dependencies.closeConfirmed?.(wcId);
             win.close();
           })
           .catch(() => {
             closeConfirmed = true;
+            dependencies.closeConfirmed?.(wcId);
             win.close();
           });
       });

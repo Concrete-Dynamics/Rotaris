@@ -27,6 +27,32 @@ export function commandsForArtifact(v: unknown): RanCommand[] {
 }
 
 /**
+ * REQ-LIBRARY-092: EVERY terminal child report is materialised as an artifact. The materialisation lives beside the one
+ * write every report passes through — the ledger's own reports, the scheduler's cancellation, the user's cancel, the
+ * settle of a child a previous run left (REQ-ORCH-053) and the decline of a resumable iteration (PD-ORCH-005 clause 6) —
+ * so no caller can store a report without one, exactly as the adjacent-duplicate rule lives beside its insert rather
+ * than in a caller. The last two wrote the report alone until 2026-09-27
+ * (`docs/defects/fixed/a-stale-settled-childs-report-is-never-an-artifact.md`). The row names the artifact; without
+ * one, the report is stored and no artifact is made.
+ */
+export function storeChildReport(deps: { readonly writer: SessionWriter; readonly artifacts?: ArtifactStore | undefined; readonly warn: (m: string) => void }, taskId: string, row: ChildRow | undefined, report: Record<string, unknown>): void {
+  const r = deps.writer.storeChildReport(taskId, report);
+  if (!r.ok) deps.warn(`the report for child ${taskId} could not be stored: ${r.error.code}`);
+  const artifacts = deps.artifacts;
+  if (!artifacts || !row) return;
+  const list = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
+  const text = (v: unknown): string => (typeof v === 'string' ? v : '');
+  const m = artifacts.materialiseChildReport({
+    taskId, canonicalName: row.canonical_name, persona: row.persona,
+    status: text(report['status']) || row.state, summary: text(report['summary']),
+    keyFindings: list(report['key_findings']), editedFiles: list(report['edited_files']), createdFiles: list(report['created_files']),
+    commands: commandsForArtifact(report['commands']),
+    highlightPaths: [], snippets: [], tags: list(report['tags']), conversationId: taskId,
+  });
+  if (!m.ok) deps.warn(`the report for child ${taskId} could not be materialised as an artifact: ${m.error.reason}`);
+}
+
+/**
  * ADR-0012: the ledger is the primary representation — one row per child, written through the session
  * writer, every state change one transaction with its event, every query carrying the session id
  * (REQ-ORCH-151). This class is the engine's view of it: admission (REQ-ORCH-046's five checks in order,
@@ -250,29 +276,9 @@ export class ChildLedger {
     const r = this.deps.writer.claimChildStart(taskId, row?.canonical_name ?? taskId);
     return r.ok && r.value;
   }
-  /**
-   * REQ-LIBRARY-092: EVERY terminal child report is materialised as an artifact. The materialisation lives
-   * here, beside the one write every report passes through — the ordinary path, the scheduler's cancellation
-   * and the user's cancel all call this — so no third caller can store a report without one, exactly as the
-   * adjacent-duplicate rule lives beside its insert rather than in a caller.
-   */
+  /** REQ-LIBRARY-092: every report the ledger stores goes through `storeChildReport`, which materialises its artifact. */
   storeReport(taskId: string, report: Record<string, unknown>): void {
-    const r = this.deps.writer.storeChildReport(taskId, report);
-    if (!r.ok) this.deps.warn(`the report for child ${taskId} could not be stored: ${r.error.code}`);
-    const artifacts = this.deps.artifacts;
-    if (!artifacts) return;
-    const row = this.get(taskId);
-    if (!row) return;
-    const list = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
-    const text = (v: unknown): string => (typeof v === 'string' ? v : '');
-    const m = artifacts.materialiseChildReport({
-      taskId, canonicalName: row.canonical_name, persona: row.persona,
-      status: text(report['status']) || row.state, summary: text(report['summary']),
-      keyFindings: list(report['key_findings']), editedFiles: list(report['edited_files']), createdFiles: list(report['created_files']),
-      commands: commandsForArtifact(report['commands']),
-      highlightPaths: [], snippets: [], tags: list(report['tags']), conversationId: taskId,
-    });
-    if (!m.ok) this.deps.warn(`the report for child ${taskId} could not be materialised as an artifact: ${m.error.reason}`);
+    storeChildReport(this.deps, taskId, this.get(taskId), report);
   }
   markObserved(taskId: string): void {
     this.deps.dal.setChildObserved(this.deps.sessionId, taskId);

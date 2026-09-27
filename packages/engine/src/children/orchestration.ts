@@ -10,7 +10,7 @@ import { callsRun } from '../run/interruption.js';
 import type { AttachmentOutcome, BackgroundOutput, DelegateOutcome, DelegateRequest, DelegationOps, WaitOutcome } from './delegation.js';
 import { fullContextBlock, siblingIndexBlock, type AttachedResolution } from '../artifacts/context.js';
 import type { ArtifactStore } from '../artifacts/store.js';
-import { ChildLedger, type Budget } from './ledger.js';
+import { ChildLedger, storeChildReport, type Budget } from './ledger.js';
 import { childPayload, completionNotification, parseReport, priorAgentContext, reportBlock, resumeMessage } from './notify.js';
 import { CHILD_STALL_TIMEOUT_MS, continuationRefusal, cutOffLines, cutOffReport, ProgressLog, type CutOff } from './cut-off.js';
 import { BUILT_IN_PERSONAS, type Persona, type PersonaResolver, type RoleName } from './personas.js';
@@ -874,15 +874,19 @@ function storedScope(row: ChildRow): string[] {
   try { const v = JSON.parse(row.write_scope) as unknown; return Array.isArray(v) ? v.filter((p): p is string => typeof p === 'string') : []; } catch { return []; }
 }
 
-/** REQ-ORCH-053: on a later run of the same session, settle every non-terminal child of any previous iteration before the first iteration. */
-export function settleStaleChildren(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, warn: (m: string) => void): number {
+/**
+ * REQ-ORCH-053: on a later run of the same session, settle every non-terminal child of any previous iteration before the
+ * first iteration. Its report is materialised as every other terminal child's is (REQ-LIBRARY-092), given the session's
+ * artifact store.
+ */
+export function settleStaleChildren(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, warn: (m: string) => void, artifacts?: ArtifactStore): number {
   let n = 0;
   for (const c of dal.childrenOf(sessionId)) {
     // PD-ORCH-005 (narrowing REQ-ORCH-053 / REQ-SESSION-065 / REQ-NOTIFY-121): a `paused` agent is left as it is; it is
     // resumed with its iteration, or ended by the user continuing without it.
     if (isTerminalChildState(c.state) || c.state === 'paused') continue;
     const r = writer.transitionChild(c.task_id, 'cancelled', 'cancellation');
-    if (r.ok) { n += 1; writer.storeChildReport(c.task_id, { agent_name: c.canonical_name, role: c.persona, status: 'cancelled', summary: 'Cancelled: the run that owned this child ended (killed host or hard cancel) before it settled.', key_findings: [], last_response: '', final_response: '', errors: [{ type: 'cancelled', message: 'settled on continue (REQ-ORCH-053)' }] }); }
+    if (r.ok) { n += 1; storeChildReport({ writer, artifacts, warn }, c.task_id, c, { agent_name: c.canonical_name, role: c.persona, status: 'cancelled', summary: 'Cancelled: the run that owned this child ended (killed host or hard cancel) before it settled.', key_findings: [], last_response: '', final_response: '', errors: [{ type: 'cancelled', message: 'settled on continue (REQ-ORCH-053)' }] }); }
     else warn(r.error.code === 'illegal-move' ? r.error.reason : r.error.code);
   }
   return n;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ProcessReply } from '@rotaris/contracts';
 import { FakeClock } from '@rotaris/kernel';
-import { CHILD_CLOSE_BOUND_MS, exitAfterChildWindows, shutdownAtQuit, watchChildExit, type ClosableWindow } from './exit.js';
+import { CHILD_CLOSE_BOUND_MS, dialogCloseAnswersDeny, exitAfterChildWindows, shutdownAtQuit, watchChildExit, type ClosableWindow } from './exit.js';
 
 /** A window whose destruction reports `closed` at once, later, or never. */
 function win(opts: { parent: boolean; closes?: 'now' | 'never' }, log: string[], name: string): ClosableWindow & { closed: () => void } {
@@ -153,5 +153,23 @@ describe("a child's shutdown at quit, raced against its own exit (exit.ts)", () 
     c.exit(0);
     await flush();
     expect(said).toHaveLength(1);
+  });
+});
+
+describe('PD-ORCH-005 clause 9: an approval dialog the quit closed answers nothing (exit.ts)', () => {
+  it('a dialog closed unanswered while a main window stays answers Deny (REQ-TOOLS-063)', () => {
+    // The user closed the dialog, or one main window of two.
+    expect(dialogCloseAnswersDeny({ answered: false, exiting: false, mainWindowsStaying: 1 })).toBe(true);
+    expect(dialogCloseAnswersDeny({ answered: false, exiting: false, mainWindowsStaying: 2 })).toBe(true);
+  });
+
+  it('a dialog closed by the quit answers nothing: the run host\'s shutdown withdraws the approval, never denies it', () => {
+    // The last main window's close confirmed, and the immediate exit (the capture seam, the driver's quit).
+    expect(dialogCloseAnswersDeny({ answered: false, exiting: false, mainWindowsStaying: 0 })).toBe(false);
+    expect(dialogCloseAnswersDeny({ answered: false, exiting: true, mainWindowsStaying: 1 })).toBe(false);
+  });
+
+  it('an answered dialog asks nothing more, whatever closes it', () => {
+    expect(dialogCloseAnswersDeny({ answered: true, exiting: false, mainWindowsStaying: 1 })).toBe(false);
   });
 });

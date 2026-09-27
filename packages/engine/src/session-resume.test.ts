@@ -105,6 +105,8 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
     await resumed.running(sid);
     // REQ-ORCH-053: the orphan belongs to no open iteration, so the continue settles it cancelled before its first iteration.
     expect(dal.getChild(sid, 'bg_00000001')).toMatchObject({ state: 'cancelled', report_stored: 1 });
+    // REQ-LIBRARY-092: its report is an artifact, as every terminal child's is (a-stale-settled-childs-report-is-never-an-artifact.md).
+    expect(dal.artifactsOf(sid).filter((a) => a.source_task_id === 'bg_00000001').map((a) => [a.kind, a.status])).toEqual([['child_report', 'cancelled']]);
     expect(priorContexts).toEqual([undefined, 'single_file_change']);
     const continuation = client.requests[1]!.messages
       .flatMap((message) => message.content.map((part) => part.kind === 'text' ? part.text : null))

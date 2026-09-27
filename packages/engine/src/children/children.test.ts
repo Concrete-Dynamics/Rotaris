@@ -802,9 +802,14 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     w.value.spawnChild({ task_id: 'bg_0000dead', canonical_name: 'ghost', given_name: 'ghost', persona: 'coding-agent', state: 'running', parent_id: 'root:1', depth: 1, iteration: 1, model_key: 'm', category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}' });
     w.value.release(1, HOST);
     // The next run on that session id is refused by design (a new session is minted per prompt today), so the sweep is exercised directly.
-    const settled = (await import('./orchestration.js')).settleStaleChildren(dal, w.value, sid0, () => undefined);
+    const { ArtifactStore } = await import('../artifacts/store.js');
+    const artifacts = new ArtifactStore({ dal, sessionId: sid0, directory: () => join(tmpdir(), 'rotaris-phantom-artifacts'), wall: clock, warn: () => undefined });
+    const settled = (await import('./orchestration.js')).settleStaleChildren(dal, w.value, sid0, () => undefined, artifacts);
     expect(settled).toBe(1);
     expect(dal.getChild(sid0, 'bg_0000dead')).toMatchObject({ state: 'cancelled', report_stored: 1 });
+    // REQ-LIBRARY-092: the settled report is an artifact like every other terminal child's, so a later run finds it by
+    // reading artifacts (the repair of a-stale-settled-childs-report-is-never-an-artifact.md).
+    expect(dal.artifactsOf(sid0).map((a) => [a.kind, a.source_task_id, a.canonical_name, a.status])).toEqual([['child_report', 'bg_0000dead', 'ghost', 'cancelled']]);
     void sessions;
   });
 
@@ -1308,6 +1313,8 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       for (const name of ['one', 'two']) {
         expect(byName(sid, name)).toMatchObject({ state: 'cancelled', interruption: 'pause', report_stored: 1 });
         expect(JSON.parse(byName(sid, name).report!)).toMatchObject({ status: 'cancelled', summary: expect.stringMatching(/continued without this agent, which the pause had left paused/) });
+        // REQ-LIBRARY-092: a declined agent's report is an artifact like every other terminal child's.
+        expect(dal.artifactsOf(sid).filter((a) => a.source_task_id === byName(sid, name).task_id).map((a) => [a.kind, a.status])).toEqual([['child_report', 'cancelled']]);
       }
       // The declined iteration's task stays anchored (REQ-ORCH-135): it is worked again, in a new iteration.
       const rows = dal.iterationsOf(sid);

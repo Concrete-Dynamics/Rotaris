@@ -23,7 +23,7 @@ import type { HookPort, RunNotice } from '../hooks-port.js';
 import type { CheckpointPort } from '../checkpoint-port.js';
 import type { ArtifactStore } from '../artifacts/store.js';
 import { NO_PREFLIGHT_INTENT, type Preflight } from '../preflight.js';
-import { clampBudget } from '../children/ledger.js';
+import { clampBudget, storeChildReport } from '../children/ledger.js';
 import type { ChildRow, StoreDal } from '@rotaris/store';
 import type { LoopSupervisor } from './supervisor.js';
 import type { Persona, PersonaResolver } from '../children/personas.js';
@@ -875,7 +875,8 @@ export class Run {
       if (c.state !== 'paused') continue;
       const r = this.deps.writer.transitionChild(c.task_id, 'cancelled', 'cancellation');
       if (!r.ok) { this.deps.warn(r.error.code === 'illegal-move' ? r.error.reason : `cancelling paused ${c.task_id} failed: ${r.error.code}`); continue; }
-      this.deps.writer.storeChildReport(c.task_id, { agent_name: c.canonical_name, role: c.persona, status: 'cancelled', summary: report(c), key_findings: [], last_response: '', final_response: '', errors: [] });
+      // REQ-LIBRARY-092: the report is materialised as every terminal child's is.
+      storeChildReport({ writer: this.deps.writer, artifacts: this.deps.artifacts, warn: this.deps.warn }, c.task_id, c, { agent_name: c.canonical_name, role: c.persona, status: 'cancelled', summary: report(c), key_findings: [], last_response: '', final_response: '', errors: [] });
     }
   }
 

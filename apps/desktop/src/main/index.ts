@@ -42,7 +42,7 @@ import { sessionCommands } from './commands/session.js';
 import { shellCommands } from './commands/shell.js';
 import { skillsCommands } from './commands/skills.js';
 import { windowCommands, windowsCommands } from './commands/windows.js';
-import { exitAfterChildWindows, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
+import { dialogCloseAnswersDeny, exitAfterChildWindows, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
 import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, type AppLogLevel } from './app-log.js'; // PD-MONITOR-002
 import { workspaceCommands } from './commands/workspace.js';
 // The answer every command ends in, and the inventory the facets above are given (ADR-0019, REQ-SHELL-020).
@@ -61,8 +61,13 @@ import { refusal, type ApprovalDialogState, type CommandContext, type CommandHan
  * behaviour beyond it.
  */
 const clocks = nodeClocks();
+/**
+ * PD-ORCH-005 clause 9: what tells a dialog closed by the application's quit from one a user closed (`exit.ts`,
+ * `dialogCloseAnswersDeny`) — the process exiting at once, and the main windows whose close is confirmed.
+ */
+const quit = { exiting: false, closing: new Set<number>() };
 /** Every immediate exit goes through this: on Linux, `app.exit` over an open modal child segfaults (`exit.ts`). */
-const exitCleanly = (code: number): void => exitAfterChildWindows({ windows: () => BrowserWindow.getAllWindows(), exit: (c) => app.exit(c), timers: clocks.timers, nextTurn: (fn) => setImmediate(fn) }, code);
+const exitCleanly = (code: number): void => { quit.exiting = true; exitAfterChildWindows({ windows: () => BrowserWindow.getAllWindows(), exit: (c) => app.exit(c), timers: clocks.timers, nextTurn: (fn) => setImmediate(fn) }, code); };
 const dirs = resolveUserDirs();
 const layout = dataLayout(dirs);
 mkdirSync(dirs.data, { recursive: true });
@@ -604,7 +609,9 @@ async function main(): Promise<void> {
       dialogPayloads.delete(dlgWcId);
       if (mainWindows.openDialog(w.wcId) === entry) mainWindows.setOpenDialog(w.wcId, null);
       // REQ-TOOLS-063: closing the window answers Deny; a request already answered or cancelled asks nothing more.
-      if (!entry.answered) void runHost.request({ kind: 'session.control', request: { op: 'answerApproval', sessionId: payload.session_id, args: { requestId: payload.request_id, option: 'deny' } } }, millis(5_000)).catch(() => undefined);
+      // PD-ORCH-005 clause 9: a dialog the application's quit closed answers nothing — the shutdown withdraws it.
+      const staying = mainWindows.ordered().filter((m) => !m.win.isDestroyed() && !quit.closing.has(m.wcId)).length;
+      if (dialogCloseAnswersDeny({ answered: entry.answered, exiting: quit.exiting, mainWindowsStaying: staying })) void runHost.request({ kind: 'session.control', request: { op: 'answerApproval', sessionId: payload.session_id, args: { requestId: payload.request_id, option: 'deny' } } }, millis(5_000)).catch(() => undefined);
       clocks.timers.after(millis(50), () => { void presentNext(w); });
     });
     try {
@@ -996,6 +1003,7 @@ async function main(): Promise<void> {
       void runHost.request({ kind: 'presenter.revoke', windowId: String(wcId) }, millis(5_000)).catch(() => undefined);
     },
     forgetTerminalFrames: (wcId) => terminalFrames.forget(wcId),
+    closeConfirmed: (wcId) => { quit.closing.add(wcId); },
     log,
   });
 

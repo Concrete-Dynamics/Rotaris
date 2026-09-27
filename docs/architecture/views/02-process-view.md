@@ -169,7 +169,10 @@ seam's exit and the driver's `quit` — go through `exitCleanly` (`main/exit.ts`
 `closed` awaited (bounded at 2 s), and `app.exit` runs on the next turn, because on Linux `app.exit` over an open modal
 child segfaults. Neither sends `shutdown`; both are verification seams (`ROTARIS_CAPTURE_PNG`, and the driver under
 `ROTARIS_DRIVER`), and every quit a user can reach goes through `window-all-closed`, the main window's close guard
-turning an `app.quit()` into one.
+turning an `app.quit()` into one. Neither path answers an approval dialog it closes. The Electron adapter reports each
+main window's confirmed close (`closeConfirmed`), and a dialog that closes after the last one's close, or during
+`exitCleanly`, sends no Deny: at a quit, the run host's `shutdown` withdraws the approval (PD-ORCH-005 clause 9,
+`dialogCloseAnswersDeny`).
 
 **The session browser's actions (Part U).** Renderer → main: `session.repair {sessionId?}` (one stale session, or every
 stale session when the id is absent — REQ-SESSION-060/182) → `{report: {repaired[{sessionId, from, to: interrupted,

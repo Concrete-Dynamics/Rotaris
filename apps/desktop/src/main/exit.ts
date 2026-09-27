@@ -29,6 +29,18 @@ export interface ExitDeps {
   readonly nextTurn: (fn: () => void) => void;
 }
 
+/**
+ * PD-ORCH-005 clause 9: whether an approval dialog that closed unanswered answers Deny (REQ-TOOLS-063). It does while
+ * the application stays: the user closed the dialog, or one main window of several. A dialog that closes because the
+ * application is quitting — the process exiting, or every main window's close confirmed — was answered by no one. The
+ * run host's shutdown then withdraws the approval by the quit, and a withdrawn approval is never recorded as denied.
+ * Before this rule the last window's close denied the call first, and the agent took one more model step on the denial
+ * (`docs/defects/fixed/a-quit-denies-the-approval-it-should-withdraw.md`).
+ */
+export function dialogCloseAnswersDeny(state: { readonly answered: boolean; readonly exiting: boolean; readonly mainWindowsStaying: number }): boolean {
+  return !state.answered && !state.exiting && state.mainWindowsStaying > 0;
+}
+
 /** A child window that never reports `closed` must not hold the process open: the exit happens regardless. */
 export const CHILD_CLOSE_BOUND_MS = 2_000;
 

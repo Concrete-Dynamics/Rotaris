@@ -1334,7 +1334,8 @@ None. One identifier minted, five amended in place, every amended sentence quoti
 
 - **The notices generator** (`REQ-STARTUP-141/142/143`) is not built, so the section the amendment adds to
   `THIRD-PARTY-LICENSES.txt` exists in the specification only. IC-7's discharge is half shown until it
-  exists, and the condition stays on the release.
+  exists, and the condition stays on the release. *2026-09-27: the generator is built and lists the servers,
+  and IC-7 is recorded as discharged in `../architecture/implementation-conditions.md`.*
 - **The setup manifest as a shipped file** (`REQ-STARTUP-058`, schema version 1) is the onboarding domain's
   and is not built either. The declaration lives in the generated binding manifest and feeds that file when
   it exists.

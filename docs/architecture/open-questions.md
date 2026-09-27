@@ -58,7 +58,15 @@ REQ-STARTUP-059 and REQ-MCP-095 read one way and REQ-STARTUP-064 the other) **an
 numbers are canonical decimals), each with the reading the guard is built under, **and OQ-70** (whether the running
 desktop with no version metadata reports `dev` or `0+unknown`, which REQ-STARTUP-007 and REQ-STARTUP-004 fix
 differently), raised by the gate round that reviewed it; the three were raised as OQ-66 to OQ-68 on their own branch and renumbered when they reached `main` after the
-`/skills` listing's and the injection proof's. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+`/skills` listing's and the injection proof's. **Three more were raised on 2026-09-27 by building the notices generator
+(`first-release-plan.md` §4.3): OQ-71** (whether an entry of `THIRD-PARTY-LICENSES.txt` is a package or everything
+compiled into one — Electron's 779 credited components carry no version and no identifier), **OQ-72** (REQ-STARTUP-142
+names Manrope and a machine-tool manifest, neither of which the first release carries) **and OQ-73** (whether the
+reviewed-exceptions table may supply an identifier a dependency does not declare — `dotenv` 0.9.9 in the bundled
+runtime). **One more was raised the same day by that generator's gate review: OQ-74** (when a component carries "its
+full license text": a licence file that only pointed elsewhere, or only carried a licence's per-file notice, had
+counted as the text, and 4 components without text became 12); the four were raised as OQ-66 to OQ-69 on their own branch and renumbered when they reached `main`
+after the `/skills` listing, the injection proof and the version guard had taken OQ-66 to OQ-70. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -2986,6 +2994,177 @@ sentence and REQ-STARTUP-159's About observation forbid it, and electron-builder
 
 **What a ruling decides.** Which literal the running desktop reports without metadata. If `0+unknown`, the constant
 changes and nothing else does; if `dev`, REQ-STARTUP-004's second sentence is amended to agree.
+
+**OQ-71 — What is one entry of the notices file: a package, or everything compiled into one?** *(REQ-STARTUP-142, REQ-STARTUP-143. Raised 2026-09-27 by building the notices generator, `first-release-plan.md` §4.3; raised as OQ-66 and renumbered OQ-71 when it reached `main`, after the `/skills` listing, the injection proof and the version guard had taken OQ-66 to OQ-70.)*
+
+REQ-STARTUP-142 wants "one entry for every dependency present in the shipped artifact", each naming "the component,
+its version, its license identifier, and its full license text", and REQ-STARTUP-143 fails the release on a
+dependency that "declares no license identifier". Three kinds of thing are present in the artifact and are not
+packages a package manager lists, and none of them can meet all four fields:
+
+- **What is compiled into Electron.** The runtime's binaries carry 779 components — Chromium's third-party code,
+  Node.js, V8 and ffmpeg, which is under the LGPL, among them. Electron's own credits file, `LICENSES.chromium.html`, gives each a
+  title, a homepage and a licence text, and **no version and no identifier**. Read as 779 entries, the release could
+  not pass REQ-STARTUP-143 until someone supplied 779 identifiers the credits do not carry, and the reviewed table
+  has no route for a missing identifier (OQ-73).
+- **What this build compiles into its own native modules.** SQLite into `better-sqlite3`, and winpty into
+  `node-pty` on Windows, from sources the host packages vendor. `electron-builder.yml` strips those sources and their
+  licence files from the archive (ADR-0056 rule 1).
+- **What the bundled interpreter links.** The code-intelligence runtime's CPython (python-build-standalone, install-only)
+  carries OpenSSL, SQLite and zlib linked in (the interpreter answers OpenSSL 3.5.7, SQLite 3.53.1, zlib 1.3.2) and
+  Tcl/Tk beside it. Its `LICENSE.txt` names only the software incorporated into CPython itself, and never mentions
+  OpenSSL. The install-only tree has no record of the rest that could be read offline.
+
+**What the build proceeds under.** The entry is what a package manager enumerates — an npm package, a Python
+distribution, the interpreter, a font — and what is compiled into one is that component's own disclosure:
+
+- Electron is one entry (MIT, its `LICENSE`), and its credits are reproduced whole, in plain text, as the file's last
+  section, each under its title and homepage, stated as "as compiled into Electron 44.1.1". That section is 19.8 MB
+  of the file's 20.4 MB.
+- SQLite and winpty are listed as entries of their own, read from the installed host package: the version from the
+  sources, the identifier from the text (`blessing`, `MIT`), and "Contained in" naming the host. This is because the
+  packager removes the only other place their notices would be.
+- The interpreter's linked libraries are **not listed**. That is a known gap, not a reading, and it is stated here so
+  it is not mistaken for coverage. The file says so too, at the head of its runtime section, and its header claims
+  "the third-party components" of the build rather than every one.
+- *Added 2026-09-27 by the gate review.* Two consequences of reading the closure from production edges:
+  - The icon set appears twice: as `@phosphor-icons/web` 2.1.1, a production dependency of the application, and as
+    "Phosphor Icons", which REQ-STARTUP-142 names on its own.
+  - Two type-only packages are listed that no artifact carries: `json-schema` 0.4.0 and `@standard-schema/spec`
+    1.1.0, production dependencies of `@ai-sdk/provider` and `@ai-sdk/provider-utils`. The review read a scratch
+    build's sourcemaps and found that the bundler inlines neither.
+
+  Both errors list more than ships, never less.
+
+**What a ruling decides.** Whether the credits of a component the build takes whole (Electron's, and any other
+bundled distribution's) satisfy REQ-STARTUP-142 when they are reproduced beneath it, or whether each credited
+component must be an entry with a version and an identifier. And whether the interpreter's linked libraries must be
+enumerated, which would mean building the runtime from a python-build-standalone archive that carries its licence
+records (the full archive, not the install-only one) or declaring them by hand in a reviewed table.
+
+**OQ-72 — REQ-STARTUP-142 names two things the first release does not carry: Manrope, and Git and ripgrep.** *(REQ-STARTUP-142 with REQ-STARTUP-040, REQ-STARTUP-058, `PD-STARTUP-001`. Raised 2026-09-27 by building the notices generator; raised as OQ-67 and renumbered OQ-72 when it reached `main`, after the `/skills` listing, the injection proof and the version guard had taken OQ-66 to OQ-70.)*
+
+REQ-STARTUP-142 states the file "SHALL further contain the license texts of the bundled fonts JetBrains Mono,
+Manrope and Space Grotesk", and that its tools section is "generated from the setup manifest of that same build,
+listing for Git and for ripgrep the name, provisioned version, source URL and license identifier the manifest
+pins". Both clauses assume something about the build that is not true of this one.
+
+- **Manrope is not bundled.** The design import carried no Manrope file, so `packages/ui/src/fonts.css` declares two
+  faces and the body text falls back to the system face (the file says so). REQ-STARTUP-040's "register bundled font
+  families so branded fonts render from first paint" is short one family for the same reason.
+- **No setup manifest in this build pins a machine tool.** Machine setup — REQ-STARTUP-058's first list, REQ-STARTUP-060
+  onward — is not built, and it is not in the first-release plan. The only manifest the build carries is the
+  code-intelligence pins (`apps/desktop/scripts/code-intelligence/pins.json`), whose `languageServers` is the second
+  list of REQ-STARTUP-058. Nothing in this build downloads Git or ripgrep.
+
+**What the build proceeds under.** The file tells the truth about the artifact and keeps each clause's text where
+it can:
+
+- Manrope's OFL-1.1 text is reproduced, as the requirement names it. Its entry's version reads "not contained in this
+  build", so no reader takes the licence for a file that is not there. When the design material supplies the face and
+  `fonts.css` declares it, the table beside the generator gains the file and nothing else changes.
+- The tools section reads the manifest the build has. Under "Machine tools" it says the setup manifest of this build
+  pins none, so this build downloads neither Git nor ripgrep. It then lists the language servers with their four
+  fields, as IC-7 requires. When machine setup is built its manifest carries `machineTools`, and the section lists them
+  as downloaded and not contained. The generator already renders that shape, and it is tested with ripgrep.
+  *Added 2026-09-27 by the gate review:* that shape is the generator's own assumption: one `{name, version, source,
+  license}` object per tool, under a `machineTools` key. REQ-STARTUP-058 describes the machine-tool manifest per
+  platform, with archives, digests and layouts. Neither the key nor its shape is decided anywhere yet. Machine setup
+  decides both, and the generator's reader follows.
+
+**What a ruling decides.** Whether the first release ships without Manrope, and if so whether REQ-STARTUP-142's
+font clause is narrowed to the faces the build carries; and whether machine setup belongs in the first release —
+without it REQ-STARTUP-058's first list is unmet, which is a larger question than the notices file.
+
+**OQ-73 — May the reviewed-exceptions table supply a licence identifier a dependency does not declare?** *(REQ-STARTUP-143. Raised 2026-09-27 by the notices generator's first run against the bundled runtime; raised as OQ-68 and renumbered OQ-73 when it reached `main`, after the `/skills` listing, the injection proof and the version guard had taken OQ-66 to OQ-70.)*
+
+REQ-STARTUP-143 fails the release on "a dependency in the shipped closure declares no license identifier", and
+separately on "a dependency carries no license text and is not covered by the ... maintainer-review table". The
+table's entries each carry "the license identifier claimed for it", but the requirement gives the table only the
+second failure to excuse.
+
+The first run found the case the requirement does not route: `dotenv` 0.9.9, a shim `serena-agent` 1.7.0 requires in
+the code-intelligence runtime. It declares `License: UNKNOWN` and no classifier, and it ships an MIT `LICENSE`. It has
+text and no identifier. No change a maintainer can make lets it pass, short of removing it from the runtime, which
+would break the tool server.
+
+**What the build proceeds under.** The requirement as worded: a missing identifier fails validation, and an
+exception in the table does not excuse it (tested). The generator reads an identifier from what a component
+declares, most specific first: `License-Expression`, a one-line `License`, the licence classifiers, the first line of
+a `License` field that holds a whole text. `UNKNOWN` declares nothing. It never infers an identifier from a licence
+text a dependency ships. The one place it reads a text for an identifier is a component that states its licence by
+name inside it: the interpreter, SQLite and winpty.
+
+**What a ruling decides.** Whether a table entry, being a reviewed and expiring claim of an identifier, may also
+cover a dependency that declares none. That ruling would change REQ-STARTUP-143's wording and one condition in
+`collectNotices`. Until then the first release is blocked on `dotenv` as surely as on O-3.
+
+*Added 2026-09-27 by the generator's gate review:* an identifier is copied as the component declares it and is never
+normalised. The runtime's distributions declare `BSD License` (`itsdangerous`, `Jinja2`, `pywebview`), `MIT License`,
+`Apache Software License 2.0`, `LGPLv2+` and `BSD 3-Clause`. REQ-STARTUP-142 does not ask for an SPDX identifier, but
+`BSD License` names a family rather than one licence. Whether an identifier must be an SPDX expression, and who
+supplies one where the component does not, belongs to the same ruling.
+
+**OQ-74 — When does a component carry "its full license text"?** *(REQ-STARTUP-142, REQ-STARTUP-143. Raised 2026-09-27 by the notices generator's gate review; raised as OQ-69 and renumbered OQ-74 when it reached `main`, after the `/skills` listing, the injection proof and the version guard had taken OQ-66 to OQ-70.)*
+
+REQ-STARTUP-142 wants each entry to carry the component's "full license text", and REQ-STARTUP-143 fails a release on
+a dependency that "carries no license text" unless a reviewed exception covers it. Neither says what a licence file
+that does not carry the licence counts as. The first build counted any non-empty licence-named file as the text. The
+gate review found `@workflow/serde` 4.1.0, which the main bundle inlines. Its only licence file reads, in full, "Apache
+License 2.0" and "See the LICENSE file in the root of this repository.", and the package ships no such file.
+Reading the rest of the closure found three more kinds:
+
+- **A licence's per-file notice, and nothing else.** The notice is what a licence asks to be applied to each file
+  with. Apache-2.0's reads "You may obtain a copy of the License at …". Five npm packages carry only that: `ai` 7.0.92,
+  `@ai-sdk/gateway`, `@ai-sdk/openai`, `@ai-sdk/openai-compatible` and `@ai-sdk/provider`. So does `mslex` 1.3.0 in
+  the runtime. `certifi` 2026.7.22 carries only MPL-2.0's Exhibit A.
+- **An attribution declared as a licence file:** `mslex`'s `AUTHORS.rst`, beside its notice.
+- **A short file that sends the reader to its siblings:** "the licenses found in LICENSE.APACHE or LICENSE.BSD"
+  (`cryptography`, `sniffio`, and pip's vendored `packaging`). Their siblings carry the texts.
+
+**What the build proceeds under.** A licence file is one of three things (`licenseTextKind` in
+`tools/notices/notices.mjs`), and only the first is the component's licence text:
+
+- **text**: it carries a licence;
+- **a reference**: it only names a licence on one line. Or it is at most 2,000 characters, it sends the reader
+  elsewhere, and it carries no grant of its own. "Sends elsewhere" is one of: "see the LICENSE" (a markdown link,
+  "see the [LICENSE](LICENSE)", included), "found in LICENSE", "obtain a copy of the License", "can obtain one at",
+  "should have received a copy of the". The grants checked are those of the licences short enough to sit beside such
+  words: MIT and Boost, ISC and 0BSD, the BSD family, zlib, the Unlicense and SQLite's blessing. Every full text
+  that quotes its own notice in an appendix (Apache-2.0, the GPL family, MPL-2.0) is far longer than the bound;
+- **an attribution**: a file named NOTICE, AUTHORS, CONTRIBUTORS or CREDITS.
+
+References and attributions are still reproduced with the component, because they carry its copyright and
+attribution notices; Apache-2.0's NOTICE must travel with the work. A component that carries no text fails
+validation, and the message names each file and what it does instead. Only a reviewed exception lets it pass, as for
+a component that ships no file at all.
+
+Electron, the interpreter, a compiled-in library and a bundled asset each have one named licence file. If that file
+is only a reference, validation fails and no reviewed exception can cover it. REQ-STARTUP-143 gives the table to "a
+dependency" in general, so this is stricter than the requirement. It is recorded here as a reading. No such case
+exists in the first release.
+
+Over this tree the rule leaves 12 shipped components without licence text. The first run counted 4.
+
+Three limits are stated here, so that none is read as coverage:
+
+- The classifier reads words, so a pointer worded differently from the phrases above passes as text.
+- A file that carries one licence's text and refers elsewhere for another counts as text. `tqdm` 4.67.1 declares
+  `MPL-2.0 AND MIT` and carries the MIT text in full beside MPL-2.0's Exhibit A, so its entry has no MPL-2.0 text.
+  The generator does not match the texts a component carries against the expression it declares.
+- The pass is per component, and a component's vendored libraries are not components of their own (OQ-71). pip
+  26.2.1 passes on its own MIT text. Its vendored `certifi` ships only MPL-2.0's Exhibit A, so pip's entry carries no
+  MPL-2.0 text. Its vendored `cachecontrol` and `msgpack` ship only Apache-2.0's per-file notice. The Apache-2.0 text
+  is in pip's entry only because its vendored `packaging` happens to ship it as `LICENSE.APACHE`. This is `tqdm`'s gap
+  one level down. The ruling below would close it only together with OQ-71's granularity. *Added 2026-09-27 by the
+  gate review's second round, checked against the bundled runtime.*
+
+**What a ruling decides.** Whether a component that ships only a licence's notice should instead get the canonical
+text of the identifier it declares, reproduced by the generator from a version-controlled copy beside it (as
+`bundled-assets.json` does for the fonts). The reviewed table asks "why no license text is obtainable". For
+Apache-2.0 or MPL-2.0 the honest answer is that the text is obtainable and the package left it out. That ruling
+would change REQ-STARTUP-143's route for such a component, and it would close `tqdm`'s gap as well. Until then,
+eight of O-11's twelve reviews are for a notice or a pointer.
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

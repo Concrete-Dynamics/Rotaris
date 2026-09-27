@@ -215,6 +215,28 @@ home segment is now pinned to `CODE_INTELLIGENCE_HOME_SEGMENT` by a test, which 
 on IC-7:** the notices generator's section (`REQ-STARTUP-141/142/143`), not built — the condition binds the
 release until it lists the servers.
 
+**IC-7 discharged — the notices generator lists the servers (2026-09-27, `first-release-plan.md` §4.3).**
+`pnpm notices` (`tools/notices/`) reads `pins.json` as the setup manifest this build carries and writes its
+`languageServers` into `THIRD-PARTY-LICENSES.txt`'s `Tools provisioned after installation` section. The sub-heading
+names this runtime (`serena-agent 1.7.0`), and each of the three packages appears with its language, version, source
+and licence. The generator also reads the runtime itself as part of the shipped closure: the interpreter (`CPython`
+3.13.15 from the bundle marker's own answer, `PSF-2.0` read from its `LICENSE.txt`) and every distribution in its
+site-packages, 73 on the Linux bundle, with the identifier each declares and its licence files. **What that first
+read found in this record's tree:** `dotenv` 0.9.9, which `serena-agent` requires, declares `License: UNKNOWN` (OQ-73),
+and `proxy_tools` 0.1.0, which `pywebview` requires, ships no licence text at all. Both fail notices validation until
+a ruling or a maintainer's review. The runtime's own `LICENSE`, the one copy this record's bundle note named, is now
+one entry among those. *Corrected the same day by the generator's gate review:* two more distributions carry no
+licence text. `certifi` 2026.7.22 carries only MPL-2.0's Exhibit A. `mslex` 1.3.0 carries only Apache-2.0's per-file
+notice, beside an `AUTHORS.rst`. Each file only refers to the licence. The first run had counted any non-empty licence
+file as the text (OQ-74). Both now wait on a maintainer's review (O-11), as `proxy_tools` does.
+
+REQ-STARTUP-015's "exactly one copy" of the tool server's licence text meets a second copy when first-release-plan.md
+§4.4 carries the notices file into the artifact. That step decides which copy stands. *Decided 2026-09-27 by §4.4: the
+notices file's copy stands, because REQ-STARTUP-142 requires it there, and the copy under `serena_agent`'s dist-info is
+filtered out of the artifact (`electron-builder.yml`). The runtime tree this record builds keeps it, because the
+generator reads it there. `afterPack` counts the copies in the artifact (ADR-0054, "The two bundled assets"). The
+runtime reads nothing from the file, so this record's mechanism is unchanged.*
+
 **The client's owed halves, alive** (ADR-0034's note beside this one): `code_intelligence` ships **enabled** —
 `REQ-CONFIG-181`'s deviation of 2026-09-05 reverted, its record kept in `defaults.ts`; the grant tiers on the built-in
 personas (12 or 19 names; the proof's discovery launch: the orchestrator's 12, the block present in the section, the
@@ -261,7 +283,8 @@ runtime's (the dashboard, the partial-configuration refusal, the auto-created ma
 fetched language servers). The tally stands.
 
 **Not built, said so:** the language servers beyond what the runtime provisions itself (IC-7); macOS and Linux bundles
-(IC-3; `bundle.mjs` refuses off Windows); the notices generator's section for the runtime (`REQ-STARTUP-142`); the
+(IC-3; `bundle.mjs` refuses off Windows); ~~the notices generator's section for the runtime (`REQ-STARTUP-142`)~~
+**built 2026-09-27** (IC-7 discharged, above); the
 machine-setup half of `REQ-MCP-112` and `REQ-MCP-095/096`; the ONBOARDING tier's persona; the dashboard and
 project-switching tools (never granted by design); the isolated-tree binding; nested `.gitignore` files in the
 contains-code walk (the root file only).

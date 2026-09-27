@@ -12,7 +12,9 @@
  *    marker, is byte-identical to the copy the artifact carries under app.asar.unpacked, and no prebuild
  *    rides in the artifact (neither unpacked nor inside app.asar, where the loader's existsSync would find
  *    it). Then rule 4: the packaged Electron binary loads each binding THROUGH the packaged asar and
- *    reports the file it actually opened, which must be the rule-1a file.
+ *    reports the file it actually opened, which must be the rule-1a file. Beside them, the "runtime" rule (the bundled
+ *    code-intelligence interpreter answers from inside the artifact) and the "assets" rule (the About page's two files
+ *    at the root of resources/, and REQ-STARTUP-015's one copy of the tool server's licence text; first-release-plan.md §4.4).
  *
  * ROTARIS_IC6_COUNTERFACTUAL=no-force      — D10 as measured: the rebuild runs, exits 0, compiles nothing.
  * ROTARIS_IC6_COUNTERFACTUAL=keep-prebuild — a prebuild sits in the tree the loader reaches (package.mjs packs
@@ -25,8 +27,10 @@ const { createHash } = require('node:crypto');
 const { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { pathToFileURL } = require('node:url');
 
 const APP_DIR = path.resolve(__dirname, '..');
+const REPO_DIR = path.resolve(APP_DIR, '..', '..');
 const RELEASE_DIR = path.join(APP_DIR, 'release');
 const MARKER = path.join(RELEASE_DIR, 'rebuild-marker.json');
 const REPORT = path.join(RELEASE_DIR, 'load-proof.afterpack.json');
@@ -243,7 +247,32 @@ function checkRuntime(appOutDir) {
   let bytes = 0, files = 0;
   const walk = (d) => { for (const e of readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) walk(p); else { bytes += statSync(p).size; files += 1; } } };
   walk(root);
-  return { python, answers, bytes, files, licenseFile: marker.licenseFile, licensePresent: existsSync(path.join(root, 'runtime', ...String(marker.licenseFile).split('/'))) };
+  // The tool server's licence file is no longer carried here (REQ-STARTUP-015, the "assets" rule below counts its copies).
+  return { python, answers, bytes, files };
+}
+
+/**
+ * first-release-plan.md §4.4 — the "assets" rule: `build-id.txt` (REQ-SHELL-140) and `THIRD-PARTY-LICENSES.txt`
+ * (REQ-STARTUP-141) at the root of the artifact's resources, each byte-identical to the file its step wrote before
+ * freezing, the identifier naming the tree being packed; the notices file absent only when
+ * ROTARIS_PACKAGE_WITHOUT_NOTICES=1 asked for a development package, and never on a build for a tag; and the tool
+ * server's licence text once, in the notices file, never under its dist-info as well (REQ-STARTUP-015). The rules are
+ * `scripts/lib/about-assets.mjs`'s, which the tests drive through electron-builder's own copier and this yml.
+ */
+async function checkAssets(appOutDir) {
+  const { ABOUT_ASSETS, aboutAssetProblems } = await import(pathToFileURL(path.join(__dirname, 'lib', 'about-assets.mjs')).href);
+  const { identifyBuild } = await import(pathToFileURL(path.join(REPO_DIR, 'tools', 'build-id', 'build-id.mjs')).href);
+  const resourcesDir = path.join(appOutDir, 'resources');
+  const marker = JSON.parse(readFileSync(path.join(APP_DIR, 'resources', 'code-intelligence', 'bundle.json'), 'utf8'));
+  const toolServerLicense = typeof marker.licenseFile === 'string' && marker.licenseFile !== '' ? marker.licenseFile : null;
+  const build = identifyBuild({ root: REPO_DIR });
+  const problems = aboutAssetProblems({ resourcesDir, sourceDir: path.join(APP_DIR, 'resources'), env: process.env, toolServerLicense, build });
+  if (problems.length > 0) throw new Error(`assets: ${problems.join('; ')}`);
+  return {
+    buildId: readFileSync(path.join(resourcesDir, ABOUT_ASSETS.buildId), 'utf8').trim(),
+    notices: existsSync(path.join(resourcesDir, ABOUT_ASSETS.notices)) ? 'carried' : 'absent',
+    toolServerLicense,
+  };
 }
 
 /** electron-builder: called after the app is packed into appOutDir and before the artifact is made. */
@@ -270,6 +299,8 @@ async function afterPack(ctx) {
     report.naming = await checkNaming(ctx.packager.appInfo.version);
     report.runtime = checkRuntime(appOutDir);
     console.log(`[ic6] runtime: ${report.runtime.python} answered Python ${report.runtime.answers.python}, ${report.runtime.answers.distribution} ${report.runtime.answers.version} from inside the artifact (${report.runtime.files} files, ${(report.runtime.bytes / 1048576).toFixed(1)} MiB)`);
+    report.assets = await checkAssets(appOutDir);
+    console.log(`[ic6] assets: build-id.txt ${report.assets.buildId}; THIRD-PARTY-LICENSES.txt ${report.assets.notices}; the tool server's licence text ${report.assets.notices === 'carried' ? 'once, in the notices file' : 'not carried (a development package)'}`);
     const probe = runProbe(exe, appOutDir);
     report.probe = { status: probe.status, stderr: probe.stderr };
     report.rule4 = checkRule4(probe, report.rule1a, unpackedRoot, marker);
@@ -280,4 +311,4 @@ async function afterPack(ctx) {
   }
 }
 
-module.exports = { beforeBuild, afterPack, BINDINGS, checkRule1a, checkRule4, checkNaming, MARKER, REPORT };
+module.exports = { beforeBuild, afterPack, BINDINGS, checkRule1a, checkRule4, checkNaming, checkAssets, MARKER, REPORT };

@@ -10,7 +10,7 @@ only places `electron` is imported.
 | adding a package, or asking which one work belongs in | [The packages](#the-packages) |
 | adding an import that crosses a package | [The allowed-edge matrix](#the-allowed-edge-matrix-the-lint-rule-verbatim) |
 | deciding where a responsibility sits | [Where the responsibilities sit](#where-the-responsibilities-sit) |
-| touching the transcript, the Library, MCP, the code-intelligence bundle or the design system | the `###` sections after it |
+| touching the transcript, the Library, MCP, the code-intelligence bundle, the notices generator, the build-identifier writer and the bundled assets, or the design system | the `###` sections after it |
 
 ## The packages
 
@@ -226,6 +226,47 @@ contains-code walk (an edge it already had). Main gains its first module, `main/
 branch: `platform` for the per-user directory, nothing else), imported before anything that touches `electron`.
 `electron-builder.yml` carries the tree as `extraResources` outside the asar (a Python tree cannot run from an
 archive); `build-hooks.cjs`'s `afterPack` asserts the interpreter answers from inside `win-unpacked`.
+
+### The notices generator (2026-09-27; `first-release-plan.md` §4.3, ADR-0054)
+
+Not a package — a **build-time tool** under `tools/notices/`, with no `package.json`, so the lockfile does not see it.
+It imports nothing from `packages/` or `apps/`, and nothing in the product imports it. `pnpm notices`
+(`generate.mjs`, a thin CLI over `notices.mjs`, typed by `notices.d.mts`) reads the installed tree: the desktop
+application's and the workspace packages' `package.json` production edges, `node_modules`, Electron's `dist/`, the
+bundled runtime under `apps/desktop/resources/code-intelligence/`, `packages/ui/src/fonts.css` and the font files it
+names, and `apps/desktop/scripts/code-intelligence/pins.json` as the setup manifest. It writes one file,
+`apps/desktop/resources/THIRD-PARTY-LICENSES.txt`, only when REQ-STARTUP-143's validation passes. Three
+version-controlled tables sit beside it, as REQ-STARTUP-143 asks of the first:
+
+- `reviewed-exceptions.json`, the maintainer-review table;
+- `release-inputs.json`, O-3's LGPL address;
+- `bundled-assets.json`, the fonts and the icon set, with their licence texts under `licenses/`.
+
+The product meets the tool at one literal: `main/about.ts`'s `THIRD_PARTY_LICENSES_ASSET` equals the generator's
+`NOTICES_FILE`, and `about.test.ts` holds them equal. **Edges unchanged**: `tools/**` is outside the boundary rule, and
+the one test that crosses is a test.
+
+### The build-identifier writer and the About page's two files (2026-09-27; `first-release-plan.md` §4.4, ADR-0054)
+
+`tools/build-id/` is the notices generator's sibling: a **build-time tool** with no `package.json`, importing nothing
+from `packages/` or `apps/`. `pnpm build-id` (`write.mjs`, a thin CLI over `build-id.mjs`, typed by `build-id.d.mts`)
+asks the local git for HEAD's commit and whether the tree differs from it, and writes
+`apps/desktop/resources/build-id.txt`. The product meets it at one literal, as it meets the generator:
+`main/about.ts`'s `BUILD_ID_ASSET` equals `BUILD_ID_FILE`, held by `about.test.ts`.
+
+`apps/desktop/scripts/package.mjs` runs both tools before freezing. `electron-builder.yml`'s `extraResources` carries
+both files to the root of the artifact's resources, and leaves the tool server's dist-info licence out
+(REQ-STARTUP-015). `scripts/lib/about-assets.mjs` holds the rules `package.mjs` and `build-hooks.cjs`'s `afterPack`
+share: whether a refused notices step may be passed over (and, for `package.mjs` alone, whether the flag's value is one
+it understands), and what the artifact must carry. It takes the two names, and the generator's `normalize`, from the two
+tools, and `afterPack` asks `build-id.mjs`'s `identifyBuild` again for the tree being packed. Its two files are bundled
+assets in the specification's sense, as the fonts and the icon set are; `bundled-assets.json` above holds only those
+that carry a licence file (REQ-STARTUP-143), so this module is named for the surface it serves.
+`scripts/lib/package-verdict.mjs` holds the lines `package.mjs` closes on, each printed only when the steps that ran
+make it true. `scripts/lib/staged-resources.mjs` is `settings-proof`'s, for staging the two files and giving them back;
+the proof also takes the writer's list of git's redirecting variables from `build-id.mjs`. **Edges unchanged**:
+`apps/desktop/scripts/**` and `tools/**` are outside the boundary rule, the scripts reach the tools and never the
+reverse, and no product code imports either.
 
 ### `ui/design-system` (2026-09-12)
 

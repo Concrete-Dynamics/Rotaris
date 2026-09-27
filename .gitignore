@@ -50,6 +50,10 @@ packages/kernel/src/generated/
 .terminal-proof/
 # ADR-0035 (Part T): the bundled code-intelligence runtime is built by `pnpm code-intel:bundle` from committed pins, never committed.
 apps/desktop/resources/code-intelligence/
+# REQ-STARTUP-141/142: the notices file is generated per build by `pnpm notices` (tools/notices/), never committed.
+apps/desktop/resources/THIRD-PARTY-LICENSES.txt
+# REQ-SHELL-140: the build identifier is written per build by `pnpm build-id` (tools/build-id/), never committed.
+apps/desktop/resources/build-id.txt
 apps/desktop/.cache/
 # Part AK
 .requirements-proof/

@@ -65,6 +65,12 @@ selected. — `REQ-SHELL` theming
 **Diagnostics capture**:
 The opt-in, bounded, content-free UI trace, at level `off`, `light`, or `deep`. — `REQ-SHELL-163`
 
+**Build identifier**:
+What the About surface's Build row shows, read from a bundled text asset ([Distribution](../shell/CONTEXT.md)'s
+**bundled asset**); when the asset is missing or unreadable there is none, and the row shows an em dash.
+— `REQ-SHELL-140`
+_Avoid_: build number, version (the Version row carries the release's single version; many builds may carry one)
+
 ### The conversation
 
 **Composer**:

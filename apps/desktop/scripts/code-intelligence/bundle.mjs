@@ -195,7 +195,9 @@ try {
 }
 if (answers.python !== PINS.python) fail(`the interpreter answers Python ${answers.python}, the pin is ${PINS.python}`);
 if (answers.distribution !== PINS.version) fail(`the tree answers ${PINS.distribution} ${answers.distribution}, the pin is ${PINS.version}`);
-// REQ-STARTUP-015 / REQ-STARTUP-142: exactly one copy of the bundled tool server's licence text inside the bundle.
+// REQ-STARTUP-015 / REQ-STARTUP-142: exactly one copy of the bundled tool server's licence text inside the bundle. This
+// tree's copy is the one the notices generator reads and reproduces in THIRD-PARTY-LICENSES.txt; the artifact carries
+// that one and leaves this file out (electron-builder.yml's filter; afterPack's "assets" rule counts; plan §4.4).
 const sitePackages = findSitePackages(RUNTIME);
 if (!sitePackages) fail(`site-packages not found under ${RUNTIME}`);
 const distInfo = readdirSync(sitePackages).find((n) => n.startsWith('serena_agent-') && n.endsWith('.dist-info'));

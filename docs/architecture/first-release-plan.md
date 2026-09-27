@@ -23,7 +23,7 @@ record already decides, and every ruling it needs is named as the owner's rather
 | Skills — ESC-37, ESC-38, ESC-39 | **ruled 2026-09-27** as recommended ([R-052](../product/requests.md#r-052)); amended | §2 |
 | Workspace-context injection, REQ-WORKSPACE-041..050 | built 2026-09-22 under `PD-WORKSPACE-002` | §3 |
 | Injection — REQ-WORKSPACE-049's latency bound, a built-app proof | **built 2026-09-27** (`pnpm injection-proof`); the bound **met on Linux**, the Windows gate-class reading **owed**; OQ-64 **ruled 2026-09-27**; OQ-67 raised | §3 |
-| The Windows release pipeline, REQ-STARTUP-027..038, 141..143, 156, 158, 167, 168 | the installer built once (ADR-0054, 2026-09-04); **the version guard built 2026-09-27** (§4.1), and the setup manifest it checks is owed | §4 |
+| The Windows release pipeline, REQ-STARTUP-027..038, 141..143, 156, 158, 167, 168 | the installer built once (ADR-0054, 2026-09-04); **the version guard built 2026-09-27** (§4.1), and the setup manifest it checks is owed; **the notices generator built 2026-09-27** (§4.3), its validation refusing until O-3, O-11 and OQ-73; **the two bundled assets wired into `pnpm package` 2026-09-27** (§4.4), so a package refuses with it | §4 |
 | The updater, REQ-STARTUP-107..124 | **not built** — no module in `apps/desktop/src/main/`; **in the first release**, ruled 2026-09-27 | §4.6 |
 
 **Deferred by "thats it".** Each item stays owed where the record already carries it:
@@ -345,8 +345,78 @@ release is published is the owner's choice (§6).
 - It fails the platform's job on each condition REQ-STARTUP-143 lists.
 
 While this is built, the About page's lowercase lookup has to be repaired
-(`../defects/the-about-page-looks-for-the-licence-bundle-under-a-lowercase-name.md`). Otherwise the first
+(`../defects/fixed/the-about-page-looks-for-the-licence-bundle-under-a-lowercase-name.md`). Otherwise the first
 release carries the file and the About page still says it does not.
+
+*Built 2026-09-27, with the About repair; first execution reported into ADR-0035, ADR-0054 and IC-7.* `pnpm notices`
+(`tools/notices/`) writes `apps/desktop/resources/THIRD-PARTY-LICENSES.txt` only when validation passes, and exits 1
+naming each problem otherwise (REQ-STARTUP-149). It builds under four readings, each an open question:
+
+- OQ-71, what one entry is;
+- OQ-72, Manrope and the machine tools;
+- OQ-73, an identifier a dependency does not declare;
+- OQ-74, when a licence file carries the licence's text. It was added by the gate review the same day.
+
+**Where the owner writes the O-3 address.** In `tools/notices/release-inputs.json`, as the value of
+`lgplCorrespondingSourcesAddress`. That file is the one place the generator reads it. The value must be one literal
+address in one of two shapes:
+
+- one e-mail address, alone or after a display name, as in `Rotaris Maintainers <sources@example.org>` with the
+  owner's own domain in place of `example.org`. The example as written is refused, because `example.org` is reserved
+  for examples, so a copied example cannot pass;
+- a postal address of more than one part, separated by commas or lines, with a number and words in it.
+
+Validation refuses each of these, naming what it found:
+
+- a web page;
+- more than one e-mail address, since REQ-STARTUP-142 asks for a single address;
+- a no-reply route, which no maintainer monitors;
+- a placeholder word (`N/A`, `none`, `TBA`, `TODO`, `REPLACE_ME` and the like), or a template's field name standing
+  where the value goes (`Name <…>`, `Street 1, 12345 City, Country`);
+- a stock template address: "Address line 1", "123 Main Street", Anytown, Nowhere, "Fake Street", Musterstadt, or a
+  number made only of zeros;
+- a domain reserved for examples and tests;
+- a top-level label no mail reaches (`.tld`, `.domain`, `.local`, `.lan`, `.internal` and the like);
+- a template's domain (`domain.com`, `host.com`, `test.com`) or local part (`test@`, `foo@`, `user@`, `john.doe@`).
+
+Until an address that passes is written, validation fails and names the key.
+
+**The check is a word-and-shape heuristic, and nothing more.** It refuses the placeholders it knows. It cannot tell
+whether an address is the owner's, so an invented address that looks real still passes. In the other direction, a
+real address that contains one of its words is refused, for example a street named "Sample Lane", a company named
+"Unknown Pleasures", or a domain such as `sample-labs.com`. REQ-STARTUP-142 makes a truthful address the owner's
+act. The check only catches a template left in place.
+
+*Corrected 2026-09-27 by the gate review's second round.* The check as the first round left it still accepted
+`Name <sources@domain.tld>`, which was the example this paragraph then gave. It also accepted `test@test.com`,
+`noreply@…`, two addresses in one value, and the stock postal templates. The second round also found that an input
+file holding only `null`, `false`, `0` or `""` was read as having nothing to report. With `release-inputs.json` set to
+`null` over an otherwise valid fixture, the step exited 0 and the header read "(no address)". Every input that is not
+a JSON object now fails as unparsable.
+
+**What the first run refused, besides O-3.** Twelve shipped components carry no licence text. Four ship no licence
+file at all:
+
+- `@ai-sdk/provider-utils` 5.0.36;
+- `@xterm/addon-serialize` 0.14.0;
+- `@xterm/headless` 6.0.0;
+- `proxy_tools` 0.1.0, in the code-intelligence runtime.
+
+Eight ship a file that only refers to their licence (OQ-74):
+
+- `@workflow/serde` 4.1.0, whose `LICENSE.md` points to a file it does not ship;
+- `ai` 7.0.92, `@ai-sdk/gateway` 4.0.74, `@ai-sdk/openai` 4.0.58, `@ai-sdk/openai-compatible` 3.0.43 and
+  `@ai-sdk/provider` 4.0.10, each with Apache-2.0's per-file notice only;
+- `certifi` 2026.7.22, in the runtime, with MPL-2.0's Exhibit A only;
+- `mslex` 1.3.0, in the runtime, with the Apache-2.0 notice and an authors list.
+
+*Corrected 2026-09-27 by the gate review. This paragraph first said "Four shipped components carry no licence text",
+listing only the first four. The generator had then counted any non-empty licence file as the text, so the eight
+files that only refer to their licence passed.*
+
+Each of the twelve passes only with a maintainer's reviewed exception in `tools/notices/reviewed-exceptions.json`
+(O-11), and the file states why each is there. `dotenv` 0.9.9, in the runtime, declares no licence identifier.
+REQ-STARTUP-143 as worded gives that no route, which is OQ-73.
 
 **4.4 The two bundled assets.** The About page already has both "absent" branches (ADR-0054, 2026-09-08). The
 build must now produce two files under `process.resourcesPath`:
@@ -355,6 +425,40 @@ build must now produce two files under `process.resourcesPath`:
 - the notices file for REQ-SHELL-142.
 
 `settings-proof` gains the present branch for each.
+
+Two facts from §4.3 bear on this step:
+
+- `pnpm notices` writes no file until O-3, O-11 and OQ-73 are answered. The notices file's present branch therefore
+  needs a file the proof supplies itself. Once `pnpm notices` succeeds in a worktree, the built app finds its output
+  through `about.ts`'s source-tree fallback, and the proof's absent-caption check turns red.
+- REQ-STARTUP-015 asks for "exactly one copy" of the bundled tool server's licence text inside the bundle, citing
+  REQ-STARTUP-142. ADR-0054 recorded the dist-info `LICENSE` as that copy. The notices file reproduces the same text
+  again, so carrying the file makes two copies. This step decides which copy stands, or raises the question.
+
+*Built 2026-09-27; first execution reported into ADR-0054 ("The two bundled assets") and ADR-0035.* What landed:
+
+- **The build identifier.** `pnpm build-id` (`tools/build-id/`) writes `apps/desktop/resources/build-id.txt` (git-ignored)
+  as one line: the full commit name of HEAD, with `-dirty` when the working tree differs from it. It is deterministic
+  per commit and uses no network. ADR-0054 records why neither an abbreviation nor a tag is used.
+- **The packaging.** `pnpm package` runs `pnpm notices` and then `pnpm build-id` before `electron-vite build`.
+  `electron-builder.yml` carries both files to the root of `process.resourcesPath`, and `afterPack`'s "assets" rule
+  checks them in the artifact.
+- **While O-3 is owed, a local `pnpm package` fails** at the notices step (REQ-STARTUP-143). `ROTARIS_PACKAGE_WITHOUT_NOTICES=1`
+  makes a development package without the notices file instead, removing any earlier one; any other value is a usage
+  error (exit 2). Its About page shows the absent caption, the package says it is not releasable, and a build for a
+  tag refuses the flag, in `package.mjs` and in `afterPack` alike. Its installer still carries a release artifact's
+  name (ADR-0054 records this).
+- **The licence copy.** The notices file's copy stands, because REQ-STARTUP-142 requires it there. The dist-info copy
+  is filtered out of the artifact and kept in the source tree for the generator. The requirements decide this between
+  them, so no question is raised.
+- **The proof.** `settings-proof` launch 1′ measures the present branch of each asset. The notices file there is a
+  fixture, as the first fact above says it must be. The proof puts back whatever `apps/desktop/resources/` held, byte
+  for byte, so a successful `pnpm notices` no longer turns the absent check red. A real file written between a killed
+  run and the next is kept, not taken for the proof's (the gate review's correction, ADR-0054); so is a real writer's
+  removal of the proof's file, which leaves the name empty (its second round's).
+
+**Owed:** the "assets" rule's first run against a real `win-unpacked`, at the next Windows `pnpm package`. No package
+was run here (IC-3).
 
 **4.5 The portable and its launcher stub.** REQ-STARTUP-031 names two Windows artifacts, so the portable is part of
 the first release. The stub is ADR-0054's second build technology and has never been built. It is the largest
@@ -419,7 +523,7 @@ cannot be the gate.
 
 **The conditions that bind this release:**
 
-- **IC-7** is discharged by §4.3.
+- **IC-7** is discharged by §4.3. *Discharged 2026-09-27: the generator lists the language servers.*
 - **IC-4** half 2 is the owner's (§6). It binds the restore's sign-off, and the restore ships in this release.
 - **IC-3 and IC-8** bind only artifacts this release does not publish.
 - **ESC-6** already accepted win32 reporting confinement as `available: false` for the first release.
@@ -430,7 +534,7 @@ cannot be the gate.
 |---|---|---|
 | O-1 | ~~Rule ESC-37, ESC-38, ESC-39 and OQ-64~~ **ruled 2026-09-27** as recommended (R-052) | §2.2, §3.3 |
 | O-2 | Generate the manifest signing key pair and store the private half as a repository secret. The public half is committed | §4.7 |
-| O-3 | Give the literal contact address for the LGPL source request (REQ-STARTUP-142). It must be reachable without an account | §4.3 |
+| O-3 | Give the literal contact address for the LGPL source request (REQ-STARTUP-142). It must be a single address, reachable without an account and monitored by the maintainers. **Written in `tools/notices/release-inputs.json`, key `lgplCorrespondingSourcesAddress`**, in one of the two shapes §4.3 states; validation fails naming that key until it is | §4.3 |
 | O-4 | Supply an icon, with the `.ico` sizes `electron-builder` asks for | §4.9 |
 | O-5 | ~~Choose where releases are published~~ **ruled 2026-09-27** (R-053): GitHub releases of `theUpsider/Rotaris-crw`, the product repository REQ-STARTUP-038 names | §4.2 |
 | O-6 | Provide the gate machine of §5. **Form ruled 2026-09-27** (R-053): a snapshot-restored Windows x64 virtual machine, restored between releases. The owner still provides it | §5 |
@@ -438,9 +542,10 @@ cannot be the gate.
 | O-8 | The power-loss test's fault half: a forced power-off during a save (`spikes/power-loss.md` §4) | the store's sign-off |
 | O-9 | ~~Approve the §2.3 and §3.4 live runs~~ **approved 2026-09-27** (R-053). The agent still states the scenario and its spending bound immediately before each run (AGENTS.md) | §2.3, §3.4 |
 | O-10 | ~~Decide §4.6~~ **ruled 2026-09-27**: the updater ships in the first release (R-052) | §4.6 |
+| O-11 | As a maintainer, review each shipped component that carries no licence text, and record the review in `tools/notices/reviewed-exceptions.json`: the component, the version range, the identifier claimed, why no text is obtainable, the reviewer, the date and an expiry at most 365 days later (REQ-STARTUP-143). The first run named twelve (§4.3). Four ship no licence file: `@ai-sdk/provider-utils` 5.0.36, `@xterm/addon-serialize` 0.14.0, `@xterm/headless` 6.0.0 and `proxy_tools` 0.1.0. Eight ship a file that only refers to the licence (OQ-74): `@workflow/serde` 4.1.0, `ai` 7.0.92, `@ai-sdk/gateway` 4.0.74, `@ai-sdk/openai` 4.0.58, `@ai-sdk/openai-compatible` 3.0.43, `@ai-sdk/provider` 4.0.10, `certifi` 2026.7.22 and `mslex` 1.3.0. For those eight, OQ-74 asks whether the generator should reproduce the declared licence's standard text instead. *Added 2026-09-27 by §4.3's first execution. It first named only the four without a licence file; the gate review corrected it the same day* | §4.3 |
 
 O-2, O-3, O-4, O-7 and O-8 carry no recommendation to take: each is a value or an act only the owner can
-supply, and each stays owed (R-053).
+supply, and each stays owed (R-053). O-11 is the same kind of item: a review only a maintainer may sign.
 
 ## 7. Order of work
 
@@ -455,8 +560,10 @@ supply, and each stays owed (R-053).
      (`REQ-STARTUP-058/059`), before §5's first check can pass. §4.3's section is generated from the same file, so
      that step is where it most naturally lands, and it lands packed: an `extraResources` entry, and either the
      guard's `toolServerPackages` field or a change to the guard's constant;
-   - §4.3 the notices generator with the About defect;
-   - §4.4 the bundled assets.
+   - §4.3 the notices generator with the About defect — *built 2026-09-27; validation refuses until O-3, O-11 and OQ-73.
+     OQ-71 does not stop validation, but until it is ruled the file knowingly leaves out the libraries linked into
+     the bundled interpreter*;
+   - §4.4 the bundled assets — *built 2026-09-27; its "assets" rule waits for the next Windows package.*
 3. **The portable stub (§4.5).** Spike first, and report the result into ADR-0054.
 4. **The updater (§4.6)** if O-10 includes it, then the manifest and signature (§4.7) against O-2's key.
 5. **Assembly.** The release body (§4.8), the icon (§4.9) and the tag workflow (§4.2), run end to end against a

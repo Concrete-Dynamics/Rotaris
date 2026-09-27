@@ -23,8 +23,9 @@
  * workspace store is the only one under it (the sixty-eighth defect was a proof that read another workspace's store).
  *
  * It needs `apps/desktop/release/win-unpacked/Rotaris.exe`, which
- * `ROTARIS_PACKAGE_DIR_ONLY=1 ROTARIS_PACKAGE_SKIP_APP=1 pnpm package` builds. Absent, this REFUSES and says so; it
- * never passes quietly and never falls back to the development build, which would not be the packaged application.
+ * `ROTARIS_PACKAGE_DIR_ONLY=1 ROTARIS_PACKAGE_SKIP_APP=1 pnpm package` builds (with `ROTARIS_PACKAGE_WITHOUT_NOTICES=1`
+ * while `pnpm notices` refuses; first-release-plan.md §4.4). Absent, this REFUSES and says so; it never passes quietly
+ * and never falls back to the development build, which would not be the packaged application.
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -139,7 +140,7 @@ export function packagedTerminalStreaming({ repo, afterMs = 16_000 }) {
   if (!existsSync(exe)) {
     return {
       available: false,
-      refusal: `no packaged executable at ${exe} — build it with \`ROTARIS_PACKAGE_DIR_ONLY=1 ROTARIS_PACKAGE_SKIP_APP=1 pnpm package\`. This section reports NOTHING rather than measuring the development build, which is not the packaged application.`,
+      refusal: `no packaged executable at ${exe} — build it with \`ROTARIS_PACKAGE_DIR_ONLY=1 ROTARIS_PACKAGE_SKIP_APP=1 pnpm package\` (and \`ROTARIS_PACKAGE_WITHOUT_NOTICES=1\` while \`pnpm notices\` refuses). This section reports NOTHING rather than measuring the development build, which is not the packaged application.`,
     };
   }
   const scratchRoot = join(release, 'terminal-stream-proof');

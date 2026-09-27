@@ -1,0 +1,30 @@
+{
+  "$comment": "REQ-STARTUP-142/143: the fonts and the icon set the build bundles, each with its license file, read by tools/notices/notices.mjs. files are the font files the build carries, relative to the repository root; a font's version and copyright notice are read from its own naming table, and its license file must carry that notice. Every font packages/ui/src/fonts.css bundles must be named here, or validation fails because its license file is missing. package names an installed package whose version the entry takes. The three OFL-1.1 texts are the upstream projects' own OFL.txt, line endings normalised: JetBrains Mono and Space Grotesk from their repositories, Manrope from the Google Fonts repository (ofl/manrope). Manrope has no files: REQ-STARTUP-142 names it and no build carries it yet (packages/ui/src/fonts.css; OQ-72).",
+  "assets": [
+    {
+      "component": "JetBrains Mono",
+      "license": "OFL-1.1",
+      "licenseFile": "tools/notices/licenses/JetBrainsMono-OFL.txt",
+      "files": ["docs/design/assets/d961a407.woff2", "docs/design/assets/4a0312df.woff2"]
+    },
+    {
+      "component": "Manrope",
+      "license": "OFL-1.1",
+      "licenseFile": "tools/notices/licenses/Manrope-OFL.txt",
+      "files": []
+    },
+    {
+      "component": "Space Grotesk",
+      "license": "OFL-1.1",
+      "licenseFile": "tools/notices/licenses/SpaceGrotesk-OFL.txt",
+      "files": ["docs/design/assets/18c029f5.woff2"]
+    },
+    {
+      "component": "Phosphor Icons",
+      "license": "MIT",
+      "package": "@phosphor-icons/web",
+      "licenseFile": "node_modules/@phosphor-icons/web/LICENSE",
+      "files": ["node_modules/@phosphor-icons/web/src/regular/Phosphor.woff2", "node_modules/@phosphor-icons/web/src/fill/Phosphor-Fill.woff2"]
+    }
+  ]
+}

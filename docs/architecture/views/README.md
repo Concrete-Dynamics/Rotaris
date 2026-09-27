@@ -80,6 +80,35 @@ until then, is now the declared version on all three connection paths. The **pro
 paragraph and gains the manifest as a file main and the run host read; the **runtime view**'s MCP paragraph names who
 the client says it is. No process, channel, message kind or state owner changed.
 
+**The two bundled assets (first-release-plan.md §4.4, built 2026-09-27).** `tools/build-id/` joins `tools/notices/` as a
+build-time tool: `pnpm build-id` writes `apps/desktop/resources/build-id.txt`. `pnpm package` runs both tools before
+freezing, and `electron-builder.yml` carries both files to the root of `process.resourcesPath`. It leaves the tool
+server's dist-info licence out of the artifact (REQ-STARTUP-015). The **component view** gains a section for the writer
+and the two script modules, and the **process view** gains the identifier's row in "Files and directories on disk", an
+updated notices row and a corrected About paragraph. No package, edge, process, channel, command or message kind
+changed. `about.ts` reads what it read before. The gate review later that day renamed `lib/bundled-assets.mjs` to
+`lib/about-assets.mjs`, ~~because REQ-STARTUP-143's "bundled asset" is a font family or the icon set~~ because
+`tools/notices/bundled-assets.json` already holds the bundled assets that carry a licence file. It moved
+`package.mjs`'s closing lines into a third script module, `lib/package-verdict.mjs`. The **component view**'s section
+says both. The scripts now import two constants and `normalize` from the tools, which is not an edge the boundary rule
+governs. Nothing else in the views moved. *The review's second round struck the reason: the specification counts both
+About files among its bundled assets (domain 12's appendix, REQ-SHELL-140). The component view's sentence saying
+otherwise is corrected, and the section now names the flag's usage check and the proof's use of the writer's list of
+git's redirecting variables. The stash's ledger and removal branch stay inside its module. Nothing else in the views
+moved.*
+
+**The notices generator, and the About page's lookup (first-release-plan.md §4.3, built 2026-09-27).** `tools/notices/`
+is a build-time tool, not a package: `pnpm notices` computes the shipped closure offline and writes
+`apps/desktop/resources/THIRD-PARTY-LICENSES.txt` only when REQ-STARTUP-143's validation passes. Main's About reader now
+looks for the file under REQ-STARTUP-141's name; it had looked for a lowercase name. The **component view** gains a
+section for the tool, and the **process view** gains the file's row in "Files and directories on disk" and a corrected
+About paragraph. No package, edge, process, channel, command or message kind changed. The gate review later that day
+changed two things inside the tool. A licence file that only refers to the licence, or only attributes, is no longer
+counted as the text (OQ-74). The LGPL address must now have an address's shape. No view changed for either: both
+are internal to `notices.mjs`, and it still reads and writes what the component view says. The review's second round
+changed three more things inside the tool. The address check refuses the placeholders it still accepted. An input that
+is not a JSON object fails as unparsable. A directory where the output goes is a handled error. No view changed.
+
 **Product-drawn main-window chrome (`PD-SHELL-003`, built and revised 2026-09-24).** On Windows, Linux and macOS the main
 `BrowserWindow` is frameless with its native menu hidden. The existing title bar now ends in minimize,
 maximize/restore and guarded close controls; four renderer commands reach the sending window in main.

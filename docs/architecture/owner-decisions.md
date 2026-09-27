@@ -1154,7 +1154,9 @@ capability switched off.
   manifest's declaration checked against the runtime, and the disclosure with its proof are the first half.
   The second — the notices generator listing the servers under `REQ-STARTUP-142` — waits on that generator,
   which is not built (`REQ-STARTUP-141/142/143`; ADR-0054). The entry in `implementation-conditions.md`
-  says so; no condition is downgraded by the person doing the work.
+  says so; no condition is downgraded by the person doing the work. *2026-09-27: the second half is shown. The
+  notices generator lists the servers, and IC-7 is recorded as discharged there. The release pipeline's evidence
+  of the section is still owed (`first-release-plan.md` §4.3).*
 - `REQ-STARTUP-064`'s reason for exempting the reserved token from cache warm-up — "what it resolves to
   ships inside the artifact" — was true of the runtime and false of its servers. The outcome (no warm-up
   step) stands; the reason is qualified in place and kept beside its qualification, under GD-10.

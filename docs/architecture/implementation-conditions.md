@@ -2,8 +2,9 @@
 
 Created 2026-09-02 by owner ruling GD-3. **Extended 2026-09-03 by the Architecture Gate**, which added
 IC-4, IC-5 and IC-6 under its decision 2 and recorded its decision 3 at the end of this file. **IC-7 was proposed
-2026-09-06 by ADR-0035's first execution and adopted by the owner the same day (ESC-32, option 2)**; it stays on the
-release until both halves of that option are shown.
+2026-09-06 by ADR-0035's first execution and adopted by the owner the same day (ESC-32, option 2)**; it stayed on the
+release until both halves of that option were shown, and **the second half was shown on 2026-09-27** by the notices
+generator's first execution (see its entry).
 
 This file holds obligations that are **not** conditions of the Architecture Gate but **are** conditions on
 building the thing they name. It exists because the alternative to holding a whole gate for one mechanism's
@@ -375,7 +376,39 @@ ninth defect of decision 3's pattern was a blank packaged window, React twice in
 the unpackaged build shared and no test rendered. Owed and stated: the portable and its stub (ADR-0054),
 signing, `REQ-STARTUP-156`'s gate, an icon, and the per-runner half (IC-3 item 3).
 
-## IC-7 — the bundled code-intelligence runtime fetches its language servers; the release is bound until the owner decides (ADOPTED 2026-09-06, option 2 — half discharged)
+## IC-7 — the bundled code-intelligence runtime fetches its language servers; the release is bound until the owner decides (ADOPTED 2026-09-06, option 2 — DISCHARGED 2026-09-27, the pipeline's evidence owed)
+
+> **DISCHARGED 2026-09-27 — the second half, by the notices generator's first execution** (`first-release-plan.md`
+> §4.3; `tools/notices/`, `pnpm notices`). The criterion option 2 set — "the specification carries the amendment and
+> the notices generator lists them" — is met. The generator writes the `Tools provisioned after installation` section
+> from the setup manifest this build carries (`apps/desktop/scripts/code-intelligence/pins.json`). Under a sub-heading
+> naming the runtime (`serena-agent 1.7.0`), it lists `typescript` 5.9.3 (Apache-2.0,
+> https://registry.npmjs.org/typescript), `typescript-language-server` 5.1.3 (MIT,
+> https://registry.npmjs.org/typescript-language-server) and `pyright` 1.1.403 (MIT, https://pypi.org/project/pyright/),
+> each with its language. It states that the runtime downloads each at the first use of that language, that none is
+> contained in the artifact, and that a further language obtains its server by the same route and is not declared.
+> Rendered over this tree and asserted by `tools/notices/notices.test.ts`, both over a fixture and over the real
+> manifest. A manifest that cannot be read or parsed, or a package missing any of the four fields, fails validation.
+> *Corrected the same day by the gate review's second round: that sentence was false for one input.* A manifest
+> holding only `null`, `false`, `0` or `""` parsed without complaint. Over an otherwise valid fixture the step exited
+> 0 and printed "0 language servers", and this section's list was empty. Every input the generator reads must now be
+> a JSON object, or it fails as unparsable. A package field that is only whitespace also counts as missing.
+> `notices.test.ts` covers each case.
+> **What this does not show, stated so it is not read as shown:** a notices file frozen into a release. The first run
+> wrote none, because REQ-STARTUP-143's validation failed on six things IC-7 does not own: the LGPL address (O-3),
+> `dotenv` 0.9.9's missing identifier (OQ-73), and three npm packages and one Python distribution that carry no
+> licence text and await a maintainer's review (O-11). *Corrected the same day by the gate review: fourteen things.*
+> Eight more components carry only a file that refers to their licence without carrying its text: six npm packages
+> (`@workflow/serde`, `ai` and four `@ai-sdk` packages) and two Python distributions (`certifi`, `mslex`). The first
+> run had counted such a file as the text (OQ-74). O-11 is now twelve reviews. That binds every release by itself, so
+> IC-7 no longer binds anything REQ-STARTUP-143 does not. The machine tools this section also names in
+> REQ-STARTUP-142 are OQ-72's, not IC-7's. Of the three records this entry is "discharged into", the notes on
+> ADR-0035 and ADR-0054 are written in place. **The third, the release pipeline's evidence, is owed**: no pipeline
+> exists yet (first-release-plan.md §4.2). Its first run must show this section in a frozen file.
+> *Pointer added 2026-09-27 (first-release-plan.md §4.4): `electron-builder.yml`'s `extraResources` now carries the
+> file into the artifact, and `afterPack`'s "assets" rule compares it byte for byte with the one in the source tree. No
+> Windows package has run since, so the first one to pass validation freezes this section for the first time and runs
+> that rule for the first time too (ADR-0054, "The two bundled assets").*
 
 > **ADOPTED 2026-09-06 by the owner — option 2, ESC-32 (`owner-decisions.md`).** The language servers are tools
 > provisioned after installation, like Git and ripgrep. **Shown so far, the same day:** `REQ-STARTUP-159`, `058`,

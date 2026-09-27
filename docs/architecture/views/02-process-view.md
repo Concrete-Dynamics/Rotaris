@@ -286,14 +286,20 @@ loads the renderer in the `rows-proof` role, the row renderer over a fixture arr
 **The About page's two commands (Part AG).** Renderer → main: **`shell.openThirdPartyLicenses`** → `{path}` | a refusal.
 `REQ-SHELL-142`'s notices bundle is a **local file shipped with the build**, so it cannot travel through
 `shell.openExternal`, which refuses every scheme but `http(s)` for the reason above; it takes its own command, the
-renderer names no path, and main answers `licenses.absent` when the build carries no bundle — the ordinary case today,
-since nothing produces the asset (owed to ADR-0054). `shell.hello`'s reply gains three local facts beside the version
+renderer names no path, and main answers `licenses.absent` when the build carries no bundle. Since 2026-09-27
+`pnpm notices` produces the asset (below), but only once its validation passes, and `pnpm package` carries it into the
+artifact (`first-release-plan.md` §4.4). A package cannot be made without it, except a development package that
+`ROTARIS_PACKAGE_WITHOUT_NOTICES=1` asks for. That package, and any source-tree run nobody has written the file for,
+takes the absent branch. Main looks for it as `THIRD-PARTY-LICENSES.txt`, the name REQ-STARTUP-141 fixes and the
+generator writes; it looked for a lowercase name until that date, which Linux does not forgive. `shell.hello`'s reply
+gains three local facts beside the version
 — which is the application manifest's, read once per process by `main/version.ts` (through `@rotaris/platform`'s
 `installedProductVersion`) from the `package.json` beside the bundle and never `app.getVersion()`, since Electron answers
-that with its own version for the unpacked entry (`REQ-STARTUP-007`, `REQ-STARTUP-158`; 2026-09-27) — for `REQ-SHELL-140`'s product card: `build` (the bundled build identifier, null when the asset is missing or
-unreadable), `standalone` (`app.isPackaged`) and `thirdPartyLicenses` (whether a bundle exists). The About page issues
-no request of its own — `REQ-SHELL-139` requires zero network requests at render — and the same capture seam
-(`ROTARIS_CAPTURE_OPEN_EXTERNAL=record|fail`) covers both openers.
+that with its own version for the unpacked entry (`REQ-STARTUP-007`, `REQ-STARTUP-158`; 2026-09-27) — for `REQ-SHELL-140`'s product card: `build` (the bundled build identifier,
+null when the asset is missing or unreadable; `pnpm build-id` writes it, below), `standalone` (`app.isPackaged`) and
+`thirdPartyLicenses` (whether a bundle exists). The About page issues no request of its own — `REQ-SHELL-139` requires
+zero network requests at render — and the same capture seam (`ROTARIS_CAPTURE_OPEN_EXTERNAL=record|fail`) covers both
+openers.
 
 **The requirements board's contracts (Part AK; ADR-0041's first execution).** Renderer → main: `requirements {command}` — ONE envelope member carrying the `name`-discriminated `RequirementsCommand` (`board`, `detail {id}`, `refresh`, `reachable {id, from, to}`, `act {id, action, target?, payload?}`, `operation`, `cancel`, `queue.set`, `source.write`, `source.previewLocation`); main replaces `workspace` with the open root and stamps the `Actor` (REQ-CONFIG-198), a renderer never sends one. Main → workspace service: `requirements.command {workspaceRoot, command, actor}` → `requirements.result {value, changed?}`. Main → renderer: **channel 10 `requirements:changed {v, workspace, generation, affected | null, progress?}`**, broadcast to every window only after a reply carrying `changed` (persist before publish). The workspace service's case takes the one traceability engine `traceability.ts` holds for the process (since the merge of 2026-09-09; it shipped with `ENGINE_NOT_MERGED`).
 
@@ -447,3 +453,5 @@ licensed.
 | the instance claim | main (ADR-0055) | main (a second launch hands over and exits) |
 | **verification only, compiled out of a packaged build:** the file `ROTARIS_CAPTURE_MODEL_REQUESTS` names — one JSON line per scripted model call (`call`, `who`, `model`, `system`), what the model port received | run host (the scripted client alone, so no provider's traffic can reach it) | `injection-proof` |
 | the application manifest's `version` — `apps/desktop/package.json` in development, `resources/app.asar/package.json` packaged (`out/main/../../package.json` either way) | the developer; packed by electron-builder; the one place a release declares the product version, checked against the tag by `pnpm release:guard` before any build (REQ-STARTUP-028/158) | main (`version.ts`, once per process — the version `shell.hello` reports) and the run host (`host.ts`, once — the `clientInfo.version` of every MCP handshake, handed to `McpHost`); both through `@rotaris/platform`'s `installedProductVersion`, from `out/main/`, so neither process carries a version of its own |
+| `process.resourcesPath/THIRD-PARTY-LICENSES.txt` — the notices file (REQ-STARTUP-141/142); in the source tree `apps/desktop/resources/THIRD-PARTY-LICENSES.txt`, git-ignored | **the build**, never the product: `pnpm notices` (`tools/notices/`), per platform before freezing and only when REQ-STARTUP-143's validation passes; `pnpm package` runs it and `extraResources` carries it into the artifact (§4.4, 2026-09-27) | main (`about.ts`, `thirdPartyLicensesPath`) — the About page's `shell.openThirdPartyLicenses` opens it as a local file; `afterPack`'s "assets" rule; a person |
+| `process.resourcesPath/build-id.txt` — the build identifier (REQ-SHELL-140): one line, HEAD's commit name, `-dirty` when the tree differed; in the source tree `apps/desktop/resources/build-id.txt`, git-ignored | **the build**, never the product: `pnpm build-id` (`tools/build-id/`), which `pnpm package` runs before freezing; `extraResources` carries it into the artifact (§4.4, 2026-09-27) | main (`about.ts`, `buildIdentifier`) — `shell.hello`'s `build`, the About page's Build row; `afterPack`'s "assets" rule |

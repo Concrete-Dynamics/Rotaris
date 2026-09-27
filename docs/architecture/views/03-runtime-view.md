@@ -175,6 +175,16 @@ flowchart TB
   ML -- no --> L0
 ```
 
+**An iteration a previous run left open (PD-ORCH-005; the repair of the crashed-iteration defect).** Every execution
+iteration has an `iterations` row from the moment its root is minted, and `iteration.end` and the row's close commit in
+one transaction (`endIteration`). A run host that died mid-iteration leaves that row open, so before its first iteration
+a run closes any open row `cancelled` (`closeLeftOpenIteration`, REQ-ORCH-135): the task it held goes back to
+`pending` (`Todo.reopen`), and the count moves past it, so the run's own first iteration takes the next number rather
+than the dead one's. The count is also never below the highest iteration recorded closed. The ledger holds its own
+root's tree, walked from the root through the parent links, rather than every child with its iteration's number — every
+plan cycle is numbered 0. Root and child task ids are minted against every child's and every recorded root's id in the
+session (`takenTaskIds`), since the record is keyed by task id session-wide.
+
 **The checkpoint at iteration close (Part P; ADR-0039's first execution).** Exactly once per iteration that closes, after
 `iteration.end` is recorded and BEFORE the hooks' `iteration_end` (the checkpoint records the iteration's work as the agent
 left it; a hook that later carries the checkpoint — REQ-HOOKS-082 with checkpoints, owed — can only do so if the capture
@@ -219,9 +229,13 @@ the moment it joins the conversation, and every `replace` (a compression, ADR-00
 the whole conversation that took its place (clause 12). The root's recorder is keyed by the iteration's root task id,
 a child's by its own; REQ-ORCH-088's fallback retry writes an empty replacement before the second attempt, since that
 attempt starts the child's conversation again from its payload. A summarising pass, the compressor and the classifiers
-are no agent's conversation and record nothing. `runTurn` takes a `null` task to continue a history as it stands (the
-spike's seam, used by the resume). `ConversationRecord.load` reads an agent's conversation back from its last
-replacement forward (`conversationOf`).
+are no agent's conversation and record nothing. What the record holds is the conversation: the system prompt and the tool
+definitions are rebuilt from the persona whenever the agent is built, and streamed reasoning is drawn but never sent back,
+so neither is recorded (OQ-68). A turn **closes** its `Conversation` on every exit, so a manual compression (Part AO)
+that finishes after its turn ended replaces and records nothing and reports that it failed. `runTurn` takes a `null` task
+to continue a history as it stands, and `ConversationRecord.load` reads an agent's conversation back from its last
+replacement forward (`conversationOf`); neither has a caller until the resume lands. Until the interruption lands, a
+stop that aborts a step mid-dispatch still leaves that agent's record ending on calls with no results.
 
 **What a step costs (PD-MONITOR-001 revision 2; `model/reported-cost.ts`, `kernel/money.ts`, `run/pricing.ts`,
 `run/aggregates.ts`).** A completed provider request carries its tokens and, where the endpoint's protocol defines a

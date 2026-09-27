@@ -77,10 +77,13 @@ describe('the ledger and the scheduler against a real store (ADR-0012)', () => {
     // the total check (2) precedes the dependency check (4): a wider budget reaches it
     const wide = ledger(null, { maxDepth: 3, maxTotal: 20, maxActive: 6 });
     expect(spawn(wide, 'dep', { dependsOn: ['bg_00000000'] })).toMatchObject({ ok: false, error: { reason: "Unknown dependency 'bg_00000000'" } });
-    const other = spawn(wide, 'other', { parentId: 'someone-else' });
+    // A dependency owned by another parent of the same iteration — a child's child — is refused naming that parent.
+    const someone = spawn(wide, 'someone');
+    const someoneId = someone.ok ? someone.value.row.task_id : '';
+    const other = spawn(wide, 'other', { parentId: someoneId, parentDepth: 1 });
     const otherId = other.ok ? other.value.row.task_id : '';
-    expect(spawn(wide, 'dep2', { dependsOn: [otherId] })).toMatchObject({ ok: false, error: { reason: expect.stringMatching(/is owned by parent 'someone-else', not 'root'/) } });
-    expect(dal.eventsOfKind(sid, 'child.spawn')).toHaveLength(3);
+    expect(spawn(wide, 'dep2', { dependsOn: [otherId] })).toMatchObject({ ok: false, error: { reason: expect.stringMatching(new RegExp(`is owned by parent '${someoneId}', not 'root'`)) } });
+    expect(dal.eventsOfKind(sid, 'child.spawn')).toHaveLength(4);
   });
 
   it('REQ-MONITOR-016: an illegal move is refused naming both states, the record untouched, no event; a legal terminal move stamps completed_at', () => {
@@ -95,6 +98,20 @@ describe('the ledger and the scheduler against a real store (ADR-0012)', () => {
     expect(dal.getChild(sid, id)!.completed_at).not.toBeNull();
     expect(dal.eventsOfKind(sid, 'child.transition')).toHaveLength(1);
     expect(JSON.parse(dal.eventsOfKind(sid, 'child.transition')[0]!.payload)).toMatchObject({ from_state: 'queued', to_state: 'cancelled', child_id: id });
+  });
+
+  it('the repair of a-crashed-iteration-number-is-reused-by-the-next-run: a ledger holds its own root\'s tree, not every child numbered like it', () => {
+    // Two roots under one iteration number — every plan cycle is numbered 0, and a dead run's number was reused.
+    const earlier = ledger();
+    const a = spawn(earlier, 'a');
+    const idA = a.ok ? a.value.row.task_id : '';
+    spawn(earlier, 'b', { parentId: idA, parentDepth: 1 });
+    const later = ledger();
+    expect(later.root.taskId).not.toBe(earlier.root.taskId);
+    expect(earlier.all().map((c) => c.canonical_name).sort()).toEqual(['a', 'b']);
+    expect(later.all()).toEqual([]);
+    // So the earlier root's children count toward none of the later ledger's limits and resolve none of its dependencies.
+    expect(spawn(later, 'dep', { dependsOn: [idA] })).toMatchObject({ ok: false, error: { reason: `Unknown dependency '${idA}'` } });
   });
 
   it('REQ-ORCH-049: two passes claim the same child; exactly one child_start, one suppression recorded in the same transaction', () => {

@@ -7,6 +7,8 @@ import { migrateStore, openStore, StoreDal, forgetSpelling, type AgentMessageRow
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ChatMessage, type ModelRequest, type ScriptedCall } from '@rotaris/model';
 import { BUILT_IN_PERSONAS, RUN_CONFIG_DEFAULTS, Sessions, type DelegationOps, type ModelLookup, type PortToolResult, type Publisher, type RoleName, type RunConfig, type ToolPort } from '../index.js';
 import { conversationOf } from './record.js';
+import { takenTaskIds } from '../children/naming.js';
+import { decodeStoredTodo, encodeStoredTodo } from '../todo-view.js';
 
 /**
  * PD-ORCH-005 clauses 1 and 12 — the conversation record, written as it happens: the root's and every child's
@@ -122,8 +124,36 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
     // Every tool call with its arguments and every tool result is in it (the child's probe).
     const kinds = recorded(sid, child.task_id).flatMap((m) => m.content.map((p) => p.kind));
     expect(kinds).toEqual(expect.arrayContaining(['tool-call', 'tool-result']));
-    // A summarising pass is no agent's conversation and records nothing.
-    expect(dal.agentMessagesOf(sid, 'summariser')).toEqual([]);
+    // Only the two agents have records: the summarising pass is no agent's conversation and records nothing.
+    const recordedAgents = (dal.db.prepare('SELECT DISTINCT task_id FROM agent_messages WHERE session_id = ?').all(sid) as { task_id: string }[]).map((r) => r.task_id).sort();
+    expect(recordedAgents).toEqual([iteration!.root_task_id, child.task_id].sort());
+  });
+
+  it('the repair of a-crashed-iteration-number-is-reused-by-the-next-run: an iteration a dead run left open closes cancelled, its task goes back to pending, and the next iteration takes the next number', async () => {
+    const { sessions } = sessionsWith(() => answer('Answered.'));
+    const sid = (sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    // The residue a run host that died mid-iteration 1 leaves: the row open, the count not yet moved, the task in progress.
+    dal.db.prepare("UPDATE iterations SET state = 'open', outcome = NULL, closed_at = NULL WHERE session_id = ? AND iteration = 1").run(sid);
+    const stored = decodeStoredTodo(dal.getSession(sid)!.todo);
+    const planner = structuredClone(stored.planner!);
+    planner.phases[0]!.tasks[0]!.state = 'in_progress';
+    dal.updateSessionRun(sid, { iterations_completed: 0, todo: encodeStoredTodo({ ...stored, planner }) });
+
+    const continued = sessions.prompt(sid, 'second');
+    expect(continued.ok).toBe(true);
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    // No store failure — before the repair the reused number failed the insert and the whole workspace store with it.
+    expect(dal.getSession(sid)!.execution_status).toBe('completed');
+    const rows = dal.iterationsOf(sid);
+    expect(rows.map((r) => [r.iteration, r.state, r.outcome])).toEqual([[1, 'closed', 'cancelled'], [2, 'closed', 'succeeded'], [3, 'closed', 'succeeded']]);
+    // The dead iteration's task was selected again (REQ-ORCH-135: it stays anchored), then the continued prompt's.
+    expect(rows[1]!.todo_task_id).toBe(rows[0]!.todo_task_id);
+    const ended = dal.eventsOfKind(sid, 'iteration.end').map((e) => JSON.parse(e.payload) as { iteration: number; outcome: string });
+    expect(ended.filter((e) => e.iteration === 1).map((e) => e.outcome)).toEqual(['succeeded', 'cancelled']);
+    // Each root has its own id, and every recorded root's id is taken when the next one is minted.
+    expect(new Set(rows.map((r) => r.root_task_id)).size).toBe(3);
+    for (const r of rows) expect(takenTaskIds(dal, sid).has(r.root_task_id)).toBe(true);
   });
 
   it('clause 12: a compression is written into the record, so the conversation a resume sends is the compressed one', async () => {

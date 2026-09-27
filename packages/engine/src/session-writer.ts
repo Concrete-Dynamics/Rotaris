@@ -667,26 +667,54 @@ export class SessionWriter {
    * PD-ORCH-005 clause 1: an execution iteration begins, recorded open with its root's task id. Its own transaction; a
    * plan cycle is not an iteration and is never opened here (REQ-ORCH-153's ruling).
    */
-  openIteration(row: Omit<IterationInsert, 'session_id' | 'opened_at'>): Result<void, WriteFailure> {
+  openIteration(row: Omit<IterationInsert, 'session_id' | 'opened_at'>): Result<boolean, WriteFailure> {
     if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
     const { dal, sessionId, wall } = this.deps;
     try {
-      dal.transaction(() => dal.insertIteration({ ...row, session_id: sessionId, opened_at: toIsoUtc(wall.instant()) }));
+      /*
+       * `false`, and nothing written, when the number is taken or another iteration is still open. The caller numbers
+       * past every recorded iteration and closes a left-open one first, so this is a defect's shape and not a race: a
+       * conflict here must never become a store failure, which would refuse every session of the workspace (found by
+       * phase 2's review, with a crashed iteration's number reused by the next run).
+       */
+      return ok(dal.transaction(() => {
+        if (dal.getIteration(sessionId, row.iteration) !== undefined || dal.openIterationOf(sessionId) !== undefined) return false;
+        dal.insertIteration({ ...row, session_id: sessionId, opened_at: toIsoUtc(wall.instant()) });
+        return true;
+      }));
     } catch (cause) {
       return this.fail(cause);
     }
-    return ok(undefined);
   }
 
-  /** PD-ORCH-005: the iteration closes with REQ-ORCH-135's outcome; `false` when it was not open. Its own transaction. */
-  closeIteration(iteration: number, outcome: string): Result<boolean, WriteFailure> {
+  /**
+   * PD-ORCH-005: the iteration ends — `iteration.end` recorded and the iteration's row closed with its outcome, in ONE
+   * transaction, so a process death cannot leave an ended iteration open. The row's close is `false` when it was not
+   * open (a run with no store row for it); the event is recorded either way.
+   */
+  endIteration(iteration: number, payload: Record<string, unknown>, outcome: string): Result<boolean, WriteFailure> {
     if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
     const { dal, sessionId, wall } = this.deps;
+    const at = toIsoUtc(wall.instant());
+    const ev = this.envelope('iteration.end', at, { ...payload, iteration });
+    const line = serializeEvent(ev);
+    if (!line.ok) this.deps.warn(`event iteration.end could not be serialised and was not recorded: ${line.error.reason}`);
+    const ordinal = this.nextOrdinal;
+    let closed = false;
     try {
-      return ok(dal.transaction(() => dal.closeIteration(sessionId, iteration, outcome, toIsoUtc(wall.instant()))));
+      dal.transaction(() => {
+        if (line.ok) dal.insertEvent(sessionId, ordinal, 'iteration.end', at, EVENT_SCHEMA_VERSION, iteration, line.value);
+        closed = dal.closeIteration(sessionId, iteration, outcome, at);
+      });
     } catch (cause) {
       return this.fail(cause);
     }
+    if (line.ok) {
+      this.nextOrdinal += 1;
+      this.deps.onCommitted({ kind: 'event', ordinal, events: [{ ordinal, event: ev, line: line.value }] });
+      this.trimIfOverflowed(at);
+    }
+    return ok(closed);
   }
 
   /**

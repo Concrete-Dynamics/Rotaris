@@ -14,7 +14,7 @@ import { runTurn, type ToolPort } from './turn.js';
 import { IterationChildren } from '../children/orchestration.js';
 import type { DelegationOps } from '../children/delegation.js';
 import type { Budget as ChildBudget } from '../children/ledger.js';
-import { canonicaliseName, mintTaskId } from '../children/naming.js';
+import { canonicaliseName, mintTaskId, takenTaskIds } from '../children/naming.js';
 import type { SummariserDeps } from '../children/report.js';
 import type { ClaimHit } from '../children/write-scope.js';
 import { priceRequest, type PricedUsage } from './pricing.js';
@@ -357,7 +357,10 @@ export class Run {
     this.aggregates = Aggregates.rehydrate(stored);
     this.lastUsageEmitted = usageTotals(this.aggregates.usagePayload());
     this.tokenSamples = parseTokenSamples(stored?.token_samples ?? '[]');
-    this.iterationsCompleted = stored?.iterations_completed ?? 0;
+    // PD-ORCH-005: the count is never below the highest iteration recorded closed, so the next iteration's number is
+    // always free even where a process death landed between an iteration's close and the save that counts it.
+    const closedIterations = deps.dal?.iterationsOf(deps.sessionId).filter((i) => i.state === 'closed').map((i) => i.iteration) ?? [];
+    this.iterationsCompleted = Math.max(stored?.iterations_completed ?? 0, ...closedIterations);
     this.initialIterations = this.iterationsCompleted;
     // Sticky and observable: a request before the loop exists replays here (REQ-SESSION-092).
     this.stop.onRequested((s) => {
@@ -539,6 +542,8 @@ export class Run {
       // REQ-HOOKS-003/081: session_start once, ahead of the first iteration, in line with the loop (REQ-HOOKS-080).
       if (this.hooks) await this.hooks.fireLifecycle('session_start', { task: this.deps.task });
 
+      // PD-ORCH-005: an iteration a previous run left open is settled before anything else runs.
+      this.closeLeftOpenIteration();
       // REQ-ORCH-153: a held run produces its plan and parks; it never enters the iteration loop, so it selects no
       // task, judges no completion and runs no check suite — the prohibition is structural rather than a branch.
       if (this.planHeld) return await this.parkAtPlanGate();
@@ -624,9 +629,8 @@ export class Run {
       escalate = true;
       if (this.rootRecord) this.rootRecord.state = 'failed';
     }
-    writer.recordEvent('iteration.end', { task: task.text, outcome, summary }, iteration);
-    // PD-ORCH-005 clause 1: the iteration's record closes with its outcome.
-    writer.closeIteration(iteration, outcome);
+    // PD-ORCH-005 clause 1: `iteration.end` and the iteration's record closing with its outcome, in one transaction.
+    writer.endIteration(iteration, { task: task.text, outcome, summary }, outcome);
     this.iterationTask = null;
     // ADR-0039 / REQ-GIT-051: exactly one capture per iteration that closes, at the moment it closes — after
     // `iteration.end` is recorded and BEFORE the hooks' `iteration_end`: the checkpoint records the iteration's work as
@@ -650,6 +654,23 @@ export class Run {
     this.saveRunning({});
     await this.drain();
     return escalate;
+  }
+
+  /**
+   * PD-ORCH-005, and the repair of `a-crashed-iteration-number-is-reused-by-the-next-run.md`: an iteration a previous
+   * run left open — a run host that died mid-iteration leaves its row open, since nothing ran to close it — closes as
+   * cancelled before this run's first iteration (REQ-ORCH-135): `iteration.end` and the row's close in one transaction,
+   * its todo task back to `pending` so it is selected again ("the task stays anchored"), and the count moved past it, so
+   * this run's first iteration takes the next number rather than the dead one's. It counts toward no limit of this run.
+   */
+  private closeLeftOpenIteration(): void {
+    const open = this.deps.dal?.openIterationOf(this.sessionId);
+    if (!open) return;
+    this.deps.writer.endIteration(open.iteration, { task: open.task, outcome: 'cancelled', summary: 'the run that owned this iteration ended before it closed' }, 'cancelled');
+    this.todo.reopen(open.todo_task_id);
+    this.iterationsCompleted = Math.max(this.iterationsCompleted, open.iteration);
+    this.initialIterations = this.iterationsCompleted;
+    this.saveRunning({});
   }
 
   /**
@@ -774,9 +795,10 @@ export class Run {
     const { writer, owner, backend, config } = this.deps;
     const iteration = iterationOverride ?? this.iterationsCompleted + 1;
     this.rootIterationId = `root:${iteration}`;
-    // REQ-ORCH-072: the iteration's root execution record with the entry role and task payload, in the children namespace
-    const taken = new Set(this.deps.dal ? this.deps.dal.childrenOf(this.sessionId).map((c) => c.task_id) : []);
-    const rootTaskId = mintTaskId(taken);
+    // REQ-ORCH-072: the iteration's root execution record with the entry role and task payload, in the children namespace.
+    // PD-ORCH-005: every earlier root's id is taken too — roots are recorded now, and the conversation record is keyed by
+    // task id across the whole session, so a root minted over an earlier one would merge two agents' records.
+    const rootTaskId = mintTaskId(takenTaskIds(this.deps.dal, this.sessionId));
     const rootCanonical = canonicaliseName(config.persona);
     const rootRecord: RootExecutionRecord = {
       taskId: rootTaskId,
@@ -791,7 +813,8 @@ export class Run {
     this.rootId = rootTaskId;
     // PD-ORCH-005 clause 1: "The root's task id is recorded with its iteration." A plan cycle (0) is not an iteration.
     if (iterationOverride === undefined) {
-      writer.openIteration({ iteration, root_task_id: rootTaskId, root_canonical_name: rootCanonical, root_persona: config.persona, todo_task_id: this.iterationTask?.id ?? '', task });
+      const opened = writer.openIteration({ iteration, root_task_id: rootTaskId, root_canonical_name: rootCanonical, root_persona: config.persona, todo_task_id: this.iterationTask?.id ?? '', task });
+      if (opened.ok && !opened.value) this.deps.warn(`iteration ${iteration} of ${this.sessionId} was not recorded open: its number is taken or another iteration is open`);
     }
     const children = this.deps.toolsFor && this.deps.dal
       ? new IterationChildren({

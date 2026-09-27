@@ -1,4 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
+import type { SessionId } from '@rotaris/kernel';
+import type { StoreDal } from '@rotaris/store';
 
 /**
  * REQ-ORCH-036/044/045: task ids `bg_` + 8 hex, unique per session; canonical names — whitespace runs
@@ -30,4 +32,13 @@ export function mintTaskId(taken: ReadonlySet<string>): string {
     const id = `bg_${randomBytes(4).toString('hex')}`;
     if (!taken.has(id)) return id;
   }
+}
+
+/**
+ * REQ-ORCH-036 / PD-ORCH-005: every task id the session has used — each child's and each recorded iteration root's — so
+ * a new id never repeats one the conversation record is keyed by (it is keyed by task id across the whole session).
+ */
+export function takenTaskIds(dal: StoreDal | undefined, sessionId: SessionId): Set<string> {
+  if (!dal) return new Set();
+  return new Set([...dal.childrenOf(sessionId).map((c) => c.task_id), ...dal.iterationsOf(sessionId).map((i) => i.root_task_id)]);
 }

@@ -46,7 +46,8 @@ every level requirement in the corpus governs the per-session log instead), **ru
 amendment (R-049), and OQ-62's configured-rate branch with it; OQ-62's discovery branch stays open. **One more was raised on
 2026-09-21 by building `PD-WORKSPACE-002`'s per-file switches: OQ-64** (whether an instruction override
 suppresses its base when the override is itself switched off — a third state REQ-WORKSPACE-042's "given
-both exist" has no word for). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+both exist" has no word for). **OQ-64 was ruled on 2026-09-27** as built (R-052), together with ESC-37,
+ESC-38 and ESC-39. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -2800,6 +2801,11 @@ marked in place.
 
 **What a ruling decides.** Which reading governs; and, if the first, whether the inventory gains a
 third row state — *suppressed* — so that the screen stops disagreeing with the merge.
+
+> **Disposition, 2026-09-27 (R-052). RULED as built.** The second reading governs: an override suppresses
+> its base only while the override is itself switched on, and the inventory gains no third row state.
+> `PD-WORKSPACE-002` states the ruling in its injection paragraph. See `owner-decisions.md`, "OQ-64 — an
+> instruction override suppresses its base only while it is switched on, ruled".
 
 **OQ-65 — Do the instruction-file switches reach the retrospective, or only what agents are given?** *(`PD-LIBRARY-002` over REQ-WORKSPACE-041, since narrowed by `PD-WORKSPACE-002`; REQ-WORKSPACE-048. Raised 2026-09-22 by repairing [`the-retrospective-reads-instruction-files-the-user-switched-off.md`](../defects/fixed/the-retrospective-reads-instruction-files-the-user-switched-off.md).)*
 

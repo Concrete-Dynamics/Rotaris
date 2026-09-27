@@ -18,7 +18,7 @@ describe('REQ-SHELL-056 — the catalogue normal form a generated entry takes', 
   it('lower-cases, collapses whitespace and underscore runs to one hyphen, and REMOVES everything else', () => {
     expect(catalogueNormalForm('Build UI')).toBe('build-ui');
     expect(catalogueNormalForm('build__ui')).toBe('build-ui');
-    // The difference from REQ-WORKSPACE-054's form, which is ESC-39: `+` is deleted here and hyphenated there.
+    // The difference from REQ-WORKSPACE-054's form, kept apart by ESC-39: `+` is deleted here and hyphenated there.
     expect(catalogueNormalForm('c++ build')).toBe('c-build');
     expect(catalogueNormalForm('--x--')).toBe('x');
   });
@@ -32,7 +32,7 @@ describe('REQ-SHELL-056 — the catalogue normal form a generated entry takes', 
   });
 });
 
-describe('REQ-SHELL-056 — collisions are suffixed, never skipped (ESC-39)', () => {
+describe('REQ-SHELL-056 — collisions are suffixed, never skipped (ESC-39, ruled)', () => {
   it('takes the first free -2, -3 … and leaves the holder its name', () => {
     const taken = new Set(['stop', 'stop-2']);
     expect(freeName('stop', (n) => taken.has(n))).toBe('stop-3');

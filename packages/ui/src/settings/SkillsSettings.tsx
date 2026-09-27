@@ -19,10 +19,9 @@ import { collapseHome, elideMiddle } from '../workspace-label.js';
  * composer chip". What the user needs to know — which skills reach an agent and how — is the Load column
  * together with the `manual` scope label.
  *
- * **Seven columns, and why.** REQ-CONFIG-343 says five (Skill, Source, Trigger, Load, Description);
- * REQ-WORKSPACE-067, amended later, says six by adding Path and requires a per-row invocation selector
- * besides. The two disagree and that is **ESC-38**; the seven here are domain 13's set with the selector it
- * requires drawn as the mockup draws it, so every column either requirement names is present.
+ * **Seven columns, and why.** REQ-WORKSPACE-067 names six by adding Path and requires a per-row invocation
+ * selector besides, drawn here as the mockup draws it. REQ-CONFIG-343 once said five; ESC-38 ruled for seven
+ * on 2026-09-27 and REQ-CONFIG-343 now counts them.
  */
 export interface SkillsSettingsProps {
   readonly state: SkillsState | null;

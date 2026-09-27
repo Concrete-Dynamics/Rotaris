@@ -4,30 +4,48 @@ import type { ChildRow, IterationRow, StoreDal } from '@rotaris/store';
 import type { SessionWriter } from '../session-writer.js';
 import { treeOf } from '../children/ledger.js';
 import { conversationOf } from './record.js';
-import { answerUnanswered } from './interruption.js';
+import { answerUnanswered, interruptedResult } from './interruption.js';
 
 /** The children of a stored iteration: every child descending from its root, as the live ledger would hold them. */
 export function iterationAgents(dal: StoreDal, sessionId: SessionId, open: IterationRow): ChildRow[] {
   return treeOf(dal.childrenOfIteration(sessionId, open.iteration), (id) => id === open.root_task_id);
 }
 
+/** The agent whose open calls `answerOpenCalls` answers: its task id, and the name its transcript rows carry. */
+export interface OpenCallsAgent {
+  readonly taskId: string;
+  readonly name: string;
+}
+
 /**
- * PD-ORCH-005 clauses 3 and 4: an agent left `paused` whose record ends on tool calls with no results — a call its
- * execution never returned from (the stop's grace gave up on it), or one it raised out of — gains, for each, the result
- * that it was interrupted before it completed and was not re-run, and each of those calls' rows still `running` settles
- * with the same statement. A resume then sends a conversation whose every call has its result. Returns how many calls
- * it answered; none when the record ends answered.
+ * PD-ORCH-005 clauses 3 and 4: an agent left `paused` whose record ends on tool calls with no results — its step raised,
+ * the stop's grace gave up on a call its execution never returned from, or the process died — gains their results in
+ * one `tool` message. The results of the calls that completed in that step lived only in the step, so they are read back
+ * from the agent's settled rows (found by phase 3's fourth review: answering every call as interrupted presented a
+ * finished write as undone); each call cut off before its result arrived gains the statement that it was interrupted
+ * and not re-run, with whatever output its row had recorded, and that row, still `running`, settles with the same
+ * statement (REQ-SESSION-129: no row is left `running`). A resume then sends a conversation
+ * whose every call has its result.
+ *
+ * A call's row is the latest resident `tool` row this agent has for its id: REQ-ORCH-141 dispatches an id once and
+ * replays it after, so a row with that id is the call's. A row released past the resident window is not read, and its
+ * call is answered as interrupted.
  */
-export function answerOpenCalls(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, taskId: string, iteration: number, cause: Interruption): number {
-  const answer = answerUnanswered(conversationOf(dal.agentConversation(sessionId, taskId)), cause);
-  if (!answer) return 0;
-  writer.recordAgentMessage(taskId, iteration, 'message', answer);
-  const results = new Map(answer.content.flatMap((p) => (p.kind === 'tool-result' ? [[p.callId, p.result] as const] : [])));
-  for (const row of dal.residentRows(sessionId)) {
-    const result = row.kind === 'tool' && row.tool_status === 'running' && row.call_key !== null ? results.get(row.call_key) : undefined;
-    if (result !== undefined) writer.settleRow(row.row_index, row.body, { toolStatus: 'failed', output: result });
+export function answerOpenCalls(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, agent: OpenCallsAgent, iteration: number, cause: Interruption): void {
+  const rowOf = new Map(dal.residentRows(sessionId).flatMap((r) => (r.kind === 'tool' && r.name === agent.name && r.call_key !== null ? [[r.call_key, r] as const] : [])));
+  const answer = answerUnanswered(conversationOf(dal.agentConversation(sessionId, agent.taskId)), cause, (callId) => {
+    const row = rowOf.get(callId);
+    if (row === undefined) return undefined;
+    // Clause 3 and REQ-SESSION-129: a call cut off is recorded as interrupted with whatever output its row had recorded.
+    return row.tool_status === 'running' ? { result: interruptedResult(cause, true, row.output ?? ''), isError: true } : { result: row.output ?? '', isError: row.tool_status !== 'ok' };
+  });
+  if (!answer) return;
+  writer.recordAgentMessage(agent.taskId, iteration, 'message', answer);
+  for (const part of answer.content) {
+    if (part.kind !== 'tool-result') continue;
+    const row = rowOf.get(part.callId);
+    if (row?.tool_status === 'running') writer.settleRow(row.row_index, row.body, { toolStatus: 'failed', output: part.result });
   }
-  return results.size;
 }
 
 /** What `recordCrash` found and recorded. */
@@ -50,8 +68,9 @@ export interface CrashRecord {
  * - the iteration it left open (its interruption still NULL, since every rest records one) gains interruption `crash`;
  * - every agent of that iteration not in a terminal state, and not already paused, is left `paused` by the crash, in the
  *   state it resumes into (clause 3);
- * - an agent whose record ends on tool calls with no results — nothing ran to answer them — gains the result that each
- *   was interrupted before it completed and was not re-run (clauses 3 and 4);
+ * - an agent whose record ends on tool calls with no results — nothing ran to answer them — gains their results
+ *   (`answerOpenCalls`): a call whose row settled keeps what it returned, and every other gains the result that it was
+ *   interrupted before it completed and was not re-run, its row left `running` settling with the same (clauses 3 and 4);
  * - every approval still listed as pending is withdrawn by the crash, never denied (clause 9);
  * - every background terminal session still recorded as running, and not held by this process, is recorded as ended by
  *   the crash (clause 10: a crash ends them).
@@ -76,10 +95,9 @@ export function recordCrash(dal: StoreDal, writer: SessionWriter, sessionId: Ses
       if (r.ok) paused += 1;
       else warn(r.error.code === 'illegal-move' ? r.error.reason : `recording ${c.task_id} paused by a crash failed: ${r.error.code}`);
     }
-    for (const taskId of [open.root_task_id, ...agents.filter((c) => !isTerminalChildState(c.state)).map((c) => c.task_id)]) {
-      const answer = answerUnanswered(conversationOf(dal.agentConversation(sessionId, taskId)), 'crash');
-      if (answer) writer.recordAgentMessage(taskId, open.iteration, 'message', answer);
-    }
+    // The root's rows carry its persona (`Run.turn`'s agent name), a child's its canonical name.
+    const unfinished = agents.filter((c) => !isTerminalChildState(c.state)).map((c) => ({ taskId: c.task_id, name: c.canonical_name }));
+    for (const agent of [{ taskId: open.root_task_id, name: open.root_persona }, ...unfinished]) answerOpenCalls(dal, writer, sessionId, agent, open.iteration, 'crash');
     writer.appendTimeline('iteration_paused', 'rotaris', `Iteration ${open.iteration} was left open by ${interruptionPhrase('crash')}; its unfinished agents are paused and resume when the session is continued.`, { iteration: open.iteration, interruption: 'crash', paused_agents: paused });
   }
   const withdrawn = withdrawStoredApprovals(dal, writer, sessionId);

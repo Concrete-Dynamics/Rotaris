@@ -101,6 +101,31 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
     expect({ messages: dal.agentMessagesOf(sid, ROOT).length, timeline: dal.timelineOf(sid).length }).toEqual(before);
   });
 
+  it('clauses 3 and 4 (found by phase 3\'s fourth review): a call that completed before the crash keeps what it returned, and only the call still running is answered as interrupted, its row settling (docs/defects/fixed/a-crash-leaves-its-tool-rows-running.md)', () => {
+    const sid = 'S-completed' as SessionId;
+    const writer = created(sid);
+    dal.insertIteration({ session_id: sid, iteration: 1, root_task_id: ROOT, root_canonical_name: 'orchestrator', root_persona: 'orchestrator', todo_task_id: 't', task: 't', opened_at: 't' });
+    writer.recordAgentMessage(ROOT, 1, 'message', { role: 'assistant', content: [{ kind: 'tool-call', callId: 'a', name: 'write', args: '{}' }, { kind: 'tool-call', callId: 'b', name: 'grep', args: '{}' }] });
+    // An earlier step's call with an id this step reuses: the call's row is the latest (REQ-ORCH-141).
+    writer.appendRow('tool', 'grep', true, { name: 'orchestrator', toolName: 'grep', toolStatus: 'ok', callKey: 'b', output: 'an earlier answer' });
+    writer.appendRow('tool', 'write', true, { name: 'orchestrator', toolName: 'write', toolStatus: 'ok', callKey: 'a', output: 'wrote the file' });
+    writer.appendRow('tool', 'grep', false, { name: 'orchestrator', toolName: 'grep', toolStatus: 'running', callKey: 'b', output: 'a.ts:1' });
+    // Another agent's call with the same id — local providers number calls — is not the root's.
+    writer.appendRow('tool', 'glob', false, { name: 'c9', toolName: 'glob', toolStatus: 'running', callKey: 'b' });
+    recordCrash(dal, writer, sid, new Set(), () => undefined);
+    expect(conversationOf(dal.agentConversation(sid, ROOT)).at(-1)).toEqual({ role: 'tool', content: [
+      { kind: 'tool-result', callId: 'a', name: 'write', isError: false, result: 'wrote the file' },
+      { kind: 'tool-result', callId: 'b', name: 'grep', isError: true, result: interruptedResult('crash', true, 'a.ts:1') },
+    ] });
+    // REQ-SESSION-129: the row a crash left running settles `failed`, keeping the output it had recorded.
+    expect(dal.residentRows(sid).map((r) => [r.name, r.tool_name, r.tool_status, r.output])).toEqual([
+      ['orchestrator', 'grep', 'ok', 'an earlier answer'],
+      ['orchestrator', 'write', 'ok', 'wrote the file'],
+      ['orchestrator', 'grep', 'failed', interruptedResult('crash', true, 'a.ts:1')],
+      ['c9', 'glob', 'running', null],
+    ]);
+  });
+
   it('an iteration a rest left open is not a crash\'s: its interruption and its agents are left as they are', () => {
     const sid = 'S-rested' as SessionId;
     const writer = created(sid);

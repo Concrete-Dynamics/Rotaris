@@ -1079,7 +1079,7 @@ export class Run {
           this.iterationRest = this.restCause;
           rootRecord.state = 'paused';
           // Clauses 3 and 4: a root that raised out of a call has that call answered as interrupted, as a child's is.
-          if (this.deps.dal) answerOpenCalls(this.deps.dal, writer, this.sessionId, rootTaskId, iteration, this.restCause);
+          if (this.deps.dal) answerOpenCalls(this.deps.dal, writer, this.sessionId, { taskId: rootTaskId, name: config.persona }, iteration, this.restCause);
         }
       } else if (children) {
         // REQ-ORCH-052: every exit path from an iteration leaves every child record terminal.

@@ -3024,11 +3024,14 @@ when the pause is accepted, a rest that finds nothing unfinished, and what a cra
   the run was coming to rest. An agent whose execution raises while the run comes to rest is left `paused`, the root
   and a child alike. A raise mid-rest is most often the rest's own abort surfacing through a tool. The call it raised
   out of is answered in its record as interrupted, and its row settles (`answerOpenCalls`), so it resumes from a
-  record whose every call has its result. REQ-ORCH-073 (a child that raises ends `failed`) and REQ-ORCH-135 (an
+  record whose every call has its result. A call that completed earlier in the same step keeps what it returned, read
+  back from its settled row: clause 3 records as interrupted only a call "cut off before its result arrived" (found by
+  phase 3's fourth review, which saw a finished write presented as undone). REQ-ORCH-073 (a child that raises ends `failed`) and REQ-ORCH-135 (an
   iteration that raises closes `failed`) still govern a raise outside a rest.
 - **An execution the stop's grace gives up on.** A stop or a quit waits for its executions within REQ-SESSION-092's
   30 s. One still running after that is detached. It is left `paused` where it stood, and the call it never returned
-  from is answered in its record as interrupted, its row settled. When the execution returns, the engine writes nothing
+  from is answered in its record as interrupted, its row settled; a call of the same step that completed keeps its
+  result, as above. When the execution returns, the engine writes nothing
   more for it (REQ-SESSION-094's straggler clause). What the call's own tool gate or a streaming model step writes as it
   finishes is not stopped; `docs/defects/a-detached-call-still-writes-through-its-tool-gate.md` records it. A root's call
   has no such bound (`docs/defects/a-root-call-that-ignores-the-stop-holds-the-run-open.md`, which predates the

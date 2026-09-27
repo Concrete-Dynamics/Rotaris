@@ -399,7 +399,7 @@ export class IterationChildren implements DelegationOps {
     // calls answered as interrupted, so it resumes from a record whose every call has its result (found by phase 3's
     // third review).
     const paused = this.ledger.all().filter((c) => this.ledger.get(c.task_id)?.state === 'paused');
-    for (const c of paused) answerOpenCalls(this.deps.dal, this.deps.writer, this.deps.sessionId, c.task_id, c.iteration, cause);
+    for (const c of paused) answerOpenCalls(this.deps.dal, this.deps.writer, this.deps.sessionId, { taskId: c.task_id, name: c.canonical_name }, c.iteration, cause);
     return paused.length;
   }
 

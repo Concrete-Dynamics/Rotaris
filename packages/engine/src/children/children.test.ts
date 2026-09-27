@@ -1198,6 +1198,40 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(dal.residentRows(sid).filter((r) => r.tool_name === 'boom').map((r) => r.tool_status)).toEqual(['failed']);
     });
 
+    describe('clauses 3 and 4 (found by phase 3\'s fourth review): a call that completed in the step that raised, or was given up on, keeps its result', () => {
+      const wrote: PortToolResult = { text: 'wrote the file', isError: false, status: 'ok', durationMs: 1, label: 'write', args: {} };
+      const step = () => toolCalls([{ callId: 'w1', name: 'write', args: {} }, { callId: 'b2', name: 'boom', args: {} }], 'Write, then boom.');
+      const expectAnswered = (sid: SessionId, cause: 'pause' | 'stop') => {
+        expect(conversationOf(dal.agentConversation(sid, byName(sid, 'work').task_id)).at(-1)).toEqual({ role: 'tool', content: [
+          { kind: 'tool-result', callId: 'w1', name: 'write', isError: false, result: 'wrote the file' },
+          { kind: 'tool-result', callId: 'b2', name: 'boom', isError: true, result: interruptedResult(cause, true, '') },
+        ] });
+        expect(dal.residentRows(sid).filter((r) => r.kind === 'tool' && r.name === 'work').map((r) => [r.tool_name, r.tool_status])).toEqual([['write', 'ok'], ['boom', 'failed']]);
+      };
+
+      it('a call raised out of during a pause', async () => {
+        let raise!: () => void;
+        const raised = new Promise<void>((r) => { raise = r; });
+        const { sessions } = scriptedChild([step], { tool: (name) => (name === 'write' ? Promise.resolve(wrote) : name === 'boom' ? raised.then((): PortToolResult => { throw new Error('the tool host went away'); }) : undefined) });
+        const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+        await pauseAt(sessions, sid, () => dal.residentRows(sid).some((r) => r.kind === 'tool' && r.tool_name === 'boom'), raise);
+        expect(byName(sid, 'work')).toMatchObject({ state: 'paused', interruption: 'pause' });
+        expectAnswered(sid, 'pause');
+      });
+
+      it('a call the stop\'s grace gave up on', async () => {
+        const { sessions } = scriptedChild([step], { tool: (name) => (name === 'write' ? Promise.resolve(wrote) : name === 'boom' ? new Promise<PortToolResult>(() => undefined) : undefined) });
+        const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+        await settle(() => dal.residentRows(sid).some((r) => r.kind === 'tool' && r.tool_name === 'boom'));
+        sessions.control({ op: 'cancel', sessionId: sid, args: {} });
+        await new Promise((r) => setTimeout(r, 20));
+        clock.advance(30_000);
+        await sessions.running(sid)!;
+        expect(byName(sid, 'work')).toMatchObject({ state: 'paused', interruption: 'stop' });
+        expectAnswered(sid, 'stop');
+      });
+    });
+
     it('REQ-TOOLS-156 at a rest: a parent waiting in wait_for_tasks is released at once, and its wait is recorded as interrupted', async () => {
       let release!: () => void;
       const hold = new Promise<void>((r) => { release = r; });

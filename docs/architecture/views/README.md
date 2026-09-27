@@ -43,7 +43,18 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-09-24**
+## Last reconciled with the code: **2026-09-27**
+
+**The `/skills` listing (REQ-CHAT-162, `first-release-plan.md` §2.2, built 2026-09-27).** One renderer command,
+`skills.list`, relayed by main's skills facet to the run host with the followed session named by main (a window
+following none is refused there, OQ-66); the run host writes the listing as ONE `system` row through that session's
+own writer (`run-host/skills.ts`'s `writeSkillListing`), and the one row renderer draws a system row whose text is
+the listing as the listing (`transcript/Row.tsx`, the text fixed once in `contracts/skills.ts`). The **process view**
+gains the command and its reply, and the run host's row says it writes the listing; the **component view**'s skills
+row names the three places; the **runtime view**'s `transcript_rows` line says the listing is a row like any other.
+No package, edge, channel, store column or state owner changed.
+
+Previously reconciled: **2026-09-24**
 
 **Product-drawn main-window chrome (`PD-SHELL-003`, built and revised 2026-09-24).** On Windows, Linux and macOS the main
 `BrowserWindow` is frameless with its native menu hidden. The existing title bar now ends in minimize,

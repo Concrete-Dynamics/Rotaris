@@ -4,7 +4,8 @@ import { buildCatalogue, type CatalogueOptions } from './catalogue.js';
 import { createSlashRegistry } from './registry.js';
 import {
   bindSkillsReader, cachedSkills, catalogueNormalForm, freeName, readSkills, registerSkillCommands,
-  skillCommandDescription, skillRegistrations, triggerCommandName,
+  skillCommandDescription, skillPathCommand, skillRegistrations, skillsListCommand, triggerCommandName,
+  SKILLS_LIST_COMMAND_NAME, SKILLS_LIST_DESCRIPTION,
 } from './skills.js';
 
 const row = (over: Partial<SkillRow> = {}): SkillRow => ({
@@ -160,5 +161,72 @@ describe('slash/skills — the reader keeps what it has and what it is waiting f
     bindSkillsReader(null);
     expect(cachedSkills()).toBeNull();
     expect(readSkills()).toBeNull();
+  });
+});
+
+describe('REQ-CHAT-162 — `/skills`, the listing written as one saved system row', () => {
+  it('is a catalogue command of the `skill` kind that takes no argument', () => {
+    const command = skillsListCommand(async () => ({ ok: true, count: 0 }));
+    expect(command.name).toBe(SKILLS_LIST_COMMAND_NAME);
+    expect(command.kind).toBe('skill');
+    expect(command.description).toBe(SKILLS_LIST_DESCRIPTION);
+    expect(command.argumentHint).toBeUndefined();
+    expect(command.availability({} as never)).toEqual({ ok: true });
+  });
+
+  it('asks once, and the row that appears is the report — no toast of its own', async () => {
+    let asked = 0;
+    const notices: string[] = [];
+    const command = skillsListCommand(async () => { asked += 1; return { ok: true, count: 3 }; });
+    expect(await command.run('ignored words', { notify: (t: string) => notices.push(t) } as never)).toEqual({ kind: 'executed' });
+    expect(asked).toBe(1);
+    expect(notices).toEqual([]);
+  });
+
+  it('surfaces a refusal, and a throw, as `failed` with the reason', async () => {
+    expect(await skillsListCommand(async () => ({ ok: false, reason: 'Open or start a session first.' })).run('', {} as never))
+      .toEqual({ kind: 'failed', message: 'Open or start a session first.' });
+    expect(await skillsListCommand(async () => { throw new Error('the bridge went away'); }).run('', {} as never))
+      .toEqual({ kind: 'failed', message: 'the bridge went away' });
+  });
+});
+
+describe('REQ-SHELL-056 — `/skill` and `/skills` are built-ins and keep their names against a generated entry', () => {
+  const fixed = (registry: ReturnType<typeof createSlashRegistry>) => {
+    registry.register(skillPathCommand(async () => ({ ok: true, name: 'x' }), () => undefined));
+    registry.register(skillsListCommand(async () => ({ ok: true, count: 0 })));
+  };
+  const named = state([row({ name: 'skill', declaredName: 'skill' }), row({ name: 'skills', declaredName: 'Skills' })]);
+
+  it('the fixed commands registered FIRST: each skill is offered -2, and the fixed commands are untouched', () => {
+    const registry = createSlashRegistry();
+    fixed(registry);
+    const r = registerSkillCommands(registry, named);
+    expect(r.names).toEqual(['skill-2', 'skills-2']);
+    expect(registry.lookup('skill')!.argumentHint).toBe('<path>');
+    expect(registry.lookup('skills')!.description).toBe(SKILLS_LIST_DESCRIPTION);
+    expect(registry.lookup('skill-2')!.description).toContain('(skill: skill)');
+  });
+
+  it('the generated commands registered FIRST: the same names, so neither registration order loses a command', () => {
+    // The defect this rule repairs: a holder of kind `skill` read as the registrar's own work, so the generated
+    // `skill` took the name here and the fixed `/skill` then replaced it — the skill silently unreachable.
+    const registry = createSlashRegistry();
+    const r = registerSkillCommands(registry, named);
+    fixed(registry);
+    expect(r.names).toEqual(['skill-2', 'skills-2']);
+    expect(registry.lookup('skill-2')!.kind).toBe('skill');
+    expect(registry.lookup('skill')!.argumentHint).toBe('<path>');
+    expect(registry.lookup('skills')!.description).toBe(SKILLS_LIST_DESCRIPTION);
+  });
+
+  it('a rescan never removes a fixed command, even one a skill of that name once stood beside', () => {
+    const registry = createSlashRegistry();
+    fixed(registry);
+    const first = registerSkillCommands(registry, named);
+    registerSkillCommands(registry, state([]), new Set(first.names));
+    expect(registry.lookup('skill')).toBeDefined();
+    expect(registry.lookup('skills')).toBeDefined();
+    expect(registry.lookup('skill-2')).toBeUndefined();
   });
 });

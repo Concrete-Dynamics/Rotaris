@@ -232,6 +232,12 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('skills.rescan'), workspaceRoot: z.string(), sessionId: z.string().optional() }),
   z.object({ kind: z.literal('skills.forceLoad'), workspaceRoot: z.string(), sessionId: z.string().optional(), name: z.string().min(1) }),
   z.object({ kind: z.literal('skills.loadFile'), workspaceRoot: z.string(), sessionId: z.string().optional(), path: z.string().min(1) }),
+  /**
+   * REQ-CHAT-162 — `/skills`: the listing written into the session's transcript as one saved system row. The
+   * session is REQUIRED here, unlike the three above: a row has to be saved with a session, so there is no pending
+   * bucket to fall back to (OQ-66), and main refuses before it asks when the window follows none.
+   */
+  z.object({ kind: z.literal('skills.list'), workspaceRoot: z.string(), sessionId: z.string().min(1) }),
 ]);
 export type RunHostRequest = z.infer<typeof RunHostRequestSchema>;
 
@@ -511,6 +517,8 @@ export const ProcessReplySchema = z.discriminatedUnion('kind', [
    * `loaded` names the skill for the toast (REQ-WORKSPACE-073/151).
    */
   z.object({ kind: z.literal('skills.state'), state: SkillsStateSchema, loaded: z.string().optional() }),
+  /** REQ-CHAT-162: the listing row was committed — how many skills it lists and the transcript index it took. */
+  z.object({ kind: z.literal('skills.listed'), count: z.number().int().nonnegative(), index: z.number().int().nonnegative() }),
 ]);
 export type ProcessReply = z.infer<typeof ProcessReplySchema>;
 

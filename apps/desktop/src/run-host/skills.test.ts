@@ -4,7 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FileToolState, grepTool, readFileTool, writeFileTool } from '@rotaris/agent-tools';
 import { SKILLS_DEFAULTS, type SkillsSection } from '@rotaris/config';
-import { SkillHost } from './skills.js';
+import { parseSkillListing } from '@rotaris/contracts';
+import { readTrajectory, Sessions } from '@rotaris/engine';
+import { asSessionId, FakeClock, mintMachineId, type MachineId } from '@rotaris/kernel';
+import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
+import { SkillHost, writeSkillListing } from './skills.js';
 
 /**
  * ADR-0063's catalog, and the fence defect its first execution found. Everything here runs against a real
@@ -282,6 +286,83 @@ describe('the workspace context unit (REQ-WORKSPACE-041..048, PD-WORKSPACE-002)'
       writeFileSync(join(t.root, 'AGENTS.md'), 'THIRD\n');
       h.rescan(t.root);
       expect(h.contextUnits(t.root, 's2')[0]).toContain('THIRD');
+    } finally { t.cleanup(); }
+  });
+});
+
+/**
+ * REQ-CHAT-162 — `/skills`, against a real store. What the requirement and the plan ask of the row is what the
+ * session's own writer guarantees, so this drives that writer rather than a stand-in: a loaded idle session, the
+ * listing written through it, then a SECOND process's resume of the same session reading it back, and the
+ * trajectory export (REQ-SESSION-189) carrying it as the `transcript.row` event the append recorded.
+ */
+describe('the /skills listing is one saved system row (REQ-CHAT-162)', () => {
+  const HOST = mintMachineId('0000000000000000000000000000000c') as MachineId;
+  const sessionsFor = (dir: string, pid: number, isProcessAlive: (pid: number) => boolean = () => true) => new Sessions({
+    clocks: new FakeClock(), publisher: { increment: () => undefined, snapshot: () => undefined }, pid, host: HOST,
+    retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-listing', model: null,
+    sessionFilesDir: (_store, sid) => join(dir, 'sessions', sid), isProcessAlive,
+  });
+
+  it('is written through the loaded session\'s writer, survives a reopen, and is exported with the session', () => {
+    const t = tree();
+    const dir = mkdtempSync(join(tmpdir(), 'rotaris-listing-'));
+    const db = openStore(join(dir, 'workspace.db'));
+    migrateStore(db);
+    const dal = new StoreDal(db);
+    try {
+      writeFileSync(join(t.root, '.agents', 'skills', 'alpha', 'SKILL.md'), `---\nname: alpha\ndescription: ${'Alpha does things. '.repeat(10)}\ntrigger:\n  type: keyword\n  keywords: [render, "/pdf"]\n---\nALPHA BODY\n`);
+      const sid = asSessionId('S-listing');
+      dal.upsertSession({ session_id: sid, execution_status: 'completed', workspace_root: t.root, created_at: '2026-09-27T00:00:00.000Z', updated_at: '2026-09-27T00:00:00.000Z' });
+      const first = sessionsFor(dir, 77);
+      expect(first.resume(dal, t.root, sid).ok).toBe(true);
+      const skills = host(t.root, t.home);
+
+      const r = writeSkillListing(first.writer(sid), skills.state(t.root, sid));
+      expect(r).toEqual({ ok: true, count: 1, index: 0 });
+      const stored = dal.residentRows(sid);
+      expect(stored.map((row) => [row.kind, row.settled])).toEqual([['system', 1]]);
+      const listing = parseSkillListing(stored[0]!.body);
+      expect(listing?.count).toBe(1);
+      expect(listing?.skills.map((s) => [s.name.text, s.scope.text, s.triggers?.text, s.path.text])).toEqual([['alpha', 'project', 'render, /pdf', join(t.root, '.agents', 'skills', 'alpha', 'SKILL.md')]]);
+      // REQ-CHAT-162's clip: at most 120 characters, the last the ellipsis where the long description was cut.
+      expect(Array.from(listing!.skills[0]!.description.text)).toHaveLength(120);
+      expect(listing!.skills[0]!.description.text.endsWith('…')).toBe(true);
+
+      // Reopened by another process: the row is read back from the store, as every row of the session is.
+      const again = sessionsFor(dir, 88, () => false);
+      expect(again.resume(dal, t.root, sid).ok).toBe(true);
+      expect(dal.residentRows(sid).map((row) => row.body)).toEqual([stored[0]!.body]);
+
+      // Exported with the session: the trajectory document carries the append's `transcript.row` event.
+      const events = (readTrajectory(dal, sid)!.document as { events: { event: string; row?: { kind: string; body: string } }[] }).events;
+      const rows = events.filter((e) => e.event === 'transcript.row').map((e) => e.row);
+      expect(rows).toEqual([expect.objectContaining({ kind: 'system', body: stored[0]!.body })]);
+    } finally {
+      db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); t.cleanup();
+    }
+  });
+
+  it('refuses rather than writing around a session that is not loaded — no row lands under the store alone', () => {
+    const t = tree();
+    try {
+      const r = writeSkillListing(undefined, host(t.root, t.home).state(t.root));
+      expect(r).toMatchObject({ ok: false, code: 'session.not-loaded' });
+    } finally { t.cleanup(); }
+  });
+
+  it('lists every discovered skill whatever its policy, a hand-loaded one for this session, and nothing of another session\'s', () => {
+    const t = tree();
+    try {
+      mkdirSync(join(t.root, 'elsewhere', 'by-hand'), { recursive: true });
+      writeFileSync(join(t.root, 'elsewhere', 'by-hand', 'SKILL.md'), '---\nname: by-hand\ndescription: Loaded by hand.\n---\nb\n');
+      const h = host(t.root, t.home, { ...SKILLS_DEFAULTS, enabled: false, overrides: { alpha: 'off' } });
+      expect(h.loadFile(t.root, 's1', join(t.root, 'elsewhere', 'by-hand')).ok).toBe(true);
+      const bodies: string[] = [];
+      const writer = { appendRow: (_kind: string, body: string) => { bodies.push(body); return { ok: true as const, value: { index: bodies.length - 1, kind: 'system', settled: true, body, at: '', ts: '' } }; } };
+      expect(writeSkillListing(writer, h.state(t.root, 's1'))).toEqual({ ok: true, count: 2, index: 0 });
+      expect(parseSkillListing(bodies[0]!)?.skills.map((s) => `${s.name.text}:${s.scope.text}`)).toEqual(['alpha:project', 'by-hand:manual']);
+      expect(writeSkillListing(writer, h.state(t.root, 's2'))).toEqual({ ok: true, count: 1, index: 1 });
     } finally { t.cleanup(); }
   });
 });

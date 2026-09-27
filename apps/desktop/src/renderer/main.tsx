@@ -12,7 +12,7 @@ import { bindPromptRootsReader } from '@rotaris/ui';
 import type { PromptsRootsResult } from '@rotaris/contracts';
 // ADR-0063 — portable skills: the catalog reader, the Settings tab's props and the composer's commands.
 import { bindSkillsReader } from '@rotaris/ui';
-import { EMPTY_SKILLS_STATE, type InstructionStateName, type SkillInvocationModeName, type SkillLoadModeName, type SkillsState } from '@rotaris/contracts';
+import { EMPTY_SKILLS_STATE, type InstructionStateName, type SkillInvocationModeName, type SkillListingOutcome, type SkillLoadModeName, type SkillsState } from '@rotaris/contracts';
 import './design.css';
 // The mockup loads these two stylesheets from @phosphor-icons/web@2.1.1; the design assets
 // carry the same two fonts byte for byte (REQ-SHELL-027, a distinct icon per view).
@@ -276,6 +276,16 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
       if (!r.ok) return { ok: false as const, reason: r.detail ?? r.headline };
       const outcome = r.value as { cancelled: boolean; name?: string };
       return outcome.name === undefined ? { ok: false as const, reason: 'The skill was not loaded.' } : { ok: true as const, name: outcome.name };
+    },
+    /*
+     * REQ-CHAT-162 — `/skills`. Main names the followed session (a window following none is refused there, OQ-66);
+     * the run host writes the listing through that session's own writer, and the row reaches this window the way
+     * every other row does — on the session's transcript channel — so nothing is drawn from this answer.
+     */
+    listSkills: async () => {
+      const r = await bridge.command({ kind: 'skills.list' });
+      if (!r.ok) return { ok: false as const, reason: r.detail ?? r.headline };
+      return { ok: true as const, count: (r.value as SkillListingOutcome).count };
     },
     // REQ-CHAT-034: a rescan or a hand-loaded skill in Settings re-registers the typeable commands.
     skillsRevision,

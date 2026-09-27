@@ -736,7 +736,7 @@ export function renderNotices(model) {
   const lgpl = [...application, ...interpreter, ...distributions, ...assets].filter((c) => /LGPL|Lesser General Public/i.test(c.license ?? ''));
   const title = `${product.name} ${product.version} — third-party software notices`;
   const out = [title, '='.repeat(title.length), ''];
-  out.push(wrap(`This file is ${NOTICES_FILE}. It names every third-party component contained in this build of ${product.name}, each with its version, its license identifier and the full text of its license, and then the tools ${product.name} downloads after installation, which this build does not contain.`), '');
+  out.push(wrap(`This file is ${NOTICES_FILE}. It names the third-party components contained in this build of ${product.name}, each with its version, its license identifier and the full text of its license, and then the tools ${product.name} downloads after installation, which this build does not contain.`), '');
   out.push(subheading('Components licensed under the GNU Lesser General Public License'));
   out.push(wrap(`Some components in this build are licensed under the GNU Lesser General Public License (LGPL). You have the right to modify each of them and to relink ${product.name} with your modified version, under the terms of the LGPL, whose text is reproduced with each such component below.${lgpl.length > 0 ? ` The components whose declared license names the LGPL are: ${lgpl.map((c) => `${c.name} ${c.version}`).join(', ')}.` : ''}${credits.length > 0 ? ` Components compiled into Electron whose license is the LGPL are reproduced in section 5.` : ''}`), '');
   out.push(wrap('To request the complete corresponding source code of any LGPL-licensed component in this build, write to:'), '');
@@ -759,7 +759,8 @@ export function renderNotices(model) {
   }
 
   out.push(heading(2, 'The bundled code-intelligence runtime'));
-  out.push(wrap(`The interpreter the bundled code-intelligence runtime runs on, and every distribution installed in it.`), '');
+  // OQ-66: what the interpreter's distributor linked into it has no record in the tree to read, and the file says so.
+  out.push(wrap(`The interpreter the bundled code-intelligence runtime runs on, and every distribution installed in it. The libraries linked into the interpreter by its distributor are not listed separately.`), '');
   for (const c of [...interpreter, ...distributions]) out.push(entry(c));
 
   out.push(heading(3, 'Bundled fonts and icons'));

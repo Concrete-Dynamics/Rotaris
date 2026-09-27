@@ -2872,7 +2872,8 @@ distribution, the interpreter, a font — and what is compiled into one is that 
   sources, the identifier from the text (`blessing`, `MIT`), and "Contained in" naming the host. This is because the
   packager removes the only other place their notices would be.
 - The interpreter's linked libraries are **not listed**. That is a known gap, not a reading, and it is stated here so
-  it is not mistaken for coverage.
+  it is not mistaken for coverage. The file says so too, at the head of its runtime section, and its header claims
+  "the third-party components" of the build rather than every one.
 
 **What a ruling decides.** Whether the credits of a component the build takes whole (Electron's, and any other
 bundled distribution's) satisfy REQ-STARTUP-142 when they are reproduced beneath it, or whether each credited

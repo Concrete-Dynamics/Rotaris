@@ -193,6 +193,8 @@ describe('REQ-STARTUP-142: the shipped closure, and nothing else', () => {
     expect(model.interpreter[0]?.license).toBe('PSF-2.0');
     expect(names(model.distributions)).toEqual(['pystray@0.19.5', 'serena-agent@1.7.0']);
     expect(text).toContain('Component: pystray\nVersion:   0.19.5\nLicense:   LGPLv3\n');
+    // OQ-66's one unlisted part is said where a reader would look for it, not left for the reader to find missing.
+    expect(flat(section(text, 2))).toContain('The libraries linked into the interpreter by its distributor are not listed separately.');
   });
 
   it('carries the bundled fonts and the icon set: version and copyright from the font itself, a named font the build lacks stated as such', () => {

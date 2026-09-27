@@ -53,11 +53,11 @@ a provider-reported per-request cost — are not covered at all; they are **OQ-6
 - `docs/architecture/adr/0031-money-as-exact-decimal.md`, `docs/architecture/open-questions.md` (OQ-21,
   OQ-62) — what has to be decided before this is built.
 
-**Confirmed still blocked, 2026-09-22 — [R-047](../product/requests.md#r-047).** Re-read against the code
+**Confirmed still blocked, 2026-09-22 — [R-047](../../product/requests.md#r-047).** Re-read against the code
 under the instruction that every open defect be repaired. The block named above has not moved, and nothing
 in this note can be built without pre-empting it.
 
-**Proposed 2026-09-23, not ruled — [R-048](../product/requests.md#r-048).** Put to the owner and held back from the ruling: answer OQ-21 as it
+**Proposed 2026-09-23, not ruled — [R-048](../../product/requests.md#r-048).** Put to the owner and held back from the ruling: answer OQ-21 as it
 recommends (prices carried and persisted as decimal strings, read from the YAML scalar's source text so they
 never pass through a binary float), accept ADR-0031 with scaled-integer arithmetic in one money module, and
 feed `effectivePricing()` into `Aggregates.addCost` under the `configured` qualifier, a provider-reported
@@ -96,10 +96,10 @@ Without that repair, configured prices would miss every delegated child's reques
 Open forks put to the owner: a reported-plus-configured mix reads `configured` (proposed: yes); OpenRouter
 discovery prices, OQ-62's first half (proposed: deferred).
 
-**Ruled 2026-09-23 — [R-049](../product/requests.md#r-049).** The design above is approved with both forks as
+**Ruled 2026-09-23 — [R-049](../../product/requests.md#r-049).** The design above is approved with both forks as
 recommended: a mixed run reads `configured`, and discovery pricing is deferred. The block is lifted: OQ-21 is
 answered and applied by amendment, ADR-0031 is accepted in narrowed form, and the behaviour is
-[`PD-MONITOR-001`](../product/directives.md#pd-monitor-001) revision 2. The note stays open until that
+[`PD-MONITOR-001`](../../product/directives.md#pd-monitor-001) revision 2. The note stays open until that
 revision is built.
 
 ## Repaired — 2026-09-23 ([`PD-MONITOR-001`](../../product/directives.md#pd-monitor-001) revision 2 built)

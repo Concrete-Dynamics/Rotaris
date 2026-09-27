@@ -43,7 +43,7 @@ resolves to no value.
 
 *Noticed 2026-09-15 in a screenshot of the built product, while diagnosing overlapping activity lines.*
 
-**Repaired 2026-09-15** ([R-021](../product/requests.md#r-021)). The contradiction is resolved by deleting the
+**Repaired 2026-09-15** ([R-021](../../product/requests.md#r-021)). The contradiction is resolved by deleting the
 truncation half, not by completing it: `overflow: hidden` and `text-overflow: ellipsis` are gone and
 `overflow-wrap: anywhere` takes their place, so a hyphenated name breaks at its hyphen and an unbroken one breaks
 rather than clipping mid-glyph. The falsified rule is kept above its replacement with the reason. `REQ-CHAT-057`

@@ -8,7 +8,7 @@ iteration sees the crashed one's rows: they count toward `maxTotal`, `depends_on
 `selectNext` never picks an `in_progress` task again. Plan cycles all run as iteration 0, with the same effect between
 cycles.
 
-Noticed 2026-09-27 by the code survey for the run-continuation policy ([R-058](../product/requests.md#r-058)). Established by reading the code; not driven.
+Noticed 2026-09-27 by the code survey for the run-continuation policy ([R-058](../../product/requests.md#r-058)). Established by reading the code; not driven.
 
 ## Specs
 

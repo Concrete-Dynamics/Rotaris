@@ -5,7 +5,7 @@ bypasses `ledger.storeReport`, so no child-report artifact is materialised for i
 becomes an artifact the sibling-artifact index lists. The children a crash or a hard cancel left behind are the ones a
 later run cannot find by reading artifacts.
 
-Noticed 2026-09-27 by the code survey for the run-continuation policy ([R-058](../product/requests.md#r-058)). Established by reading the code; not driven.
+Noticed 2026-09-27 by the code survey for the run-continuation policy ([R-058](../../product/requests.md#r-058)). Established by reading the code; not driven.
 
 ## Specs
 

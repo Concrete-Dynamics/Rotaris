@@ -5,7 +5,7 @@
 running, and when its turn ends `execute` stores its own report over the cancellation's, since `storeReport` does not
 check the state; its own transition is refused as illegal and only warns. The last writer wins the report.
 
-Noticed 2026-09-27 by the code survey for the run-continuation policy ([R-058](../product/requests.md#r-058)). Established by reading the code; not driven.
+Noticed 2026-09-27 by the code survey for the run-continuation policy ([R-058](../../product/requests.md#r-058)). Established by reading the code; not driven.
 
 ## Specs
 

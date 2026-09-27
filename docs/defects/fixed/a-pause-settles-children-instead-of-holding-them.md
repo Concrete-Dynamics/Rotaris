@@ -8,7 +8,7 @@ keeps starting queued children while the pause is requested (`startQueued` check
 no-activity. So a paused run's children end up reported as finished work, and the session persists exactly what a
 cancel persists (`paused`, `user_cancelled`).
 
-Noticed 2026-09-27 by the code survey for the run-continuation policy ([R-058](../product/requests.md#r-058)). Established by reading the code; not driven.
+Noticed 2026-09-27 by the code survey for the run-continuation policy ([R-058](../../product/requests.md#r-058)). Established by reading the code; not driven.
 
 ## Specs
 

@@ -95,19 +95,19 @@ written `warning`, the directive's word, so the variable accepts what the column
 What else changed with it: main's uncaught-exception and unhandled-rejection lines, the refused launch (previously
 `console.error('[main] launch refused: …')`, on stderr and in a shape of its own), a failed hand-over, a renderer or
 child process gone for any reason but `clean-exit`, the run host or a workspace service exiting with any status but 0,
-and a `shutdown` either child left unanswered, still running, when its bound elapsed at quit are written at `error` (0
-is not proof of an orderly `shutdown`: Electron reports 0 for a child it tears down at quit, measured on a scratch
-Electron 44.1.1 app, which is why the silent `.catch` on the quit path now says what did not answer — raced against
-the child's own exit, so an answer lost to that exit is not a failure,
+and a `shutdown` either child refused or left unanswered, still running, when its bound elapsed at quit are written at
+`error` (0 is not proof of an orderly `shutdown`: Electron reports 0 for a child it tears down at quit, measured on a
+scratch Electron 44.1.1 app, which is why the silent `.catch` on the quit path now says what did not answer — raced
+against the child's own exit, so an answer lost to that exit is not a failure,
 [`a-childs-shutdown-ack-can-lose-the-race-with-its-exit.md`](a-childs-shutdown-ack-can-lose-the-race-with-its-exit.md));
 a dialog or review that could not be presented is `warning`; main's own line about the run host's handshake reads
-`run host hello:` rather than `run host:`, which is now a forwarded line's source; the collaborators whose port
-already tells a warning apart — the improvement coordinator, initialization, the credential store, the settings store
-and the provider service — now reach the log at `warning` instead of having the level dropped, which is how
-REQ-LIBRARY-035(b)'s warning arrives as one. Readers of the old shape were updated in the same change:
-`questions-proof.mjs` (the probe-at line, anchored after the stamp), `slice-proof.mjs` (the intent line, reading both
-shapes because it replays stored logs) and `live-run.mjs`'s filter; `code-intel-proof.mjs` and `mcp-proof.mjs` read
-`debug` lines and now launch with `ROTARIS_APP_LOG_LEVEL=debug`. `AGENTS.md` says how to drive the app at `debug`.
+`run host hello:` rather than `run host:`, which is now a forwarded line's source; the collaborators whose port already
+tells a warning apart — the improvement coordinator, initialization, the credential store, the settings store and the
+provider service — now reach the log at `warning` instead of having the level dropped, which is how REQ-LIBRARY-035(b)'s
+warning arrives as one. Readers of the old shape were updated in the same change: `questions-proof.mjs` (the probe-at
+line, anchored after the stamp), `slice-proof.mjs` (the intent line, reading both shapes because it replays stored logs)
+and `live-run.mjs`'s filter; `code-intel-proof.mjs` and `mcp-proof.mjs` read `debug` lines and now launch with
+`ROTARIS_APP_LOG_LEVEL=debug`. `AGENTS.md` says how to drive the app at `debug`.
 
 Evidence: `apps/desktop/src/main/app-log.test.ts` (14 cases: every accepted word in three casings, unset and
 unrecognized values, the column, a stack's every line, a final line break, the four thresholds, a forwarded line

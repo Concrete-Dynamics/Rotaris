@@ -1,3 +1,4 @@
+import type { ProcessReply } from '@rotaris/contracts';
 import { millis, type Timers } from '@rotaris/kernel';
 
 /**
@@ -68,10 +69,13 @@ export function watchChildExit(child: { once(event: 'exit', listener: (code: num
  * `docs/defects/fixed/a-childs-shutdown-ack-can-lose-the-race-with-its-exit.md`).
  *
  * The run host answers `shutdown` and then exits on a 0 ms timer, and its reply is posted asynchronously, so the exit
- * sometimes arrives and the answer never does: measured 3 quits in 24. Waiting on the answer alone then stalled the quit
+ * sometimes arrives and the answer never does: measured 3 quits in 26. Waiting on the answer alone then stalled the quit
  * for the whole bound and reported an orderly end as a failure. So the exit counts as an answer:
  *
- * - answered → nothing to say;
+ * - answered `ack` → nothing to say;
+ * - answered anything else → `notCompleted`: a child whose `shutdown` threw (a store that would not release, a
+ *   connection that would not close) answers `refused` rather than staying silent, has not closed what it holds and has
+ *   not scheduled its exit, and Electron's teardown will then report 0 — so this answer is the only record of it;
  * - the child exits first → nothing more: 0 is the orderly end whose answer was lost, and any other status has already
  *   been written, at `error`, by that child's exit handler;
  * - the request fails (its bound elapsed) while the child still runs → `notCompleted`, once;
@@ -79,10 +83,18 @@ export function watchChildExit(child: { once(event: 'exit', listener: (code: num
  *
  * The request is never left to reject unobserved, whichever side of the race loses.
  */
-export async function shutdownAtQuit(request: () => Promise<unknown>, exit: ChildExit, notCompleted: (cause: unknown) => void): Promise<void> {
+export async function shutdownAtQuit(request: () => Promise<ProcessReply>, exit: ChildExit, notCompleted: (cause: unknown) => void): Promise<void> {
   if (exit.code !== null) return;
-  const answer = Promise.resolve().then(request).then(() => ({ failed: false as const }), (cause: unknown) => ({ failed: true as const, cause }));
+  const answer = Promise.resolve().then(request).then(
+    (reply) => (reply.kind === 'ack' ? { failed: false as const } : { failed: true as const, cause: new Error(unacknowledged(reply)) }),
+    (cause: unknown) => ({ failed: true as const, cause }),
+  );
   const outcome = await Promise.race([answer, exit.exited.then(() => null)]);
   if (outcome === null || !outcome.failed || exit.code !== null) return;
   notCompleted(outcome.cause);
+}
+
+/** What a `shutdown` answer other than `ack` said, for the line that reports it. */
+function unacknowledged(reply: ProcessReply): string {
+  return reply.kind === 'refused' ? `refused (${reply.code}): ${reply.headline}` : `answered '${reply.kind}' rather than 'ack'`;
 }

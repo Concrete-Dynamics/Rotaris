@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { ProcessReply } from '@rotaris/contracts';
 import { FakeClock } from '@rotaris/kernel';
 import { CHILD_CLOSE_BOUND_MS, exitAfterChildWindows, shutdownAtQuit, watchChildExit, type ClosableWindow } from './exit.js';
 
@@ -71,8 +72,8 @@ describe("a child's shutdown at quit, raced against its own exit (exit.ts)", () 
     let settle: { resolve: (v: unknown) => void; reject: (e: unknown) => void } | null = null;
     let sent = 0;
     return {
-      send: () => { sent += 1; return new Promise<unknown>((resolve, reject) => { settle = { resolve, reject }; }); },
-      answer: () => settle?.resolve({ kind: 'ack' }),
+      send: () => { sent += 1; return new Promise<ProcessReply>((resolve, reject) => { settle = { resolve: (v) => resolve(v as ProcessReply), reject }; }); },
+      answer: (reply: unknown = { kind: 'ack' }) => settle?.resolve(reply),
       fail: (cause: unknown) => settle?.reject(cause),
       sent: () => sent,
     };
@@ -139,5 +140,18 @@ describe("a child's shutdown at quit, raced against its own exit (exit.ts)", () 
     const cause = new Error('link closed');
     await shutdownAtQuit(() => { throw cause; }, watchChildExit(c), (x) => said.push(x));
     expect(said).toEqual([cause]);
+  });
+
+  it('says it once when the child answers its shutdown with a refusal — the shutdown threw, and nothing it held was closed', async () => {
+    const c = child(); const r = request(); const said: unknown[] = [];
+    const done = shutdownAtQuit(r.send, watchChildExit(c), (cause) => said.push(String(cause)));
+    await flush();
+    r.answer({ kind: 'refused', code: 'request.failed', headline: 'Error: database is locked' });
+    await done;
+    expect(said).toEqual(['Error: refused (request.failed): Error: database is locked']);
+    // Electron's teardown then reports 0; the refusal has already been said, and the exit adds nothing.
+    c.exit(0);
+    await flush();
+    expect(said).toHaveLength(1);
   });
 });

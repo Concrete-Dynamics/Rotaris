@@ -13,9 +13,9 @@ while: its first version of the unanswered-`shutdown` line (commit `4f867a6`) tu
 `quit: the run host did not complete its shutdown (… no reply to shutdown within 30000 ms)`, written on a quit whose run
 host had in fact finished and exited 0.
 
-Found 2026-09-27 by the independent review of that branch: 3 of 24 last-window closes (`window.close` through the
-driver) wrote the line and took 30,052–30,061 ms, 2 of them at the default level; the other 21 took 40–70 ms and wrote
-nothing. In a failing case `run host exited (0)` stood 23 ms after the close.
+Found 2026-09-27 by the independent review of that branch: 3 of 26 last-window closes (`window.close` through the
+driver) wrote the line and took 30,052–30,061 ms, 2 of them at the default level; the other 23 wrote nothing, and the 21
+whose timings were kept took 40–70 ms. In a failing case `run host exited (0)` stood 23 ms after the close.
 
 ## Specs
 
@@ -46,8 +46,11 @@ a dead child fails, and the quit is the only place that needs the exit as an ans
 exit on a 0 ms timer stay as they are — ordering the reply ahead of the exit at the source is not needed once main
 treats the exit as the end.
 
-Evidence: `exit.test.ts` covers the six cases with plain promises (answered; exit 0 first; a non-zero exit first; the
-bound elapsing while the child runs; a child gone before the quit; a request that throws before it is sent). Removing
+Evidence: `exit.test.ts` covers seven cases with plain promises (answered; exit 0 first; a non-zero exit first; the
+bound elapsing while the child runs; a child gone before the quit; a request that throws before it is sent; a `shutdown`
+answered with a refusal). The last was added when the same review found a `refused` answer counted as completed: a
+child whose `shutdown` throws answers `refused`, has closed nothing, and is then torn down with exit 0, so
+`shutdownAtQuit` now treats any answer but `ack` as a `shutdown` not completed. Removing
 the race from `shutdownAtQuit` fails the two exit-first cases, and removing the already-gone check fails that case.
 Driven on the rebuilt app at the default level, 24 last-window closes wrote no `warning` or `error` line and took
 40–69 ms. A second series of 32, on a build that briefly logged when the answer arrived (not committed), lost the answer

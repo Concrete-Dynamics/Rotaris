@@ -167,7 +167,9 @@ waits for them (REQ-GIT-101); main sends every service `shutdown` after the run 
 limits, before it quits. The two paths that end the process at once rather than through `app.quit()` — the capture
 seam's exit and the driver's `quit` — go through `exitCleanly` (`main/exit.ts`): every child window is destroyed, its
 `closed` awaited (bounded at 2 s), and `app.exit` runs on the next turn, because on Linux `app.exit` over an open modal
-child segfaults.
+child segfaults. Neither sends `shutdown`; both are verification seams (`ROTARIS_CAPTURE_PNG`, and the driver under
+`ROTARIS_DRIVER`), and every quit a user can reach goes through `window-all-closed`, the main window's close guard
+turning an `app.quit()` into one.
 
 **The session browser's actions (Part U).** Renderer → main: `session.repair {sessionId?}` (one stale session, or every
 stale session when the id is absent — REQ-SESSION-060/182) → `{report: {repaired[{sessionId, from, to: interrupted,
@@ -403,32 +405,32 @@ restore/prune` (Part P), `shutdown`. The service's narrow asks back to main (`Se
 `runHost.refuseRuns/renewLease/closeStore/release/reopen` — are forwarded by main to the run host; the two children never
 talk directly.
 
-**The application log (`PD-MONITOR-002`, built 2026-09-27).** Main's standard output, and nothing else: main's own
-lines and the `log {level, message}` events both children send — the run host's and each workspace service's — are
-written through one writer, `logAt` in `main/index.ts`, built over `main/app-log.ts`. A line carries its level as a
-field, a column of its own ahead of the message: `[main <instant>] <level> <source>: <message>`, the level one of
-`debug`, `info`, `warning` (the protocol's `warn`) and `error`, the source present only on a forwarded line
-(`run host`, `workspace service`); main's own line about the run host's handshake reads `run host hello:` so it is
-never taken for one. A forwarded line keeps the level its child gave it — the event's `level` is the logger's own
-type, so no mapping stands between them. Main's own lines are `info`, except its reports of a loss — a crash, a
-renderer or child process gone for any reason but `clean-exit`, a child exiting with any status but 0, a `shutdown` a
-child left unanswered, still running, when its bound elapsed at quit, a failed hand-over, a refused launch — which are
-`error`, and a dialog it could not present, which is `warning`. An exit status of 0 is not proof of an orderly
-`shutdown`: Electron reports 0 for a child it tears down at quit, too, which is why the unanswered `shutdown` has a
-line of its own. The quit races each `shutdown` against that child's exit (`shutdownAtQuit`, `main/exit.ts`), watched
-from the fork: a child that exits has ended even when its answer was lost to the exit, so only one still running when
-its bound elapses is said. A line below the threshold is not written. The threshold is `info`, and the environment
-variable `ROTARIS_APP_LOG_LEVEL`, read once when main's module is evaluated, is the only thing that moves it; no
-message kind, command, configuration key or setting reaches it, and it is a different thing from the per-session
-`session.log`, whose level is `session_log_level` (REQ-CONFIG-121). The per-session log is the run host's file; the
-application log is not a file the product writes — whoever launched the process keeps it or does not. The sentinel
-(`main/sentinel.ts`) is not main and does not write this log itself: its two diagnostics — the bundled runtime absent,
-or present and unable to start — go to its own stderr. The token process is an MCP stdio child, so that stderr reaches
-this log through the run host like any child's: line by line at `debug` (`run host: mcp code_intelligence stderr: …`,
-`packages/mcp/src/transport.ts`), and quoted in the failure lines — REQ-MCP-107's stderr tail in a failed discovery's
-line at `warning`, and a failed setup step's last output at `info`
-(`mcp setup: create failed — …; its last output: …`, the detail `packages/mcp/src/setup.ts` builds). At the default
-threshold only the quoted route is written.
+**The application log (`PD-MONITOR-002`, built 2026-09-27).** Main's standard output, and nothing else: main's own lines
+and the `log {level, message}` events both children send — the run host's and each workspace service's — are written
+through one writer, `logAt` in `main/index.ts`, built over `main/app-log.ts`. A line carries its level as a field, a
+column of its own ahead of the message: `[main <instant>] <level> <source>: <message>`, the level one of `debug`,
+`info`, `warning` (the protocol's `warn`) and `error`, the source present only on a forwarded line (`run host`,
+`workspace service`); main's own line about the run host's handshake reads `run host hello:` so it is never taken for
+one. A forwarded line keeps the level its child gave it — the event's `level` is the logger's own type, so no mapping
+stands between them. Main's own lines are `info`, except its reports of a loss — a crash, a renderer or child process
+gone for any reason but `clean-exit`, a child exiting with any status but 0, a `shutdown` a child refused or left
+unanswered, still running, when its bound elapsed at quit, a failed hand-over, a refused launch — which are `error`, and
+a dialog it could not present, which is `warning`. An exit status of 0 is not proof of an orderly `shutdown`: Electron
+reports 0 for a child it tears down at quit, too, which is why the unanswered `shutdown` has a line of its own. The quit
+races each `shutdown` against that child's exit (`shutdownAtQuit`, `main/exit.ts`), watched from the fork: a child that
+exits has ended even when its answer was lost to the exit, so only one still running when its bound elapses, or one that
+answers with a refusal (its `shutdown` threw, so it closed nothing and Electron's teardown will report 0), is said. A
+line below the threshold is not written. The threshold is `info`, and the environment variable `ROTARIS_APP_LOG_LEVEL`,
+read once when main's module is evaluated, is the only thing that moves it; no message kind, command, configuration key
+or setting reaches it, and it is a different thing from the per-session `session.log`, whose level is
+`session_log_level` (REQ-CONFIG-121). The per-session log is the run host's file; the application log is not a file the
+product writes — whoever launched the process keeps it or does not. The sentinel (`main/sentinel.ts`) is not main and
+does not write this log itself: its two diagnostics — the bundled runtime absent, or present and unable to start — go to
+its own stderr. The token process is an MCP stdio child, so that stderr reaches this log through the run host like any
+child's: line by line at `debug` (`run host: mcp code_intelligence stderr: …`, `packages/mcp/src/transport.ts`), and
+quoted in the failure lines — REQ-MCP-107's stderr tail in a failed discovery's line at `warning`, and a failed setup
+step's last output at `info` (`mcp setup: create failed — …; its last output: …`, the detail `packages/mcp/src/setup.ts`
+builds). At the default threshold only the quoted route is written.
 
 **Every window subscribes for itself (Part R).** `session.subscribe` / `session.unsubscribe` bind the relay subscription to the **sender's** webContents id — the persona window's when it asks — not the main window's (the twenty-seventh defect, ADR-0043's note); the run host's `session.attach` then re-delivers the whole-session update and the resident rows to every subscriber of the session. A persona window subscribes on show and unsubscribes on hide (ADR-0048's zero-work rule).
 

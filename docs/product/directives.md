@@ -1589,16 +1589,16 @@ are not recorded, and cannot be recovered afterwards.
 > REQ-LIBRARY-035(b)'s *warning* reached the log as an unlabelled line; each now arrives at `warning`. Main's own
 > reports of a loss are `error` — an uncaught exception or rejection, a refused launch, a failed hand-over, a renderer
 > or child process gone for any reason but `clean-exit`, the run host or a workspace service exiting with any status
-> but 0, and a `shutdown` either child left unanswered, still running, when its bound elapsed at quit — and a dialog
-> or review that could not be presented is `warning`; every other line of main's stays `info`. An exit of 0 was first
-> read as proof of main's own `shutdown`; it is not, because Electron reports 0 for a child it tears down at quit, so
-> the unanswered `shutdown` is the line that says work was cut off. A message of several lines (a stack) is written
-> with the stamp and level on each line. **(3) The obliged lines.** Every line the seven named requirements oblige
-> reaches the log at `info` or above: the confinement verdict (REQ-SANDBOX-071) at `info`, REQ-LIBRARY-035(b)/124's
-> failure and REQ-LIBRARY-047's unrecorded version at `warning`; REQ-TOOLS-171 and REQ-HOOKS-102 oblige no line, they
-> constrain text, which a threshold can only drop. REQ-HOOKS-138's hook lines in this log are `info` and `warning`,
-> but the hook engine's own sink — documented "the application log only" — is wired to the per-session log at `INFO`,
-> where the default `WARNING` drops it; that is recorded as
+> but 0, and a `shutdown` either child refused or left unanswered, still running, when its bound elapsed at quit — and
+> a dialog or review that could not be presented is `warning`; every other line of main's stays `info`. An exit of 0
+> was first read as proof of main's own `shutdown`; it is not, because Electron reports 0 for a child it tears down at
+> quit, so the unanswered `shutdown` is the line that says work was cut off. A message of several lines (a stack) is
+> written with the stamp and level on each line. **(3) The obliged lines.** Every line the seven named requirements
+> oblige reaches the log at `info` or above: the confinement verdict (REQ-SANDBOX-071) at `info`,
+> REQ-LIBRARY-035(b)/124's failure and REQ-LIBRARY-047's unrecorded version at `warning`; REQ-TOOLS-171 and
+> REQ-HOOKS-102 oblige no line, they constrain text, which a threshold can only drop. REQ-HOOKS-138's hook lines in
+> this log are `info` and `warning`, but the hook engine's own sink — documented "the application log only" — is wired
+> to the per-session log at `INFO`, where the default `WARNING` drops it; that is recorded as
 > [`hook-faults-reach-only-the-session-log-at-a-level-it-drops.md`](../defects/hook-faults-reach-only-the-session-log-at-a-level-it-drops.md)
 > and not changed here, because it is a question of which log, not of this one's threshold. Three proof readers
 > matched the old shape and two proofs read `debug` lines; the readers were updated and those two launches set the
@@ -1609,7 +1609,7 @@ are not recorded, and cannot be recovered afterwards.
 > is what a threshold above `info` costs: 24 launches driven to a last-window close at the default level wrote no
 > `warning` or `error` line and quit in 40–69 ms, and one ended by the driver's `app.exit` at `warning` wrote nothing
 > at all. The review's run of the same close found the first version of the unanswered-`shutdown` line firing on
-> orderly quits (3 in 24, each waiting out the 30 s bound), because a child's answer can lose the race with its own
+> orderly quits (3 in 26, each waiting out the 30 s bound), because a child's answer can lose the race with its own
 > exit; the quit now races each `shutdown` against the child's exit, recorded as
 > [`a-childs-shutdown-ack-can-lose-the-race-with-its-exit.md`](../defects/fixed/a-childs-shutdown-ack-can-lose-the-race-with-its-exit.md).
 > A loss still writes its `error`, driven against this build at `warning`: a run host killed with SIGKILL and then the

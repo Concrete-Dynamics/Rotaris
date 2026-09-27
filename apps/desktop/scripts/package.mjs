@@ -1,14 +1,20 @@
 /**
  * `pnpm package` — ADR-0056's build, with its evidence (IC-6).
  *
+ *   0. the bundled assets                   `pnpm notices` (REQ-STARTUP-143's validation, before freezing) and
+ *                                           `pnpm build-id` (REQ-SHELL-140) write into resources/ (first-release-plan.md §4.4)
  *   1. electron-vite build                  the five entries
- *   2. electron-builder --win               rebuild → pack → hooks (rule 1a, rule 4a) → installer
+ *   2. electron-builder --win               rebuild → pack → hooks (rule 1a, rule 4a, the assets) → installer
  *   3. the packaged app, launched           rule 4 (b): the product's own path opens a store in a real
  *                                           utilityProcess and runs a terminal call; both settle in the store
  *   4. release/load-proof.json              the merged report; a non-zero exit on any miss
  *
  * ROTARIS_PACKAGE_DIR_ONLY=1   stop at win-unpacked (no installer)
  * ROTARIS_PACKAGE_SKIP_APP=1   skip step 3
+ * ROTARIS_PACKAGE_WITHOUT_NOTICES=1
+ *                              go on after a REFUSED notices step: a development package with no notices file, which its
+ *                              About page states and which is not releasable; refused on a build for a tag
+ *                              (scripts/lib/bundled-assets.mjs says why the flag exists and what such a package lacks)
  * ROTARIS_IC6_COUNTERFACTUAL   see build-hooks.cjs; the build must then fail and this script reports where
  */
 import { spawnSync } from 'node:child_process';
@@ -17,8 +23,10 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { proofIsolationEnv, workspacesRootFor } from './lib/harness.mjs';
+import { afterNoticesStep, ASSETS, WITHOUT_NOTICES } from './lib/bundled-assets.mjs';
 
 const APP = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const REPO = resolve(APP, '..', '..');
 const RELEASE = join(APP, 'release');
 const REPORT = join(RELEASE, 'load-proof.json');
 const require = createRequire(import.meta.url);
@@ -41,6 +49,11 @@ function run(cmd, args, opts = {}) {
   const r = spawnSync(cmd, args, { cwd: APP, stdio: 'inherit', shell: process.platform === 'win32', ...opts });
   if (r.status !== 0) throw new Error(`${cmd} ${args.join(' ')} exited ${r.status ?? r.signal}`);
 }
+/** A pipeline step whose exit code is the answer (REQ-STARTUP-149): its lines go to the terminal, its code comes back. */
+function exitOf(script) {
+  const r = spawnSync(process.execPath, [join(REPO, script)], { cwd: REPO, stdio: 'inherit' });
+  return r.status ?? null;
+}
 function finish(ok, why) {
   report.ok = ok;
   report.ms = Date.now() - t0;
@@ -48,10 +61,13 @@ function finish(ok, why) {
   mkdirSync(RELEASE, { recursive: true });
   writeFileSync(REPORT, JSON.stringify(report, null, 2));
   process.stdout.write(`\n[package] ${ok ? 'PASSED' : 'REFUSED'}${why ? ` — ${why}` : ''} (${report.ms} ms) → ${REPORT}\n`);
+  // A development package says what it is last, where it cannot scroll away (first-release-plan.md §4.4).
+  if (ok && report.assets?.notices === 'absent') process.stdout.write(`[package] ${report.assets.line}\n`);
   // This script builds with the verification seams compiled OUT and leaves that build in `out/`. Every `*-proof`
   // script launches `out/main/index.js` and drives those seams, so the next proof run after a package would fail
-  // for a reason no one would guess from its output. Say so here rather than let it be discovered.
-  process.stdout.write('[package] `out/` now holds a SEAM-FREE build — run `pnpm build` before any proof or `pnpm app:drive`.\n');
+  // for a reason no one would guess from its output. Say so here rather than let it be discovered — and only when that
+  // build ran: a package refused at the notices step (§4.4) never reached it, and `out/` is what it was.
+  if (report.steps.some((s) => s.name.startsWith('electron-vite build'))) process.stdout.write('[package] `out/` now holds a SEAM-FREE build — run `pnpm build` before any proof or `pnpm app:drive`.\n');
   process.exit(ok ? 0 : 1);
 }
 
@@ -66,6 +82,23 @@ try {
     return { bundle: { python: marker.answers.python, distribution: marker.distribution, version: marker.answers.distribution, bytes: marker.size.bytes, files: marker.size.files, builtAt: marker.builtAt, elapsedMs: marker.elapsedMs } };
   });
   step('code-intelligence manifest equals the committed module', () => run('node', [join(APP, 'scripts', 'code-intelligence', 'manifest.mjs'), '--check']));
+  // first-release-plan.md §4.4: the two files the About page reads, written where electron-builder.yml's extraResources
+  // picks them up. Notices first — REQ-STARTUP-037 runs its validation before freezing, and it reads the runtime the
+  // step above built. A refusal (exit 1) stops the package unless ROTARIS_PACKAGE_WITHOUT_NOTICES=1 asks for a
+  // development package without the file; the refused step has already removed any earlier one (REQ-STARTUP-149).
+  report.assets = step('the notices file (pnpm notices)', () => {
+    const decision = afterNoticesStep({ code: exitOf('tools/notices/generate.mjs'), env: process.env });
+    process.stdout.write(`[package] ${decision.line}\n`);
+    if (!decision.proceed) throw new Error(decision.line);
+    return { notices: decision.carried ? 'carried' : 'absent', flag: process.env[WITHOUT_NOTICES] ?? null, line: decision.line };
+  });
+  step('the build identifier (pnpm build-id)', () => {
+    const code = exitOf('tools/build-id/write.mjs');
+    if (code !== 0) throw new Error(`pnpm build-id exited ${code}: this build has no identifier to carry (REQ-SHELL-140)`);
+    const id = readFileSync(join(APP, 'resources', ASSETS.buildId), 'utf8').trim();
+    report.assets.buildId = id;
+    return { buildId: id };
+  });
   // ROTARIS_BUILD=package compiles the verification seams OUT (electron.vite.config.ts). A packaged binary that
   // could still be scripted through its environment is the thing this flag exists to prevent.
   step('electron-vite build (seams compiled out)', () => run('pnpm', ['exec', 'electron-vite', 'build'], { env: { ...process.env, ROTARIS_BUILD: 'package' } }));

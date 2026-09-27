@@ -342,7 +342,7 @@ export class Run {
    * PD-ORCH-005 clause 2 / REQ-ORCH-134: aborted when the pause's tool deadline passes, cutting every tool call still in
    * flight in every agent; the timer that aborts it is armed when the pause is accepted.
    */
-  private readonly toolCut = new AbortController();
+  private toolCut = new AbortController();
   private toolDeadline: TimerHandle | null = null;
   /** PD-ORCH-005 clause 2: the interruption the current iteration came to rest by, leaving it open; null while it has not. */
   private iterationRest: Interruption | null = null;
@@ -467,6 +467,11 @@ export class Run {
     return this.stop.reason === 'user_cancelled' ? 'stop' : null;
   }
 
+  /** PD-ORCH-005 clause 2: the run is coming to rest, so it makes no further model call — a manual compression among them. */
+  get comingToRest(): boolean {
+    return this.restCause !== null;
+  }
+
   /** Whether the 30 s hard-cancel budget is armed (ADR-0014). */
   get hardCancelArmed(): boolean {
     return this.hardCancel !== null;
@@ -515,7 +520,7 @@ export class Run {
    * own abort signal bounds it, so a cancel during the pass ends it as it ends any model call.
    */
   async forceCompression(): Promise<ManualCompressionReport | null> {
-    if (this.ended || this.conversations.size === 0) return null;
+    if (this.ended || this.comingToRest || this.conversations.size === 0) return null;
     return this.conversations.compressAll(this.abort.signal);
   }
   /**
@@ -590,6 +595,8 @@ export class Run {
       if (this.planHeld && this.pauseRequested) {
         this.pauseRequested = false;
         this.toolDeadline?.cancel();
+        // A deadline that already passed cut nothing yet — no turn has run — and cuts nothing of the plan cycle's.
+        this.toolCut = new AbortController();
         writer.appendTimeline('run_pause_refused', 'rotaris', 'The pause was not applied: this run is held at the plan gate, which leaves no agent unfinished (PD-ORCH-005 clause 11).', {});
         writer.save('starting');
       }
@@ -769,22 +776,31 @@ export class Run {
    * this run's first iteration takes the next number rather than the dead one's. It counts toward no limit of this run.
    */
   private async closeLeftOpenIteration(): Promise<void> {
+    const closed = await this.closeOpenIteration((open) => (open.interruption === null || open.interruption === 'crash'
+      ? 'the run that owned this iteration ended before it closed'
+      : `the session was continued without the agents ${interruptionPhrase(open.interruption)} had left paused`));
+    if (!closed) return;
+    this.initialIterations = this.iterationsCompleted;
+    this.saveRunning({});
+  }
+
+  /**
+   * The open iteration closes `cancelled` with every agent it left paused: `iteration.end` and the row's close in one
+   * transaction, its capture, its todo task back to `pending`, and the count moved past it. False when none is open.
+   */
+  private async closeOpenIteration(summary: (open: IterationRow) => string): Promise<boolean> {
     const dal = this.deps.dal;
     const open = dal?.openIterationOf(this.sessionId);
-    if (!dal || !open) return;
+    if (!dal || !open) return false;
     this.cancelPausedAgents(dal, open);
-    const summary = open.interruption === null || open.interruption === 'crash'
-      ? 'the run that owned this iteration ended before it closed'
-      : `the session was continued without the agents ${interruptionPhrase(open.interruption)} had left paused`;
-    this.deps.writer.endIteration(open.iteration, { task: this.todo.textOf(open.todo_task_id) ?? open.task, outcome: 'cancelled', summary }, 'cancelled');
-    // REQ-GIT-051: the iteration closes here, so its one capture is attempted here — it records the work the dead run
-    // left. No child is credited: that run's children are not this run's. Its hooks' `iteration_end` is not fired; the
-    // hooks that saw the iteration begin belonged to the run that died.
+    this.deps.writer.endIteration(open.iteration, { task: this.todo.textOf(open.todo_task_id) ?? open.task, outcome: 'cancelled', summary: summary(open) }, 'cancelled');
+    // REQ-GIT-051: the iteration closes here, so its one capture is attempted here — it records the work the run that
+    // left it open had done. No child is credited: those children are not this run's. Its hooks' `iteration_end` is not
+    // fired; the hooks that saw the iteration begin belonged to that run.
     await this.captureCheckpoint(open.iteration, '');
     this.todo.reopen(open.todo_task_id);
     this.iterationsCompleted = Math.max(this.iterationsCompleted, open.iteration);
-    this.initialIterations = this.iterationsCompleted;
-    this.saveRunning({});
+    return true;
   }
 
   /**
@@ -1461,7 +1477,9 @@ export class Run {
   }
 
   private saveRunning(extra: { run_started_at?: string | null; permission_mode?: string; sandboxed?: number }, status: 'running' | 'waiting' = this.waits.size > 0 ? 'waiting' : 'running'): void {
-    const r = this.deps.writer.save(status, {
+    // REQ-MONITOR-124: an accepted pause reads `pausing` until the run has come to rest — a wait the pause releases, or any
+    // other save on the way to rest, does not read `running` again (found by phase 3's second review).
+    const r = this.deps.writer.save(this.pauseRequested ? 'pausing' : status, {
       ...this.aggregates.patch(), token_samples: JSON.stringify(this.tokenSamples), iterations_completed: this.iterationsCompleted,
       todo: this.todoJson(), progress: JSON.stringify(this.progress()),
       ...(extra.run_started_at === undefined ? {} : { run_started_at: extra.run_started_at }),
@@ -1508,6 +1526,17 @@ export class Run {
     // the one string the payload and the session.end event below both carry.
     if (this.hooks) {
       try { await this.hooks.fireLifecycle('session_end', { status: result.status }); } catch (cause) { this.deps.warn(`the session_end hooks raised on ${this.sessionId}: ${String(cause)}`); }
+    }
+    /*
+     * PD-ORCH-005 clause 3: the explicit cancel is final even when it lands after the rest was recorded — while this
+     * teardown ended background sessions or ran the hooks. The iteration the rest left open closes `cancelled` with
+     * every agent it paused, and the background sessions a pause had left running end (found by phase 3's second review).
+     */
+    if (this.stop.final) {
+      try {
+        if (ended === 'pause') await this.restTerminals('stop');
+        if (await this.closeOpenIteration(() => 'the run was cancelled after it had come to rest') && this.rootRecord) this.rootRecord.state = 'cancelled';
+      } catch (cause) { this.deps.warn(`closing the rested iteration of ${this.sessionId} after the cancel failed: ${String(cause)}`); }
     }
 
     step('run_end', () => { writer.appendTimeline('run_end', 'rotaris', `The run ended ${status}.`, { execution_status: status, stop_reason: stopReason }); });

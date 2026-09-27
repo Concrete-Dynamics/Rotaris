@@ -12,7 +12,7 @@ import { ChildLedger, type Budget } from './ledger.js';
 import { childPayload, completionNotification, parseReport, priorAgentContext, reportBlock, resumeMessage } from './notify.js';
 import { CHILD_STALL_TIMEOUT_MS, continuationRefusal, cutOffLines, cutOffReport, ProgressLog, type CutOff } from './cut-off.js';
 import { BUILT_IN_PERSONAS, type Persona, type PersonaResolver, type RoleName } from './personas.js';
-import { produceReport, type SummariserDeps } from './report.js';
+import { fallbackReport, produceReport, type ReportInput, type SummariserDeps } from './report.js';
 import { Scheduler } from './scheduler.js';
 import { validateWriteScope, WriteClaims, writeScopeBlock, type ClaimHit, type ScopeDisclosure } from './write-scope.js';
 import type { HookPort } from '../hooks-port.js';
@@ -156,6 +156,11 @@ export class IterationChildren implements DelegationOps {
   private readonly controllers = new Map<string, AbortController>();
   /** PD-ORCH-005 clause 2: the run is coming to rest — no child starts, every agent stops before its next model step. */
   private resting = false;
+  /**
+   * REQ-SESSION-094 / PD-ORCH-005: the rest stopped waiting for this iteration's executions at the stop's grace. One that
+   * ends after that is a straggler of a finished run: it writes nothing more (found by phase 3's second review).
+   */
+  private detached = false;
 
   constructor(private readonly deps: ChildrenDeps, readonly iteration: number) {
     this.ledger = new ChildLedger({ dal: deps.dal, writer: deps.writer, sessionId: deps.sessionId, iteration, budget: deps.budget, modelCap: deps.modelCap, warn: deps.warn , personas: deps.personas, ...(deps.artifacts ? { artifacts: deps.artifacts } : {}), ...(deps.rootRecord ? { rootRecord: deps.rootRecord } : {}) });
@@ -372,11 +377,11 @@ export class IterationChildren implements DelegationOps {
     this.beginRest();
     // A stop and a quit have aborted every execution; REQ-SESSION-092's grace bounds how long their ends are awaited. A
     // pause waits for the step in flight, whose own model timeout bounds it (REQ-MONITOR-123).
-    const executions = Promise.allSettled([...this.executing]);
+    const executions = Promise.allSettled([...this.executing]).then(() => false);
     if (cause === 'pause') await executions;
     else {
       let grace: TimerHandle | undefined;
-      await Promise.race([executions, new Promise<void>((r) => { grace = this.deps.clocks.timers.after(STOP_GRACE, r); })]);
+      this.detached = await Promise.race([executions, new Promise<boolean>((r) => { grace = this.deps.clocks.timers.after(STOP_GRACE, () => r(true)); })]);
       grace?.cancel();
     }
     // Clause 3: an explicit cancel that arrived meanwhile is final — nothing more is paused; the caller settles the rest.
@@ -550,6 +555,7 @@ export class IterationChildren implements DelegationOps {
         onToolCompleted: (call, result) => progress.completed(deps.clocks.monotonic.now(), call.name, result.args, result.status === 'ok' && !result.isError),
         // PD-ORCH-005 clause 1: the child's conversation, recorded under its task id as it happens.
         ...(deps.record ? { recorder: deps.record.recorder(row.task_id, row.iteration) } : {}),
+        detached: () => this.detached,
         // REQ-ORCH-093: the resume limb — a child's turn after its first is a parent being resumed with reports.
         parentResume: !wasFirst,
       }, task, history, controller.signal); };
@@ -598,6 +604,8 @@ export class IterationChildren implements DelegationOps {
       }
       break;
     }
+    // REQ-SESSION-094: the rest gave up waiting for this execution, and the run it belonged to has ended.
+    if (this.detached) return;
     const cancelled = deps.runSignal.aborted;
     const toolCalls = outcome?.toolCallCount ?? 0;
     this.toolCalls.set(row.task_id, toolCalls);
@@ -619,11 +627,12 @@ export class IterationChildren implements DelegationOps {
      * no summary, no report, no terminal state (the repair of `a-pause-settles-children-instead-of-holding-them.md`). It
      * resumes into writing its report only when its turn truly finished — it answered, owes no re-prompt and is owed
      * nothing by children of its own; otherwise (its turn stopped where it stood, or the rest's abort cut its model step,
-     * which reads as a failed step) it resumes `running` from its record. A child whose limit expired, or that raised,
-     * is not stopped by the rest: it ends `failed` as REQ-ORCH-088 and REQ-ORCH-073 have it, and is never resumed
-     * (clause 5) — its report assembled with no summarising call, since no model call is made once the run comes to rest.
+     * which reads as a failed step, or its execution raised, as the root's may) it resumes `running` from its record
+     * (OQ-69). A child whose limit expired is not stopped by the rest: it ends `failed` as REQ-ORCH-088 has it, and is
+     * never resumed (clause 5) — its report assembled with no summarising call, since no model call is made once the run
+     * comes to rest.
      */
-    const rest = this.resting && !timedOut && error === null ? deps.restCause?.() ?? null : null;
+    const rest = this.resting && !timedOut ? deps.restCause?.() ?? null : null;
     if (rest !== null) {
       const finished = outcome !== null && outcome.paused !== true && outcome.report.status !== 'failed' && !rePromptOwed;
       const into = finished ? 'summarizing' : 'running';
@@ -677,18 +686,35 @@ export class IterationChildren implements DelegationOps {
     this.controllers.set(row.task_id, summarising);
     const onRunAbortWhileSummarising = () => summarising.abort();
     deps.runSignal.addEventListener('abort', onRunAbortWhileSummarising, { once: true });
+    const reportInput: ReportInput = { agentName: row.canonical_name, role: row.persona, status, messages, toolCallCount: toolCalls, toolsUsed: [...new Set(messages.flatMap((m) => m.content.flatMap((p) => (p.kind === 'tool-call' ? [p.name] : []))))], lastText, finalTextIsFinal: finalIsFinal, errors };
     let produced: Awaited<ReturnType<typeof produceReport>>;
     try {
-      produced = await produceReport({ agentName: row.canonical_name, role: row.persona, status, messages, toolCallCount: toolCalls, toolsUsed: [...new Set(messages.flatMap((m) => m.content.flatMap((p) => (p.kind === 'tool-call' ? [p.name] : []))))], lastText, finalTextIsFinal: finalIsFinal, errors }, cancelled || this.resting ? null : deps.summariser, summarising.signal, this.resting && !cancelled ? 'the run was coming to rest, so no summarising call was made' : undefined);
+      produced = await produceReport(reportInput, cancelled || this.resting ? null : deps.summariser, summarising.signal, this.resting && !cancelled ? 'the run was coming to rest, so no summarising call was made' : undefined, () => this.resting);
     } finally {
       deps.runSignal.removeEventListener('abort', onRunAbortWhileSummarising);
       this.controllers.delete(row.task_id);
     }
-    if (isTerminalChildState(this.ledger.get(row.task_id)?.state ?? 'cancelled')) return;
+    if (this.detached || isTerminalChildState(this.ledger.get(row.task_id)?.state ?? 'cancelled')) return;
+    // The explicit cancel landing while this child summarised ends it `cancelled`, as one landing before would have.
+    const cancelledNow = cancelled || (deps.runSignal.aborted && (deps.restCause?.() ?? null) === null);
+    if (produced === null) {
+      /*
+       * PD-ORCH-005 clauses 2 and 3: the summarising pass was cut short — a stop's or a quit's abort, or a pause that
+       * allowed no second attempt. It produced no report, so this child has not finished: it is left `paused`, and it
+       * summarises again when it resumes (found by phase 3's second review).
+       */
+      const restNow = this.resting && !cancelledNow ? deps.restCause?.() ?? null : null;
+      if (restNow !== null) {
+        const r = this.ledger.rest(row.task_id, restNow, 'summarizing', toolCalls);
+        if (!r.ok) deps.warn(r.reason);
+        return;
+      }
+      produced = fallbackReport(reportInput, 'the run was cancelled during the summarising pass');
+    }
     const report = cutOff === null ? produced : { ...produced, cut_off: cutOff };
     this.ledger.storeReport(row.task_id, report as unknown as Record<string, unknown>);
-    const terminal = cancelled ? 'cancelled' : status === 'failed' ? 'failed' : reportStatusToState(report.status);
-    const t = cancelled ? this.ledger.transition(row.task_id, 'cancelled', 'cancellation') : this.ledger.transition(row.task_id, terminal);
+    const terminal = cancelledNow ? 'cancelled' : status === 'failed' ? 'failed' : reportStatusToState(report.status);
+    const t = cancelledNow ? this.ledger.transition(row.task_id, 'cancelled', 'cancellation') : this.ledger.transition(row.task_id, terminal);
     if (!t.ok) deps.warn(t.reason);
     // REQ-ORCH-098: teardown, whatever the terminal state.
     const at = toIsoUtc(deps.clocks.wall.instant());

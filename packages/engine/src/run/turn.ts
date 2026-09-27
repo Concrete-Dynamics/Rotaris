@@ -130,6 +130,11 @@ export interface TurnDeps {
   readonly cutCalls?: AbortSignal | undefined;
   /** PD-ORCH-005: what the run is coming to rest by, for the interrupted results it records; null while it is not. */
   readonly interruption?: (() => Interruption | null) | undefined;
+  /**
+   * REQ-SESSION-094: the run gave up waiting for this turn and has ended. A step or a call that returns after that writes
+   * nothing more — no row settled, nothing recorded — and the turn ends where it stands. Absent means never.
+   */
+  readonly detached?: (() => boolean) | undefined;
   /** Part Q: the ladder over every model step of this agent (REQ-ORCH-090/091/092); absent means the bare step. */
   readonly resilience?: TurnResilience | undefined;
   /**
@@ -282,6 +287,7 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
       ? await resilientStep({ writer, clocks, warn: deps.warn, agent: deps.agentName, onRequestUsage: observeRequestUsage }, resilience, (choice, unresponsiveMs) => step(stepDeps, choice, conv.snapshot(), specs, signal, unresponsiveMs, segment), signal)
       : await (async () => { const o = await step(stepDeps, { model: deps.model, thinking: deps.thinking }, conv.snapshot(), specs, signal, null, segment); observeRequestUsage(priceRequest(o.report.usage, null)); return o.report; })();
     lastReport = report;
+    if (deps.detached?.() === true) return { report: { ...report, usage }, messages: conv.snapshot(), toolCallCount, paused: true };
     // REQ-MONITOR-049 (Part R): the step's input count is this agent's latest prompt-token reading; the surface reads it from the record.
     // REQ-MONITOR-089: after a compression the reading FALLS, because the step that follows one reports the shorter prompt.
     writer.activity.usage(deps.agentName, report.usage.input);
@@ -340,6 +346,7 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
       // REQ-ORCH-134 (PD-ORCH-005 clause 2): the call runs under the turn's signal and the pause's tool deadline.
       const callSignal = deps.cutCalls ? AbortSignal.any([signal, deps.cutCalls]) : signal;
       const r = await tools.dispatch(call, callSignal);
+      if (deps.detached?.() === true) return { report: { status: 'succeeded', text: lastReport.text, usage }, messages: conv.snapshot(), toolCallCount, paused: true };
       const interrupted = r.interrupted === true || callSignal.aborted;
       deps.onToolCompleted?.(call, r);
       deps.dispatched.set(c.callId, r.text);

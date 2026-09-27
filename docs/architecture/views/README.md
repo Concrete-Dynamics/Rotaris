@@ -55,7 +55,13 @@ the state it resumes into, the root execution record `paused`, and the iteration
 terminal sessions are attributed to their agent and recorded in `agent_terminals` (a pause leaves them running; a stop
 and a quit end them). A crash is recorded from the store at the next repair or continue (`run/crash.ts`); loading a
 session no longer settles anything, so `session.resumed` loses its settled count. Cancelling one child aborts its
-execution and its descendants'. Until the resume lands, a continue declines the open iteration. Repairs
+execution and its descendants'. Until the resume lands, a continue declines the open iteration. **Repaired by the
+phase's two adversarial reviews (same date):** a finished but unreported child leaves its parent unfinished; no model
+call follows the pause (the turn re-checks after supervision and compression, the ladder lets the step's report stand,
+the waits are released, the summariser makes no second attempt, the manual compression is refused); the status reads
+`pausing` until the run rests; the explicit cancel is final in the rest's window and in teardown's; a withdrawn question
+settles blocked with `question_withdrawn`; a stop waits within its 30 s grace and an execution it gave up on writes
+nothing afterwards; a pause refused at the plan gate takes its tool deadline with it. Repairs
 `a-pause-settles-children-instead-of-holding-them.md` and `cancelling-one-child-does-not-stop-it.md`. The **runtime
 view** gains §2's rest and crash paragraphs and diagram arm, §4's and §5's rows move, §6's teardown and §7's four rows'
 writers; the **state-ownership view** gains the rest's runtime and durable facts and the background session's owner;

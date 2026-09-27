@@ -315,6 +315,25 @@ describe('engine/run/compression — in a run (REQ-ORCH-093, REQ-MONITOR-076/086
     expect(warnings.some((w) => w.includes('REQ-MONITOR-082'))).toBe(true);
   });
 
+  it('PD-ORCH-005 clause 2 (found by phase 3\'s second review): the manual compression is refused while the run comes to rest — it would be a model call', async () => {
+    let release!: () => void;
+    const held = new Promise<void>((r) => { release = r; });
+    const { sessions, counts } = sessionsWith((persona, turn) => {
+      if (persona === 'compressor') return answer('Work performed: some. Findings reached: none. Questions left open: none.');
+      if (turn === 1) return toolCalls([{ callId: 'c1', name: 'glob', args: {} }], 'looking');
+      if (turn === 2) return { parts: [{ hold: held }, ...answer('done').parts] };
+      return answer('never');
+    });
+    const sid = (sessions.start(dal, 'C:/ws', 'do the thing') as { value: SessionId }).value;
+    for (let i = 0; i < 60 && [...counts.values()].reduce((a, b) => a + b, 0) < 2; i++) await tick();
+    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    const refused = await sessions.controlAsync({ op: 'forceCompression', sessionId: sid, args: {} });
+    expect(refused).toEqual({ ok: false, refusal: { code: 'run_coming_to_rest', message: 'The run is coming to rest; nothing is compressed until it is continued.' } });
+    release();
+    await sessions.running(sid)!;
+    expect(counts.get('compressor')).toBeUndefined();
+  });
+
   it('PD-ORCH-005 clause 2: a pause accepted while the threshold compresses allows no step after the compression', async () => {
     let release!: () => void;
     const held = new Promise<void>((r) => { release = r; });

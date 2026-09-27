@@ -423,6 +423,17 @@ describe('the two hook slots (ADR-0015, REQ-HOOKS-004/005/047/068/071/072/074)',
     expect(bad.followUp).toBe("Hook 'P' reported after the call: noted");
     expect(rh.calls[3]!.call.results).toEqual([{ kind: 'error', text: bad.text }]);
   });
+  it('PD-ORCH-005 clause 9 (found by phase 3\'s second review): a question the rest withdrew never ran — blocked, recorded as withdrawn, no post_tool hook and no tool error', async () => {
+    const rh = recordingHooks();
+    const withdrawn = simpleExecutor('ask_questions', 'q', anySchema, async () => ({ text: 'The questions were withdrawn by the pause.', isError: true, failureKind: INTERRUPTED_FAILURE_KIND, withdrawnBy: 'pause' as const }));
+    const h = harness({ preset: 'autonomous', hooks: rh.hooks, extraExecutors: [['ask_questions', withdrawn]] });
+    const r = await h.gate.dispatch(h.call('ask_questions', {}), new AbortController().signal);
+    expect(r).toMatchObject({ status: 'blocked', interrupted: true, blockedReason: 'The questions were withdrawn by the pause.' });
+    expect(rh.calls.map((c) => c.slot)).toEqual(['pre']);
+    expect(h.rec.timeline).toContain('question_withdrawn');
+    expect(h.rec.issues).toEqual([]);
+  });
+
   it('REQ-HOOKS-004/068: a call the policy denies starts no hook; no hook port means one lookup and nothing more', async () => {
     const rh = recordingHooks();
     const h = harness({ preset: 'autonomous', hooks: rh.hooks });

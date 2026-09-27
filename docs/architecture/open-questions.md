@@ -3005,22 +3005,42 @@ when the pause is accepted, a rest that finds nothing unfinished, and what a cra
   finishes, and its report stands: a transient failure of it is not retried, no fallback model is tried, a context
   rejection is not condensed, and a provider limit it meets is not waited on. An agent already parked on a provider limit
   stops waiting at once and makes no further request, so a pause during the wait on an exhausted provider completes;
-  the turn checks the rest again after supervision and after compression, so neither leads to another step; and no
-  child summarises. The same holds from a stop's acceptance, which also aborts the step in flight.
+  the turn checks the rest again after supervision and after compression, so neither leads to another step; the manual
+  compression is refused; and no child starts a summarising pass. A child's summarising call already in flight when
+  the pause is accepted is a step in flight: it finishes, and a usable answer is the child's report, since the child
+  then finished before the rest. An unusable one is not retried; the pass is cut short, and the child is left `paused`
+  to summarise when it resumes. The same holds from a stop's acceptance, which also aborts the step in flight, so a
+  child summarising when the stop lands is left `paused` the same way. The status reads `pausing` throughout, as
+  REQ-MONITOR-124 has it.
 - **Calls in flight at a stop or a quit (clauses 3 and 9).** Clause 9's last sentence gives every other in-flight call
   REQ-ORCH-134's deadline, and read alone it would give it on a stop and a quit too. Clause 3 has a stop's call "cut off
   before its result arrived", and REQ-SESSION-092's stop aborts at once, so the deadline is the pause's: a stop and a quit
   cut every call in flight at once, each recorded as interrupted with what it had produced.
 - **A child that times out or raises during a rest.** "What is unchanged" keeps a timed-out child failed and never
-  resumed. A child whose `child_timeout` fires, or whose execution raises, while the run is coming to rest ends `failed`
-  as it would have without the rest. Clause 2 permits no summarising call, so its report is the unsummarised one, whose
-  `summary_failure` says the run was coming to rest.
+  resumed. A child whose `child_timeout` fires while the run is coming to rest ends `failed` as it would have without
+  the rest. Clause 2 permits no summarising call, so its report is the unsummarised one, whose `summary_failure` says
+  the run was coming to rest. An agent whose execution raises while the run comes to rest is left `paused`, the root
+  and a child alike. A raise mid-rest is most often the rest's own abort surfacing through a tool, and the agent's
+  record is intact, so it resumes from it. REQ-ORCH-073 (a child that raises ends `failed`) and REQ-ORCH-135 (an
+  iteration that raises closes `failed`) still govern a raise outside a rest.
+- **An execution the stop's grace gives up on.** A stop or a quit waits for its executions within REQ-SESSION-092's
+  30 s. One still running after that is detached. When it returns it writes nothing into the finished session: no row
+  settled, nothing recorded, no report (REQ-SESSION-094's straggler clause). It was left `paused` where it stood, and it
+  resumes from what its record held at that moment.
+- **A call cut by no rest.** A call cut by its agent's limit, by the cancellation of that agent or by the explicit
+  cancel is recorded as cut off, and its statement names no rest. Only a pause, a stop, a quit or a crash is named as
+  what interrupted a call.
 - **A child finished and unreported is unfinished work.** A child that reached its terminal state but whose report its
   parent has not received leaves the parent unfinished: the parent is left `paused`, and a root in that state leaves the
   iteration open, so the report is delivered when the parent resumes instead of being lost with a closed iteration.
 - **The explicit cancel meanwhile.** A rest waits for every execution — a pause as long as the steps in flight take, a
   stop or a quit within REQ-SESSION-092's 30 s. The explicit cancel that arrives in that window is final: every agent
-  the rest had paused ends `cancelled` and the iteration closes.
+  the rest had paused ends `cancelled` and the iteration closes. So is one that arrives later, while teardown ends
+  background sessions or runs the `session_end` hooks. Before the terminal save, the open iteration closes `cancelled`
+  with every agent it left paused, and the background sessions a pause had left running end.
+- **A pause accepted in the pre-flight.** The plan hold is not known until the pre-flight answers. A pause accepted
+  before that is refused once the hold is known (`run_pause_refused`), and its tool deadline goes with it, even one
+  that had already passed.
 - **Background sessions at the other ends (clause 10).** The explicit cancel is a stop made final, so it records `stop`
   and ends them as a stop does. A run the product ends on its own account and a stop or a quit during a plan cycle do
   not come to rest, and record nothing of them, as before the build.

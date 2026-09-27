@@ -133,6 +133,24 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     expect(dal.timelineOf(sid).map((t) => t.name)).toContain('run_pause_refused');
   });
 
+  it('PD-ORCH-005 clause 2 (found by phase 3\'s second review): a deadline that passed before the refusal cuts no plan-cycle call', async () => {
+    let release!: () => void;
+    const preflightHold = new Promise<void>((r) => { release = r; });
+    let cut: boolean | null = null;
+    const tools: ToolPort = { ...grepPort(), dispatch: async (_c, signal) => { cut = signal.aborted; return { text: 'found', isError: false, status: 'ok', durationMs: 1, label: 'grep', args: {} }; } };
+    const sessions = sessionsWith(scripted([toolCalls([{ callId: 'g1', name: 'grep', args: {} }], 'Reading first.'), answer('Step 1: do it.')]).backend, { intent: 'moderate_feature', preflightHold, tools });
+    const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+    await new Promise((r) => setTimeout(r, 10));
+    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    // A slow pre-flight: the pause's deadline passes before the hold is known.
+    clock.advance(30_000);
+    release();
+    const result = await sessions.running(sid)!;
+    expect(cut).toBe(false);
+    expect(result.execution_status).toBe('awaiting_plan_decision');
+    expect(dal.planCycle(sid, 1)!.plan).toBe('Step 1: do it.');
+  });
+
   it('PD-ORCH-005 clause 2: the refused pause\'s tool deadline goes with it — a plan-cycle call past 30 s is not cut', async () => {
     let release!: () => void;
     const preflightHold = new Promise<void>((r) => { release = r; });

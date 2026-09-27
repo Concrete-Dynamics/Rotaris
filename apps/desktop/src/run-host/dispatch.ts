@@ -303,7 +303,8 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       // REQ-PROVIDER-066 (the continuation lease): refresh the bearers before the run resolves its setup.
       const leaseRefusal = await continuationLeaseForSession(req.sessionId);
       if (leaseRefusal) return leaseRefusal;
-      const r = sessions.continueSession(asSessionId(req.sessionId), req.action);
+      // PD-ORCH-005 clause 6: resuming the open iteration is the default; `withoutPaused` declines it.
+      const r = sessions.continueSession(asSessionId(req.sessionId), req.action, { withoutPaused: req.withoutPaused === true });
       if (!r.ok) return { kind: 'refused', code: `session.${r.error.code}`, headline: 'The session could not be continued', detail: r.error.reason };
       log(`session ${req.sessionId} ${req.action}: ${r.value.resumed ? 'a continuation run is executing' : 'left paused'}${r.value.messageLimit === null ? '' : ` (message limit ${r.value.messageLimit})`}`);
       return { kind: 'session.continued', sessionId: req.sessionId, resumed: r.value.resumed, messageLimit: r.value.messageLimit };

@@ -531,8 +531,13 @@ ownership, the predicate `backgroundOutput` shares), when that child's stored re
 continuation, which is never offered one, cannot be continued in turn — or when a child of the session already
 records it as `continuation_of`. An admitted continuation is an ordinary child whose row carries `continuation_of`;
 its payload is assembled as any child's is, with nothing of the timed-out child injected. Ownership is tested against
-the current iteration's root task, so a continuation can be taken up only within the iteration whose child was cut off.
-The field itself is not in REQ-TOOLS-152, which the directive does not name: **OQ-66**.
+the current iteration's root task, so within that iteration only the agent that delegated the cut-off child takes its
+offer up. **Revision 3, an offer outlives its run:** the root of a later iteration or a later run of the session takes
+up an offer the session left before — the named child found in the store with a lower iteration number, at any depth,
+or, for a resumed iteration, one of its own children that had ended before this run took it up (`endedInEarlierRun`,
+fixed when `IterationChildren` is built) — and a child of that later iteration cannot (the refusal names both routes
+to the root; a plan cycle's root takes up none, OQ-72). The field itself is not in REQ-TOOLS-152, which the directive
+does not name: **OQ-66**.
 
 **The record the agent surfaces read (Part R; REQ-MONITOR-044).** Each child's `AgentRecord` carries, beside what Part B
 projected, `reasoning` (the persona's configured level, `medium` when none), `contextUsed` (the input count of its latest
@@ -552,15 +557,15 @@ presented as it is with its `interruption`, the record's one PD-ORCH-005 field.
 
 | Operation | Reaches | Effect |
 |---|---|---|
-| `cancel` | `run.stop.request('user_cancelled')` | REQ-SESSION-186's stop: graceful; the second activation forces; 30 s backstop (ADR-0014). **PD-ORCH-005:** a stop, forced or not, comes to rest — every unfinished agent `paused` by `stop`, the iteration open (OQ-69) — and the next continue resumes it (§2) |
+| `cancel` | `run.stop.request('user_cancelled')` | REQ-SESSION-186's stop: graceful; the second activation forces; 30 s backstop (ADR-0014). **PD-ORCH-005:** a stop, forced or not, comes to rest — every unfinished agent `paused` by `stop`, the iteration open (OQ-69) — and the next continue resumes it (§2). Sent by the composer's stop control, unconfirmed (renderer `stopRun`), and by `/stop` |
 | `pause` | `run.pause()` | refused while the plan gate holds (PD-ORCH-005 clause 11); `pausing` written only after acceptance; approvals and questions withdrawn, the tool deadline armed, the scheduler held; every agent stops before its next step; the run ends as `user_cancelled` → status `paused` with its row, its unfinished agents `paused` and the iteration open. **The Mission view refuses a pause for any selection but the run itself client-side, with REQ-MONITOR-276's text, and sends nothing** (Part R); the same `pause` op reaches here for the run-level selection |
 | `submitSteeringPrompt` | `run.steer(agentId, text)` | pending per conversation (`root` or a task id); the id is the string value; the persona window's steer card sends it for its instance (Part R, REQ-MONITOR-070/137) |
 | `createQueuedPrompt` / `editQueuedPrompt` / `removeQueuedPrompt` | the writer's queue units | QUEUED rows; the snapshot republished; refused once TRIGGERED. **Part AB (REQ-CHAT-039):** `createQueuedPrompt` also takes an optional `context` snapshot (a one-level record, or its JSON text) and resolves ownership before the row exists — the control channel's addressing IS the explicit session id, a snapshot naming another session is REFUSED rather than re-scoped, and an unscoped prompt is refused naming OQ-51. Ownership is the primary key's first column, so edit and trigger cannot move it |
 | `editTodo` | `run.editTodo` while live; stored-document editor while paused/completed | REQ-CHAT-085..091: add / update / remove follows the plan's projected source (`child` > `agent` > `planner`); accepted edits persist and count as a user instruction for the supervisor. Planner and root-agent documents share the existing `sessions.todo` TEXT column through a version-2 JSON envelope; child plans stay on child rows |
 | `setModel` / `setReasoning` | `run.setEntryModel` / `setEntryReasoning` | applied from the next iteration; a system row. **During a provider-limit wait** (Part Q) `setModel` is REQ-NOTIFY-263's *change model*: the parked agent rebuilds and re-runs at once, the override is persisted session-wide (`model_override`); a key that cannot be applied answers `false`, records `model_override_rejected` and the header names why — the wait continues |
-| *(keep waiting during a wait)* | — | REQ-NOTIFY-263's first choice is the absence of a decision: no operation exists for it, the header's control acknowledges and changes nothing; *cancel the run* is `cancel` (ADR-0010's note, REQ-MONITOR-004's enumeration stays at twenty-two) |
+| *(keep waiting during a wait)* | — | REQ-NOTIFY-263's first choice is the absence of a decision: no operation exists for it, the header's control acknowledges and changes nothing; *cancel the run* is `cancelAgent` with the reserved run id, confirmed, the final cancel (PD-ORCH-005 clause 3, OQ-69; ADR-0010's note, REQ-MONITOR-004's enumeration stays at twenty-two) |
 | `setPermissionMode` | every live tool port's `setMode`, **and the session's mode override** | applies from the next tool call; audited. **Two halves (REQ-TOOLS-073):** the live ports take the new preset, and the run's override holder records the requested name so every agent built AFTERWARDS — each delegated child — is constructed with it (`Sessions`' `modeOverride`, one holder per run, which is what discards it at run end, REQ-TOOLS-075). The port SELECTS at construction through `selectRequestedMode` — the persona's `permission_mode` pin, then the override, then `runtime.permission_mode` (REQ-TOOLS-048) — and under PD-TOOLS-002 the selected name is the effective one. **REQ-TOOLS-074:** a change that would loosen a pinned agent does not reach it; the port names its persona, and the run lists those names in `skipped_personas`, in the log line and in the transcript row |
-| `cancelAgent` | `IterationChildren.cancel`, or the run's final stop | the reserved run id (`run`) is REQ-MONITOR-126's explicit cancel: a final stop that ends every agent `cancelled` and closes the iteration (PD-ORCH-005 clause 3). The Mission view, the inspector and a persona window all send this op for a child (confirmed naming it, with the live-descendant count, REQ-MONITOR-055/064): the child and every live descendant are settled `cancelled` and their executions aborted (the repair of `cancelling-one-child-does-not-stop-it.md`). A live run only: a paused agent of a session at rest is not cancellable on its own (OQ-69) |
+| `cancelAgent` | `IterationChildren.cancel`, or the run's final stop | the reserved run id (`run`) is REQ-MONITOR-126's explicit cancel: a final stop that ends every agent `cancelled` and closes the iteration (PD-ORCH-005 clause 3). Every confirmed "Cancel the run?" sends it — the inspector's run-level cancel, the Mission view's run row, the wait header and a persona window's Cancel on the run's own instance (renderer `cancelRun`, OQ-69). The Mission view, the inspector and a persona window all send this op for a child (confirmed naming it, with the live-descendant count, REQ-MONITOR-055/064): the child and every live descendant are settled `cancelled` and their executions aborted (the repair of `cancelling-one-child-does-not-stop-it.md`). A live run only: a paused agent of a session at rest is not cancellable on its own (OQ-69) |
 | `answerApproval` | the agent's pending approvals | routed by request id across live sessions |
 | `answerQuestion` | the agent's pending question prompts (`PendingQuestions`, one registry per tool port, which is one conversation — REQ-CHAT-094) | routed by request id across live sessions; **the answers cross as two flat maps** keyed by step id (`selected`, `freeform`) because REQ-CHAT-095's `{step_id: {…}}` is a record of records and `ControlRequestSchema`'s value space is not (REQ-MONITOR-013), recombined in `Sessions.control`; a stale id answers `false`, which is what keeps REQ-CHAT-102's modal open instead of reporting success (Part AC) |
 | `cancelQuestions` | the same registry | releases the waiting call at once; the stepper emits it exactly once, whatever route dismissed it (REQ-CHAT-101). The explicit cancel and host teardown release every pending prompt on the existing `cancelPending` sweep beside the approvals (REQ-TOOLS-054/177, REQ-CHAT-096); a rest — a pause, a stop, a quit — **withdraws** them instead (`withdrawPending`, PD-ORCH-005 clause 9), and the calls are recorded as interrupted, never as cancelled or denied |
@@ -587,9 +592,18 @@ A **paused** session has no live run: `session.continue {action}` is a session c
 it resolves the pause (continue → `idle`; double → the limit ×2; cancel → `paused`, stop reason
 `message_limit_reached`) and, for continue/double and for a manually paused session, launches a **continuation
 run** on the same session with no new user row (Part H's route, the previous intent carried over, the
-continuation payload built to REQ-SESSION-115's budgets). **PD-ORCH-005:** where the last run left an iteration open,
-that run resumes it first (§2), and `continueSession`'s `withoutPaused` option declines it instead — clause 6's
-"continue without them"; the engine carries the option, and the Continue action that offers it is the surface's.
+continuation payload built to REQ-SESSION-115's budgets, its artifact the latest one the session's store holds,
+id first and cut to 6,000 characters — `latestArtifactText` — and its progress context listing the continuation offers
+no child has taken up, the newest ten — `openOffersText`, which a continue that resumes an open iteration records for
+its root instead, OQ-72). **PD-ORCH-005:** where the last run left an iteration open,
+that run resumes it first (§2), and `session.continue`'s `withoutPaused` declines it instead — clause 6's "continue
+without them" (renderer `continueSession(action, {withoutPaused})` → main → run host → `Sessions.continueSession`). The
+Continue action states what it resumes from `SessionRecord.resumable` (`resumableOf`: the open iteration, and its root
+plus every agent of it not in a terminal state — the paused ones after a rest, and the ones a crash not yet recorded
+left, which its record will pause — read from the store as `planGate` is) — the count in the composer's notices row,
+describing every continue that resumes them, on a `paused` session, on one a crash left `interrupted` and on one in
+REQ-CHAT-008's recovery state, and on a `paused` one "Continue without them" beside it, behind a confirmation; the strip
+keeps its one band, its two continues showing short labels as the send pill does (OQ-71).
 
 ## 6. End
 

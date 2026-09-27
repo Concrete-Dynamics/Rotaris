@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { asSessionId, FakeClock, mintMachineId, type MachineId, type Result, type SessionId } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, type AgentBackend } from '@rotaris/model';
-import { buildContinuationPayload, RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type PreflightContext, type RunSetup, type TodoDocument } from './index.js';
+import { buildContinuationPayload, offersToldIn, RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type PreflightContext, type RunSetup, type TodoDocument } from './index.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
 const OTHER = mintMachineId('0000000000000000000000000000000b') as MachineId;
@@ -138,6 +138,87 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
     expect(payload).toContain('...');
     const context = payload.split('Recent session context:\n')[1]!;
     expect(context.length).toBeLessThanOrEqual(3_200);
+  });
+
+  it('REQ-SESSION-115\'s artifact is the latest one the session holds, never a line saying none is recorded (the repair of the-continuation-payload-says-no-artifact-is-recorded)', () => {
+    const sid = asSessionId('S-artifact');
+    const at = new Date(clock.instant()).toISOString();
+    dal.upsertSession({ session_id: sid, execution_status: 'completed', workspace_root: 'C:/ws', created_at: at, updated_at: at });
+    expect(buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined)).toContain('Artifact: (none recorded in this session)');
+    const artifact = (id: string, title: string, summary: string, createdAt: string, supersededBy: string | null = null, kind: 'child_report' | 'agent_published' = 'child_report', findings = '- found the bug') => dal.insertArtifact({
+      session_id: sid, id, slug: id, title, kind, source_task_id: 'bg_00000001', canonical_name: 'build', source_persona: 'coding-agent', status: kind === 'child_report' ? 'succeeded' : 'published',
+      summary, key_findings: findings, highlight_paths: '[]', snippets: '[]', edited_files: '[]', created_files: '[]', commands: '[]', tags: '[]',
+      supersedes: null, superseded_by: supersededBy, created_by: 'build', consumed_by: '[]', timeline_event_id: null, conversation_id: null, importance: 'normal',
+      created_at: createdAt, edited_at: null, body_file: `${id}.md`,
+    });
+    artifact('a0000001', 'build report', 'The build was fixed.', '2026-09-27T01:00:00.000Z');
+    artifact('a0000002', 'review report', 'The review found nothing.', '2026-09-27T02:00:00.000Z');
+    // A superseded record is never the latest.
+    artifact('a0000003', 'draft report', 'A draft.', '2026-09-27T03:00:00.000Z', 'a0000002');
+    const payload = buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined);
+    expect(payload).not.toContain('no orchestrator artifact is recorded');
+    // Its id leads, so no cut reaches it (REQ-SESSION-194).
+    expect(payload).toContain('Artifact: a0000002 — review report (child_report, succeeded)\nThe review found nothing.\nKey findings:\n- found the bug');
+    expect(payload).not.toContain('A draft.');
+    // At most 6,000 characters of it (REQ-SESSION-115's budget).
+    artifact('a0000004', 'long report', 'w'.repeat(9_000), '2026-09-27T04:00:00.000Z');
+    const long = buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined);
+    const part = long.slice(long.indexOf('Artifact: '), long.indexOf('\nTodo:'));
+    expect(part.length).toBe(6_000);
+    expect(part.endsWith('...')).toBe(true);
+    // A cut never splits a surrogate pair (found by phase 6's review): this one would fall between a pair's halves.
+    artifact('a0000005', 'emoji report', `${'w'.repeat(5_900)}${'😀'.repeat(60)}`, '2026-09-27T05:00:00.000Z');
+    const emoji = buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined);
+    const tail = emoji.slice(emoji.indexOf('Artifact: '), emoji.indexOf('\nTodo:'));
+    expect(tail.endsWith('...')).toBe(true);
+    expect(/[\uD800-\uDBFF]$/.test(tail.slice(0, -3))).toBe(false);
+    // A title is cut to 80 characters; the id before it never is.
+    artifact('a0000007', 'T'.repeat(100), 'Long.', '2026-09-27T05:30:00.000Z');
+    expect(buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined)).toContain(`Artifact: a0000007 — ${'T'.repeat(77)}... (child_report, succeeded)`);
+    // A published document states its body once: its summary is the body's first line (REQ-LIBRARY-093).
+    artifact('a0000006', 'notes', 'First line.', '2026-09-27T06:00:00.000Z', null, 'agent_published', 'First line.\nSecond line.');
+    expect(buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined)).toContain('Artifact: a0000006 — notes (agent_published, published)\nFirst line.\nSecond line.\nTodo:');
+  });
+
+  it('PD-ORCH-004 revision 3 (found by phase 6\'s fourth review): an offer counts as told only when the conversation holds the offer itself, never for a mere mention of its task id', () => {
+    const offer = 'Continuation offer: the remaining work may be delegated to a new child as a continuation of this one — call delegate with continuation_of: "bg_0000aa01". A piece of work is continued once; a continuation is not offered one of its own.';
+    const told = offersToldIn([
+      { role: 'user', content: [{ kind: 'text', text: `### build (coding-agent) — failed\n${offer}` }] },
+      { role: 'tool', content: [{ kind: 'tool-result', callId: 'w1', name: 'wait_for_tasks', isError: false, result: offer.replaceAll('aa01', 'aa02') }] },
+      { role: 'user', content: [{ kind: 'text', text: 'Open continuation offers (delegate with `continuation_of` set to the task id to take one up):\n- lint (bg_0000aa03)' }] },
+      { role: 'assistant', content: [{ kind: 'text', text: 'I will look at bg_0000aa04 later.' }, { kind: 'tool-call', callId: 'b1', name: 'background_output', args: '{"task_id":"bg_0000aa05"}' }] },
+      // The list inside a new iteration's handoff counts too, elision line and all; the line after it ends the list.
+      { role: 'user', content: [{ kind: 'text', text: 'Progress: p\nOpen continuation offers (delegate with `continuation_of` set to the task id to take one up):\n- [... earlier continuation offers elided]\n- docs (bg_0000aa06)\nRecent iterations:\n- iteration 1 (bg_0000aa07)' }] },
+    ]);
+    expect([...told].sort()).toEqual(['bg_0000aa01', 'bg_0000aa02', 'bg_0000aa03', 'bg_0000aa06']);
+  });
+
+  it('PD-ORCH-004 revision 3: the handoff states every continuation offer no child has taken up, so a later run\'s root learns of it (OQ-72)', () => {
+    const sid = asSessionId('S-offers');
+    const at = new Date(clock.instant()).toISOString();
+    dal.upsertSession({ session_id: sid, execution_status: 'completed', workspace_root: 'C:/ws', created_at: at, updated_at: at });
+    expect(buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined)).not.toContain('Open continuation offers');
+    const child = (id: string, name: string, continuationOf: string | null = null) => dal.insertChild({ session_id: sid, task_id: id, canonical_name: name, given_name: name, persona: 'coding-agent', state: 'failed', parent_id: 'bg_root0001', depth: 1, iteration: 1, model_key: 'm', category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: at, continuation_of: continuationOf });
+    const offering = (id: string) => JSON.stringify({ status: 'failed', summary: 'timed out', cut_off: { statement: 's', changed_paths: [], changes: '', continuation_offer: `Continue with continuation_of: "${id}".` } });
+    child('bg_00000a01', 'build');
+    dal.setChildReport(sid, 'bg_00000a01', offering('bg_00000a01'));
+    child('bg_00000a02', 'lint');
+    dal.setChildReport(sid, 'bg_00000a02', offering('bg_00000a02'));
+    child('bg_00000a03', 'lint-rest', 'bg_00000a02');
+    const payload = buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined);
+    expect(payload).toContain('Open continuation offers (delegate with `continuation_of` set to the task id to take one up):\n- build (bg_00000a01)\nRecent iterations:');
+    expect(payload).not.toContain('- lint (bg_00000a02)');
+    // Budgeted as every part of the handoff is: the newest ten, the rest elided (found by phase 6's second review).
+    for (let i = 10; i < 21; i += 1) {
+      const id = `bg_00000b${i}`;
+      child(id, `task-${i}`);
+      dal.setChildReport(sid, id, offering(id));
+    }
+    const many = buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined);
+    const told = many.slice(many.indexOf('Open continuation offers'), many.indexOf('\nRecent iterations:')).split('\n');
+    expect(told.slice(1, 3)).toEqual(['- [... earlier continuation offers elided]', '- task-11 (bg_00000b11)']);
+    expect(told).toHaveLength(12);
+    expect(told.at(-1)).toBe('- task-20 (bg_00000b20)');
   });
 
   it('reaps one dead local lock and preserves live local and foreign holders with distinct refusals', () => {

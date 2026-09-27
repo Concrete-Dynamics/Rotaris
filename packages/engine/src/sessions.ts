@@ -2,14 +2,15 @@ import { asSessionId, err, formatAmount, millis, ok, type Clocks, type MachineId
 import { APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, COST_QUALIFIERS, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type CheckpointKind, type CheckpointListPayload, type ControlRequest, type ControlResult, type CostQualifier, type ImageAttachmentInput, type PermissionPreset, type QuestionAnswers, type RunType, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding } from '@rotaris/contracts';
 import { existsSync, rmSync } from 'node:fs';
 import { RELEASE_PAGE_SIZE, type CheckpointRow, type SessionRow, type StoreDal } from '@rotaris/store';
-import type { AgentBackend, ContentPart } from '@rotaris/model';
+import type { AgentBackend, ChatMessage, ContentPart } from '@rotaris/model';
+import { conversationOf } from './run/record.js';
 import { ProjectionOwner, type Publisher } from './projection-owner.js';
 import { SequenceCounters } from './sequence.js';
 import { SessionWriter, toTranscriptRow, type CheckpointRecordInput, type Committed, type RestoreRecordInput } from './session-writer.js';
 import type { CheckpointPort, CheckpointPortContext } from './checkpoint-port.js';
 import { EventBus } from './run/event-bus.js';
 import { parseTokenSamples, Run, type AgentTerminals, type ModelLookup, type PermissionPosture, type RunConfig, type RunResult } from './run/run.js';
-import { recordCrash } from './run/crash.js';
+import { iterationAgents, recordCrash } from './run/crash.js';
 import { resumeNoticeOf } from './run/resume.js';
 import { planSection } from './run/plan-text.js';
 export { planRequestSection, planSection } from './run/plan-text.js';
@@ -26,11 +27,13 @@ import { SummaryWriter } from './run/summary.js';
 import { isActiveStatus } from './run/stop-conditions.js';
 import type { HookPort, HookPortContext, RunNotice, ToolHookBridge } from './hooks-port.js';
 import { ArtifactStore } from './artifacts/store.js';
+import { toArtifactRecord } from './artifacts/record.js';
+import { parseReport } from './children/notify.js';
 import { persistAttachments, projectAttachments, readAttachmentBody, validateAttachmentInputs } from './attachments.js';
 import { artifactOps, type ArtifactOps } from './artifacts/port.js';
 import type { Preflight, PreflightContext } from './preflight.js';
 import { IntentResultSchema, type IntentCategory, type IntentGrant, type IntentStatus } from '@rotaris/contracts';
-import type { PlanDecision, PlanGatePayload } from '@rotaris/contracts';
+import type { PlanDecision, PlanGatePayload, ResumablePayload } from '@rotaris/contracts';
 import { SupervisorRegistry, type LoopClassifier, type SupervisorConfig } from './run/supervisor.js';
 import { meteredBackend, type CountUsage } from './run/metered.js';
 import { Todo, type TodoDocument } from './run/todo.js';
@@ -380,7 +383,13 @@ export interface ResumeSuccess {
 
 type ResumeFailure = { readonly code: string; readonly reason: string };
 
-const cut = (text: string, cap: number): string => text.length <= cap ? text : `${text.slice(0, Math.max(0, cap - 3))}...`;
+const cut = (text: string, cap: number): string => {
+  if (text.length <= cap) return text;
+  const end = Math.max(0, cap - 3);
+  // Never between the two halves of a surrogate pair (found by phase 6's review).
+  const kept = end > 0 && /[\uD800-\uDBFF]/.test(text[end - 1]!) ? end - 1 : end;
+  return `${text.slice(0, kept)}...`;
+};
 
 function parseTodoDocument(row: SessionRow): Result<TodoDocument | undefined, ResumeFailure> {
   if (row.todo === null) return ok(undefined);
@@ -427,6 +436,79 @@ function continuedTaskId(dal: StoreDal, sessionId: SessionId, todo: TodoDocument
   return `${sessionId}:continued:${n}`;
 }
 
+/**
+ * REQ-SESSION-115's artifact: the latest artifact the session's store holds and nothing has superseded — the child
+ * reports and the documents its agents published are where a run's work is recorded — cut to the requirement's 6,000
+ * characters. Its id leads, so no cut reaches it (REQ-SESSION-194). A published document's summary is its body's first
+ * line and its key findings its body (REQ-LIBRARY-093), so it is stated once, as its body. The repair of
+ * `the-continuation-payload-says-no-artifact-is-recorded.md` (OQ-72).
+ */
+export function latestArtifactText(dal: StoreDal, sessionId: SessionId): string {
+  const records = dal.artifactsOf(sessionId).flatMap((r) => { const a = toArtifactRecord(r); return a && a.supersededBy === null ? [a] : []; });
+  const latest = records.at(-1);
+  if (!latest) return 'Artifact: (none recorded in this session)';
+  const header = `Artifact: ${latest.id} — ${cut(latest.title, 80)} (${latest.kind}, ${latest.status})`;
+  const findings = latest.keyFindings.trim();
+  const body = latest.kind === 'agent_published' ? findings : `${latest.summary}${findings === '' ? '' : `\nKey findings:\n${findings}`}`;
+  return cut(`${header}\n${body}`, 6_000);
+}
+
+/** The text of a message, its text parts joined. */
+function textOfMessage(m: ChatMessage): string {
+  return m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('');
+}
+
+/** The texts of the user messages a conversation holds after its last assistant message — what it has not yet answered. */
+function toldSinceLastAnswer(messages: readonly ChatMessage[]): ReadonlySet<string> {
+  const lastAnswer = messages.map((m) => m.role).lastIndexOf('assistant');
+  return new Set(messages.slice(lastAnswer + 1).filter((m) => m.role === 'user').map(textOfMessage));
+}
+
+/** PD-ORCH-004 revision 3: how many open offers a later root is told of — the newest; the rest are elided. */
+const OFFERS_TOLD = 10;
+const OFFERS_HEADER = 'Open continuation offers (delegate with `continuation_of` set to the task id to take one up):';
+
+/**
+ * PD-ORCH-004 revision 3: the task ids whose continuation offer a conversation already holds — the offer itself, as a
+ * child's report carries it (`continuation_of: "<id>"`, in a message or a tool result), or a line of an offers list it
+ * was told, alone or in a handoff. A task id merely mentioned is not an offer told (found by phase 6's fourth review).
+ */
+export function offersToldIn(messages: readonly ChatMessage[]): ReadonlySet<string> {
+  const told = new Set<string>();
+  for (const m of messages) {
+    for (const p of m.content) {
+      const text = p.kind === 'text' ? p.text : p.kind === 'tool-result' ? p.result : '';
+      for (const hit of text.matchAll(/continuation_of: \\?"(bg_[0-9a-f]{8})\\?"/g)) told.add(hit[1]!);
+      if (p.kind !== 'text') continue;
+      // An offers list stands alone when a resumed root is told it, and inside the handoff a new iteration's root reads.
+      for (let at = p.text.indexOf(OFFERS_HEADER); at >= 0; at = p.text.indexOf(OFFERS_HEADER, at + 1)) {
+        for (const line of p.text.slice(at + OFFERS_HEADER.length + 1).split('\n')) {
+          if (!line.startsWith('- ')) break;
+          const hit = /\((bg_[0-9a-f]{8})\)$/.exec(line);
+          if (hit !== null) told.add(hit[1]!);
+        }
+      }
+    }
+  }
+  return told;
+}
+
+/**
+ * PD-ORCH-004 revision 3: the continuation offers the session holds that no child has taken up, which a later root may
+ * take up — each by its child's name and task id, the newest ten, with the way to take one up (OQ-72). A new iteration's
+ * root reads it in the handoff's progress context, a resumed root at the continue (only those `include` admits).
+ * Empty when there is none.
+ */
+export function openOffersText(dal: StoreDal, sessionId: SessionId, include: (taskId: string) => boolean = () => true): string {
+  const all = dal.childrenOf(sessionId);
+  const continued = new Set(all.flatMap((c) => (c.continuation_of === null ? [] : [c.continuation_of])));
+  const open = all.filter((c) => typeof parseReport(c)?.cut_off?.continuation_offer === 'string' && !continued.has(c.task_id) && include(c.task_id));
+  if (open.length === 0) return '';
+  const told = open.slice(-OFFERS_TOLD).map((c) => `- ${cut(c.canonical_name, 80)} (${c.task_id})`);
+  const elided = open.length > OFFERS_TOLD ? ['- [... earlier continuation offers elided]'] : [];
+  return [OFFERS_HEADER, ...elided, ...told].join('\n');
+}
+
 export function buildContinuationPayload(dal: StoreDal, row: SessionRow, prompt: string, todo: TodoDocument | undefined): string {
   const recentRows = dal.residentRows(row.session_id as SessionId)
     .filter((event) => (event.kind === 'user' || event.kind === 'agent') && event.body.trim() !== '')
@@ -442,9 +524,10 @@ export function buildContinuationPayload(dal: StoreDal, row: SessionRow, prompt:
     'This is a follow-up within an existing session. Prior session context is authoritative; continue from its recorded state.',
     '', 'Latest user request:', prompt,
     '', 'Authoritative session handoff:',
-    'Artifacts: (no orchestrator artifact is recorded in this build)',
+    latestArtifactText(dal, row.session_id as SessionId),
     `Todo:\n${shownTasks.join('\n') || '- (empty)'}`,
     `Progress: ${cut(row.progress ?? '(none recorded)', 700)}`,
+    ...[openOffersText(dal, row.session_id as SessionId)].filter((t) => t !== ''),
     `Recent iterations:\n${iterations.map((item) => `- ${item}`).join('\n') || '- (none recorded)'}`,
     '', 'Recent session context:', history || '(none recorded)',
   ].join('\n');
@@ -538,7 +621,20 @@ export function planGateOf(dal: StoreDal, r: SessionRow): PlanGatePayload | null
   return { cycle: row.cycle, openedAt: row.opened_at, plan: row.plan, edited: row.edited, intent: row.intent, todo: row.todo, changes: row.changes };
 }
 
-export function toSessionRecord(r: SessionRow, queued: readonly { id: string; content: string; createdAt: string }[] = [], toolCalls: readonly { tool_name: string; count: number; agents: number }[] = [], planGate: PlanGatePayload | null = null): SessionRecord {
+/**
+ * PD-ORCH-005 clause 6: what the Continue action would resume — the open iteration, with its root and every agent of it
+ * not in a terminal state. After a rest those are the agents it left `paused`; after a crash not yet recorded (clause 8:
+ * reading records nothing) they are the agents the crash record will pause, so the count is the same either way. Read
+ * from the store, so a session at rest states it with no process behind it.
+ */
+export function resumableOf(dal: StoreDal, r: SessionRow): ResumablePayload | null {
+  const open = dal.openIterationOf(asSessionId(r.session_id));
+  if (!open) return null;
+  const unfinished = iterationAgents(dal, asSessionId(r.session_id), open).filter((c) => !isTerminalChildState(c.state)).length;
+  return { iteration: open.iteration, agents: 1 + unfinished };
+}
+
+export function toSessionRecord(r: SessionRow, queued: readonly { id: string; content: string; createdAt: string }[] = [], toolCalls: readonly { tool_name: string; count: number; agents: number }[] = [], planGate: PlanGatePayload | null = null, resumable: ResumablePayload | null = null): SessionRecord {
   return {
     // REQ-MONITOR-085: derived from the live run at every snapshot; a record read from the store alone carries none.
     compression: null,
@@ -575,6 +671,7 @@ export function toSessionRecord(r: SessionRow, queued: readonly { id: string; co
     // PD-ORCH-003: the release outlives the run that took it, so a surface showing the mode reads this to tell
     // an armed `plan` from a released one rather than promising a gate that will not open.
     planReleased: r.plan_released === 1,
+    resumable,
     usageHistory: parseTokenSamples(r.token_samples),
     costLabel: costLabelOf(r.cost, r.cost_qualifier),
     toolCalls: { total: r.tool_calls, agents: Math.max(0, ...toolCalls.map((t) => t.agents)), byTool: toolCalls.map((t) => ({ tool: t.tool_name, count: t.count })) },
@@ -831,7 +928,7 @@ export class Sessions {
     const writer = opened.value;
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const current = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, current)), ...projectSessionTodos(current, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: current.execution_status, updatedAt: current.updated_at } })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
+      readSession: () => { const current = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, current), resumableOf(dal, current)), ...projectSessionTodos(current, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: current.execution_status, updatedAt: current.updated_at } })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
@@ -891,7 +988,7 @@ export class Sessions {
     if (!storedAttachments.ok) return err({ code: 'attachment-invalid', reason: storedAttachments.reason });
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const row = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, row)), ...projectSessionTodos(row, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: row.execution_status, updatedAt: row.updated_at } })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
+      readSession: () => { const row = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, row), resumableOf(dal, row)), ...projectSessionTodos(row, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: row.execution_status, updatedAt: row.updated_at } })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
@@ -1081,9 +1178,23 @@ export class Sessions {
      * turn, and the notice followed it).
      */
     if (open && openIteration !== 'decline') {
+      const tell = (m: ChatMessage): void => { s.writer.recordAgentMessage(open.root_task_id, open.iteration, 'message', m); };
+      // A continue whose run came to rest before the resumed root took a step has told it already: a notice or an offer
+      // list it has not yet answered is not repeated (found by phase 4's third review).
+      const conversation = conversationOf(s.dal.agentConversation(sessionId, open.root_task_id));
+      const unanswered = toldSinceLastAnswer(conversation);
       const notice = resumeNoticeOf(s.dal, sessionId, open.root_task_id, this.deps.terminals?.(sessionId));
-      if (notice !== null) s.writer.recordAgentMessage(open.root_task_id, open.iteration, 'message', notice);
-      if (openIteration.message !== null && openIteration.message.length > 0) s.writer.recordAgentMessage(open.root_task_id, open.iteration, 'message', { role: 'user', content: [...openIteration.message] });
+      if (notice !== null && !unanswered.has(textOfMessage(notice))) tell(notice);
+      /*
+       * PD-ORCH-004 revision 3: a resumed root is told the offers it may take up, as a new iteration's reads them in the
+       * handoff it is not sent (found by phase 6's second review) — only those its conversation does not already hold:
+       * its own children's reports carry theirs, and an offer told once is not told again, so a root that had answered
+       * and waits takes no step for a list it has read (found by phase 6's third and fourth reviews).
+       */
+      const told = offersToldIn(conversation);
+      const offers = openOffersText(s.dal, sessionId, (taskId) => !told.has(taskId));
+      if (offers !== '') tell({ role: 'user', content: [{ kind: 'text', text: offers }] });
+      if (openIteration.message !== null && openIteration.message.length > 0) tell({ role: 'user', content: [...openIteration.message] });
     }
     // REQ-EVENTS-053, PD-MONITOR-001: the run's model calls that are no agent's turn count against the run itself.
     const countUsage: CountUsage = (usage, ref) => { runRef.run?.countUsage(usage, ref); };

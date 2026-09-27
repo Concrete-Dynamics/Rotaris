@@ -350,6 +350,50 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
       expect(last[1]).toBe('NOW DO Y');
     });
 
+    it('clause 10 (found by phase 4\'s third review): continues that come to rest before the root takes a step tell it of its background sessions once, and deliver every message', async () => {
+      const { terminals } = withTerminals();
+      const { port } = fakePort({ hold: new Promise<void>(() => undefined), holdOn: 'glob' });
+      const { sessions, client } = sessionsWith([toolCalls([{ callId: 'c1', name: 'glob', args: {} }]), answer('resumed')], port, { terminals: (sid) => { const t = terminals!(sid); return { ...t, list: () => t.list().map((l) => ({ ...l, taskId: dal.iterationsOf(sid)[0]?.root_task_id ?? '' })) }; }, runtime: { permissionMode: 'ask', pauseToolDeadlineMs: 5_000 } });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => dal.residentRows(sid).some((r) => r.kind === 'tool'));
+      sessions.control({ op: 'pause', sessionId: sid, args: {} });
+      clock.advance(5_000);
+      await sessions.running(sid)!;
+      for (const message of ['FIRST', 'SECOND']) {
+        expect(sessions.prompt(sid, message).ok).toBe(true);
+        sessions.control({ op: 'pause', sessionId: sid, args: {} });
+        await sessions.running(sid)!;
+      }
+      expect(sessions.prompt(sid, 'THIRD').ok).toBe(true);
+      await sessions.running(sid)!;
+      const read = client.requests.at(-1)!.messages.map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join(''));
+      expect(read.filter((t) => t.startsWith('You were paused and have now resumed.'))).toHaveLength(1);
+      expect(read.slice(-3)).toEqual(['FIRST', 'SECOND', 'THIRD']);
+    });
+
+    it('PD-ORCH-004 revision 3 (found by phase 6\'s third review): a resumed root is told an open offer once — a later continue, after it has read it, does not tell it again', async () => {
+      const { port } = fakePort({ hold: new Promise<void>(() => undefined), holdOn: 'glob' });
+      const { sessions } = sessionsWith([toolCalls([{ callId: 'c1', name: 'glob', args: {} }]), toolCalls([{ callId: 'c2', name: 'glob', args: {} }]), answer('done')], port, { runtime: { permissionMode: 'ask', pauseToolDeadlineMs: 5_000 } });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      const restAt = async (n: number) => {
+        await settle(() => dal.residentRows(sid).filter((r) => r.kind === 'tool').length === n);
+        sessions.control({ op: 'pause', sessionId: sid, args: {} });
+        clock.advance(5_000);
+        await sessions.running(sid)!;
+      };
+      await restAt(1);
+      // An earlier iteration's child, cut off with an offer no child has taken up.
+      dal.insertChild({ session_id: sid, task_id: 'bg_0000be09', canonical_name: 'old', given_name: 'old', persona: 'coding-agent', state: 'failed', parent_id: 'bg_0000a11e', depth: 1, iteration: 0, model_key: 'm', category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't' });
+      dal.setChildReport(sid, 'bg_0000be09', JSON.stringify({ status: 'failed', summary: 'timed out', cut_off: { statement: 's', changed_paths: [], changes: '', continuation_offer: 'Continue with continuation_of: "bg_0000be09".' } }));
+      expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+      await restAt(2);
+      expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+      await sessions.running(sid)!;
+      const root = dal.iterationsOf(sid)[0]!.root_task_id;
+      const told = conversationOf(dal.agentConversation(sid, root)).filter((m) => m.role === 'user' && m.content.some((p) => p.kind === 'text' && p.text.startsWith('Open continuation offers')));
+      expect(told).toHaveLength(1);
+    });
+
     it('clause 3 (found by phase 3\'s second review): the explicit cancel that lands while teardown ends the background sessions still closes the iteration cancelled', async () => {
       const live: { -readonly [K in keyof LiveTerminal]: LiveTerminal[K] }[] = [{ id: 'ts_serve', taskId: 'bg_agent01', command: 'serve', startedAt: '2026-09-27T00:00:00.000Z', status: 'running', exitCode: null, tail: 'listening' }];
       let ending = false;

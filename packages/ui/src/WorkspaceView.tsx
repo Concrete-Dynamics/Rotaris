@@ -18,7 +18,7 @@ import { COMMAND_NOT_RUN_TITLE, defaultUnavailableReason, parseSlash, slashNameT
 import { SlashPopup, slashRowId } from './slash/SlashPopup.js';
 import type { SlashCommand, SlashContext, SlashOutcome } from './slash/types.js';
 import { AgentTree } from './AgentTree.js';
-import { liveDescendants, runLevelAgent } from './agents.js';
+import { cancelConfirmation, runLevelAgent } from './agents.js';
 import { Inspector, type PersonaEntry } from './Inspector.js';
 import { useShellState } from './shell-state.js';
 import { DelegationHeader, ScopeToggle, scopedRows, type Acknowledger } from './TranscriptSurface.js';
@@ -31,6 +31,7 @@ import { addImageBytes, composerTokenEstimate } from './attachments.js';
 import { PlanGate } from './PlanGate.js';
 import { QuestionForm } from './QuestionStepper.js';
 import './attachments.css';
+import { ConfirmDialog } from './ConfirmDialog.js';
 import { Button as DesignButton, Input as DesignInput, PopoverMenu, SearchableSelect as DesignSearchableSelect, SendPill as DesignSendPill, StripActionButton, TextArea as DesignTextArea } from './design-system/index.js';
 
 // Part AA: the row helpers moved to `transcript/Row.tsx`, the ONE row renderer, and are exported from the package
@@ -53,8 +54,16 @@ export interface WorkspaceViewProps {
   readonly session: SessionRecord | null;
   readonly rows: readonly TranscriptRow[];
   readonly onSubmit: (text: string, attachments: readonly ImageAttachmentInput[]) => Promise<{ ok: true } | { ok: false; reason: string }>;
-  /** REQ-SESSION-186: first activation graceful, the second forces. */
+  /**
+   * REQ-SESSION-186: the stop control — first activation graceful, the second forces. PD-ORCH-005 clause 3: a stop
+   * brings the run to rest and its unfinished agents resume on a continue, so it asks no confirmation (OQ-69).
+   */
   readonly onStop: (force: boolean) => Promise<{ ok: true } | { ok: false; reason: string }>;
+  /**
+   * REQ-MONITOR-126/127 and REQ-MONITOR-009: the confirmed cancel of the whole run — the reserved run id's, which
+   * PD-ORCH-005 clause 3 keeps final (OQ-69). Absent, the surface offers no run-level cancel.
+   */
+  readonly onCancelRun?: (() => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
   /** REQ-TOOLS-077 / REQ-MONITOR-150: forwarded to the running session; applies from the next tool call. */
   readonly onSetMode?: ((mode: PermissionPreset) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
   /** REQ-MONITOR-009 / REQ-ORCH-133: cancel one child from the tree's run header. */
@@ -69,7 +78,8 @@ export interface WorkspaceViewProps {
   readonly onEditTodo?: ((edit: TodoEdit) => Promise<{ ok: true; value?: string } | { ok: false; reason: string }>) | undefined;
   /** REQ-MONITOR-123/125: pause the whole run; continue a paused session from the composer. */
   readonly onPause?: (() => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
-  readonly onContinue?: (() => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
+  /** PD-ORCH-005 clause 6: `withoutPaused` continues without the agents the rest left paused; resuming them is the default. */
+  readonly onContinue?: ((opts?: { readonly withoutPaused?: boolean }) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
   /**
    * REQ-ORCH-153/154 (ADR-0062): the plan gate's two entries. `onPlanEdit` records the user's text and approves
    * nothing; `onPlanDecision` carries one of exactly three answers with the changes `revise` hands to the next
@@ -313,23 +323,6 @@ function QueuePanel({ prompts, onEdit, onRemove, onError }: { prompts: SessionRe
   );
 }
 
-/** A warning prompt in the design's dialog language; the confirm label is explicit (REQ-MONITOR-126/128). */
-function ConfirmDialog({ title, body, confirmLabel, lines = [], onConfirm, onCancel }: { title: string; body: string; confirmLabel: string; lines?: readonly string[]; onConfirm: () => void; onCancel: () => void }) {
-  return (
-    <div className="dialog-backdrop" role="presentation">
-      <div className="dialog" role="alertdialog" aria-modal="true" aria-labelledby="ws-confirm-title">
-        <h2 id="ws-confirm-title" className="dialog-title">{title}</h2>
-        <p className="dialog-body">{body}</p>
-        {lines.length > 0 && <ul className="dialog-body">{lines.map((l) => <li key={l}>{l}</li>)}</ul>}
-        <div className="dialog-actions">
-          <DesignButton type="button" className="btn btn-secondary" autoFocus onClick={onCancel}>Keep running</DesignButton>
-          <DesignButton type="button" className="btn btn-danger" onClick={onConfirm}>{confirmLabel}</DesignButton>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /** REQ-MONITOR-137: the steer card — a text for one live agent. */
 function SteerDialog({ target, onSteer, onClose }: { target: { id: string; name: string }; onSteer: NonNullable<WorkspaceViewProps['onSteer']>; onClose: () => void }) {
   const [text, setText] = useState('');
@@ -368,6 +361,22 @@ function SteerDialog({ target, onSteer, onClose }: { target: { id: string; name:
 export function composerPlaceholder(session: SessionRecord | null, localRunActive: boolean, busy = localRunActive): string {
   return composerPlaceholderFor(session !== null, localRunActive, busy);
 }
+/** PD-ORCH-005 clause 6: the Continue action states how many agents will resume — the open iteration's root and every unfinished agent. */
+export function resumeCountText(agents: number): string {
+  return agents === 1 ? '1 agent will resume' : `${agents} agents will resume`;
+}
+
+/**
+ * PD-ORCH-005 clauses 3, 5 and 6: what declining does — the paused agents end `cancelled`, which cannot be undone, and
+ * the open iteration's task is taken up again by a new iteration's root. A count of one is the root alone, which no
+ * agent record names as cancelled.
+ */
+export function declineText(agents: number): string {
+  const others = agents - 1;
+  const ended = others === 0 ? '' : `${others === 1 ? 'The paused agent ends' : `The ${others} paused agents end`} cancelled and cannot be resumed. `;
+  return `${ended}The open iteration closes, and its task is taken up again in a new iteration.`;
+}
+
 /** REQ-CHAT-005: the primary action states the mode; `Queue` needs a LOCAL run, not merely a busy session. */
 export function composerAction(session: SessionRecord | null, localRunActive: boolean): 'Queue' | 'Continue run' | 'Start run' {
   if (localRunActive) return 'Queue';
@@ -413,7 +422,7 @@ export function waitHeaderText(wait: NonNullable<SessionRecord['wait']>, nowMs: 
  * (the existing model list of REQ-NOTIFY-074, pinned through `setModel`, REQ-NOTIFY-089), cancel the run (`cancel`).
  * The countdown ticks once a second on the surface's own clock, as the Overview's runtime label does.
  */
-function WaitHeader({ wait, models, onSetModel, onCancel }: { wait: NonNullable<SessionRecord['wait']>; models: readonly string[]; onSetModel?: WorkspaceViewProps['onSetModel']; onCancel: () => void }) {
+function WaitHeader({ wait, models, onSetModel, onCancel }: { wait: NonNullable<SessionRecord['wait']>; models: readonly string[]; onSetModel?: WorkspaceViewProps['onSetModel']; onCancel?: (() => void) | undefined }) {
   const [now, setNow] = useState(() => Date.now());
   const [choosing, setChoosing] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
@@ -444,7 +453,7 @@ function WaitHeader({ wait, models, onSetModel, onCancel }: { wait: NonNullable<
         ) : (
           <DesignButton type="button" className="btn btn-secondary btn-compact" onClick={() => { setAcknowledged(false); setChoosing(true); }}>Change model</DesignButton>
         ))}
-        <DesignButton type="button" className="btn btn-danger btn-compact" onClick={onCancel}>Cancel the run</DesignButton>
+        {onCancel && <DesignButton type="button" className="btn btn-danger btn-compact" onClick={onCancel}>Cancel the run</DesignButton>}
       </div>
     </div>
   );
@@ -654,7 +663,7 @@ function ModeSelector({ current, enabled, onSetMode, strip = false, stripCompact
   );
 }
 
-export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onPlanEdit, onPlanDecision, runStartMode = 'auto', onSetRunStartMode, onSteer, onSetModel, onSetReasoning, models = [], imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, initialization = null, onOpenProjectSetup, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight, onOpenTrailer, onAnswerQuestions, onCancelQuestions, slash}: WorkspaceViewProps) {
+export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, onSetMode, onCancelAgent, nowIso = null, onQueue, onEditQueued, onRemoveQueued, onEditTodo, onPause, onContinue, onPlanEdit, onPlanDecision, runStartMode = 'auto', onSetRunStartMode, onSteer, onSetModel, onSetReasoning, models = [], imageInputModels = [], personas = [], entry, compressionThresholdPercent = 60, onSelectAgent, onOpenPersona, onStash, stashCount = 0, onOpenStash, onRecordPrompt, onPageOlder, reachedOldest = false, groupTools = true, displayCaps, onOpenLink, onReadAttachment, onAcknowledge, showReasoning = false, autoCollapseTools = false, needsRecovery = false, projectSetupPending = false, initialization = null, onOpenProjectSetup, modelsLoaded = false, configuredMode, onSetNextPersona, onSetNextModel, onSetNextReasoning, history = [], draft, onPublishDraft, onWriteDraft, composerHeight, onComposerHeight, onOpenTrailer, onAnswerQuestions, onCancelQuestions, slash}: WorkspaceViewProps) {
   const [text, setText] = useState(draft ?? '');
   // REQ-CHAT-069: the transcript's scope. "This task" needs a selected agent, so it falls back to "All activity".
   const [scope, setScope] = useState<'all' | 'task'>('all');
@@ -665,7 +674,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
   const [attachments, setAttachments] = useState<ImageAttachmentInput[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
   const [stopRequested, setStopRequested] = useState(false);
-  const [confirming, setConfirming] = useState<'stop' | { agent: { id: string; name: string }; descendants: string[] } | null>(null);
+  const [confirming, setConfirming] = useState<'cancelRun' | 'decline' | { agent: { id: string; name: string } } | null>(null);
   const [steering, setSteering] = useState<{ id: string; name: string } | null>(null);
   const [pausePending, setPausePending] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -1004,19 +1013,25 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
     // REQ-MONITOR-006: on a refusal the state is rolled back and the refusal named.
     if (!r.ok) { setStopRequested(false); setError(r.reason); }
   };
+  // REQ-MONITOR-127: on confirmation the run is shown cancelling at once; a refusal restores it and says why.
+  const cancelRun = async () => {
+    if (!onCancelRun) return;
+    setStopRequested(true);
+    const r = await onCancelRun();
+    if (!r.ok) { setStopRequested(false); setError(r.reason); }
+  };
   // REQ-MONITOR-296: `pausing` is shown only after the run accepted the pause.
   const pause = async () => {
     if (!onPause) return;
     const r = await onPause();
     if (r.ok) setPausePending(true); else setError(r.reason);
   };
-  const continueRun = async () => {
+  const continueRun = async (withoutPaused = false) => {
     if (!onContinue) return;
-    const r = await onContinue();
+    const r = await onContinue(withoutPaused ? { withoutPaused: true } : undefined);
     if (!r.ok) setError(r.reason); else setError(null);
   };
   // REQ-MONITOR-064: the live descendants, by the one rule every agent surface applies.
-  const descendantsOf = (id: string): string[] => liveDescendants(session?.agents ?? [], id).map((a) => a.name);
 
   /**
    * REQ-CHAT-001: Enter submits, Shift+Enter inserts a newline.
@@ -1142,8 +1157,8 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
   const [seenSelection, setSeenSelection] = useState(selectedAgent);
   if (seenSelection !== selectedAgent) { setSeenSelection(selectedAgent); if (narrow && selectedAgent !== null) setDrawer('inspector'); }
   const inspectorCancel = (agent: AgentRecord) => {
-    if (agent.id === RUN_AGENT_ID) { setConfirming('stop'); return; }
-    setConfirming({ agent: { id: agent.id, name: agent.name }, descendants: descendantsOf(agent.id) });
+    if (agent.id === RUN_AGENT_ID) { if (onCancelRun) setConfirming('cancelRun'); return; }
+    setConfirming({ agent: { id: agent.id, name: agent.name } });
   };
   const inspector = (
     <Inspector session={session} rows={rows} personas={personas} runLevel={runLevel} selectedAgentId={selectedAgent} onSelect={(id) => select(id, 'click')} models={models}
@@ -1176,6 +1191,10 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
     setPlanCollapsed(false);
   }
   const paused = session !== null && (session.executionStatus === 'paused' || session.executionStatus === 'paused_message_limit' || session.executionStatus === 'awaiting_plan_decision');
+  // PD-ORCH-005 clause 6 (OQ-71): a session at rest states what its continue resumes — a paused one; one a crash left
+  // `interrupted`; and one a crash left persisted busy with no run behind it (REQ-CHAT-008's recovery state), whose
+  // continue by message records the crash and resumes the same agents. Only the Continue action offers to decline.
+  const resumable = session !== null && (session.executionStatus === 'paused' || session.executionStatus === 'interrupted' || (sessionBusy && needsRecovery)) ? session.resumable : null;
   /** The send control's accessible name, by composer mode (PD-CHAT-001 revision 2, R-040). Set beside the
     * gate and the pause it reads, so no declaration order can break it again. */
   const sendName = runActive
@@ -1253,7 +1272,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
               <DesignButton type="button" className="btn btn-ghost agents__cancel" onClick={() => setSteering({ id: selected.id, name: selected.name })}>Steer {selected.name}</DesignButton>
             )}
             {selected && !['done', 'failed', 'cancelled'].includes(selected.presentationState) && onCancelAgent && (
-              <DesignButton type="button" className="btn btn-ghost agents__cancel" onClick={() => setConfirming({ agent: { id: selected.id, name: selected.name }, descendants: descendantsOf(selected.id) })}>Cancel {selected.name}</DesignButton>
+              <DesignButton type="button" className="btn btn-ghost agents__cancel" onClick={() => setConfirming({ agent: { id: selected.id, name: selected.name } })}>Cancel {selected.name}</DesignButton>
             )}
           </div>
           <AgentTree agents={agents} selected={selectedAgent} onSelect={select} nowIso={nowIso} />
@@ -1317,7 +1336,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
           <div className="intent-status mono" role="status" aria-live="polite" data-phase={session?.intent?.phase}>{intentStatusText(session?.intent ?? null)}</div>
         )}
         {session?.wait && runActive && (
-          <WaitHeader key={`${session.wait.agent}:${session.wait.attempt}:${session.wait.provider}:${session.wait.model}:${session.wait.rejection ?? ''}`} wait={session.wait} models={models} onSetModel={onSetModel} onCancel={() => setConfirming('stop')} />
+          <WaitHeader key={`${session.wait.agent}:${session.wait.attempt}:${session.wait.provider}:${session.wait.model}:${session.wait.rejection ?? ''}`} wait={session.wait} models={models} onSetModel={onSetModel} onCancel={onCancelRun ? () => setConfirming('cancelRun') : undefined} />
         )}
         {/* Part AA — REQ-CHAT-068: above the shown transcript, and only for a CHILD agent; a root agent produces none. */}
         {scope === 'task' && selected !== null && selected.id !== RUN_AGENT_ID && <DelegationHeader agent={selected} />}
@@ -1489,9 +1508,10 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
               {/* REQ-SESSION-186's two-step stop: the hint sentence rides as tooltip + accessible description
                 * (PD-CHAT-001) instead of a visible line, and the label stays the spec's own.
                 * Revision 2: the stop and the queue are the strip's shells — the stop keeps its danger
-                * button (it confirms and destroys), the queue is the send pill in its Queue mode, so the
-                * run state the strip draws needs no button family the strip does not own. */}
-              <DesignButton type="button" className="btn btn-danger btn-compact" onClick={() => setConfirming('stop')} aria-describedby="stop-hint" title={stopPending ? 'The stop is pending; the next activation forces it.' : 'Stops gracefully; a second activation forces.'}>{stopLabel(stopPending)}</DesignButton>
+                * button, the queue is the send pill in its Queue mode, so the run state the strip draws needs no
+                * button family the strip does not own. PD-ORCH-005 clause 3: the stop brings the run to rest and
+                * destroys nothing, so it acts at once; the confirmed, final cancel is the run-level cancel's (OQ-69). */}
+              <DesignButton type="button" className="btn btn-danger btn-compact" onClick={() => { void stop(); }} aria-describedby="stop-hint" title={stopPending ? 'The stop is pending; the next activation forces it.' : 'Stops gracefully; a second activation forces.'}>{stopLabel(stopPending)}</DesignButton>
               <span id="stop-hint" className="visually-hidden">{stopPending ? 'The stop is pending; the next activation forces it.' : 'Stops gracefully; a second activation forces.'}</span>
               <DesignSendPill shortLabel="Queue" sendName="Queue the message for the next iteration" disabled={busy} title={undefined} aria-describedby={undefined} data-testid="composer-send" />
             </>
@@ -1507,8 +1527,14 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
             <DesignButton type="submit" className="btn btn-primary" disabled aria-describedby="plan-gate-hint">Answer the plan first</DesignButton>
           ) : paused && onContinue ? (
             <>
-              <DesignButton type="button" className="btn btn-primary" onClick={() => { void continueRun(); }}>Continue run</DesignButton>
-              <DesignButton type="submit" className="btn btn-secondary" disabled={busy}>Continue with a message</DesignButton>
+              {/* PD-ORCH-005 clause 6: both continues resume the open iteration's agents, so the count below describes
+                * both. The strip keeps its one band (PD-CHAT-001): the count and the decline stand in the notices row,
+                * and the two continues take the send pill's place, so they carry short labels at every density as the
+                * pill does — `Continue` is the pill's own (REQ-CHAT-005 as PD-CHAT-001 narrows it) — with the full
+                * name as accessible name and tooltip. At full labels the paused strip scrolled at every density but
+                * narrow (found by phase 5's second review; OQ-71 puts `Message` to the owner). */}
+              <DesignButton type="button" className="btn btn-primary composer__continue" onClick={() => { void continueRun(); }} aria-label="Continue run" title="Continue run" aria-describedby={resumable ? 'composer-resume-count' : undefined}>Continue</DesignButton>
+              <DesignButton type="submit" className="btn btn-secondary composer__continue" disabled={busy} aria-label="Continue with a message" title="Continue with a message" aria-describedby={resumable ? 'composer-resume-count' : undefined}>Message</DesignButton>
             </>
           ) : (
             /*
@@ -1520,7 +1546,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
               * short label visible ("Run" / "Continue" / "Queue"), the spec's own wording as the
               * accessible name, so REQ-CHAT-005 still states the mode and the strip stays one band.
               */
-            <DesignSendPill shortLabel={sendShortLabel} sendName={projectSetupPending ? PROJECT_SETUP_SEND_REASON : sendName} disabled={busy || projectSetupPending} title={projectSetupPending ? PROJECT_SETUP_SEND_REASON : undefined} aria-describedby={projectSetupPending ? sendReasonId : undefined} data-testid="composer-send" />
+            <DesignSendPill shortLabel={sendShortLabel} sendName={projectSetupPending ? PROJECT_SETUP_SEND_REASON : sendName} disabled={busy || projectSetupPending} title={projectSetupPending ? PROJECT_SETUP_SEND_REASON : undefined} aria-describedby={projectSetupPending ? sendReasonId : resumable ? 'composer-resume-count' : undefined} data-testid="composer-send" />
           )}
         </div>
         </div>
@@ -1536,13 +1562,30 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
           {projectSetupPending && <span id={sendReasonId} className="visually-hidden">{PROJECT_SETUP_SEND_REASON}</span>}
           {planGate && <span id="plan-gate-hint" className="composer__hint">A plan is waiting for your decision above. Approve, revise, or cancel the run to continue.</span>}
           {paused && !planGate && <span className="composer__hint">Paused. Run controls need the run continued before they can be used.</span>}
+          {resumable && (
+            /* PD-ORCH-005 clause 6 (OQ-71): the continue states how many agents will resume, and the Continue action
+             * offers to continue without them — confirmed, since it ends them `cancelled` for good (clauses 3 and 5). */
+            <div className="composer__resume" data-testid="composer-resume">
+              <span id="composer-resume-count" className="composer__hint" data-testid="composer-resume-count">{resumeCountText(resumable.agents)}</span>
+              {session?.executionStatus === 'paused' && onContinue && (
+                <>
+                  <DesignButton type="button" className="btn btn-ghost btn-compact" data-testid="composer-continue-without" onClick={() => setConfirming('decline')}
+                    title={declineText(resumable.agents)} aria-describedby="composer-decline-hint">Continue without them</DesignButton>
+                  <span id="composer-decline-hint" className="visually-hidden">{declineText(resumable.agents)}</span>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </form>
-      {confirming === 'stop' && (
-        <ConfirmDialog title="Cancel the run?" body="Cancellation cannot be undone in this session. The active run and every active task agent will be cancelled." confirmLabel="Cancel the run" onCancel={() => setConfirming(null)} onConfirm={() => { setConfirming(null); void stop(); }} />
+      {confirming === 'cancelRun' && (
+        <ConfirmDialog {...cancelConfirmation({ id: RUN_AGENT_ID, name: 'the run' }, session?.agents ?? [])} cancelLabel="Keep running" destructive testId="cancel-run-confirm" onCancel={() => setConfirming(null)} onConfirm={() => { setConfirming(null); void cancelRun(); }} />
       )}
-      {confirming !== null && confirming !== 'stop' && (
-        <ConfirmDialog title={`Cancel ${confirming.agent.name}?`} body={confirming.descendants.length > 0 ? 'Its live descendants will be cancelled with it:' : 'The agent will be cancelled.'} lines={confirming.descendants} confirmLabel={`Cancel ${confirming.agent.name}`} onCancel={() => setConfirming(null)} onConfirm={() => { const target = confirming.agent; setConfirming(null); void onCancelAgent?.(target.id).then((r) => { if (!r.ok) setError(r.reason); }); }} />
+      {confirming === 'decline' && resumable && (
+        <ConfirmDialog title="Continue without them?" body={declineText(resumable.agents)} confirmLabel="Continue without them" cancelLabel="Keep them" destructive testId="decline-confirm" onCancel={() => setConfirming(null)} onConfirm={() => { setConfirming(null); void continueRun(true); }} />
+      )}
+      {confirming !== null && confirming !== 'cancelRun' && confirming !== 'decline' && (
+        <ConfirmDialog {...cancelConfirmation(confirming.agent, session?.agents ?? [])} cancelLabel="Keep running" destructive onCancel={() => setConfirming(null)} onConfirm={() => { const target = confirming.agent; setConfirming(null); void onCancelAgent?.(target.id).then((r) => { if (!r.ok) setError(r.reason); }); }} />
       )}
       {steering && onSteer && <SteerDialog target={steering} onSteer={onSteer} onClose={() => setSteering(null)} />}
     </div>

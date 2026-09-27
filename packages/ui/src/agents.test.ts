@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { contextPercent, DEFAULT_CONTEXT_CAPACITY, RUN_AGENT_ID, type AgentRecord, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
-import { cascadeNote, chipStates, countNoun, followedAgent, inspectorEnablement, instancesOf, liveDescendants, mcpChipStates, mcpFateText, metaLine, PAUSE_NO_RUN, PAUSE_SELECT_RUN, pauseAvailability, resolvedTools, ringFigures, rowsOf, runLevelAgent, tableOrder } from './agents.js';
+import { CANCEL_RUN_TEXT, cancelConfirmation, cascadeNote, chipStates, countNoun, followedAgent, inspectorEnablement, instancesOf, liveDescendants, mcpChipStates, mcpFateText, metaLine, PAUSE_NO_RUN, PAUSE_SELECT_RUN, pauseAvailability, resolvedTools, ringFigures, rowsOf, runLevelAgent, tableOrder } from './agents.js';
 import { personaColourToken } from './PersonaWindow.js';
 import { useShellState } from './shell-state.js';
 
@@ -12,7 +12,7 @@ const agent = (over: Partial<AgentRecord>): AgentRecord => ({
 const row = (over: Partial<TranscriptRow>): TranscriptRow => ({ index: 0, kind: 'agent', settled: true, body: 'x', at: '2026-09-05T10:00:00.000Z', ts: '10:00:00', ...over });
 const session = (over: Partial<SessionRecord>): SessionRecord => ({
   id: 's1', executionStatus: 'running', workspaceRoot: 'C:\\ws', createdAt: 'x', updatedAt: '2026-09-05T10:05:00.000Z', historyOpen: true, truncation: { truncated: false, droppedCount: 0, cap: null, lastTrimAt: null }, agents: [], pendingApprovals: [], pendingQuestions: [],
-  tokenUsage: { input: 0, output: 0 }, cost: '0', stopReason: null, runType: 'task_run', improvementArtifactIds: [], runStartedAt: '2026-09-05T10:00:00.000Z', iterationsCompleted: 0, summary: null, permissionMode: 'ask', sandboxed: false, backgroundSessions: 0, intent: null, queuedPrompts: [], todo: null, childTodos: {}, messageLimit: null, pausedAtCount: null, planGate: null, planReleased: false,
+  tokenUsage: { input: 0, output: 0 }, cost: '0', stopReason: null, runType: 'task_run', improvementArtifactIds: [], runStartedAt: '2026-09-05T10:00:00.000Z', iterationsCompleted: 0, summary: null, permissionMode: 'ask', sandboxed: false, backgroundSessions: 0, intent: null, queuedPrompts: [], todo: null, childTodos: {}, messageLimit: null, pausedAtCount: null, planGate: null, planReleased: false, resumable: null,
   usageHistory: [], costLabel: { text: '', qualifier: 'unknown' }, toolCalls: { total: 5, agents: 2, byTool: [] }, worktreeBranch: null, wait: null, compression: null, entryContext: { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, ...over,
 });
 
@@ -135,5 +135,20 @@ describe('the MCP chips per server (REQ-MCP-065/100/114, REQ-MONITOR-060; wired 
     ]);
     expect(mcpFateText({ fate: 'connected' })).toBe('connected');
     expect(mcpFateText({ fate: 'dropped', reason: 'disabled' })).toBe('dropped — disabled');
+  });
+});
+
+describe('REQ-MONITOR-126 / REQ-MONITOR-128: what confirming a cancel states (PD-ORCH-005 clause 3)', () => {
+  const a = agent({ id: 'a', name: 'alpha', parentId: 'root:1' });
+  const b = agent({ id: 'b', name: 'beta', parentId: 'a' });
+  const c = agent({ id: 'c', name: 'gamma', parentId: 'a', presentationState: 'done', state: 'succeeded' });
+
+  it('the run instance\'s cancel is the run\'s own, final — whichever surface confirms it', () => {
+    expect(cancelConfirmation({ id: RUN_AGENT_ID, name: 'orchestrator' }, [a, b])).toEqual({ title: 'Cancel the run?', body: CANCEL_RUN_TEXT, lines: [], confirmLabel: 'Cancel the run' });
+  });
+
+  it('an agent\'s names it, and one line per live descendant cancelled with it', () => {
+    expect(cancelConfirmation({ id: 'a', name: 'alpha' }, [a, b, c])).toEqual({ title: 'Cancel alpha?', body: 'Its live descendants will be cancelled with it:', lines: ['beta'], confirmLabel: 'Cancel alpha' });
+    expect(cancelConfirmation({ id: 'b', name: 'beta' }, [a, b, c])).toEqual({ title: 'Cancel beta?', body: 'The agent will be cancelled.', lines: [], confirmLabel: 'Cancel beta' });
   });
 });

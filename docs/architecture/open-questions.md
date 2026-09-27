@@ -53,8 +53,10 @@ on 2026-09-27** as recommended by `PD-ORCH-004` revision 2 ([R-058](../product/r
 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3: OQ-67** (how a `paused` agent presents, and whether it is settled
 for display with a session at rest, which four requirements the directive does not name would do), **OQ-68** (whether
 the transcript is drawn from the conversation record, and what of a model exchange the record holds), **OQ-69** (which
-control is a stop and which the final cancel, and what a rest does at the edges the directive does not reach) **and
-OQ-70** (how a resumed iteration carries on where the directive gives the what and not the how), each stating the
+control is a stop and which the final cancel, and what a rest does at the edges the directive does not reach), **OQ-70**
+(how a resumed iteration carries on where the directive gives the what and not the how), **OQ-71** (what the
+Continue action counts, where it says so, and which continues offer the decline) **and OQ-72** (which artifact
+REQ-SESSION-115's handoff carries, and who takes up an earlier offer), each stating the
 reading the build proceeds under. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
@@ -2966,6 +2968,21 @@ when the pause is accepted, a rest that finds nothing unfinished, and what a cra
   marked final (`StopRequest.final`), and it ends every agent `cancelled` and closes the iteration, as before. A stop the
   run raises on its own account (`agent_session_aborted`: a recording failure, the headless abort hook, a supervisor
   escalation) is no user's act and ends its agents as before.
+- **Which surface sends which.** The composer's stop control ("Stop run", then "Force stop") sends the stop, and asks
+  no confirmation: it ends nothing, and REQ-SESSION-186 asks for none. Every confirmed "Cancel the run?" — the
+  inspector's cancel of the run-level agent, the Mission view's run row, the wait header's "Cancel the run" and a
+  persona window's Cancel on the run's own instance — sends the reserved run id, the final cancel, so REQ-MONITOR-126's
+  "cannot be undone in this session" is true of it; a persona window's Cancel of a child confirms it as REQ-MONITOR-128
+  asks and cancels that child (REQ-SHELL-075(g), REQ-MONITOR-130's "an auxiliary window"). *Phase 5's second repair
+  left the persona window's unconfirmed Cancel the stop, reasoning that a final cancel without a confirmation would
+  break REQ-MONITOR-126; REQ-SHELL-075 forbids no confirmation, so the reason was a false choice, and the button now
+  confirms and cancels (found by phase 5's third review).* `/stop` stays the stop: it asks nothing, and REQ-CHAT-029's
+  "MUST cancel that run" is read as met by the run ending, though its description reads "Cancel the active run" — put
+  to the owner below. *Until phase 5's repair every one of these
+  surfaces sent the stop, and the composer's stop was itself confirmed by the "Cancel the run?" dialog, so the reading
+  above — that the confirmed control reaches the engine as the reserved run id — was false of the built product: a
+  confirmed "cannot be undone" left every agent paused and resumable, and the final cancel was reachable from no
+  surface (found by phase 7's built-app rehearsal).*
 - **A plan cycle is never at rest.** Clause 11 says no agent is unfinished while the plan gate holds, and a plan cycle
   runs while it holds. A stop or a quit during a plan cycle ends the cycle's agents as before and records no
   interruption, and a crash during one leaves no open iteration: a plan cycle has no `iterations` row, and its children
@@ -3070,8 +3087,9 @@ when the pause is accepted, a rest that finds nothing unfinished, and what a cra
 **What a ruling decides.** Whether a forced stop should be final, as REQ-SESSION-186's persisted `paused` for a forced
 stop hints (a forced stop and a cancel persist the same status). Whether a stop during a plan cycle should leave the
 cycle's agents to be resumed, which clause 11's durable hold arguably forbids. And whether one paused agent should be
-cancellable while its session rests. Whether REQ-ORCH-135, REQ-MONITOR-130 and REQ-SESSION-108 should join the Narrows
-list, as the build reads them. Each would change a control's reach, a surface's offer or the record's traceability, and
+cancellable while its session rests. Whether `/stop`, which REQ-CHAT-029 describes as "Cancel the active run" and says
+"MUST cancel that run", should be the final cancel (and then confirmed) rather than the stop, or be reworded. Whether
+REQ-ORCH-135, REQ-MONITOR-130 and REQ-SESSION-108 should join the Narrows list, as the build reads them. Each would change a control's reach, a surface's offer or the record's traceability, and
 none is decided by the directive.
 
 **OQ-70 — How does a resumed iteration carry on where the directive says what and not how?** *(`PD-ORCH-005` clauses 4, 5, 6, 7 and 10; PD-TOOLS-006 revision 2; REQ-ORCH-095, REQ-ORCH-088, REQ-ORCH-152, REQ-HOOKS-075 and REQ-MONITOR-125, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3 under [R-060](../product/requests.md#r-060) and [R-061](../product/requests.md#r-061).)*
@@ -3094,7 +3112,8 @@ treat a resumed child.
   counted, as a running child (found by phase 4's review).
 - **The new message is not a task.** A continue that resumes an open iteration appends no todo task. The message is the
   resumed root's next message, recorded in its conversation at the continue itself, with the images attached to it —
-  after the root's notice of its background sessions, so the user's message is the last it reads — and
+  after the root's notice of its background sessions, so the user's message is the last it reads; a notice the root has
+  not yet answered is not recorded again by a later continue — and
   REQ-SESSION-115's continuation payload is not sent (the directive narrows it so). The explicit cancel of that continue
   ends the iteration the message was delivered to, and the message with it: it stays in that iteration's record and in
   the transcript, and is not kept as a task. The iteration's own task is the one
@@ -3151,6 +3170,120 @@ iteration that closes without addressing it leaves the message pending? Should a
 the Continue action, and with it "continue without them"? And should a re-armed session hold its plan gate before the
 resume, after it, or not at all — as built, the run that resumes is not held, and neither are the iterations it runs
 after the resumed one?
+
+**OQ-71 — What does the Continue action count, where does it say so, and which continues offer the decline?** *(`PD-ORCH-005` clause 6; REQ-SHELL-023, REQ-MONITOR-125 and REQ-SESSION-110, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3 under [R-060](../product/requests.md#r-060) and [R-061](../product/requests.md#r-061).)*
+
+Clause 6: "The Continue action SHALL state how many agents will resume, and SHALL offer to continue without them;
+choosing that ends those agents `cancelled`, the open iteration closes as cancelled, and the session continues as a
+new iteration". Clause 4 restores "its root and every `paused` agent". The clause does not say whether the root is one
+of the agents counted, where on the surface the count is stated, or whether the other continue routes offer the
+decline too.
+
+**What the build proceeds under.**
+
+- **The count is every agent that resumes: the root and every unfinished agent of the open iteration.** Clause 4
+  resumes the root with them, and declining ends the root's iteration too. After a rest the unfinished agents are the
+  paused ones; after a crash not yet recorded they are the ones the crash record will pause (clause 8 forbids recording
+  it on a read), so the count does not change when the crash is recorded. A session whose root was the only
+  unfinished agent states "1 agent will resume". The count is read from the store (`SessionRecord.resumable`,
+  `resumableOf`), as the plan gate is, because a session at rest has no process behind it.
+- **Where.** In the composer's notices row, below the field and its strip, on a `paused` session, on one a crash left
+  `interrupted`, and on one a crash left persisted busy with no run behind it — REQ-CHAT-008's recovery state, which a
+  session is in when it is opened after a crash and before any repair, and whose continue by message records the crash
+  and resumes the same agents (*the second build left that state out, so the most direct crash path stated no count:
+  found by phase 5's second review*). REQ-SHELL-023 places the Continue action in the composer; no screen, tab or panel
+  is added. The row holds the count
+  as a sentence ("3 agents will resume") in the row's quiet hint style, which describes every continue that resumes
+  them — each carries it as its accessible description — and on a `paused` session a compact ghost "Continue without
+  them" beside it. The design material draws no paused composer. The row's controls are the mockup's own: the quiet
+  hint, and the compact ghost button the session tables draw for "Resume" (*the second build cited the queue card above
+  the field as the pattern, which sits in a chrome card with a kicker and is not what the row draws — phase 5's second
+  review*). *The first build put the count and the decline in the strip itself; at the product's default window the
+  strip then wrapped to three lines, and at 1280×800 the decline sat past its clipped edge (found by phase 5's review,
+  measured in the built app).*
+- **Against PD-CHAT-001.** Its body still says "The strip SHALL carry every control the composer draws … No control SHALL
+  stand on a second chip row outside the dock", while its revision 3 quotes the same words as revision 2's and says
+  they "no longer govern". The build reads the notices row as the composer's line for notices — the plan gate's hint and
+  the pause's already stand there — and the decline as the count's own action, so neither is a chip row; the owner may
+  read the body as still governing, which would put the decline in the strip and bring back the wrap.
+- **The two continues' labels.** A paused session's strip draws two continues where the send pill stands, and at their
+  full labels ("Continue run", "Continue with a message") the strip scrolled at the full and tight densities — by 8 px
+  at a 908 px dock with the configured model and `autonomous` (phase 5's second review, measured). Each now shows a
+  short label at every density, as the pill it replaces does, with its full name as accessible name and tooltip:
+  `Continue`, which REQ-CHAT-005 as PD-CHAT-001 narrows it already gives the pill, and `Message`, which neither the
+  specification nor the glossary has — put to the owner. With them the paused strip fits at every density from a
+  548 px dock to a 968 px one with the configured model; a model id as long as revision 3's own example still scrolls
+  the full-density strip, idle or paused, since full density shows every value. *The first repair shortened them at
+  the narrow density only, which extended revision 3's enumerated rules and left the other two densities scrolling.*
+- **Declining is confirmed.** It ends the paused agents `cancelled`, which clauses 3 and 5 make final, so it asks first,
+  as the two other controls that end agents `cancelled` do (REQ-MONITOR-126, REQ-MONITOR-128), stating what ends and that
+  it cannot be undone (found by phase 5's review).
+- **Which continues offer the decline.** The Continue action only. A continue by message resumes (clause 4: the
+  message goes to the resumed root) and offers no decline; a plan decision resumes as OQ-70 has it. A session a crash
+  left `interrupted` is continued by a message, as today: it states the count, and offers no decline (OQ-70's second
+  question stands).
+- **What the decline carries.** `session.continue` gains an optional `withoutPaused`; absent, the Continue action
+  resumes, which clause 6 makes the default.
+
+**What a ruling decides.** Whether the count should name only the paused agents, leaving the root out. Whether the
+decline should also be offered beside "Continue with a message", so a message can start a new iteration over a
+declined one. Whether PD-CHAT-001's body still keeps every composer control in the strip. What the message continue's
+short label should be, if not `Message`. And whether the design material should draw the Continue action's paused
+state, which it does not.
+
+**OQ-72 — Which artifact is REQ-SESSION-115's "latest orchestrator artifact", and how does a later root take up an offer?** *(`PD-ORCH-004` revision 3; REQ-SESSION-115, which `PD-ORCH-005` narrows for a resumed iteration and which nothing narrows here, and REQ-TOOLS-155, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-004` revision 3 with `PD-ORCH-005` under [R-059](../product/requests.md#r-059), and by the repair of `the-continuation-payload-says-no-artifact-is-recorded.md`.)*
+
+REQ-SESSION-115's handoff carries "at most 6000 characters for the latest orchestrator artifact against an
+8000-character artifact baseline". The session's artifact store holds child reports and the documents agents
+published. The built-in orchestrator publishes no artifact of its own, so no record of a default configuration is an
+"orchestrator artifact" by author. PD-ORCH-004 revision 3 keeps an offer open until it is taken up once, "by the agent
+that delegated the child while that agent runs, or, in a later iteration or a later run of the session, by that
+iteration's root agent". It does not say which iteration's children count as "left" for a resumed iteration, which
+keeps its number across runs, nor how a later root learns an offer exists.
+
+**What the build proceeds under.**
+
+- **The artifact.** The latest record of the session's store that nothing has superseded, of any kind. It is where
+  the run's work is recorded, and the handoff states it in place of the placeholder that claimed none existed. It is
+  rendered as its id, title, kind and status — the id first, so no cut reaches it (REQ-SESSION-194) — then its summary
+  and key findings, cut to 6,000 characters without splitting a character. A published document is stated once, as its
+  body: its summary is its body's first line and its key findings its body (REQ-LIBRARY-093). The 8,000-character
+  baseline is not applied: nothing larger is assembled before the cut. A session with none says so. "Latest" is the
+  last created, in the listing's own index order (REQ-LIBRARY-096), so artifacts created in the same millisecond — a
+  cancellation writes several reports at once — fall to their ids, a stable order but not the order they were written.
+  *The first repair broke that tie by insertion order, which cost the index's order (a sort per read, found by phase 6's
+  second review).* Two more limits stand, both found by phase 6's review: a report re-materialised in place keeps its creation time (REQ-LIBRARY-092), so a later iteration's report
+  that reuses a canonical name does not become the latest (and overwrites the earlier one:
+  `a-reused-canonical-name-overwrites-an-earlier-iterations-report-artifact.md`); and a body edited after publishing
+  (REQ-LIBRARY-094) is stated as it was published.
+- **Who takes up an earlier offer.** The agent that delegated the child, while it runs. Otherwise only an iteration's
+  root, of an offer the session left before that root's run took the iteration up: any earlier iteration's (the
+  child's `iteration` is lower), a grandchild's as readily as a direct child's, and — a resumed iteration keeping its
+  number — its own iteration's children that had ended in an earlier run, whoever delegated them ("a later run of the
+  session"; *the first build admitted only lower iterations, which read those words as redundant — found by phase 6's
+  review*). A child of a later iteration is refused: the directive gives the offer to "that iteration's root agent", and
+  REQ-TOOLS-155 keeps a child to its own children. A plan cycle's root takes up none, since a plan cycle is not an
+  iteration (REQ-ORCH-153), and its refusal names only its own children; a plan cycle a continuation starts is still
+  shown the open offers in its handoff, which it cannot take up there.
+- **How a later root learns of an offer.** The offers no child has taken up are stated as `Open continuation offers`,
+  with the way to take one up, each by the offering child's name and task id — the newest ten, the rest elided behind
+  one line, since every part of the handoff is budgeted (found by phase 6's second review) — and only when there is one.
+  A new iteration's root reads them in the handoff's progress context. A resumed root, which is sent no handoff, is told
+  them at the continue that resumes it, after the notice of its background sessions and before the continue's message
+  (found by phase 6's second review) — only the offers its conversation does not already hold, since its own children's
+  reports carry theirs and an offer told once is not told again. An offer is held when the conversation carries the
+  offer itself: a report's `continuation_of: "<id>"`, in a message or a tool result, or a line of an offers list it was
+  told, alone or inside a handoff. A root that had answered and waits therefore takes a step only to read an offer it
+  has not seen; *the second repair told the whole list at every continue, which had such a root step for it each time
+  (found by phase 6's third review)*; *the third repair counted any mention of a task id as the offer told, so a root
+  that had only named a task in passing was never told its offer (found by phase 6's fourth review)*. A compression
+  that summarises the held offer away has it told again at the next continue, once. A later iteration of the same run starts from the launch content, which states
+  none, so there an offer is taken up only by a root that already knows its task id.
+
+**What a ruling decides.** Whether "orchestrator artifact" should instead name only what the root itself publishes,
+leaving the line empty until it does. Whether the open offers belong in the handoff, which REQ-SESSION-115 defines as
+"artifact, todo, and progress context", or should reach a later root some other way — and whether a later iteration of
+the same run should be told of them too.
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

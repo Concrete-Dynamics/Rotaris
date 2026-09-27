@@ -1890,6 +1890,9 @@ builds "failed". That would be false, and it would read as a broken pipeline. Wh
 
 ### PD-ORCH-005 — a continued session resumes the agents its last run left unfinished, from their full record
 
+*Revision 3 (2026-09-27, [R-061](requests.md#r-061)) — **what a pause does not wait for, and what outlives it**:
+clauses 9 to 12, added; nothing earlier is replaced. The owner ruled clause 9 and delegated clauses 10 to 12.*
+
 *Revision 2 (2026-09-27, [R-060](requests.md#r-060)) — **the full record**: every agent's conversation is kept as it
 happens, and continuing resumes the same agents where they stood, in the iteration they stood in; clauses 1, 2 and 4
 and the two closing paragraphs are replaced, and clauses 3 and 5 to 8 are adjusted to match. Revision 1 (2026-09-27,
@@ -1936,6 +1939,27 @@ continuing, and an iteration interrupted again after a resume is resumable in tu
 
 **(8) Opening a session is not continuing it.** Loading a session to view it SHALL change no agent record; settling,
 recording interruptions and resuming happen only when a run of the session is about to start.
+
+**(9) A pause does not wait on a person (revision 3).** A tool call suspended on an approval or a question when the run
+comes to rest — by a pause, a stop, a quit or a crash — is not waited for. Its approval or question is **withdrawn**: it
+leaves `pending_approvals` or `pending_questions`, the timeline records it as withdrawn by that interruption, and the
+call is recorded as interrupted and never run. It is never recorded as denied, and no answer is replayed later. When the
+agent resumes it sees the call as interrupted, and issuing it again asks afresh. Every other in-flight tool call still
+finishes within REQ-ORCH-134's deadline and is recorded as interrupted if the deadline passes.
+
+**(10) Background terminal sessions (revision 3).** A pause leaves the background terminal sessions its agents started
+running while the application stays open. A stop ends them, and so do a quit and a crash (REQ-TOOLS-111). When an agent
+resumes, it is told, for each background session it had started, whether it is still running (with its id) or ended and
+by what, with its last recorded output.
+
+**(11) The durable holds win (revision 3).** While the plan gate or the message-limit pause holds, no agent is
+unfinished: a pause is refused, and a quit leaves the hold as it stands and records no interruption. Continuing from a
+hold is what it is today.
+
+**(12) The record's lifetime (revision 3).** The conversation record belongs to its session and is deleted with it.
+Paging the transcript never touches it. Clearing the transcript clears the record of closed iterations only; an open
+iteration's record is kept until the iteration closes. A compression is written into the record, so a resume sends the
+compressed conversation.
 
 **What is unchanged.** A continuation is still not a resume: a timed-out child is never resumed and earns no corrective
 message (REQ-NOTIFY-112). The message-limit pause and the plan gate keep their durable holds. The run host is still
@@ -1998,10 +2022,10 @@ column (`children.interruption`) are added, with `children.write_scope` stored f
 > back-pointer is removed. It extended REQ-ORCH-053, REQ-SESSION-065 and REQ-NOTIFY-121; revision 2 narrows them,
 > because the settle no longer cancels a `paused` agent.
 
-> **Narrows:** REQ-MONITOR-256, REQ-MONITOR-123, REQ-ORCH-072, REQ-ORCH-002, REQ-ORCH-052, REQ-MONITOR-300, REQ-ORCH-053, REQ-SESSION-065, REQ-NOTIFY-121, REQ-SESSION-115, REQ-SESSION-129
+> **Narrows:** REQ-MONITOR-256, REQ-MONITOR-123, REQ-ORCH-072, REQ-ORCH-002, REQ-ORCH-052, REQ-MONITOR-300, REQ-ORCH-053, REQ-SESSION-065, REQ-NOTIFY-121, REQ-SESSION-115, REQ-SESSION-129, REQ-SESSION-025, REQ-TOOLS-054, REQ-TOOLS-111, REQ-ORCH-134
 
 *Raised by the owner, 2026-09-27; logged as [R-058](requests.md#r-058) and ruled as drafted, every fork as recommended,
-by [R-059](requests.md#r-059). Revision 2 logged as [R-060](requests.md#r-060).*
+by [R-059](requests.md#r-059). Revision 2 logged as [R-060](requests.md#r-060), revision 3 as [R-061](requests.md#r-061).*
 
 ---
 

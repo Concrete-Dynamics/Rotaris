@@ -1581,6 +1581,9 @@ waiting for them; answering or writing anything to the session ends that.
 
 ### PD-ORCH-004 — a child cut off while making progress hands its work back to the parent
 
+*Revision 2 (2026-09-27, [R-058](requests.md#r-058)) — **how the parent names the child it continues**, below, which
+rules OQ-66. Revision 1 (2026-09-23, [R-048](requests.md#r-048)) is otherwise unchanged.*
+
 REQ-ORCH-088's expiry path still runs in its order: the child is gracefully paused; if the role has a
 configured fallback model not yet attempted for this child, it is retried once on it; otherwise it is
 recorded failed with a timeout issue and a report of the form "Child timed out after <N>s" carrying the
@@ -1601,6 +1604,20 @@ A child delegated as a continuation carries that relationship in its record. A c
 times out while making progress SHALL receive the first two items and SHALL NOT receive a continuation
 offer, so a piece of work is continued once and never chained.
 
+**Naming the continuation (revision 2).** `delegate` SHALL accept one further optional action field,
+`continuation_of`: the task id of the child whose work the new child continues. The delegation SHALL be refused
+with status `rejected`, before any record is created and with a reason naming the cause, unless the id names a
+direct child of the calling agent whose report carries a continuation offer and which no child of the session
+already continues. The new child's record carries the id it continues; its payload is assembled as any child's
+is, and nothing of the continued child is injected into it. Which agent may take up an offer once the iteration
+that raised it has ended — after a stop, a pause or an interruption — is for the run-continuation policy
+[R-058](requests.md#r-058) opened; until that is ruled, only the agent that delegated the child can, within the
+same iteration.
+
+> Revision 1 said nothing of how the parent names the child it continues, and it narrowed REQ-ORCH-088 alone,
+> so the field built under [R-057](requests.md#r-057) departed from REQ-TOOLS-152, which no directive named for it.
+> That is [OQ-66](../architecture/open-questions.md), ruled by this revision.
+
 Unchanged: the child still ends `failed` with its timeout issue; the per-child limit and its default are
 untouched; a child that was not making progress gets exactly REQ-ORCH-088's report; and REQ-NOTIFY-112
 still holds that a child whose own `runtime.child_timeout` was exceeded is not recovery-eligible and earns
@@ -1613,8 +1630,9 @@ report for these children, and one more relationship in the child record. The li
 so a child that genuinely loops is still stopped at the same point.
 
 > **Narrows:** REQ-ORCH-088
+> **Extends:** REQ-TOOLS-152 (revision 2)
 
-*Raised by the owner, 2026-09-23; logged as [R-048](requests.md#r-048).*
+*Raised by the owner, 2026-09-23; logged as [R-048](requests.md#r-048). Revision 2 logged as [R-058](requests.md#r-058).*
 
 > **First execution, 2026-09-27, built under [R-057](requests.md#r-057):** the mechanism was built as written, and the
 > text met the code in four places. **(1) The stall window had no reader.** `runtime.child_stall_timeout` and a role's

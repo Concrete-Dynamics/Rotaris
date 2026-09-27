@@ -22,7 +22,7 @@ record already decides, and every ruling it needs is named as the owner's rather
 | Skills — `/skills`, REQ-CHAT-162's listing | **not built** (`SKILLS_LISTING_NOT_BUILT`, `packages/ui/src/slash/skills.ts`) | §2 |
 | Skills — ESC-37, ESC-38, ESC-39 | **ruled 2026-09-27** as recommended ([R-052](../product/requests.md#r-052)); amended | §2 |
 | Workspace-context injection, REQ-WORKSPACE-041..050 | built 2026-09-22 under `PD-WORKSPACE-002` | §3 |
-| Injection — REQ-WORKSPACE-049's latency bound, a built-app proof | **owed**; OQ-64 **ruled 2026-09-27** | §3 |
+| Injection — REQ-WORKSPACE-049's latency bound, a built-app proof | **built 2026-09-27** (`pnpm injection-proof`); the bound **met on Linux**, the Windows gate-class reading **owed**; OQ-64 **ruled 2026-09-27**; OQ-66 raised | §3 |
 | The Windows release pipeline, REQ-STARTUP-027..038, 141..143, 156, 158, 167, 168 | the installer built once (ADR-0054, 2026-09-04); nothing else | §4 |
 | The updater, REQ-STARTUP-107..124 | **not built** — no module in `apps/desktop/src/main/`; **in the first release**, ruled 2026-09-27 | §4.6 |
 
@@ -116,6 +116,39 @@ input. It is not measured. The plan is:
 
 If it fails, the fix is a separate change, and the reading stays next to it.
 
+> **First execution, 2026-09-27 — the Linux reading; the Windows gate-class reading is still owed.** Taken in the
+> built app by `pnpm injection-proof`'s latency section (first-executions row 2026-09-27).
+>
+> **Hardware.** A Linux container: 4 vCPU Intel Xeon @ 2.10 GHz, kernel 6.18 in a Firecracker VM, with the workspace
+> on the VM's virtio block device. That device is local and non-removable. The machine is not the gate machine's
+> class, so this reading does not stand in for it.
+>
+> **Fixture.** Fourteen instruction files, every slot discovery can reach, totalling exactly 1,048,576 bytes. Twenty
+> cannot be built: **OQ-66**. Twelve of the fourteen are read by the merge. The two bases suppressed by their on
+> overrides hold one line each. Every read file exceeds the per-file limit, and the total limit drops eight of them.
+>
+> **What was timed.** The run host's own cold path, `SkillHost.workspaceContext`, on the monotonic clock port: the
+> saved-policy read, the discovery and the merge. The policy read is included on purpose, because `PD-WORKSPACE-002`
+> made it part of deciding what is merged.
+>
+> **What "cold" means here.** Twenty consecutive launches, each a new Electron process. Before each launch, every
+> fixture file's data pages were dropped (`POSIX_FADV_DONTNEED`, after one `sync`). `mincore(2)` then confirmed that
+> 0 of 266 pages were resident. Dentries and inodes were not dropped. The workspace service stats every instruction
+> file at workspace open anyway, before any merge can run.
+>
+> **Reading.** From the committed code: **p95 15.42 ms** (nearest rank, 20 runs), median 11.74 ms, minimum 6.91 ms,
+> maximum 15.44 ms. Discovery and merge alone had a p95 of 13.35 ms, and the policy read alone 4.87 ms. Two earlier
+> runs of 20, taken while the proof's reporting was still being finished, gave p95 25.4 ms and 28.64 ms (maximum
+> 46.82 ms). **The bound is met on this machine** in all three runs. The worst p95 is about a seventh of it.
+>
+> **The unconditional halves.** All twenty separate processes produced byte-identical merged context (one SHA-256).
+> In all twenty, the merge ran only after the typed prompt was accepted and recorded as row 0. It runs in the run host,
+> never in the window's process.
+>
+> **Still owed.** The same measurement on the Windows gate machine's class of hardware (§5, O-6). The script has no
+> per-file page-cache eviction on Windows: there it labels its reading **warm** and does not assess it against the
+> bound. A cold method for Windows is owed with that reading.
+
 **3.3 A built-app proof.** `pnpm injection-proof` is new and belongs in the AGENTS.md index. It opens a
 workspace with instruction files at each base, switches one off, starts a scripted run, and reads what the
 model port received. It asserts four things:
@@ -127,6 +160,32 @@ model port received. It asserts four things:
 
 It also covers REQ-WORKSPACE-050's worktree case: a run in an isolated worktree reads context from the run's
 execution root.
+
+> **First execution, 2026-09-27 — built, and green on Linux** (`apps/desktop/scripts/injection-proof.mjs`; the
+> AGENTS.md index; first-executions row 2026-09-27). It reads what the model port **received**. A new seam,
+> `ROTARIS_CAPTURE_MODEL_REQUESTS`, makes the scripted client append each call's system text to a file. The seam is
+> compiled out of a packaged build, and only the scripted client can write through it, so no real provider is called
+> or recorded.
+>
+> **Every base is a scratch directory.** The home-relative bases use `ROTARIS_CAPTURE_INSTRUCTIONS_HOME`. The global
+> base is the profile's own configuration directory. The machine-wide base uses a second new seam,
+> `ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE`, which is also compiled out. Without it, the only way to place a file at
+> `/etc/codex` was to write into the machine's own `/etc`. The same gap had left the unit tests reading the host's
+> real `/etc/codex`: [`the-instruction-discovery-tests-read-the-machines-own-etc-codex.md`](../defects/fixed/the-instruction-discovery-tests-read-the-machines-own-etc-codex.md).
+>
+> **Four launches.**
+>
+> 1. **All on.** Ten blocks arrived in discovery order. The on override suppressed its own base and nothing else.
+>    The context unit arrived ahead of the skill catalog.
+> 2. **Switch.** Two files were switched off through Settings → Instructions and saved. The inventory listed all
+>    eleven present files, each under its source label, and the policy was written sparsely.
+> 3. **Switched.** The switched-off file sent nothing, not even its source comment. **OQ-64 as ruled:** with the
+>    override off, `AGENTS.md` came back into the merge.
+> 4. **Isolated.** The run executed in `.rotaris/worktrees/<sid>`. Its workspace blocks carried the **committed** text
+>    under the worktree's paths, not the base's working copy. The base's switches still governed them by identity.
+>
+> **Two falsifications, each red.** Suppression computed over presence failed launch 3. Context read from the base
+> root instead of the execution root failed launch 4. Both were rebuilt and run, then reverted.
 
 **3.4 A live run.** One `pnpm live-run` scenario with a workspace `AGENTS.md` whose instruction the model can
 only follow if it was injected. Owner-approved, like §2.3.

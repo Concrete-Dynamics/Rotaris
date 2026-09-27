@@ -45,6 +45,15 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-27**
 
+**The application log keeps `info` and above (`PD-MONITOR-002`, built 2026-09-27, R-055).** Main's standard output
+carried the level of a forwarded line as text inside it and none on main's own, and recorded every level. Each line
+now carries its level in a column of its own, and a line below the threshold is not written; the threshold is `info`,
+moved only by `ROTARIS_APP_LOG_LEVEL`, read once at start. The level, the predicate and the line are the new
+`main/app-log.ts`; `index.ts` keeps the wiring. The **process view** gains a paragraph on the application log, the
+`log` event names its fields, and the MCP-child paragraph says `debug` is now a filter; the **state-ownership view**
+gains the threshold as a fact nobody writes after start. No package, edge, process, channel, message kind or store
+column changed.
+
 **The run's model calls outside an agent's turn are counted (defect round, 2026-09-27, R-054).** Compression, the
 child-report summariser, the intent classifier and the loop supervisor's classifier discarded the usage their
 requests reported, so the run's tokens, its cost and `usage.update` missed them (REQ-EVENTS-053, PD-MONITOR-001).

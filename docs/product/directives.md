@@ -1579,6 +1579,30 @@ are not recorded, and cannot be recovered afterwards.
 
 *Raised by the owner, 2026-09-23; logged as [R-048](requests.md#r-048).*
 
+> **First execution, 2026-09-27, built under [R-055](requests.md#r-055):** the mechanism was built as written, and the
+> text met the code in three places. **(1) The vocabulary.** The directive names `warning`; the child protocol and every
+> writer in the code say `warn`. The line is written with the directive's word and the variable accepts exactly the
+> four the directive lists, so `ROTARIS_APP_LOG_LEVEL=warn` is unrecognized and means `info` — the product says so in
+> one `warning` line after the instance claim, rather than silently. **(2) "Every line".** Main's own lines carried no
+> level at all, and the collaborators that already told a warning apart (the improvement coordinator, initialization,
+> the credential store, the settings store, the provider service) had it dropped by the wiring, so REQ-LIBRARY-035(b)'s *warning* reached
+> the log as an unlabelled line; each now arrives at `warning`. A message of several lines (a stack) is written with
+> the stamp and level on each line. **(3) The obliged lines.** Every line the seven named requirements oblige reaches
+> the log at `info` or above: the confinement verdict (REQ-SANDBOX-071) at `info`, REQ-LIBRARY-035(b)/124's failure and
+> REQ-LIBRARY-047's unrecorded version at `warning`; REQ-TOOLS-171 and REQ-HOOKS-102 oblige no line, they constrain
+> text, which a threshold can only drop. REQ-HOOKS-138's hook lines in this log are `info` and `warning`, but the hook
+> engine's own sink — documented "the application log only" — is wired to the per-session log at `INFO`, where the
+> default `WARNING` drops it; that is recorded as
+> [`hook-faults-reach-only-the-session-log-at-a-level-it-drops.md`](../defects/hook-faults-reach-only-the-session-log-at-a-level-it-drops.md)
+> and not changed here, because it is a question of which log, not of this one's threshold. Three proof readers matched
+> the old shape and two proofs read `debug` lines; the readers were updated and those two launches set the variable.
+> Measured on a driven launch in a Linux container as root, without the bundled runtime, so the 141 stderr lines of
+> 2026-09-16 could not recur: 72 lines at the default (66 `info`, 6 `warning`, 0 `debug`); 69 with the variable at
+> `debug`, the same lines plus the code-intelligence child's two `debug` lines, less five the first launch's own
+> driving wrote. At `warning` a launch and quit wrote nothing, the `quit:` lines that tell a crash from a close among
+> it — which is what a threshold above `info` costs. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-tools-006"></a>

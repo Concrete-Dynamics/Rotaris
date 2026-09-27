@@ -274,3 +274,9 @@ So the level the product forwards a child's stderr at is now `debug` for every l
 host no longer flattens it. What the sentence above predicted is what happened: the lines still reach the
 launch log, now saying what they are. That residue is **OQ-63** — the application log reads no level at
 all, and the 141 lines are the measurement of it.
+
+**The residue, ruled and built — 2026-09-27.** OQ-63 was ruled on 2026-09-23 as `PD-MONITOR-002` and built on
+2026-09-27: the application log carries each line's level as a field and records `info` and above unless
+`ROTARIS_APP_LOG_LEVEL` restores `debug`. The paragraph above stays as measured. A child's stderr is still
+forwarded at `debug`, and at the default threshold none of it is written; the first execution is in
+[`../../product/directives.md`](../../product/directives.md#pd-monitor-002).

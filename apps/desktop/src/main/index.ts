@@ -43,6 +43,7 @@ import { shellCommands } from './commands/shell.js';
 import { skillsCommands } from './commands/skills.js';
 import { windowCommands, windowsCommands } from './commands/windows.js';
 import { exitAfterChildWindows } from './exit.js';
+import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, type AppLogLevel } from './app-log.js'; // PD-MONITOR-002
 import { workspaceCommands } from './commands/workspace.js';
 // The answer every command ends in, and the inventory the facets above are given (ADR-0019, REQ-SHELL-020).
 import { refusal, type ApprovalDialogState, type CommandContext, type CommandHandler, type CommandHandlers, type MainWindowState, type Recovery } from './commands/context.js';
@@ -72,26 +73,23 @@ const catalogue = validateCatalog();
 if (!catalogue.ok) throw new Error(`the provider catalogue is invalid: ${catalogue.error.join('; ')}`);
 
 /**
- * The application log. The level is a PARAMETER, not text a caller interpolates into the message:
- * `docs/defects/the-application-log-keeps-every-level-because-nothing-reads-one.md` recorded that the two
- * forwarders wrote `run host ${e.level}: …` and nothing could read it back, so a `debug` line and an
- * `error` line were indistinguishable to anything but a person.
+ * The application log — main's standard output — and PD-MONITOR-002's threshold over it. `app-log.ts` holds the
+ * level, the predicate and the line; this is the wiring. `ROTARIS_APP_LOG_LEVEL` is read here, once, before
+ * anything is written, and never again: nothing a running application does moves the threshold, and no
+ * configuration key or setting reaches it (`session_log_level` governs the per-session log alone).
  *
- * **No threshold is applied, and applying one is not this function's to decide.** What a packaged build's
- * diagnostics are worth after an incident is OQ-63, and the build proceeds under "the log keeps every
- * level". This only makes the level a value the log HAS. The rendered line is unchanged: `run host debug:`
- * still reads `run host debug:`, so a reader and a proof that greps for it see exactly what they did.
+ * `logAt` is the one writer. The two forwarders pass a child's line through it with the level the child gave it,
+ * so a run host `debug` line is filtered like one of main's; `log` is main's own line, `info` unless the caller
+ * names a level — which a collaborator whose port distinguishes a warning (`improvements.ts`, `initialization.ts`,
+ * the credential store, the settings store, the provider service) now does, rather than having its `warn` dropped.
  */
-type LogLevel = 'debug' | 'info' | 'warn' | 'error';
-const logAt = (level: LogLevel, source: string | null, m: string): void => {
-  const prefix = source === null ? '' : `${source} ${level}: `;
-  console.log(`[main ${new Date().toISOString()}] ${prefix}${m}`);
-};
-const log = (m: string) => { logAt('info', null, m); };
+const appLogLevel = appLogThreshold(process.env[APP_LOG_LEVEL_VARIABLE]);
+const logAt = createAppLog({ threshold: appLogLevel.threshold, now: () => toIsoUtc(clocks.wall.instant()), write: (line) => console.log(line) });
+const log = (m: string, level: AppLogLevel = 'info'): void => { logAt(level, null, m); };
 // ADR-0019's prohibition, from the other side: an uncaught exception in main would raise the platform's native
 // error box — a synchronous modal that blocks the loop and every poll reply. Log it instead; nothing here may hang.
-process.on('uncaughtException', (e) => { log(`UNCAUGHT in main: ${e.stack ?? String(e)}`); });
-process.on('unhandledRejection', (reason) => { log(`UNHANDLED rejection in main: ${reason instanceof Error ? reason.stack ?? reason.message : String(reason)}`); });
+process.on('uncaughtException', (e) => { log(`UNCAUGHT in main: ${e.stack ?? String(e)}`, 'error'); });
+process.on('unhandledRejection', (reason) => { log(`UNHANDLED rejection in main: ${reason instanceof Error ? reason.stack ?? reason.message : String(reason)}`, 'error'); });
 
 /*
  * Why the process is going away, written down while it still can be.
@@ -151,11 +149,13 @@ async function main(): Promise<void> {
     return;
   }
   if (claim.outcome === 'refused') {
-    console.error(`[main] launch refused: ${claim.reason}`);
+    log(`launch refused: ${claim.reason}`, 'error');
     app.exit(2);
     return;
   }
   log(`instance claimed (pid ${process.pid}, host ${machineId})`);
+  // A value the variable does not accept is said once, here: after the claim, so a handed-over launch still writes nothing.
+  if (appLogLevel.warning !== null) log(appLogLevel.warning, 'warn');
   app.on('will-quit', () => { void claim.close(); });
 
   const preferenceRoot = resolvePreferenceRoot();
@@ -176,9 +176,9 @@ async function main(): Promise<void> {
   // ADR-0029/0030: the credential store and the provider service live HERE, in main; the run host is leased bearers.
   const lockDeps = { pid: process.pid, startedAt: toIsoUtc(clocks.wall.instant()), timers: clocks.timers, monotonic: clocks.monotonic };
   const random = () => Math.random().toString(36).slice(2, 10);
-  const credentials = new CredentialStore({ dir: layout.tokens, protector: createProtector({ scratchDir: dirs.data }), lock: lockDeps, random, warn: (m) => log(`credentials: ${m}`), info: (m) => log(`credentials: ${m}`) });
-  const projectSettings = new ProjectSettingsStore({ path: join(dirs.config, PROJECT_SETTINGS_FILE), lock: lockDeps, timers: clocks.timers, warn: (m) => log(`project settings: ${m}`) });
-  const providers = new ProviderService({ credentials, settings: projectSettings, wall: clocks.wall, log: (m) => log(`providers: ${m}`), warn: (m) => log(`providers: ${m}`) });
+  const credentials = new CredentialStore({ dir: layout.tokens, protector: createProtector({ scratchDir: dirs.data }), lock: lockDeps, random, warn: (m) => log(`credentials: ${m}`, 'warn'), info: (m) => log(`credentials: ${m}`) });
+  const projectSettings = new ProjectSettingsStore({ path: join(dirs.config, PROJECT_SETTINGS_FILE), lock: lockDeps, timers: clocks.timers, warn: (m) => log(`project settings: ${m}`, 'warn') });
+  const providers = new ProviderService({ credentials, settings: projectSettings, wall: clocks.wall, log: (m) => log(`providers: ${m}`), warn: (m) => log(`providers: ${m}`, 'warn') });
 
   // ADR-0002: one run host for the application's lifetime; one workspace service per open workspace.
   const runHostChild = utilityProcess.fork(join(__dirname, 'run-host.js'), [], { serviceName: 'rotaris-run-host' });
@@ -266,7 +266,8 @@ async function main(): Promise<void> {
       svc = { child, link: new ProcessLink<WorkspaceServiceRequest>(portOf(child), clocks.timers) };
       services.set(key, svc);
       child.on('exit', (code) => { log(`workspace service for ${key} exited (${code})`); services.delete(key); cancelImprovementWorkspace(key); });
-      // The service's log lines reach main's log too (Part P: the checkpoint capture, preview and restore lines the proof reads).
+      // The service's log lines reach main's log too (Part P: the checkpoint capture, preview and restore lines the proof reads),
+      // at the level the service gave them and under the same threshold as main's own (PD-MONITOR-002).
       svc.link.onEvent((e) => { if (e.kind === 'log') logAt(e.level, 'workspace service', e.message); });
       // ADR-0002 c.7 / ADR-0058: the service's narrow requests back to main are forwarded to the run host, bounded.
       svc.link.onAsk((a) => {
@@ -826,6 +827,7 @@ async function main(): Promise<void> {
       resultSeen = true;
       log(`run ${e.sessionId} ended ${e.result.status} (${e.result.stop_reason}) → ${e.result.execution_status}`);
     }
+    // PD-MONITOR-002: the run host's level, under the same threshold as main's own — its MCP children's stderr is `debug`.
     else if (e.kind === 'log') logAt(e.level, 'run host', e.message);
   });
   // Part AL — channel 3 (ADR-0021 first executed): a terminal frame is delivered to each subscribed window under
@@ -840,7 +842,7 @@ async function main(): Promise<void> {
    */
   const initialization = new InitializationCoordinator({
     clocks,
-    log: (m) => log(m),
+    log,
     writeMarker: async (root, patch) => {
       const svc = services.get(root);
       if (!svc) return { ok: false, reason: 'the workspace service is not running' };

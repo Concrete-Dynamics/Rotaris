@@ -65,7 +65,50 @@ volume half of the note stays open until that question is ruled; the mechanism h
 Measured: `pnpm check` green (2,119 passed); `pnpm overview-proof` and `pnpm rows-proof` exit 0 with the
 log lines unchanged in shape.
 
-**Ruled 2026-09-23 — OQ-63, by [`PD-MONITOR-002`](../product/directives.md#pd-monitor-002), [R-048](../product/requests.md#r-048).** The
+**Ruled 2026-09-23 — OQ-63, by [`PD-MONITOR-002`](../../product/directives.md#pd-monitor-002), [R-048](../../product/requests.md#r-048).** The
 application log carries each line's level as a field and records `info` and above; `ROTARIS_APP_LOG_LEVEL`
 restores `debug`, and no configuration key reaches it. Under the directive the 141 `run host debug:` lines
 measured above are not recorded by default. The note stays open until the directive is built.
+
+## Repaired 2026-09-27 ([R-055](../../product/requests.md#r-055))
+
+Both halves of the title are now false: [`PD-MONITOR-002`](../../product/directives.md#pd-monitor-002) is built.
+The level, the threshold and the line live in one pure unit, `apps/desktop/src/main/app-log.ts`: `appLogThreshold`
+reads `ROTARIS_APP_LOG_LEVEL` (`debug`, `info`, `warning`, `error` in any casing; anything else `info`, with a warning
+line when a value was given but not taken), `createAppLog` is the predicate, and `formatAppLogLine` writes the level
+in a column of its own. `index.ts` reads the variable once at module evaluation and builds `logAt` over it; `log` is
+main's own line at `info` unless the caller names a level. A line reads, before and after:
+
+```
+[main 2026-09-16T10:00:00.000Z] run host debug: mcp code_intelligence stderr: INFO …
+[main 2026-09-16T10:00:00.000Z] instance claimed (pid 1, host h)
+
+[main 2026-09-27T10:00:00.000Z] debug   run host: mcp code_intelligence stderr: INFO …
+[main 2026-09-27T10:00:00.000Z] info    instance claimed (pid 1, host h)
+```
+
+and at the default threshold the first of the two new lines is not written. The level type is the child protocol's
+own (`Extract<ProcessEvent, { kind: 'log' }>['level']`), so a forwarded line's level reaches the predicate without a
+mapping, and a level the protocol adds fails to compile until the rank table has it. The protocol's `warn` is
+written `warning`, the directive's word, so the variable accepts what the column shows.
+
+What else changed with it: main's uncaught-exception and unhandled-rejection lines and the refused launch (previously
+`console.error('[main] launch refused: …')`, on stderr and in a shape of its own) are written at `error`; the
+collaborators whose port already tells a warning apart — the improvement coordinator, initialization, the
+credential store, the settings store and the provider service — now reach the log at `warning` instead of having
+the level dropped, which is how REQ-LIBRARY-035(b)'s warning arrives as one. Readers of the old shape were updated
+in the same change: `questions-proof.mjs` (the probe-at line, anchored after the stamp), `slice-proof.mjs` (the intent
+line, reading both shapes because it replays stored logs) and `live-run.mjs`'s filter; `code-intel-proof.mjs` and
+`mcp-proof.mjs` read `debug` lines and now launch with `ROTARIS_APP_LOG_LEVEL=debug`. `AGENTS.md` says how to drive
+the app at `debug`.
+
+Evidence: `apps/desktop/src/main/app-log.test.ts` (13 cases: every accepted word in three casings, unset and
+unrecognized values, the column, a stack's every line, the four thresholds, a forwarded line filtered by its child's
+level, and 141 dropped `debug` lines that are neither stamped nor written); `improvements.test.ts` now pins the
+REQ-LIBRARY-035(b) line at `warn`. A driven launch with one scripted run wrote 72 application-log lines at the
+default (66 `info`, 6 `warning`, 0 `debug`) and 69 with the variable at `debug`: the same lines plus the
+code-intelligence child's two `debug` lines, less five of the first launch's own driving. The 141 lines this note
+measured could not be reproduced here — the container runs as root without the bundled runtime, so the child dies at
+its first line of stderr (`the-code-intelligence-server-dies-when-the-app-runs-as-root.md`). `questions-proof`, whose
+reader is anchored after the stamp, passed against the build (run as root through a copy that adds `--no-sandbox`).
+`pnpm check`: the two failures it has without this change, and none other.

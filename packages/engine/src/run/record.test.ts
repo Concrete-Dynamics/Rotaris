@@ -111,7 +111,7 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
 
     // The iteration is recorded with its root's task id and the todo task it worked on, and closed with its outcome.
     const [iteration] = dal.iterationsOf(sid);
-    expect(iteration).toMatchObject({ iteration: 1, root_name: 'orchestrator', root_persona: 'orchestrator', task_id: `${sid}:main:1`, state: 'closed', outcome: 'succeeded' });
+    expect(iteration).toMatchObject({ iteration: 1, root_canonical_name: 'orchestrator', root_persona: 'orchestrator', todo_task_id: `${sid}:main:1`, state: 'closed', outcome: 'succeeded' });
     const child = dal.childrenOf(sid)[0]!;
     expect(child.parent_id).toBe(iteration!.root_task_id);
 
@@ -155,7 +155,7 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
     const closedEntries = dal.agentMessagesOf(sid, closedRoot).length;
     expect(closedEntries).toBeGreaterThan(0);
     // An open iteration beside it, as a pause will leave one: its record must survive the clear.
-    dal.insertIteration({ session_id: sid, iteration: 2, root_task_id: 'bg_0000open', root_name: 'orchestrator', root_persona: 'orchestrator', task_id: 't', task: 't', opened_at: 't' });
+    dal.insertIteration({ session_id: sid, iteration: 2, root_task_id: 'bg_0000open', root_canonical_name: 'orchestrator', root_persona: 'orchestrator', todo_task_id: 't', task: 't', opened_at: 't' });
     dal.insertAgentMessage({ session_id: sid, task_id: 'bg_0000open', iteration: 2, kind: 'message', body: JSON.stringify({ role: 'user', content: [{ kind: 'text', text: 'open' }] }), at: 't' });
     expect(sessions.control({ op: 'clearTranscript', sessionId: sid, args: {} })).toEqual({ ok: true });
     expect(dal.agentMessagesOf(sid, closedRoot)).toEqual([]);

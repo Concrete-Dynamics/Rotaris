@@ -22,8 +22,18 @@ describe('PD-ORCH-005: the paused state in the child machine (REQ-MONITOR-300 na
     // "continue without them" ends a paused agent `cancelled`; a reconciliation reaches any terminal state from it.
     expect(isLegalChildMove('paused', 'cancelled', 'cancellation')).toBe(true);
     for (const to of TERMINAL_CHILD_STATES) expect(isLegalChildMove('paused', to, 'reconciliation')).toBe(true);
-    // Nothing that was legal before is taken away: the table only grew.
-    expect(CHILD_TRANSITIONS.running).toEqual(expect.arrayContaining(['summarizing', 'succeeded', 'failed']));
+  });
+
+  it('nothing that was legal before is taken away: every row of REQ-MONITOR-300\'s table only gained paused', () => {
+    const before: Readonly<Record<string, readonly ChildState[]>> = {
+      waiting_on_dependencies: ['queued', 'blocked'], queued: ['starting', 'waiting_on_model_slot', 'blocked'], waiting_on_model_slot: ['queued', 'blocked'],
+      starting: ['running', 'failed'], running: ['summarizing', 'succeeded', 'failed'], summarizing: ['succeeded', 'failed'],
+      succeeded: [], failed: [], cancelled: [], blocked: [],
+    };
+    for (const [from, tos] of Object.entries(before)) {
+      const expected = TERMINAL_CHILD_STATES.has(from as ChildState) ? tos : [...tos, 'paused'];
+      expect(CHILD_TRANSITIONS[from as ChildState], from).toEqual(expected);
+    }
   });
 
   it('the state an agent resumes into: where it waited, running, summarising — and a claimed-but-not-started agent is queued again', () => {
@@ -45,10 +55,10 @@ describe('PD-ORCH-005: the paused state in the child machine (REQ-MONITOR-300 na
     expect(isInterruption(null)).toBe(false);
   });
 
-  it('a paused agent presents as waiting (REQ-MONITOR-046\'s closed vocabulary, OQ-67) and the agent record carries its interruption', () => {
-    expect(presentationChildState('paused')).toBe('waiting');
+  it('a paused agent presents by REQ-MONITOR-046\'s own catch-all, queued (OQ-67), and the agent record carries its interruption', () => {
+    expect(presentationChildState('paused')).toBe('queued');
     const base = {
-      id: 'bg_00000001', name: 'helper', givenName: 'Helper', persona: 'coding-agent', state: 'paused', presentationState: 'waiting', parentId: 'bg_00000000', dependencies: [],
+      id: 'bg_00000001', name: 'helper', givenName: 'Helper', persona: 'coding-agent', state: 'paused', presentationState: 'queued', parentId: 'bg_00000000', dependencies: [],
       activity: '', model: 'm', depth: 1, background: true, category: '', spawnedAt: 't', completedAt: null, toolCalls: 3, delegationTask: '', reasoning: 'medium',
       contextUsed: 0, contextLimit: 1, compressions: 0, grantedTools: [], calledTools: [], activeTools: [], delegationSessionId: null, inheritedContext: '', live: false,
       grantedMcp: {}, mcpServers: [],

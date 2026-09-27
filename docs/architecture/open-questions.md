@@ -50,9 +50,10 @@ both exist" has no word for). **OQ-64 was ruled on 2026-09-27** as built (R-052)
 ESC-38 and ESC-39. **One more was raised on 2026-09-27 by building `PD-ORCH-004`: OQ-66** (how `delegate` names the
 child a continuation continues, which REQ-TOOLS-152's fields do not provide and the directive does not name), **ruled
 on 2026-09-27** as recommended by `PD-ORCH-004` revision 2 ([R-058](../product/requests.md#r-058)). **More were raised on
-2026-09-27 by building `PD-ORCH-005` revisions 2 and 3, from OQ-67** (how a `paused` agent presents, which
-REQ-MONITOR-046's closed vocabulary has no word for) **and OQ-68** (whether the transcript is drawn from the
-conversation record), each stating the reading the build proceeds under. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+2026-09-27 by building `PD-ORCH-005` revisions 2 and 3: OQ-67** (how a `paused` agent presents, and whether it is settled
+for display with a session at rest, which four requirements the directive does not name would do) **and OQ-68** (whether
+the transcript is drawn from the conversation record, and what of a model exchange the record holds), each stating the
+reading the build proceeds under. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -2881,21 +2882,31 @@ which carries the back-pointer. The two limits named above are not settled by th
 offer after the iteration that raised it has ended belongs to the run-continuation policy the same request opened, and
 until that is ruled the build keeps the same-iteration reading.
 
-**OQ-67 — How does a `paused` agent present?** *(`PD-ORCH-005` over REQ-MONITOR-300; REQ-MONITOR-046, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3 under [R-060](../product/requests.md#r-060) and [R-061](../product/requests.md#r-061).)*
+**OQ-67 — How does a `paused` agent present, and is it settled with its session?** *(`PD-ORCH-005` over REQ-MONITOR-300; REQ-MONITOR-014, REQ-MONITOR-046, REQ-MONITOR-211, REQ-MONITOR-213, REQ-SESSION-078 and REQ-SESSION-180, none of which the directive names. Raised 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3 under [R-060](../product/requests.md#r-060) and [R-061](../product/requests.md#r-061).)*
 
-`PD-ORCH-005` adds `paused` to the agent states REQ-MONITOR-300 governs, and every surface that draws an agent reads its
-presentation state instead: REQ-MONITOR-046 maps each engine state onto a closed six-value vocabulary (`running`,
-`waiting`, `queued`, `done`, `failed`, `cancelled`) that is never stored. The mapping must be total, and the directive
-names neither REQ-MONITOR-046 nor a presentation value of its own.
+`PD-ORCH-005` adds `paused` to the states REQ-MONITOR-300 governs. Three families of requirements it does not name meet
+that state, and under `docs/product/README.md` each governs exactly as it did:
 
-**What the build proceeds under.** `paused` presents as `waiting`: of the six, it is the one that says an agent is
-neither running nor finished and will run again when something outside it happens — for `waiting_on_dependencies` a
-sibling finishing, for `paused` the user continuing. Nothing in REQ-MONITOR-046 is widened. The agent record carries
-the engine state (`paused`) and its `interruption` beside the presentation state, so a surface that needs to say
-*why* an agent waits can.
+- **REQ-MONITOR-014** lists exactly ten states. REQ-MONITOR-300, which the directive narrows, says a state another
+  domain needs is added there rather than described elsewhere; the build reads REQ-MONITOR-014's list as the table's
+  restatement and adds `paused` to both.
+- **REQ-MONITOR-046** maps engine states onto six presentation states and ends "anything else→queued". The mapping is
+  total, and `paused` falls into its catch-all: **a paused agent presents as `queued`, as the requirement says.**
+- **REQ-MONITOR-211/213 and REQ-SESSION-078/180** settle, for display, every running, waiting or queued agent of a
+  session whose status neither claims a live run nor is `idle` — a `paused` session among them — to the run's outcome:
+  `cancelled`, "ended with the run", tool chips cleared, on every surface. Applied to a `paused` agent this shows as
+  cancelled an agent clauses 2 and 4 keep resumable, and that clause 6's Continue action counts as resuming.
 
-**What a ruling decides.** Whether `waiting` is right, or whether the presentation vocabulary should gain `paused`
-(a directive naming REQ-MONITOR-046), which would change the chip every agent surface draws for it.
+**What the build proceeds under.** `paused` is added to REQ-MONITOR-014's list with the table. A paused agent presents
+as `queued`, REQ-MONITOR-046's catch-all, with no change to that requirement. It is **not** settled for display: the
+projection (`toAgentRecord`) exempts `paused` from REQ-MONITOR-211's settle and presents it as it is, carrying its
+`interruption` on the agent record and no active tool chip. That exemption is a departure from four requirements
+nothing narrowed, and it is recorded here rather than made quietly. Every other unfinished agent of a session at rest is
+settled exactly as before.
+
+**What a ruling decides.** Whether PD-ORCH-005 should name REQ-MONITOR-211/213 and REQ-SESSION-078/180 (and REQ-MONITOR-014)
+as narrowed by `paused`, as built; and whether a paused agent should present as `queued` or as a presentation state of
+its own (widening REQ-MONITOR-046's closed vocabulary), which would change the chip every agent surface draws for it.
 
 **OQ-68 — Is the transcript drawn from the conversation record?** *(`PD-ORCH-005` clause 1; REQ-MONITOR-248, REQ-SESSION-196, REQ-CHAT-046. Raised 2026-09-27 by building `PD-ORCH-005` revision 2 under [R-060](../product/requests.md#r-060).)*
 

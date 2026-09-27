@@ -266,12 +266,15 @@ cannot be the gate.
 | O-2 | Generate the manifest signing key pair and store the private half as a repository secret. The public half is committed | §4.7 |
 | O-3 | Give the literal contact address for the LGPL source request (REQ-STARTUP-142). It must be reachable without an account | §4.3 |
 | O-4 | Supply an icon, with the `.ico` sizes `electron-builder` asks for | §4.9 |
-| O-5 | Choose where releases are published. REQ-STARTUP-038 says "the product repository"; this one is `theUpsider/Rotaris-crw` | §4.2 |
-| O-6 | Provide the gate machine of §5 | §5 |
+| O-5 | ~~Choose where releases are published~~ **ruled 2026-09-27** (R-053): GitHub releases of `theUpsider/Rotaris-crw`, the product repository REQ-STARTUP-038 names | §4.2 |
+| O-6 | Provide the gate machine of §5. **Form ruled 2026-09-27** (R-053): a snapshot-restored Windows x64 virtual machine, restored between releases. The owner still provides it | §5 |
 | O-7 | IC-4 half 2: rename the machine and reboot (`ROTARIS_IC4_PHASE=prepare`, then `verify`) | the restore's sign-off |
 | O-8 | The power-loss test's fault half: a forced power-off during a save (`spikes/power-loss.md` §4) | the store's sign-off |
-| O-9 | Approve the §2.3 and §3.4 live runs | §2.3, §3.4 |
+| O-9 | ~~Approve the §2.3 and §3.4 live runs~~ **approved 2026-09-27** (R-053). The agent still states the scenario and its spending bound immediately before each run (AGENTS.md) | §2.3, §3.4 |
 | O-10 | ~~Decide §4.6~~ **ruled 2026-09-27**: the updater ships in the first release (R-052) | §4.6 |
+
+O-2, O-3, O-4, O-7 and O-8 carry no recommendation to take: each is a value or an act only the owner can
+supply, and each stays owed (R-053).
 
 ## 7. Order of work
 

@@ -61,6 +61,8 @@ export interface SpawnInput {
   readonly grantedTools: readonly string[];
   /** PD-ORCH-004: the child this one continues, admitted by the caller before the spawn; absent for ordinary work. */
   readonly continuationOf?: string | undefined;
+  /** PD-TOOLS-006 revision 2: the validated patterns the child declared, stored with its record; absent means none. */
+  readonly writeScope?: readonly string[] | undefined;
 }
 
 export type SpawnRejection = { readonly reason: string };
@@ -205,6 +207,8 @@ export class ChildLedger {
       granted_mcp: JSON.stringify(role.persona.mcpEvidence?.() ?? EMPTY_MCP_EVIDENCE),
       // PD-ORCH-004: "A child delegated as a continuation carries that relationship in its record."
       continuation_of: input.continuationOf ?? null,
+      // PD-TOOLS-006 revision 2: "the `write_scope` a child declared is stored with its record".
+      write_scope: JSON.stringify(input.writeScope ?? []),
     };
     const r = this.deps.writer.spawnChild(row);
     if (!r.ok) return { ok: false, error: { reason: `The child could not be recorded: ${r.error.code}` } };

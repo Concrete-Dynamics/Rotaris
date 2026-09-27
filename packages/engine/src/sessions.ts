@@ -18,7 +18,7 @@ import type { ToolPort } from './run/turn.js';
 import { settleStaleChildren } from './children/orchestration.js';
 import type { DelegationOps } from './children/delegation.js';
 import { DEFAULT_BUDGET, type Budget } from './children/ledger.js';
-import { DEFAULT_CONTEXT_CAPACITY, isTerminalChildState, presentationChildState, reconciledState, type AgentRecord, type ChildState } from '@rotaris/contracts';
+import { DEFAULT_CONTEXT_CAPACITY, isInterruption, isTerminalChildState, presentationChildState, reconciledState, type AgentRecord, type ChildState } from '@rotaris/contracts';
 import type { ChildRow } from '@rotaris/store';
 import { SummaryWriter } from './run/summary.js';
 import { isActiveStatus } from './run/stop-conditions.js';
@@ -644,7 +644,10 @@ export function toAgentRecord(c: ChildRow, clocks: Clocks, facts: AgentFacts = {
   void clocks;
   const activity = facts.activity;
   const status = facts.session?.executionStatus ?? null;
-  const reconcile = status !== null && status !== 'idle' && !isActiveStatus(status) && !isTerminalChildState(state);
+  // PD-ORCH-005: a `paused` agent is not a leftover of a run that ended — it waits in its open iteration to be resumed,
+  // so it is presented as it is and never settled to the run's outcome.
+  const paused = state === 'paused';
+  const reconcile = status !== null && status !== 'idle' && !isActiveStatus(status) && !isTerminalChildState(state) && !paused;
   const shownState: ChildState = reconcile ? reconciledState(status) : state;
   const shownPs = reconcile ? presentationChildState(shownState) : ps;
   const terminal = c.completed_at !== null || reconcile;
@@ -666,6 +669,7 @@ export function toAgentRecord(c: ChildRow, clocks: Clocks, facts: AgentFacts = {
     inheritedContext: parseList(c.inherited_context).join(String.fromCharCode(10)),
     live: shownPs === 'running',
     ...mcpEvidenceOf(c.granted_mcp),
+    interruption: paused && isInterruption(c.interruption) ? c.interruption : null,
   };
 }
 

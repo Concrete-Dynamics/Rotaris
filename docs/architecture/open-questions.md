@@ -49,7 +49,9 @@ suppresses its base when the override is itself switched off — a third state R
 both exist" has no word for). **OQ-64 was ruled on 2026-09-27** as built (R-052), together with ESC-37,
 ESC-38 and ESC-39. **One more was raised on 2026-09-27 by building `PD-ORCH-004`: OQ-66** (how `delegate` names the
 child a continuation continues, which REQ-TOOLS-152's fields do not provide and the directive does not name), **ruled
-on 2026-09-27** as recommended by `PD-ORCH-004` revision 2 ([R-058](../product/requests.md#r-058)). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+on 2026-09-27** as recommended by `PD-ORCH-004` revision 2 ([R-058](../product/requests.md#r-058)). **More were raised on
+2026-09-27 by building `PD-ORCH-005` revisions 2 and 3, from OQ-67** (how a `paused` agent presents, which
+REQ-MONITOR-046's closed vocabulary has no word for), each stating the reading the build proceeds under. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -2877,6 +2879,22 @@ The owner took the recommendation: the directive now states `continuation_of` an
 which carries the back-pointer. The two limits named above are not settled by this ruling. Which agent may take up an
 offer after the iteration that raised it has ended belongs to the run-continuation policy the same request opened, and
 until that is ruled the build keeps the same-iteration reading.
+
+**OQ-67 — How does a `paused` agent present?** *(`PD-ORCH-005` over REQ-MONITOR-300; REQ-MONITOR-046, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3 under [R-060](../product/requests.md#r-060) and [R-061](../product/requests.md#r-061).)*
+
+`PD-ORCH-005` adds `paused` to the agent states REQ-MONITOR-300 governs, and every surface that draws an agent reads its
+presentation state instead: REQ-MONITOR-046 maps each engine state onto a closed six-value vocabulary (`running`,
+`waiting`, `queued`, `done`, `failed`, `cancelled`) that is never stored. The mapping must be total, and the directive
+names neither REQ-MONITOR-046 nor a presentation value of its own.
+
+**What the build proceeds under.** `paused` presents as `waiting`: of the six, it is the one that says an agent is
+neither running nor finished and will run again when something outside it happens — for `waiting_on_dependencies` a
+sibling finishing, for `paused` the user continuing. Nothing in REQ-MONITOR-046 is widened. The agent record carries
+the engine state (`paused`) and its `interruption` beside the presentation state, so a surface that needs to say
+*why* an agent waits can.
+
+**What a ruling decides.** Whether `waiting` is right, or whether the presentation vocabulary should gain `paused`
+(a directive naming REQ-MONITOR-046), which would change the chip every agent surface draws for it.
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

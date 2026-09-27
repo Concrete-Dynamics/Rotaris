@@ -9,6 +9,9 @@ import { asSessionId, millis, mintMachineId, mintWorkspaceId, type MachineId, ty
 import { nodeClocks } from '@rotaris/platform';
 import { claimAsideName, CURRENT_SCHEMA_VERSION, MIGRATIONS, establishWorkspaceId, expandArtifact as expandArtifactInto, migrateStore, openStore, openWorkspaceStore, PROMPT_CAPS, restoreStore, SIDECAR_PATTERN, StoreDal, storeDir, storeFile, takeBackup, forgetSpelling, type RunHostControl } from './index.js';
 
+/** PD-ORCH-005: what v23 added, undone so a test that lowers `user_version` below 23 can migrate forward through it again. */
+const UNDO_V23 = 'ALTER TABLE children DROP COLUMN interruption; ALTER TABLE children DROP COLUMN resume_state; ALTER TABLE children DROP COLUMN write_scope; DROP TABLE iterations; DROP TABLE agent_messages; DROP TABLE agent_terminals;';
+
 const M = mintMachineId('0000000000000000000000000000000a') as MachineId;
 const OTHER = mintMachineId('0000000000000000000000000000000b') as MachineId;
 const clocks = nodeClocks();
@@ -341,6 +344,7 @@ describe('store — v3: what a run records (REQ-SESSION-138, REQ-SESSION-168, RE
     // v21's column goes too: a store stopped at v15 predates PD-MONITOR-001 revision 2's qualifier.
     r.db.exec('ALTER TABLE sessions DROP COLUMN cost_qualifier');
     r.db.exec('ALTER TABLE children DROP COLUMN continuation_of');
+    r.db.exec(UNDO_V23);
     r.db.pragma('user_version = 15');
     r.db.prepare(`INSERT INTO artifacts (session_id, id, slug, title, kind, source_task_id, canonical_name, source_persona, status, summary, key_findings,
       highlight_paths, snippets, edited_files, created_files, tags, supersedes, superseded_by, created_by, consumed_by, timeline_event_id, conversation_id, importance, created_at, edited_at, body_file)
@@ -377,6 +381,7 @@ describe('store — v3: what a run records (REQ-SESSION-138, REQ-SESSION-168, RE
     // v21's column goes too: a store stopped at v16 predates PD-MONITOR-001 revision 2's qualifier.
     r.db.exec('ALTER TABLE sessions DROP COLUMN cost_qualifier');
     r.db.exec('ALTER TABLE children DROP COLUMN continuation_of');
+    r.db.exec(UNDO_V23);
     r.db.pragma('user_version = 16');
     // The migration ladder is append-only and runs to the build's own top, so the store stopped at
     // v16 climbs every appended rung — 17 and then 18 — not a v16→17 hop that never existed alone.
@@ -436,6 +441,7 @@ describe('store — v3: what a run records (REQ-SESSION-138, REQ-SESSION-168, RE
     // v21's column goes too: a store stopped at v18 predates PD-MONITOR-001 revision 2's qualifier.
     r.db.exec('ALTER TABLE sessions DROP COLUMN cost_qualifier');
     r.db.exec('ALTER TABLE children DROP COLUMN continuation_of');
+    r.db.exec(UNDO_V23);
     r.db.pragma('user_version = 18');
 
     expect(migrateStore(r.db)).toEqual({ kind: 'migrated', from: 18, to: CURRENT_SCHEMA_VERSION });
@@ -483,6 +489,7 @@ describe('store — v3: what a run records (REQ-SESSION-138, REQ-SESSION-168, RE
     // v21's column goes too: a store stopped at v19 predates PD-MONITOR-001 revision 2's qualifier.
     r.db.exec('ALTER TABLE sessions DROP COLUMN cost_qualifier');
     r.db.exec('ALTER TABLE children DROP COLUMN continuation_of');
+    r.db.exec(UNDO_V23);
     r.db.pragma('user_version = 19');
 
     expect(migrateStore(r.db)).toEqual({ kind: 'migrated', from: 19, to: CURRENT_SCHEMA_VERSION });
@@ -515,6 +522,7 @@ describe('store — v3: what a run records (REQ-SESSION-138, REQ-SESSION-168, RE
     for (const [sid, cost] of Object.entries(costs)) r.db.prepare('UPDATE sessions SET cost = ? WHERE session_id = ?').run(cost, sid);
     r.db.exec('ALTER TABLE sessions DROP COLUMN cost_qualifier');
     r.db.exec('ALTER TABLE children DROP COLUMN continuation_of');
+    r.db.exec(UNDO_V23);
     r.db.pragma('user_version = 20');
 
     expect(migrateStore(r.db)).toEqual({ kind: 'migrated', from: 20, to: CURRENT_SCHEMA_VERSION });
@@ -539,12 +547,33 @@ describe('store — v3: what a run records (REQ-SESSION-138, REQ-SESSION-168, RE
     const sid = asSessionId('S-v21');
     setup.upsertSession({ session_id: sid, execution_status: 'idle', workspace_root: 'C:/ws', created_at: 't', updated_at: 't' });
     r.db.exec('ALTER TABLE children DROP COLUMN continuation_of');
+    r.db.exec(UNDO_V23);
     r.db.prepare(`INSERT INTO children (session_id, task_id, canonical_name, given_name, persona, state, parent_id, depth, iteration, model_key, task, spawned_at)
       VALUES (?, 'bg_00000001', 'old', 'old', 'coding-agent', 'failed', 'root', 1, 1, 'm', 't', 't')`).run(sid);
     r.db.pragma('user_version = 21');
 
     expect(migrateStore(r.db)).toEqual({ kind: 'migrated', from: 21, to: CURRENT_SCHEMA_VERSION });
     expect(new StoreDal(r.db).getChild(sid, 'bg_00000001')!.continuation_of).toBeNull();
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+
+  /** PD-ORCH-005 / PD-TOOLS-006 revision 2 (R-060, R-061): v22→v23 — a child written before it was never paused and declared no scope it kept. */
+  it('PD-ORCH-005: a v22 store migrates to v23 and a child written before it reads no interruption, no resume state and an empty write scope', () => {
+    const id = mintWorkspaceId('000000000000000000000000000000f7');
+    const r = openWorkspaceStore(root, id, 'C:/ws');
+    const setup = new StoreDal(r.db);
+    const sid = asSessionId('S-v22');
+    setup.upsertSession({ session_id: sid, execution_status: 'idle', workspace_root: 'C:/ws', created_at: 't', updated_at: 't' });
+    r.db.exec(UNDO_V23);
+    r.db.prepare(`INSERT INTO children (session_id, task_id, canonical_name, given_name, persona, state, parent_id, depth, iteration, model_key, task, spawned_at)
+      VALUES (?, 'bg_00000001', 'old', 'old', 'coding-agent', 'failed', 'root', 1, 1, 'm', 't', 't')`).run(sid);
+    r.db.pragma('user_version = 22');
+
+    expect(migrateStore(r.db)).toEqual({ kind: 'migrated', from: 22, to: CURRENT_SCHEMA_VERSION });
+    const dal = new StoreDal(r.db);
+    expect(dal.getChild(sid, 'bg_00000001')).toMatchObject({ interruption: null, resume_state: null, write_scope: '[]' });
+    expect(dal.iterationsOf(sid)).toEqual([]);
     r.db.close();
     forgetSpelling(r.dir);
   });
@@ -719,11 +748,11 @@ describe('store — v5: the child ledger (ADR-0012, REQ-ORCH-043/049/050/151)', 
     // v18 (ADR-0061) added the typed-run session columns and the improvement tables; v19 (ADR-0065)
     // rebuilt `improvement_artifacts` for PD-LIBRARY-002's retrospective, which belongs to no session;
     // v20 gives `plan_cycles` the cascade REQ-SESSION-166's delete assumes; v21 records the cost qualifier; v22 the
-    // continuation a child was delegated as (PD-ORCH-004).
-    expect(CURRENT_SCHEMA_VERSION).toBe(22);
+    // continuation a child was delegated as (PD-ORCH-004); v23 the record a paused run resumes from (PD-ORCH-005).
+    expect(CURRENT_SCHEMA_VERSION).toBe(23);
     dal.insertChild(child(sid, 'bg_00000001'));
     const c = dal.getChild(sid, 'bg_00000001')!;
-    expect(c).toMatchObject({ state: 'queued', launch_generation: 0, report_stored: 0, observed: 0, context_injected: 0, tool_calls: 0, completed_at: null, report: null, continuation_of: null });
+    expect(c).toMatchObject({ state: 'queued', launch_generation: 0, report_stored: 0, observed: 0, context_injected: 0, tool_calls: 0, completed_at: null, report: null, continuation_of: null, interruption: null, resume_state: null, write_scope: '[]' });
     // PD-ORCH-004: a continuation carries the task id of the child it continues.
     dal.insertChild({ ...child(sid, 'bg_00000002'), continuation_of: 'bg_00000001' });
     expect(dal.getChild(sid, 'bg_00000002')!.continuation_of).toBe('bg_00000001');
@@ -867,6 +896,11 @@ describe('Part U — the delete and its cascade (REQ-SESSION-166, ADR-0058)', ()
       dal.insertCheckpoint({ session_id: sid, sequence: 1, ref: 'refs/rotaris/checkpoints/x/1', commit_id: 'c', created_at: 't', iteration: 1, child_name: '', files: '[]', kind: 'iteration' });
       // v20 (REQ-SESSION-166): the plan cycle goes with its session, so its VERBATIM plan text leaves with the delete.
       dal.insertPlanCycle(sid, 1, 't', 'the plan, verbatim', 'small_feature', '', '');
+      // v23 (PD-ORCH-005 clause 12): "The conversation record belongs to its session and is deleted with it" — the
+      // iteration, every agent's messages and the background terminals it recorded.
+      dal.insertIteration({ session_id: sid, iteration: 1, root_task_id: 'bg_00000000', root_name: 'orchestrator', root_persona: 'orchestrator', task_id: 't', task: 't', opened_at: 't' });
+      dal.insertAgentMessage({ session_id: sid, task_id: 'bg_00000000', iteration: 1, kind: 'message', body: '{"role":"user","content":[]}', at: 't' });
+      dal.upsertAgentTerminal({ session_id: sid, terminal_id: 'ts_00000001', task_id: 'bg_00000000', command: 'c', started_at: 't', state: 'running', exit_code: null, output_tail: '', updated_at: 't' });
       // Part Y (v12): the artifact record goes with its session, so its body file is the only thing left to remove.
       dal.insertArtifact({
         session_id: raw, id: `art_${raw.slice(-6)}A`, slug: `slug-${raw.toLowerCase()}`, title: 't', kind: 'agent_published', source_task_id: null, canonical_name: null, source_persona: 'p',
@@ -882,10 +916,10 @@ describe('Part U — the delete and its cascade (REQ-SESSION-166, ADR-0058)', ()
     // requirement's run history outlives the session it names (REQ-TRACE-405/476: "no requirement SHALL be silently
     // reset"), so the dependants of the session row are the tables whose session_id column REFERENCES it.
     const tables = (r.db.prepare("SELECT m.name FROM sqlite_master m WHERE m.type = 'table' AND m.name NOT LIKE 'sqlite_%' AND (m.name = 'sessions' OR EXISTS (SELECT 1 FROM pragma_foreign_key_list(m.name) WHERE \"from\" = 'session_id' AND \"table\" = 'sessions'))").all() as { name: string }[]).map((t) => t.name).sort();
-    // Every table whose session_id references the session row is a dependant of it: fifteen today (v20's
-    // `plan_cycles` cascade among them) plus `sessions` itself. `delivery_runs` names a session and is NOT among them (Part AK).
+    // Every table whose session_id references the session row is a dependant of it: eighteen today (v20's
+    // `plan_cycles` cascade and v23's three among them) plus `sessions` itself. `delivery_runs` names a session and is NOT among them (Part AK).
     expect((r.db.prepare("SELECT count(*) AS c FROM pragma_table_info('delivery_runs') WHERE name = 'session_id'").get() as { c: number }).c).toBe(1);
-    expect(tables).toEqual(['artifacts', 'checkpoints', 'children', 'events', 'issues', 'launch_audits', 'model_slot_queue', 'permission_audit', 'plan_cycles', 'queued_prompts', 'ring_state', 'session_locks', 'sessions', 'timeline', 'tool_calls', 'transcript_rows']);
+    expect(tables).toEqual(['agent_messages', 'agent_terminals', 'artifacts', 'checkpoints', 'children', 'events', 'issues', 'iterations', 'launch_audits', 'model_slot_queue', 'permission_audit', 'plan_cycles', 'queued_prompts', 'ring_state', 'session_locks', 'sessions', 'timeline', 'tool_calls', 'transcript_rows']);
     const count = (table: string, sid: string) => (r.db.prepare(`SELECT count(*) AS c FROM ${table} WHERE session_id = ?`).get(sid) as { c: number }).c;
     for (const t of tables) expect(count(t, gone), `${t} planted`).toBeGreaterThan(0);
     // The delete runs on the RUN HOST's kind of connection — openStore on the resolved file, no migrateStore — which is
@@ -1008,10 +1042,10 @@ describe('store — v11: the saved prompts (Part X; REQ-LIBRARY-137/138/139, REQ
   it('is v19, and the migration list is append-only with nothing renumbered', () => {
     // Part X reserved v11, Part Y v12, Part AB v13, Part AE v14 and Part AK v15 (plan Reservations, ruled 2026-09-09: the ladder and
     // the pin ride with the v15 reservation) before any of them was written; PD-LIBRARY-001 appended v16; the plan gate appended
-    // v17; ADR-0061 appended v18; ADR-0065 appended v19; the plan_cycles cascade appended v20; PD-MONITOR-001 revision 2 appended v21; PD-ORCH-004 appended v22. The ladder is asserted whole rather than at its top, so a later part
+    // v17; ADR-0061 appended v18; ADR-0065 appended v19; the plan_cycles cascade appended v20; PD-MONITOR-001 revision 2 appended v21; PD-ORCH-004 appended v22; PD-ORCH-005 appended v23. The ladder is asserted whole rather than at its top, so a later part
     // that renumbers an earlier entry fails here and not on a user's disk.
-    expect(MIGRATIONS.map((m) => m.to)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]);
-    expect(CURRENT_SCHEMA_VERSION).toBe(22);
+    expect(MIGRATIONS.map((m) => m.to)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]);
+    expect(CURRENT_SCHEMA_VERSION).toBe(23);
   });
 });
 
@@ -1039,6 +1073,104 @@ describe('store — v13: the queued prompt\u2019s context snapshot and its owner
     // And another session cannot reach it at all — the statements are keyed by (session_id, prompt_id).
     expect(dal.triggerQueuedPrompt(theirs, 'p-2', 't4')).toBe(false);
     expect(dal.updateQueuedPrompt(theirs, 'p-2', 'stolen')).toBe(false);
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+});
+
+describe('store — v23: the record a paused run resumes from (PD-ORCH-005, PD-TOOLS-006 revision 2)', () => {
+  function open(n: string) {
+    const id = mintWorkspaceId(`${"0".repeat(30)}a${n}`);
+    const r = openWorkspaceStore(root, id, 'C:/ws');
+    const dal = new StoreDal(r.db);
+    const sid = asSessionId(`S-v23-${n}`);
+    dal.upsertSession({ session_id: sid, execution_status: 'running', workspace_root: 'C:/ws', created_at: 't', updated_at: 't' });
+    return { r, dal, sid };
+  }
+  const iteration = (sid: string, n: number, root: string) => ({ session_id: sid, iteration: n, root_task_id: root, root_name: 'orchestrator', root_persona: 'orchestrator', task_id: `${sid}:main:1`, task: 'the task', opened_at: 't' });
+  const message = (sid: string, taskId: string, n: number, text: string, kind: 'message' | 'replacement' = 'message') => ({
+    session_id: sid, task_id: taskId, iteration: n, kind, at: 't',
+    body: JSON.stringify(kind === 'message' ? { role: 'user', content: [{ kind: 'text', text }] } : [{ role: 'user', content: [{ kind: 'text', text }] }]),
+  });
+
+  it('clause 1: an iteration is recorded open with its root task id, closed once, and interrupted only while open', () => {
+    const { r, dal, sid } = open('1');
+    dal.insertIteration(iteration(sid, 1, 'bg_000000a1'));
+    expect(dal.openIterationOf(sid)).toMatchObject({ iteration: 1, root_task_id: 'bg_000000a1', state: 'open', outcome: null, interruption: null });
+    expect(dal.setIterationInterruption(sid, 1, 'pause')).toBe(true);
+    expect(dal.getIteration(sid, 1)!.interruption).toBe('pause');
+    expect(dal.closeIteration(sid, 1, 'succeeded', 't2')).toBe(true);
+    expect(dal.closeIteration(sid, 1, 'failed', 't3')).toBe(false);
+    expect(dal.getIteration(sid, 1)).toMatchObject({ state: 'closed', outcome: 'succeeded', closed_at: 't2' });
+    expect(dal.setIterationInterruption(sid, 1, 'stop')).toBe(false);
+    expect(dal.openIterationOf(sid)).toBeUndefined();
+    // A plan cycle is not an iteration and has no row: 0 is refused by the table itself.
+    expect(() => dal.insertIteration(iteration(sid, 0, 'bg_000000a0'))).toThrow(/CHECK/);
+    expect(() => r.db.prepare("UPDATE iterations SET interruption = 'cancel' WHERE session_id = ? AND iteration = 1").run(sid)).toThrow(/CHECK/);
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+
+  it('clause 1 and 12: an agent\'s messages are sequenced per agent, and its conversation is read from its last replacement forward', () => {
+    const { r, dal, sid } = open('2');
+    dal.insertAgentMessage(message(sid, 'bg_000000a1', 1, 'first'));
+    dal.insertAgentMessage(message(sid, 'bg_000000b2', 1, 'other agent'));
+    dal.insertAgentMessage(message(sid, 'bg_000000a1', 1, 'second'));
+    expect(dal.agentMessagesOf(sid, 'bg_000000a1').map((m) => m.seq)).toEqual([1, 2]);
+    expect(dal.agentMessagesOf(sid, 'bg_000000b2').map((m) => m.seq)).toEqual([1]);
+    expect(dal.agentConversation(sid, 'bg_000000a1').map((m) => m.seq)).toEqual([1, 2]);
+    dal.insertAgentMessage(message(sid, 'bg_000000a1', 1, 'the compressed conversation', 'replacement'));
+    dal.insertAgentMessage(message(sid, 'bg_000000a1', 1, 'after'));
+    const conversation = dal.agentConversation(sid, 'bg_000000a1');
+    expect(conversation.map((m) => [m.seq, m.kind])).toEqual([[3, 'replacement'], [4, 'message']]);
+    // The full history stays in the table: a compression replaces what a resume sends, never what was recorded.
+    expect(dal.agentMessagesOf(sid, 'bg_000000a1')).toHaveLength(4);
+    expect(() => dal.insertAgentMessage({ ...message(sid, 'bg_000000a1', 1, 'x'), kind: 'note' as never })).toThrow(/CHECK/);
+    // Both reads are primary-key prefix reads; no index was declared and none is scanned (spike 8's rule).
+    for (const sql of ['SELECT * FROM agent_messages WHERE session_id = ? AND task_id = ? ORDER BY seq', 'SELECT * FROM iterations WHERE session_id = ? ORDER BY iteration']) {
+      const plan = (r.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...(sql.includes('task_id') ? [sid, 'bg_000000a1'] : [sid])) as { detail: string }[]).map((p) => p.detail).join(' | ');
+      expect(plan).toMatch(/USING INDEX sqlite_autoindex|PRIMARY KEY/);
+      expect(plan).not.toMatch(/TEMP B-TREE/);
+    }
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+
+  it('clause 12: the transcript clear removes the records of closed iterations and keeps the open one\'s; the session delete removes them all', () => {
+    const { r, dal, sid } = open('3');
+    dal.insertIteration(iteration(sid, 1, 'bg_000000a1'));
+    dal.closeIteration(sid, 1, 'succeeded', 't');
+    dal.insertIteration(iteration(sid, 2, 'bg_000000a2'));
+    dal.insertAgentMessage(message(sid, 'bg_000000a1', 1, 'closed iteration'));
+    dal.insertAgentMessage(message(sid, 'bg_000000a2', 2, 'open iteration'));
+    dal.insertAgentMessage(message(sid, 'bg_000000c0', 0, 'a plan cycle, never open'));
+    expect(dal.clearClosedAgentMessages(sid)).toBe(2);
+    expect(dal.agentMessagesOf(sid, 'bg_000000a2')).toHaveLength(1);
+    expect(dal.agentMessagesOf(sid, 'bg_000000a1')).toHaveLength(0);
+    dal.upsertAgentTerminal({ session_id: sid, terminal_id: 'ts_00000001', task_id: 'bg_000000a2', command: 'npm run dev', started_at: 't', state: 'running', exit_code: null, output_tail: '', updated_at: 't' });
+    dal.insertChild({ session_id: sid, task_id: 'bg_000000d1', canonical_name: 'x', given_name: 'x', persona: 'coding-agent', state: 'queued', parent_id: 'bg_000000a2', depth: 1, iteration: 2, model_key: 'm', category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't', write_scope: '["src/**"]' });
+    expect(dal.getChild(sid, 'bg_000000d1')!.write_scope).toBe('["src/**"]');
+    expect(dal.deleteSession(sid)).toBe(true);
+    for (const table of ['iterations', 'agent_messages', 'agent_terminals', 'children']) expect((r.db.prepare(`SELECT count(*) AS c FROM ${table}`).get() as { c: number }).c, table).toBe(0);
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+
+  it('clause 2 and 10: a child records its interruption and resume state; a terminal record is updated in place, not appended', () => {
+    const { r, dal, sid } = open('4');
+    dal.insertChild({ session_id: sid, task_id: 'bg_000000e1', canonical_name: 'x', given_name: 'x', persona: 'coding-agent', state: 'running', parent_id: 'root', depth: 1, iteration: 1, model_key: 'm', category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't' });
+    dal.setChildState(sid, 'bg_000000e1', 'paused', null);
+    dal.setChildRest(sid, 'bg_000000e1', 'quit', 'running');
+    expect(dal.getChild(sid, 'bg_000000e1')).toMatchObject({ state: 'paused', interruption: 'quit', resume_state: 'running' });
+    expect(dal.pausedChildrenOfIteration(sid, 1).map((c) => c.task_id)).toEqual(['bg_000000e1']);
+    expect(() => dal.setChildRest(sid, 'bg_000000e1', 'cancel', null)).toThrow(/CHECK/);
+    dal.setChildRest(sid, 'bg_000000e1', null, null);
+    expect(dal.getChild(sid, 'bg_000000e1')).toMatchObject({ interruption: null, resume_state: null });
+    const t = { session_id: sid, terminal_id: 'ts_00000002', task_id: 'bg_000000e1', command: 'make test', started_at: 't', state: 'running' as const, exit_code: null, output_tail: '', updated_at: 't' };
+    dal.upsertAgentTerminal(t);
+    dal.upsertAgentTerminal({ ...t, state: 'quit', output_tail: 'last lines', updated_at: 't2' });
+    expect(dal.agentTerminalsOf(sid)).toEqual([{ ...t, state: 'quit', output_tail: 'last lines', updated_at: 't2' }]);
+    expect(() => dal.upsertAgentTerminal({ ...t, state: 'gone' as never })).toThrow(/CHECK/);
     r.db.close();
     forgetSpelling(r.dir);
   });

@@ -816,6 +816,83 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE children ADD COLUMN continuation_of TEXT;
     `,
   },
+  {
+    to: 23,
+    /*
+     * PD-ORCH-005 revisions 2 and 3 (R-060, R-061), with PD-TOOLS-006 revision 2 (R-059): the record a paused, stopped,
+     * quit or crashed run is resumed from.
+     *
+     * On `children`: `interruption` is what left the agent `paused` (`pause | stop | quit | crash`, NULL for an agent
+     * that is not paused), `resume_state` the state it moves back into when its iteration resumes, and `write_scope` the
+     * patterns it declared, which a resumed child claims again (PD-TOOLS-006 revision 2) — `'[]'` for every row written
+     * before this version, which is what a child that declared nothing reads as, and true of them: no row before this
+     * version could be resumed.
+     *
+     * `iterations`: one row per execution iteration, carrying the ROOT's task id (clause 1: "the root's task id is
+     * recorded with its iteration") and whether the iteration is open. An iteration opens when it begins and closes when
+     * it ends; a pause, a stop, a quit and a crash leave it open (clause 2), and it is resumed from here. A plan cycle is
+     * not an iteration (REQ-ORCH-153's ruling) and has no row. `interruption` is the last interruption while open.
+     *
+     * `agent_messages`: every agent's conversation, appended as it happens (clause 1) under the agent's task id — the
+     * root's and every child's. `kind = 'message'` is one message; `kind = 'replacement'` is a compression, whose body is
+     * the whole conversation that replaced the one before it (clause 12: "a compression is written into the record"),
+     * so a resume reads from an agent's last replacement forward and the full history stays in the table. `iteration`
+     * is what the transcript clear reads: it removes the records of closed iterations and keeps an open one's.
+     *
+     * `agent_terminals`: the background terminal sessions an agent started (clause 10), what became of each and the last
+     * output recorded for it, so a resumed agent can be told — after a quit or a crash, when the process that held them
+     * is gone.
+     *
+     * Every table cascades with its session: the record is deleted with it (clause 12). NO new index: every read is by
+     * a primary-key prefix — one session's iterations, one agent's messages in order, one session's terminals.
+     */
+    sql: `
+      ALTER TABLE children ADD COLUMN interruption TEXT
+        CHECK (interruption IS NULL OR interruption IN ('pause', 'stop', 'quit', 'crash'));
+      ALTER TABLE children ADD COLUMN resume_state TEXT;
+      ALTER TABLE children ADD COLUMN write_scope TEXT NOT NULL DEFAULT '[]';
+
+      CREATE TABLE iterations (
+        session_id   TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+        iteration    INTEGER NOT NULL CHECK (iteration >= 1),
+        root_task_id TEXT NOT NULL,
+        root_name    TEXT NOT NULL,
+        root_persona TEXT NOT NULL,
+        task_id      TEXT NOT NULL,
+        task         TEXT NOT NULL,
+        state        TEXT NOT NULL CHECK (state IN ('open', 'closed')),
+        outcome      TEXT,
+        interruption TEXT CHECK (interruption IS NULL OR interruption IN ('pause', 'stop', 'quit', 'crash')),
+        opened_at    TEXT NOT NULL,
+        closed_at    TEXT,
+        PRIMARY KEY (session_id, iteration)
+      );
+
+      CREATE TABLE agent_messages (
+        session_id TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+        task_id    TEXT NOT NULL,
+        seq        INTEGER NOT NULL,
+        iteration  INTEGER NOT NULL,
+        kind       TEXT NOT NULL CHECK (kind IN ('message', 'replacement')),
+        body       TEXT NOT NULL,
+        at         TEXT NOT NULL,
+        PRIMARY KEY (session_id, task_id, seq)
+      );
+
+      CREATE TABLE agent_terminals (
+        session_id  TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+        terminal_id TEXT NOT NULL,
+        task_id     TEXT NOT NULL,
+        command     TEXT NOT NULL,
+        started_at  TEXT NOT NULL,
+        state       TEXT NOT NULL CHECK (state IN ('running', 'exited', 'killed', 'timeout', 'stop', 'quit', 'crash')),
+        exit_code   INTEGER,
+        output_tail TEXT NOT NULL DEFAULT '',
+        updated_at  TEXT NOT NULL,
+        PRIMARY KEY (session_id, terminal_id)
+      );
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

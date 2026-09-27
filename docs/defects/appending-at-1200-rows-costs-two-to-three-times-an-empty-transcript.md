@@ -134,3 +134,12 @@ note ends on, in this order:
 3. **Repair only the cause the trace names.** The candidates on record are a full-height scroll container
    laid out again on every append and a pin-to-bottom scroll write forcing a synchronous layout; neither is
    to be taken on a guess (`.agents/skills/debug-ui` step 8).
+
+## Not taken 2026-09-27 ([R-054](../product/requests.md#r-054))
+
+The owner asked for this round again under R-054, and it did not start. All three steps drive the built
+application, and the session ran in a Linux container as uid 0, where Electron will not start with Chromium's
+sandbox on. Starting it any other way needs the sandbox switched off or the proof run under a different account,
+and neither was done. So no proof was re-run, no trace was taken and no code changed. The round stays authorized as
+R-048 left it, for a host that can launch the application: a Windows or Linux desktop, or a container running as
+an unprivileged user.

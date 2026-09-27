@@ -143,9 +143,9 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
     const at = new Date(clock.instant()).toISOString();
     dal.upsertSession({ session_id: sid, execution_status: 'completed', workspace_root: 'C:/ws', created_at: at, updated_at: at });
     expect(buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined)).toContain('Artifact: (none recorded in this session)');
-    const artifact = (id: string, title: string, summary: string, createdAt: string, supersededBy: string | null = null) => dal.insertArtifact({
-      session_id: sid, id, slug: id, title, kind: 'child_report', source_task_id: 'bg_00000001', canonical_name: 'build', source_persona: 'coding-agent', status: 'succeeded',
-      summary, key_findings: '- found the bug', highlight_paths: '[]', snippets: '[]', edited_files: '[]', created_files: '[]', commands: '[]', tags: '[]',
+    const artifact = (id: string, title: string, summary: string, createdAt: string, supersededBy: string | null = null, kind: 'child_report' | 'agent_published' = 'child_report', findings = '- found the bug') => dal.insertArtifact({
+      session_id: sid, id, slug: id, title, kind, source_task_id: 'bg_00000001', canonical_name: 'build', source_persona: 'coding-agent', status: kind === 'child_report' ? 'succeeded' : 'published',
+      summary, key_findings: findings, highlight_paths: '[]', snippets: '[]', edited_files: '[]', created_files: '[]', commands: '[]', tags: '[]',
       supersedes: null, superseded_by: supersededBy, created_by: 'build', consumed_by: '[]', timeline_event_id: null, conversation_id: null, importance: 'normal',
       created_at: createdAt, edited_at: null, body_file: `${id}.md`,
     });
@@ -155,7 +155,8 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
     artifact('a0000003', 'draft report', 'A draft.', '2026-09-27T03:00:00.000Z', 'a0000002');
     const payload = buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined);
     expect(payload).not.toContain('no orchestrator artifact is recorded');
-    expect(payload).toContain('Artifact: review report (child_report, succeeded; a0000002)\nThe review found nothing.\nKey findings:\n- found the bug');
+    // Its id leads, so no cut reaches it (REQ-SESSION-194).
+    expect(payload).toContain('Artifact: a0000002 — review report (child_report, succeeded)\nThe review found nothing.\nKey findings:\n- found the bug');
     expect(payload).not.toContain('A draft.');
     // At most 6,000 characters of it (REQ-SESSION-115's budget).
     artifact('a0000004', 'long report', 'w'.repeat(9_000), '2026-09-27T04:00:00.000Z');
@@ -163,6 +164,36 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
     const part = long.slice(long.indexOf('Artifact: '), long.indexOf('\nTodo:'));
     expect(part.length).toBe(6_000);
     expect(part.endsWith('...')).toBe(true);
+    // A cut never splits a surrogate pair (found by phase 6's review): this one would fall between a pair's halves.
+    artifact('a0000005', 'emoji report', `${'w'.repeat(5_900)}${'😀'.repeat(60)}`, '2026-09-27T05:00:00.000Z');
+    const emoji = buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined);
+    const tail = emoji.slice(emoji.indexOf('Artifact: '), emoji.indexOf('\nTodo:'));
+    expect(tail.endsWith('...')).toBe(true);
+    expect(/[\uD800-\uDBFF]$/.test(tail.slice(0, -3))).toBe(false);
+    // A published document states its body once: its summary is the body's first line (REQ-LIBRARY-093).
+    artifact('a0000006', 'notes', 'First line.', '2026-09-27T06:00:00.000Z', null, 'agent_published', 'First line.\nSecond line.');
+    expect(buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined)).toContain('Artifact: a0000006 — notes (agent_published, published)\nFirst line.\nSecond line.\nTodo:');
+    // Two artifacts created in the same millisecond: the one written last is the latest, whatever their ids.
+    artifact('zzzzzzz7', 'first written', 'One.', '2026-09-27T07:00:00.000Z');
+    artifact('aaaaaaa8', 'second written', 'Two.', '2026-09-27T07:00:00.000Z');
+    expect(buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined)).toContain('Artifact: aaaaaaa8 — second written');
+  });
+
+  it('PD-ORCH-004 revision 3: the handoff states every continuation offer no child has taken up, so a later run\'s root learns of it (OQ-72)', () => {
+    const sid = asSessionId('S-offers');
+    const at = new Date(clock.instant()).toISOString();
+    dal.upsertSession({ session_id: sid, execution_status: 'completed', workspace_root: 'C:/ws', created_at: at, updated_at: at });
+    expect(buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined)).not.toContain('Open continuation offers');
+    const child = (id: string, name: string, continuationOf: string | null = null) => dal.insertChild({ session_id: sid, task_id: id, canonical_name: name, given_name: name, persona: 'coding-agent', state: 'failed', parent_id: 'bg_root0001', depth: 1, iteration: 1, model_key: 'm', category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: at, continuation_of: continuationOf });
+    const offering = (id: string) => JSON.stringify({ status: 'failed', summary: 'timed out', cut_off: { statement: 's', changed_paths: [], changes: '', continuation_offer: `Continue with continuation_of: "${id}".` } });
+    child('bg_00000a01', 'build');
+    dal.setChildReport(sid, 'bg_00000a01', offering('bg_00000a01'));
+    child('bg_00000a02', 'lint');
+    dal.setChildReport(sid, 'bg_00000a02', offering('bg_00000a02'));
+    child('bg_00000a03', 'lint-rest', 'bg_00000a02');
+    const payload = buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined);
+    expect(payload).toContain('Open continuation offers:\n- build (bg_00000a01): Continue with continuation_of: "bg_00000a01".\nRecent iterations:');
+    expect(payload).not.toContain('- lint (bg_00000a02)');
   });
 
   it('reaps one dead local lock and preserves live local and foreign holders with distinct refusals', () => {

@@ -26,6 +26,7 @@ import { isActiveStatus } from './run/stop-conditions.js';
 import type { HookPort, HookPortContext, RunNotice, ToolHookBridge } from './hooks-port.js';
 import { ArtifactStore } from './artifacts/store.js';
 import { toArtifactRecord } from './artifacts/record.js';
+import { parseReport } from './children/notify.js';
 import { persistAttachments, projectAttachments, readAttachmentBody, validateAttachmentInputs } from './attachments.js';
 import { artifactOps, type ArtifactOps } from './artifacts/port.js';
 import type { Preflight, PreflightContext } from './preflight.js';
@@ -380,7 +381,13 @@ export interface ResumeSuccess {
 
 type ResumeFailure = { readonly code: string; readonly reason: string };
 
-const cut = (text: string, cap: number): string => text.length <= cap ? text : `${text.slice(0, Math.max(0, cap - 3))}...`;
+const cut = (text: string, cap: number): string => {
+  if (text.length <= cap) return text;
+  const end = Math.max(0, cap - 3);
+  // Never between the two halves of a surrogate pair (found by phase 6's review).
+  const kept = end > 0 && /[\uD800-\uDBFF]/.test(text[end - 1]!) ? end - 1 : end;
+  return `${text.slice(0, kept)}...`;
+};
 
 function parseTodoDocument(row: SessionRow): Result<TodoDocument | undefined, ResumeFailure> {
   if (row.todo === null) return ok(undefined);
@@ -430,14 +437,32 @@ function continuedTaskId(dal: StoreDal, sessionId: SessionId, todo: TodoDocument
 /**
  * REQ-SESSION-115's artifact: the latest artifact the session's store holds and nothing has superseded — the child
  * reports and the documents its agents published are where a run's work is recorded — cut to the requirement's 6,000
- * characters. The repair of `the-continuation-payload-says-no-artifact-is-recorded.md` (OQ-72).
+ * characters. Its id leads, so no cut reaches it (REQ-SESSION-194). A published document's summary is its body's first
+ * line and its key findings its body (REQ-LIBRARY-093), so it is stated once, as its body. The repair of
+ * `the-continuation-payload-says-no-artifact-is-recorded.md` (OQ-72).
  */
 export function latestArtifactText(dal: StoreDal, sessionId: SessionId): string {
   const records = dal.artifactsOf(sessionId).flatMap((r) => { const a = toArtifactRecord(r); return a && a.supersededBy === null ? [a] : []; });
   const latest = records.at(-1);
   if (!latest) return 'Artifact: (none recorded in this session)';
+  const header = `Artifact: ${latest.id} — ${cut(latest.title, 80)} (${latest.kind}, ${latest.status})`;
   const findings = latest.keyFindings.trim();
-  return cut(`Artifact: ${latest.title} (${latest.kind}, ${latest.status}; ${latest.id})\n${latest.summary}${findings === '' ? '' : `\nKey findings:\n${findings}`}`, 6_000);
+  const body = latest.kind === 'agent_published' ? findings : `${latest.summary}${findings === '' ? '' : `\nKey findings:\n${findings}`}`;
+  return cut(`${header}\n${body}`, 6_000);
+}
+
+/**
+ * PD-ORCH-004 revision 3: every continuation offer the session holds that no child has taken up, which a later run's
+ * root may take up — stated in the handoff's progress context, so that root learns of them (OQ-72). Empty when none.
+ */
+export function openOffersText(dal: StoreDal, sessionId: SessionId): string {
+  const all = dal.childrenOf(sessionId);
+  const continued = new Set(all.flatMap((c) => (c.continuation_of === null ? [] : [c.continuation_of])));
+  const open = all.flatMap((c) => {
+    const offer = parseReport(c)?.cut_off?.continuation_offer;
+    return typeof offer === 'string' && !continued.has(c.task_id) ? [`- ${c.canonical_name} (${c.task_id}): ${cut(offer, 700)}`] : [];
+  });
+  return open.length === 0 ? '' : `Open continuation offers:\n${open.join('\n')}`;
 }
 
 export function buildContinuationPayload(dal: StoreDal, row: SessionRow, prompt: string, todo: TodoDocument | undefined): string {
@@ -458,6 +483,7 @@ export function buildContinuationPayload(dal: StoreDal, row: SessionRow, prompt:
     latestArtifactText(dal, row.session_id as SessionId),
     `Todo:\n${shownTasks.join('\n') || '- (empty)'}`,
     `Progress: ${cut(row.progress ?? '(none recorded)', 700)}`,
+    ...[openOffersText(dal, row.session_id as SessionId)].filter((t) => t !== ''),
     `Recent iterations:\n${iterations.map((item) => `- ${item}`).join('\n') || '- (none recorded)'}`,
     '', 'Recent session context:', history || '(none recorded)',
   ].join('\n');

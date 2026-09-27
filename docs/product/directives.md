@@ -1668,7 +1668,9 @@ so a child that genuinely loops is still stopped at the same point.
 > REQ-TOOLS-155's ownership test, and every iteration mints a new root task. So a continuation can be taken up only
 > within the iteration whose child was cut off: a later iteration, or the next run after a stop, is refused with
 > "names no child task of yours", and the offer's text does not say so (OQ-66); this limit is read from `run/run.ts`
-> and `owns()`, not exercised by a test. The continuation's payload is
+> and `owns()`, not exercised by a test. *Revision 3 lifted this limit on 2026-09-27: an earlier iteration's offer, and
+> a resumed iteration's own from an earlier run, are the later root's to take up (`continuationRefusalFor`, OQ-72), and
+> the handoff lists the open offers.* The continuation's payload is
 > assembled as any child's is; nothing of the timed-out child is injected into it. What was measured: unit and scripted
 > end-to-end tests only. These cover the rule at a call completed exactly at the window's start and one millisecond
 > before it, a 60 s window set through the run's configuration, the path list's order, de-duplication and failed

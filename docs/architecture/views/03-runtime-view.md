@@ -531,9 +531,11 @@ records it as `continuation_of`. An admitted continuation is an ordinary child w
 its payload is assembled as any child's is, with nothing of the timed-out child injected. Ownership is tested against
 the current iteration's root task, so within that iteration only the agent that delegated the cut-off child takes its
 offer up. **Revision 3, an offer outlives its run:** the root of a later iteration or a later run of the session takes
-up an offer any earlier iteration left — the named child found in the store with a lower iteration number — and a child
-of that later iteration cannot (the refusal names both routes to the root). The field itself is not in REQ-TOOLS-152,
-which the directive does not name: **OQ-66**.
+up an offer the session left before — the named child found in the store with a lower iteration number, at any depth,
+or, for a resumed iteration, one of its own children that had ended before this run took it up (`endedInEarlierRun`,
+fixed when `IterationChildren` is built) — and a child of that later iteration cannot (the refusal names both routes
+to the root; a plan cycle's root takes up none, OQ-72). The field itself is not in REQ-TOOLS-152, which the directive
+does not name: **OQ-66**.
 
 **The record the agent surfaces read (Part R; REQ-MONITOR-044).** Each child's `AgentRecord` carries, beside what Part B
 projected, `reasoning` (the persona's configured level, `medium` when none), `contextUsed` (the input count of its latest
@@ -589,7 +591,8 @@ it resolves the pause (continue → `idle`; double → the limit ×2; cancel →
 `message_limit_reached`) and, for continue/double and for a manually paused session, launches a **continuation
 run** on the same session with no new user row (Part H's route, the previous intent carried over, the
 continuation payload built to REQ-SESSION-115's budgets, its artifact the latest one the session's store holds,
-cut to 6,000 characters — `latestArtifactText`, OQ-72). **PD-ORCH-005:** where the last run left an iteration open,
+id first and cut to 6,000 characters — `latestArtifactText` — and its progress context listing the continuation offers
+no child has taken up — `openOffersText`, OQ-72). **PD-ORCH-005:** where the last run left an iteration open,
 that run resumes it first (§2), and `continueSession`'s `withoutPaused` option declines it instead — clause 6's
 "continue without them"; the engine carries the option, and the Continue action that offers it is the surface's.
 

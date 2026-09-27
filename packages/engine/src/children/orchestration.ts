@@ -174,9 +174,15 @@ export class IterationChildren implements DelegationOps {
    * ends after that is a straggler of a finished run: it writes nothing more (found by phase 3's second review).
    */
   private detached = false;
+  /**
+   * PD-ORCH-004 revision 3: this iteration's children that had ended before this run took the iteration up — a resumed
+   * iteration's, left by an earlier run. Their offers are the root's to take up, as "a later run" of the session's.
+   */
+  private readonly endedInEarlierRun: ReadonlySet<string>;
 
   constructor(private readonly deps: ChildrenDeps, readonly iteration: number) {
     this.ledger = new ChildLedger({ dal: deps.dal, writer: deps.writer, sessionId: deps.sessionId, iteration, budget: deps.budget, modelCap: deps.modelCap, warn: deps.warn , personas: deps.personas, ...(deps.artifacts ? { artifacts: deps.artifacts } : {}), ...(deps.rootRecord ? { rootRecord: deps.rootRecord } : {}) });
+    this.endedInEarlierRun = new Set(this.ledger.all().filter((c) => isTerminalChildState(c.state)).map((c) => c.task_id));
     this.scheduler = new Scheduler({ ledger: this.ledger, runChild: (row) => this.track(this.execute(row)), warn: deps.warn });
     this.scheduler.onTerminal((row) => { const w = this.resumeWaiters.get(row.parent_id); if (w) { this.resumeWaiters.delete(row.parent_id); w(); } });
     // PD-TOOLS-006: a claim lapses at its child's terminal state. Liveness is also read from the ledger at every
@@ -253,19 +259,19 @@ export class IterationChildren implements DelegationOps {
    * PD-ORCH-004: the refusal of a `continuation_of` naming `reference`, or null. The offer is read from the named
    * child's stored report, so only a child the limit cut off while making progress — and never a continuation — can be
    * continued; a child already recorded as its continuation refuses a second one, anywhere in the session. Revision 3,
-   * "an offer outlives its run": within this iteration only the agent that delegated the child takes its offer up; the
-   * root of a later iteration or a later run takes up one any earlier iteration of the session left.
+   * "an offer outlives its run": the agent that delegated the child takes its offer up while it runs, and the root of a
+   * later iteration or a later run takes up one the session left before — any earlier iteration's, and a resumed
+   * iteration's own from an earlier run (found by phase 6's review). A plan cycle's root takes up none: a plan cycle is
+   * not an iteration (REQ-ORCH-153).
    */
   private continuationRefusalFor(parentId: string, reference: string): string | null {
     const row = this.ledger.get(reference);
-    const own = row !== undefined && this.owns(parentId, row) ? row : undefined;
-    const earlier = own === undefined && this.ledger.isRoot(parentId)
-      ? this.deps.dal.childrenOf(this.deps.sessionId).find((c) => c.task_id === reference && c.iteration < this.iteration)
-      : undefined;
-    const target = own ?? earlier;
+    const laterRoot = this.ledger.isRoot(parentId) && this.iteration >= 1;
+    const left = row !== undefined && laterRoot && (row.iteration < this.iteration || this.endedInEarlierRun.has(row.task_id));
+    const target = row !== undefined && (this.owns(parentId, row) || left) ? row : undefined;
     const offered = target !== undefined && typeof parseReport(target)?.cut_off?.continuation_offer === 'string';
     const continuedBy = this.deps.dal.childrenOf(this.deps.sessionId).find((c) => c.continuation_of === reference);
-    return continuationRefusal(reference, target, offered, continuedBy, this.ledger.isRoot(parentId));
+    return continuationRefusal(reference, target, offered, continuedBy, laterRoot);
   }
 
   // ---- PD-TOOLS-006: write scopes ---------------------------------------------------------------

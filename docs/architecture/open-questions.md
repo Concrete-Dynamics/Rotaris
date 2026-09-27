@@ -3143,28 +3143,46 @@ the Continue action, and with it "continue without them"? And should a re-armed 
 resume, after it, or not at all — as built, the run that resumes is not held, and neither are the iterations it runs
 after the resumed one?
 
-**OQ-72 — Which artifact is REQ-SESSION-115's "latest orchestrator artifact", and who is "that iteration's root" for an offer?** *(`PD-ORCH-004` revision 3; REQ-SESSION-115 and REQ-TOOLS-155, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-004` revision 3 with `PD-ORCH-005` under [R-059](../product/requests.md#r-059), and by the repair of `the-continuation-payload-says-no-artifact-is-recorded.md`.)*
+**OQ-72 — Which artifact is REQ-SESSION-115's "latest orchestrator artifact", and how does a later root take up an offer?** *(`PD-ORCH-004` revision 3; REQ-SESSION-115, which `PD-ORCH-005` narrows for a resumed iteration and which nothing narrows here, and REQ-TOOLS-155, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-004` revision 3 with `PD-ORCH-005` under [R-059](../product/requests.md#r-059), and by the repair of `the-continuation-payload-says-no-artifact-is-recorded.md`.)*
 
 REQ-SESSION-115's handoff carries "at most 6000 characters for the latest orchestrator artifact against an
 8000-character artifact baseline". The session's artifact store holds child reports and the documents agents
-published. The root agent publishes no artifact of its own in this build, so no record is an "orchestrator artifact"
-by author. PD-ORCH-004 revision 3 lets "that iteration's root agent" take up an offer "in a later iteration or a later
-run". It does not say whether a resumed iteration's root is a later iteration's, or whether a later iteration's child
-may take the offer up.
+published. The built-in orchestrator publishes no artifact of its own, so no record of a default configuration is an
+"orchestrator artifact" by author. PD-ORCH-004 revision 3 keeps an offer open until it is taken up once, "by the agent
+that delegated the child while that agent runs, or, in a later iteration or a later run of the session, by that
+iteration's root agent". It does not say which iteration's children count as "left" for a resumed iteration, which
+keeps its number across runs, nor how a later root learns an offer exists.
 
 **What the build proceeds under.**
 
 - **The artifact.** The latest record of the session's store that nothing has superseded, of any kind. It is where
   the run's work is recorded, and the handoff states it in place of the placeholder that claimed none existed. It is
-  rendered as its title, kind, status and id, then its summary and key findings, cut to 6,000 characters. The
-  8,000-character baseline is not applied: nothing larger is assembled before the cut. A session with none says so.
-- **Who takes up an earlier offer.** Only a root, and only of an iteration after the one whose child made the offer
-  (the child's `iteration` is lower). A resumed iteration keeps its number, so its root takes up its own children's
-  offers as the delegating agent and earlier iterations' offers as a later root. A child of a later iteration is
-  refused: the offer is the parent's decision, and REQ-TOOLS-155 keeps a child to its own children.
+  rendered as its id, title, kind and status — the id first, so no cut reaches it (REQ-SESSION-194) — then its summary
+  and key findings, cut to 6,000 characters without splitting a character. A published document is stated once, as its
+  body: its summary is its body's first line and its key findings its body (REQ-LIBRARY-093). The 8,000-character
+  baseline is not applied: nothing larger is assembled before the cut. A session with none says so. "Latest" is the
+  last created, ties in the same millisecond falling to the one written last. Two limits stand, both found by phase 6's
+  review: a report re-materialised in place keeps its creation time (REQ-LIBRARY-092), so a later iteration's report
+  that reuses a canonical name does not become the latest (and overwrites the earlier one:
+  `a-reused-canonical-name-overwrites-an-earlier-iterations-report-artifact.md`); and a body edited after publishing
+  (REQ-LIBRARY-094) is stated as it was published.
+- **Who takes up an earlier offer.** The agent that delegated the child, while it runs. Otherwise only an iteration's
+  root, of an offer the session left before that root's run took the iteration up: any earlier iteration's (the
+  child's `iteration` is lower), a grandchild's as readily as a direct child's, and — a resumed iteration keeping its
+  number — its own iteration's children that had ended in an earlier run, whoever delegated them ("a later run of the
+  session"; *the first build admitted only lower iterations, which read those words as redundant — found by phase 6's
+  review*). A child of a later iteration is refused: the directive gives the offer to "that iteration's root agent", and
+  REQ-TOOLS-155 keeps a child to its own children. A plan cycle's root takes up none, since a plan cycle is not an
+  iteration (REQ-ORCH-153), and its refusal names only its own children.
+- **How a later root learns of an offer.** The handoff's progress context lists every offer no child has taken up — the
+  offering child's name and task id and its offer — under `Open continuation offers:`, and only when there is one. A
+  later run's root reads it in its continuation payload. A later iteration of the same run starts from the launch
+  content, which states none, so there an offer is taken up only by a root that already knows its task id.
 
 **What a ruling decides.** Whether "orchestrator artifact" should instead name only what the root itself publishes,
-leaving the line empty until it does. And whether a later iteration's children may take up an earlier offer.
+leaving the line empty until it does. Whether the open offers belong in the handoff, which REQ-SESSION-115 defines as
+"artifact, todo, and progress context", or should reach a later root some other way — and whether a later iteration of
+the same run should be told of them too.
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

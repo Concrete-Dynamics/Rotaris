@@ -6,9 +6,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { brotliCompressSync } from 'node:zlib';
 import {
-  addressProblem, bundledAssetComponents, compareVersions, declaredFontFiles, exceptionFor, generateNotices, MAX_EXCEPTION_DAYS,
+  addressProblem, bundledAssetComponents, compareVersions, declaredFontFiles, exceptionFor, generateNotices, licenseTextKind, MAX_EXCEPTION_DAYS,
   NOTICES_FILE, parseChromiumCredits, parseCoreMetadata, PATHS, pythonLicenseOf, reviewedExceptions, runNoticesStep, setupManifest,
-  TOOLS_SECTION, versionInRange, woff2Names,
+  TOOLS_SECTION, versionInRange, woff2Names, WORKSPACE_DIRS,
 } from './notices.mjs';
 
 /**
@@ -21,9 +21,15 @@ import {
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const TODAY = '2026-09-27';
+/** The fixture runtime's site-packages, in the POSIX layout `pnpm code-intel:bundle` produces on Linux. */
+const SITE = `${PATHS.runtime}/lib/python3.13/site-packages`;
 /** A fixture address: a literal postal route, no placeholder, no reserved domain. */
 const ADDRESS = 'Fixture Maintainers, Postfach 1234, 10115 Fixturestadt';
 const MIT = 'MIT License\n\nCopyright (c) Fixture Authors\n\nPermission is hereby granted, free of charge, to any person obtaining a copy.';
+/** A stand-in for one licence's full text: more than the one line that only names a licence (OQ-69). */
+const body = (title: string): string => `${title}\n\nThe terms of the ${title}, as the fixture carries them.`;
+/** The per-file notice Apache-2.0 asks to be applied with, which sends the reader elsewhere for the licence (OQ-69). */
+const APACHE_NOTICE = 'Copyright 2023 Fixture, Inc.\n\nLicensed under the Apache License, Version 2.0 (the "License");\nyou may not use this file except in compliance with the License.\nYou may obtain a copy of the License at\n\n    http://www.apache.org/licenses/LICENSE-2.0';
 const OFL_BODY = 'This Font Software is licensed under the SIL Open Font License, Version 1.1.\n\nSIL OPEN FONT LICENSE Version 1.1 - 26 February 2007';
 const FONT_COPYRIGHT = 'Copyright 2020 The Fixture Sans Project Authors';
 
@@ -97,10 +103,10 @@ function writeFixture(): void {
   pkg('tools/release-naming', { name: '@rotaris/release-naming', version: '0.0.0' }, null);
   // The installed tree: hoisted, with one version conflict nested under its dependent.
   pkg('node_modules/alpha', { name: 'alpha', version: '1.0.0', license: 'MIT', dependencies: { gamma: '^1.0.0' }, optionalDependencies: { 'not-installed': '1.0.0' } });
-  pkg('node_modules/beta', { name: 'beta', version: '2.0.0', license: '(MIT OR Apache-2.0)', dependencies: { gamma: '^2.0.0' } }, 'MIT text for beta', 'LICENSE-MIT');
-  put('node_modules/beta/LICENSE-APACHE', 'Apache text for beta');
-  pkg('node_modules/beta/node_modules/gamma', { name: 'gamma', version: '2.0.0', license: 'ISC' }, 'ISC text for gamma 2');
-  pkg('node_modules/gamma', { name: 'gamma', version: '1.2.0', license: 'ISC' }, 'ISC text for gamma 1');
+  pkg('node_modules/beta', { name: 'beta', version: '2.0.0', license: '(MIT OR Apache-2.0)', dependencies: { gamma: '^2.0.0' } }, body('MIT licence of beta'), 'LICENSE-MIT');
+  put('node_modules/beta/LICENSE-APACHE', body('Apache licence of beta'));
+  pkg('node_modules/beta/node_modules/gamma', { name: 'gamma', version: '2.0.0', license: 'ISC' }, body('ISC licence of gamma 2'));
+  pkg('node_modules/gamma', { name: 'gamma', version: '1.2.0', license: 'ISC' }, body('ISC licence of gamma 1'));
   pkg('node_modules/@phosphor-icons/web', { name: '@phosphor-icons/web', version: '2.1.1', license: 'MIT' }, 'MIT License\n\nCopyright (c) 2020-2021 Phosphor Icons');
   put('node_modules/@phosphor-icons/web/src/regular/Phosphor.woff2', woff2({ 0: 'Phosphor Icons', 5: 'Version 2.1', 13: 'MIT' }));
   pkg('node_modules/devtool', { name: 'devtool', version: '1.0.0', license: 'MIT' });
@@ -113,12 +119,11 @@ function writeFixture(): void {
   put('node_modules/electron/dist/LICENSES.chromium.html', CREDITS_HTML);
   // The bundled code-intelligence runtime, in the POSIX layout pnpm code-intel:bundle produces on Linux.
   put('apps/desktop/resources/code-intelligence/bundle.json', json({ answers: { python: '3.13.15', distribution: '1.7.0' } }));
-  const site = 'apps/desktop/resources/code-intelligence/runtime/lib/python3.13/site-packages';
   put('apps/desktop/resources/code-intelligence/runtime/lib/python3.13/LICENSE.txt', 'A. HISTORY OF THE SOFTWARE\n\nPYTHON SOFTWARE FOUNDATION LICENSE VERSION 2\n--------------------------------------------');
-  put(`${site}/serena_agent-1.7.0.dist-info/METADATA`, 'Metadata-Version: 2.4\nName: serena-agent\nVersion: 1.7.0\nLicense: MIT\nLicense-File: LICENSE\n\nlong description\nLicense: not a header');
-  put(`${site}/serena_agent-1.7.0.dist-info/licenses/LICENSE`, MIT);
-  put(`${site}/pystray-0.19.5.dist-info/METADATA`, 'Metadata-Version: 2.1\nName: pystray\nVersion: 0.19.5\nLicense: LGPLv3\nClassifier: License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)\n');
-  put(`${site}/pystray-0.19.5.dist-info/COPYING.LGPL`, 'GNU LESSER GENERAL PUBLIC LICENSE Version 3');
+  put(`${SITE}/serena_agent-1.7.0.dist-info/METADATA`, 'Metadata-Version: 2.4\nName: serena-agent\nVersion: 1.7.0\nLicense: MIT\nLicense-File: LICENSE\n\nlong description\nLicense: not a header');
+  put(`${SITE}/serena_agent-1.7.0.dist-info/licenses/LICENSE`, MIT);
+  put(`${SITE}/pystray-0.19.5.dist-info/METADATA`, 'Metadata-Version: 2.1\nName: pystray\nVersion: 0.19.5\nLicense: LGPLv3\nClassifier: License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)\n');
+  put(`${SITE}/pystray-0.19.5.dist-info/COPYING.LGPL`, body('GNU LESSER GENERAL PUBLIC LICENSE Version 3'));
   // The setup manifest as this build carries it: the language servers, no machine tools (OQ-67).
   put(PATHS.setupManifest, json({
     python: '3.13.15', distribution: 'serena-agent', version: '1.7.0',
@@ -182,8 +187,8 @@ describe('REQ-STARTUP-142: the shipped closure, and nothing else', () => {
   it('names the component, its version, its license identifier and its full license text, every file of it', () => {
     const { text } = generate();
     expect(text).toContain('Component: beta\nVersion:   2.0.0\nLicense:   (MIT OR Apache-2.0)\n');
-    expect(text).toContain('----- LICENSE-APACHE -----\n\nApache text for beta\n');
-    expect(text).toContain('----- LICENSE-MIT -----\n\nMIT text for beta\n');
+    expect(text).toContain(`----- LICENSE-APACHE -----\n\n${body('Apache licence of beta')}\n`);
+    expect(text).toContain(`----- LICENSE-MIT -----\n\n${body('MIT licence of beta')}\n`);
     expect(text).toContain('Component: gamma\nVersion:   2.0.0\nLicense:   ISC\n');
   });
 
@@ -219,6 +224,12 @@ describe('REQ-STARTUP-142: the shipped closure, and nothing else', () => {
     expect(flat(header)).toContain('You have the right to modify each of them and to relink Rotaris with your modified version');
     expect(flat(header)).toContain('The components whose declared license names the LGPL are: pystray 0.19.5.');
     expect(header).toContain(`\n    ${ADDRESS}\n`);
+    // The credits carry no identifier, so the sentence about them stands only while one of their texts is the LGPL's.
+    const sentence = 'Components compiled into Electron whose license is the LGPL are reproduced in section 5.';
+    expect(flat(header)).toContain(sentence);
+    put('node_modules/electron/dist/LICENSES.chromium.html', CREDITS_HTML.replace('GNU LESSER GENERAL PUBLIC LICENSE, as it happens.', 'A permissive licence.'));
+    const without = generate().text;
+    expect(flat(without.slice(0, without.indexOf('Contents')))).not.toContain(sentence);
   });
 
   it('writes the tools section from the setup manifest: no machine tools in this build, then every language server with its four fields (IC-7)', () => {
@@ -270,14 +281,40 @@ describe('REQ-STARTUP-142: the shipped closure, and nothing else', () => {
     expect(win.problems).toEqual([]);
     expect(win.text).toContain('Component: winpty\nVersion:   0.4.4-dev\nLicense:   MIT\nContained in: node-pty 1.1.0 (compiled into its native module)\n');
   });
+
+  it('reads the bundled runtime in the Windows layout the first release ships: Lib/site-packages, the interpreter\'s licence at the root or in Lib', () => {
+    rmSync(join(root, PATHS.runtime), { recursive: true });
+    const psf = 'A. HISTORY OF THE SOFTWARE\n\nPYTHON SOFTWARE FOUNDATION LICENSE VERSION 2';
+    put(`${PATHS.runtime}/LICENSE.txt`, psf);
+    put(`${PATHS.runtime}/Lib/site-packages/serena_agent-1.7.0.dist-info/METADATA`, 'Metadata-Version: 2.4\nName: serena-agent\nVersion: 1.7.0\nLicense: MIT\n');
+    put(`${PATHS.runtime}/Lib/site-packages/serena_agent-1.7.0.dist-info/licenses/LICENSE`, MIT);
+    const atRoot = generate('win32');
+    expect(atRoot.problems).toEqual([]);
+    expect(names(atRoot.model.interpreter)).toEqual(['CPython@3.13.15']);
+    expect(atRoot.model.interpreter[0]?.texts.map((t) => t.file)).toEqual(['LICENSE.txt']);
+    expect(names(atRoot.model.distributions)).toEqual(['serena-agent@1.7.0']);
+    rmSync(join(root, PATHS.runtime, 'LICENSE.txt'));
+    put(`${PATHS.runtime}/Lib/LICENSE.txt`, psf);
+    const inLib = generate('win32');
+    expect(inLib.problems).toEqual([]);
+    expect(inLib.model.interpreter[0]?.texts.map((t) => t.file)).toEqual(['Lib/LICENSE.txt']);
+    rmSync(join(root, PATHS.runtime, 'Lib', 'LICENSE.txt'));
+    // The interpreter states its licence by name inside its text, so without the text it declares none either.
+    expect(generate('win32').problems).toEqual([
+      `CPython 3.13.15: license file LICENSE.txt is missing from ${PATHS.runtime}`,
+      'CPython 3.13.15 (code-intelligence runtime): declares no license identifier',
+    ]);
+  });
 });
 
 describe('REQ-STARTUP-143: validation fails naming the component or path, one condition at a time', () => {
-  it('a bundled asset\'s license file is missing, or empty', () => {
+  it('a bundled asset\'s license file is missing, empty, or only refers to the text (OQ-69)', () => {
     rmSync(join(root, 'tools/notices/licenses/FixtureSans-OFL.txt'));
     expect(generate().problems).toEqual(['bundled asset Fixture Sans: license file tools/notices/licenses/FixtureSans-OFL.txt is missing']);
     put('tools/notices/licenses/FixtureSans-OFL.txt', '\n');
     expect(generate().problems).toEqual(['bundled asset Fixture Sans: license file tools/notices/licenses/FixtureSans-OFL.txt is empty']);
+    put('tools/notices/licenses/FixtureSans-OFL.txt', `${FONT_COPYRIGHT}\n\nThis Font Software is licensed under the SIL Open Font License, Version 1.1.\nSee the LICENSE file in the font's repository.`);
+    expect(generate().problems).toEqual(['bundled asset Fixture Sans: license file tools/notices/licenses/FixtureSans-OFL.txt only names its license or points elsewhere for it, not the license text']);
   });
 
   it('a font the build bundles with no row in the table, and a license file that does not carry the font\'s own notice', () => {
@@ -288,15 +325,18 @@ describe('REQ-STARTUP-143: validation fails naming the component or path, one co
     expect(generate().problems).toEqual([`bundled asset Fixture Sans: license file tools/notices/licenses/FixtureSans-OFL.txt does not carry the font's own copyright notice "${FONT_COPYRIGHT}"`]);
   });
 
-  it('Electron\'s own license files are required', () => {
+  it('Electron\'s own license files are required, and one that only points elsewhere is not its text', () => {
     rmSync(join(root, 'node_modules/electron/dist/LICENSES.chromium.html'));
     expect(generate().problems).toEqual(['electron 44.1.1: license file node_modules/electron/dist/LICENSES.chromium.html is missing']);
+    put('node_modules/electron/dist/LICENSES.chromium.html', CREDITS_HTML);
+    put('node_modules/electron/dist/LICENSE', 'MIT\n\nSee the LICENSE file in the Electron repository.');
+    expect(generate().problems).toEqual(['electron 44.1.1 (npm): carries no license text — LICENSE only names its license or points elsewhere for it']);
   });
 
   it('a dependency in the shipped closure declares no license identifier — and an exception does not excuse it (OQ-68)', () => {
-    pkg('node_modules/gamma', { name: 'gamma', version: '1.2.0', license: 'SEE LICENSE IN LICENSE' }, 'text');
-    put(`apps/desktop/resources/code-intelligence/runtime/lib/python3.13/site-packages/dotenv-0.9.9.dist-info/METADATA`, 'Metadata-Version: 2.1\nName: dotenv\nVersion: 0.9.9\nLicense: UNKNOWN\n');
-    put(`apps/desktop/resources/code-intelligence/runtime/lib/python3.13/site-packages/dotenv-0.9.9.dist-info/LICENSE`, MIT);
+    pkg('node_modules/gamma', { name: 'gamma', version: '1.2.0', license: 'SEE LICENSE IN LICENSE' }, body('A licence of gamma'));
+    put(`${SITE}/dotenv-0.9.9.dist-info/METADATA`, 'Metadata-Version: 2.1\nName: dotenv\nVersion: 0.9.9\nLicense: UNKNOWN\n');
+    put(`${SITE}/dotenv-0.9.9.dist-info/LICENSE`, MIT);
     put(PATHS.exceptions, json({ exceptions: [{ component: 'dotenv', versions: '0.9.9', license: 'MIT', whyNoText: 'n/a', reviewer: 'A Maintainer', reviewedOn: '2026-09-01', expires: '2027-08-31' }] }));
     expect(generate().problems).toEqual([
       'gamma 1.2.0 (npm): declares no license identifier',
@@ -322,6 +362,40 @@ describe('REQ-STARTUP-143: validation fails naming the component or path, one co
     expect(generate().problems).toEqual(['gamma 1.2.0 (npm): carries no license text and its reviewed exception covers >=1.3.0, not 1.2.0 (tools/notices/reviewed-exceptions.json)']);
   });
 
+  it('a licence file that only points elsewhere, or only carries a licence\'s per-file notice, is no license text (OQ-69)', () => {
+    // @workflow/serde 4.1.0's whole LICENSE.md, then the shape of ai 7.0.92's LICENSE: each refers to a text not shipped.
+    rmSync(join(root, 'node_modules/gamma/LICENSE'));
+    put('node_modules/gamma/LICENSE.md', 'Apache License 2.0\n\nSee the LICENSE file in the root of this repository.');
+    const pointer = 'gamma 1.2.0 (npm): carries no license text — LICENSE.md only names its license or points elsewhere for it — and no reviewed exception covers it (tools/notices/reviewed-exceptions.json)';
+    expect(generate().problems).toEqual([pointer]);
+    rmSync(join(root, 'node_modules/gamma/LICENSE.md'));
+    put('node_modules/gamma/LICENSE', APACHE_NOTICE);
+    expect(generate().problems).toEqual([pointer.replace('LICENSE.md', 'LICENSE')]);
+    // A reviewed exception covers it like a component with no file, and the notice is still reproduced for its copyright.
+    const whyNoText = 'The package ships the Apache-2.0 notice and not the licence text.';
+    put(PATHS.exceptions, json({ exceptions: [{ component: 'gamma', versions: '1.2.0', license: 'Apache-2.0', whyNoText, reviewer: 'A Maintainer', reviewedOn: '2026-09-01', expires: '2027-08-31' }] }));
+    const covered = generate();
+    expect(covered.problems).toEqual([]);
+    expect(flat(covered.text)).toContain(`No license text is distributed with this component. ${whyNoText} ${flat(APACHE_NOTICE)}`);
+  });
+
+  it('a NOTICE or an authors list alone is no license text; beside the licence it is reproduced with it (OQ-69)', () => {
+    rmSync(join(root, 'node_modules/gamma/LICENSE'));
+    put('node_modules/gamma/NOTICE', 'Fixture gamma\nCopyright 2024 The Gamma Authors');
+    expect(generate().problems).toEqual(['gamma 1.2.0 (npm): carries no license text — NOTICE only attributes — and no reviewed exception covers it (tools/notices/reviewed-exceptions.json)']);
+    put('node_modules/gamma/LICENSE', body('ISC licence of gamma 1'));
+    const { problems, text } = generate();
+    expect(problems).toEqual([]);
+    expect(text).toContain(`----- LICENSE -----\n\n${body('ISC licence of gamma 1')}\n\n----- NOTICE -----\n\nFixture gamma\nCopyright 2024 The Gamma Authors\n`);
+  });
+
+  it('a runtime distribution whose licence files are an authors list and a per-file notice carries no license text (mslex 1.3.0\'s shape)', () => {
+    put(`${SITE}/mslex-1.3.0.dist-info/METADATA`, 'Metadata-Version: 2.1\nName: mslex\nVersion: 1.3.0\nLicense: Apache Software License 2.0\nLicense-File: LICENSE\nLicense-File: AUTHORS.rst\n');
+    put(`${SITE}/mslex-1.3.0.dist-info/LICENSE`, APACHE_NOTICE);
+    put(`${SITE}/mslex-1.3.0.dist-info/AUTHORS.rst`, 'Authors\n=======\n\n* A. Fixture');
+    expect(generate().problems).toEqual(['mslex 1.3.0 (code-intelligence runtime): carries no license text — AUTHORS.rst only attributes; LICENSE only names its license or points elsewhere for it — and no reviewed exception covers it (tools/notices/reviewed-exceptions.json)']);
+  });
+
   it('the reviewed-exceptions table itself: every field, real dates, and an expiry at most 365 days after the review', () => {
     const entry = { component: 'gamma', versions: '1.2.0', license: 'ISC', whyNoText: 'why', reviewer: 'A Maintainer', reviewedOn: '2026-01-01', expires: '2027-01-01' };
     expect(MAX_EXCEPTION_DAYS).toBe(365);
@@ -333,6 +407,11 @@ describe('REQ-STARTUP-143: validation fails naming the component or path, one co
       `${PATHS.exceptions} entry 3 (gamma) has no reviewer`,
       `${PATHS.exceptions} entry 4 (gamma): reviewedOn and expires must be YYYY-MM-DD dates`,
     ]);
+    // A review dated ahead of today would otherwise stand from now until a year past its own date.
+    const ahead: string[] = [];
+    put(PATHS.exceptions, json({ exceptions: [{ ...entry, reviewedOn: '2030-01-01', expires: '2030-12-31' }] }));
+    expect(reviewedExceptions(root, ahead, TODAY)).toEqual([]);
+    expect(ahead).toEqual([`${PATHS.exceptions} entry 1 (gamma): reviewedOn 2030-01-01 is after today, ${TODAY}`]);
   });
 
   it('the setup manifest cannot be read, cannot be parsed, or declares a package without one of its four fields', () => {
@@ -349,8 +428,13 @@ describe('REQ-STARTUP-143: validation fails naming the component or path, one co
     expect(generate().problems).toEqual([`the LGPL corresponding-sources address (lgplCorrespondingSourcesAddress in ${PATHS.releaseInputs}) is empty — it is the owner's to give (first-release-plan.md §6, O-3; REQ-STARTUP-142)`]);
     put(PATHS.releaseInputs, json({ lgplCorrespondingSourcesAddress: 'sources@example.com' }));
     expect(generate().problems).toEqual([`the LGPL corresponding-sources address (lgplCorrespondingSourcesAddress in ${PATHS.releaseInputs}) uses a domain reserved for examples and tests — it is the owner's to give (first-release-plan.md §6, O-3; REQ-STARTUP-142)`]);
+    put(PATHS.releaseInputs, json({ lgplCorrespondingSourcesAddress: 'N/A' }));
+    expect(generate().problems).toEqual([`the LGPL corresponding-sources address (lgplCorrespondingSourcesAddress in ${PATHS.releaseInputs}) is a placeholder — it is the owner's to give (first-release-plan.md §6, O-3; REQ-STARTUP-142)`]);
     rmSync(join(root, PATHS.releaseInputs));
     expect(generate().problems).toEqual([`the release inputs ${PATHS.releaseInputs} cannot be read: ENOENT`]);
+    // Windows PowerShell 5.1 writes a byte-order mark; the owner's edit is not refused for it.
+    put(PATHS.releaseInputs, `﻿${json({ lgplCorrespondingSourcesAddress: ADDRESS })}`);
+    expect(generate().problems).toEqual([]);
   });
 
   it('the bundled runtime is part of the closure, so its absence is a failure rather than a shorter file', () => {
@@ -384,6 +468,14 @@ describe('REQ-STARTUP-149: the step exits 0 having written the file, or 1 having
     expect(existsSync(join(root, PATHS.output))).toBe(false);
   });
 
+  it('a package.json the closure cannot parse fails the step as a handled error naming its path', () => {
+    put('node_modules/gamma/package.json', '{ name: gamma }');
+    const r = runNoticesStep({ root, platform: 'linux', today: TODAY });
+    expect(r.code).toBe(1);
+    expect(r.stderr).toHaveLength(1);
+    expect(r.stderr[0]).toMatch(/^error: the notices generator failed: node_modules\/gamma\/package\.json cannot be parsed: /);
+  });
+
   it('refuses an argument as a usage error (2)', () => {
     const r = spawnSync(process.execPath, [join(REPO, 'tools/notices/generate.mjs'), '--check'], { encoding: 'utf8' });
     expect(r.status).toBe(2);
@@ -402,6 +494,27 @@ describe('the readers, on their own', () => {
     expect(addressProblem('TODO')).toBe('is a placeholder');
     expect(addressProblem('your email here')).toBe('is a placeholder');
     for (const reserved of ['a@example.org', 'a@sources.example', 'a@x.invalid', 'a@rotaris.test', 'a@localhost']) expect(addressProblem(reserved)).toBe('uses a domain reserved for examples and tests');
+    // REQ-STARTUP-142: "an address that is only a placeholder SHALL fail". Each of these once stood (gate round 1).
+    for (const word of ['N/A', 'n/a', 'none', 'TBA', 'to be announced', 'REPLACE_ME', 'insert address here', 'sources@yourdomain.com']) expect(addressProblem(word)).toBe('is a placeholder');
+    for (const template of ['name@domain.com', 'user@email.com']) expect(addressProblem(template)).toBe('uses a placeholder domain');
+    for (const shapeless of ['-', '?', '...', 'address', '0', 'x@y', 'x@y.z', 'mailto:', '1, 2']) expect(addressProblem(shapeless)).toBe('is neither an e-mail address nor a postal address');
+    // What stands has an address's shape: an e-mail address, or a postal address in more than one part.
+    for (const real of ['corresponding-sources@rotaris.dev', 'Rotaris Maintainers\nPostfach 1234\n10115 Berlin\nGermany', 'Jane Maintainer, 12 High Street, Leeds LS1 1AA, United Kingdom']) expect(addressProblem(real)).toBeNull();
+  });
+
+  it('a licence file carries its licence, only refers to one, or only attributes (OQ-69)', () => {
+    expect(licenseTextKind('LICENSE.md', 'Apache License 2.0\n\nSee the LICENSE file in the root of this repository.')).toBe('reference');
+    expect(licenseTextKind('LICENSE', APACHE_NOTICE)).toBe('reference');
+    const mplExhibitA = 'This Source Code Form is subject to the terms of the Mozilla Public License,\nv. 2.0. If a copy of the MPL was not distributed with this file, You can obtain\none at http://mozilla.org/MPL/2.0/.';
+    expect(licenseTextKind('LICENSE', `This package contains a modified version of a bundle.\n\n${mplExhibitA}`)).toBe('reference');
+    expect(licenseTextKind('LICENSE', 'This software is made available under the terms of *either* of the licenses\nfound in LICENSE.APACHE or LICENSE.BSD.')).toBe('reference');
+    expect(licenseTextKind('LICENSE', 'MIT')).toBe('reference');
+    expect(licenseTextKind('LICENSE', MIT)).toBe('text');
+    // tqdm 4.67.1's shape: the MIT text in full beside MPL-2.0's Exhibit A still carries a licence.
+    expect(licenseTextKind('LICENCE', `${mplExhibitA}\n\n${MIT}`)).toBe('text');
+    // A full text that quotes its own notice in an appendix runs long, and stays text.
+    expect(licenseTextKind('LICENSE', `${'TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION\n'.repeat(40)}\n${APACHE_NOTICE}`)).toBe('text');
+    for (const file of ['NOTICE', 'NOTICE.txt', 'AUTHORS.rst', 'licenses/AUTHORS', 'CONTRIBUTORS.md']) expect(licenseTextKind(file, MIT)).toBe('attribution');
   });
 
   it('versions compare segment by segment, and a range is an exact version or comparators', () => {
@@ -445,6 +558,13 @@ describe('the readers, on their own', () => {
 });
 
 describe('the real repository: what `pnpm check` can say without the bundled runtime', () => {
+  it('the product\'s own packages are the ones under pnpm-workspace.yaml\'s globs, of which the generator holds a copy', () => {
+    const yaml = readFileSync(join(REPO, 'pnpm-workspace.yaml'), 'utf8');
+    const block = /^packages:\n((?:[ \t]+-[^\n]*\n)+)/m.exec(yaml)?.[1] ?? '';
+    const globs = [...block.matchAll(/-\s*['"]?([^'"\n]+?)['"]?\s*$/gm)].map((m) => m[1]);
+    expect(globs).toEqual(WORKSPACE_DIRS.map((d) => `${d}/*`));
+  });
+
   it('every font the renderer bundles has a license file that carries the font\'s own copyright notice; the three REQ-STARTUP-142 names and Phosphor are present', () => {
     const problems: string[] = [];
     const assets = bundledAssetComponents(REPO, problems);

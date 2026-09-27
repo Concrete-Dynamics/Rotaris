@@ -14,7 +14,9 @@ export declare const PATHS: Readonly<{
   designAssets: string; electron: string; assets: string; exceptions: string; releaseInputs: string;
 }>;
 
-export interface LicenseText { readonly file: string; readonly text: string }
+/** OQ-69: only `text` is the component's licence text; a `reference` or an `attribution` is reproduced beside it. */
+export type LicenseTextKind = 'text' | 'reference' | 'attribution';
+export interface LicenseText { readonly file: string; readonly text: string; readonly kind?: LicenseTextKind }
 export interface ReviewedException {
   readonly component: string; readonly versions: string; readonly license: string; readonly whyNoText: string;
   readonly reviewer: string; readonly reviewedOn: string; readonly expires: string;
@@ -56,6 +58,10 @@ export interface NoticesOptions {
   readonly today: string;
 }
 
+/** The workspace globs of `pnpm-workspace.yaml`, as directory names. */
+export declare const WORKSPACE_DIRS: readonly string[];
+
+export declare function licenseTextKind(file: string, text: string): LicenseTextKind;
 export declare function compareVersions(a: string, b: string): number;
 export declare function versionInRange(version: string, range: string): boolean;
 export declare function workspacePackages(root: string): Map<string, { dir: string; pkg: Record<string, unknown> }>;
@@ -71,7 +77,8 @@ export declare function woff2Names(buffer: Buffer): Record<number, string>;
 export declare function declaredFontFiles(css: string): string[];
 export declare function bundledAssetComponents(root: string, problems: string[]): Component[];
 export declare function setupManifest(root: string, problems: string[]): SetupManifest | null;
-export declare function reviewedExceptions(root: string, problems: string[]): ReviewedException[];
+/** Given `today` (YYYY-MM-DD, UTC), an entry reviewed after it is refused. */
+export declare function reviewedExceptions(root: string, problems: string[], today?: string): ReviewedException[];
 export declare function exceptionFor(component: Pick<Component, 'name' | 'version'>, exceptions: readonly ReviewedException[], today: string): { entry: ReviewedException | null; reason: string | null };
 /** Why an address may not stand in the header (REQ-STARTUP-142), or null when it may. */
 export declare function addressProblem(address: unknown): string | null;

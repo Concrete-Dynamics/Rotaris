@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BUILD_ID_ASSET, THIRD_PARTY_LICENSES_ASSET, buildIdentifier, thirdPartyLicensesPath } from './about.js';
@@ -13,6 +13,11 @@ import { NOTICES_FILE } from '../../../../tools/notices/notices.mjs';
  * The second case below fails on every platform against that name: on Linux the reader finds nothing, and elsewhere
  * it answers a path spelled differently from the file the generator wrote.
  */
+/** The reader's second candidate, `apps/desktop/resources/<name>`: its trimmed text, or null when it holds none. */
+function sourceTreeAnswer(name: string): string | null {
+  try { return readFileSync(join(__dirname, '..', '..', 'resources', name), 'utf8').trim() || null; } catch { return null; }
+}
+
 describe('REQ-STARTUP-141 / REQ-SHELL-142: the About page opens the file the notices generator writes', () => {
   const holder = process as NodeJS.Process & { resourcesPath?: string };
   const before = holder.resourcesPath;
@@ -31,10 +36,12 @@ describe('REQ-STARTUP-141 / REQ-SHELL-142: the About page opens the file the not
     expect(thirdPartyLicensesPath()).toBe(bundled);
   });
 
-  it('reads the build identifier from its own asset, and an empty one as absent', () => {
+  it('reads the build identifier from its own asset, and passes over an empty one', () => {
     writeFileSync(join(resources, BUILD_ID_ASSET), '  0.1.0+abc1234\n');
     expect(buildIdentifier()).toBe('0.1.0+abc1234');
+    // An empty asset says nothing, so the reader goes on to the source tree's `resources/`, which a build of this
+    // worktree may have written (first-release-plan.md §4.4); the answer is that candidate's, whatever it holds.
     writeFileSync(join(resources, BUILD_ID_ASSET), '\n');
-    expect(buildIdentifier()).toBeNull();
+    expect(buildIdentifier()).toBe(sourceTreeAnswer(BUILD_ID_ASSET));
   });
 });

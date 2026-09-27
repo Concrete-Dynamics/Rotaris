@@ -19,6 +19,9 @@
 //    carries yet, has its licence reproduced and its entry says it is not contained.
 //  - OQ-68: a component that carries licence text but declares no licence identifier fails validation outright; the
 //    reviewed-exceptions table covers a component with no licence text only, as REQ-STARTUP-143 words it.
+//  - OQ-69: "its full license text" is a file that carries the licence. A file that only names it, only sends the
+//    reader elsewhere for it, or only attributes (NOTICE, AUTHORS) is reproduced with the component and never counted
+//    as its text, so a component that ships nothing else takes the reviewed route like one that ships no file at all.
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { brotliDecompressSync } from 'node:zlib';
@@ -46,10 +49,31 @@ export const PATHS = Object.freeze({
   releaseInputs: 'tools/notices/release-inputs.json',
 });
 
-/** The workspace globs of `pnpm-workspace.yaml`: every package under them is the product's own (REQ-STARTUP-142). */
-const WORKSPACE_DIRS = ['packages', 'apps', 'tools'];
-/** A file that carries a component's licence text, by the names the ecosystems use for one. */
+/**
+ * The workspace globs of `pnpm-workspace.yaml`: every package under them is the product's own (REQ-STARTUP-142).
+ * Copied rather than parsed, because the tool reads no YAML; `notices.test.ts` holds the two equal.
+ */
+export const WORKSPACE_DIRS = Object.freeze(['packages', 'apps', 'tools']);
+/** A file that may carry a component's licence text, by the names the ecosystems use for one. */
 const LICENSE_FILE = /^(licen[cs]e|copying|notice|unlicense)([.\-_].*)?$/i;
+/** A file that attributes rather than licenses — Apache-2.0's NOTICE, an authors list: reproduced, never the text (OQ-69). */
+const ATTRIBUTION_FILE = /^(notice|authors?|contributors?|credits)([.\-_].*)?$/i;
+/**
+ * The words by which a licence file sends its reader elsewhere for the licence: a pointer ("See the LICENSE file in
+ * the root of this repository", "the licenses found in LICENSE.APACHE or LICENSE.BSD"), and the per-file notices
+ * licences ask to be applied with — Apache-2.0's "You may obtain a copy of the License at", MPL-2.0's "You can obtain
+ * one at", the GPL family's "You should have received a copy of the". A full text that quotes such a notice in its
+ * appendix runs to thousands of characters, so a file that says these words is a reference only while it is no longer
+ * than REFERENCE_MAX, and only while it carries none of the grants below.
+ */
+const REFERS_ELSEWHERE = /\b(?:see|found\s+in)\s+(?:the\s+)?[`'"]?(?:licen[cs]e|copying)\b|\bobtain\s+a\s+copy\s+of\s+the\s+licen[cs]e\b|\bcan\s+obtain\s+one\s+at\b|\bshould\s+have\s+received\s+a\s+copy\s+of\s+the\b/i;
+const REFERENCE_MAX = 2000;
+/**
+ * The grant of each licence short enough to sit under REFERENCE_MAX beside a reference — MIT and Boost, ISC and 0BSD,
+ * the BSD family, zlib, the Unlicense, SQLite's blessing — so a file that carries one of them and refers elsewhere for
+ * another licence (tqdm's: the MIT text, and MPL-2.0 by its Exhibit A) still carries licence text.
+ */
+const SHORT_LICENSE_GRANT = /permission\s+is\s+hereby\s+granted|permission\s+to\s+use,\s+copy,\s+modify|redistribution\s+and\s+use\s+in\s+source\s+and\s+binary\s+forms|this\s+software\s+is\s+provided\s+['‘]as-is['’]|free\s+and\s+unencumbered\s+software|disclaims\s+copyright\s+to\s+this\s+source\s+code/i;
 /** Values that declare nothing: setuptools' default and npm's pointer to a file. */
 const NO_IDENTIFIER = /^(unknown|none|)$|^see licen[cs]e in /i;
 
@@ -101,12 +125,23 @@ export function versionInRange(version, range) {
   });
 }
 
-/** Read and parse a JSON input, or record why not and answer null. */
+/**
+ * Read and parse a JSON input, or record why not and answer null. A byte-order mark is dropped first: Windows
+ * PowerShell 5.1 writes one, and the owner edits `release-inputs.json` on the release's own platform.
+ */
 function readJson(root, rel, problems, what) {
   const path = join(root, rel);
   let text;
   try { text = readFileSync(path, 'utf8'); } catch (e) { problems.push(`${what} ${rel} cannot be read: ${codeOf(e)}`); return null; }
-  try { return JSON.parse(text); } catch (e) { problems.push(`${what} ${rel} cannot be parsed: ${e instanceof Error ? e.message : String(e)}`); return null; }
+  try { return JSON.parse(text.replace(/^\uFEFF/, '')); } catch (e) { problems.push(`${what} ${rel} cannot be parsed: ${e instanceof Error ? e.message : String(e)}`); return null; }
+}
+
+/** A `package.json` of the installed tree or the workspace; one that cannot be parsed fails the step naming its path. */
+function readManifest(path, root) {
+  const text = readFileSync(path, 'utf8');
+  try { return JSON.parse(text.replace(/^\uFEFF/, '')); } catch (e) {
+    throw new Error(`${relative(root, path).split('\\').join('/')} cannot be parsed: ${e instanceof Error ? e.message : String(e)}`);
+  }
 }
 
 function codeOf(e) {
@@ -116,6 +151,23 @@ function codeOf(e) {
 function isFile(path) {
   try { return statSync(path).isFile(); } catch { return false; }
 }
+
+/**
+ * What one licence file is to its component (REQ-STARTUP-142 "its full license text"; OQ-69): `text` when it carries
+ * a licence; `reference` when it only names the licence on one line, or is short, sends the reader elsewhere for the
+ * licence and grants nothing itself; `attribution` when its name says it credits rather than licenses. Only `text`
+ * counts as the component's licence text; the other two are still reproduced, because they carry its copyright and
+ * attribution notices.
+ * @returns {'text' | 'reference' | 'attribution'}
+ */
+export function licenseTextKind(file, text) {
+  if (ATTRIBUTION_FILE.test(file.split('/').pop() ?? file)) return 'attribution';
+  if (!text.includes('\n') && text.length <= 80) return 'reference';
+  if (text.length <= REFERENCE_MAX && REFERS_ELSEWHERE.test(text) && !SHORT_LICENSE_GRANT.test(text)) return 'reference';
+  return 'text';
+}
+/** What a failure says a file that is not licence text does instead. */
+const KIND_SAYS = Object.freeze({ reference: 'only names its license or points elsewhere for it', attribution: 'only attributes' });
 
 /** The licence texts of one directory's own licence files, sorted by name; an empty one is kept, and the caller decides what it means. */
 function licenseFilesOf(dir, relTo) {
@@ -132,7 +184,7 @@ export function workspacePackages(root) {
   /** @type {Map<string, {dir: string, pkg: any}>} */
   const out = new Map();
   if (isFile(join(root, 'package.json'))) {
-    const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+    const pkg = readManifest(join(root, 'package.json'), root);
     if (typeof pkg.name === 'string') out.set(pkg.name, { dir: root, pkg });
   }
   for (const group of WORKSPACE_DIRS) {
@@ -141,7 +193,7 @@ export function workspacePackages(root) {
     for (const d of dirs.sort(byText)) {
       const file = join(root, group, d, 'package.json');
       if (!isFile(file)) continue;
-      const pkg = JSON.parse(readFileSync(file, 'utf8'));
+      const pkg = readManifest(file, root);
       out.set(pkg.name, { dir: join(root, group, d), pkg });
     }
   }
@@ -193,7 +245,7 @@ export function javascriptClosure(root, problems) {
       if (!optional) problems.push(`${name}, a dependency of ${requiredBy}, is not installed — the closure is read from the installed workspace (pnpm install)`);
       return;
     }
-    const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
+    const pkg = readManifest(join(dir, 'package.json'), root);
     if (workspace.has(pkg.name)) return;
     const key = `${pkg.name}@${pkg.version}`;
     if (seen.has(key)) return;
@@ -531,7 +583,7 @@ export function bundledAssetComponents(root, problems) {
     if (typeof a?.package === 'string') {
       const dir = resolveInstalled(a.package, root, root);
       if (!dir) problems.push(`bundled asset ${label}: its package ${a.package} is not installed`);
-      else version = String(JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).version);
+      else version = String(readManifest(join(dir, 'package.json'), root).version);
     }
     const texts = [];
     if (typeof a?.licenseFile === 'string' && a.licenseFile !== '') {
@@ -539,7 +591,10 @@ export function bundledAssetComponents(root, problems) {
       try { text = normalize(readFileSync(join(root, a.licenseFile), 'utf8')); } catch { problems.push(`bundled asset ${label}: license file ${a.licenseFile} is missing`); }
       if (text === '') problems.push(`bundled asset ${label}: license file ${a.licenseFile} is empty`);
       if (text) {
-        texts.push({ file: a.licenseFile.split('/').pop() ?? a.licenseFile, text });
+        const file = a.licenseFile.split('/').pop() ?? a.licenseFile;
+        texts.push({ file, text });
+        // REQ-STARTUP-142 names these texts outright, so a file that only refers to one is as good as missing (OQ-69).
+        if (licenseTextKind(file, text) !== 'text') problems.push(`bundled asset ${label}: license file ${a.licenseFile} ${KIND_SAYS[licenseTextKind(file, text)]}, not the license text`);
         for (const c of copyrights) if (!text.includes(c)) problems.push(`bundled asset ${label}: license file ${a.licenseFile} does not carry the font's own copyright notice "${c}"`);
       }
     }
@@ -593,10 +648,11 @@ function dayNumber(date) {
 
 /**
  * REQ-STARTUP-143's maintainer-review table. An entry carries the seven fields; its expiry is at most
- * MAX_EXCEPTION_DAYS after its review. A malformed entry fails validation naming it — a reviewed exception that
- * cannot be read is not one.
+ * MAX_EXCEPTION_DAYS after its review, and given `today`, its review is not dated after it — a review dated ahead
+ * would otherwise stand from now until a year past that date. A malformed entry fails validation naming it — a
+ * reviewed exception that cannot be read is not one.
  */
-export function reviewedExceptions(root, problems) {
+export function reviewedExceptions(root, problems, today) {
   const table = readJson(root, PATHS.exceptions, problems, 'the reviewed-exceptions table');
   if (!table) return [];
   if (!Array.isArray(table.exceptions)) { problems.push(`the reviewed-exceptions table ${PATHS.exceptions} carries no exceptions list`); return []; }
@@ -608,6 +664,7 @@ export function reviewedExceptions(root, problems) {
     const reviewed = dayNumber(e.reviewedOn), expires = dayNumber(e.expires);
     if (reviewed === null || expires === null) { problems.push(`${label}: reviewedOn and expires must be YYYY-MM-DD dates`); continue; }
     if (expires < reviewed || expires - reviewed > MAX_EXCEPTION_DAYS) { problems.push(`${label}: expires ${e.expires} is not within ${MAX_EXCEPTION_DAYS} days after the review on ${e.reviewedOn}`); continue; }
+    if (today !== undefined && e.reviewedOn > today) { problems.push(`${label}: reviewedOn ${e.reviewedOn} is after today, ${today}`); continue; }
     out.push(e);
   }
   return out;
@@ -623,17 +680,31 @@ export function exceptionFor(component, exceptions, today) {
   return { entry: null, reason: inRange ? `its reviewed exception expired on ${inRange.expires}` : `its reviewed exception covers ${named.map((e) => e.versions).join(', ')}, not ${component.version}` };
 }
 
+/** Words that only hold an address's place: a to-do, "not applicable", "to be announced", an instruction to fill it in. */
+const PLACEHOLDER_WORDS = /\b(?:todo|tbd|tba|tbc|fixme|changeme|change[\s_-]me|replace(?:[\s_-]?(?:me|this))?|insert|placeholder|sample|dummy|lorem\s+ipsum|x{3,}|n\/a|none|null|undefined|unknown)\b|\bto\s+be\s+(?:announced|decided|determined|confirmed|added|provided|supplied)\b|\byour[\s_-]?(?:e-?mail|address|name|domain|company|org(?:ani[sz]ation)?)\b/i;
+/** Domains reserved for examples and tests (RFC 2606, RFC 6761). */
+const RESERVED_DOMAIN = /@(?:[a-z0-9-]+\.)*(?:example\.(?:com|net|org)|[a-z0-9-]+\.(?:example|invalid|test|localhost))\b|@(?:example|localhost)\b/i;
+/** Domains a template writes where the real one goes. */
+const PLACEHOLDER_DOMAIN = /@(?:[a-z0-9-]+\.)*(?:domain|email|company|website|mydomain|somedomain|anydomain)\.(?:com|net|org)\b/i;
+/** An e-mail address whose domain has a dot and a top-level label, alone or inside `Name <…>`. */
+const EMAIL_ADDRESS = /(?:^|[\s<(:])[^\s@<>():,;]+@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:[a-z]{2,}|xn--[a-z0-9-]+)(?=$|[\s>),;])/i;
+
 /**
  * REQ-STARTUP-142: a literal address reachable without an account. Refused when empty, when it is a page reference,
- * and when it is only a placeholder — a template marker, a to-do word, or a domain reserved for examples and tests.
+ * and when it is only a placeholder — a template marker, a placeholder word, or a domain reserved for examples and
+ * tests or written by templates. What stands must have an address's shape: an e-mail address, or a postal address of
+ * more than one part (split at commas or lines) with a number and at least two words in it.
  */
 export function addressProblem(address) {
   if (typeof address !== 'string' || address.trim() === '') return 'is empty';
   const a = address.trim();
   if (/^(https?:\/\/|www\.)/i.test(a)) return 'is a web page reference, not an address';
   if (/<[^@<>]*>|\{\{|\}\}/.test(a)) return 'is a template placeholder';
-  if (/\b(todo|tbd|fixme|changeme|placeholder|lorem ipsum|x{3,})\b|your[\s_-]?(e-?mail|address)/i.test(a)) return 'is a placeholder';
-  if (/@(?:[a-z0-9-]+\.)*(?:example\.(?:com|net|org)|[a-z0-9-]+\.(?:example|invalid|test|localhost))\b|@(?:example|localhost)\b/i.test(a)) return 'uses a domain reserved for examples and tests';
+  if (PLACEHOLDER_WORDS.test(a)) return 'is a placeholder';
+  if (RESERVED_DOMAIN.test(a)) return 'uses a domain reserved for examples and tests';
+  if (PLACEHOLDER_DOMAIN.test(a)) return 'uses a placeholder domain';
+  const postal = a.split(/\s*[,\n]\s*/).filter((p) => p !== '').length >= 2 && /\d/.test(a) && (a.match(/\p{L}{2,}/gu) ?? []).length >= 2;
+  if (!EMAIL_ADDRESS.test(a) && !postal) return 'is neither an e-mail address nor a postal address';
   return null;
 }
 
@@ -665,7 +736,7 @@ export function collectNotices({ root, platform, today }) {
   const runtime = codeIntelligenceComponents(root, problems);
   const assets = bundledAssetComponents(root, problems);
   const manifest = setupManifest(root, problems);
-  const exceptions = reviewedExceptions(root, problems);
+  const exceptions = reviewedExceptions(root, problems, today);
   const inputs = releaseInputs(root, problems);
 
   const order = (a, b) => byText(a.name, b.name) || compareVersions(a.version, b.version);
@@ -676,13 +747,19 @@ export function collectNotices({ root, platform, today }) {
   for (const c of [...application, ...interpreter, ...distributions]) {
     const where = c.section === 'runtime' ? 'code-intelligence runtime' : c.containedIn ? `compiled into ${c.containedIn}` : c.ecosystem;
     if (!c.license) problems.push(`${c.name} ${c.version} (${where}): declares no license identifier`);
-    // An empty licence file is no licence text. Electron, the interpreter and a compiled-in library have one named
-    // file each, which their readers already reported missing or empty; only a dependency takes the reviewed route.
-    c.texts = c.texts.filter((t) => t.text !== '');
-    if (c.texts.length === 0 && !c.textRequired) {
-      const { entry, reason } = exceptionFor(c, exceptions, today);
-      if (entry) c.exception = entry;
-      else problems.push(`${c.name} ${c.version} (${where}): carries no license text and ${reason} (${PATHS.exceptions})`);
+    // An empty licence file is no licence text, and neither is one that only names the licence, points elsewhere for
+    // it or attributes (OQ-69); those are kept, for the notices they carry. Electron, the interpreter and a
+    // compiled-in library have one named file each, which their readers already reported missing or empty; only a
+    // dependency takes the reviewed route.
+    c.texts = c.texts.filter((t) => t.text !== '').map((t) => ({ ...t, kind: licenseTextKind(t.file, t.text) }));
+    if (!c.texts.some((t) => t.kind === 'text')) {
+      const instead = c.texts.map((t) => `${t.file} ${KIND_SAYS[t.kind]}`).join('; ');
+      const what = `${c.name} ${c.version} (${where}): carries no license text${instead ? ` — ${instead}` : ''}`;
+      if (!c.textRequired) {
+        const { entry, reason } = exceptionFor(c, exceptions, today);
+        if (entry) c.exception = entry;
+        else problems.push(`${what}${instead ? ' —' : ''} and ${reason} (${PATHS.exceptions})`);
+      } else if (instead) problems.push(what);
     }
     delete c.dir;
   }
@@ -734,11 +811,13 @@ export function renderNotices(model) {
   const { product, application, interpreter, distributions, assets, manifest, electron } = model;
   const credits = electron?.credits ?? [];
   const lgpl = [...application, ...interpreter, ...distributions, ...assets].filter((c) => /LGPL|Lesser General Public/i.test(c.license ?? ''));
+  // The credits carry no identifier, so the sentence about them stands only when one of their texts is the LGPL's.
+  const lgplCredits = credits.some((c) => /GNU LESSER GENERAL PUBLIC LICENSE/i.test(c.text));
   const title = `${product.name} ${product.version} — third-party software notices`;
   const out = [title, '='.repeat(title.length), ''];
   out.push(wrap(`This file is ${NOTICES_FILE}. It names the third-party components contained in this build of ${product.name}, each with its version, its license identifier and the full text of its license, and then the tools ${product.name} downloads after installation, which this build does not contain.`), '');
   out.push(subheading('Components licensed under the GNU Lesser General Public License'));
-  out.push(wrap(`Some components in this build are licensed under the GNU Lesser General Public License (LGPL). You have the right to modify each of them and to relink ${product.name} with your modified version, under the terms of the LGPL, whose text is reproduced with each such component below.${lgpl.length > 0 ? ` The components whose declared license names the LGPL are: ${lgpl.map((c) => `${c.name} ${c.version}`).join(', ')}.` : ''}${credits.length > 0 ? ` Components compiled into Electron whose license is the LGPL are reproduced in section 5.` : ''}`), '');
+  out.push(wrap(`Some components in this build are licensed under the GNU Lesser General Public License (LGPL). You have the right to modify each of them and to relink ${product.name} with your modified version, under the terms of the LGPL, whose text is reproduced with each such component below.${lgpl.length > 0 ? ` The components whose declared license names the LGPL are: ${lgpl.map((c) => `${c.name} ${c.version}`).join(', ')}.` : ''}${lgplCredits ? ` Components compiled into Electron whose license is the LGPL are reproduced in section 5.` : ''}`), '');
   out.push(wrap('To request the complete corresponding source code of any LGPL-licensed component in this build, write to:'), '');
   out.push(...(model.address || '(no address)').split('\n').map((l) => `    ${l.trim()}`), '');
   out.push(subheading('Contents'));

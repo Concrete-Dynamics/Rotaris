@@ -12,13 +12,14 @@ import type { ChatMessage } from '@rotaris/model';
  *
  * `ran` separates a call that was under way (its executor started and was cut off, or finished past the deadline) from
  * one that never started: a call the pausing step asked for but had not dispatched, or one whose approval or question
- * was withdrawn (clause 9).
+ * was withdrawn (clause 9). A null `cause` is a call cut by something other than a rest — its agent's limit, the
+ * cancellation of that agent, the explicit cancel — and the statement names no rest (found by phase 3's second review).
  */
 export function interruptedResult(cause: Interruption | null, ran: boolean, output: string): string {
-  const by = interruptionPhrase(cause ?? '');
+  const by = cause === null ? null : interruptionPhrase(cause);
   const head = ran
-    ? `This call was interrupted by ${by} before it completed, and it was not re-run.`
-    : `This call was not run: it was interrupted by ${by} before it started, and it was not re-run.`;
+    ? by === null ? 'This call was cut off before it completed, and it was not re-run.' : `This call was interrupted by ${by} before it completed, and it was not re-run.`
+    : by === null ? 'This call was not run: its agent was stopped before it started, and it was not re-run.' : `This call was not run: it was interrupted by ${by} before it started, and it was not re-run.`;
   const tail = 'Issue it again if it is still needed.';
   const produced = output.trim() === '' ? '' : `\n${ran ? 'What it had produced before it was cut off' : 'Detail'}:\n${output}`;
   return `${head} ${tail}${produced}`;

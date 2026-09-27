@@ -173,6 +173,8 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     await tick();
     expect(lastWait(pub)).not.toBeNull();
     expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    // REQ-MONITOR-124 (found by phase 3's second review): releasing the wait does not read `running` again.
+    expect(dal.getSession(sid)!.execution_status).toBe('pausing');
     const result = await sessions.running(sid)!;
     expect(result.status).toBe('interrupted');
     expect(result.error).toBeNull();

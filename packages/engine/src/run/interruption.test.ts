@@ -29,6 +29,11 @@ describe('PD-ORCH-005: the interrupted result', () => {
     expect(interruptedResult('quit', true, '  ')).toBe('This call was interrupted by quitting the application before it completed, and it was not re-run. Issue it again if it is still needed.');
   });
 
+  it('a call cut by no rest — its agent\'s limit, a cancel — names no rest (found by phase 3\'s second review)', () => {
+    expect(interruptedResult(null, true, 'half')).toBe('This call was cut off before it completed, and it was not re-run. Issue it again if it is still needed.\nWhat it had produced before it was cut off:\nhalf');
+    expect(interruptedResult(null, false, '')).toBe('This call was not run: its agent was stopped before it started, and it was not re-run. Issue it again if it is still needed.');
+  });
+
   it('after a crash, the calls of a last assistant message with no results are each answered as interrupted; anything else is left as it is', () => {
     const calls: ChatMessage = { role: 'assistant', content: [{ kind: 'text', text: 'Two.' }, { kind: 'tool-call', callId: 'a', name: 'probe', args: '{}' }, { kind: 'tool-call', callId: 'b', name: 'grep', args: '{}' }] };
     const answered = answerUnanswered([{ role: 'user', content: [{ kind: 'text', text: 'go' }] }, calls], 'crash');

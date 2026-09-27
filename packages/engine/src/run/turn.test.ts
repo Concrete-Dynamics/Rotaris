@@ -9,6 +9,7 @@ import { RUN_CONFIG_DEFAULTS, Sessions, type ModeChange, type PortToolCall, type
 import { conversationOf } from './record.js';
 import { decodeStoredTodo } from '../todo-view.js';
 import type { LiveTerminal } from './run.js';
+import type { HookPort } from '../hooks-port.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
@@ -61,7 +62,7 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
 
   const config = (over: Partial<RunConfig> = {}): RunConfig => ({ ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k', ...over });
 
-  function sessionsWith(calls: ScriptedCall[], port: ToolPort | null, extra: { attended?: boolean; runtime?: { permissionMode: string; pauseToolDeadlineMs?: number }; terminals?: SessionsDeps['terminals'] } = {}) {
+  function sessionsWith(calls: ScriptedCall[], port: ToolPort | null, extra: { attended?: boolean; runtime?: { permissionMode: string; pauseToolDeadlineMs?: number }; terminals?: SessionsDeps['terminals']; hooks?: HookPort } = {}) {
     const client = new ScriptedModelClient(calls);
     let n = 0;
     const logLines: string[] = [];
@@ -72,6 +73,7 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
       runtime: { permissionMode: extra.runtime?.permissionMode ?? 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', ...(extra.runtime?.pauseToolDeadlineMs === undefined ? {} : { pauseToolDeadlineMs: extra.runtime.pauseToolDeadlineMs }) },
       sessionLogAppender: () => (line) => { logLines.push(line); },
       ...(extra.terminals ? { terminals: extra.terminals } : {}),
+      ...(extra.hooks ? { hooks: () => extra.hooks! } : {}),
     });
     return { sessions, client, logLines };
   }
@@ -329,6 +331,52 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
       // The notice is part of the record, as every message of the conversation is.
       const root = dal.iterationsOf(sid)[0]!.root_task_id;
       expect(conversationOf(dal.agentConversation(sid, root)).some((m) => m.role === 'user' && m.content.some((p) => p.kind === 'text' && p.text === told))).toBe(true);
+    });
+
+    it('clause 3 (found by phase 3\'s second review): the explicit cancel that lands while teardown ends the background sessions still closes the iteration cancelled', async () => {
+      const live: { -readonly [K in keyof LiveTerminal]: LiveTerminal[K] }[] = [{ id: 'ts_serve', taskId: 'bg_agent01', command: 'serve', startedAt: '2026-09-27T00:00:00.000Z', status: 'running', exitCode: null, tail: 'listening' }];
+      let ending = false;
+      let releaseEnd!: () => void;
+      const endHold = new Promise<void>((r) => { releaseEnd = r; });
+      const terminals: SessionsDeps['terminals'] = () => ({ list: () => live, end: async () => { ending = true; await endHold; live[0]!.status = 'killed'; } });
+      const { port } = fakePort({ hold: new Promise<void>(() => undefined), holdOn: 'glob' });
+      const { sessions } = sessionsWith([toolCalls([{ callId: 'c1', name: 'glob', args: {} }]), answer('never')], port, { terminals });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => dal.residentRows(sid).some((r) => r.kind === 'tool'));
+      sessions.control({ op: 'cancel', sessionId: sid, args: {} });
+      await settle(() => ending);
+      expect(dal.iterationsOf(sid)).toMatchObject([{ state: 'open', interruption: 'stop' }]);
+      expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: 'run' } })).toEqual({ ok: true });
+      releaseEnd();
+      await sessions.running(sid)!;
+      expect(dal.iterationsOf(sid)).toMatchObject([{ state: 'closed', outcome: 'cancelled' }]);
+      const closed = dal.eventsOfKind(sid, 'iteration.end').map((e) => JSON.parse(e.payload) as { summary: string });
+      expect(closed.map((e) => e.summary)).toEqual(['the run was cancelled after it had come to rest']);
+    });
+
+    it('clause 10: the explicit cancel that lands after a pause came to rest ends the background sessions the pause had left running', async () => {
+      const { terminals, ended } = withTerminals();
+      let releaseHook!: () => void;
+      const hookHold = new Promise<void>((r) => { releaseHook = r; });
+      let ending = false;
+      const hooks: HookPort = {
+        auditSnapshot: () => [], trust: () => ({ withheld: 0, reinstated: 0, notice: '', workspace: 'C:/ws', fingerprint: 'f', loadWarning: '' }), announceWithheld: () => 0, hasHooksFor: () => true,
+        fireLifecycle: async (event) => { if (event === 'session_end') { ending = true; await hookHold; } return []; }, advisory: () => '', toolHooks: { preTool: async () => ({ blocked: false, refusal: '' }), postTool: async () => ({ feedback: '' }) },
+      };
+      const { port } = fakePort({ hold: new Promise<void>(() => undefined), holdOn: 'glob' });
+      const { sessions } = sessionsWith([toolCalls([{ callId: 'c1', name: 'glob', args: {} }]), answer('never')], port, { terminals, hooks, runtime: { permissionMode: 'ask', pauseToolDeadlineMs: 5_000 } });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => dal.residentRows(sid).some((r) => r.kind === 'tool'));
+      sessions.control({ op: 'pause', sessionId: sid, args: {} });
+      clock.advance(5_000);
+      await settle(() => ending);
+      expect(ended).toEqual([]);
+      expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: 'run' } })).toEqual({ ok: true });
+      releaseHook();
+      await sessions.running(sid)!;
+      expect(ended).toEqual([['ts_serve']]);
+      expect(dal.agentTerminalsOf(sid).map((t) => [t.terminal_id, t.state])).toEqual([['ts_serve', 'stop'], ['ts_build', 'completed']]);
+      expect(dal.iterationsOf(sid)).toMatchObject([{ state: 'closed', outcome: 'cancelled' }]);
     });
 
     it('clause 10 (OQ-69): the explicit cancel is a stop for the background sessions — it ends them and records it', async () => {

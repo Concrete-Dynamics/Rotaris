@@ -1148,6 +1148,8 @@ export class Sessions {
     const s = this.live.get(sessionId);
     const run = s?.run;
     if (!s || !run || run.isEnded) return { ok: false, refusal: { code: 'no_run', message: 'No run is active.' } };
+    // PD-ORCH-005 clause 2: a compression is a model call, and none is made once the run is coming to rest.
+    if (run.comingToRest) return { ok: false, refusal: { code: 'run_coming_to_rest', message: 'The run is coming to rest; nothing is compressed until it is continued.' } };
     const report = await run.forceCompression();
     if (report === null) return { ok: false, refusal: { code: 'no_active_conversations', message: 'No active agent contexts are available to compress.' } };
     const total = report.compressed + report.unchanged + report.failed.length;

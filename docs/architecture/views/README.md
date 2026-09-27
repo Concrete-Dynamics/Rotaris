@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-27**
 
+**The `FAILED ` marker matches in capitals only (`PD-TOOLS-003`, built 2026-09-27, R-055).** Of REQ-TOOLS-113's five
+literal failure markers, `FAILED ` alone is now matched case-sensitively; the other four, the error count, the banner
+and the pipeline check keep their casing. The rule lives in the marker list in `agent-tools/src/terminal/classify.ts`,
+and the search and the quoted line share one predicate. No view states the terminal's marker rule at this depth, so
+no view changes beyond this entry; no package, edge, process, channel, message kind or store column changed.
+
 **The run's model calls outside an agent's turn are counted (defect round, 2026-09-27, R-054).** Compression, the
 child-report summariser, the intent classifier and the loop supervisor's classifier discarded the usage their
 requests reported, so the run's tokens, its cost and `usage.update` missed them (REQ-EVENTS-053, PD-MONITOR-001).

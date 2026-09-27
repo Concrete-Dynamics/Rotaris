@@ -195,6 +195,13 @@ stated in the test rather than argued about.
 > kept because the schedule it states — the emulator arriving with streaming — is exactly the assumption that
 > failed silently: streaming arrived and nobody moved the capture.
 
+> **Narrowed 2026-09-27 — [`PD-TOOLS-003`](../../product/directives.md#pd-tools-003).** "The `FAILED ` marker of
+> `REQ-TOOLS-113` fires on a test-runner banner's own `failed `" no longer holds: the directive matches that
+> marker in capitals only, so a banner's lower-case `failed ` warns through the banner check alone. The assertion
+> that stated the old reading now uses a capital `==== 1 FAILED ====` banner, which still raises both warnings,
+> and a new `PD-TOOLS-003` case pins a lower-case banner raising the banner warning alone. The sentence is kept as
+> it was written.
+
 **Not built:** confinement (ADR-0022; no backend exists on this platform and `sandbox_mode` is fixed
 `off`), live streaming and the terminal window (ADR-0021, `REQ-TOOLS-126` onward — with streaming off the
 command still runs), the persisted `runtime.shell_*` keys (an environment stopgap, `codebase.md`).

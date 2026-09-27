@@ -232,7 +232,7 @@ neither path depends on what the other did.
 | `shell` | a relaunch with no prompt | Overview painted from the store: the sessions the runs left, the repository card's branch |
 | `frictions` | one real run engineered to trip the inducible autopsy frictions, read back from the store | first-use `write_file` with no operation repair, SIGINT delivered with no platform refusal — **red by design until the fixes land**; the exit-trace friction is recorded but not inducible on demand, and the stall-abort one moved to `faults` |
 | `faults` | two runs against an endpoint the proxy makes misbehave: a 429-then-500 ladder, and a stream that stops mid-answer with the socket open | the ladder run still completes; the stalled run does **not** report `user_cancelled` with nobody having pressed anything (defect 82's shape), **and the product is shown to have noticed the stall** in its own `issues` row — the negative alone would pass on a run that met no fault at all |
-| `terminal` | one run issuing six commands the record names verbatim: a multi-line here-string, forty long lines, a wedge with no `timeout`, an exit-0 output carrying `FAILED`, a `git diff` exiting 1, a pipeline through a pipe | the here-string terminated; all forty lines arrived, none concatenated, none carrying an escape sequence; a call with no `timeout` was still bounded; exit 1 from `git diff` was not `shell_failure`; **no end marker in anything the model read**. The other two are NOTEs — they fire as their requirements specify — and a shape the model never issued is a NOTE too |
+| `terminal` | one run issuing six commands the record names verbatim: a multi-line here-string, forty long lines, a wedge with no `timeout`, an exit-0 output carrying docker's lower-case `failed to connect` line, a `git diff` exiting 1, a pipeline through a pipe | the here-string terminated; all forty lines arrived, none concatenated, none carrying an escape sequence; a call with no `timeout` was still bounded; the docker line printed at exit 0 was neither `suspicious_success` nor given a failure-marker warning (`PD-TOOLS-003`); exit 1 from `git diff` was not `shell_failure`; **no end marker in anything the model read**. The pipeline is a NOTE — its deny fires as its requirements specify — and a shape the model never issued is a NOTE too |
 | `duress` | **opt-in** (`--only=duress`): one delegating run of **three dependent waves, six children**, under `LIVE_RUN_DURESS_MS` (default 40 min) against `--duress-fixture` | the autopsy's coherence section is clean (no null summary on a stopped run, no tokens against a zero cost); no child ended `failed` with nothing to say; a child that ran commands reported them; the `compressions` aggregate agrees with the timeline. Length, children and compressions are **reported**, so a run that was not duress says so |
 
 An endpoint that discovers no model catalogue is not a dead end. The sign-in takes the dialog's own "Continue
@@ -314,10 +314,12 @@ Sixty negative runs are not a negative result when none of them carries the inpu
 issues the recorded commands verbatim, and asserts from `tool_calls` — what the agent passed, what came back —
 rather than from what the model says it did.
 
-**Three of the six shapes are NOTEs, on purpose.** The `FAILED`-marker warning and the pipe-to-shell deny fire
-exactly as `REQ-TOOLS-113` and `REQ-TOOLS-036/038` specify; their notes exist to measure what they cost, not to
-accuse the product. A shape the model never issued is also a NOTE. Reporting a faithful behaviour as a fault is
-how a scenario teaches its reader to ignore it — the mistake the board scenario made twice.
+**One of the six shapes is a NOTE, on purpose.** The pipe-to-shell deny fires exactly as `REQ-TOOLS-036/038`
+specify; its note exists to measure what it costs, not to accuse the product. A shape the model never issued is
+also a NOTE. Reporting a faithful behaviour as a fault is how a scenario teaches its reader to ignore it — the
+mistake the board scenario made twice. The `FAILED`-marker shape was the second NOTE until 2026-09-27: it now
+replays the record's own lower-case docker line and checks that `PD-TOOLS-003` keeps it from warning, as
+`diff-exit-1` guards ESC-41 — a regression guard, not a cost note.
 
 `duress` asserts **coherence, not correctness**: a long run's failures are mostly records disagreeing with each
 other, and `apps/desktop/scripts/autopsy.mjs` already computes most of them. What the model produced is never
@@ -334,7 +336,7 @@ across waves, which is what reaches compression and re-spawn. A single wave of p
 minutes and measures the short path under a longer deadline. `--duress-fixture` remains for the question that
 is about size specifically.
 
-The shapes and the two readers live in `apps/desktop/scripts/lib/terminal-shapes.mjs`, pinned by
+The shapes and the three readers (`diagnosticOf`, `longOutputReading`, `outputOf`) live in `apps/desktop/scripts/lib/terminal-shapes.mjs`, pinned by
 `terminal-shapes.test.ts` — a pattern that stopped matching its own command would turn every check in the
 scenario into "never attempted" without anybody being told, so the test asserts the round trip in both
 directions: every shape matches its own command, and none matches another's.
@@ -345,6 +347,8 @@ surviving, `git diff` exiting 1 read as `outcome success` rather than `shell_fai
 proven live on the same machine whose unit test for it is red for an unrelated timeout — and no `__rot_` marker
 reached the model. One shape did not reach its question: the wedge **soft-paused before the hard cap**, so
 `hardMs`'s own bound is still unmeasured live, and the scenario says so rather than implying otherwise.
+**The `failed-word` guard has not run against a real endpoint**: it was written on 2026-09-27, after that run,
+and the next live run of `terminal` is its first.
 
 **`duress` has not been executed.** It owes its row in `docs/architecture/first-executions.md`.
 

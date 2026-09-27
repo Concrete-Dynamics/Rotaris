@@ -770,6 +770,17 @@ harness rather than by the work. `--duress-fixture` replaces the workspace for t
 alongside any other scenario, because one sandbox holds one store and every other prompt names `todo-app`'s
 files.
 
+**`failed-word` stopped being a NOTE on 2026-09-27 (`PD-TOOLS-003`), and the paragraph above is kept as it was
+written.** The shape printed `FAILED` in capitals, and its warning was faithful to `REQ-TOOLS-113`'s marker. The
+directive matches that marker in capitals only, which put the shape on the other side of the rule from the
+record it claimed to replay. It now prints the record's own lower-case docker line,
+`failed to connect to the docker API`, and the scenario checks that the line reached the output at exit 0, was not
+`suspicious_success` and carried no failure-marker warning — a regression guard, as `diff-exit-1` is for ESC-41.
+That positive half reads the output through a new `outputOf`, because the diagnostic block repeats the command
+and a pattern taken from the command matches the whole result whether or not anything was printed. The deny is
+the one faithful behaviour still measured as a NOTE. **The guard has not run against a real endpoint**; the next
+live run of `terminal` is its first.
+
 **The five decisions this scenario was held on were taken on 2026-09-22**, four by the owner and one delegated:
 the endpoint is the unmetered `katalyst`, the wall clock is **40 minutes**, it stays **opt-in**, its assertions
 stay coherence-shaped, and **`--max-iterations` rises from 15 to 500**. That last one is a bound being loosened

@@ -48,8 +48,9 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 **The application log keeps `info` and above (`PD-MONITOR-002`, built 2026-09-27, R-055).** Main's standard output
 carried the level of a forwarded line as text inside it and none on main's own, and recorded every level. Each line
 now carries its level in a column of its own, and a line below the threshold is not written; the threshold is `info`,
-moved only by `ROTARIS_APP_LOG_LEVEL`, read once at start. Main's own reports of a loss are `error`, so a crash is
-still recorded at a higher threshold. The level, the predicate and the line are the new
+moved only by `ROTARIS_APP_LOG_LEVEL`, read once at start. Main's own reports of a loss are `error` — a
+`shutdown` a child did not answer at quit among them, since an exit of 0 does not prove one — so a crash is still
+recorded at a higher threshold. The level, the predicate and the line are the new
 `main/app-log.ts`; `index.ts` keeps the wiring. The **process view** gains a paragraph on the application log, the
 `log` event names its fields, and the MCP-child paragraph says `debug` is now a filter; the **state-ownership view**
 gains the threshold as a fact nobody writes after start. No package, edge, process, channel, message kind or store

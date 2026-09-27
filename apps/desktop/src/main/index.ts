@@ -206,8 +206,11 @@ async function main(): Promise<void> {
     if (line !== lastLeaseLine) { lastLeaseLine = line; log(line); }
     return { kind: 'credentials.leased', bearers, report: { authenticated: [...report.authenticated], renewed: [...report.renewed], unresolved: { ...report.unresolved } } };
   });
-  // PD-MONITOR-002: the run host exits 0 only after main's own `shutdown` (`dispatch.ts`), which every orderly quit sends;
-  // any other status is the process lost, and an `error`.
+  // PD-MONITOR-002: 0 is an orderly end — main's own `shutdown` (`dispatch.ts`), or Electron tearing the process down at
+  // quit, which also reports 0 (measured on a scratch Electron 44.1.1 app: `app.quit()`, `app.exit(0)` and
+  // `utilityProcess.kill()` all report 0; an uncaught throw, `process.exit(3)`, SIGABRT, SIGKILL, SIGSEGV and SIGTERM
+  // reported 1, 3, 6, 9, 11 and 15). Any other status is the process lost, and an `error`. A quit that tore down a run
+  // host that never answered its `shutdown` says so on the quit path (`window-all-closed`, below).
   runHostChild.on('exit', (code) => log(`run host exited (${code}); NOT re-forked — every in-flight run is lost and settles through stale detection (ADR-0002)`, code === 0 ? 'info' : 'error'));
 
   const services = new Map<string, { child: UtilityProcess; link: ProcessLink<WorkspaceServiceRequest> }>();
@@ -269,7 +272,8 @@ async function main(): Promise<void> {
       const child = utilityProcess.fork(join(__dirname, 'workspace-service.js'), [], { serviceName: `rotaris-workspace:${key}` });
       svc = { child, link: new ProcessLink<WorkspaceServiceRequest>(portOf(child), clocks.timers) };
       services.set(key, svc);
-      // PD-MONITOR-002: 0 follows main's own `shutdown`; any other status is the service lost, and an `error`.
+      // PD-MONITOR-002: 0 is an orderly end — main's own `shutdown`, or Electron tearing the service down at quit (see the
+      // run host's exit above); any other status is the service lost, and an `error`.
       child.on('exit', (code) => { log(`workspace service for ${key} exited (${code})`, code === 0 ? 'info' : 'error'); services.delete(key); cancelImprovementWorkspace(key); });
       // The service's log lines reach main's log too (Part P: the checkpoint capture, preview and restore lines the proof reads),
       // at the level the service gave them and under the same threshold as main's own (PD-MONITOR-002).
@@ -1459,9 +1463,12 @@ async function main(): Promise<void> {
     void (async () => {
       // REQ-GIT-101: a desktop checkpoint operation in flight finishes first — bounded only by REQ-GIT-033's limits.
       if (checkpointOp.current) { log('quit: waiting for the in-flight checkpoint operation (REQ-GIT-101)'); await checkpointOp.current.catch(() => undefined); }
-      await runHost.request({ kind: 'shutdown', deadlineMs: 30_000 }, millis(30_000)).catch(() => undefined);
+      // PD-MONITOR-002: a `shutdown` that is not answered within its bound is said at `error`, and the quit goes on. Electron
+      // then tears the process down, and its exit — when it is reported before main is gone — reads 0, so this line is the
+      // only record that the work was cut off.
+      await runHost.request({ kind: 'shutdown', deadlineMs: 30_000 }, millis(30_000)).catch((cause: unknown) => { log(`quit: the run host did not complete its shutdown (${String(cause)}); its in-flight runs may be lost`, 'error'); });
       // REQ-GIT-101 again, one process down: each workspace service finishes its in-flight checkpoint Git before it exits.
-      await Promise.all([...services.values()].map((s) => s.link.request({ kind: 'shutdown', deadlineMs: 30_000 }, millis(330_000)).catch(() => undefined)));
+      await Promise.all([...services].map(([key, s]) => s.link.request({ kind: 'shutdown', deadlineMs: 30_000 }, millis(330_000)).catch((cause: unknown) => { log(`quit: the workspace service for ${key} did not complete its shutdown (${String(cause)}); its in-flight work may be lost`, 'error'); })));
       app.quit();
     })();
   });

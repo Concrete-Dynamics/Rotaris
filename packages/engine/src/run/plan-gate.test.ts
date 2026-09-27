@@ -53,7 +53,7 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
   });
 
-  function sessionsWith(backend: AgentBackend, opts: { mode?: 'auto' | 'plan'; intent?: IntentCategory; classifier?: LoopClassifier; preflightHold?: Promise<void>; tools?: ToolPort } = {}) {
+  function sessionsWith(backend: AgentBackend, opts: { mode?: 'auto' | 'plan'; intent?: IntentCategory; classifier?: LoopClassifier; preflightHold?: Promise<void> | (() => Promise<void>); tools?: ToolPort } = {}) {
     const runtime: RuntimePosture = {
       permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' },
       sessionLogLevel: 'WARNING', runStartMode: opts.mode ?? 'plan',
@@ -65,7 +65,7 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
       sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
       // The registry predicate the run host injects; here just enough to exercise the child-admission refusal.
       planWithholds: (tool) => ['write_file', 'terminal', 'haet', 'haet_edit', 'git_commit'].includes(tool),
-      ...(opts.intent ? { preflight: async () => { await opts.preflightHold; return preflightOf(opts.intent!); } } : {}),
+      ...(opts.intent ? { preflight: async () => { await (typeof opts.preflightHold === 'function' ? opts.preflightHold() : opts.preflightHold); return preflightOf(opts.intent!); } } : {}),
       // PD-ORCH-001: supervision is only constructed when this dependency answers, which is how the directive's
       // "no supervisor is attached" is observable at all — a run without it looks the same from the outside.
       ...(opts.classifier ? { supervisor: () => ({ config: { ...SUPERVISOR_DEFAULTS, repetitionThreshold: 3 }, classifier: opts.classifier! }), tools: () => grepPort() } : {}),
@@ -169,6 +169,29 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     const result = await sessions.running(sid)!;
     expect(cut).toBe(false);
     expect(result.execution_status).toBe('awaiting_plan_decision');
+  });
+
+  it('PD-ORCH-005 clause 3 (found by phase 3\'s third review): an explicit cancel before a continue has taken up the iteration an earlier rest left open leaves it to the next continue', async () => {
+    let finish!: () => void;
+    const finishing = new Promise<void>((r) => { finish = r; });
+    const tools: ToolPort = { ...grepPort(), dispatch: async () => { await finishing; return { text: 'found', isError: false, status: 'ok', durationMs: 1, label: 'grep', args: {} }; } };
+    let next: Promise<void> = Promise.resolve();
+    const sessions = sessionsWith(scripted([toolCalls([{ callId: 'g1', name: 'grep', args: {} }]), answer('never')]).backend, { mode: 'auto', intent: 'moderate_feature', preflightHold: () => next, tools });
+    const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+    for (let i = 0; i < 100 && !dal.residentRows(sid).some((r) => r.kind === 'tool'); i++) await new Promise((r) => setTimeout(r, 5));
+    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    finish();
+    await sessions.running(sid)!;
+    expect(dal.iterationsOf(sid)).toMatchObject([{ iteration: 1, state: 'open', interruption: 'pause' }]);
+    // The continue's pre-flight is held; the user cancels the run before it takes the open iteration up.
+    let release!: () => void;
+    next = new Promise<void>((r) => { release = r; });
+    expect(sessions.prompt(sid, 'go on').ok).toBe(true);
+    await new Promise((r) => setTimeout(r, 10));
+    expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: 'run' } })).toEqual({ ok: true });
+    release();
+    await sessions.running(sid)!;
+    expect(dal.iterationsOf(sid)).toMatchObject([{ iteration: 1, state: 'open', interruption: 'pause' }]);
   });
 
   it('PD-ORCH-005 clause 11: a quit leaves the hold as it stands and records no interruption', async () => {

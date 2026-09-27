@@ -1,4 +1,4 @@
-import { ApprovalPayloadSchema, interruptionPhrase, isTerminalChildState, resumeStateFor, type ApprovalPayload, type ChildState } from '@rotaris/contracts';
+import { ApprovalPayloadSchema, interruptionPhrase, isTerminalChildState, resumeStateFor, type ApprovalPayload, type ChildState, type Interruption } from '@rotaris/contracts';
 import type { SessionId } from '@rotaris/kernel';
 import type { ChildRow, IterationRow, StoreDal } from '@rotaris/store';
 import type { SessionWriter } from '../session-writer.js';
@@ -9,6 +9,25 @@ import { answerUnanswered } from './interruption.js';
 /** The children of a stored iteration: every child descending from its root, as the live ledger would hold them. */
 export function iterationAgents(dal: StoreDal, sessionId: SessionId, open: IterationRow): ChildRow[] {
   return treeOf(dal.childrenOfIteration(sessionId, open.iteration), (id) => id === open.root_task_id);
+}
+
+/**
+ * PD-ORCH-005 clauses 3 and 4: an agent left `paused` whose record ends on tool calls with no results — a call its
+ * execution never returned from (the stop's grace gave up on it), or one it raised out of — gains, for each, the result
+ * that it was interrupted before it completed and was not re-run, and each of those calls' rows still `running` settles
+ * with the same statement. A resume then sends a conversation whose every call has its result. Returns how many calls
+ * it answered; none when the record ends answered.
+ */
+export function answerOpenCalls(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, taskId: string, iteration: number, cause: Interruption): number {
+  const answer = answerUnanswered(conversationOf(dal.agentConversation(sessionId, taskId)), cause);
+  if (!answer) return 0;
+  writer.recordAgentMessage(taskId, iteration, 'message', answer);
+  const results = new Map(answer.content.flatMap((p) => (p.kind === 'tool-result' ? [[p.callId, p.result] as const] : [])));
+  for (const row of dal.residentRows(sessionId)) {
+    const result = row.kind === 'tool' && row.tool_status === 'running' && row.call_key !== null ? results.get(row.call_key) : undefined;
+    if (result !== undefined) writer.settleRow(row.row_index, row.body, { toolStatus: 'failed', output: result });
+  }
+  return results.size;
 }
 
 /** What `recordCrash` found and recorded. */

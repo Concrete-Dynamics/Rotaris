@@ -7,6 +7,7 @@ import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/stor
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ScriptedCall } from '@rotaris/model';
 import { RUN_CONFIG_DEFAULTS, Sessions, type ModeChange, type PortToolCall, type PortToolResult, type Publisher, type RunConfig, type SessionsDeps, type ToolPort } from '../index.js';
 import { conversationOf } from './record.js';
+import { interruptedResult } from './interruption.js';
 import { decodeStoredTodo } from '../todo-view.js';
 import type { LiveTerminal } from './run.js';
 import type { HookPort } from '../hooks-port.js';
@@ -384,6 +385,10 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
       expect(result.status).toBe('interrupted');
       expect(dal.iterationsOf(sid)).toMatchObject([{ state: 'open', interruption: 'pause' }]);
       expect(decodeStoredTodo(dal.getSession(sid)!.todo).planner!.phases[0]!.tasks[0]!.state).toBe('in_progress');
+      // The call it raised out of is answered as interrupted in the root's record, and its row settles (phase 3's third review).
+      const root = dal.iterationsOf(sid)[0]!.root_task_id;
+      expect(conversationOf(dal.agentConversation(sid, root)).at(-1)).toEqual({ role: 'tool', content: [{ kind: 'tool-result', callId: 'c1', name: 'glob', isError: true, result: interruptedResult('pause', true, '') }] });
+      expect(dal.residentRows(sid).filter((r) => r.kind === 'tool').map((r) => r.tool_status)).toEqual(['failed']);
     });
 
     it('clause 10: a pause leaves them running while the application stays open; the quit that follows ends them and records it', async () => {

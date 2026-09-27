@@ -33,7 +33,7 @@ import { WaitRegistry, type WaitState } from './waits.js';
 import type { ResolvedTrigger, TurnCompression } from './compression.js';
 import { ConversationRegistry, type ManualCompressionReport } from './conversations.js'; // Part AO
 import { ConversationRecord } from './record.js';
-import { iterationAgents } from './crash.js';
+import { answerOpenCalls, iterationAgents } from './crash.js';
 import { randomUUID } from 'node:crypto';
 import { decodeStoredTodo, editAgentTodo, encodeStoredTodo, isAgentTodoDocument, type AgentTodoDocument } from '../todo-view.js';
 
@@ -346,6 +346,10 @@ export class Run {
   private toolDeadline: TimerHandle | null = null;
   /** PD-ORCH-005 clause 2: the interruption the current iteration came to rest by, leaving it open; null while it has not. */
   private iterationRest: Interruption | null = null;
+  /** PD-ORCH-005 clause 3: the iteration this run left open at its rest — the one a later explicit cancel may close. */
+  private restedIteration: number | null = null;
+  /** PD-ORCH-005 clause 3: teardown has passed the point where the explicit cancel can still close anything. */
+  private cancelWindowClosed = false;
   private pausedAtLimit: { count: number; limit: number | null } | null = null;
   /**
    * REQ-ORCH-153: whether this run is held at the plan gate. Settled once, after the pre-flight and before the
@@ -520,7 +524,7 @@ export class Run {
    * own abort signal bounds it, so a cancel during the pass ends it as it ends any model call.
    */
   async forceCompression(): Promise<ManualCompressionReport | null> {
-    if (this.ended || this.comingToRest || this.conversations.size === 0) return null;
+    if (this.ended || this.conversations.size === 0) return null;
     return this.conversations.compressAll(this.abort.signal);
   }
   /**
@@ -758,6 +762,7 @@ export class Run {
   private async leaveIterationOpen(iteration: number, rest: Interruption): Promise<boolean> {
     const { writer } = this.deps;
     this.iterationRest = null;
+    this.restedIteration = iteration;
     writer.recordIterationInterruption(iteration, rest);
     // The root and every paused child.
     const paused = 1 + (this.children?.ledger.all().filter((c) => c.state === 'paused').length ?? 0);
@@ -778,25 +783,27 @@ export class Run {
   private async closeLeftOpenIteration(): Promise<void> {
     const closed = await this.closeOpenIteration((open) => (open.interruption === null || open.interruption === 'crash'
       ? 'the run that owned this iteration ended before it closed'
-      : `the session was continued without the agents ${interruptionPhrase(open.interruption)} had left paused`));
+      : `the session was continued without the agents ${interruptionPhrase(open.interruption)} had left paused`),
+    (c) => `Cancelled: the session was continued without this agent, which ${interruptionPhrase(c.interruption ?? '')} had left paused.`);
     if (!closed) return;
     this.initialIterations = this.iterationsCompleted;
     this.saveRunning({});
   }
 
   /**
-   * The open iteration closes `cancelled` with every agent it left paused: `iteration.end` and the row's close in one
-   * transaction, its capture, its todo task back to `pending`, and the count moved past it. False when none is open.
+   * The open iteration closes `cancelled` with every agent it left paused, each with `agentReport`'s words: `iteration.end`
+   * and the row's close in one transaction, its capture, its todo task back to `pending`, and the count moved past it.
+   * `only` names the one iteration the caller may close. False when none is open, or the open one is not that one.
    */
-  private async closeOpenIteration(summary: (open: IterationRow) => string): Promise<boolean> {
+  private async closeOpenIteration(summary: (open: IterationRow) => string, agentReport: (c: ChildRow) => string, only?: number | null): Promise<boolean> {
     const dal = this.deps.dal;
     const open = dal?.openIterationOf(this.sessionId);
-    if (!dal || !open) return false;
-    this.cancelPausedAgents(dal, open);
+    if (!dal || !open || (only !== undefined && open.iteration !== only)) return false;
+    this.cancelPausedAgents(dal, open, agentReport);
     this.deps.writer.endIteration(open.iteration, { task: this.todo.textOf(open.todo_task_id) ?? open.task, outcome: 'cancelled', summary: summary(open) }, 'cancelled');
-    // REQ-GIT-051: the iteration closes here, so its one capture is attempted here — it records the work the run that
-    // left it open had done. No child is credited: those children are not this run's. Its hooks' `iteration_end` is not
-    // fired; the hooks that saw the iteration begin belonged to that run.
+    // REQ-GIT-051: the iteration closes here, so its one capture is attempted here — it records the work done in it. No
+    // child is credited: none finished the iteration. Its hooks' `iteration_end` is not fired: an iteration left open by
+    // an earlier run began under that run's hooks, and one this run left open ends with the run.
     await this.captureCheckpoint(open.iteration, '');
     this.todo.reopen(open.todo_task_id);
     this.iterationsCompleted = Math.max(this.iterationsCompleted, open.iteration);
@@ -808,12 +815,12 @@ export class Run {
    * report saying so, before the iteration closes as cancelled. Until the resume is built this is what every continue
    * does with an iteration a rest left open; once it is, only the user's declining does.
    */
-  private cancelPausedAgents(dal: StoreDal, open: IterationRow): void {
+  private cancelPausedAgents(dal: StoreDal, open: IterationRow, report: (c: ChildRow) => string): void {
     for (const c of iterationAgents(dal, this.sessionId, open)) {
       if (c.state !== 'paused') continue;
       const r = this.deps.writer.transitionChild(c.task_id, 'cancelled', 'cancellation');
       if (!r.ok) { this.deps.warn(r.error.code === 'illegal-move' ? r.error.reason : `cancelling paused ${c.task_id} failed: ${r.error.code}`); continue; }
-      this.deps.writer.storeChildReport(c.task_id, { agent_name: c.canonical_name, role: c.persona, status: 'cancelled', summary: `Cancelled: the session was continued without this agent, which ${interruptionPhrase(c.interruption ?? '')} had left paused.`, key_findings: [], last_response: '', final_response: '', errors: [] });
+      this.deps.writer.storeChildReport(c.task_id, { agent_name: c.canonical_name, role: c.persona, status: 'cancelled', summary: report(c), key_findings: [], last_response: '', final_response: '', errors: [] });
     }
   }
 
@@ -1071,6 +1078,8 @@ export class Run {
         } else {
           this.iterationRest = this.restCause;
           rootRecord.state = 'paused';
+          // Clauses 3 and 4: a root that raised out of a call has that call answered as interrupted, as a child's is.
+          if (this.deps.dal) answerOpenCalls(this.deps.dal, writer, this.sessionId, rootTaskId, iteration, this.restCause);
         }
       } else if (children) {
         // REQ-ORCH-052: every exit path from an iteration leaves every child record terminal.
@@ -1386,7 +1395,12 @@ export class Run {
    */
   cancelAgent(taskId: string): boolean {
     if (this.ended) return false;
-    if (this.isRootAgent(taskId)) { this.stop.request('user_cancelled', false, true); return true; }
+    if (this.isRootAgent(taskId)) {
+      // Clause 3: a cancel that lands after teardown can no longer close what the rest left open is refused, not lost.
+      if (this.cancelWindowClosed) return false;
+      this.stop.request('user_cancelled', false, true);
+      return true;
+    }
     return this.children?.cancel(taskId) ?? false;
   }
 
@@ -1514,6 +1528,25 @@ export class Run {
     const elapsed = this.startedAt === null ? null : (clocks.monotonic.now() - this.startedAt) / 1000;
     // REQ-NOTIFY-093: a wait the user cancelled ends the run with the limit condition as its error, so main classifies it (REQ-NOTIFY-063).
     const error = this.lastFailure ?? this.waits.cancelledReason;
+    // REQ-HOOKS-003/081: session_end on every exit path, after the status is decided and before shutdown; `classified.result`
+    // is the one string the payload, the result and the session.end event below all carry.
+    if (this.hooks) {
+      try { await this.hooks.fireLifecycle('session_end', { status: classified.result }); } catch (cause) { this.deps.warn(`the session_end hooks raised on ${this.sessionId}: ${String(cause)}`); }
+    }
+    /*
+     * PD-ORCH-005 clause 3: the explicit cancel is final even when it lands after the rest was recorded — while this
+     * teardown ended background sessions or ran the hooks. The iteration this run left open closes `cancelled` with every
+     * agent it paused, and the background sessions a pause had left running end (found by phase 3's second review) —
+     * before the result is built, so every terminal record counts the iteration it closes (the third review). From here
+     * the cancel has nothing left to close, and a later one is refused (`cancelAgent`).
+     */
+    if (this.stop.final) {
+      try {
+        if (ended === 'pause') await this.restTerminals('stop');
+        if (await this.closeOpenIteration(() => 'the run was cancelled after it had come to rest', () => 'Cancelled: the user cancelled the run after it had come to rest.', this.restedIteration) && this.rootRecord) this.rootRecord.state = 'cancelled';
+      } catch (cause) { this.deps.warn(`closing the rested iteration of ${this.sessionId} after the cancel failed: ${String(cause)}`); }
+    }
+    this.cancelWindowClosed = true;
     const result: RunResult = {
       status: classified.result, session_id: this.sessionId, stop_reason: stopReason, summary: summary.message,
       iterations_completed: this.iterationsCompleted, report: null, tokens: this.aggregates.usagePayload().tokens, cost: this.aggregates.usagePayload().cost,
@@ -1522,22 +1555,6 @@ export class Run {
     this.result = result;
     try {
     const step = (name: string, fn: () => void) => { try { fn(); } catch (cause) { this.deps.warn(`teardown step ${name} failed on ${this.sessionId}: ${String(cause)}`); } };
-    // REQ-HOOKS-003/081: session_end on every exit path, after the status is decided and before shutdown; `result.status` is
-    // the one string the payload and the session.end event below both carry.
-    if (this.hooks) {
-      try { await this.hooks.fireLifecycle('session_end', { status: result.status }); } catch (cause) { this.deps.warn(`the session_end hooks raised on ${this.sessionId}: ${String(cause)}`); }
-    }
-    /*
-     * PD-ORCH-005 clause 3: the explicit cancel is final even when it lands after the rest was recorded — while this
-     * teardown ended background sessions or ran the hooks. The iteration the rest left open closes `cancelled` with
-     * every agent it paused, and the background sessions a pause had left running end (found by phase 3's second review).
-     */
-    if (this.stop.final) {
-      try {
-        if (ended === 'pause') await this.restTerminals('stop');
-        if (await this.closeOpenIteration(() => 'the run was cancelled after it had come to rest') && this.rootRecord) this.rootRecord.state = 'cancelled';
-      } catch (cause) { this.deps.warn(`closing the rested iteration of ${this.sessionId} after the cancel failed: ${String(cause)}`); }
-    }
 
     step('run_end', () => { writer.appendTimeline('run_end', 'rotaris', `The run ended ${status}.`, { execution_status: status, stop_reason: stopReason }); });
     step('flush-publications', () => owner.flushPending());
@@ -1547,7 +1564,7 @@ export class Run {
       // REQ-MONITOR-166: once more at the terminal state, then the sampler goes.
       this.sampler?.cancel();
       this.sampleTokens(false);
-      const systemRow = classified.result === 'interrupted' ? (this.pauseRequested ? 'Run paused at the user\'s request; continue it from the composer.' : 'Run paused: interrupted by user.')
+      const systemRow = classified.result === 'interrupted' ? (this.pauseRequested && !this.stop.final ? 'Run paused at the user\'s request; continue it from the composer.' : 'Run paused: interrupted by user.')
         : classified.result === 'failed' || classified.result === 'error' || status === 'failed' ? `Run failed: ${this.lastFailure ?? stopReason}`
           : summary.message;
       const r = writer.endRun({

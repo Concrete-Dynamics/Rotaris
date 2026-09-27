@@ -79,19 +79,19 @@ export function priorAgentContext(deps: readonly ChildRow[]): string {
 }
 
 /**
- * REQ-TOOLS-154 (1) and (6), with REQ-ORCH-047's block ahead of everything when present, then Part Y's
- * artifact blocks — `PRIOR SIBLING ARTIFACT INDEX` and, where the launch attached any, `PRIOR AGENT CONTEXT
- * (FULL)` (REQ-LIBRARY-097, REQ-LIBRARY-098). They sit after the dependency reports and before the workspace
- * root and the task, so the child reads what its dependencies found first and the session's wider index next.
- * PD-TOOLS-006's write-scope block follows the workspace root directly.
+ * REQ-TOOLS-154's order: REQ-ORCH-047's prior-agent context ahead of everything when present (REQ-ORCH-035), then
+ * (1) the workspace root with PD-TOOLS-006's write scopes immediately after it, then Part Y's artifact blocks —
+ * (3) `PRIOR SIBLING ARTIFACT INDEX` and (4), where the launch attached any, `PRIOR AGENT CONTEXT (FULL)`
+ * (REQ-LIBRARY-097, REQ-LIBRARY-098) — and (6) the task last. `artifactBlocks` arrives in that (3), (4) order.
+ * Items (2) and (5) have no block here: the verification suite REQ-ORCH-129 fills (2) from is not built, and (5) is
+ * `docs/defects/the-inherited-context-reports-never-reach-the-child.md`.
  */
 export function childPayload(workspaceRoot: string, task: string, priorContext: string, artifactBlocks: readonly string[] = [], writeScopes = ''): string {
   const parts: string[] = [];
   if (priorContext) parts.push(priorContext);
-  for (const block of artifactBlocks) if (block !== '') parts.push(block);
   parts.push(`Workspace root: ${workspaceRoot}. Treat any other absolute path you encounter as stale; every path you use is relative to this root.`);
-  // PD-TOOLS-006: the write scopes, immediately after the workspace-root prefix, and nothing when there are none.
   if (writeScopes !== '') parts.push(writeScopes);
+  for (const block of artifactBlocks) if (block !== '') parts.push(block);
   parts.push(task);
   return parts.join('\n\n');
 }

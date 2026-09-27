@@ -2967,6 +2967,17 @@ when the pause is accepted, a rest that finds nothing unfinished, and what a cra
   marked final (`StopRequest.final`), and it ends every agent `cancelled` and closes the iteration, as before. A stop the
   run raises on its own account (`agent_session_aborted`: a recording failure, the headless abort hook, a supervisor
   escalation) is no user's act and ends its agents as before.
+- **Which surface sends which.** The composer's stop control ("Stop run", then "Force stop") sends the stop, and asks
+  no confirmation: it ends nothing, and REQ-SESSION-186 asks for none. Every confirmed "Cancel the run?" — the
+  inspector's cancel of the run-level agent, the Mission view's run row and the wait header's "Cancel the run" — sends
+  the reserved run id, the final cancel, so REQ-MONITOR-126's "cannot be undone in this session" is true of it. The
+  persona window's Cancel on the run's own instance asks no confirmation, so it stays the stop: sending the final cancel
+  from there would break REQ-MONITOR-126's confirmation. `/stop` stays the stop too; REQ-CHAT-029's "MUST cancel that
+  run" is met by the run ending, and the slash command asks nothing either. *Until phase 5's repair every one of these
+  surfaces sent the stop, and the composer's stop was itself confirmed by the "Cancel the run?" dialog, so the reading
+  above — that the confirmed control reaches the engine as the reserved run id — was false of the built product: a
+  confirmed "cannot be undone" left every agent paused and resumable, and the final cancel was reachable from no
+  surface (found by phase 7's built-app rehearsal).*
 - **A plan cycle is never at rest.** Clause 11 says no agent is unfinished while the plan gate holds, and a plan cycle
   runs while it holds. A stop or a quit during a plan cycle ends the cycle's agents as before and records no
   interruption, and a crash during one leaves no open iteration: a plan cycle has no `iterations` row, and its children
@@ -3167,16 +3178,36 @@ decline too.
   resumes the root with them, and declining ends the root's iteration too. After a rest the unfinished agents are the
   paused ones; after a crash not yet recorded they are the ones the crash record will pause (clause 8 forbids recording
   it on a read), so the count does not change when the crash is recorded. A session whose root was the only
-  unfinished agent states "1 agent resumes". The count is read from the store (`SessionRecord.resumable`,
+  unfinished agent states "1 agent will resume". The count is read from the store (`SessionRecord.resumable`,
   `resumableOf`), as the plan gate is, because a session at rest has no process behind it.
-- **Where.** In the composer's notices row, below the field and its strip, on a `paused` session and on one a crash left
-  `interrupted` (REQ-SHELL-023 places the Continue action in the composer; no screen, tab or panel is added): the count
+- **Where.** In the composer's notices row, below the field and its strip, on a `paused` session, on one a crash left
+  `interrupted`, and on one a crash left persisted busy with no run behind it — REQ-CHAT-008's recovery state, which a
+  session is in when it is opened after a crash and before any repair, and whose continue by message records the crash
+  and resumes the same agents (*the second build left that state out, so the most direct crash path stated no count:
+  found by phase 5's second review*). REQ-SHELL-023 places the Continue action in the composer; no screen, tab or panel
+  is added. The row holds the count
   as a sentence ("3 agents will resume") in the row's quiet hint style, which describes every continue that resumes
   them — each carries it as its accessible description — and on a `paused` session a compact ghost "Continue without
-  them" beside it. The design material draws no paused composer; its nearest pattern is the queue card above the field,
-  a quiet line and its action, which the row follows. *The first build put the count and the decline in the strip
-  itself; at the product's default window the strip then wrapped to three lines, and at 1280×800 the decline sat past
-  its clipped edge (found by phase 5's review, measured in the built app).*
+  them" beside it. The design material draws no paused composer. The row's controls are the mockup's own: the quiet
+  hint, and the compact ghost button the session tables draw for "Resume" (*the second build cited the queue card above
+  the field as the pattern, which sits in a chrome card with a kicker and is not what the row draws — phase 5's second
+  review*). *The first build put the count and the decline in the strip itself; at the product's default window the
+  strip then wrapped to three lines, and at 1280×800 the decline sat past its clipped edge (found by phase 5's review,
+  measured in the built app).*
+- **Against PD-CHAT-001.** Its body still says "The strip SHALL carry every control the composer draws … No control SHALL
+  stand on a second chip row outside the dock", while its revision 3 quotes the same words as revision 2's and says
+  they "no longer govern". The build reads the notices row as the composer's line for notices — the plan gate's hint and
+  the pause's already stand there — and the decline as the count's own action, so neither is a chip row; the owner may
+  read the body as still governing, which would put the decline in the strip and bring back the wrap.
+- **The two continues' labels.** A paused session's strip draws two continues where the send pill stands, and at their
+  full labels ("Continue run", "Continue with a message") the strip scrolled at the full and tight densities — by 8 px
+  at a 908 px dock with the configured model and `autonomous` (phase 5's second review, measured). Each now shows a
+  short label at every density, as the pill it replaces does, with its full name as accessible name and tooltip:
+  `Continue`, which REQ-CHAT-005 as PD-CHAT-001 narrows it already gives the pill, and `Message`, which neither the
+  specification nor the glossary has — put to the owner. With them the paused strip fits at every density from a
+  548 px dock to a 968 px one with the configured model; a model id as long as revision 3's own example still scrolls
+  the full-density strip, idle or paused, since full density shows every value. *The first repair shortened them at
+  the narrow density only, which extended revision 3's enumerated rules and left the other two densities scrolling.*
 - **Declining is confirmed.** It ends the paused agents `cancelled`, which clauses 3 and 5 make final, so it asks first,
   as the two other controls that end agents `cancelled` do (REQ-MONITOR-126, REQ-MONITOR-128), stating what ends and that
   it cannot be undone (found by phase 5's review).
@@ -3189,7 +3220,9 @@ decline too.
 
 **What a ruling decides.** Whether the count should name only the paused agents, leaving the root out. Whether the
 decline should also be offered beside "Continue with a message", so a message can start a new iteration over a
-declined one. And whether the design material should draw the Continue action's paused state, which it does not.
+declined one. Whether PD-CHAT-001's body still keeps every composer control in the strip. What the message continue's
+short label should be, if not `Message`. And whether the design material should draw the Continue action's paused
+state, which it does not.
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

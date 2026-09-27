@@ -3,7 +3,7 @@ import { DELEGATION_STRATEGY_NAMES, isBusy, presentationStatus, RUN_AGENT_ID, ST
 import { AgentTable } from './AgentTable.js';
 import { AgentTree } from './AgentTree.js';
 import { cascadeNote, liveDescendants, pauseAvailability } from './agents.js';
-import { ConfirmDialog } from './ConfirmDialog.js';
+import { CANCEL_RUN_TEXT, ConfirmDialog } from './ConfirmDialog.js';
 import { markMotionStart } from './motion.js';
 import { Button as DesignButton, PageHeader as DesignPageHeader, Select as DesignSelect } from './design-system/index.js';
 
@@ -121,7 +121,7 @@ export function MissionView(props: MissionViewProps) {
       {confirming && (
         <ConfirmDialog
           title={confirming.agent.id === RUN_AGENT_ID ? 'Cancel the run?' : `Cancel ${confirming.agent.name}?`}
-          body={confirming.agent.id === RUN_AGENT_ID ? 'Cancellation cannot be undone in this session. The active run and every active task agent will be cancelled.' : `${confirming.agent.name} (${confirming.agent.persona}) will be cancelled. ${cascadeNote(confirming.cascade.length) || 'Nothing cascades.'}`}
+          body={confirming.agent.id === RUN_AGENT_ID ? CANCEL_RUN_TEXT : `${confirming.agent.name} (${confirming.agent.persona}) will be cancelled. ${cascadeNote(confirming.cascade.length) || 'Nothing cascades.'}`}
           lines={confirming.cascade.map((a) => a.name)} confirmLabel={confirming.agent.id === RUN_AGENT_ID ? 'Cancel the run' : `Cancel ${confirming.agent.name}`} cancelLabel="Keep running" destructive
           onConfirm={() => { void confirmCancel(); }} onCancel={() => setConfirming(null)} testId="mission-confirm"
         />

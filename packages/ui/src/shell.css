@@ -408,7 +408,6 @@
 .composer__dock .composer__input:focus-visible { border-color: transparent; outline: none; }
 .composer__strip { display: flex; align-items: center; gap: var(--rt-space-1); min-height: 34px; padding: var(--rt-space-1) var(--rt-space-2); border-top: var(--rt-hairline-width) solid var(--rt-divider); background: var(--rt-chrome); overflow-x: auto; scrollbar-width: none; }
 .composer__strip::-webkit-scrollbar { display: none; }
-/* PD-ORCH-005 clause 6: the Continue action's count, the strip's quiet figure (the agents panel states its count so). */
 /* PD-ORCH-005 clause 6: what the continue resumes, and the decline, as one notices line that wraps rather than widen the strip. */
 .composer__resume { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rt-space-2); }
 .composer__resume > .composer__hint { margin-right: 0; }
@@ -441,17 +440,25 @@
  * widens the dock, and no second estimate is ever drawn. What never shortens: attach, stash,
  * steer, pause and the send pill — an action without a visible label is a control without a name.
  */
-.composer__strip[data-compact='tight'] .strip-control[data-testid='chip-reasoning'] .strip-btn__value,
-.composer__strip[data-compact='tight'] .strip-control[data-testid='chip-reasoning'] .strip-btn__caret,
-.composer__strip[data-compact='tight'] .strip-control[data-testid='chip-run-start-mode'] .strip-btn__value,
-.composer__strip[data-compact='tight'] .strip-control[data-testid='chip-run-start-mode'] .strip-btn__caret,
-.composer__strip[data-compact='tight'] .strip-control[data-testid='chip-mode'] .strip-btn__value,
-.composer__strip[data-compact='tight'] .strip-control[data-testid='chip-mode'] .strip-btn__caret,
-.composer__strip[data-compact='tight'] [data-testid='composer-estimate-strip'],
+/*
+ * `narrow` shortens "additionally": it keeps every `tight` rule and adds persona and model. The rules named `tight` alone
+ * until 2026-09-27, so a narrow dock drew the four small values and the estimate again and scrolled the strip
+ * (found by PD-ORCH-005 phase 5's review; `docs/defects/fixed/a-narrow-strip-draws-the-values-tight-hides.md`).
+ */
+.composer__strip:is([data-compact='tight'], [data-compact='narrow']) .strip-control[data-testid='chip-reasoning'] .strip-btn__value,
+.composer__strip:is([data-compact='tight'], [data-compact='narrow']) .strip-control[data-testid='chip-reasoning'] .strip-btn__caret,
+.composer__strip:is([data-compact='tight'], [data-compact='narrow']) .strip-control[data-testid='chip-run-start-mode'] .strip-btn__value,
+.composer__strip:is([data-compact='tight'], [data-compact='narrow']) .strip-control[data-testid='chip-run-start-mode'] .strip-btn__caret,
+.composer__strip:is([data-compact='tight'], [data-compact='narrow']) .strip-control[data-testid='chip-mode'] .strip-btn__value,
+.composer__strip:is([data-compact='tight'], [data-compact='narrow']) .strip-control[data-testid='chip-mode'] .strip-btn__caret,
+.composer__strip:is([data-compact='tight'], [data-compact='narrow']) [data-testid='composer-estimate-strip'],
 .composer__strip[data-compact='narrow'] .strip-control[data-testid='chip-persona'] .strip-btn__value,
 .composer__strip[data-compact='narrow'] .strip-control[data-testid='chip-persona'] .strip-btn__caret,
 .composer__strip[data-compact='narrow'] .strip-control[data-testid='chip-model'] .strip-btn__value,
 .composer__strip[data-compact='narrow'] .strip-control[data-testid='chip-model'] .strip-btn__caret { display: none; }
+/* The estimate's auto margin is what pushes the strip's actions to its end; hidden, it hands that margin on to the
+ * control after it, so the actions stay at the end of a compact strip too (found by PD-ORCH-005 phase 5's review). */
+.composer__strip:is([data-compact='tight'], [data-compact='narrow']) [data-testid='composer-estimate-strip'] + * { margin-inline-start: auto; }
 /*
  * The strip's send: the primary button's own fill as a short pill (the system's ONE filled control,
  * design §1.7), carrying the mode's short label visible and the spec's own wording as its accessible

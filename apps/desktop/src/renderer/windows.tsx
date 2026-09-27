@@ -143,6 +143,8 @@ export function PersonaApp({ persona, initialSelect }: { persona: string; initia
       persona={persona} session={state.session} rows={state.rows} runLevel={runLevel} declaredTools={declared} selectedAgentId={selected} onSelectTab={setSelected}
       nowIso={nowIso} compressionThresholdPercent={snapshot?.compressorThresholdPercentage ?? 60} focusSteer={focusSteer}
       onSteer={(agentId, text) => control('submitSteeringPrompt', { agentId, text }, 'Steering is unavailable for this run.')}
+      // The run's own instance has an unconfirmed Cancel here, so it is the stop, never REQ-MONITOR-126's final cancel,
+      // which must be confirmed: the run comes to rest and its agents resume on a continue (PD-ORCH-005 clause 3, OQ-69).
       onCancel={(agentId) => (agentId === RUN_AGENT_ID ? stopRun(false) : cancelAgent(agentId))}
     />
     {/* ADR-0049's fourth decision: the acknowledgement stack is PER WINDOW, so this window owns its own — the same

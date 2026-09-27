@@ -1,4 +1,4 @@
-import { useEffect, useId } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { Button as DesignButton } from './design-system/index.js';
 
 /**
@@ -6,6 +6,12 @@ import { Button as DesignButton } from './design-system/index.js';
  * list, Cancel as the DEFAULT (focused, and Escape), and one confirm — destructive when the action discards work.
  * REQ-GIT-117 relies on every dismissal path resolving to "do not delete", so closing by any route calls `onCancel`.
  */
+/**
+ * REQ-MONITOR-126: the confirmation the run's cancel states — the one text every surface that cancels the whole run
+ * shows. PD-ORCH-005 clause 3 keeps that cancel final, so "cannot be undone" stays true of it (OQ-69).
+ */
+export const CANCEL_RUN_TEXT = 'Cancellation cannot be undone in this session. The active run and every active task agent will be cancelled.';
+
 export interface ConfirmDialogProps {
   readonly title: string;
   readonly body: string;
@@ -21,16 +27,21 @@ export interface ConfirmDialogProps {
 
 export function ConfirmDialog({ title, body, lines = [], confirmLabel, cancelLabel = 'Cancel', destructive = false, busy = false, onConfirm, onCancel, testId }: ConfirmDialogProps) {
   const titleId = useId();
+  const bodyId = useId();
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape' && !busy) { event.preventDefault(); onCancel(); } };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onCancel, busy]);
+  // WAI-ARIA's dialog pattern: focus goes back to the control that opened the dialog when it closes, by any route. The
+  // opener is read on the first render, before `autoFocus` moves focus into the dialog at commit.
+  const [opener] = useState(() => (typeof document === 'undefined' ? null : document.activeElement));
+  useEffect(() => () => { if (opener instanceof HTMLElement && opener.isConnected) opener.focus(); }, [opener]);
   return (
     <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onCancel(); }}>
-      <div className="dialog confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby={titleId} data-testid={testId}>
+      <div className="dialog confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={bodyId} data-testid={testId}>
         <h2 id={titleId} className="dialog-title">{title}</h2>
-        <p className="dialog-body confirm-dialog__body">{body}</p>
+        <p id={bodyId} className="dialog-body confirm-dialog__body">{body}</p>
         {lines.length > 0 && <ul className="dialog-body confirm-dialog__lines">{lines.map((line) => <li key={line}>{line}</li>)}</ul>}
         <div className="dialog-actions">
           <DesignButton type="button" className="btn btn-secondary" autoFocus disabled={busy} onClick={onCancel}>{cancelLabel}</DesignButton>

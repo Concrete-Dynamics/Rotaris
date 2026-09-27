@@ -142,3 +142,26 @@ describe('PD-ORCH-005 clause 6: the Continue action', () => {
     expect(a.sent).toEqual([{ kind: 'session.continue', sessionId: 'S1', action: 'continue', withoutPaused: true }]);
   });
 });
+
+describe('PD-ORCH-005 clause 3: the stop comes to rest, and the confirmed cancel of the run is final (OQ-69)', () => {
+  it('the stop is the `cancel` control, graceful and then forced — the run comes to rest and its agents resume on a continue', async () => {
+    const a = actions([{ ok: true, value: { ok: true } }, { ok: true, value: { ok: true } }]);
+    expect(await a.stopRun(false)).toEqual({ ok: true });
+    expect(await a.stopRun(true)).toEqual({ ok: true });
+    expect(a.sent).toEqual([
+      { kind: 'session.control', request: { op: 'cancel', sessionId: 'S1', args: { force: false } } },
+      { kind: 'session.control', request: { op: 'cancel', sessionId: 'S1', args: { force: true } } },
+    ]);
+  });
+
+  it('the run\'s cancel is the reserved run id\'s cancellation (REQ-MONITOR-009), never the stop, and a refusal says the run is no longer cancellable (REQ-MONITOR-127)', async () => {
+    const a = actions([{ ok: true, value: { ok: true } }, { ok: true, value: { ok: false } }]);
+    expect(await a.cancelRun()).toEqual({ ok: true });
+    expect(await a.cancelRun()).toEqual({ ok: false, reason: 'The run is no longer cancellable.' });
+    expect(a.sent).toEqual([
+      { kind: 'session.control', request: { op: 'cancelAgent', sessionId: 'S1', args: { agentId: 'run' } } },
+      { kind: 'session.control', request: { op: 'cancelAgent', sessionId: 'S1', args: { agentId: 'run' } } },
+    ]);
+    expect(await actions([], null).cancelRun()).toEqual({ ok: false, reason: 'No run is active.' });
+  });
+});

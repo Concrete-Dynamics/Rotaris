@@ -21,7 +21,7 @@ import '@phosphor-icons/web/fill';
 
 // The window itself: the bridge, the replica and the two stacks, the terminal registry, the display preferences and
 // the theme — everything this window has before a surface mounts (`shell.ts`).
-import { acknowledge, acknowledgements, answerQuestions, bridge, cancelAgent, cancelQuestions, continueSession, control, displayPrefs, notices, openLink, pendingDisplay, planDecision, planEdit, readDisplayPrefs, refreshStats, replica, setMode, setRunStartMode, stopRun, submitPrompt, terminalHost, windowTheme, writeDisplayPref } from './shell.js';
+import { acknowledge, acknowledgements, answerQuestions, bridge, cancelAgent, cancelQuestions, cancelRun, continueSession, control, displayPrefs, notices, openLink, pendingDisplay, planDecision, planEdit, readDisplayPrefs, refreshStats, replica, setMode, setRunStartMode, stopRun, submitPrompt, terminalHost, windowTheme, writeDisplayPref } from './shell.js';
 // What a transcript surface reads about the session it is following, shared with the persona window (`session-view.ts`).
 import { entryOf, openPersona, personasOf, useConfigSnapshot, useElapsedTick } from './session-view.js';
 // The other windows this same bundle is the root of, each one a role on the route (`windows.tsx`, ADR-0056).
@@ -309,7 +309,7 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
     onOpenTrailer={onOpenTrailer}
     onAnswerQuestions={answerQuestions}
     onCancelQuestions={cancelQuestions}
-    session={session} rows={rows} onSubmit={submitPrompt} onStop={stopRun} onSetMode={setMode} onCancelAgent={cancelAgent} nowIso={nowIso}
+    session={session} rows={rows} onSubmit={submitPrompt} onStop={stopRun} onCancelRun={cancelRun} onSetMode={setMode} onCancelAgent={cancelAgent} nowIso={nowIso}
     onPageOlder={pageOlder} reachedOldest={reachedOldest} groupTools={groupTools} displayCaps={pendingCaps ?? snapshot?.display}
     onStash={(text) => prompts.push('stash', text)} stashCount={prompts.stash.length} onOpenStash={onOpenStash}
     onRecordPrompt={(text) => prompts.push('history', text)}
@@ -345,7 +345,7 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
 /**
  * REQ-SHELL-023's Mission view (Part R; REQ-MONITOR-274..276). Mounted only while shown (REQ-MONITOR-039/275: a hidden
  * surface refreshes nothing and runs no timer); the strategy and the depth are the settings' own values, written through
- * the per-field path (REQ-CONFIG-321, REQ-CONFIG-112); pause is the existing `pause` control, cancel `cancelAgent`/`cancel`.
+ * the per-field path (REQ-CONFIG-321, REQ-CONFIG-112); pause is the existing `pause` control, and cancel is `cancelAgent` — for the run row the reserved run id, final (`cancelRun`, OQ-69).
  */
 function Mission({ workspace, popOut }: { workspace: string; popOut: boolean }) {
   const session = useStore(replica, (s) => s.session);
@@ -376,7 +376,7 @@ function Mission({ workspace, popOut }: { workspace: string; popOut: boolean }) 
     strategy={snapshot?.delegationStrategy ?? null} maxDepth={snapshot?.runtime.max_depth ?? null}
     onSetStrategy={(value) => setField({ rotaris: { delegation_strategy: value } })} onSetDepth={(value) => setField({ runtime: { max_depth: value } })}
     onPause={() => control('pause', {}, 'Pause is unavailable because no active run exists.')}
-    onCancelAgent={cancelAgent} onCancelRun={() => stopRun(false)}
+    onCancelAgent={cancelAgent} onCancelRun={cancelRun}
     onOpen={open} onPopOut={(agent) => { void openPersona(agent, false); }}
   />;
 }

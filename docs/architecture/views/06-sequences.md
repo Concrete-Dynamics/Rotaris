@@ -239,8 +239,9 @@ sequenceDiagram
   background sessions ended. Loading the session writes nothing.
 - **The explicit cancel is not a rest.** The reserved run id's final stop cancels the waits, drains and finalizes as
   before: every agent `cancelled`, the iteration closed — including when it arrives while a pause or a stop is still
-  coming to rest, or later while teardown runs (the open iteration then closes before the terminal save). It ends the
-  agents' background sessions as a stop does (OQ-69).
+  coming to rest, or later while teardown runs (the iteration this run left open then closes before the run's result is
+  built; a cancel after that is refused). It ends the agents' background sessions as a stop does, and lets a child
+  summarising during REQ-ORCH-080's drain finish (OQ-69).
 - **The next continue resumes it** (`03-runtime-view.md` §2): the open iteration first, the same root and task, every
   paused agent moved back and carrying on from its record, told of its background sessions, the root handed a new
   message as its next. Declined ("continue without them"), its paused agents end `cancelled` and it closes before the

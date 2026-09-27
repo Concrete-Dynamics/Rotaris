@@ -5,6 +5,7 @@ import type { ChildRow, StoreDal } from '@rotaris/store';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { SessionWriter } from '../session-writer.js';
 import { runTurn, type SteeringPrompt, type ToolPort, type TurnOutcome } from '../run/turn.js';
+import { answerOpenCalls } from '../run/crash.js';
 import type { AttachmentOutcome, BackgroundOutput, DelegateOutcome, DelegateRequest, DelegationOps, WaitOutcome } from './delegation.js';
 import { fullContextBlock, siblingIndexBlock, type AttachedResolution } from '../artifacts/context.js';
 import type { ArtifactStore } from '../artifacts/store.js';
@@ -397,7 +398,12 @@ export class IterationChildren implements DelegationOps {
       const r = this.ledger.rest(c.task_id, cause, into);
       if (!r.ok) this.deps.warn(r.reason);
     }
-    return this.ledger.all().filter((c) => this.ledger.get(c.task_id)?.state === 'paused').length;
+    // Clauses 3 and 4: a paused child whose execution never returned from a call, or raised out of one, has its open
+    // calls answered as interrupted, so it resumes from a record whose every call has its result (found by phase 3's
+    // third review).
+    const paused = this.ledger.all().filter((c) => this.ledger.get(c.task_id)?.state === 'paused');
+    for (const c of paused) answerOpenCalls(this.deps.dal, this.deps.writer, this.deps.sessionId, { taskId: c.task_id, name: c.canonical_name }, c.iteration, cause);
+    return paused.length;
   }
 
   /**
@@ -737,11 +743,13 @@ export class IterationChildren implements DelegationOps {
     /*
      * REQ-ORCH-133 (the repair of `cancelling-one-child-does-not-stop-it.md`): the summarising pass runs under this
      * child's own abort too, so a cancel while it summarises stops it, and what it produced is not stored over the
-     * cancellation's report. PD-ORCH-005: nothing summarises once the run is coming to rest.
+     * cancellation's report. PD-ORCH-005: nothing summarises once the run is coming to rest, so a stop's or a quit's abort
+     * ends the pass. The explicit cancel's does not: REQ-ORCH-080's drain lets a finishing child write its report
+     * "without cancelling" it, as before (clause 3: "as today"; found by phase 3's third review).
      */
     const summarising = new AbortController();
     this.controllers.set(row.task_id, summarising);
-    const onRunAbortWhileSummarising = () => summarising.abort();
+    const onRunAbortWhileSummarising = () => { if ((deps.restCause?.() ?? null) !== null) summarising.abort(); };
     deps.runSignal.addEventListener('abort', onRunAbortWhileSummarising, { once: true });
     const reportInput: ReportInput = { agentName: row.canonical_name, role: row.persona, status, messages, toolCallCount: toolCalls, toolsUsed: [...new Set(messages.flatMap((m) => m.content.flatMap((p) => (p.kind === 'tool-call' ? [p.name] : []))))], lastText, finalTextIsFinal: finalIsFinal, errors };
     let produced: Awaited<ReturnType<typeof produceReport>>;
@@ -752,15 +760,13 @@ export class IterationChildren implements DelegationOps {
       this.controllers.delete(row.task_id);
     }
     if (this.detached || isTerminalChildState(this.ledger.get(row.task_id)?.state ?? 'cancelled')) return;
-    // The explicit cancel landing while this child summarised ends it `cancelled`, as one landing before would have.
-    const cancelledNow = cancelled || (deps.runSignal.aborted && (deps.restCause?.() ?? null) === null);
     if (produced === null) {
       /*
        * PD-ORCH-005 clauses 2 and 3: the summarising pass was cut short — a stop's or a quit's abort, or a pause that
        * allowed no second attempt. It produced no report, so this child has not finished: it is left `paused`, and it
        * summarises again when it resumes (found by phase 3's second review).
        */
-      const restNow = this.resting && !cancelledNow ? deps.restCause?.() ?? null : null;
+      const restNow = this.resting ? deps.restCause?.() ?? null : null;
       if (restNow !== null) {
         const r = this.ledger.rest(row.task_id, restNow, 'summarizing', toolCalls);
         if (!r.ok) deps.warn(r.reason);
@@ -770,8 +776,8 @@ export class IterationChildren implements DelegationOps {
     }
     const report = cutOff === null ? produced : { ...produced, cut_off: cutOff };
     this.ledger.storeReport(row.task_id, report as unknown as Record<string, unknown>);
-    const terminal = cancelledNow ? 'cancelled' : status === 'failed' ? 'failed' : reportStatusToState(report.status);
-    const t = cancelledNow ? this.ledger.transition(row.task_id, 'cancelled', 'cancellation') : this.ledger.transition(row.task_id, terminal);
+    const terminal = cancelled ? 'cancelled' : status === 'failed' ? 'failed' : reportStatusToState(report.status);
+    const t = cancelled ? this.ledger.transition(row.task_id, 'cancelled', 'cancellation') : this.ledger.transition(row.task_id, terminal);
     if (!t.ok) deps.warn(t.reason);
     // REQ-ORCH-098: teardown, whatever the terminal state.
     const at = toIsoUtc(deps.clocks.wall.instant());

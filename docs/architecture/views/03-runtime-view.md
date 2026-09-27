@@ -202,17 +202,23 @@ hard-cancel budget — and leaves each unfinished child `paused` where it stood 
 execution record `paused`, and the iteration open (above). A child whose `child_timeout` expired during the rest ends
 `failed` as it would have without one, unsummarised; one whose execution raised is left `paused`, as the root is
 (**OQ-69**). An execution a stop's grace gave up on is **detached**: when it returns it writes nothing — no row, no
-record, no report (REQ-SESSION-094). A rest that finds nothing unfinished closes the iteration as before. The cause is
+record, no report (REQ-SESSION-094). Every agent the rest leaves paused, the root included, has any call it never
+returned from or raised out of answered in its record as interrupted, its row settled (`answerOpenCalls`, which the crash
+record uses for a dead run's agents too), so a resume sends a conversation whose every call has its result; a call of
+that step that completed keeps what it returned, read back from its settled row. A rest that finds nothing unfinished closes the iteration as before. The cause is
 read again once the rest is done: the explicit cancel that arrived meanwhile ends every agent the rest paused
-`cancelled` and closes the iteration; one that arrives later, during teardown, closes the open iteration the same way
-before the terminal save. At teardown a run records what became of its agents' background sessions (clause 10:
+`cancelled` and closes the iteration; one that arrives later, during teardown, closes the iteration this run left open
+the same way before the run's result is built, and one after that is refused. The explicit cancel does not abort a
+child's summarising pass: REQ-ORCH-080's drain lets it finish, as before. At teardown a run records what became of its agents' background sessions (clause 10:
 `restTerminals` — a pause leaves them running, a stop, a quit and the explicit cancel record their end and then end
 them). The explicit cancel keeps REQ-ORCH-080's drain and REQ-ORCH-052's finalize.
 
 **A crash (clause 3; `run/crash.ts`).** A run host that died wrote none of that, so `recordCrash` writes it from the
 store when the session is next repaired (`repairOne`) or continued (`launchContinuation`, before the stale-child settle,
 which now leaves a `paused` agent alone): the open iteration's interruption `crash`, its unfinished agents `paused`, an
-unanswered last `assistant` message answered as interrupted, the stored approvals withdrawn, and the background
+unanswered last `assistant` message answered (`answerOpenCalls`: a call whose row settled keeps its result, one whose
+row is `running` is answered as interrupted and its row settles, and one with no row, which never started, is answered
+as not run), the stored approvals withdrawn, and the background
 sessions still recorded running and not held by this process ended by the crash. Loading a session records and
 settles nothing (clause 8).
 

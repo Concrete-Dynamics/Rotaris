@@ -83,10 +83,11 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
     expect(state('bg_000000c4')).toMatchObject({ state: 'succeeded', interruption: null });
     // Not this iteration's agent: left for the stale-child settle.
     expect(state('bg_000000x1')).toMatchObject({ state: 'running', interruption: null });
-    // The root's two calls are answered as interrupted by the crash; the child, whose record ends on an answer, gains nothing.
+    // The root's two calls, which have no rows and so never started, are answered as not run by the crash; the child,
+    // whose record ends on an answer, gains nothing.
     expect(conversationOf(dal.agentConversation(sid, ROOT)).at(-1)).toEqual({ role: 'tool', content: [
-      { kind: 'tool-result', callId: 'a', name: 'grep', isError: true, result: interruptedResult('crash', true, '') },
-      { kind: 'tool-result', callId: 'b', name: 'glob', isError: true, result: interruptedResult('crash', true, '') },
+      { kind: 'tool-result', callId: 'a', name: 'grep', isError: true, result: interruptedResult('crash', false, '') },
+      { kind: 'tool-result', callId: 'b', name: 'glob', isError: true, result: interruptedResult('crash', false, '') },
     ] });
     expect(conversationOf(dal.agentConversation(sid, 'bg_000000c1')).map((m) => m.role)).toEqual(['user', 'assistant']);
     // Clause 9: withdrawn, never denied — the list is emptied and the timeline names the crash.
@@ -99,6 +100,31 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
     const before = { messages: dal.agentMessagesOf(sid, ROOT).length, timeline: dal.timelineOf(sid).length };
     expect(recordCrash(dal, writer, sid, new Set(['ts_live']), () => undefined)).toEqual({ iteration: null, paused: 0, withdrawn: 0, terminals: 0 });
     expect({ messages: dal.agentMessagesOf(sid, ROOT).length, timeline: dal.timelineOf(sid).length }).toEqual(before);
+  });
+
+  it('clauses 3 and 4 (found by phase 3\'s fourth review): a call that completed before the crash keeps what it returned, and only the call still running is answered as interrupted, its row settling (docs/defects/fixed/a-crash-leaves-its-tool-rows-running.md)', () => {
+    const sid = 'S-completed' as SessionId;
+    const writer = created(sid);
+    dal.insertIteration({ session_id: sid, iteration: 1, root_task_id: ROOT, root_canonical_name: 'orchestrator', root_persona: 'orchestrator', todo_task_id: 't', task: 't', opened_at: 't' });
+    writer.recordAgentMessage(ROOT, 1, 'message', { role: 'assistant', content: [{ kind: 'tool-call', callId: 'a', name: 'write', args: '{}' }, { kind: 'tool-call', callId: 'b', name: 'grep', args: '{}' }] });
+    // An earlier step's call with an id this step reuses: the call's row is the latest (REQ-ORCH-141).
+    writer.appendRow('tool', 'grep', true, { name: 'orchestrator', toolName: 'grep', toolStatus: 'ok', callKey: 'b', output: 'an earlier answer' });
+    writer.appendRow('tool', 'write', true, { name: 'orchestrator', toolName: 'write', toolStatus: 'ok', callKey: 'a', output: 'wrote the file' });
+    writer.appendRow('tool', 'grep', false, { name: 'orchestrator', toolName: 'grep', toolStatus: 'running', callKey: 'b', output: 'a.ts:1' });
+    // Another agent's call with the same id — local providers number calls — is not the root's.
+    writer.appendRow('tool', 'glob', false, { name: 'c9', toolName: 'glob', toolStatus: 'running', callKey: 'b' });
+    recordCrash(dal, writer, sid, new Set(), () => undefined);
+    expect(conversationOf(dal.agentConversation(sid, ROOT)).at(-1)).toEqual({ role: 'tool', content: [
+      { kind: 'tool-result', callId: 'a', name: 'write', isError: false, result: 'wrote the file' },
+      { kind: 'tool-result', callId: 'b', name: 'grep', isError: true, result: interruptedResult('crash', true, 'a.ts:1') },
+    ] });
+    // REQ-SESSION-129: the row a crash left running settles `failed`, keeping the output it had recorded.
+    expect(dal.residentRows(sid).map((r) => [r.name, r.tool_name, r.tool_status, r.output])).toEqual([
+      ['orchestrator', 'grep', 'ok', 'an earlier answer'],
+      ['orchestrator', 'write', 'ok', 'wrote the file'],
+      ['orchestrator', 'grep', 'failed', interruptedResult('crash', true, 'a.ts:1')],
+      ['c9', 'glob', 'running', null],
+    ]);
   });
 
   it('an iteration a rest left open is not a crash\'s: its interruption and its agents are left as they are', () => {
@@ -186,10 +212,11 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       expect(JSON.parse(dal.getChild(sid, 'bg_000000x1')!.report!)).toMatchObject({ summary: expect.stringMatching(/^Cancelled: the run that owned this child ended/) });
       expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.state, r.outcome, r.interruption])).toEqual([[1, 'closed', 'succeeded', null], [2, 'closed', 'succeeded', null]]);
       const root = conversationOf(dal.agentConversation(sid, ROOT));
+      // The root's two calls had no rows, so they never started: the crash's answers say they were not run.
       expect(root.slice(2, 4)).toEqual([
         { role: 'tool', content: [
-          { kind: 'tool-result', callId: 'a', name: 'grep', isError: true, result: interruptedResult('crash', true, '') },
-          { kind: 'tool-result', callId: 'b', name: 'glob', isError: true, result: interruptedResult('crash', true, '') },
+          { kind: 'tool-result', callId: 'a', name: 'grep', isError: true, result: interruptedResult('crash', false, '') },
+          { kind: 'tool-result', callId: 'b', name: 'glob', isError: true, result: interruptedResult('crash', false, '') },
         ] },
         { role: 'user', content: [{ kind: 'text', text: 'second' }] },
       ]);

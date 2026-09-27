@@ -7,6 +7,7 @@ import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/stor
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ScriptedCall } from '@rotaris/model';
 import { RUN_CONFIG_DEFAULTS, Sessions, type ModeChange, type PortToolCall, type PortToolResult, type Publisher, type RunConfig, type SessionsDeps, type ToolPort } from '../index.js';
 import { conversationOf } from './record.js';
+import { interruptedResult } from './interruption.js';
 import { decodeStoredTodo } from '../todo-view.js';
 import type { LiveTerminal } from './run.js';
 import type { HookPort } from '../hooks-port.js';
@@ -394,16 +395,25 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
     it('a call that raises while the run comes to rest leaves the iteration open to be resumed, not failed and abandoned', async () => {
       let raise!: () => void;
       const raised = new Promise<void>((r) => { raise = r; });
-      const port: ToolPort = { ...fakePort().port, dispatch: async () => { await raised; throw new Error('the tool host went away'); } };
-      const { sessions } = sessionsWith([toolCalls([{ callId: 'c1', name: 'glob', args: {} }]), answer('never')], port);
+      const fake = fakePort().port;
+      const port: ToolPort = { ...fake, dispatch: async (c, signal) => { if (c.name !== 'glob') return fake.dispatch(c, signal); await raised; throw new Error('the tool host went away'); } };
+      const { sessions } = sessionsWith([toolCalls([{ callId: 'c0', name: 'write_file', args: { path: 'a.txt' } }, { callId: 'c1', name: 'glob', args: {} }]), answer('never')], port);
       const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
-      await settle(() => dal.residentRows(sid).some((r) => r.kind === 'tool'));
+      await settle(() => dal.residentRows(sid).some((r) => r.kind === 'tool' && r.tool_name === 'glob'));
       expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
       raise();
       const result = await sessions.running(sid)!;
       expect(result.status).toBe('interrupted');
       expect(dal.iterationsOf(sid)).toMatchObject([{ state: 'open', interruption: 'pause' }]);
       expect(decodeStoredTodo(dal.getSession(sid)!.todo).planner!.phases[0]!.tasks[0]!.state).toBe('in_progress');
+      // The call it raised out of is answered as interrupted in the root's record, and its row settles (phase 3's third
+      // review); the call that completed before it in the same step keeps what it returned (phase 3's fourth review).
+      const root = dal.iterationsOf(sid)[0]!.root_task_id;
+      expect(conversationOf(dal.agentConversation(sid, root)).at(-1)).toEqual({ role: 'tool', content: [
+        { kind: 'tool-result', callId: 'c0', name: 'write_file', isError: false, result: 'wrote a.txt' },
+        { kind: 'tool-result', callId: 'c1', name: 'glob', isError: true, result: interruptedResult('pause', true, '') },
+      ] });
+      expect(dal.residentRows(sid).filter((r) => r.kind === 'tool').map((r) => [r.tool_name, r.tool_status])).toEqual([['write_file', 'ok'], ['glob', 'failed']]);
     });
 
     it('clause 10: a pause leaves them running while the application stays open; the quit that follows ends them and records it', async () => {

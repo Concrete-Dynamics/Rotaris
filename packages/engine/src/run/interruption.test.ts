@@ -34,16 +34,27 @@ describe('PD-ORCH-005: the interrupted result', () => {
     expect(interruptedResult(null, false, '')).toBe('This call was not run: its agent was stopped before it started, and it was not re-run. Issue it again if it is still needed.');
   });
 
-  it('after a crash, the calls of a last assistant message with no results are each answered as interrupted; anything else is left as it is', () => {
+  it('after a crash, the calls of a last assistant message with no results and no rows are each answered as never started; anything else is left as it is', () => {
+    const none = () => undefined;
     const calls: ChatMessage = { role: 'assistant', content: [{ kind: 'text', text: 'Two.' }, { kind: 'tool-call', callId: 'a', name: 'probe', args: '{}' }, { kind: 'tool-call', callId: 'b', name: 'grep', args: '{}' }] };
-    const answered = answerUnanswered([{ role: 'user', content: [{ kind: 'text', text: 'go' }] }, calls], 'crash');
+    const answered = answerUnanswered([{ role: 'user', content: [{ kind: 'text', text: 'go' }] }, calls], 'crash', none);
     expect(answered).toEqual({ role: 'tool', content: [
-      { kind: 'tool-result', callId: 'a', name: 'probe', isError: true, result: interruptedResult('crash', true, '') },
-      { kind: 'tool-result', callId: 'b', name: 'grep', isError: true, result: interruptedResult('crash', true, '') },
+      { kind: 'tool-result', callId: 'a', name: 'probe', isError: true, result: interruptedResult('crash', false, '') },
+      { kind: 'tool-result', callId: 'b', name: 'grep', isError: true, result: interruptedResult('crash', false, '') },
     ] });
-    expect(answerUnanswered([calls, answered!], 'crash')).toBeNull();
-    expect(answerUnanswered([{ role: 'assistant', content: [{ kind: 'text', text: 'done' }] }], 'crash')).toBeNull();
-    expect(answerUnanswered([], 'crash')).toBeNull();
+    expect(answerUnanswered([calls, answered!], 'crash', none)).toBeNull();
+    expect(answerUnanswered([{ role: 'assistant', content: [{ kind: 'text', text: 'done' }] }], 'crash', none)).toBeNull();
+    expect(answerUnanswered([], 'crash', none)).toBeNull();
+  });
+
+  it('a call that completed keeps what it returned; only a call cut off before its result arrived is answered as interrupted (found by phase 3\'s fourth review)', () => {
+    const calls: ChatMessage = { role: 'assistant', content: [{ kind: 'tool-call', callId: 'w', name: 'write', args: '{}' }, { kind: 'tool-call', callId: 'x', name: 'lint', args: '{}' }, { kind: 'tool-call', callId: 'b', name: 'boom', args: '{}' }] };
+    const known = new Map([['w', { result: 'wrote the file', isError: false }], ['x', { result: 'two warnings', isError: true }]]);
+    expect(answerUnanswered([calls], 'pause', (id) => known.get(id))).toEqual({ role: 'tool', content: [
+      { kind: 'tool-result', callId: 'w', name: 'write', isError: false, result: 'wrote the file' },
+      { kind: 'tool-result', callId: 'x', name: 'lint', isError: true, result: 'two warnings' },
+      { kind: 'tool-result', callId: 'b', name: 'boom', isError: true, result: interruptedResult('pause', false, '') },
+    ] });
   });
 });
 

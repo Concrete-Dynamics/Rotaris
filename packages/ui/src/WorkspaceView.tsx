@@ -18,7 +18,7 @@ import { COMMAND_NOT_RUN_TITLE, defaultUnavailableReason, parseSlash, slashNameT
 import { SlashPopup, slashRowId } from './slash/SlashPopup.js';
 import type { SlashCommand, SlashContext, SlashOutcome } from './slash/types.js';
 import { AgentTree } from './AgentTree.js';
-import { liveDescendants, runLevelAgent } from './agents.js';
+import { cancelConfirmation, runLevelAgent } from './agents.js';
 import { Inspector, type PersonaEntry } from './Inspector.js';
 import { useShellState } from './shell-state.js';
 import { DelegationHeader, ScopeToggle, scopedRows, type Acknowledger } from './TranscriptSurface.js';
@@ -31,7 +31,7 @@ import { addImageBytes, composerTokenEstimate } from './attachments.js';
 import { PlanGate } from './PlanGate.js';
 import { QuestionForm } from './QuestionStepper.js';
 import './attachments.css';
-import { CANCEL_RUN_TEXT, ConfirmDialog } from './ConfirmDialog.js';
+import { ConfirmDialog } from './ConfirmDialog.js';
 import { Button as DesignButton, Input as DesignInput, PopoverMenu, SearchableSelect as DesignSearchableSelect, SendPill as DesignSendPill, StripActionButton, TextArea as DesignTextArea } from './design-system/index.js';
 
 // Part AA: the row helpers moved to `transcript/Row.tsx`, the ONE row renderer, and are exported from the package
@@ -674,7 +674,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
   const [attachments, setAttachments] = useState<ImageAttachmentInput[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
   const [stopRequested, setStopRequested] = useState(false);
-  const [confirming, setConfirming] = useState<'cancelRun' | 'decline' | { agent: { id: string; name: string }; descendants: string[] } | null>(null);
+  const [confirming, setConfirming] = useState<'cancelRun' | 'decline' | { agent: { id: string; name: string } } | null>(null);
   const [steering, setSteering] = useState<{ id: string; name: string } | null>(null);
   const [pausePending, setPausePending] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -1032,7 +1032,6 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
     if (!r.ok) setError(r.reason); else setError(null);
   };
   // REQ-MONITOR-064: the live descendants, by the one rule every agent surface applies.
-  const descendantsOf = (id: string): string[] => liveDescendants(session?.agents ?? [], id).map((a) => a.name);
 
   /**
    * REQ-CHAT-001: Enter submits, Shift+Enter inserts a newline.
@@ -1159,7 +1158,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
   if (seenSelection !== selectedAgent) { setSeenSelection(selectedAgent); if (narrow && selectedAgent !== null) setDrawer('inspector'); }
   const inspectorCancel = (agent: AgentRecord) => {
     if (agent.id === RUN_AGENT_ID) { if (onCancelRun) setConfirming('cancelRun'); return; }
-    setConfirming({ agent: { id: agent.id, name: agent.name }, descendants: descendantsOf(agent.id) });
+    setConfirming({ agent: { id: agent.id, name: agent.name } });
   };
   const inspector = (
     <Inspector session={session} rows={rows} personas={personas} runLevel={runLevel} selectedAgentId={selectedAgent} onSelect={(id) => select(id, 'click')} models={models}
@@ -1273,7 +1272,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
               <DesignButton type="button" className="btn btn-ghost agents__cancel" onClick={() => setSteering({ id: selected.id, name: selected.name })}>Steer {selected.name}</DesignButton>
             )}
             {selected && !['done', 'failed', 'cancelled'].includes(selected.presentationState) && onCancelAgent && (
-              <DesignButton type="button" className="btn btn-ghost agents__cancel" onClick={() => setConfirming({ agent: { id: selected.id, name: selected.name }, descendants: descendantsOf(selected.id) })}>Cancel {selected.name}</DesignButton>
+              <DesignButton type="button" className="btn btn-ghost agents__cancel" onClick={() => setConfirming({ agent: { id: selected.id, name: selected.name } })}>Cancel {selected.name}</DesignButton>
             )}
           </div>
           <AgentTree agents={agents} selected={selectedAgent} onSelect={select} nowIso={nowIso} />
@@ -1580,13 +1579,13 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
         </div>
       </form>
       {confirming === 'cancelRun' && (
-        <ConfirmDialog title="Cancel the run?" body={CANCEL_RUN_TEXT} confirmLabel="Cancel the run" cancelLabel="Keep running" destructive testId="cancel-run-confirm" onCancel={() => setConfirming(null)} onConfirm={() => { setConfirming(null); void cancelRun(); }} />
+        <ConfirmDialog {...cancelConfirmation({ id: RUN_AGENT_ID, name: 'the run' }, session?.agents ?? [])} cancelLabel="Keep running" destructive testId="cancel-run-confirm" onCancel={() => setConfirming(null)} onConfirm={() => { setConfirming(null); void cancelRun(); }} />
       )}
       {confirming === 'decline' && resumable && (
         <ConfirmDialog title="Continue without them?" body={declineText(resumable.agents)} confirmLabel="Continue without them" cancelLabel="Keep them" destructive testId="decline-confirm" onCancel={() => setConfirming(null)} onConfirm={() => { setConfirming(null); void continueRun(true); }} />
       )}
       {confirming !== null && confirming !== 'cancelRun' && confirming !== 'decline' && (
-        <ConfirmDialog title={`Cancel ${confirming.agent.name}?`} body={confirming.descendants.length > 0 ? 'Its live descendants will be cancelled with it:' : 'The agent will be cancelled.'} lines={confirming.descendants} confirmLabel={`Cancel ${confirming.agent.name}`} cancelLabel="Keep running" destructive onCancel={() => setConfirming(null)} onConfirm={() => { const target = confirming.agent; setConfirming(null); void onCancelAgent?.(target.id).then((r) => { if (!r.ok) setError(r.reason); }); }} />
+        <ConfirmDialog {...cancelConfirmation(confirming.agent, session?.agents ?? [])} cancelLabel="Keep running" destructive onCancel={() => setConfirming(null)} onConfirm={() => { const target = confirming.agent; setConfirming(null); void onCancelAgent?.(target.id).then((r) => { if (!r.ok) setError(r.reason); }); }} />
       )}
       {steering && onSteer && <SteerDialog target={steering} onSteer={onSteer} onClose={() => setSteering(null)} />}
     </div>

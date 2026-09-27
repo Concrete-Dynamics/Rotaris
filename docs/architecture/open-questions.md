@@ -2969,11 +2969,15 @@ when the pause is accepted, a rest that finds nothing unfinished, and what a cra
   escalation) is no user's act and ends its agents as before.
 - **Which surface sends which.** The composer's stop control ("Stop run", then "Force stop") sends the stop, and asks
   no confirmation: it ends nothing, and REQ-SESSION-186 asks for none. Every confirmed "Cancel the run?" — the
-  inspector's cancel of the run-level agent, the Mission view's run row and the wait header's "Cancel the run" — sends
-  the reserved run id, the final cancel, so REQ-MONITOR-126's "cannot be undone in this session" is true of it. The
-  persona window's Cancel on the run's own instance asks no confirmation, so it stays the stop: sending the final cancel
-  from there would break REQ-MONITOR-126's confirmation. `/stop` stays the stop too; REQ-CHAT-029's "MUST cancel that
-  run" is met by the run ending, and the slash command asks nothing either. *Until phase 5's repair every one of these
+  inspector's cancel of the run-level agent, the Mission view's run row, the wait header's "Cancel the run" and a
+  persona window's Cancel on the run's own instance — sends the reserved run id, the final cancel, so REQ-MONITOR-126's
+  "cannot be undone in this session" is true of it; a persona window's Cancel of a child confirms it as REQ-MONITOR-128
+  asks and cancels that child (REQ-SHELL-075(g), REQ-MONITOR-130's "an auxiliary window"). *Phase 5's second repair
+  left the persona window's unconfirmed Cancel the stop, reasoning that a final cancel without a confirmation would
+  break REQ-MONITOR-126; REQ-SHELL-075 forbids no confirmation, so the reason was a false choice, and the button now
+  confirms and cancels (found by phase 5's third review).* `/stop` stays the stop: it asks nothing, and REQ-CHAT-029's
+  "MUST cancel that run" is read as met by the run ending, though its description reads "Cancel the active run" — put
+  to the owner below. *Until phase 5's repair every one of these
   surfaces sent the stop, and the composer's stop was itself confirmed by the "Cancel the run?" dialog, so the reading
   above — that the confirmed control reaches the engine as the reserved run id — was false of the built product: a
   confirmed "cannot be undone" left every agent paused and resumable, and the final cancel was reachable from no
@@ -3082,8 +3086,9 @@ when the pause is accepted, a rest that finds nothing unfinished, and what a cra
 **What a ruling decides.** Whether a forced stop should be final, as REQ-SESSION-186's persisted `paused` for a forced
 stop hints (a forced stop and a cancel persist the same status). Whether a stop during a plan cycle should leave the
 cycle's agents to be resumed, which clause 11's durable hold arguably forbids. And whether one paused agent should be
-cancellable while its session rests. Whether REQ-ORCH-135, REQ-MONITOR-130 and REQ-SESSION-108 should join the Narrows
-list, as the build reads them. Each would change a control's reach, a surface's offer or the record's traceability, and
+cancellable while its session rests. Whether `/stop`, which REQ-CHAT-029 describes as "Cancel the active run" and says
+"MUST cancel that run", should be the final cancel (and then confirmed) rather than the stop, or be reworded. Whether
+REQ-ORCH-135, REQ-MONITOR-130 and REQ-SESSION-108 should join the Narrows list, as the build reads them. Each would change a control's reach, a surface's offer or the record's traceability, and
 none is decided by the directive.
 
 **OQ-70 — How does a resumed iteration carry on where the directive says what and not how?** *(`PD-ORCH-005` clauses 4, 5, 6, 7 and 10; PD-TOOLS-006 revision 2; REQ-ORCH-095, REQ-ORCH-088, REQ-ORCH-152, REQ-HOOKS-075 and REQ-MONITOR-125, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3 under [R-060](../product/requests.md#r-060) and [R-061](../product/requests.md#r-061).)*

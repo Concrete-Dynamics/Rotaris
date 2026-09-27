@@ -6,12 +6,6 @@ import { Button as DesignButton } from './design-system/index.js';
  * list, Cancel as the DEFAULT (focused, and Escape), and one confirm — destructive when the action discards work.
  * REQ-GIT-117 relies on every dismissal path resolving to "do not delete", so closing by any route calls `onCancel`.
  */
-/**
- * REQ-MONITOR-126: the confirmation the run's cancel states — the one text every surface that cancels the whole run
- * shows. PD-ORCH-005 clause 3 keeps that cancel final, so "cannot be undone" stays true of it (OQ-69).
- */
-export const CANCEL_RUN_TEXT = 'Cancellation cannot be undone in this session. The active run and every active task agent will be cancelled.';
-
 export interface ConfirmDialogProps {
   readonly title: string;
   readonly body: string;

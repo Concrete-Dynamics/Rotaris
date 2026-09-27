@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
 import { RUN_AGENT_ID, TERMINAL_REFUSALS, type ApprovalOption, type ApprovalPayload, type CommandOutcome, type HooksSummary, type PausePayload, type PauseResolution, type ProviderDialogPayload, type ProviderSignInResult, type SessionListItemPayload, type TerminalFrame, type TerminalRefusal, type TerminalWindowPayload } from '@rotaris/contracts';
 import { Acknowledgements, ApprovalDialog, createTerminalWindowStreams, HookReviewDialog, PauseDialog, PersonaWindow, ProviderDialog, runLevelAgent, TerminalWindow, terminalWindowTitle, ToggleSwitch, type TerminalActionResult, type TerminalActions, type TerminalStreamSet } from '@rotaris/ui';
-import { acknowledge, acknowledgements, bridge, cancelAgent, control, displayPrefs, openLink, replica, stopRun, terminalHost, terminalStreams } from './shell.js';
+import { acknowledge, acknowledgements, bridge, cancelAgent, cancelRun, control, displayPrefs, openLink, replica, terminalHost, terminalStreams } from './shell.js';
 import { entryOf, useConfigSnapshot, useElapsedTick } from './session-view.js';
 
 /**
@@ -143,9 +143,9 @@ export function PersonaApp({ persona, initialSelect }: { persona: string; initia
       persona={persona} session={state.session} rows={state.rows} runLevel={runLevel} declaredTools={declared} selectedAgentId={selected} onSelectTab={setSelected}
       nowIso={nowIso} compressionThresholdPercent={snapshot?.compressorThresholdPercentage ?? 60} focusSteer={focusSteer}
       onSteer={(agentId, text) => control('submitSteeringPrompt', { agentId, text }, 'Steering is unavailable for this run.')}
-      // The run's own instance has an unconfirmed Cancel here, so it is the stop, never REQ-MONITOR-126's final cancel,
-      // which must be confirmed: the run comes to rest and its agents resume on a continue (PD-ORCH-005 clause 3, OQ-69).
-      onCancel={(agentId) => (agentId === RUN_AGENT_ID ? stopRun(false) : cancelAgent(agentId))}
+      // REQ-SHELL-075(g) / REQ-MONITOR-009: the confirmed Cancel of the run's own instance is the run's final cancel
+      // (PD-ORCH-005 clause 3, OQ-69); of a child, that child's.
+      onCancel={(agentId) => (agentId === RUN_AGENT_ID ? cancelRun() : cancelAgent(agentId))}
     />
     {/* ADR-0049's fourth decision: the acknowledgement stack is PER WINDOW, so this window owns its own — the same
         shared component the main window draws, swept for accessibility here in its own right (REQ-SHELL-112). */}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { contextPercent, DEFAULT_CONTEXT_CAPACITY, RUN_AGENT_ID, type AgentRecord, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
-import { cascadeNote, chipStates, countNoun, followedAgent, inspectorEnablement, instancesOf, liveDescendants, mcpChipStates, mcpFateText, metaLine, PAUSE_NO_RUN, PAUSE_SELECT_RUN, pauseAvailability, resolvedTools, ringFigures, rowsOf, runLevelAgent, tableOrder } from './agents.js';
+import { CANCEL_RUN_TEXT, cancelConfirmation, cascadeNote, chipStates, countNoun, followedAgent, inspectorEnablement, instancesOf, liveDescendants, mcpChipStates, mcpFateText, metaLine, PAUSE_NO_RUN, PAUSE_SELECT_RUN, pauseAvailability, resolvedTools, ringFigures, rowsOf, runLevelAgent, tableOrder } from './agents.js';
 import { personaColourToken } from './PersonaWindow.js';
 import { useShellState } from './shell-state.js';
 
@@ -135,5 +135,20 @@ describe('the MCP chips per server (REQ-MCP-065/100/114, REQ-MONITOR-060; wired 
     ]);
     expect(mcpFateText({ fate: 'connected' })).toBe('connected');
     expect(mcpFateText({ fate: 'dropped', reason: 'disabled' })).toBe('dropped — disabled');
+  });
+});
+
+describe('REQ-MONITOR-126 / REQ-MONITOR-128: what confirming a cancel states (PD-ORCH-005 clause 3)', () => {
+  const a = agent({ id: 'a', name: 'alpha', parentId: 'root:1' });
+  const b = agent({ id: 'b', name: 'beta', parentId: 'a' });
+  const c = agent({ id: 'c', name: 'gamma', parentId: 'a', presentationState: 'done', state: 'succeeded' });
+
+  it('the run instance\'s cancel is the run\'s own, final — whichever surface confirms it', () => {
+    expect(cancelConfirmation({ id: RUN_AGENT_ID, name: 'orchestrator' }, [a, b])).toEqual({ title: 'Cancel the run?', body: CANCEL_RUN_TEXT, lines: [], confirmLabel: 'Cancel the run' });
+  });
+
+  it('an agent\'s names it, and one line per live descendant cancelled with it', () => {
+    expect(cancelConfirmation({ id: 'a', name: 'alpha' }, [a, b, c])).toEqual({ title: 'Cancel alpha?', body: 'Its live descendants will be cancelled with it:', lines: ['beta'], confirmLabel: 'Cancel alpha' });
+    expect(cancelConfirmation({ id: 'b', name: 'beta' }, [a, b, c])).toEqual({ title: 'Cancel beta?', body: 'The agent will be cancelled.', lines: [], confirmLabel: 'Cancel beta' });
   });
 });

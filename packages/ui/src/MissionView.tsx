@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { DELEGATION_STRATEGY_NAMES, isBusy, presentationStatus, RUN_AGENT_ID, STATUS_LABELS, type AgentRecord, type SessionRecord } from '@rotaris/contracts';
 import { AgentTable } from './AgentTable.js';
 import { AgentTree } from './AgentTree.js';
-import { cascadeNote, liveDescendants, pauseAvailability } from './agents.js';
-import { CANCEL_RUN_TEXT, ConfirmDialog } from './ConfirmDialog.js';
+import { CANCEL_RUN_TEXT, cascadeNote, liveDescendants, pauseAvailability } from './agents.js';
+import { ConfirmDialog } from './ConfirmDialog.js';
 import { markMotionStart } from './motion.js';
 import { Button as DesignButton, PageHeader as DesignPageHeader, Select as DesignSelect } from './design-system/index.js';
 

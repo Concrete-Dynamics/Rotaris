@@ -28,7 +28,11 @@ which describe two controls.
 By PD-ORCH-005 phase 5's second repair.
 - The stop control sends the stop, with no confirmation.
 - Every confirmed "Cancel the run?" sends the reserved run id through `cancelRun`, the final cancel.
-- The persona window's Cancel on the run's own instance, which asks no confirmation, stays the stop.
+- A persona window's Cancel now confirms before it sends anything (`cancelConfirmation`, REQ-MONITOR-126/128). On the
+  run's own instance it sends the final cancel; on a child, it cancels that child.
+
+The second repair had left the persona window's unconfirmed Cancel as the stop. Phase 5's third review found that a
+false choice.
 
 The readings are in OQ-69, beside the one this defect falsified.
 
@@ -36,6 +40,8 @@ Evidence:
 - `apps/desktop/src/renderer/session-actions.test.ts`, "PD-ORCH-005 clause 3…": the stop is `cancel`, graceful and
   then forced, and the run's cancel is `cancelAgent` with `run`. A refusal of the cancel says the run is no longer
   cancellable.
+- `packages/ui/src/agents.test.ts`, "REQ-MONITOR-126 / REQ-MONITOR-128…": the run instance's confirmation is the run's
+  final cancel, and an agent's names it and its live descendants.
 - The built app. "Stop run" opened no dialog, and the run came to rest with both children `paused` by `stop` and the
   iteration open. The inspector's Cancel opened "Cancel the run?", with focus on "Keep running", and Escape closed it.
   Confirming it left both children and the iteration `cancelled`, with no interruption.

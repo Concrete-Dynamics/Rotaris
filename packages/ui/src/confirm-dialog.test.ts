@@ -1,7 +1,8 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { CANCEL_RUN_TEXT, ConfirmDialog } from './ConfirmDialog.js';
+import { CANCEL_RUN_TEXT } from './agents.js';
+import { ConfirmDialog } from './ConfirmDialog.js';
 
 /**
  * The shared confirmation, which PD-ORCH-005 phase 5 made the Workspace's too (its own copy had no Escape, no

@@ -179,7 +179,7 @@ release is published is the owner's choice (§6).
 - It fails the platform's job on each condition REQ-STARTUP-143 lists.
 
 While this is built, the About page's lowercase lookup has to be repaired
-(`../defects/the-about-page-looks-for-the-licence-bundle-under-a-lowercase-name.md`). Otherwise the first
+(`../defects/fixed/the-about-page-looks-for-the-licence-bundle-under-a-lowercase-name.md`). Otherwise the first
 release carries the file and the About page still says it does not.
 
 **4.4 The two bundled assets.** The About page already has both "absent" branches (ADR-0054, 2026-09-08). The

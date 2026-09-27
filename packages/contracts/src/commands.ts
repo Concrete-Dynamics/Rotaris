@@ -135,8 +135,11 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('session.prompt'), sessionId: z.string(), prompt: z.string(), attachments: z.array(ImageAttachmentInputSchema).max(10).optional() }).refine((v) => v.prompt.trim() !== '' || (v.attachments?.length ?? 0) > 0, { message: 'A prompt or attachment is required.' }),
   /** REQ-CHAT-173: thumbnail bytes are fetched on demand and never join a transcript snapshot. */
   z.object({ kind: z.literal('session.readAttachment'), sessionId: z.string().min(1), path: z.string().min(1), digest: z.string().regex(/^[0-9a-f]{64}$/) }),
-  /** REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause or continue a paused session. */
-  z.object({ kind: z.literal('session.continue'), sessionId: z.string().min(1), action: z.enum(PAUSE_RESOLUTIONS) }),
+  /**
+   * REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause or continue a paused session. `withoutPaused` is PD-ORCH-005
+   * clause 6's "continue without them": the agents the rest left paused end `cancelled` instead of resuming.
+   */
+  z.object({ kind: z.literal('session.continue'), sessionId: z.string().min(1), action: z.enum(PAUSE_RESOLUTIONS), withoutPaused: z.boolean().optional() }),
   /**
    * REQ-ORCH-153/154 (ADR-0062): the plan gate's two entries. A session command and not a control operation —
    * the run is PARKED at the gate, so there is no live run to control and the answer must reach a session whose

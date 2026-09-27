@@ -100,6 +100,24 @@ export function liveDescendants(agents: readonly AgentRecord[], id: string): Age
   walk(id);
   return out;
 }
+/**
+ * REQ-MONITOR-126: the confirmation the run's cancel states, the one text every surface that cancels the whole run
+ * shows. PD-ORCH-005 clause 3 keeps that cancel final, so "cannot be undone" stays true of it (OQ-69).
+ */
+export const CANCEL_RUN_TEXT = 'Cancellation cannot be undone in this session. The active run and every active task agent will be cancelled.';
+
+/**
+ * REQ-MONITOR-126 / REQ-MONITOR-128: what confirming a cancel states. For the run instance it is the run's own cancel,
+ * which is final. For an agent it names that agent and gives one line per live descendant cancelled with it. The
+ * Workspace and a persona window confirm through it, so the button REQ-SHELL-075(g) puts in the persona window can no
+ * longer cancel unconfirmed (found by phase 5's third review).
+ */
+export function cancelConfirmation(agent: { readonly id: string; readonly name: string }, agents: readonly AgentRecord[]): { title: string; body: string; lines: string[]; confirmLabel: string } {
+  if (agent.id === RUN_AGENT_ID) return { title: 'Cancel the run?', body: CANCEL_RUN_TEXT, lines: [], confirmLabel: 'Cancel the run' };
+  const lines = liveDescendants(agents, agent.id).map((a) => a.name);
+  return { title: `Cancel ${agent.name}?`, body: lines.length > 0 ? 'Its live descendants will be cancelled with it:' : 'The agent will be cancelled.', lines, confirmLabel: `Cancel ${agent.name}` };
+}
+
 /** REQ-MONITOR-064's sentence, empty when nothing cascades (REQ-SHELL-044's noun agreement). */
 export function cascadeNote(count: number): string {
   if (count <= 0) return '';

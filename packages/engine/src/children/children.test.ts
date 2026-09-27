@@ -5,13 +5,14 @@ import { join } from 'node:path';
 import { FakeClock, millis, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling, type ChildRow } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ModelRequest, type ScriptedCall } from '@rotaris/model';
-import { CHILD_STATES, CHILD_TRANSITIONS, isLegalChildMove, RUN_AGENT_ID, TASK_ID_PATTERN, TERMINAL_CHILD_STATES, type PermissionPreset } from '@rotaris/contracts';
+import { CHILD_STATES, CHILD_TRANSITIONS, isLegalChildMove, RUN_AGENT_ID, TASK_ID_PATTERN, TERMINAL_CHILD_STATES, type PermissionPreset, type SessionRecord } from '@rotaris/contracts';
 import { canonicaliseName, ChildLedger, RUN_CONFIG_DEFAULTS, Scheduler, Sessions, SessionWriter, uniqueUnderParent, type DelegationOps, type PortToolResult, type Publisher, type RunConfig, type ToolPort, type ToolPortContext } from '../index.js';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { HookPort } from '../hooks-port.js';
 import { conversationOf } from '../run/record.js';
 import { interruptedResult } from '../run/interruption.js';
 import { decodeStoredTodo } from '../todo-view.js';
+import { resumableOf } from '../sessions.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
@@ -240,10 +241,10 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
 
   /**
    * `deaf`: the personas whose calls ignore their abort — a provider that does not honour it — so a test can have a call
-   * outlive a stop. `hooks` and `drainTimeoutMs` reach the session as their names say; `images` has the model accept
-   * image input.
+   * outlive a stop. `hooks`, `drainTimeoutMs` and `publisher` reach the session as their names say; `images` has the
+   * model accept image input.
    */
-  function sessionsWith(script: (persona: string, turn: number, req: ModelRequest) => ScriptedCall, over: { cap?: number | null; childTimeoutMs?: number; childStallTimeoutMs?: number; tool?: TestTool; deaf?: readonly string[]; hooks?: HookPort; drainTimeoutMs?: number; images?: boolean } = {}) {
+  function sessionsWith(script: (persona: string, turn: number, req: ModelRequest) => ScriptedCall, over: { cap?: number | null; childTimeoutMs?: number; childStallTimeoutMs?: number; tool?: TestTool; deaf?: readonly string[]; hooks?: HookPort; drainTimeoutMs?: number; images?: boolean; publisher?: Publisher } = {}) {
     // The scripted client answers by persona and by the number of calls that persona has made.
     const counts = new Map<string, number>();
     const client = new ScriptedModelClient([]);
@@ -261,7 +262,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     const contexts = new Map<string, ToolPortContext>();
     const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: over.images === true ? { ...MODEL, acceptsImageInput: true } : MODEL, credentialFor: () => async () => 'k' };
     const sessions = new Sessions({
-      clocks: clock, publisher: NONE, pid: 77, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), mintSessionId: () => `S${++n}`,
+      clocks: clock, publisher: over.publisher ?? NONE, pid: 77, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), mintSessionId: () => `S${++n}`,
       model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
       tools: (ctx) => {
         // The mode each agent was BUILT with, in construction order. The run host's port SELECTS it through
@@ -974,7 +975,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     const byName = (sid: SessionId, name: string): ChildRow => children(sid).find((c) => c.canonical_name === name)!;
 
     /** Two background children under a cap of one: `one` is mid-step on a held model call, `two` waits on the slot. */
-    function heldPair() {
+    function heldPair(publisher?: Publisher) {
       let release!: () => void;
       const hold = new Promise<void>((r) => { release = r; });
       const seen = { summaries: 0, childSteps: 0, orchestratorSteps: 0 };
@@ -988,7 +989,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
         // The step in flight when the pause is accepted finishes by asking for a call; every later step answers.
         if (seen.childSteps > 1) return answer('done');
         return { parts: [{ hold }, ...toolCalls([{ callId: 'p1', name: 'background_output', args: { task_id: 'bg_00000000' } }], 'Checking.').parts] };
-      }, { cap: 1 });
+      }, { cap: 1, ...(publisher ? { publisher } : {}) });
       return { sessions, client, seen, release: () => release() };
     }
 
@@ -1406,14 +1407,20 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     });
 
     it('clause 6, declined: "continue without them" ends the paused agents cancelled, closes the open iteration cancelled, and works in a new one', async () => {
-      const { sessions, release } = heldPair();
+      const snapshots: SessionRecord[] = [];
+      const { sessions, release } = heldPair({ increment: () => undefined, snapshot: (p) => { snapshots.push(p.session); } });
       const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
       await settle(() => children(sid).length === 2 && byName(sid, 'two').state === 'waiting_on_model_slot');
       sessions.control({ op: 'pause', sessionId: sid, args: {} });
       release();
       await sessions.running(sid)!;
+      // Clause 6: what the Continue action states — the open iteration, its root and its two paused agents.
+      expect(resumableOf(dal, dal.getSession(sid)!)).toEqual({ iteration: 1, agents: 3 });
+      expect(snapshots.at(-1)!.resumable).toEqual({ iteration: 1, agents: 3 });
       expect(sessions.continueSession(sid, 'continue', { withoutPaused: true }).ok).toBe(true);
       await sessions.running(sid)!;
+      expect(resumableOf(dal, dal.getSession(sid)!)).toBeNull();
+      expect(snapshots.at(-1)!.resumable).toBeNull();
       for (const name of ['one', 'two']) {
         expect(byName(sid, name)).toMatchObject({ state: 'cancelled', interruption: 'pause', report_stored: 1 });
         expect(JSON.parse(byName(sid, name).report!)).toMatchObject({ status: 'cancelled', summary: expect.stringMatching(/continued without this agent, which the pause had left paused/) });

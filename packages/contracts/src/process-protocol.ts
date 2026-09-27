@@ -102,8 +102,8 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('config.liveState'), state: z.record(z.string(), z.unknown()) }),
   z.object({ kind: z.literal('session.list'), workspaceId: z.string() }),
   z.object({ kind: z.literal('session.resume'), workspaceId: z.string(), sessionId: z.string().min(1) }),
-  /** REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause (continue, double, cancel) or continue a manually paused session. */
-  z.object({ kind: z.literal('session.continue'), sessionId: z.string().min(1), action: z.enum(['continue', 'double', 'cancel']) }),
+  /** REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause (continue, double, cancel) or continue a manually paused session; PD-ORCH-005 clause 6's `withoutPaused` declines the open iteration. */
+  z.object({ kind: z.literal('session.continue'), sessionId: z.string().min(1), action: z.enum(['continue', 'double', 'cancel']), withoutPaused: z.boolean().optional() }),
   /** REQ-ORCH-153/154 (ADR-0062) and PD-ORCH-003: the plan gate's three entries, forwarded to the run host that owns the session. */
   z.object({ kind: z.literal('session.planEdit'), sessionId: z.string().min(1), text: z.string() }),
   z.object({ kind: z.literal('session.planDecision'), sessionId: z.string().min(1), decision: z.enum(PLAN_DECISIONS), changes: z.string().optional() }),

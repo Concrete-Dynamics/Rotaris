@@ -126,6 +126,18 @@ export const PlanGateSchema = z.object({
 });
 export type PlanGatePayload = z.infer<typeof PlanGateSchema>;
 
+/**
+ * PD-ORCH-005 clause 6: what the Continue action resumes — the iteration a rest or a crash left open, and how many of its
+ * agents resume with it: its root and every agent of it not in a terminal state. It is read from the store, as the plan
+ * gate is, because a session at rest has no process behind it; a live run's session carries it too, and no surface
+ * states it there.
+ */
+export const ResumableSchema = z.object({
+  iteration: z.number().int().positive(),
+  agents: z.number().int().positive(),
+});
+export type ResumablePayload = z.infer<typeof ResumableSchema>;
+
 /** REQ-CHAT-038: a queued prompt's status series. */
 export const QUEUED_PROMPT_STATUSES = ['QUEUED', 'TRIGGERED', 'COMPLETED'] as const;
 export type QueuedPromptStatus = (typeof QUEUED_PROMPT_STATUSES)[number];

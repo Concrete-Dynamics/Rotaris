@@ -3022,8 +3022,8 @@ when the pause is accepted, a rest that finds nothing unfinished, and what a cra
   unanswered", and REQ-CHAT-101 has closing the window emit the question's cancellation. At a quit, clause 9 withdraws
   both instead, so main sends neither when the application's quit closes the surface (`exit.ts`'s `QuitState`): the
   approval or question stays pending until the run host's `shutdown` withdraws it. A quit Electron starts on its own
-  account (SIGTERM, the desktop's logout, `app.quit()`) first closes each main window through its guard, so a dialog
-  never closes ahead of its window's confirmed close. While the application stays, both requirements govern unchanged.
+  account (SIGTERM, the desktop's logout, `app.quit()`) first closes the main windows through their guards, all or
+  none, so no dialog closes before every main window's close is confirmed. While the application stays, both requirements govern unchanged.
   *Until phase 7's repairs the quit's close sent the Deny and the cancellation first, and the agent stepped on them
   (`docs/defects/fixed/a-quit-denies-the-approval-it-should-withdraw.md`).*
 - **No model call after the pause, wherever one is made (clause 2).** The step in flight is the only model call that

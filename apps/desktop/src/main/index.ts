@@ -2,7 +2,7 @@
 // first on the command line it hands the process to the bundled runtime and exits before anything below is evaluated.
 import './sentinel.js';
 import type { PersonaWindows, TerminalWindows } from './windows.js'; // Part AL2: the terminal window's registry beside the persona windows'
-import { createElectronMainWindowAdapter, createElectronProjectFolderChooser, MainWindows, removeApplicationMenu } from './main-windows.js';
+import { createElectronMainWindowAdapter, createElectronProjectFolderChooser, MainWindows, removeApplicationMenu, type CloseGuard } from './main-windows.js';
 import { createNoticeStore } from './notices.js';
 import { createLibraryRevision } from './library.js';
 // The driver seam (verification only; `ROTARIS_DRIVER` names its endpoint file). Never reached by a product surface.
@@ -42,7 +42,7 @@ import { sessionCommands } from './commands/session.js';
 import { shellCommands } from './commands/shell.js';
 import { skillsCommands } from './commands/skills.js';
 import { windowCommands, windowsCommands } from './commands/windows.js';
-import { dialogCloseAnswersDeny, exitAfterChildWindows, QuitState, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
+import { closeThroughGuards, dialogCloseAnswersDeny, exitAfterChildWindows, QuitState, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
 import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, type AppLogLevel } from './app-log.js'; // PD-MONITOR-002
 import { workspaceCommands } from './commands/workspace.js';
 // The answer every command ends in, and the inventory the facets above are given (ADR-0019, REQ-SHELL-020).
@@ -241,6 +241,8 @@ async function main(): Promise<void> {
    * the moment there are two.
    */
   let mainWindows!: MainWindows<BrowserWindow, PersonaWindows, TerminalWindows, ApprovalPayload, ApprovalDialogState>;
+  /** Each open main window's close guard, by its `webContents` id (`guardClose`, `main-windows.ts`). */
+  const closeGuards = new Map<number, CloseGuard>();
   /** PD-ORCH-005 clause 9: whether the application is quitting (`QuitState`), over the main windows as they are now. */
   const quitting = (): boolean => quit.quitting(mainWindows.ordered().map((m) => ({ wcId: m.wcId, destroyed: m.win.isDestroyed() })));
   /** The window a message came from, when that sender is a main window at all (a dialog or a persona window is not). */
@@ -1002,6 +1004,7 @@ async function main(): Promise<void> {
     },
     forgetTerminalFrames: (wcId) => terminalFrames.forget(wcId),
     closeConfirmed: (wcId) => { quit.closeConfirmed(wcId); },
+    closeGuard: (wcId, guard) => { if (guard) closeGuards.set(wcId, guard); else closeGuards.delete(wcId); },
     log,
   });
 
@@ -1468,17 +1471,25 @@ async function main(): Promise<void> {
   /*
    * PD-ORCH-005 clause 9: a quit Electron starts on its own account — SIGTERM, the desktop's logout, `app.quit()` —
    * closes every window at once, an approval dialog before its main window's close guard has answered, and the dialog's
-   * close would be sent as the person's Deny. Such a quit is turned into each main window's own guarded close, so a
-   * dialog only ever closes with a main window whose close is confirmed; the last one's close reaches
-   * `window-all-closed`, which shuts the children down and quits. The quit that handler makes finds no main window open
-   * and goes ahead. A guard that refuses keeps its window, its dialog and the application, as a refused close always did.
+   * close would be sent as the person's Deny. Such a quit is turned into the main windows' guarded close, all or none
+   * (`closeThroughGuards`): every guard is asked, every close is confirmed, and only then does any window close, so a
+   * dialog only ever closes once every main window's close is confirmed. The last close reaches `window-all-closed`,
+   * which shuts the children down and quits; that quit finds no main window open and goes ahead. A guard that refuses
+   * keeps every window, its dialogs and the application, as a refused close always did.
    */
+  let guardsAsked = false;
   app.on('before-quit', (event) => {
     const open = mainWindows.ordered().filter((m) => !m.win.isDestroyed() && !quit.isClosing(m.wcId));
     if (open.length === 0) return;
     event.preventDefault();
-    log(`quit: closing ${open.length} main window(s) through their close guard first (PD-ORCH-005 clause 9)`);
-    for (const m of open) m.win.close();
+    if (guardsAsked) return;
+    guardsAsked = true;
+    log(`quit: closing ${open.length} main window(s) through their close guards first (PD-ORCH-005 clause 9)`);
+    const guards = open.map((m) => closeGuards.get(m.wcId) ?? { ask: async () => true, confirm: () => quit.closeConfirmed(m.wcId), close: () => m.win.close() });
+    void closeThroughGuards(guards).then((closing) => {
+      guardsAsked = false;
+      if (!closing) log('quit: a close guard refused; the application stays');
+    });
   });
 
   app.on('window-all-closed', () => {

@@ -54,6 +54,21 @@ export class QuitState {
   }
 }
 
+/**
+ * PD-ORCH-005 clause 9: a quit Electron starts on its own account closes the main windows through their guards, all or
+ * none. Every guard is asked first; only when every one allows is every close confirmed, and only then is any window
+ * closed — so no window's dialog closes while another main window's guard is still undecided, which would leave
+ * `QuitState` seeing a window that stays (found by phase 7's second review). A guard that refuses closes nothing, which
+ * is what a refused close has always meant. Answers whether the windows are closing.
+ */
+export async function closeThroughGuards(guards: readonly { ask(): Promise<boolean>; confirm(): void; close(): void }[]): Promise<boolean> {
+  const allowed = await Promise.all(guards.map((g) => g.ask()));
+  if (allowed.some((a) => !a)) return false;
+  for (const g of guards) g.confirm();
+  for (const g of guards) g.close();
+  return true;
+}
+
 /** REQ-TOOLS-063 under PD-ORCH-005 clause 9: an approval dialog that closed unanswered answers Deny unless the quit closed it. */
 export function dialogCloseAnswersDeny(state: { readonly answered: boolean; readonly quitting: boolean }): boolean {
   return !state.answered && !state.quitting;

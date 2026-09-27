@@ -172,8 +172,9 @@ seam's exit and the driver's `quit` — go through `exitCleanly` (`main/exit.ts`
 child segfaults. Neither sends `shutdown`; both are verification seams (`ROTARIS_CAPTURE_PNG`, and the driver under
 `ROTARIS_DRIVER`), and every quit a user can reach goes through `window-all-closed`, the main window's close guard
 turning an `app.quit()` into one. A quit Electron starts on its own account (SIGTERM, the desktop's logout, `app.quit()`)
-is turned into the same path: `before-quit` is held while any main window is open, and each main window is closed
-through its guard. Nothing a quit closes answers for a person. `QuitState` (`main/exit.ts`) knows the quit from
+is turned into the same path: `before-quit` is held while any main window is open, and the main windows are closed
+through their guards, all or none (`closeThroughGuards`: every guard asked, every close confirmed, then every window
+closed). Nothing a quit closes answers for a person. `QuitState` (`main/exit.ts`) knows the quit from
 `exitCleanly` and from each main window's confirmed close, which `guardClose` reports before closing. While it is under
 way an approval dialog that closes sends no Deny, and the question dock's cancellation is not forwarded. The run host's
 `shutdown` withdraws both instead (PD-ORCH-005 clause 9, OQ-69).

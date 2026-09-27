@@ -307,3 +307,17 @@ describe('the main window\'s close guard reports a confirmed close before it clo
     expect(log).toEqual(['held', 'confirmed', 'close', 'passed']);
   });
 });
+
+describe('a main window\'s close guard, as the application\'s quit drives it (PD-ORCH-005 clause 9)', () => {
+  it('asking closes nothing; a confirmed guard lets the window\'s next close pass, and one that cannot answer allows', async () => {
+    const log: string[] = [];
+    let listener: ((event: { preventDefault(): void }) => void) | null = null;
+    const win: GuardedWindow = { on: (_e, l) => { listener = l; }, isDestroyed: () => false, close: () => { log.push('close'); let held = false; listener?.({ preventDefault: () => { held = true; } }); log.push(held ? 'held' : 'passed'); } };
+    const guard = guardClose(win, async () => { throw new Error('gone'); }, () => log.push('confirmed'));
+    expect(await guard.ask()).toBe(true);
+    expect(log).toEqual([]);
+    guard.confirm();
+    guard.close();
+    expect(log).toEqual(['confirmed', 'close', 'passed']);
+  });
+});

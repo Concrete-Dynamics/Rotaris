@@ -36,14 +36,20 @@ By PD-ORCH-005's phase 7.
 - While the application stays, the user closing a dialog or one main window of several, REQ-TOOLS-063 and
   REQ-CHAT-101 govern as before.
 - A quit Electron starts on its own account (SIGTERM, the desktop's logout, `app.quit()`) would close every window at
-  once, a dialog ahead of its window's guard. `before-quit` now turns it into each main window's guarded close.
+  once, a dialog ahead of its window's guard. `before-quit` now closes the main windows through their guards, all or
+  none (`closeThroughGuards`). Every guard is asked, every close is confirmed, and only then does any window close.
 
-The first repair covered the window close only. Phase 7's review found the `app.quit()` path and the dock, and both are
-repaired in the second. OQ-69 records the departure from REQ-TOOLS-063 and REQ-CHAT-101.
+The first repair covered the window close only. Phase 7's review found the `app.quit()` path and the dock, and the
+second repair covered both. The second review then found two main windows whose guards answered at different times:
+the faster window's dialog closed while the other still stayed. The third repair asks every guard before any window
+closes. OQ-69 records the departure from REQ-TOOLS-063 and REQ-CHAT-101.
 
 Evidence:
 - `exit.test.ts`: `QuitState` and the dialog rule.
-- `main-windows.test.ts`: the guard reports a confirmed close before closing, and never a refused one.
+- `main-windows.test.ts`: the guard reports a confirmed close before closing, and never a refused one. Asking it
+  closes nothing.
+- `exit.test.ts`, `closeThroughGuards`: two windows whose guards answer at different times are both confirmed before
+  either closes, and a refusal closes neither. Two windows were not driven in the built app.
 - `commands/session.test.ts`: the dock's cancellation is dropped while quitting, and forwarded otherwise.
 - The built app: see PD-ORCH-005's first-execution record, which drove a window-close quit, a SIGTERM quit and a quit
   with a question open.

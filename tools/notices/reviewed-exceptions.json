@@ -1,0 +1,4 @@
+{
+  "$comment": "REQ-STARTUP-143: the maintainer-review table of reviewed exceptions, read by tools/notices/notices.mjs. An entry lets a shipped dependency that carries no license text pass notices validation. Each entry carries: component (the name as the notices file prints it), versions (an exact version, or space-separated comparators such as \">=1.0.0 <2.0.0\"), license (the identifier claimed for it), whyNoText (why no license text is obtainable), reviewer (the maintainer who reviewed it), reviewedOn and expires (YYYY-MM-DD, the expiry at most 365 days after the review). An entry covers a dependency only while its version is inside the range and the expiry has not passed; otherwise it is treated as no entry at all. Adding an entry is a reviewed change made by a maintainer, never by the generator or an agent.",
+  "exceptions": []
+}

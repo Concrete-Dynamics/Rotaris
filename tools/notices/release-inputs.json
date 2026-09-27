@@ -1,0 +1,4 @@
+{
+  "$comment": "REQ-STARTUP-142: the release-time inputs of the notices generator (tools/notices/notices.mjs). lgplCorrespondingSourcesAddress is the single address, reachable without an account and monitored by the maintainers, by which a recipient requests the corresponding sources of the LGPL-licensed components; the generator writes it into the header of THIRD-PARTY-LICENSES.txt as a literal string. It is owner item O-3 (docs/architecture/first-release-plan.md section 6) and is left empty until the owner gives it: while it is empty, or only a placeholder, notices validation fails and names this key (REQ-STARTUP-143).",
+  "lgplCorrespondingSourcesAddress": ""
+}

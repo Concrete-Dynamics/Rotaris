@@ -48,7 +48,8 @@ amendment (R-049), and OQ-62's configured-rate branch with it; OQ-62's discovery
 suppresses its base when the override is itself switched off — a third state REQ-WORKSPACE-042's "given
 both exist" has no word for). **OQ-64 was ruled on 2026-09-27** as built (R-052), together with ESC-37,
 ESC-38 and ESC-39. **One more was raised on 2026-09-27 by building `PD-ORCH-004`: OQ-66** (how `delegate` names the
-child a continuation continues, which REQ-TOOLS-152's fields do not provide and the directive does not name). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+child a continuation continues, which REQ-TOOLS-152's fields do not provide and the directive does not name), **ruled
+on 2026-09-27** as recommended by `PD-ORCH-004` revision 2 ([R-058](../product/requests.md#r-058)). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -2870,6 +2871,12 @@ caller's "own child" is the same ownership test `background_output` uses (REQ-TO
 root task. So a later iteration's root, or the next run after a stop, is refused a continuation of an earlier
 iteration's child, and the offer's text does not say so. And nothing but the task id carries over: the continuation's
 payload is assembled as any child's is.
+
+**Ruled 2026-09-27 — by [`PD-ORCH-004`](../product/directives.md#pd-orch-004) revision 2, [R-058](../product/requests.md#r-058).**
+The owner took the recommendation: the directive now states `continuation_of` and its refusals, and extends REQ-TOOLS-152,
+which carries the back-pointer. The two limits named above are not settled by this ruling. Which agent may take up an
+offer after the iteration that raised it has ended belongs to the run-continuation policy the same request opened, and
+until that is ruled the build keeps the same-iteration reading.
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

@@ -46,6 +46,27 @@ produced; nothing at run time adds to, replaces or disables that set. — `REQ-S
 _Avoid_: code signature — the artifacts carry none, and what the manifest signature establishes is
 **who published a release**, which checksums alone never did
 
+**Notices file**:
+`THIRD-PARTY-LICENSES.txt`, inside every standalone artifact: one entry per dependency of the shipped closure with its
+version, licence identifier and full licence text, the bundled fonts' and icon set's licences, the tools provisioned
+after installation, and a header giving the LGPL corresponding-sources address. The About & Legal surface opens this
+same file. — `REQ-STARTUP-141`, `REQ-STARTUP-142`
+_Avoid_: notices on its own — the desktop shell's notices are the [Shell](../ui/CONTEXT.md) context's. The surface
+calls the same file the third-party license bundle (`REQ-SHELL-142`).
+
+**Shipped closure**:
+Every dependency present in the shipped artifact, and nothing used only for development or CI, and no component of
+the product's own build. — `REQ-STARTUP-142`, `REQ-STARTUP-143`
+
+**Notices validation**:
+The check run per platform before freezing that fails the platform's release job, naming the offending component or
+path, when the shipped closure or the notices header is incomplete. — `REQ-STARTUP-037`, `REQ-STARTUP-143`
+
+**Maintainer-review table**:
+The version-controlled, dated table of reviewed exceptions beside the notices generator, each entry letting one
+dependency without licence text pass validation for a version range until its expiry. — `REQ-STARTUP-143`
+_Avoid_: allow-list, waiver
+
 **Release feed**:
 The product's public source of the latest release, consulted exactly once per launch of a supported
 standalone build, after the window is visible. — `REQ-STARTUP` update check

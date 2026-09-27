@@ -54,7 +54,9 @@ Listed foundation-first, which is also dependency order. "Root" is the compositi
 
 `tools/` holds build-time and lint-time code, not product code: `tools/eslint-rules/` (`rotaris/no-bare-timers`
 and its siblings), `tools/symbol-artifact/` (the generator behind `pnpm symbols`), `tools/release-naming/`,
-and the standalone checks `pnpm lint` runs before ESLint.
+`tools/notices/` (the generator behind `pnpm notices` — `THIRD-PARTY-LICENSES.txt` and its validation, open
+`notices.mjs`; the three tables beside it are the reviewed exceptions, the release inputs and the bundled fonts;
+tests in `notices.test.ts`), and the standalone checks `pnpm lint` runs before ESLint.
 
 ## Where a thing is not where you would guess
 

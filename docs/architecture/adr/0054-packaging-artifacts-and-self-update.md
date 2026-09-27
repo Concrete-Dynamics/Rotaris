@@ -1077,7 +1077,8 @@ typescript@5.9.3` attempted and failed). The licence text the bundle carries is 
 dist-info; the notices generator (`REQ-STARTUP-141/142`) is still not built.
 **IC-7 adopted 2026-09-06 (ESC-32, option 2):** the language servers are tools provisioned after installation;
 `REQ-STARTUP-142`'s section now lists them after Git and ripgrep, from the same manifest, and the generator that
-will write that section is the one still owed here — IC-7's second half is discharged when it does.
+will write that section is the one still owed here — IC-7's second half is discharged when it does. *It did, on
+2026-09-27: see "The notices generator" below.*
 
 ## Two assets the About page asks this record for — 2026-09-08 (Part AG)
 
@@ -1087,4 +1088,50 @@ absent branch — an em dash for Build, and the caption "This build does not car
 branches are built and exercised (`pnpm settings-proof`, launch 1), so nothing here is a stub: what is owed is the two
 assets, not the surface. Main resolves them the way every other bundled resource is resolved — `process.resourcesPath`
 for a packaged build, else `apps/desktop/resources/` — in `apps/desktop/src/main/about.ts`, which is where a packaging
-change would land them. `shell.openThirdPartyLicenses` answers `licenses.absent` until then.
+change would land them. `shell.openThirdPartyLicenses` answers `licenses.absent` until then. *2026-09-27: the notices
+file now has a generator (below), and the reader's name was corrected to `THIRD-PARTY-LICENSES.txt` in the same change —
+it had looked for the name in lower case, which only a case-insensitive filesystem forgives
+(`../../defects/fixed/the-about-page-looks-for-the-licence-bundle-under-a-lowercase-name.md`). Carrying the two assets
+into the artifact is `first-release-plan.md` §4.4.*
+
+## The notices generator — 2026-09-27, first execution (`first-release-plan.md` §4.3)
+
+*REQ-STARTUP-037, REQ-STARTUP-141..143, REQ-STARTUP-149; IC-7's second half.* `pnpm notices` (`tools/notices/generate.mjs`
+over `notices.mjs`) is the licence-inventory generation and validation step this record's pipeline runs per platform
+before freezing. It writes `apps/desktop/resources/THIRD-PARTY-LICENSES.txt` (git-ignored) only when validation passes.
+A failure exits 1 with one `error:` line per problem naming the component or path, and it removes any earlier file so a
+stale one cannot be frozen in its place. The closure is computed offline, from what is installed:
+
+- the desktop application's production `dependencies` and those of every workspace package it builds from, never a
+  development dependency and never a product package;
+- Electron as one component, with its own credits reproduced beneath it (OQ-66);
+- SQLite and winpty (win32 only), which this build compiles into its native modules from vendored sources whose
+  licence files the `files` patterns above strip from the archive;
+- the bundled runtime's interpreter and every distribution in it;
+- the fonts and the icon set, from a table beside the generator that must name every face `packages/ui/src/fonts.css`
+  bundles.
+
+The inputs a person owns are three version-controlled files beside the generator:
+
+- the maintainer-review table (`reviewed-exceptions.json`, empty);
+- the release inputs (`release-inputs.json`), where the owner writes O-3's LGPL address;
+- the fonts table (`bundled-assets.json`), with the upstream OFL texts under `licenses/`.
+
+**What the first run over this tree found.** The file renders 20.4 MB, 19.8 MB of it Electron's 779 credited
+components. There are 40 application components on win32 (38 npm packages including Electron, plus SQLite 3.53.4 and
+winpty 0.4.4-dev), 74 runtime components on the Linux bundle, and 4 fonts and icon sets. **Validation refused, on
+six problems, each correctly:**
+
+1. the LGPL address is empty (O-3, owed by design);
+2. `@ai-sdk/provider-utils` 5.0.36 carries no licence text in its npm package;
+3. `@xterm/addon-serialize` 0.14.0, the same;
+4. `@xterm/headless` 6.0.0, the same;
+5. `proxy_tools` 0.1.0, in the runtime, the same;
+6. `dotenv` 0.9.9, in the runtime, declares no licence identifier.
+
+Four of those wait on a maintainer's reviewed exception, which only a maintainer may write (plan §6, O-11). The sixth
+has no reviewed route under REQ-STARTUP-143 as worded (OQ-68). Two premises of REQ-STARTUP-142 are not true of this
+build: Manrope is named and not bundled, and no setup manifest pins a machine tool (OQ-67). **Nothing in this record
+changes.** The step sits where REQ-STARTUP-037 puts it, before freezing. The `extraResources` entry
+that carries the file into the artifact, and `package.mjs`'s call to the step, are §4.4's, with `build-id.txt`.
+

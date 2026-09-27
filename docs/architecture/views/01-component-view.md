@@ -10,7 +10,7 @@ only places `electron` is imported.
 | adding a package, or asking which one work belongs in | [The packages](#the-packages) |
 | adding an import that crosses a package | [The allowed-edge matrix](#the-allowed-edge-matrix-the-lint-rule-verbatim) |
 | deciding where a responsibility sits | [Where the responsibilities sit](#where-the-responsibilities-sit) |
-| touching the transcript, the Library, MCP, the code-intelligence bundle or the design system | the `###` sections after it |
+| touching the transcript, the Library, MCP, the code-intelligence bundle, the notices generator or the design system | the `###` sections after it |
 
 ## The packages
 
@@ -226,6 +226,25 @@ contains-code walk (an edge it already had). Main gains its first module, `main/
 branch: `platform` for the per-user directory, nothing else), imported before anything that touches `electron`.
 `electron-builder.yml` carries the tree as `extraResources` outside the asar (a Python tree cannot run from an
 archive); `build-hooks.cjs`'s `afterPack` asserts the interpreter answers from inside `win-unpacked`.
+
+### The notices generator (2026-09-27; `first-release-plan.md` §4.3, ADR-0054)
+
+Not a package — a **build-time tool** under `tools/notices/`, with no `package.json`, so the lockfile does not see it.
+It imports nothing from `packages/` or `apps/`, and nothing in the product imports it. `pnpm notices`
+(`generate.mjs`, a thin CLI over `notices.mjs`, typed by `notices.d.mts`) reads the installed tree: the desktop
+application's and the workspace packages' `package.json` production edges, `node_modules`, Electron's `dist/`, the
+bundled runtime under `apps/desktop/resources/code-intelligence/`, `packages/ui/src/fonts.css` and the font files it
+names, and `apps/desktop/scripts/code-intelligence/pins.json` as the setup manifest. It writes one file,
+`apps/desktop/resources/THIRD-PARTY-LICENSES.txt`, only when REQ-STARTUP-143's validation passes. Three
+version-controlled tables sit beside it, as REQ-STARTUP-143 asks of the first:
+
+- `reviewed-exceptions.json`, the maintainer-review table;
+- `release-inputs.json`, O-3's LGPL address;
+- `bundled-assets.json`, the fonts and the icon set, with their licence texts under `licenses/`.
+
+The product meets the tool at one literal: `main/about.ts`'s `THIRD_PARTY_LICENSES_ASSET` equals the generator's
+`NOTICES_FILE`, and `about.test.ts` holds them equal. **Edges unchanged**: `tools/**` is outside the boundary rule, and
+the one test that crosses is a test.
 
 ### `ui/design-system` (2026-09-12)
 

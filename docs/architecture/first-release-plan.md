@@ -23,7 +23,7 @@ record already decides, and every ruling it needs is named as the owner's rather
 | Skills — ESC-37, ESC-38, ESC-39 | **ruled 2026-09-27** as recommended ([R-052](../product/requests.md#r-052)); amended | §2 |
 | Workspace-context injection, REQ-WORKSPACE-041..050 | built 2026-09-22 under `PD-WORKSPACE-002` | §3 |
 | Injection — REQ-WORKSPACE-049's latency bound, a built-app proof | **owed**; OQ-64 **ruled 2026-09-27** | §3 |
-| The Windows release pipeline, REQ-STARTUP-027..038, 141..143, 156, 158, 167, 168 | the installer built once (ADR-0054, 2026-09-04); nothing else | §4 |
+| The Windows release pipeline, REQ-STARTUP-027..038, 141..143, 156, 158, 167, 168 | the installer built once (ADR-0054, 2026-09-04); **the notices generator built 2026-09-27** (§4.3), its validation refusing until O-3 and O-11 | §4 |
 | The updater, REQ-STARTUP-107..124 | **not built** — no module in `apps/desktop/src/main/`; **in the first release**, ruled 2026-09-27 | §4.6 |
 
 **Deferred by "thats it".** Each item stays owed where the record already carries it:
@@ -182,6 +182,27 @@ While this is built, the About page's lowercase lookup has to be repaired
 (`../defects/fixed/the-about-page-looks-for-the-licence-bundle-under-a-lowercase-name.md`). Otherwise the first
 release carries the file and the About page still says it does not.
 
+*Built 2026-09-27, with the About repair; first execution reported into ADR-0054 and IC-7.* `pnpm notices`
+(`tools/notices/`) writes `apps/desktop/resources/THIRD-PARTY-LICENSES.txt` only when validation passes, and exits 1
+naming each problem otherwise (REQ-STARTUP-149). It builds under three readings, each an open question: OQ-66 (what
+one entry is), OQ-67 (Manrope and the machine tools) and OQ-68 (an identifier a dependency does not declare).
+
+**Where the owner writes the O-3 address.** In `tools/notices/release-inputs.json`, as the value of
+`lgplCorrespondingSourcesAddress`. That file is the one place the generator reads it. The value must be a literal
+address, for example an e-mail address or a postal one. It may not be a web page, a placeholder, or a domain reserved
+for examples and tests. Until the value is written, validation fails and names the key.
+
+**What the first run refused, besides O-3.** Four shipped components carry no licence text:
+
+- `@ai-sdk/provider-utils` 5.0.36;
+- `@xterm/addon-serialize` 0.14.0;
+- `@xterm/headless` 6.0.0;
+- `proxy_tools` 0.1.0, in the code-intelligence runtime.
+
+Each passes only with a maintainer's reviewed exception in `tools/notices/reviewed-exceptions.json` (O-11), and the
+file states why each is there. `dotenv` 0.9.9, in the runtime, declares no licence identifier. REQ-STARTUP-143 as
+worded gives that no route, which is OQ-68.
+
 **4.4 The two bundled assets.** The About page already has both "absent" branches (ADR-0054, 2026-09-08). The
 build must now produce two files under `process.resourcesPath`:
 
@@ -253,7 +274,7 @@ cannot be the gate.
 
 **The conditions that bind this release:**
 
-- **IC-7** is discharged by §4.3.
+- **IC-7** is discharged by §4.3. *Discharged 2026-09-27: the generator lists the language servers.*
 - **IC-4** half 2 is the owner's (§6). It binds the restore's sign-off, and the restore ships in this release.
 - **IC-3 and IC-8** bind only artifacts this release does not publish.
 - **ESC-6** already accepted win32 reporting confinement as `available: false` for the first release.
@@ -264,7 +285,7 @@ cannot be the gate.
 |---|---|---|
 | O-1 | ~~Rule ESC-37, ESC-38, ESC-39 and OQ-64~~ **ruled 2026-09-27** as recommended (R-052) | §2.2, §3.3 |
 | O-2 | Generate the manifest signing key pair and store the private half as a repository secret. The public half is committed | §4.7 |
-| O-3 | Give the literal contact address for the LGPL source request (REQ-STARTUP-142). It must be reachable without an account | §4.3 |
+| O-3 | Give the literal contact address for the LGPL source request (REQ-STARTUP-142). It must be reachable without an account. **Written in `tools/notices/release-inputs.json`, key `lgplCorrespondingSourcesAddress`**; validation fails naming that key until it is | §4.3 |
 | O-4 | Supply an icon, with the `.ico` sizes `electron-builder` asks for | §4.9 |
 | O-5 | ~~Choose where releases are published~~ **ruled 2026-09-27** (R-053): GitHub releases of `theUpsider/Rotaris-crw`, the product repository REQ-STARTUP-038 names | §4.2 |
 | O-6 | Provide the gate machine of §5. **Form ruled 2026-09-27** (R-053): a snapshot-restored Windows x64 virtual machine, restored between releases. The owner still provides it | §5 |
@@ -272,9 +293,10 @@ cannot be the gate.
 | O-8 | The power-loss test's fault half: a forced power-off during a save (`spikes/power-loss.md` §4) | the store's sign-off |
 | O-9 | ~~Approve the §2.3 and §3.4 live runs~~ **approved 2026-09-27** (R-053). The agent still states the scenario and its spending bound immediately before each run (AGENTS.md) | §2.3, §3.4 |
 | O-10 | ~~Decide §4.6~~ **ruled 2026-09-27**: the updater ships in the first release (R-052) | §4.6 |
+| O-11 | As a maintainer, review each shipped component that carries no licence text, and record the review in `tools/notices/reviewed-exceptions.json`: the component, the version range, the identifier claimed, why no text is obtainable, the reviewer, the date and an expiry at most 365 days later (REQ-STARTUP-143). The first run named four: `@ai-sdk/provider-utils` 5.0.36, `@xterm/addon-serialize` 0.14.0, `@xterm/headless` 6.0.0 and `proxy_tools` 0.1.0. *Added 2026-09-27 by §4.3's first execution* | §4.3 |
 
 O-2, O-3, O-4, O-7 and O-8 carry no recommendation to take: each is a value or an act only the owner can
-supply, and each stays owed (R-053).
+supply, and each stays owed (R-053). O-11 is the same kind of item: a review only a maintainer may sign.
 
 ## 7. Order of work
 
@@ -284,7 +306,7 @@ supply, and each stays owed (R-053).
    - §2.2 `/skills`;
    - §3.2 the latency measurement plus §3.3 the injection proof;
    - §4.1 the version guard;
-   - §4.3 the notices generator with the About defect;
+   - §4.3 the notices generator with the About defect — *built 2026-09-27; validation refuses until O-3, O-11 and OQ-68*;
    - §4.4 the bundled assets.
 3. **The portable stub (§4.5).** Spike first, and report the result into ADR-0054.
 4. **The updater (§4.6)** if O-10 includes it, then the manifest and signature (§4.7) against O-2's key.

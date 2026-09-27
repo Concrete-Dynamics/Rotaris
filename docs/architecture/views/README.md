@@ -43,7 +43,14 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-09-24**
+## Last reconciled with the code: **2026-09-27**
+
+**The notices generator, and the About page's lookup (first-release-plan.md §4.3, built 2026-09-27).** `tools/notices/`
+is a build-time tool, not a package: `pnpm notices` computes the shipped closure offline and writes
+`apps/desktop/resources/THIRD-PARTY-LICENSES.txt` only when REQ-STARTUP-143's validation passes. Main's About reader now
+looks for the file under REQ-STARTUP-141's name; it had looked for a lowercase name. The **component view** gains a
+section for the tool, and the **process view** gains the file's row in "Files and directories on disk" and a corrected
+About paragraph. No package, edge, process, channel, command or message kind changed.
 
 **Product-drawn main-window chrome (`PD-SHELL-003`, built and revised 2026-09-24).** On Windows, Linux and macOS the main
 `BrowserWindow` is frameless with its native menu hidden. The existing title bar now ends in minimize,

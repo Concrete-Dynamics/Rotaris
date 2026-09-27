@@ -286,8 +286,11 @@ loads the renderer in the `rows-proof` role, the row renderer over a fixture arr
 **The About page's two commands (Part AG).** Renderer → main: **`shell.openThirdPartyLicenses`** → `{path}` | a refusal.
 `REQ-SHELL-142`'s notices bundle is a **local file shipped with the build**, so it cannot travel through
 `shell.openExternal`, which refuses every scheme but `http(s)` for the reason above; it takes its own command, the
-renderer names no path, and main answers `licenses.absent` when the build carries no bundle — the ordinary case today,
-since nothing produces the asset (owed to ADR-0054). `shell.hello`'s reply gains three local facts beside the version
+renderer names no path, and main answers `licenses.absent` when the build carries no bundle — the ordinary case today:
+since 2026-09-27 `pnpm notices` produces the asset (below) but only once its validation passes, and no build yet
+carries it into the artifact (`first-release-plan.md` §4.4). Main looks for it as `THIRD-PARTY-LICENSES.txt`, the name
+REQ-STARTUP-141 fixes and the generator writes; it looked for a lowercase name until that date, which Linux does not
+forgive. `shell.hello`'s reply gains three local facts beside the version
 for `REQ-SHELL-140`'s product card: `build` (the bundled build identifier, null when the asset is missing or
 unreadable), `standalone` (`app.isPackaged`) and `thirdPartyLicenses` (whether a bundle exists). The About page issues
 no request of its own — `REQ-SHELL-139` requires zero network requests at render — and the same capture seam
@@ -442,3 +445,4 @@ licensed.
 | `%LOCALAPPDATA%/rotaris/data/tokens/<provider_id>.json` (+ `<provider_id>.lock` while a write is in flight) | main (`CredentialStore`: staged `.tmp` protected before a byte is written, renamed; owner + SYSTEM only, read back; ADR-0029) | main only — the run host is leased the bearer |
 | `%LOCALAPPDATA%/rotaris/config/project_settings.yaml` (+ `.lock`) | main (`ProjectSettingsStore`: under the lock, behind the secret screen, mode 0644) | run host and workspace service (layer 3 of every `loadConfiguration`, no lock) |
 | the instance claim | main (ADR-0055) | main (a second launch hands over and exits) |
+| `process.resourcesPath/THIRD-PARTY-LICENSES.txt` — the notices file (REQ-STARTUP-141/142); in the source tree `apps/desktop/resources/THIRD-PARTY-LICENSES.txt`, git-ignored | **the build**, never the product: `pnpm notices` (`tools/notices/`), per platform before freezing and only when REQ-STARTUP-143's validation passes; the packaging step carries it into the artifact (§4.4, owed) | main (`about.ts`, `thirdPartyLicensesPath`) — the About page's `shell.openThirdPartyLicenses` opens it as a local file; a person |

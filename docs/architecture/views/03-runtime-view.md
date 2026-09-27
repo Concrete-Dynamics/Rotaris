@@ -302,8 +302,8 @@ text no further tool activity followed. **A child cut off while making progress 
 expiry instant — not at the backstop — the child's `ProgressLog` answers whether it completed a tool call within the
 final stall window (the role's `stall_timeout`, else `runtime.child_stall_timeout`, 90 s by default; the bound is
 inclusive). If it did, and the child then ends failed on that timeout, the stored report gains `cut_off`: the statement,
-the workspace paths its own `write_file`/`haet_edit` calls changed with `ok` (both attempts, in the order first changed,
-each once), and — unless the child is itself a continuation — the offer naming `continuation_of`. The report block and
+the workspace paths its own `write_file`/`haet_edit`/`haet` calls changed with `ok` (the name matched in lower case, as the
+gate's fallback dispatches it; resolved lexically against the root; both attempts, in the order first changed, each once), and — unless the child is itself a continuation — the offer naming `continuation_of`. The report block and
 `background_output` render it after the result text; nothing resumes the child. See §4 for the continuation.
 Per-model `timeout` / `num_retries` ride the choice (REQ-ORCH-145). On resume the memory is
 rehydrated from the timeline (`ResilienceMemory.rehydrate`), so a continuation never returns to an exhausted pair and keeps the
@@ -411,7 +411,9 @@ write-scope refusal, and refuses it with no record when the named task is not th
 ownership, the predicate `backgroundOutput` shares), when that child's stored report carries no offer — so a
 continuation, which is never offered one, cannot be continued in turn — or when a child of the session already
 records it as `continuation_of`. An admitted continuation is an ordinary child whose row carries `continuation_of`;
-its payload is assembled as any child's is, with nothing of the timed-out child injected.
+its payload is assembled as any child's is, with nothing of the timed-out child injected. Ownership is tested against
+the current iteration's root task, so a continuation can be taken up only within the iteration whose child was cut off.
+The field itself is not in REQ-TOOLS-152, which the directive does not name: **OQ-66**.
 
 **The record the agent surfaces read (Part R; REQ-MONITOR-044).** Each child's `AgentRecord` carries, beside what Part B
 projected, `reasoning` (the persona's configured level, `medium` when none), `contextUsed` (the input count of its latest

@@ -11,6 +11,10 @@ Found 2026-09-27 while building `PD-ORCH-004` (R-057), running the proof as root
 its first launch. By reading, the other 33 scripts under `apps/desktop/scripts/` that launch `electron` directly
 (32 proofs and `live-run.mjs`) name neither `hostSwitches` nor `--no-sandbox`. They were not run.
 
+The gap was first recorded in [`fixed/a-driven-launch-dies-as-root-on-linux.md`](fixed/a-driven-launch-dies-as-root-on-linux.md),
+whose repair gave the driver `hostSwitches` and stated that "the scripts that spawn Electron themselves keep their own
+launches ... and still die as root". This note is that same gap, met in one more proof, and stays open for it.
+
 ## Specs
 
 None contradicted by the product. A proof is evidence (`.claude/rules/tests-and-proofs.md`), and as root this one

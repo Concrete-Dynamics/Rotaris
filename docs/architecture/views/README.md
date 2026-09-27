@@ -45,6 +45,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-27**
 
+**`PD-ORCH-004` repaired after review (2026-09-27, R-057).** One behaviour moved: a file-writing call is recognised by
+its lower-cased name, as the gate's own fallback dispatches `Write_File` to `write_file`, so such a write is now listed
+among a cut-off child's changed paths. The rest is record: four end-to-end cases in `run/ladder.test.ts` pin the paths
+across REQ-ORCH-088's retry, the rule read at the failing attempt's expiry, the landing grace and a role's
+`stall_timeout`. The `delegate` field `continuation_of` is raised as **OQ-66** against REQ-TOOLS-152. The **runtime
+view**'s child-timeout passage names the lower-case match and the lexical resolution, and its continuation paragraph
+names the same-iteration limit and OQ-66. No package, edge, process, channel, message kind or store column changed.
+
 **A child cut off while making progress hands its work back (`PD-ORCH-004`, built 2026-09-27, R-057).** REQ-ORCH-088's
 expiry path is unchanged; at the expiry instant a child's `ProgressLog` (`engine/children/cut-off.ts`, fed by the turn's
 new `onToolCompleted`) answers whether it completed a tool call within the final stall window, and if it did, its failed

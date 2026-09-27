@@ -71,6 +71,13 @@ describe('PD-ORCH-004: the paths a child\'s own file-writing calls changed', () 
     expect(log.changedPaths()).toEqual([]);
   });
 
+  it('a write the gate dispatched through its lower-case fallback (`Write_File` runs `write_file`) is a write', () => {
+    const log = new ProgressLog(ROOT);
+    log.completed(millis(1), 'Write_File', { path: 'src/a.ts' }, true);
+    log.completed(millis(2), 'HAET_EDIT', { path: 'src/b.ts' }, true);
+    expect(log.changedPaths()).toEqual(['src/a.ts', 'src/b.ts']);
+  });
+
   it('workspacePath resolves lexically against the root', () => {
     expect(workspacePath(ROOT, 'a/b.ts')).toBe('a/b.ts');
     expect(workspacePath(ROOT, '/ws/a/b.ts')).toBe('a/b.ts');

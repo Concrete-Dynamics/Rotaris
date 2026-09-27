@@ -51,6 +51,15 @@ Evidence: `cut-off.test.ts` (13 cases) and four scripted end-to-end cases in `ch
 - the paths are ordered and de-duplicated with failed writes left out; the continuation reports that it changed
   nothing and carries no offer; and a chained continuation and a second continuation are both refused.
 
-Each end-to-end case went red under a mutation of the mechanism it covers. What was not measured: no built app
+Each end-to-end case went red under a mutation of the mechanism it covers. After review the same day, four more
+end-to-end cases in `packages/engine/src/run/ladder.test.ts` run through REQ-ORCH-088's own retry and landing:
+
+- attempt 1's write is listed beside attempt 2's across the fallback retry;
+- a child progressing at attempt 1's expiry and not at attempt 2's gets REQ-ORCH-088's report alone;
+- a call completing inside the landing grace is not progress;
+- a role's `stall_timeout` replaces the run's window (REQ-CONFIG-108).
+
+Each went red under its own mutation. A `cut-off.test.ts` case covers a write dispatched through the gate's
+lower-case fallback, which the path list now recognises. What was not measured: no built app
 exercised it (`pnpm resilience-proof` could not launch as root) and no live run was made. So whether run `2e21e324`'s
 two children would have qualified is taken from the ruling above, not re-measured.

@@ -28,7 +28,10 @@ export const CHILD_STALL_TIMEOUT_MS: Millis = millis(90_000);
  * `raw` as a path relative to the workspace root in `/` form, or null when it names the root itself or a place
  * outside it. PD-ORCH-004 asks for the *workspace* paths a child changed, so a write outside the root (possible under
  * `runtime.allow_outside_workspace`) is not one of them. Resolution is lexical: `./a` and `<root>/a` are `a`, and a
- * symbolic link is not followed.
+ * symbolic link is not followed. That is a literal reading stated in PD-ORCH-004's first execution, and it differs
+ * from the file tools' fence, which decides "inside" on real paths: a write spelled through the real path of a root
+ * reached by a link is accepted by the fence and left out here, and on a case-insensitive filesystem `Src/A.ts` and
+ * `src/a.ts` are listed as two paths.
  */
 export function workspacePath(root: string, raw: string): string | null {
   if (raw === '') return null;
@@ -51,11 +54,13 @@ export class ProgressLog {
   /**
    * One tool call returned to the child at `at`. A call completes whatever it returned — an error or a refusal is a
    * completed call too. A file-writing call (`write_file`, `haet_edit`, `haet`) changed its path only when it
-   * returned `ok`; a failed edit or a refused write changed nothing and is not listed.
+   * returned `ok`; a failed edit or a refused write changed nothing and is not listed. The name is matched in lower
+   * case, because the gate dispatches a call whose name matches no executor under its lower-case spelling
+   * (`Write_File` runs `write_file`), and a write it ran is a write whatever the model called it.
    */
   completed(at: Millis, toolName: string, args: Readonly<Record<string, unknown>>, ok: boolean): void {
     this.lastCompletedAt = at;
-    if (!ok || !isFileWritingTool(toolName)) return;
+    if (!ok || !isFileWritingTool(toolName.toLowerCase())) return;
     const target = args['path'] ?? args['file_path'];
     const path = typeof target === 'string' ? workspacePath(this.workspaceRoot, target) : null;
     if (path !== null && !this.changed.includes(path)) this.changed.push(path);

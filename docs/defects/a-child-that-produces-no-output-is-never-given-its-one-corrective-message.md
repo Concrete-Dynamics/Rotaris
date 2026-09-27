@@ -22,6 +22,14 @@ run.
   message.
 - `REQ-CONFIG-113`: `child_stall_timeout` (default 90 s) is the "no-event threshold before a child is reported
   stalled", and `REQ-NOTIFY-100` bounds a child producing no output by it. Nothing reports a child stalled.
+- `REQ-ORCH-089`: the stall watchdog that owns this threshold ("per-role override else the default 90 s"), a
+  visibility-only evaluation with its cadence, warning, diagnostics issue and stall callback. It is not built either,
+  and it is what would detect the stall the recovery above answers. ADR-0012 already records it as unbuilt
+  ([`0012-the-delegated-child-scheduler.md`](../architecture/adr/0012-the-delegated-child-scheduler.md), the
+  REQ-ORCH-088 measurement paragraph: "the stall watchdog's badge (REQ-ORCH-089) is not built either").
+- `REQ-ORCH-144`: the per-role stall threshold, one of the per-role overrides; REQ-MONITOR-285 names REQ-ORCH-089 and
+  REQ-ORCH-144 as the owners of the per-agent stall timeout and its override. Since `PD-ORCH-004` the override reaches
+  the run as `Persona.stallTimeoutMs`, read only by the progress rule.
 
 ## Relevant files
 

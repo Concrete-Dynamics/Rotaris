@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { err, maskArguments, ok, redactRowString, toIsoUtc, type Instant, type MachineId, type Result, type SessionId, type WallClock } from '@rotaris/kernel';
 import { RELEASE_PAGE_SIZE, RESIDENT_ROW_CAP, type AgentTerminalRow, type CheckpointRow, type IterationInsert, type QueuedPromptRow, type ChildInsert, type ChildRow, type RowToolFields, type SessionRunPatch, type StoreDal, type TranscriptRowRecord } from '@rotaris/store';
-import { interruptionPhrase, isLegalChildMove, isTerminalChildState, type ChildState, type ImageAttachment, type Interruption, type ResumeState, type RunType, type SettlingPath, type TimelineSeverity, type TranscriptRow } from '@rotaris/contracts';
+import { interruptionPhrase, isLegalChildMove, isResumeState, isTerminalChildState, type ChildState, type ImageAttachment, type Interruption, type ResumeState, type RunType, type SettlingPath, type TimelineSeverity, type TranscriptRow } from '@rotaris/contracts';
 import { EVENT_SCHEMA_VERSION, locator, serializeEvent, type EventKind, type WireEvent } from './events.js';
 import { isActiveStatus, summarise } from './run/stop-conditions.js';
 import { AgentActivity } from './children/activity.js';
@@ -1044,6 +1044,39 @@ export class SessionWriter {
     }
     // A paused agent runs nothing, so it carries no active tool chip (REQ-MONITOR-211's rule, applied to a rest).
     this.activity.clearActive(current.canonical_name);
+    if (line.ok) { const o = this.nextOrdinal++; this.deps.onCommitted({ kind: 'event', ordinal: o, events: [{ ordinal: o, event: ev, line: line.value }] }); }
+    this.trimIfOverflowed(at);
+    return ok(dal.getChild(sessionId, taskId)!);
+  }
+
+  /**
+   * PD-ORCH-005 clause 4: "a `paused` agent moves back to the state it resumes into". The move, the rest columns cleared,
+   * `child.transition` and a `child_resumed` timeline entry, in ONE transaction. Refused unless the child is `paused`
+   * with a resume state recorded.
+   */
+  resumeChild(taskId: string, override?: 'running'): Result<ChildRow, WriteFailure | { code: 'illegal-move'; from: string; to: string; reason: string }> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    const current = dal.getChild(sessionId, taskId);
+    if (!current || current.state !== 'paused' || !isResumeState(current.resume_state)) {
+      return err({ code: 'illegal-move', from: current?.state ?? '(none)', to: current?.resume_state ?? '(none)', reason: `child ${taskId} is not paused with a state to resume into (PD-ORCH-005)` });
+    }
+    // `override`: a child that will take a step at its resume moves back `running` whatever it had reached (clause 10).
+    const into = override ?? current.resume_state;
+    const at = toIsoUtc(wall.instant());
+    const ev = this.envelope('child.transition', at, { child_id: taskId, from_state: 'paused', to_state: into });
+    const line = serializeEvent(ev);
+    if (!line.ok) this.deps.warn(`event child.transition could not be serialised and was not recorded: ${line.error.reason}`);
+    try {
+      dal.transaction(() => {
+        dal.setChildState(sessionId, taskId, into, null);
+        dal.setChildRest(sessionId, taskId, null, null);
+        if (line.ok) dal.insertEvent(sessionId, this.nextOrdinal, 'child.transition', at, EVENT_SCHEMA_VERSION, null, line.value);
+        dal.insertTimeline(sessionId, dal.nextTimelineOrdinal(sessionId), at, 'child_resumed', 'rotaris', `Child ${current.canonical_name} (${taskId}), paused by ${interruptionPhrase(current.interruption ?? '')}, resumed ${into === 'running' ? 'running' : `as ${into}`}.`, JSON.stringify({ task_id: taskId, interruption: current.interruption, resume_state: into }), timelineId(), 'info');
+      });
+    } catch (cause) {
+      return this.fail(cause);
+    }
     if (line.ok) { const o = this.nextOrdinal++; this.deps.onCommitted({ kind: 'event', ordinal: o, events: [{ ordinal: o, event: ev, line: line.value }] }); }
     this.trimIfOverflowed(at);
     return ok(dal.getChild(sessionId, taskId)!);

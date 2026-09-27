@@ -11,7 +11,7 @@ import { SequenceCounters } from '../sequence.js';
 import { SessionWriter } from '../session-writer.js';
 import { runTurn, type PortToolCall, type PortToolResult, type ToolPort, type TurnDeps } from './turn.js';
 import type { LoopSupervisor } from './supervisor.js';
-import { answerUnanswered, interruptedResult } from './interruption.js';
+import { answerUnanswered, callsRun, interruptedResult } from './interruption.js';
 
 /**
  * PD-ORCH-005 clauses 2, 3, 4 and 9 — what a tool call the run's rest cut short leaves in its agent's conversation, and
@@ -55,6 +55,19 @@ describe('PD-ORCH-005: the interrupted result', () => {
       { kind: 'tool-result', callId: 'x', name: 'lint', isError: true, result: 'two warnings' },
       { kind: 'tool-result', callId: 'b', name: 'boom', isError: true, result: interruptedResult('pause', false, '') },
     ] });
+  });
+});
+
+describe('PD-ORCH-005 clause 4 with REQ-ORCH-095: the calls a record holds as run (found by phase 4\'s review)', () => {
+  it('counts every call but those answered as never started, whatever cut them', () => {
+    const step = (ids: readonly string[]): ChatMessage => ({ role: 'assistant', content: ids.map((id) => ({ kind: 'tool-call' as const, callId: id, name: 'grep', args: '{}' })) });
+    const results = (pairs: readonly (readonly [string, string])[]): ChatMessage => ({ role: 'tool', content: pairs.map(([id, result]) => ({ kind: 'tool-result' as const, callId: id, name: 'grep', isError: false, result })) });
+    expect(callsRun([
+      step(['a', 'b']), results([['a', 'found'], ['b', interruptedResult('pause', true, 'half')]]),
+      step(['c', 'd', 'e']), results([['c', interruptedResult('crash', false, '')], ['d', interruptedResult(null, false, '')], ['e', interruptedResult('stop', false, '')]]),
+      step(['f']),
+    ])).toBe(3);
+    expect(callsRun([])).toBe(0);
   });
 });
 

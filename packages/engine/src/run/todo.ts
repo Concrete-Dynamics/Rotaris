@@ -66,6 +66,11 @@ export class Todo {
     return true;
   }
 
+  /** The task carrying `taskId`, as the todo holds it. */
+  task(taskId: string): Task | undefined {
+    return this.all().find((t) => t.id === taskId);
+  }
+
   /** The text of the task carrying `taskId`, or null when none does. */
   textOf(taskId: string): string | null {
     return this.all().find((t) => t.id === taskId)?.text ?? null;

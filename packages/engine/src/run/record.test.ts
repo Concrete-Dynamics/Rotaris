@@ -77,12 +77,13 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
       client.push(script(persona, n));
       return original(req);
     };
+    const warnings: string[] = [];
     const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k' };
     const backend = new DefaultAgentBackend(client);
     const models = (key: string): ModelLookup => ({ ok: false, reason: `'${key}' is not a configured model` });
     const personas = { resolve: (name: string) => { const base = BUILT_IN_PERSONAS[name as RoleName]; return base ? { persona: base, alias: null } : null; }, knownRoles: () => Object.keys(BUILT_IN_PERSONAS) };
     const sessions = new Sessions({
-      clocks: clock, publisher: NONE, pid: 79, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => `S-rec-${++minted}`,
+      clocks: clock, publisher: NONE, pid: 79, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), mintSessionId: () => `S-rec-${++minted}`,
       model: null, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid), attended: () => true, onRunResult: () => undefined,
       tools: (ctx) => port(ctx.delegation, ctx.parentId ?? 'root'),
       ...(checkpoints ? { checkpoints } : {}),
@@ -96,7 +97,7 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
         resilience: { catalogue: [], fallbackModel: null },
       } }),
     });
-    return { sessions, client };
+    return { sessions, client, warnings };
   }
   /** What a request carried, less the system message the backend puts first. */
   const sent = (req: ModelRequest): ChatMessage[] => req.messages.slice(1) as ChatMessage[];
@@ -130,33 +131,6 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
     expect(recordedAgents).toEqual([iteration!.root_task_id, child.task_id].sort());
   });
 
-  it('the repair of a-crashed-iteration-number-is-reused-by-the-next-run: an iteration a dead run left open closes cancelled, its task goes back to pending, and the next iteration takes the next number', async () => {
-    const { sessions } = sessionsWith(() => answer('Answered.'));
-    const sid = (sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
-    expect((await sessions.running(sid)!).status).toBe('completed');
-    // The residue a run host that died mid-iteration 1 leaves: the row open, the count not yet moved, the task in progress.
-    dal.db.prepare("UPDATE iterations SET state = 'open', outcome = NULL, closed_at = NULL WHERE session_id = ? AND iteration = 1").run(sid);
-    const stored = decodeStoredTodo(dal.getSession(sid)!.todo);
-    const planner = structuredClone(stored.planner!);
-    planner.phases[0]!.tasks[0]!.state = 'in_progress';
-    dal.updateSessionRun(sid, { iterations_completed: 0, todo: encodeStoredTodo({ ...stored, planner }) });
-
-    const continued = sessions.prompt(sid, 'second');
-    expect(continued.ok).toBe(true);
-    expect((await sessions.running(sid)!).status).toBe('completed');
-    // No store failure — before the repair the reused number failed the insert and the whole workspace store with it.
-    expect(dal.getSession(sid)!.execution_status).toBe('completed');
-    const rows = dal.iterationsOf(sid);
-    expect(rows.map((r) => [r.iteration, r.state, r.outcome])).toEqual([[1, 'closed', 'cancelled'], [2, 'closed', 'succeeded'], [3, 'closed', 'succeeded']]);
-    // The dead iteration's task was selected again (REQ-ORCH-135: it stays anchored), then the continued prompt's.
-    expect(rows[1]!.todo_task_id).toBe(rows[0]!.todo_task_id);
-    const ended = dal.eventsOfKind(sid, 'iteration.end').map((e) => JSON.parse(e.payload) as { iteration: number; outcome: string });
-    expect(ended.filter((e) => e.iteration === 1).map((e) => e.outcome)).toEqual(['succeeded', 'cancelled']);
-    // Each root has its own id, and every recorded root's id is taken when the next one is minted.
-    expect(new Set(rows.map((r) => r.root_task_id)).size).toBe(3);
-    for (const r of rows) expect(takenTaskIds(dal, sid).has(r.root_task_id)).toBe(true);
-  });
-
   /** The residue a run host that died mid-`iteration` leaves: its row open, the count not yet moved, its todo task in progress. */
   function dieIn(sid: SessionId, iteration: number, taskIdPart: string): void {
     dal.db.prepare("UPDATE iterations SET state = 'open', outcome = NULL, closed_at = NULL WHERE session_id = ? AND iteration = ?").run(sid, iteration);
@@ -165,33 +139,72 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
     for (const phase of planner.phases) for (const task of phase.tasks) if (task.id.endsWith(taskIdPart)) task.state = 'in_progress';
     dal.updateSessionRun(sid, { iterations_completed: iteration - 1, todo: encodeStoredTodo({ ...stored, planner }) });
   }
+  /** The same residue as a rest leaves it: the interruption recorded and the session `paused`, so the Continue action applies. */
+  function restIn(sid: SessionId, iteration: number, taskIdPart: string): void {
+    dieIn(sid, iteration, taskIdPart);
+    dal.setIterationInterruption(sid, iteration, 'pause');
+    dal.db.prepare("UPDATE sessions SET execution_status = 'paused' WHERE session_id = ?").run(sid);
+  }
 
-  it('the same repair when the dead iteration was a continued prompt\'s: the next prompt takes its own task id, and each prompt is its own todo task', async () => {
-    const { sessions, client } = sessionsWith(() => answer('Answered.'));
+  it('PD-ORCH-005 clause 4, and the repair of a-crashed-iteration-number-is-reused-by-the-next-run: a dead run\'s open iteration is resumed — its number, its root and its task — and the new message is its root\'s next message', async () => {
+    const { sessions, client, warnings } = sessionsWith(() => answer('Answered.'));
+    const sid = (sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    const root = dal.iterationsOf(sid)[0]!.root_task_id;
+    const before = recorded(sid, root);
+    dieIn(sid, 1, ':main:1');
+
+    expect(sessions.prompt(sid, 'second').ok).toBe(true);
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(SessionWriter.storeFailure(dal)).toBeUndefined();
+    // One iteration, the same one: its number and its root's task id carried on, and nothing appended to the todo.
+    expect(dal.iterationsOf(sid)).toMatchObject([{ iteration: 1, state: 'closed', outcome: 'succeeded', root_task_id: root, interruption: null }]);
+    const tasks = decodeStoredTodo(dal.getSession(sid)!.todo).planner!.phases.flatMap((p) => p.tasks);
+    expect(tasks.map((t) => [t.text, t.state])).toEqual([['first', 'complete']]);
+    // The root carried on from its record, the new message its next message; the crash's `crash` interruption came and went.
+    const last = client.requests.at(-1)!;
+    expect(sent(last)).toEqual([...before, { role: 'user', content: [{ kind: 'text', text: 'second' }] }]);
+    expect(recorded(sid, root)).toEqual([...before, { role: 'user', content: [{ kind: 'text', text: 'second' }] }, assistant('Answered.')]);
+    expect(dal.timelineOf(sid).map((t) => t.name)).toEqual(expect.arrayContaining(['iteration_paused', 'iteration_resumed']));
+    // The resumed iteration is the open row itself: no second row is opened for it, so none is refused.
+    expect(warnings.filter((w) => /was not recorded open/.test(w))).toEqual([]);
+  });
+
+  it('PD-ORCH-005 clause 6, declined: the open iteration closes cancelled, its task goes back to pending, and the next iteration takes the next number', async () => {
+    const { sessions } = sessionsWith(() => answer('Answered.'));
+    const sid = (sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    restIn(sid, 1, ':main:1');
+
+    expect(sessions.continueSession(sid, 'continue', { withoutPaused: true }).ok).toBe(true);
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(SessionWriter.storeFailure(dal)).toBeUndefined();
+    const rows = dal.iterationsOf(sid);
+    expect(rows.slice(0, 2).map((r) => [r.iteration, r.state, r.outcome])).toEqual([[1, 'closed', 'cancelled'], [2, 'closed', 'succeeded']]);
+    // The declined iteration's task was selected again (REQ-ORCH-135: it stays anchored), under a new root.
+    expect(rows[1]!.todo_task_id).toBe(rows[0]!.todo_task_id);
+    const ended = dal.eventsOfKind(sid, 'iteration.end').map((e) => JSON.parse(e.payload) as { iteration: number; outcome: string });
+    expect(ended.filter((e) => e.iteration === 1).map((e) => e.outcome)).toEqual(['succeeded', 'cancelled']);
+    expect(new Set(rows.map((r) => r.root_task_id)).size).toBe(rows.length);
+    for (const r of rows) expect(takenTaskIds(dal, sid).has(r.root_task_id)).toBe(true);
+  });
+
+  it('a continued prompt\'s dead iteration is resumed too: the next prompt is its root\'s next message, never a second task under a reused id', async () => {
+    const { sessions } = sessionsWith(() => answer('Answered.'));
     const sid = (sessions.start(dal, 'C:/ws', 'FIRST') as { value: SessionId }).value;
     await sessions.running(sid);
     expect(sessions.prompt(sid, 'SECOND').ok).toBe(true);
     await sessions.running(sid);
+    const root2 = dal.iterationsOf(sid)[1]!.root_task_id;
     dieIn(sid, 2, ':continued:2');
-    const before = client.requests.length;
 
     expect(sessions.prompt(sid, 'THIRD').ok).toBe(true);
     expect((await sessions.running(sid)!).status).toBe('completed');
-    expect(SessionWriter.storeFailure(dal)).toBeUndefined();
     const tasks = decodeStoredTodo(dal.getSession(sid)!.todo).planner!.phases.flatMap((p) => p.tasks);
-    // Before the repair the new task was minted `continued:2` from the stale count: two tasks under one id.
     expect(new Set(tasks.map((t) => t.id)).size).toBe(tasks.length);
-    expect(tasks.map((t) => [t.text, t.state])).toEqual([['FIRST', 'complete'], ['SECOND', 'complete'], ['THIRD', 'complete']]);
-    const rows = dal.iterationsOf(sid);
-    expect(rows.map((r) => [r.iteration, r.outcome])).toEqual([[1, 'succeeded'], [2, 'cancelled'], [3, 'succeeded'], [4, 'succeeded']]);
-    expect(rows[2]!.todo_task_id).toBe(rows[1]!.todo_task_id);
-    expect(rows[3]!.todo_task_id).not.toBe(rows[2]!.todo_task_id);
-    // Both prompts were worked, one iteration each. What the reopened task's iteration is sent is the open defect
-    // `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`, which this test does not pin.
-    expect(client.requests.length - before).toBe(2);
-    // The dead iteration's `iteration.end` names its todo task's text, as every other one does — never the root's payload.
-    const ended = dal.eventsOfKind(sid, 'iteration.end').map((e) => JSON.parse(e.payload) as { iteration: number; task: string; outcome: string });
-    expect(ended.find((e) => e.iteration === 2 && e.outcome === 'cancelled')!.task).toBe('SECOND');
+    expect(tasks.map((t) => [t.text, t.state])).toEqual([['FIRST', 'complete'], ['SECOND', 'complete']]);
+    expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.outcome, r.root_task_id === root2])).toEqual([[1, 'succeeded', false], [2, 'succeeded', true]]);
+    expect(recorded(sid, root2).filter((m) => m.role === 'user').at(-1)).toEqual({ role: 'user', content: [{ kind: 'text', text: 'THIRD' }] });
   });
 
   it('a continued task id steps past every id the todo holds, even one no iteration row carries (a run that died before its first iteration opened)', async () => {
@@ -209,17 +222,24 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
     expect(tasks.map((t) => [t.id, t.text, t.state])).toEqual([[`${sid}:main:1`, 'FIRST', 'complete'], [`${sid}:continued:2`, 'LOST', 'complete'], [`${sid}:continued:3`, 'SECOND', 'complete']]);
   });
 
-  it('REQ-GIT-051: the iteration a dead run left open closes here, so its one capture is attempted here — before this run\'s first', async () => {
+  it('REQ-GIT-051: an open iteration declined closes at that moment, so its one capture is attempted then — before this run\'s first; resumed, it is captured once, when it closes', async () => {
     const captures: { iteration: number; childName: string }[] = [];
     const { sessions } = sessionsWith(() => answer('Answered.'), undefined, () => ({ enabled: true, capture: async (input) => { captures.push({ iteration: input.iteration, childName: input.childName }); return { outcome: 'captured', detail: '' } as never; } }));
     const sid = (sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
     await sessions.running(sid);
-    dieIn(sid, 1, ':main:1');
+    restIn(sid, 1, ':main:1');
     captures.length = 0;
-    expect(sessions.prompt(sid, 'second').ok).toBe(true);
-    expect((await sessions.running(sid)!).status).toBe('completed');
-    // Exactly one capture per iteration that closed in this run: the dead one (no child credited), then 2 and 3.
-    expect(captures).toEqual([{ iteration: 1, childName: '' }, { iteration: 2, childName: '' }, { iteration: 3, childName: '' }]);
+    expect(sessions.continueSession(sid, 'continue', { withoutPaused: true }).ok).toBe(true);
+    await sessions.running(sid);
+    // The declined one first (no child credited), then each iteration this run closed.
+    expect(captures[0]).toEqual({ iteration: 1, childName: '' });
+    expect(captures.map((c) => c.iteration)).toEqual([1, ...dal.iterationsOf(sid).slice(1).map((r) => r.iteration)]);
+
+    restIn(sid, dal.iterationsOf(sid).length, ':main:1');
+    captures.length = 0;
+    expect(sessions.prompt(sid, 'again').ok).toBe(true);
+    await sessions.running(sid);
+    expect(captures.map((c) => c.iteration)).toEqual([dal.iterationsOf(sid).length]);
   });
 
   it('an open the store already holds is refused with a warning, never a store failure; the count never falls below a closed iteration', async () => {
@@ -265,6 +285,34 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
     const last = client.requests.filter((r) => personaOf(r) === 'orchestrator').at(-1)!;
     // Without the turn closing its conversation, the late pass wrote a replacement the model never saw.
     expect(recorded(sid, root)).toEqual([...sent(last), assistant('All done.')]);
+  });
+
+  it('PD-ORCH-005 clause 4: a resumed conversation too long for its model is compressed as any conversation is, before its first step', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    const long = 'Every file of the project, probed in turn. '.repeat(80);
+    const first = sessionsWith((_persona, turn) => {
+      if (turn === 1) return toolCalls([{ callId: 'p1', name: 'probe', args: { what: long } }], 'Probing.', { input: 5, output: 5 });
+      return { parts: [{ hold }, ...toolCalls([{ callId: 'p2', name: 'probe', args: { what: 'y' } }], 'Again.', { input: 5, output: 5 }).parts] };
+    }, { triggerTokens: 600 });
+    const sid = (first.sessions.start(dal, 'C:/ws', 'probe the thing') as { value: SessionId }).value;
+    for (let i = 0; i < 400 && first.client.requests.length < 2; i += 1) await new Promise((r) => setTimeout(r, 2));
+    expect(first.sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    release();
+    await first.sessions.running(sid);
+    const root = dal.iterationsOf(sid)[0]!.root_task_id;
+    // Under the provider's small reading nothing was compressed before the rest.
+    expect(dal.agentMessagesOf(sid, root).filter((e) => e.kind === 'replacement')).toHaveLength(0);
+
+    // A relaunch: a new process holds no reading of this agent's prompt, so the count is the conversation's estimate.
+    const second = sessionsWith((persona) => (persona === 'compressor' ? answer('Work performed: probed once. Findings reached: none. Questions left open: the second probe.') : answer('done')), { triggerTokens: 600 });
+    expect(second.sessions.resume(dal, 'C:/ws', sid).ok).toBe(true);
+    expect(second.sessions.continueSession(sid, 'continue').ok).toBe(true);
+    expect((await second.sessions.running(sid)!).status).toBe('completed');
+    expect(dal.agentMessagesOf(sid, root).filter((e) => e.kind === 'replacement')).toHaveLength(1);
+    const resumedStep = second.client.requests.find((r) => personaOf(r) === 'orchestrator')!;
+    expect(JSON.stringify(sent(resumedStep))).not.toContain(long.slice(0, 200));
+    expect(recorded(sid, root)).toEqual([...sent(resumedStep), assistant('done')]);
   });
 
   it('clause 12: a compression is written into the record, so the conversation a resume sends is the compressed one', async () => {

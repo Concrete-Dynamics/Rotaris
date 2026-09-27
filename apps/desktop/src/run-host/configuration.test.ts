@@ -3,9 +3,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock } from '@rotaris/kernel';
-import { authProvidersOf, classifierSlotsOf, configureRun, credentialResolver, egressReader, entryTierOf } from './configuration.js';
+import { authProvidersOf, classifierSlotsOf, configureRun, credentialResolver, egressReader, entryTierOf, personaResolverFor, runtimeFromConfiguration } from './configuration.js';
 import { nodeClocks } from '@rotaris/platform';
-import type { ModelEntry } from '@rotaris/config';
+import { loadConfiguration, type ModelEntry } from '@rotaris/config';
 
 /**
  * ADR-0030 at the run-host root: a model naming an `auth_provider` resolves the bearer main leased, per request;
@@ -147,5 +147,41 @@ describe('the egress reader (ADR-0023, REQ-SANDBOX-038/118, REQ-TOOLS-089)', () 
     const r = await read();
     expect(r.ok && r.policy.defaultDisposition).toBe('ask');
     expect(r.ok && r.toolCallTimeoutS).toBe(30);
+  });
+});
+
+/**
+ * PD-ORCH-004's progress rule reads the stall window: `runtime.child_stall_timeout` reaches the run, and a role's own
+ * `stall_timeout` substitutes for it on that role's children and no others (REQ-CONFIG-108).
+ */
+describe('the stall window reaches the run (PD-ORCH-004, REQ-CONFIG-108, REQ-CONFIG-113)', () => {
+  it('the runtime key is handed over in milliseconds, and only the role that states its own carries it', () => {
+    mkdirSync(join(dir, 'ws', '.rotaris'), { recursive: true });
+    writeFileSync(join(dir, 'ws', '.rotaris', 'agents.yaml'), `default_persona: coding-agent
+models:
+  selected:
+    provider: openai
+    model_id: first
+    api_key: k
+large_model: selected
+medium_model: selected
+small_model: selected
+personas:
+  coding-agent:
+    name: Coding agent
+    model: selected
+    stall_timeout: 30
+  tester:
+    name: Tester
+    model: selected
+runtime:
+  child_stall_timeout: 45
+`);
+    const loaded = loadConfiguration({ globalDir: join(dir, 'global'), workspaceRoot: join(dir, 'ws') });
+    if (!loaded.ok) throw new Error('configuration');
+    expect(runtimeFromConfiguration(loaded.value).childStallTimeoutMs).toBe(45_000);
+    const personas = personaResolverFor(loaded.value, true, () => undefined);
+    expect(personas.resolve('coding-agent')!.persona.stallTimeoutMs).toBe(30_000);
+    expect(personas.resolve('tester')!.persona.stallTimeoutMs).toBeUndefined();
   });
 });

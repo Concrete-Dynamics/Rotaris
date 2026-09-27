@@ -249,8 +249,10 @@ export interface ChildRow {
   readonly observed: number;
   readonly context_injected: number;
   readonly tool_calls: number;
+  /** v22 — PD-ORCH-004: the task id of the child this one was delegated to continue; null for every other child. */
+  readonly continuation_of: string | null;
 }
-export type ChildInsert = Omit<ChildRow, 'completed_at' | 'report' | 'report_stored' | 'observed' | 'context_injected' | 'tool_calls' | 'launch_generation' | 'todo'> & { readonly todo?: string | null };
+export type ChildInsert = Omit<ChildRow, 'completed_at' | 'report' | 'report_stored' | 'observed' | 'context_injected' | 'tool_calls' | 'launch_generation' | 'todo' | 'continuation_of'> & { readonly todo?: string | null; readonly continuation_of?: string | null };
 
 export interface IssueRow {
   readonly session_id: string;
@@ -456,8 +458,8 @@ export class StoreDal {
       issuesOf: db.prepare('SELECT * FROM issues WHERE session_id = ? ORDER BY ordinal'),
 
       // ADR-0012: the child ledger. Every statement carries session_id (REQ-ORCH-151, asserted by a test over this text).
-      insertChild: db.prepare(`INSERT INTO children (session_id, task_id, canonical_name, given_name, persona, state, parent_id, depth, iteration, model_key, category, background, task, depends_on, inherited_context, granted_tools, granted_mcp, todo, spawned_at)
-        VALUES (@session_id, @task_id, @canonical_name, @given_name, @persona, @state, @parent_id, @depth, @iteration, @model_key, @category, @background, @task, @depends_on, @inherited_context, @granted_tools, @granted_mcp, @todo, @spawned_at)`),
+      insertChild: db.prepare(`INSERT INTO children (session_id, task_id, canonical_name, given_name, persona, state, parent_id, depth, iteration, model_key, category, background, task, depends_on, inherited_context, granted_tools, granted_mcp, todo, spawned_at, continuation_of)
+        VALUES (@session_id, @task_id, @canonical_name, @given_name, @persona, @state, @parent_id, @depth, @iteration, @model_key, @category, @background, @task, @depends_on, @inherited_context, @granted_tools, @granted_mcp, @todo, @spawned_at, @continuation_of)`),
       getChild: db.prepare('SELECT * FROM children WHERE session_id = ? AND task_id = ?'),
       childrenOf: db.prepare('SELECT * FROM children WHERE session_id = ? ORDER BY spawned_at, task_id'),
       childrenOfIteration: db.prepare('SELECT * FROM children WHERE session_id = ? AND iteration = ? ORDER BY spawned_at, task_id'),
@@ -552,7 +554,7 @@ export class StoreDal {
   }
 
   insertChild(row: ChildInsert): void {
-    this.stmts['insertChild']!.run({ ...row, todo: row.todo ?? null });
+    this.stmts['insertChild']!.run({ ...row, todo: row.todo ?? null, continuation_of: row.continuation_of ?? null });
   }
   getChild(id: SessionId, taskId: string): ChildRow | undefined {
     return this.stmts['getChild']!.get(id, taskId) as ChildRow | undefined;

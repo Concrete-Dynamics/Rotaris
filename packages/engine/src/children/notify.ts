@@ -1,4 +1,5 @@
 import type { ChildRow } from '@rotaris/store';
+import { cutOffLines, type CutOff } from './cut-off.js';
 
 /**
  * REQ-ORCH-055..060, REQ-ORCH-063, REQ-MONITOR-023, REQ-TOOLS-154: the messages a parent receives — the
@@ -18,6 +19,8 @@ export interface StoredReport {
   readonly last_response?: string;
   readonly final_response?: string;
   readonly errors?: readonly { type: string; message: string }[];
+  /** PD-ORCH-004: a child cut off while making progress (see `ChildReport.cut_off`). */
+  readonly cut_off?: Partial<CutOff>;
 }
 
 export function parseReport(row: ChildRow): StoredReport | null {
@@ -30,11 +33,15 @@ function cap(text: string): string {
   return `${text.slice(0, REPORT_BLOCK_CAP)}\n… [${text.length - REPORT_BLOCK_CAP} characters omitted]`;
 }
 
-/** REQ-ORCH-060: canonical name, role, status, then the result text (final, else last, else key findings). */
+/**
+ * REQ-ORCH-060: canonical name, role, status, then the result text (final, else last, else key findings). PD-ORCH-004:
+ * for a child cut off while making progress, its report's additions follow the capped result text — outside the
+ * 4,000-character cap, which bounds the result text, so the path list and the offer are never the part cut away.
+ */
 export function reportBlock(row: ChildRow): string {
   const r = parseReport(row);
   const result = r?.final_response || r?.last_response || (r?.key_findings ?? []).map((k) => `- ${k}`).join('\n') || r?.summary || '(no report)';
-  return [`### ${row.canonical_name} (${row.persona}) — ${r?.status ?? row.state}`, cap(result)].join('\n');
+  return [`### ${row.canonical_name} (${row.persona}) — ${r?.status ?? row.state}`, cap(result), ...cutOffLines(r?.cut_off)].join('\n');
 }
 
 /** REQ-ORCH-058: the background pass's immediate resume. */

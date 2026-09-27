@@ -804,6 +804,18 @@ export const MIGRATIONS: readonly Migration[] = [
       UPDATE sessions SET cost_qualifier = 'reported' WHERE cost GLOB '*[1-9]*';
     `,
   },
+  {
+    to: 22,
+    /*
+     * PD-ORCH-004 (R-057): "A child delegated as a continuation carries that relationship in its record." The task id of
+     * the child it continues, NULL for every other child — which is also what a row written before this version reads
+     * as, since no continuation existed then. NO new index: the one reader (the admission check that a piece of work is
+     * continued once) scans one session's children, which the primary key already serves.
+     */
+    sql: `
+      ALTER TABLE children ADD COLUMN continuation_of TEXT;
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

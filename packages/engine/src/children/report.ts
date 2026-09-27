@@ -1,6 +1,7 @@
 import { millis, type Millis, type Timers } from '@rotaris/kernel';
 import { normaliseReportStatus, type ReportStatus } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ModelRef, ThinkingLevel } from '@rotaris/model';
+import type { CutOff } from './cut-off.js';
 
 /**
  * REQ-ORCH-108..112: every terminal child produces a machine-readable report before its parent resumes.
@@ -32,6 +33,12 @@ export interface ChildReport {
   readonly errors: readonly { type: string; message: string }[];
   readonly next_actions: readonly string[];
   readonly tags: readonly string[];
+  /**
+   * PD-ORCH-004: present only on a child that REQ-ORCH-088's limit cut off while it was making progress — the
+   * statement, the paths it changed and, unless it is itself a continuation, the continuation offer. Runner-owned:
+   * no summarising pass writes it, and every other report carries no such field.
+   */
+  readonly cut_off?: CutOff;
 }
 
 export interface ReportInput {
@@ -90,6 +97,11 @@ export function transcriptText(messages: readonly ChatMessage[]): string {
 
 /** `REQ-TOOLS-001`: `haet` resolves to the same tool as `haet_edit`; all three write to a path. */
 const WRITE_TOOLS: ReadonlySet<string> = new Set(['write_file', 'haet_edit', 'haet']);
+
+/** Whether a call of `toolName` writes a file at the path its arguments name — the one list the report and PD-ORCH-004's path list share. */
+export function isFileWritingTool(toolName: string): boolean {
+  return WRITE_TOOLS.has(toolName);
+}
 /** `REQ-TOOLS-100`: every terminal observation ends with this block, sorted, with null-valued keys DROPPED. */
 const DIAGNOSTIC = '[terminal_diagnostic] ';
 
@@ -156,7 +168,7 @@ export function editedFilesFrom(messages: readonly ChatMessage[], reported: read
   for (const m of messages) {
     if (m.role !== 'assistant') continue;
     for (const p of m.content) {
-      if (p.kind !== 'tool-call' || !WRITE_TOOLS.has(p.name)) continue;
+      if (p.kind !== 'tool-call' || !isFileWritingTool(p.name)) continue;
       const a = jsonObject(p.args);
       add(asText(a?.['path']) || asText(a?.['file_path']));
     }

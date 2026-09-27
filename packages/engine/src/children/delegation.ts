@@ -25,6 +25,11 @@ export interface DelegateRequest {
    * while it is live. Absent or empty claims nothing.
    */
   readonly writeScope?: readonly string[] | undefined;
+  /**
+   * PD-ORCH-004: the task id of the caller's own child whose report offered a continuation; the new child is recorded
+   * as its continuation. Absent or empty delegates ordinary work.
+   */
+  readonly continuationOf?: string | undefined;
 }
 
 /** REQ-LIBRARY-098: what became of the caller's attachments, so the tool reports it rather than guessing. */

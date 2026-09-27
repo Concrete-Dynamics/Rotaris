@@ -45,6 +45,16 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-27**
 
+**A child cut off while making progress hands its work back (`PD-ORCH-004`, built 2026-09-27, R-057).** REQ-ORCH-088's
+expiry path is unchanged; at the expiry instant a child's `ProgressLog` (`engine/children/cut-off.ts`, fed by the turn's
+new `onToolCompleted`) answers whether it completed a tool call within the final stall window, and if it did, its failed
+report gains a runner-owned `cut_off`: the statement, the workspace paths its own file-writing calls changed, and —
+unless it is a continuation — the offer. `delegate` takes `continuation_of`; `IterationChildren.delegate` refuses it
+before a record exists unless it names the caller's own child that made the offer and was not yet continued.
+`runtime.child_stall_timeout` and a role's `stall_timeout` reach the run for the first time. The **runtime view** moves:
+the child-timeout passage, a §4 paragraph, and §7 names v22 and `children.continuation_of`; the **state-ownership view**
+gains the progress log. No package, edge, process, channel or message kind changed; one store column was appended.
+
 **The application log keeps `info` and above (`PD-MONITOR-002`, built 2026-09-27, R-055).** Main's standard output
 carried the level of a forwarded line as text inside it and none on main's own, and recorded every level. Each line now
 carries its level in a column of its own, and a line below the threshold is not written; the threshold is `info`, moved

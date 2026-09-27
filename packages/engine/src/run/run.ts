@@ -152,6 +152,8 @@ export interface RunDeps {
   /** Part AH (ADR-0060): what an agent needs to compress its own context; null or absent means neither trigger fires. */
   readonly compression?: RunCompression | null | undefined;
   readonly childTimeoutMs?: Millis | undefined;
+  /** PD-ORCH-004 / REQ-CONFIG-113: `runtime.child_stall_timeout`, the window of the progress rule; absent means 90 s. */
+  readonly childStallTimeoutMs?: Millis | undefined;
   /** REQ-ORCH-080: default 120 s; 0 disables. */
   readonly drainTimeoutMs?: Millis | undefined;
   readonly permission: PermissionPosture;
@@ -793,7 +795,7 @@ export class Run {
         countToolCalls: (n) => this.aggregates.addToolCalls(n),
         // REQ-EVENTS-053, PD-MONITOR-001: a child's provider requests are the run's, counted where the entry agent's are.
         onRequestUsage: this.onRequestUsage,
-        summariser: this.deps.summariser ?? null, hooks: this.hooks, playbookFor: this.preflight?.playbookFor ?? null, route: this.preflight?.route ?? 'work', ...(this.deps.childTimeoutMs === undefined ? {} : { childTimeoutMs: this.deps.childTimeoutMs }), runSignal: this.abort.signal, warn: this.deps.warn,
+        summariser: this.deps.summariser ?? null, hooks: this.hooks, playbookFor: this.preflight?.playbookFor ?? null, route: this.preflight?.route ?? 'work', ...(this.deps.childTimeoutMs === undefined ? {} : { childTimeoutMs: this.deps.childTimeoutMs }), ...(this.deps.childStallTimeoutMs === undefined ? {} : { childStallTimeoutMs: this.deps.childStallTimeoutMs }), runSignal: this.abort.signal, warn: this.deps.warn,
         // REQ-WORKSPACE-060/065 (ADR-0063): a child is an agent, so it receives the SAME units the entry agent
         // does — the getter is passed through, not a copy, which is what makes "a skill can never be visible to
         // one persona and hidden from another" true by construction rather than by two call sites agreeing.

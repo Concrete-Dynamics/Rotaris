@@ -421,6 +421,32 @@ describe('REQ-STARTUP-143: validation fails naming the component or path, one co
     expect(generate().problems[0]).toMatch(new RegExp(`^the setup manifest ${PATHS.setupManifest} cannot be parsed: `));
     put(PATHS.setupManifest, json({ distribution: 'serena-agent', version: '1.7.0', languageServers: [{ language: 'python', packages: [{ name: 'pyright', version: '1.1.403', source: 'https://pypi.org/project/pyright/' }] }] }));
     expect(generate().problems).toEqual([`the setup manifest ${PATHS.setupManifest} cannot be parsed: language server package pyright (python) has no license`]);
+    // A field that is only whitespace is no field: it would render an empty `License:` line (gate round 2).
+    put(PATHS.setupManifest, json({ distribution: 'serena-agent', version: '1.7.0', languageServers: [{ language: 'python', packages: [{ name: 'pyright', version: ' ', source: 'https://pypi.org/project/pyright/', license: 'MIT' }] }] }));
+    expect(generate().problems).toEqual([`the setup manifest ${PATHS.setupManifest} cannot be parsed: language server package pyright (python) has no version`]);
+  });
+
+  it('an input that parses to no object — null, false, 0, "" or a list — cannot be parsed as that input (gate round 2)', () => {
+    // Each once read as "nothing to report": the header then carried "(no address)", the fonts section or the
+    // language servers went missing, and the step exited 0.
+    const inputs = [
+      [PATHS.releaseInputs, 'the release inputs'],
+      [PATHS.assets, 'the bundled-assets table'],
+      [PATHS.setupManifest, 'the setup manifest'],
+      [PATHS.bundleMarker, 'the bundle marker'],
+      [PATHS.exceptions, 'the reviewed-exceptions table'],
+    ] as const;
+    for (const [rel, what] of inputs) {
+      const original = readFileSync(join(root, rel), 'utf8');
+      for (const value of ['null', 'false', '0', '""', '[]']) {
+        put(rel, value);
+        expect(generate().problems, `${rel} = ${value}`).toEqual([`${what} ${rel} cannot be parsed: it is not a JSON object`]);
+      }
+      put(rel, original);
+    }
+    put(PATHS.releaseInputs, 'null');
+    expect(runNoticesStep({ root, platform: 'linux', today: TODAY }).code).toBe(1);
+    expect(existsSync(join(root, PATHS.output))).toBe(false);
   });
 
   it('the notices header carries no LGPL corresponding-sources address — O-3 still owed', () => {
@@ -476,6 +502,29 @@ describe('REQ-STARTUP-149: the step exits 0 having written the file, or 1 having
     expect(r.stderr[0]).toMatch(/^error: the notices generator failed: node_modules\/gamma\/package\.json cannot be parsed: /);
   });
 
+  it('Electron\'s package.json is read like every other: absent is "not installed", malformed is named as unparsable (gate round 2)', () => {
+    rmSync(join(root, 'node_modules/electron/package.json'));
+    expect(generate().problems).toEqual([`electron is not installed at ${PATHS.electron}`]);
+    put('node_modules/electron/package.json', '{ version: 44 }');
+    const r = runNoticesStep({ root, platform: 'linux', today: TODAY });
+    expect(r.code).toBe(1);
+    expect(r.stderr).toHaveLength(1);
+    expect(r.stderr[0]).toMatch(/^error: the notices generator failed: node_modules\/electron\/package\.json cannot be parsed: /);
+  });
+
+  it('a directory standing where the file goes is a handled error, on a pass and on a failure alike (gate round 2)', () => {
+    mkdirSync(join(root, PATHS.output), { recursive: true });
+    const unwritable = runNoticesStep({ root, platform: 'linux', today: TODAY });
+    expect(unwritable.code).toBe(1);
+    expect(unwritable.stderr[0]).toMatch(/^error: the notices generator failed: EISDIR/);
+    expect(unwritable.stderr[1]).toBe(`error: ${PATHS.output} cannot be removed: ERR_FS_EISDIR`);
+    put(PATHS.releaseInputs, json({ lgplCorrespondingSourcesAddress: '' }));
+    const invalid = runNoticesStep({ root, platform: 'linux', today: TODAY });
+    expect(invalid.code).toBe(1);
+    expect(invalid.stderr.every((l) => l.startsWith('error: '))).toBe(true);
+    expect(invalid.stderr.at(-1)).toBe(`error: ${PATHS.output} cannot be removed: ERR_FS_EISDIR`);
+  });
+
   it('refuses an argument as a usage error (2)', () => {
     const r = spawnSync(process.execPath, [join(REPO, 'tools/notices/generate.mjs'), '--check'], { encoding: 'utf8' });
     expect(r.status).toBe(2);
@@ -497,9 +546,31 @@ describe('the readers, on their own', () => {
     // REQ-STARTUP-142: "an address that is only a placeholder SHALL fail". Each of these once stood (gate round 1).
     for (const word of ['N/A', 'n/a', 'none', 'TBA', 'to be announced', 'REPLACE_ME', 'insert address here', 'sources@yourdomain.com']) expect(addressProblem(word)).toBe('is a placeholder');
     for (const template of ['name@domain.com', 'user@email.com']) expect(addressProblem(template)).toBe('uses a placeholder domain');
-    for (const shapeless of ['-', '?', '...', 'address', '0', 'x@y', 'x@y.z', 'mailto:', '1, 2']) expect(addressProblem(shapeless)).toBe('is neither an e-mail address nor a postal address');
+    for (const shapeless of ['-', '?', '...', '0', 'x@y', 'x@y.z', 'mailto:', '1, 2']) expect(addressProblem(shapeless)).toBe('is neither an e-mail address nor a postal address');
     // What stands has an address's shape: an e-mail address, or a postal address in more than one part.
     for (const real of ['corresponding-sources@rotaris.dev', 'Rotaris Maintainers\nPostfach 1234\n10115 Berlin\nGermany', 'Jane Maintainer, 12 High Street, Leeds LS1 1AA, United Kingdom']) expect(addressProblem(real)).toBeNull();
+  });
+
+  it('an address that is only a placeholder is refused in every shape a template writes one (REQ-STARTUP-142, gate round 2)', () => {
+    // Each of these stood after round 1 — the first is the example first-release-plan.md §4.3 once gave the owner.
+    for (const template of ['Name <sources@domain.tld>', 'Name <sources@rotaris.dev>', 'address', 'Street 1, 12345 City, Country']) expect(addressProblem(template), template).toBe('is a template placeholder');
+    for (const [value, tld] of [['sources@domain.tld', 'tld'], ['user@host.tld', 'tld'], ['sources@your.domain', 'domain'], ['sources@rotaris.local', 'local'], ['sources@rotaris.internal', 'internal'], ['sources@corp.lan', 'lan']]) {
+      expect(addressProblem(value), value).toBe(`uses a top-level domain no mail reaches (.${tld})`);
+    }
+    for (const domain of ['email@address.com', 'test@test.com', 'user@host.com', 'sources@mydomain.net', 'sources@test.rotaris.dev']) expect(addressProblem(domain), domain).toBe('uses a placeholder domain');
+    const stock = [
+      'foo@bar.com', 'admin@admin.com', 'abc@abc.com', 'someone@somewhere.com', 'test@rotaris.dev', 'john.doe@rotaris.dev', 'user1@rotaris.dev',
+      '123 Main Street, Anytown', '123 Main Street, Anytown, USA', 'PO Box 0, Nowhere 00000', '123 Fake Street, Springfield',
+      'Address line 1, Address line 2', 'Address line 1, Address line 2, 00000', 'Musterstraße 1, 12345 Musterstadt',
+    ];
+    for (const value of stock) expect(addressProblem(value), value).toBe('is a placeholder');
+    // REQ-STARTUP-142: "a single address … monitored by the maintainers".
+    for (const unread of ['noreply@rotaris.dev', 'no-reply@rotaris.dev', 'do-not-reply@rotaris.dev']) expect(addressProblem(unread), unread).toBe('is a no-reply address, which the maintainers do not monitor');
+    expect(addressProblem('legal@rotaris.dev, legal2@rotaris.dev')).toBe('names more than one e-mail address, not a single address');
+    // The plan's example now names a domain reserved for examples, so copying it fails closed.
+    expect(addressProblem('Rotaris Maintainers <sources@example.org>')).toBe('uses a domain reserved for examples and tests');
+    // A real route still stands: an internationalised domain in either form, a role at its own domain, a PO box.
+    for (const real of ['sources@münchen.de', 'sources@xn--mnchen-3ya.de', 'rotaris@rotaris.dev', 'info@rotaris.dev', 'legal@rotaris.co.uk', 'PO Box 1234, 10115 Berlin']) expect(addressProblem(real), real).toBeNull();
   });
 
   it('a licence file carries its licence, only refers to one, or only attributes (OQ-69)', () => {
@@ -509,6 +580,8 @@ describe('the readers, on their own', () => {
     expect(licenseTextKind('LICENSE', `This package contains a modified version of a bundle.\n\n${mplExhibitA}`)).toBe('reference');
     expect(licenseTextKind('LICENSE', 'This software is made available under the terms of *either* of the licenses\nfound in LICENSE.APACHE or LICENSE.BSD.')).toBe('reference');
     expect(licenseTextKind('LICENSE', 'MIT')).toBe('reference');
+    // A one-line pointer longer than the one-line bound, through a markdown link (gate round 2).
+    expect(licenseTextKind('LICENSE.md', 'This project is licensed under the ISC License - see the [LICENSE](LICENSE) file for details')).toBe('reference');
     expect(licenseTextKind('LICENSE', MIT)).toBe('text');
     // tqdm 4.67.1's shape: the MIT text in full beside MPL-2.0's Exhibit A still carries a licence.
     expect(licenseTextKind('LICENCE', `${mplExhibitA}\n\n${MIT}`)).toBe('text');

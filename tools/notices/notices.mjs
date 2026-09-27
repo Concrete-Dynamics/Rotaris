@@ -60,13 +60,13 @@ const LICENSE_FILE = /^(licen[cs]e|copying|notice|unlicense)([.\-_].*)?$/i;
 const ATTRIBUTION_FILE = /^(notice|authors?|contributors?|credits)([.\-_].*)?$/i;
 /**
  * The words by which a licence file sends its reader elsewhere for the licence: a pointer ("See the LICENSE file in
- * the root of this repository", "the licenses found in LICENSE.APACHE or LICENSE.BSD"), and the per-file notices
- * licences ask to be applied with — Apache-2.0's "You may obtain a copy of the License at", MPL-2.0's "You can obtain
- * one at", the GPL family's "You should have received a copy of the". A full text that quotes such a notice in its
- * appendix runs to thousands of characters, so a file that says these words is a reference only while it is no longer
- * than REFERENCE_MAX, and only while it carries none of the grants below.
+ * the root of this repository", "the licenses found in LICENSE.APACHE or LICENSE.BSD", "see the [LICENSE](LICENSE)
+ * file"), and the per-file notices licences ask to be applied with — Apache-2.0's "You may obtain a copy of the
+ * License at", MPL-2.0's "You can obtain one at", the GPL family's "You should have received a copy of the". A full
+ * text that quotes such a notice in its appendix runs to thousands of characters, so a file that says these words is
+ * a reference only while it is no longer than REFERENCE_MAX, and only while it carries none of the grants below.
  */
-const REFERS_ELSEWHERE = /\b(?:see|found\s+in)\s+(?:the\s+)?[`'"]?(?:licen[cs]e|copying)\b|\bobtain\s+a\s+copy\s+of\s+the\s+licen[cs]e\b|\bcan\s+obtain\s+one\s+at\b|\bshould\s+have\s+received\s+a\s+copy\s+of\s+the\b/i;
+const REFERS_ELSEWHERE = /\b(?:see|found\s+in)\s+(?:the\s+)?[`'"[]?(?:licen[cs]e|copying)\b|\bobtain\s+a\s+copy\s+of\s+the\s+licen[cs]e\b|\bcan\s+obtain\s+one\s+at\b|\bshould\s+have\s+received\s+a\s+copy\s+of\s+the\b/i;
 const REFERENCE_MAX = 2000;
 /**
  * The grant of each licence short enough to sit under REFERENCE_MAX beside a reference — MIT and Boost, ISC and 0BSD,
@@ -125,23 +125,42 @@ export function versionInRange(version, range) {
   });
 }
 
+/** A path relative to `from`, with `/` on every platform — the only form a record or a failure names a path in. */
+function posixRelative(from, path) {
+  return relative(from, path).split('\\').join('/');
+}
+
+/** Only a non-null, non-array object is a table, a manifest or a marker; `null`, `false`, `0` and `""` all parse. */
+function isObject(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 /**
- * Read and parse a JSON input, or record why not and answer null. A byte-order mark is dropped first: Windows
- * PowerShell 5.1 writes one, and the owner edits `release-inputs.json` on the release's own platform.
+ * Read and parse a JSON input, or record why not and answer null — so null always means "reported". Every input is
+ * an object: one that parses to anything else (`null`, `false`, `0`, `""`, a list) cannot be parsed as that input,
+ * and fails like malformed text (gate round 2: a `release-inputs.json` holding `null` had skipped the address check).
+ * A byte-order mark is dropped first: Windows PowerShell 5.1 writes one, and the owner edits `release-inputs.json` on
+ * the release's own platform.
  */
 function readJson(root, rel, problems, what) {
   const path = join(root, rel);
   let text;
   try { text = readFileSync(path, 'utf8'); } catch (e) { problems.push(`${what} ${rel} cannot be read: ${codeOf(e)}`); return null; }
-  try { return JSON.parse(text.replace(/^\uFEFF/, '')); } catch (e) { problems.push(`${what} ${rel} cannot be parsed: ${e instanceof Error ? e.message : String(e)}`); return null; }
+  let value;
+  try { value = JSON.parse(text.replace(/^\uFEFF/, '')); } catch (e) { problems.push(`${what} ${rel} cannot be parsed: ${e instanceof Error ? e.message : String(e)}`); return null; }
+  if (!isObject(value)) { problems.push(`${what} ${rel} cannot be parsed: it is not a JSON object`); return null; }
+  return value;
 }
 
 /** A `package.json` of the installed tree or the workspace; one that cannot be parsed fails the step naming its path. */
 function readManifest(path, root) {
   const text = readFileSync(path, 'utf8');
-  try { return JSON.parse(text.replace(/^\uFEFF/, '')); } catch (e) {
-    throw new Error(`${relative(root, path).split('\\').join('/')} cannot be parsed: ${e instanceof Error ? e.message : String(e)}`);
+  let value;
+  try { value = JSON.parse(text.replace(/^\uFEFF/, '')); } catch (e) {
+    throw new Error(`${posixRelative(root, path)} cannot be parsed: ${e instanceof Error ? e.message : String(e)}`);
   }
+  if (!isObject(value)) throw new Error(`${posixRelative(root, path)} cannot be parsed: it is not a JSON object`);
+  return value;
 }
 
 function codeOf(e) {
@@ -174,7 +193,7 @@ function licenseFilesOf(dir, relTo) {
   let names;
   try { names = readdirSync(dir); } catch { return []; }
   return names.filter((n) => LICENSE_FILE.test(n) && isFile(join(dir, n))).sort(byText)
-    .map((n) => ({ file: relative(relTo, join(dir, n)).split('\\').join('/'), text: normalize(readFileSync(join(dir, n), 'utf8')) }));
+    .map((n) => ({ file: posixRelative(relTo, join(dir, n)), text: normalize(readFileSync(join(dir, n), 'utf8')) }));
 }
 
 // ---- the JavaScript closure (npm) -----------------------------------------------------------------------------
@@ -232,7 +251,7 @@ export function npmLicenseOf(pkg) {
  */
 export function javascriptClosure(root, problems) {
   const workspace = workspacePackages(root);
-  const desktop = [...workspace.values()].find((w) => relative(root, join(w.dir, 'package.json')).split('\\').join('/') === PATHS.desktop);
+  const desktop = [...workspace.values()].find((w) => posixRelative(root, join(w.dir, 'package.json')) === PATHS.desktop);
   if (!desktop) { problems.push(`the desktop application's manifest ${PATHS.desktop} cannot be read`); return []; }
   /** @type {Map<string, any>} */
   const seen = new Map();
@@ -308,8 +327,9 @@ export function parseChromiumCredits(html) {
 /** The runtime the artifact is built around (ADR-0054): one component, and its own credits beneath it (OQ-66). */
 export function electronComponent(root, problems) {
   const dir = join(root, PATHS.electron);
-  let pkg;
-  try { pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')); } catch (e) { problems.push(`electron is not installed at ${PATHS.electron} (${codeOf(e)})`); return null; }
+  if (!isFile(join(dir, 'package.json'))) { problems.push(`electron is not installed at ${PATHS.electron}`); return null; }
+  // Read like every other package.json, so a malformed one is named as unparsable rather than as absent.
+  const pkg = readManifest(join(dir, 'package.json'), root);
   const version = String(pkg.version);
   const dist = join(dir, 'dist');
   try {
@@ -368,9 +388,9 @@ export function compiledInComponents(root, closure, platform, problems) {
     const read = (file) => { try { return readFileSync(join(host.dir, file), 'utf8'); } catch { return null; } };
     const versionSource = read(spec.version.file);
     const version = versionSource === null ? null : spec.version.pattern.exec(versionSource)?.[1] ?? null;
-    if (version === null) problems.push(`${where}: its version cannot be read from ${relative(root, join(host.dir, spec.version.file)).split('\\').join('/')}`);
+    if (version === null) problems.push(`${where}: its version cannot be read from ${posixRelative(root, join(host.dir, spec.version.file))}`);
     const textSource = read(spec.text.file);
-    const rel = relative(root, join(host.dir, spec.text.file)).split('\\').join('/');
+    const rel = posixRelative(root, join(host.dir, spec.text.file));
     let text = null;
     if (textSource === null) problems.push(`${where}: license file ${rel} is missing`);
     else {
@@ -435,7 +455,7 @@ function sitePackagesOf(runtime) {
 /** A distribution's licence files: the ones its metadata declares, and every licence-named file its metadata directory holds. */
 function distributionLicenseFiles(infoDir, fields) {
   const found = new Map();
-  const add = (path) => { if (isFile(path)) found.set(relative(infoDir, path).split('\\').join('/'), path); };
+  const add = (path) => { if (isFile(path)) found.set(posixRelative(infoDir, path), path); };
   for (const declared of fields.get('license-file') ?? []) { add(join(infoDir, 'licenses', declared)); add(join(infoDir, declared)); }
   const walk = (dir, all) => {
     for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -465,8 +485,8 @@ export function codeIntelligenceComponents(root, problems) {
   const pyVersion = typeof marker?.answers?.python === 'string' ? marker.answers.python : null;
   if (marker && !pyVersion) problems.push(`the bundle marker ${PATHS.bundleMarker} carries no interpreter version (answers.python)`);
   const site = sitePackagesOf(runtime);
-  const candidates = ['LICENSE.txt', ...(site ? [relative(runtime, join(site, '..', 'LICENSE.txt'))] : [])];
-  const licenseRel = candidates.map((c) => c.split('\\').join('/')).find((c) => isFile(join(runtime, c)));
+  const candidates = ['LICENSE.txt', ...(site ? [posixRelative(runtime, join(site, '..', 'LICENSE.txt'))] : [])];
+  const licenseRel = candidates.find((c) => isFile(join(runtime, c)));
   const interpreter = { section: 'runtime', ecosystem: 'interpreter', name: 'CPython', version: pyVersion ?? 'unknown', license: /** @type {string | null} */ (null), texts: /** @type {{file: string, text: string}[]} */ ([]), textRequired: true };
   if (!licenseRel) problems.push(`CPython ${interpreter.version}: license file LICENSE.txt is missing from ${PATHS.runtime}`);
   else {
@@ -563,8 +583,8 @@ export function bundledAssetComponents(root, problems) {
   const covered = new Set();
   const out = [];
   for (const [i, a] of table.assets.entries()) {
-    const label = typeof a?.component === 'string' && a.component !== '' ? a.component : `entry ${i + 1}`;
-    for (const k of ['component', 'license', 'licenseFile']) if (typeof a?.[k] !== 'string' || a[k] === '') problems.push(`the bundled-assets table ${PATHS.assets}: ${label} has no ${k}`);
+    const label = typeof a?.component === 'string' && a.component.trim() !== '' ? a.component : `entry ${i + 1}`;
+    for (const k of ['component', 'license', 'licenseFile']) if (typeof a?.[k] !== 'string' || a[k].trim() === '') problems.push(`the bundled-assets table ${PATHS.assets}: ${label} has no ${k}`);
     const files = Array.isArray(a?.files) ? a.files : [];
     const versions = new Set();
     const copyrights = new Set();
@@ -592,9 +612,10 @@ export function bundledAssetComponents(root, problems) {
       if (text === '') problems.push(`bundled asset ${label}: license file ${a.licenseFile} is empty`);
       if (text) {
         const file = a.licenseFile.split('/').pop() ?? a.licenseFile;
-        texts.push({ file, text });
+        const kind = licenseTextKind(file, text);
+        texts.push({ file, text, kind });
         // REQ-STARTUP-142 names these texts outright, so a file that only refers to one is as good as missing (OQ-69).
-        if (licenseTextKind(file, text) !== 'text') problems.push(`bundled asset ${label}: license file ${a.licenseFile} ${KIND_SAYS[licenseTextKind(file, text)]}, not the license text`);
+        if (kind !== 'text') problems.push(`bundled asset ${label}: license file ${a.licenseFile} ${KIND_SAYS[kind]}, not the license text`);
         for (const c of copyrights) if (!text.includes(c)) problems.push(`bundled asset ${label}: license file ${a.licenseFile} does not carry the font's own copyright notice "${c}"`);
       }
     }
@@ -623,15 +644,15 @@ export function setupManifest(root, problems) {
   if (!Array.isArray(pins.languageServers)) return bad('languageServers is not a list');
   const languageServers = [];
   for (const ls of pins.languageServers) {
-    if (typeof ls?.language !== 'string' || !Array.isArray(ls?.packages)) return bad('a language-server entry has no language or packages');
+    if (typeof ls?.language !== 'string' || ls.language.trim() === '' || !Array.isArray(ls?.packages)) return bad('a language-server entry has no language or packages');
     for (const pkg of ls.packages) {
-      for (const k of ['name', 'version', 'source', 'license']) if (typeof pkg?.[k] !== 'string' || pkg[k] === '') return bad(`language server package ${pkg?.name ?? '?'} (${ls.language}) has no ${k}`);
+      for (const k of ['name', 'version', 'source', 'license']) if (typeof pkg?.[k] !== 'string' || pkg[k].trim() === '') return bad(`language server package ${pkg?.name ?? '?'} (${ls.language}) has no ${k}`);
       languageServers.push({ language: ls.language, provisioner: ls.provisioner, name: pkg.name, version: pkg.version, source: pkg.source, license: pkg.license });
     }
   }
   const tools = [];
   for (const t of machineTools) {
-    for (const k of ['name', 'version', 'source', 'license']) if (typeof t?.[k] !== 'string' || t[k] === '') return bad(`machine tool ${t?.name ?? '?'} has no ${k}`);
+    for (const k of ['name', 'version', 'source', 'license']) if (typeof t?.[k] !== 'string' || t[k].trim() === '') return bad(`machine tool ${t?.name ?? '?'} has no ${k}`);
     tools.push({ name: t.name, version: t.version, source: t.source, license: t.license });
   }
   return { runtime: `${pins.distribution} ${pins.version}`, machineTools: tools, languageServers };
@@ -680,31 +701,65 @@ export function exceptionFor(component, exceptions, today) {
   return { entry: null, reason: inRange ? `its reviewed exception expired on ${inRange.expires}` : `its reviewed exception covers ${named.map((e) => e.versions).join(', ')}, not ${component.version}` };
 }
 
-/** Words that only hold an address's place: a to-do, "not applicable", "to be announced", an instruction to fill it in. */
-const PLACEHOLDER_WORDS = /\b(?:todo|tbd|tba|tbc|fixme|changeme|change[\s_-]me|replace(?:[\s_-]?(?:me|this))?|insert|placeholder|sample|dummy|lorem\s+ipsum|x{3,}|n\/a|none|null|undefined|unknown)\b|\bto\s+be\s+(?:announced|decided|determined|confirmed|added|provided|supplied)\b|\byour[\s_-]?(?:e-?mail|address|name|domain|company|org(?:ani[sz]ation)?)\b/i;
+/**
+ * Words that only hold an address's place wherever they stand: a to-do, "not applicable", "to be announced", an
+ * instruction to fill it in, and the stock of address templates: "Address line 1", "123 Main Street", Anytown and
+ * Nowhere, "Fake Street", Germany's Mustermann and Musterstadt, and a number made only of zeros.
+ */
+const PLACEHOLDER_WORDS = /\b(?:todo|tbd|tba|tbc|fixme|changeme|change[\s_-]me|replace(?:[\s_-]?(?:me|this))?|insert|placeholder|sample|dummy|fake|lorem\s+ipsum|x{3,}|n\/a|none|null|undefined|unknown|address\s+line(?:\s*\d+)?|123\s+main\s+st(?:reet)?|any(?:town|city|ville|where|place)|some(?:where|place|town|city)|nowhere|muster(?:mann|frau|stra(?:ß|ss)e|stadt|dorf|weg|gasse|firma|hausen)|0{3,})\b|\bto\s+be\s+(?:announced|decided|determined|confirmed|added|provided|supplied)\b|\byour[\s_-]?(?:e-?mail|address|name|domain|company|org(?:ani[sz]ation)?)\b/iu;
 /** Domains reserved for examples and tests (RFC 2606, RFC 6761). */
 const RESERVED_DOMAIN = /@(?:[a-z0-9-]+\.)*(?:example\.(?:com|net|org)|[a-z0-9-]+\.(?:example|invalid|test|localhost))\b|@(?:example|localhost)\b/i;
-/** Domains a template writes where the real one goes. */
-const PLACEHOLDER_DOMAIN = /@(?:[a-z0-9-]+\.)*(?:domain|email|company|website|mydomain|somedomain|anydomain)\.(?:com|net|org)\b/i;
-/** An e-mail address whose domain has a dot and a top-level label, alone or inside `Name <…>`. */
-const EMAIL_ADDRESS = /(?:^|[\s<(:])[^\s@<>():,;]+@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:[a-z]{2,}|xn--[a-z0-9-]+)(?=$|[\s>),;])/i;
+/** An e-mail address, alone or inside `Name <…>`: its local part, and a domain of dotted labels in any script (IDN). */
+const EMAIL_ADDRESS = /(?<=^|[\s<(:])([^\s@<>():,;]+)@((?:[\p{L}\p{N}](?:[\p{L}\p{N}-]*[\p{L}\p{N}])?\.)+(?:\p{L}{2,}|xn--[a-z0-9-]+))(?=$|[\s>),;])/giu;
+/**
+ * Top-level labels no mail reaches: a template's (`.tld`, `.domain`), and the ones kept for private networks —
+ * RFC 6762's `.local`, ICANN's `.internal`, the never-delegated `.lan`, `.home`, `.corp` and `.mail`, RFC 9476's `.alt`.
+ */
+const NOT_A_TLD = new Set(['tld', 'domain', 'localdomain', 'local', 'internal', 'intranet', 'private', 'lan', 'home', 'corp', 'mail', 'alt', 'onion', 'arpa']);
+/** A domain label a template writes where the real one goes: `domain.com`, `yourcompany.org`, `host.net`, `test.com`. */
+const PLACEHOLDER_LABEL = /^(?:(?:my|your|some|any|the)[-_]?(?:domain|company|website|site|host|server|mail|email|org|organi[sz]ation|name)|domain(?:name)?|company(?:name)?|website|host(?:name)?|e-?mail(?:address)?|address|test(?:ing)?|foo(?:bar)?|baz|qux|placeholder)$/iu;
+/** A local part that names no one: a test, a stand-in (`foo`, `user`, `name`, `someone`, `john.doe`), a keyboard run. */
+const PLACEHOLDER_LOCAL = /^(?:test(?:ing|er)?\d*|foo(?:bar)?|bar|baz|qux|user(?:name)?\d*|(?:first|full|last|my|your|some)?[._-]?name|first[._-]?last|firstname[._-]?lastname|(?:john|jane|j)[._-]?doe|some(?:one|body)|any(?:one|body)|no(?:one|body)|no-one|abc|xyz|asdf|qwerty|dummy|example)$/iu;
+/** A route no maintainer reads (REQ-STARTUP-142: "monitored by the maintainers"). */
+const NO_REPLY_LOCAL = /^(?:no[._-]?reply|do[._-]?not[._-]?reply|mailer[._-]?daemon)(?:[+._-].*)?$/iu;
+/** A role repeated as its own domain — `admin@admin.com`, `info@info.net` — is a template's, not an organisation's. */
+const ROLE_LOCAL = /^(?:admin(?:istrator)?|info|mail|email|contact|hello|support|webmaster|postmaster|office|sales)$/iu;
+/** A template's field names standing where the value goes: "Name <…>", "Street 1, 12345 City, Country". */
+const FIELD_NAME = /^(?:(?:(?:first|last|full|your|company)\s+)?name|street(?:\s+(?:address|name))?|house\s+number|address|city|town|state|province|region|county|zip(?:\s*code)?|post(?:al)?\s*code|postcode|country|company)$/iu;
 
 /**
- * REQ-STARTUP-142: a literal address reachable without an account. Refused when empty, when it is a page reference,
- * and when it is only a placeholder — a template marker, a placeholder word, or a domain reserved for examples and
- * tests or written by templates. What stands must have an address's shape: an e-mail address, or a postal address of
- * more than one part (split at commas or lines) with a number and at least two words in it.
+ * REQ-STARTUP-142: a single literal address, reachable without an account and monitored by the maintainers. Refused
+ * when empty, when it is a page reference, and when it is only a placeholder: a template marker or field name, a
+ * placeholder word or a stock template address, a domain reserved for examples and tests, a top-level label no mail
+ * reaches, a template's domain or local part, or a no-reply route. What stands must have an address's shape: one
+ * e-mail address, or a postal address of more than one part (split at commas or lines) with a number and at least two
+ * words in it. This is a word-and-shape check (first-release-plan.md §4.3): it refuses the placeholders it knows, and
+ * a plausible address the owner did not give would still pass it — the check cannot know an address is the owner's.
  */
 export function addressProblem(address) {
   if (typeof address !== 'string' || address.trim() === '') return 'is empty';
   const a = address.trim();
   if (/^(https?:\/\/|www\.)/i.test(a)) return 'is a web page reference, not an address';
   if (/<[^@<>]*>|\{\{|\}\}/.test(a)) return 'is a template placeholder';
+  const emails = [...a.matchAll(EMAIL_ADDRESS)];
+  const parts = a.replace(EMAIL_ADDRESS, ' ').split(/\s*[,\n]\s*/).map((p) => p.replace(/[\d\p{P}\p{S}\s]+/gu, ' ').trim()).filter((p) => p !== '');
+  if (parts.some((p) => FIELD_NAME.test(p))) return 'is a template placeholder';
   if (PLACEHOLDER_WORDS.test(a)) return 'is a placeholder';
   if (RESERVED_DOMAIN.test(a)) return 'uses a domain reserved for examples and tests';
-  if (PLACEHOLDER_DOMAIN.test(a)) return 'uses a placeholder domain';
+  if (emails.length > 1) return 'names more than one e-mail address, not a single address';
+  if (emails.length === 1) {
+    const [, local, domain] = /** @type {RegExpMatchArray} */ (emails[0]);
+    const labels = domain.split('.');
+    const tld = /** @type {string} */ (labels.pop()).toLowerCase();
+    if (NOT_A_TLD.has(tld)) return `uses a top-level domain no mail reaches (.${tld})`;
+    if (labels.some((l) => PLACEHOLDER_LABEL.test(l))) return 'uses a placeholder domain';
+    if (NO_REPLY_LOCAL.test(local)) return 'is a no-reply address, which the maintainers do not monitor';
+    if (PLACEHOLDER_LOCAL.test(local)) return 'is a placeholder';
+    if (ROLE_LOCAL.test(local) && local.toLowerCase() === labels[labels.length - 1]?.toLowerCase()) return 'is a placeholder';
+    return null;
+  }
   const postal = a.split(/\s*[,\n]\s*/).filter((p) => p !== '').length >= 2 && /\d/.test(a) && (a.match(/\p{L}{2,}/gu) ?? []).length >= 2;
-  if (!EMAIL_ADDRESS.test(a) && !postal) return 'is neither an e-mail address nor a postal address';
+  if (!postal) return 'is neither an e-mail address nor a postal address';
   return null;
 }
 
@@ -729,7 +784,8 @@ export function collectNotices({ root, platform, today }) {
   /** @type {string[]} */
   const problems = [];
   let product = { name: 'Rotaris', version: 'unknown' };
-  try { product = { name: 'Rotaris', version: String(JSON.parse(readFileSync(join(root, PATHS.desktop), 'utf8')).version) }; } catch { /* reported by the closure */ }
+  // A missing manifest is reported by the closure; one that cannot be parsed fails the step naming its path.
+  if (isFile(join(root, PATHS.desktop))) product = { name: 'Rotaris', version: String(readManifest(join(root, PATHS.desktop), root).version) };
   const javascript = javascriptClosure(root, problems);
   const electron = electronComponent(root, problems);
   const compiled = compiledInComponents(root, javascript, platform, problems);
@@ -886,11 +942,15 @@ export function generateNotices(options) {
  */
 export function runNoticesStep({ root, platform, today }) {
   const output = join(root, PATHS.output);
+  // Removing the earlier file can itself fail — a directory standing where the file goes — and that is one more
+  // handled `error:` line, never an exception out of the step (REQ-STARTUP-149).
+  const removeEarlier = () => {
+    try { rmSync(output, { force: true }); return []; } catch (e) { return [`error: ${PATHS.output} cannot be removed: ${codeOf(e)}`]; }
+  };
   try {
     const { text, problems, model } = generateNotices({ root, platform, today });
     if (problems.length > 0) {
-      rmSync(output, { force: true });
-      const stderr = [`error: notices validation failed (REQ-STARTUP-143): ${problems.length} problem${problems.length === 1 ? '' : 's'}; ${PATHS.output} was not written`, ...problems.map((p) => `error: ${p}`)];
+      const stderr = [`error: notices validation failed (REQ-STARTUP-143): ${problems.length} problem${problems.length === 1 ? '' : 's'}; ${PATHS.output} was not written`, ...problems.map((p) => `error: ${p}`), ...removeEarlier()];
       return { code: 1, stdout: [], stderr };
     }
     mkdirSync(dirname(output), { recursive: true });
@@ -898,7 +958,6 @@ export function runNoticesStep({ root, platform, today }) {
     const counts = `${model.application.length} application, ${model.interpreter.length + model.distributions.length} runtime, ${model.assets.length} font and icon components; ${model.manifest?.languageServers.length ?? 0} language servers; ${model.electron?.credits.length ?? 0} components compiled into Electron`;
     return { code: 0, stdout: [`[notices] wrote ${PATHS.output} (${Buffer.byteLength(text)} bytes): ${counts}`], stderr: [] };
   } catch (e) {
-    rmSync(output, { force: true });
-    return { code: 1, stdout: [], stderr: [`error: the notices generator failed: ${e instanceof Error ? e.message : String(e)}`] };
+    return { code: 1, stdout: [], stderr: [`error: the notices generator failed: ${e instanceof Error ? e.message : String(e)}`, ...removeEarlier()] };
   }
 }

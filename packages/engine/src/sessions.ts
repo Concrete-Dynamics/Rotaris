@@ -466,6 +466,32 @@ function toldSinceLastAnswer(messages: readonly ChatMessage[]): ReadonlySet<stri
 
 /** PD-ORCH-004 revision 3: how many open offers a later root is told of — the newest; the rest are elided. */
 const OFFERS_TOLD = 10;
+const OFFERS_HEADER = 'Open continuation offers (delegate with `continuation_of` set to the task id to take one up):';
+
+/**
+ * PD-ORCH-004 revision 3: the task ids whose continuation offer a conversation already holds — the offer itself, as a
+ * child's report carries it (`continuation_of: "<id>"`, in a message or a tool result), or a line of an offers list it
+ * was told, alone or in a handoff. A task id merely mentioned is not an offer told (found by phase 6's fourth review).
+ */
+export function offersToldIn(messages: readonly ChatMessage[]): ReadonlySet<string> {
+  const told = new Set<string>();
+  for (const m of messages) {
+    for (const p of m.content) {
+      const text = p.kind === 'text' ? p.text : p.kind === 'tool-result' ? p.result : '';
+      for (const hit of text.matchAll(/continuation_of: \\?"(bg_[0-9a-f]{8})\\?"/g)) told.add(hit[1]!);
+      if (p.kind !== 'text') continue;
+      // An offers list stands alone when a resumed root is told it, and inside the handoff a new iteration's root reads.
+      for (let at = p.text.indexOf(OFFERS_HEADER); at >= 0; at = p.text.indexOf(OFFERS_HEADER, at + 1)) {
+        for (const line of p.text.slice(at + OFFERS_HEADER.length + 1).split('\n')) {
+          if (!line.startsWith('- ')) break;
+          const hit = /\((bg_[0-9a-f]{8})\)$/.exec(line);
+          if (hit !== null) told.add(hit[1]!);
+        }
+      }
+    }
+  }
+  return told;
+}
 
 /**
  * PD-ORCH-004 revision 3: the continuation offers the session holds that no child has taken up, which a later root may
@@ -480,7 +506,7 @@ export function openOffersText(dal: StoreDal, sessionId: SessionId, include: (ta
   if (open.length === 0) return '';
   const told = open.slice(-OFFERS_TOLD).map((c) => `- ${cut(c.canonical_name, 80)} (${c.task_id})`);
   const elided = open.length > OFFERS_TOLD ? ['- [... earlier continuation offers elided]'] : [];
-  return ['Open continuation offers (delegate with `continuation_of` set to the task id to take one up):', ...elided, ...told].join('\n');
+  return [OFFERS_HEADER, ...elided, ...told].join('\n');
 }
 
 export function buildContinuationPayload(dal: StoreDal, row: SessionRow, prompt: string, todo: TodoDocument | undefined): string {
@@ -1147,12 +1173,12 @@ export class Sessions {
       if (notice !== null && !unanswered.has(textOfMessage(notice))) tell(notice);
       /*
        * PD-ORCH-004 revision 3: a resumed root is told the offers it may take up, as a new iteration's reads them in the
-       * handoff it is not sent (found by phase 6's second review) — only those its conversation has never named: its own
-       * children's reports carry theirs, and an offer told once is not told again, so a root that had answered and waits
-       * takes no step for a list it has read (found by phase 6's third review).
+       * handoff it is not sent (found by phase 6's second review) — only those its conversation does not already hold:
+       * its own children's reports carry theirs, and an offer told once is not told again, so a root that had answered
+       * and waits takes no step for a list it has read (found by phase 6's third and fourth reviews).
        */
-      const named = conversation.flatMap((m) => m.content.map((p) => (p.kind === 'text' ? p.text : p.kind === 'tool-result' ? p.result : p.kind === 'tool-call' ? p.args : ''))).join('\n');
-      const offers = openOffersText(s.dal, sessionId, (taskId) => !named.includes(taskId));
+      const told = offersToldIn(conversation);
+      const offers = openOffersText(s.dal, sessionId, (taskId) => !told.has(taskId));
       if (offers !== '') tell({ role: 'user', content: [{ kind: 'text', text: offers }] });
       if (openIteration.message !== null && openIteration.message.length > 0) tell({ role: 'user', content: [...openIteration.message] });
     }

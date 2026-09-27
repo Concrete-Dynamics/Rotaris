@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { asSessionId, FakeClock, mintMachineId, type MachineId, type Result, type SessionId } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, type AgentBackend } from '@rotaris/model';
-import { buildContinuationPayload, RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type PreflightContext, type RunSetup, type TodoDocument } from './index.js';
+import { buildContinuationPayload, offersToldIn, RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type PreflightContext, type RunSetup, type TodoDocument } from './index.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
 const OTHER = mintMachineId('0000000000000000000000000000000b') as MachineId;
@@ -176,6 +176,19 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
     // A published document states its body once: its summary is the body's first line (REQ-LIBRARY-093).
     artifact('a0000006', 'notes', 'First line.', '2026-09-27T06:00:00.000Z', null, 'agent_published', 'First line.\nSecond line.');
     expect(buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined)).toContain('Artifact: a0000006 — notes (agent_published, published)\nFirst line.\nSecond line.\nTodo:');
+  });
+
+  it('PD-ORCH-004 revision 3 (found by phase 6\'s fourth review): an offer counts as told only when the conversation holds the offer itself, never for a mere mention of its task id', () => {
+    const offer = 'Continuation offer: the remaining work may be delegated to a new child as a continuation of this one — call delegate with continuation_of: "bg_0000aa01". A piece of work is continued once; a continuation is not offered one of its own.';
+    const told = offersToldIn([
+      { role: 'user', content: [{ kind: 'text', text: `### build (coding-agent) — failed\n${offer}` }] },
+      { role: 'tool', content: [{ kind: 'tool-result', callId: 'w1', name: 'wait_for_tasks', isError: false, result: offer.replaceAll('aa01', 'aa02') }] },
+      { role: 'user', content: [{ kind: 'text', text: 'Open continuation offers (delegate with `continuation_of` set to the task id to take one up):\n- lint (bg_0000aa03)' }] },
+      { role: 'assistant', content: [{ kind: 'text', text: 'I will look at bg_0000aa04 later.' }, { kind: 'tool-call', callId: 'b1', name: 'background_output', args: '{"task_id":"bg_0000aa05"}' }] },
+      // The list inside a new iteration's handoff counts too, elision line and all; the line after it ends the list.
+      { role: 'user', content: [{ kind: 'text', text: 'Progress: p\nOpen continuation offers (delegate with `continuation_of` set to the task id to take one up):\n- [... earlier continuation offers elided]\n- docs (bg_0000aa06)\nRecent iterations:\n- iteration 1 (bg_0000aa07)' }] },
+    ]);
+    expect([...told].sort()).toEqual(['bg_0000aa01', 'bg_0000aa02', 'bg_0000aa03', 'bg_0000aa06']);
   });
 
   it('PD-ORCH-004 revision 3: the handoff states every continuation offer no child has taken up, so a later run\'s root learns of it (OQ-72)', () => {

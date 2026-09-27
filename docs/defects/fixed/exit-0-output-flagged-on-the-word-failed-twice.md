@@ -55,8 +55,10 @@ output carries the marker, and which line to quote. The quoted line had been fou
 own, so narrowing only the search would have quoted a `failed ` line ahead of the `FAILED ` line that matched.
 Nothing outside that file changed behaviour: `gate.ts` still files `terminal_suspicious_success` on every
 `suspicious_success`, and a lower-case `failed ` no longer makes one through the marker. The live run's
-`failed-word` shape (`apps/desktop/scripts/lib/terminal-shapes.mjs`) prints `FAILED` in capitals, so it still
-warns; its comments and `live-run.mjs`'s now cite the directive.
+`failed-word` shape (`apps/desktop/scripts/lib/terminal-shapes.mjs`) printed `FAILED` in capitals; it now prints
+this run's docker line in lower case, and `live-run.mjs` checks that the line reached the output at exit 0 with no
+marker warning and no `suspicious_success` — a regression guard for this repair that has not yet run against a
+real endpoint.
 
 Evidence: `packages/agent-tools/src/terminal/terminal.test.ts`. *PD-TOOLS-003 / REQ-TOOLS-113: run `2e21e324`'s
 docker line no longer warns, so its exit-0 command reads success* feeds this run's docker output

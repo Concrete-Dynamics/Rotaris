@@ -1436,14 +1436,21 @@ banner containing `failed` in any casing still warns through the banner check.
 > matched on, and that line was found by a second, lower-cased search of its own. Narrowing only the search would
 > have left an output with `failed ` on an earlier line and `FAILED ` on a later one warning on the capital line
 > while quoting the lower-case one. The casing is therefore stated once, on the marker, and one predicate serves
-> both the search and the quoted line (`packages/agent-tools/src/terminal/classify.ts`). One unit test had pinned
-> the old reading: a lower-case `==== 1 failed ====` banner raised the marker warning and the banner warning, and
-> it now raises the banner warning alone, which is the banner check still catching it as the cost paragraph above
-> says. ADR-0020's "consequence 2 as met today" stated that reading as conformant; the sentence is kept there with
-> a dated note beside it. Two things were not measured. Run `2e21e324`'s git line is not recorded verbatim
-> anywhere in the record, so only its docker line is replayed in a test. The live run's `failed-word` shape prints
-> `FAILED` in capitals, so it still warns and still measures only the cost of a faithful warning; no live run was
-> made. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+> both the search and the quoted line (`packages/agent-tools/src/terminal/classify.ts`). Two unit assertions had
+> pinned the old reading. One had a lower-case `==== 1 failed ====` banner raise the marker warning and the banner
+> warning; it now uses a capital `==== 1 FAILED ====` banner, which still raises both, and a new case pins a
+> lower-case banner raising the banner warning alone, the banner check still catching it as the cost paragraph
+> above says. The other expected run `2e21e324`'s docker line to be quoted in a marker warning; it moved to a
+> case of its own, which now expects no warning and `success`. ADR-0020's "consequence 2 as met today" stated the banner reading as
+> conformant; the sentence is kept there with a dated note beside it. The live run's `failed-word` shape printed
+> `FAILED` in capitals, the other side of the rule from the record it claimed to replay. It now prints the record's
+> lower-case docker line and checks that the line reached the output at exit 0 with no marker warning and no
+> `suspicious_success`, a regression guard as `diff-exit-1` is for ESC-41. Writing that guard's positive half found
+> that the here-string's own check reads its command back and cannot fail, recorded as
+> [`the-here-string-check-reads-its-own-command-back.md`](../defects/the-here-string-check-reads-its-own-command-back.md).
+> Two things were not measured. Run `2e21e324`'s git line is not recorded verbatim anywhere in the record, so only
+> its docker line is replayed. And the guard has not run against a real endpoint; the next live run of `terminal`
+> is its first. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

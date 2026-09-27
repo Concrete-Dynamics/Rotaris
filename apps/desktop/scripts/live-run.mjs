@@ -58,9 +58,10 @@
  *                 so the ladder half costs nothing but retries.
  *   8. terminal  — the TERMINAL under duress, one run, six named shapes replayed from the record: a
  *                 multi-line here-string, forty lines of long output, a wedge with no `timeout` supplied,
- *                 an exit-0 output carrying the word FAILED, a `git diff` with differences exiting 1, and a
- *                 read-only git pipeline through a pipe. Asserted from `tool_calls`, never from the model's
- *                 prose; a shape the model never attempted is a NOTE, not a failure.
+ *                 an exit-0 output carrying docker's lower-case `failed to connect` line, a `git diff` with
+ *                 differences exiting 1, and a read-only git pipeline through a pipe. Asserted from
+ *                 `tool_calls`, never from the model's prose; a shape the model never attempted is a NOTE,
+ *                 not a failure.
  *   9. duress    — OPT-IN (`--only=duress`), tens of minutes: a delegating run long enough to reach
  *                 compression, re-spawn and a child that ends badly. Its assertions are coherence
  *                 questions the autopsy reader already computes, which is what makes a long run cheap to
@@ -103,7 +104,7 @@ import { homedir, tmpdir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
 import { cleanEnvironment, configDirFor, findDatabases, proofIsolationEnv, tokensDirFor } from './lib/harness.mjs';
 import { startRecordingProxy } from './lib/model-traffic.mjs';
-import { LONG_OUTPUT_LINES, diagnosticOf, longOutputReading, terminalShapes } from './lib/terminal-shapes.mjs';
+import { LONG_OUTPUT_LINES, diagnosticOf, longOutputReading, outputOf, terminalShapes } from './lib/terminal-shapes.mjs';
 
 const require = createRequire(import.meta.url);
 const repo = resolve(import.meta.dirname, '..', '..', '..');
@@ -1537,14 +1538,14 @@ if (wanted.includes('faults')) {
  * | `here-string`   | a multi-line command lost its newlines in the PTY, so a here-string never terminated |
  * | `long-output`   | the concatenation above, and the agent's capture VT-stripped where the window's was not |
  * | `wedge`         | `hardMs` passed and read nowhere: a call supplying no `timeout` had the soft pause and no hard cap (REQ-TOOLS-097) |
- * | `failed-word`   | `exit-0-output-flagged-on-the-word-failed-twice.md` — fires as PD-TOOLS-003 narrows REQ-TOOLS-113 (in capitals), recorded for cost |
+ * | `failed-word`   | `exit-0-output-flagged-on-the-word-failed-twice.md` — PD-TOOLS-003's capitals-only marker, and a real regression guard |
  * | `diff-exit-1`   | `git-diff-with-differences-read-as-a-failure.md` — ESC-41's carve-out, and a real regression guard |
  * | `pipe-to-shell` | `a-read-only-git-pipeline-was-withheld-by-the-pipe-to-shell-rule.md` — also cost, not contradiction |
  *
- * **A shape the model never attempted is a NOTE, not a failure.** Three of these are cost observations whose
- * behaviour is faithful to a requirement, and reporting them as faults would train a reader to ignore this
- * scenario — the mistake the board scenario made twice. Only `here-string`, `long-output`, `diff-exit-1` and the
- * marker leak are asserted as product facts.
+ * **A shape the model never attempted is a NOTE, not a failure.** `pipe-to-shell` is a cost observation whose
+ * behaviour is faithful to a requirement, and reporting it as a fault would train a reader to ignore this
+ * scenario — the mistake the board scenario made twice. `here-string`, `long-output`, the wedge's bound,
+ * `failed-word`, `diff-exit-1` and the marker leak are asserted as product facts.
  */
 if (wanted.includes('terminal')) {
   /*
@@ -1617,13 +1618,20 @@ if (wanted.includes('terminal')) {
   }
 
   const failedWord = attempted('failed-word')[0];
-  if (failedWord === undefined) noted('the exit-0 FAILED command was not attempted', 'no terminal call carried it');
+  if (failedWord === undefined) noted('the docker line was not attempted', 'no terminal call carried it; PD-TOOLS-003 is unasked');
   else {
     const d = diagnosticOf(failedWord.result);
-    // REQ-TOOLS-113's `FAILED ` marker matches in capitals only (PD-TOOLS-003), and this output carries it in
-    // capitals. The warning is FAITHFUL; what the record wanted measured is what it costs — an agent explaining
-    // a false positive away.
-    noted('an exit-0 output carrying the word FAILED', `exit ${d?.exit_code ?? 'none'}, outcome ${d?.outcome_kind ?? 'none'}, warnings: ${(d?.warnings ?? []).join(' ') || 'none'}`);
+    // PD-TOOLS-003: REQ-TOOLS-113's `FAILED ` marker matches in capitals only. This is the lower-case docker line
+    // that warned in run `2e21e324` and cost the agent a second pass to explain it away — a real regression guard,
+    // not a cost note. Its positive half reads the output alone: the diagnostic repeats the command, and with the
+    // line absent from the output, "no marker warning" would pass for nothing.
+    const printed = /failed to connect to the docker API/.test(outputOf(failedWord.result) ?? '');
+    check(d?.exit_code === 0 && printed, 'the docker line was printed and exited 0, as the shape needs', `exit ${d?.exit_code ?? 'none'}, line ${printed ? 'present' : 'absent'} in the output`);
+    if (d?.exit_code === 0 && printed) {
+      const warnings = d.warnings ?? [];
+      check(d.outcome_kind !== 'suspicious_success', 'a lower-case failed at exit 0 was not classified suspicious_success', `outcome ${d.outcome_kind ?? 'none'}`);
+      check(!warnings.some((w) => /failure marker/.test(w)), 'no failure-marker warning on the lower-case line', `warnings: ${warnings.join(' ') || 'none'}`);
+    }
   }
 
   const diffExitOne = attempted('diff-exit-1')[0];

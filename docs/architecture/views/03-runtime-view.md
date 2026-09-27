@@ -343,7 +343,10 @@ single-flight (one process per server per session, shared by every child), a per
 no reconnect; the next call re-establishes; one `mcp_config` warning per server per session), a `tools/list_changed`
 recomputes and only narrows (the executor deleted, the prompt untouched). **Their lifetime:** the connections of a
 session live until the session's lock is released, which today is the run host's shutdown (`McpHost.closeAll`, after
-`Sessions.closeAll`; the discovery children are killed first so no outstanding discovery delays the exit).
+`Sessions.closeAll`; the discovery children are killed first so no outstanding discovery delays the exit). **Who the
+client says it is:** every handshake on all three paths names `rotaris` at the product version the run host read from
+the application manifest (`McpHost`'s `productVersion`, required as `clientVersion` by `ToolDiscovery`, `HealthProbe`,
+`SessionConnections` and `openClient`), never a literal (REQ-STARTUP-158; a literal `0.1.0` until 2026-09-27).
 
 **Code intelligence (Part T; ADR-0035).** The shipped `code_intelligence` entry is **enabled** (REQ-CONFIG-181; the
 2026-09-05 deviation reverted, its record kept in `config/src/mcp/defaults.ts`), so every run whose persona carries it —

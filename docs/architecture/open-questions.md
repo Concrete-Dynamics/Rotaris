@@ -50,7 +50,9 @@ both exist" has no word for). **OQ-64 was ruled on 2026-09-27** as built (R-052)
 ESC-38 and ESC-39. **Two more were raised on 2026-09-27 by building the version guard** (first-release plan §4.1):
 **OQ-66** (whether a default entry shipped switched off counts as one the default configuration launches, which
 REQ-STARTUP-059 and REQ-MCP-095 read one way and REQ-STARTUP-064 the other) **and OQ-67** (whether a release tag's
-numbers are canonical decimals), each with the reading the guard is built under. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+numbers are canonical decimals), each with the reading the guard is built under, **and OQ-68** (whether the running
+desktop with no version metadata reports `dev` or `0+unknown`, which REQ-STARTUP-007 and REQ-STARTUP-004 fix
+differently), raised by the gate round that reviewed it. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -2875,6 +2877,27 @@ in the suffix number. `v01.2.3` and `v1.2.3rc01` are refused with REQ-STARTUP-02
 **What a ruling decides.** Whether a leading zero is outside the grammar, which is the reading built, or inside it and
 normalised. If it is normalised, the grammar must also say which spelling the artifact names and the declared version
 carry.
+
+**OQ-68 — With no version metadata, does the running desktop report `dev` or `0+unknown`?** *(REQ-STARTUP-004, REQ-STARTUP-007; REQ-STARTUP-109, REQ-STARTUP-158, REQ-STARTUP-159, REQ-SHELL-140. Raised 2026-09-27 by the review of the version guard, first-release plan §4.1.)*
+
+Both requirements govern the same value and fix different literals for the same case. REQ-STARTUP-004: the product
+reports its version from its own installation metadata, and "when that metadata is absent, the reported version SHALL
+be the literal string `0+unknown`". REQ-STARTUP-007: the running desktop treats as its version the one that metadata
+declares, "else the literal `dev` when no such metadata is present", and that value is the one the About surface
+presents and the one compared against the release feed. REQ-STARTUP-007 cites REQ-STARTUP-004 for the first branch, so
+the two are meant to agree, and do not. Before 2026-09-27 the code had no absent-metadata branch to disagree with:
+`app.getVersion()` always answered something, Electron's own version for the unpacked entry. Reading the application's
+manifest (`@rotaris/platform`, `version.ts`) gave the question a place to be answered.
+
+**What the build proceeds under.** `dev`. REQ-STARTUP-007 is the requirement written for the running desktop and for
+the two consumers of the value (the About surface, REQ-SHELL-140, and the update comparison); REQ-STARTUP-109's
+unanswerable comparison names `dev` as its example; and `0+unknown` is not a version REQ-STARTUP-027's grammar parses
+either, so nothing downstream distinguishes the two. `VERSION_WITHOUT_METADATA` in `packages/platform/src/version.ts`
+carries the literal and cites this question. Neither literal can reach an installed build: REQ-STARTUP-004's own last
+sentence and REQ-STARTUP-159's About observation forbid it, and electron-builder always packs the manifest.
+
+**What a ruling decides.** Which literal the running desktop reports without metadata. If `0+unknown`, the constant
+changes and nothing else does; if `dev`, REQ-STARTUP-004's second sentence is amended to agree.
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

@@ -161,18 +161,22 @@ The guard is a script under `tools/` and is unit-tested beside itself.
 `first-executions.md`.* `pnpm release:guard <tag>` (`tools/release-guard`) is the guard. The tag grammar it parses
 lives in `tools/release-naming`. What the build decided and found:
 
-- **One place declares the version: `apps/desktop/package.json`, at `0.1.0`.** It is the only version an artifact
-  carries, and the running app now reports it too, where it used to report Electron's own `44.1.1` from the unpacked
-  entry (repaired). The workspace root's `version` is removed. `tools/release-naming` and the other `@rotaris/*`
-  packages keep `0.0.0`: they are never packed as packages, so their `0.0.0` is not a product version. A prerelease
-  tag needs the declaration to match its text exactly, for example `0.1.0rc1` for step 5's `v0.1.0rc1`.
+- **One place declares the version: `apps/desktop/package.json`, at `0.1.0`.** Everything the running product reports
+  as its version reads that file back through one reader (`@rotaris/platform`, `installedProductVersion`): the About
+  row, which used to report Electron's own `44.1.1` from the unpacked entry, and the MCP client's `clientInfo.version`,
+  which the gate round found hard-coded as a second product version, `0.1.0`, that the guard could not see (both
+  repaired). The workspace root's `version` is removed. `tools/release-naming` and the other `@rotaris/*` packages keep
+  `0.0.0`: they are never packed as packages, so their `0.0.0` is not a product version. A prerelease tag needs the
+  declaration to match its text exactly, for example `0.1.0rc1` for step 5's `v0.1.0rc1`. With no manifest the app
+  reports `dev`, **OQ-68**'s reading of a conflict between REQ-STARTUP-004 and REQ-STARTUP-007.
 - **The setup manifest (`REQ-STARTUP-058`) does not exist, and no step of this plan builds it.** The pin half reads it,
   so on this tree `pnpm release:guard v0.1.0` exits 1 on that half alone, naming `@playwright/mcp` `0.0.80`, both files
   and the missing manifest. §5's first check therefore cannot pass until the manifest is built. §4.3 needs the same
   file, because `REQ-STARTUP-142`'s "Tools provisioned after installation" section is generated from it and
   `REQ-STARTUP-143` fails a platform whose manifest cannot be read. The guard reads it at
-  `apps/desktop/resources/setup-manifest.json` and needs only `schemaVersion: 1` and `toolServerPackages`. **Owed; see
-  §7.**
+  `apps/desktop/resources/setup-manifest.json` and needs only `schemaVersion: 1` and `toolServerPackages`; that field
+  name is the guard's reading, and that directory is not packed, so whoever writes the manifest also adds it to
+  `extraResources` (ADR-0054's note). **Owed; see §7.**
 - **electron-builder hyphenates a prerelease version** (`0.1.0rc1` → `0.1.0-rc1`), so step 5's prerelease would be named
   `Rotaris-0.1.0-rc1-…` unless §4.2/§4.5 render the name from the tag through `tools/release-naming`
   (`../defects/a-prerelease-version-reaches-the-installer-hyphenated.md`).
@@ -183,7 +187,8 @@ lives in `tools/release-naming`. What the build decided and found:
 matching REQ-STARTUP-027's grammar. Channel classification follows REQ-STARTUP-029. The stages, each failing
 the release on its own:
 
-1. guards;
+1. guards — after `pnpm symbols`, which the version guard needs (it reads `@rotaris/config`, whose kernel re-exports
+   the generated symbols; without them it fails closed), and as `pnpm release:guard <tag>`;
 2. the notices step;
 3. `pnpm package` on a `windows-latest` x64 runner;
 4. portable assembly;
@@ -308,7 +313,8 @@ supply, and each stays owed (R-053).
    - ~~§4.1 the version guard~~ **built 2026-09-27**. It found that **the setup manifest is owed and scheduled nowhere**.
      The manifest has to exist, with Git, ripgrep, the language servers and the `@playwright/mcp` pin
      (`REQ-STARTUP-058/059`), before §5's first check can pass. §4.3's section is generated from the same file, so
-     that step is where it most naturally lands;
+     that step is where it most naturally lands, and it lands packed: an `extraResources` entry, and either the
+     guard's `toolServerPackages` field or a change to the guard's constant;
    - §4.3 the notices generator with the About defect;
    - §4.4 the bundled assets.
 3. **The portable stub (§4.5).** Spike first, and report the result into ADR-0054.

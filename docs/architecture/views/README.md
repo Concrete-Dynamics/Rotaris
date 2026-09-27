@@ -51,8 +51,11 @@ REQ-STARTUP-059's package pins — and `tools/release-naming` gains the release-
 outside the component view's runtime matrix (`boundaries/ignore` covers `tools/**`), so `module-map.md` names the package
 and no edge moves. In main, `shell.hello`'s version now comes from `main/version.ts`, which reads the application
 manifest beside the bundle, rather than from `app.getVersion()`, which answered Electron's own version for the unpacked
-entry. The **process view** says so in the About paragraph and gains the manifest as a file main reads. No process,
-channel, message kind or state owner changed.
+entry. The gate round that reviewed it moved the reader into `@rotaris/platform` (`version.ts`, an existing edge for
+both roots) because the **run host** reads the same file: the MCP client's `clientInfo.version`, a literal `0.1.0`
+until then, is now the declared version on all three connection paths. The **process view** says so in the About
+paragraph and gains the manifest as a file main and the run host read; the **runtime view**'s MCP paragraph names who
+the client says it is. No process, channel, message kind or state owner changed.
 
 **Product-drawn main-window chrome (`PD-SHELL-003`, built and revised 2026-09-24).** On Windows, Linux and macOS the main
 `BrowserWindow` is frameless with its native menu hidden. The existing title bar now ends in minimize,

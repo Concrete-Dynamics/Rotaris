@@ -288,9 +288,9 @@ loads the renderer in the `rows-proof` role, the row renderer over a fixture arr
 `shell.openExternal`, which refuses every scheme but `http(s)` for the reason above; it takes its own command, the
 renderer names no path, and main answers `licenses.absent` when the build carries no bundle — the ordinary case today,
 since nothing produces the asset (owed to ADR-0054). `shell.hello`'s reply gains three local facts beside the version
-— which is the application manifest's, read once per process by `main/version.ts` from the `package.json` beside the
-bundle and never `app.getVersion()`, since Electron answers that with its own version for the unpacked entry
-(`REQ-STARTUP-007`, `REQ-STARTUP-158`; 2026-09-27) — for `REQ-SHELL-140`'s product card: `build` (the bundled build identifier, null when the asset is missing or
+— which is the application manifest's, read once per process by `main/version.ts` (through `@rotaris/platform`'s
+`installedProductVersion`) from the `package.json` beside the bundle and never `app.getVersion()`, since Electron answers
+that with its own version for the unpacked entry (`REQ-STARTUP-007`, `REQ-STARTUP-158`; 2026-09-27) — for `REQ-SHELL-140`'s product card: `build` (the bundled build identifier, null when the asset is missing or
 unreadable), `standalone` (`app.isPackaged`) and `thirdPartyLicenses` (whether a bundle exists). The About page issues
 no request of its own — `REQ-SHELL-139` requires zero network requests at render — and the same capture seam
 (`ROTARIS_CAPTURE_OPEN_EXTERNAL=record|fail`) covers both openers.
@@ -444,4 +444,4 @@ licensed.
 | `%LOCALAPPDATA%/rotaris/data/tokens/<provider_id>.json` (+ `<provider_id>.lock` while a write is in flight) | main (`CredentialStore`: staged `.tmp` protected before a byte is written, renamed; owner + SYSTEM only, read back; ADR-0029) | main only — the run host is leased the bearer |
 | `%LOCALAPPDATA%/rotaris/config/project_settings.yaml` (+ `.lock`) | main (`ProjectSettingsStore`: under the lock, behind the secret screen, mode 0644) | run host and workspace service (layer 3 of every `loadConfiguration`, no lock) |
 | the instance claim | main (ADR-0055) | main (a second launch hands over and exits) |
-| the application manifest's `version` — `apps/desktop/package.json` in development, `resources/app.asar/package.json` packaged (`out/main/../../package.json` either way) | the developer; packed by electron-builder; the one place a release declares the product version, checked against the tag by `pnpm release:guard` before any build (REQ-STARTUP-028/158) | main (`version.ts`, once per process — the version `shell.hello` reports) |
+| the application manifest's `version` — `apps/desktop/package.json` in development, `resources/app.asar/package.json` packaged (`out/main/../../package.json` either way) | the developer; packed by electron-builder; the one place a release declares the product version, checked against the tag by `pnpm release:guard` before any build (REQ-STARTUP-028/158) | main (`version.ts`, once per process — the version `shell.hello` reports) and the run host (`host.ts`, once — the `clientInfo.version` of every MCP handshake, handed to `McpHost`); both through `@rotaris/platform`'s `installedProductVersion`, from `out/main/`, so neither process carries a version of its own |

@@ -24,6 +24,7 @@ import { providerIdentity, type ModelChoice } from '../run/resilience.js';
 import type { TurnCompression } from '../run/compression.js';
 import type { PricedUsage } from '../run/pricing.js';
 import { todoLinesFromStored } from '../todo-view.js';
+import type { ConversationRecord } from '../run/record.js';
 
 /**
  * One iteration's children (REQ-ORCH-072: a fresh ledger per iteration under the clamped policy): the
@@ -123,6 +124,8 @@ export interface ChildrenDeps {
   readonly planGate?: { readonly held: () => boolean; readonly withholds: (tool: string) => boolean } | undefined;
   /** REQ-ORCH-072: the iteration's root execution record. */
   readonly rootRecord?: RootExecutionRecord | undefined;
+  /** PD-ORCH-005 clause 1: the conversation record each child's turn appends to; absent means nothing is recorded. */
+  readonly record?: ConversationRecord | undefined;
 }
 
 function personaOf(deps: ChildrenDeps, name: string): Persona | undefined {
@@ -438,6 +441,8 @@ export class IterationChildren implements DelegationOps {
         ...(compression ? { compression } : {}),
         ...(deps.onRequestUsage ? { onRequestUsage: deps.onRequestUsage } : {}),
         onToolCompleted: (call, result) => progress.completed(deps.clocks.monotonic.now(), call.name, result.args, result.status === 'ok' && !result.isError),
+        // PD-ORCH-005 clause 1: the child's conversation, recorded under its task id as it happens.
+        ...(deps.record ? { recorder: deps.record.recorder(row.task_id, row.iteration) } : {}),
         // REQ-ORCH-093: the resume limb — a child's turn after its first is a parent being resumed with reports.
         parentResume: !wasFirst,
       }, task, history, controller.signal); };
@@ -472,6 +477,8 @@ export class IterationChildren implements DelegationOps {
         deps.warn(message);
         outcome = null;
         error = null;
+        // PD-ORCH-005: the retry starts the child's conversation again from its payload, and its record says so.
+        deps.record?.restarted(row.task_id, row.iteration);
         continue;
       }
       break;

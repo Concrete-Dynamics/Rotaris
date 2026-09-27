@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { err, maskArguments, ok, redactRowString, toIsoUtc, type Instant, type MachineId, type Result, type SessionId, type WallClock } from '@rotaris/kernel';
-import { RELEASE_PAGE_SIZE, RESIDENT_ROW_CAP, type CheckpointRow, type QueuedPromptRow, type ChildInsert, type ChildRow, type RowToolFields, type SessionRunPatch, type StoreDal, type TranscriptRowRecord } from '@rotaris/store';
+import { RELEASE_PAGE_SIZE, RESIDENT_ROW_CAP, type CheckpointRow, type IterationInsert, type QueuedPromptRow, type ChildInsert, type ChildRow, type RowToolFields, type SessionRunPatch, type StoreDal, type TranscriptRowRecord } from '@rotaris/store';
 import { isLegalChildMove, isTerminalChildState, type ChildState, type ImageAttachment, type RunType, type SettlingPath, type TimelineSeverity, type TranscriptRow } from '@rotaris/contracts';
 import { EVENT_SCHEMA_VERSION, locator, serializeEvent, type EventKind, type WireEvent } from './events.js';
 import { isActiveStatus, summarise } from './run/stop-conditions.js';
@@ -646,8 +646,12 @@ export class SessionWriter {
     try {
       dal.transaction(() => {
         removed = dal.clearTranscriptRows(sessionId);
+        // PD-ORCH-005 clause 12: "Clearing the transcript clears the record of closed iterations only; an open
+        // iteration's record is kept until the iteration closes." One transaction with the rows, so a reader never sees
+        // the transcript gone and a closed iteration's record still standing, or the other way round.
+        const records = dal.clearClosedAgentMessages(sessionId);
         const ordinal = dal.nextTimelineOrdinal(sessionId);
-        dal.insertTimeline(sessionId, ordinal, at, 'transcript_cleared', 'user', `The transcript was cleared: ${removed} row(s) removed. Agent state, artifacts and Git changes were kept.`, JSON.stringify({ removed, next_index: this.nextIndex }), id, 'info');
+        dal.insertTimeline(sessionId, ordinal, at, 'transcript_cleared', 'user', `The transcript was cleared: ${removed} row(s) removed. Agent state, artifacts and Git changes were kept.`, JSON.stringify({ removed, next_index: this.nextIndex, records_removed: records }), id, 'info');
         dal.touchSession(sessionId, this.status, at);
       });
     } catch (cause) {
@@ -657,6 +661,79 @@ export class SessionWriter {
     this.messageRows.clear();
     this.deps.onCommitted({ kind: 'clear' });
     return ok({ removed });
+  }
+
+  /**
+   * PD-ORCH-005 clause 1: an execution iteration begins, recorded open with its root's task id. Its own transaction; a
+   * plan cycle is not an iteration and is never opened here (REQ-ORCH-153's ruling).
+   */
+  openIteration(row: Omit<IterationInsert, 'session_id' | 'opened_at'>): Result<boolean, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    try {
+      /*
+       * `false`, and nothing written, when the number is taken or another iteration is still open. The caller numbers
+       * past every recorded iteration and closes a left-open one first, so this is a defect's shape and not a race: a
+       * conflict here must never become a store failure, which would refuse every session of the workspace (found by
+       * phase 2's review, with a crashed iteration's number reused by the next run).
+       */
+      return ok(dal.transaction(() => {
+        if (dal.getIteration(sessionId, row.iteration) !== undefined || dal.openIterationOf(sessionId) !== undefined) return false;
+        dal.insertIteration({ ...row, session_id: sessionId, opened_at: toIsoUtc(wall.instant()) });
+        return true;
+      }));
+    } catch (cause) {
+      return this.fail(cause);
+    }
+  }
+
+  /**
+   * PD-ORCH-005: the iteration ends — `iteration.end` recorded and the iteration's row closed with its outcome, in ONE
+   * transaction, so a process death cannot leave an ended iteration open. The row's close is `false` when it was not
+   * open (a run with no store row for it); the event is recorded either way.
+   */
+  endIteration(iteration: number, payload: Record<string, unknown>, outcome: string): Result<boolean, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    const at = toIsoUtc(wall.instant());
+    const ev = this.envelope('iteration.end', at, { ...payload, iteration });
+    const line = serializeEvent(ev);
+    if (!line.ok) this.deps.warn(`event iteration.end could not be serialised and was not recorded: ${line.error.reason}`);
+    const ordinal = this.nextOrdinal;
+    let closed = false;
+    try {
+      dal.transaction(() => {
+        if (line.ok) dal.insertEvent(sessionId, ordinal, 'iteration.end', at, EVENT_SCHEMA_VERSION, iteration, line.value);
+        closed = dal.closeIteration(sessionId, iteration, outcome, at);
+      });
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    if (line.ok) {
+      this.nextOrdinal += 1;
+      this.deps.onCommitted({ kind: 'event', ordinal, events: [{ ordinal, event: ev, line: line.value }] });
+      this.trimIfOverflowed(at);
+    }
+    return ok(closed);
+  }
+
+  /**
+   * PD-ORCH-005 clauses 1 and 12: one entry of an agent's conversation record, appended as it happens under the agent's
+   * task id — a `message` the model was sent or answered, or a `replacement`, the whole conversation a compression put
+   * in place of the one before. Its own transaction, and nothing is published: the record is read by a resume, never
+   * drawn. A body that cannot be serialised fails the recording like any other write, because a record that silently
+   * skipped a message would resume an agent into a conversation it never had.
+   */
+  recordAgentMessage(taskId: string, iteration: number, kind: 'message' | 'replacement', body: unknown): Result<void, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    try {
+      const text = JSON.stringify(body);
+      dal.transaction(() => dal.insertAgentMessage({ session_id: sessionId, task_id: taskId, iteration, kind, body: text, at: toIsoUtc(wall.instant()) }));
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    return ok(undefined);
   }
 
   /**

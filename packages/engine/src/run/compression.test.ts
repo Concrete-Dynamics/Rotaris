@@ -91,6 +91,25 @@ describe('engine/run/compression — the reconstruction and the turn alignment (
     expect(conv.snapshot()).toEqual(before);
   });
 
+  it('PD-ORCH-005 clause 12: a pass that finishes after its turn ended replaces nothing and records nothing', async () => {
+    // Part AO's manual pass runs under the control's own signal, so it can outlive the turn it was started on; the
+    // agent's next turn by then works on a new conversation built from this one's history (found by phase 2's review).
+    const before: ChatMessage[] = [text('user', 'original'), call('c1'), result('c1'), call('c2'), result('c2'), text('user', 'recent')];
+    const replaced: unknown[] = [];
+    const conv = new Conversation(before, { appended: () => undefined, replaced: (ms) => { replaced.push(ms); } });
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    const backend = { runTurn: async () => { await hold; return { status: 'succeeded' as const, text: 'Work performed: x. Findings reached: y. Questions left open: none.', usage: { input: 0, output: 0 } }; } };
+    const pending = compress({ conversation: conv, preserveRecentTurns: 1, charsPerToken: 4, todoLines: [] }, { backend: backend as never, model: A1, thinking: 'unset', timers: new FakeClock().timers, credentialFor: () => async () => 'k' }, new AbortController().signal);
+    conv.close();
+    release();
+    const out = await pending;
+    expect(out.ok).toBe(false);
+    expect(out.reason).toContain('turn ended before the compressing pass completed');
+    expect(replaced).toEqual([]);
+    expect(conv.snapshot()).toEqual(before);
+  });
+
   it('ADR-0060 decision 1: a replacement never mutates the array a call in flight was given', () => {
     const conv = new Conversation([text('user', 'original'), text('assistant', 'a')]);
     const inFlight = conv.snapshot();

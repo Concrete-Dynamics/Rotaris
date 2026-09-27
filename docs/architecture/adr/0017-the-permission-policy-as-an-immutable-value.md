@@ -51,13 +51,14 @@ recent grant first, and they outlive policy replacement and mode change unchange
 exact argument set.
 
 > **Narrowed 2026-09-27 — [`PD-TOOLS-004`](../../product/directives.md#pd-tools-004).** "Either a byte-identical
-> pre-redaction command facet or the same exact argument set" no longer holds for `write_file` and `haet_edit`
-> (`haet` folded into it): a session grant of either now matches a later call of the same tool from the same persona
+> pre-redaction command facet or the same exact argument set" no longer holds for the public `write_file` and
+> `haet_edit` (`haet` folded into it): a session grant of either now matches a later call of the same tool from the same persona
 > whose `REQ-TOOLS-018` path arguments resolve to exactly the grant's set of paths, whatever its other arguments. The
 > grant's set is resolved once, when it is made; the later call's set is resolved at evaluation, through the same
 > injected resolver path scope already uses, and only when a path-scoped grant of that tool and persona exists. A call
-> carrying no path key falls back to the exact match; every other tool is unchanged. The sentence is kept as it was
-> written.
+> carrying no path key falls back to the exact match; every other tool is unchanged, an MCP tool offered under one of
+> those names included — the gate tells it apart by a `publicTool` predicate the run host supplies, not by the name.
+> The sentence is kept as it was written.
 
 `REQ-TOOLS-025` and `REQ-TOOLS-191`: replacing the policy mid-run governs the agent's very next call
 with no restart, no reconnection and no agent rebuild; decisions already returned keep their outcome.

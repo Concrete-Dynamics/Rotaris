@@ -17,7 +17,7 @@ import { realPathOf } from './tools/fence.js';
 const ROOT = 'D:/ws';
 /** A stand-in for an MCP edit tool such as the code-intelligence server's, whose own name is written only in its manifest (REQ-MCP-116). */
 const MCP_EDIT_TOOL = 'mcp_edit_in_file';
-const env: EvaluationEnv = { attended: true, workspaceRoot: ROOT, resolvePath: (p) => (p.startsWith('D:/') ? p : `${ROOT}/${p}`) };
+const env: EvaluationEnv = { attended: true, workspaceRoot: ROOT, resolvePath: (p) => (p.startsWith('D:/') ? p : `${ROOT}/${p}`), publicTool: () => true };
 
 describe('registry (ADR-0016, REQ-TOOLS-001/004/005/006/007)', () => {
   it('declares every public name exactly once and the classes stay consistent with the declaration', () => {
@@ -332,7 +332,7 @@ describe('PD-TOOLS-004: a session approval of a file write covers that path (nar
     writeFileSync(join(ws, 'specs', 'index.md'), 'x\n');
     writeFileSync(join(ws, 'specs', 'other.md'), 'y\n');
     // The production resolver (run-host/tools.ts): the real path, a throw read as unresolvable.
-    fsEnv = { attended: true, workspaceRoot: ws, resolvePath: (p) => { try { return realPathOf(p); } catch { return null; } } };
+    fsEnv = { attended: true, workspaceRoot: ws, resolvePath: (p) => { try { return realPathOf(p); } catch { return null; } }, publicTool: () => true };
   });
   afterEach(() => rmSync(ws, { recursive: true, force: true }));
   const ctxOf = () => new PolicyContext(buildPolicy({ preset: 'ask', workspaceRoot: ws }));
@@ -454,5 +454,23 @@ describe('PD-TOOLS-004: a session approval of a file write covers that path (nar
     ctx.replace(buildPolicy({ preset: 'restricted', workspaceRoot: ws }));
     expect(ctx.evaluate(edit('write_file', 'o', { operation: 'overwrite', path: 'specs/index.md', content: 'n' }), fsEnv).ruleId).toBe('session:allow:4');
     expect(ctx.evaluate(edit('write_file', 'o', { operation: 'overwrite', path: 'specs/other.md', content: 'n' }), fsEnv).ruleId).toBe('preset:restricted');
+  });
+
+  it('an MCP tool offered under a public name keeps REQ-TOOLS-024: only the public write_file and haet_edit are scoped by path', () => {
+    // A filesystem-style server's own `write_file`, offered as plain `write_file` to a persona whose public set lacks one.
+    const mcpWrite: EvaluationEnv = { ...fsEnv, publicTool: (name) => name.toLowerCase() !== 'write_file' };
+    const ctx = ctxOf();
+    const first = edit('write_file', 'o', { path: 'specs/index.md', content: 'one' });
+    expect(ctx.grant(first, mcpWrite).paths).toBeNull();
+    expect(ctx.evaluate(edit('write_file', 'o', { path: 'specs/index.md', content: 'two' }), mcpWrite).decision).toBe('ask');
+    expect(ctx.evaluate(edit('write_file', 'o', { content: 'one', path: 'specs/index.md' }), mcpWrite).ruleId).toBe('session:allow:1');
+    // A public haet_edit grant does not reach a server's `haet` through the alias, and the server's `haet` grant is exact.
+    const mcpHaet: EvaluationEnv = { ...fsEnv, publicTool: (name) => name.toLowerCase() !== 'haet' };
+    const alias = ctxOf();
+    expect(alias.grant(edit('haet_edit', 'o', { path: 'specs/index.md', content_hash: HASH_1, old_string: 'a', new_string: 'b' }), mcpHaet).paths).toEqual([join(ws, 'specs', 'index.md')]);
+    expect(alias.evaluate(edit('haet', 'o', { path: 'specs/index.md', content_hash: HASH_2, old_string: 'q', new_string: 'r' }), mcpHaet).decision).toBe('ask');
+    expect(alias.evaluate(edit('haet_edit', 'o', { path: 'specs/index.md', content_hash: HASH_2, old_string: 'q', new_string: 'r' }), mcpHaet).ruleId).toBe('session:allow:1');
+    expect(alias.grant(edit('haet', 'o', { path: 'specs/index.md', content_hash: HASH_1, old_string: 'a', new_string: 'b' }), mcpHaet).paths).toBeNull();
+    expect(alias.evaluate(edit('haet', 'o', { path: 'specs/index.md', content_hash: HASH_2, old_string: 'a', new_string: 'b' }), mcpHaet).decision).toBe('ask');
   });
 });

@@ -58,15 +58,18 @@ the directive is built.
 
 ## Repaired 2026-09-27 ([R-057](../../product/requests.md#r-057))
 
-[`PD-TOOLS-004`](../../product/directives.md#pd-tools-004) is built. A grant made by "approve for session" on a
-`write_file` or `haet_edit` call (`haet` folded into `haet_edit`) now stores the set of paths its REQ-TOOLS-018 path
+[`PD-TOOLS-004`](../../product/directives.md#pd-tools-004) is built. A grant made by "approve for session" on a call
+of the public `write_file` or `haet_edit` (`haet` folded into `haet_edit`) now stores the set of paths its REQ-TOOLS-018 path
 arguments resolved to — each joined to the workspace root, then through the gate's real-path resolver — when the grant
 is made. A later call of the same tool from the same persona whose own set is exactly that one is allowed by the grant
 (`session:allow:<n>`, source `session-rule`) without a dialog, whatever its `old_string`, `content_hash` or `write_file`
 operation. A different path, persona or tool, a superset or subset of the paths, or any path that cannot be resolved
-asks again; a call with no path key falls back to REQ-TOOLS-024's exact match, which every other tool keeps. The rule is
-`resolvedPathSet` and `approvalMatches` in `packages/agent-tools/src/policy.ts`; `PolicyContext.grant` takes the root
-and the resolver, and `packages/agent-tools/src/gate.ts` passes them.
+asks again; a call with no path key falls back to REQ-TOOLS-024's exact match, which every other tool keeps — an MCP
+tool offered under the name `write_file` or `haet` included, told apart from the public tool by the executor that
+serves it rather than by its name. The rule is `resolvedPathSet` and `approvalMatches` in
+`packages/agent-tools/src/policy.ts`; `PolicyContext.grant` takes the root, the resolver and the `publicTool`
+predicate, `packages/agent-tools/src/gate.ts` passes them, and `apps/desktop/src/run-host/tools.ts` supplies the
+predicate.
 
 The MCP `replace_content` half is unchanged, as ruled: its grant still needs the exact argument set, and its
 regex-needle failure belongs to the code-intelligence server.
@@ -76,5 +79,8 @@ Evidence: `policy.test.ts` gains nine `PD-TOOLS-004` cases over a real temporary
 above, the alias both ways, a link resolved at grant time, and an MCP edit tool, `git_commit` and `terminal` still
 matched exactly — the MCP one a stand-in, since REQ-MCP-116 keeps `replace_content`'s name to its manifest). `gate.test.ts` gains one: an edit approved for the session, then two retries with another
 `old_string` and hash — one through the alias `haet` — pass with no second dialog, while the same edit from another
-persona and an edit of another path each ask again. With `policy.ts` restored to its previous text all ten fail. Not
-measured: the built app was not driven and no live run replayed run `1ddeb71b`'s loop.
+persona and an edit of another path each ask again. With `policy.ts` restored to its previous text all ten fail. The
+independent review then found a server's own `write_file` scoped by path by its name alone; three cases pin the repair
+(`policy.test.ts`, `gate.test.ts`, and `apps/desktop/src/run-host/tools.test.ts` through the real port with a stand-in
+MCP host) and fail with the `publicTool` check removed. Not measured: the built app was not driven and no live run
+replayed run `1ddeb71b`'s loop.

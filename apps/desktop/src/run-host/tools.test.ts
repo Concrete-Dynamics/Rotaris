@@ -1,14 +1,15 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, FakeClock, mintMachineId } from '@rotaris/kernel';
-import { TOOL_IMPLEMENTATIONS, type PermissionPreset } from '@rotaris/contracts';
+import { TOOL_IMPLEMENTATIONS, type ApprovalPayload, type PermissionPreset } from '@rotaris/contracts';
 import { loadConfiguration } from '@rotaris/config';
-import { gitReadTool, permissivePolicyRead, TodoList, todoTool } from '@rotaris/agent-tools';
+import { anySchema, gitReadTool, permissivePolicyRead, simpleExecutor, TodoList, todoTool, type ToolExecutor } from '@rotaris/agent-tools';
 import { SessionWriter, type ToolPortContext } from '@rotaris/engine';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
-import { personaResolverFor, runtimeFromConfiguration } from './configuration.js';
+import { personaResolverFor, runtimeFromConfiguration, type ConfiguredRun } from './configuration.js';
+import type { McpHost } from './mcp.js';
 import { createToolPort, isEntryPort, toolSpec, type ToolPortDeps } from './tools.js';
 
 /**
@@ -78,7 +79,7 @@ describe('the permission mode an agent is BUILT with (REQ-TOOLS-048/073/074)', (
   let writer: SessionWriter;
   const warnings: string[] = [];
 
-  const yaml = (pin: string | null) => `default_persona: coding-agent
+  const yaml = (pin: string | null, tools: string | null = null) => `default_persona: coding-agent
 models:
   selected:
     provider: openai
@@ -91,7 +92,7 @@ personas:
   coding-agent:
     name: Coding agent
     model: selected
-${pin === null ? '' : `    permission_mode: ${pin}\n`}runtime:
+${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : `    tools: ${tools}\n`}runtime:
   permission_mode: ask
 `;
 
@@ -107,21 +108,28 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}runtime:
     if (!created.ok) throw new Error('writer');
     writer = created.value;
     warnings.length = 0;
+    presented.length = 0;
   });
   afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
 
-  function portFor(pin: string | null, modeOverride: string | null, extra: Pick<ToolPortContext, 'writeClaimFor'> = {}) {
+  const presented: ApprovalPayload[] = [];
+  function portFor(pin: string | null, modeOverride: string | null, extra: Pick<ToolPortContext, 'writeClaimFor'> = {}, surface: { tools?: string; mcp?: readonly ToolExecutor[] } = {}) {
     mkdirSync(join(dir, '.rotaris'), { recursive: true });
-    writeFileSync(join(dir, '.rotaris', 'agents.yaml'), yaml(pin));
+    writeFileSync(join(dir, '.rotaris', 'agents.yaml'), yaml(pin, surface.tools ?? null));
     const loaded = loadConfiguration({ globalDir: join(dir, 'global'), workspaceRoot: dir });
     if (!loaded.ok) throw new Error('configuration');
     const cfg = loaded.value;
     const resolver = personaResolverFor(cfg, true, (m) => warnings.push(m));
     const deps: ToolPortDeps = {
       clocks: new FakeClock(), runtime: () => runtimeFromConfiguration(cfg), personas: () => resolver,
-      presenter: { present: async () => ({ ok: true }), close: () => undefined },
+      presenter: { present: async (p) => { presented.push(p); return { ok: true }; }, close: () => undefined },
       nextSequence: () => 1, fileStates: new Map(), terminal: null,
       egress: () => permissivePolicyRead,
+      // A stand-in MCP host whose one server offers the given executors (ADR-0034's surface, without a server process).
+      ...(surface.mcp ? {
+        mcp: { prepare: async () => undefined, surfaceFor: () => ({ persona: 'coding-agent', active: [], dropped: [] }), section: () => '', executorsFor: () => [...(surface.mcp ?? [])] } as unknown as McpHost,
+        configured: () => ({ cfg }) as unknown as ConfiguredRun,
+      } : {}),
     };
     return createToolPort({
       sessionId: asSessionId('S1'), workspaceRoot: dir, writer, persona: 'coding-agent', agentName: 'coding-agent',
@@ -140,6 +148,44 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}runtime:
     const written = await port.dispatch(call('src/ui/view.ts'), new AbortController().signal);
     expect(written.status).toBe('ok');
     expect(asked).toEqual(['src/api/users.ts', 'src/ui/view.ts']);
+  });
+
+  /**
+   * PD-TOOLS-004 through the port: the gate's `publicTool` is what keeps a server's own `write_file` — offered under
+   * that name to a persona whose public set lacks one — on REQ-TOOLS-024's exact match, while the public `write_file`
+   * of another persona's port is scoped by path.
+   */
+  async function approveForSession(port: ReturnType<typeof portFor>, args: Record<string, unknown>, n: number) {
+    const call = { callId: `c${n}`, name: 'write_file', rawArgs: JSON.stringify(args), persona: 'coding-agent', agentId: 'coding-agent', agentName: 'coding-agent' };
+    const r = port.dispatch(call, new AbortController().signal);
+    await vi.waitFor(() => expect(presented.length).toBeGreaterThanOrEqual(n));
+    expect(port.answerApproval(presented[n - 1]!.request_id, 'session')).toBe(true);
+    return r;
+  }
+  const again = (port: ReturnType<typeof portFor>, args: Record<string, unknown>) =>
+    port.dispatch({ callId: 'again', name: 'write_file', rawArgs: JSON.stringify(args), persona: 'coding-agent', agentId: 'coding-agent', agentName: 'coding-agent' }, new AbortController().signal);
+
+  it('PD-TOOLS-004: a server\'s own write_file keeps the exact match; the public write_file is scoped by path', async () => {
+    const writes: unknown[] = [];
+    const serverWrite = simpleExecutor('write_file', 'a server\'s write_file', anySchema, async (a) => { writes.push(a); return { text: 'written', isError: false }; });
+    const mcpPort = portFor(null, null, {}, { tools: '[read_file]', mcp: [serverWrite] });
+    await mcpPort.ready?.();
+    expect(mcpPort.specs().filter((s) => s.name === 'write_file')).toHaveLength(1);
+    expect((await approveForSession(mcpPort, { path: 'notes.md', content: 'one' }, 1)).status).toBe('ok');
+    expect((await again(mcpPort, { path: 'notes.md', content: 'one' })).status).toBe('ok');
+    expect(presented).toHaveLength(1);
+    const other = again(mcpPort, { path: 'notes.md', content: 'two' });
+    await vi.waitFor(() => expect(presented).toHaveLength(2));
+    expect(mcpPort.answerApproval(presented[1]!.request_id, 'deny')).toBe(true);
+    expect((await other).status).toBe('blocked');
+    expect(writes).toEqual([{ path: 'notes.md', content: 'one' }, { path: 'notes.md', content: 'one' }]);
+
+    const publicPort = portFor(null, null, {}, { tools: '[read_file, write_file]' });
+    await publicPort.ready?.();
+    expect((await approveForSession(publicPort, { operation: 'create', path: 'mine.md', content: 'one' }, 3)).status).toBe('ok');
+    // another operation and content on the same path: no dialog, whatever the executor then makes of it
+    await again(publicPort, { operation: 'overwrite', path: 'mine.md', content: 'two' });
+    expect(presented).toHaveLength(3);
   });
 
   it('an agent built after a mid-run switch takes the session override, not the start-of-run mode', () => {

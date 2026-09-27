@@ -60,7 +60,7 @@ function recordingSink() {
   return { sink, decisions, requested, issues, timeline, opens, settles, pending, warnings };
 }
 
-function harness(opts: { preset?: string; attended?: boolean; presenter?: PresenterPort | null; headless?: 'deny' | 'abort'; abortHook?: (() => void) | null; timeoutMs?: number; extraExecutors?: [string, ReturnType<typeof simpleExecutor>][]; hooks?: ToolHooks | null; planGateHeld?: boolean; planGateWithheldNames?: readonly string[]; writeClaimFor?: GateDeps['writeClaimFor']; root?: string } = {}) {
+function harness(opts: { preset?: string; attended?: boolean; presenter?: PresenterPort | null; headless?: 'deny' | 'abort'; abortHook?: (() => void) | null; timeoutMs?: number; extraExecutors?: [string, ReturnType<typeof simpleExecutor>][]; hooks?: ToolHooks | null; planGateHeld?: boolean; planGateWithheldNames?: readonly string[]; writeClaimFor?: GateDeps['writeClaimFor']; root?: string; publicTool?: GateDeps['publicTool'] } = {}) {
   const clock = new FakeClock();
   const rec = recordingSink();
   const approvals = new PendingApprovals(clock);
@@ -75,7 +75,7 @@ function harness(opts: { preset?: string; attended?: boolean; presenter?: Presen
   let seq = 0;
   const gate = new Gate({
     sessionId: 'S1', workspaceRoot: opts.root ?? ROOT, policy, approvals, attended: () => opts.attended ?? true, presenter: opts.presenter === undefined ? { present: async () => ({ ok: true }), close: () => undefined } : opts.presenter,
-    headlessPolicy: opts.headless ?? 'deny', abortHook: opts.abortHook ?? null, approvalTimeoutMs: opts.timeoutMs ?? 300_000, executors, resolvePath: (p) => (p.startsWith('D:/') ? p : `${ROOT}/${p}`),
+    headlessPolicy: opts.headless ?? 'deny', abortHook: opts.abortHook ?? null, approvalTimeoutMs: opts.timeoutMs ?? 300_000, executors, resolvePath: (p) => (p.startsWith('D:/') ? p : `${ROOT}/${p}`), publicTool: opts.publicTool ?? (() => true),
     monotonic: clock, wall: clock, timers: clock, sink: rec.sink, nextSequence: () => ++seq, newRequestId: () => `req${++seq}`,
     hooks: opts.hooks ?? null,
     planGateHeld: () => opts.planGateHeld ?? false,
@@ -166,6 +166,28 @@ describe('gate (ADR-0017, ADR-0019, REQ-TOOLS-011..013, 027, 032, 050..066, 175)
     h.approvals.resolve(String(h.rec.requested[2]!['request_id']), 'deny');
     expect((await other).status).toBe('blocked');
     expect(edits).toHaveLength(3);
+  });
+
+  it('PD-TOOLS-004: an MCP tool the surface offers as write_file keeps the exact match — another content on the same path asks again', async () => {
+    const writes: Record<string, unknown>[] = [];
+    const serverWrite = simpleExecutor('write_file', 'a server\'s write_file', anySchema, async (a) => { writes.push(a); return { text: 'written', isError: false }; });
+    const h = harness({ extraExecutors: [['write_file', serverWrite]], publicTool: (name) => name !== 'write_file' });
+    const s = new AbortController().signal;
+    const first = h.gate.dispatch(h.call('write_file', { path: 'specs/index.md', content: 'one' }), s);
+    await Promise.resolve();
+    h.approvals.resolve('req1', 'session');
+    expect((await first).status).toBe('ok');
+    expect(h.policy.sessionApprovals[0]!.paths).toBeNull();
+    // the identical call is covered, as REQ-TOOLS-024 covers it
+    expect((await h.gate.dispatch(h.call('write_file', { content: 'one', path: 'specs/index.md' }), s)).status).toBe('ok');
+    expect(h.rec.requested).toHaveLength(1);
+    // another content on the same path is not: the server's tool was never scoped by path
+    const other = h.gate.dispatch(h.call('write_file', { path: 'specs/index.md', content: 'two' }), s);
+    await Promise.resolve();
+    expect(h.rec.requested).toHaveLength(2);
+    h.approvals.resolve(String(h.rec.requested[1]!['request_id']), 'deny');
+    expect((await other).status).toBe('blocked');
+    expect(writes).toEqual([{ path: 'specs/index.md', content: 'one' }, { content: 'one', path: 'specs/index.md' }]);
   });
 
   it('ask → deny, timeout, cancel: the three deny sources with their reason clauses', async () => {

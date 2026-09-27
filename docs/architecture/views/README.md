@@ -46,14 +46,16 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 ## Last reconciled with the code: **2026-09-27**
 
 **A session approval of a file write covers that path (`PD-TOOLS-004`, built 2026-09-27, R-057).** A grant made by
-"approve for session" on a `write_file` or `haet_edit` call (`haet` folded in) now stores the set of paths its
-REQ-TOOLS-018 path arguments resolved to, against the workspace root, when it was made, and matches a later call of
-that tool from that persona whose set is exactly that one, whatever its other arguments and its `write_file`
-operation. An unresolvable path never matches; a call carrying no path key falls back to REQ-TOOLS-024's exact
-match, which every other tool keeps. The rule is `resolvedPathSet` and `approvalMatches` in
-`agent-tools/src/policy.ts`; `PolicyContext.grant` now takes the root and the resolver, which the gate passes. The
-**sequences view** gains one bullet on the grant in §2; no package, edge, process, channel, message kind or store
-column changed.
+"approve for session" on a call of the public `write_file` or `haet_edit` (`haet` folded in) now stores the set of
+paths its REQ-TOOLS-018 path arguments resolved to, against the workspace root, when it was made, and matches a later
+call of that tool from that persona whose set is exactly that one, whatever its other arguments and its
+`write_file` operation. An unresolvable path never matches; a call carrying no path key falls back to REQ-TOOLS-024's exact
+match, which every other tool keeps — an MCP tool offered under the name `write_file` or `haet` included, since a
+server's tool is prefixed only when its name is taken. The rule is `resolvedPathSet` and `approvalMatches` in
+`agent-tools/src/policy.ts`; `PolicyContext.grant` now takes the root, the resolver and `publicTool`, which the gate
+passes from its new `GateDeps.publicTool`, and `run-host/tools.ts` supplies that predicate: true when the callable map
+holds the very executor `executorsFor` built for the name. The **sequences view** gains one bullet on the grant in §2;
+no package, edge, process, channel, message kind or store column changed.
 
 **The application log keeps `info` and above (`PD-MONITOR-002`, built 2026-09-27, R-055).** Main's standard output
 carried the level of a forwarded line as text inside it and none on main's own, and recorded every level. Each line now

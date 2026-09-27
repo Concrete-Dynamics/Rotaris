@@ -45,6 +45,16 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-27**
 
+**A quit answers nothing for a person, and every stored report is an artifact (`PD-ORCH-005` phase 7, 2026-09-27,
+R-062).** Main tells the application's quit apart (`QuitState`, `main/exit.ts`). That covers the immediate exit, every
+main window's close confirmed by its guard (`guardClose`), and a quit Electron starts on its own account, which
+`before-quit` turns into the guarded close of every main window, all or none (`closeThroughGuards`). While the quit is
+under way, an approval dialog's close sends no Deny and the question dock's cancellation is held back. The run host's
+`shutdown` withdraws both instead (clause 9, OQ-69). The report write and its artifact are one function in the engine
+(`storeChildReport`), which the stale settle and the decline now use. The **process view**'s quit paragraph, the
+**sequences view**'s approval notes and the **runtime view**'s settle line are updated. The **seams view** is not:
+`CommandContext` gains `quitting`, and no package, edge, process or channel changes.
+
 **The Continue action states what it resumes and offers to continue without it (`PD-ORCH-005` phase 5, 2026-09-27,
 R-060/R-061).** `SessionRecord.resumable` (`ResumableSchema`: the open iteration and how many agents will resume — its
 root and every unfinished agent of it) is read from the store by `resumableOf`, as the plan gate is. On a `paused` or

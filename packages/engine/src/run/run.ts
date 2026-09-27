@@ -590,11 +590,8 @@ export class Run {
     let summary = '';
     let escalate = false;
     try {
-      // The run's own task goes out as the prompt it was launched with (its attachments, and a continuation's handoff);
-      // any other task the iteration selected — a queued prompt, or a dead iteration's reopened task — as its own text.
-      const own = task.id === this.deps.taskId;
-      const modelTask = this.deps.continuation && own ? this.deps.task : task.text;
-      const report = await this.turnWithRetry(modelTask, own ? undefined : [{ kind: 'text', text: modelTask }]);
+      const modelTask = this.deps.continuation && task.id === this.deps.taskId ? this.deps.task : task.text;
+      const report = await this.turnWithRetry(modelTask);
       summary = report.text.slice(0, 200);
       if (this.stop.requested) {
         // REQ-ORCH-135: an iteration cancelled mid-run closes as cancelled; the task stays anchored.
@@ -690,8 +687,8 @@ export class Run {
    * already executed. (First execution of Part Q: the turn-level transient retry this method used to be would have
    * re-run executed tool calls with fresh ids; the reason is kept in ADR-0027's note.)
    */
-  private async turnWithRetry(task: string, content?: readonly ContentPart[]): Promise<TurnReport> {
-    return this.turn(task, undefined, content);
+  private async turnWithRetry(task: string): Promise<TurnReport> {
+    return this.turn(task);
   }
 
   /** REQ-ORCH-088/090/144, REQ-CONFIG-065/067/110: the role's own `fallback_model`, else the run-level slot; never the agent's own model. */

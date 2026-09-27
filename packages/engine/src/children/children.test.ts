@@ -747,7 +747,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       const refusals = client.requests.map((r) => textOf(r.messages.at(-1)!)).join('\n');
       expect(refusals).toContain(`Task 'again': rejected — Task 'build' (${buildId()}) was already continued by 'build-rest' (${rest.task_id})`);
       // Within its iteration an offer is taken up by the agent that delegated the child, the root included.
-      expect(refusals).toContain(`Task 'peer-rest': rejected — continuation_of '${PEER}' names no child task of yours, nor a child an earlier iteration or an earlier run of this one left`);
+      expect(refusals).toContain(`Task 'peer-rest': rejected — continuation_of '${PEER}' names no child task of yours, nor a child that an earlier iteration, or an earlier run of this iteration, left`);
       expect(refusals).toContain(`Task 'sneak': rejected — continuation_of '${buildId()}' names no child task of yours: a continuation continues one of your own children`);
     });
 

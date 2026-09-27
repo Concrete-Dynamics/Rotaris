@@ -648,8 +648,10 @@ describe('store - a declared index is a claim about a query plan; the plan is as
     expect(plan("SELECT * FROM events WHERE session_id = 's' AND at >= ? AND at <= ? ORDER BY ordinal", 'a', 'b')).toContain('events_by_at');
     // REQ-SESSION-192: the resident window is read through its partial index.
     expect(plan("SELECT * FROM transcript_rows WHERE session_id = 's' AND page IS NULL ORDER BY row_index")).toContain('transcript_resident');
-    // REQ-LIBRARY-096 (and REQ-SESSION-115's latest artifact): the session's artifacts in the index's own order, no sort.
-    expect(plan("SELECT * FROM artifacts WHERE session_id = 's' ORDER BY created_at, id")).toBe('SEARCH artifacts USING INDEX artifacts_by_created (session_id=?)');
+    // REQ-LIBRARY-096 (and REQ-SESSION-115's latest artifact): the DAL's own listing reads the session's artifacts in the
+    // index's own order, with no sort (found by phase 6's third review: a hand-written copy did not cover the statement).
+    const statements = (new StoreDal(r.db) as unknown as { stmts: Record<string, { source: string }> }).stmts;
+    expect(plan(statements['artifactsOf']!.source, 's')).toBe('SEARCH artifacts USING INDEX artifacts_by_created (session_id=?)');
     r.db.close();
     forgetSpelling(r.dir);
   });

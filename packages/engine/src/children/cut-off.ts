@@ -123,7 +123,7 @@ export function cutOffLines(cutOff: Partial<CutOff> | undefined): readonly strin
 export function continuationRefusal(reference: string, target: ChildRow | undefined, offered: boolean, continuedBy: ChildRow | undefined, asRoot = false): string | null {
   if (!target) {
     return asRoot
-      ? `continuation_of '${reference}' names no child task of yours, nor a child an earlier iteration or an earlier run of this one left: a continuation continues one of your own children or an offer the session left before (PD-ORCH-004).`
+      ? `continuation_of '${reference}' names no child task of yours, nor a child that an earlier iteration, or an earlier run of this iteration, left: a continuation continues one of your own children or an offer the session left before (PD-ORCH-004).`
       : `continuation_of '${reference}' names no child task of yours: a continuation continues one of your own children (PD-ORCH-004).`;
   }
   if (!offered) return `Task '${target.canonical_name}' (${target.task_id}) made no continuation offer: only a child cut off by its time limit while making progress offers one, and a continuation never offers another (PD-ORCH-004).`;

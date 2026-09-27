@@ -470,12 +470,13 @@ const OFFERS_TOLD = 10;
 /**
  * PD-ORCH-004 revision 3: the continuation offers the session holds that no child has taken up, which a later root may
  * take up — each by its child's name and task id, the newest ten, with the way to take one up (OQ-72). A new iteration's
- * root reads it in the handoff's progress context, a resumed root at the continue. Empty when there is none.
+ * root reads it in the handoff's progress context, a resumed root at the continue (only those `include` admits).
+ * Empty when there is none.
  */
-export function openOffersText(dal: StoreDal, sessionId: SessionId): string {
+export function openOffersText(dal: StoreDal, sessionId: SessionId, include: (taskId: string) => boolean = () => true): string {
   const all = dal.childrenOf(sessionId);
   const continued = new Set(all.flatMap((c) => (c.continuation_of === null ? [] : [c.continuation_of])));
-  const open = all.filter((c) => typeof parseReport(c)?.cut_off?.continuation_offer === 'string' && !continued.has(c.task_id));
+  const open = all.filter((c) => typeof parseReport(c)?.cut_off?.continuation_offer === 'string' && !continued.has(c.task_id) && include(c.task_id));
   if (open.length === 0) return '';
   const told = open.slice(-OFFERS_TOLD).map((c) => `- ${cut(c.canonical_name, 80)} (${c.task_id})`);
   const elided = open.length > OFFERS_TOLD ? ['- [... earlier continuation offers elided]'] : [];
@@ -1140,13 +1141,19 @@ export class Sessions {
       const tell = (m: ChatMessage): void => { s.writer.recordAgentMessage(open.root_task_id, open.iteration, 'message', m); };
       // A continue whose run came to rest before the resumed root took a step has told it already: a notice or an offer
       // list it has not yet answered is not repeated (found by phase 4's third review).
-      const unanswered = toldSinceLastAnswer(conversationOf(s.dal.agentConversation(sessionId, open.root_task_id)));
+      const conversation = conversationOf(s.dal.agentConversation(sessionId, open.root_task_id));
+      const unanswered = toldSinceLastAnswer(conversation);
       const notice = resumeNoticeOf(s.dal, sessionId, open.root_task_id, this.deps.terminals?.(sessionId));
       if (notice !== null && !unanswered.has(textOfMessage(notice))) tell(notice);
-      // PD-ORCH-004 revision 3: a resumed root is told the offers it may take up, as a new iteration's reads them in the
-      // handoff it is not sent (found by phase 6's second review).
-      const offers = openOffersText(s.dal, sessionId);
-      if (offers !== '' && !unanswered.has(offers)) tell({ role: 'user', content: [{ kind: 'text', text: offers }] });
+      /*
+       * PD-ORCH-004 revision 3: a resumed root is told the offers it may take up, as a new iteration's reads them in the
+       * handoff it is not sent (found by phase 6's second review) — only those its conversation has never named: its own
+       * children's reports carry theirs, and an offer told once is not told again, so a root that had answered and waits
+       * takes no step for a list it has read (found by phase 6's third review).
+       */
+      const named = conversation.flatMap((m) => m.content.map((p) => (p.kind === 'text' ? p.text : p.kind === 'tool-result' ? p.result : p.kind === 'tool-call' ? p.args : ''))).join('\n');
+      const offers = openOffersText(s.dal, sessionId, (taskId) => !named.includes(taskId));
+      if (offers !== '') tell({ role: 'user', content: [{ kind: 'text', text: offers }] });
       if (openIteration.message !== null && openIteration.message.length > 0) tell({ role: 'user', content: [...openIteration.message] });
     }
     // REQ-EVENTS-053, PD-MONITOR-001: the run's model calls that are no agent's turn count against the run itself.

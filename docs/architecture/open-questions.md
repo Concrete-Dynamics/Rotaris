@@ -3193,7 +3193,10 @@ keeps its number across runs, nor how a later root learns an offer exists.
   one line, since every part of the handoff is budgeted (found by phase 6's second review) — and only when there is one.
   A new iteration's root reads them in the handoff's progress context. A resumed root, which is sent no handoff, is told
   them at the continue that resumes it, after the notice of its background sessions and before the continue's message
-  (found by phase 6's second review). A later iteration of the same run starts from the launch content, which states
+  (found by phase 6's second review) — only the offers its conversation has never named, since its own children's
+  reports carry theirs and an offer told once is not told again. A root that had answered and waits therefore takes a
+  step only to read an offer it has not seen; *the second repair told the whole list at every continue, which had such
+  a root step for it each time (found by phase 6's third review)*. A later iteration of the same run starts from the launch content, which states
   none, so there an offer is taken up only by a root that already knows its task id.
 
 **What a ruling decides.** Whether "orchestrator artifact" should instead name only what the root itself publishes,

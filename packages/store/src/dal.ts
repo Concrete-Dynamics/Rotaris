@@ -549,6 +549,7 @@ export class StoreDal {
       agentConversation: db.prepare(`SELECT * FROM agent_messages WHERE session_id = ? AND task_id = ?
         AND seq >= coalesce((SELECT max(seq) FROM agent_messages WHERE session_id = ? AND task_id = ? AND kind = 'replacement'), 0) ORDER BY seq`),
       agentMessagesOf: db.prepare('SELECT * FROM agent_messages WHERE session_id = ? AND task_id = ? ORDER BY seq'),
+      recordedTaskIds: db.prepare('SELECT DISTINCT task_id FROM agent_messages WHERE session_id = ?'),
       // Clause 12: the transcript clear removes the records of closed iterations and keeps the open one's.
       clearClosedAgentMessages: db.prepare("DELETE FROM agent_messages WHERE session_id = ? AND iteration NOT IN (SELECT iteration FROM iterations WHERE session_id = ? AND state = 'open')"),
 
@@ -712,6 +713,10 @@ export class StoreDal {
   /** Every entry of an agent's record, replacements included, in order. */
   agentMessagesOf(id: SessionId, taskId: string): AgentMessageRow[] {
     return this.stmts['agentMessagesOf']!.all(id, taskId) as AgentMessageRow[];
+  }
+  /** PD-ORCH-005: every task id the session holds a conversation record under. */
+  recordedTaskIds(id: SessionId): string[] {
+    return (this.stmts['recordedTaskIds']!.all(id) as { task_id: string }[]).map((r) => r.task_id);
   }
   /** Clause 12: the records of every closed iteration removed, an open iteration's kept; the count removed. */
   clearClosedAgentMessages(id: SessionId): number {

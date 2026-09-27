@@ -398,6 +398,20 @@ function previousIntent(dal: StoreDal, sessionId: SessionId): IntentCategory | n
   } catch { return null; }
 }
 
+/**
+ * REQ-ORCH-004's appended task, and the repair of a-crashed-iteration-number-is-reused-by-the-next-run (PD-ORCH-005): the
+ * id a continuation gives the task it appends. A run host that died mid-iteration leaves the stored count behind the
+ * iteration rows, so the number is taken past both; and since the dead iteration's task goes back to `pending` and is
+ * selected again, the id also steps past every id the todo already holds, so the new prompt never shares one with it.
+ */
+function continuedTaskId(dal: StoreDal, sessionId: SessionId, todo: TodoDocument | undefined): string {
+  const taken = new Set((todo?.phases ?? []).flatMap((phase) => phase.tasks.map((task) => task.id)));
+  const rows = dal.iterationsOf(sessionId);
+  let n = Math.max(dal.getSession(sessionId)?.iterations_completed ?? 0, rows.at(-1)?.iteration ?? 0) + 1;
+  while (taken.has(`${sessionId}:continued:${n}`)) n += 1;
+  return `${sessionId}:continued:${n}`;
+}
+
 export function buildContinuationPayload(dal: StoreDal, row: SessionRow, prompt: string, todo: TodoDocument | undefined): string {
   const recentRows = dal.residentRows(row.session_id as SessionId)
     .filter((event) => (event.kind === 'user' || event.kind === 'agent') && event.body.trim() !== '')
@@ -1041,7 +1055,7 @@ export class Sessions {
       if (s.memory.exhausted.size > 0 || s.memory.overrideCount > 0) s.log?.info(`resilience memory rehydrated: ${s.memory.exhausted.size} exhausted pair(s), ${s.memory.overrideCount} override(s)`);
     }
     const run = new Run({
-      sessionId, workspaceRoot, effectiveRoot, task: payload, taskContent: [{ kind: 'text', text: payload }, ...attachmentContent], taskLabel: prompt, taskId: `${sessionId}:continued:${s.dal.getSession(sessionId)!.iterations_completed + 1}`,
+      sessionId, workspaceRoot, effectiveRoot, task: payload, taskContent: [{ kind: 'text', text: payload }, ...attachmentContent], taskLabel: prompt, taskId: continuedTaskId(s.dal, sessionId, todo),
       ...(setupIn.personas ? { personas: setupIn.personas } : {}),
       ...(setupIn.models ? { models: setupIn.models } : {}),
       // REQ-WORKSPACE-073 (ADR-0063): a continuation is where an invoked skill first reaches a model — the

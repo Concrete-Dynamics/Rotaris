@@ -134,7 +134,7 @@ export interface TurnDeps {
    * progress rule and the list of paths a child changed; absent means nobody is listening.
    */
   readonly onToolCompleted?: ((call: PortToolCall, result: PortToolResult) => void) | undefined;
-  /** SPIKE (PD-ORCH-005): observes every message as it joins this agent's conversation. */
+  /** PD-ORCH-005 clause 1: observes every message as it joins this agent's conversation — the conversation record. */
   readonly recorder?: ConversationRecorder | undefined;
 }
 
@@ -167,7 +167,7 @@ function injectSteering(deps: TurnDeps, conversation: Conversation): number {
 export async function runTurn(deps: TurnDeps, task: string | null, history: readonly ChatMessage[], signal: AbortSignal, initialContent?: readonly ContentPart[]): Promise<TurnOutcome> {
   const { writer, owner, tools, clocks } = deps;
   // ADR-0060: the history is an object whose array is SWAPPED by a compression, never spliced under a call in flight.
-  // SPIKE (PD-ORCH-005): a null task continues the history as it stands — the resume of a recorded conversation.
+  // PD-ORCH-005: a null task continues the history as it stands — how a recorded conversation is resumed.
   const conv = new Conversation(history, deps.recorder);
   if (task !== null) conv.push({ role: 'user', content: initialContent ?? [{ kind: 'text', text: task }] });
   // ADR-0034: the MCP surface is demanded before the listing and the prompt are read — one resolution feeds both.
@@ -306,6 +306,7 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
   }
   } finally {
     unregister?.(); // Part AO
+    conv.close(); // PD-ORCH-005: a manual pass that finishes after this turn replaces and records nothing.
   }
 }
 

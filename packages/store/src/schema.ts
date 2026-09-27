@@ -825,7 +825,7 @@ export const MIGRATIONS: readonly Migration[] = [
      * This migration lands ahead of most of its writers, which is the one exception to the rule stated at the top of
      * this file: PD-ORCH-005 is built in phases on one branch, the schema first, and every table and column here gains its
      * writer in a later phase of the same build, before the build reaches `main`. Its shape was settled against every
-     * clause before it was appended, because once it ships it is never edited.
+     * clause before it was appended (OQ-68, on clause 1's record, aside), because once it ships it is never edited.
      *
      * On `children`: `interruption` is what left the agent `paused` (`pause | stop | quit | crash`, NULL for an agent that
      * is not paused), `resume_state` the state it moves back into when its iteration resumes (REQ-MONITOR-300 narrowed:
@@ -839,8 +839,9 @@ export const MIGRATIONS: readonly Migration[] = [
      * child's `bg_` task id, REQ-ORCH-036). An iteration opens when it begins and closes when it ends; a pause, a stop, a
      * quit and a crash leave it open (clause 2), and it is resumed from here. At most one is open per session, which the
      * partial unique index enforces rather than trusts. A plan cycle is not an iteration (REQ-ORCH-153's ruling) and has
-     * no row: it runs while the plan gate holds, and clause 11 leaves no agent unfinished there. `interruption` is the last
-     * interruption while open, cleared when the iteration resumes; `outcome` is REQ-ORCH-135's at close.
+     * no row: it runs while the plan gate holds, where clause 11 refuses a pause and has a quit record no interruption (a
+     * stop or a crash during one is the interruption phase's open question). `interruption` is the last interruption while
+     * open, cleared when the iteration resumes; `outcome` is the run loop's iteration outcome at close (REQ-ORCH-073/135).
      *
      * `agent_messages`: every agent's conversation, appended as it happens (clause 1) under the agent's task id — the
      * root's and every child's. `kind = 'message'` is one message; `kind = 'replacement'` is a compression, whose body is

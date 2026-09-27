@@ -261,8 +261,9 @@ A delegated child's state: `queued`, `starting`, `running`, `summarizing`,
 The one non-terminal state a run leaves an unfinished agent in when it comes to rest by a pause, a stop, a quit or a
 crash, with its **interruption** recorded and its iteration left open. It is left again when the iteration resumes,
 for the state the agent **resumes into**: where it waited if it had not started, `running` from its recorded
-conversation if it had, `summarizing` if it was writing its report. It presents as `waiting`. Not a terminal state and
-not an outcome: a `paused` agent has no report until it ends. — `PD-ORCH-005`, `REQ-MONITOR-300`
+conversation if it had, `summarizing` if it was writing its report. It presents as `queued`, REQ-MONITOR-046's catch-all
+(OQ-67), and is not settled for display with its session. Not a terminal state and not an outcome: a `paused` agent has
+no report until it ends. — `PD-ORCH-005`, `REQ-MONITOR-300`
 _Avoid_: suspended, frozen, held (the **plan gate** and the **message-limit pause** hold a run; they leave no agent paused)
 
 **Interruption**:

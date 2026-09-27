@@ -52,7 +52,8 @@ child a continuation continues, which REQ-TOOLS-152's fields do not provide and 
 on 2026-09-27** as recommended by `PD-ORCH-004` revision 2 ([R-058](../product/requests.md#r-058)). **More were raised on
 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3: OQ-67** (how a `paused` agent presents, and whether it is settled
 for display with a session at rest, which four requirements the directive does not name would do) **and OQ-68** (whether
-the transcript is drawn from the conversation record), each stating the reading the build proceeds under. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+the transcript is drawn from the conversation record, and what of a model exchange the record holds), each stating the
+reading the build proceeds under. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -2907,23 +2908,43 @@ settled exactly as before.
 as narrowed by `paused`, as built; and whether a paused agent should present as `queued` or as a presentation state of
 its own (widening REQ-MONITOR-046's closed vocabulary), which would change the chip every agent surface draws for it.
 
-**OQ-68 — Is the transcript drawn from the conversation record?** *(`PD-ORCH-005` clause 1; REQ-MONITOR-248, REQ-SESSION-196, REQ-CHAT-046. Raised 2026-09-27 by building `PD-ORCH-005` revision 2 under [R-060](../product/requests.md#r-060).)*
+**OQ-68 — Is the transcript drawn from the conversation record, and what of a model exchange does the record hold?** *(`PD-ORCH-005` clauses 1 and 12; REQ-MONITOR-248, REQ-SESSION-196, REQ-CHAT-046 and REQ-SESSION-029, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-005` revision 2 under [R-060](../product/requests.md#r-060).)*
 
 Clause 1 calls the conversation record "the record a resume is made from, and the same record a session's transcript
 is drawn from". Read as an instruction, it would have the transcript's rows derived from the agents' conversations.
 Read as a statement, it says the two come from one session record. Clause 12 separates them in the same breath —
 paging the transcript never touches the conversation record, and clearing the transcript clears only closed
-iterations' records — which an instruction to derive one from the other would make meaningless.
+iterations' records — which an instruction to derive one from the other would make meaningless. REQ-SESSION-029, which
+the directive does not name, promises that "no part of a session's content exists in two places where the two could
+disagree", and the record and the transcript's rows now carry the same messages twice.
 
-**What the build proceeds under.** The statement. The conversation record is a new part of the session's record
-(`agent_messages`, v23), written as each agent's conversation changes; the transcript's rows are written exactly as
-before (REQ-MONITOR-248, REQ-CHAT-046), and nothing re-derives either from the other. Clause 12's two rules are built
-as stated: paging releases transcript rows and leaves the conversation record alone, and a transcript clear removes the
-conversation entries of every iteration that is not open.
+Clause 1 also says the record keeps "each message sent to and received from the model". Two parts of every request are
+not messages of the conversation: the system prompt and the tool definitions, which the product rebuilds from the
+persona each time an agent is built. And one part of a response is received but never sent back: streamed reasoning
+(REQ-CHAT-163), drawn in its own row.
+
+**What the build proceeds under.**
+
+- **The statement.** The conversation record is a new part of the session's record (`agent_messages`, v23), written as
+  each agent's conversation changes; the transcript's rows are written exactly as before (REQ-MONITOR-248,
+  REQ-CHAT-046), and nothing re-derives either from the other. REQ-SESSION-029's promise is kept in its consequence:
+  the two cannot disagree about what an agent was sent, because the transcript is not what a resume reads.
+- **The conversation, not the request.** The record holds the messages of the conversation — everything a request
+  carries after its system message — and not the system prompt, the tool definitions or streamed reasoning. A resumed
+  agent is built from its persona as any agent is, so a persona edited between the rest and the resume gives it its new
+  instructions and tools.
+- **Clause 12's two rules as stated.** Paging releases transcript rows and leaves the record alone; a transcript clear
+  removes the conversation entries of every iteration that is not open, in the clear's own transaction, and keeps an
+  open iteration's until the next clear after it closes (the record is not cleared at the close itself). A plan cycle
+  (iteration 0) has no open row, so a clear during a live plan cycle removes that cycle's record too; a plan cycle is
+  never resumed (clause 11). The clear's acknowledgement is unchanged; the count removed is in `transcript_cleared`'s
+  metadata.
 
 **What a ruling decides.** Whether the transcript should be rebuilt from the conversation record — which would make the
 record's content and the transcript's rows one fact with one writer, at the price of rewriting the transcript's
-projection — or whether the two stay parallel records of the same run, as built.
+projection — or whether the two stay parallel records of the same run, as built; and whether the record should also
+keep the system prompt and tool definitions each request carried, so a resume replays the instructions the agent had
+rather than the persona's current ones.
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

@@ -48,11 +48,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 **Every agent's conversation is recorded as it happens (`PD-ORCH-005` phase 2, 2026-09-27, R-060).** A `Conversation`
 now carries a recorder (the spike's seam), so each `push` is one `agent_messages` entry under the agent's task id and
 each `replace` — a compression — one replacement entry; the root records under the iteration's root task id and a
-child under its own, and REQ-ORCH-088's fallback retry writes an empty replacement before its second attempt. The run
-opens an `iterations` row with the root's task id when an execution iteration's root is minted and closes it beside
-`iteration.end`; the transcript clear removes closed iterations' records in its own transaction (clause 12). The
-**runtime view** gains a §3 paragraph and two §7 rows' writers; the **state-ownership view** gains the record as a
-durable fact. No package, edge, process, channel or message kind changed.
+child under its own, and REQ-ORCH-088's fallback retry writes an empty replacement before its second attempt; a turn
+closes its conversation when it ends, so a late manual compression records nothing. The run opens an `iterations` row
+with the root's task id when an execution iteration's root is minted and closes it with `iteration.end` in one
+transaction; the transcript clear removes closed iterations' records in its own transaction (clause 12). Repairing
+`a-crashed-iteration-number-is-reused-by-the-next-run.md`: a run closes an iteration a dead run left open before its
+first iteration and numbers past it, the ledger holds its own root's tree, and task ids are minted against every
+recorded root's id. The **runtime view** gains a §2 paragraph, a §3 paragraph and two §7 rows' writers; the
+**state-ownership view** gains the record as a durable fact. No package, edge, process, channel or message kind changed.
 
 **The record a paused run resumes from, in contracts and the store (`PD-ORCH-005` phase 1, 2026-09-27, R-060/R-061).**
 The child machine gains its eleventh state, `paused` (`contracts/children.ts`: every non-terminal state may move to it,

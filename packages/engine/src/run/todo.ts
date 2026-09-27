@@ -55,6 +55,22 @@ export class Todo {
     phase.tasks.push({ id: taskId, text, state: 'pending', consecutiveRetries: 0 });
   }
 
+  /**
+   * REQ-ORCH-135 ("the task stays anchored"): the task an iteration held when it closed without finishing goes back to
+   * `pending`, so the next selection picks it again. Only an `in_progress` task moves; false when none carries the id.
+   */
+  reopen(taskId: string): boolean {
+    const task = this.all().find((t) => t.id === taskId);
+    if (!task || task.state !== 'in_progress') return false;
+    task.state = 'pending';
+    return true;
+  }
+
+  /** The text of the task carrying `taskId`, or null when none does. */
+  textOf(taskId: string): string | null {
+    return this.all().find((t) => t.id === taskId)?.text ?? null;
+  }
+
   /** REQ-CHAT-090/091: validated add/update/remove; every successful edit changes the document. */
   editTask(op: 'add' | 'update' | 'remove', id: string, text: string, phaseName = 'main'): boolean {
     const body = text.trim();

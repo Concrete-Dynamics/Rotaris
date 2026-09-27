@@ -3,7 +3,7 @@ import { isTerminalChildState, type ChildState, type RootExecutionRecord, type S
 import type { ChildInsert, ChildRow, StoreDal } from '@rotaris/store';
 import type { SessionWriter } from '../session-writer.js';
 import type { ArtifactStore } from '../artifacts/store.js';
-import { canonicaliseName, mintTaskId, uniqueUnderParent } from './naming.js';
+import { canonicaliseName, mintTaskId, takenTaskIds, uniqueUnderParent } from './naming.js';
 import { EMPTY_MCP_EVIDENCE, knownRolesMessage, resolveRole, type Persona, type PersonaResolver } from './personas.js';
 import type { RanCommand } from '../artifacts/record.js';
 
@@ -93,8 +93,7 @@ export class ChildLedger {
     if (deps.rootRecord) {
       this.root = deps.rootRecord;
     } else {
-      const taken = new Set(deps.dal.childrenOf(deps.sessionId).map((c) => c.task_id));
-      const taskId = mintTaskId(taken);
+      const taskId = mintTaskId(takenTaskIds(deps.dal, deps.sessionId));
       this.root = {
         taskId,
         canonicalName: 'orchestrator',
@@ -128,9 +127,28 @@ export class ChildLedger {
   enqueueSlot(modelKey: string, taskId: string): void {
     this.deps.dal.enqueueSlot(this.deps.sessionId, modelKey, taskId);
   }
-  /** REQ-ORCH-065/072: one ledger per iteration — every child this iteration created. */
+  /**
+   * REQ-ORCH-065/072: one ledger per iteration — every child this iteration created, which is every child descending from
+   * this iteration's ROOT. The iteration number alone is not that set: every plan cycle is numbered 0, and a run host
+   * that died mid-iteration left its children under a number the next run reused
+   * (`a-crashed-iteration-number-is-reused-by-the-next-run.md`), so a ledger scoped by number read another root's
+   * children into its limits, its dependencies and its credited child. The tree is walked from the root, since children
+   * spawned in one instant are ordered by task id and a child can be read before its parent; the result keeps the
+   * store's spawn order.
+   */
   all(): ChildRow[] {
-    return this.deps.dal.childrenOfIteration(this.deps.sessionId, this.deps.iteration);
+    const rows = this.deps.dal.childrenOfIteration(this.deps.sessionId, this.deps.iteration);
+    const tree = new Set<string>();
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const c of rows) {
+        if (tree.has(c.task_id) || !(this.isRoot(c.parent_id) || tree.has(c.parent_id))) continue;
+        tree.add(c.task_id);
+        grew = true;
+      }
+    }
+    return rows.filter((c) => tree.has(c.task_id));
   }
   get(taskId: string): ChildRow | undefined {
     return this.deps.dal.getChild(this.deps.sessionId, taskId);
@@ -187,7 +205,8 @@ export class ChildLedger {
       return (edges.get(from) ?? []).some((d) => reaches(d, target));
     };
     for (const inh of input.inheritedContext) if (inh.trim() === '') return { ok: false, error: { reason: 'A malformed inherited-context entry (empty) was rejected' } };
-    const taken = new Set(all.map((c) => c.task_id));
+    // REQ-ORCH-036: unique within the SESSION — every child's and every recorded root's id (PD-ORCH-005), not this iteration's.
+    const taken = takenTaskIds(this.deps.dal, this.deps.sessionId);
     taken.add(this.root.taskId);
     const taskId = mintTaskId(taken);
     for (const dep of input.dependsOn) if (reaches(dep, taskId)) return { ok: false, error: { reason: 'Dependency cycle detected' } };

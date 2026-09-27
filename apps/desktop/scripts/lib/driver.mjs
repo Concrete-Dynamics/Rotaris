@@ -12,7 +12,7 @@ import { existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } 
 import { connect as connectSocket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
-import { app as appDirectory, cleanEnvironment, electron, mainEntry, proofIsolationEnv } from './harness.mjs';
+import { app as appDirectory, cleanEnvironment, electron, hostSwitches, mainEntry, proofIsolationEnv } from './harness.mjs';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -122,7 +122,7 @@ export async function startApp({ root, workspace, extra = {}, electronArgs = [],
   mkdirSync(preferences, { recursive: true });
 
   const out = openSync(logFile, 'a');
-  const child = spawn(electron, [mainEntry, ...electronArgs, ...(workspace ? [workspace] : [])], {
+  const child = spawn(electron, [mainEntry, ...hostSwitches, ...electronArgs, ...(workspace ? [workspace] : [])], {
     cwd: appDirectory,
     detached,
     windowsHide: false,

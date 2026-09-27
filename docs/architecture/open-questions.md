@@ -2872,6 +2872,31 @@ followed session's transcript — amending REQ-WORKSPACE-067's two to three — 
 is read as met by the table; and if the latter, whether the tab should state the count. (b) Whether `/skills`
 with no session refuses (built), starts a session, or lists into the next session created in the window.
 
+**Readings the listing was also built under, named here so a ruling can reach them** *(added 2026-09-27, gate
+round 1 of the same change; each was stated only in a code comment or the plan's note before)*:
+
+- **(c) Which skills are listed.** Every discovered skill — auto-only ones, ones whose load mode is `off`
+  ("hidden"), and all of them while `skills.enabled` is off. REQ-CHAT-162 lists "the discovered skills" and the
+  Settings table lists the same set; `/skill <path>` is not refused while skills are off either. The contrary
+  reading: the requirement's last sentence calls these "skill commands", and REQ-CHAT-034 fails a skill command
+  with "Skills are disabled. Enable them in Settings." while the switch is off. *(`writeSkillListing`,
+  `apps/desktop/src/run-host/skills.ts`.)*
+- **(d) When a refusal is stated.** `/skills` is always listed as available and states the no-session refusal of
+  (b) only once invoked. REQ-CHAT-025 and REQ-CHAT-029/030 already allow "listed but unavailable, with the reason"
+  before invocation; the composer's context carries no "a session is followed" fact today, so the build did not
+  add one. *(`skillsListCommand`, `packages/ui/src/slash/skills.ts`.)*
+- **(e) How the 120 is counted.** At most 120 characters, the last of them the ellipsis where the text was cut,
+  after whitespace runs collapse to one space — REQ-CHAT-068's `compactTask` reading of the same kind of clause.
+  Counted in code points, so a cut can separate a combining mark or a joined emoji from its base.
+  *(`clipSkillDescription`, `packages/contracts/src/skills.ts`.)*
+- **(f) Which badge the two fixed commands carry.** `skill`, as ADR-0063 chose for `/skill`; REQ-CHAT-025 names the
+  set and does not say. `slash-proof` asserts the other reading, and has been red on it since ADR-0063
+  (`../defects/slash-proof-expects-every-built-in-to-carry-the-action-badge.md`).
+- **(g) Who else reads the row.** The row is a system row, and the improvement analyst takes every recent row's
+  text as evidence (`packages/engine/src/improvements/capture.ts`), so a listing carries the names, descriptions
+  and paths of skills set to "hidden" to that model. The agent path does not (it keeps user and agent rows only).
+  Whether "hidden" (REQ-WORKSPACE-062) reaches that far is not stated; nothing withholds them today.
+
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 
 The key is registered with default 20 and minimum 1. Each background session publishes its own `bg:<id>` stream at up to 50 frames/s (the 20 ms floor), so the produced aggregate is `(agents + background sessions) × 50 frames/s`, and only one of those two factors — agents, REQ-MONITOR-285's 20 — has a ceiling. Part AL reads the key into the manager and caps the *delivered* rate per window at 1,000 frames/s by merging (REQ-MONITOR-306, REQ-SHELL-103), so a user who configures 400 background sessions saturates the run-host → main pipe, not a renderer. A stated maximum on the key would let the produced rate be computed rather than absorbed. The owner's call; recorded, not resolved.

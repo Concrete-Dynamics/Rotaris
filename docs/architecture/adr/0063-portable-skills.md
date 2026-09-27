@@ -276,6 +276,10 @@ kind badge as its own earlier work, and `/skill <path>` carries that badge — s
 command or lost its own depending on which effect ran first, against REQ-SHELL-056 both ways. `/skills` would have
 had the same exposure. The two fixed names are now always taken
 ([`a-skill-named-skill-takes-the-skill-command.md`](../../defects/fixed/a-skill-named-skill-takes-the-skill-command.md)).
+The same change's gate found the prompt-file registrar holding the same hole from the other side — the fixed
+commands register by effect after the prompt files are on a rebuilt registry, and a re-read took `/skills` back for
+a `skills.md` — so both registrars now hold the two names
+([`a-prompt-file-named-skills-takes-the-skills-command.md`](../../defects/fixed/a-prompt-file-named-skills-takes-the-skills-command.md)).
 
 **One gap the specification leaves is logged as OQ-66**, with the reading built: REQ-CHAT-162 asks for the listing
 to be reachable from the Settings tab, whose header actions REQ-WORKSPACE-067 fixes at two, so the tab's table is

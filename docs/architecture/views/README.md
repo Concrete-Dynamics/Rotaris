@@ -52,9 +52,9 @@ own writer (`run-host/skills.ts`'s `writeSkillListing`), and the one row rendere
 the listing as the listing (`transcript/Row.tsx`, the text fixed once in `contracts/skills.ts`). The **process view**
 gains the command and its reply, and the run host's row says it writes the listing; the **component view**'s skills
 row names the three places; the **runtime view**'s `transcript_rows` line says the listing is a row like any other.
-No package, edge, channel, store column or state owner changed.
-
-Previously reconciled: **2026-09-24**
+No package, edge, channel, store column or state owner changed. The two repairs its gate asked for — the listing's
+fields drawn through the plain-text path so a URL stays a link, and the prompt-file registrar holding `/skill` and
+`/skills` — are below the depth any view describes, so no view changes beyond this entry.
 
 **Product-drawn main-window chrome (`PD-SHELL-003`, built and revised 2026-09-24).** On Windows, Linux and macOS the main
 `BrowserWindow` is frameless with its native menu hidden. The existing title bar now ends in minimize,

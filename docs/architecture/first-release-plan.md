@@ -32,7 +32,10 @@ record already decides, and every ruling it needs is named as the owner's rather
   PKCE authenticators, Git integration and merge, the manual compression part, and persona memory.
 - The open notes in `../defects/`.
 - The four red proofs: `transcript-proof`, `library-proof`, `part-h-proof`, and `theme-proof`'s contrast section
-  (OQ-56).
+  (OQ-56). *Two more were measured red on 2026-09-27 while §2.2 was built, both before it and unchanged by it:*
+  `slash-proof` at its first catalogue assertion since ADR-0063
+  ([note](../defects/slash-proof-expects-every-built-in-to-carry-the-action-badge.md)), and `skills-proof`'s policy
+  launch on Linux only ([note](../defects/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md)).
 - The unbuilt directives `PD-TOOLS-003`, `PD-TOOLS-004`, `PD-TOOLS-005`, `PD-ORCH-004` and `PD-MONITOR-002`.
 - The macOS and Linux artifacts, which are bound by IC-3 and IC-8 and now also by `PD-STARTUP-001`.
 
@@ -125,6 +128,22 @@ held as written, the reason it was not built held, and building it found one def
   `rows-proof` passes unchanged. `slash-proof` stops at its first catalogue assertion with and without this change —
   it expects every built-in to carry the `action` badge, which `/skill` has not since ADR-0063 — recorded as
   [`slash-proof-expects-every-built-in-to-carry-the-action-badge.md`](../defects/slash-proof-expects-every-built-in-to-carry-the-action-badge.md).
+- *Gate round 1 of the same change found two more defects, both repaired before it merged.* (1) Drawing the listing
+  as its own block took the system row off `PlainText`, so a bare URL in a skill's description stopped being a link
+  (REQ-CHAT-076). Every field is now drawn through `PlainText`; `rows.test.ts` renders a listing and reads the link,
+  and launch 1c gives `home-skill` a description ending in a URL and reads the link drawn for it, the full stop
+  outside the target. `skills-proof` passes to the same Linux-only policy check as before, and `rows-proof` passes.
+  (2) A prompt file named `skills.md` took `/skills` back from the listing on the first prompt re-read after mount
+  (REQ-CHAT-160, REQ-CHAT-162): the collision repaired above held for the skill registrar only —
+  [`a-prompt-file-named-skills-takes-the-skills-command.md`](../defects/fixed/a-prompt-file-named-skills-takes-the-skills-command.md).
+- *Readings stated here rather than left in code.* Search matches the row's text (REQ-CHAT-074), and the text's
+  punctuation between fields (`- `, the brackets round the scope, ` triggers: `) is not drawn, so a match falling
+  only there selects the row and paints nothing in it. `/skills` is sent from `renderer/main.tsx`'s slash host
+  beside `/skill`'s `loadSkillFile`, not from `renderer/session-actions.ts`, where `views/04-seams.md` §1 step 5
+  puts a gesture against the followed session: main, not the renderer, names the session here, as it does for
+  `skills.forceLoad` and `skills.loadFile` (ADR-0063). The listing's other readings — which skills it lists, when
+  its refusal is stated, how the 120 is counted, the badge, and the improvement analyst reading the row — are
+  OQ-66 (c) to (g).
 
 **2.3 A skills live run.** One `pnpm live-run` scenario invokes a skill command and asserts that the model's
 first turn shows the skill's body was in its context. It spends the owner's money, so it runs only when the

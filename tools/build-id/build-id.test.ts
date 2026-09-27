@@ -16,8 +16,14 @@ const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 /** A commit needs an author, and the operator's own configuration may ask for a signature this test cannot make. */
 const IDENTITY = ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@invalid', '-c', 'commit.gpgsign=false'];
 
+/**
+ * The fixture's git runs without the variables an enclosing git process sets (a hook running `pnpm check`), which would
+ * otherwise point `init` and `commit` at the repository under test instead of the fixture.
+ */
+const FIXTURE_ENV = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^GIT_(DIR|WORK_TREE|INDEX_FILE|OBJECT_DIRECTORY|ALTERNATE_OBJECT_DIRECTORIES|COMMON_DIR|NAMESPACE|PREFIX)$/.test(k)));
+
 function run(root: string, ...args: string[]): string {
-  const r = spawnSync('git', ['-C', root, ...IDENTITY, ...args], { encoding: 'utf8' });
+  const r = spawnSync('git', ['-C', root, ...IDENTITY, ...args], { encoding: 'utf8', env: FIXTURE_ENV });
   if (r.status !== 0) throw new Error(`git ${args.join(' ')}: ${r.stderr}`);
   return r.stdout.trim();
 }

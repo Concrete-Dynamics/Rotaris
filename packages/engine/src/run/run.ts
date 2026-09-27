@@ -32,6 +32,7 @@ import { entryOf, pairKey, providerIdentity, ResilienceMemory, sameRef, withSett
 import { WaitRegistry, type WaitState } from './waits.js';
 import type { ResolvedTrigger, TurnCompression } from './compression.js';
 import { ConversationRegistry, type ManualCompressionReport } from './conversations.js'; // Part AO
+import { ConversationRecord } from './record.js';
 import { randomUUID } from 'node:crypto';
 import { decodeStoredTodo, editAgentTodo, encodeStoredTodo, isAgentTodoDocument, type AgentTodoDocument } from '../todo-view.js';
 
@@ -332,11 +333,16 @@ export class Run {
   // Part AO
   /** ADR-0060 decision 1's registry (Part AO): every conversation live in this run, for the `forceCompression` arm. */
   readonly conversations = new ConversationRegistry();
+  /** PD-ORCH-005 clause 1: every agent's conversation of this run, recorded as it happens. */
+  private readonly record: ConversationRecord;
+  /** PD-ORCH-005 clause 1: the todo task the current iteration works on, recorded with the iteration and its root. */
+  private iterationTask: { readonly id: string; readonly text: string } | null = null;
   private appliedEntryModel: ModelRef | null = null;
 
   constructor(private readonly deps: RunDeps) {
     this.sessionId = deps.sessionId;
     this.hooks = deps.hooks ?? null;
+    this.record = new ConversationRecord(deps.writer, deps.dal, deps.sessionId);
     this.memory = deps.resilience?.memory ?? new ResilienceMemory();
     this.catalogue = deps.resilience?.catalogue ?? [];
     this.waits = new WaitRegistry({ clocks: deps.clocks, onChange: () => this.publishWait() });
@@ -571,6 +577,7 @@ export class Run {
     if (!task) return false;
     this.todo.begin(task);
     const iteration = this.iterationsCompleted + 1;
+    this.iterationTask = { id: task.id, text: task.text };
     writer.recordEvent('iteration.start', { task: task.text }, iteration);
     await this.drain();
 
@@ -618,6 +625,9 @@ export class Run {
       if (this.rootRecord) this.rootRecord.state = 'failed';
     }
     writer.recordEvent('iteration.end', { task: task.text, outcome, summary }, iteration);
+    // PD-ORCH-005 clause 1: the iteration's record closes with its outcome.
+    writer.closeIteration(iteration, outcome);
+    this.iterationTask = null;
     // ADR-0039 / REQ-GIT-051: exactly one capture per iteration that closes, at the moment it closes — after
     // `iteration.end` is recorded and BEFORE the hooks' `iteration_end`: the checkpoint records the iteration's work as
     // the agent left it, and a hook that later carries the checkpoint (REQ-HOOKS-082 with checkpoints, owed) can only
@@ -779,6 +789,10 @@ export class Run {
     };
     this.rootRecord = rootRecord;
     this.rootId = rootTaskId;
+    // PD-ORCH-005 clause 1: "The root's task id is recorded with its iteration." A plan cycle (0) is not an iteration.
+    if (iterationOverride === undefined) {
+      writer.openIteration({ iteration, root_task_id: rootTaskId, root_name: rootCanonical, root_persona: config.persona, task_id: this.iterationTask?.id ?? '', task });
+    }
     const children = this.deps.toolsFor && this.deps.dal
       ? new IterationChildren({
         rootRecord,
@@ -803,6 +817,8 @@ export class Run {
         ...(this.deps.supervisorFor ? { supervisorFor: this.deps.supervisorFor } : {}),
         ...(this.deps.personas ? { personas: this.deps.personas } : {}),
         steeringFor: (id: string) => this.steeringFor(id), shouldPause: () => this.pauseRequested,
+        // PD-ORCH-005 clause 1: every child's conversation is recorded under its task id.
+        record: this.record,
         // Part Y (REQ-LIBRARY-092/097/098): the session artifact store — child reports materialise into it and its
         // two context blocks reach every child the iteration launches.
         ...(this.deps.artifacts ? { artifacts: this.deps.artifacts } : {}),
@@ -839,6 +855,8 @@ export class Run {
       parentResume: !initialCall,
       // OQ-8: the entry agent's provider requests, each counted and published as it completes.
       onRequestUsage: this.onRequestUsage,
+      // PD-ORCH-005 clause 1: the root's conversation is recorded under its task id, with its iteration.
+      recorder: this.record.recorder(rootTaskId, iteration),
       }, text, history, this.abort.signal, content);
     };
     try {

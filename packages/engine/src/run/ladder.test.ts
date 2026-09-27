@@ -7,6 +7,7 @@ import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/stor
 import type { SessionSnapshot } from '@rotaris/contracts';
 import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, toolCalls, type ModelRef, type ScriptedCall } from '@rotaris/model';
 import { BUILT_IN_PERSONAS, RUN_CONFIG_DEFAULTS, Sessions, toSessionRecord, type CatalogueEntry, type DelegationOps, type ModelChoice, type ModelLookup, type PortToolResult, type Publisher, type RoleName, type RunConfig, type ToolPort } from '../index.js';
+import { conversationOf } from './record.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000d') as MachineId;
 const ref = (providerId: string, modelId: string): ModelRef => ({ providerId, modelId, dialect: 'chat' });
@@ -387,6 +388,12 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
     expect(result.status).toBe('completed');
     const child = dal.childrenOf(sid)[0]!;
     expect(child.state).toBe('succeeded');
+    // PD-ORCH-005 clause 1: the retry starts the child's conversation again from its payload, and the record says so —
+    // the conversation a resume would send carries the payload once, while the full history keeps both attempts.
+    const recorded = conversationOf(dal.agentConversation(sid, child.task_id));
+    const payloads = (ms: readonly { role: string; content: readonly { kind: string; text?: string }[] }[]) => ms.filter((m) => m.role === 'user' && m.content.some((p) => p.kind === 'text' && (p.text ?? '').includes('TASK: be slow'))).length;
+    expect(payloads(recorded)).toBe(1);
+    expect(payloads(dal.agentMessagesOf(sid, child.task_id).filter((r) => r.kind === 'message').map((r) => JSON.parse(r.body) as { role: string; content: { kind: string; text?: string }[] }))).toBe(2);
     expect(timeline(sid)).toContain('child_timeout_fallback');
     expect(JSON.parse(dal.timelineOf(sid).find((t) => t.name === 'child_timeout_fallback')!.metadata)).toMatchObject({ from_model: 'a1', to_model: 'f1', timeout_seconds: 10 });
     // a1 hung and timed out, f1 answered; REQ-ORCH-095's one re-prompt of a text-only implementer adds a third call, on f1 still.

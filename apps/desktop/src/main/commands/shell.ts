@@ -1,6 +1,7 @@
 import { BrowserWindow, app, nativeTheme, shell } from 'electron';
 import { CHANNEL, CONTRACT_SCHEMA_VERSION } from '@rotaris/contracts';
 import { buildIdentifier, thirdPartyLicensesPath } from '../about.js';
+import { productVersion } from '../version.js';
 import { composerDraftKey } from '@rotaris/platform';
 import { homedir } from 'node:os';
 import { millis } from '@rotaris/kernel';
@@ -21,9 +22,10 @@ export function shellCommands(
         ? await runHost.request({ kind: 'circuit_breaker.status', workspaceId: w.workspaceId }, millis(5_000))
         : { kind: 'circuit_breaker.status' as const, enabled: process.env['ROTARIS_CIRCUIT_BREAKER'] !== 'off' };
       // REQ-SHELL-140 (Part AG): the About page's product card reads its four local facts from here; it makes no
-      // request of its own and none of these leaves the machine (REQ-SHELL-139, REQ-CONFIG-398).
+      // request of its own and none of these leaves the machine (REQ-SHELL-139, REQ-CONFIG-398). The version is the
+      // application manifest's, never Electron's (REQ-STARTUP-007, REQ-STARTUP-158; `version.ts`).
       return { ok: true, value: {
-        version: app.getVersion(), workspace: w.workspace, processes: [...processes, ...services.keys()].map((p) => `svc:${p}`),
+        version: productVersion(), workspace: w.workspace, processes: [...processes, ...services.keys()].map((p) => `svc:${p}`),
         circuitBreakerArmed: cb.kind === 'circuit_breaker.status' && cb.enabled,
         build: buildIdentifier(), standalone: app.isPackaged, thirdPartyLicenses: thirdPartyLicensesPath() !== null,
         // Stage B — REQ-WORKSPACE-149 rule 1: home collapsing is a DISPLAY rule, so the renderer needs to know

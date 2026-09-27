@@ -43,7 +43,16 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-09-24**
+## Last reconciled with the code: **2026-09-27**
+
+**The version guard and the reported version (first-release plan §4.1, built 2026-09-27).** `tools/release-guard` is a
+new build-time package — `pnpm release:guard <tag>`, the pre-build guard of REQ-STARTUP-028 over the product version and
+REQ-STARTUP-059's package pins — and `tools/release-naming` gains the release-tag grammar (REQ-STARTUP-027/029). Tools sit
+outside the component view's runtime matrix (`boundaries/ignore` covers `tools/**`), so `module-map.md` names the package
+and no edge moves. In main, `shell.hello`'s version now comes from `main/version.ts`, which reads the application
+manifest beside the bundle, rather than from `app.getVersion()`, which answered Electron's own version for the unpacked
+entry. The **process view** says so in the About paragraph and gains the manifest as a file main reads. No process,
+channel, message kind or state owner changed.
 
 **Product-drawn main-window chrome (`PD-SHELL-003`, built and revised 2026-09-24).** On Windows, Linux and macOS the main
 `BrowserWindow` is frameless with its native menu hidden. The existing title bar now ends in minimize,

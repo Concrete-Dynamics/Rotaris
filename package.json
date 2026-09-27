@@ -73,6 +73,7 @@
     "theme-proof:counterfactual:focus": "node apps/desktop/scripts/theme-proof.mjs --counterfactual=focus",
     "package": "pnpm --filter @rotaris/desktop package",
     "notices": "node tools/notices/generate.mjs",
+    "build-id": "node tools/build-id/write.mjs",
     "check": "pnpm symbols && pnpm typecheck && pnpm lint && pnpm test"
   },
   "devDependencies": {

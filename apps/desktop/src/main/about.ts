@@ -7,11 +7,12 @@ import { join } from 'node:path';
  * `extraResources`), else the source tree's `apps/desktop/resources/`, so the development entry and the
  * packaged binary run one code path (the same rule `sentinel.ts` states for the code-intelligence runtime).
  *
- * **Neither asset is carried by a build yet**, so both readers take their absent branch and the About page shows what
- * the requirements say it shows then: an em dash for Build, and REQ-SHELL-142's caption for the licence bundle. That
- * is the requirement met on the branch that reaches, not a stub. `pnpm notices` (`tools/notices/`, 2026-09-27) now
- * writes the licence bundle to `apps/desktop/resources/` when its validation passes; carrying the two assets into the
- * artifact belongs to the packaging part (ADR-0054, first-release-plan.md §4.4) and changes nothing here when it lands.
+ * Each reader has both branches, and a build decides which one runs. `pnpm build-id` (`tools/build-id/`) writes the build
+ * identifier and `pnpm notices` (`tools/notices/`) the licence bundle into `apps/desktop/resources/`; `pnpm package`
+ * runs both before freezing and `electron-builder.yml` carries both to the root of `process.resourcesPath`
+ * (first-release-plan.md §4.4, 2026-09-27). Where a file is absent — a development package built without notices, or a
+ * source tree nobody has written them into — the About page shows what the requirements say it shows then: an em dash
+ * for Build, and REQ-SHELL-142's caption for the licence bundle. `pnpm settings-proof` measures both branches of both.
  */
 
 export const BUILD_ID_ASSET = 'build-id.txt';

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BUILD_ID_ASSET, THIRD_PARTY_LICENSES_ASSET, buildIdentifier, thirdPartyLicensesPath } from './about.js';
 import { NOTICES_FILE } from '../../../../tools/notices/notices.mjs';
+import { BUILD_ID_FILE } from '../../../../tools/build-id/build-id.mjs';
 
 /**
  * The About page's two bundled assets (REQ-SHELL-140, REQ-SHELL-142), read from `process.resourcesPath` the way a
@@ -34,6 +35,17 @@ describe('REQ-STARTUP-141 / REQ-SHELL-142: the About page opens the file the not
     const bundled = join(resources, NOTICES_FILE);
     writeFileSync(bundled, 'Rotaris — third-party software notices\n');
     expect(thirdPartyLicensesPath()).toBe(bundled);
+  });
+
+  it('names the build identifier\'s asset as the writer does (REQ-SHELL-140, first-release-plan.md §4.4)', () => {
+    expect(BUILD_ID_ASSET).toBe('build-id.txt');
+    expect(BUILD_ID_ASSET).toBe(BUILD_ID_FILE);
+  });
+
+  it('reads back the one line the writer writes: a commit name, `-dirty` when the tree differed', () => {
+    const id = `${'0123456789abcdef'.repeat(2)}01234567-dirty`;
+    writeFileSync(join(resources, BUILD_ID_FILE), `${id}\n`);
+    expect(buildIdentifier()).toBe(id);
   });
 
   it('reads the build identifier from its own asset, and passes over an empty one', () => {

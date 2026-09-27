@@ -15,7 +15,7 @@ export function sessionCommands(
   const { capturing, dialogs, log, mainWindows, notices, pauseWindows, raiseNotice, recoveryFor, relay, runHost, services } = ctx;
   return {
     'session.continue': async (req) => {
-      const r = await runHost.request({ kind: 'session.continue', sessionId: req.sessionId, action: req.action }, millis(10_000));
+      const r = await runHost.request({ kind: 'session.continue', sessionId: req.sessionId, action: req.action, ...(req.withoutPaused === true ? { withoutPaused: true } : {}) }, millis(10_000));
       if (r.kind !== 'session.continued') { if (r.kind === 'refused') raiseNotice('error', r.headline, r.detail); return refusal(r, 'The session could not be continued'); }
       const open = pauseWindows.get(req.sessionId);
       if (open && !open.isDestroyed()) open.close();

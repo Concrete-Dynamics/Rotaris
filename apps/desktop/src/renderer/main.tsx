@@ -329,7 +329,7 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
         ...(edit.ownerId === null ? {} : { ownerId: edit.ownerId }),
       }, 'Todo editing is not ready for this active run yet.')}
     onPause={() => control('pause', {}, 'Pause is unavailable because no active run exists.')}
-    onContinue={() => continueSession('continue')}
+    onContinue={(opts) => continueSession('continue', opts)}
     /* REQ-ORCH-153/154 (ADR-0062): the plan gate's two entries, addressed to the focused session. */
     onPlanEdit={(text) => planEdit(text)}
     onPlanDecision={(decision, changes) => planDecision(decision, changes)}

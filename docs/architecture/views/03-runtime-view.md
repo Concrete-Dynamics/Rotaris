@@ -569,8 +569,12 @@ it resolves the pause (continue → `idle`; double → the limit ×2; cancel →
 `message_limit_reached`) and, for continue/double and for a manually paused session, launches a **continuation
 run** on the same session with no new user row (Part H's route, the previous intent carried over, the
 continuation payload built to REQ-SESSION-115's budgets). **PD-ORCH-005:** where the last run left an iteration open,
-that run resumes it first (§2), and `continueSession`'s `withoutPaused` option declines it instead — clause 6's
-"continue without them"; the engine carries the option, and the Continue action that offers it is the surface's.
+that run resumes it first (§2), and `session.continue`'s `withoutPaused` declines it instead — clause 6's "continue
+without them" (renderer `continueSession(action, {withoutPaused})` → main → run host → `Sessions.continueSession`). The
+Continue action states what it resumes from `SessionRecord.resumable` (`resumableOf`: the open iteration, and its root
+plus every agent of it not in a terminal state — the paused ones after a rest, and the ones a crash not yet recorded
+left, which its record will pause — read from the store as `planGate` is) — the count in the composer strip before the
+continue buttons, and "Continue without them" beside "Continue run" — on a `paused` session only (OQ-71).
 
 ## 6. End
 

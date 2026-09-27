@@ -72,6 +72,13 @@ The input that adapts to run state — start a run, continue a session, or queue
 Steering a live agent is **not** a composer mode. — `REQ-CHAT` overview
 _Avoid_: input box, prompt bar, chat box
 
+**Continue action**:
+On a `paused` session, the composer's "Continue run": it continues the session, and where the last run left an
+iteration open it states how many agents resume (the open iteration's root and every paused agent) and offers
+"Continue without them", which ends those agents `cancelled` and continues as a new iteration. Resuming is the
+default. — `PD-ORCH-005` clause 6, `REQ-MONITOR-125`
+_Avoid_: resume button, restart
+
 **Draft**:
 The one in-progress composer text, persisted per workspace. Distinct from the
 [Library](../engine/src/artifacts/CONTEXT.md)'s **stash**, which is a collection. — `REQ-CHAT-015`

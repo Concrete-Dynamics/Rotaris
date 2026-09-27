@@ -69,7 +69,8 @@ export interface WorkspaceViewProps {
   readonly onEditTodo?: ((edit: TodoEdit) => Promise<{ ok: true; value?: string } | { ok: false; reason: string }>) | undefined;
   /** REQ-MONITOR-123/125: pause the whole run; continue a paused session from the composer. */
   readonly onPause?: (() => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
-  readonly onContinue?: (() => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
+  /** PD-ORCH-005 clause 6: `withoutPaused` continues without the agents the rest left paused; resuming them is the default. */
+  readonly onContinue?: ((opts?: { readonly withoutPaused?: boolean }) => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
   /**
    * REQ-ORCH-153/154 (ADR-0062): the plan gate's two entries. `onPlanEdit` records the user's text and approves
    * nothing; `onPlanDecision` carries one of exactly three answers with the changes `revise` hands to the next
@@ -368,6 +369,14 @@ function SteerDialog({ target, onSteer, onClose }: { target: { id: string; name:
 export function composerPlaceholder(session: SessionRecord | null, localRunActive: boolean, busy = localRunActive): string {
   return composerPlaceholderFor(session !== null, localRunActive, busy);
 }
+/** PD-ORCH-005 clause 6: what declining does, as the tooltip of "Continue without them". */
+export const CONTINUE_WITHOUT_THEM_HINT = 'The agents that would resume end cancelled; the open iteration closes and the session continues in a new one.';
+
+/** PD-ORCH-005 clause 6: the Continue action states how many agents resume — the open iteration's root and every paused agent. */
+export function resumeCountText(agents: number): string {
+  return agents === 1 ? '1 agent resumes' : `${agents} agents resume`;
+}
+
 /** REQ-CHAT-005: the primary action states the mode; `Queue` needs a LOCAL run, not merely a busy session. */
 export function composerAction(session: SessionRecord | null, localRunActive: boolean): 'Queue' | 'Continue run' | 'Start run' {
   if (localRunActive) return 'Queue';
@@ -1010,9 +1019,9 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
     const r = await onPause();
     if (r.ok) setPausePending(true); else setError(r.reason);
   };
-  const continueRun = async () => {
+  const continueRun = async (withoutPaused = false) => {
     if (!onContinue) return;
-    const r = await onContinue();
+    const r = await onContinue(withoutPaused ? { withoutPaused: true } : undefined);
     if (!r.ok) setError(r.reason); else setError(null);
   };
   // REQ-MONITOR-064: the live descendants, by the one rule every agent surface applies.
@@ -1176,6 +1185,8 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
     setPlanCollapsed(false);
   }
   const paused = session !== null && (session.executionStatus === 'paused' || session.executionStatus === 'paused_message_limit' || session.executionStatus === 'awaiting_plan_decision');
+  /** PD-ORCH-005 clause 6: what the Continue action resumes; only a `paused` session offers it. */
+  const resumable = session?.executionStatus === 'paused' ? session.resumable : null;
   /** The send control's accessible name, by composer mode (PD-CHAT-001 revision 2, R-040). Set beside the
     * gate and the pause it reads, so no declaration order can break it again. */
   const sendName = runActive
@@ -1507,8 +1518,16 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onSetMode, onCa
             <DesignButton type="submit" className="btn btn-primary" disabled aria-describedby="plan-gate-hint">Answer the plan first</DesignButton>
           ) : paused && onContinue ? (
             <>
-              <DesignButton type="button" className="btn btn-primary" onClick={() => { void continueRun(); }}>Continue run</DesignButton>
-              <DesignButton type="submit" className="btn btn-secondary" disabled={busy}>Continue with a message</DesignButton>
+              {/* PD-ORCH-005 clause 6: the Continue action states how many agents resume and offers to continue without
+                * them. The count is the strip's own quiet figure, as the agents panel states its count, and it describes
+                * both continues: a message resumes them too. Declining is the Continue action's alone. */}
+              {resumable && <span id="composer-resume-count" className="composer__resume mono" data-testid="composer-resume-count">{resumeCountText(resumable.agents)}</span>}
+              <DesignButton type="button" className="btn btn-primary" onClick={() => { void continueRun(); }} aria-describedby={resumable ? 'composer-resume-count' : undefined}>Continue run</DesignButton>
+              {resumable && (
+                <DesignButton type="button" className="btn btn-ghost" data-testid="composer-continue-without" onClick={() => { void continueRun(true); }}
+                  title={CONTINUE_WITHOUT_THEM_HINT}>Continue without them</DesignButton>
+              )}
+              <DesignButton type="submit" className="btn btn-secondary" disabled={busy} aria-describedby={resumable ? 'composer-resume-count' : undefined}>Continue with a message</DesignButton>
             </>
           ) : (
             /*

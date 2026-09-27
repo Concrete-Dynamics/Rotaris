@@ -134,11 +134,14 @@ export function createSessionActions({ bridge, replica }: SessionActionDeps) {
     void send({ kind: 'session.control', request: { op: 'cancelQuestions', sessionId, args: { requestId } } });
   }
 
-  /** REQ-SESSION-110 / REQ-MONITOR-125: continue the focused session, or resolve its pause. */
-  async function continueSession(action: PauseResolution = 'continue'): Promise<{ ok: true } | { ok: false; reason: string }> {
+  /**
+   * REQ-SESSION-110 / REQ-MONITOR-125: continue the focused session, or resolve its pause. PD-ORCH-005 clause 6: the
+   * agents a rest left paused resume, unless `withoutPaused` asks to continue without them.
+   */
+  async function continueSession(action: PauseResolution = 'continue', opts: { readonly withoutPaused?: boolean } = {}): Promise<{ ok: true } | { ok: false; reason: string }> {
     const sessionId = replica.getState().sessionId;
     if (!sessionId) return { ok: false, reason: 'No session is loaded.' };
-    const r = await send({ kind: 'session.continue', sessionId, action });
+    const r = await send({ kind: 'session.continue', sessionId, action, ...(opts.withoutPaused === true ? { withoutPaused: true } : {}) });
     return r.ok ? { ok: true } : { ok: false, reason: r.detail ?? r.headline };
   }
 

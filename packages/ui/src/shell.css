@@ -408,6 +408,8 @@
 .composer__dock .composer__input:focus-visible { border-color: transparent; outline: none; }
 .composer__strip { display: flex; align-items: center; gap: var(--rt-space-1); min-height: 34px; padding: var(--rt-space-1) var(--rt-space-2); border-top: var(--rt-hairline-width) solid var(--rt-divider); background: var(--rt-chrome); overflow-x: auto; scrollbar-width: none; }
 .composer__strip::-webkit-scrollbar { display: none; }
+/* PD-ORCH-005 clause 6: the Continue action's count, the strip's quiet figure (the agents panel states its count so). */
+.composer__resume { flex: 0 0 auto; font-size: var(--rt-text-2xs); color: var(--rt-text-tertiary); white-space: nowrap; }
 .strip-control { display: inline-flex; align-items: center; flex: none; min-width: 0; }
 .strip-btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--rt-space-1); min-height: 26px; min-width: var(--rt-control-height-compact); padding: 0 var(--rt-space-1); border: 0; border-radius: var(--rt-radius-sm); background: transparent; color: var(--rt-text-secondary); font-family: inherit; font-size: var(--rt-text-xs); font-weight: var(--rt-weight-medium); cursor: pointer; white-space: nowrap; }
 .strip-btn:hover { background: var(--rt-hover); color: var(--rt-text); }

@@ -109,3 +109,17 @@ describe('session.start, driven without a process behind it', () => {
     expect(h.logs.some((l) => l.includes('bound to'))).toBe(true);
   });
 });
+
+describe('session.continue (PD-ORCH-005 clause 6)', () => {
+  const continued = { kind: 'session.continued', sessionId: 'S1', resumed: true, messageLimit: null } as const;
+  it('relays the decline to the run host, and a plain continue without one', async () => {
+    const h = harness(() => ({ kind: 'ack' }), () => continued);
+    const commands = sessionCommands(h.ctx);
+    expect(await commands['session.continue']({ kind: 'session.continue', sessionId: 'S1', action: 'continue', withoutPaused: true }, windowOn('ws-1'))).toEqual({ ok: true, value: { resumed: true, messageLimit: null } });
+    expect(await commands['session.continue']({ kind: 'session.continue', sessionId: 'S1', action: 'continue' }, windowOn('ws-1'))).toEqual({ ok: true, value: { resumed: true, messageLimit: null } });
+    expect(h.hostAsked).toEqual([
+      { kind: 'session.continue', sessionId: 'S1', action: 'continue', withoutPaused: true },
+      { kind: 'session.continue', sessionId: 'S1', action: 'continue' },
+    ]);
+  });
+});

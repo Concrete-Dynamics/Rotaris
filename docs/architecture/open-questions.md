@@ -53,8 +53,9 @@ on 2026-09-27** as recommended by `PD-ORCH-004` revision 2 ([R-058](../product/r
 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3: OQ-67** (how a `paused` agent presents, and whether it is settled
 for display with a session at rest, which four requirements the directive does not name would do), **OQ-68** (whether
 the transcript is drawn from the conversation record, and what of a model exchange the record holds), **OQ-69** (which
-control is a stop and which the final cancel, and what a rest does at the edges the directive does not reach) **and
-OQ-70** (how a resumed iteration carries on where the directive gives the what and not the how), each stating the
+control is a stop and which the final cancel, and what a rest does at the edges the directive does not reach), **OQ-70**
+(how a resumed iteration carries on where the directive gives the what and not the how) **and OQ-71** (what the
+Continue action counts, where it says so, and which continues offer the decline), each stating the
 reading the build proceeds under. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
@@ -3080,6 +3081,38 @@ treat a resumed child.
 iteration that closes without addressing it leaves the message pending? Should a crashed, `interrupted` session offer
 the Continue action, and with it "continue without them"? And should a re-armed session hold its plan gate before the
 resume, after it, or not at all, as built?
+
+**OQ-71 — What does the Continue action count, where does it say so, and which continues offer the decline?** *(`PD-ORCH-005` clause 6; REQ-SHELL-023, REQ-MONITOR-125 and REQ-SESSION-110, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3 under [R-060](../product/requests.md#r-060) and [R-061](../product/requests.md#r-061).)*
+
+Clause 6: "The Continue action SHALL state how many agents will resume, and SHALL offer to continue without them;
+choosing that ends those agents `cancelled`, the open iteration closes as cancelled, and the session continues as a
+new iteration". Clause 4 restores "its root and every `paused` agent". The clause does not say whether the root is one
+of the agents counted, where on the surface the count is stated, or whether the other continue routes offer the
+decline too.
+
+**What the build proceeds under.**
+
+- **The count is every agent that resumes: the root and every unfinished agent of the open iteration.** Clause 4
+  resumes the root with them, and declining ends the root's iteration too. After a rest the unfinished agents are the
+  paused ones; after a crash not yet recorded they are the ones the crash record will pause (clause 8 forbids recording
+  it on a read), so the count does not change when the crash is recorded. A session whose root was the only
+  unfinished agent states "1 agent resumes". The count is read from the store (`SessionRecord.resumable`,
+  `resumableOf`), as the plan gate is, because a session at rest has no process behind it.
+- **Where.** In the composer strip's paused state (REQ-SHELL-023 places the Continue action there; no screen, tab or
+  panel is added): the count as the strip's quiet figure just before the continue buttons, in the mono face at the
+  smallest size and the tertiary text colour, as the agents panel states its own count in the design material. It
+  describes both continues (each carries it as its accessible description), because a continue by message resumes
+  the same agents. "Continue without them" is a ghost button beside "Continue run", with a tooltip saying what
+  declining does.
+- **Which continues offer the decline.** The Continue action only. A continue by message resumes (clause 4: the
+  message goes to the resumed root) and offers no decline; a plan decision resumes as OQ-70 has it. A session a crash
+  left `interrupted` is continued by a message, as today, and states no count (OQ-70's second question stands).
+- **What the decline carries.** `session.continue` gains an optional `withoutPaused`; absent, the Continue action
+  resumes, which clause 6 makes the default.
+
+**What a ruling decides.** Whether the count should name only the paused agents, leaving the root out. Whether the
+decline should also be offered beside "Continue with a message", so a message can start a new iteration over a
+declined one. And whether the design material should draw the Continue action's paused state, which it does not.
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

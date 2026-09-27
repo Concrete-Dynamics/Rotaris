@@ -9,7 +9,7 @@ import { SessionWriter, toTranscriptRow, type CheckpointRecordInput, type Commit
 import type { CheckpointPort, CheckpointPortContext } from './checkpoint-port.js';
 import { EventBus } from './run/event-bus.js';
 import { parseTokenSamples, Run, type AgentTerminals, type ModelLookup, type PermissionPosture, type RunConfig, type RunResult } from './run/run.js';
-import { recordCrash } from './run/crash.js';
+import { iterationAgents, recordCrash } from './run/crash.js';
 import { planSection } from './run/plan-text.js';
 export { planRequestSection, planSection } from './run/plan-text.js';
 import { ResilienceMemory, type CatalogueEntry, type ModelChoice } from './run/resilience.js';
@@ -29,7 +29,7 @@ import { persistAttachments, projectAttachments, readAttachmentBody, validateAtt
 import { artifactOps, type ArtifactOps } from './artifacts/port.js';
 import type { Preflight, PreflightContext } from './preflight.js';
 import { IntentResultSchema, type IntentCategory, type IntentGrant, type IntentStatus } from '@rotaris/contracts';
-import type { PlanDecision, PlanGatePayload } from '@rotaris/contracts';
+import type { PlanDecision, PlanGatePayload, ResumablePayload } from '@rotaris/contracts';
 import { SupervisorRegistry, type LoopClassifier, type SupervisorConfig } from './run/supervisor.js';
 import { meteredBackend, type CountUsage } from './run/metered.js';
 import { Todo, type TodoDocument } from './run/todo.js';
@@ -528,7 +528,20 @@ export function planGateOf(dal: StoreDal, r: SessionRow): PlanGatePayload | null
   return { cycle: row.cycle, openedAt: row.opened_at, plan: row.plan, edited: row.edited, intent: row.intent, todo: row.todo, changes: row.changes };
 }
 
-export function toSessionRecord(r: SessionRow, queued: readonly { id: string; content: string; createdAt: string }[] = [], toolCalls: readonly { tool_name: string; count: number; agents: number }[] = [], planGate: PlanGatePayload | null = null): SessionRecord {
+/**
+ * PD-ORCH-005 clause 6: what the Continue action would resume — the open iteration, with its root and every agent of it
+ * not in a terminal state. After a rest those are the agents it left `paused`; after a crash not yet recorded (clause 8:
+ * reading records nothing) they are the agents the crash record will pause, so the count is the same either way. Read
+ * from the store, so a session at rest states it with no process behind it.
+ */
+export function resumableOf(dal: StoreDal, r: SessionRow): ResumablePayload | null {
+  const open = dal.openIterationOf(asSessionId(r.session_id));
+  if (!open) return null;
+  const unfinished = iterationAgents(dal, asSessionId(r.session_id), open).filter((c) => !isTerminalChildState(c.state)).length;
+  return { iteration: open.iteration, agents: 1 + unfinished };
+}
+
+export function toSessionRecord(r: SessionRow, queued: readonly { id: string; content: string; createdAt: string }[] = [], toolCalls: readonly { tool_name: string; count: number; agents: number }[] = [], planGate: PlanGatePayload | null = null, resumable: ResumablePayload | null = null): SessionRecord {
   return {
     // REQ-MONITOR-085: derived from the live run at every snapshot; a record read from the store alone carries none.
     compression: null,
@@ -565,6 +578,7 @@ export function toSessionRecord(r: SessionRow, queued: readonly { id: string; co
     // PD-ORCH-003: the release outlives the run that took it, so a surface showing the mode reads this to tell
     // an armed `plan` from a released one rather than promising a gate that will not open.
     planReleased: r.plan_released === 1,
+    resumable,
     usageHistory: parseTokenSamples(r.token_samples),
     costLabel: costLabelOf(r.cost, r.cost_qualifier),
     toolCalls: { total: r.tool_calls, agents: Math.max(0, ...toolCalls.map((t) => t.agents)), byTool: toolCalls.map((t) => ({ tool: t.tool_name, count: t.count })) },
@@ -821,7 +835,7 @@ export class Sessions {
     const writer = opened.value;
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const current = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, current)), ...projectSessionTodos(current, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: current.execution_status, updatedAt: current.updated_at } })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
+      readSession: () => { const current = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, current), resumableOf(dal, current)), ...projectSessionTodos(current, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: current.execution_status, updatedAt: current.updated_at } })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
@@ -881,7 +895,7 @@ export class Sessions {
     if (!storedAttachments.ok) return err({ code: 'attachment-invalid', reason: storedAttachments.reason });
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const row = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, row)), ...projectSessionTodos(row, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: row.execution_status, updatedAt: row.updated_at } })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
+      readSession: () => { const row = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, row), resumableOf(dal, row)), ...projectSessionTodos(row, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: row.execution_status, updatedAt: row.updated_at } })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;

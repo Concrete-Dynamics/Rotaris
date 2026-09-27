@@ -45,6 +45,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-27**
 
+**The Continue action states what it resumes and offers to continue without it (`PD-ORCH-005` phase 5, 2026-09-27,
+R-060/R-061).** `SessionRecord.resumable` (`ResumableSchema`: the open iteration and how many agents resume — its root
+and every paused agent) is read from the store by `resumableOf`, as the plan gate is. On a `paused` session the composer
+strip states the count before the continue buttons and offers "Continue without them" beside "Continue run";
+`session.continue` gains an optional `withoutPaused`, carried from the renderer through main and the run host to
+`Sessions.continueSession`. Readings in OQ-71. The **runtime view**'s §5 Continue paragraph and the **state-ownership
+view**'s rest row name the projection; the command's shape changes and no package, edge, process or channel does.
+
 **A continue resumes the open iteration from every agent's record (`PD-ORCH-005` phase 4, 2026-09-27, R-060/R-061).**
 Every continue — a new message, the Continue action, a plan decision — resumes the iteration a rest or a crash left open
 before anything else runs: the same number, root and task (`iterate(openRow)`, `iteration_resumed`, no second

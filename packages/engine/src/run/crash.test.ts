@@ -5,9 +5,10 @@ import { join } from 'node:path';
 import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, type ChatMessage } from '@rotaris/model';
-import type { ApprovalPayload } from '@rotaris/contracts';
+import type { ApprovalPayload, SessionRecord } from '@rotaris/contracts';
 import { RUN_CONFIG_DEFAULTS, Sessions, SessionWriter, type Publisher, type RunConfig, type ToolPort } from '../index.js';
 import { recordCrash } from './crash.js';
+import { resumableOf } from '../sessions.js';
 import { conversationOf } from './record.js';
 import { interruptedResult } from './interruption.js';
 
@@ -101,6 +102,17 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
     expect({ messages: dal.agentMessagesOf(sid, ROOT).length, timeline: dal.timelineOf(sid).length }).toEqual(before);
   });
 
+  it('clause 6 with clause 8: the Continue action counts what a crash left unfinished before the crash is recorded, and the same after', () => {
+    const sid = 'S-count' as SessionId;
+    const writer = created(sid);
+    dieIn(writer, sid);
+    // The root and its three unfinished agents; not the succeeded one, nor another root's.
+    expect(resumableOf(dal, dal.getSession(sid)!)).toEqual({ iteration: 2, agents: 4 });
+    expect(dal.getChild(sid, 'bg_000000c1')!.state).toBe('running');
+    recordCrash(dal, writer, sid, new Set(), () => undefined);
+    expect(resumableOf(dal, dal.getSession(sid)!)).toEqual({ iteration: 2, agents: 4 });
+  });
+
   it('an iteration a rest left open is not a crash\'s: its interruption and its agents are left as they are', () => {
     const sid = 'S-rested' as SessionId;
     const writer = created(sid);
@@ -114,7 +126,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
   });
 
   describe('when it is recorded (Sessions)', () => {
-    function sessionsAs(pid: number) {
+    function sessionsAs(pid: number, publisher: Publisher = NONE) {
       const client = new ScriptedModelClient([]);
       const original = client.stream.bind(client);
       client.stream = (req) => { client.push(answer('Answered.')); return original(req); };
@@ -125,7 +137,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
       });
       return new Sessions({
-        clocks: clock, publisher: NONE, pid, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-dead', isProcessAlive: () => false,
+        clocks: clock, publisher, pid, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-dead', isProcessAlive: () => false,
         model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
         tools: () => port(),
       });
@@ -143,10 +155,13 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       return sid;
     }
 
-    it('clause 8: loading the session records nothing', async () => {
+    it('clause 8: loading the session records nothing, and still states what the Continue action would resume (clause 6)', async () => {
       const sid = await crashed();
-      const viewer = sessionsAs(88);
+      const snapshots: SessionRecord[] = [];
+      const viewer = sessionsAs(88, { increment: () => undefined, snapshot: (p) => { snapshots.push(p.session); } });
       expect(viewer.resume(dal, 'C:/ws', sid).ok).toBe(true);
+      viewer.owner(sid)!.attach();
+      expect(snapshots.at(-1)!.resumable).toEqual({ iteration: 2, agents: 4 });
       expect(dal.getIteration(sid, 2)!.interruption).toBeNull();
       expect(dal.getChild(sid, 'bg_000000c1')!.state).toBe('running');
       expect(dal.getSession(sid)!.pending_approvals).not.toBe('[]');

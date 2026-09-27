@@ -128,3 +128,17 @@ describe('the gestures against the followed session', () => {
     await expect(b.answerQuestions('R1', { q1: { selected_option: 'yes', freeform_text: null } })).resolves.toEqual({ delivered: false });
   });
 });
+
+describe('PD-ORCH-005 clause 6: the Continue action', () => {
+  it('resumes by default: the command carries no decline', async () => {
+    const a = actions([{ ok: true, value: { resumed: true, messageLimit: null } }]);
+    expect(await a.continueSession()).toEqual({ ok: true });
+    expect(a.sent).toEqual([{ kind: 'session.continue', sessionId: 'S1', action: 'continue' }]);
+  });
+
+  it('"continue without them" carries the decline to the run host', async () => {
+    const a = actions([{ ok: true, value: { resumed: true, messageLimit: null } }]);
+    expect(await a.continueSession('continue', { withoutPaused: true })).toEqual({ ok: true });
+    expect(a.sent).toEqual([{ kind: 'session.continue', sessionId: 'S1', action: 'continue', withoutPaused: true }]);
+  });
+});

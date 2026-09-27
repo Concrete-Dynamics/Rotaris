@@ -11,7 +11,7 @@ import { resilientStep, type StepOutcome, type TurnResilience } from './ladder.j
 import { priceRequest, type PricedUsage } from './pricing.js';
 import type { ModelChoice } from './resilience.js';
 import { CompressionRunner, type TurnCompression } from './compression.js';
-import { Conversation } from './conversation.js';
+import { Conversation, type ConversationRecorder } from './conversation.js';
 
 /**
  * The tool loop inside one iteration (REQ-TOOLS-180, REQ-ORCH-146's non-native case): step the model;
@@ -134,6 +134,8 @@ export interface TurnDeps {
    * progress rule and the list of paths a child changed; absent means nobody is listening.
    */
   readonly onToolCompleted?: ((call: PortToolCall, result: PortToolResult) => void) | undefined;
+  /** SPIKE (PD-ORCH-005): observes every message as it joins this agent's conversation. */
+  readonly recorder?: ConversationRecorder | undefined;
 }
 
 export interface SteeringPrompt {
@@ -162,10 +164,12 @@ function injectSteering(deps: TurnDeps, conversation: Conversation): number {
   return pending.length;
 }
 
-export async function runTurn(deps: TurnDeps, task: string, history: readonly ChatMessage[], signal: AbortSignal, initialContent?: readonly ContentPart[]): Promise<TurnOutcome> {
+export async function runTurn(deps: TurnDeps, task: string | null, history: readonly ChatMessage[], signal: AbortSignal, initialContent?: readonly ContentPart[]): Promise<TurnOutcome> {
   const { writer, owner, tools, clocks } = deps;
   // ADR-0060: the history is an object whose array is SWAPPED by a compression, never spliced under a call in flight.
-  const conv = new Conversation([...history, { role: 'user', content: initialContent ?? [{ kind: 'text', text: task }] }]);
+  // SPIKE (PD-ORCH-005): a null task continues the history as it stands — the resume of a recorded conversation.
+  const conv = new Conversation(history, deps.recorder);
+  if (task !== null) conv.push({ role: 'user', content: initialContent ?? [{ kind: 'text', text: task }] });
   // ADR-0034: the MCP surface is demanded before the listing and the prompt are read — one resolution feeds both.
   if (tools?.ready) await tools.ready();
   const specs = tools?.specs() ?? [];

@@ -14,11 +14,17 @@ import type { ChatMessage } from '@rotaris/model';
  * survive compression character for character, and after one compression it is no longer derivable from
  * position alone in any way this class would rather rely on.
  */
+/** SPIKE (PD-ORCH-005): what observes a conversation as it changes. */
+export interface ConversationRecorder {
+  appended(message: ChatMessage): void;
+  replaced(messages: readonly ChatMessage[]): void;
+}
+
 export class Conversation {
   private entries: ChatMessage[];
-  private readonly original: ChatMessage | null;
+  private original: ChatMessage | null;
 
-  constructor(initial: readonly ChatMessage[]) {
+  constructor(initial: readonly ChatMessage[], private readonly recorder?: ConversationRecorder) {
     this.entries = [...initial];
     this.original = this.entries.find((m) => m.role === 'user') ?? null;
   }
@@ -29,10 +35,13 @@ export class Conversation {
   }
   push(message: ChatMessage): void {
     this.entries.push(message);
+    if (this.original === null && message.role === 'user') this.original = message;
+    this.recorder?.appended(message);
   }
   /** ADR-0060 decision 1: a NEW array, so an in-flight request keeps the old one. */
   replace(messages: readonly ChatMessage[]): void {
     this.entries = [...messages];
+    this.recorder?.replaced(this.entries);
   }
   get length(): number {
     return this.entries.length;

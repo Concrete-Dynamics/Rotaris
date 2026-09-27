@@ -1,0 +1,15 @@
+{
+  "name": "@rotaris/release-guard",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "The pre-build guard of REQ-STARTUP-028: the tag's version against every place the build declares the product version (REQ-STARTUP-158), and the setup manifest's pins against the built-in default configuration's npx/uvx launches (REQ-STARTUP-059) — one stage, exit 1 on either (REQ-STARTUP-149). Run as `pnpm release:guard <tag>` (ADR-0054, first-release-plan.md §4.1).",
+  "dependencies": {
+    "@rotaris/config": "workspace:*",
+    "@rotaris/release-naming": "workspace:*",
+    "vite": "^8.2.2"
+  },
+  "devDependencies": {
+    "@rotaris/platform": "workspace:*"
+  }
+}

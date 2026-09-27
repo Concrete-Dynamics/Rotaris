@@ -5,7 +5,9 @@
  * denial and a rename, one stored secret, and nine launches against one scratch profile:
  *
  *   1. discovery   — the prompt's MCP section character-exact and equal to the callable set; the inert grant reported
- *                    once; gamma's unknown key warned once per load; the discovery file byte-identical after the run.
+ *                    once; gamma's unknown key warned once per load; the discovery file byte-identical after the run;
+ *                    every handshake tells the server `rotaris` at the version `apps/desktop/package.json` declares
+ *                    (REQ-STARTUP-158 — the client carried a literal `0.1.0` until 2026-09-27).
  *   2. call        — `echo` end to end (tool.start before tool.finish, the result text, the row succeeded); `slow` beyond
  *                    `request_timeout: 2` fails naming the server and the connection serves the following `echo` (003/069).
  *   3. one process — two children calling alpha concurrently share one connection and one fixture process; a third
@@ -148,7 +150,9 @@ const results = {};
 {
   writeFileSync(join(workspace, '.mcp.json'), MCP_JSON);
   const before = sha(join(workspace, '.mcp.json'));
-  const r = launch('discovery', { ROTARIS_CAPTURE_PROMPT: 'call echo on alpha', ROTARIS_SCRIPT: 'mcp:alpha.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '9000' });
+  const clients = join(output, 'alpha.clients.jsonl');
+  writeFileSync(clients, '');
+  const r = launch('discovery', { ROTARIS_CAPTURE_PROMPT: 'call echo on alpha', ROTARIS_SCRIPT: 'mcp:alpha.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '9000' }, { files: { global: globalYaml({ alphaFlags: ['--client-file', clients] }) } });
   if (sha(join(workspace, '.mcp.json')) !== before) throw new Error('the discovery file changed across the load (REQ-MCP-027)');
   const surface = lines(r.log, /mcp: surface for orchestrator/);
   if (surface.length === 0) throw new Error(`no surface line:\n${r.log}`);
@@ -176,7 +180,11 @@ const results = {};
   if (s.execution_status !== 'completed') throw new Error(`the run ended ${s.execution_status}`);
   if (echo.length !== 1 || echo[0].status !== 'ok' || !String(echo[0].entry.result ?? '').includes('hello from the scripted agent')) throw new Error(`echo did not succeed: ${JSON.stringify(echo)}`);
   const env = lines(r.log, /stderr/);
-  results.discovery = { section, callable, inertReports: inert.length, loads, unknownKeyWarnings: weird, discoveryMs: Object.fromEntries(disc.map((l) => [/discovery of '(\w+)'/.exec(l)[1], Number(/in (\d+) ms/.exec(l)?.[1])])), fileByteIdentical: true, stderrLines: env.length };
+  // REQ-STARTUP-158: the run host's handshakes (the discovery and the session's connection) name the declared version.
+  const declared = JSON.parse(readFileSync(join(app, 'package.json'), 'utf8')).version;
+  const told = readFileSync(clients, 'utf8').split('\n').filter((l) => l.trim() !== '').map((l) => JSON.parse(l));
+  if (told.length < 2 || told.some((c) => c?.name !== 'rotaris' || c?.version !== declared)) throw new Error(`the MCP handshakes did not name rotaris ${declared} (REQ-STARTUP-158): ${JSON.stringify(told)}`);
+  results.discovery = { section, callable, inertReports: inert.length, loads, unknownKeyWarnings: weird, discoveryMs: Object.fromEntries(disc.map((l) => [/discovery of '(\w+)'/.exec(l)[1], Number(/in (\d+) ms/.exec(l)?.[1])])), fileByteIdentical: true, stderrLines: env.length, clientInfo: told };
 }
 
 // ---- 2. A call end to end, and the allowance ------------------------------------------------------------------

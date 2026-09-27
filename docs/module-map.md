@@ -38,7 +38,7 @@ Listed foundation-first, which is also dependency order. "Root" is the compositi
 |---|---|---|---|---|
 | `kernel` | `Result`, ids, clocks and time, redaction, similarity, the glob dialect (`glob.ts`, shared by the `glob` tool and a delegated child's write scope), exact decimal money (`money.ts`, the one place arithmetic on an amount lives — ADR-0031, `rotaris/money-only-in-money-ts`), and the re-export of the generated requirement symbols (`src/generated/requirements.ts` — gitignored, written by `pnpm symbols`; never edited by hand) | `result.ts`, `time.ts`, `clock/`, `redaction.ts` | every root | — |
 | `contracts` | every cross-boundary type: channels, commands, the child process protocol, control, requirements, tools, hooks, notices, theme data, roles | `commands.ts`, `channels.ts`, `process-protocol.ts` | every root | — |
-| `platform` | OS facts and side effects that are not `electron`: directories, the YAML document model, single-instance, machine id, liveness, clocks, the preference store | `dirs.ts`, `preferences.ts`, `document.ts`, `instance.ts` | main, run-host, workspace-service | — |
+| `platform` | OS facts and side effects that are not `electron`: directories, the YAML document model, single-instance, machine id, liveness, clocks, the preference store, the installed product version | `dirs.ts`, `preferences.ts`, `document.ts`, `instance.ts`, `version.ts` | main, run-host, workspace-service | — |
 | `store` | the SQLite schema and its migrations, the DAL, open/lock/rings, backup and restore primitives, delivery and improvement tables | `schema.ts` (append a `Migration`, never edit a shipped one), `dal.ts`, `open.ts` | workspace-service (migrate), run-host (read/write) | [`store/CONTEXT.md`](../packages/store/CONTEXT.md) |
 | `config` | the three-tier layered configuration, its loader, validators and comment-preserving writers; portable skills; instruction-file discovery and merge; project initialization | `load.ts`, `merge.ts`, `tiers.ts`, `writers.ts`, `sections/`, `skills/`, `instructions.ts`, `init/` | run-host (Tier B), workspace-service (Tier A), main (init) | [`config/CONTEXT.md`](../packages/config/CONTEXT.md) |
 | `model` | the model port and its clients — the default backend, the AI-SDK client, the scripted client, reasoning, reported cost | `ports.ts`, `default-backend.ts`, `ai-sdk-client.ts`, `scripted-client.ts` | run-host | — |
@@ -53,8 +53,10 @@ Listed foundation-first, which is also dependency order. "Root" is the compositi
 | `ui` | every drawn surface: the shell and views, the dialogs, the design system, the transcript engine, the terminal display, Markdown, the slash catalogue, the command vocabulary, Settings, the Library | `AppShell.tsx`, `design-system/`, `transcript/`, `settings/`, `commands/` | renderer | [`ui/CONTEXT.md`](../packages/ui/CONTEXT.md) |
 
 `tools/` holds build-time and lint-time code, not product code: `tools/eslint-rules/` (`rotaris/no-bare-timers`
-and its siblings), `tools/symbol-artifact/` (the generator behind `pnpm symbols`), `tools/release-naming/`,
-and the standalone checks `pnpm lint` runs before ESLint.
+and its siblings), `tools/symbol-artifact/` (the generator behind `pnpm symbols`), `tools/release-naming/` (the
+artifact names and the release-tag grammar), `tools/release-guard/` (`pnpm release:guard <tag>`, the pre-build version
+and package-pin guard; `cli.mjs` boots `src/guard.ts` through Vite's module runner because it reads `@rotaris/config`'s
+source), and the standalone checks `pnpm lint` runs before ESLint.
 
 ## Where a thing is not where you would guess
 

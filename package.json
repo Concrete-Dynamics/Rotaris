@@ -1,7 +1,6 @@
 {
   "name": "rotaris-crw",
   "private": true,
-  "version": "0.0.0",
   "description": "Rotaris — one Electron desktop application. Clean-room rewrite.",
   "license": "UNLICENSED",
   "type": "module",
@@ -73,6 +72,7 @@
     "theme-proof:counterfactual:text": "node apps/desktop/scripts/theme-proof.mjs --counterfactual=text",
     "theme-proof:counterfactual:focus": "node apps/desktop/scripts/theme-proof.mjs --counterfactual=focus",
     "package": "pnpm --filter @rotaris/desktop package",
+    "release:guard": "node tools/release-guard/cli.mjs",
     "check": "pnpm symbols && pnpm typecheck && pnpm lint && pnpm test"
   },
   "devDependencies": {

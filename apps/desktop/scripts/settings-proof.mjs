@@ -125,6 +125,10 @@ const noWorkspace = launch('no-workspace', null, local, preferences, {
   ROTARIS_CAPTURE_AFTER_MS: '3600',
 });
 const aboutRows = Object.fromEntries(rows(noWorkspace.probes, '[data-testid="about-row"]').map((r) => [r.data['data-name'], r.data['data-value']]));
+// REQ-STARTUP-158 / REQ-STARTUP-007: the version the running app reports is the one place a release declares it
+// (`tools/release-guard`), never Electron's own — this unpacked build read "v44.1.1" until `main/version.ts`.
+const declaredVersion = JSON.parse(readFileSync(join(app, 'package.json'), 'utf8')).version;
+if (aboutRows.Version !== `v${declaredVersion}`) throw new Error(`the Version row read "${aboutRows.Version}", not the declared v${declaredVersion}`);
 if (!/^v\d/.test(aboutRows.Version ?? '')) throw new Error(`the Version row did not carry a version: ${JSON.stringify(aboutRows)}`);
 // REQ-SHELL-140: no build asset ships, so the row is the em dash rather than an invented identifier.
 if (aboutRows.Build !== '—') throw new Error(`the Build row was "${aboutRows.Build}", not the em dash`);

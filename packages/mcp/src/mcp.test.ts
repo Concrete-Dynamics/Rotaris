@@ -18,6 +18,8 @@ const dir = mkdtempSync(join(tmpdir(), 'rotaris-mcp-'));
 const lines: string[] = [];
 const log: McpLog = { info: (m) => lines.push(`I ${m}`), warn: (m) => lines.push(`W ${m}`), debug: (m) => lines.push(`D ${m}`) };
 const env = { ...process.env as Record<string, string> };
+/** What a composition root hands down as the product version (REQ-STARTUP-158); distinctive, so a literal cannot pass for it. */
+const clientVersion = '9.8.7rc6';
 const fixture = (...extra: string[]): StdioDescription => ({ transport: 'stdio', command: process.execPath, args: [FIXTURE, ...extra], env, cwd: dir });
 const pidLines = (file: string) => readFileSync(file, 'utf8').split('\n').filter((l) => l.trim() !== '');
 /**
@@ -48,7 +50,7 @@ describe('ToolDiscovery (REQ-MCP-046/047/048/051/052/053)', () => {
   it('interrogates once per identity, memoises per process, and a reload interrogates afresh', async () => {
     const pids = join(dir, 'disc.pids');
     writeFileSync(pids, '');
-    const d = new ToolDiscovery({ clocks, log });
+    const d = new ToolDiscovery({ clocks, log, clientVersion });
     const req = { name: 'alpha', description: fixture('--pid-file', pids), workspaceRoot: dir };
     const first = await d.discover(req);
     expect(first.failed).toBe(false);
@@ -65,7 +67,7 @@ describe('ToolDiscovery (REQ-MCP-046/047/048/051/052/053)', () => {
     expect(pidLines(pids)).toHaveLength(3);
   });
   it('never raises: a command that cannot start is the empty list, one warning per identity, the failure remembered', async () => {
-    const d = new ToolDiscovery({ clocks, log });
+    const d = new ToolDiscovery({ clocks, log, clientVersion });
     const req = { name: 'ghost', description: { ...fixture(), command: join(dir, 'no-such-server.exe') }, workspaceRoot: dir };
     const before = lines.filter((l) => l.startsWith('W mcp ghost')).length;
     const r = await d.discover(req);
@@ -76,7 +78,7 @@ describe('ToolDiscovery (REQ-MCP-046/047/048/051/052/053)', () => {
     expect(d.failedFor(req)).toBe(true);
   });
   it('returns the empty list at the outer bound when the server never answers initialize (REQ-MCP-053)', async () => {
-    const d = new ToolDiscovery({ clocks, log, timeoutMs: millis(2_000), boundMs: millis(2_500) });
+    const d = new ToolDiscovery({ clocks, log, clientVersion, timeoutMs: millis(2_000), boundMs: millis(2_500) });
     const started = clocks.monotonic.now();
     const r = await d.discover({ name: 'mute', description: fixture('--never-init'), workspaceRoot: dir });
     const took = clocks.monotonic.now() - started;
@@ -85,7 +87,7 @@ describe('ToolDiscovery (REQ-MCP-046/047/048/051/052/053)', () => {
     await d.closeAll();
   });
   it('drops entries with an empty or non-string name (REQ-MCP-052) — the fixture reports none, so the count is exact', async () => {
-    const d = new ToolDiscovery({ clocks, log });
+    const d = new ToolDiscovery({ clocks, log, clientVersion });
     const r = await d.discover({ name: 'alpha', description: fixture(), workspaceRoot: join(dir, 'x') });
     expect(r.tools.every((t) => typeof t.name === 'string' && t.name !== '' && typeof t.description === 'string')).toBe(true);
     expect(r.tools.find((t) => t.name === 'fail')!.description).toBe('');
@@ -96,7 +98,7 @@ describe('HealthProbe (REQ-MCP-054)', () => {
   it('contacts the server every time and touches no cache', async () => {
     const pids = join(dir, 'probe.pids');
     writeFileSync(pids, '');
-    const p = new HealthProbe({ clocks, log });
+    const p = new HealthProbe({ clocks, log, clientVersion });
     const one = await p.probe('alpha', fixture('--pid-file', pids));
     const two = await p.probe('alpha', fixture('--pid-file', pids));
     expect(one.state).toBe('healthy');
@@ -105,7 +107,7 @@ describe('HealthProbe (REQ-MCP-054)', () => {
     expect(pidLines(pids)).toHaveLength(2);
   });
   it('is unreachable with detail for a missing command and within its budget for a mute server', async () => {
-    const p = new HealthProbe({ clocks, log, budgetMs: millis(1_500) });
+    const p = new HealthProbe({ clocks, log, clientVersion, budgetMs: millis(1_500) });
     const missing = await p.probe('ghost', { ...fixture(), command: join(dir, 'nope.exe') });
     expect(missing.state).toBe('unreachable');
     const started = clocks.monotonic.now();
@@ -115,11 +117,26 @@ describe('HealthProbe (REQ-MCP-054)', () => {
   });
 });
 
+describe('who the client says it is — REQ-STARTUP-158', () => {
+  it('every path tells the server the product version it was handed, under the product\'s name', async () => {
+    const clients = join(dir, 'clients.jsonl');
+    writeFileSync(clients, '');
+    const desc = fixture('--client-file', clients);
+    await new ToolDiscovery({ clocks, log, clientVersion }).discover({ name: 'who', description: desc, workspaceRoot: join(dir, 'who') });
+    expect((await new HealthProbe({ clocks, log, clientVersion }).probe('who', desc)).state).toBe('healthy');
+    const s = new SessionConnections({ clocks, log, clientVersion, workspaceRoot: dir, unreachable: () => undefined });
+    registries.push(s);
+    await s.connect('who', desc);
+    const told = readFileSync(clients, 'utf8').split('\n').filter((l) => l.trim() !== '').map((l) => JSON.parse(l) as unknown);
+    expect(told).toEqual([0, 1, 2].map(() => ({ name: 'rotaris', version: '9.8.7rc6' })));
+  });
+});
+
 describe('SessionConnections (REQ-MCP-066/067/068/069/070)', () => {
   it('two concurrent first demands share one connection and one process; three interleaved calls each get their own answer', async () => {
     const pids = join(dir, 'sess.pids');
     writeFileSync(pids, '');
-    const s = new SessionConnections({ clocks, log, workspaceRoot: dir, unreachable: () => undefined });
+    const s = new SessionConnections({ clocks, log, clientVersion, workspaceRoot: dir, unreachable: () => undefined });
     registries.push(s);
     const desc = fixture('--pid-file', pids);
     const [a, b] = await Promise.all([s.connect('alpha', desc), s.connect('alpha', desc)]);
@@ -136,7 +153,7 @@ describe('SessionConnections (REQ-MCP-066/067/068/069/070)', () => {
     expect(pidLines(pids)).toHaveLength(1);
   });
   it('an exhausted allowance fails the call, leaves the connection open, and a later call succeeds (REQ-MCP-003)', async () => {
-    const s = new SessionConnections({ clocks, log, workspaceRoot: dir, unreachable: () => undefined });
+    const s = new SessionConnections({ clocks, log, clientVersion, workspaceRoot: dir, unreachable: () => undefined });
     registries.push(s);
     const desc = fixture();
     await expect(s.call('alpha', desc, 'slow', { ms: 2_000 }, millis(300))).rejects.toThrow();
@@ -149,7 +166,7 @@ describe('SessionConnections (REQ-MCP-066/067/068/069/070)', () => {
     const pids = join(dir, 'crash.pids');
     writeFileSync(pids, '');
     const warned: string[] = [];
-    const s = new SessionConnections({ clocks, log, workspaceRoot: dir, unreachable: (n, d) => warned.push(`${n}: ${d}`) });
+    const s = new SessionConnections({ clocks, log, clientVersion, workspaceRoot: dir, unreachable: (n, d) => warned.push(`${n}: ${d}`) });
     registries.push(s);
     const desc = fixture('--crash-after', '50', '--pid-file', pids);
     await expect(s.call('alpha', desc, 'slow', { ms: 1_000 }, millis(5_000))).rejects.toThrow();
@@ -159,7 +176,7 @@ describe('SessionConnections (REQ-MCP-066/067/068/069/070)', () => {
     expect(pidLines(pids)).toHaveLength(2);
   });
   it('a changed list is re-read and announced (REQ-MCP-060)', async () => {
-    const s = new SessionConnections({ clocks, log, workspaceRoot: dir, unreachable: () => undefined });
+    const s = new SessionConnections({ clocks, log, clientVersion, workspaceRoot: dir, unreachable: () => undefined });
     registries.push(s);
     const c = await s.connect('alpha', fixture('--rename-after', '100'));
     const seen = await new Promise<readonly string[]>((resolve) => { c.onToolsChanged((tools) => resolve(tools.map((t) => t.name))); });
@@ -168,7 +185,7 @@ describe('SessionConnections (REQ-MCP-066/067/068/069/070)', () => {
     expect(seen).not.toContain('extra');
   });
   it('the lsp name runs lsp_init with the root before its tools are offered (REQ-MCP-070)', async () => {
-    const s = new SessionConnections({ clocks, log, workspaceRoot: dir, unreachable: () => undefined });
+    const s = new SessionConnections({ clocks, log, clientVersion, workspaceRoot: dir, unreachable: () => undefined });
     registries.push(s);
     const c = await s.connect('lsp', fixture());
     expect(c.hook).toEqual({ kind: 'lsp_init', outcome: 'ok', detail: '' });
@@ -176,7 +193,7 @@ describe('SessionConnections (REQ-MCP-066/067/068/069/070)', () => {
     expect(other.hook.kind).toBe('none');
   });
   it('closeAll is idempotent, leaves no process, and a later request fails naming the server', async () => {
-    const s = new SessionConnections({ clocks, log, workspaceRoot: dir, unreachable: () => undefined });
+    const s = new SessionConnections({ clocks, log, clientVersion, workspaceRoot: dir, unreachable: () => undefined });
     const c = await s.connect('alpha', fixture());
     const pid = c.pid();
     expect(pid).not.toBeNull();
@@ -228,7 +245,7 @@ describe('OwnedStdioTransport (ADR-0033, ADR-0007)', () => {
     // the child through the parent environment the run host supplies (OQ-22's reading; the merge of Parts R and S found
     // the child spawned with the map alone, so `npx` never had a PATH).
     const withPath = { ...env, PATH: `${dir};${env['PATH'] ?? ''}` };
-    const s = new SessionConnections({ clocks, log, workspaceRoot: dir, unreachable: () => undefined, parentEnv: withPath });
+    const s = new SessionConnections({ clocks, log, clientVersion, workspaceRoot: dir, unreachable: () => undefined, parentEnv: withPath });
     registries.push(s);
     const c = await s.connect('runner', { transport: 'stdio', command: 'runner', args: [FIXTURE, '--stderr', 'via cmd'], env: {}, cwd: dir });
     expect(c.tools().map((t) => t.name)).toContain('echo');

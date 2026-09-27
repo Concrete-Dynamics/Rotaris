@@ -1,5 +1,9 @@
+import { spawnSync } from 'node:child_process';
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { artifactName, releaseArtifacts, UnknownArtifactKindError } from './index.js';
+import { artifactName, parseReleaseTag, releaseArtifacts, UnknownArtifactKindError } from './index.js';
+
+const APP = resolve(import.meta.dirname, '..', '..', '..', 'apps', 'desktop');
 
 describe('release naming — REQ-STARTUP-031', () => {
   it('produces the four exact shapes', () => {
@@ -20,5 +24,21 @@ describe('release naming — REQ-STARTUP-031', () => {
       'Rotaris-0.1.0-macos-arm64.dmg',
       'Rotaris-0.1.0-linux-x86_64.AppImage',
     ]);
+  });
+});
+
+describe('loaded the way the packaging hook loads it — REQ-STARTUP-031 at afterPack', () => {
+  /**
+   * `build-hooks.cjs`'s `checkNaming` imports `src/index.ts` with plain Node — no bundler, no loader — and a failure
+   * there refuses the installer build. Vitest's own resolution would hide a module Node cannot load, so the check runs
+   * in a child `node`, through the hook's own export, exactly as `afterPack` calls it.
+   */
+  it('the hook\'s naming check answers the setup name from this module, for a stable and a prerelease version', () => {
+    const script = `require(${JSON.stringify(join(APP, 'scripts', 'build-hooks.cjs'))}).checkNaming(process.argv[1]).then((r) => process.stdout.write(r.expected), (e) => { process.stderr.write(String(e && e.stack || e)); process.exit(1); })`;
+    for (const version of ['0.1.0', parseReleaseTag('v0.1.0rc1').version]) {
+      const r = spawnSync(process.execPath, ['-e', script, version], { cwd: APP, encoding: 'utf8', timeout: 60_000 });
+      expect(r.status, r.stderr).toBe(0);
+      expect(r.stdout).toBe(artifactName(version, 'setup'));
+    }
   });
 });

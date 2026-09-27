@@ -68,6 +68,18 @@ reach the built app: `ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE`, read by the run hos
 files, which it had never listed, and the capture file. No package, edge, process, channel, message kind or owner
 of state changed.
 
+**The version guard and the reported version (first-release plan §4.1, built 2026-09-27).** `tools/release-guard` is a
+new build-time package — `pnpm release:guard <tag>`, the pre-build guard of REQ-STARTUP-028 over the product version and
+REQ-STARTUP-059's package pins — and `tools/release-naming` gains the release-tag grammar (REQ-STARTUP-027/029). Tools sit
+outside the component view's runtime matrix (`boundaries/ignore` covers `tools/**`), so `module-map.md` names the package
+and no edge moves. In main, `shell.hello`'s version now comes from `main/version.ts`, which reads the application
+manifest beside the bundle, rather than from `app.getVersion()`, which answered Electron's own version for the unpacked
+entry. The gate round that reviewed it moved the reader into `@rotaris/platform` (`version.ts`, an existing edge for
+both roots) because the **run host** reads the same file: the MCP client's `clientInfo.version`, a literal `0.1.0`
+until then, is now the declared version on all three connection paths. The **process view** says so in the About
+paragraph and gains the manifest as a file main and the run host read; the **runtime view**'s MCP paragraph names who
+the client says it is. No process, channel, message kind or state owner changed.
+
 **Product-drawn main-window chrome (`PD-SHELL-003`, built and revised 2026-09-24).** On Windows, Linux and macOS the main
 `BrowserWindow` is frameless with its native menu hidden. The existing title bar now ends in minimize,
 maximize/restore and guarded close controls; four renderer commands reach the sending window in main.

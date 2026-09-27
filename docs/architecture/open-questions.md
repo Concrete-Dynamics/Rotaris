@@ -47,7 +47,10 @@ amendment (R-049), and OQ-62's configured-rate branch with it; OQ-62's discovery
 2026-09-21 by building `PD-WORKSPACE-002`'s per-file switches: OQ-64** (whether an instruction override
 suppresses its base when the override is itself switched off — a third state REQ-WORKSPACE-042's "given
 both exist" has no word for). **OQ-64 was ruled on 2026-09-27** as built (R-052), together with ESC-37,
-ESC-38 and ESC-39. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+ESC-38 and ESC-39. **Two more were raised on 2026-09-27 by building the version guard** (first-release plan §4.1):
+**OQ-66** (whether a default entry shipped switched off counts as one the default configuration launches, which
+REQ-STARTUP-059 and REQ-MCP-095 read one way and REQ-STARTUP-064 the other) **and OQ-67** (whether a release tag's
+numbers are canonical decimals), each with the reading the guard is built under. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -2836,6 +2839,42 @@ handed to the engine, which owns neither.
 **What a ruling decides.** Whether an analysis reads what injection may not; and, if not, whether the
 retrospective should say in its own output that a file was present and withheld, so a user reading a thin
 retrospective can tell it apart from an empty workspace.
+
+**OQ-66 — Does a default entry shipped switched off count as one the default configuration "launches"?** *(REQ-STARTUP-059 with REQ-MCP-095 and REQ-STARTUP-064; REQ-MCP-010, REQ-CONFIG-181. Raised 2026-09-27 by building the version guard, first-release plan §4.1.)*
+
+REQ-STARTUP-059 has the setup manifest pin "every package that the built-in default tool-server configuration of that
+same build launches through `npx` or `uvx`". The one such default is `browser`, `npx -y @playwright/mcp@0.0.80
+--headless`, and it ships `enabled: false`. Two requirements read the word "launches" in opposite ways against it.
+REQ-STARTUP-064 gives an `enabled: false` entry no warm-up step "because nothing will ever launch it". On that reading
+the switched-off default launches nothing, so the pin guard has nothing to check on this build and passes with no
+manifest at all. REQ-MCP-095 instead requires the release-pinned setup manifest to carry the `browser` package's
+version string character for character, with the build checking the two against each other, whatever the entry's
+switch says.
+
+**What the build proceeds under.** The entry counts. The shipped `enabled: false` is the entry's default state and not
+its launch, a user who switches it on launches exactly that specification, and REQ-MCP-095 already requires this pin.
+The stricter reading can only stop a release the looser one would let through, never the reverse.
+`tools/release-guard/src/pins.ts` (`defaultLaunches`) says so in place.
+
+**What a ruling decides.** Whether REQ-STARTUP-059's pin agreement covers every default entry whose launch goes through
+a runner, or only those enabled by default. If the second, the guard stops checking `browser` under REQ-STARTUP-059,
+and REQ-MCP-095's own cross-check still requires the pin.
+
+**OQ-67 — Are the numbers in a release tag canonical decimals?** *(REQ-STARTUP-027, REQ-STARTUP-029, REQ-STARTUP-031, REQ-STARTUP-109. Raised 2026-09-27 by building the version guard, first-release plan §4.1.)*
+
+REQ-STARTUP-027 fixes the shape `v<major>.<minor>.<patch>` with an optional PEP 440 suffix, and its counter-examples
+say nothing about leading zeros. PEP 440 permits them and normalises them away, so `v01.2.3` would be the same release
+as `v1.2.3`. This product never normalises the text: the guard compares the tag's version with the declared one as text,
+and every artifact name renders it as text (REQ-STARTUP-031). A permitted `v01.2.3` would therefore be a second spelling
+of one numeric tuple, carrying a second set of artifact names. REQ-STARTUP-109 would order the two as equal.
+
+**What the build proceeds under.** The numbers are canonical decimals, with no leading zero, in all three places and
+in the suffix number. `v01.2.3` and `v1.2.3rc01` are refused with REQ-STARTUP-027's message (`tools/release-naming`,
+`parseReleaseTag`). `v0.1.0` and every tag the plan names parse unchanged.
+
+**What a ruling decides.** Whether a leading zero is outside the grammar, which is the reading built, or inside it and
+normalised. If it is normalised, the grammar must also say which spelling the artifact names and the declared version
+carry.
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

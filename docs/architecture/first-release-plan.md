@@ -23,7 +23,7 @@ record already decides, and every ruling it needs is named as the owner's rather
 | Skills — ESC-37, ESC-38, ESC-39 | **ruled 2026-09-27** as recommended ([R-052](../product/requests.md#r-052)); amended | §2 |
 | Workspace-context injection, REQ-WORKSPACE-041..050 | built 2026-09-22 under `PD-WORKSPACE-002` | §3 |
 | Injection — REQ-WORKSPACE-049's latency bound, a built-app proof | **owed**; OQ-64 **ruled 2026-09-27** | §3 |
-| The Windows release pipeline, REQ-STARTUP-027..038, 141..143, 156, 158, 167, 168 | the installer built once (ADR-0054, 2026-09-04); nothing else | §4 |
+| The Windows release pipeline, REQ-STARTUP-027..038, 141..143, 156, 158, 167, 168 | the installer built once (ADR-0054, 2026-09-04); **the version guard built 2026-09-27** (§4.1), and the setup manifest it checks is owed | §4 |
 | The updater, REQ-STARTUP-107..124 | **not built** — no module in `apps/desktop/src/main/`; **in the first release**, ruled 2026-09-27 | §4.6 |
 
 **Deferred by "thats it".** Each item stays owed where the record already carries it:
@@ -157,6 +157,28 @@ versions disagree: `package.json` is `0.0.0`, `apps/desktop/package.json` is `0.
 
 The guard is a script under `tools/` and is unit-tested beside itself.
 
+*Built 2026-09-27; the first execution is reported in ADR-0054 ("One version and the pre-build guard") and in
+`first-executions.md`.* `pnpm release:guard <tag>` (`tools/release-guard`) is the guard. The tag grammar it parses
+lives in `tools/release-naming`. What the build decided and found:
+
+- **One place declares the version: `apps/desktop/package.json`, at `0.1.0`.** It is the only version an artifact
+  carries, and the running app now reports it too, where it used to report Electron's own `44.1.1` from the unpacked
+  entry (repaired). The workspace root's `version` is removed. `tools/release-naming` and the other `@rotaris/*`
+  packages keep `0.0.0`: they are never packed as packages, so their `0.0.0` is not a product version. A prerelease
+  tag needs the declaration to match its text exactly, for example `0.1.0rc1` for step 5's `v0.1.0rc1`.
+- **The setup manifest (`REQ-STARTUP-058`) does not exist, and no step of this plan builds it.** The pin half reads it,
+  so on this tree `pnpm release:guard v0.1.0` exits 1 on that half alone, naming `@playwright/mcp` `0.0.80`, both files
+  and the missing manifest. §5's first check therefore cannot pass until the manifest is built. §4.3 needs the same
+  file, because `REQ-STARTUP-142`'s "Tools provisioned after installation" section is generated from it and
+  `REQ-STARTUP-143` fails a platform whose manifest cannot be read. The guard reads it at
+  `apps/desktop/resources/setup-manifest.json` and needs only `schemaVersion: 1` and `toolServerPackages`. **Owed; see
+  §7.**
+- **electron-builder hyphenates a prerelease version** (`0.1.0rc1` → `0.1.0-rc1`), so step 5's prerelease would be named
+  `Rotaris-0.1.0-rc1-…` unless §4.2/§4.5 render the name from the tag through `tools/release-naming`
+  (`../defects/a-prerelease-version-reaches-the-installer-hyphenated.md`).
+- Two readings were raised rather than taken silently: **OQ-66**, whether the switched-off `browser` default counts
+  (built: it does), and **OQ-67**, whether tag numbers are canonical decimals (built: they are).
+
 **4.2 The tag workflow.** `.github/workflows/release.yml` does not exist yet. It is triggered only by tags
 matching REQ-STARTUP-027's grammar. Channel classification follows REQ-STARTUP-029. The stages, each failing
 the release on its own:
@@ -283,7 +305,10 @@ supply, and each stays owed (R-053).
 2. **In parallel, after step 1.** Each item is its own worktree with its own first-execution row:
    - §2.2 `/skills`;
    - §3.2 the latency measurement plus §3.3 the injection proof;
-   - §4.1 the version guard;
+   - ~~§4.1 the version guard~~ **built 2026-09-27**. It found that **the setup manifest is owed and scheduled nowhere**.
+     The manifest has to exist, with Git, ripgrep, the language servers and the `@playwright/mcp` pin
+     (`REQ-STARTUP-058/059`), before §5's first check can pass. §4.3's section is generated from the same file, so
+     that step is where it most naturally lands;
    - §4.3 the notices generator with the About defect;
    - §4.4 the bundled assets.
 3. **The portable stub (§4.5).** Spike first, and report the result into ADR-0054.

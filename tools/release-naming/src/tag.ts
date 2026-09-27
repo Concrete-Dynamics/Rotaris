@@ -7,7 +7,8 @@
  * those names are rendered with (REQ-STARTUP-031).
  *
  * The numbers are canonical decimals — `v01.2.3` is refused — because the release version is compared as text by the
- * guard and rendered as text into every artifact name, so two spellings of one numeric tuple would be two releases.
+ * guard and rendered as text into every artifact name, so two spellings of one numeric tuple would be two releases. The
+ * grammar does not say so itself; that is the reading OQ-67 records.
  */
 export type ReleaseChannel = 'stable' | 'prerelease';
 export type PrereleaseKind = 'a' | 'b' | 'rc';

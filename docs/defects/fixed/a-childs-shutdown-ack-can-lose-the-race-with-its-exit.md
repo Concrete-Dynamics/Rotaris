@@ -14,8 +14,8 @@ while: its first version of the unanswered-`shutdown` line (commit `4f867a6`) tu
 host had in fact finished and exited 0.
 
 Found 2026-09-27 by the independent review of that branch: 3 of 26 last-window closes (`window.close` through the
-driver) wrote the line and took 30,052–30,061 ms, 2 of them at the default level; the other 23 wrote nothing, and the 21
-whose timings were kept took 40–70 ms. In a failing case `run host exited (0)` stood 23 ms after the close.
+driver) wrote the line and took 30,052–30,061 ms, 2 of them at the default level; the other 23 wrote nothing and took
+38–72 ms. In a failing case `run host exited (0)` stood 23 ms after the close.
 
 ## Specs
 

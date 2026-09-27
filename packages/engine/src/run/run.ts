@@ -791,7 +791,7 @@ export class Run {
     this.rootId = rootTaskId;
     // PD-ORCH-005 clause 1: "The root's task id is recorded with its iteration." A plan cycle (0) is not an iteration.
     if (iterationOverride === undefined) {
-      writer.openIteration({ iteration, root_task_id: rootTaskId, root_name: rootCanonical, root_persona: config.persona, task_id: this.iterationTask?.id ?? '', task });
+      writer.openIteration({ iteration, root_task_id: rootTaskId, root_canonical_name: rootCanonical, root_persona: config.persona, todo_task_id: this.iterationTask?.id ?? '', task });
     }
     const children = this.deps.toolsFor && this.deps.dal
       ? new IterationChildren({

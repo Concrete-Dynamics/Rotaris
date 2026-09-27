@@ -36,7 +36,7 @@ export function runLevelAgent(session: SessionRecord | null, entry: { readonly p
     reasoning: entry.reasoning, contextUsed: session.entryContext.used, contextLimit: session.entryContext.limit > 0 ? session.entryContext.limit : DEFAULT_CONTEXT_CAPACITY, grantedTools: [...entry.tools], calledTools: [], activeTools: [], delegationSessionId: null, inheritedContext: '', live: busy,
     // Part S's evidence (REQ-MCP-065/114) is per child; the run-level agent carries none in this build.
     grantedMcp: {}, mcpServers: [],
-    // PD-ORCH-005: the run-level agent is never one of the `paused` agents a continue resumes; the root is counted apart.
+    // PD-ORCH-005: the interruption belongs to a delegated agent's record; the synthetic run-level agent carries none.
     interruption: null,
   };
 }

@@ -268,20 +268,20 @@ export interface IterationRow {
   readonly session_id: string;
   readonly iteration: number;
   readonly root_task_id: string;
-  readonly root_name: string;
+  readonly root_canonical_name: string;
   readonly root_persona: string;
-  /** The todo task the iteration works on, and the text its root was given. */
-  readonly task_id: string;
+  /** The todo item the iteration works on (a todo id, not a child's `bg_` task id), and the text its root was given. */
+  readonly todo_task_id: string;
   readonly task: string;
   readonly state: 'open' | 'closed';
   /** REQ-ORCH-073/135's outcome at close; null while open. */
   readonly outcome: string | null;
-  /** The last interruption that left it open; null for one never interrupted. */
+  /** The last interruption that left it open; null for one never interrupted, and cleared when it resumes. */
   readonly interruption: string | null;
   readonly opened_at: string;
   readonly closed_at: string | null;
 }
-export type IterationInsert = Pick<IterationRow, 'session_id' | 'iteration' | 'root_task_id' | 'root_name' | 'root_persona' | 'task_id' | 'task' | 'opened_at'>;
+export type IterationInsert = Pick<IterationRow, 'session_id' | 'iteration' | 'root_task_id' | 'root_canonical_name' | 'root_persona' | 'todo_task_id' | 'task' | 'opened_at'>;
 
 /**
  * v23 — PD-ORCH-005 clauses 1 and 12: one entry of an agent's recorded conversation. `message` is one message as the
@@ -305,8 +305,8 @@ export interface AgentTerminalRow {
   readonly task_id: string;
   readonly command: string;
   readonly started_at: string;
-  /** `running`, or how it ended: on its own (`exited`), by the agent (`killed`), by its timeout, or by a stop, a quit or a crash. */
-  readonly state: 'running' | 'exited' | 'killed' | 'timeout' | 'stop' | 'quit' | 'crash';
+  /** REQ-TOOLS-109's status (`running`, `completed`, `failed`, `killed`, `timeout`), or the rest that ended it: a stop, a quit or a crash. */
+  readonly state: 'running' | 'completed' | 'failed' | 'killed' | 'timeout' | 'stop' | 'quit' | 'crash';
   readonly exit_code: number | null;
   readonly output_tail: string;
   readonly updated_at: string;
@@ -534,8 +534,8 @@ export class StoreDal {
       pausedChildrenOfIteration: db.prepare("SELECT * FROM children WHERE session_id = ? AND iteration = ? AND state = 'paused' ORDER BY spawned_at, task_id"),
 
       // v23 — PD-ORCH-005: the iterations, each carrying its root's task id.
-      insertIteration: db.prepare(`INSERT INTO iterations (session_id, iteration, root_task_id, root_name, root_persona, task_id, task, state, opened_at)
-        VALUES (@session_id, @iteration, @root_task_id, @root_name, @root_persona, @task_id, @task, 'open', @opened_at)`),
+      insertIteration: db.prepare(`INSERT INTO iterations (session_id, iteration, root_task_id, root_canonical_name, root_persona, todo_task_id, task, state, opened_at)
+        VALUES (@session_id, @iteration, @root_task_id, @root_canonical_name, @root_persona, @todo_task_id, @task, 'open', @opened_at)`),
       getIteration: db.prepare('SELECT * FROM iterations WHERE session_id = ? AND iteration = ?'),
       openIterationOf: db.prepare("SELECT * FROM iterations WHERE session_id = ? AND state = 'open' ORDER BY iteration DESC LIMIT 1"),
       iterationsOf: db.prepare('SELECT * FROM iterations WHERE session_id = ? ORDER BY iteration'),
@@ -555,7 +555,8 @@ export class StoreDal {
       // v23 — PD-ORCH-005 clause 10: the background terminal sessions agents started.
       upsertAgentTerminal: db.prepare(`INSERT INTO agent_terminals (session_id, terminal_id, task_id, command, started_at, state, exit_code, output_tail, updated_at)
         VALUES (@session_id, @terminal_id, @task_id, @command, @started_at, @state, @exit_code, @output_tail, @updated_at)
-        ON CONFLICT (session_id, terminal_id) DO UPDATE SET state = excluded.state, exit_code = excluded.exit_code, output_tail = excluded.output_tail, updated_at = excluded.updated_at`),
+        ON CONFLICT (session_id, terminal_id) DO UPDATE SET state = excluded.state, exit_code = excluded.exit_code, output_tail = excluded.output_tail, updated_at = excluded.updated_at
+        WHERE agent_terminals.task_id = excluded.task_id AND agent_terminals.command = excluded.command`),
       agentTerminalsOf: db.prepare('SELECT * FROM agent_terminals WHERE session_id = ? ORDER BY started_at, terminal_id'),
       enqueueSlot: db.prepare('INSERT INTO model_slot_queue (session_id, model_key, position, task_id) VALUES (?, ?, (SELECT coalesce(max(position), 0) + 1 FROM model_slot_queue WHERE session_id = ? AND model_key = ?), ?)'),
       slotQueueOf: db.prepare('SELECT task_id FROM model_slot_queue WHERE session_id = ? AND model_key = ? ORDER BY position'),
@@ -686,7 +687,7 @@ export class StoreDal {
   getIteration(id: SessionId, iteration: number): IterationRow | undefined {
     return this.stmts['getIteration']!.get(id, iteration) as IterationRow | undefined;
   }
-  /** The open iteration a continue resumes; at most one is open at a time, and the newest wins if a defect left two. */
+  /** The open iteration a continue resumes; at most one per session (`iterations_one_open` enforces it). */
   openIterationOf(id: SessionId): IterationRow | undefined {
     return this.stmts['openIterationOf']!.get(id) as IterationRow | undefined;
   }
@@ -697,6 +698,7 @@ export class StoreDal {
   closeIteration(id: SessionId, iteration: number, outcome: string, closedAt: string): boolean {
     return this.stmts['closeIteration']!.run(outcome, closedAt, id, iteration).changes === 1;
   }
+  /** The rest that left an open iteration open; a resume sets it back to NULL, so a later crash is not read as the earlier rest. */
   setIterationInterruption(id: SessionId, iteration: number, interruption: string | null): boolean {
     return this.stmts['setIterationInterruption']!.run(interruption, id, iteration).changes === 1;
   }
@@ -715,8 +717,12 @@ export class StoreDal {
   clearClosedAgentMessages(id: SessionId): number {
     return this.stmts['clearClosedAgentMessages']!.run(id, id).changes;
   }
-  upsertAgentTerminal(row: AgentTerminalRow): void {
-    this.stmts['upsertAgentTerminal']!.run(row);
+  /**
+   * A new terminal, or the state, exit code and tail of a recorded one; `false` when the id names a terminal another agent
+   * started with another command (an id collision across two managers), which is left as it was.
+   */
+  upsertAgentTerminal(row: AgentTerminalRow): boolean {
+    return this.stmts['upsertAgentTerminal']!.run(row).changes === 1;
   }
   agentTerminalsOf(id: SessionId): AgentTerminalRow[] {
     return this.stmts['agentTerminalsOf']!.all(id) as AgentTerminalRow[];

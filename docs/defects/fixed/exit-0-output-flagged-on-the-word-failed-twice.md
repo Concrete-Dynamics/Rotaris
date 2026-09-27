@@ -34,13 +34,37 @@ not mint one. Until the owner rules, the two commands in this run would warn aga
 Measured: `packages/agent-tools/src/terminal/terminal.test.ts`'s REQ-TOOLS-113 case, extended with this
 run's own docker line and with the cap, is green.
 
-**Raised with the owner, 2026-09-22 — [R-047](../product/requests.md#r-047).** Repairing this note means
+**Raised with the owner, 2026-09-22 — [R-047](../../product/requests.md#r-047).** Repairing this note means
 changing behaviour a live requirement states exactly, which `docs/product/README.md` sends to a `PD` and
 an implementer may not mint. The request is logged with the requirements a directive would have to name,
 so the decision is in front of the owner rather than waiting in a defect note.
 
-**Ruled 2026-09-23 — [`PD-TOOLS-003`](../product/directives.md#pd-tools-003), [R-048](../product/requests.md#r-048).** The owner took the half
+**Ruled 2026-09-23 — [`PD-TOOLS-003`](../../product/directives.md#pd-tools-003), [R-048](../../product/requests.md#r-048).** The owner took the half
 this note left to them: the `FAILED ` marker matches case-sensitively, so only `FAILED ` in capitals warns,
 and the other four markers stay case-insensitive. Both warnings this run raised came from lower-case text and
 would not fire under the directive. The note stays open until the directive is built; the repair cites
 `PD-TOOLS-003` and owes its first execution.
+
+## Repaired 2026-09-27 ([R-055](../../product/requests.md#r-055))
+
+Built as [`PD-TOOLS-003`](../../product/directives.md#pd-tools-003) rules it: the fifth marker, `FAILED `, matches
+case-sensitively, and the other four markers, the error count, the banner check and the pipeline check keep their
+casing. In `packages/agent-tools/src/terminal/classify.ts` each entry of `MARKERS` now carries its own
+`caseSensitive` flag, and one predicate, `containsMarker`, answers both questions the warning asks: whether the
+output carries the marker, and which line to quote. The quoted line had been found by a lower-cased search of its
+own, so narrowing only the search would have quoted a `failed ` line ahead of the `FAILED ` line that matched.
+Nothing outside that file changed behaviour: `gate.ts` still files `terminal_suspicious_success` on every
+`suspicious_success`, and a lower-case `failed ` no longer makes one through the marker. The live run's
+`failed-word` shape (`apps/desktop/scripts/lib/terminal-shapes.mjs`) prints `FAILED` in capitals, so it still
+warns; its comments and `live-run.mjs`'s now cite the directive.
+
+Evidence: `packages/agent-tools/src/terminal/terminal.test.ts`. *PD-TOOLS-003 / REQ-TOOLS-113: run `2e21e324`'s
+docker line no longer warns, so its exit-0 command reads success* feeds this run's docker output
+(`failed to connect to the docker API`) through `outputWarnings` and `classifyOutcome` and reads no warning and
+`success` / `info` — the ord 114 warning would not fire now. The ord 229 git line is not recorded verbatim; this
+note records only that it matched in lower case, so it is covered by the casing cases rather than replayed:
+`failed `, `Failed ` and `fAILED ` do not warn. The other cases pin the rest: `FAILED test_a.py::test_x` still
+warns and is quoted; a `failed ` line ahead of a `FAILED ` line quotes the capital one; and the four other markers
+in other casings, a lower-case `=== 1 failed in 0.1s ===` banner and a lower-case `failed` through a `|` all still
+warn. With `FAILED ` made case-insensitive again, the three new cases fail; with only the quoted line's search
+lower-cased again, the ordering case fails.

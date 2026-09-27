@@ -16,7 +16,29 @@ export interface TerminalFacts {
   readonly backgroundStatus?: BackgroundStatus | null;
 }
 
-const MARKERS = ['Traceback (most recent call last):', 'ERROR: file or directory not found', 'no tests ran', 'AssertionError', 'FAILED '] as const;
+interface FailureMarker {
+  readonly text: string;
+  readonly caseSensitive: boolean;
+}
+
+/**
+ * REQ-TOOLS-113's literal failure markers, in its fixed order. Four are searched case-insensitively; the fifth,
+ * `FAILED ` with its trailing space, matches in capitals only (PD-TOOLS-003) — test runners print it that way,
+ * and the lower-case `failed ` of ordinary prose, docker's `failed to connect to the docker API` among it, is
+ * what warned falsely.
+ */
+const MARKERS: readonly FailureMarker[] = [
+  { text: 'Traceback (most recent call last):', caseSensitive: false },
+  { text: 'ERROR: file or directory not found', caseSensitive: false },
+  { text: 'no tests ran', caseSensitive: false },
+  { text: 'AssertionError', caseSensitive: false },
+  { text: 'FAILED ', caseSensitive: true },
+];
+
+/** Whether `text` carries `marker` in the casing it is matched in — the one test the search and the quoted line share. */
+function containsMarker(text: string, marker: FailureMarker): boolean {
+  return marker.caseSensitive ? text.includes(marker.text) : text.toLowerCase().includes(marker.text.toLowerCase());
+}
 
 /**
  * Commands whose exit 1 is a success-with-output convention, not a failure. `git diff` (and
@@ -44,25 +66,23 @@ const MARKER_LINE_CAP = 120;
  * exit-0 command and git's own chatter on another, and from the warning by itself neither the agent nor
  * the reader could tell either from a test runner's `FAILED test_a`. The marker is still named first —
  * the requirement's clause is untouched — and the line it matched on is quoted after it, so the judgement
- * is one read rather than a second pass over the whole output. Which outputs warn is not changed here:
- * that is fixed by the requirement, and narrowing it would be a directive, not a repair.
+ * is one read rather than a second pass over the whole output. Both of that run's matches were lower case
+ * and no longer warn at all (PD-TOOLS-003). The line is found with `containsMarker`, the test the search
+ * used, so a `failed ` line ahead of the `FAILED ` line that matched is never the one quoted.
  */
-function markerWarning(output: string, marker: string): string {
-  const needle = marker.toLowerCase();
-  const line = (output.split('\n').find((l) => l.toLowerCase().includes(needle)) ?? '').trim();
-  if (line === '') return `Output contains the failure marker '${marker.trim()}'.`;
+function markerWarning(output: string, marker: FailureMarker): string {
+  const line = (output.split('\n').find((l) => containsMarker(l, marker)) ?? '').trim();
+  if (line === '') return `Output contains the failure marker '${marker.text.trim()}'.`;
   const quoted = line.length > MARKER_LINE_CAP ? `${line.slice(0, MARKER_LINE_CAP - 1)}…` : line;
-  return `Output contains the failure marker '${marker.trim()}', in: ${quoted}`;
+  return `Output contains the failure marker '${marker.text.trim()}', in: ${quoted}`;
 }
 
 /** REQ-TOOLS-113: at most one warning per check, in the fixed order; de-duplicated with the first occurrence kept. */
 export function outputWarnings(command: string, output: string, exitCode: number | null): string[] {
   const out: string[] = [];
-  const lower = output.toLowerCase();
   if (exitCode === 0) {
-    for (const m of MARKERS) {
-      if (lower.includes(m.toLowerCase())) { out.push(markerWarning(output, m)); break; }
-    }
+    const marker = MARKERS.find((m) => containsMarker(output, m));
+    if (marker) out.push(markerWarning(output, marker));
     const count = /(^|\n)[^\n]*\bfound (\d+) errors?\b/i.exec(output);
     if (count && Number(count[2]) !== 0) out.push(`Output reports ${count[2]} error(s).`);
     if (/(^|\n)=+[^\n]*failed[^\n]*=+\s*(\n|$)/i.test(output)) out.push('A test-runner failure banner appears in the output.');

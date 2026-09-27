@@ -76,7 +76,7 @@ it.each([
   expect(output(r.text)).toBe('(no output)');
 });
 
-describe('terminal — pure parts (REQ-TOOLS-100, 112, 113)', () => {
+describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () => {
   it('classifies in the fixed order and renders the diagnostic block with sorted keys and nulls dropped', () => {
     expect(classifyOutcome({ failureKind: 'timeout', exitCode: 124, output: '', command: 'x' }, [])).toEqual({ outcomeKind: 'timeout', severity: 'error' });
     expect(classifyOutcome({ exitCode: 0, output: '', command: 'x', backgroundStatus: 'killed' }, [])).toEqual({ outcomeKind: 'background_terminal', severity: 'warning' });
@@ -98,13 +98,33 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113)', () => {
     expect(outputWarnings('pytest', 'AssertionError: x\nFAILED test_a', 0)).toEqual(["Output contains the failure marker 'AssertionError', in: AssertionError: x"]);
     expect(outputWarnings('tsc', 'found 3 errors', 0)).toEqual(['Output reports 3 error(s).']);
     expect(outputWarnings('tsc', 'Found 0 errors', 0)).toEqual([]);
-    // 'FAILED ' is searched case-insensitively, so the banner's own 'failed ' fires the marker check too — two warnings, marker first.
-    expect(outputWarnings('pytest', '==== 1 failed ====', 0)).toEqual(["Output contains the failure marker 'FAILED', in: ==== 1 failed ====", 'A test-runner failure banner appears in the output.']);
-    // The line is what tells run `2e21e324`'s two exit-0 matches apart from a test runner's, and it is capped.
-    expect(outputWarnings('docker', 'Client: ok\nfailed to connect to the docker API\n', 0)).toEqual(["Output contains the failure marker 'FAILED', in: failed to connect to the docker API"]);
+    // A banner carrying 'FAILED ' in capitals fires the marker check too — two warnings, marker first.
+    expect(outputWarnings('pytest', '==== 1 FAILED ====', 0)).toEqual(["Output contains the failure marker 'FAILED', in: ==== 1 FAILED ====", 'A test-runner failure banner appears in the output.']);
+    // The line the marker matched on is quoted, and capped.
     expect(outputWarnings('x', `FAILED ${'y'.repeat(300)}`, 0)[0]).toMatch(/, in: FAILED y{112}…$/);
     expect(outputWarnings('a | b', 'error: x', 3)).toEqual(['Pipeline command may have hidden an upstream failure exit code.']);
     expect(outputWarnings('a', 'error: x', 3)).toEqual([]);
+  });
+  it('PD-TOOLS-003 / REQ-TOOLS-113: the FAILED marker warns in capitals only, and the line quoted is the one that matched', () => {
+    expect(outputWarnings('pytest', 'collected 2 items\nFAILED test_a.py::test_x - assert 1 == 2\n', 0)).toEqual(["Output contains the failure marker 'FAILED', in: FAILED test_a.py::test_x - assert 1 == 2"]);
+    for (const casing of ['failed ', 'Failed ', 'fAILED ']) expect(outputWarnings('x', `step one ${casing}to connect`, 0)).toEqual([]);
+    // A lower-case line ahead of the capital one: the capital line is quoted, not the first line a lower-cased search would reach.
+    expect(outputWarnings('pytest', 'retry: failed to connect\nFAILED test_b\n', 0)).toEqual(["Output contains the failure marker 'FAILED', in: FAILED test_b"]);
+  });
+  it('PD-TOOLS-003 / REQ-TOOLS-113: every other check keeps its casing — the four other markers, the banner and the pipeline match in any case', () => {
+    expect(outputWarnings('x', 'traceback (most recent call last):', 0)).toEqual(["Output contains the failure marker 'Traceback (most recent call last):', in: traceback (most recent call last):"]);
+    expect(outputWarnings('x', 'error: FILE OR DIRECTORY NOT FOUND', 0)).toEqual(["Output contains the failure marker 'ERROR: file or directory not found', in: error: FILE OR DIRECTORY NOT FOUND"]);
+    expect(outputWarnings('x', 'No Tests Ran', 0)).toEqual(["Output contains the failure marker 'no tests ran', in: No Tests Ran"]);
+    expect(outputWarnings('x', 'assertionerror: x', 0)).toEqual(["Output contains the failure marker 'AssertionError', in: assertionerror: x"]);
+    expect(outputWarnings('pytest', '=== 1 failed in 0.1s ===', 0)).toEqual(['A test-runner failure banner appears in the output.']);
+    expect(outputWarnings('make | tee build.log', 'step one failed to connect', 0)).toEqual(['Pipeline command may have hidden an upstream failure exit code.']);
+  });
+  it('PD-TOOLS-003 / REQ-TOOLS-113: run `2e21e324`\'s docker line no longer warns, so its exit-0 command reads success', () => {
+    const command = 'docker info; docker compose version';
+    const text = 'Client: ok\nfailed to connect to the docker API\n';
+    const warnings = outputWarnings(command, text, 0);
+    expect(warnings).toEqual([]);
+    expect(classifyOutcome({ exitCode: 0, output: text, command }, warnings)).toEqual({ outcomeKind: 'success', severity: 'info' });
   });
   it('strips VT sequences and carriage returns', () => {
     expect(stripVt('\x1b[32mhi\x1b[0m\r\n\x1b]0;title\x07x')).toBe('hi\nx');

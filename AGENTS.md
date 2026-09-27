@@ -315,9 +315,10 @@ issues the recorded commands verbatim, and asserts from `tool_calls` — what th
 rather than from what the model says it did.
 
 **Three of the six shapes are NOTEs, on purpose.** The `FAILED`-marker warning and the pipe-to-shell deny fire
-exactly as `REQ-TOOLS-113` and `REQ-TOOLS-036/038` specify; their notes exist to measure what they cost, not to
-accuse the product. A shape the model never issued is also a NOTE. Reporting a faithful behaviour as a fault is
-how a scenario teaches its reader to ignore it — the mistake the board scenario made twice.
+exactly as `REQ-TOOLS-113` (its `FAILED ` marker in capitals only, `PD-TOOLS-003`) and `REQ-TOOLS-036/038`
+specify; their notes exist to measure what they cost, not to accuse the product. A shape the model never issued
+is also a NOTE. Reporting a faithful behaviour as a fault is how a scenario teaches its reader to ignore it — the
+mistake the board scenario made twice.
 
 `duress` asserts **coherence, not correctness**: a long run's failures are mostly records disagreeing with each
 other, and `apps/desktop/scripts/autopsy.mjs` already computes most of them. What the model produced is never

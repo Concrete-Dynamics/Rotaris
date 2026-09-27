@@ -1537,7 +1537,7 @@ if (wanted.includes('faults')) {
  * | `here-string`   | a multi-line command lost its newlines in the PTY, so a here-string never terminated |
  * | `long-output`   | the concatenation above, and the agent's capture VT-stripped where the window's was not |
  * | `wedge`         | `hardMs` passed and read nowhere: a call supplying no `timeout` had the soft pause and no hard cap (REQ-TOOLS-097) |
- * | `failed-word`   | `exit-0-output-flagged-on-the-word-failed-twice.md` — fired as REQ-TOOLS-113 specifies, recorded for cost |
+ * | `failed-word`   | `exit-0-output-flagged-on-the-word-failed-twice.md` — fires as PD-TOOLS-003 narrows REQ-TOOLS-113 (in capitals), recorded for cost |
  * | `diff-exit-1`   | `git-diff-with-differences-read-as-a-failure.md` — ESC-41's carve-out, and a real regression guard |
  * | `pipe-to-shell` | `a-read-only-git-pipeline-was-withheld-by-the-pipe-to-shell-rule.md` — also cost, not contradiction |
  *
@@ -1620,8 +1620,9 @@ if (wanted.includes('terminal')) {
   if (failedWord === undefined) noted('the exit-0 FAILED command was not attempted', 'no terminal call carried it');
   else {
     const d = diagnosticOf(failedWord.result);
-    // REQ-TOOLS-113 searches literal markers case-insensitively and this output carries one. The warning is
-    // FAITHFUL; what the record wanted measured is what it costs — an agent explaining a false positive away.
+    // REQ-TOOLS-113's `FAILED ` marker matches in capitals only (PD-TOOLS-003), and this output carries it in
+    // capitals. The warning is FAITHFUL; what the record wanted measured is what it costs — an agent explaining
+    // a false positive away.
     noted('an exit-0 output carrying the word FAILED', `exit ${d?.exit_code ?? 'none'}, outcome ${d?.outcome_kind ?? 'none'}, warnings: ${(d?.warnings ?? []).join(' ') || 'none'}`);
   }
 

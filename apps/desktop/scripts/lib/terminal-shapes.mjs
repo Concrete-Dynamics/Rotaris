@@ -35,8 +35,8 @@ export function terminalShapes(platform = process.platform) {
     // `hardMs` was passed by `index.ts` and read nowhere, so a call supplying no `timeout` had the soft pause
     // and no hard cap at all — REQ-TOOLS-097 wants both bounds with the first to fire governing.
     { id: 'wedge', match: /setTimeout/, command: node },
-    // REQ-TOOLS-113 searches literal markers case-insensitively; this output carries one and exits 0. The
-    // warning is faithful. What the record wanted measured is what it costs.
+    // REQ-TOOLS-113's `FAILED ` marker matches in capitals only (PD-TOOLS-003); this output carries it in
+    // capitals and exits 0. The warning is faithful. What the record wanted measured is what it costs.
     { id: 'failed-word', match: /FAILED to connect/, command: failed },
     // ESC-41's carve-out: `git diff` exiting 1 IS the answer, and classifying it a failure made the agent
     // explain away its own evidence.

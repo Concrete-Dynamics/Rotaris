@@ -7,3 +7,4 @@ export * from './canonical.js';
 export * from './instance.js';
 export * from './spawn.js';
 export * from './preferences.js';
+export * from './version.js';

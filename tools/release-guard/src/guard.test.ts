@@ -66,13 +66,19 @@ describe('the command line — REQ-STARTUP-149\'s exit codes', () => {
   };
 
   it('anything but exactly one tag is a usage error: exit 2, error: on stderr, and the usage line', () => {
-    for (const argv of [[], ['v0.1.0', 'v0.2.0'], ['--help']]) {
+    for (const argv of [[], ['v0.1.0', 'v0.2.0'], ['--help'], ['--'], ['--', '--', 'v0.1.0']]) {
       const { out, err, streams } = io();
       expect(guardCommandLine(argv, REPO, streams), JSON.stringify(argv)).toBe(2);
       expect(out).toEqual([]);
       expect(err.join('')).toMatch(/^error: expected exactly one argument, the release tag/);
       expect(err.join('')).toContain(USAGE);
     }
+  });
+
+  it('a single leading -- is pnpm\'s separator, not an argument: `pnpm release:guard -- <tag>` checks the tag', () => {
+    const { err, streams } = io();
+    expect(guardCommandLine(['--', 'v99.0.0'], REPO, streams)).toBe(1);
+    expect(err.join('')).toContain('tag v99.0.0 is version 99.0.0');
   });
 
   it('the script itself boots, reads this repository and exits 1 on a tag this build does not declare', () => {

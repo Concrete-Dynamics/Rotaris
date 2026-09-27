@@ -43,7 +43,9 @@ export type ManifestReading =
  * (`1.2.3`, `1.1.403`, `1.2.3-beta.1`, `1.2.3rc1`); `^1.2.3`, `1.2`, `1.x`, `latest` and `npm:x@1.2.3` are not.
  */
 export function isCompleteVersion(version: string): boolean {
-  return /^\d+\.\d+\.\d+(?:[-+.]?[0-9A-Za-z]+)*$/.test(version);
+  // One character per repetition: an optional separator inside a starred group of `+` runs backtracks exponentially on
+  // a long qualifier followed by a stray character, and a guard that hangs does not exit 1.
+  return /^\d+\.\d+\.\d+(?:[-+.]?[0-9A-Za-z])*$/.test(version);
 }
 
 export function readSetupManifest(repoRoot: string, location: string = SETUP_MANIFEST_LOCATION): ManifestReading {

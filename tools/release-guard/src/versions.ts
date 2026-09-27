@@ -14,13 +14,18 @@ export interface VersionPlace {
 
 /**
  * Where the product version is declared — **one place**, decided at this guard's first execution (ADR-0054, §4.1 of
- * `first-release-plan.md`). The desktop application's manifest is the only `version` an artifact carries:
- * electron-builder renders it into every artifact name (REQ-STARTUP-031) and into the installer's own metadata, packs
- * the file into the archive the application runs from, and the running application reads its version back from that
- * packed copy (`apps/desktop/src/main/version.ts`, REQ-STARTUP-004/007). Every other `version` in the workspace belongs
- * to a private package no artifact carries — the workspace packages are the desktop's devDependencies, compiled into its
- * bundles from source and never packed as packages — so none of them is a product version, and the workspace root
- * declares none at all. A place that comes to carry the version into an artifact joins this list.
+ * `first-release-plan.md`): the desktop application's manifest. electron-builder renders it into every artifact name
+ * (REQ-STARTUP-031) and into the installer's own metadata, and packs the file into the archive the application runs
+ * from. Everything the running product reports as its version is READ from that packed copy, never written a second
+ * time: the About surface (main) and the MCP client's `clientInfo.version` in every handshake (the run host) both go
+ * through `@rotaris/platform`'s `installedProductVersion` (REQ-STARTUP-004/007/158). The MCP client carried a literal
+ * `0.1.0` until the gate round that reviewed this guard found it — a second product version this list did not name —
+ * and it now reads the same file (`versions.test.ts` pins the reader to this place).
+ *
+ * Every `version` field of the workspace's own packages is a private package's, not the product's: they are the
+ * desktop's devDependencies, compiled into its bundles from source and never packed as packages, and the workspace root
+ * declares none at all. A place that comes to carry a version into an artifact — a literal, a stamped file, a
+ * builder override — either reads this one or joins this list.
  */
 export const PRODUCT_VERSION_PLACES: readonly VersionPlace[] = [{ file: 'apps/desktop/package.json', field: 'version' }];
 
@@ -66,6 +71,8 @@ export function readDeclaredVersions(repoRoot: string, places: readonly VersionP
  * the agreeing ones too, since the instruction is to bump *every* place — and says why.
  */
 export function versionMismatch(tag: string, tagVersion: string, declared: readonly DeclaredVersion[]): string | null {
+  // A guard handed no place has checked nothing, and nothing checked is not agreement.
+  if (declared.length === 0) return `error: the guard was given no place that declares the product version, so tag ${tag} cannot be checked against the build (REQ-STARTUP-028).`;
   if (declared.every((d) => d.value === tagVersion)) return null;
   const width = Math.max(...declared.map((d) => describePlace(d.place).length));
   const lines = declared.map((d) => {

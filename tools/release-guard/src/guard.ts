@@ -69,8 +69,12 @@ export interface GuardStreams {
 
 export const USAGE = 'usage: pnpm release:guard <tag>   (for example: pnpm release:guard v0.1.0)';
 
-/** `pnpm release:guard <tag>`: one argument, the tag; the repository is the one the script sits in. */
-export function guardCommandLine(argv: readonly string[], repoRoot: string, io: GuardStreams): 0 | 1 | 2 {
+/**
+ * `pnpm release:guard <tag>`: one argument, the tag; the repository is the one the script sits in. A single leading
+ * `--` is dropped: pnpm passes it through (`pnpm release:guard -- v0.1.0`), and it separates, it is not an argument.
+ */
+export function guardCommandLine(given: readonly string[], repoRoot: string, io: GuardStreams): 0 | 1 | 2 {
+  const argv = given[0] === '--' ? given.slice(1) : given;
   if (argv.length !== 1 || argv[0]!.startsWith('-')) {
     io.err(`error: expected exactly one argument, the release tag, and got ${argv.length === 0 ? 'none' : argv.map((a) => JSON.stringify(a)).join(' ')}\n${USAGE}\n`);
     return 2;

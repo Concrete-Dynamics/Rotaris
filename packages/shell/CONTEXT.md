@@ -26,7 +26,7 @@ ones are `prerelease`. — `REQ-STARTUP-027`, `REQ-STARTUP-029`
 **Pre-build guard**:
 The one stage, before any platform is built, that stops a release when the tag's version differs from
 a product version the build declares, or when the setup manifest's package pins disagree with the
-built-in default configuration's. Exit code 1 on either stops every platform. — `REQ-STARTUP-028`,
+built-in default configuration's. Either failure stops every platform. — `REQ-STARTUP-028`,
 `REQ-STARTUP-059`, `REQ-STARTUP-149`
 _Avoid_: version check (it checks the pins too), preflight
 

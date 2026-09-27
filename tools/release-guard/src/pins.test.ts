@@ -92,6 +92,15 @@ describe('reading the setup manifest — REQ-STARTUP-059\'s discipline', () => {
     for (const v of ['^1.2.3', '~1.2.3', '1.2', '1.x', 'latest', '>=1.0.0', '1.2.3 || 2.0.0', 'npm:x@1.2.3', '', 'v1.2.3']) expect(isCompleteVersion(v), v).toBe(false);
   });
 
+  it('decides a long mistyped qualifier at once rather than backtracking (the stage must exit, not hang)', () => {
+    // The first pattern took ~0.4 s at 26 characters and quadrupled every two more; a commit hash is 40.
+    const typo = `1.2.3+${'a'.repeat(64)}!`;
+    const started = performance.now();
+    expect(isCompleteVersion(typo)).toBe(false);
+    expect(isCompleteVersion(`1.2.3+${'a'.repeat(64)}`)).toBe(true);
+    expect(performance.now() - started).toBeLessThan(50);
+  });
+
   it('an unreadable manifest — missing, not JSON, the wrong schema, no list — is reported as unreadable', () => {
     const missing = mkdtempSync(join(tmpdir(), 'release-guard-'));
     scratch.push(missing);

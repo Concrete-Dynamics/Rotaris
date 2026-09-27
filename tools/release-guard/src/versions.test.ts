@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { applicationManifestPath, installedProductVersion } from '@rotaris/platform';
 import { parseReleaseVersion } from '@rotaris/release-naming';
 import { PRODUCT_VERSION_PLACES, readDeclaredVersions, versionMismatch, type VersionPlace } from './versions.js';
 
@@ -33,6 +34,14 @@ describe('where the product version is declared — REQ-STARTUP-158 (the decisio
     expect(declared!.value).not.toBeNull();
     expect(parseReleaseVersion(declared!.value!).version).toBe(declared!.value);
     expect(JSON.parse(readFileSync(join(REPO, 'package.json'), 'utf8'))).not.toHaveProperty('version');
+  });
+
+  it('is the place the running product reads back — the About surface and every MCP handshake (REQ-STARTUP-007/158)', () => {
+    // Every process's bundle sits in apps/desktop/out/main; the one reader resolves the manifest from there.
+    const bundle = join(REPO, 'apps', 'desktop', 'out', 'main');
+    expect(applicationManifestPath(bundle)).toBe(join(REPO, DESKTOP.file));
+    expect(DESKTOP.field).toBe('version');
+    expect(installedProductVersion(bundle)).toBe(readDeclaredVersions(REPO)[0]!.value);
   });
 });
 
@@ -79,6 +88,10 @@ describe('the version half — REQ-STARTUP-028', () => {
     expect(lines.find((l) => l.includes('apps/desktop/package.json'))).not.toContain('differs');
     expect(lines.find((l) => l.includes('build/product.json ("productVersion")'))).toMatch(/"0\.9\.0"\s+← differs$/);
     expect(lines.find((l) => l.includes('c.json ("version")'))).toMatch(/"0\.1\.0"\s+← differs$/);
+  });
+
+  it('no place at all is not agreement: a guard that checked nothing fails', () => {
+    expect(versionMismatch('v0.1.0', '0.1.0', [])).toBe('error: the guard was given no place that declares the product version, so tag v0.1.0 cannot be checked against the build (REQ-STARTUP-028).');
   });
 
   it('a place that declares nothing differs, and says why', () => {

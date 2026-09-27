@@ -192,15 +192,41 @@ naming each problem otherwise (REQ-STARTUP-149). It builds under four readings, 
 - OQ-69, when a licence file carries the licence's text. It was added by the gate review the same day.
 
 **Where the owner writes the O-3 address.** In `tools/notices/release-inputs.json`, as the value of
-`lgplCorrespondingSourcesAddress`. That file is the one place the generator reads it. The value must be a literal
+`lgplCorrespondingSourcesAddress`. That file is the one place the generator reads it. The value must be one literal
 address in one of two shapes:
 
-- an e-mail address whose domain has a dot, for example `Name <sources@domain.tld>`;
+- one e-mail address, alone or after a display name, as in `Rotaris Maintainers <sources@example.org>` with the
+  owner's own domain in place of `example.org`. The example as written is refused, because `example.org` is reserved
+  for examples, so a copied example cannot pass;
 - a postal address of more than one part, separated by commas or lines, with a number and words in it.
 
-It may not be a web page, a placeholder word (`N/A`, `none`, `TBA`, `TODO`, `REPLACE_ME` and the like), a template
-domain such as `domain.com`, or a domain reserved for examples and tests. Until the value is written, validation fails
-and names the key.
+Validation refuses each of these, naming what it found:
+
+- a web page;
+- more than one e-mail address, since REQ-STARTUP-142 asks for a single address;
+- a no-reply route, which no maintainer monitors;
+- a placeholder word (`N/A`, `none`, `TBA`, `TODO`, `REPLACE_ME` and the like), or a template's field name standing
+  where the value goes (`Name <…>`, `Street 1, 12345 City, Country`);
+- a stock template address: "Address line 1", "123 Main Street", Anytown, Nowhere, "Fake Street", Musterstadt, or a
+  number made only of zeros;
+- a domain reserved for examples and tests;
+- a top-level label no mail reaches (`.tld`, `.domain`, `.local`, `.lan`, `.internal` and the like);
+- a template's domain (`domain.com`, `host.com`, `test.com`) or local part (`test@`, `foo@`, `user@`, `john.doe@`).
+
+Until an address that passes is written, validation fails and names the key.
+
+**The check is a word-and-shape heuristic, and nothing more.** It refuses the placeholders it knows. It cannot tell
+whether an address is the owner's, so an invented address that looks real still passes. In the other direction, a
+real address that contains one of its words is refused, for example a street named "Sample Lane", a company named
+"Unknown Pleasures", or a domain such as `sample-labs.com`. REQ-STARTUP-142 makes a truthful address the owner's
+act. The check only catches a template left in place.
+
+*Corrected 2026-09-27 by the gate review's second round.* The check as the first round left it still accepted
+`Name <sources@domain.tld>`, which was the example this paragraph then gave. It also accepted `test@test.com`,
+`noreply@…`, two addresses in one value, and the stock postal templates. The second round also found that an input
+file holding only `null`, `false`, `0` or `""` was read as having nothing to report. With `release-inputs.json` set to
+`null` over an otherwise valid fixture, the step exited 0 and the header read "(no address)". Every input that is not
+a JSON object now fails as unparsable.
 
 **What the first run refused, besides O-3.** Twelve shipped components carry no licence text. Four ship no licence
 file at all:
@@ -317,7 +343,7 @@ cannot be the gate.
 |---|---|---|
 | O-1 | ~~Rule ESC-37, ESC-38, ESC-39 and OQ-64~~ **ruled 2026-09-27** as recommended (R-052) | §2.2, §3.3 |
 | O-2 | Generate the manifest signing key pair and store the private half as a repository secret. The public half is committed | §4.7 |
-| O-3 | Give the literal contact address for the LGPL source request (REQ-STARTUP-142). It must be reachable without an account. **Written in `tools/notices/release-inputs.json`, key `lgplCorrespondingSourcesAddress`**; validation fails naming that key until it is | §4.3 |
+| O-3 | Give the literal contact address for the LGPL source request (REQ-STARTUP-142). It must be a single address, reachable without an account and monitored by the maintainers. **Written in `tools/notices/release-inputs.json`, key `lgplCorrespondingSourcesAddress`**, in one of the two shapes §4.3 states; validation fails naming that key until it is | §4.3 |
 | O-4 | Supply an icon, with the `.ico` sizes `electron-builder` asks for | §4.9 |
 | O-5 | ~~Choose where releases are published~~ **ruled 2026-09-27** (R-053): GitHub releases of `theUpsider/Rotaris-crw`, the product repository REQ-STARTUP-038 names | §4.2 |
 | O-6 | Provide the gate machine of §5. **Form ruled 2026-09-27** (R-053): a snapshot-restored Windows x64 virtual machine, restored between releases. The owner still provides it | §5 |

@@ -1151,6 +1151,27 @@ and both are still reproduced (OQ-69). **Run again, validation refuses on fourte
 
 O-11 names twelve reviews.
 
+**Validation fails on more than REQ-STARTUP-143's five conditions.** These are the generator's own integrity guards.
+Each fails closed and names what it found:
+
+- a font's licence file that lacks the font's own copyright notice;
+- an installed Electron runtime whose `dist/version` differs from its `package.json`;
+- Electron credits whose product count does not match what could be read;
+- a malformed or future-dated reviewed exception, even when no component needs it;
+- a required dependency that is not installed;
+- an input file that is not a JSON object.
+
+Only the rule that Electron, the interpreter, a compiled-in library and a bundled asset must carry their text is a
+reading of the requirement (OQ-69). The rest guard the generator's own inputs.
+
+*Corrected 2026-09-27 by the gate review's second round, on two points.* First, an input that parsed to `null`, `false`,
+`0` or `""` had been read as having nothing to report. Over an otherwise valid fixture, a `release-inputs.json` holding
+`null` exited 0 with "(no address)" in the header. A `bundled-assets.json` holding `null` dropped every font and icon
+text, and a `pins.json` holding `null` dropped every language server. Second, the address check still accepted the
+plan's own example `Name <sources@domain.tld>`, `test@test.com`, `noreply@…`, two addresses in one value, and the
+stock postal templates. Both are repaired. What the check refuses, and its limits as a word-and-shape heuristic, are
+stated in the plan's §4.3.
+
 Two premises of REQ-STARTUP-142 are not true of this
 build: Manrope is named and not bundled, and no setup manifest pins a machine tool (OQ-67). **Nothing in this record
 changes.** The step sits where REQ-STARTUP-037 puts it, before freezing. The `extraResources` entry

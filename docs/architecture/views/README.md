@@ -53,7 +53,9 @@ section for the tool, and the **process view** gains the file's row in "Files an
 About paragraph. No package, edge, process, channel, command or message kind changed. The gate review later that day
 changed two things inside the tool. A licence file that only refers to the licence, or only attributes, is no longer
 counted as the text (OQ-69). The LGPL address must now have an address's shape. No view changed for either: both
-are internal to `notices.mjs`, and it still reads and writes what the component view says.
+are internal to `notices.mjs`, and it still reads and writes what the component view says. The review's second round
+changed three more things inside the tool. The address check refuses the placeholders it still accepted. An input that
+is not a JSON object fails as unparsable. A directory where the output goes is a handled error. No view changed.
 
 **Product-drawn main-window chrome (`PD-SHELL-003`, built and revised 2026-09-24).** On Windows, Linux and macOS the main
 `BrowserWindow` is frameless with its native menu hidden. The existing title bar now ends in minimize,

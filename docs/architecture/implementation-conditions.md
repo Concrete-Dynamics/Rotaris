@@ -376,7 +376,7 @@ ninth defect of decision 3's pattern was a blank packaged window, React twice in
 the unpackaged build shared and no test rendered. Owed and stated: the portable and its stub (ADR-0054),
 signing, `REQ-STARTUP-156`'s gate, an icon, and the per-runner half (IC-3 item 3).
 
-## IC-7 — the bundled code-intelligence runtime fetches its language servers; the release is bound until the owner decides (ADOPTED 2026-09-06, option 2 — DISCHARGED 2026-09-27)
+## IC-7 — the bundled code-intelligence runtime fetches its language servers; the release is bound until the owner decides (ADOPTED 2026-09-06, option 2 — DISCHARGED 2026-09-27, the pipeline's evidence owed)
 
 > **DISCHARGED 2026-09-27 — the second half, by the notices generator's first execution** (`first-release-plan.md`
 > §4.3; `tools/notices/`, `pnpm notices`). The criterion option 2 set — "the specification carries the amendment and
@@ -389,6 +389,11 @@ signing, `REQ-STARTUP-156`'s gate, an icon, and the per-runner half (IC-3 item 3
 > contained in the artifact, and that a further language obtains its server by the same route and is not declared.
 > Rendered over this tree and asserted by `tools/notices/notices.test.ts`, both over a fixture and over the real
 > manifest. A manifest that cannot be read or parsed, or a package missing any of the four fields, fails validation.
+> *Corrected the same day by the gate review's second round: that sentence was false for one input.* A manifest
+> holding only `null`, `false`, `0` or `""` parsed without complaint. Over an otherwise valid fixture the step exited
+> 0 and printed "0 language servers", and this section's list was empty. Every input the generator reads must now be
+> a JSON object, or it fails as unparsable. A package field that is only whitespace also counts as missing.
+> `notices.test.ts` covers each case.
 > **What this does not show, stated so it is not read as shown:** a notices file frozen into a release. The first run
 > wrote none, because REQ-STARTUP-143's validation failed on six things IC-7 does not own: the LGPL address (O-3),
 > `dotenv` 0.9.9's missing identifier (OQ-68), and three npm packages and one Python distribution that carry no

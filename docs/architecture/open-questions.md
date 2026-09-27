@@ -2976,11 +2976,11 @@ Reading the rest of the closure found three more kinds:
 
 - **text**: it carries a licence;
 - **a reference**: it only names a licence on one line. Or it is at most 2,000 characters, it sends the reader
-  elsewhere, and it carries no grant of its own. "Sends elsewhere" is one of: "see the LICENSE", "found in LICENSE",
-  "obtain a copy of the License", "can obtain one at", "should have received a copy of the". The grants checked are
-  those of the licences short enough to sit beside such words: MIT and Boost, ISC and 0BSD, the BSD family, zlib, the
-  Unlicense and SQLite's blessing. Every full text that quotes its own notice in an appendix (Apache-2.0, the GPL
-  family, MPL-2.0) is far longer than the bound;
+  elsewhere, and it carries no grant of its own. "Sends elsewhere" is one of: "see the LICENSE" (a markdown link,
+  "see the [LICENSE](LICENSE)", included), "found in LICENSE", "obtain a copy of the License", "can obtain one at",
+  "should have received a copy of the". The grants checked are those of the licences short enough to sit beside such
+  words: MIT and Boost, ISC and 0BSD, the BSD family, zlib, the Unlicense and SQLite's blessing. Every full text
+  that quotes its own notice in an appendix (Apache-2.0, the GPL family, MPL-2.0) is far longer than the bound;
 - **an attribution**: a file named NOTICE, AUTHORS, CONTRIBUTORS or CREDITS.
 
 References and attributions are still reproduced with the component, because they carry its copyright and
@@ -2995,12 +2995,18 @@ exists in the first release.
 
 Over this tree the rule leaves 12 shipped components without licence text. The first run counted 4.
 
-Two limits are stated here, so that neither is read as coverage:
+Three limits are stated here, so that none is read as coverage:
 
 - The classifier reads words, so a pointer worded differently from the phrases above passes as text.
 - A file that carries one licence's text and refers elsewhere for another counts as text. `tqdm` 4.67.1 declares
   `MPL-2.0 AND MIT` and carries the MIT text in full beside MPL-2.0's Exhibit A, so its entry has no MPL-2.0 text.
   The generator does not match the texts a component carries against the expression it declares.
+- The pass is per component, and a component's vendored libraries are not components of their own (OQ-66). pip
+  26.2.1 passes on its own MIT text. Its vendored `certifi` ships only MPL-2.0's Exhibit A, so pip's entry carries no
+  MPL-2.0 text. Its vendored `cachecontrol` and `msgpack` ship only Apache-2.0's per-file notice. The Apache-2.0 text
+  is in pip's entry only because its vendored `packaging` happens to ship it as `LICENSE.APACHE`. This is `tqdm`'s gap
+  one level down. The ruling below would close it only together with OQ-66's granularity. *Added 2026-09-27 by the
+  gate review's second round, checked against the bundled runtime.*
 
 **What a ruling decides.** Whether a component that ships only a licence's notice should instead get the canonical
 text of the identifier it declares, reproduced by the generator from a version-controlled copy beside it (as

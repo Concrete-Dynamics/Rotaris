@@ -291,19 +291,37 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       if (persona === 'orchestrator') return turn === 1
         ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'survey', task: 'TASK: read it', run_in_background: false } }], 'Delegating.', { input: 10, output: 2, cost: '0.001' })
         : answer('All done.', { input: 12, output: 3, cost: '0.002' });
-      if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+      // The summariser reports nothing here, so this case is the child's alone; the next case counts the summariser.
+      if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}', { input: 0, output: 0 });
       // A reader that answers in text is accepted at once (REQ-ORCH-095 re-prompts only an implementer), so this is one request.
       return answer('The module is small.', { input: 100, output: 20, cost: '0.0105' });
     });
     const sid = (sessions.start(dal, 'C:/ws', 'build the thing') as { value: SessionId }).value;
     const result = await sessions.running(sid)!;
     expect(result.status).toBe('completed');
-    // The entry agent's two requests and the child's one, each counted once; the summariser's call is not a request of any agent's turn.
+    // The entry agent's two requests and the child's one, each counted once; the summariser reported no usage, so it moves no total.
     expect(dal.getSession(sid)).toMatchObject({ tokens_input: 122, tokens_output: 25, cost: '0.0135' });
     const updates = dal.eventsOfKind(sid, 'usage.update').map((e) => (JSON.parse(e.payload) as { tokens: { total: number }; cost: { total: string } }));
     expect(updates).toHaveLength(3);
     expect(updates.at(-1)).toMatchObject({ tokens: { input: 122, output: 25, total: 147 }, cost: { total: '0.0135' } });
     expect(updates.map((u) => u.cost.total)).toContain('0.0115');
+  });
+
+  it('REQ-EVENTS-053 / PD-MONITOR-001: the child-report summariser\'s request counts against the run like any agent\'s', async () => {
+    const { sessions } = sessionsWith((persona, turn) => {
+      if (persona === 'orchestrator') return turn === 1
+        ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'survey', task: 'TASK: read it', run_in_background: false } }], 'Delegating.', { input: 10, output: 2, cost: '0.001' })
+        : answer('All done.', { input: 12, output: 3, cost: '0.002' });
+      if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}', { input: 40, output: 8, cost: '0.0004' });
+      return answer('The module is small.', { input: 100, output: 20, cost: '0.0105' });
+    });
+    const sid = (sessions.start(dal, 'C:/ws', 'build the thing') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    // The three agent requests of the case above, plus the summariser's one — no agent's turn, and still the run's.
+    expect(dal.getSession(sid)).toMatchObject({ tokens_input: 162, tokens_output: 33, cost: '0.0139' });
+    const updates = dal.eventsOfKind(sid, 'usage.update').map((e) => (JSON.parse(e.payload) as { cost: { total: string } }));
+    expect(updates).toHaveLength(4);
+    expect(updates.at(-1)).toMatchObject({ cost: { total: '0.0139' } });
   });
 
   describe('PD-TOOLS-006: write scopes', () => {

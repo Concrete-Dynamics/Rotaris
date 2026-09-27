@@ -237,7 +237,14 @@ used — the discovery snapshot's prices likewise. **Every agent's requests are 
 and every delegated child's turn, at any depth, hand each completed request to the one `Run.onRequestUsage`
 (`ChildrenDeps.onRequestUsage`), so the run's tokens, its cost and each `usage.update` cover the whole tree
 (REQ-EVENTS-053). Until 2026-09-23 a child's turn was built without it and the totals were the entry agent's
-alone.
+alone. **So are the run's requests that belong to no agent's turn** (`run/metered.ts`): compression, the
+child-report summariser, the pre-flight's intent classifier and the loop supervisor's classifier each call a
+backend `meteredBackend` wraps, which hands every completed request, a failed one included, to `Run.countUsage`
+with the model it was sent to; `countUsage` prices it at that model's catalogue rates (`priceRequest`, as the ladder
+does) and passes it to `onRequestUsage`. `Sessions` wraps the compressor's and the summariser's backends itself and
+hands its `countUsage` to the run host's two classifiers, through `PreflightContext.countUsage` and the
+`supervisor` factory's third argument, which wrap their own. The improvement analyst runs after the run has ended
+and has no run totals to join. Until 2026-09-27 these four calls discarded their usage.
 
 What the model is handed for each of them is `toolSpec` (`run-host/tools.ts`): an MCP tool's own input schema where
 ADR-0034 supplies one, otherwise the zod schema converted **as an input** (`io: 'input'`) — the shape of a call about to

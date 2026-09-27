@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import { mergePlaybookOverrides, readIntentMapping, readPlaybookOverrides } from '@rotaris/config';
 import { WORKSPACE_SCOPE_DIR } from '@rotaris/platform';
 import { isAnswerOnly, type ModelTier } from '@rotaris/contracts';
-import { carryOver, classifyIntent, intentGrant, resolveIntentMapping, resolvePlaybooks, ROLE_VOCABULARY, type RungMemory, type ClassifierSlots, type Preflight, type PreflightContext } from '@rotaris/engine';
+import { carryOver, classifyIntent, intentGrant, meteredBackend, resolveIntentMapping, resolvePlaybooks, ROLE_VOCABULARY, type RungMemory, type ClassifierSlots, type Preflight, type PreflightContext } from '@rotaris/engine';
 import type { AgentBackend, ModelRef } from '@rotaris/model';
 import type { Clocks } from '@rotaris/kernel';
 
@@ -36,7 +36,8 @@ export async function runPreflight(ctx: PreflightContext, deps: PreflightDeps): 
   const freshIntent = await classifyIntent(
     { prompt: ctx.prompt, metadata: { entrypoint: 'desktop', workspace_hash: String(ctx.workspaceRoot.length) } },
     deps.slots,
-    { backend: deps.backend, timers: deps.clocks.timers, credentialFor: deps.credentialFor, modelTimeoutMs: deps.modelTimeoutMs, memory: deps.memory, warn },
+    // REQ-EVENTS-053: the classification requests are the run's, counted against it where the engine hands a counter.
+    { backend: ctx.countUsage ? meteredBackend(deps.backend, ctx.countUsage) : deps.backend, timers: deps.clocks.timers, credentialFor: deps.credentialFor, modelTimeoutMs: deps.modelTimeoutMs, memory: deps.memory, warn },
     ctx.signal,
   );
   const intent = carryOver(freshIntent, ctx.previousIntent ?? null, ctx.hasUnfinishedWork ?? null);

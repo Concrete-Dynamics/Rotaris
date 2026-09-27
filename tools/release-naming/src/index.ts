@@ -47,3 +47,5 @@ export function releaseArtifacts(version: string): readonly { platform: Platform
 
 export const CHECKSUM_MANIFEST_NAME = 'SHA256SUMS.txt' as const;
 export const CHECKSUM_SIGNATURE_NAME = 'SHA256SUMS.txt.sig' as const;
+
+export * from './tag.js';

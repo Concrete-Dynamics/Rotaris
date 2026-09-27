@@ -6,10 +6,17 @@
  * scripted client appends every call's system text to a file (`ROTARIS_CAPTURE_MODEL_REQUESTS`, a seam compiled out
  * of a packaged build and reachable only from the scripted client, so no real provider is ever called or recorded).
  *
- * Every base is a scratch directory. The home-relative bases resolve into a scratch home through
+ * Every instruction base is a scratch directory. The home-relative bases resolve into a scratch home through
  * `ROTARIS_CAPTURE_INSTRUCTIONS_HOME`, the global base is the scratch profile's own configuration directory, and the
- * machine-wide base (`/etc/codex`, off Windows only) is redirected by `ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE` — the
- * operator's own `~/.agents`, `~/.config/opencode`, `~/.openhands` and `/etc/codex` are never read or written.
+ * machine-wide base (`/etc/codex`, off Windows only) is redirected by `ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE`: no
+ * instruction file of the operator's own is read or written. On a POSIX host `HOME` is that scratch home as well
+ * (`proofIsolationEnv`), so every other home-relative read — the prompt library's `~/.agents/prompts`, for one —
+ * lands there too; Windows keeps its real home, because overriding it kills Electron before it paints there.
+ *
+ * ONE root of the operator's machine is still read: the skill search's machine-wide root, `/etc/codex/skills`
+ * (REQ-WORKSPACE-051, off Windows only), which has no seam. A skill there would enter the scripted model's catalog
+ * and the captured calls. No assertion here is exact over the catalog, so it cannot turn the proof red, but it is not
+ * isolation (`docs/defects/three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md`).
  *
  * The functional half, four launches against one scratch profile whose workspace is a Git repository in which every
  * workspace instruction file's committed text differs from its working copy:
@@ -46,7 +53,7 @@
  * eviction this script can reach, so elsewhere the reading is labelled WARM and is not assessed against the bound.
  *
  * Evidence under `.proof/injection-proof/`: one PNG, one log and one model-call file per launch; `results.json`;
- * `latency.json`. Flags: `--skip-build`, `--skip-latency`, `--latency-runs=<n>` (n ≥ 20).
+ * `latency.json`. Flags: `--skip-build`, `--skip-latency`, `--latency-runs=<n>` or `--latency-runs <n>` (n ≥ 20).
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -58,7 +65,12 @@ import { app, buildDesktop, configDirFor, electron, evidenceDirectory, launchOpt
 const output = evidenceDirectory('injection-proof');
 rmSync(output, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 mkdirSync(output, { recursive: true });
-const flag = (name) => process.argv.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3);
+/** `--name=value` or `--name value`; a flag given with no value reads as the empty string, which no check accepts. */
+const flag = (name) => {
+  const at = process.argv.findIndex((a) => a === `--${name}` || a.startsWith(`--${name}=`));
+  if (at < 0) return undefined;
+  return process.argv[at].includes('=') ? process.argv[at].slice(name.length + 3) : (process.argv[at + 1] ?? '');
+};
 const skipLatency = process.argv.includes('--skip-latency');
 const latencyRuns = Number(flag('latency-runs') ?? 20);
 // REQ-WORKSPACE-049: "at least 20 consecutive cold measurements taken in separate processes". Fewer is not the figure.
@@ -72,6 +84,8 @@ const fail = (message) => { writeFileSync(join(output, 'results.json'), JSON.str
 const write = (path, text) => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, text); };
 /** The platform rule the product applies to the machine-wide base (`hasEtcHierarchy`): every platform but Windows. */
 const hasMachineBase = process.platform !== 'win32';
+/** Where `HOME` may be moved into the profile: every platform but Windows, where overriding it kills Electron. */
+const scratchHome = process.platform !== 'win32';
 
 /**
  * One launch of the built product. `profile` names the scratch roots; the model-call file is the launch's own, so a
@@ -84,7 +98,7 @@ function launch(name, profile, workspace, extra, timeoutMs = 120_000) {
   const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), workspace], {
     cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
     env: {
-      ...launchOptions({ local: profile.local, preferences: profile.preferences }),
+      ...launchOptions({ local: profile.local, preferences: profile.preferences, ...(scratchHome ? { home: profile.home } : {}) }),
       ROTARIS_CAPTURE_INSTRUCTIONS_HOME: profile.home,
       ...(hasMachineBase ? { ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE: profile.machine } : {}),
       ROTARIS_CAPTURE_MODEL_REQUESTS: calls,

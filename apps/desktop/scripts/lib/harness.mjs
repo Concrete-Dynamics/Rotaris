@@ -140,12 +140,13 @@ export function buildDesktop(output) {
 
 /**
  * The environment every launch shares — the clean base, the scratch profile's three roots and the scripted
- * dialect. A caller adds its own seams on top; nothing here presumes a capture.
+ * dialect. A caller adds its own seams on top; nothing here presumes a capture. `home` is `proofIsolationEnv`'s,
+ * passed through: a POSIX caller names its scratch home there, and a Windows caller never does (see below).
  */
-export function launchOptions({ local, preferences, extra = {} }) {
+export function launchOptions({ local, preferences, home, extra = {} }) {
   return {
     ...cleanEnvironment(),
-    ...proofIsolationEnv({ local, preferences }),
+    ...proofIsolationEnv({ local, preferences, home }),
     ROTARIS_MODEL_DIALECT: 'scripted',
     ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
     ...extra,

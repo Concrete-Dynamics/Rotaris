@@ -49,7 +49,7 @@ export interface InstructionDiscoveryEnv {
 }
 
 /** PD-WORKSPACE-002's machine-wide base, where a platform has an `/etc` hierarchy. */
-export const MACHINE_INSTRUCTION_DIR = join('/etc', 'codex');
+const MACHINE_INSTRUCTION_DIR = join('/etc', 'codex');
 
 function fileIfPresent(entries: InstructionFileEntry[], id: string, name: string, path: string, source: string, isFile: (p: string) => boolean): void {
   if (isFile(path)) entries.push({ id, name, path, source });

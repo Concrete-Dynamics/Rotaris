@@ -47,8 +47,9 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 **Workspace-context injection, measured and proven in the built app (first-release-plan §3.2 and §3.3, 2026-09-27).**
 `SkillHost.workspaceContext` times its cold path on the monotonic clock port. It covers the policy read, the
-discovery and the merge, and logs one line, which is REQ-WORKSPACE-049's figure. The policy read moved into
-`enabledUnder`, a private step, so that it can be timed apart. The machine-wide instruction base's directory is
+discovery and the merge, and logs one line, which is REQ-WORKSPACE-049's figure. The policy read moved **out** of
+the discovery step into its two callers, `workspaceContext` and `instructionFiles`, so that it can be timed apart;
+`enabledUnder`, a private step, now takes a policy already read. The machine-wide instruction base's directory is
 injectable (`machineDir`, `/etc/codex` when absent). Two verification seams, both compiled out of a packaged build,
 reach the built app: `ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE`, read by the run host and the workspace service, and
 `ROTARIS_CAPTURE_MODEL_REQUESTS`, through which the scripted client alone appends what each call received. The

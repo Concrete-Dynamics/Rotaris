@@ -72,7 +72,13 @@ the four positions named and two of them stated empty.
 > would have read; nothing anywhere said the list described a mechanism that did not run. The owner asked
 > for switches over "the auto injection" on the reasonable assumption that there was one. A slot named in
 > a record is not a slot named in the product, and the second absent unit — persona memory — has the same
-> exposure today. `REQ-WORKSPACE-050`'s worktree half is still unbuilt and is recorded in `docs/defects/`.
+> exposure today. ~~`REQ-WORKSPACE-050`'s worktree half is still unbuilt and is recorded in `docs/defects/`.~~
+>
+> **Repaired, then executed in the built app.** The worktree half was built on 2026-09-22 (`0b3ebe3`) as the repair of
+> [`isolated-runs-read-instruction-files-from-the-base-workspace.md`](../../defects/fixed/isolated-runs-read-instruction-files-from-the-base-workspace.md)
+> (now under `fixed/`). On 2026-09-27 `pnpm injection-proof`'s isolated launch showed it in the built app: a run in
+> `.rotaris/worktrees/<sid>` received the worktree's committed text under the worktree's paths, while the catalog stayed
+> the base workspace's (first-release-plan §3.3; first-executions row 2026-09-27).
 
 ## The decision
 

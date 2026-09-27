@@ -78,7 +78,8 @@ function launch(name, workspace, local, preferences, extra, timeoutMs = 150_000)
     if (end) { try { probes[end[1]] = JSON.parse(end[2]); } catch { probes[end[1]] = []; } continue; }
     // `probe-at <n>` is a sampled instant; `probe-at ~<n>` is a wait-until logged with the REQUESTED ms
     // (main strips the tilde when acting but keeps it in the label, so a reader can tell the two apart).
-    const at = /^\[main (\S+)\] capture: probe-at ~?(\d+) (.+?) → (\[.*\])\s*$/.exec(line);
+    // PD-MONITOR-002: the stamp, then the level column (`info` — main's own line), then the message.
+    const at = /^\[main (\S+)\] info +capture: probe-at ~?(\d+) (.+?) → (\[.*\])\s*$/.exec(line);
     if (at) { try { timed.push({ wall: Date.parse(at[1]), at: Number(at[2]), selector: at[3], found: JSON.parse(at[4]) }); } catch { /* an unreadable probe is no probe */ } continue; }
     const ins = /capture: inspect-at ~?(\d+) (.+?) → (\{.*\})\s*$/.exec(line);
     if (ins) { try { inspected.push({ at: Number(ins[1]), selector: ins[2], ...JSON.parse(ins[3]) }); } catch { /* an unreadable inspection is none */ } }

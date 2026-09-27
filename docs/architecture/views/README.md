@@ -45,6 +45,18 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-27**
 
+**The application log keeps `info` and above (`PD-MONITOR-002`, built 2026-09-27, R-055).** Main's standard output
+carried the level of a forwarded line as text inside it and none on main's own, and recorded every level. Each line now
+carries its level in a column of its own, and a line below the threshold is not written; the threshold is `info`, moved
+only by `ROTARIS_APP_LOG_LEVEL`, read once at start. Main's own reports of a loss are `error` — a `shutdown` a child
+refused or left unanswered while still running among them, since an exit of 0 does not prove one — so a crash is still
+recorded at a higher threshold. The quit races each child's `shutdown` against its exit (`main/exit.ts`), so an answer
+lost to the exit neither stalls the quit for the bound nor writes that line. The level, the predicate and the line are
+the new `main/app-log.ts`; `index.ts` keeps the wiring. The **process view** gains a paragraph on the application log,
+the `log` event names its fields, and the MCP-child paragraph says `debug` is now a filter; the **state-ownership view**
+gains the threshold as a fact nobody writes after start. No package, edge, process, channel, message kind or store
+column changed.
+
 **The `FAILED ` marker matches in capitals only (`PD-TOOLS-003`, built 2026-09-27, R-055).** Of REQ-TOOLS-113's five
 literal failure markers, `FAILED ` alone is now matched case-sensitively; the other four, the error count, the banner
 and the pipeline check keep their casing. The rule lives in the marker list in `agent-tools/src/terminal/classify.ts`,

@@ -1600,6 +1600,48 @@ are not recorded, and cannot be recovered afterwards.
 
 *Raised by the owner, 2026-09-23; logged as [R-048](requests.md#r-048).*
 
+> **First execution, 2026-09-27, built under [R-055](requests.md#r-055):** the mechanism was built as written, and the
+> text met the code in three places. **(1) The vocabulary.** The directive names `warning`; the child protocol and
+> every writer in the code say `warn`. The line is written with the directive's word and the variable accepts exactly
+> the four the directive lists, so `ROTARIS_APP_LOG_LEVEL=warn` is unrecognized and means `info` — the product says so
+> in one `warning` line after the instance claim, rather than silently. **(2) "Every line".** Main's own lines carried
+> no level at all, and the collaborators that already told a warning apart (the improvement coordinator,
+> initialization, the credential store, the settings store, the provider service) had it dropped by the wiring, so
+> REQ-LIBRARY-035(b)'s *warning* reached the log as an unlabelled line; each now arrives at `warning`. Main's own
+> reports of a loss are `error` — an uncaught exception or rejection, a refused launch, a failed hand-over, a renderer
+> or child process gone for any reason but `clean-exit`, the run host or a workspace service exiting with any status
+> but 0, and a `shutdown` either child refused or left unanswered, still running, when its bound elapsed at quit — and
+> a dialog or review that could not be presented is `warning`; every other line of main's stays `info`. An exit of 0
+> was first read as proof of main's own `shutdown`; it is not, because Electron reports 0 for a child it tears down at
+> quit, so the unanswered `shutdown` is the line that says work was cut off. A message of several lines (a stack) is
+> written with the stamp and level on each line. **(3) The obliged lines.** Every line the seven named requirements
+> oblige reaches the log at `info` or above: the confinement verdict (REQ-SANDBOX-071) at `info`,
+> REQ-LIBRARY-035(b)/124's failure and REQ-LIBRARY-047's unrecorded version at `warning`; REQ-TOOLS-171 and
+> REQ-HOOKS-102 oblige no line, they constrain text, which a threshold can only drop. REQ-HOOKS-138's hook lines in
+> this log are `info` and `warning`, but the hook engine's own sink — documented "the application log only" — is wired
+> to the per-session log at `INFO`, where the default `WARNING` drops it; that is recorded as
+> [`hook-faults-reach-only-the-session-log-at-a-level-it-drops.md`](../defects/hook-faults-reach-only-the-session-log-at-a-level-it-drops.md)
+> and not changed here, because it is a question of which log, not of this one's threshold. Three proof readers
+> matched the old shape and two proofs read `debug` lines; the readers were updated and those two launches set the
+> variable. Measured on a driven launch in a Linux container as root, without the bundled runtime, so the 141 stderr
+> lines of 2026-09-16 could not recur: 72 lines at the default (66 `info`, 6 `warning`, 0 `debug`); 69 with the
+> variable at `debug`, the same lines plus the code-intelligence child's two `debug` lines, less five the first
+> launch's own driving wrote. At `warning` a clean launch and quit writes nothing, its `quit:` lines included, which
+> is what a threshold above `info` costs: 24 launches driven to a last-window close at the default level wrote no
+> `warning` or `error` line and quit in 40–69 ms, and one ended by the driver's `app.exit` at `warning` wrote nothing
+> at all. The review's run of the same close found the first version of the unanswered-`shutdown` line firing on
+> orderly quits (3 in 26, each waiting out the 30 s bound), because a child's answer can lose the race with its own
+> exit; the quit now races each `shutdown` against the child's exit, recorded as
+> [`a-childs-shutdown-ack-can-lose-the-race-with-its-exit.md`](../defects/fixed/a-childs-shutdown-ack-can-lose-the-race-with-its-exit.md).
+> A loss still writes its `error`, driven against this build at `warning`: a run host killed with SIGKILL and then the
+> last window closed wrote exactly `run host exited (9)` and
+> `CHILD PROCESS GONE (Utility rotaris-run-host: killed, exit 9)` and quit in about 60 ms; one stopped with SIGSTOP
+> before the close wrote `quit: the run host did not complete its shutdown (… no reply to shutdown within 30000 ms)`
+> after 30 s, and nothing else. The other exit statuses rest on a scratch Electron 44.1.1 app, not this build: an
+> uncaught throw, `process.exit(3)`, SIGABRT, SIGKILL, SIGSEGV and SIGTERM reported 1, 3, 6, 9, 11 and 15, and a
+> teardown at quit and `utilityProcess.kill()` reported 0. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-tools-006"></a>

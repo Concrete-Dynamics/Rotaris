@@ -96,11 +96,12 @@ scratch profile under `.drive/`. Full usage is in the script's own header
 ```
 pnpm build                                  # it drives the BUILT app, so build first
 pnpm app:drive start [--workspace=PATH] [--fresh] [--dialect=scripted]
+pnpm app:drive start --env=ROTARIS_APP_LOG_LEVEL=debug   # log every level; an exported variable never reaches it
 pnpm app:drive waitFor ".app-shell"         # waits for it; never a fixed sleep
 pnpm app:drive click ".nav-item" --text=Git
 pnpm app:drive inspect ".composer"          # boxes, attributes, text, what holds focus
 pnpm app:drive shot screen.png              # a PNG you can open, or read in a transcript
-pnpm app:drive log --tail=40                # what the app printed
+pnpm app:drive log --tail=40                # what the app printed: info and above unless started as above (PD-MONITOR-002)
 pnpm app:drive stop
 ```
 
@@ -254,7 +255,7 @@ directory per scenario:
 | file | what it holds |
 |---|---|
 | `app.log` | the launch verbatim, key substituted out and asserted free of a bearer |
-| `app.filtered.log` | the same log with a child MCP server's stderr dropped, consecutive repeats collapsed and the sandbox path shortened — two thirds of a launch log is one language server booting (OQ-63 rules that the *product's* log keeps every level, so this is the reader filtering, never the product) |
+| `app.filtered.log` | the same log with consecutive repeats collapsed and the sandbox path shortened, and a child MCP server's stderr dropped where the log holds any — two thirds of a launch log used to be one language server booting. Since `PD-MONITOR-002` the product's own log records `info` and above and that stderr is `debug`, so a live-run log carries none of it unless a scenario sets `ROTARIS_APP_LOG_LEVEL=debug`, the one switch that restores it |
 | `autopsy.txt` | `apps/desktop/scripts/autopsy.mjs` over that scenario's session |
 | `session.log` | the product's own per-session log, at `--session-log-level` (default `INFO`) |
 | `transcript.md` | every transcript row in full, not the 400 characters `results.json` keeps |

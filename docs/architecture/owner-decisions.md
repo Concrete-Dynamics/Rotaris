@@ -1515,6 +1515,9 @@ shape the question named.
 **What this ruling does not do.** It builds nothing. Until the directive is built the log keeps every level,
 and the directive owes its first execution into `first-executions.md` when it is.
 
+**Built 2026-09-27 (R-055).** The first execution is reported under `PD-MONITOR-002` in `docs/product/directives.md`
+and has its row in `first-executions.md`.
+
 ### OQ-21 — per-token prices are decimal strings, ruled; OQ-62's configured-rate branch with it
 
 **Ruled 2026-09-23 (R-049).** The owner approved the design recorded on

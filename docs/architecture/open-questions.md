@@ -42,7 +42,7 @@ payload, and whether a provider-reported cost has a qualifier — the reason eve
 which **one branch was ruled on 2026-09-16** by `PD-MONITOR-001` and two stay open. **One more was raised on
 2026-09-16 by reading a launch log: OQ-63** (what level threshold, if any, governs the **application** log —
 every level requirement in the corpus governs the per-session log instead), **ruled on 2026-09-23 by
-`PD-MONITOR-002`**. **OQ-21**, open since the gate, was **ruled on 2026-09-23** as it recommended and applied by
+`PD-MONITOR-002`** and built on 2026-09-27. **OQ-21**, open since the gate, was **ruled on 2026-09-23** as it recommended and applied by
 amendment (R-049), and OQ-62's configured-rate branch with it; OQ-62's discovery branch stays open. **One more was raised on
 2026-09-21 by building `PD-WORKSPACE-002`'s per-file switches: OQ-64** (whether an instruction override
 suppresses its base when the override is itself switched off — a third state REQ-WORKSPACE-042's "given
@@ -2776,6 +2776,10 @@ the shape every other desktop product settles on and which no requirement here s
 > "What the build proceeds under" no longer holds once the directive is built; until then the log keeps
 > every level, as that paragraph says. See `owner-decisions.md`, "OQ-63 — the application log's threshold,
 > ruled".
+>
+> **Built 2026-09-27 (R-055).** "What the build proceeds under" no longer holds: the log records `info` and above by
+> default (`apps/desktop/src/main/app-log.ts`), and the first execution is under `PD-MONITOR-002` in
+> `docs/product/directives.md` and in `first-executions.md`.
 
 **OQ-64 — Does an instruction override suppress its base when the override is switched off?** *(REQ-WORKSPACE-042, narrowed by `PD-WORKSPACE-002`; REQ-WORKSPACE-043/047/048. Raised 2026-09-21 by building the per-file switches and the injection that consumes them.)*
 

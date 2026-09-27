@@ -138,6 +138,9 @@ function launch(name, extra, { ws = workspace, global = GLOBAL, timeout = 150_00
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_INTENT_SCRIPT: 'explicit_trivial', ROTARIS_CIRCUIT_BREAKER: 'off', ROTARIS_CAPTURE_PNG: png,
       ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
+      // PD-MONITOR-002: the launch lines this proof reads (`mcp code_intelligence: launching …`) are the MCP child's
+      // `debug` diagnostics, which the application log leaves out at its `info` default.
+      ROTARIS_APP_LOG_LEVEL: 'debug',
       ...extra,
     },
   });

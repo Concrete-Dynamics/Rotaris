@@ -638,10 +638,11 @@ function scenarioDir(name) {
  * recoverable, so nothing here is a substitute for `app.log`, only a way to read it.
  *
  * Three reductions, in order of how much they take:
- *   1. a child MCP server's stderr, forwarded into the application log by `packages/mcp/src/transport.ts`. Two
- *      thirds of a live launch log is one language server's boot noise (190 of 288 lines, measured on the
- *      2026-09-21 pack; 141 of 195 measured independently on 2026-09-16). OQ-63 rules that the application log
- *      keeps every level, so this is the READER filtering, never the product — which is why `app.log` stays.
+ *   1. a child MCP server's stderr, forwarded into the application log at `debug` by `packages/mcp/src/transport.ts`.
+ *      Two thirds of a live launch log was one language server's boot noise (190 of 288 lines, measured on the
+ *      2026-09-21 pack; 141 of 195 measured independently on 2026-09-16). Since PD-MONITOR-002 the product records
+ *      `info` and above unless `ROTARIS_APP_LOG_LEVEL` says otherwise, and `cleanEnvironment()` strips that name from
+ *      this launch, so those lines are absent from `app.log` unless a scenario's own `extra` sets it to `debug`.
  *   2. consecutive repeats of one line, collapsed to the line and a count, the shape `transport.ts` already uses.
  *   3. the sandbox's absolute path, which prefixes most lines at about ninety characters, shortened to `<sandbox>`.
  */
@@ -655,7 +656,7 @@ function filterLog(text, sandboxPath) {
     if (previous !== null && run > 1) { out.push(`  … the line above repeated ${run} times`); dropped.repeats += run - 1; }
   };
   for (const raw of text.split('\n')) {
-    if (/ (?:run host|workspace service) debug: mcp \S+ stderr: /.test(raw)) { dropped.mcpStderr += 1; continue; }
+    if (/\] debug +(?:run host|workspace service): mcp \S+ stderr: /.test(raw)) { dropped.mcpStderr += 1; continue; }
     const body = short(raw).replace(/^\[[^\]]*\] /, '');
     if (body === previous) { run += 1; continue; }
     flush();
@@ -1023,6 +1024,9 @@ if (!inCatalogue || typeof endpoint.contextTokens === 'number') {
 // `session_log_level` is the one level knob the product actually honours (REQ-SESSION-142; the APPLICATION log
 // filters on nothing, which is OQ-63's open question). It governs `<store>/sessions/<id>/session.log`, which
 // `preserveRun` copies into the pack.
+// No longer true since 2026-09-27: OQ-63 was ruled as PD-MONITOR-002 and built. The application log records `info`
+// and above, and its one switch is the environment variable ROTARIS_APP_LOG_LEVEL, never a configuration key —
+// `session_log_level` is still the only level knob in `agents.yaml`, and it still reaches the session log alone.
 if (!agents.includes('permission_mode:')) agents += `runtime:\n  permission_mode: autonomous\n  allow_unsandboxed_autonomous: true\n  max_iterations: ${MAX_ITERATIONS}\n  session_log_level: ${SESSION_LOG_LEVEL}\n`;
 writeFileSync(agentsFile, agents);
 cpSync(agentsFile, join(output, 'agents.yaml'));

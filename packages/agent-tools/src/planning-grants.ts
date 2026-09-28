@@ -12,8 +12,17 @@ import { withholdsOn } from './registry.js';
  * The `readsWorkspaceFiles` facet is deliberately NOT consulted: the requirement names two facets and a plan
  * is written by reading. `read_file`, `grep`, `glob`, `haet_read`, `fetch`, `todo`, `delegate` and the artifact
  * tools all survive the narrowing, which is what makes a plan cycle able to produce a plan at all.
+ *
+ * `isPublicTool` is whether the surface serves this name with the public tool of that name — the run host's
+ * `publicTool` predicate, PD-TOOLS-004's seam. The registry answers by NAME, and a name is not a declaration: a
+ * server's tool offered as `read_file` (a persona's MCP surface prefixes a server's tool only when its name is
+ * already taken) carries none, so it is withheld like every other undeclared tool whatever it is called. Until
+ * 2026-09-28 both readers asked the registry about the name alone and such a tool survived the hold
+ * (`docs/defects/fixed/an-mcp-tool-offered-under-a-public-name-is-ruled-as-that-public-tool.md`). The default
+ * serves the caller that narrows a persona's DECLARED names, which REQ-TOOLS-002 keeps public.
  */
-export function withheldUnderPlanGate(name: string): boolean {
+export function withheldUnderPlanGate(name: string, isPublicTool = true): boolean {
+  if (!isPublicTool) return true;
   return withholdsOn(name, 'writesWorkspaceFiles') || withholdsOn(name, 'runsCommands');
 }
 

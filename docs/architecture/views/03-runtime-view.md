@@ -364,7 +364,7 @@ watchdog on the clock port) and the turn awaits the port's `ready()` before read
 collision prefix) and from it, in one place, the executors outside the registry (named by callable name, dispatching the
 reported name to the session's shared connection under the entry's allowance, 300 s by default), the model's listing and
 `## MCP servers` appended to the system prompt (REQ-MCP-101, byte-exact). Under `restricted` or `read_only` the MCP
-tools are withheld from the surface (ADR-0016's reading). The session's connections open on first demand under a keyed
+tools are withheld from the surface (ADR-0016's reading), and while the plan gate holds every server executor is withheld by identity — `withheldUnderPlanGate(name, false)` — rather than by the registry's answer for its name, which a server's tool offered under a free public name such as `read_file` would otherwise borrow (REQ-ORCH-153; the gate refuses the same call on dispatch through its `publicTool` predicate and the port's withheld set). The session's connections open on first demand under a keyed
 single-flight (one process per server per session, shared by every child), a per-call failure is that call's (no retry,
 no reconnect; the next call re-establishes; one `mcp_config` warning per server per session), a `tools/list_changed`
 recomputes and only narrows (the executor deleted, the prompt untouched). **Their lifetime:** the connections of a

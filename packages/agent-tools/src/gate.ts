@@ -229,7 +229,17 @@ export class Gate {
      *    and `finish` settles it as `blocked` exactly as a permission denial does.
      * Meta tools are never gated (REQ-TOOLS-014, ADR-0016 c.4) and are checked first; they touch no workspace.
      */
-    if (!isMeta && deps.planGateHeld?.() === true && withheldUnderPlanGate(call.name)) {
+    /*
+     * Which tool the name reaches decides whether it is declared, not the name: a name this surface serves with
+     * something other than the public tool (a server's `read_file`, PD-TOOLS-004's `publicTool` answering false), or
+     * one this port removed at the gate (a server's `read_file` withheld from the listing is in no map at all), carries
+     * no declaration and is withheld whatever the registry says of the NAME. A name the surface neither serves nor
+     * removed is judged by the registry as before, so a public name the port never offered still takes the two
+     * branches below.
+     */
+    const removedHere = deps.planGateWithheldNames?.().has(call.name) === true;
+    const undeclared = removedHere || (executor !== undefined && !deps.publicTool(call.name));
+    if (!isMeta && deps.planGateHeld?.() === true && withheldUnderPlanGate(call.name, !undeclared)) {
       /*
        * …of a name that IS a tool. The fail-closed predicate answers `true` for every name outside the
        * registry, which is what the requirement asks for and also what made a misspelling read as a promise:
@@ -240,7 +250,7 @@ export class Gate {
        * REQ-TOOLS-032's unknown-tool refusal below, which is the true answer and the actionable one. Nothing is
        * relaxed: a name with an executor is still refused before the schema parse, the permission and the hooks.
        */
-      const isTool = executor !== undefined || isPublicToolName(canonicalToolName(call.name)) || deps.planGateWithheldNames?.().has(call.name) === true;
+      const isTool = executor !== undefined || isPublicToolName(canonicalToolName(call.name)) || removedHere;
       if (isTool) {
         const reason = planGateRefusal(call.name);
         return finish({ text: reason, isError: true, status: 'blocked', decision: null, observation: null, blockedReason: reason }, { failure_kind: 'plan_gate_withheld', error: 'withheld while the run is held at the plan gate' });

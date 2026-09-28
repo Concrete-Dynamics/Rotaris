@@ -265,8 +265,10 @@ crash, with its **interruption** recorded and its iteration left open. It is lef
 for the state the agent **resumes into**: where it waited if it had not started, `running` from its recorded
 conversation if it had, `summarizing` if it was writing its report. It presents as `paused`, a presentation state of its
 own, keeps its last activity, and is not settled for display with its session (`PD-ORCH-005` clause 13, revision 4); an
-agent a crash left unfinished presents so before the crash is recorded (OQ-73). One `paused` child may be cancelled while
-its session rests: it and its `paused` descendants end `cancelled`, and the rest resume (clause 16). Not a terminal state
+agent a crash left unfinished presents so before the crash is recorded (OQ-73, a departure from clause 13's last
+sentence). One `paused` child may be cancelled while its session rests: it and its `paused` descendants end `cancelled`,
+and the rest resume (clause 16); cancelling a crash-left one records the crash first (OQ-74, a departure from clauses 3
+and 8). Not a terminal state
 and not an outcome: a `paused` agent has no report until it ends. — `PD-ORCH-005`, `REQ-MONITOR-300`
 _Avoid_: suspended, frozen, held (the **plan gate** and the **message-limit pause** hold a run; they leave no agent paused)
 

@@ -6,7 +6,7 @@ import { isBusy, isViewId, LIBRARY_TABS, presentationStatus, STATUS_LABELS, THEM
 // provider that carries this window's preview registry down to every transcript surface (ADR-0047).
 import { TERMINAL_WINDOW_ROLE } from '@rotaris/contracts';
 import { TerminalHostProvider } from '@rotaris/ui';
-import { Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, rebasePending, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, runLevelAgent, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, type SlashHost, RequirementsBoard } from '@rotaris/ui';
+import { Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, rebasePending, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, runLevelAgent, runLevelResting, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, type SlashHost, RequirementsBoard } from '@rotaris/ui';
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls, and the shape it answers.
 import { bindPromptRootsReader } from '@rotaris/ui';
 import type { PromptsRootsResult } from '@rotaris/contracts';
@@ -333,6 +333,8 @@ function Mission({ workspace, popOut }: { workspace: string; popOut: boolean }) 
   // PD-ORCH-005 clause 13 (OQ-73): in REQ-CHAT-008's recovery state the run-level agent presents `paused`, as its agents do.
   const needsRecovery = useNeedsRecovery(session?.id ?? null, session?.executionStatus ?? null);
   const runLevel = useMemo(() => runLevelAgent(session, entry, needsRecovery), [session, entry, needsRecovery]);
+  // PD-ORCH-005 clause 16 (OQ-74): a paused child offers "Cancel selection" while its session rests, by the same predicate.
+  const resting = session !== null && runLevelResting(session, needsRecovery);
   const nowIso = useElapsedTick(session);
   const [sessions, setSessions] = useState<readonly SessionListItemPayload[]>([]);
   useEffect(() => { if (workspace !== '(no workspace)') queueMicrotask(() => { void bridge.command({ kind: 'session.list' }).then((r) => { if (r.ok) setSessions((r.value as { sessions: SessionListItemPayload[] }).sessions); }); }); }, [workspace, session?.id]);
@@ -348,7 +350,7 @@ function Mission({ workspace, popOut }: { workspace: string; popOut: boolean }) 
     useShellState.getState().switchView('workspace');
   };
   return <MissionView
-    session={session} sessionLabel={label} runLevel={runLevel} selectedAgentId={selectedAgentId} nowIso={nowIso} refresh={refresh}
+    session={session} sessionLabel={label} runLevel={runLevel} resting={resting} selectedAgentId={selectedAgentId} nowIso={nowIso} refresh={refresh}
     onSelect={(id, source) => { selectAgent(id); if (source === 'click' && popOut && id !== null && id !== RUN_AGENT_ID) { const agent = session?.agents.find((a) => a.id === id); if (agent) void openPersona(agent, false); } }}
     strategy={snapshot?.delegationStrategy ?? null} maxDepth={snapshot?.runtime.max_depth ?? null}
     onSetStrategy={(value) => setField({ rotaris: { delegation_strategy: value } })} onSetDepth={(value) => setField({ runtime: { max_depth: value } })}

@@ -19,13 +19,15 @@ export function inspectorEnablement(state: AgentRecord['presentationState'] | nu
 
 /**
  * Whether a surface offers Cancel for the shown agent: a live agent while its run is active (REQ-MONITOR-063); a `paused`
- * child wherever it is shown, since it is cancellable while its session rests (PD-ORCH-005 clause 16) — but never the
- * run-level agent at rest, whose whole-iteration equivalent is clause 6's "Continue without them" (OQ-74). The inspector,
- * the Mission view and the Workspace's agents header decide by it; a persona window offers Cancel always (REQ-SHELL-075(g)).
+ * child while its session rests (`resting`, `runLevelResting`), since clause 16 of PD-ORCH-005 makes it cancellable then
+ * — not while a run is active, when a `pausing` run is still bringing its agents to rest or a continue has not yet
+ * resumed them — and never the run-level agent at rest, whose whole-iteration equivalent is clause 6's "Continue without
+ * them" (OQ-74). The inspector, the Mission view and the Workspace's agents header decide by it; a persona window offers
+ * Cancel always (REQ-SHELL-075(g)).
  */
-export function cancelOffered(agent: Pick<AgentRecord, 'id' | 'presentationState'> | null, runActive: boolean): boolean {
+export function cancelOffered(agent: Pick<AgentRecord, 'id' | 'presentationState'> | null, runActive: boolean, resting: boolean): boolean {
   if (agent === null) return false;
-  if (agent.presentationState === 'paused') return agent.id !== RUN_AGENT_ID;
+  if (agent.presentationState === 'paused') return resting && agent.id !== RUN_AGENT_ID;
   return runActive && inspectorEnablement(agent.presentationState).cancel;
 }
 
@@ -40,7 +42,8 @@ export function cancelOffered(agent: Pick<AgentRecord, 'id' | 'presentationState
  * PD-ORCH-005 clauses 13 and 19 (OQ-73): the iteration's root resumes with its paused agents and the Continue action
  * counts it, so while the session rests with an iteration open — `paused` or `interrupted`, or in REQ-CHAT-008's
  * recovery state, which only the caller knows (`recovery`) — the run-level agent presents as `paused` too, the tree
- * agreeing with the count. The same sessions the composer states a count for (`WorkspaceView`'s `resumable`).
+ * agreeing with the count. The one predicate for the composer's count (`WorkspaceView`'s `resumable`), the resting root
+ * and a paused child's Cancel (`cancelOffered`'s `resting`, clause 16), so the three cannot drift apart.
  */
 export function runLevelResting(session: SessionRecord, recovery = false): boolean {
   const status = session.executionStatus;
@@ -139,7 +142,7 @@ export function pausedDescendants(agents: readonly AgentRecord[], id: string): A
  * descendants (PD-ORCH-005 clause 16, OQ-74).
  */
 export function cancelCascade(agents: readonly AgentRecord[], agent: Pick<AgentRecord, 'id' | 'presentationState'>): AgentRecord[] {
-  return agent.presentationState === 'paused' && agent.id !== RUN_AGENT_ID ? pausedDescendants(agents, agent.id) : liveDescendants(agents, agent.id);
+  return agent.presentationState === 'paused' ? pausedDescendants(agents, agent.id) : liveDescendants(agents, agent.id);
 }
 
 /**

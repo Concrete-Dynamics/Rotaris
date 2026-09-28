@@ -48,15 +48,18 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 **One paused child is cancellable while its session rests (`PD-ORCH-005` clause 16, revision 4, 2026-09-28, R-064).**
 `session.control`'s `cancelAgent` reaches `Sessions.cancelPausedAtRest` when no run is behind the session: the child
 and each `paused` descendant end `cancelled` with the live cancel's report, timeline entry and artifact, the iteration
-stays open, and `resumable` drops; a crash not yet recorded is recorded first. The surfaces offer Cancel by
-`cancelOffered` and confirm by `cancelConfirmation`/`missionCancelBody`, naming the paused descendants. The **runtime
-view**'s `cancelAgent` row and the **state-ownership view**'s rest row name the new writer; no package, edge, process,
-channel or command changes.
+stays open, and `resumable` drops; a crash not yet recorded is recorded first — the whole crash record, at a moment
+clauses 3 and 8 do not name (OQ-74's departure). The surfaces offer a paused child's Cancel while its session rests
+(`cancelOffered(agent, runActive, resting)`, `resting` being `runLevelResting`, the predicate the composer's count and
+the resting root share) and confirm by `cancelConfirmation`, the Mission view through `missionConfirmation`. The
+**runtime view**'s `cancelAgent`, `children`, `iterations` and `agent_terminals` rows and the **state-ownership view**'s
+rest row name the new writer; no package, edge, process, channel or command changes.
 
 **A paused agent presents as paused on every agent surface (`PD-ORCH-005` clause 13, revision 4, 2026-09-28, R-064).**
 `PRESENTATION_CHILD_STATES` gains `paused` and `presentationChildState` maps the child state to it, so `AgentRecord`'s
 `presentationState` widens on the existing session-record channel. `toAgentRecord` presents the agents a crash left
-unfinished, before the crash is recorded, as the record will leave them (`crashLeftOf`, OQ-73); `runLevelAgent`
+unfinished, before the crash is recorded, as the record will leave them (`crashLeftOf`, asked once per projection;
+OQ-73's departure from clause 13's last sentence); `runLevelAgent`
 presents the resting root `paused`, its callers passing REQ-CHAT-008's recovery state (`useNeedsRecovery`, moved to
 `renderer/session-view.ts`). The Overview counts paused agents on their own. The **runtime view**'s eleventh-state and
 projection paragraphs and the **state-ownership view**'s rest row are updated; no package, edge, process, channel or

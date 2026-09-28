@@ -37,6 +37,11 @@ export interface InspectorProps {
   readonly withheldModels?: readonly { readonly model: string; readonly reason: string }[] | undefined;
   readonly compressionThresholdPercent: number;
   readonly runActive: boolean;
+  /**
+   * PD-ORCH-005 clause 16 (OQ-74): the session rests with an iteration open (`runLevelResting`, which only the caller can
+   * ask, since REQ-CHAT-008's recovery state is the renderer's to know) — when a `paused` child offers Cancel.
+   */
+  readonly resting: boolean;
   readonly nowIso: string | null;
   readonly onSteer: (agent: AgentRecord) => void;
   readonly onCancel: (agent: AgentRecord, cascade: number) => void;
@@ -55,7 +60,7 @@ export const NEXT_ITERATION_NOTE = 'Takes effect from the next iteration.';
 export const NO_ARTIFACTS = 'No artifacts yet — this build has no artifact store.';
 
 export function Inspector(props: InspectorProps) {
-  const { session, rows, personas, runLevel, selectedAgentId, onSelect, models, withheldModels = [], compressionThresholdPercent, runActive, nowIso, onSteer, onCancel, onPopOut, onSetModel, onSetReasoning, drawer = false, onCloseDrawer } = props;
+  const { session, rows, personas, runLevel, selectedAgentId, onSelect, models, withheldModels = [], compressionThresholdPercent, runActive, resting, nowIso, onSteer, onCancel, onPopOut, onSetModel, onSetReasoning, drawer = false, onCloseDrawer } = props;
   const agents = useMemo(() => session?.agents ?? [], [session]);
   const selected = useMemo(() => (selectedAgentId === RUN_AGENT_ID ? runLevel : agents.find((a) => a.id === selectedAgentId) ?? null), [selectedAgentId, agents, runLevel]);
   const followed = useMemo(() => (selected ? null : followedAgent(rows, agents, runLevel)), [selected, rows, agents, runLevel]);
@@ -73,7 +78,7 @@ export function Inspector(props: InspectorProps) {
   const writable = isRunLevel && runActive && shown?.live === true;
   const cascade = shown ? cancelCascade(agents, shown).length : 0;
   // PD-ORCH-005 clause 16: a paused child offers Cancel while its session rests; a live agent while its run is active.
-  const cancellable = cancelOffered(shown, runActive);
+  const cancellable = cancelOffered(shown, runActive, resting);
   const chips = shown ? chipStates(resolvedTools(shown, persona?.tools ?? []), shown.calledTools, shown.activeTools) : [];
   const elapsed = shown && (shown.live || shown.completedAt) ? elapsedLabel(shown, nowIso) : null;
   const currentModel = shown?.model ?? '';

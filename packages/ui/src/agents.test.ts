@@ -181,14 +181,19 @@ describe('agents — PD-ORCH-005 clause 16 (revision 4): one paused child is can
   const grand = agent({ id: 'grand', name: 'grand', parentId: 'done', state: 'paused', presentationState: 'paused', live: false });
   const two = agent({ id: 'two', name: 'two', parentId: 'root', state: 'paused', presentationState: 'paused', live: false });
   const agents = [one, done, grand, two];
-  it('Cancel is offered for a paused child with no run active, never for the resting run itself; a live agent still needs its run', () => {
-    expect(cancelOffered(one, false)).toBe(true);
-    expect(cancelOffered(one, true)).toBe(true);
-    expect(cancelOffered({ id: RUN_AGENT_ID, presentationState: 'paused' }, false)).toBe(false);
-    expect(cancelOffered(agent({ presentationState: 'running' }), false)).toBe(false);
-    expect(cancelOffered(agent({ presentationState: 'queued' }), true)).toBe(true);
-    expect(cancelOffered(done, true)).toBe(false);
-    expect(cancelOffered(null, true)).toBe(false);
+  it('Cancel is offered for a paused child while its session rests, never for the resting run itself; a live agent still needs its run', () => {
+    expect(cancelOffered(one, false, true)).toBe(true);
+    // REQ-CHAT-008's recovery state: the Mission view counts the persisted busy status as a run, and the session rests.
+    expect(cancelOffered(one, true, true)).toBe(true);
+    expect(cancelOffered({ id: RUN_AGENT_ID, presentationState: 'paused' }, false, true)).toBe(false);
+    expect(cancelOffered({ id: RUN_AGENT_ID, presentationState: 'paused' }, true, true)).toBe(false);
+    expect(cancelOffered(agent({ presentationState: 'running' }), false, false)).toBe(false);
+    expect(cancelOffered(agent({ presentationState: 'queued' }), true, false)).toBe(true);
+    expect(cancelOffered(done, true, true)).toBe(false);
+    expect(cancelOffered(null, true, true)).toBe(false);
+  });
+  it('a paused child is not offered Cancel while a run is active and its session does not rest — a `pausing` run, or a continue not yet reaching it', () => {
+    expect(cancelOffered(one, true, false)).toBe(false);
   });
   it('what cascades is its paused descendants, through a finished one; a live agent\'s is its live ones', () => {
     expect(pausedDescendants(agents, 'one').map((a) => a.name)).toEqual(['grand']);

@@ -2,11 +2,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
+import { asSessionId, FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling, type AgentMessageRow } from '@rotaris/store';
-import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ChatMessage, type ModelRequest, type ScriptedCall } from '@rotaris/model';
+import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ChatMessage, type ModelRef, type ModelRequest, type ScriptedCall } from '@rotaris/model';
 import { BUILT_IN_PERSONAS, RUN_CONFIG_DEFAULTS, Sessions, SessionWriter, type DelegationOps, type ModelLookup, type PortToolResult, type Publisher, type RoleName, type RunConfig, type SessionsDeps, type ToolPort } from '../index.js';
-import { conversationOf } from './record.js';
+import { ConversationRecord, conversationOf, fingerprintOf } from './record.js';
 import { takenTaskIds } from '../children/naming.js';
 import { decodeStoredTodo, encodeStoredTodo } from '../todo-view.js';
 
@@ -350,5 +350,340 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
     expect(dal.agentMessagesOf(sid, closedRoot)).toEqual([]);
     expect(dal.agentMessagesOf(sid, 'bg_0000open')).toHaveLength(1);
     expect(JSON.parse(dal.timelineOf(sid).find((t) => t.name === 'transcript_cleared')!.metadata)).toMatchObject({ records_removed: closedEntries });
+  });
+});
+
+/**
+ * PD-ORCH-005 revision 4 clause 14: each agent's record keeps a fingerprint of the system instructions and the tool
+ * definitions it started with; a resumed agent runs with its persona's current ones, and when they differ the run states,
+ * as a warning, which agent resumed under changed instructions (OQ-78).
+ */
+describe('F — the fingerprint an agent started with (PD-ORCH-005 clause 14)', () => {
+  const spec = (name: string, parameters: Record<string, unknown> = { type: 'object' }, description = name) => ({ name, description, parameters });
+
+  it('fingerprintOf: the same instructions and tools give the same digests whatever order the listing or its keys were built in', () => {
+    const a = fingerprintOf('You are x.', [spec('read', { type: 'object', properties: { path: { type: 'string' } } }), spec('write')]);
+    const b = fingerprintOf('You are x.', [spec('write'), { parameters: { properties: { path: { type: 'string' } }, type: 'object' }, description: 'read', name: 'read' }]);
+    expect(b).toEqual(a);
+    // A key present but undefined is the key absent: the request serialises neither.
+    expect(fingerprintOf('You are x.', [spec('read', { type: 'object', properties: { path: { type: 'string' } }, required: undefined }), spec('write')])).toEqual(a);
+    expect(a.instructions).toMatch(/^[0-9a-f]{64}$/);
+    expect(a.tools).toMatch(/^[0-9a-f]{64}$/);
+    // A changed prompt changes the instructions only; a changed description, schema or name changes the tools only.
+    const prompt = fingerprintOf('You are y.', [spec('read', { type: 'object', properties: { path: { type: 'string' } } }), spec('write')]);
+    expect([prompt.instructions === a.instructions, prompt.tools === a.tools]).toEqual([false, true]);
+    for (const tools of [
+      [spec('read', { type: 'object', properties: { path: { type: 'string' } } }, 'reads'), spec('write')],
+      [spec('read', { type: 'object', properties: { path: { type: 'number' } } }), spec('write')],
+      [spec('read', { type: 'object', properties: { path: { type: 'string' } } })],
+    ]) {
+      const changed = fingerprintOf('You are x.', tools);
+      expect([changed.instructions === a.instructions, changed.tools === a.tools]).toEqual([true, false]);
+    }
+  });
+
+  let dir: string;
+  let dal: StoreDal;
+  let clock: FakeClock;
+  let minted = 0;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'rotaris-fingerprint-'));
+    const db = openStore(join(dir, 'workspace.db'));
+    migrateStore(db);
+    dal = new StoreDal(db);
+    clock = new FakeClock();
+  });
+  afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
+
+  const systemOf = (req: ModelRequest): string => req.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') ?? '';
+  const personaOf = (req: ModelRequest): string => /^You are the orchestrator/.test(systemOf(req)) ? 'orchestrator' : /summarise/i.test(systemOf(req)) ? 'summariser' : 'child';
+  const ok = (text: string): PortToolResult => ({ text, isError: false, status: 'ok', durationMs: 1, label: 'x', args: {} });
+  const ROOT = RUN_CONFIG_DEFAULTS.systemPrompt;
+  const CHILD = BUILT_IN_PERSONAS['coding-agent' as RoleName]!;
+
+  /** A root and its children over `delegate` and `probe`; `extraTool` widens every agent's listing. */
+  function harness(script: (persona: string, turn: number) => ScriptedCall, over: { rootPrompt?: string; rootPersona?: string; childPrompt?: string; extraTool?: boolean; contextUnits?: () => readonly string[]; childTimeoutMs?: number; childFallback?: ModelRef; childReady?: () => Promise<void> } = {}) {
+    const counts = new Map<string, number>();
+    const client = new ScriptedModelClient([]);
+    const original = client.stream.bind(client);
+    client.stream = (req) => {
+      const persona = personaOf(req);
+      const n = (counts.get(persona) ?? 0) + 1;
+      counts.set(persona, n);
+      client.push(script(persona, n));
+      return original(req);
+    };
+    const names = ['delegate', 'probe', ...(over.extraTool ? ['extra'] : [])];
+    const port = (ops: DelegationOps | undefined, parentId: string, child: boolean): ToolPort => ({
+      // ADR-0034: a child's surface may need discovery before its first step; the test holds it there.
+      ...(child && over.childReady ? { ready: over.childReady } : {}),
+      specs: () => names.map((n) => ({ name: n, description: n, parameters: { type: 'object' } })),
+      dispatch: async (c) => {
+        const a = JSON.parse(c.rawArgs) as Record<string, unknown>;
+        if (c.name === 'delegate' && ops) {
+          const r = await ops.delegate(parentId, { persona: 'coding-agent', taskName: String(a['task_name']), task: 'TASK: probe it', dependsOn: [], inheritedContext: [], category: '', runInBackground: true });
+          return r.status === 'rejected' ? { ...ok(r.message), isError: true, status: 'failed' } : ok(`task_id: ${r.taskId}`);
+        }
+        return ok(`probed`);
+      },
+      // REQ-MCP-101: the MCP section the port renders is appended to the instructions, and is fingerprinted with them.
+      promptSection: () => 'MCP servers: none connected.',
+      cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
+    });
+    const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k', systemPrompt: over.rootPrompt ?? ROOT, ...(over.rootPersona === undefined ? {} : { persona: over.rootPersona }) };
+    const backend = new DefaultAgentBackend(client);
+    const models = (key: string): ModelLookup => ({ ok: false, reason: `'${key}' is not a configured model` });
+    const personas = { resolve: (name: string) => { const base = BUILT_IN_PERSONAS[name as RoleName]; if (!base) return null; const child = name === 'coding-agent'; return { persona: { ...base, ...(child && over.childPrompt ? { systemPrompt: over.childPrompt } : {}), ...(child && over.childFallback ? { fallbackModel: over.childFallback } : {}) }, alias: null }; }, knownRoles: () => Object.keys(BUILT_IN_PERSONAS) };
+    const sessions = new Sessions({
+      clocks: clock, publisher: NONE, pid: 79, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => `S-fp-${++minted}`,
+      model: null, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid), attended: () => true, onRunResult: () => undefined,
+      tools: (ctx) => port(ctx.delegation, ctx.parentId ?? 'root', ctx.persona === 'coding-agent'),
+      configure: () => ({ ok: true, value: {
+        model: { backend, config }, models, personas,
+        runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', drainTimeoutMs: 0, ...(over.childTimeoutMs === undefined ? {} : { childTimeoutMs: over.childTimeoutMs }) },
+        resilience: { catalogue: [], fallbackModel: null },
+        ...(over.contextUnits ? { contextUnits: over.contextUnits } : {}),
+      } }),
+    });
+    return { sessions, client };
+  }
+  const warnings = (sid: SessionId) => dal.issuesOf(sid).filter((i) => i.kind === 'resumed_under_changed_instructions');
+  const systemRows = (sid: SessionId) => dal.residentRows(sid).filter((r) => r.kind === 'system' && /resumed under changed instructions/.test(r.body)).map((r) => r.body);
+  /** The residue a run host that died mid-iteration leaves (as record.test's `dieIn`): its row open, the count behind it. */
+  function dieIn(sid: SessionId): void {
+    dal.db.prepare("UPDATE iterations SET state = 'open', outcome = NULL, closed_at = NULL WHERE session_id = ? AND iteration = 1").run(sid);
+    const stored = decodeStoredTodo(dal.getSession(sid)!.todo);
+    const planner = structuredClone(stored.planner!);
+    for (const phase of planner.phases) for (const task of phase.tasks) if (task.id.endsWith(':main:1')) task.state = 'in_progress';
+    dal.updateSessionRun(sid, { iterations_completed: 0, todo: encodeStoredTodo({ ...stored, planner }) });
+  }
+
+  it('each agent records the fingerprint of what its first request carried, once; a resume under the same instructions states nothing', async () => {
+    const first = harness((persona, turn) => (persona === 'orchestrator' ? (turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { task_name: 'work' } }], 'Delegating.') : answer('All done.')) : persona === 'summariser' ? answer('{"summary":"probed"}') : answer('Probed.')));
+    const sid = (first.sessions.start(dal, 'C:/ws', 'probe the thing') as { value: SessionId }).value;
+    expect((await first.sessions.running(sid)!).status).toBe('completed');
+    const root = dal.iterationsOf(sid)[0]!.root_task_id;
+    const child = dal.childrenOf(sid)[0]!.task_id;
+    const request = (persona: string) => first.client.requests.find((r) => personaOf(r) === persona)!;
+    for (const [taskId, persona] of [[root, 'orchestrator'], [child, 'child']] as const) {
+      const req = request(persona);
+      expect(systemOf(req)).toContain('MCP servers: none connected.');
+      expect(dal.agentFingerprintOf(sid, taskId)).toMatchObject({ iteration: 1, ...fingerprintOf(systemOf(req), req.tools ?? []) });
+    }
+    // The root's later requests (after its child reported) record nothing more: one row per agent.
+    expect((dal.db.prepare('SELECT count(*) AS c FROM agent_fingerprints WHERE session_id = ?').get(sid) as { c: number }).c).toBe(2);
+
+    dieIn(sid);
+    const again = harness(() => answer('Answered again.'));
+    expect(again.sessions.resume(dal, 'C:/ws', sid).ok).toBe(true);
+    expect(again.sessions.prompt(sid, 'go on').ok).toBe(true);
+    expect((await again.sessions.running(sid)!).status).toBe('completed');
+    expect(dal.iterationsOf(sid)).toMatchObject([{ iteration: 1, root_task_id: root, state: 'closed' }]);
+    expect(warnings(sid)).toEqual([]);
+    expect(systemRows(sid)).toEqual([]);
+  });
+
+  it('a root resumed after its instructions changed is named in a warning issue, its timeline entry and a transcript line; the fingerprint it started with is kept', async () => {
+    // A persona id the canonicaliser rewrites (REQ-ORCH-045), so the name the warning carries is seen to be the
+    // agent's canonical name and not its persona's id.
+    const rootPersona = 'Lead Orchestrator';
+    const first = harness(() => answer('Answered.'), { rootPersona });
+    const sid = (first.sessions.start(dal, 'C:/ws', 'answer') as { value: SessionId }).value;
+    expect((await first.sessions.running(sid)!).status).toBe('completed');
+    const root = dal.iterationsOf(sid)[0]!;
+    expect(root.root_canonical_name).toBe('Lead-Orchestrator');
+    const started = dal.agentFingerprintOf(sid, root.root_task_id)!;
+    dieIn(sid);
+
+    const changed = harness(() => answer('Answered under new instructions.'), { rootPrompt: `${ROOT} Always answer in French.`, rootPersona });
+    expect(changed.sessions.resume(dal, 'C:/ws', sid).ok).toBe(true);
+    expect(changed.sessions.prompt(sid, 'go on').ok).toBe(true);
+    expect((await changed.sessions.running(sid)!).status).toBe('completed');
+    // It ran with its persona's current instructions…
+    expect(systemOf(changed.client.requests.at(-1)!)).toContain('Always answer in French.');
+    // …and the run said so, naming the agent: once, as a warning.
+    const message = `Agent ${root.root_canonical_name} (${root.root_task_id}) resumed under changed instructions: its system instructions differ from the ones it started with.`;
+    expect(warnings(sid)).toMatchObject([{ severity: 'warning', actor: root.root_canonical_name, message }]);
+    expect(JSON.parse(warnings(sid)[0]!.metadata)).toEqual({ task_id: root.root_task_id, iteration: 1, instructions_changed: true, tools_changed: false });
+    expect(dal.timelineOf(sid).filter((t) => t.name === 'issue' && t.message === message)).toHaveLength(1);
+    expect(systemRows(sid)).toEqual([message]);
+    // A finished row, as every system row the writer commits is — never one drawn as still streaming (REQ-CHAT-054).
+    expect(dal.residentRows(sid).filter((r) => r.body === message).map((r) => r.settled)).toEqual([1]);
+    // The fingerprint is of what it STARTED with: a resume never replaces it.
+    expect(dal.agentFingerprintOf(sid, root.root_task_id)).toEqual(started);
+  });
+
+  it('a child resumed after its persona\'s tools and instructions changed is named for both; the root, whose tools alone changed, for its tools', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    const first = harness((persona, turn) => {
+      if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { task_name: 'work' } }], 'Delegating.') : answer('Waiting.');
+      if (persona === 'summariser') return answer('{"summary":"probed"}');
+      return turn === 1 ? { parts: [{ hold }, ...toolCalls([{ callId: 'p1', name: 'probe', args: {} }], 'Probing.').parts] } : answer('Probed.');
+    });
+    const sid = (first.sessions.start(dal, 'C:/ws', 'probe the thing') as { value: SessionId }).value;
+    for (let i = 0; i < 400 && !first.client.requests.some((r) => personaOf(r) === 'child'); i += 1) await new Promise((r) => setTimeout(r, 2));
+    expect(first.sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    release();
+    await first.sessions.running(sid);
+    const child = dal.childrenOf(sid)[0]!;
+    expect(child.state).toBe('paused');
+    expect(dal.agentFingerprintOf(sid, child.task_id)).toBeDefined();
+
+    const changed = harness((persona) => (persona === 'summariser' ? answer('{"summary":"probed"}') : answer('Done.')), { childPrompt: `${CHILD.systemPrompt}\nNever touch tests.`, extraTool: true });
+    expect(changed.sessions.resume(dal, 'C:/ws', sid).ok).toBe(true);
+    expect(changed.sessions.continueSession(sid, 'continue').ok).toBe(true);
+    expect((await changed.sessions.running(sid)!).status).toBe('completed');
+    // The root's tools changed too (`extra` joined every listing), so it is named for its tools alone.
+    const root = dal.iterationsOf(sid)[0]!;
+    expect(warnings(sid).map((w) => [w.actor, JSON.parse(w.metadata) as unknown])).toEqual(expect.arrayContaining([
+      [child.canonical_name, { task_id: child.task_id, iteration: 1, instructions_changed: true, tools_changed: true }],
+      [root.root_canonical_name, { task_id: root.root_task_id, iteration: 1, instructions_changed: false, tools_changed: true }],
+    ]));
+    expect(systemRows(sid)).toContain(`Agent ${child.canonical_name} (${child.task_id}) resumed under changed instructions: its system instructions and tool definitions differ from the ones it started with.`);
+    // The wording names what changed: the root's tools alone, in the transcript and in the issue.
+    const toolsOnly = `Agent ${root.root_canonical_name} (${root.root_task_id}) resumed under changed instructions: its tool definitions differ from the ones it started with.`;
+    expect(systemRows(sid)).toContain(toolsOnly);
+    expect(warnings(sid).find((w) => w.actor === root.root_canonical_name)?.message).toBe(toolsOnly);
+    expect(warnings(sid)).toHaveLength(2);
+  });
+
+  it('once per execution, placed where the execution begins: a run never paused states nothing, though a skill loaded mid-run changes what the root\'s re-entry and the child\'s fallback retry are instructed with', async () => {
+    // REQ-CONFIG-166: the context units are re-read at every turn's construction; a unit appears once the child's first
+    // request has gone out, so the root's re-entry with its child's report and the child's REQ-ORCH-088 retry both carry it.
+    const FALLBACK: ModelRef = { providerId: 'f', modelId: 'f1', dialect: 'chat' };
+    const NEVER = new Promise<void>(() => undefined);
+    let childAsked = false;
+    const s = harness((persona, turn) => {
+      if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { task_name: 'work' } }], 'Delegating.') : answer('All done.');
+      if (persona === 'summariser') return answer('{"summary":"probed"}');
+      if (turn === 1) { childAsked = true; return { parts: [{ hold: NEVER, part: { kind: 'text', delta: 'late' } }, { part: { kind: 'finish', reason: 'stop' } }] }; }
+      return answer('Probed on the fallback.');
+    }, { contextUnits: () => (childAsked ? ['Skill: loaded mid-run.'] : []), childTimeoutMs: 10_000, childFallback: FALLBACK });
+    const sid = (s.sessions.start(dal, 'C:/ws', 'probe the thing') as { value: SessionId }).value;
+    for (let i = 0; i < 400 && !childAsked; i += 1) await new Promise((r) => setTimeout(r, 2));
+    // REQ-ORCH-088: the ceiling asks the child to land; it cannot, so the backstop ends it and the retry begins.
+    clock.advance(10_000);
+    await new Promise((r) => setTimeout(r, 5));
+    clock.advance(30_000);
+    expect((await s.sessions.running(sid)!).status).toBe('completed');
+    expect(dal.timelineOf(sid).map((t) => t.name)).toContain('child_timeout_fallback');
+    // The precondition: each agent's later request carried instructions its first did not.
+    const requests = (persona: string) => s.client.requests.filter((r) => personaOf(r) === persona).map(systemOf);
+    for (const persona of ['orchestrator', 'child']) {
+      expect(requests(persona).length).toBeGreaterThan(1);
+      expect(requests(persona)[0]).not.toContain('Skill: loaded mid-run.');
+      expect(requests(persona).at(-1)).toContain('Skill: loaded mid-run.');
+    }
+    // Neither was resumed, so neither is named: the check is built once per execution, not per turn or per attempt.
+    expect(warnings(sid)).toEqual([]);
+    expect(systemRows(sid)).toEqual([]);
+    const root = dal.iterationsOf(sid)[0]!.root_task_id;
+    const child = dal.childrenOf(sid)[0]!.task_id;
+    expect(dal.agentFingerprintOf(sid, root)?.instructions).toBe(fingerprintOf(requests('orchestrator')[0]!, []).instructions);
+    expect(dal.agentFingerprintOf(sid, child)?.instructions).toBe(fingerprintOf(requests('child')[0]!, []).instructions);
+  });
+
+  it('the check acts once per execution: a second call within it compares nothing, and a record with no store checks nothing', () => {
+    const sid = asSessionId('S-fp-unit');
+    dal.upsertSession({ session_id: sid, execution_status: 'running', workspace_root: 'C:/ws', created_at: 't', updated_at: 't' });
+    const w = SessionWriter.open({ dal, sessionId: sid, wall: clock, retentionCap: 0, warn: () => undefined, onCommitted: () => undefined }, { pid: 5, host: HOST, isProcessAlive: () => false });
+    if (!w.ok) throw new Error('writer');
+    const record = new ConversationRecord(w.value, dal, sid);
+    record.fingerprint('bg_0000aa01', 'work', 1)('You are a.', []);
+    expect(dal.agentFingerprintOf(sid, 'bg_0000aa01')).toMatchObject({ iteration: 1, ...fingerprintOf('You are a.', []) });
+    // A later execution under changed instructions warns once, however many steps it takes — even when they change again.
+    const resumed = record.fingerprint('bg_0000aa01', 'work', 1);
+    resumed('You are b.', []);
+    resumed('You are c.', [spec('x')]);
+    expect(warnings(sid)).toHaveLength(1);
+    // One under the instructions it started with states nothing.
+    record.fingerprint('bg_0000aa01', 'work', 1)('You are a.', []);
+    expect(warnings(sid)).toHaveLength(1);
+    new ConversationRecord(w.value, undefined, sid).fingerprint('bg_0000aa02', 'other', 1)('You are a.', []);
+    expect(dal.agentFingerprintOf(sid, 'bg_0000aa02')).toBeUndefined();
+  });
+
+  it('clause 12: clearing the transcript removes the fingerprints of closed iterations and keeps an open iteration\'s', async () => {
+    const { sessions } = harness(() => answer('Answered.'));
+    const sid = (sessions.start(dal, 'C:/ws', 'answer') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    const closedRoot = dal.iterationsOf(sid)[0]!.root_task_id;
+    expect(dal.agentFingerprintOf(sid, closedRoot)).toBeDefined();
+    dal.insertIteration({ session_id: sid, iteration: 2, root_task_id: 'bg_0000open', root_canonical_name: 'orchestrator', root_persona: 'orchestrator', todo_task_id: 't', task: 't', opened_at: 't' });
+    dal.insertAgentFingerprint({ session_id: sid, task_id: 'bg_0000open', iteration: 2, instructions: 'i', tools: 't', at: 't' });
+    expect(sessions.control({ op: 'clearTranscript', sessionId: sid, args: {} })).toEqual({ ok: true });
+    expect(dal.agentFingerprintOf(sid, closedRoot)).toBeUndefined();
+    expect(dal.agentFingerprintOf(sid, 'bg_0000open')).toBeDefined();
+    expect(JSON.parse(dal.timelineOf(sid).find((t) => t.name === 'transcript_cleared')!.metadata)).toMatchObject({ fingerprints_removed: 1 });
+  });
+
+  it('an agent paused before its first model step has no fingerprint: resumed under changed instructions it records the current ones and is not named', async () => {
+    // ADR-0034: the child's port is still resolving its surface when the pause lands, so its turn stops before any request.
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    let resolving = false;
+    const first = harness((persona, turn) => (persona === 'orchestrator' ? (turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { task_name: 'work' } }], 'Delegating.') : answer('Waiting.')) : persona === 'summariser' ? answer('{"summary":"probed"}') : answer('Probed.')), { childReady: async () => { resolving = true; await hold; } });
+    const sid = (first.sessions.start(dal, 'C:/ws', 'probe the thing') as { value: SessionId }).value;
+    for (let i = 0; i < 400 && !resolving; i += 1) await new Promise((r) => setTimeout(r, 2));
+    expect(resolving).toBe(true);
+    expect(first.sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    release();
+    await first.sessions.running(sid);
+    const child = dal.childrenOf(sid)[0]!;
+    expect(child.state).toBe('paused');
+    // It never sent a request, so it never started under any instructions: nothing is recorded for it.
+    expect(first.client.requests.some((r) => personaOf(r) === 'child')).toBe(false);
+    expect(dal.agentFingerprintOf(sid, child.task_id)).toBeUndefined();
+
+    const changed = harness((persona) => (persona === 'summariser' ? answer('{"summary":"probed"}') : answer('Done.')), { childPrompt: `${CHILD.systemPrompt}\nNever touch tests.` });
+    expect(changed.sessions.resume(dal, 'C:/ws', sid).ok).toBe(true);
+    expect(changed.sessions.continueSession(sid, 'continue').ok).toBe(true);
+    expect((await changed.sessions.running(sid)!).status).toBe('completed');
+    // Its first step went out under the changed instructions, and that is the fingerprint it started with.
+    const req = changed.client.requests.find((r) => personaOf(r) === 'child')!;
+    expect(systemOf(req)).toContain('Never touch tests.');
+    expect(dal.agentFingerprintOf(sid, child.task_id)).toMatchObject({ iteration: 1, ...fingerprintOf(systemOf(req), req.tools ?? []) });
+    expect(warnings(sid)).toEqual([]);
+    expect(systemRows(sid)).toEqual([]);
+  });
+
+  it('each agent records its fingerprint under its own iteration: a clear after an earlier iteration closed keeps an open later one\'s, and its resume is still named', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    const first = harness((persona, turn) => {
+      if (persona === 'orchestrator') return turn === 1 ? answer('Answered.') : turn === 2 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { task_name: 'work' } }], 'Delegating.') : answer('Waiting.');
+      if (persona === 'summariser') return answer('{"summary":"probed"}');
+      return turn === 1 ? { parts: [{ hold }, ...toolCalls([{ callId: 'p1', name: 'probe', args: {} }], 'Probing.').parts] } : answer('Probed.');
+    });
+    const sid = (first.sessions.start(dal, 'C:/ws', 'FIRST') as { value: SessionId }).value;
+    expect((await first.sessions.running(sid)!).status).toBe('completed');
+    expect(first.sessions.prompt(sid, 'SECOND').ok).toBe(true);
+    for (let i = 0; i < 400 && !first.client.requests.some((r) => personaOf(r) === 'child'); i += 1) await new Promise((r) => setTimeout(r, 2));
+    expect(first.sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    release();
+    await first.sessions.running(sid);
+    const [one, two] = dal.iterationsOf(sid);
+    expect([one?.state, two?.state]).toEqual(['closed', 'open']);
+    const child = dal.childrenOf(sid)[0]!;
+    expect(child).toMatchObject({ iteration: 2, state: 'paused' });
+    expect(dal.agentFingerprintOf(sid, two!.root_task_id)?.iteration).toBe(2);
+    expect(dal.agentFingerprintOf(sid, child.task_id)?.iteration).toBe(2);
+
+    // Clause 12: the clear removes the closed iteration's fingerprint and keeps the open one's, the root's and the child's.
+    expect(first.sessions.control({ op: 'clearTranscript', sessionId: sid, args: {} })).toEqual({ ok: true });
+    expect(dal.agentFingerprintOf(sid, one!.root_task_id)).toBeUndefined();
+    expect(dal.agentFingerprintOf(sid, two!.root_task_id)).toBeDefined();
+    expect(dal.agentFingerprintOf(sid, child.task_id)).toBeDefined();
+
+    const changed = harness((persona) => (persona === 'summariser' ? answer('{"summary":"probed"}') : answer('Done.')), { childPrompt: `${CHILD.systemPrompt}\nNever touch tests.`, extraTool: true });
+    expect(changed.sessions.resume(dal, 'C:/ws', sid).ok).toBe(true);
+    expect(changed.sessions.continueSession(sid, 'continue').ok).toBe(true);
+    expect((await changed.sessions.running(sid)!).status).toBe('completed');
+    expect(warnings(sid).map((w) => [w.actor, JSON.parse(w.metadata) as unknown])).toEqual(expect.arrayContaining([
+      [child.canonical_name, { task_id: child.task_id, iteration: 2, instructions_changed: true, tools_changed: true }],
+      [two!.root_canonical_name, { task_id: two!.root_task_id, iteration: 2, instructions_changed: false, tools_changed: true }],
+    ]));
+    expect(warnings(sid)).toHaveLength(2);
   });
 });

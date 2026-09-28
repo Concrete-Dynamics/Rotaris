@@ -43,7 +43,24 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-09-27**
+## Last reconciled with the code: **2026-09-28**
+
+**Each agent's record keeps the fingerprint it started with (`PD-ORCH-005` revision 4 clause 14, 2026-09-28, R-064).**
+Store **v24** appends `agent_fingerprints`: per agent, the SHA-256 of the system prompt and of the tool definitions its
+first model request carried. `runTurn` hands both to `TurnDeps.fingerprint` just before a step goes out; the check
+(`ConversationRecord.fingerprint`, built once per execution by `turn()` and `execute()`) records the first and, on a
+resume, states a changed one as a `resumed_under_changed_instructions` warning issue and a transcript `system` row
+naming the agent (OQ-78). The transcript clear removes closed iterations' fingerprints. The **runtime view**'s record
+paragraph and §7 table and the **state-ownership view** gain the table, and the **sequences view**'s resume bullet names
+the warning; no package, edge, process, channel or command changes.
+
+**The handoff's artifact is the root's own (`PD-ORCH-005` revision 4 clause 20, 2026-09-28, R-064).**
+`latestArtifactText` takes the latest artifact the most recent recorded iteration's root published that nothing
+supersedes, known by the root's task id as the record's `conversation_id`, and falls back to the latest of any kind
+(OQ-79) — also when a plan cycle opened its gate after that iteration, so the plan gate's approve and revise never
+hand over an earlier piece of work's document ahead of the plan cycle's. It is read once, at the continue: a later iteration of the same run is re-sent it as it stood then. The
+**runtime view**'s continuation paragraph is updated. No package, edge, process, channel, command or
+store table changes, so the other views are not.
 
 **A quit answers nothing for a person, and every stored report is an artifact (`PD-ORCH-005` phase 7, 2026-09-27,
 R-062).** Main tells the application's quit apart (`QuitState`, `main/exit.ts`). That covers the immediate exit, every

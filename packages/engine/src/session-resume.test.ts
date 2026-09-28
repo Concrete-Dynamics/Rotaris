@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, FakeClock, mintMachineId, type MachineId, type Result, type SessionId } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
-import { answer, DefaultAgentBackend, ScriptedModelClient, type AgentBackend } from '@rotaris/model';
-import { buildContinuationPayload, offersToldIn, RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type PreflightContext, type RunSetup, type TodoDocument } from './index.js';
+import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type AgentBackend, type ScriptedCall } from '@rotaris/model';
+import { buildContinuationPayload, offersToldIn, RUN_CONFIG_DEFAULTS, Sessions, type ArtifactOps, type Preflight, type PreflightContext, type RunSetup, type TodoDocument, type ToolPort } from './index.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
 const OTHER = mintMachineId('0000000000000000000000000000000b') as MachineId;
@@ -254,5 +254,145 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
     expect(sessions.list(dal, 'C:/ws').map((row) => ({ id: row.sessionId, status: row.status, stale: row.stale }))).toEqual([
       { id: active, status: 'running', stale: true }, { id: done, status: 'completed', stale: false },
     ]);
+  });
+});
+
+/**
+ * PD-ORCH-005 clause 20 (revision 4): the handoff's artifact is the latest one the iteration's root published that
+ * nothing supersedes and, when the root published none, the latest of any kind that nothing supersedes. The iteration is
+ * the session's most recent recorded one (OQ-79), and its root is known by the task id its publishes carry.
+ */
+describe('G — the handoff prefers the root\'s own artifact (PD-ORCH-005 clause 20)', () => {
+  let dir: string;
+  let dal: StoreDal;
+  let clock: FakeClock;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'rotaris-handoff-'));
+    const db = openStore(join(dir, 'workspace.db'));
+    migrateStore(db);
+    dal = new StoreDal(db);
+    clock = new FakeClock();
+  });
+  afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
+
+  const seed = (sid: SessionId): void => {
+    const at = new Date(clock.instant()).toISOString();
+    dal.upsertSession({ session_id: sid, execution_status: 'completed', workspace_root: 'C:/ws', created_at: at, updated_at: at });
+  };
+  const iteration = (sid: SessionId, n: number, rootTaskId: string, openedAt = '2026-09-27T00:00:00.000Z'): void => dal.insertIteration({ session_id: sid, iteration: n, root_task_id: rootTaskId, root_canonical_name: 'orchestrator', root_persona: 'orchestrator', todo_task_id: `t${n}`, task: 'work', opened_at: openedAt });
+  const artifact = (sid: SessionId, id: string, kind: 'child_report' | 'agent_published', conversationId: string | null, createdAt: string, supersededBy: string | null = null) => dal.insertArtifact({
+    session_id: sid, id, slug: id, title: `${id} title`, kind, source_task_id: conversationId ?? 'bg_00000001', canonical_name: 'build', source_persona: 'coding-agent', status: kind === 'child_report' ? 'succeeded' : 'published',
+    summary: `${id} summary`, key_findings: `${id} body`, highlight_paths: '[]', snippets: '[]', edited_files: '[]', created_files: '[]', commands: '[]', tags: '[]',
+    supersedes: null, superseded_by: supersededBy, created_by: 'build', consumed_by: '[]', timeline_event_id: null, conversation_id: conversationId, importance: 'normal',
+    created_at: createdAt, edited_at: null, body_file: `${id}.md`,
+  });
+  const handoffArtifact = (sid: SessionId): string => /Artifact: (\S+)/.exec(buildContinuationPayload(dal, dal.getSession(sid)!, 'next', undefined))![1]!;
+
+  it('the root\'s publish is chosen over a later child report and over a later publish by a child', () => {
+    const sid = asSessionId('S-root-first');
+    seed(sid);
+    iteration(sid, 1, 'bg_root0001');
+    artifact(sid, 'a0000001', 'agent_published', 'bg_root0001', '2026-09-27T01:00:00.000Z');
+    artifact(sid, 'a0000002', 'child_report', 'bg_child001', '2026-09-27T02:00:00.000Z');
+    artifact(sid, 'a0000003', 'agent_published', 'bg_child001', '2026-09-27T03:00:00.000Z');
+    expect(handoffArtifact(sid)).toBe('a0000001');
+    // The latest of the root's own, when it published more than one.
+    artifact(sid, 'a0000004', 'agent_published', 'bg_root0001', '2026-09-27T04:00:00.000Z');
+    artifact(sid, 'a0000005', 'child_report', 'bg_child002', '2026-09-27T05:00:00.000Z');
+    expect(handoffArtifact(sid)).toBe('a0000004');
+  });
+
+  it('a root publish that is superseded, or a root that published none, falls back to the latest of any kind', () => {
+    const sid = asSessionId('S-root-fallback');
+    seed(sid);
+    iteration(sid, 1, 'bg_root0001');
+    artifact(sid, 'a0000001', 'child_report', 'bg_child001', '2026-09-27T01:00:00.000Z');
+    artifact(sid, 'a0000002', 'agent_published', 'bg_child001', '2026-09-27T02:00:00.000Z');
+    // The root published none.
+    expect(handoffArtifact(sid)).toBe('a0000002');
+    // The root's only publish is superseded (by a child's), so nothing of the root's stands.
+    artifact(sid, 'a0000000', 'agent_published', 'bg_root0001', '2026-09-27T00:30:00.000Z', 'a0000002');
+    expect(handoffArtifact(sid)).toBe('a0000002');
+  });
+
+  it('the root is the most recent recorded iteration\'s: an earlier iteration\'s root publish counts only as "of any kind" (OQ-79)', () => {
+    const sid = asSessionId('S-root-iterations');
+    seed(sid);
+    iteration(sid, 1, 'bg_root0001');
+    dal.closeIteration(sid, 1, 'succeeded', '2026-09-27T01:30:00.000Z');
+    artifact(sid, 'a0000001', 'agent_published', 'bg_root0001', '2026-09-27T01:00:00.000Z');
+    artifact(sid, 'a0000002', 'child_report', 'bg_child002', '2026-09-27T02:00:00.000Z');
+    expect(handoffArtifact(sid)).toBe('a0000001');
+    iteration(sid, 2, 'bg_root0002');
+    expect(handoffArtifact(sid)).toBe('a0000002');
+    // A plan cycle's root (iteration 0, never recorded as an iteration) is not an iteration's root either.
+    artifact(sid, 'a0000003', 'agent_published', 'bg_plan0001', '2026-09-27T03:00:00.000Z');
+    artifact(sid, 'a0000004', 'child_report', 'bg_child003', '2026-09-27T04:00:00.000Z');
+    expect(handoffArtifact(sid)).toBe('a0000004');
+    artifact(sid, 'a0000005', 'agent_published', 'bg_root0002', '2026-09-27T01:00:00.000Z');
+    expect(handoffArtifact(sid)).toBe('a0000005');
+  });
+
+  it('a plan cycle that ran after the latest iteration is what the new work follows: an earlier iteration\'s root document never outranks what the plan cycle produced (OQ-79)', () => {
+    const sid = asSessionId('S-root-plan-cycle');
+    seed(sid);
+    iteration(sid, 1, 'bg_root0001', '2026-09-27T00:00:00.000Z');
+    dal.closeIteration(sid, 1, 'succeeded', '2026-09-27T01:30:00.000Z');
+    artifact(sid, 'a0000001', 'agent_published', 'bg_root0001', '2026-09-27T01:00:00.000Z');
+    // The session is re-armed and a prompt starts a plan cycle: its child reports, its root publishes the plan, and the
+    // gate opens. The handoff the approve (or the revise) builds takes the latest of any kind — the plan — not X.
+    artifact(sid, 'a0000002', 'child_report', 'bg_child002', '2026-09-27T02:00:00.000Z');
+    artifact(sid, 'a0000003', 'agent_published', 'bg_plan0001', '2026-09-27T02:30:00.000Z');
+    expect(handoffArtifact(sid)).toBe('a0000001');
+    dal.insertPlanCycle(sid, 1, '2026-09-27T03:00:00.000Z', 'The plan.', 'implementation', '', '');
+    expect(handoffArtifact(sid)).toBe('a0000003');
+    // Approved: the iteration the plan led into opens after the gate, so its root is preferred again once it publishes.
+    iteration(sid, 2, 'bg_root0002', '2026-09-27T04:00:00.000Z');
+    expect(handoffArtifact(sid)).toBe('a0000003');
+    artifact(sid, 'a0000004', 'agent_published', 'bg_root0002', '2026-09-27T05:00:00.000Z');
+    artifact(sid, 'a0000005', 'child_report', 'bg_child005', '2026-09-27T06:00:00.000Z');
+    expect(handoffArtifact(sid)).toBe('a0000004');
+  });
+
+  it('end to end: a root\'s publish carries its task id as its conversation, and the next iteration\'s handoff names it over a later report', async () => {
+    const calls: unknown[] = [];
+    const script: ScriptedCall[] = [
+      toolCalls([{ callId: 'w1', name: 'publish', args: {} }], 'Publishing.'), answer('Published.'),
+      answer('Second iteration done.'),
+    ];
+    const client = new ScriptedModelClient(script);
+    const backend = new DefaultAgentBackend(client);
+    const port = (ops: ArtifactOps | undefined): ToolPort => ({
+      specs: () => [{ name: 'publish', description: 'publish', parameters: { type: 'object' } }],
+      dispatch: async (c) => {
+        calls.push(c);
+        const r = ops?.write({ slug: 'the-plan', title: 'The plan', body: 'Plan body.', tags: [], supersedes: null });
+        return { text: r?.ok ? r.id : 'failed', isError: !r?.ok, status: r?.ok ? 'ok' : 'failed', durationMs: 1, label: 'publish', args: {} };
+      },
+      cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
+    });
+    const sessions = new Sessions({
+      clocks: clock, publisher: { increment: () => undefined, snapshot: () => undefined }, pid: 81, host: HOST,
+      retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-handoff-e2e',
+      model: null, sessionFilesDir: (_store, sid) => join(dir, 'sessions', sid), attended: () => true,
+      tools: (ctx) => port(ctx.artifacts),
+      configure: () => ({ ok: true, value: {
+        model: { backend, config: { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => '' } },
+        runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', drainTimeoutMs: 0 },
+      } }),
+    });
+    const sid = (sessions.start(dal, 'C:/ws', 'plan it') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(calls).toHaveLength(1);
+    const root = dal.iterationsOf(sid)[0]!.root_task_id;
+    const published = dal.artifactsOf(sid).find((a) => a.kind === 'agent_published')!;
+    expect(published.conversation_id).toBe(root);
+    // A later child report (as a child of the same iteration would leave) is newer than the root's publish.
+    artifact(sid, 'a0000009', 'child_report', 'bg_child009', '2999-01-01T00:00:00.000Z');
+    expect(sessions.prompt(sid, 'next').ok).toBe(true);
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    const firstOfSecond = client.requests.at(-1)!.messages.map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('')).join('\n');
+    expect(firstOfSecond).toContain(`Artifact: ${published.id} — The plan (agent_published, published)\nPlan body.`);
+    expect(firstOfSecond).not.toContain('Artifact: a0000009');
   });
 });

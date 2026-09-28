@@ -3347,6 +3347,130 @@ recommendations.
 Until they are built, the artifact is the latest of any kind, and a later iteration of the same run is told of no
 offer.
 
+**OQ-78 — What is an agent's fingerprint taken of, when is it compared, and where is the warning stated?** *(`PD-ORCH-005` clause 14 over OQ-68's reading; REQ-SESSION-029, REQ-SESSION-132, REQ-SESSION-134, REQ-SESSION-135, REQ-ORCH-019, REQ-ORCH-088, REQ-ORCH-095, REQ-WORKSPACE-047, REQ-WORKSPACE-050, REQ-WORKSPACE-058, REQ-WORKSPACE-060, REQ-TOOLS-010, REQ-TOOLS-053, REQ-TOOLS-069, REQ-MCP-101, REQ-CONFIG-166 and REQ-MONITOR-305, which the directive does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
+
+Clause 14 has each agent's record keep "a fingerprint of the system instructions and the tool definitions the agent
+started with", and has the run state, as a warning, which agent resumed under changed instructions when its persona's
+current ones differ. It does not say what the instructions are — the persona's own text, or everything the request's
+system prompt carries — nor when the comparison is made, how often a warning is repeated, or where the run states it.
+REQ-MONITOR-305's warnings surface, where a warning would naturally be listed, is not built.
+
+**What the build proceeds under.**
+
+- **What the request carried.** The fingerprint is two SHA-256 digests (`agent_fingerprints`, v24): the system prompt
+  exactly as the agent's first model request carried it — the persona's instructions, its playbook (REQ-ORCH-019), the
+  session's context units (REQ-WORKSPACE-060) and the MCP section (REQ-MCP-101) — and the tool definitions that request
+  offered (REQ-TOOLS-010), in name order with every object's keys sorted, so the order a listing was assembled in is not
+  a change. A digest, not a copy: the instructions are not stored twice (REQ-SESSION-029). The consequence is stated
+  here because it is wider than "its persona" alone: a continue whose pre-flight classifies a different intent (a
+  different playbook), a skill force-loaded since, a changed MCP server, or a permission mode that changes the listing
+  also warns, since each changes what the agent is instructed with or offered. The first is common: every continue
+  runs the pre-flight again with its own message (`launchContinuation`), so a continue by message classified as a
+  different intent warns for every resumed agent whose role has a playbook, though no persona was edited. The model is
+  not part of it.
+- **The workspace's own files are in it too.** The context units include REQ-WORKSPACE-047/050's workspace context —
+  the instruction files (`AGENTS.md` and the like) merged from the run's execution root, the tree the agents write
+  to — and the skill catalog block. So an agent that edits `AGENTS.md` as part of its task changes what every agent
+  resumed after it is instructed with, and each is named "resumed under changed instructions: its system instructions
+  differ", although no persona changed and the change is the run's own. Whether it is named depends on whether the
+  merge was read again: REQ-WORKSPACE-058 holds it per workspace root until a rescan or a session creation clears it
+  (`SkillRegistry.workspaceContext`), so a continue in the same process after nothing else happened is still handed
+  the cached merge and states nothing, while the same continue after the app is relaunched, or after any session is
+  created in that workspace, is handed the edited file and warns for every resumed agent. The warning is true of what
+  the request carried in both cases; which of the two the agent is given is REQ-WORKSPACE-058's, not this build's.
+  A lesser case of the same kind: `ask_questions` is listed only while the run host holds a live presenter
+  (`userPromptChannel`, attendedness under REQ-TOOLS-053/069), so an agent that started during a lapse in the presenter and is resumed
+  with one live is named for its tool definitions.
+- **The first is kept.** The fingerprint is recorded at an agent's first model step and never replaced. Every resume
+  compares against it, so each resume under instructions that still differ warns again; a resume under the instructions
+  it started with states nothing.
+- **Compared at the resumed execution's first model step**, just before the step goes out, once per execution — after
+  the tool port is ready, so an MCP listing is complete. Any later execution of a task id that has a fingerprint is a
+  resume (a task id is never executed twice otherwise). REQ-ORCH-088's fallback retry and REQ-ORCH-095's re-prompt run
+  within one execution and compare nothing, and neither does a root re-entered with its children's reports, although
+  REQ-CONFIG-166 re-reads the context units at every turn: a skill loaded mid-run is not a resume. A resumed root
+  waiting on its children is compared when it next steps; one that never steps again never ran under the changed
+  instructions and is not named.
+- **An agent with no fingerprint** — recorded before v24, or paused before its first model step — has one recorded at
+  its resumed first step and nothing is stated (REQ-SESSION-132).
+- **Stated as a warning issue and a transcript line.** A `resumed_under_changed_instructions` issue at warning severity
+  — a kind coined by this build: the specification's issue-kind vocabulary ("Issue kinds (session diagnostics)" in
+  `docs/spec/01-run-orchestration.md`) has none for it — its actor the agent's canonical name, with its timeline entry
+  (REQ-SESSION-134/135), and one `system` row in the transcript: "Agent <canonical name> (<task id>) resumed under
+  changed instructions: its system instructions | tool definitions | system instructions and tool definitions differ
+  from the ones it started with." The issue's metadata carries the task id, the iteration and which of the two changed.
+- **Every agent**, the root and every child at every depth, each under its task id and its own iteration (the root's
+  iteration number, a child's `children.iteration`). The fingerprint is part of the agent's record for clause 12: it is
+  deleted with its session, and the transcript clear removes closed iterations' fingerprints with their conversations
+  (`fingerprints_removed` in `transcript_cleared`'s metadata), so an open iteration's are kept however many iterations
+  closed before it.
+
+**What a ruling decides.** Whether "the system instructions" should be the persona's own definition only, so a changed
+playbook, skill, MCP server, workspace instruction file (one the run's own agents may have edited) or presenter-bound
+tool does not warn; whether a warning should be stated once per change (replacing the
+fingerprint after a warned resume) rather than at every resume while it differs; and whether the warning should also
+reach REQ-MONITOR-305's warnings surface once that is built, or be stated at the continue rather than at the agent's
+first step; and what the issue kind is called, since the specification's vocabulary has none for it.
+
+**OQ-79 — Whose root is "the iteration's root" when the handoff is built for an iteration that has not started?** *(`PD-ORCH-005` clause 20 over REQ-SESSION-115; REQ-ORCH-153, REQ-ORCH-154, REQ-LIBRARY-093 and REQ-LIBRARY-096, which the directive does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
+
+Clause 20 makes REQ-SESSION-115's artifact "the latest artifact the iteration's root published that nothing supersedes"
+and, when the root published none, the latest of any kind. Every continue builds the handoff, including one that resumes
+an open iteration, but it reaches a model only when a new iteration starts — a new prompt, a continue that finds nothing
+open, "continue without them", the plan gate's approve, or the iteration after a resumed one — since a resumed root is
+handed the new message alone; and that new iteration's root has published nothing yet. The clause does not say which
+iteration it means. Three further edges meet it: a plan cycle's root (REQ-ORCH-153's iteration 0, never recorded as an
+iteration), a root from before the iterations were recorded (v23), and a later iteration of the same run, which starts
+from the launch content computed when the run began.
+
+**What the build proceeds under.**
+
+- **The iteration is the most recent recorded one**, open or closed — the highest-numbered row in `iterations`, the
+  iteration the new one follows. A publish by an earlier iteration's root counts only as "of any kind". The alternative
+  read "the orchestrator" as a role — the latest publish of any iteration's root — and was not taken, because the
+  clause names one iteration's root.
+- **The root is known by its task id.** A root's publish carries its task id as the artifact's `conversation_id` (its
+  own tool port writes it; a child's report and a child's publish carry the child's), and the iteration's row records
+  that id. `created_by` is not used: every root records its persona there
+  (`a-roots-publish-names-its-persona-as-its-author.md`), so it cannot tell one iteration's root from another's.
+- **A plan cycle's root is not an iteration's root.** Its publishes count only as "of any kind"; the approve path
+  carries the plan itself in its own section.
+- **Work that follows a plan cycle follows no iteration.** A plan cycle is never recorded as an iteration, so on the
+  plan gate's approve and revise, and on a prompt after a declined plan, the most recent `iterations` row belongs to
+  an earlier piece of work. Taking its root there would hand over that earlier work's document ahead of everything
+  the plan cycle produced — its children's reports and the plan its root published — although the new work follows
+  the plan cycle, not that iteration. So when the latest plan cycle opened its gate (`plan_cycles.opened_at`) after
+  the latest iteration opened, no iteration's root is preferred and the handoff takes the latest of any kind that
+  nothing supersedes. A prompt that opens a plan cycle on a re-armed session (`PD-ORCH-003`) is handed the latest
+  iteration's root's document, since that plan cycle follows it; and once the approved iteration opens, its root is
+  preferred again. The two instants are the session writer's own ISO times, so an equal pair (possible only under
+  a stopped test clock) counts the iteration as the later.
+- **A root with no recorded iteration or no tool port** (before v23, or a run with no tool port) has no publish to
+  find, and the handoff takes the latest of any kind. Nothing is backfilled.
+- **A root whose every publish is superseded published none.** Only artifacts nothing supersedes are candidates, so
+  when a later record (a child's included) supersedes each of the root's publishes, the handoff takes the latest of any
+  kind that nothing supersedes. The literal alternative — the root did publish, so the fallback does not apply and no
+  artifact is carried — was not taken: it would carry nothing where an unsuperseded artifact stands.
+- **The handoff is read once, when the continuation starts its run.** REQ-SESSION-115's handoff is "the payload handed
+  to the run", built at the continue, and clause 20's "that nothing supersedes" holds of it then. A later iteration of
+  the same run is not a new handoff: it is re-sent the launch content computed at the continue, by the recorded defect
+  `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`, so **its artifact line can name an artifact
+  superseded since, or another agent's where the resumed root published its first artifact after the continue**, as
+  its todo and progress lines can be stale. The artifact line is not recomputed alone; the repair belongs to that
+  defect, which must keep the three flows it names, and `PD-ORCH-004` revision 4 adds only the open offers to that
+  first message.
+- **Everything else stands as OQ-72 records it**: "latest" is the listing's order (created time, then id), a
+  superseded record is never chosen, and the rendering (id first, 80-character title, a published body stated once,
+  6,000 characters) is unchanged.
+
+**What a ruling decides.** Whether "the iteration's root" is the root of the iteration the new one follows, as built,
+or any iteration's root of the session, which would carry an earlier iteration's document forward past a later
+iteration whose root published nothing; whether work that follows a plan cycle takes the latest of any kind, as
+built, or prefers the plan cycle root's own publish, or the root of the last recorded iteration — the reading this
+build first took, which handed an earlier piece of work's document over ahead of the plan cycle's; whether a root whose every publish is superseded counts as having published
+none; and whether a later iteration of the same run should have its handoff's artifact read again when it starts,
+rather than be re-sent the one read at the continue, superseded or not.
+
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 
 The key is registered with default 20 and minimum 1. Each background session publishes its own `bg:<id>` stream at up to 50 frames/s (the 20 ms floor), so the produced aggregate is `(agents + background sessions) × 50 frames/s`, and only one of those two factors — agents, REQ-MONITOR-285's 20 — has a ceiling. Part AL reads the key into the manager and caps the *delivered* rate per window at 1,000 frames/s by merging (REQ-MONITOR-306, REQ-SHELL-103), so a user who configures 400 background sessions saturates the run-host → main pipe, not a renderer. A stated maximum on the key would let the produced rate be computed rather than absorbed. The owner's call; recorded, not resolved.

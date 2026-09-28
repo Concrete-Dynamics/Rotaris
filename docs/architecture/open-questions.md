@@ -82,7 +82,7 @@ the signature — built as Ed25519, raw, over the manifest's exact bytes, SPKI P
 registry match nor the launcher's variable: ADR-0054 says not updatable, REQ-STARTUP-106's copied-tree sentence says portable) **and OQ-85**
 (REQ-STARTUP-118 against REQ-SHELL-118 on the download notice's title, persistence and the pause before the apply); **one more by that
 item's verification the same day: OQ-86** (whether the installer's auto-close and the restart's close ask REQ-STARTUP-046's active-run
-confirmation) — the four raised as OQ-76 to OQ-79 on their branch and renumbered at the merge, OQ-76 to OQ-82 having been taken on `main`. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+confirmation) — the four raised as OQ-76 to OQ-79 on their branch and renumbered at the merge, OQ-76 to OQ-82 having been taken on `main`. **One more was raised on 2026-09-28 by building the setup manifest (`first-release-plan.md` §4.1): OQ-87** (what a machine tool's "archive layout" comprises, and what path its expected executables are relative to — MinGit's entries sit at the archive root and ripgrep's under one directory). **And OQ-88**, raised by the same item's independent verification (whether a manifest may key an archive under REQ-STARTUP-060's raw `<os>-<machine>` fallback); the two were raised as OQ-76 and OQ-77 on their branch and renumbered at the merge, OQ-76 to OQ-86 having been taken on `main`. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -3436,6 +3436,48 @@ REQ-STARTUP-118: "a non-persistent notice titled `Downloading Rotaris {version}`
 REQ-STARTUP-046: "When a run is active, a confirmation SHALL be presented before anything is torn down; declining it SHALL abort the close, leaving the window open and accepting input and the run still executing." REQ-STARTUP-119: "when the hand-off requires quitting (Windows installer), the window SHALL auto-close after a 1200 ms single delay." REQ-STARTUP-121: "the current window closes only after the successor has started". The installer's auto-close and the restart's close are closes of a window, and a run may be active in it when the user chooses `Update now` or `Restart now`. If the confirmation is asked and declined, the installer is already running against the tree the window runs from, and after a restart the record has already passed to the successor, so the declining instance would stay beside the one that now holds the record.
 
 **What the build proceeds under.** ADR-0054's stated reading: both closes destroy the main windows without the confirmation (`mainWindows.dispose()`), because the user chose the action and, after the record has passed, the predecessor must not stay. **What a ruling decides.** Whether REQ-STARTUP-046's confirmation governs these two closes — then it has to be asked *before* the installer is spawned and before the successor is started, which moves it from the close to the action — or whether REQ-STARTUP-119/121 are exceptions REQ-STARTUP-046 should name.
+
+**OQ-87 — What does a machine tool's "archive layout" comprise, and what are its expected executables relative to?** *(REQ-STARTUP-058 with REQ-STARTUP-085, REQ-STARTUP-086 and REQ-STARTUP-088. Raised 2026-09-28 by building the setup manifest, first-release plan §4.1. Raised as OQ-76 on its branch; renumbered OQ-87 at the merge, because OQ-76 to OQ-86 were already on `main`.)*
+
+REQ-STARTUP-058 has each per-platform archive artifact declare "archive layout, expected executables" and says no more
+about either. REQ-STARTUP-085 fixes the three archive formats extraction accepts and normalises entry names;
+REQ-STARTUP-086 requires every expected executable to exist in staging before the tree is promoted, but names no base
+the paths are relative to. The archives the manifest pins differ in exactly this respect: MinGit's entries sit at the
+archive root (`cmd/git.exe`, `mingw64/bin/git.exe`), ripgrep's under one directory named after the archive
+(`ripgrep-15.2.0-x86_64-pc-windows-msvc/rg.exe`). Whether the managed tool directory (`tools/<tool>/<provisioned_version>/`,
+REQ-STARTUP-070) holds that directory or its contents decides which paths REQ-STARTUP-088 can prepend.
+
+**What the build proceeds under.** `layout` is two things (`ArchiveSchema` in `packages/config/src/setup-manifest.ts`):
+the archive `format`, one of REQ-STARTUP-085's three, and `topLevelDirectory`, the one directory every entry sits under,
+or `null` when entries sit at the archive root. `executables` are written relative to that directory when one is
+declared and to the archive root otherwise — `rg.exe` and `cmd/git.exe`, never `ripgrep-15.2.0-…/rg.exe` — which reads
+the consumer as promoting the directory's contents, so a managed tool directory holds the executables at the same
+paths whatever the archive did. Which subdirectory of a tool's managed directory is prepended to PATH is the consumer's
+(REQ-STARTUP-088); the manifest names executables and nothing about PATH.
+
+**What a ruling decides.** Whether "archive layout" is the format alone, the format with the top-level directory, or
+something else (a list of entries to keep, a strip depth); and whether expected executables are relative to the archive
+root or to the promoted tree. A different reading changes the schema's `layout` object and the shipped file, and the
+fingerprint of REQ-STARTUP-061 with them, so it is cheapest before the first release ships a manifest that installations
+have set up from.
+
+**OQ-88 — May a setup manifest key an archive under REQ-STARTUP-060's raw `<os>-<machine>` fallback?** *(REQ-STARTUP-060 with REQ-STARTUP-058. Raised 2026-09-28 by the independent verification of the setup manifest, first-release plan §4.1. Raised as OQ-77 on its branch; renumbered OQ-88 at the merge, because OQ-76 to OQ-86 were already on `main`.)*
+
+REQ-STARTUP-060 names three platform keys, "with a raw `<os>-<machine>` fallback for anything else", and says the keys
+are shared between release artifact naming, updater asset selection and manifest artifact selection. It does not say
+whether the fallback is a key a manifest may *write* an archive under, or only one a host may *compute* and then find
+nothing under. The first reading makes the manifest's key set open-ended (any `<os>-<machine>` string); the second keeps
+it to the three, which is what artifact naming (`PLATFORM_KEYS` in `tools/release-naming`) already does.
+
+**What the build proceeds under.** The second. `SetupManifestSchema` (`packages/config/src/setup-manifest.ts`) admits an
+archive only under one of the three keys, and `tools/release-guard/src/pins.test.ts` pins that an archive under
+`freebsd-x86_64` is refused and that `config`'s key list equals release naming's. A host whose key is a fallback finds
+no archive to select; what machine setup then does (REQ-STARTUP-060 onward, REQ-MCP-112's setup half) is the consumer's,
+not built.
+
+**What a ruling decides.** Whether a manifest may carry an archive for a platform outside the three. A ruling for the
+first reading widens the schema's key to a pattern and changes nothing in the shipped file; either reading leaves the
+consumer to state what a host with no matching archive is told.
 
 ## Design-reference dependencies
 

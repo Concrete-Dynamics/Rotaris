@@ -60,6 +60,13 @@ extraResources:
     to: build-id.txt
   - from: resources/THIRD-PARTY-LICENSES.txt
     to: THIRD-PARTY-LICENSES.txt
+  # REQ-STARTUP-058/059 (first-release-plan.md §4.1, 2026-09-28): the setup manifest a release ships — the machine-tool
+  # pins, the tool-server package pins the pre-build guard checks against the built-in defaults, and the language servers
+  # the bundled runtime provisions. Committed, not generated; `packages/config`'s `SetupManifestSchema` is its shape and
+  # `setup-manifest.test.ts` validates this file. Carried to the root of process.resourcesPath, where the machine-setup
+  # flow (not yet built) reads it the way `src/main/about.ts` reads the two files above.
+  - from: resources/setup-manifest.json
+    to: setup-manifest.json
 publish: null
 win:
   target:

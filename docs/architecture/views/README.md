@@ -45,6 +45,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-28**
 
+**The setup manifest (REQ-STARTUP-058/059, `first-release-plan.md` §4.1, built 2026-09-28).**
+`apps/desktop/resources/setup-manifest.json` exists — Git and ripgrep as the requirement pins them, the `@playwright/mcp`
+pin the guard checks, the language servers as `pins.json` declares them — and `electron-builder.yml` packs it. Its schema
+is `config`'s `setup-manifest.ts`, read by the pre-build guard now and by the machine-setup flow when that is built. The
+**component view** gains a section and its `config` node names the schema; the **process view**'s files-on-disk table gains
+the file's row (`process.resourcesPath/setup-manifest.json`, read by the guard and by nothing in the product yet). No package, edge, process, channel, message
+kind or store column changed; `config` gains the `zod` dependency `contracts` already carries.
+
 **The updater (first-release-plan.md §4.6, ADR-0054; built 2026-09-28, R-062).** ADR-0054's bespoke main-process
 updater exists: `apps/desktop/src/main/updater/` — the flavour classified once from the artifact the launch started
 from (REQ-STARTUP-106), the one endpoint and the offer rule (105/107–110/112), the compiled-in key set — EMPTY until

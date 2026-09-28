@@ -23,7 +23,7 @@ record already decides, and every ruling it needs is named as the owner's rather
 | Skills — ESC-37, ESC-38, ESC-39 | **ruled 2026-09-27** as recommended ([R-052](../product/requests.md#r-052)); amended | §2 |
 | Workspace-context injection, REQ-WORKSPACE-041..050 | built 2026-09-22 under `PD-WORKSPACE-002` | §3 |
 | Injection — REQ-WORKSPACE-049's latency bound, a built-app proof | **built 2026-09-27** (`pnpm injection-proof`); the bound **met on Linux**, the Windows gate-class reading **owed**; OQ-64 **ruled 2026-09-27**; OQ-68 raised | §3 |
-| The Windows release pipeline, REQ-STARTUP-027..038, 141..143, 156, 158, 167, 168 | the installer built once (ADR-0054, 2026-09-04); **the version guard built 2026-09-27** (§4.1), and the setup manifest it checks is owed; **the notices generator built 2026-09-27** (§4.3), its validation refusing until O-3, O-11 and OQ-74; **the two bundled assets wired into `pnpm package` 2026-09-27** (§4.4), so a package refuses with it | §4 |
+| The Windows release pipeline, REQ-STARTUP-027..038, 141..143, 156, 158, 167, 168 | the installer built once (ADR-0054, 2026-09-04); **the version guard built 2026-09-27** (§4.1), ~~and the setup manifest it checks is owed~~ **the setup manifest built 2026-09-28** (§4.1; the guard passes both halves; its consumer, machine setup, is not built and not in this plan); **the notices generator built 2026-09-27** (§4.3), its validation refusing until O-3, O-11 and OQ-74; **the two bundled assets wired into `pnpm package` 2026-09-27** (§4.4), so a package refuses with it | §4 |
 | The updater, REQ-STARTUP-107..124 | ~~**not built** — no module in `apps/desktop/src/main/`~~; **in the first release**, ruled 2026-09-27; **built 2026-09-28** (`apps/desktop/src/main/updater/`, `pnpm updater-proof`; the compiled-in key set empty until O-2; the apply and the restart unit-tested over fakes, their run against a real artifact owed to the next Windows package, IC-3); OQ-83, OQ-84, OQ-85 raised; repaired at verification the same day (classification order, the record pass, the re-offer, the launch-time cleanup), OQ-86 raised; and at the second verification (a refused record pass now fails the restart) | §4.6 |
 
 **Deferred by "thats it".** Each item stays owed where the record already carries it:
@@ -336,14 +336,28 @@ lives in `tools/release-naming`. What the build decided and found:
   `0.0.0`: they are never packed as packages, so their `0.0.0` is not a product version. A prerelease tag needs the
   declaration to match its text exactly, for example `0.1.0rc1` for step 5's `v0.1.0rc1`. With no manifest the app
   reports `dev`, **OQ-71**'s reading of a conflict between REQ-STARTUP-004 and REQ-STARTUP-007.
-- **The setup manifest (`REQ-STARTUP-058`) does not exist, and no step of this plan builds it.** The pin half reads it,
-  so on this tree `pnpm release:guard v0.1.0` exits 1 on that half alone, naming `@playwright/mcp` `0.0.80`, both files
-  and the missing manifest. §5's first check therefore cannot pass until the manifest is built. §4.3 needs the same
+- ~~**The setup manifest (`REQ-STARTUP-058`) does not exist, and no step of this plan builds it.**~~ The pin half reads it,
+  so on the 2026-09-27 tree `pnpm release:guard v0.1.0` exited 1 on that half alone, naming `@playwright/mcp` `0.0.80`, both files
+  and the missing manifest. §5's first check therefore could not pass until the manifest was built. §4.3 needs the same
   file, because `REQ-STARTUP-142`'s "Tools provisioned after installation" section is generated from it and
   `REQ-STARTUP-143` fails a platform whose manifest cannot be read. The guard reads it at
   `apps/desktop/resources/setup-manifest.json` and needs only `schemaVersion: 1` and `toolServerPackages`; that field
   name is the guard's reading, and that directory is not packed, so whoever writes the manifest also adds it to
-  `extraResources` (ADR-0054's note). **Owed; see §7.**
+  `extraResources` (ADR-0054's note). ~~**Owed; see §7.**~~ **Built 2026-09-28** (first execution reported in ADR-0054,
+  "The setup manifest", and in `first-executions.md`): `apps/desktop/resources/setup-manifest.json`, committed, schema
+  version 1 — Git and ripgrep as `REQ-STARTUP-058` pins them, each archive's URL real and its SHA-256 taken by downloading
+  the archive (the four digests and the commands are in the commit and the ADR note); `toolServerPackages` with
+  `@playwright/mcp` 0.0.80 (OQ-69's reading); the language servers character for character as `pins.json` declares them.
+  Its shape is `SetupManifestSchema` in `packages/config/src/setup-manifest.ts` (zod, strict), where both the guard and the
+  product's reader may import it; `setup-manifest.test.ts` validates the shipped file, refuses each malformed shape and
+  holds the language-server list equal to `pins.json` and to `CODE_INTELLIGENCE_LANGUAGE_SERVERS`, so the two files cannot
+  drift. `electron-builder.yml` carries it to the root of the artifact's resources, tested through electron-builder's own
+  `copyFiles`. **`pnpm release:guard v0.1.0` passes both halves, exit 0.** OQ-87 raised (what "archive layout" comprises), and OQ-88 (whether a manifest may key an archive under REQ-STARTUP-060's fallback) — raised as OQ-76 and OQ-77 on the branch, renumbered at the merge.
+  **Still owed, and not by this step:** the flow that reads the manifest — machine setup, `REQ-STARTUP-060` onward and
+  `REQ-MCP-112`'s setup half, with `REQ-STARTUP-061`'s fingerprint — is not built and not in this plan; the notices
+  generator still reads `pins.json` and its file says the manifest pins no machine tools, which is now false of the tree
+  (OQ-73 decides whose reader follows; `../defects/the-notices-file-says-the-setup-manifest-pins-no-machine-tools.md`);
+  `afterPack` does not yet assert the manifest inside `win-unpacked` (the next Windows package, IC-3).
 - **electron-builder hyphenates a prerelease version** (`0.1.0rc1` → `0.1.0-rc1`), so step 5's prerelease would be named
   `Rotaris-0.1.0-rc1-…` unless §4.2/§4.5 render the name from the tag through `tools/release-naming`
   (`../defects/fixed/a-prerelease-version-reaches-the-installer-hyphenated.md`). *Repaired 2026-09-28 (R-062; ADR-0054,
@@ -653,7 +667,10 @@ supply, and each stays owed (R-053). O-11 is the same kind of item: a review onl
      The manifest has to exist, with Git, ripgrep, the language servers and the `@playwright/mcp` pin
      (`REQ-STARTUP-058/059`), before §5's first check can pass. §4.3's section is generated from the same file, so
      that step is where it most naturally lands, and it lands packed: an `extraResources` entry, and either the
-     guard's `toolServerPackages` field or a change to the guard's constant;
+     guard's `toolServerPackages` field or a change to the guard's constant — **the manifest built 2026-09-28** (§4.1's
+     second note): packed by `extraResources`, under the guard's `toolServerPackages`, its schema in `packages/config`;
+     `pnpm release:guard v0.1.0` passes. §4.3's reader still reads `pins.json` (OQ-73), and the manifest's consumer,
+     machine setup, stays outside this plan;
    - §4.3 the notices generator with the About defect — *built 2026-09-27; validation refuses until O-3, O-11 and OQ-74.
      OQ-72 does not stop validation, but until it is ruled the file knowingly leaves out the libraries linked into
      the bundled interpreter*;

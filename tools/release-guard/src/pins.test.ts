@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { BROWSER_PACKAGE, BROWSER_PACKAGE_VERSION, SHIPPED_MCP_SERVERS } from '@rotaris/config';
 import {
   DEFAULT_CONFIGURATION_LOCATION, defaultLaunches, isCompleteVersion, packageSpecs, pinDisagreements, readSetupManifest,
-  SETUP_MANIFEST_LOCATION, splitPackageSpec, type DefaultLaunch, type ManifestReading,
+  SETUP_MANIFEST_LOCATION, SETUP_MANIFEST_SCHEMA_VERSION, splitPackageSpec, type DefaultLaunch, type ManifestReading,
 } from './pins.js';
 
 const REPO = resolve(import.meta.dirname, '..', '..', '..');
@@ -120,6 +120,17 @@ describe('reading the setup manifest — REQ-STARTUP-059\'s discipline', () => {
     expect(errors[0]).toContain('pins "a" to "^1.0.0", which is not a complete version string');
     expect(errors[1]).toContain('toolServerPackages[1] is not a { "name", "version" } pair');
     expect(errors[2]).toContain('lists "c" 2 times (toolServerPackages[2] = "1.0.0", toolServerPackages[3] = "1.0.1")');
+  });
+});
+
+describe('the shipped setup manifest against the shipped defaults (first-release-plan.md §4.1, built 2026-09-28)', () => {
+  it('the manifest at the guard\'s location reads, is at the schema version the schema states, and pins every default launch at the same string', () => {
+    const manifest = readSetupManifest(REPO);
+    expect(manifest).toMatchObject({ readable: true, errors: [] });
+    expect(SETUP_MANIFEST_SCHEMA_VERSION).toBe(1);
+    const { launches, errors } = defaultLaunches(SHIPPED_MCP_SERVERS);
+    expect(errors).toEqual([]);
+    expect(pinDisagreements(launches, manifest)).toEqual([]);
   });
 });
 

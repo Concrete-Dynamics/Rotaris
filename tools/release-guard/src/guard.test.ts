@@ -87,15 +87,18 @@ describe('the command line — REQ-STARTUP-149\'s exit codes', () => {
     expect(r.status, r.stderr).toBe(1);
     expect(r.stderr).toContain('tag v99.0.0 is version 99.0.0');
     expect(r.stderr).toMatch(new RegExp(`apps/desktop/package\\.json \\("version"\\)\\s+"${declared.replaceAll('.', '\\.')}"\\s+← differs`));
-    expect(r.stderr).toContain('server "browser" launches `npx -y @playwright/mcp@0.0.80 --headless`');
+    // The pin half passes on this tree (the setup manifest exists since 2026-09-28), so the version half is the one error.
+    expect(r.stderr).toContain('release guard: FAILED — 1 error');
+    expect(r.stderr).not.toContain('setup manifest');
   });
 
-  it('the script finds no version disagreement for the version this repository declares', () => {
+  it('the script passes this repository for the version it declares: both halves, exit 0 (the setup manifest exists since 2026-09-28)', () => {
     const declared = (JSON.parse(readFileSync(join(REPO, 'apps', 'desktop', 'package.json'), 'utf8')) as { version: string }).version;
     const r = spawnSync(process.execPath, [CLI, `v${declared}`], { cwd: REPO, encoding: 'utf8', timeout: 60_000 });
-    // Exit 0 once the setup manifest exists; until then 1 on the pin half alone (ADR-0054's §4.1 note).
-    expect([0, 1], r.stderr).toContain(r.status);
-    expect(r.stderr).not.toContain('disagree on the product version');
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stderr).toBe('');
+    expect(r.stdout).toContain('release guard: passed (REQ-STARTUP-028)');
+    expect(r.stdout).toContain(`package pins: @playwright/mcp 0.0.80 (server "browser") — ${SETUP_MANIFEST_LOCATION} agrees`);
     expect(spawnSync(process.execPath, [CLI], { cwd: REPO, encoding: 'utf8', timeout: 60_000 }).status).toBe(2);
   });
 });

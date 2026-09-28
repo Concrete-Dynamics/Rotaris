@@ -69,7 +69,7 @@ reviewed-exceptions table may supply an identifier a dependency does not declare
 runtime). **One more was raised the same day by that generator's gate review: OQ-75** (when a component carries "its
 full license text": a licence file that only pointed elsewhere, or only carried a licence's per-file notice, had
 counted as the text, and 4 components without text became 12); the four were raised as OQ-66 to OQ-69 on their own branch and renumbered when they reached `main`
-after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71. **One more was raised on 2026-09-28 by building the setup manifest (`first-release-plan.md` §4.1): OQ-76** (what a machine tool's "archive layout" comprises, and what path its expected executables are relative to — MinGit's entries sit at the archive root and ripgrep's under one directory). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -3207,6 +3207,30 @@ text of the identifier it declares, reproduced by the generator from a version-c
 Apache-2.0 or MPL-2.0 the honest answer is that the text is obtainable and the package left it out. That ruling
 would change REQ-STARTUP-143's route for such a component, and it would close `tqdm`'s gap as well. Until then,
 eight of O-11's twelve reviews are for a notice or a pointer.
+
+**OQ-76 — What does a machine tool's "archive layout" comprise, and what are its expected executables relative to?** *(REQ-STARTUP-058 with REQ-STARTUP-085, REQ-STARTUP-086 and REQ-STARTUP-088. Raised 2026-09-28 by building the setup manifest, first-release plan §4.1.)*
+
+REQ-STARTUP-058 has each per-platform archive artifact declare "archive layout, expected executables" and says no more
+about either. REQ-STARTUP-085 fixes the three archive formats extraction accepts and normalises entry names;
+REQ-STARTUP-086 requires every expected executable to exist in staging before the tree is promoted, but names no base
+the paths are relative to. The archives the manifest pins differ in exactly this respect: MinGit's entries sit at the
+archive root (`cmd/git.exe`, `mingw64/bin/git.exe`), ripgrep's under one directory named after the archive
+(`ripgrep-15.2.0-x86_64-pc-windows-msvc/rg.exe`). Whether the managed tool directory (`tools/<tool>/<provisioned_version>/`,
+REQ-STARTUP-070) holds that directory or its contents decides which paths REQ-STARTUP-088 can prepend.
+
+**What the build proceeds under.** `layout` is two things (`ArchiveSchema` in `packages/config/src/setup-manifest.ts`):
+the archive `format`, one of REQ-STARTUP-085's three, and `topLevelDirectory`, the one directory every entry sits under,
+or `null` when entries sit at the archive root. `executables` are written relative to that directory when one is
+declared and to the archive root otherwise — `rg.exe` and `cmd/git.exe`, never `ripgrep-15.2.0-…/rg.exe` — which reads
+the consumer as promoting the directory's contents, so a managed tool directory holds the executables at the same
+paths whatever the archive did. Which subdirectory of a tool's managed directory is prepended to PATH is the consumer's
+(REQ-STARTUP-088); the manifest names executables and nothing about PATH.
+
+**What a ruling decides.** Whether "archive layout" is the format alone, the format with the top-level directory, or
+something else (a list of entries to keep, a strip depth); and whether expected executables are relative to the archive
+root or to the promoted tree. A different reading changes the schema's `layout` object and the shipped file, and the
+fingerprint of REQ-STARTUP-061 with them, so it is cheapest before the first release ships a manifest that installations
+have set up from.
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

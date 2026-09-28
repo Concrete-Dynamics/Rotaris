@@ -59,7 +59,16 @@ Continue action counts, where it says so, and which continues offer the decline)
 REQ-SESSION-115's handoff carries, and who takes up an earlier offer), each stating the
 reading the build proceeds under. **All six were ruled on 2026-09-28** as recommended ([R-063](../product/requests.md#r-063)):
 by `PD-ORCH-005` revision 4, with `PD-ORCH-004` revision 4, `PD-ORCH-003` revision 2, `PD-CHAT-001` revision 4 and
-`PD-CHAT-002` revision 2. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+`PD-CHAT-002` revision 2, and those revisions were built on 2026-09-28 ([R-064](../product/requests.md#r-064)). **Building them raised nine
+more: OQ-73** (how clause 13's `paused` reads on the counters and on the run-level agent, and how the agents a crash left
+present before it is recorded), **OQ-74** (what cancelling one paused child at rest reaches, says and leaves, and what it
+does with a child a crash left), **OQ-75** (how a continue's message closes with the resumed iteration, and which
+continues append a task), **OQ-76** (which sessions a crash left, and what the Continue action offers on one with nothing
+to resume), **OQ-77** (where the plan gate holds a run that resumed an iteration, and what that plan cycle plans),
+**OQ-78** (what an agent's fingerprint is taken of, when it is compared and where the warning is stated), **OQ-79** (whose
+root the handoff's artifact is taken from), **OQ-80** (which offers a later iteration's root is told, and where) **and
+OQ-81** (what the audit of clause 15, clause 19, `PD-CHAT-001` revision 4 and `PD-CHAT-002` revision 2 leaves
+undecided), each stating the reading the build proceeds under. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -2919,6 +2928,10 @@ REQ-SESSION-078/180 and REQ-MONITOR-014 join the Narrows list, as built, and eac
 agent presents in a presentation state of its own, `paused`, and REQ-MONITOR-046 is narrowed to map it so (clause 13).
 Until that is built, a paused agent presents as `queued`, as the reading above says.
 
+**Built 2026-09-28 under [R-064](../product/requests.md#r-064).** A `paused` agent presents as `paused` on every agent
+surface, and the "until that is built" readings above are superseded. Building it raised OQ-73: how the counters and the
+run-level agent read it, and how the agents a crash left present before the crash is recorded.
+
 **OQ-68 — Is the transcript drawn from the conversation record, and what of a model exchange does the record hold?** *(`PD-ORCH-005` clauses 1 and 12; REQ-MONITOR-248, REQ-SESSION-196, REQ-CHAT-046 and REQ-SESSION-029, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-005` revision 2 under [R-060](../product/requests.md#r-060).)*
 
 Clause 1 calls the conversation record "the record a resume is made from, and the same record a session's transcript
@@ -2962,6 +2975,10 @@ and the conversation record stay two records of one run, each written as the run
 is replaced to say so. Each agent's record also keeps a fingerprint of the instructions and tools it started with; a
 resumed agent runs with its persona's current ones, and the run states, as a warning, when they changed (clause 14).
 Until that is built, a resume says nothing of a changed persona.
+
+**Built 2026-09-28 under [R-064](../product/requests.md#r-064).** Store v24 keeps each agent's fingerprint
+(`agent_fingerprints`), and a resume under changed instructions or tools states a warning naming the agent. Building it
+raised OQ-78.
 
 **OQ-69 — Which control is a stop and which the final cancel, and what does a rest do at the edges the directive does not reach?** *(`PD-ORCH-005` clauses 2, 3, 8, 9, 10 and 11; REQ-MONITOR-009, REQ-MONITOR-126, REQ-MONITOR-130, REQ-MONITOR-092, REQ-SESSION-092, REQ-SESSION-108, REQ-SESSION-186, REQ-SESSION-025, REQ-ORCH-080, REQ-ORCH-135, REQ-GIT-094, REQ-TOOLS-063 and REQ-CHAT-101, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3 under [R-060](../product/requests.md#r-060) and [R-061](../product/requests.md#r-061).)*
 
@@ -3123,6 +3140,11 @@ recommendation (clauses 15 and 16).
 - REQ-ORCH-135, REQ-MONITOR-130, REQ-SESSION-108 and REQ-TOOLS-063 join the Narrows list, as the build reads them.
 - REQ-CHAT-101 is already narrowed by `PD-CHAT-002`, so its quit case is that directive's revision 2.
 
+**Built 2026-09-28 under [R-064](../product/requests.md#r-064).** The audit of clause 15 found it built, except for a
+board run caught by the quit, which rested by `stop` and was repaired; a stop or a quit during a plan cycle now
+withdraws what waits on a person. One paused child is cancellable while its session rests, and `/stop` reads "Stop the
+active run". Building it raised OQ-74 and OQ-81.
+
 Until they are built, a paused child is not cancellable at rest, and `/stop` keeps its old description.
 
 **OQ-70 — How does a resumed iteration carry on where the directive says what and not how?** *(`PD-ORCH-005` clauses 4, 5, 6, 7 and 10; PD-TOOLS-006 revision 2; REQ-ORCH-095, REQ-ORCH-088, REQ-ORCH-152, REQ-HOOKS-075 and REQ-MONITOR-125, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3 under [R-060](../product/requests.md#r-060) and [R-061](../product/requests.md#r-061).)*
@@ -3212,6 +3234,11 @@ recommendation.
 - A resumed iteration is never held at the plan gate, and a gate that would hold the run holds before its first new
   iteration. That is `PD-ORCH-003` revision 2, since that directive already narrows REQ-ORCH-152.
 
+**Built 2026-09-28 under [R-064](../product/requests.md#r-064).** The readings above that a continue's message is no
+task and that a resumed iteration's run is never held are superseded: the message is a task the resumed iteration holds
+(clause 17), a crash-left session offers both continues and the decline (clause 18), and an armed gate holds before the
+first new iteration (`PD-ORCH-003` revision 2). Building it raised OQ-75, OQ-76 and OQ-77.
+
 Until they are built, the readings above stand.
 
 **OQ-71 — What does the Continue action count, where does it say so, and which continues offer the decline?** *(`PD-ORCH-005` clause 6; REQ-SHELL-023, REQ-MONITOR-125 and REQ-SESSION-110, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3 under [R-060](../product/requests.md#r-060) and [R-061](../product/requests.md#r-061).)*
@@ -3282,6 +3309,10 @@ recommendation.
 - The message continue's short label is `Send`, from the send pill it stands in for.
 - The design material is asked to draw the composer's paused state (`docs/design/README.md` §3.2).
 
+**Built 2026-09-28 under [R-064](../product/requests.md#r-064).** The count and the decline stand in the notices row, a
+crash-left session shows them as a paused one does, and the message continue reads `Send`. Building it raised OQ-76 and
+OQ-81.
+
 Until they are built, the label reads `Message`.
 
 **OQ-72 — Which artifact is REQ-SESSION-115's "latest orchestrator artifact", and how does a later root take up an offer?** *(`PD-ORCH-004` revision 3; REQ-SESSION-115, which `PD-ORCH-005` narrows for a resumed iteration and which nothing narrows here, and REQ-TOOLS-155, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-004` revision 3 with `PD-ORCH-005` under [R-059](../product/requests.md#r-059), and by the repair of `the-continuation-payload-says-no-artifact-is-recorded.md`.)*
@@ -3343,6 +3374,11 @@ recommendations.
 - The handoff's artifact is the latest one the iteration's root published and, when the root published none, the latest
   of any kind (clause 20).
 - The open offers stay in the handoff, and the root of each later iteration of the same run is told them too, once.
+
+**Built 2026-09-28 under [R-064](../product/requests.md#r-064).** The handoff's artifact is the latest the iteration's
+root published, falling back to the latest of any kind, and the reading above that a later iteration of the same run is
+told of no offer is superseded: every execution root's first message names the open offers it does not already hold.
+Building it raised OQ-79 and OQ-80.
 
 Until they are built, the artifact is the latest of any kind, and a later iteration of the same run is told of no
 offer.
@@ -3940,6 +3976,12 @@ and what the answer at that gate launches.
   `paused_message_limit`: nothing open and the message `complete`, so the resolution's 'continue' and 'double' append it
   again as the Continue action does ("the message-limit resolution's …", in the same file). Recorded at the merged
   build's tenth review.
+- **No surface re-arms the gate on a paused session.** The revision holds a resumed run "because the session holds no
+  release and the mode is `plan` or the release was re-armed", and the re-arm is the user choosing `plan` on the run-start
+  control, which the composer disables on a paused session and in the recovery state (REQ-CHAT-006,
+  `CHIPS_DISABLED_STATES`). `Sessions.planRearm` accepts a rested session, so a re-arm before a continue is reached only
+  by command, or by a mode chosen before the pause. The build leaves the chip as REQ-CHAT-006 draws it. Found by the
+  built-app drive of the merged build, which re-armed through `session.planRearm`.
 
 **What a ruling decides.** Whether the revision's unheld resume reaches an iteration a crash left open once clause 18
 has recorded the crash, as built, or only one a rest left, so that a crash-left iteration is held at the gate like a new
@@ -3949,7 +3991,7 @@ them; whether this plan cycle should be sent a handoff rebuilt after the resumed
 continue's, or be told that the handoff predates that iteration; whether a revise after this hold should be told again
 what became of the continue's message; and whether a Continue action after a Cancel, a stop or a quit at this hold, or
 the message-limit resolution after the limit won over it, should re-run a message the resumed iteration carried out, as
-built, or continue with the pending work alone (with OQ-76's ruling on the same state).
+built, or continue with the pending work alone (with OQ-76's ruling on the same state); and whether the run-start control should offer the re-arm on a paused session.
 
 **OQ-78 — What is an agent's fingerprint taken of, when is it compared, and where is the warning stated?** *(`PD-ORCH-005` clause 14 over OQ-68's reading; REQ-SESSION-029, REQ-SESSION-132, REQ-SESSION-134, REQ-SESSION-135, REQ-ORCH-019, REQ-ORCH-088, REQ-ORCH-095, REQ-WORKSPACE-047, REQ-WORKSPACE-050, REQ-WORKSPACE-058, REQ-WORKSPACE-060, REQ-TOOLS-010, REQ-TOOLS-053, REQ-TOOLS-069, REQ-MCP-101, REQ-CONFIG-166 and REQ-MONITOR-305, which the directive does not name; and REQ-ORCH-139, whose issue-kind vocabulary has no kind for the warning, which the reading below departs from by coining `resumed_under_changed_instructions`. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
 

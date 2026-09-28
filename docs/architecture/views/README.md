@@ -49,8 +49,10 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 present-request that waits behind the dialog already open in its window, or behind requests queued ahead of it, with
 the new run-host request `approval.queued` (`MainWindows.enqueueApproval` answers which). `RunHostPresenter` then stops
 bounding the wait for `approval.shown`. The gate races the presentation against its own wait, so a queued request that
-times out or is cancelled is dropped unshown and counts as cancelled (REQ-TOOLS-054). The **process view**'s request list
-and the **sequences view**'s approval diagram and bullets name it; no package, edge or store table changes.
+times out or is cancelled is dropped unshown and counts as cancelled (REQ-TOOLS-054). A window that closes while the
+application stays hands its queued requests to main (`MainWindows`' `unshownApprovals`), which answers each not shown
+(REQ-TOOLS-058), so none hangs; during a quit it answers nothing. The **process view**'s request list and the
+**sequences view**'s approval diagram and bullets name it; no package, edge or store table changes.
 
 **Each agent's record keeps the fingerprint it started with (`PD-ORCH-005` revision 4 clause 14, 2026-09-28, R-064).**
 Store **v24** appends `agent_fingerprints`: per agent, the SHA-256 of the system prompt and of the tool definitions its

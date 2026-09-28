@@ -256,6 +256,19 @@ the warning confirmation dialog REQ-CHAT-009 fixes, with Cancel holding initial 
 request, 2026-09-18; logged as [R-040](requests.md#r-040). **Revised again** at the owner's request,
 2026-09-18; logged as [R-041](requests.md#r-041). Revision 4 logged as [R-063](requests.md#r-063).*
 
+> **First execution of revision 4, 2026-09-28, ruled by [R-063](requests.md#r-063) and built with `PD-ORCH-005` revision 4
+> under [R-064](requests.md#r-064):** the revision was built as written. The notices row already held the plan gate's
+> hint, the pause's statement, the Continue action's count and "Continue without them"; the build added the tests that
+> pin each there, and the paused strip's second continue now reads `Send`, named `Continue with a message`. The text met
+> the code in two places, recorded in [OQ-76](../architecture/open-questions.md) and [OQ-81](../architecture/open-questions.md):
+> - on a session a crash left, the two continues take the send pill's place as on a paused one;
+> - three controls stand outside the dock and outside the notices row, and are read as outside this sentence: REQ-CHAT-021's
+>   command banner, the refusal line with its recovery action, and REQ-CHAT-169's attachment list.
+>
+> **What was measured.** `continue-action.test.ts`; in the built app, the paused strip as one band
+> with `Continue` and `Send`, and the count and the decline in the notices row, on a paused and a crash-left session.
+> The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 <a id="pd-chat-002"></a>
 
 ### PD-CHAT-002 — structured questions present an auto-opened, docked all-in-one form and a rendered transcript summary
@@ -304,6 +317,16 @@ scrollable all-step form.
 > **Extends:** REQ-CHAT-061, REQ-CHAT-097, REQ-CHAT-100, REQ-CHAT-102
 
 *Raised by the owner, 2026-09-13; logged as [R-011](requests.md#r-011). Revision 2 logged as [R-063](requests.md#r-063).*
+
+> **First execution of revision 2, 2026-09-28, ruled by [R-063](requests.md#r-063) and built with `PD-ORCH-005` revision 4
+> under [R-064](requests.md#r-064):** the sentence was already built when the owner ruled it; main drops the dock's
+> cancellation while the application quits. The build re-cited that guard to this revision, and found one case beside
+> it: a question pending in a plan cycle when the quit lands was cancelled by the run. A stop or a quit during a plan
+> cycle now withdraws it ([OQ-81](../architecture/open-questions.md)).
+>
+> **What was measured.** `session.test.ts` and `plan-gate.test.ts`, each red when its limb is reverted. **What was not
+> measured.** No built-app quit with a question open was driven for this revision; phase 7 of revisions 2 and 3 drove
+> one. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 <a id="pd-chat-003"></a>
 
@@ -901,6 +924,24 @@ accessible name fuses its label and its hint with no separator — `Auto` + `sta
 as [`a-chip-option-announces-its-label-and-hint-as-one-word.md`](../defects/a-chip-option-announces-its-label-and-hint-as-one-word.md)
 and deliberately not repaired here. The row is in
 [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **First execution of revision 2, 2026-09-28, ruled by [R-063](requests.md#r-063) and built with `PD-ORCH-005` revision 4
+> under [R-064](requests.md#r-064):** the rule was built as written. A run that resumes an open iteration runs it unheld;
+> when the gate would hold the run, it parks before the first new iteration, and its plan cycle is told the pending
+> tasks and what became of the continue's message. Building it found every approved prompt worked twice, because a
+> plan decision's relaunch appended the gated prompt as a second task
+> ([`a-plan-decision-appends-the-gated-prompt-as-a-second-task.md`](../defects/fixed/a-plan-decision-appends-the-gated-prompt-as-a-second-task.md),
+> repaired: the relaunch appends none). The text met the code in these places, each recorded in [OQ-77](../architecture/open-questions.md):
+> - an iteration a crash left open runs unheld once the crash is recorded, as a rest's does;
+> - the message limit, checked as the resumed iteration closes, wins over the hold;
+> - the held plan cycle is sent the handoff the continue built;
+> - no surface re-arms the gate on a paused session, since the run-start control is disabled there (REQ-CHAT-006).
+>
+> **What was measured.** `plan-gate-resume.test.ts` and `plan-text.test.ts`, each limb red when reverted. In the built
+> app, a plan-mode session paused mid-iteration, re-armed by command and continued: the resumed iteration ran unheld,
+> and the gate held before the next one.
+>
+> **What was not measured.** No live run was made. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 <a id="pd-monitor-001"></a>
 
@@ -1774,6 +1815,19 @@ so a child that genuinely loops is still stopped at the same point.
 > while it is making progress. No live run was made. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **First execution of revision 4, 2026-09-28, ruled by [R-063](requests.md#r-063) and built with `PD-ORCH-005` revision 4
+> under [R-064](requests.md#r-064):** the rule was built as written. Every execution root's first message names the open
+> offers that message does not already hold (`offersForFirstMessage`), and a plan cycle is told none. The list and its
+> reader moved to `packages/engine/src/run/offers.ts`, so the run tells a later iteration's root without importing the
+> session manager, and REQ-SESSION-194's cut is one function, `run/cut.ts`. The text met the code in one place, recorded
+> in [OQ-80](../architecture/open-questions.md): "told of it, once" is read once per root, and the offers a handoff already covered, named or elided,
+> count as told.
+>
+> **What was measured.** `offers.test.ts`, through the run, each limb red when reverted.
+>
+> **What was not measured.** No built-app run: the scripted client cannot cut a child off while it is making progress
+> and then begin a second iteration. No live run was made. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-monitor-002"></a>
@@ -2322,6 +2376,78 @@ revision 4 as [R-063](requests.md#r-063).*
 > - The driver's own quit is an immediate exit that skips the shutdown
 >   ([`the-drivers-quit-skips-the-applications-shutdown.md`](../defects/the-drivers-quit-skips-the-applications-shutdown.md));
 >   the quit above was a window close.
+>
+> The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **First execution of revision 4, 2026-09-28, ruled by [R-063](requests.md#r-063) and built under
+> [R-064](requests.md#r-064):** clauses 13 to 20 were built as written, in four lanes that ran in parallel, each on its own
+> branch and worktree and each reviewed adversarially until no blocking or should-fix finding remained. The merged build
+> was then reviewed across the lanes for fourteen rounds and driven in the built app. The text met the code in these
+> places, and each reading is an open question:
+> - **Clause 13** ([OQ-73](../architecture/open-questions.md)). `paused` is a presentation state of its own on every agent surface, drawn in the waiting
+>   colour (`--rt-wait`) with no pulse, and a paused agent keeps its task line as its activity; the Overview counts it on
+>   its own. The run-level agent presents `paused` while its session rests, and the agents a crash left present `paused`
+>   before the crash is recorded, so the tree agrees with the Continue action's count. That second reading departs from
+>   the clause's last sentence and is put to the owner.
+> - **Clause 14** ([OQ-78](../architecture/open-questions.md)). Store v24 appends `agent_fingerprints`: the SHA-256 of the system prompt and of the tool
+>   definitions each agent's first model request carried. A resume under a different pair states a
+>   `resumed_under_changed_instructions` warning issue and one transcript row naming the agent. The issue kind is coined
+>   beside REQ-ORCH-139's vocabulary, and the fingerprint covers the whole system prompt, so a changed pre-flight playbook
+>   warns too; both are put to the owner.
+> - **Clause 15** ([OQ-81](../architecture/open-questions.md)). The audit found it built, with one exception: a board run caught by the application's quit
+>   rested by `stop` ([`a-board-run-caught-by-a-quit-rests-as-a-stop.md`](../defects/fixed/a-board-run-caught-by-a-quit-rests-as-a-stop.md),
+>   repaired). A stop or a quit during a plan cycle now withdraws what waits on a person. `/stop` reads "Stop the active
+>   run".
+> - **Clause 16** ([OQ-74](../architecture/open-questions.md)). `session.control`'s `cancelAgent` ends a paused child and its paused descendants `cancelled`
+>   while no run is behind the session, under the session's lock, with the live cancel's report and artifact, and the
+>   count drops. A child a crash left is cancelled from its stored state, and the crash is left for the next repair or
+>   continue. The first cut wrote the whole crash record
+>   ([`cancelling-one-crash-left-child-records-the-whole-crash.md`](../defects/fixed/cancelling-one-crash-left-child-records-the-whole-crash.md),
+>   repaired), and wrote against a failed store
+>   ([`the-at-rest-cancel-writes-against-a-failed-store.md`](../defects/fixed/the-at-rest-cancel-writes-against-a-failed-store.md), repaired).
+> - **Clause 17** ([OQ-75](../architecture/open-questions.md)). The message is a task the resumed iteration holds: done when the iteration succeeds, pending
+>   on any other close and taken up by the next iteration. The Continue action, the decline and the message-limit
+>   resolution append no second task while the todo holds the last request unfinished. That reading reaches beyond the
+>   clause, into REQ-ORCH-004, and it repaired
+>   [`the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`](../defects/fixed/the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md).
+> - **Clause 18** ([OQ-76](../architecture/open-questions.md)). A session a crash left offers both continues and the decline with the same count, and each
+>   records the crash first; a session a store failure left busy is refused, since it did not crash. On a crash-left
+>   session the two continues take the send pill's place as they do on a paused one.
+> - **Clause 19** was already built; the audit added its tests.
+> - **Clause 20** ([OQ-79](../architecture/open-questions.md)). The handoff takes the latest artifact the most recent iteration's root published, known by
+>   the root's task id, and falls back to the latest of any kind.
+>
+> **What building it found in the code before it.** Each was repaired, and each note is in `docs/defects/fixed/`:
+> - a plan decision's relaunch appended the gated prompt as a second task, so every approved prompt was worked twice;
+> - a request queued behind an open approval dialog was denied unshown after ten seconds. That repair's first cut left a
+>   request queued behind a closing window to hang, which the orchestrator's own review found and repaired;
+> - the composer's Pause stayed disabled after the first pause;
+> - the status strip read "run Running" in the recovery state;
+> - a persona window at rest could keep a first view without its transcript;
+> - the Mission view offered Pause and Cancel with no run behind the session.
+>
+> The open defects noticed along the way are recorded in `docs/defects/`.
+>
+> **What was measured.** The gate went from 2418 to 2620 passing tests, with only the three known failures, and each new
+> limb turned a test red when reverted. Thirteen scenarios were driven in the built app, each as the text says:
+> - the `paused` presentation after a pause and after a stop;
+> - one paused child cancelled at rest with its paused descendant, then the rest continued;
+> - a crash-left session's presentation, and a crash-left child cancelled at rest;
+> - the paused strip's `Continue` and `Send` with the count and decline in the notices row, and `/stop`;
+> - a crash-left session in the recovery state and after a repair, "Continue without them", the Continue action, and a
+>   continue by message;
+> - a continue's message as a held task;
+> - a resume under a changed persona's instructions, with its single warning;
+> - the plan gate around a resumed iteration (`PD-ORCH-003` revision 2).
+>
+> **What was not measured.**
+> - The four repairs of the last review round were checked in the built app by the round that made them; the independent
+>   re-drive did not run, because the subagents' usage limit was reached.
+> - Persona windows cannot be addressed by the driver, so their state was read from screen captures
+>   ([`the-driver-cannot-address-persona-or-approval-windows.md`](../defects/the-driver-cannot-address-persona-or-approval-windows.md)).
+> - Clause 14's orchestrator-instructions and tool-change variants were not driven.
+> - Clause 20 is not observable with the scripted client; its evidence is the tests.
+> - No live run was made, and only Linux under Xvfb was driven.
 >
 > The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 

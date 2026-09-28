@@ -264,6 +264,9 @@ expect(popup.first === 'stop' && popup.active === 0, `the first row should be /s
 // mirrors carry `action`. This launch discovers no skill and has no prompt file, so the set is exactly those two, and the
 // `skill` badge sits on exactly those two rows. Until 2026-09-28 the assertion read every row as `action`, which
 // `/skill` stopped matching on 2026-09-15 (`docs/defects/fixed/slash-proof-expects-every-built-in-to-carry-the-action-badge.md`).
+// "Discovers no skill" rests on the launch's isolation: on a POSIX host a skill under the machine-wide
+// `/etc/codex/skills`, which no scratch variable redirects, would add its own `skill` row and fail the exact set below
+// (`docs/defects/three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md`).
 const FIXED_SKILL_COMMANDS = ['skill', 'skills'];
 expect([...popup.kinds].sort().join(',') === 'action,skill', `the built-ins and mirrors carry the action badge and the two fixed skill commands the skill badge — no other kind: ${popup.kinds.join(',')}`);
 const skillBadged = rows.filter((r) => r.attrs['data-kind'] === 'skill').map((r) => r.attrs['data-command']).sort();

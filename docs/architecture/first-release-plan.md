@@ -40,7 +40,14 @@ record already decides, and every ruling it needs is named as the owner's rather
   set (`action` for the built-ins and mirrors, `skill` for `/skill` and `/skills`), and every proof takes the global
   configuration directory from `configDirFor`; `skills-proof` passed 10 checks over 9 launches as root on Linux
   ([fixed](../defects/fixed/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md),
-  [fixed](../defects/fixed/slash-proof-expects-every-built-in-to-carry-the-action-badge.md)).
+  [fixed](../defects/fixed/slash-proof-expects-every-built-in-to-carry-the-action-badge.md)). `slash-proof` is not
+  green for it. It moves from one red to another: it now stops at the model chip's eval
+  ([note](../defects/slash-proofs-model-chip-eval-shares-its-offset-with-the-usage-notice-read.md)). On Linux as
+  root, `resilience-proof`, `sandbox-proof`, `notice-proof` and `init-proof` are red for their recorded notes
+  ([override select](../defects/resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md),
+  [Windows verdict](../defects/sandbox-proof-asserts-the-windows-verdict-on-every-platform.md), and
+  [code intelligence as root](../defects/the-code-intelligence-server-dies-when-the-app-runs-as-root.md) for the last
+  two).
 - The unbuilt directives `PD-TOOLS-003`, `PD-TOOLS-004`, `PD-TOOLS-005`, `PD-ORCH-004` and `PD-MONITOR-002`.
 - The macOS and Linux artifacts, which are bound by IC-3 and IC-8 and now also by `PD-STARTUP-001`.
 

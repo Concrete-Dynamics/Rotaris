@@ -39,3 +39,7 @@ leave one root of the operator's machine inside that profile, and the unit tests
 - `apps/desktop/src/run-host/skills.test.ts`: `host()`, the catalog cases.
 - `apps/desktop/src/run-host/host.ts`, `apps/desktop/src/workspace-service/index.ts`: where the instruction base's
   seam is read today.
+
+**A fifth (2026-09-28, R-062).** `slash-proof` now asserts exactly two `skill`-badged rows, `/skill` and `/skills`
+(ADR-0063 decision 5). A skill under the host's `/etc/codex/skills` would add a third, and the proof would go red on a
+POSIX host that holds one. Its assertion names that dependency in a comment. The proof is not changed.

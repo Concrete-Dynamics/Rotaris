@@ -421,8 +421,9 @@ export class Run {
         ? Todo.fromDocument(deps.resumeTodo, deps.config.consecutiveRetryLimit)
         : Todo.fresh(deps.taskId, deps.taskLabel ?? deps.task, deps.config.consecutiveRetryLimit);
     const openRow = deps.dal?.openIterationOf(deps.sessionId) ?? null;
-    // PD-ORCH-005 clause 17: a task held by an iteration that is no longer open goes back to pending before anything reads the todo.
-    if (deps.dal) this.todo.releaseStale(openRow?.iteration ?? null);
+    // PD-ORCH-005 clause 17: a task held by an iteration that is no longer open closes as the record says that iteration
+    // did — done when it closed succeeded, pending otherwise — before anything reads the todo.
+    if (deps.dal) this.todo.releaseStale(openRow?.iteration ?? null, new Set(deps.dal.iterationsOf(deps.sessionId).filter((i) => i.state === 'closed' && i.outcome === 'succeeded').map((i) => i.iteration)));
     const open = deps.openIteration === undefined ? null : openRow;
     this.resumeFrom = deps.openIteration?.resume === true ? open : null;
     this.restedIteration = open?.iteration ?? null;

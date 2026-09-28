@@ -33,10 +33,18 @@ describe('Todo — a task held by an open iteration (PD-ORCH-005 clause 17)', ()
     const t = Todo.fresh('a', 'first');
     t.appendHeld('Continued Prompts', 'm1', 'one', 1);
     t.appendHeld('Continued Prompts', 'm2', 'two', 2);
-    expect(t.releaseStale(2)).toBe(1);
+    expect(t.releaseStale(2, new Set())).toBe(1);
     expect(shape(t).slice(1)).toEqual([['m1', 'pending', undefined, 0], ['m2', 'in_progress', 2, 0]]);
-    expect(t.releaseStale(null)).toBe(1);
+    expect(t.releaseStale(null, new Set())).toBe(1);
     expect(shape(t)[2]).toEqual(['m2', 'pending', undefined, 0]);
+  });
+
+  it('releaseStale completes a task whose holding iteration the record holds closed succeeded', () => {
+    const t = Todo.fresh('a', 'first');
+    t.appendHeld('Continued Prompts', 'm1', 'one', 1);
+    t.appendHeld('Continued Prompts', 'm2', 'two', 2);
+    expect(t.releaseStale(null, new Set([1]))).toBe(2);
+    expect(shape(t).slice(1)).toEqual([['m1', 'complete', undefined, 0], ['m2', 'pending', undefined, 0]]);
   });
 
   it('the binding survives the stored document', () => {

@@ -3389,8 +3389,10 @@ message.
   and not decided here.
 - **What a death leaves.** The todo is saved with the run's `starting` save, so a run host that dies during the
   pre-flight keeps the task as the root's record keeps the message. A task held by an iteration that is no longer open —
-  a death between the iteration's close and the save that recorded the release — goes back to `pending` when the next
-  run is built, so it is never left in progress with nothing to close it.
+  a death between the iteration's close and the save that recorded the release — closes when the next run is built as
+  the record says its iteration closed: `complete` when the iteration's row reads `succeeded`, since the clause's "done
+  when the iteration succeeds" is decided by the outcome and not by which save landed, and `pending` otherwise, so it is
+  never left in progress with nothing to close it and a message its iteration carried out is never worked again.
 
 **What a ruling decides.** Whether a `partial` resumed iteration should close the message as done, since the root
 answered it; whether leaving the message pending should count toward REQ-ORCH-077's limit, so a message no iteration
@@ -3421,8 +3423,9 @@ at that gate launches.
   continue — its message, or the last request for the Continue action — and a run whose intent is in REQ-ORCH-021's
   answer group is not held, so whether a run will be held stays answerable without knowing more than at the start.
 - **What the plan cycle plans.** It is told the plan request, then that the run resumed the iteration, which has closed,
-  and the tasks still pending in the order the run takes them up (the first twenty, each cut to 500 characters, as the
-  handoff bounds its todo), then the launch content as the session's context, marked as already dealt with. The pending
+  and the tasks still pending in the order the run takes them up (the first twenty, the count the handoff shows of its
+  todo under REQ-SESSION-115, each cut to 500 characters rather than the handoff's 80, since here a task's text is the
+  work to plan and not a display title), then the launch content as the session's context, marked as already dealt with. The pending
   tasks are what the first new iteration would have selected, so the approved plan is about the work it releases.
 - **What the answer launches.** A plan decision's relaunch appends no task: the held run's stored todo already carries
   the gated work, and after this hold the last user row is the continue's message, which the resumed iteration dealt
@@ -3431,12 +3434,18 @@ at that gate launches.
   ([`a-plan-decision-appends-the-gated-prompt-as-a-second-task.md`](../defects/fixed/a-plan-decision-appends-the-gated-prompt-as-a-second-task.md)).
   The approved run is set up as any run is: the resumed root's persona covered the work already under way (OQ-70), and
   no iteration is open when the plan is decided, so the work after the gate runs as the entry role configured then.
+- **A revise is launched as any revise is.** After this hold the run has closed the resumed iteration, so the revise's
+  relaunch resumes nothing: its plan cycle is told the plan request, the handoff built for it — whose "Latest user
+  request" is the continue's message and whose todo shows that message `complete` (or `pending`) beside the tasks still
+  pending — and the plan and the changes the user stated. It is not told `resumedWorkSection` again; the record keeps no
+  mark that the hold followed a resumed iteration, and the handoff's todo states the same work.
 - **"Continue without them" is unchanged.** It resumes nothing, so its run is held before its first iteration, as any run
   that resumes nothing is.
 
 **What a ruling decides.** Whether a requeued resumed task should count as work already under way rather than a new
-iteration; whether the answer-group exemption should reach this hold; and whether the plan cycle should plan only the
-first pending task or all of them.
+iteration; whether the answer-group exemption should reach this hold; whether the plan cycle should plan only the
+first pending task or all of them; and whether a revise after this hold should be told again that the continue's
+message was already dealt with.
 
 **OQ-80 — Which offers is a later iteration's root told, where in its first message, and which roots count?** *(`PD-ORCH-004` revision 4; REQ-ORCH-088, which the directive narrows, REQ-TOOLS-152, which it extends, and REQ-SESSION-115, REQ-SESSION-194, REQ-ORCH-067, REQ-ORCH-072 and REQ-ORCH-153, which it does not name. Raised 2026-09-28 by building `PD-ORCH-004` revision 4 under [R-064](../product/requests.md#r-064).)*
 
@@ -3456,6 +3465,11 @@ handoff it is re-sent, or whether a plan cycle's root is such a root.
   content does not already hold. The root of a new session's first iteration has none to be told. A continuation's
   first iteration reads them all in its handoff and is told nothing more. Each later iteration of the same run is told
   those raised since, including any a resumed first iteration raised.
+- **An offer a held list left out is held.** A list names the newest ten and, when there were more, says the earlier
+  ones were left out; that is the whole of what the directive tells a root. So an offer spawned before the oldest one a
+  list names that carries the elision line counts as told by it, and is not named again in a second list beside it.
+  An offer a list could not have named — raised since it was built — is still told, the newest ten of those with the
+  same elision line.
 - **Where.** A text part of its own after the launch content — its text and any attachments — in the same first user
   message, so the root reads it as part of its task. It is the same list, header, lines, newest ten and elision line
   as the handoff's and the resumed root's, so a later reader recognises it.

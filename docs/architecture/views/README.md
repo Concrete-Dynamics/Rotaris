@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-28**
 
+**Review round 1 of the iteration lane (`PD-ORCH-005` clause 17, `PD-ORCH-003` revision 2, `PD-ORCH-004` revision 4,
+2026-09-28, R-064).** A stale held message closes as the record says its iteration did (`Todo.releaseStale` reads the
+iteration rows' outcome); an offer a held list elided counts as told (`offersForFirstMessage`); REQ-SESSION-194's cut
+is one function, `run/cut.ts`, shared by the handoff, the offers list and the plan cycle's pending tasks. The **runtime
+view**'s message-task and continuation paragraphs say so. No package, edge, process, channel, message kind or store
+column changed.
+
 **A later iteration's root is told the open offers (`PD-ORCH-004` revision 4, 2026-09-28, R-064).** The offers list and
 its reader (`openOffersText`, `offersToldIn`) move from `sessions.ts` to `run/offers.ts`, re-exported where they were, so
 the run can use them without importing the session manager. `Run.turn()` adds to every execution iteration root's first

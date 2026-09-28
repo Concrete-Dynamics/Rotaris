@@ -9,7 +9,7 @@ describe('resumedWorkSection (PD-ORCH-003 revision 2)', () => {
     expect(text).toContain('Pending tasks:\n- alpha\n- beta\n');
   });
 
-  it('bounds the list as the handoff bounds its todo: twenty tasks, each cut to 500 characters, never inside a surrogate pair', () => {
+  it('bounds the list: twenty tasks as the handoff shows of its todo, each cut to 500 characters rather than its 80, never inside a surrogate pair', () => {
     const many = Array.from({ length: 22 }, (_, i) => `task ${i + 1}`);
     const text = resumedWorkSection(1, many);
     expect(text).toContain('- task 20\n- [... additional pending tasks elided]');

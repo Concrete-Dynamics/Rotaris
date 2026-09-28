@@ -2,6 +2,7 @@ import type { SessionId } from '@rotaris/kernel';
 import type { ChatMessage, ContentPart } from '@rotaris/model';
 import type { StoreDal } from '@rotaris/store';
 import { parseReport } from '../children/notify.js';
+import { cut } from './cut.js';
 
 /**
  * PD-ORCH-004 revisions 3 and 4 — how a later root learns of an open continuation offer. The list is told to the root
@@ -14,14 +15,8 @@ import { parseReport } from '../children/notify.js';
 /** PD-ORCH-004 revision 3: how many open offers a later root is told of — the newest; the rest are elided. */
 export const OFFERS_TOLD = 10;
 export const OFFERS_HEADER = 'Open continuation offers (delegate with `continuation_of` set to the task id to take one up):';
-
-/** REQ-SESSION-194's cut: `cap` characters at most, the last three an ellipsis, never between a surrogate pair's halves. */
-function cut(text: string, cap: number): string {
-  if (text.length <= cap) return text;
-  const end = Math.max(0, cap - 3);
-  const kept = end > 0 && /[\uD800-\uDBFF]/.test(text[end - 1]!) ? end - 1 : end;
-  return `${text.slice(0, kept)}...`;
-}
+/** The line a list carries, after its header, when it left earlier offers out. */
+const ELIDED_LINE = '- [... earlier continuation offers elided]';
 
 /**
  * PD-ORCH-004 revision 3: the task ids whose continuation offer a conversation already holds — the offer itself, as a
@@ -60,19 +55,44 @@ export function openOffersText(dal: StoreDal, sessionId: SessionId, include: (ta
   const open = all.filter((c) => typeof parseReport(c)?.cut_off?.continuation_offer === 'string' && !continued.has(c.task_id) && include(c.task_id));
   if (open.length === 0) return '';
   const told = open.slice(-OFFERS_TOLD).map((c) => `- ${cut(c.canonical_name, 80)} (${c.task_id})`);
-  const elided = open.length > OFFERS_TOLD ? ['- [... earlier continuation offers elided]'] : [];
+  const elided = open.length > OFFERS_TOLD ? [ELIDED_LINE] : [];
   return [OFFERS_HEADER, ...elided, ...told].join('\n');
 }
 
 /**
+ * PD-ORCH-004 revision 3: whether an offers list in `parts` said earlier offers were left out, and the task ids of the
+ * oldest offer each such list names — the newest ten it names are the tail of the offers open when it was built, so
+ * every offer before its oldest line was left out of it.
+ */
+function elidedBeforeIn(parts: readonly ContentPart[]): string[] {
+  const oldest: string[] = [];
+  for (const p of parts) {
+    if (p.kind !== 'text') continue;
+    for (let at = p.text.indexOf(OFFERS_HEADER); at >= 0; at = p.text.indexOf(OFFERS_HEADER, at + 1)) {
+      const lines = p.text.slice(at + OFFERS_HEADER.length + 1).split('\n');
+      if (lines[0] !== ELIDED_LINE) continue;
+      const first = lines.slice(1).map((line) => /^- .*\((bg_[0-9a-f]{8})\)$/.exec(line)).find((hit) => hit !== null);
+      if (first) oldest.push(first[1]!);
+    }
+  }
+  return oldest;
+}
+
+/**
  * PD-ORCH-004 revision 4: what the root of an execution iteration is told of the open offers in its first message —
- * the offers its first message does not already hold, as a text part of their own, or null when there are none. The
- * root of a continuation's first iteration reads them all in its handoff, so it is told nothing more; the root of
- * every later iteration of the same run is told those raised since, and a later continue that resumes it finds them in
- * its record (`offersToldIn`), so it is told each once (OQ-80).
+ * the offers its first message has not already told it, as a text part of their own, or null when there are none. An
+ * offer is told when the message holds it (`offersToldIn`), and also when a list it holds left it out as one of the
+ * earlier offers: that list names the newest ten and says the rest were left out, which is the whole of what the
+ * directive tells a root, so an elided offer is not named again beside it. The root of a continuation's first
+ * iteration therefore reads them all in its handoff and is told nothing more, and so is every later iteration it
+ * re-sends that handoff to, but for the offers raised since; a later continue that resumes one of them finds its list in
+ * its record (`offersToldIn`), so each root is told once (OQ-80).
  */
 export function offersForFirstMessage(dal: StoreDal, sessionId: SessionId, first: readonly ContentPart[]): ContentPart | null {
   const held = offersToldIn([{ role: 'user', content: first }]);
-  const text = openOffersText(dal, sessionId, (taskId) => !held.has(taskId));
+  const order = new Map(dal.childrenOf(sessionId).map((c, i) => [c.task_id, i]));
+  // Every offer spawned before the oldest a list names that elided earlier ones was left out by it, and counts as told.
+  const floor = Math.max(-1, ...elidedBeforeIn(first).map((id) => order.get(id) ?? -1));
+  const text = openOffersText(dal, sessionId, (taskId) => !held.has(taskId) && (order.get(taskId) ?? Infinity) >= floor);
   return text === '' ? null : { kind: 'text', text };
 }

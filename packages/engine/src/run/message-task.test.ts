@@ -220,16 +220,34 @@ describe('PD-ORCH-005 clause 17: a continue\'s message is also a task', () => {
     expect(shape(sid)).toEqual([['first', 'complete', undefined], ['second', 'complete', undefined]]);
   });
 
-  it('a task held by an iteration that has closed — a process that died before the release was saved — goes back to pending at the next run', async () => {
-    const h = sessionsWith([answer('first, done'), answer('LOST, done'), answer('next, done')]);
-    const sid = (h.sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
-    await h.sessions.running(sid)!;
-    // The residue: iteration 1 closed, and the todo still shows a message it held in progress.
+  /** The residue a process death between an iteration's close and the save of its release leaves: `LOST` still held by iteration 1. */
+  function heldResidue(sid: SessionId): void {
     const stored = decodeStoredTodo(dal.getSession(sid)!.todo);
     const planner = { ...stored.planner!, phases: [...stored.planner!.phases, { name: 'Continued Prompts', tasks: [{ id: `${sid}:continued:2`, text: 'LOST', state: 'in_progress' as const, consecutiveRetries: 0, heldBy: 1 }] }] };
     dal.updateSessionRun(sid, { todo: encodeStoredTodo({ ...stored, planner }) });
+  }
+
+  it('a task held by an iteration the record holds closed succeeded is done at the next run — its message is never worked again', async () => {
+    const h = sessionsWith([answer('first, done'), answer('next, done')]);
+    const sid = (h.sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
+    await h.sessions.running(sid)!;
+    expect(dal.iterationsOf(sid).map((r) => r.outcome)).toEqual(['succeeded']);
+    heldResidue(sid);
     expect(h.sessions.prompt(sid, 'next').ok).toBe(true);
     expect((await h.sessions.running(sid)!).status).toBe('completed');
     expect(shape(sid)).toEqual([['first', 'complete', undefined], ['LOST', 'complete', undefined], ['next', 'complete', undefined]]);
+    expect(dal.iterationsOf(sid).map((r) => tasksOf(sid).find((t) => t.id === r.todo_task_id)?.text)).toEqual(['first', 'next']);
+  });
+
+  it('a task held by an iteration that closed without succeeding goes back to pending at the next run, and is taken up', async () => {
+    const h = sessionsWith([answer('first, done'), answer('LOST, done'), answer('next, done')]);
+    const sid = (h.sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
+    await h.sessions.running(sid)!;
+    dal.db.prepare("UPDATE iterations SET outcome = 'failed' WHERE session_id = ? AND iteration = 1").run(sid);
+    heldResidue(sid);
+    expect(h.sessions.prompt(sid, 'next').ok).toBe(true);
+    expect((await h.sessions.running(sid)!).status).toBe('completed');
+    expect(shape(sid)).toEqual([['first', 'complete', undefined], ['LOST', 'complete', undefined], ['next', 'complete', undefined]]);
+    expect(dal.iterationsOf(sid).map((r) => tasksOf(sid).find((t) => t.id === r.todo_task_id)?.text)).toEqual(['first', 'LOST', 'next']);
   });
 });

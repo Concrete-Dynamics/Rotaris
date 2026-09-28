@@ -82,7 +82,6 @@ export class Todo {
       if (task.heldBy !== iteration) continue;
       delete task.heldBy;
       task.state = done ? 'complete' : 'pending';
-      if (done) task.consecutiveRetries = 0;
       n += 1;
     }
     return n;
@@ -95,14 +94,16 @@ export class Todo {
 
   /**
    * PD-ORCH-005 clause 17: a task held by an iteration that is no longer open — a process that died between the
-   * iteration's close and the save that recorded the release — goes back to `pending`, so it is never stuck in progress.
+   * iteration's close and the save that recorded the release — closes as that iteration did: `complete` when the record
+   * holds it closed `succeeded` (`succeeded`), and otherwise back to `pending`, so it is never stuck in progress and a
+   * message its iteration already carried out is never worked again.
    */
-  releaseStale(openIteration: number | null): number {
+  releaseStale(openIteration: number | null, succeeded: ReadonlySet<number>): number {
     let n = 0;
     for (const task of this.all()) {
       if (task.heldBy === undefined || task.heldBy === openIteration) continue;
+      task.state = succeeded.has(task.heldBy) ? 'complete' : 'pending';
       delete task.heldBy;
-      task.state = 'pending';
       n += 1;
     }
     return n;

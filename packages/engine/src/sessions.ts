@@ -13,6 +13,7 @@ import { parseTokenSamples, Run, type AgentTerminals, type ModelLookup, type Per
 import { iterationAgents, recordCrash } from './run/crash.js';
 import { resumeNoticeOf } from './run/resume.js';
 import { offersToldIn, openOffersText } from './run/offers.js';
+import { cut } from './run/cut.js';
 // PD-ORCH-004 revision 4: the offers list lives beside the run, which tells a later iteration's root; kept public here.
 export { offersToldIn, openOffersText } from './run/offers.js';
 import { planSection } from './run/plan-text.js';
@@ -384,14 +385,6 @@ export interface ResumeSuccess {
 }
 
 type ResumeFailure = { readonly code: string; readonly reason: string };
-
-const cut = (text: string, cap: number): string => {
-  if (text.length <= cap) return text;
-  const end = Math.max(0, cap - 3);
-  // Never between the two halves of a surrogate pair (found by phase 6's review).
-  const kept = end > 0 && /[\uD800-\uDBFF]/.test(text[end - 1]!) ? end - 1 : end;
-  return `${text.slice(0, kept)}...`;
-};
 
 function parseTodoDocument(row: SessionRow): Result<TodoDocument | undefined, ResumeFailure> {
   if (row.todo === null) return ok(undefined);
@@ -1192,7 +1185,7 @@ export class Sessions {
       // every run's, with or without a tool port.
       dal: s.dal,
       // PD-ORCH-005 clause 17: a message this continue delivered to the resumed root is also a task that closes with it.
-      ...(open ? { openIteration: { resume: openIteration !== 'decline', delivered: openIteration !== 'decline' && openIteration.message !== null && openIteration.message.length > 0 } } : {}),
+      ...(open ? { openIteration: { resume: openIteration !== 'decline', delivered: openIteration !== 'decline' && openIteration.message !== null } } : {}),
       tools: null, permission, pid: this.deps.pid, host: this.deps.host, readSession: () => s.dal.getSession(sessionId), warn,
       continuation: true, ...(todo ? { resumeTodo: todo } : {}), ...(appendsTask ? {} : { appendsTask: false }), ...(hooks ? { hooks } : {}), checkpoints,
       ...(supervisors ? { supervisorFor: (conversationId: string) => supervisors.forConversation(conversationId) } : {}),

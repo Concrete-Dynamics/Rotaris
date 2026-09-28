@@ -7,7 +7,7 @@ import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/stor
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ContentPart, type ModelRequest, type ScriptedCall } from '@rotaris/model';
 import { ProjectionOwner, Run, RUN_CONFIG_DEFAULTS, SequenceCounters, Sessions, SessionWriter, toSessionRecord, toTranscriptRow, type RunConfig, type RuntimePosture, type ToolPort } from '../index.js';
 import { conversationOf } from './record.js';
-import { OFFERS_HEADER, offersForFirstMessage, offersToldIn } from './offers.js';
+import { OFFERS_HEADER, offersForFirstMessage, offersToldIn, openOffersText } from './offers.js';
 import { decodeStoredTodo, encodeStoredTodo } from '../todo-view.js';
 
 /**
@@ -127,6 +127,38 @@ describe('PD-ORCH-004 revision 4: a later iteration\'s root is told the open off
     const first = firstMessageOf(sid, 2);
     expect(lists(first)).toHaveLength(1);
     expect(lists(first)[0]).toContain('- old (bg_0000be09)');
+  });
+
+  it('offersForFirstMessage: an offer a held list left out as earlier is told too, so only the offers raised since are named', () => {
+    const sid = asSessionId('S-elided');
+    const at = new Date(clock.instant()).toISOString();
+    dal.upsertSession({ session_id: sid, execution_status: 'completed', workspace_root: 'C:/ws', created_at: at, updated_at: at });
+    for (let i = 0; i < 11; i += 1) offer(sid, `bg_0000a0${i.toString(16).padStart(2, '0')}`, `c${i}`);
+    const handoff = openOffersText(dal, sid);
+    expect(handoff).toContain('- [... earlier continuation offers elided]\n- c1 (bg_0000a001)');
+    expect(handoff).not.toContain('c0');
+    expect(offersForFirstMessage(dal, sid, [{ kind: 'text', text: `the handoff\n${handoff}\nRecent iterations:` }])).toBeNull();
+    offer(sid, 'bg_0000a0ff', 'since');
+    expect(offersForFirstMessage(dal, sid, [{ kind: 'text', text: handoff }])).toEqual({ kind: 'text', text: `${OFFERS_HEADER}\n- since (bg_0000a0ff)` });
+    // A list that left nothing out elides nothing: an offer before the one it names is still told.
+    expect((offersForFirstMessage(dal, sid, [{ kind: 'text', text: `${OFFERS_HEADER}\n- c5 (bg_0000a005)\n- c6 (bg_0000a006)` }]) as { text: string }).text).toContain('- c4 (bg_0000a004)');
+  });
+
+  it('with more than ten open offers, a continuation\'s first iteration and every later one read one list — the handoff\'s newest ten', async () => {
+    const { sessions } = sessionsWith([answer('first, done'), toolCalls([{ callId: 'p1', name: 'probe', args: {} }]), answer('next, done')], { config: { maxStepsPerTurn: 1, iterationLimit: 3 } });
+    const sid = (sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    for (let i = 1; i <= 12; i += 1) offer(sid, `bg_00000b${i.toString(16).padStart(2, '0')}`, `c${i}`);
+    expect(sessions.prompt(sid, 'next').ok).toBe(true);
+    await sessions.running(sid)!;
+    expect(dal.iterationsOf(sid).map((r) => r.iteration)).toEqual([1, 2, 3]);
+    for (const iteration of [2, 3]) {
+      const told = lists(firstMessageOf(sid, iteration));
+      expect(told).toHaveLength(1);
+      expect(told[0]).toContain('- [... earlier continuation offers elided]\n- c3 (bg_00000b03)');
+      expect(told[0]).not.toContain('bg_00000b01');
+      expect(told[0]).not.toContain('bg_00000b02');
+    }
   });
 
   it('a plan cycle is not an iteration and is told no offer of its own — even after a resumed iteration raised one', async () => {

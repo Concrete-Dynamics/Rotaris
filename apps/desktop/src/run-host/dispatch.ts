@@ -300,9 +300,10 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
     }
     case 'session.continue': {
       // REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause, or continue a paused session or one a crash left (PD-ORCH-005
-      // clause 18); no user row is appended. The todo may be: a session with nothing open whose last request finished —
-      // crash-left, or paused after its iteration closed — takes that request up again as a task (OQ-76) —
-      // `continueSession` decides it.
+      // clause 18); no user row is appended. `continueSession` decides the todo: a session with nothing open whose last
+      // request finished — crash-left, `paused` by a pause or a stop accepted after its iteration closed, or `paused` by a
+      // plan Cancel or a stop of the plan cycle held after a resumed iteration (PD-ORCH-003 revision 2, OQ-77) — takes
+      // that request up again as a task (OQ-76).
       // REQ-PROVIDER-066 (the continuation lease): refresh the bearers before the run resolves its setup.
       const leaseRefusal = await continuationLeaseForSession(req.sessionId);
       if (leaseRefusal) return leaseRefusal;

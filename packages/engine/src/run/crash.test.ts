@@ -499,6 +499,35 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         expect(crashWrites(sid)).toEqual(before);
       });
 
+      /**
+       * Clause 16 meets REQ-ORCH-048 (OQ-74's "A dependent of the cancelled child"): the at-rest cancel runs no cascade —
+       * clause 16's count "drops by as many as were cancelled" and "the rest of its agents resume with it" — so a paused
+       * (or crash-left) sibling whose `depends_on` names the cancelled child stays unfinished and counted, is resumed by
+       * the Continue action, and is blocked by the resumed run's first scheduler pass. A ruling that blocks it at the
+       * cancel turns this red.
+       */
+      for (const status of ['paused', 'recovery'] as const) {
+        it(`${status}: a dependent of the cancelled child stays counted, is resumed, and is blocked by the first pass of the resumed run (REQ-ORCH-048)`, async () => {
+          const dependent = (w: SessionWriter) => {
+            if (status === 'paused') rested(true)(w);
+            w.spawnChild({ ...child('bg_000000e1', 'waiting_on_dependencies', ROOT), depends_on: JSON.stringify(['bg_000000c2']) });
+            if (status === 'paused') w.restChild('bg_000000e1', 'pause', 'waiting_on_dependencies');
+          };
+          const sid = await crashed(dependent, status === 'paused' ? 'paused' : 'running');
+          const viewer = sessionsAs(88);
+          expect(viewer.resume(dal, 'C:/ws', sid).ok).toBe(true);
+          expect(resumableOf(dal, dal.getSession(sid)!)).toEqual({ iteration: 2, agents: 5 });
+          expect(cancel(viewer, sid, 'bg_000000c2')).toEqual({ ok: true });
+          // Only the chosen child ends; the dependent is left where it stood, and the count drops by one.
+          expect(dal.getChild(sid, 'bg_000000e1')!.state).toBe(status === 'paused' ? 'paused' : 'waiting_on_dependencies');
+          expect(resumableOf(dal, dal.getSession(sid)!)).toEqual({ iteration: 2, agents: 4 });
+          expect(viewer.continueSession(sid, 'continue').ok).toBe(true);
+          expect((await viewer.running(sid))!.status).toBe('completed');
+          expect(['bg_000000c1', 'bg_000000c2', 'bg_000000c3', 'bg_000000e1'].map((id) => dal.getChild(sid, id)!.state)).toEqual(['succeeded', 'cancelled', 'succeeded', 'blocked']);
+          expect(dal.timelineOf(sid).some((t) => t.name === 'child_resumed' && t.message.includes('bg_000000e1'))).toBe(true);
+        });
+      }
+
       it('when the chosen child\'s own move fails, the cancel is refused and nothing below it is cancelled (REQ-MONITOR-128)', async () => {
         const sid = await crashed(rested(true), 'paused');
         const viewer = sessionsAs(88);

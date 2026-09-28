@@ -360,7 +360,6 @@ export function parseBinding(json: string | null): WorktreeBinding | null {
   try { const r = WorktreeBindingSchema.safeParse(JSON.parse(json)); return r.success ? r.data : null; } catch { return null; }
 }
 
-/** REQ-GIT-019/022: the run's effective root is the worktree while the record stays anchored to the base. */
 /**
  * OQ-42, and OQ-76's "the same state the same way": why the workspace store refuses to record for this session — the
  * store's own failure or the writer's — or null when it records. Every entry point that would write (the continue by
@@ -371,6 +370,7 @@ function storeFailureOf(dal: StoreDal, writer: SessionWriter): string | null {
   return SessionWriter.storeFailure(dal) ?? writer.failed ?? null;
 }
 
+/** REQ-GIT-019/022: the run's effective root is the worktree while the record stays anchored to the base. */
 function effectiveRootOf(row: SessionRow): { readonly root: string; readonly binding: WorktreeBinding | null } {
   const binding = parseBinding(row.worktree);
   return { root: binding?.worktree_path ?? row.workspace_root, binding };
@@ -1566,7 +1566,9 @@ export class Sessions {
    * session rests. It and each of its `paused` descendants end `cancelled` — final, as clause 3 says — each with the
    * report, the timeline entry and the artifact a live cancel writes (REQ-ORCH-133, REQ-LIBRARY-092). Nothing else moves:
    * the open iteration stays open, the rest of its agents resume with it, and `resumableOf` counts as many fewer. A
-   * parent learns of it when it resumes, as of any child that ended unobserved (REQ-ORCH-054).
+   * parent learns of it when it resumes, as of any child that ended unobserved (REQ-ORCH-054). Unlike the live cancel,
+   * it runs no scheduler pass, so an agent whose `depends_on` names a cancelled child is left where it stood, counted,
+   * and blocked by the resumed run's first pass (REQ-ORCH-048; OQ-74's "A dependent of the cancelled child").
    *
    * Refused — `{ok: false}`, which the renderer states as "not cancellable" (REQ-MONITOR-128) — for the run itself (a
    * rest's whole-iteration equivalent is clause 6's "Continue without them"), an id that is no agent of the open

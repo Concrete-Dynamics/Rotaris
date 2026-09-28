@@ -3438,7 +3438,7 @@ so that they present `paused` as the build presents them — and with it REQ-MON
 session — or whether they should present as before (running in REQ-CHAT-008's recovery state, `cancelled` once
 `interrupted`) until the crash is recorded, the tree disagreeing with clause 18's count until then.
 
-**OQ-74 — What does cancelling one paused child at rest reach, say and leave, and what does it do with a child a crash left, which clauses 3 and 8 record only at a repair or a continue?** *(`PD-ORCH-005` clause 16, revision 4, with clauses 3 and 8 — "a crash is recorded when the session is next repaired or continued", and "settling, recording interruptions and resuming happen only when a run of the session is about to start" — which the crash reading below keeps, and clauses 10 and 18, whose "Either choice records the crash first" names the Continue action and "continue without them" and not the cancel; REQ-MONITOR-063, which the directive narrows, and REQ-MONITOR-064, REQ-MONITOR-128, REQ-MONITOR-055, REQ-ORCH-133, REQ-LIBRARY-092, REQ-TOOLS-111, REQ-SHELL-075 and REQ-SESSION-129, which it does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
+**OQ-74 — What does cancelling one paused child at rest reach, say and leave, and what does it do with a child a crash left, which clauses 3 and 8 record only at a repair or a continue?** *(`PD-ORCH-005` clause 16, revision 4, with clauses 3 and 8 — "a crash is recorded when the session is next repaired or continued", and "settling, recording interruptions and resuming happen only when a run of the session is about to start" — which the crash reading below keeps, and clauses 10 and 18, whose "Either choice records the crash first" names the Continue action and "continue without them" and not the cancel; REQ-MONITOR-063, which the directive narrows, and REQ-MONITOR-064, REQ-MONITOR-128, REQ-MONITOR-055, REQ-ORCH-133, REQ-LIBRARY-092, REQ-TOOLS-111, REQ-SHELL-075, REQ-SESSION-129 and REQ-ORCH-048, which it does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
 
 Clause 16 has "a `paused` child" offer Cancel "wherever a live agent offers it", confirmed as REQ-MONITOR-128 requires —
 naming the child and one line per paused descendant — and has it and each paused descendant end `cancelled`, the
@@ -3450,7 +3450,8 @@ only with a run behind it. The clause does not say:
   `running`;
 - what the cancelled child's report, timeline entry and background sessions become;
 - what REQ-MONITOR-064's cascade note, which counts live descendants only, says for a paused child;
-- what the confirmation says beyond naming.
+- what the confirmation says beyond naming;
+- what becomes of an agent whose `depends_on` names the cancelled child (REQ-ORCH-048).
 
 **What the build proceeds under.**
 
@@ -3528,6 +3529,19 @@ only with a run behind it. The clause does not say:
   as it was when Cancel was pressed: a continue confirmed in another window before this one is answered sends the
   cancel to the live run, which cancels every unfinished descendant rather than the paused ones listed — the same
   window a live agent's confirmation has when its descendants change under it.
+- **A dependent of the cancelled child.** The at-rest cancel runs no scheduler pass, so REQ-ORCH-048's cascade, which
+  a live cancel's pass runs at once (`IterationChildren.cancel`), does not reach an agent whose `depends_on` names the
+  cancelled child. That agent is neither the child nor its descendant, so it stays where it stood — `paused` with the
+  resume state `waiting_on_dependencies`, or, left by a crash not yet recorded, stored `waiting_on_dependencies` and
+  presenting `paused` (OQ-73). It stays in the Continue action's count, which drops by exactly as many as were
+  cancelled, as clause 16 says, and the confirmation's "the other paused agents resume when the session continues" is
+  literally what happens to it: the Continue action resumes it (`child_resumed`), and the resumed run's first scheduler
+  pass blocks it (REQ-ORCH-048). It does no work, and it gets no report
+  ([`a-child-blocked-by-its-dependency-gets-no-report.md`](../defects/a-child-blocked-by-its-dependency-gets-no-report.md),
+  which a live cascade reaches too). So the count overstates by the dependents the resumed run will block at once.
+  Blocking them at the cancel would make the count drop by more than were cancelled and would move an agent clause 16
+  does not name, so the build does not. Pinned in `crash.test.ts` ("a dependent of the cancelled child stays counted
+  …", `paused` and the recovery state). Found by the merged build's ninth review round.
 - **Not built.** REQ-MONITOR-128's optimistic display: the surfaces wait for the republished record, for this cancel as
   for a live one.
 
@@ -3536,7 +3550,10 @@ calls the crash cut off answered at the cancel, or be offered no Cancel until th
 should end at the cancel, since it will never resume. Whether REQ-MONITOR-064 should be named as narrowed for the
 paused count. Whether the recovery state's cancel should also repair the session's status. Whether the resting
 run-level agent should offer a Cancel that declines the iteration, and whether a persona window on the run's own
-instance should withhold its Cancel while the session rests rather than confirm one the engine refuses.
+instance should withhold its Cancel while the session rests rather than confirm one the engine refuses. Whether the
+at-rest cancel should block, at the cancel, each agent whose `depends_on` names a child it cancels, as the live cancel's
+pass does (REQ-ORCH-048), counting them out of the Continue action's count and naming them in the confirmation, or
+leave them for the resumed run to block, as built.
 
 **OQ-75 — How does a continue's message close with the resumed iteration, and which continues make one?** *(`PD-ORCH-005` clause 17 (revision 4); REQ-ORCH-004, which the clause narrows for a continue's message alone and which the reading below departs from for the continues the clause does not govern — the Continue action, "continue without them" and the message-limit resolution's 'continue' and 'double', none of which appends its request while the todo holds it unfinished, where REQ-ORCH-004's back-pointer keeps "Every other new top-level task is appended as stated" (the plan decision's relaunch, OQ-77, is not among them: it states no new top-level task, the held run having appended the gated work already, so appending none keeps REQ-ORCH-004); and REQ-ORCH-067, REQ-ORCH-069, REQ-ORCH-072, REQ-ORCH-077, REQ-ORCH-135, REQ-MONITOR-125, REQ-SESSION-110, REQ-ORCH-086 and REQ-ORCH-087, which it does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
 
@@ -3696,18 +3713,19 @@ say what the decline's wording means before the crash is recorded.
 - **The two continues take the send pill's place.** A crash-left session with an iteration open draws the Continue
   action and the continue by message (`Send`) in the strip where the send pill stood, and the count and "Continue
   without them" in the notices row, as a `paused` session does (`crashLeft` in `WorkspaceView`); with nothing open it
-  draws the two continues and no count (below). `PD-CHAT-001` revision 4 prescribes that layout "on a paused session"
-  alone ("the send pill, or on a paused session the two continues that take its place"; "On a paused session the send
-  pill's place is taken by two continues"), and REQ-CHAT-005's send pill as it narrows it governs everywhere else.
-  Clause 18 grants a crash-left session "the Continue action and 'continue without them' … as a `paused` session does";
-  it names neither the strip nor the continue by message. The build reads clause 18's "as a `paused` session does" to
-  carry the paused session's presentation of those continues, and draws the continue by message beside them because
-  the send pill it would otherwise keep sends a continue by message on that session too (`Sessions.prompt` records the
-  crash first, as every continue does). Drawing it there departs from `PD-CHAT-001` revision 4's strip sentence and from
-  REQ-CHAT-005 for a session neither directive governs; the alternative — keep the send pill, with the Continue action
-  and the decline beside it in the notices row — was not taken, because the strip would then draw two different
-  controls for the same pair of continues depending on why the session rests. *Until the merged build's eighth review
-  round this was stated only in passing, in the bullet below, and not asked.*
+  draws the two continues and no count ("Nothing open to resume", above). `PD-CHAT-001` revision 4 prescribes that
+  layout "on a paused session" alone ("the send pill, or on a paused session the two continues that take its place"; "On
+  a paused session the send pill's place is taken by two continues"), and REQ-CHAT-005's send pill as it narrows it
+  governs everywhere else. Clause 18 grants a crash-left session "the Continue action and 'continue without them' … as a
+  `paused` session does"; it names neither the strip nor the continue by message. The build reads clause 18's "as a
+  `paused` session does" to carry the paused session's presentation of those continues, and draws the continue by
+  message beside them because the send pill it would otherwise keep sends a continue by message on that session too
+  (`Sessions.prompt` records the crash first, as every continue does). Drawing it there departs from `PD-CHAT-001`
+  revision 4's strip sentence and from REQ-CHAT-005 for a session neither directive governs; the alternative — keep the
+  send pill, with the Continue action and the decline beside it in the notices row — was not taken, because the strip
+  would then draw two different controls for the same pair of continues depending on why the session rests. *Until the
+  merged build's eighth review round this was stated only in passing, in the bullet "Nothing open to resume" above, and
+  not asked.*
 - **No pause statement.** "Paused. Run controls need the run continued…" stays on a paused session only. A crash-left
   session is not paused, and its run state already says what it is (REQ-CHAT-008's "Run needs recovery", or the
   interrupted presentation). REQ-CHAT-006's chip reason in the recovery state is left as it stands. The Continue action

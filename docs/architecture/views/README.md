@@ -69,17 +69,18 @@ views are not.
 each `paused` descendant end `cancelled` with the live cancel's report, timeline entry and artifact, the iteration stays
 open, and `resumable` drops. A child a crash not yet recorded left unfinished, and each such descendant, is cancelled
 from the state it is stored in, its calls the crash cut off answered as interrupted; the crash itself is left for the
-next repair or continue to record (clauses 3 and 8, OQ-74). It is refused under a store failure, as every continue is
-(OQ-76). The cancel writes under the session's lock, taken for the write and given back, a dead local holder reaped by
-the `claimLockReaping` that `SessionWriter.open` claims through, and is refused while another live process holds it
-(`lockForWrite`); a target it refuses outright is judged before the lock is taken. Every confirmation and cascade note
-names each unfinished descendant a cancel ends, live or paused (`cancelCascade`, OQ-73 and OQ-74), and both cancels
-write through one `userCancellation`. The surfaces offer a paused child's Cancel while its session rests
-(`cancelOffered(agent, runActive, resting)`, `resting` being `runLevelResting`, the predicate the composer's count and
-the resting root share) and confirm by `cancelConfirmation` — the Workspace and a persona window through
-`AgentCancelConfirm` (`packages/ui/src/AgentCancelConfirm.tsx`), which also confirms the run's cancel on the Workspace,
-takes no label of its own and has its call sites pinned by a source test, and the Mission view through
-`missionConfirmation`. The **runtime view**'s `cancelAgent` and `children` rows and its crash paragraph, the
+next repair or continue to record (clauses 3 and 8, OQ-74). It runs no scheduler pass, so an agent whose `depends_on`
+names a cancelled child stays counted and is blocked by the resumed run's first pass (REQ-ORCH-048, OQ-74). It is
+refused under a store failure, as every continue is (OQ-76). The cancel writes under the session's lock, taken for the
+write and given back, a dead local holder reaped by the `claimLockReaping` that `SessionWriter.open` claims through, and
+is refused while another live process holds it (`lockForWrite`); a target it refuses outright is judged before the lock
+is taken. Every confirmation and cascade note names each unfinished descendant a cancel ends, live or paused
+(`cancelCascade`, OQ-73 and OQ-74), and both cancels write through one `userCancellation`. The surfaces offer a paused
+child's Cancel while its session rests (`cancelOffered(agent, runActive, resting)`, `resting` being `runLevelResting`,
+the predicate the composer's count and the resting root share) and confirm by `cancelConfirmation` — the Workspace and a
+persona window through `AgentCancelConfirm` (`packages/ui/src/AgentCancelConfirm.tsx`), which also confirms the run's
+cancel on the Workspace, takes no label of its own and has its call sites pinned by a source test, and the Mission view
+through `missionConfirmation`. The **runtime view**'s `cancelAgent` and `children` rows and its crash paragraph, the
 **state-ownership view**'s rest and session-lock rows and the **sequences view**'s crash note name the new writer; the
 `iterations` and `agent_terminals` rows say only that the crash record is written at a repair or a continue, which the
 cancel is not. No package, edge, process, channel or command changes.
@@ -91,14 +92,15 @@ unfinished, before the crash is recorded, as the record will leave them (`crashL
 OQ-73's departure from clause 13's last sentence) — never for a session a store failure left busy, which is not one a
 crash left and states nothing to resume (`Sessions.restingOf`, OQ-76); `runLevelAgent` presents the resting root
 `paused`, the Workspace, the Mission view and a persona window asking it and `runLevelResting` through one call
-(`restingView`, whose recovery argument, like `runLevelAgent`'s and `runLevelResting`'s, is required) with REQ-CHAT-008's recovery state
-(`useNeedsRecovery`, moved to `renderer/session-view.ts`; the two renderer roots' wiring is pinned by
-`renderer/recovery-wiring.test.ts`, with the props that carry it and what `restingView` answers to the Workspace, the
-Mission view and a persona window), and the Mission view, handed that fact as `recovery`, reads no run active in it, so
-it offers no Pause beside the root it draws `paused` and labels the run REQ-CHAT-008's "Run needs recovery" rather than
-"Running" (`docs/defects/fixed/the-mission-view-offers-pause-and-cancel-with-no-run-behind-the-session.md`). The
-Overview counts paused agents on their own. The **runtime view**'s eleventh-state and projection paragraphs and the
-**state-ownership view**'s rest row are updated; no package, edge, process, channel or command changes.
+(`restingView`, whose recovery argument, like `runLevelAgent`'s and `runLevelResting`'s, is required) with
+REQ-CHAT-008's recovery state (`useNeedsRecovery`, moved to `renderer/session-view.ts`; the two renderer roots' wiring
+is pinned by `renderer/recovery-wiring.test.ts`, with the props that carry it and what `restingView` answers to the
+Workspace, the Mission view and a persona window), and the Mission view, handed that fact as `recovery`, reads no run
+active in it, so it offers no Pause beside the root it draws `paused` and labels the run REQ-CHAT-008's "Run needs
+recovery" rather than "Running"
+(`docs/defects/fixed/the-mission-view-offers-pause-and-cancel-with-no-run-behind-the-session.md`). The Overview counts
+paused agents on their own. The **runtime view**'s eleventh-state and projection paragraphs and the **state-ownership
+view**'s rest row are updated; no package, edge, process, channel or command changes.
 
 **A quit ends a board run as a quit, and clause 15's audit re-cites the stop and the cancel (`PD-ORCH-005` clauses 15
 and 19, `PD-CHAT-001` revision 4, `PD-CHAT-002` revision 2, 2026-09-28, R-064).** Main's board coordinator ends its runs

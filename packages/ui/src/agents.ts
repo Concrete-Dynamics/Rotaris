@@ -49,8 +49,9 @@ export function steerOffered(agent: Pick<AgentRecord, 'presentationState'> | nul
  * counts it, so while the session rests with an iteration open — `paused` or `interrupted`, or in REQ-CHAT-008's
  * recovery state, which only the caller knows (`recovery`, required as `runLevelAgent`'s is, so no caller can leave
  * that state out and withhold the resting root or a paused child's Cancel) — the run-level agent presents as `paused`
- * too, the tree agreeing with the count. The one predicate for the composer's count (`WorkspaceView`'s `resumable`), the resting root
- * and a paused child's Cancel (`cancelOffered`'s `resting`, clause 16), so the three cannot drift apart.
+ * too, the tree agreeing with the count. The one predicate for the composer's count (`WorkspaceView`'s `resumable`),
+ * the resting root and a paused child's Cancel (`cancelOffered`'s `resting`, clause 16), so the three cannot drift
+ * apart.
  */
 export function runLevelResting(session: SessionRecord, recovery: boolean): boolean {
   const status = session.executionStatus;

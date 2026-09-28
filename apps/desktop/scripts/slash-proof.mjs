@@ -30,7 +30,8 @@
  *                  workspace is a git repository) — each closed again with Escape (REQ-CHAT-031, REQ-CHAT-159);
  *   `/ hello`      is a PROMPT: it starts a run and appears in the transcript as the user's row (REQ-CHAT-018);
  *   `/compress`    during the run: dispatched to the run host, whose refusal (no arm until Part AO) surfaces as `failed`;
- *   `/stop`        during the run: accepted, the run cancels, no notice (REQ-CHAT-029).
+ *   `/stop`        during the run: accepted, the stop brings the run to rest, no notice (REQ-CHAT-029, PD-ORCH-005
+ *                  clauses 3 and 15).
  *
  * Part C2 (wave 3) adds three launches of its own after that one, each with its own scratch profile:
  *
@@ -391,7 +392,7 @@ const unsupported = compress !== null && /does not support/.test(String(compress
 expect(dispatched && !unsupported, `/compress during the run must reach the armed control and never the wave-1 refusal (Part AO): dispatched=${dispatched}, notice=${JSON.stringify(compress)}`);
 results.compress = { dispatched, notice: compress };
 const stopped = match(run, '[data-testid="run-state"]', T.stopped)?.text;
-expect(typeof stopped === 'string' && stopped !== 'Run active' && /control cancel on \S+ → ok/.test(run.log), `/stop during the run should be accepted and cancel it: run state ${JSON.stringify(stopped)}`);
+expect(typeof stopped === 'string' && stopped !== 'Run active' && /control cancel on \S+ → ok/.test(run.log), `/stop during the run should be accepted and stop it: run state ${JSON.stringify(stopped)}`);
 // Part AO: the run start cleared the unscoped "Command not run" (REQ-NOTIFY-058) — measured above at `T.compressFailed` — and the
 // executed /stop raises no refusal of its own. What the ONE slot holds once the run rests is the RUN's own notice, "The run came to
 // rest because a person stopped it.", raised by the run host through main's notice store. A first reading had this read `=== null`,

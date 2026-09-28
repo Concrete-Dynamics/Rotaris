@@ -174,7 +174,7 @@ export function Inspector(props: InspectorProps) {
           {error && <div className="composer__error" role="alert">{error}</div>}
           <div className="inspector__actions">
             <DesignButton type="button" className="btn btn-secondary btn-compact" disabled={!enablement.steer || !runActive} title={enablement.steer && runActive ? `Steer ${shown.name} through its persona window` : 'Steer is enabled while the agent is running or waiting.'} onClick={() => onSteer(shown)}>Steer</DesignButton>
-            <DesignButton type="button" className="btn btn-danger btn-compact" data-testid="inspector-cancel" disabled={!cancellable} title={cancellable ? `Cancel ${shown.name}` : 'Cancel is enabled while the agent is running, waiting or queued, and for a paused agent while its session rests.'} onClick={() => onCancel(shown, cascade.length)}>Cancel</DesignButton>
+            <DesignButton type="button" className="btn btn-danger btn-compact" data-testid="inspector-cancel" disabled={!cancellable} title={cancellable ? `Cancel ${shown.name}` : isRunLevel && shown.presentationState === 'paused' ? 'The resting run is not cancelled here: "Continue without them" ends its paused agents (PD-ORCH-005 clause 6).' : 'Cancel is enabled while the agent is running, waiting or queued, and for a paused child while its session rests.'} onClick={() => onCancel(shown, cascade.length)}>Cancel</DesignButton>
             <DesignButton type="button" className="btn btn-secondary btn-compact" disabled={!enablement.popOut} onClick={() => onPopOut(shown)}>Pop out</DesignButton>
           </div>
         </div>

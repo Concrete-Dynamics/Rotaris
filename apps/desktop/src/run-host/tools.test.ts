@@ -113,7 +113,7 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
   afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
 
   const presented: ApprovalPayload[] = [];
-  function portFor(pin: string | null, modeOverride: string | null, extra: Pick<ToolPortContext, 'writeClaimFor'> = {}, surface: { tools?: string; mcp?: readonly ToolExecutor[] } = {}) {
+  function portFor(pin: string | null, modeOverride: string | null, extra: Pick<ToolPortContext, 'writeClaimFor' | 'planGateHeld'> = {}, surface: { tools?: string; mcp?: readonly ToolExecutor[] } = {}) {
     mkdirSync(join(dir, '.rotaris'), { recursive: true });
     writeFileSync(join(dir, '.rotaris', 'agents.yaml'), yaml(pin, surface.tools ?? null));
     const loaded = loadConfiguration({ globalDir: join(dir, 'global'), workspaceRoot: dir });
@@ -186,6 +186,45 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
     // another operation and content on the same path: no dialog, whatever the executor then makes of it
     await again(publicPort, { operation: 'overwrite', path: 'mine.md', content: 'two' });
     expect(presented).toHaveLength(3);
+  });
+
+  /**
+   * An MCP tool offered under a public name is not that public tool (REQ-TOOLS-001 as ADR-0016 reads it): the surface
+   * prefixes a server's tool only when its name is taken, so a server's `read_file` reaches a persona whose public set
+   * lacks one under the plain name, and until 2026-09-28 the policy's class rules and the plan gate's two enforcement
+   * points knew it by that name alone (`docs/defects/fixed/an-mcp-tool-offered-under-a-public-name-is-ruled-as-that-public-tool.md`).
+   */
+  it('a server\'s own read_file is withheld at the plan gate like any undeclared tool, and is not granted by ask:read-only-tool (REQ-ORCH-153, REQ-TOOLS-043)', async () => {
+    const reads: unknown[] = [];
+    const serverRead = simpleExecutor('read_file', 'a server\'s read_file', anySchema, async (a) => { reads.push(a); return { text: 'read', isError: false }; });
+    const call = { callId: 'r1', name: 'read_file', rawArgs: JSON.stringify({ path: 'notes.md' }), persona: 'coding-agent', agentId: 'coding-agent', agentName: 'coding-agent' };
+
+    const held = portFor(null, 'autonomous', { planGateHeld: () => true }, { tools: '[grep]', mcp: [serverRead] });
+    await held.ready?.();
+    expect(held.specs().map((s) => s.name)).not.toContain('read_file');
+    expect(warnings.some((w) => w.includes("'read_file' is withheld while this run is held at the plan gate"))).toBe(true);
+    const refused = await held.dispatch(call, new AbortController().signal);
+    expect(refused).toMatchObject({ status: 'blocked', isError: true });
+    expect(refused.text).toContain('held at the plan gate');
+    expect(reads).toEqual([]);
+
+    // The same server tool on a run that is not held, under `ask`: the read-only class is the public tools', so it asks.
+    const open = portFor(null, null, {}, { tools: '[grep]', mcp: [serverRead] });
+    await open.ready?.();
+    expect(open.specs().map((s) => s.name)).toContain('read_file');
+    const asked = open.dispatch(call, new AbortController().signal);
+    await vi.waitFor(() => expect(presented).toHaveLength(1));
+    expect(presented[0]).toMatchObject({ tool_name: 'read_file', rule_id: 'preset:ask' });
+    expect(open.answerApproval(presented[0]!.request_id, 'deny')).toBe(true);
+    expect((await asked).status).toBe('blocked');
+    expect(reads).toEqual([]);
+
+    // The public read_file of another persona's port under the same preset is allowed by ask:read-only-tool, no dialog.
+    const publicPort = portFor(null, null, {}, { tools: '[read_file]' });
+    await publicPort.ready?.();
+    writeFileSync(join(dir, 'notes.md'), 'x\n');
+    expect((await publicPort.dispatch(call, new AbortController().signal)).status).toBe('ok');
+    expect(presented).toHaveLength(1);
   });
 
   it('an agent built after a mid-run switch takes the session override, not the start-of-run mode', () => {

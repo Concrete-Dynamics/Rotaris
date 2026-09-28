@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock } from '@rotaris/kernel';
-import { checkFence, type FenceConfig } from './fence.js';
+import { checkFence, realPathOf, type FenceConfig } from './fence.js';
 import { renderDiff } from './diff.js';
 import { FileToolState, haetEditTool, haetReadTool, matchEdit, readFileTool, sha256, writeFileTool } from './files.js';
 import { globToRegExp, globTool, grepTool, parseGitignore, ignoredBy } from './search.js';
@@ -42,6 +42,22 @@ describe('the path fence (REQ-TOOLS-129/130/132)', () => {
     const ro = { ...fence, additionalReadOnlyRoots: [outside] };
     expect(checkFence(ro, join(outside, 'x.txt'), 'read')).toMatchObject({ ok: true, readOnlyRoot: true });
     expect(checkFence({ ...ro, allowOutsideWorkspace: true }, join(outside, 'x.txt'), 'write').ok).toBe(false);
+  });
+
+  it('realPathOf rebuilds the missing tail of a relative path whole — REQ-TOOLS-129 rests on it answering rightly for every input', () => {
+    // Until 2026-09-28 the walk that reached `.` dropped the first character of the first segment: `specs/index.md`
+    // came back as `<cwd>/pecs/index.md` and `D:/ws` on POSIX as `<cwd>/:/ws` (docs/defects/fixed/realpathof-drops-a-character-from-a-relative-path.md).
+    const cwd = realpathSync.native(process.cwd());
+    expect(realPathOf(join('zz-absent-9f3c', 'child', 'index.md'))).toBe(join(cwd, 'zz-absent-9f3c', 'child', 'index.md'));
+    expect(realPathOf('zz-absent-9f3c')).toBe(join(cwd, 'zz-absent-9f3c'));
+    expect(realPathOf('.')).toBe(cwd);
+    // an absolute path under an existing directory: the existing part is its real path, the rest is appended as given
+    expect(realPathOf(join(root, 'src', 'absent', 'deep.ts'))).toBe(join(realpathSync.native(root), 'src', 'absent', 'deep.ts'));
+    expect(realPathOf(join(root, 'src', 'a.ts'))).toBe(join(realpathSync.native(root), 'src', 'a.ts'));
+    // the fence, over the same input: a workspace-relative path that does not exist yet is inside, and a root spelled relative is one directory, not another
+    expect(checkFence(fence, 'src/absent/deep.ts', 'write')).toMatchObject({ ok: true, inside: true, rel: 'src/absent/deep.ts' });
+    const rel = { ...fence, workspaceRoot: 'zz-absent-9f3c/ws' };
+    expect(checkFence(rel, 'a.ts', 'read')).toMatchObject({ ok: true, inside: true, rel: 'a.ts' });
   });
 });
 

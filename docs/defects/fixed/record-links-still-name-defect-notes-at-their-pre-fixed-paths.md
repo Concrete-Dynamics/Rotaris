@@ -44,16 +44,18 @@ and the anchor passing; a fragment naming no heading; a same-file fragment; the 
 of code and comment skipped with line numbers kept; a stray backtick that may not pair across a blank line; the slug rules; a repeated heading and the explicit anchors.
 
 **Its first execution over the whole record** (985 relative links in 361 files, on `main` at `392f681`) found **51** dangling links, not the
-seven this note had by hand — the note's own count was of the documents one branch touched. Every one is repaired
-in this commit; by kind:
+seven this note had by hand — the note's own count was of the documents one branch touched. Every one is repaired,
+forty-six by `f180732` on this branch and the five in `requests.md` on `main` (below); by kind:
 
 - **Seven** the note lists (`first-executions.md` lines 121, 130, 136, 137; `directives.md` lines 867, 982).
 - **Twenty-one more links to notes at their pre-`fixed/` path**, the same slip in the same files and two others:
   `first-executions.md` (lines 141–154: `the-here-string-check-…`, `hook-faults-reach-only-…`,
   `resilience-proof-cannot-launch-…`, `path-scope-resolves-…`, `an-mcp-tool-offered-…`, `skills-proof-writes-…` ×2,
   `slash-proof-expects-…`), `first-release-plan.md` (lines 47, 48, 147, 152, 305), `directives.md` (lines 1450, 1752,
-  1808), and `requests.md` (lines 71, 75, 77 — five links in three rows' disposition cells, repointed and not one word
-  of the request changed; the log's own rule protects the words, the date, the classification and the disposition).
+  1808), and `requests.md` (lines 71, 75, 77 — five links in three rows' disposition cells). `f180732` repointed those five
+  too, but a branch may not edit the request log; they landed on `main` instead, by the log's owner under R-062, as
+  `6091a37`, identical to the branch's hunk, and the branch's hunk dropped out when `main` was merged into it. Not one
+  word of a request changed either way.
 - **Twenty-one inside `docs/defects/fixed/` itself**: a note moved into `fixed/` keeps the relative links it was
   written with, and each now needs one more `../`. Twelve `../product/requests.md#r-nnn` and two
   `../product/directives.md#pd-…` citations in seven notes (`an-mcp-tool-offered-…`, `configured-per-token-prices-…`,
@@ -79,12 +81,25 @@ already named five notes) — and 985 links, not 984. The 51 and every repair st
 same review found one false negative in the gate: inline code was allowed to span a blank line, so a stray backtick
 in one paragraph paired with one paragraphs later and hid the links between — one link in
 `views/02-process-view.md` (line 345, `#message-families`, which resolves) was not being read. A code span now ends
-at a blank line, as CommonMark's does; the gate reads 991 links after the repair, every one resolving.
+at a blank line, as CommonMark's does; after that repair the gate read 991 links on the branch, every one resolving.
 
-**The five `requests.md` repoints are not this branch's to land.** The task that built the gate forbids a branch to
-edit `docs/product/requests.md`, and the bundle's verification held the edit in `f180732` blocking on that rule alone.
-The log's own rule ("appended and never rewritten") was not the test it failed. The log's owner lands the five
-repoints on `main` or waives the rule for this hunk, and until then the branch keeps them. Dropping them would fail
-`pnpm lint` on exactly those five links: with `requests.md` at `main`'s text, the gate names lines 71, 71, 75, 77 and
-77, and nothing else. Exempting the file is not an option either, because the gate covers every relative link under
-`docs/`. Once `main` carries the identical change, merging `main` into the branch drops the hunk with no conflict.
+**The five `requests.md` repoints landed on `main`, not by this branch.** The task that built the gate forbids a
+branch to edit `docs/product/requests.md`, and the bundle's verification held the hunk in `f180732` blocking on that
+rule alone (the log's own rule, "appended and never rewritten", was not the test it failed). Dropping the hunk on the
+branch would have failed `pnpm lint` on exactly those five links — with `requests.md` at `main`'s text the gate named
+lines 71, 71, 75, 77 and 77 and nothing else — and exempting the file would have narrowed a gate that covers every
+relative link under `docs/`. The log's owner landed the same five repoints on `main` under R-062 as `6091a37`
+("docs(requests): five links repointed to defect notes that moved to fixed/"). Merging `main` into the branch then
+dropped the branch's hunk with no conflict: `git diff main...HEAD -- docs/product/requests.md` is empty.
+
+**The gate's first merge.** That merge also brought in two notes `main` had moved into `docs/defects/fixed/` after the
+gate's first run (`code-intel-proofs-branch-client-waits-forever-…` and `slash-proofs-model-chip-eval-shares-…`).
+Each linked a neighbour in the same directory as `fixed/<name>.md`, which resolves to `fixed/fixed/<name>.md` from
+inside `fixed/`. The gate failed on both, naming file, line and target. Both were repointed in the commit after the
+merge (the slip this note records, caught by the first merge that could carry it). On 2026-09-28, after that merge,
+the gate read 1015 relative links in 365 files, every one resolving.
+
+**Limits the review named, none met in the record today.** A footnote definition (`[^1]: text`) is read as a
+reference link. An indented (four-space) code block is not skipped. A Setext heading (text underlined with `===` or
+`---`) is not read as an anchor. A path is checked with the host's case sensitivity, so a wrongly-cased link passes on
+Windows and macOS and fails on Linux. Each would be a false failure or a false pass if the record started to use it.

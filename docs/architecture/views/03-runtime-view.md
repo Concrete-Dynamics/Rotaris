@@ -432,11 +432,13 @@ The field itself is not in REQ-TOOLS-152, which the directive does not name: **O
 
 **Inherited context (REQ-TOOLS-152, REQ-TOOLS-154 item (5), REQ-ORCH-032; `children/ledger.ts`, `notify.ts`).** A
 `delegate` call may carry `inherited_context`, task ids of siblings whose reports the child is to read without waiting on
-them. `ChildLedger.spawn` resolves each against the caller's own children (REQ-TOOLS-155's scoping) after REQ-ORCH-046's
-five checks: an id naming none of them refuses the call with no record and no id, reported as REQ-TOOLS-153's `rejected`
-(another parent's child refuses the same way — **OQ-76**); an id naming a sibling that failed, was cancelled, has not
-finished, or succeeded without its report stored is ignored; the siblings `succeeded` with a report stored are returned on
-`Spawned.inherited`, once each in the caller's order. `IterationChildren.delegate` renders them at once — a heading saying
+them. `ChildLedger.spawn` resolves each after REQ-ORCH-046's dependency checks and before its cycle check. Existence is
+asked of the session's child records and the root execution record, which shares their namespace (REQ-ORCH-072): an id no
+task has refuses the call with no record and no id, reported as REQ-TOOLS-153's `rejected`; an id naming a task that exists
+and has not completed — the root, the caller's own task, any task that failed, was cancelled, has not finished, or
+succeeded without its report stored — is ignored; the caller's own children `succeeded` with a report stored are returned on
+`Spawned.inherited`, once each in the caller's order; a completed task that is not the caller's own child is refused for
+ownership, naming its parent as the `depends_on` refusal does, never as nonexistent (**OQ-76**). `IterationChildren.delegate` renders them at once — a heading saying
 the reports are context and not a dependency, then one REQ-ORCH-060 `reportBlock` per sibling, the same block the parent
 reads on a resume — and keeps the text per task id in memory for the life of the run, exactly as the attachment list is
 kept. `childPayload`'s sixth argument places it as item (5), after the artifact blocks and immediately before the task;

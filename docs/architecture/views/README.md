@@ -47,13 +47,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 **`inherited_context` reaches the child (REQ-TOOLS-152, REQ-TOOLS-154 item (5), REQ-ORCH-032; repaired 2026-09-28,
 R-062).** A `delegate` call's `inherited_context` ids were stored on the child's row and read by nothing. `ChildLedger.spawn`
-now resolves them against the caller's own children: an id naming none refuses the call with no record (REQ-TOOLS-153's
-`rejected`), one naming a failed, cancelled, unfinished or report-less sibling is ignored, and the completed siblings come
-back on `Spawned.inherited`. `IterationChildren.delegate` renders their `reportBlock`s under one heading
+now resolves them: an id no task in the session has (the root execution record included, REQ-ORCH-072) refuses the call
+with no record (REQ-TOOLS-153's `rejected`), one naming a task that has not completed — the root, the caller's own task, a
+failed, cancelled, unfinished or report-less one — is ignored, and the caller's completed children come back on
+`Spawned.inherited`. `IterationChildren.delegate` renders their `reportBlock`s under one heading
 (`notify.ts`'s `inheritedContextBlock`) and remembers the text per task id on `attached`'s terms; `childPayload` takes it
 as a sixth argument and places it as item (5), after the artifact blocks and before the task. The **runtime view** §4
-gains a paragraph; the **state-ownership view** gains the remembered block as a volatile fact. Another parent's child
-refusing like an unknown id is OQ-76. No package, edge, process, channel, message kind or store column changed.
+gains a paragraph; the **state-ownership view** gains the remembered block as a volatile fact. Another parent's completed
+child refused for ownership is OQ-76. No package, edge, process, channel, message kind or store column changed.
 
 **A session approval of a file write covers that path (`PD-TOOLS-004`, built 2026-09-27, R-057).** A grant made by
 "approve for session" on a call of the public `write_file` or `haet_edit` (`haet` folded in) now stores the set of

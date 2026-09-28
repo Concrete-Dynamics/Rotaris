@@ -191,19 +191,29 @@ export class ChildLedger {
     };
     /*
      * REQ-TOOLS-152: "an id in `inherited_context` that names no task at all refuses the call, an id … naming a task
-     * that failed or has not finished is ignored without refusing". The lookup is the caller's own children, as every
-     * delegation lookup is (REQ-TOOLS-155's parent scoping; the requirement's word is "sibling"), so another parent's
-     * task refuses like an unknown one — that reading is OQ-76. "Completed" is REQ-ORCH-047's notion: `succeeded` with
-     * the report stored, since it is the report that is carried. A cancelled sibling has no completed report and is
-     * ignored with the failed. The refusal creates no record and issues no id (REQ-TOOLS-153).
+     * that failed or has not finished is ignored without refusing". Existence is asked of the whole session and the
+     * root execution record, which shares the children's id namespace (REQ-ORCH-072: a lookup naming the root resolves
+     * to it rather than reporting it unknown), so only an id no task has is refused as referring to nothing. A task that
+     * exists and has not completed — the root, the caller's own task, a sibling or any other task that failed, was
+     * cancelled or is still under way — is ignored. "Completed" is REQ-ORCH-047's notion: `succeeded` with the report
+     * stored, since it is the report that is carried. A completed task that is not the caller's own child (another
+     * parent's, or an earlier iteration's) is not a sibling; it is refused, for ownership and never as nonexistent, as
+     * the `depends_on` check above refuses one — that reading is OQ-76. This runs after the dependency checks and before
+     * the cycle check (5). A refusal creates no record and issues no id (REQ-TOOLS-153).
      */
     const siblings = this.childrenOf(input.parentId);
     const inherited: ChildRow[] = [];
     for (const inh of input.inheritedContext) {
       if (inh.trim() === '') return { ok: false, error: { reason: 'A malformed inherited-context entry (empty) was rejected' } };
-      const sibling = siblings.find((c) => c.task_id === inh);
-      if (!sibling) return { ok: false, error: { reason: `inherited_context id '${inh}' refers to nothing: no task of yours has that id` } };
-      if (sibling.state === 'succeeded' && sibling.report_stored === 1 && !inherited.some((c) => c.task_id === inh)) inherited.push(sibling);
+      if (this.isRoot(inh)) continue;
+      const named = this.get(inh);
+      if (!named) return { ok: false, error: { reason: `inherited_context id '${inh}' refers to nothing: no task has that id` } };
+      if (named.state !== 'succeeded' || named.report_stored !== 1) continue;
+      if (!siblings.some((c) => c.task_id === inh)) {
+        const caller = this.isRoot(input.parentId) ? this.root.taskId : input.parentId;
+        return { ok: false, error: { reason: `inherited_context id '${inh}' is not a sibling's: it is owned by parent '${named.parent_id}', not '${caller}'` } };
+      }
+      if (!inherited.some((c) => c.task_id === inh)) inherited.push(named);
     }
     const taken = new Set(all.map((c) => c.task_id));
     taken.add(this.root.taskId);

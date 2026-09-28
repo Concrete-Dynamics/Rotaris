@@ -82,7 +82,7 @@ describe('the ledger and the scheduler against a real store (ADR-0012)', () => {
     expect(dal.eventsOfKind(sid, 'child.spawn')).toHaveLength(3);
   });
 
-  it('REQ-TOOLS-152: an inherited-context id naming no task of the caller refuses the call with no record; one naming a failed or unfinished sibling is ignored; a completed sibling with its report is carried once', () => {
+  it('REQ-TOOLS-152: an inherited-context id naming no task at all refuses the call with no record; one naming a failed or unfinished task is ignored; a completed sibling with its report is carried once', () => {
     const l = ledger();
     const done = spawn(l, 'done'); const idDone = done.ok ? done.value.row.task_id : '';
     const failed = spawn(l, 'failed'); const idFailed = failed.ok ? failed.value.row.task_id : '';
@@ -93,22 +93,39 @@ describe('the ledger and the scheduler against a real store (ADR-0012)', () => {
     l.transition(idFailed, 'failed'); l.storeReport(idFailed, { status: 'failed', summary: 'f' });
     l.transition(idNoReport, 'succeeded');
     const other = spawn(l, 'other', { parentId: 'someone-else' }); const idOther = other.ok ? other.value.row.task_id : '';
+    const otherDone = spawn(l, 'other-done', { parentId: 'someone-else' }); const idOtherDone = otherDone.ok ? otherDone.value.row.task_id : '';
+    l.claimStart(idOtherDone); l.transition(idOtherDone, 'running'); l.transition(idOtherDone, 'succeeded'); l.storeReport(idOtherDone, { status: 'succeeded', summary: 'o' });
     const before = dal.childrenOf(sid).length;
     // "an id … that names no task at all refuses the call": no record, no id, the reason names the id.
-    expect(spawn(l, 'x', { inheritedContext: [idDone, 'bg_00000000'] })).toMatchObject({ ok: false, error: { reason: "inherited_context id 'bg_00000000' refers to nothing: no task of yours has that id" } });
-    // Another parent's child is no task of this caller (REQ-TOOLS-155's scoping — OQ-76).
-    expect(spawn(l, 'x', { inheritedContext: [idOther] })).toMatchObject({ ok: false, error: { reason: `inherited_context id '${idOther}' refers to nothing: no task of yours has that id` } });
+    expect(spawn(l, 'x', { inheritedContext: [idDone, 'bg_00000000'] })).toMatchObject({ ok: false, error: { reason: "inherited_context id 'bg_00000000' refers to nothing: no task has that id" } });
+    // Another parent's COMPLETED task exists and is not a sibling: refused for ownership, never as nonexistent (OQ-76).
+    expect(spawn(l, 'x', { inheritedContext: [idOtherDone] })).toMatchObject({ ok: false, error: { reason: `inherited_context id '${idOtherDone}' is not a sibling's: it is owned by parent 'someone-else', not '${l.root.taskId}'` } });
     expect(spawn(l, 'x', { inheritedContext: [' '] })).toMatchObject({ ok: false, error: { reason: 'A malformed inherited-context entry (empty) was rejected' } });
     expect(dal.childrenOf(sid)).toHaveLength(before);
     // "an id … naming a task that failed or has not finished is ignored without refusing"; a report is what is carried, so succeeded-without-report is not yet complete either.
-    const r = spawn(l, 'reader', { inheritedContext: [idFailed, idDone, idQueued, idNoReport, idDone] });
+    // The root execution record is a task in the same namespace that has not finished (REQ-ORCH-072), and so is another parent's unfinished task.
+    const r = spawn(l, 'reader', { inheritedContext: [idFailed, idDone, idQueued, idNoReport, l.root.taskId, idOther, idDone] });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.value.inherited.map((c) => c.task_id)).toEqual([idDone]);
     expect(r.value.row.state).toBe('queued');
-    expect(JSON.parse(r.value.row.inherited_context)).toEqual([idFailed, idDone, idQueued, idNoReport, idDone]);
+    expect(JSON.parse(r.value.row.inherited_context)).toEqual([idFailed, idDone, idQueued, idNoReport, l.root.taskId, idOther, idDone]);
     // Inheriting imposes no ordering: the reader does not wait on anything (REQ-ORCH-032).
     expect(JSON.parse(r.value.row.depends_on)).toEqual([]);
+  });
+
+  it('REQ-TOOLS-152 with REQ-ORCH-072: a child naming the root or its own task in inherited_context is ignored, not told the task does not exist', () => {
+    const l = ledger();
+    const a = spawn(l, 'a'); const idA = a.ok ? a.value.row.task_id : '';
+    l.claimStart(idA); l.transition(idA, 'running');
+    // The root delegating with its own id: the root is running, so the id is ignored.
+    const fromRoot = spawn(l, 'r', { inheritedContext: [l.root.taskId] });
+    expect(fromRoot.ok && fromRoot.value.inherited).toEqual([]);
+    // Child `a` delegating (one level deeper) naming the root, and naming its own task: both exist and neither has finished.
+    const fromA = spawn(l, 'b', { parentId: idA, parentDepth: 1, inheritedContext: [l.root.taskId, idA] });
+    expect(fromA.ok).toBe(true);
+    expect(fromA.ok && fromA.value.inherited).toEqual([]);
+    expect(fromA.ok && fromA.value.row.parent_id).toBe(idA);
   });
 
   it('REQ-MONITOR-016: an illegal move is refused naming both states, the record untouched, no event; a legal terminal move stamps completed_at', () => {
@@ -497,7 +514,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect((await sessions.running(sid)!).status).toBe('completed');
       expect(children(sid)).toEqual([]);
       const resumed = textOf(client.requests.at(-1)!);
-      expect(resumed).toContain("Task 'build': rejected — inherited_context id 'bg_00000000' refers to nothing: no task of yours has that id");
+      expect(resumed).toContain("Task 'build': rejected — inherited_context id 'bg_00000000' refers to nothing: no task has that id");
       expect(resumed).not.toContain('task_id:');
     });
   });

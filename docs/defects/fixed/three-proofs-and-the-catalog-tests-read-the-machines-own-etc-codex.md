@@ -39,3 +39,47 @@ leave one root of the operator's machine inside that profile, and the unit tests
 - `apps/desktop/src/run-host/skills.test.ts`: `host()`, the catalog cases.
 - `apps/desktop/src/run-host/host.ts`, `apps/desktop/src/workspace-service/index.ts`: where the instruction base's
   seam is read today.
+
+## Repaired — 2026-09-28 (R-062)
+
+**The seam.** `SkillRootsEnv` gains `machineDir` (`packages/config/src/skills/roots.ts`): the fourth user-scope root is
+`join(machineCodexDir(env.machineDir), 'skills')`, where `machineCodexDir` is `/etc/codex` for an absent or blank value
+and the resolved directory otherwise. It moves the directory and nothing else — the root keeps its scope, its rank and
+its platform rule, so Windows still searches no machine-wide root wherever it points. The instruction base reads the
+same `MACHINE_CODEX_DIR` through the same function, so the two literals that used to sit in two files are one, on the
+terms `hasEtcHierarchy` already set. `SkillHost.catalog` passes its existing `deps.machineDir` into `discoverSkills`, so
+the one value the host already held for the instruction base now moves both discoveries; in the built app it is
+`ROTARIS_CAPTURE_SKILLS_MACHINE ?? ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE` (`apps/desktop/src/run-host/host.ts`),
+mirroring the `SKILLS_HOME ?? INSTRUCTIONS_HOME` pair, read only under `__ROTARIS_SEAMS__` and named in
+`scripts/package.mjs`'s forbidden list so a packaged bundle that still carried it would fail the seam check. The
+workspace service keeps reading the instructions variable alone, as it does for `home`; it runs no skill discovery.
+
+**The three proofs.** `skills-proof` sets `ROTARIS_CAPTURE_SKILLS_MACHINE` to `scratch/machine-codex` and stages
+`skills/machine-skill/SKILL.md` there, so off Windows the seam is exercised in the built app: the discover launch's exact
+list gains `machine-skill` (scope `user`), the discovery log's count follows the list, the `/skills` listing's entry
+for it carries the scratch path, and the run launch's catalog names it. `injection-proof` already set
+`ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE`, which now moves the skill root too, and its header says so in place of the
+"one root is still read" paragraph. `settings-proof` sets `ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE` to `profile/machine-codex`,
+so its exact Instructions inventory and its scripted run read neither the host's `/etc/codex/AGENTS.md` nor its
+`/etc/codex/skills`.
+
+**The catalog tests.** `apps/desktop/src/run-host/skills.test.ts`'s `host()` already named `join(home, 'machine')`; it
+now reaches the skill root too. The isolation case records `readDir` beside `isFile` and asserts, for both helpers on a
+pinned `linux` platform, that `<home>/machine/skills` was listed and nothing under `/etc/codex` was — red on any host
+when the host loses its `machineDir` (checked by removing it from the `discoverSkills` call). A new case stages the
+note's `zeta` under the scratch machine root and a same-named `alpha` under it and under the scratch home: `zeta` is
+found as `user` scope from the scratch path, `alpha`'s workspace copy wins and shadows both, and on `win32` the root is
+not searched. `packages/config/src/skills/skills.test.ts` pins the seam itself: `<machineDir>/skills` last among six
+roots on Linux, nothing under `/etc/codex`, `machineCodexDir` folding absent and blank to the real directory, and no
+fourth root on Windows whatever `machineDir` names.
+
+**What was run.** `pnpm settings-proof` and `pnpm injection-proof --skip-latency` under Xvfb, and `pnpm skills-proof`
+up to the point its policy launch fails on Linux for the reason
+[`../skills-proof-writes-its-global-policy-where-only-windows-reads-it.md`](../skills-proof-writes-its-global-policy-where-only-windows-reads-it.md)
+records — the launches before it (discover, commands, listing, listing-reopen) are the ones that read the machine root;
+the outcomes are in the first-executions row of 2026-09-28. On this host Chromium refuses to start as root without
+`--no-sandbox`, which none of the three scripts passes yet (another item sweeps them); they were run through a
+verification-only wrapper around the worktree's own `node_modules/electron/dist/electron` that inserts the switch after
+the main entry, exactly as `hostSwitches` does in the driver, and nothing in the repository was changed for it.
+
+Repaired 2026-09-28 under R-062, on the branch `fix-config-isolation-decoding`.

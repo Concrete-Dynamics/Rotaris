@@ -30,9 +30,14 @@ import type { DisplayRow } from './types.js';
  * at a third of the whole-state cost at 1,200 rows and declined it for buying "0.6 ms of a 47 ms gap"; under a burst
  * that multiplies every per-increment millisecond by the queue in front of the sample, it is worth having. It is
  * taken only where it projects what the whole-state form projects — an append, or a row replaced at its own index —
- * and `projector.test.ts` holds it to that over a seeded walk of every shape the pane can be handed, including a
+ * and `projector.test.ts` holds it to that over seeded walks of every shape the pane can be handed, including a
  * removal, a scope switch and a run member changed in place (R-062's fix round 1 found the first two taken wrongly
- * here and the third in step 4 itself).
+ * here and the third in step 4 itself). Fix round 2 found step 4's bounded branch still wrong on a PURE append: its cut
+ * read runs on the raw rows while the fold reads the rows hygiene keeps, so a live duplicate reasoning row REQ-CHAT-048
+ * drops split a run it no longer interrupts; and a repeated edit diff REQ-CHAT-050 drops, re-sent at its own index with
+ * the rows behind it removed, let the reused prefix reach past `from`. Both are repaired in `project.ts` and pinned
+ * beside the walks, which now run over seven seeds, with reasoning durations and edit diffs, and every value of
+ * `running`, `groupTools` and `showReasoning`.
  */
 export interface Projection {
   readonly display: readonly DisplayRow[];

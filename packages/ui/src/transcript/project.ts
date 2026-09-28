@@ -327,12 +327,33 @@ function spanOf(members: readonly TranscriptRow[]): { startedAt: string; endedAt
  * context REQ-CHAT-048 needs and therefore the only lookback the incremental bound has to preserve.
  */
 function hygiene(row: TranscriptRow, previousThinking: TranscriptRow | null, o: ProjectOptions, expanded: boolean): TranscriptRow | null {
-  // REQ-CHAT-048: per agent, an unstamped thinking row equal to the immediately previous one projects to zero rows.
-  if (row.kind === 'thinking' && row.durationMs === undefined && previousThinking !== null
-    && (previousThinking.name ?? '') === (row.name ?? '') && previousThinking.body === row.body) return null;
+  if (repeatsReasoning(row, previousThinking)) return null;
+  let out = settle(row, o.running);
+  if (out.kind === 'diff') out = { ...out, body: capDiff(out.body) };
 
+  // REQ-CHAT-166: the caps affect only what is DRAWN, and expansion shows the untruncated value whatever they say.
+  if (!expanded && (out.input !== undefined || out.output !== undefined)) {
+    const input = out.input === undefined ? undefined : o.caps.show_tool_inputs ? capLines(out.input, o.caps.tool_input_lines) : '';
+    const output = out.output === undefined ? undefined : o.caps.show_tool_results ? capLines(out.output, o.caps.tool_result_lines) : '';
+    out = { ...out, ...(input === undefined ? {} : { input }), ...(output === undefined ? {} : { output }) };
+  }
+  return out;
+}
+
+/** REQ-CHAT-048: per agent, an unstamped thinking row equal to the immediately previous one projects to zero rows. */
+function repeatsReasoning(row: TranscriptRow, previousThinking: TranscriptRow | null): boolean {
+  return row.kind === 'thinking' && row.durationMs === undefined && previousThinking !== null
+    && (previousThinking.name ?? '') === (row.name ?? '') && previousThinking.body === row.body;
+}
+
+/**
+ * REQ-CHAT-049 and REQ-CHAT-062's settling — the part of hygiene that decides whether a streamed row is still live,
+ * and therefore (REQ-CHAT-066) whether it may fold. Split from the caps so `cleanCut` can read runs exactly as
+ * `foldRuns` will form them without paying for the caps, which no run reads.
+ */
+function settle(row: TranscriptRow, running: boolean): TranscriptRow {
   let out: TranscriptRow = row;
-  if (!o.running) {
+  if (!running) {
     // REQ-CHAT-049: an unstamped thinking row does not present as live, and a row still marked running shows no
     // status and no live timer, so a session with no run never appears to be in the middle of a tool call.
     if (out.kind === 'thinking' && out.durationMs === undefined) {
@@ -349,15 +370,6 @@ function hygiene(row: TranscriptRow, previousThinking: TranscriptRow | null, o: 
     const started = Date.parse(out.startedAt);
     const last = Date.parse(out.at);
     if (Number.isFinite(started) && Number.isFinite(last) && (last - started) / 1000 > THINKING_STALE_SECONDS) out = { ...out, settled: true };
-  }
-
-  if (out.kind === 'diff') out = { ...out, body: capDiff(out.body) };
-
-  // REQ-CHAT-166: the caps affect only what is DRAWN, and expansion shows the untruncated value whatever they say.
-  if (!expanded && (out.input !== undefined || out.output !== undefined)) {
-    const input = out.input === undefined ? undefined : o.caps.show_tool_inputs ? capLines(out.input, o.caps.tool_input_lines) : '';
-    const output = out.output === undefined ? undefined : o.caps.show_tool_results ? capLines(out.output, o.caps.tool_result_lines) : '';
-    out = { ...out, ...(input === undefined ? {} : { input }), ...(output === undefined ? {} : { output }) };
   }
   return out;
 }
@@ -514,25 +526,40 @@ export function trailerRows(o: Pick<ProjectOptions, 'pendingQuestions' | 'pendin
  * a row whose run reaches the cut drags the cut down to itself, a row whose run ended above it does not, and
  * a row that closes an agent's run starts that agent again from the row before. A row naming no agent closes
  * every run, so nothing before it can cross and the walk stops there.
+ *
+ * **Both passes read the rows as `foldRuns` will see them**: a row REQ-CHAT-048 projects to zero rows is skipped, and
+ * each row is settled by REQ-CHAT-049 / REQ-CHAT-062 before `runnable` asks whether it is still live. The first form
+ * read the raw rows, and a live reasoning row that repeats its agent's previous one — never foldable raw, absent once
+ * cleaned — closed that agent's run here while the fold joined the rows on either side of it: an append after it drew
+ * `[group 1,2 · row 4]` where the whole projection draws `[group 1,2,4]` (R-062's fix round 2, `projector.test.ts`).
  */
-function cleanCut(rows: readonly TranscriptRow[], b: number, showReasoning: boolean): number {
+function cleanCut(rows: readonly TranscriptRow[], b: number, o: Pick<ProjectOptions, 'running' | 'showReasoning'>): number {
   const reach = new Map<string, number>();
   const closedAbove = new Set<string>();
+  let previousThinking = lastThinkingBefore(rows, b);
   for (let i = b; i < rows.length; i += 1) {
-    const row = rows[i]!;
+    const raw = rows[i]!;
+    const repeat = repeatsReasoning(raw, previousThinking);
+    if (raw.kind === 'thinking') previousThinking = raw;
+    if (repeat) continue;
+    const row = settle(raw, o.running);
     if (closesEveryRun(row)) break;
     const key = agentKey(row);
-    if (!runnable(row, showReasoning)) { closedAbove.add(key); continue; }
+    if (!runnable(row, o.showReasoning)) { closedAbove.add(key); continue; }
     // An agent whose first event in the suffix is runnable has a run that may reach back past `b`.
     if (!closedAbove.has(key) && !reach.has(key)) reach.set(key, b);
   }
 
   let cut = b;
   for (let i = b - 1; i >= 0; i -= 1) {
-    const row = rows[i]!;
+    const raw = rows[i]!;
+    // The lookback is taken only for an unstamped thinking row, and each one ends at the next thinking row down, so
+    // the walk's lookbacks cover disjoint stretches: bounded by the walk plus one stretch below it.
+    if (raw.kind === 'thinking' && raw.durationMs === undefined && repeatsReasoning(raw, lastThinkingBefore(rows, i))) continue;
+    const row = settle(raw, o.running);
     if (closesEveryRun(row)) break;
     const key = agentKey(row);
-    if (!runnable(row, showReasoning)) { reach.delete(key); continue; }
+    if (!runnable(row, o.showReasoning)) { reach.delete(key); continue; }
     // The highest index this agent's current run is known to reach. Unset means this row is its highest.
     const highest = reach.get(key) ?? i;
     reach.set(key, highest);
@@ -559,10 +586,15 @@ export function projectDisplay(o: ProjectOptions, incremental?: { readonly previ
   if (incremental) {
     let b = deduped.findIndex((r) => r.index >= incremental.from);
     if (b === -1) b = deduped.length;
-    startRow = cleanCut(deduped, b, o.showReasoning);
+    startRow = cleanCut(deduped, b, o);
     // The ROW INDEX of the clean cut, which is where re-projection begins — not `b`'s, which a run open at
     // `b` may reach back past. REQ-CHAT-048 needs the immediately previous thinking row, kept below.
-    const boundaryIndex = deduped[startRow]?.index ?? Number.POSITIVE_INFINITY;
+    //
+    // Never above `from`. Where every row at and after `from` is gone from `deduped` — REQ-CHAT-050's repeated diff
+    // re-sent at its own index with the rows behind it removed — the cut lands past the end, and the first form read
+    // that as +Infinity and reused the whole previous display, removed rows included (R-062's fix round 2). The rows
+    // from `from` on are the changed ones by definition, so nothing displayed for them before is reusable.
+    const boundaryIndex = Math.min(deduped[startRow]?.index ?? Number.POSITIVE_INFINITY, incremental.from);
     prefix = incremental.previous.filter((d) => d.shape !== 'trailer' && lastIndexOf(d) < boundaryIndex);
     // A reusable prefix must be a prefix: stop at the first displayed row that is not below the boundary.
     const cut = incremental.previous.findIndex((d) => d.shape === 'trailer' || lastIndexOf(d) >= boundaryIndex);

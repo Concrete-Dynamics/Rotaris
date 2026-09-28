@@ -153,7 +153,8 @@ describe('REQ-CHAT-055: the projector projects once per change of its inputs', (
     // Fix round 1 of R-062: the first form of `changedFrom` returned the next array's row index at the first differing
     // position even when the previous array's row there was GONE, and the bounded form kept the removed row.
     const indices = (display: readonly DisplayRow[]) => display.map((d) => (d.shape === 'row' ? `row:${d.row.index}` : d.shape === 'group' ? `group:${d.members.map((m) => m.index).join(',')}` : d.shape));
-    const said = (i: number, name: string, over: Partial<TranscriptRow> = {}): TranscriptRow => ({ ...rows(i + 1)[i]!, name, persona: 'coder', kind: 'agent', ...over } as TranscriptRow);
+    // Negative indices are rows paged in above (REQ-CHAT-165); they take row 0's instants and keep their own index.
+    const said = (i: number, name: string, over: Partial<TranscriptRow> = {}): TranscriptRow => ({ ...rows(Math.max(0, i) + 1)[Math.max(0, i)]!, index: i, body: `row ${i}`, name, persona: 'coder', kind: 'agent', ...over } as TranscriptRow);
 
     it('REQ-CHAT-069: switching "This task" from one agent to another draws the second agent\'s rows and none of the first\'s', () => {
       const all = [rows(1)[0]!, said(1, 'X'), said(2, 'Y'), said(3, 'Y')];
@@ -204,21 +205,67 @@ describe('REQ-CHAT-055: the projector projects once per change of its inputs', (
       expect(projector.project(prose).display).toEqual(projectDisplay(prose));
     });
 
-    it('agrees with the whole-state projection over a seeded walk of every shape the pane can be handed', () => {
-      // A small deterministic generator (mulberry32): appends of every kind across three agents, settles and growth
-      // in place, a kind changed in place, removals and re-sends through the replica's own upsert, scope switches
-      // through the surface's own filter, truncations, and older rows paged in above.
-      let seed = 0x5eed;
+    // Fix round 2 of R-062: `cleanCut` decided runs on the RAW rows while `foldRuns` folds the rows hygiene keeps, and
+    // the prefix boundary could pass `from` when the rows at and after it were dropped. Both drew something the
+    // whole-state form does not, on shapes the bounded form was taking.
+    it('REQ-CHAT-048 / PD-CHAT-004: an append after a duplicate live reasoning row joins the run that row no longer interrupts', () => {
+      const Y = (i: number, over: Partial<TranscriptRow>) => ({ ...said(i, 'Y'), ...over } as TranscriptRow);
+      const held = [
+        rows(1)[0]!,
+        Y(1, { kind: 'thinking', streamId: 's1', durationMs: 5, body: 'same' }),
+        { ...tool(2, 'ok', true), name: 'Y', persona: 'coder', toolName: 'glob', body: 'glob' } as TranscriptRow,
+        Y(3, { kind: 'thinking', streamId: 's3', settled: false, body: 'same' }),
+      ];
+      const projector = createProjector();
+      const o = options({ rows: held, running: true });
+      expect(indices(projector.project(o).display)).toEqual(['row:0', 'group:1,2']);
+      const appended = { ...o, rows: [...held, { ...tool(4, 'ok', true), name: 'Y', persona: 'coder' } as TranscriptRow] };
+      expect(changedFrom(o, appended)).toBe(4);
+      // The live row at 3 repeats 1's reasoning, so REQ-CHAT-048 projects it to zero rows and 4 joins 1 and 2's run.
+      expect(indices(projectDisplay(appended))).toEqual(['row:0', 'group:1,2,4']);
+      expect(indices(projector.project(appended).display)).toEqual(['row:0', 'group:1,2,4']);
+      expect(projector.project(appended).display).toEqual(projectDisplay(appended));
+      expect(projector.incrementals).toBe(1);
+    });
+
+    it('REQ-CHAT-050: a repeated diff replaced at its own index, with the rows behind it removed, reuses none of them', () => {
+      const diff = (i: number, body: string) => ({ ...said(i, 'Y'), kind: 'diff', callKey: 'call-edit', body } as TranscriptRow);
+      const held = [rows(1)[0]!, diff(1, 'a.md +1 -0'), said(2, 'Y'), diff(3, 'a.md +1 -0'), said(4, 'Y'), said(5, 'Y')];
+      const projector = createProjector();
+      const o = options({ rows: held, groupTools: false });
+      expect(indices(projector.project(o).display)).toEqual(['row:0', 'row:1', 'row:2', 'row:4', 'row:5']);
+      // Row 3 re-sent (still the repeat REQ-CHAT-050 drops), rows 4 and 5 removed: the replica's own upsert.
+      const next = { ...o, rows: projectIncrement(held, 3, [{ ...held[3]! }]) };
+      expect(next.rows.map((r) => r.index)).toEqual([0, 1, 2, 3]);
+      expect(changedFrom(o, next)).toBe(3);
+      expect(indices(projectDisplay(next))).toEqual(['row:0', 'row:1', 'row:2']);
+      expect(projector.project(next).display).toEqual(projectDisplay(next));
+    });
+
+    /**
+     * A small deterministic generator (mulberry32): appends of every kind across three agents — reasoning with and
+     * without a duration, repeating its own body, and edit diffs repeating their call — settles and growth in place, a
+     * kind changed in place, removals and re-sends through the replica's own upsert, scope switches through the
+     * surface's own filter, truncations, and older rows paged in above. Run over several seeds and every value of the
+     * three switches that change what folds, because one seed with no diff rows is how fix round 1's walk passed two
+     * divergences it had never generated.
+     */
+    const walk = (initial: number, config: Pick<ProjectOptions, 'running' | 'groupTools' | 'showReasoning'>, steps: number) => {
+      let seed = initial;
       const rand = () => { seed = (seed + 0x6d2b79f5) | 0; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
       const pick = <T,>(xs: readonly T[]): T => xs[Math.floor(rand() * xs.length)]!;
       const names = ['X', 'Y', 'Z'];
       const agents = names.map((name) => ({ id: name.toLowerCase(), name, persona: 'coder' }) as unknown as AgentRecord);
       const make = (i: number): TranscriptRow => {
         const name = pick(names);
-        switch (pick(['user', 'agent', 'tool', 'tool', 'tool', 'thinking', 'system'])) {
+        switch (pick(['user', 'agent', 'tool', 'tool', 'tool', 'thinking', 'thinking', 'diff', 'system'])) {
           case 'user': return { ...rows(1)[0]!, index: i };
           case 'system': return { ...said(i, '', { kind: 'system' }), name: undefined, persona: undefined } as unknown as TranscriptRow;
-          case 'thinking': return said(i, name, { kind: 'thinking', streamId: `s${i}`, settled: rand() < 0.5, body: `thought ${i % 3}` } as Partial<TranscriptRow>);
+          case 'thinking': {
+            const settled = rand() < 0.5;
+            return said(i, name, { kind: 'thinking', streamId: `s${i}`, settled, body: `thought ${Math.floor(rand() * 2)}`, ...(settled && rand() < 0.5 ? { durationMs: 5 } : {}) } as Partial<TranscriptRow>);
+          }
+          case 'diff': return said(i, name, { kind: 'diff', body: `a.md +${Math.floor(rand() * 2)} -0`, ...(rand() < 0.7 ? { callKey: `call-${Math.floor(rand() * 3)}` } : {}) } as Partial<TranscriptRow>);
           case 'tool': return { ...tool(i, rand() < 0.5 ? 'running' : 'ok', rand() < 0.5), name, persona: 'coder' };
           default: return said(i, name);
         }
@@ -226,29 +273,41 @@ describe('REQ-CHAT-055: the projector projects once per change of its inputs', (
       let all: TranscriptRow[] = [rows(1)[0]!];
       let scope: AgentRecord | null = null;
       const projector = createProjector();
-      const base = options({ running: true });
-      let checked = 0;
-      for (let step = 0; step < 600; step += 1) {
+      const base = options(config);
+      for (let step = 0; step < steps; step += 1) {
         const top = all[all.length - 1]!.index;
         const r = rand();
         if (r < 0.4) all = [...all, make(top + 1)];
         else if (r < 0.55) { const at = all.length - 1 - Math.floor(rand() * Math.min(4, all.length - 1)); all = [...all.slice(0, at), { ...all[at]!, settled: true, toolStatus: 'ok', body: `${all[at]!.body}+` } as TranscriptRow, ...all.slice(at + 1)]; }
-        else if (r < 0.62) { const at = Math.max(1, all.length - 1 - Math.floor(rand() * 3)); all = [...all.slice(0, at), make(all[at]!.index), ...all.slice(at + 1)]; }
+        else if (r < 0.62 && all.length > 1) { const at = Math.max(1, all.length - 1 - Math.floor(rand() * 3)); all = [...all.slice(0, at), make(all[at]!.index), ...all.slice(at + 1)]; }
         else if (r < 0.72 && all.length > 3) {
           const from = all[Math.max(1, all.length - 1 - Math.floor(rand() * 5))]!.index;
-          all = projectIncrement(all, from, [...all.filter((row) => row.index >= from && rand() < 0.6).map((row) => ({ ...row })), make(top + 1)]);
+          all = projectIncrement(all, from, [...all.filter((row) => row.index >= from && rand() < 0.6).map((row) => ({ ...row })), ...(rand() < 0.7 ? [make(top + 1)] : [])]);
         }
         else if (r < 0.85) scope = rand() < 0.3 ? null : pick(agents);
         else if (r < 0.9 && all.length > 4) all = all.slice(0, all.length - 2);
         else if (r < 0.93) { const bottom = all[0]!.index; all = [{ ...make(bottom - 1), index: bottom - 1 } as TranscriptRow, ...all]; }
         else all = [...all, make(top + 1), make(top + 2)];
         const o = { ...base, rows: scopedRows(all, scope) };
-        expect(projector.project(o).display, `step ${step}`).toEqual(projectDisplay(o));
-        checked += 1;
+        expect(projector.project(o).display, `seed ${initial.toString(16)} ${JSON.stringify(config)} step ${step}`).toEqual(projectDisplay(o));
       }
-      expect(checked).toBe(600);
-      // The walk exercised the bounded form, not only the whole window it falls back to.
-      expect(projector.incrementals).toBeGreaterThan(100);
+      return projector.incrementals;
+    };
+
+    it('agrees with the whole-state projection over a seeded walk of every shape the pane can be handed', () => {
+      // Fix round 1's walk, kept: its seed and switches, now with reasoning durations and edit diffs in the mix.
+      expect(walk(0x5eed, { running: true, groupTools: true, showReasoning: false }, 600)).toBeGreaterThan(100);
+    });
+
+    it('agrees with the whole-state projection over seven seeds and every value of running, grouping and reasoning', () => {
+      let bounded = 0;
+      for (const seed of [0x5eed, 1, 2, 3, 5, 8, 13]) {
+        for (const running of [true, false]) for (const groupTools of [true, false]) for (const showReasoning of [false, true]) {
+          bounded += walk(seed, { running, groupTools, showReasoning }, 300);
+        }
+      }
+      // The walks exercised the bounded form, not only the whole window it falls back to.
+      expect(bounded).toBeGreaterThan(56 * 50);
     });
   });
 });

@@ -1994,6 +1994,60 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       });
     });
   });
+
+  /**
+   * PD-ORCH-005 clause 15 (revision 4): "A forced stop is a stop: its agents come to rest as clause 3 says." The
+   * graceful stop is covered above; these are the forced one, reached either way the stop control forces it, and the
+   * application's quit, whose `quit` a stop request received first would displace (the first reason stands — the
+   * board-run defect, `docs/defects/fixed/a-board-run-caught-by-a-quit-rests-as-a-stop.md`).
+   */
+  describe('PD-ORCH-005 clause 15: a forced stop is a stop, and a quit rests by quit', () => {
+    const restsBy = async (sessions: Sessions, sid: SessionId, interruption: 'stop' | 'quit') => {
+      const result = await sessions.running(sid)!;
+      expect(result.status).toBe('interrupted');
+      expect(children(sid)[0]!).toMatchObject({ state: 'paused', interruption, completed_at: null, report_stored: 0 });
+      expect(dal.iterationsOf(sid)).toMatchObject([{ iteration: 1, state: 'open', outcome: null, interruption }]);
+      expect(dal.getSession(sid)!.execution_status).toBe('paused');
+    };
+
+    it('a stop forced at its first activation leaves the child paused by the stop and the iteration open, as a graceful one does', async () => {
+      const { sessions, release } = holdingChild();
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await new Promise((r) => setTimeout(r, 10));
+      expect(sessions.control({ op: 'cancel', sessionId: sid, args: { force: true } })).toEqual({ ok: true });
+      release();
+      await restsBy(sessions, sid, 'stop');
+    });
+
+    it('a second activation of the stop control forces it (REQ-SESSION-186), and it still comes to rest', async () => {
+      const { sessions, release } = holdingChild();
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await new Promise((r) => setTimeout(r, 10));
+      expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+      expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+      release();
+      await restsBy(sessions, sid, 'stop');
+    });
+
+    it('the application\'s quit (`announceShutdown`, what a board run is sent at the last window\'s close) rests by quit', async () => {
+      const { sessions, release } = holdingChild();
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await new Promise((r) => setTimeout(r, 10));
+      expect(sessions.control({ op: 'announceShutdown', sessionId: sid, args: {} })).toEqual({ ok: true });
+      release();
+      await restsBy(sessions, sid, 'quit');
+    });
+
+    it('a stop that reaches the run before the quit keeps its reason: the run rests by stop (why the board sends the quit)', async () => {
+      const { sessions, release } = holdingChild();
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await new Promise((r) => setTimeout(r, 10));
+      expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+      expect(sessions.control({ op: 'announceShutdown', sessionId: sid, args: {} })).toEqual({ ok: true });
+      release();
+      await restsBy(sessions, sid, 'stop');
+    });
+  });
 });
 
 describe('PD-ORCH-005 clause 16 (OQ-74): the user\'s cancel writes one entry for both cancels, the at-rest one saying the session rested', () => {

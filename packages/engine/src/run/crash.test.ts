@@ -156,9 +156,9 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
     const asked: ModelRequest[] = [];
     /**
      * `configured`: the process resolves each run's setup through `configure`, which reports the entry persona asked for.
-     * `publisher`: where its projections publish.
+     * `publisher`: where its projections publish. `alive`: REQ-GIT-093's process probe (every other process is dead).
      */
-    function sessionsAs(pid: number, configured?: (entryPersona: string | undefined) => void, publisher: Publisher = NONE) {
+    function sessionsAs(pid: number, configured?: (entryPersona: string | undefined) => void, publisher: Publisher = NONE, alive: (pid: number) => boolean = () => false) {
       const client = new ScriptedModelClient([]);
       const original = client.stream.bind(client);
       client.stream = (req) => { asked.push(req); client.push(answer('Answered.')); return original(req); };
@@ -170,7 +170,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
       });
       return new Sessions({
-        clocks: clock, publisher, pid, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-dead', isProcessAlive: () => false,
+        clocks: clock, publisher, pid, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-dead', isProcessAlive: alive,
         model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
         tools: () => port(),
         ...(configured ? { configure: (_ws: string, ctx: { readonly entryPersona?: string | undefined }) => { configured(ctx.entryPersona); return ok({ model: { backend: new DefaultAgentBackend(client), config }, runtime }); } } : {}),
@@ -556,6 +556,78 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         w.restChild('bg_000000c2', 'pause', 'queued');
         w.restChild('bg_000000c3', 'pause', 'waiting_on_dependencies');
       };
+    });
+
+    /**
+     * PD-ORCH-005 clause 18 (extending REQ-MONITOR-125): a session a crash left — in REQ-CHAT-008's recovery state before
+     * any repair, or `interrupted` after one — offers the Continue action and "continue without them" as a `paused`
+     * session does, and either choice records the crash first, as any continue does (clause 8). Readings in OQ-76.
+     */
+    describe('PD-ORCH-005 clause 18: a crash offers the same choice', () => {
+      const userRows = (sid: SessionId) => dal.residentRows(sid).filter((r) => r.kind === 'user').length;
+      const pausedBy = (sid: SessionId) => dal.timelineOf(sid).filter((t) => t.name === 'child_paused').map((t) => (JSON.parse(t.metadata) as { interruption: string }).interruption);
+      /** The recovery state (the status still `running`, its process dead), or the repair's `interrupted` — which records nothing of the agents (clause 8, the checkpoint listing's repair). */
+      function leftBy(state: 'recovery' | 'interrupted', sid: SessionId): Sessions {
+        const next = sessionsAs(88);
+        expect(next.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        if (state === 'interrupted') expect(next.checkpointListing(dal, 'C:/ws', sid).ok).toBe(true);
+        expect(dal.getSession(sid)!.execution_status).toBe(state === 'recovery' ? 'running' : 'interrupted');
+        expect(dal.getIteration(sid, 2)!.interruption).toBeNull();
+        return next;
+      }
+
+      for (const state of ['recovery', 'interrupted'] as const) {
+        it(`${state}: the Continue action records the crash first, then resumes every unfinished agent from its record, and appends no user row`, async () => {
+          const sid = await crashed();
+          const next = leftBy(state, sid);
+          const before = userRows(sid);
+          expect(next.continueSession(sid, 'continue')).toEqual({ ok: true, value: { resumed: true, messageLimit: null } });
+          expect((await next.running(sid))!.status).toBe('completed');
+          expect(pausedBy(sid)).toEqual(['crash', 'crash', 'crash']);
+          for (const id of ['bg_000000c1', 'bg_000000c2', 'bg_000000c3']) expect(dal.getChild(sid, id), id).toMatchObject({ state: 'succeeded', interruption: null });
+          expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.state, r.outcome])).toEqual([[1, 'closed', 'succeeded'], [2, 'closed', 'succeeded']]);
+          // REQ-MONITOR-125's "resumed from the composer": the last request stands and nothing is appended.
+          expect(userRows(sid)).toBe(before);
+        });
+
+        it(`${state}: "continue without them" records the crash first, then ends those agents cancelled, closes the iteration cancelled and continues as a new iteration`, async () => {
+          const sid = await crashed();
+          const next = leftBy(state, sid);
+          expect(next.continueSession(sid, 'continue', { withoutPaused: true }).ok).toBe(true);
+          await next.running(sid);
+          expect(pausedBy(sid)).toEqual(['crash', 'crash', 'crash']);
+          expect(dal.getIteration(sid, 2)).toMatchObject({ state: 'closed', outcome: 'cancelled', interruption: 'crash' });
+          for (const id of ['bg_000000c1', 'bg_000000c2', 'bg_000000c3']) expect(dal.getChild(sid, id)!.state, id).toBe('cancelled');
+          expect(dal.iterationsOf(sid).map((r) => r.iteration)).toEqual([1, 2, 3]);
+        });
+      }
+
+      it('a busy session whose process may still be running it is refused, and nothing is recorded', async () => {
+        const sid = await crashed();
+        const next = sessionsAs(88);
+        expect(next.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        // REQ-GIT-093: a lock naming another machine is live — this process cannot tell whether that run goes on.
+        dal.db.prepare('UPDATE session_locks SET host = ? WHERE session_id = ?').run('0000000000000000000000000000000b', sid);
+        expect(next.continueSession(sid, 'continue')).toMatchObject({ ok: false, error: { code: 'run-active' } });
+        expect(next.continueSession(sid, 'continue', { withoutPaused: true })).toMatchObject({ ok: false, error: { code: 'run-active' } });
+        expect(dal.getIteration(sid, 2)!.interruption).toBeNull();
+        expect(dal.getChild(sid, 'bg_000000c1')!.state).toBe('running');
+      });
+
+      it('a busy session whose liveness is unknown is refused, and nothing is recorded (REQ-GIT-093: unknown resolves toward running)', async () => {
+        const sid = await crashed();
+        let probe: 'dead' | 'throws' = 'dead';
+        const next = sessionsAs(88, undefined, NONE, () => { if (probe === 'throws') throw new Error('the probe cannot tell'); return false; });
+        expect(next.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        // The lock names another process on this machine, and the probe cannot say whether it lives.
+        dal.db.prepare('UPDATE session_locks SET host = ?, pid = ? WHERE session_id = ?').run(HOST, 66, sid);
+        probe = 'throws';
+        expect(next.liveness(dal, sid)).toBe('unknown');
+        expect(next.continueSession(sid, 'continue')).toMatchObject({ ok: false, error: { code: 'run-active' } });
+        expect(next.continueSession(sid, 'continue', { withoutPaused: true })).toMatchObject({ ok: false, error: { code: 'run-active' } });
+        expect(dal.getIteration(sid, 2)!.interruption).toBeNull();
+        expect(dal.getChild(sid, 'bg_000000c1')!.state).toBe('running');
+      });
     });
   });
 });

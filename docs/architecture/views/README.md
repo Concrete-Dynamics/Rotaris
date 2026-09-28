@@ -87,6 +87,31 @@ presents the resting root `paused`, its callers passing REQ-CHAT-008's recovery 
 projection paragraphs and the **state-ownership view**'s rest row are updated; no package, edge, process, channel or
 command changes.
 
+**A quit ends a board run as a quit, and clause 15's audit re-cites the stop and the cancel (`PD-ORCH-005` clauses 15
+and 19, `PD-CHAT-001` revision 4, `PD-CHAT-002` revision 2, 2026-09-28, R-064).** Main's board coordinator ends its runs
+at the last window's close with the application's quit (`quitAll` → `announceShutdown`), not the stop control's
+`cancel`, so a board run rests by `quit` (`docs/defects/fixed/a-board-run-caught-by-a-quit-rests-as-a-stop.md`). The
+**process view**'s board paragraph, the **runtime view**'s rest paragraph and §5 rows and the **sequences view**'s
+approval note now cite the rulings in place of OQ-69; readings in OQ-81. A stop or a quit during a plan cycle now
+withdraws what waits on a person rather than cancelling it (`Run.waitsWithdrawnBy`, which reads the stop request alone
+and never the plan hold; clause 15's last bullet and `PD-CHAT-002` revision 2): the **runtime view**'s rest paragraph and `cancelQuestions` row and the **sequences view**'s
+approval note say so. No package, edge, process, channel or command changes.
+
+**A crash offers the same choice as a pause (`PD-ORCH-005` clause 18, 2026-09-28, R-064).** `Sessions.continueSession`
+accepts a session a crash left — `interrupted`, or persisted busy and `not-live` (REQ-CHAT-008's recovery state) — beside
+`paused`, and refuses a busy one whose process may still be running it (`run-active`) and, first, any session whose
+store has failed (`store-failed`, as the continue by message is: a run ended on a recording failure is not a crash,
+OQ-42; a `paused` session under a store failure is refused the same way). The composer draws the two continues and
+"Continue without them" on it (`crashLeft`), with the same count; either choice records the crash first,
+in `launchContinuation`. Readings in OQ-76. The **runtime view**'s §5 Continue paragraph and the **process view**'s
+`session.continue` note are updated; the command's shape does not change, and no package, edge, process or channel does.
+
+**`/stop` is offered as the stop, and the paused continue by message reads `Send` (`PD-ORCH-005` clause 15,
+`PD-CHAT-001` revision 4, 2026-09-28, R-064).** The slash catalogue describes `/stop` as "Stop the active run"; it still
+sends the stop's `cancel` op and never the explicit cancel. The paused strip's second continue shows `Send`, named
+`Continue with a message`. The **runtime view**'s §5 `cancel` row and Continue paragraph are updated; no package, edge,
+process, channel or command changes.
+
 **A quit answers nothing for a person, and every stored report is an artifact (`PD-ORCH-005` phase 7, 2026-09-27,
 R-062).** Main tells the application's quit apart (`QuitState`, `main/exit.ts`). That covers the immediate exit, every
 main window's close confirmed by its guard (`guardClose`), and a quit Electron starts on its own account, which

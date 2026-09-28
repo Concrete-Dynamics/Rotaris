@@ -143,7 +143,7 @@ describe('PD-ORCH-005 clause 6: the Continue action', () => {
   });
 });
 
-describe('PD-ORCH-005 clause 3: the stop comes to rest, and the confirmed cancel of the run is final (OQ-69)', () => {
+describe('PD-ORCH-005 clauses 3 and 15: the stop comes to rest, and the confirmed cancel of the run is final', () => {
   it('the stop is the `cancel` control, graceful and then forced — the run comes to rest and its agents resume on a continue', async () => {
     const a = actions([{ ok: true, value: { ok: true } }, { ok: true, value: { ok: true } }]);
     expect(await a.stopRun(false)).toEqual({ ok: true });

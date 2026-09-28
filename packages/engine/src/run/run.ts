@@ -428,9 +428,11 @@ export class Run {
     this.stop.onRequested((s) => {
       // REQ-MONITOR-012: whatever is blocked on a person is released first, then the run stops. PD-ORCH-005 clause 9: a
       // stop or a quit brings the run to rest, so the waits are WITHDRAWN (the calls interrupted, never denied) and every
-      // agent is left paused; only the explicit cancel releases them as REQ-TOOLS-052's cancellation, as before.
+      // agent is left paused; only the explicit cancel releases them as REQ-TOOLS-052's cancellation, as before. Clause
+      // 15: a stop or a quit during a plan cycle withdraws its waits too, though its agents end (`waitsWithdrawnBy`).
       const rest = this.restCause;
-      try { if (rest !== null) this.withdrawPending(rest); else this.cancelPending(); } catch (cause) { this.deps.warn(`releasing pending approvals on ${this.sessionId} failed: ${String(cause)}`); }
+      const withdrawBy = this.waitsWithdrawnBy;
+      try { if (withdrawBy !== null) this.withdrawPending(withdrawBy); else this.cancelPending(); } catch (cause) { this.deps.warn(`releasing pending approvals on ${this.sessionId} failed: ${String(cause)}`); }
       if (rest !== null) this.children?.beginRest();
       this.abort.abort();
       if (s.forced || this.hardCancel) return;
@@ -464,7 +466,8 @@ export class Run {
    * explicit cancel, `pause` for an accepted pause — or null when it is not coming to rest: running, cancelled (clause 3:
    * "an explicit cancel is final"), aborted on its own account (`agent_session_aborted`: a recording failure, the headless
    * abort hook, an escalation), or held at the plan gate (clause 11: a durable hold leaves no agent unfinished, so a stop
-   * or a quit during a plan cycle ends its agents as before — OQ-69).
+   * or a quit during a plan cycle ends its agents and records no interruption — PD-ORCH-005 clause 15). A forced stop is
+   * a stop (clause 15): `forced` is never read here.
    */
   get restCause(): Interruption | null {
     if (this.planHeld) return null;
@@ -1460,7 +1463,8 @@ export class Run {
   /**
    * REQ-MONITOR-009 / REQ-ORCH-133: cancel one child — it and its live descendants stop and settle `cancelled`
    * (`IterationChildren.cancel`, the per-child abort). The reserved run id is the full cancellation, which PD-ORCH-005
-   * clause 3 keeps final: REQ-MONITOR-126's cancel control, "cannot be undone in this session" (OQ-69).
+   * clause 3 keeps final: REQ-MONITOR-126's cancel control, "cannot be undone in this session", which every confirmed
+   * "Cancel the run?" sends (clause 15).
    */
   cancelAgent(taskId: string): boolean {
     if (this.ended) return false;
@@ -1482,6 +1486,20 @@ export class Run {
     for (const p of this.ports) n += p.withdrawPending?.(cause) ?? 0;
     if (this.deps.tools && !this.ports.has(this.deps.tools)) n += this.deps.tools.withdrawPending?.(cause) ?? 0;
     return n;
+  }
+
+  /**
+   * PD-ORCH-005 clause 9: the interruption that withdraws what waits on a person, read when a stop request lands, or null
+   * when the waits are cancelled (REQ-TOOLS-052) — the explicit cancel and a stop the run raised itself. A stop withdraws
+   * by `stop` and a quit by `quit` whether or not a plan cycle holds the run: clause 15 has the quit withdraw an approval
+   * its dialog closes and PD-CHAT-002 revision 2 a question, in every case the directive decides, a plan cycle among
+   * them. The withdrawal's cause is its own, so the plan hold is never read here; a cycle's agents still end and no
+   * interruption is recorded of them (`restCause`, clause 15). Readings in OQ-81.
+   */
+  private get waitsWithdrawnBy(): Interruption | null {
+    if (this.stop.final) return null;
+    if (this.stop.reason === 'application_shutdown') return 'quit';
+    return this.stop.reason === 'user_cancelled' ? 'stop' : null;
   }
 
   /**

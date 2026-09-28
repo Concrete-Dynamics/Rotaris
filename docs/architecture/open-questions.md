@@ -3471,6 +3471,127 @@ build first took, which handed an earlier piece of work's document over ahead of
 none; and whether a later iteration of the same run should have its handoff's artifact read again when it starts,
 rather than be re-sent the one read at the continue, superseded or not.
 
+**OQ-76 — Which sessions has a crash left, and what does the Continue action offer on one with nothing to resume?** *(`PD-ORCH-005` clause 18 (revision 4), with clauses 8, 11 and 19; REQ-MONITOR-125 as clause 18 extends it; REQ-CHAT-008, REQ-GIT-093, REQ-SESSION-171, REQ-SESSION-060, REQ-GIT-094 and REQ-CHAT-006, which the directive does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
+
+Clause 18: "A session a crash left — `interrupted` after a repair, or in REQ-CHAT-008's recovery state before one — SHALL
+offer the Continue action and 'continue without them' as a `paused` session does, with the same count. Either choice
+records the crash first, as any continue does (clause 8)." The clause names the two states. It does not say how the
+engine tells the recovery state apart from a session another process is still running. It does not say what a
+crash-left session offers when no iteration is open, or whether the pause's statement is drawn on it. And it does not
+say what the decline's wording means before the crash is recorded.
+
+**What the build proceeds under.**
+
+- **Which sessions a crash left.** `Sessions.continueSession` accepts a session whose status is `interrupted`. It also
+  accepts one whose status is still busy when REQ-GIT-093's liveness predicate calls it `not-live`, the one predicate
+  REQ-SESSION-171 and the repair already use. A busy session that is `live`, or whose liveness is `unknown`, is refused
+  (`run-active`), because another process may still be running it. The renderer reads the same two states as
+  `crashLeft`: `interrupted`, or busy with `needsRecovery` (the session list's `stale`). `paused_message_limit` and
+  `awaiting_plan_decision` are durable holds, not busy statuses, so a crash does not make them crash-left. They keep
+  their own continues (clause 11).
+- **A session the store's failure left busy is not one a crash left.** A run that ends on a recording failure (OQ-42)
+  leaves the durable status busy and this process's lock with no run behind it, so the liveness predicate reads
+  `not-live`, the session list marks it `stale`, and the renderer's `crashLeft` draws the two continues on it. It did not
+  crash, and nothing can be recorded of it. `Sessions.continueSession` therefore refuses every continue on it
+  `store-failed` ("The workspace store requires recovery before continuing work"), as `Sessions.prompt` and the plan
+  decision already do, so the Continue action, the decline and the continue by message all refuse the same state the
+  same way. The guard stands first in `continueSession`, so a `paused` session under a store failure is refused too,
+  where it was accepted before. The recovery is OQ-42's: restore storage and reopen the session, which rebuilds the
+  writer. After the reopen the session is busy with nothing running it, which is REQ-CHAT-008's recovery state, and a
+  continue then records the crash as for any other. The renderer does not tell this state apart: it knows nothing of
+  the writer's failure beyond the recording-failure notice, whose action is the reopen. *The first build accepted such a
+  session and reported `{resumed: true}` against the failed writer, where the same call had been refused `not-paused`
+  before clause 18; the round-2 review found it.*
+- **The actions at the message limit.** A crash-left session is not at the message limit, so it takes `action` as a
+  manually paused session does. `continue` and `double` continue it; `cancel` leaves it as it is.
+- **Nothing open to resume.** A crash-left session with no open iteration draws the two continues where the send pill
+  stood, with no count and no decline, as a `paused` session with nothing to resume does. Its Continue action continues
+  the last request, which is REQ-MONITOR-125's "resumed from the composer".
+- **No pause statement.** "Paused. Run controls need the run continued…" stays on a paused session only. A crash-left
+  session is not paused, and its run state already says what it is (REQ-CHAT-008's "Run needs recovery", or the
+  interrupted presentation). REQ-CHAT-006's chip reason in the recovery state is left as it stands. The Continue action
+  belongs to the composer, not to the run controls.
+- **The decline's wording before the crash is recorded.** In the recovery state the agents the count names are still
+  `running` in the store, yet the decline says "The N paused agents end cancelled". The text is kept. The crash record
+  pauses them first (clause 8), then the decline cancels them, so the words describe the act at the moment it happens.
+  The wording does not rest on how those agents present, which is lane "surfaces"' reading (clause 13 and REQ-CHAT-008's
+  recovery state): at this commit they still present as the build's catch-all, and the reading that lane is expected to
+  take is that they present as `paused` before the crash is recorded, so the agent tree agrees with the count. If that
+  reading is refined, this bullet is re-read against it.
+- **Either choice records the crash first, in one place.** Every continue passes `Sessions.launchContinuation`, which
+  records the crash before the stale-child settle and before it resumes or declines the open iteration. So the Continue
+  action, the continue by message (`Sessions.prompt`) and the decline need no crash-specific path.
+- **The lock.** `Sessions.prompt` tries to re-claim a lock it no longer holds, but it cannot: `resume` returns early for
+  a session already live in this process. A probe placed in that branch was never reached on any crash-left path, so
+  `continueSession` does not copy it
+  (`docs/defects/a-continue-by-message-cannot-re-claim-a-lock-it-no-longer-holds.md`).
+
+**What a ruling decides.** Whether a busy session of unknown liveness should also be continuable, for example after a
+confirmation, rather than refused. Whether a crash-left session should state something of its own in the notices row,
+where a paused session states its pause. Whether a crash that left a durable hold should offer anything beyond that
+hold's own continues. Whether the composer should withhold the continues on a session the store's failure left busy,
+rather than draw them and have the engine refuse them.
+
+**OQ-81 — What does the audit of clause 15, clause 19, PD-CHAT-001 revision 4 and PD-CHAT-002 revision 2 leave undecided?** *(`PD-ORCH-005` clauses 3, 9, 11, 15 and 19 (revision 4); `PD-CHAT-001` revision 4, "The strip" and "The paused continues"; `PD-CHAT-002` revision 2; REQ-CHAT-029, REQ-CHAT-005, REQ-CHAT-021, REQ-CHAT-169, REQ-MONITOR-004, REQ-SESSION-186, REQ-TOOLS-063, REQ-CHAT-101 and REQ-TRACE-464. Raised 2026-09-28 by building `PD-ORCH-005` revision 4, `PD-CHAT-001` revision 4 and `PD-CHAT-002` revision 2 under [R-064](../product/requests.md#r-064).)*
+
+Most of what these rulings decide was already built under OQ-69 and OQ-71's readings. The audit found one behaviour the
+text contradicts: a board run caught by the application's quit came to rest by `stop`
+(`docs/defects/fixed/a-board-run-caught-by-a-quit-rests-as-a-stop.md`). It also found two strings the rulings fix:
+`/stop`'s description and the paused continue's `Send`. What the text leaves open concerns a plan cycle's waits at a
+stop, the literal reach of "no other control stands outside the dock", REQ-TRACE-464's word "cancel", and a few names
+the build kept.
+
+**What the build proceeds under.**
+
+- **A wait inside a plan cycle at a stop or a quit.** Clause 15 says a stop or a quit during a plan cycle "ends the
+  cycle's agents and records no interruption". Its last bullet, which it decides "in each case", has the quit withdraw
+  an approval its dialog closes (clause 9), and PD-CHAT-002 revision 2 has the quit withdraw a question. Neither makes
+  an exception for a plan cycle, and a withdrawal names its own cause, apart from the agents' and the iteration's
+  interruption. So an approval or a question pending in a plan cycle when the quit lands is **withdrawn by `quit`**
+  (`Run.waitsWithdrawnBy`, which reads the stop request alone and never the plan hold, so the waits' release does not
+  depend on when a plan cycle holds the run), while the cycle's agents still end `cancelled` and nothing records an
+  interruption. The
+  text decides the quit; the build reads the stop the same way, because clause 9 names the stop beside the quit and
+  clause 15 puts the two together for a plan cycle: a wait pending in a plan cycle when a stop lands is withdrawn by
+  `stop`. The explicit cancel still cancels it (clause 3: it is final), and so does a stop the run raised itself. *The
+  first reading built, and superseded in the same round by the review: the pending wait was cancelled
+  (`cancelPending`), on the ground that "a withdrawal is recorded by the interruption that caused it, and a plan cycle
+  records none". That ground confused the wait's cause with the agents' interruption, and the directive's words govern
+  the quit's case.* A stop or a quit at a *parked* gate has no turn in flight and nothing waiting.
+- **A stop during a plan cycle, as the session shows it.** The cycle's agents end `cancelled` with their reports, no
+  iteration row exists, and `plan_released` stays 0, so the next prompt or continue is held again. The session persists
+  `paused` (REQ-SESSION-186's persisted status for a stop). Its result's summary reads "The run came to rest because a
+  person stopped it.", because the summary is classified from the stop reason alone. Both are kept. The status is what
+  a stop persists, and the wording describes the run, not an agent left to resume.
+- **"No other control stands outside the dock."** The sentence governs the run-state notices it names and the strip's
+  input controls. Three controls outside the dock and outside the notices row stay where they are, because each
+  belongs to a surface the directive does not name: REQ-CHAT-021's "Command not run" notice with its dismiss, above the
+  dock; the refusal line with "Open project setup", above the dock; and REQ-CHAT-169's attachment list with its Remove
+  buttons, below the dock.
+- **The names the build kept.** `/stop` is offered as "Stop the active run" and still sends the control op `cancel`,
+  which is REQ-MONITOR-004's enumeration. The op is not renamed, and REQ-CHAT-029's "MUST cancel that run" is read
+  through clause 15's narrowing. The paused strip's continue by message draws its own accessible name ("Continue with
+  a message") and shows `Send`. The send pill's `sendName` arm for a paused session, which the strip never draws, is
+  left as it stands.
+- **The board's quit.** Main's board coordinator ends its runs at the last window's close with the run host's
+  `announceShutdown` (REQ-MONITOR-131's shutdown request), renamed `quitAll`, rather than the stop control's `cancel`.
+  A stop request keeps its first reason, so the `cancel` sent ahead of the run host's `shutdown` rested the run by
+  `stop`. REQ-TRACE-469's unlimited approval wait is still released at once, withdrawn by the quit. REQ-TRACE-464 says
+  "Closing the application SHALL **cancel** the run rather than leave it orphaned", and `PD-ORCH-005`'s Narrows list
+  does not name it. The build reads the requirement's guarantee as the clause's own last words — the run is ended, not
+  orphaned — and ends it as every quit ends a run, clause 3's quit: its agents rest `paused`, its iteration stays open,
+  and a later continue resumes it. The word "cancel" is not met literally, and was not before the repair either (the
+  stop's `cancel` rested the run by `stop`); nothing met it as the explicit cancel. So this is a departure from a
+  requirement no directive names, and a back-pointer is owed: either `PD-ORCH-005` names REQ-TRACE-464 among what it
+  narrows, or a ruling has a board run cancelled explicitly at the quit.
+
+**What a ruling decides.** Whether a stop during a plan cycle, which the text leaves to clause 9, should withdraw its
+pending approval or question as a quit does (the build) or cancel it. Whether REQ-TRACE-464's "SHALL cancel" is narrowed
+by clause 3's quit, which would add it to `PD-ORCH-005`'s Narrows list, or a board run is cancelled explicitly at the
+quit, final and never resumed. Whether the "Command not run" notice and the refusal line should
+move into the notices row, a layout change. Whether a stop during a plan cycle should persist a status and a summary of
+its own rather than a stop's `paused` and "came to rest".
+
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 
 The key is registered with default 20 and minimum 1. Each background session publishes its own `bg:<id>` stream at up to 50 frames/s (the 20 ms floor), so the produced aggregate is `(agents + background sessions) × 50 frames/s`, and only one of those two factors — agents, REQ-MONITOR-285's 20 — has a ceiling. Part AL reads the key into the manager and caps the *delivered* rate per window at 1,000 frames/s by merging (REQ-MONITOR-306, REQ-SHELL-103), so a user who configures 400 background sessions saturates the run-host → main pipe, not a renderer. A stated maximum on the key would let the produced rate be computed rather than absorbed. The owner's call; recorded, not resolved.

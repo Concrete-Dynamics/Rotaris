@@ -320,7 +320,7 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
 /**
  * REQ-SHELL-023's Mission view (Part R; REQ-MONITOR-274..276). Mounted only while shown (REQ-MONITOR-039/275: a hidden
  * surface refreshes nothing and runs no timer); the strategy and the depth are the settings' own values, written through
- * the per-field path (REQ-CONFIG-321, REQ-CONFIG-112); pause is the existing `pause` control, and cancel is `cancelAgent` — for the run row the reserved run id, final (`cancelRun`, OQ-69).
+ * the per-field path (REQ-CONFIG-321, REQ-CONFIG-112); pause is the existing `pause` control, and cancel is `cancelAgent` — for the run row the reserved run id, final (`cancelRun`, PD-ORCH-005 clause 15).
  */
 function Mission({ workspace, popOut }: { workspace: string; popOut: boolean }) {
   const session = useStore(replica, (s) => s.session);

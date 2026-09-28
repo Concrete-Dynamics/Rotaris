@@ -947,7 +947,7 @@ async function main(): Promise<void> {
     broadcast: (payload) => { for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(CHANNEL.requirementsChanged, payload); },
     log,
   });
-  app.on('window-all-closed', () => { void requirementsRuns.cancelAll('the last window closed'); });
+  app.on('window-all-closed', () => { void requirementsRuns.quitAll('the last window closed'); });
 
   // A3: hoisted out of the builder below — `runCommand` calls this for whichever window opened the persona
   // window, and it closes over nothing per window (the window it measures is its argument).

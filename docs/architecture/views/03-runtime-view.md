@@ -183,8 +183,8 @@ flowchart TB
 `cancel` operation, graceful or forced) or a quit (`application_shutdown`); `restCause` names which, and is null for the
 explicit cancel (the reserved run id: `StopRequest.final`), for a stop the run raised itself (`agent_session_aborted`)
 and while the plan gate holds (**PD-ORCH-005 clause 15**: a stop or a quit during a plan cycle ends its agents and
-records no interruption; a forced stop is a stop). What waits on a person is released by `waitsWithdrawnBy`: the rest's
-cause, and during a plan cycle the stop's or the quit's too, so a stop or a quit withdraws an approval or a question
+records no interruption; a forced stop is a stop). What waits on a person is released by `waitsWithdrawnBy`, which reads
+the stop request alone and never the plan hold: a stop withdraws an approval or a question by `stop` and a quit by `quit`,
 whether or not the run comes to rest (clause 15's last bullet, PD-CHAT-002 revision 2; OQ-81); only the explicit cancel
 and a stop the run raised itself cancel them (REQ-TOOLS-052). A **pause** is refused while the gate holds (clause 11); accepted, it
 withdraws every approval and question at once (clause 9: each waiting call settles interrupted and never run, never

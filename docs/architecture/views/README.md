@@ -51,16 +51,16 @@ at the last window's close with the application's quit (`quitAll` → `announceS
 `cancel`, so a board run rests by `quit` (`docs/defects/fixed/a-board-run-caught-by-a-quit-rests-as-a-stop.md`). The
 **process view**'s board paragraph, the **runtime view**'s rest paragraph and §5 rows and the **sequences view**'s
 approval note now cite the rulings in place of OQ-69; readings in OQ-81. A stop or a quit during a plan cycle now
-withdraws what waits on a person rather than cancelling it (`Run.waitsWithdrawnBy`, clause 15's last bullet and
-`PD-CHAT-002` revision 2): the **runtime view**'s rest paragraph and `cancelQuestions` row and the **sequences view**'s
+withdraws what waits on a person rather than cancelling it (`Run.waitsWithdrawnBy`, which reads the stop request alone
+and never the plan hold; clause 15's last bullet and `PD-CHAT-002` revision 2): the **runtime view**'s rest paragraph and `cancelQuestions` row and the **sequences view**'s
 approval note say so. No package, edge, process, channel or command changes.
 
 **A crash offers the same choice as a pause (`PD-ORCH-005` clause 18, 2026-09-28, R-064).** `Sessions.continueSession`
 accepts a session a crash left — `interrupted`, or persisted busy and `not-live` (REQ-CHAT-008's recovery state) — beside
 `paused`, and refuses a busy one whose process may still be running it (`run-active`) and, first, any session whose
-store has failed (`store-failed`, as the continue by message is: a run ended on a recording failure is not a crash, OQ-42).
-The composer draws the two
-continues and "Continue without them" on it (`crashLeft`), with the same count; either choice records the crash first,
+store has failed (`store-failed`, as the continue by message is: a run ended on a recording failure is not a crash,
+OQ-42; a `paused` session under a store failure is refused the same way). The composer draws the two continues and
+"Continue without them" on it (`crashLeft`), with the same count; either choice records the crash first,
 in `launchContinuation`. Readings in OQ-76. The **runtime view**'s §5 Continue paragraph and the **process view**'s
 `session.continue` note are updated; the command's shape does not change, and no package, edge, process or channel does.
 

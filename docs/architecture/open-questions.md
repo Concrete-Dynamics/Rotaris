@@ -3424,7 +3424,9 @@ the build kept.
   an approval its dialog closes (clause 9), and PD-CHAT-002 revision 2 has the quit withdraw a question. Neither makes
   an exception for a plan cycle, and a withdrawal names its own cause, apart from the agents' and the iteration's
   interruption. So an approval or a question pending in a plan cycle when the quit lands is **withdrawn by `quit`**
-  (`Run.waitsWithdrawnBy`), while the cycle's agents still end `cancelled` and nothing records an interruption. The
+  (`Run.waitsWithdrawnBy`, which reads the stop request alone and never the plan hold, so the waits' release does not
+  depend on when a plan cycle holds the run), while the cycle's agents still end `cancelled` and nothing records an
+  interruption. The
   text decides the quit; the build reads the stop the same way, because clause 9 names the stop beside the quit and
   clause 15 puts the two together for a plan cycle: a wait pending in a plan cycle when a stop lands is withdrawn by
   `stop`. The explicit cancel still cancels it (clause 3: it is final), and so does a stop the run raised itself. *The

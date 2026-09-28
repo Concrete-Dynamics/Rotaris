@@ -79,16 +79,6 @@ describe('PD-ORCH-005 clause 6: the Continue action states how many agents will 
     expect(live).not.toContain('aria-label="Continue run"');
   });
 
-  it('PD-ORCH-005 clause 18: a session a crash left with nothing open to resume still draws the two continues, with no count and no decline, as a paused one does', () => {
-    for (const [executionStatus, recovery] of [['interrupted', false], ['running', true]] as const) {
-      const html = render(session({ executionStatus, resumable: null }), recovery);
-      expect(strip(html), executionStatus).toMatch(/aria-label="Continue run"[^>]*>Continue</);
-      expect(strip(html), executionStatus).toMatch(/aria-label="Continue with a message"[^>]*>Send</);
-      expect(html, executionStatus).not.toContain('composer-resume-count');
-      expect(html, executionStatus).not.toContain('Continue without them');
-    }
-  });
-
   it('a paused session with nothing to resume offers the Continue action as before: no count and no decline', () => {
     const html = render(session({ resumable: null }));
     expect(html).toMatch(/aria-label="Continue run"[^>]*>Continue</);
@@ -99,6 +89,18 @@ describe('PD-ORCH-005 clause 6: the Continue action states how many agents will 
   it('a session at the message limit, at the plan gate or finished states no count', () => {
     for (const executionStatus of ['paused_message_limit', 'awaiting_plan_decision', 'completed']) {
       const html = render(session({ executionStatus, resumable: { iteration: 1, agents: 2 } }));
+      expect(html, executionStatus).not.toContain('composer-resume-count');
+      expect(html, executionStatus).not.toContain('Continue without them');
+    }
+  });
+});
+
+describe('item D — PD-ORCH-005 clause 18: a crash offers the Continue action as a pause does', () => {
+  it('a session a crash left with nothing open to resume still draws the two continues, with no count and no decline, as a paused one does', () => {
+    for (const [executionStatus, recovery] of [['interrupted', false], ['running', true]] as const) {
+      const html = render(session({ executionStatus, resumable: null }), recovery);
+      expect(strip(html), executionStatus).toMatch(/aria-label="Continue run"[^>]*>Continue</);
+      expect(strip(html), executionStatus).toMatch(/aria-label="Continue with a message"[^>]*>Send</);
       expect(html, executionStatus).not.toContain('composer-resume-count');
       expect(html, executionStatus).not.toContain('Continue without them');
     }

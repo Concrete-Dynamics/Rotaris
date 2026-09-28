@@ -1538,12 +1538,13 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
           ) : (paused || crashLeft) && onContinue ? (
             <>
               {/* PD-ORCH-005 clause 6: both continues resume the open iteration's agents, so the count below describes
-                * both — on a paused session and on one a crash left (clause 18). The strip keeps its one band (PD-CHAT-001): the count and the decline stand in the notices row,
-                * and the two continues take the send pill's place, so they carry short labels at every density as the
-                * pill does — `Continue` is the pill's own (REQ-CHAT-005 as PD-CHAT-001 narrows it) — with the full
-                * name as accessible name and tooltip. At full labels the paused strip scrolled at every density but
-                * narrow (found by phase 5's second review). PD-CHAT-001 revision 4 ("The paused continues"): the
-                * continue by message reads `Send`, the word of the send pill it stands in for. */}
+                * both — on a paused session and on one a crash left (clause 18). The strip keeps its one band
+                * (PD-CHAT-001): the count and the decline stand in the notices row, and the two continues take the
+                * send pill's place, so they carry short labels at every density as the pill does — `Continue` is the
+                * pill's own (REQ-CHAT-005 as PD-CHAT-001 narrows it) — with the full name as accessible name and
+                * tooltip. At full labels the paused strip scrolled at every density but narrow (found by phase 5's
+                * second review). PD-CHAT-001 revision 4 ("The paused continues"): the continue by message reads
+                * `Send`, the word of the send pill it stands in for. */}
               <DesignButton type="button" className="btn btn-primary composer__continue" onClick={() => { void continueRun(); }} aria-label="Continue run" title="Continue run" aria-describedby={resumable ? 'composer-resume-count' : undefined}>Continue</DesignButton>
               <DesignButton type="submit" className="btn btn-secondary composer__continue" disabled={busy} aria-label="Continue with a message" title="Continue with a message" aria-describedby={resumable ? 'composer-resume-count' : undefined}>Send</DesignButton>
             </>

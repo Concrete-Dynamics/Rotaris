@@ -492,21 +492,6 @@ export class Run {
     return this.stop.reason === 'user_cancelled' ? 'stop' : null;
   }
 
-  /**
-   * PD-ORCH-005 clause 9: the interruption that withdraws what waits on a person when a stop request lands, or null when
-   * the waits are cancelled (REQ-TOOLS-052) — the explicit cancel and a run ended on its own account. It is the rest's
-   * cause, and also, during a plan cycle, the stop's or the quit's: clause 15 has the quit withdraw an approval its dialog
-   * closes and PD-CHAT-002 revision 2 a question, in every case the directive decides, a plan cycle among them. The
-   * withdrawal's cause is its own; the cycle's agents still end and no interruption is recorded of them (clause 15).
-   * Readings in OQ-81.
-   */
-  private get waitsWithdrawnBy(): Interruption | null {
-    const rest = this.restCause;
-    if (rest !== null || !this.planHeld || !this.stop.requested || this.stop.final) return rest;
-    if (this.stop.reason === 'application_shutdown') return 'quit';
-    return this.stop.reason === 'user_cancelled' ? 'stop' : null;
-  }
-
   /** PD-ORCH-005 clause 2: the run is coming to rest, so it makes no further model call — a manual compression among them. */
   get comingToRest(): boolean {
     return this.restCause !== null;
@@ -1497,6 +1482,20 @@ export class Run {
     for (const p of this.ports) n += p.withdrawPending?.(cause) ?? 0;
     if (this.deps.tools && !this.ports.has(this.deps.tools)) n += this.deps.tools.withdrawPending?.(cause) ?? 0;
     return n;
+  }
+
+  /**
+   * PD-ORCH-005 clause 9: the interruption that withdraws what waits on a person, read when a stop request lands, or null
+   * when the waits are cancelled (REQ-TOOLS-052) — the explicit cancel and a stop the run raised itself. A stop withdraws
+   * by `stop` and a quit by `quit` whether or not a plan cycle holds the run: clause 15 has the quit withdraw an approval
+   * its dialog closes and PD-CHAT-002 revision 2 a question, in every case the directive decides, a plan cycle among
+   * them. The withdrawal's cause is its own, so the plan hold is never read here; a cycle's agents still end and no
+   * interruption is recorded of them (`restCause`, clause 15). Readings in OQ-81.
+   */
+  private get waitsWithdrawnBy(): Interruption | null {
+    if (this.stop.final) return null;
+    if (this.stop.reason === 'application_shutdown') return 'quit';
+    return this.stop.reason === 'user_cancelled' ? 'stop' : null;
   }
 
   /**

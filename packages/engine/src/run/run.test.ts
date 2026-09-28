@@ -536,9 +536,10 @@ describe('engine/run — the run loop end to end against a real store and a scri
  * PD-ORCH-005 clause 18 (item D, round 2 of its review): the Continue action and its decline are offered to a session a
  * crash left — one persisted busy that no process runs (`not-live`). A session the store's failure left busy in THIS
  * process reads the same (OQ-42), but it did not crash and nothing can be recorded of it: every continue is refused
- * `store-failed`, as the continue by message is, until the reopen rebuilds the writer (OQ-76).
+ * `store-failed`, as the continue by message is, until the reopen rebuilds the writer (OQ-76). The guard stands first,
+ * so a `paused` session under a store failure is refused the same way.
  */
-describe('PD-ORCH-005 clause 18: a session the store\'s failure left busy is refused every continue', () => {
+describe('PD-ORCH-005 clause 18: a session under a store failure is refused every continue', () => {
   let dir: string;
   let dal: StoreDal;
   beforeEach(() => {
@@ -574,6 +575,29 @@ describe('PD-ORCH-005 clause 18: a session the store\'s failure left busy is ref
     expect(sessions.prompt(sid, 'blocked')).toMatchObject({ ok: false, error: { code: 'store-failed' } });
     expect(sessions.run(sid)!.isEnded).toBe(true);
     expect(dal.getSession(sid)!.execution_status).toBe('running');
+    expect(dal.eventsFrom(sid, 1, 10_000).length).toBe(boundary);
+    await sessions.closeAll();
+  });
+
+  it('a paused session under a store failure is refused the Continue action and the decline too, and nothing is recorded (OQ-76)', async () => {
+    const backend = new DefaultAgentBackend(new ScriptedModelClient(Array.from({ length: 4 }, (_, n) => answer(`answer ${n + 1}`, { input: 5, output: 2 }))));
+    const sessions = new Sessions({
+      clocks: new FakeClock(), publisher: recorder(), pid: 77, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S1',
+      model: { backend, config: { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k' } }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
+    });
+    const sid = (sessions.start(dal, 'C:/ws', 'a') as { value: SessionId }).value;
+    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    await sessions.running(sid);
+    expect(dal.getSession(sid)!.execution_status).toBe('paused');
+    // The store fails after the rest: the guard stands first, so the ordinary paused continue is refused as well.
+    const insert = vi.spyOn(dal, 'insertEvent').mockImplementationOnce(() => { throw new Error('injected full disk'); });
+    expect(sessions.writer(sid)!.recordEvent('error', { message: 'failure probe' }).ok).toBe(false);
+    insert.mockRestore();
+    const boundary = dal.eventsFrom(sid, 1, 10_000).length;
+    expect(sessions.continueSession(sid, 'continue')).toMatchObject({ ok: false, error: { code: 'store-failed' } });
+    expect(sessions.continueSession(sid, 'continue', { withoutPaused: true })).toMatchObject({ ok: false, error: { code: 'store-failed' } });
+    expect(sessions.run(sid)!.isEnded).toBe(true);
+    expect(dal.getSession(sid)!.execution_status).toBe('paused');
     expect(dal.eventsFrom(sid, 1, 10_000).length).toBe(boundary);
     await sessions.closeAll();
   });

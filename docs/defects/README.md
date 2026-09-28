@@ -5,7 +5,7 @@
 <how it contradicts the specs or which one it violates (if any)>
 ## Relevant files
 <list of relevant files with small explanation>
->
+-->
 
 A repaired note is **moved** to `fixed/` (`CLAUDE.md`, "Defects noticed along the way"), and every relative link in
 the record that named it at its old path moves with it, in the same commit — the note's own links move too, since

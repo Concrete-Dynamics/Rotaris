@@ -4,7 +4,17 @@
 # platform (implementation-conditions.md, IC-3).
 #
 # Artifact names come from tools/release-naming (REQ-STARTUP-031) and are
-# composed nowhere else; the templates below must match `artifactName(v, 'setup')`.
+# composed nowhere else — and NOT from electron-builder's `${version}` macro, which
+# renders the manifest's version normalised through loose SemVer (`0.1.0rc1` →
+# `0.1.0-rc1`, measured on 26.15.3), a name REQ-STARTUP-027/031 do not know. So this
+# file carries no `artifactName`: `pnpm package` (scripts/package.mjs) renders the
+# name from the DECLARED version and writes this file with `win.artifactName` and
+# `nsis.artifactName` set to it as release/electron-builder.package.yml, which is
+# what electron-builder runs with; afterPack refuses a configuration without them
+# or with any other name, and artifactBuildCompleted refuses a produced file by any
+# other name (scripts/build-hooks.cjs, `checkNaming`; scripts/lib/artifact-names.mjs).
+# The installer's OWN version metadata (VERSION define → DisplayVersion,
+# ProductVersion) still carries electron-builder's normalised value — OQ-76.
 # The portable is NOT the tool's `portable` target (refused, ADR-0054 P1); it is
 # assembled by the release pipeline from win-unpacked around our own stub, later.
 appId: dev.rotaris.desktop
@@ -55,11 +65,10 @@ win:
   target:
     - target: nsis
       arch: [x64]
-  artifactName: "Rotaris-${version}-windows-x64-setup.${ext}"
+  # no artifactName here: supplied by pnpm package from the declared version (see the header)
 nsis:
   oneClick: true
   perMachine: false
-  artifactName: "Rotaris-${version}-windows-x64-setup.${ext}"
 # ADR-0056 rule 1: every native binding is rebuilt from source against the
 # shipped Electron, configured explicitly even where it is the default.
 npmRebuild: true
@@ -70,3 +79,5 @@ buildDependenciesFromSource: true
 # loader opens (rule 4). A miss refuses the build. See scripts/build-hooks.cjs.
 beforeBuild: ./scripts/build-hooks.cjs
 afterPack: ./scripts/build-hooks.cjs
+# REQ-STARTUP-031: each produced file's name equals the declared version's name (the header above).
+artifactBuildCompleted: ./scripts/build-hooks.cjs

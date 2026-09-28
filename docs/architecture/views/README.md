@@ -43,7 +43,16 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-09-27**
+## Last reconciled with the code: **2026-09-28**
+
+**A prerelease's installer is named from the declared version (2026-09-28, R-062).** `pnpm package` now reads the manifest's
+`version` as written (`0.1.0rc1`), renders the installer's name through `tools/release-naming` and writes it as a literal into
+the configuration electron-builder runs with (`release/electron-builder.package.yml`); `electron-builder.yml` carries no
+`artifactName`, whose `${version}` was the normalised `0.1.0-rc1`. `build-hooks.cjs` compares the configured names and, in a
+new `artifactBuildCompleted` hook, the produced file against the same text. The **process view**'s row for the manifest's
+`version` gains `pnpm package` among its readers. No package, edge, process, channel, message kind or store column changed.
+The installer's own Windows metadata stays normalised — OQ-76.
+
 
 **A session approval of a file write covers that path (`PD-TOOLS-004`, built 2026-09-27, R-057).** A grant made by
 "approve for session" on a call of the public `write_file` or `haet_edit` (`haet` folded in) now stores the set of

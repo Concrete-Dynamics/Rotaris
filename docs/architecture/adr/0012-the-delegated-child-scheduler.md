@@ -414,7 +414,7 @@ nothing. An id naming a task that exists and has not completed — the root, the
 failed, was cancelled or is still under way, whoever owns it — is ignored, which is what `REQ-TOOLS-152` says of every
 such task. The caller's own completed children are carried, since the requirement's own word is "sibling". A completed
 task that is not the caller's child is refused, but for ownership, naming its parent as the `depends_on` refusal does
-and never as nonexistent; that it is refused rather than carried or ignored is a reading, raised as **OQ-76**.
+and never as nonexistent; that it is refused rather than carried or ignored is a reading, raised as **OQ-81** (OQ-76 on its branch, renumbered at the merge, OQ-76 to OQ-80 having been taken on `main`).
 "Completed" is read as this record already reads it for a dependency: `succeeded` with the report stored, since the
 report is the thing carried.
 

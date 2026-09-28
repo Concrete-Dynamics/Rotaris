@@ -45,7 +45,7 @@ resume, so the child inherits exactly what the parent was told — and remembers
 run lives, on `attached`'s terms. `childPayload` gains a trailing `inheritedContext` argument and places it as item (5),
 after the artifact blocks and immediately before the task; `execute`'s one call passes `this.inherited.get(task_id) ?? ''`
 and is otherwise untouched. The refusal reaches the caller as REQ-TOOLS-153's `rejected` observation. That another
-parent's completed task is refused rather than ignored or carried is a reading, raised as OQ-76.
+parent's completed task is refused rather than ignored or carried is a reading, raised as OQ-81 (OQ-76 on its branch, renumbered at the merge).
 
 *Corrected in fix round 1, the same day:* the first build resolved ids against the caller's own children only and refused
 every other id as referring to nothing, so the root's id and the caller's own id — both real, unfinished tasks — were

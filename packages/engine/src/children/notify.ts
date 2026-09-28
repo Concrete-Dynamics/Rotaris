@@ -2,11 +2,11 @@ import type { ChildRow } from '@rotaris/store';
 import { cutOffLines, type CutOff } from './cut-off.js';
 
 /**
- * REQ-ORCH-055..060, REQ-ORCH-063, REQ-MONITOR-023, REQ-TOOLS-154: the messages a parent receives — the
- * background-started message, the completion notification, the resume message with per-child report
- * blocks capped at 4,000 characters, and the child's payload in the fixed order (the dependency reports,
- * Part Y's artifact context blocks, the workspace-root prefix, then the task text). The wording is the
- * implementation's; the facts each must carry are the requirements'.
+ * REQ-ORCH-055..060, REQ-ORCH-063, REQ-MONITOR-023, REQ-TOOLS-152, REQ-TOOLS-154: the messages a parent receives —
+ * the background-started message, the completion notification, the resume message with per-child report
+ * blocks capped at 4,000 characters — and the child's payload in REQ-TOOLS-154's order (the dependency reports
+ * ahead of everything, the workspace-root prefix, Part Y's artifact context blocks, the inherited-context block,
+ * then the task text). The wording is the implementation's; the facts each must carry are the requirements'.
  */
 export const REPORT_BLOCK_CAP = 4_000;
 
@@ -86,19 +86,33 @@ export function priorAgentContext(deps: readonly ChildRow[]): string {
 }
 
 /**
+ * REQ-TOOLS-152 / REQ-TOOLS-154 item (5): the inherited-context block — the reports of the completed siblings the
+ * caller named in `inherited_context`, as they stood when the call was made. Each is REQ-ORCH-060's report block, the
+ * same rendering the parent reads on a resume, so a child inherits exactly what its parent was told. The heading says
+ * what the block is and is not: context, not a dependency (REQ-ORCH-032 — "without imposing an ordering dependency"),
+ * which is what tells it apart from REQ-ORCH-047's authoritative prior-agent context. Empty when nothing was carried.
+ */
+export function inheritedContextBlock(siblings: readonly ChildRow[]): string {
+  if (siblings.length === 0) return '';
+  return ['[Inherited context — the reports of sibling tasks that had already completed when you were delegated; read them as context, not as work to repeat, and not as a dependency of yours]', ...siblings.map(reportBlock)].join('\n\n');
+}
+
+/**
  * REQ-TOOLS-154's order: REQ-ORCH-047's prior-agent context ahead of everything when present (REQ-ORCH-035), then
  * (1) the workspace root with PD-TOOLS-006's write scopes immediately after it, then Part Y's artifact blocks —
  * (3) `PRIOR SIBLING ARTIFACT INDEX` and (4), where the launch attached any, `PRIOR AGENT CONTEXT (FULL)`
- * (REQ-LIBRARY-097, REQ-LIBRARY-098) — and (6) the task last. `artifactBlocks` arrives in that (3), (4) order.
- * Items (2) and (5) have no block here: the verification suite REQ-ORCH-129 fills (2) from is not built, and (5) is
- * `docs/defects/the-inherited-context-reports-never-reach-the-child.md`.
+ * (REQ-LIBRARY-097, REQ-LIBRARY-098) — then (5) the inherited-context block (REQ-TOOLS-152), and (6) the task last.
+ * `artifactBlocks` arrives in that (3), (4) order. Item (2) has no block here: the verification suite REQ-ORCH-129
+ * fills it from is not built. Item (5) was missing until 2026-09-28
+ * (`docs/defects/fixed/the-inherited-context-reports-never-reach-the-child.md`).
  */
-export function childPayload(workspaceRoot: string, task: string, priorContext: string, artifactBlocks: readonly string[] = [], writeScopes = ''): string {
+export function childPayload(workspaceRoot: string, task: string, priorContext: string, artifactBlocks: readonly string[] = [], writeScopes = '', inheritedContext = ''): string {
   const parts: string[] = [];
   if (priorContext) parts.push(priorContext);
   parts.push(`Workspace root: ${workspaceRoot}. Treat any other absolute path you encounter as stale; every path you use is relative to this root.`);
   if (writeScopes !== '') parts.push(writeScopes);
   for (const block of artifactBlocks) if (block !== '') parts.push(block);
+  if (inheritedContext !== '') parts.push(inheritedContext);
   parts.push(task);
   return parts.join('\n\n');
 }

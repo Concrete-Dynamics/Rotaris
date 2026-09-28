@@ -440,6 +440,21 @@ its payload is assembled as any child's is, with nothing of the timed-out child 
 the current iteration's root task, so a continuation can be taken up only within the iteration whose child was cut off.
 The field itself is not in REQ-TOOLS-152, which the directive does not name: **OQ-66**.
 
+**Inherited context (REQ-TOOLS-152, REQ-TOOLS-154 item (5), REQ-ORCH-032; `children/ledger.ts`, `notify.ts`).** A
+`delegate` call may carry `inherited_context`, task ids of siblings whose reports the child is to read without waiting on
+them. `ChildLedger.spawn` resolves each after REQ-ORCH-046's dependency checks and before its cycle check. Existence is
+asked of the session's child records and the root execution record, which shares their namespace (REQ-ORCH-072): an id no
+task has refuses the call with no record and no id, reported as REQ-TOOLS-153's `rejected`; an id naming a task that exists
+and has not completed — the root, the caller's own task, any task that failed, was cancelled, has not finished, or
+succeeded without its report stored — is ignored; the caller's own children `succeeded` with a report stored are returned on
+`Spawned.inherited`, once each in the caller's order; a completed task that is not the caller's own child is refused for
+ownership, naming its parent as the `depends_on` refusal does, never as nonexistent (**OQ-81**). `IterationChildren.delegate` renders them at once — a heading saying
+the reports are context and not a dependency, then one REQ-ORCH-060 `reportBlock` per sibling, the same block the parent
+reads on a resume — and keeps the text per task id in memory for the life of the run, exactly as the attachment list is
+kept. `childPayload`'s sixth argument places it as item (5), after the artifact blocks and immediately before the task;
+`execute` passes what was remembered and nothing else of it changed. The ids stay on `children.inherited_context` for the
+agent surfaces (REQ-MONITOR-074); the run holds no other record of which of them counted.
+
 **The record the agent surfaces read (Part R; REQ-MONITOR-044).** Each child's `AgentRecord` carries, beside what Part B
 projected, `reasoning` (the persona's configured level, `medium` when none), `contextUsed` (the input count of its latest
 model step) and `contextLimit` — **from Part AH the model's own `max_input_tokens`** where the configuration states one

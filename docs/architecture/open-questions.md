@@ -74,7 +74,9 @@ under REQ-WORKSPACE-053, which names the reason without saying what encoding a s
 decoder's error — raised as OQ-76 on its branch and renumbered at the merge, OQ-76 to OQ-78 having been taken on `main`). **And one more the same day by repairing the prerelease naming defect (R-062): OQ-80** (whether REQ-STARTUP-158 reaches the Windows
 installer's own version metadata — `DisplayVersion`, `ProductVersion` and the uninstall display name, which electron-builder
 writes from its normalised `0.1.0-rc1` while the artifact's name carries the declared `0.1.0rc1` — raised as OQ-76 on its branch
-and renumbered at the merge, OQ-76 to OQ-79 having been taken on `main`). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+and renumbered at the merge, OQ-76 to OQ-79 having been taken on `main`). **And one more the same day by repairing `inherited_context`'s path to the child (R-062): OQ-81** (what an `inherited_context` id naming another parent's, or an earlier
+iteration's, completed task is — refused for ownership, as built, on REQ-TOOLS-155's scoping — and whether the caller is told
+which ids were ignored — raised as OQ-76 on its branch and renumbered at the merge, OQ-76 to OQ-80 having been taken on `main`). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -3332,6 +3334,44 @@ REQ-STARTUP-158's sense. If they are, the pipeline must write the declared text 
 `WriteRegStr` of `DisplayVersion` and a `VIAddVersionKey ProductVersion`, which electron-builder allows — and the guard
 gains a place to check in the produced installer; if they are not, the spelling Windows shows in "Installed apps" for a
 prerelease is `0.1.0-rc1` and the record says so.
+
+**OQ-81 — What is another parent's completed task to a `delegate` call's `inherited_context`?** *(REQ-TOOLS-152 with
+REQ-TOOLS-155, REQ-ORCH-032 and REQ-ORCH-072; REQ-ORCH-046. Raised 2026-09-28 by repairing
+`the-inherited-context-reports-never-reach-the-child` under [R-062](../product/requests.md#r-062). Raised as OQ-76 on its branch; renumbered OQ-81 at the merge, because OQ-76 to OQ-80 were already on `main`.)*
+
+REQ-TOOLS-152 handles an `inherited_context` id by field: one "that names no task at all refuses the call", one "naming a
+task that failed or has not finished is ignored without refusing", and the field carries "the reports of already-completed
+**sibling** tasks". It does not say what an id is that names a *completed* task which exists but is not the caller's child —
+another agent's child in the same run, or a child of an earlier iteration. (A task that exists and has not completed
+is not in question, whoever owns it: the requirement ignores it. Nor is the root execution record: REQ-ORCH-072 puts
+its id in the children's namespace, so a lookup naming it resolves to it, and an agent is never told it does not exist.) REQ-TOOLS-155 scopes `background_output` to the
+caller's own children ("a task whose parent is not the caller reads as `not_found`"), REQ-TOOLS-156 lets an agent wait
+only for its direct children, and REQ-ORCH-046 refuses a `depends_on` naming another parent's child with a reason that
+names the owner; none of the three is written for `inherited_context`.
+
+**What the build proceeds under.** Existence is asked of the session's child records and the root execution record:
+an id no task has refuses with `inherited_context id '<id>' refers to nothing: no task has that id`, and an id naming a
+task that has not completed is ignored. A completed task that is not the caller's own child refuses, for ownership, with
+`inherited_context id '<id>' is not a sibling's: it is owned by parent '<owner>', not '<caller>'` — the shape of
+REQ-ORCH-046's dependency refusal. That it refuses at all is REQ-TOOLS-155's scoping applied to the one delegation lookup
+it does not name, and it keeps a child from reading a report its parent could not have read itself. (The first build of
+this repair refused every id outside the caller's own children as referring to nothing, the root's and the caller's own
+included; verification the same day showed that contradicts REQ-TOOLS-152 and REQ-ORCH-072, and it was corrected before
+merge — ADR-0012 keeps that reading beside its replacement.) "Completed" is read as REQ-ORCH-047 reads it for a dependency — `succeeded` with the report stored —
+since the report is what is carried; a cancelled sibling, and a succeeded one whose report is not yet stored, are
+ignored with the failed. The ids that were ignored are not reported to the caller: REQ-TOOLS-153 fixes the message's
+content to the alias resolution and the attachment warning, and adding a third item there is a change to that
+requirement rather than a reading of this one.
+
+**What a ruling decides.** Whether another parent's completed task should be refused at all, or ignored as the text
+ignores an unfinished one, or carried — "no task at all" favours existence anywhere, and naming the owner tells the caller
+that the id is real and not its own, a fact REQ-TOOLS-155 withholds from `background_output`; whether an id of an earlier
+iteration's completed child should be carried rather than refused, which would need the carrying to leave the
+per-iteration ledger; and whether the caller should be told which ids were ignored, which is REQ-TOOLS-153's to widen.
+An earlier iteration's *root* is held in memory by the run and not in the store, so an id naming one finds no task and
+refuses as referring to nothing; whether it must be found is part of the same ruling. Until then the field carries the
+reports of the caller's own completed children, ignores every task that has not completed, and refuses a completed task
+it may not carry for that reason.
 
 ## Design-reference dependencies
 

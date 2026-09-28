@@ -45,6 +45,17 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-28**
 
+**`inherited_context` reaches the child (REQ-TOOLS-152, REQ-TOOLS-154 item (5), REQ-ORCH-032; repaired 2026-09-28,
+R-062).** A `delegate` call's `inherited_context` ids were stored on the child's row and read by nothing. `ChildLedger.spawn`
+now resolves them: an id no task in the session has (the root execution record included, REQ-ORCH-072) refuses the call
+with no record (REQ-TOOLS-153's `rejected`), one naming a task that has not completed — the root, the caller's own task, a
+failed, cancelled, unfinished or report-less one — is ignored, and the caller's completed children come back on
+`Spawned.inherited`. `IterationChildren.delegate` renders their `reportBlock`s under one heading
+(`notify.ts`'s `inheritedContextBlock`) and remembers the text per task id on `attached`'s terms; `childPayload` takes it
+as a sixth argument and places it as item (5), after the artifact blocks and before the task. The **runtime view** §4
+gains a paragraph; the **state-ownership view** gains the remembered block as a volatile fact. Another parent's completed
+child refused for ownership is OQ-81 (OQ-76 on its branch, renumbered at the merge). No package, edge, process, channel, message kind or store column changed.
+
 **A prerelease's installer is named from the declared version (2026-09-28, R-062).** `pnpm package` now reads the manifest's
 `version` as written (`0.1.0rc1`), renders the installer's name through `tools/release-naming` and writes it as a literal into
 the configuration electron-builder runs with (`release/electron-builder.package.yml`); `electron-builder.yml` carries no

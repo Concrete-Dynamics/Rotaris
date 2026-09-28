@@ -50,7 +50,9 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 the configuration electron-builder runs with (`release/electron-builder.package.yml`); `electron-builder.yml` carries no
 `artifactName`, whose `${version}` was the normalised `0.1.0-rc1`. `build-hooks.cjs` compares the configured names and, in a
 new `artifactBuildCompleted` hook, the produced file against the same text. The **process view**'s row for the manifest's
-`version` gains `pnpm package` among its readers. No package, edge, process, channel, message kind or store column changed.
+`version` gains `pnpm package` among its readers, and the **component view**'s section on the scripts' shared modules gains
+`scripts/lib/artifact-names.mjs`, which both scripts load and which reaches `tools/release-naming`. No package, edge,
+process, channel, message kind or store column changed.
 The installer's own Windows metadata stays normalised — OQ-76.
 
 

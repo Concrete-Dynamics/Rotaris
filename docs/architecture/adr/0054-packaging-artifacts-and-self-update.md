@@ -1473,22 +1473,25 @@ declared text through — electron-builder deep-assigns it *after* normalising �
 either it or `buildVersion` is a second place a version is declared. Whether REQ-STARTUP-158 reaches that metadata is
 **OQ-76**; the build proceeds with it as electron-builder writes it, said in `electron-builder.yml`'s header.
 
-**Measured.** 32 new unit cases: `apps/desktop/scripts/lib/artifact-names.test.ts` (16 — the names for `0.1.0`, `0.1.0rc1`,
+**Measured.** 26 new unit cases: `apps/desktop/scripts/lib/artifact-names.test.ts` (15 — the names for `0.1.0`, `0.1.0rc1`,
 `0.1.0a2`, `0.1.0b3`; `0.1.0-rc1` and `0.1.0dev1` refused by the grammar; the manifest read raw for all four and refused
 without a version or outside the grammar; the produced-name rule over the declared installer, its block map, the hyphenated
 installer and electron-builder's own pattern; the written configuration loaded by app-builder-lib's `getConfig` with both
 keys literal, the three hooks and the targets kept, `extraResources` and `files` once; the bare yml loading with no name;
 a template already in the configuration refused; the keep-prebuild variant named with its own files list),
-`apps/desktop/scripts/build-hooks.test.ts` (11 — `checkNaming` passing the declared name and refusing the hyphenated one,
+`apps/desktop/scripts/build-hooks.test.ts` (10 — `checkNaming` passing the declared name and refusing the hyphenated one,
 one wrong key among right ones, no name, and a declared text outside the grammar; `configuredArtifactNames` through
 electron-builder's real `expandMacro` over a normalised `0.1.0-rc1` rendering the defect's exact name and being refused, the
 literal surviving, the stable case identical either way; `artifactBuildCompleted` over this tree's declared version) and
 one more in `tools/release-naming/src/naming.test.ts` (the hook's plain-Node load refusing the hyphenated name, beside the
-passing case rewritten to the new signature). `pnpm check` and `pnpm build` green under Node 24.
+passing case rewritten to the new signature); counted from `pnpm vitest run … --reporter=verbose` over the three files,
+30 cases in all, 4 of them `naming.test.ts`'s older ones. *Corrected 2026-09-28 by the review round: the first report
+said 16, 11 and 32 new, which no run shows.* `pnpm check` and `pnpm build` green under Node 24.
 
 **Not shown here — IC-3.** No Windows package can run on this host, so the repaired path has produced no installer. The
 **next Windows `pnpm package`** must show, with the manifest temporarily declaring `0.1.0rc1`: the line
-`[package] declared 0.1.0rc1 → Rotaris-0.1.0rc1-windows-x64-setup.exe, written into release/electron-builder.package.yml`;
+a line beginning `[package] declared 0.1.0rc1 → Rotaris-0.1.0rc1-windows-x64-setup.exe, written into release` (the
+separator Windows prints, then `electron-builder.package.yml (from electron-builder.yml)`);
 afterPack's `[ic6] naming: declared 0.1.0rc1, electron-builder's normalised 0.1.0-rc1; configured to produce
 Rotaris-0.1.0rc1-windows-x64-setup.exe, Rotaris-0.1.0rc1-windows-x64-setup.exe`; `[ic6] naming: produced
 Rotaris-0.1.0rc1-windows-x64-setup.exe` and the same for its `.blockmap`; the file by that name under `release/`; and the

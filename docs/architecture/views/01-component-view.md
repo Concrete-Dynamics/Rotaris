@@ -268,6 +268,15 @@ the proof also takes the writer's list of git's redirecting variables from `buil
 `apps/desktop/scripts/**` and `tools/**` are outside the boundary rule, the scripts reach the tools and never the
 reverse, and no product code imports either.
 
+*Added 2026-09-28 (R-062, ADR-0054 "The prerelease naming repair").* `scripts/lib/artifact-names.mjs` is a fourth
+shared module: the declared product version read as `apps/desktop/package.json` writes it (`declaredProductVersion`,
+validated through REQ-STARTUP-029's grammar), the installer names rendered from it (`packagingArtifactNames`), the
+configuration electron-builder is run with — the yml with `win.artifactName` and `nsis.artifactName` set to those
+literals (`configurationWithNames`, `namedConfigurationText`) — and the rule a produced file's name is held to
+(`producedNameProblem`). `package.mjs` imports it; `build-hooks.cjs` loads it by dynamic import in `afterPack`'s
+`checkNaming` and in `artifactBuildCompleted`; it imports `tools/release-naming/src/index.ts` by path, as the hook did
+before it. **Edges unchanged**: a script reaching a tool, as above.
+
 ### `ui/design-system` (2026-09-12)
 
 The adopted design language's **one** implementation, and the only place in `ui` where a design-equivalent control

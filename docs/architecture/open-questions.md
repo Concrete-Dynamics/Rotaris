@@ -69,7 +69,10 @@ reviewed-exceptions table may supply an identifier a dependency does not declare
 runtime). **One more was raised the same day by that generator's gate review: OQ-75** (when a component carries "its
 full license text": a licence file that only pointed elsewhere, or only carried a licence's per-file notice, had
 counted as the text, and 4 components without text became 12); the four were raised as OQ-66 to OQ-69 on their own branch and renumbered when they reached `main`
-after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71. **One more was raised on
+2026-09-28 by repairing the prerelease naming defect (R-062): OQ-76** (whether REQ-STARTUP-158 reaches the Windows
+installer's own version metadata — `DisplayVersion`, `ProductVersion` and the uninstall display name, which electron-builder
+writes from its normalised `0.1.0-rc1` while the artifact's name carries the declared `0.1.0rc1`). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -3208,6 +3211,27 @@ Apache-2.0 or MPL-2.0 the honest answer is that the text is obtainable and the p
 would change REQ-STARTUP-143's route for such a component, and it would close `tqdm`'s gap as well. Until then,
 eight of O-11's twelve reviews are for a notice or a pointer.
 
+**OQ-76 — Does REQ-STARTUP-158's "every artifact … SHALL declare … that same version" reach the Windows installer's own version metadata?** *(REQ-STARTUP-158, REQ-STARTUP-018, REQ-STARTUP-027, REQ-STARTUP-031. Raised 2026-09-28 by repairing the prerelease naming defect, R-062; `docs/defects/fixed/a-prerelease-version-reaches-the-installer-hyphenated.md`.)*
+
+A prerelease is written without a separator (`0.1.0rc1`, REQ-STARTUP-027), and after the repair every published filename
+carries that text and the running application reports it. electron-builder still normalises the manifest's version through
+loose SemVer when it reads it, and the NSIS installer's own metadata is written from that normalised value: the `VERSION`
+define, which becomes the per-user uninstall entry's `DisplayVersion` that REQ-STARTUP-018 names and the uninstall display
+name `Rotaris 0.1.0-rc1`; the `ProductVersion` version key; and `VIProductVersion`, which Windows fixes as four numbers
+(`0.1.0.0`) and so can carry no suffix in any spelling. A stable version is identical in every place.
+
+**What the build proceeds under.** The installer's Windows metadata carries electron-builder's normalised value, stated in
+`electron-builder.yml`'s header and in ADR-0054; the artifact's name and its run-time report carry the declared text, which
+is what REQ-STARTUP-158 points at (REQ-STARTUP-031 "is where the version appears in each artifact's name") and what the
+guard of REQ-STARTUP-028 compares. `extraMetadata.version` was not used to force the text through: ADR-0054 decided that
+either it or `buildVersion` would be a second place a version is declared.
+
+**What a ruling decides.** Whether `DisplayVersion` and `ProductVersion` are "declaring" the release's version in
+REQ-STARTUP-158's sense. If they are, the pipeline must write the declared text over them — a custom NSIS include with a
+`WriteRegStr` of `DisplayVersion` and a `VIAddVersionKey ProductVersion`, which electron-builder allows — and the guard
+gains a place to check in the produced installer; if they are not, the spelling Windows shows in "Installed apps" for a
+prerelease is `0.1.0-rc1` and the record says so.
+
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 
 The key is registered with default 20 and minimum 1. Each background session publishes its own `bg:<id>` stream at up to 50 frames/s (the 20 ms floor), so the produced aggregate is `(agents + background sessions) × 50 frames/s`, and only one of those two factors — agents, REQ-MONITOR-285's 20 — has a ceiling. Part AL reads the key into the manager and caps the *delivered* rate per window at 1,000 frames/s by merging (REQ-MONITOR-306, REQ-SHELL-103), so a user who configures 400 background sessions saturates the run-host → main pipe, not a renderer. A stated maximum on the key would let the produced rate be computed rather than absorbed. The owner's call; recorded, not resolved.
@@ -3929,24 +3953,3 @@ Electron binary that tree carries: run against `node_modules` in the checkout it
 asar unpacking, and run under the host Node it passes on exactly the artifact that fails. **A proof
 written the easy way is worse than none, because it reads as verified.** Somebody must establish that it
 is constructible on all three release runners before it is relied on as the only defence.
-
-**OQ-76 — Does REQ-STARTUP-158's "every artifact … SHALL declare … that same version" reach the Windows installer's own version metadata?** *(REQ-STARTUP-158, REQ-STARTUP-018, REQ-STARTUP-027, REQ-STARTUP-031. Raised 2026-09-28 by repairing the prerelease naming defect, R-062; `docs/defects/fixed/a-prerelease-version-reaches-the-installer-hyphenated.md`.)*
-
-A prerelease is written without a separator (`0.1.0rc1`, REQ-STARTUP-027), and after the repair every published filename
-carries that text and the running application reports it. electron-builder still normalises the manifest's version through
-loose SemVer when it reads it, and the NSIS installer's own metadata is written from that normalised value: the `VERSION`
-define, which becomes the per-user uninstall entry's `DisplayVersion` that REQ-STARTUP-018 names and the uninstall display
-name `Rotaris 0.1.0-rc1`; the `ProductVersion` version key; and `VIProductVersion`, which Windows fixes as four numbers
-(`0.1.0.0`) and so can carry no suffix in any spelling. A stable version is identical in every place.
-
-**What the build proceeds under.** The installer's Windows metadata carries electron-builder's normalised value, stated in
-`electron-builder.yml`'s header and in ADR-0054; the artifact's name and its run-time report carry the declared text, which
-is what REQ-STARTUP-158 points at (REQ-STARTUP-031 "is where the version appears in each artifact's name") and what the
-guard of REQ-STARTUP-028 compares. `extraMetadata.version` was not used to force the text through: ADR-0054 decided that
-either it or `buildVersion` would be a second place a version is declared.
-
-**What a ruling decides.** Whether `DisplayVersion` and `ProductVersion` are "declaring" the release's version in
-REQ-STARTUP-158's sense. If they are, the pipeline must write the declared text over them — a custom NSIS include with a
-`WriteRegStr` of `DisplayVersion` and a `VIAddVersionKey ProductVersion`, which electron-builder allows — and the guard
-gains a place to check in the produced installer; if they are not, the spelling Windows shows in "Installed apps" for a
-prerelease is `0.1.0-rc1` and the record says so.

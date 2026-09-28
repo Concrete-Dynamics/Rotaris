@@ -336,8 +336,9 @@ describe('PD-ORCH-003 revision 2: a resumed iteration and the gate', () => {
 
   /**
    * OQ-77 "The handoff after the preamble is the continue's" (found by the merged build's tenth review). The plan cycle
-   * held after a resumed iteration is sent the launch content the continue built before the crash was recorded, before
-   * clause 17 appended the message's task and before the resumed iteration worked — the behaviour
+   * held after a resumed iteration is sent the launch content the continue built at the continue — this session was
+   * paused (a rest, no crash), so that is before clause 17 appended the message's task and before the resumed iteration
+   * ran — the behaviour
    * `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md` records for a later iteration of the same run. Its
    * "Authoritative session handoff" therefore shows the resumed iteration's task still in progress and not the message,
    * while the preamble, read from the live todo, says that iteration closed and carried the message out. Pinned as built,

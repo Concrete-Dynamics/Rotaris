@@ -15,4 +15,10 @@ describe('TranscriptSurface — PD-ORCH-005 clause 13 (revision 4): "This task" 
     expect(scopeDetail(agent({}), later)).toBe('running · 3m 12s');
     expect(scopeDetail(agent({ state: 'succeeded', presentationState: 'done', live: false, completedAt: '2026-09-05T10:00:30.000Z' }), later)).toBe('done · 30s');
   });
+
+  it('only a paused agent loses its time: a waiting or a queued one — not `live`, which is running only — keeps it (REQ-CHAT-069, REQ-MONITOR-111)', () => {
+    const later = '2026-09-05T10:01:03.000Z';
+    expect(scopeDetail(agent({ state: 'waiting_on_dependencies', presentationState: 'waiting', live: false }), later)).toBe('waiting · 1m 3s');
+    expect(scopeDetail(agent({ state: 'queued', presentationState: 'queued', live: false }), later)).toBe('queued · 1m 3s');
+  });
 });

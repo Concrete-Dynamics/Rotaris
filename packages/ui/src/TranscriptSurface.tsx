@@ -188,12 +188,13 @@ export function scopedRows(rows: readonly TranscriptRow[], agent: AgentRecord | 
 }
 
 /**
- * REQ-CHAT-069's state and elapsed time for "This task". The time is shown, as the agent tree shows it, only for an agent
- * live or ended: a `paused` one is neither (PD-ORCH-005 clause 13, OQ-73), so in REQ-CHAT-008's recovery state, whose busy
- * status keeps the clock ticking, it does not count up while nothing runs.
+ * REQ-CHAT-069's state and elapsed time for "This task" (REQ-MONITOR-111). A `paused` agent — and only a `paused` one —
+ * reads its state alone (PD-ORCH-005 clause 13, OQ-73): it is neither live nor ended, and in REQ-CHAT-008's recovery
+ * state, whose busy status keeps the clock ticking, its figure would count up while nothing runs. Every other agent,
+ * a waiting or queued one included, keeps its time as REQ-CHAT-069 asks.
  */
 export function scopeDetail(agent: AgentRecord, nowIso: string | null): string {
-  return agent.live || agent.completedAt ? `${agent.presentationState} · ${elapsedLabel(agent, nowIso)}` : agent.presentationState;
+  return agent.presentationState === 'paused' ? agent.presentationState : `${agent.presentationState} · ${elapsedLabel(agent, nowIso)}`;
 }
 
 /**

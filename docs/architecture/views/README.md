@@ -76,12 +76,13 @@ refused under a store failure, as every continue is (OQ-76). The cancel writes u
 write and given back, a dead local holder reaped by the `claimLockReaping` that `SessionWriter.open` claims through, and
 is refused while another live process holds it (`lockForWrite`); a target it refuses outright is judged before the lock
 is taken. Every confirmation and cascade note names each unfinished descendant a cancel ends, live or paused
-(`cancelCascade`, OQ-73 and OQ-74), and both cancels write through one `userCancellation`. The surfaces offer a paused
-child's Cancel while its session rests (`cancelOffered(agent, runActive, resting)`, `resting` being `runLevelResting`,
-the predicate the composer's count and the resting root share) and confirm by `cancelConfirmation` — the Workspace and a
-persona window through `AgentCancelConfirm` (`packages/ui/src/AgentCancelConfirm.tsx`), which also confirms the run's
-cancel on the Workspace, takes no label of its own and has its call sites pinned by a source test, and the Mission view
-through `missionConfirmation`. The **runtime view**'s `cancelAgent` and `children` rows and its crash paragraph, the
+(`cancelCascade`; OQ-73 and OQ-74 record the departure from REQ-MONITOR-064's live count), and both cancels write
+through one `userCancellation`. The surfaces offer a paused child's Cancel while its session rests
+(`cancelOffered(agent, runActive, resting)`, `resting` being `runLevelResting`, the predicate the composer's count and
+the resting root share) and confirm by `cancelConfirmation` — the Workspace and a persona window through
+`AgentCancelConfirm` (`packages/ui/src/AgentCancelConfirm.tsx`), which also confirms the run's cancel on the Workspace,
+takes no label of its own and has its call sites pinned by a source test, and the Mission view through
+`missionConfirmation`. The **runtime view**'s `cancelAgent` and `children` rows and its crash paragraph, the
 **state-ownership view**'s rest and session-lock rows and the **sequences view**'s crash note name the new writer; the
 `iterations` and `agent_terminals` rows say only that the crash record is written at a repair or a continue, which the
 cancel is not. No package, edge, process, channel or command changes.
@@ -100,8 +101,10 @@ Workspace, the Mission view and a persona window), and the Mission view, handed 
 active in it, so it offers no Pause beside the root it draws `paused` and labels the run REQ-CHAT-008's "Run needs
 recovery" rather than "Running"
 (`docs/defects/fixed/the-mission-view-offers-pause-and-cancel-with-no-run-behind-the-session.md`). The Overview counts
-paused agents on their own. The **runtime view**'s eleventh-state and projection paragraphs and the **state-ownership
-view**'s rest row are updated; no package, edge, process, channel or command changes.
+paused agents on their own, and the transcript's "This task" reads a paused agent's state without its elapsed time — a
+paused agent's only; every other agent keeps it (`scopeDetail`, OQ-73). The **runtime view**'s eleventh-state and
+projection paragraphs and the **state-ownership view**'s rest row are updated; no package, edge, process, channel or
+command changes.
 
 **A quit ends a board run as a quit, and clause 15's audit re-cites the stop and the cancel (`PD-ORCH-005` clauses 15
 and 19, `PD-CHAT-001` revision 4, `PD-CHAT-002` revision 2, 2026-09-28, R-064).** Main's board coordinator ends its runs
@@ -146,15 +149,15 @@ edge, process, channel, message kind or store column changed.
 
 **The plan gate meets a resumed iteration (`PD-ORCH-003` revision 2, 2026-09-28, R-064).** A run that resumes an open
 iteration runs it unheld; when the gate would hold the run, the loop sets the hold once that iteration has closed and
-work is left, and parks before the first new iteration (`parkAtPlanGate(resumed)`, its plan cycle told the pending
-tasks by `resumedWorkSection`, that the iteration was left open, and what became of every message it held,
-`Todo.heldIds`), then the launch content the continue built before that iteration ran, whose handoff therefore
-predates the close (OQ-77). The message an iteration takes up is sent only to an execution root (`Run.firstMessage`),
-never to that plan cycle. The message limit, checked as the resumed iteration closes, wins over the hold and leaves the
-continue's message `complete` with nothing open, and its resolution appends it again (OQ-76). A plan decision's relaunch appends no task (`RunDeps.appendsTask: false`), which also
-repairs the approved prompt being worked twice. Readings in OQ-77. The **runtime view**'s start order, plan gate and
-resume paragraphs say so; ADR-0062 decision 1 carries the amendment. No package, edge, process, channel, message kind or
-store column changed.
+work is left, and parks before the first new iteration (`parkAtPlanGate(resumed)`, its plan cycle told the pending tasks
+by `resumedWorkSection`, that the iteration was left open, and what became of every message it held, `Todo.heldIds`),
+then the launch content the continue built before that iteration ran, whose handoff therefore predates the close
+(OQ-77). The message an iteration takes up is sent only to an execution root (`Run.firstMessage`), never to that plan
+cycle. The message limit, checked as the resumed iteration closes, wins over the hold and leaves the continue's message
+`complete` with nothing open, and its resolution appends it again (OQ-76). A plan decision's relaunch appends no task
+(`RunDeps.appendsTask: false`), which also repairs the approved prompt being worked twice. Readings in OQ-77. The
+**runtime view**'s start order, plan gate and resume paragraphs say so; ADR-0062 decision 1 carries the amendment. No
+package, edge, process, channel, message kind or store column changed.
 
 **A continue's message is also a task (`PD-ORCH-005` clause 17, 2026-09-28, R-064).** A continue by message that
 resumes an open iteration appends its message to the planner todo as a task that iteration holds (`Todo.appendHeld`,

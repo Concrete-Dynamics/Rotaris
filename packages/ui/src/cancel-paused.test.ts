@@ -102,6 +102,12 @@ describe('PD-ORCH-005 clauses 13 and 16 (revision 4, OQ-73/OQ-74): the Mission v
     expect(button(mission(paused.id, { session: session({ executionStatus: 'pausing' }), resting: false }), 'mission-cancel')).toContain(`title="${rule}"`);
     expect(button(inspector(finished.id), 'inspector-cancel')).toContain(`title="${rule}"`);
   });
+  it('with nothing selected the Mission view\'s hint names the run, which "Cancel selection" cancels from its row (REQ-MONITOR-126), and the paused child', () => {
+    const none = cancelUnavailableReason(null);
+    expect(none).toContain('a live agent or the run while the run is active');
+    expect(none).toContain('a paused child while its session rests');
+    expect(button(mission('no-such-agent', { session: session({ executionStatus: 'running' }), resting: false }), 'mission-cancel')).toContain(`title="${none}"`);
+  });
   it('a live run\'s run-level agent still offers it', () => {
     const live = agent({ id: RUN_AGENT_ID, name: 'orchestrator', persona: 'orchestrator', parentId: '', depth: 0, state: 'running', presentationState: 'running', live: true, interruption: null });
     expect(button(mission(RUN_AGENT_ID, { session: session({ executionStatus: 'running' }), runLevel: live, resting: false }), 'mission-cancel')).not.toContain('disabled');

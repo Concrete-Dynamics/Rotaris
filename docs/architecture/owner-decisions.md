@@ -1646,7 +1646,7 @@ every option below changes one function and the requirements that describe it.
   badly in — `at least <amount>; some requests have no price` becomes `at least < 0.0001` — which the ruling
   fixes with a wording for that cell, and `REQ-MONITOR-166`'s qualifiers are otherwise untouched, since they
   name what a figure *is*, not how it prints. **Code:** the floor branch in `formatAmount`, its test, and a
-  case in `sessions.ts`'s `costLabelOf` test; nothing in the store, since the exact figure is what is
+  case for `sessions.ts`'s `costLabelOf` in `packages/engine/src/run/token-samples.test.ts`, where that function is tested; nothing in the store, since the exact figure is what is
   persisted and the floor is rendering only. **What it gives up:** the rule stops being "round to N places"
   alone, and a balance (rounded down) is deliberately outside the floor — a reading the ruling should say.
 - **(c) Extend the rule's own device.** REQ-PROVIDER-121 already answers this problem one order of magnitude

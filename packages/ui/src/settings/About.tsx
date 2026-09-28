@@ -124,8 +124,10 @@ export function AboutSettings({ info, onOpenExternal, onOpenThirdPartyLicenses }
       >
         Open third-party licenses
       </DesignButton>
-      {/* The control stays reachable whether or not a bundle exists (REQ-SHELL-143); the caption says which it is. */}
-      {info !== null && !info.thirdPartyLicenses && <p className="text-secondary" data-testid="licenses-caption">{NO_THIRD_PARTY_BUNDLE}</p>}
+      {/* The control stays reachable whether or not a bundle exists (REQ-SHELL-143); the caption says which it is. It is
+          secondary text at the licence line's own scale (`.about__caption`): `text-secondary` alone sets a colour and left
+          it in the browser's default size, the largest text on the page (docs/design/README.md §2, §7; repaired 2026-09-28). */}
+      {info !== null && !info.thirdPartyLicenses && <p className="about__caption" data-testid="licenses-caption">{NO_THIRD_PARTY_BUNDLE}</p>}
       {noticesError && <p className="composer__error" role="alert" data-testid="licenses-error">{noticesError}</p>}
     </div>
   );

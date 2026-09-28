@@ -228,7 +228,7 @@ describe('REQ-CHAT-055: the projector projects once per change of its inputs', (
       expect(projector.incrementals).toBe(1);
     });
 
-    // REQ-CHAT-048 per agent (OQ-90): the bounded form's lookback reaches past another agent's reasoning to the
+    // REQ-CHAT-048 per agent (OQ-91): the bounded form's lookback reaches past another agent's reasoning to the
     // appending agent's OWN previous thinking row, exactly as the whole-state loop carries it.
     it('REQ-CHAT-048: an agent\'s repeat appended after another agent\'s reasoning projects to zero rows in the bounded form too', () => {
       const think = (i: number, name: string, body: string, over: Partial<TranscriptRow> = {}) =>

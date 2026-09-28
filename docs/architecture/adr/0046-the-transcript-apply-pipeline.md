@@ -444,7 +444,7 @@ that names a type must give it in full.
 
 Step 4 kept **one** lookback for REQ-CHAT-048 — the immediately previous thinking row of any agent — and compared names,
 so agent A's repeated burst was displayed twice whenever agent B reasoned between the copies. Read with "per agent"
-scoping the whole rule (**OQ-90** states the other reading for the owner), the lookback is now **one per agent**:
+scoping the whole rule (**OQ-91** states the other reading for the owner), the lookback is now **one per agent**:
 the walk keeps each agent's previous thinking row, and the bounded form looks an agent's row up below its cut only
 when that agent's unstamped thinking row is in the suffix. The consequence 4 bound is unchanged in kind — the lookup
 reads back to that agent's own previous thinking row, or to the window's start where it has none, exactly as far as the

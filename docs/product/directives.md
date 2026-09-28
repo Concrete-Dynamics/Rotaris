@@ -1837,6 +1837,15 @@ are not recorded, and cannot be recovered afterwards.
 > [`hook-faults-reach-only-the-session-log-at-a-level-it-drops.md`](../defects/fixed/hook-faults-reach-only-the-session-log-at-a-level-it-drops.md)
 > and the row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **2026-09-28, under [R-062](requests.md#r-062):** the quit's race over each `shutdown` is unchanged, and main now also
+> waits, bounded, for the run host's EXIT before it is gone (`endBeforeMain`, `main/exit.ts`; ADR-0014's "Main is gone
+> only after the run host"). The race answered "the answer can be lost to the exit"; it did not make main leave before
+> the exit, and a run host left behind kept every session it held refused to the next launch until its pid stopped
+> answering ([note](../defects/fixed/a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md)).
+> The levels are this directive's: a run host ended at quit reports exit 0 and writes its `info` line; one still running
+> past the bound after it was ended is a loss, written at `error`. A driven close at the default level wrote no
+> `warning` or `error` line from the close onwards, and main was gone 103 ms after it.
+
 ---
 
 <a id="pd-tools-006"></a>

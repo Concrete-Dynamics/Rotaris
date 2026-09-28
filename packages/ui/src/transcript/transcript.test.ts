@@ -328,7 +328,7 @@ describe('ADR-0046 step 4 — the projection', () => {
   });
 
   /**
-   * REQ-CHAT-048's "per agent" read as scoping the whole rule (OQ-90): the comparison is with the SAME agent's
+   * REQ-CHAT-048's "per agent" read as scoping the whole rule (OQ-91): the comparison is with the SAME agent's
    * immediately previous thinking row, so another agent's reasoning between two equal bursts does not save the repeat.
    * docs/defects/fixed/duplicate-reasoning-hygiene-compares-with-the-previous-thinking-row-of-any-agent.md.
    */

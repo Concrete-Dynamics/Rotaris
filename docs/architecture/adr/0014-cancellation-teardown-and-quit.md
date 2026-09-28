@@ -200,3 +200,32 @@ process exit until the run has reported (`REQ-MONITOR-131`).
 **Found: nothing in this record.** Rule 3's shared-fate case (a wedged main) is not reachable at this load.
 **Not exercised:** the second sweep (nothing to sweep); the workspace service's two waiting policies; the
 force-exit backstop from main's side; consequence 5's launch-during-quit.
+
+## Main is gone only after the run host — 2026-09-28, first execution (R-062)
+
+*Reported in place under the standing policy; row in `../first-executions.md`. REQ-SESSION-047, REQ-SESSION-050,
+REQ-SESSION-056, REQ-STARTUP-161; `PD-MONITOR-002`.* Rule 2 holds process exit "until the run host reports teardown
+complete or the shared deadline expires" — that is, until the run host **answers**, not until it is gone. The two
+differed by up to 1.8 s on Linux, and in that interval the run host's pid still answers, so every session it held was
+refused to the next launch as "held by another run in this application" although no run held it
+(`../../defects/fixed/a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md`).
+The immediate exits (the capture seam, the driver's `quit`) asked the run host nothing at all and left it to
+Electron's teardown: in three launches of nine the run host outlived main by 1.57–1.81 s.
+
+**Built:** `endBeforeMain` (`apps/desktop/src/main/exit.ts`). The orderly quit, after the run host's and the workspace
+services' `shutdown`, waits at most `RUN_HOST_END_BOUND_MS` (2 000 ms) for the run host to exit by itself — an answered
+`shutdown` exits on a 0 ms timer — ends it (`utilityProcess.kill()`) only if it has not, and waits the bound again; an
+immediate exit ends it at once and waits the bound. Past the bound one `error` line says so and main goes regardless.
+A killed run host leaves its locks naming a pid that is gone, which rule 2 already accepted for an incomplete force
+exit and which REQ-SESSION-047 reaps on the next claim. **Not built, and why:** releasing the locks first inside a
+stopping run host (the run is still writing under the lock that is its ownership, REQ-SESSION-050, and REQ-SESSION-049
+orders the release after the long-lived services), or a liveness test that reads "shutting down" as gone
+(REQ-SESSION-047/056 admit the pid probe alone).
+
+**Executed:** six cases in `exit.test.ts` over the fake clock; in the built app under Xvfb, five `app.exit` launches
+whose run host probed dead 0 ms after main's exit (before: three of nine lingered), and one driven launch that started a
+session and closed its window — main gone 103 ms after the close, `run host exited (0)` logged before `quit: requested`,
+and a launch started the moment main was gone resumed the same session and ran it. **Not executed:** Windows, where
+`kill()` is `TerminateProcess` and a probe can keep answering alive while a handle survives (REQ-SESSION-054) — that
+residue is the requirement's own and resolves toward live; the bound elapsing in a real run (unit-tested only).
+**Nothing in this record's decision changes;** rule 2's "reports teardown complete" now also means "is gone".

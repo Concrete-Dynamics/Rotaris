@@ -325,7 +325,7 @@ function spanOf(members: readonly TranscriptRow[]): { startedAt: string; endedAt
  * Hygiene, per row (REQ-CHAT-048, REQ-CHAT-049) plus the caps (REQ-CHAT-166). Returns null where the row projects
  * to zero rows. `previousThinking` is the immediately previous thinking row OF THE ROW'S OWN AGENT
  * (`previousThinkingByAgent`): REQ-CHAT-048's "per agent" is read as scoping the whole rule, so another agent's reasoning
- * between two equal bursts does not keep the second (OQ-90 names the other reading; the repair is recorded in
+ * between two equal bursts does not keep the second (OQ-91 names the other reading; the repair is recorded in
  * docs/defects/fixed/duplicate-reasoning-hygiene-compares-with-the-previous-thinking-row-of-any-agent.md). It is the
  * only lookback the incremental bound has to preserve.
  */

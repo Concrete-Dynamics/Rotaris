@@ -51,8 +51,12 @@ record already decides, and every ruling it needs is named as the owner's rather
   configuration directory from `configDirFor`; `skills-proof` passed 10 checks over 9 launches as root on Linux
   ([fixed](../defects/fixed/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md),
   [fixed](../defects/fixed/slash-proof-expects-every-built-in-to-carry-the-action-badge.md)). `slash-proof` is not
-  green for it. It moves from one red to another: it now stops at the model chip's eval
-  ([note](../defects/slash-proofs-model-chip-eval-shares-its-offset-with-the-usage-notice-read.md)). On Linux as
+  green for it. It moves from one red to another: it ~~now stops at the model chip's eval~~
+  stopped at the model chip's eval ([fixed](../defects/fixed/slash-proofs-model-chip-eval-shares-its-offset-with-the-usage-notice-read.md),
+  repaired 2026-09-28 in the proof with the chip's close and the ground it measures on), and now stops at a **product**
+  red: REQ-CHAT-027's partial shade at 4.06:1 on the ground the composer dock paints, every other check passing in a
+  diagnostic run ([note](../defects/the-slash-token-colours-clear-their-floor-on-a-ground-the-composer-no-longer-paints.md);
+  ADR-0050's fourth execution). On Linux as
   root, `resilience-proof`, `sandbox-proof`, `notice-proof` and `init-proof` are red for their recorded notes
   ([override select](../defects/resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md),
   [Windows verdict](../defects/sandbox-proof-asserts-the-windows-verdict-on-every-platform.md), and
@@ -598,6 +602,14 @@ so that the next release can add the updater without stranding anyone.
 > (`onRecordPassFailed`), main's wait (`updater/successor.ts`) rejects, and `Update not installed` surfaces with the
 > reason (REQ-STARTUP-121). 162 unit cases in 15 files. A successor whose 5 s bound expired while the predecessor was
 > blocked can still be passed the record after it has gone — filed in `../defects/`, not repaired.
+>
+> **Repaired the same day: the artifact variables stay with their launch.** `APPIMAGE` and `ROTARIS_PORTABLE_ARTIFACT`
+> stayed in main's environment and reached every child — observed in the built app, a scripted terminal call's shell
+> carried both — so a Rotaris started from inside a portable's terminal would have classified itself from the other
+> artifact's file. Main's first statement now takes both out of its own environment and hands them to the
+> classification alone (`takeArtifactVariables`, `packages/platform`; ADR-0054 "The updater" item 6). `pnpm updater-proof`
+> gains a second launch that reads a tool shell's environment, 11 checks. **Raised:** OQ-90 (REQ-STARTUP-147 names no
+> variable removed from a child; REQ-HOOKS-032's "exactly the environment the application itself was started with").
 
 **4.7 The manifest, the signature and the key record.** The pipeline writes and signs these:
 

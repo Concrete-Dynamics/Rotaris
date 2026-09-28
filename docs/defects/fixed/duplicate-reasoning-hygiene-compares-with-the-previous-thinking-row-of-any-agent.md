@@ -34,7 +34,7 @@ the code is right and only the comment was wrong; the reading is not settled her
 another agent's reasoning between two equal bursts does not keep the second, and one agent's burst is never compared
 with another's. The purpose clause ("display each burst once") holds under it for every interleaving. The other
 reading — the whole transcript's immediately previous thinking row, which the code implemented — is raised as
-**OQ-90** in `docs/architecture/open-questions.md` so the owner can overrule it; nothing else depends on the choice.
+**OQ-91** in `docs/architecture/open-questions.md` so the owner can overrule it; nothing else depends on the choice.
 
 ## Outcome
 

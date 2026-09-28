@@ -323,8 +323,11 @@ function spanOf(members: readonly TranscriptRow[]): { startedAt: string; endedAt
 
 /**
  * Hygiene, per row (REQ-CHAT-048, REQ-CHAT-049) plus the caps (REQ-CHAT-166). Returns null where the row projects
- * to zero rows. `previousThinking` is the immediately previous thinking row of the same agent, which is the only
- * context REQ-CHAT-048 needs and therefore the only lookback the incremental bound has to preserve.
+ * to zero rows. `previousThinking` is the immediately previous thinking row of ANY agent, and `repeatsReasoning`
+ * compares the two names, so another agent's thinking row between two equal ones keeps the second — a narrower
+ * reading than REQ-CHAT-048's "per agent", recorded in
+ * docs/defects/duplicate-reasoning-hygiene-compares-with-the-previous-thinking-row-of-any-agent.md. It is the only
+ * lookback the incremental bound has to preserve.
  */
 function hygiene(row: TranscriptRow, previousThinking: TranscriptRow | null, o: ProjectOptions, expanded: boolean): TranscriptRow | null {
   if (repeatsReasoning(row, previousThinking)) return null;

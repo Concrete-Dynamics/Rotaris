@@ -362,7 +362,15 @@ function pathScopeMatches(scope: PathScope, req: PermissionRequest, env: Evaluat
   for (const p of paths) {
     let real: string | null;
     try {
-      real = env.resolvePath(p);
+      /*
+       * REQ-TOOLS-018: "Relative paths resolve against the workspace root." The path is joined to the root first —
+       * the join the fence and `resolvedPathSet` make — and then handed to the resolver for its real path. Until
+       * 2026-09-28 the raw argument went to the resolver, and the run host's is `realPathOf`, relative to the PROCESS
+       * directory: a workspace-relative read under `restricted` landed "outside" unless main happened to start inside
+       * the workspace (`docs/defects/fixed/path-scope-resolves-a-relative-path-against-the-process-directory.md`).
+       * The unit tests did not see it because they injected a resolver that joined the root itself.
+       */
+      real = env.resolvePath(resolveInWorkspace(env, p));
     } catch {
       real = null;
     }

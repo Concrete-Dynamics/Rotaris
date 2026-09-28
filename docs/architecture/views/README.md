@@ -45,6 +45,20 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-28**
 
+**REQ-CHAT-055's measurement round: the transcript projects once per change, not once per render (2026-09-28, R-048's
+order under R-062).** The built app was traced appending to an empty transcript and to one of 1,200 rows, and the extra
+time at depth was script — three to four synchronous renders per increment, each re-running ADR-0046 step 4 over the
+whole resident window and each re-rendering every bound row through a context value rebuilt per render — not layout,
+paint or the `ResizeObserver` pass. `ui/transcript/projector.ts` now keys step 4 on every input it reads, takes the
+bounded form when the rows alone changed (the earliest-changed row read off the two arrays, no prop across the seam;
+only for an append or a row replaced at its own index — the fix round found a removal and a scope switch taken wrongly;
+fix round 2 found the bounded cut reading runs on raw rows where the fold reads the rows hygiene keeps, and repaired it),
+and the pane holds one (`TranscriptPane.tsx`); the offset table and the surface value rows read are built once per
+change of what they carry. The
+**runtime view**'s step-4 row and the **component view**'s `ui/transcript` module list gain the projector. The proof's
+side of the round is `apps/desktop/scripts/transcript-proof.mjs` and `lib/trace-summary.mjs`, which no view describes.
+No package, edge, process, channel, message kind, store column or owner of state changed.
+
 **The setup manifest (REQ-STARTUP-058/059, `first-release-plan.md` §4.1, built 2026-09-28).**
 `apps/desktop/resources/setup-manifest.json` exists — Git and ripgrep as the requirement pins them, the `@playwright/mcp`
 pin the guard checks, the language servers as `pins.json` declares them — and `electron-builder.yml` packs it. Its schema

@@ -16,15 +16,21 @@
  *                   bound slot carries a measurement key, and no slot is drawn through its neighbour.
  *   4/5. append-empty / append-loaded — the same scripted run appended to an empty transcript and to a 1200-row
  *                   one, timed at REQ-CHAT-055's stated point: after the frame showing the update has been
- *                   painted, never a synchronous figure.
+ *                   painted, never a synchronous figure. Since the R-048 measurement round the two are launched
+ *                   ALTERNATELY (empty, loaded, empty, loaded, …) so the host's drift lands on both alike, the
+ *                   samples are pooled to thirty or more a side and reported in frames as well as milliseconds
+ *                   with their spread, and one further launch of each is recorded with Chromium's own tracing so
+ *                   the frames can be attributed to style, layout, paint, the observer pass or script.
  *
- * Evidence under `.proof/transcript-proof/`: one PNG and one log per launch, `results.json`. `--skip-build` skips the build.
+ * Evidence under `.proof/transcript-proof/`: one PNG and one log per launch, the two traces, `results.json`.
+ * `--skip-build` skips the build.
  */
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { cleanEnvironment, findDatabases, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
+import { readTrace, spread, summariseAppendTrace } from './lib/trace-summary.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -53,9 +59,14 @@ const PROBES = [
   '[data-testid="transcript-page-failed"]', '.app-shell',
 ];
 
-function launch(name, extra, timeoutMs = 240_000) {
+/**
+ * One launch of the built app against the scratch profile. `electronArgs` are Chromium's own switches — the append
+ * comparison's traced launches pass the startup-tracing switches through it; `hostSwitches` is what this host needs
+ * on every launch (`--no-sandbox` as root, nothing elsewhere).
+ */
+function launch(name, extra, timeoutMs = 240_000, electronArgs = []) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
+  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, ...electronArgs, workspace], {
     cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
@@ -67,6 +78,16 @@ function launch(name, extra, timeoutMs = 240_000) {
   writeFileSync(join(output, `${name}.log`), log);
   if (result.status !== 0) throw new Error(`${name} exited ${result.status ?? result.signal ?? 'unknown'} (see ${name}.log)`);
   if (!existsSync(png)) throw new Error(`${name} produced no screenshot`);
+  // `spawnSync` returns when MAIN exits; the run host is a child that can outlive it by a moment, and a session it
+  // held is refused to the next launch for as long as its pid answers ("held by another run in this application
+  // (pid …)"). Measured 2026-09-28: the behaviour launch opened S1200 1.5 s after the invariance launch's main exited
+  // and was refused by the run host that launch had left exiting. So each launch ends only when its children are gone.
+  const children = [...log.matchAll(/"process":"[a-z-]+","pid":(\d+)/g)].map((m) => Number(m[1]));
+  const started = Date.now();
+  const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+  while (children.some(alive) && Date.now() - started < 10_000) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+  const lingering = children.filter(alive);
+  if (lingering.length > 0) throw new Error(`${name}: child processes ${lingering.join(', ')} were still alive 10 s after main exited`);
   const probes = {};
   const evals = [];
   for (const line of log.split('\n')) {
@@ -377,7 +398,21 @@ const behaviour = launch('behaviour', {
 {
   // One line, deliberately: the log reader's `capture: eval-at (\d+) (.*?) → (.*)$` cannot span newlines, and a
   // multi-line expression parses as no result at all rather than as an error.
-  const SAMPLE_AT = Array.from({ length: 26 }, (_, i) => 3000 + i * 300);
+  //
+  // The FIRST sample watches for a live activity line from inside the renderer, one animation frame at a time, and
+  // reads the boxes on the frame after it first sees one if the line is still live; the other twenty-five are
+  // appointments. The live line this stage catches is NOT the scripted run's (that run ends at `think` within
+  // milliseconds of starting): it is the PLANTED running call, live in two windows each shorter than 150 ms — when the session
+  // is first drawn, before the view learns no run is live (REQ-CHAT-049), and when the scripted run starts, before
+  // stale detection settles the call (ADR-0002). An appointment catches such a window by luck, and so did the
+  // main-process wait this replaced (`>>.activity__now@~8000`), whose read ran as a separate script after its match
+  // and lost the window in three runs of three on 2026-09-28 (fix round 1 of R-062; the probe that timed the windows
+  // is recorded in docs/defects/fixed/the-geometry-stage-catches-its-live-line-in-one-sample-or-none.md). Gives up at
+  // 8 s and reads whatever is there, so the guard below still fails honestly.
+  const LIVE_SAMPLE_AT = 8000;
+  const LIVE_WATCH_FROM = 1;
+  const LIVE_FIRST = `(async () => { const until = performance.now() + ${LIVE_SAMPLE_AT}; const frame = () => new Promise((resolve) => requestAnimationFrame(resolve)); while (performance.now() < until) { if (document.querySelector('.activity__now')) { await frame(); if (document.querySelector('.activity__now')) break; } await frame(); } return OVERLAP_READ; })()`;
+  const SAMPLE_AT = Array.from({ length: 25 }, (_, i) => 3300 + i * 300);
   const OVERLAP = `(() => { const boxes = [...document.querySelectorAll('.transcript__slot')].filter((n) => n.dataset.bound).map((n) => { const r = n.getBoundingClientRect(); return { key: n.dataset.bound, top: r.top, bottom: r.bottom, keyed: n.dataset.measure !== '' }; }).sort((a, b) => a.top - b.top); let worst = 0; let pair = null; for (let i = 1; i < boxes.length; i += 1) { const o = boxes[i - 1].bottom - boxes[i].top; if (o > worst) { worst = o; pair = [boxes[i - 1].key, boxes[i].key]; } } const seg = document.querySelector('[data-shape="group"] .activity__segments'); const segmentLines = seg ? new Set([...seg.querySelectorAll('.activity__segment')].map((e) => Math.round(e.getBoundingClientRect().top))).size : 0; const roles = [...document.querySelectorAll('.row__role')].map((e) => Math.round(e.getBoundingClientRect().height)); const g = document.querySelector('[data-shape="group"]'); return { bound: boxes.length, unkeyed: boxes.filter((b) => !b.keyed).length, worstOverlapPx: Math.round(worst * 10) / 10, pair, segmentLines, tallestRolePx: Math.max(0, ...roles), live: document.querySelectorAll('.activity__now').length, summaryTail: g ? g.innerText.replace(/\\s+/g, ' ').trim().slice(-90) : null }; })()`;
   const geometry = launch('geometry', {
     // A PLANTED running tool cannot stay running: a resumed session settles its in-flight calls through stale
@@ -386,10 +421,10 @@ const behaviour = launch('behaviour', {
     ROTARIS_CAPTURE_RESUME: 'SLIVE',
     ROTARIS_SCRIPT: 'think,read,answer',
     ROTARIS_CAPTURE_PROMPT: 'Say something about the notes.',
-    ROTARIS_CAPTURE_EVAL_AT: SAMPLE_AT.map((ms) => `${OVERLAP}@${ms}`).join(';;'),
+    ROTARIS_CAPTURE_EVAL_AT: [`${LIVE_FIRST.replace('OVERLAP_READ', () => OVERLAP)}@${LIVE_WATCH_FROM}`, ...SAMPLE_AT.map((ms) => `${OVERLAP}@${ms}`)].join(';;'),
     ROTARIS_CAPTURE_AFTER_MS: '11000',
   }, 240_000);
-  const samples = SAMPLE_AT.map((ms) => ({ ms, ...(evalAt(geometry, ms) ?? {}) })).filter((s) => typeof s.bound === 'number');
+  const samples = [{ ms: 'on the first live line', ...(evalAt(geometry, LIVE_WATCH_FROM) ?? {}) }, ...SAMPLE_AT.map((ms) => ({ ms, ...(evalAt(geometry, ms) ?? {}) }))].filter((s) => typeof s.bound === 'number');
   expect(samples.length >= 4, `the geometry stage took ${samples.length} readable samples, not enough to say anything`);
   expect(samples.every((s) => s.bound > 1), `a sample bound one slot or none, so nothing could overlap: ${JSON.stringify(samples)}`);
   // The two guards that keep the assertions below from being satisfied by construction. The line has to actually
@@ -411,29 +446,168 @@ const behaviour = launch('behaviour', {
 // ── 4/5. the append comparison ──────────────────────────────────────────────────────────────────────────────
 // REQ-CHAT-055's append clause, read as that requirement fixes it: a comparison of two SHOWN-UPDATE times, taken
 // after the frame showing the update has been painted. Never a synchronous figure.
+//
+// The R-048 measurement round (docs/defects/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md)
+// tightened how the comparison is taken, because two passes in three with a spread wider than the effect was not a
+// verdict either way:
+//
+//  - the two fixtures are launched ALTERNATELY, so whatever the host is doing lands on both alike;
+//  - the scripted run is six tool calls and a deliberation, each an appended row or two, so one launch yields about
+//    thirty applies and the pooled sides reach thirty or more each;
+//  - every sample carries where its time went (`sync` — the apply, React's flush and the layout effects; `frame1` —
+//    the frame that showed it; `ms` — the frame after), and the increment's shape, so the clause is read on row
+//    appends as well as on every update;
+//  - the frame cadence is MEASURED in the renderer rather than assumed at 60 Hz, and every figure is reported in
+//    frames beside milliseconds, with its spread;
+//  - one further launch of each fixture is recorded with Chromium's own startup tracing, and `lib/trace-summary.mjs`
+//    attributes each apply window to style, layout, pre-paint, paint, the compositor commit, the ResizeObserver
+//    delivery and script. Those two launches are NOT pooled into the comparison — tracing has a cost of its own.
 const APPLIES = 'window.__rotarisApplies()';
-function appendRun(name, sid) {
+/** The renderer's frame cadence: sixty consecutive animation frames while nothing is live, as intervals. */
+const FRAME_CADENCE = `(async () => { const ts = []; await new Promise((done) => { const step = (t) => { ts.push(t); if (ts.length < 61) requestAnimationFrame(step); else done(); }; requestAnimationFrame(step); }); const d = ts.slice(1).map((t, i) => t - ts[i]).sort((a, b) => a - b); return { medianMs: d[Math.floor(d.length / 2)], p25Ms: d[Math.floor(d.length / 4)], p75Ms: d[Math.floor((3 * d.length) / 4)], minMs: d[0], maxMs: d[d.length - 1] }; })()`;
+/**
+ * Six tool calls, then the deliberation: a scripted tool step streams a sentence and calls the tool, so each is two
+ * appended rows (the sentence, the call) and a settle; `think` streams reasoning before its answer and ends the run
+ * — it has to come LAST, because a plain answer ends the run and the earlier `think,read,answer` script never reached
+ * its `read`. Alternating families keeps consecutive calls from folding into one activity line (PD-CHAT-004), so what
+ * is measured is a row being appended rather than a header being redrawn.
+ */
+const APPEND_SCRIPT = 'read,glob,read,glob,read,glob,think';
+const APPEND_LAUNCHES = 2;
+const APPEND_READ_AT = 26_000;
+const TRACE_CATEGORIES = 'devtools.timeline,disabled-by-default-devtools.timeline,blink,blink.user_timing,v8.execute,cc,toplevel';
+function appendRun(name, sid, tracePath = null) {
+  const electronArgs = tracePath === null ? [] : [`--trace-startup=${TRACE_CATEGORIES}`, `--trace-startup-file=${tracePath}`, '--trace-startup-format=json', '--trace-startup-duration=300'];
   const r = launch(name, {
-    ROTARIS_SCRIPT: 'think,read,answer',
+    ROTARIS_SCRIPT: APPEND_SCRIPT,
     ROTARIS_CAPTURE_RESUME: sid,
     ROTARIS_CAPTURE_PROMPT: 'Say something about the notes.',
-    ROTARIS_CAPTURE_EVAL_AT: `window.__rotarisResetApplies()@3200;;${APPLIES}@26000;;window.__rotarisReplica()@26500`,
-    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '120000', ROTARIS_CAPTURE_AFTER_MS: '27000',
-  }, 300_000);
-  const samples = (evalAt(r, 26000) ?? []).map((s) => s.ms).sort((a, b) => a - b);
-  expect(samples.length >= 5, `${name} produced only ${samples.length} apply-to-paint samples`);
-  const median = samples[Math.floor(samples.length / 2)];
-  return { name, samples: samples.length, median, p95: samples[Math.min(samples.length - 1, Math.floor(samples.length * 0.95))], max: samples[samples.length - 1], replica: evalAt(r, 26500), png: r.png };
+    ROTARIS_CAPTURE_EVAL_AT: `${APPLIES}@${APPEND_READ_AT};;${FRAME_CADENCE}@${APPEND_READ_AT + 400};;window.__rotarisReplica()@${APPEND_READ_AT + 2000}`,
+    ROTARIS_CAPTURE_WAIT: 'result', ROTARIS_CAPTURE_WAIT_MS: '120000', ROTARIS_CAPTURE_AFTER_MS: '28000',
+  }, 300_000, electronArgs);
+  // The samples are read at an appointment, so the run must have ENDED before it: main logs the end and the read
+  // with the same clock, and a read that came first would be a truncated sample set reported as a small one.
+  const ended = /^\[main (\S+)\] .*run \S+ ended /m.exec(r.log);
+  const read = new RegExp(`^\\[main (\\S+)\\] .*capture: eval-at ${APPEND_READ_AT} `, 'm').exec(r.log);
+  expect(ended !== null, `${name}: the scripted run never ended (see ${name}.log)`);
+  expect(read !== null, `${name}: the apply samples were never read (see ${name}.log)`);
+  expect(Date.parse(ended[1]) <= Date.parse(read[1]), `${name}: the samples were read at ${read[1]}, before the run ended at ${ended[1]}`);
+  // The renderer's timeline, in arrival order. An increment that arrived before the previous one had been SHOWN is
+  // `queued`: its figure includes the work in front of it, which is what the reader waits for but not what one
+  // append costs. The attach increment — the resident set arriving after the resume's whole read — is not an append
+  // and is dropped, after it has been used to decide whether its successor was queued.
+  const timeline = [...(evalAt(r, APPEND_READ_AT) ?? [])].sort((a, b) => a.at - b.at);
+  let shownAt = Number.NEGATIVE_INFINITY;
+  let burst = 0;
+  for (const s of timeline) {
+    s.queued = s.at < shownAt;
+    burst = s.queued ? burst + 1 : 1;
+    s.burst = burst;
+    shownAt = Math.max(shownAt, s.at + s.ms);
+  }
+  // `isolated`: nothing was in front of it AND nothing arrived behind it before it was shown — the one figure that
+  // is the cost of showing one update and nothing else. The head of a burst is not queued but is not isolated.
+  for (let i = 0; i < timeline.length; i += 1) {
+    const s = timeline[i];
+    const next = timeline[i + 1];
+    s.isolated = !s.queued && (next === undefined || next.at >= s.at + s.ms);
+  }
+  const all = timeline.filter((s) => s.kind !== 'attach');
+  expect(all.length >= 20, `${name} produced only ${all.length} apply-to-paint samples`);
+  const cadence = evalAt(r, APPEND_READ_AT + 400);
+  expect(cadence && cadence.medianMs > 0, `${name}: the frame cadence could not be read: ${JSON.stringify(cadence)}`);
+  // The pane's own count of projections, and of those that took the bounded form (`data-projections`, verification
+  // only). The repair's mechanism is that an increment projects once and bounded; a launch in which the bounded form
+  // never ran would be measuring a pane the repair does not reach, and says so rather than passing on its figures.
+  const projections = String((r.probes['[data-testid="transcript-scroll"]'] ?? [])[0]?.data?.['data-projections'] ?? '').split('/').map(Number);
+  expect(projections.length === 2 && projections[1] > 0, `${name}: the pane never took the bounded projection (data-projections ${JSON.stringify(projections)})`);
+  return { name, samples: all, cadence, projections: { total: projections[0], bounded: projections[1] }, replica: evalAt(r, APPEND_READ_AT + 2000), png: r.png, log: r.log };
 }
-const appendEmpty = appendRun('append-empty', 'S0');
-const appendLoaded = appendRun('append-loaded', 'S1200');
+/**
+ * One side's figures: pooled samples, per-launch medians, and the spread of every phase, in milliseconds and frames —
+ * over every update, over the row appends, over the increments that arrived to a quiet surface (`alone`, which
+ * includes the head of every burst and so carries the queue behind it), and over the increments with nothing in front
+ * of them and nothing arriving behind them before they were shown (`isolated`), which is the one figure that says what
+ * ONE append costs rather than what a burst of them costs. A scripted run is a burst by nature — six tool calls answer
+ * within a few hundred milliseconds — so `isolated` is a handful a launch, and `sync` (the synchronous work one
+ * increment costs, queue or no queue) is the per-increment figure with the count behind it.
+ */
+function side(launches, frameMs) {
+  const samples = launches.flatMap((l) => l.samples);
+  const appends = samples.filter((s) => s.kind === 'append');
+  const alone = samples.filter((s) => !s.queued);
+  const isolated = samples.filter((s) => s.isolated);
+  const inFrames = (ms) => Math.round((ms / frameMs) * 100) / 100;
+  const phases = (set) => ({
+    ms: spread(set.map((s) => s.ms)), sync: spread(set.map((s) => s.sync)), frame1: spread(set.map((s) => s.frame1)),
+    frames: spread(set.map((s) => inFrames(s.ms))),
+    framesRounded: spread(set.map((s) => Math.round(s.ms / frameMs))),
+  });
+  const burstSizes = launches.flatMap((l) => { const sizes = []; for (const s of l.samples) { if (!s.queued) sizes.push(1); else if (sizes.length > 0) sizes[sizes.length - 1] += 1; } return sizes; });
+  return {
+    launches: launches.map((l) => ({ name: l.name, samples: l.samples.length, medianMs: spread(l.samples.map((s) => s.ms)).median, aloneMedianMs: spread(l.samples.filter((s) => !s.queued).map((s) => s.ms)).median, cadence: l.cadence, projections: l.projections, png: l.png })),
+    kinds: Object.fromEntries(['append', 'tail', 'update'].map((k) => [k, samples.filter((s) => s.kind === k).length])),
+    queued: samples.filter((s) => s.queued).length,
+    bursts: { count: burstSizes.length, sizes: spread(burstSizes) },
+    all: phases(samples),
+    appends: phases(appends),
+    alone: phases(alone),
+    isolated: phases(isolated),
+    samplesMs: samples.map((s) => Math.round(s.ms * 10) / 10),
+    appendsMs: appends.map((s) => Math.round(s.ms * 10) / 10),
+    aloneMs: alone.map((s) => Math.round(s.ms * 10) / 10),
+    isolatedMs: isolated.map((s) => Math.round(s.ms * 10) / 10),
+  };
+}
+const emptyLaunches = [];
+const loadedLaunches = [];
+for (let i = 1; i <= APPEND_LAUNCHES; i += 1) {
+  emptyLaunches.push(appendRun(`append-empty-${i}`, 'S0'));
+  loadedLaunches.push(appendRun(`append-loaded-${i}`, 'S1200'));
+}
+// The traced pair, after the comparison's own launches and outside them.
+const emptyTracePath = join(output, 'append-empty.trace.json');
+const loadedTracePath = join(output, 'append-loaded.trace.json');
+const emptyTraced = appendRun('append-empty-traced', 'S0', emptyTracePath);
+const loadedTraced = appendRun('append-loaded-traced', 'S1200', loadedTracePath);
 {
+  const cadences = [...emptyLaunches, ...loadedLaunches].map((l) => l.cadence.medianMs);
+  const frameMs = spread(cadences).median;
+  const empty = side(emptyLaunches, frameMs);
+  const loaded = side(loadedLaunches, frameMs);
+  expect(empty.all.ms.n >= 30 && loaded.all.ms.n >= 30, `the pooled sides hold ${empty.all.ms.n} and ${loaded.all.ms.n} samples; thirty each is the least a verdict needs`);
   // REQ-CHAT-055: appending must cost no more than on an empty transcript. The frame cadence is the floor at both
-  // ends, so the comparison is made with a tolerance of one frame at 60 Hz rather than as an exact inequality.
-  const slack = 16.7;
-  expect(appendLoaded.median <= appendEmpty.median + slack,
-    `appending at 1200 rows showed in ${appendLoaded.median} ms against ${appendEmpty.median} ms on an empty transcript`);
-  results.append = { empty: appendEmpty, loaded: appendLoaded, slackMs: slack, measurementPoint: 'after the frame showing the update has been painted (double requestAnimationFrame; a proxy, per ADR-0045)' };
+  // ends, so the comparison is made with a tolerance of one frame — at the cadence measured, not assumed — rather
+  // than as an exact inequality. It is read on every update and on the row appends alone; both must hold.
+  const slack = frameMs;
+  const verdict = (label, e, l) => {
+    const pass = l.median <= e.median + slack;
+    return { label, emptyMedianMs: e.median, loadedMedianMs: l.median, differenceMs: Math.round((l.median - e.median) * 100) / 100, slackMs: Math.round(slack * 100) / 100, emptyIqrMs: e.iqr, loadedIqrMs: l.iqr, pass };
+  };
+  const verdicts = { all: verdict('every update', empty.all.ms, loaded.all.ms), appends: verdict('row appends', empty.appends.ms, loaded.appends.ms) };
+  const traced = (launch, path) => {
+    const trace = existsSync(path) ? summariseAppendTrace(readTrace(JSON.parse(readFileSync(path, 'utf8')))) : null;
+    const seqs = new Set(launch.samples.map((s) => s.seq));
+    const covered = trace === null ? 0 : trace.windows.filter((w) => seqs.has(w.seq)).length;
+    return {
+      launch: launch.name, samples: spread(launch.samples.map((s) => s.ms)), cadence: launch.cadence, tracePath: relative(repo, path),
+      coverage: { samples: seqs.size, windowsInTrace: trace === null ? 0 : trace.windows.length, covered, unfinished: trace === null ? [] : trace.unfinished },
+      aggregate: trace === null ? null : trace.aggregate, topFunctions: trace === null ? [] : trace.topFunctions,
+      windows: trace === null ? [] : trace.windows.filter((w) => seqs.has(w.seq)),
+    };
+  };
+  results.append = {
+    script: APPEND_SCRIPT, launches: APPEND_LAUNCHES, order: 'alternating: empty, loaded, empty, loaded, then one traced launch of each',
+    frameMs: { median: frameMs, perLaunch: cadences },
+    empty, loaded, verdicts,
+    trace: { empty: traced(emptyTraced, emptyTracePath), loaded: traced(loadedTraced, loadedTracePath), categories: TRACE_CATEGORIES },
+    measurementPoint: 'after the frame showing the update has been painted (double requestAnimationFrame; a proxy, per ADR-0045)',
+  };
+  // The evidence is written BEFORE the verdict is enforced, so a red run leaves its figures on disk.
+  writeFileSync(join(output, 'append.json'), `${JSON.stringify(results.append, null, 2)}\n`);
+  for (const v of Object.values(verdicts)) {
+    expect(v.pass, `appending at 1200 rows showed in ${v.loadedMedianMs} ms (${loaded.all.frames.median} frames) against ${v.emptyMedianMs} ms (${empty.all.frames.median} frames) on an empty transcript, on ${v.label}; slack one frame of ${v.slackMs} ms; spreads (IQR) ${v.emptyIqrMs} and ${v.loadedIqrMs} ms`);
+  }
   // REQ-CHAT-163 / REQ-CHAT-062: the scripted `think` step streams deliberation, so the run must have recorded a
   // streamed-reasoning row — the row kind that did not exist in this product before Part Z.
   const thinking = withDb((db) => db.prepare("SELECT count(*) AS c FROM transcript_rows WHERE session_id = ? AND kind = 'thinking'").get('S0').c);

@@ -326,6 +326,10 @@ describe('the record passes only to a successor that is still waiting — the tw
     if (predecessor.outcome !== 'instance') throw new Error(predecessor.outcome);
     const before = readFileSync(join(dir, 'instance.json'), 'utf8');
 
+    // Deterministic, not a race won by luck: `blockLoop` runs synchronously inside the predecessor's read of the
+    // announcement, and the offer is written before that handler returns. By then the successor's 200 ms timer is
+    // overdue, and Node's event loop runs its timers phase before the poll phase that would deliver the offer's bytes,
+    // so the successor closes before it can read the offer, just as a separate successor process would have.
     const successor = await inheritInstance(deps({ handOverIntervalMs: millis(200) }), predecessor.record.endpoint);
     expect(successor.outcome).toBe('refused');
     for (let i = 0; i < 50 && failed.length === 0 && passed.length === 0; i += 1) await new Promise((resolve) => { setTimeout(resolve, 10); });

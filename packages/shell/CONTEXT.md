@@ -113,6 +113,9 @@ _Avoid_: hand-over, which is the passing of a launch, or of the single-instance 
 The updated installation an instance starts on `Restart now`, to which the single-instance record passes
 rather than being released; the one case in which the product starts the application while an instance is
 running. — `REQ-STARTUP-121`
+_Avoid_: update offer for the first step of passing the record to it. ADR-0055 names that step the record's *offer*:
+the instance offers the record, and the successor acknowledges it before the record passes. It is not the
+**Update offer**, which is the release the check found.
 
 ### Launching
 

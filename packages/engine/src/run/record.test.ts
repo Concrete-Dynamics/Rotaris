@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling, type AgentMessageRow } from '@rotaris/store';
-import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ChatMessage, type ModelRequest, type ScriptedCall } from '@rotaris/model';
+import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ChatMessage, type ModelRef, type ModelRequest, type ScriptedCall } from '@rotaris/model';
 import { BUILT_IN_PERSONAS, RUN_CONFIG_DEFAULTS, Sessions, SessionWriter, type DelegationOps, type ModelLookup, type PortToolResult, type Publisher, type RoleName, type RunConfig, type SessionsDeps, type ToolPort } from '../index.js';
 import { ConversationRecord, conversationOf, fingerprintOf } from './record.js';
 import { takenTaskIds } from '../children/naming.js';
@@ -365,6 +365,8 @@ describe('F — the fingerprint an agent started with (PD-ORCH-005 clause 14)', 
     const a = fingerprintOf('You are x.', [spec('read', { type: 'object', properties: { path: { type: 'string' } } }), spec('write')]);
     const b = fingerprintOf('You are x.', [spec('write'), { parameters: { properties: { path: { type: 'string' } }, type: 'object' }, description: 'read', name: 'read' }]);
     expect(b).toEqual(a);
+    // A key present but undefined is the key absent: the request serialises neither.
+    expect(fingerprintOf('You are x.', [spec('read', { type: 'object', properties: { path: { type: 'string' } }, required: undefined }), spec('write')])).toEqual(a);
     expect(a.instructions).toMatch(/^[0-9a-f]{64}$/);
     expect(a.tools).toMatch(/^[0-9a-f]{64}$/);
     // A changed prompt changes the instructions only; a changed description, schema or name changes the tools only.
@@ -400,7 +402,7 @@ describe('F — the fingerprint an agent started with (PD-ORCH-005 clause 14)', 
   const CHILD = BUILT_IN_PERSONAS['coding-agent' as RoleName]!;
 
   /** A root and its children over `delegate` and `probe`; `extraTool` widens every agent's listing. */
-  function harness(script: (persona: string, turn: number) => ScriptedCall, over: { rootPrompt?: string; childPrompt?: string; extraTool?: boolean } = {}) {
+  function harness(script: (persona: string, turn: number) => ScriptedCall, over: { rootPrompt?: string; childPrompt?: string; extraTool?: boolean; contextUnits?: () => readonly string[]; childTimeoutMs?: number; childFallback?: ModelRef } = {}) {
     const counts = new Map<string, number>();
     const client = new ScriptedModelClient([]);
     const original = client.stream.bind(client);
@@ -429,15 +431,16 @@ describe('F — the fingerprint an agent started with (PD-ORCH-005 clause 14)', 
     const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k', systemPrompt: over.rootPrompt ?? ROOT };
     const backend = new DefaultAgentBackend(client);
     const models = (key: string): ModelLookup => ({ ok: false, reason: `'${key}' is not a configured model` });
-    const personas = { resolve: (name: string) => { const base = BUILT_IN_PERSONAS[name as RoleName]; return base ? { persona: name === 'coding-agent' && over.childPrompt ? { ...base, systemPrompt: over.childPrompt } : base, alias: null } : null; }, knownRoles: () => Object.keys(BUILT_IN_PERSONAS) };
+    const personas = { resolve: (name: string) => { const base = BUILT_IN_PERSONAS[name as RoleName]; if (!base) return null; const child = name === 'coding-agent'; return { persona: { ...base, ...(child && over.childPrompt ? { systemPrompt: over.childPrompt } : {}), ...(child && over.childFallback ? { fallbackModel: over.childFallback } : {}) }, alias: null }; }, knownRoles: () => Object.keys(BUILT_IN_PERSONAS) };
     const sessions = new Sessions({
       clocks: clock, publisher: NONE, pid: 79, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => `S-fp-${++minted}`,
       model: null, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid), attended: () => true, onRunResult: () => undefined,
       tools: (ctx) => port(ctx.delegation, ctx.parentId ?? 'root'),
       configure: () => ({ ok: true, value: {
         model: { backend, config }, models, personas,
-        runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', drainTimeoutMs: 0 },
+        runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', drainTimeoutMs: 0, ...(over.childTimeoutMs === undefined ? {} : { childTimeoutMs: over.childTimeoutMs }) },
         resilience: { catalogue: [], fallbackModel: null },
+        ...(over.contextUnits ? { contextUnits: over.contextUnits } : {}),
       } }),
     });
     return { sessions, client };
@@ -502,7 +505,7 @@ describe('F — the fingerprint an agent started with (PD-ORCH-005 clause 14)', 
     expect(dal.agentFingerprintOf(sid, root.root_task_id)).toEqual(started);
   });
 
-  it('a child resumed after its persona\'s tools and instructions changed is named; the unchanged root is not', async () => {
+  it('a child resumed after its persona\'s tools and instructions changed is named for both; the root, whose tools alone changed, for its tools', async () => {
     let release!: () => void;
     const hold = new Promise<void>((r) => { release = r; });
     const first = harness((persona, turn) => {
@@ -530,7 +533,47 @@ describe('F — the fingerprint an agent started with (PD-ORCH-005 clause 14)', 
       [root.root_canonical_name, { task_id: root.root_task_id, iteration: 1, instructions_changed: false, tools_changed: true }],
     ]));
     expect(systemRows(sid)).toContain(`Agent ${child.canonical_name} (${child.task_id}) resumed under changed instructions: its system instructions and tool definitions differ from the ones it started with.`);
+    // The wording names what changed: the root's tools alone, in the transcript and in the issue.
+    const toolsOnly = `Agent ${root.root_canonical_name} (${root.root_task_id}) resumed under changed instructions: its tool definitions differ from the ones it started with.`;
+    expect(systemRows(sid)).toContain(toolsOnly);
+    expect(warnings(sid).find((w) => w.actor === root.root_canonical_name)?.message).toBe(toolsOnly);
     expect(warnings(sid)).toHaveLength(2);
+  });
+
+  it('once per execution, placed where the execution begins: a run never paused states nothing, though a skill loaded mid-run changes what the root\'s re-entry and the child\'s fallback retry are instructed with', async () => {
+    // REQ-CONFIG-166: the context units are re-read at every turn's construction; a unit appears once the child's first
+    // request has gone out, so the root's re-entry with its child's report and the child's REQ-ORCH-088 retry both carry it.
+    const FALLBACK: ModelRef = { providerId: 'f', modelId: 'f1', dialect: 'chat' };
+    const NEVER = new Promise<void>(() => undefined);
+    let childAsked = false;
+    const s = harness((persona, turn) => {
+      if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { task_name: 'work' } }], 'Delegating.') : answer('All done.');
+      if (persona === 'summariser') return answer('{"summary":"probed"}');
+      if (turn === 1) { childAsked = true; return { parts: [{ hold: NEVER, part: { kind: 'text', delta: 'late' } }, { part: { kind: 'finish', reason: 'stop' } }] }; }
+      return answer('Probed on the fallback.');
+    }, { contextUnits: () => (childAsked ? ['Skill: loaded mid-run.'] : []), childTimeoutMs: 10_000, childFallback: FALLBACK });
+    const sid = (s.sessions.start(dal, 'C:/ws', 'probe the thing') as { value: SessionId }).value;
+    for (let i = 0; i < 400 && !childAsked; i += 1) await new Promise((r) => setTimeout(r, 2));
+    // REQ-ORCH-088: the ceiling asks the child to land; it cannot, so the backstop ends it and the retry begins.
+    clock.advance(10_000);
+    await new Promise((r) => setTimeout(r, 5));
+    clock.advance(30_000);
+    expect((await s.sessions.running(sid)!).status).toBe('completed');
+    expect(dal.timelineOf(sid).map((t) => t.name)).toContain('child_timeout_fallback');
+    // The precondition: each agent's later request carried instructions its first did not.
+    const requests = (persona: string) => s.client.requests.filter((r) => personaOf(r) === persona).map(systemOf);
+    for (const persona of ['orchestrator', 'child']) {
+      expect(requests(persona).length).toBeGreaterThan(1);
+      expect(requests(persona)[0]).not.toContain('Skill: loaded mid-run.');
+      expect(requests(persona).at(-1)).toContain('Skill: loaded mid-run.');
+    }
+    // Neither was resumed, so neither is named: the check is built once per execution, not per turn or per attempt.
+    expect(warnings(sid)).toEqual([]);
+    expect(systemRows(sid)).toEqual([]);
+    const root = dal.iterationsOf(sid)[0]!.root_task_id;
+    const child = dal.childrenOf(sid)[0]!.task_id;
+    expect(dal.agentFingerprintOf(sid, root)?.instructions).toBe(fingerprintOf(requests('orchestrator')[0]!, []).instructions);
+    expect(dal.agentFingerprintOf(sid, child)?.instructions).toBe(fingerprintOf(requests('child')[0]!, []).instructions);
   });
 
   it('the check acts once per execution: a second call within it compares nothing, and a record with no store checks nothing', () => {

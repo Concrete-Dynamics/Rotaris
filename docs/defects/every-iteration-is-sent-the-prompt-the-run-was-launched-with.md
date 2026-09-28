@@ -16,6 +16,11 @@ recent context are only in the payload). Sending a non-own task as its bare text
 `PD-ORCH-005` phase 2, loses all three; the reviewer's proposal is the launch content as the base of every iteration
 with the selected task's own text added as the task to work on.
 
+A continuation's later iterations are re-sent the handoff as it was read at the continue: `PD-ORCH-005` clause 20's
+artifact line (`latestArtifactText`) can by then name an artifact superseded since, or another agent's where the
+resumed root published its first artifact after the continue (OQ-79; found by the review of clause 20's build,
+2026-09-28).
+
 Noticed 2026-09-27 by phase 2's re-review of `PD-ORCH-005`, whose repair of a crashed iteration puts that iteration's
 task back to `pending`. Reproduced by driving the engine (`record.test.ts` and the reviewer's probes); not driven in
 the built app.

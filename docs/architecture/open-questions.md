@@ -3371,7 +3371,8 @@ REQ-MONITOR-305's warnings surface, where a warning would naturally be listed, i
 - **Compared at the resumed execution's first model step**, just before the step goes out, once per execution — after
   the tool port is ready, so an MCP listing is complete. Any later execution of a task id that has a fingerprint is a
   resume (a task id is never executed twice otherwise). REQ-ORCH-088's fallback retry and REQ-ORCH-095's re-prompt run
-  within one execution and compare nothing. A resumed root waiting on its children is compared when it next steps; one
+  within one execution and compare nothing, and neither does a root re-entered with its children's reports, although
+  REQ-CONFIG-166 re-reads the context units at every turn: a skill loaded mid-run is not a resume. A resumed root waiting on its children is compared when it next steps; one
   that never steps again never ran under the changed instructions and is not named.
 - **An agent with no fingerprint** — recorded before v24, or paused before its first model step — has one recorded at
   its resumed first step and nothing is stated (REQ-SESSION-132).
@@ -3414,17 +3415,27 @@ when the run began.
   carries the plan itself in its own section.
 - **A root with no recorded iteration or no tool port** (before v23, or a run with no tool port) has no publish to
   find, and the handoff takes the latest of any kind. Nothing is backfilled.
-- **A later iteration of the same run is not recomputed.** It starts from the launch content computed at the
-  continuation, so its artifact line is the one current then. Clause 20 says which artifact, not when it is read, and
-  `PD-ORCH-004` revision 4 adds only the open offers to that first message.
+- **A root whose every publish is superseded published none.** Only artifacts nothing supersedes are candidates, so
+  when a later record (a child's included) supersedes each of the root's publishes, the handoff takes the latest of any
+  kind that nothing supersedes. The literal alternative — the root did publish, so the fallback does not apply and no
+  artifact is carried — was not taken: it would carry nothing where an unsuperseded artifact stands.
+- **The handoff is read once, when the continuation starts its run.** REQ-SESSION-115's handoff is "the payload handed
+  to the run", built at the continue, and clause 20's "that nothing supersedes" holds of it then. A later iteration of
+  the same run is not a new handoff: it is re-sent the launch content computed at the continue, by the recorded defect
+  `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`, so **its artifact line can name an artifact
+  superseded since, or another agent's where the resumed root published its first artifact after the continue**, as
+  its todo and progress lines can be stale. The artifact line is not recomputed alone; the repair belongs to that
+  defect, which must keep the three flows it names, and `PD-ORCH-004` revision 4 adds only the open offers to that
+  first message.
 - **Everything else stands as OQ-72 records it**: "latest" is the listing's order (created time, then id), a
   superseded record is never chosen, and the rendering (id first, 80-character title, a published body stated once,
   6,000 characters) is unchanged.
 
 **What a ruling decides.** Whether "the iteration's root" is the root of the iteration the new one follows, as built,
 or any iteration's root of the session, which would carry an earlier iteration's document forward past a later
-iteration whose root published nothing; and whether a later iteration of the same run should have its handoff's
-artifact read again when it starts.
+iteration whose root published nothing; whether a root whose every publish is superseded counts as having published
+none; and whether a later iteration of the same run should have its handoff's artifact read again when it starts,
+rather than be re-sent the one read at the continue, superseded or not.
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

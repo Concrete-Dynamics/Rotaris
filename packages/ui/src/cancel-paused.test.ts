@@ -85,7 +85,7 @@ describe('PD-ORCH-005 clauses 13 and 16 (revision 4, OQ-73/OQ-74): the Mission v
   });
 });
 
-describe('PD-ORCH-005 clause 13 (revision 4, round 2, OQ-73): a live agent\'s cancel names the paused descendants it also ends', () => {
+describe('PD-ORCH-005 clause 13 (revision 4, OQ-73): a live agent\'s cancel names the paused descendants it also ends', () => {
   it('in a `pausing` run, the inspector\'s note for a live parent counts its child already paused', () => {
     const live = agent({ state: 'running', presentationState: 'running', live: true, interruption: null });
     const pausing = session({ executionStatus: 'pausing', agents: [live, grand] });

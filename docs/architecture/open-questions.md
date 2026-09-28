@@ -3461,12 +3461,14 @@ only with a run behind it. The clause does not say:
 - **The command.** `session.control`'s `cancelAgent` with no run behind the session goes to `Sessions.cancelPausedAtRest`.
   It is refused (`{ok: false}`, which the renderer states as "not cancellable", REQ-MONITOR-128) for the run's id or the
   root's, an id that is no child of the open iteration, and a child neither `paused` nor left by a crash; a refusal
-  records nothing. It is refused too when the chosen child's own move to `cancelled` fails (a failed store write), and
-  then nothing below it is cancelled; a paused descendant whose own move fails is warned of and left `paused`, to resume
+  records nothing, and those are judged before the lock is taken, so none of them claims or reaps it. It is refused too
+  when the chosen child's own move to `cancelled` fails (a failed store write), and then nothing below it is cancelled
+  (what a crash record wrote before it stands, and is published by the record's own save); a paused descendant whose own move fails is warned of and left `paused`, to resume
   with the rest, and the chosen child's cancel stands. It is written under the session's lock (ADR-0005), which it does
   not otherwise hold: a run releases the lock at its teardown, so a session paused in this process holds none. The
   cancel takes the lock for its write and gives it back after, keeps it when this process already holds it (a session
-  loaded here), reaps a dead holder on this machine as loading a session does, and is refused while another live
+  loaded here), reaps a dead holder on this machine as loading a session does — through the one copy of that rule,
+  `claimLockReaping`, which never reaps a holder whose pid is no positive integer — and is refused while another live
   process holds it — one that has loaded the session, or is resuming it — so it never writes into a session another
   instance owns.
 - **A crash not yet recorded — a departure from clauses 3 and 8.** It is recorded first (`recordCrashOf`), and the

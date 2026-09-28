@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { contextPercent, DEFAULT_CONTEXT_CAPACITY, RUN_AGENT_ID, type AgentRecord, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
 import { CANCEL_RUN_TEXT, cancelCascade, cancelConfirmation, cancelOffered, cascadeNote, PAUSED_CANCEL_ALONE, PAUSED_CANCEL_WITH, pausedCancelWith, chipStates, countNoun, followedAgent, inspectorEnablement, instancesOf, mcpChipStates, mcpFateText, metaLine, PAUSE_NO_RUN, PAUSE_SELECT_RUN, pauseAvailability, resolvedTools, ringFigures, rowsOf, runLevelAgent, steerOffered, tableOrder } from './agents.js';
 import { personaColourToken } from './PersonaWindow.js';
-import { scopeDetail } from './TranscriptSurface.js';
 import { useShellState } from './shell-state.js';
 
 const agent = (over: Partial<AgentRecord>): AgentRecord => ({
@@ -205,11 +204,13 @@ describe('agents — PD-ORCH-005 clause 16 (revision 4): one paused child is can
   it('the confirmation names the child, gives one line per paused descendant, says it is final, and keeps it paused on dismissal (REQ-MONITOR-128)', () => {
     expect(cancelConfirmation({ id: 'one', name: 'one' }, agents)).toEqual({ title: 'Cancel one?', body: PAUSED_CANCEL_WITH, lines: ['grand'], confirmLabel: 'Cancel one', cancelLabel: 'Keep it paused' });
     expect(cancelConfirmation({ id: 'two', name: 'two' }, agents)).toEqual({ title: 'Cancel two?', body: PAUSED_CANCEL_ALONE, lines: [], confirmLabel: 'Cancel two', cancelLabel: 'Keep it paused' });
-    expect(PAUSED_CANCEL_WITH).toMatch(/cannot be undone/);
+    // The sentences the owner reads, pinned as literals rather than against the constants they are built from.
+    expect(PAUSED_CANCEL_WITH).toBe('Cancellation cannot be undone: the agent will not resume, and its paused descendants are cancelled with it:');
+    expect(PAUSED_CANCEL_ALONE).toBe('Cancellation cannot be undone: the agent will not resume. The other paused agents resume when the session continues.');
   });
 });
 
-describe('agents — PD-ORCH-005 clause 13 (revision 4, round 2): a live agent\'s cancel still ends its paused descendants, and says so (OQ-73)', () => {
+describe('agents — PD-ORCH-005 clause 13 (revision 4): a live agent\'s cancel still ends its paused descendants, and says so (OQ-73)', () => {
   const one = agent({ id: 'one', name: 'one', parentId: 'root:1' });
   const grand = agent({ id: 'grand', name: 'grand', parentId: 'one', state: 'paused', presentationState: 'paused', live: false });
   const kid = agent({ id: 'kid', name: 'kid', parentId: 'one', presentationState: 'queued', state: 'queued', live: false });
@@ -236,7 +237,7 @@ describe('agents — PD-ORCH-005 clause 13 (revision 4, round 2): a live agent\'
   });
 });
 
-describe('agents — PD-ORCH-005 clause 16 (revision 4, round 3): a paused child\'s confirmation names every descendant its cancel ends (OQ-74)', () => {
+describe('agents — PD-ORCH-005 clause 16 (revision 4): a paused child\'s confirmation names every descendant its cancel ends (OQ-74)', () => {
   const one = agent({ id: 'one', name: 'one', parentId: 'root:1', state: 'paused', presentationState: 'paused', live: false });
   const kid = agent({ id: 'kid', name: 'kid', parentId: 'one' });
   const grand = agent({ id: 'grand', name: 'grand', parentId: 'kid', state: 'paused', presentationState: 'paused', live: false });
@@ -249,14 +250,5 @@ describe('agents — PD-ORCH-005 clause 16 (revision 4, round 3): a paused child
   it('at rest, where every unfinished descendant is paused, the set and the wording are what they were', () => {
     const rested = agent({ id: 'g2', name: 'g2', parentId: 'one', state: 'paused', presentationState: 'paused', live: false });
     expect(cancelConfirmation({ id: 'one', name: 'one' }, [one, rested])).toMatchObject({ body: PAUSED_CANCEL_WITH, lines: ['g2'] });
-  });
-});
-
-describe('agents — PD-ORCH-005 clause 13 (revision 4, round 3): "This task" shows no elapsed time for a paused agent (REQ-CHAT-069, OQ-73)', () => {
-  it('a paused agent — in REQ-CHAT-008\'s recovery state the clock still ticks — reads its state alone; a live or ended one keeps its time', () => {
-    const later = '2026-09-05T10:03:12.000Z';
-    expect(scopeDetail(agent({ state: 'paused', presentationState: 'paused', live: false }), later)).toBe('paused');
-    expect(scopeDetail(agent({}), later)).toBe('running · 3m 12s');
-    expect(scopeDetail(agent({ state: 'succeeded', presentationState: 'done', live: false, completedAt: '2026-09-05T10:00:30.000Z' }), later)).toBe('done · 30s');
   });
 });

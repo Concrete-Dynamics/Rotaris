@@ -6,7 +6,7 @@ import type { AgentBackend, ChatMessage, ContentPart } from '@rotaris/model';
 import { conversationOf } from './run/record.js';
 import { ProjectionOwner, type Publisher } from './projection-owner.js';
 import { SequenceCounters } from './sequence.js';
-import { SessionWriter, toTranscriptRow, type CheckpointRecordInput, type Committed, type RestoreRecordInput } from './session-writer.js';
+import { claimLockReaping, SessionWriter, toTranscriptRow, type CheckpointRecordInput, type Committed, type RestoreRecordInput } from './session-writer.js';
 import type { CheckpointPort, CheckpointPortContext } from './checkpoint-port.js';
 import { EventBus } from './run/event-bus.js';
 import { parseTokenSamples, Run, type AgentTerminals, type ModelLookup, type PermissionPosture, type RunConfig, type RunResult } from './run/run.js';
@@ -1588,32 +1588,37 @@ export class Sessions {
     const open = s.dal.openIterationOf(sid);
     // The run's id and the root's are no child of the iteration, so the lookup below refuses them.
     if (!row || !open) return { ok: false };
+    // A refusal writes nothing, the lock included: the target is judged before the lock is taken, so the run's id, the
+    // root's, an unknown id and an agent neither paused nor crash-left never reap or claim it (OQ-74). The judgement is
+    // made again under the lock, which is what the write rests on.
+    if (!this.cancellableAtRest(s.dal, sid, agentId, row, open, () => this.liveness(s.dal, sid) === 'not-live')) return { ok: false };
     const warn = (m: string) => { s.log?.warn(m); this.deps.warn(m); };
     // ADR-0005: the write is made under the session's lock. A run releases the lock at its teardown, so a session paused
     // in this process holds none; the cancel takes it for the write and gives it back after, keeps it when this process
-    // already holds it (a loaded session), reaps a dead local holder as `SessionWriter.open` does, and refuses while
-    // another live process holds it — one that has loaded or is resuming the session (OQ-74).
+    // already holds it (a loaded session), reaps a dead local holder as `SessionWriter.open` does (`claimLockReaping`, the
+    // one copy of that rule), and refuses while another live process holds it — one that has loaded or is resuming the
+    // session (OQ-74).
     const lock = this.lockForWrite(s.dal, sid, warn);
     if (!lock) return { ok: false };
     try { return this.cancelPausedUnderLock(s, sid, agentId, row, open, warn); }
     finally { lock.release(); }
   }
 
+  /** Whether `agentId` is a child of the open iteration that is `paused`, or that a crash not yet recorded left unfinished. */
+  private cancellableAtRest(dal: StoreDal, sid: SessionId, agentId: string, row: SessionRow, open: NonNullable<ReturnType<StoreDal['openIterationOf']>>, notLive: () => boolean): { readonly crashLeft: ReadonlySet<string> } | null {
+    const crashLeft = crashLeftOf(dal, row, notLive);
+    const target = iterationAgents(dal, sid, open).find((c) => c.task_id === agentId);
+    return target && (target.state === 'paused' || crashLeft.has(agentId)) ? { crashLeft } : null;
+  }
+
   /** The lock `cancelPausedAtRest` writes under: taken (and given back), already this process's (kept), or null — refused. */
   private lockForWrite(dal: StoreDal, sid: SessionId, warn: (m: string) => void): { readonly release: () => void } | null {
     const { pid, host } = this.deps;
     try {
-      const now = toIsoUtc(this.deps.clocks.wall.instant());
-      let claimed = dal.claimLock(sid, pid, host, now);
-      if (!claimed.claimed) {
-        const h = claimed.holder;
-        if (h.pid === pid && h.host === host) return { release: () => undefined };
-        const alive = this.deps.isProcessAlive ?? (() => true);
-        if (h.host !== host || !Number.isInteger(h.pid) || h.pid <= 0 || alive(h.pid)) return null;
-        dal.releaseLock(sid, h.pid, host);
-        claimed = dal.claimLock(sid, pid, host, now);
-        if (!claimed.claimed) return null;
-      }
+      const held = dal.getLock(sid);
+      if (held && held.pid === pid && held.host === host) return { release: () => undefined };
+      const claimed = claimLockReaping(dal, sid, pid, host, toIsoUtc(this.deps.clocks.wall.instant()), this.deps.isProcessAlive ?? (() => true));
+      if (!claimed.claimed) return null;
       return { release: () => { try { dal.releaseLock(sid, pid, host); } catch (cause) { warn(`releasing the lock of ${sid} after a cancel failed: ${String(cause)}`); } } };
     } catch (cause) {
       warn(`taking the lock of ${sid} for a cancel failed: ${String(cause)}`);
@@ -1622,10 +1627,12 @@ export class Sessions {
   }
 
   private cancelPausedUnderLock(s: Live, sid: SessionId, agentId: string, row: SessionRow, open: NonNullable<ReturnType<StoreDal['openIterationOf']>>, warn: (m: string) => void): ControlResult {
-    const crashLeft = crashLeftOf(s.dal, row, () => this.liveness(s.dal, sid) === 'not-live');
-    const target = iterationAgents(s.dal, sid, open).find((c) => c.task_id === agentId);
-    if (!target || (target.state !== 'paused' && !crashLeft.has(agentId))) return { ok: false };
-    if (crashLeft.size > 0) this.recordCrashOf(s.dal, s.writer, sid, warn);
+    // Under the lock this process holds and with no run of its own behind the session, the liveness predicate can only
+    // answer not-live (`liveness`: a lock this process holds with no run behind it), so it is not asked again.
+    // The row is read again under the lock, which is what the write rests on.
+    const judged = this.cancellableAtRest(s.dal, sid, agentId, s.dal.getSession(sid) ?? row, open, () => true);
+    if (!judged) return { ok: false };
+    if (judged.crashLeft.size > 0) this.recordCrashOf(s.dal, s.writer, sid, warn);
     // Read again: the crash record has just paused what the crash left.
     const agents = iterationAgents(s.dal, sid, open);
     const byParent = new Map<string, ChildRow[]>();
@@ -1644,8 +1651,10 @@ export class Sessions {
       if (!r.ok) {
         warn(r.error.code === 'illegal-move' ? r.error.reason : `cancelling paused ${t.task_id} failed: ${r.error.code}`);
         // The chosen child is first; a failed move of it leaves it paused and cancels nothing below it, and the renderer is
-        // answered that it could not be cancelled (REQ-MONITOR-128) rather than shown a cancel that did not happen.
-        if (own) { s.owner.reconcile(); return { ok: false }; }
+        // answered that it could not be cancelled (REQ-MONITOR-128) rather than shown a cancel that did not happen. What a
+        // crash record wrote before it needs no republish here: its save publishes the record through the writer's hand-off
+        // (`ProjectionOwner.onCommitted`), and its agents already presented as it leaves them (clause 13, OQ-73).
+        if (own) return { ok: false };
         // A descendant whose move fails is left paused, and resumes; the chosen child's cancel stands (OQ-74).
         continue;
       }

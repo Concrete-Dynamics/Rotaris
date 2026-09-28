@@ -377,7 +377,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         expect(dal.getChild(sid, 'bg_000000c1')!.state).toBe('running');
       });
     });
-    describe('PD-ORCH-005 clause 16 (revision 4, round 2, OQ-74): the at-rest cancel walks through a finished descendant, records a crash only when one left something, and answers a failed move', () => {
+    describe('PD-ORCH-005 clause 16 (revision 4, OQ-74): the at-rest cancel walks through a finished descendant, records a crash only when one left something, and answers a failed move', () => {
       const cancel = (s: Sessions, sid: SessionId, agentId: string) => s.control({ op: 'cancelAgent', sessionId: sid, args: { agentId } });
       /** c1, c2 and c3 brought to rest by a pause; `recorded` whether the rest also wrote the iteration's interruption. */
       const rested = (recorded: boolean) => (w: SessionWriter) => {
@@ -434,7 +434,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         expect([dal.getChild(sid, 'bg_000000c1')!.state, dal.getChild(sid, 'bg_000000c3')!.state]).toEqual(['paused', 'paused']);
       });
     });
-    describe('PD-ORCH-005 clause 16 (revision 4, round 3, OQ-74): the at-rest cancel writes under the session\'s lock, answers a session not loaded, and keeps a failed descendant paused', () => {
+    describe('PD-ORCH-005 clause 16 (revision 4, OQ-74): the at-rest cancel writes under the session\'s lock, answers a session not loaded, and keeps a failed descendant paused', () => {
       const cancel = (s: Sessions, sid: SessionId, agentId: string) => s.control({ op: 'cancelAgent', sessionId: sid, args: { agentId } });
       const OTHER = mintMachineId('0000000000000000000000000000000b') as MachineId;
       const at = () => new Date(Number(clock.instant())).toISOString();
@@ -485,6 +485,77 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         expect([dal.getChild(sid, 'bg_000000c1')!.state, dal.getChild(sid, 'bg_000000c3')!.state]).toEqual(['cancelled', 'paused']);
         expect(resumableOf(dal, dal.getSession(sid)!)).toEqual({ iteration: 2, agents: 3 });
       });
+    });
+    describe('PD-ORCH-005 clause 16 (OQ-74): the at-rest cancel\'s entry, a crash that left a sibling of a paused child, a refused move\'s republish, and a refusal that writes nothing', () => {
+      const cancel = (s: Sessions, sid: SessionId, agentId: string) => s.control({ op: 'cancelAgent', sessionId: sid, args: { agentId } });
+      const entries = (sid: SessionId) => dal.timelineOf(sid).filter((t) => t.name === 'child_user_cancelled').map((t) => t.message);
+
+      it('each agent it ends gets the live cancel\'s entry, saying the session rested', async () => {
+        const sid = await crashed();
+        const viewer = sessionsAs(88);
+        expect(viewer.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        expect(cancel(viewer, sid, 'bg_000000c1')).toEqual({ ok: true });
+        expect(entries(sid)).toEqual(['The user cancelled child c1 (bg_000000c1) while the session rested.', 'The user cancelled child c3 (bg_000000c3) with c1 while the session rested.']);
+      });
+
+      it('the chosen child already paused, a sibling left unfinished by the crash: the crash is recorded first — the sibling paused by it, the approval withdrawn, the background sessions ended', async () => {
+        // A `pausing` run: c1 had come to rest, c2's and c3's calls were still in flight when the host died.
+        const sid = await crashed((w) => { w.restChild('bg_000000c1', 'pause', 'running'); });
+        const viewer = sessionsAs(88);
+        expect(viewer.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        expect(dal.getSession(sid)!.pending_approvals).not.toBe('[]');
+        expect(cancel(viewer, sid, 'bg_000000c1')).toEqual({ ok: true });
+        expect(dal.getIteration(sid, 2)).toMatchObject({ state: 'open', interruption: 'crash' });
+        expect(dal.getChild(sid, 'bg_000000c2')).toMatchObject({ state: 'paused', interruption: 'crash' });
+        // c3, c1's child, was paused by the crash record and so is cancelled with c1.
+        expect([dal.getChild(sid, 'bg_000000c1')!.state, dal.getChild(sid, 'bg_000000c3')!.state]).toEqual(['cancelled', 'cancelled']);
+        expect(JSON.parse(dal.getSession(sid)!.pending_approvals)).toEqual([]);
+        expect(dal.agentTerminalsOf(sid).map((t) => [t.terminal_id, t.state])).not.toContainEqual(['ts_dead', 'running']);
+      });
+
+      it('when the chosen child\'s own move fails after the crash was recorded, what the record wrote is published — its save publishes it, and its agents already presented so', async () => {
+        const sid = await crashed();
+        const snapshots: SessionRecord[] = [];
+        const viewer = sessionsAs(88, undefined, { increment: () => undefined, snapshot: (p) => { snapshots.push(p.session); } });
+        expect(viewer.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        viewer.owner(sid)!.attach();
+        expect(snapshots.at(-1)!.pendingApprovals).toHaveLength(1);
+        dal.db.exec("CREATE TRIGGER refuse_c1 BEFORE UPDATE OF state ON children WHEN NEW.state = 'cancelled' AND OLD.task_id = 'bg_000000c1' BEGIN SELECT RAISE(ABORT, 'refused'); END;");
+        expect(cancel(viewer, sid, 'bg_000000c1')).toEqual({ ok: false });
+        expect(dal.getIteration(sid, 2)!.interruption).toBe('crash');
+        expect(snapshots.at(-1)!.pendingApprovals).toEqual([]);
+        expect(snapshots.at(-1)!.agents.find((a) => a.id === 'bg_000000c2')).toMatchObject({ state: 'paused', presentationState: 'paused', interruption: 'crash' });
+      });
+
+      it('a refused target is judged before the lock is taken: a dead local holder\'s lock is not reaped for it', async () => {
+        const sid = await crashed(rested(), 'paused');
+        const viewer = sessionsAs(88);
+        expect(viewer.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        dal.releaseLock(sid, 88, HOST);
+        expect(dal.claimLock(sid, 99, HOST, at()).claimed).toBe(true);
+        for (const id of ['run', ROOT, 'bg_000000c4', 'bg_ffffffff']) expect(cancel(viewer, sid, id)).toEqual({ ok: false });
+        expect(dal.getLock(sid)).toMatchObject({ pid: 99, host: HOST });
+      });
+
+      it('a local holder whose pid is no positive integer is never reaped (REQ-SESSION-047/083/112): the cancel is refused and the lock left as it was', async () => {
+        const sid = await crashed(rested(), 'paused');
+        const viewer = sessionsAs(88);
+        expect(viewer.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        dal.releaseLock(sid, 88, HOST);
+        expect(dal.claimLock(sid, 0, HOST, at()).claimed).toBe(true);
+        expect(cancel(viewer, sid, 'bg_000000c1')).toEqual({ ok: false });
+        expect(dal.getChild(sid, 'bg_000000c1')!.state).toBe('paused');
+        expect(dal.getLock(sid)).toMatchObject({ pid: 0, host: HOST });
+      });
+
+      const at = () => new Date(Number(clock.instant())).toISOString();
+      /** c1, c2 and c3 brought to rest by a pause that recorded the iteration's interruption. */
+      const rested = () => (w: SessionWriter) => {
+        dal.setIterationInterruption(w.sessionId, 2, 'pause');
+        w.restChild('bg_000000c1', 'pause', 'running');
+        w.restChild('bg_000000c2', 'pause', 'queued');
+        w.restChild('bg_000000c3', 'pause', 'waiting_on_dependencies');
+      };
     });
   });
 });

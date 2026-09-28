@@ -13,6 +13,7 @@ import { conversationOf } from '../run/record.js';
 import { interruptedResult } from '../run/interruption.js';
 import { decodeStoredTodo } from '../todo-view.js';
 import { resumableOf } from '../sessions.js';
+import { userCancellation } from './ledger.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
@@ -1976,7 +1977,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       // Nothing is left open, so nothing is cancellable at rest any more.
       expect(cancel(sessions, sid, byName(sid, 'two').task_id)).toEqual({ ok: false });
     });
-    describe('round 3 (OQ-74): the cancel is made under the session\'s lock', () => {
+    describe('PD-ORCH-005 clause 16 (OQ-74): the cancel is made under the session\'s lock', () => {
       it('a session this process paused holds no lock: the cancel takes it for the write and gives it back; another live process holding it refuses the cancel, writing nothing', async () => {
         const { sessions, sid } = await restedFamily();
         expect(dal.getLock(sid)).toBeUndefined();
@@ -1992,5 +1993,18 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
         expect(dal.getLock(sid)).toBeUndefined();
       });
     });
+  });
+});
+
+describe('PD-ORCH-005 clause 16 (OQ-74): the user\'s cancel writes one entry for both cancels, the at-rest one saying the session rested', () => {
+  const t = { task_id: 'bg_00000002', canonical_name: 'grand', persona: 'coding-agent' };
+  const chosen = { task_id: 'bg_00000001', canonical_name: 'one' };
+  it('the live cancel\'s entry names the child and what it was cancelled with, and nothing more', () => {
+    expect(userCancellation(chosen as typeof t & typeof chosen, chosen).message).toBe('The user cancelled child one (bg_00000001).');
+    expect(userCancellation(t, chosen).message).toBe('The user cancelled child grand (bg_00000002) with one.');
+  });
+  it('the at-rest cancel\'s adds that the session rested', () => {
+    expect(userCancellation(t, chosen, true).message).toBe('The user cancelled child grand (bg_00000002) with one while the session rested.');
+    expect(userCancellation(t, chosen, true).metadata).toEqual({ task_id: 'bg_00000002', cancelled_with: 'bg_00000001' });
   });
 });

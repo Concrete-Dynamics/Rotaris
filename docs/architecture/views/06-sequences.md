@@ -241,7 +241,9 @@ sequenceDiagram
   summary, report or terminal state for a paused child; no model call after the pause beyond the step in flight.
 - **A crash writes none of this.** The next repair or continue does (`run/crash.ts`): the interruption `crash` on the
   open row, its unfinished agents paused, a dead run's unanswered calls answered, its approvals withdrawn, its
-  background sessions ended. Loading the session writes nothing.
+  background sessions ended. So does — departing from clauses 3 and 8 (OQ-74) — the user's cancel of one child while
+  the session rests, when a crash left an agent unfinished (`Sessions.cancelPausedAtRest` → `recordCrashOf`), before it
+  cancels. Loading the session writes nothing.
 - **The explicit cancel is not a rest.** The reserved run id's final stop cancels the waits, drains and finalizes as
   before: every agent `cancelled`, the iteration closed — including when it arrives while a pause or a stop is still
   coming to rest, or later while teardown runs (the iteration this run left open then closes before the run's result is

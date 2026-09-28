@@ -3347,457 +3347,6 @@ recommendations.
 Until they are built, the artifact is the latest of any kind, and a later iteration of the same run is told of no
 offer.
 
-**OQ-78 — What is an agent's fingerprint taken of, when is it compared, and where is the warning stated?** *(`PD-ORCH-005` clause 14 over OQ-68's reading; REQ-SESSION-029, REQ-SESSION-132, REQ-SESSION-134, REQ-SESSION-135, REQ-ORCH-019, REQ-ORCH-088, REQ-ORCH-095, REQ-WORKSPACE-047, REQ-WORKSPACE-050, REQ-WORKSPACE-058, REQ-WORKSPACE-060, REQ-TOOLS-010, REQ-TOOLS-053, REQ-TOOLS-069, REQ-MCP-101, REQ-CONFIG-166 and REQ-MONITOR-305, which the directive does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
-
-Clause 14 has each agent's record keep "a fingerprint of the system instructions and the tool definitions the agent
-started with", and has the run state, as a warning, which agent resumed under changed instructions when its persona's
-current ones differ. It does not say what the instructions are — the persona's own text, or everything the request's
-system prompt carries — nor when the comparison is made, how often a warning is repeated, or where the run states it.
-REQ-MONITOR-305's warnings surface, where a warning would naturally be listed, is not built.
-
-**What the build proceeds under.**
-
-- **What the request carried.** The fingerprint is two SHA-256 digests (`agent_fingerprints`, v24): the system prompt
-  exactly as the agent's first model request carried it — the persona's instructions, its playbook (REQ-ORCH-019), the
-  session's context units (REQ-WORKSPACE-060) and the MCP section (REQ-MCP-101) — and the tool definitions that request
-  offered (REQ-TOOLS-010), in name order with every object's keys sorted, so the order a listing was assembled in is not
-  a change. A digest, not a copy: the instructions are not stored twice (REQ-SESSION-029). The consequence is stated
-  here because it is wider than "its persona" alone: a continue whose pre-flight classifies a different intent (a
-  different playbook), a skill force-loaded since, a changed MCP server, or a permission mode that changes the listing
-  also warns, since each changes what the agent is instructed with or offered. The first is common: every continue
-  runs the pre-flight again with its own message (`launchContinuation`), so a continue by message classified as a
-  different intent warns for every resumed agent whose role has a playbook, though no persona was edited. The model is
-  not part of it.
-- **The workspace's own files are in it too.** The context units include REQ-WORKSPACE-047/050's workspace context —
-  the instruction files (`AGENTS.md` and the like) merged from the run's execution root, the tree the agents write
-  to — and the skill catalog block. So an agent that edits `AGENTS.md` as part of its task changes what every agent
-  resumed after it is instructed with, and each is named "resumed under changed instructions: its system instructions
-  differ", although no persona changed and the change is the run's own. Whether it is named depends on whether the
-  merge was read again: REQ-WORKSPACE-058 holds it per workspace root until a rescan or a session creation clears it
-  (`SkillRegistry.workspaceContext`), so a continue in the same process after nothing else happened is still handed
-  the cached merge and states nothing, while the same continue after the app is relaunched, or after any session is
-  created in that workspace, is handed the edited file and warns for every resumed agent. The warning is true of what
-  the request carried in both cases; which of the two the agent is given is REQ-WORKSPACE-058's, not this build's.
-  A lesser case of the same kind: `ask_questions` is listed only while the run host holds a live presenter
-  (`userPromptChannel`, attendedness under REQ-TOOLS-053/069), so an agent that started during a lapse in the presenter and is resumed
-  with one live is named for its tool definitions.
-- **The first is kept.** The fingerprint is recorded at an agent's first model step and never replaced. Every resume
-  compares against it, so each resume under instructions that still differ warns again; a resume under the instructions
-  it started with states nothing.
-- **Compared at the resumed execution's first model step**, just before the step goes out, once per execution — after
-  the tool port is ready, so an MCP listing is complete. Any later execution of a task id that has a fingerprint is a
-  resume (a task id is never executed twice otherwise). REQ-ORCH-088's fallback retry and REQ-ORCH-095's re-prompt run
-  within one execution and compare nothing, and neither does a root re-entered with its children's reports, although
-  REQ-CONFIG-166 re-reads the context units at every turn: a skill loaded mid-run is not a resume. A resumed root
-  waiting on its children is compared when it next steps; one that never steps again never ran under the changed
-  instructions and is not named.
-- **An agent with no fingerprint** — recorded before v24, or paused before its first model step — has one recorded at
-  its resumed first step and nothing is stated (REQ-SESSION-132).
-- **Stated as a warning issue and a transcript line.** A `resumed_under_changed_instructions` issue at warning severity
-  — a kind coined by this build: the specification's issue-kind vocabulary ("Issue kinds (session diagnostics)" in
-  `docs/spec/01-run-orchestration.md`) has none for it — its actor the agent's canonical name, with its timeline entry
-  (REQ-SESSION-134/135), and one `system` row in the transcript: "Agent <canonical name> (<task id>) resumed under
-  changed instructions: its system instructions | tool definitions | system instructions and tool definitions differ
-  from the ones it started with." The issue's metadata carries the task id, the iteration and which of the two changed.
-- **Every agent**, the root and every child at every depth, each under its task id and its own iteration (the root's
-  iteration number, a child's `children.iteration`). The fingerprint is part of the agent's record for clause 12: it is
-  deleted with its session, and the transcript clear removes closed iterations' fingerprints with their conversations
-  (`fingerprints_removed` in `transcript_cleared`'s metadata), so an open iteration's are kept however many iterations
-  closed before it.
-
-**What a ruling decides.** Whether "the system instructions" should be the persona's own definition only, so a changed
-playbook, skill, MCP server, workspace instruction file (one the run's own agents may have edited) or presenter-bound
-tool does not warn; whether a warning should be stated once per change (replacing the
-fingerprint after a warned resume) rather than at every resume while it differs; and whether the warning should also
-reach REQ-MONITOR-305's warnings surface once that is built, or be stated at the continue rather than at the agent's
-first step; and what the issue kind is called, since the specification's vocabulary has none for it.
-
-**OQ-79 — Whose root is "the iteration's root" when the handoff is built for an iteration that has not started?** *(`PD-ORCH-005` clause 20 over REQ-SESSION-115; REQ-ORCH-153, REQ-ORCH-154, REQ-LIBRARY-093 and REQ-LIBRARY-096, which the directive does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
-
-Clause 20 makes REQ-SESSION-115's artifact "the latest artifact the iteration's root published that nothing supersedes"
-and, when the root published none, the latest of any kind. Every continue builds the handoff, including one that resumes
-an open iteration, but it reaches a model only when a new iteration starts — a new prompt, a continue that finds nothing
-open, "continue without them", the plan gate's approve, or the iteration after a resumed one — since a resumed root is
-handed the new message alone; and that new iteration's root has published nothing yet. The clause does not say which
-iteration it means. Three further edges meet it: a plan cycle's root (REQ-ORCH-153's iteration 0, never recorded as an
-iteration), a root from before the iterations were recorded (v23), and a later iteration of the same run, which starts
-from the launch content computed when the run began.
-
-**What the build proceeds under.**
-
-- **The iteration is the most recent recorded one**, open or closed — the highest-numbered row in `iterations`, the
-  iteration the new one follows. A publish by an earlier iteration's root counts only as "of any kind". The alternative
-  read "the orchestrator" as a role — the latest publish of any iteration's root — and was not taken, because the
-  clause names one iteration's root.
-- **The root is known by its task id.** A root's publish carries its task id as the artifact's `conversation_id` (its
-  own tool port writes it; a child's report and a child's publish carry the child's), and the iteration's row records
-  that id. `created_by` is not used: every root records its persona there
-  (`a-roots-publish-names-its-persona-as-its-author.md`), so it cannot tell one iteration's root from another's.
-- **A plan cycle's root is not an iteration's root.** Its publishes count only as "of any kind"; the approve path
-  carries the plan itself in its own section.
-- **Work that follows a plan cycle follows no iteration.** A plan cycle is never recorded as an iteration, so on the
-  plan gate's approve and revise, and on a prompt after a declined plan, the most recent `iterations` row belongs to
-  an earlier piece of work. Taking its root there would hand over that earlier work's document ahead of everything
-  the plan cycle produced — its children's reports and the plan its root published — although the new work follows
-  the plan cycle, not that iteration. So when the latest plan cycle opened its gate (`plan_cycles.opened_at`) after
-  the latest iteration opened, no iteration's root is preferred and the handoff takes the latest of any kind that
-  nothing supersedes. A prompt that opens a plan cycle on a re-armed session (`PD-ORCH-003`) is handed the latest
-  iteration's root's document, since that plan cycle follows it; and once the approved iteration opens, its root is
-  preferred again. The two instants are the session writer's own ISO times, so an equal pair (possible only under
-  a stopped test clock) counts the iteration as the later.
-- **A root with no recorded iteration or no tool port** (before v23, or a run with no tool port) has no publish to
-  find, and the handoff takes the latest of any kind. Nothing is backfilled.
-- **A root whose every publish is superseded published none.** Only artifacts nothing supersedes are candidates, so
-  when a later record (a child's included) supersedes each of the root's publishes, the handoff takes the latest of any
-  kind that nothing supersedes. The literal alternative — the root did publish, so the fallback does not apply and no
-  artifact is carried — was not taken: it would carry nothing where an unsuperseded artifact stands.
-- **The handoff is read once, when the continuation starts its run.** REQ-SESSION-115's handoff is "the payload handed
-  to the run", built at the continue, and clause 20's "that nothing supersedes" holds of it then. A later iteration of
-  the same run is not a new handoff: it is re-sent the launch content computed at the continue, by the recorded defect
-  `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`, so **its artifact line can name an artifact
-  superseded since, or another agent's where the resumed root published its first artifact after the continue**, as
-  its todo and progress lines can be stale. The artifact line is not recomputed alone; the repair belongs to that
-  defect, which must keep the three flows it names, and `PD-ORCH-004` revision 4 adds only the open offers to that
-  first message.
-- **Everything else stands as OQ-72 records it**: "latest" is the listing's order (created time, then id), a
-  superseded record is never chosen, and the rendering (id first, 80-character title, a published body stated once,
-  6,000 characters) is unchanged.
-
-**What a ruling decides.** Whether "the iteration's root" is the root of the iteration the new one follows, as built,
-or any iteration's root of the session, which would carry an earlier iteration's document forward past a later
-iteration whose root published nothing; whether work that follows a plan cycle takes the latest of any kind, as
-built, or prefers the plan cycle root's own publish, or the root of the last recorded iteration — the reading this
-build first took, which handed an earlier piece of work's document over ahead of the plan cycle's; whether a root whose every publish is superseded counts as having published
-none; and whether a later iteration of the same run should have its handoff's artifact read again when it starts,
-rather than be re-sent the one read at the continue, superseded or not.
-
-**OQ-76 — Which sessions has a crash left, and what does the Continue action offer on one with nothing to resume?** *(`PD-ORCH-005` clause 18 (revision 4), with clauses 8, 11 and 19; REQ-MONITOR-125 as clause 18 extends it; REQ-CHAT-008, REQ-GIT-093, REQ-SESSION-171, REQ-SESSION-060, REQ-GIT-094 and REQ-CHAT-006, which the directive does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
-
-Clause 18: "A session a crash left — `interrupted` after a repair, or in REQ-CHAT-008's recovery state before one — SHALL
-offer the Continue action and 'continue without them' as a `paused` session does, with the same count. Either choice
-records the crash first, as any continue does (clause 8)." The clause names the two states. It does not say how the
-engine tells the recovery state apart from a session another process is still running. It does not say what a
-crash-left session offers when no iteration is open, or whether the pause's statement is drawn on it. And it does not
-say what the decline's wording means before the crash is recorded.
-
-**What the build proceeds under.**
-
-- **Which sessions a crash left.** `Sessions.continueSession` accepts a session whose status is `interrupted`. It also
-  accepts one whose status is still busy when REQ-GIT-093's liveness predicate calls it `not-live`, the one predicate
-  REQ-SESSION-171 and the repair already use. A busy session that is `live`, or whose liveness is `unknown`, is refused
-  (`run-active`), because another process may still be running it. The renderer reads the same two states as
-  `crashLeft`: `interrupted`, or busy with `needsRecovery` (the session list's `stale`). `paused_message_limit` and
-  `awaiting_plan_decision` are durable holds, not busy statuses, so a crash does not make them crash-left. They keep
-  their own continues (clause 11).
-- **A session the store's failure left busy is not one a crash left.** A run that ends on a recording failure (OQ-42)
-  leaves the durable status busy and this process's lock with no run behind it, so the liveness predicate reads
-  `not-live`, the session list marks it `stale`, and the renderer's `crashLeft` draws the two continues on it. It did not
-  crash, and nothing can be recorded of it. `Sessions.continueSession` therefore refuses every continue on it
-  `store-failed` ("The workspace store requires recovery before continuing work"), as `Sessions.prompt` and the plan
-  decision already do, so the Continue action, the decline and the continue by message all refuse the same state the
-  same way. The guard stands first in `continueSession`, so a `paused` session under a store failure is refused too,
-  where it was accepted before. The recovery is OQ-42's: restore storage and reopen the session, which rebuilds the
-  writer. After the reopen the session is busy with nothing running it, which is REQ-CHAT-008's recovery state, and a
-  continue then records the crash as for any other. The renderer does not tell this state apart: it knows nothing of
-  the writer's failure beyond the recording-failure notice, whose action is the reopen. *The first build accepted such a
-  session and reported `{resumed: true}` against the failed writer, where the same call had been refused `not-paused`
-  before clause 18; the round-2 review found it.*
-- **The actions at the message limit.** A crash-left session is not at the message limit, so it takes `action` as a
-  manually paused session does. `continue` and `double` continue it; `cancel` leaves it as it is.
-- **Nothing open to resume.** A crash-left session with no open iteration draws the two continues where the send pill
-  stood, with no count and no decline, as a `paused` session with nothing to resume does. Its Continue action continues
-  the last request, which is REQ-MONITOR-125's "resumed from the composer".
-- **No pause statement.** "Paused. Run controls need the run continued…" stays on a paused session only. A crash-left
-  session is not paused, and its run state already says what it is (REQ-CHAT-008's "Run needs recovery", or the
-  interrupted presentation). REQ-CHAT-006's chip reason in the recovery state is left as it stands. The Continue action
-  belongs to the composer, not to the run controls.
-- **The decline's wording before the crash is recorded.** In the recovery state the agents the count names are still
-  `running` in the store, yet the decline says "The N paused agents end cancelled". The text is kept. The crash record
-  pauses them first (clause 8), then the decline cancels them, so the words describe the act at the moment it happens.
-  The wording does not rest on how those agents present, which is lane "surfaces"' reading (clause 13 and REQ-CHAT-008's
-  recovery state): at this commit they still present as the build's catch-all, and the reading that lane is expected to
-  take is that they present as `paused` before the crash is recorded, so the agent tree agrees with the count. If that
-  reading is refined, this bullet is re-read against it.
-- **Either choice records the crash first, in one place.** Every continue passes `Sessions.launchContinuation`, which
-  records the crash before the stale-child settle and before it resumes or declines the open iteration. So the Continue
-  action, the continue by message (`Sessions.prompt`) and the decline need no crash-specific path.
-- **The lock.** `Sessions.prompt` tries to re-claim a lock it no longer holds, but it cannot: `resume` returns early for
-  a session already live in this process. A probe placed in that branch was never reached on any crash-left path, so
-  `continueSession` does not copy it
-  (`docs/defects/a-continue-by-message-cannot-re-claim-a-lock-it-no-longer-holds.md`).
-
-**What a ruling decides.** Whether a busy session of unknown liveness should also be continuable, for example after a
-confirmation, rather than refused. Whether a crash-left session should state something of its own in the notices row,
-where a paused session states its pause. Whether a crash that left a durable hold should offer anything beyond that
-hold's own continues. Whether the composer should withhold the continues on a session the store's failure left busy,
-rather than draw them and have the engine refuse them.
-
-**OQ-81 — What does the audit of clause 15, clause 19, PD-CHAT-001 revision 4 and PD-CHAT-002 revision 2 leave undecided?** *(`PD-ORCH-005` clauses 3, 9, 11, 15 and 19 (revision 4); `PD-CHAT-001` revision 4, "The strip" and "The paused continues"; `PD-CHAT-002` revision 2; REQ-CHAT-029, REQ-CHAT-005, REQ-CHAT-021, REQ-CHAT-169, REQ-MONITOR-004, REQ-SESSION-186, REQ-TOOLS-063, REQ-CHAT-101 and REQ-TRACE-464. Raised 2026-09-28 by building `PD-ORCH-005` revision 4, `PD-CHAT-001` revision 4 and `PD-CHAT-002` revision 2 under [R-064](../product/requests.md#r-064).)*
-
-Most of what these rulings decide was already built under OQ-69 and OQ-71's readings. The audit found one behaviour the
-text contradicts: a board run caught by the application's quit came to rest by `stop`
-(`docs/defects/fixed/a-board-run-caught-by-a-quit-rests-as-a-stop.md`). It also found two strings the rulings fix:
-`/stop`'s description and the paused continue's `Send`. What the text leaves open concerns a plan cycle's waits at a
-stop, the literal reach of "no other control stands outside the dock", REQ-TRACE-464's word "cancel", and a few names
-the build kept.
-
-**What the build proceeds under.**
-
-- **A wait inside a plan cycle at a stop or a quit.** Clause 15 says a stop or a quit during a plan cycle "ends the
-  cycle's agents and records no interruption". Its last bullet, which it decides "in each case", has the quit withdraw
-  an approval its dialog closes (clause 9), and PD-CHAT-002 revision 2 has the quit withdraw a question. Neither makes
-  an exception for a plan cycle, and a withdrawal names its own cause, apart from the agents' and the iteration's
-  interruption. So an approval or a question pending in a plan cycle when the quit lands is **withdrawn by `quit`**
-  (`Run.waitsWithdrawnBy`, which reads the stop request alone and never the plan hold, so the waits' release does not
-  depend on when a plan cycle holds the run), while the cycle's agents still end `cancelled` and nothing records an
-  interruption. The
-  text decides the quit; the build reads the stop the same way, because clause 9 names the stop beside the quit and
-  clause 15 puts the two together for a plan cycle: a wait pending in a plan cycle when a stop lands is withdrawn by
-  `stop`. The explicit cancel still cancels it (clause 3: it is final), and so does a stop the run raised itself. *The
-  first reading built, and superseded in the same round by the review: the pending wait was cancelled
-  (`cancelPending`), on the ground that "a withdrawal is recorded by the interruption that caused it, and a plan cycle
-  records none". That ground confused the wait's cause with the agents' interruption, and the directive's words govern
-  the quit's case.* A stop or a quit at a *parked* gate has no turn in flight and nothing waiting.
-- **A stop during a plan cycle, as the session shows it.** The cycle's agents end `cancelled` with their reports, no
-  iteration row exists, and `plan_released` stays 0, so the next prompt or continue is held again. The session persists
-  `paused` (REQ-SESSION-186's persisted status for a stop). Its result's summary reads "The run came to rest because a
-  person stopped it.", because the summary is classified from the stop reason alone. Both are kept. The status is what
-  a stop persists, and the wording describes the run, not an agent left to resume.
-- **"No other control stands outside the dock."** The sentence governs the run-state notices it names and the strip's
-  input controls. Three controls outside the dock and outside the notices row stay where they are, because each
-  belongs to a surface the directive does not name: REQ-CHAT-021's "Command not run" notice with its dismiss, above the
-  dock; the refusal line with "Open project setup", above the dock; and REQ-CHAT-169's attachment list with its Remove
-  buttons, below the dock.
-- **The names the build kept.** `/stop` is offered as "Stop the active run" and still sends the control op `cancel`,
-  which is REQ-MONITOR-004's enumeration. The op is not renamed, and REQ-CHAT-029's "MUST cancel that run" is read
-  through clause 15's narrowing. The paused strip's continue by message draws its own accessible name ("Continue with
-  a message") and shows `Send`. The send pill's `sendName` arm for a paused session, which the strip never draws, is
-  left as it stands.
-- **The board's quit.** Main's board coordinator ends its runs at the last window's close with the run host's
-  `announceShutdown` (REQ-MONITOR-131's shutdown request), renamed `quitAll`, rather than the stop control's `cancel`.
-  A stop request keeps its first reason, so the `cancel` sent ahead of the run host's `shutdown` rested the run by
-  `stop`. REQ-TRACE-469's unlimited approval wait is still released at once, withdrawn by the quit. REQ-TRACE-464 says
-  "Closing the application SHALL **cancel** the run rather than leave it orphaned", and `PD-ORCH-005`'s Narrows list
-  does not name it. The build reads the requirement's guarantee as the clause's own last words — the run is ended, not
-  orphaned — and ends it as every quit ends a run, clause 3's quit: its agents rest `paused`, its iteration stays open,
-  and a later continue resumes it. The word "cancel" is not met literally, and was not before the repair either (the
-  stop's `cancel` rested the run by `stop`); nothing met it as the explicit cancel. So this is a departure from a
-  requirement no directive names, and a back-pointer is owed: either `PD-ORCH-005` names REQ-TRACE-464 among what it
-  narrows, or a ruling has a board run cancelled explicitly at the quit.
-
-**What a ruling decides.** Whether a stop during a plan cycle, which the text leaves to clause 9, should withdraw its
-pending approval or question as a quit does (the build) or cancel it. Whether REQ-TRACE-464's "SHALL cancel" is narrowed
-by clause 3's quit, which would add it to `PD-ORCH-005`'s Narrows list, or a board run is cancelled explicitly at the
-quit, final and never resumed. Whether the "Command not run" notice and the refusal line should
-move into the notices row, a layout change. Whether a stop during a plan cycle should persist a status and a summary of
-its own rather than a stop's `paused` and "came to rest".
-
-**OQ-75 — How does a continue's message close with the resumed iteration, and which continues make one?** *(`PD-ORCH-005` clause 17 (revision 4); REQ-ORCH-004, which the clause narrows, and REQ-ORCH-067, REQ-ORCH-069, REQ-ORCH-072, REQ-ORCH-077, REQ-ORCH-135 and REQ-MONITOR-125, which it does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
-
-Clause 17: "The message a continue delivers to the resumed root (clause 4) SHALL also be appended to the session's todo
-as a task. That task closes with the resumed iteration: done when the iteration succeeds, and left pending when it is
-cancelled or fails, so the next iteration takes it up." The clause names two closes of an iteration that has four
-outcomes and several ways to close, and does not say what state the task is in while the iteration is open, whether
-leaving it pending counts against it, how it meets the one-task-per-iteration rule, or which continues deliver a
-message.
-
-**What the build proceeds under.**
-
-- **Only `succeeded` is done.** An iteration that ends `partial` — its own task requeued, or abandoned at the retry
-  limit — is neither a success nor a cancel; it did not finish, so the message is left pending. So is every other close:
-  failed, raised, cancelled by the explicit cancel or by a pause that found nothing unfinished, declined by "continue
-  without them", closed because the run that owned it died, and the explicit cancel after a rest or during the
-  continue's pre-flight. A rest does not close the iteration, so the task stays with it and is resumed with it.
-- **While the iteration is open the task is in progress, held by it.** It is appended `in_progress` beside the
-  iteration's own task, as REQ-ORCH-072's selected task is, so the Todo pane shows it active and no selection takes it
-  while its iteration is open. The binding is the iteration's number on the task (`heldBy`), stored in the planner todo
-  document itself, so no store column is added and the binding survives a rest, a quit and a crash with the todo.
-- **Left pending is not a requeue.** No consecutive retry is counted: REQ-ORCH-077's count is an iteration's own task
-  failing to finish, and the message was not the task the iteration selected.
-- **The message is held, not selected.** REQ-ORCH-067's "one task" is the task an iteration selects; the resumed
-  iteration selected its own before the rest, and it answers the message because clause 4 delivers it.
-- **Left pending, it is the next iteration's.** The clause says the next iteration takes it up, so a message left
-  pending is marked (`nextUp`, in the todo document) and selected before every other pending task, the resumed
-  iteration's own requeued or reopened task included; that iteration may be a later one of the same run or the first of
-  a later run. Several messages released together are taken up in the order they were appended. Once an iteration
-  begins it, it is an ordinary task: requeued, it goes back to its place in the todo (the `Continued Prompts` phase).
-  *The first build selected it in its place in the todo, after every task before it, so a partial close or a decline
-  had the next iteration take the resumed iteration's own task instead (found by the lane's second review).*
-- **Taking it up sends it.** An iteration's first message is the launch content, whose latest request is whatever
-  launched the run
-  ([`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../defects/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md)),
-  so a message taken up by a later run's iteration, or by the iteration after a continue by a second message, would be
-  selected and marked done without ever being sent as the request, and the newer request worked in its place and again
-  under its own task. So a task that is a continue's message (`message`, set when it is appended and kept for good, in
-  the todo document) is sent to the fresh root of the iteration that selects it, as a text part after the launch
-  content naming it the iteration's task and the latest request a separate one — unless the launch content's request
-  is that same text, when the launch content already says it. It is sent only to an iteration's root: a plan cycle is
-  not an iteration and has no iteration task (REQ-ORCH-153), so the plan cycle held after a resumed iteration whose own
-  task was a message is not told it (found by the lane's fifth review). Only the message's text is sent; its images are not, as
-  the task holds its text only. Every other task keeps the recorded defect's behaviour, which this does not repair. *The
-  second build selected the message and sent it nothing of it (found by the lane's fourth review).*
-- **Several continues on one open iteration.** Each continue by message that resumes the iteration appends its own task,
-  held by it; they close together, in the order they were appended.
-- **Which continues make one.** Only a continue that delivers a message: a continue by message (`Sessions.prompt`), with
-  text, images or both. A message of images alone makes a task whose text is empty, as a continued prompt's does. The
-  Continue action and a plan decision deliver none and append none for a message.
-- **A continue that states no new request appends no second task.** The Continue action, "continue without them", and
-  the message-limit resolution's 'continue' and 'double' (REQ-SESSION-110, REQ-ORCH-086/087 — the dialog and the
-  palette entry reach the same `continueSession`) continue from the last request (REQ-MONITOR-125) and append it as a
-  task (REQ-ORCH-004); while the todo still holds a
-  task of that request's text pending, or in progress and held by the open iteration (its own task, or a message it
-  holds) — a continue's message a resumed iteration left pending or holds, or any request whose task a rest put back —
-  they append none, and the run takes that task up as it stands. A request whose task is complete or abandoned is
-  appended as before, and so is one whose task is in progress with no iteration holding it: a selection takes only
-  pending tasks, so nothing would take that task up, and the run would end at once with the request not done. A message
-  a closed iteration still holds (see "What a death leaves") is judged as the run will take it: it is settled first, as
-  the run settles it before it selects, so one returned to pending is not appended a second time and one completed is
-  appended as any completed request is. A continue by message is never judged so: it states a request, so it appends
-  its task even when a task of the same text is still pending (REQ-ORCH-004), and the request is worked once for each
-  time it was sent (pinned by review round 6). *The fourth build judged such a message unheld, so a Continue action after the
-  death appended it beside the task the run then returned to pending, and the run worked it twice (found by the lane's
-  fifth review).* *The second build counted any task in progress, which ended such a continue `no_pending_tasks` (found
-  by the lane's third review); the stranded task itself is
-  [`an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md`](../defects/an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md).* This repairs
-  [`the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`](../defects/fixed/the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md),
-  which the clause had widened: a message left pending is the last user row, so a Continue action appended it beside
-  its own task and the run worked it twice. *The first build closed only "continue without them" on an iteration that
-  holds a message, and left the Continue action undecided (found by the lane's second review).* *Until the lane's seventh
-  review the record named only the Continue action and the decline, though the guard covered the message-limit
-  resolution from the second build: a session paused at its limit with the last request's task still pending appended it
-  a second time on 'continue' or 'double' at the base, and appends none now.*
-- **What a death leaves.** The todo is saved with the run's `starting` save, so a run host that dies during the
-  pre-flight keeps the task as the root's record keeps the message. A task held by an iteration that is no longer open —
-  a death between the iteration's close and the save that recorded the release — closes when the next run is built as
-  the record says its iteration closed: `complete` when the iteration's row reads `succeeded`, since the clause's "done
-  when the iteration succeeds" is decided by the outcome and not by which save landed, and `pending` otherwise, so it is
-  never left in progress with nothing to close it and a message its iteration carried out is never worked again.
-
-**What a ruling decides.** Whether a `partial` resumed iteration should close the message as done, since the root
-answered it; whether leaving the message pending should count toward REQ-ORCH-077's limit, so a message no iteration
-can finish is abandoned rather than taken up forever; whether a message left pending should be taken up before the
-resumed iteration's own unfinished task, as built, or after it; whether a continue that states no new request
-should recognise its last request's task by more than its text; and whether a message taken up by a later iteration
-should be sent with its images, or become that iteration's launch content in place of the latest request.
-
-**OQ-77 — Where does the gate hold a run that resumed an iteration, and what does that plan cycle plan?** *(`PD-ORCH-003` revision 2; REQ-ORCH-152, which the directive narrows, and REQ-ORCH-021, REQ-ORCH-067, REQ-ORCH-069, REQ-ORCH-073, REQ-ORCH-085, REQ-ORCH-153 and REQ-ORCH-154, which it does not name. Raised 2026-09-28 by building `PD-ORCH-003` revision 2 under [R-064](../product/requests.md#r-064).)*
-
-Revision 2: a continue that resumes an open iteration "SHALL run that iteration without holding it at the gate … When
-the gate would hold that run … it SHALL hold before the first new iteration the run begins." The paragraph places the
-hold and leaves open what happens at the edges of that point, what the plan cycle held there is asked to plan (the
-launch content is the continue that resumed the iteration, whose work that iteration may or may not have finished),
-and what the answer at that gate launches.
-
-**What the build proceeds under.**
-
-- **The hold falls where a new iteration would begin.** After the resumed iteration closes, the loop checks the stop,
-  the pause, the queued prompts (REQ-CHAT-040) and the stop conditions (REQ-ORCH-069) as it does before every
-  iteration, and holds only when they found work left. A run with nothing pending, or at its iteration or time limit,
-  ends as it would have, with no gate. The message-limit pause reached as the resumed iteration closes wins (REQ-ORCH-085),
-  and so do a pause or a stop accepted during it. The hold is then set before the park turn builds anything, so that
-  turn's tool listing, its hooks, its children and its supervisor are all the held segment's (REQ-TOOLS-010, PD-ORCH-001),
-  and a pause during it is refused and a stop records no interruption (`PD-ORCH-005` clauses 11 and 15).
-- **Any iteration after the resumed one is new.** A resumed iteration that ends `partial` requeues its task
-  (REQ-ORCH-073), and the next iteration would take it up again under a new number; that iteration is held too, since the
-  directive's line is the iteration, not the task.
-- **The answer group is exempt, as at the start of a run.** The intent is the pre-flight's classification of the
-  continue — its message, or the last request for the Continue action — and a run whose intent is in REQ-ORCH-021's
-  answer group is not held, so whether a run will be held stays answerable without knowing more than at the start.
-- **What the plan cycle plans.** It is told the plan request, then that the run resumed the iteration, which has closed,
-  and the tasks still pending in the order the run takes them up (the first twenty, the count the handoff shows of its
-  todo under REQ-SESSION-115, each cut to 500 characters rather than the handoff's 80, since here a task's text is the
-  work to plan and not a display title), then the launch content as the session's context. What it is told of the
-  continue's message follows what `PD-ORCH-005` clause 17 made of it: carried out when the resumed iteration succeeded;
-  not finished, among the pending tasks and taken up first, when it closed otherwise; and nothing when the resumed
-  iteration held no message. The messages meant are every one the resumed iteration held — this continue's, and one an
-  earlier continue by message delivered to it before it came to rest again, which a Continue action then resumed — and
-  "carried out" is said only when all of them closed done. *The first build told it the message was already dealt with
-  in every case, which contradicted the pending list after a `partial` close and after a Continue action (found by the
-  lane's second review); the second read only the message this run's own continue delivered, so a Continue action that
-  resumed an iteration holding an earlier continue's message was told nothing of it (found by the lane's third
-  review).* The pending tasks are what the first new iteration would have selected, so the approved plan is about the
-  work it releases. The iteration is said to have been left open, not what left it: a crash-left session's continues
-  take the same path as a paused one's (`PD-ORCH-005` clause 18), and the revision's "a rest left open" is the case it
-  names, not a line it draws. *The second build said a rest had left it open, which is false on the crash route (found
-  by the lane's fourth review).*
-- **What the answer launches.** A plan decision's relaunch appends no task: the held run's stored todo already carries
-  every task — the gated work, and after this hold the continue's message too, which `PD-ORCH-005` clause 17 made a task
-  of its own and closed with the resumed iteration, `complete` or `pending` and taken up first — so appending the last
-  request again would duplicate it. *The first statement of this reason said the resumed iteration had dealt with the
-  message, which is false after a `partial` close, and after a Continue action, whose last request is an earlier one
-  (found by the lane's third review); the behaviour was right and is unchanged.* The same append had made every approved
-  prompt a second task, worked twice; that is repaired with it
-  ([`a-plan-decision-appends-the-gated-prompt-as-a-second-task.md`](../defects/fixed/a-plan-decision-appends-the-gated-prompt-as-a-second-task.md)).
-  The approved run is set up as any run is: the resumed root's persona covered the work already under way (OQ-70), and
-  no iteration is open when the plan is decided, so the work after the gate runs as the entry role configured then.
-- **A revise is launched as any revise is.** After this hold the run has closed the resumed iteration, so the revise's
-  relaunch resumes nothing: its plan cycle is told the plan request, the handoff built for it — whose "Latest user
-  request" is the continue's message and whose todo shows that message `complete` (or `pending`) beside the tasks still
-  pending — and the plan and the changes the user stated. It is not told `resumedWorkSection` again; the record keeps no
-  mark that the hold followed a resumed iteration, and the handoff's todo states the same work.
-- **"Continue without them" is unchanged.** It resumes nothing, so its run is held before its first iteration, as any run
-  that resumes nothing is.
-
-**What a ruling decides.** Whether a requeued resumed task should count as work already under way rather than a new
-iteration; whether the answer-group exemption should reach this hold; whether the plan cycle should plan only the
-first pending task or all of them; and whether a revise after this hold should be told again what became of the
-continue's message.
-
-**OQ-80 — Which offers is a later iteration's root told, where in its first message, and which roots count?** *(`PD-ORCH-004` revision 4; REQ-ORCH-088, which the directive narrows, REQ-TOOLS-152, which it extends, and REQ-SESSION-115, REQ-SESSION-194, REQ-ORCH-067, REQ-ORCH-072 and REQ-ORCH-153, which it does not name. Raised 2026-09-28 by building `PD-ORCH-004` revision 4 under [R-064](../product/requests.md#r-064).)*
-
-Revision 4: every root that may take up an open offer "SHALL be told of it, once", and among them "the root of each
-later iteration of the same run, in that iteration's first message". It does not say whether "once" is per root or per
-offer, where in the first message the list sits, what a later iteration of a continuation run is told beside the
-handoff it is re-sent, or whether a plan cycle's root is such a root.
-
-**What the build proceeds under.**
-
-- **Once per root.** Each iteration's root is a different agent, so the root of iteration 2 is told an offer even
-  though the root of iteration 1 was. A root is told an offer once: the list is part of its first message, so its
-  record holds it, and a continue that later resumes that root finds it there (`offersToldIn`) and does not tell it
-  again.
-- **The same rule for every execution root.** The first message of every execution iteration's root carries the open
-  offers — every offer of the session no child has taken up, not a subset by iteration — that the message's launch
-  content does not already hold. The root of a new session's first iteration has none to be told. A continuation's
-  first iteration reads them all in its handoff and is told nothing more. Each later iteration of the same run is told
-  those raised since, including any a resumed first iteration raised.
-- **An offer a held list left out is held.** A list names the newest ten and, when there were more, says the earlier
-  ones were left out; that is the whole of what the directive tells a root, so an offer a list left out is not named
-  again in a second list beside it. An offer a list could not have named — raised since it was built — is still told,
-  the newest ten of those with the same elision line, whichever child raised it and however early it was spawned.
-  - *In an iteration's first message.* The session manager passes the run the offers open when the payload's handoff
-    was built (`handoffOffers`), and those are held: the handoff covers them, named or left out.
-  - *At the continue that resumes a root.* The record keeps the lists, not what each covered, so an offer is held by a
-    list recorded as a message when its child was spawned before the oldest offer that list names and the record shows
-    it raised — its child ended, `completed_at` — no later than the list was recorded; an offer with no end recorded
-    counts as raised before. An offer raised in the same millisecond a list was recorded counts as held by it. A list a
-    compression carried into the conversation holds only what it names, as a compression's summary of a list holds
-    nothing (OQ-72).
-  - *The first repair counted every offer spawned before a list's oldest line as held, and only in the first message:
-    the continue that resumed a root named the offers its list had left out, and an offer raised after a handoff was
-    built by a child spawned early was never told to any later root of the run (found by the lane's second review).*
-- **Where.** A text part of its own after the launch content — its text and any attachments — in the same first user
-  message, so the root reads it as part of its task. It is the same list, header, lines, newest ten and elision line
-  as the handoff's and the resumed root's, so a later reader recognises it.
-- **The re-sent handoff is left as it is.** A later iteration of a continuation run is re-sent the payload built at
-  the continue, whose list can name an offer taken up since (the behaviour
-  [`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../defects/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md)
-  records). Those lines are not rewritten; an offer the payload already names is not named again, and one taken up since
-  is refused at admission with "already continued by".
-- **A plan cycle is told none.** A plan cycle is not an iteration (REQ-ORCH-153) and its root takes up no offer
-  (OQ-72), so neither a plan cycle at a run's start nor one held after a resumed iteration (`PD-ORCH-003` revision 2)
-  has the list added; a continuation's plan cycle still reads the handoff's list, as before.
-- **The root's execution record keeps its task.** REQ-ORCH-072's task payload on the root's record is the task string,
-  as before; the list is in the conversation record only.
-
-**What a ruling decides.** Whether "once" means once per offer across the run, so a root whose predecessor in the same
-run was told an offer is not told it again; and whether the stale lines of a re-sent handoff should be rewritten rather
-than left beside a fresh list.
-
-**Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
-
-The key is registered with default 20 and minimum 1. Each background session publishes its own `bg:<id>` stream at up to 50 frames/s (the 20 ms floor), so the produced aggregate is `(agents + background sessions) × 50 frames/s`, and only one of those two factors — agents, REQ-MONITOR-285's 20 — has a ceiling. Part AL reads the key into the manager and caps the *delivered* rate per window at 1,000 frames/s by merging (REQ-MONITOR-306, REQ-SHELL-103), so a user who configures 400 background sessions saturates the run-host → main pipe, not a renderer. A stated maximum on the key would let the produced rate be computed rather than absorbed. The owner's call; recorded, not resolved.
-
 **OQ-73 — How does the counters' line spell the `paused` count clause 13 decides, where does the run-level agent that clause 13 does not name present, what does a live agent's cancel state for its paused descendants, and may the agents a crash left present `paused` before it is recorded, against clause 13's last sentence?** *(`PD-ORCH-005` clause 13, revision 4 — including its last sentence, "every other unfinished agent of a session at rest is settled as before", which the third reading below departs from — with clauses 8, 18 and 19; REQ-MONITOR-211/213, which that sentence keeps for every agent not `paused` and the third reading also departs from; REQ-MONITOR-169, whose count the clause's "the counters" decides and whose line's wording it does not; REQ-MONITOR-043/057, REQ-MONITOR-045, REQ-MONITOR-064/128, REQ-SHELL-036 and REQ-CHAT-008, which the directive does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
 
 Clause 13 gives an agent in the child state `paused` a presentation state of its own, `paused`, on "the agent tree,
@@ -3971,6 +3520,457 @@ cancelled from its stored state without the record. Whether a cancelled paused a
 should end at the cancel, since it will never resume. Whether REQ-MONITOR-064 should be named as narrowed for the
 paused count. Whether the recovery state's cancel should also repair the session's status. Whether the resting
 run-level agent should offer a Cancel that declines the iteration.
+
+**OQ-75 — How does a continue's message close with the resumed iteration, and which continues make one?** *(`PD-ORCH-005` clause 17 (revision 4); REQ-ORCH-004, which the clause narrows, and REQ-ORCH-067, REQ-ORCH-069, REQ-ORCH-072, REQ-ORCH-077, REQ-ORCH-135 and REQ-MONITOR-125, which it does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
+
+Clause 17: "The message a continue delivers to the resumed root (clause 4) SHALL also be appended to the session's todo
+as a task. That task closes with the resumed iteration: done when the iteration succeeds, and left pending when it is
+cancelled or fails, so the next iteration takes it up." The clause names two closes of an iteration that has four
+outcomes and several ways to close, and does not say what state the task is in while the iteration is open, whether
+leaving it pending counts against it, how it meets the one-task-per-iteration rule, or which continues deliver a
+message.
+
+**What the build proceeds under.**
+
+- **Only `succeeded` is done.** An iteration that ends `partial` — its own task requeued, or abandoned at the retry
+  limit — is neither a success nor a cancel; it did not finish, so the message is left pending. So is every other close:
+  failed, raised, cancelled by the explicit cancel or by a pause that found nothing unfinished, declined by "continue
+  without them", closed because the run that owned it died, and the explicit cancel after a rest or during the
+  continue's pre-flight. A rest does not close the iteration, so the task stays with it and is resumed with it.
+- **While the iteration is open the task is in progress, held by it.** It is appended `in_progress` beside the
+  iteration's own task, as REQ-ORCH-072's selected task is, so the Todo pane shows it active and no selection takes it
+  while its iteration is open. The binding is the iteration's number on the task (`heldBy`), stored in the planner todo
+  document itself, so no store column is added and the binding survives a rest, a quit and a crash with the todo.
+- **Left pending is not a requeue.** No consecutive retry is counted: REQ-ORCH-077's count is an iteration's own task
+  failing to finish, and the message was not the task the iteration selected.
+- **The message is held, not selected.** REQ-ORCH-067's "one task" is the task an iteration selects; the resumed
+  iteration selected its own before the rest, and it answers the message because clause 4 delivers it.
+- **Left pending, it is the next iteration's.** The clause says the next iteration takes it up, so a message left
+  pending is marked (`nextUp`, in the todo document) and selected before every other pending task, the resumed
+  iteration's own requeued or reopened task included; that iteration may be a later one of the same run or the first of
+  a later run. Several messages released together are taken up in the order they were appended. Once an iteration
+  begins it, it is an ordinary task: requeued, it goes back to its place in the todo (the `Continued Prompts` phase).
+  *The first build selected it in its place in the todo, after every task before it, so a partial close or a decline
+  had the next iteration take the resumed iteration's own task instead (found by the lane's second review).*
+- **Taking it up sends it.** An iteration's first message is the launch content, whose latest request is whatever
+  launched the run
+  ([`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../defects/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md)),
+  so a message taken up by a later run's iteration, or by the iteration after a continue by a second message, would be
+  selected and marked done without ever being sent as the request, and the newer request worked in its place and again
+  under its own task. So a task that is a continue's message (`message`, set when it is appended and kept for good, in
+  the todo document) is sent to the fresh root of the iteration that selects it, as a text part after the launch
+  content naming it the iteration's task and the latest request a separate one — unless the launch content's request
+  is that same text, when the launch content already says it. It is sent only to an iteration's root: a plan cycle is
+  not an iteration and has no iteration task (REQ-ORCH-153), so the plan cycle held after a resumed iteration whose own
+  task was a message is not told it (found by the lane's fifth review). Only the message's text is sent; its images are not, as
+  the task holds its text only. Every other task keeps the recorded defect's behaviour, which this does not repair. *The
+  second build selected the message and sent it nothing of it (found by the lane's fourth review).*
+- **Several continues on one open iteration.** Each continue by message that resumes the iteration appends its own task,
+  held by it; they close together, in the order they were appended.
+- **Which continues make one.** Only a continue that delivers a message: a continue by message (`Sessions.prompt`), with
+  text, images or both. A message of images alone makes a task whose text is empty, as a continued prompt's does. The
+  Continue action and a plan decision deliver none and append none for a message.
+- **A continue that states no new request appends no second task.** The Continue action, "continue without them", and
+  the message-limit resolution's 'continue' and 'double' (REQ-SESSION-110, REQ-ORCH-086/087 — the dialog and the
+  palette entry reach the same `continueSession`) continue from the last request (REQ-MONITOR-125) and append it as a
+  task (REQ-ORCH-004); while the todo still holds a
+  task of that request's text pending, or in progress and held by the open iteration (its own task, or a message it
+  holds) — a continue's message a resumed iteration left pending or holds, or any request whose task a rest put back —
+  they append none, and the run takes that task up as it stands. A request whose task is complete or abandoned is
+  appended as before, and so is one whose task is in progress with no iteration holding it: a selection takes only
+  pending tasks, so nothing would take that task up, and the run would end at once with the request not done. A message
+  a closed iteration still holds (see "What a death leaves") is judged as the run will take it: it is settled first, as
+  the run settles it before it selects, so one returned to pending is not appended a second time and one completed is
+  appended as any completed request is. A continue by message is never judged so: it states a request, so it appends
+  its task even when a task of the same text is still pending (REQ-ORCH-004), and the request is worked once for each
+  time it was sent (pinned by review round 6). *The fourth build judged such a message unheld, so a Continue action after the
+  death appended it beside the task the run then returned to pending, and the run worked it twice (found by the lane's
+  fifth review).* *The second build counted any task in progress, which ended such a continue `no_pending_tasks` (found
+  by the lane's third review); the stranded task itself is
+  [`an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md`](../defects/an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md).* This repairs
+  [`the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`](../defects/fixed/the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md),
+  which the clause had widened: a message left pending is the last user row, so a Continue action appended it beside
+  its own task and the run worked it twice. *The first build closed only "continue without them" on an iteration that
+  holds a message, and left the Continue action undecided (found by the lane's second review).* *Until the lane's seventh
+  review the record named only the Continue action and the decline, though the guard covered the message-limit
+  resolution from the second build: a session paused at its limit with the last request's task still pending appended it
+  a second time on 'continue' or 'double' at the base, and appends none now.*
+- **What a death leaves.** The todo is saved with the run's `starting` save, so a run host that dies during the
+  pre-flight keeps the task as the root's record keeps the message. A task held by an iteration that is no longer open —
+  a death between the iteration's close and the save that recorded the release — closes when the next run is built as
+  the record says its iteration closed: `complete` when the iteration's row reads `succeeded`, since the clause's "done
+  when the iteration succeeds" is decided by the outcome and not by which save landed, and `pending` otherwise, so it is
+  never left in progress with nothing to close it and a message its iteration carried out is never worked again.
+
+**What a ruling decides.** Whether a `partial` resumed iteration should close the message as done, since the root
+answered it; whether leaving the message pending should count toward REQ-ORCH-077's limit, so a message no iteration
+can finish is abandoned rather than taken up forever; whether a message left pending should be taken up before the
+resumed iteration's own unfinished task, as built, or after it; whether a continue that states no new request
+should recognise its last request's task by more than its text; and whether a message taken up by a later iteration
+should be sent with its images, or become that iteration's launch content in place of the latest request.
+
+**OQ-76 — Which sessions has a crash left, and what does the Continue action offer on one with nothing to resume?** *(`PD-ORCH-005` clause 18 (revision 4), with clauses 8, 11 and 19; REQ-MONITOR-125 as clause 18 extends it; REQ-CHAT-008, REQ-GIT-093, REQ-SESSION-171, REQ-SESSION-060, REQ-GIT-094 and REQ-CHAT-006, which the directive does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
+
+Clause 18: "A session a crash left — `interrupted` after a repair, or in REQ-CHAT-008's recovery state before one — SHALL
+offer the Continue action and 'continue without them' as a `paused` session does, with the same count. Either choice
+records the crash first, as any continue does (clause 8)." The clause names the two states. It does not say how the
+engine tells the recovery state apart from a session another process is still running. It does not say what a
+crash-left session offers when no iteration is open, or whether the pause's statement is drawn on it. And it does not
+say what the decline's wording means before the crash is recorded.
+
+**What the build proceeds under.**
+
+- **Which sessions a crash left.** `Sessions.continueSession` accepts a session whose status is `interrupted`. It also
+  accepts one whose status is still busy when REQ-GIT-093's liveness predicate calls it `not-live`, the one predicate
+  REQ-SESSION-171 and the repair already use. A busy session that is `live`, or whose liveness is `unknown`, is refused
+  (`run-active`), because another process may still be running it. The renderer reads the same two states as
+  `crashLeft`: `interrupted`, or busy with `needsRecovery` (the session list's `stale`). `paused_message_limit` and
+  `awaiting_plan_decision` are durable holds, not busy statuses, so a crash does not make them crash-left. They keep
+  their own continues (clause 11).
+- **A session the store's failure left busy is not one a crash left.** A run that ends on a recording failure (OQ-42)
+  leaves the durable status busy and this process's lock with no run behind it, so the liveness predicate reads
+  `not-live`, the session list marks it `stale`, and the renderer's `crashLeft` draws the two continues on it. It did not
+  crash, and nothing can be recorded of it. `Sessions.continueSession` therefore refuses every continue on it
+  `store-failed` ("The workspace store requires recovery before continuing work"), as `Sessions.prompt` and the plan
+  decision already do, so the Continue action, the decline and the continue by message all refuse the same state the
+  same way. The guard stands first in `continueSession`, so a `paused` session under a store failure is refused too,
+  where it was accepted before. The recovery is OQ-42's: restore storage and reopen the session, which rebuilds the
+  writer. After the reopen the session is busy with nothing running it, which is REQ-CHAT-008's recovery state, and a
+  continue then records the crash as for any other. The renderer does not tell this state apart: it knows nothing of
+  the writer's failure beyond the recording-failure notice, whose action is the reopen. *The first build accepted such a
+  session and reported `{resumed: true}` against the failed writer, where the same call had been refused `not-paused`
+  before clause 18; the round-2 review found it.*
+- **The actions at the message limit.** A crash-left session is not at the message limit, so it takes `action` as a
+  manually paused session does. `continue` and `double` continue it; `cancel` leaves it as it is.
+- **Nothing open to resume.** A crash-left session with no open iteration draws the two continues where the send pill
+  stood, with no count and no decline, as a `paused` session with nothing to resume does. Its Continue action continues
+  the last request, which is REQ-MONITOR-125's "resumed from the composer".
+- **No pause statement.** "Paused. Run controls need the run continued…" stays on a paused session only. A crash-left
+  session is not paused, and its run state already says what it is (REQ-CHAT-008's "Run needs recovery", or the
+  interrupted presentation). REQ-CHAT-006's chip reason in the recovery state is left as it stands. The Continue action
+  belongs to the composer, not to the run controls.
+- **The decline's wording before the crash is recorded.** In the recovery state the agents the count names are still
+  `running` in the store, yet the decline says "The N paused agents end cancelled". The text is kept. The crash record
+  pauses them first (clause 8), then the decline cancels them, so the words describe the act at the moment it happens.
+  The wording does not rest on how those agents present, which is lane "surfaces"' reading (clause 13 and REQ-CHAT-008's
+  recovery state): at this commit they still present as the build's catch-all, and the reading that lane is expected to
+  take is that they present as `paused` before the crash is recorded, so the agent tree agrees with the count. If that
+  reading is refined, this bullet is re-read against it.
+- **Either choice records the crash first, in one place.** Every continue passes `Sessions.launchContinuation`, which
+  records the crash before the stale-child settle and before it resumes or declines the open iteration. So the Continue
+  action, the continue by message (`Sessions.prompt`) and the decline need no crash-specific path.
+- **The lock.** `Sessions.prompt` tries to re-claim a lock it no longer holds, but it cannot: `resume` returns early for
+  a session already live in this process. A probe placed in that branch was never reached on any crash-left path, so
+  `continueSession` does not copy it
+  (`docs/defects/a-continue-by-message-cannot-re-claim-a-lock-it-no-longer-holds.md`).
+
+**What a ruling decides.** Whether a busy session of unknown liveness should also be continuable, for example after a
+confirmation, rather than refused. Whether a crash-left session should state something of its own in the notices row,
+where a paused session states its pause. Whether a crash that left a durable hold should offer anything beyond that
+hold's own continues. Whether the composer should withhold the continues on a session the store's failure left busy,
+rather than draw them and have the engine refuse them.
+
+**OQ-77 — Where does the gate hold a run that resumed an iteration, and what does that plan cycle plan?** *(`PD-ORCH-003` revision 2; REQ-ORCH-152, which the directive narrows, and REQ-ORCH-021, REQ-ORCH-067, REQ-ORCH-069, REQ-ORCH-073, REQ-ORCH-085, REQ-ORCH-153 and REQ-ORCH-154, which it does not name. Raised 2026-09-28 by building `PD-ORCH-003` revision 2 under [R-064](../product/requests.md#r-064).)*
+
+Revision 2: a continue that resumes an open iteration "SHALL run that iteration without holding it at the gate … When
+the gate would hold that run … it SHALL hold before the first new iteration the run begins." The paragraph places the
+hold and leaves open what happens at the edges of that point, what the plan cycle held there is asked to plan (the
+launch content is the continue that resumed the iteration, whose work that iteration may or may not have finished),
+and what the answer at that gate launches.
+
+**What the build proceeds under.**
+
+- **The hold falls where a new iteration would begin.** After the resumed iteration closes, the loop checks the stop,
+  the pause, the queued prompts (REQ-CHAT-040) and the stop conditions (REQ-ORCH-069) as it does before every
+  iteration, and holds only when they found work left. A run with nothing pending, or at its iteration or time limit,
+  ends as it would have, with no gate. The message-limit pause reached as the resumed iteration closes wins (REQ-ORCH-085),
+  and so do a pause or a stop accepted during it. The hold is then set before the park turn builds anything, so that
+  turn's tool listing, its hooks, its children and its supervisor are all the held segment's (REQ-TOOLS-010, PD-ORCH-001),
+  and a pause during it is refused and a stop records no interruption (`PD-ORCH-005` clauses 11 and 15).
+- **Any iteration after the resumed one is new.** A resumed iteration that ends `partial` requeues its task
+  (REQ-ORCH-073), and the next iteration would take it up again under a new number; that iteration is held too, since the
+  directive's line is the iteration, not the task.
+- **The answer group is exempt, as at the start of a run.** The intent is the pre-flight's classification of the
+  continue — its message, or the last request for the Continue action — and a run whose intent is in REQ-ORCH-021's
+  answer group is not held, so whether a run will be held stays answerable without knowing more than at the start.
+- **What the plan cycle plans.** It is told the plan request, then that the run resumed the iteration, which has closed,
+  and the tasks still pending in the order the run takes them up (the first twenty, the count the handoff shows of its
+  todo under REQ-SESSION-115, each cut to 500 characters rather than the handoff's 80, since here a task's text is the
+  work to plan and not a display title), then the launch content as the session's context. What it is told of the
+  continue's message follows what `PD-ORCH-005` clause 17 made of it: carried out when the resumed iteration succeeded;
+  not finished, among the pending tasks and taken up first, when it closed otherwise; and nothing when the resumed
+  iteration held no message. The messages meant are every one the resumed iteration held — this continue's, and one an
+  earlier continue by message delivered to it before it came to rest again, which a Continue action then resumed — and
+  "carried out" is said only when all of them closed done. *The first build told it the message was already dealt with
+  in every case, which contradicted the pending list after a `partial` close and after a Continue action (found by the
+  lane's second review); the second read only the message this run's own continue delivered, so a Continue action that
+  resumed an iteration holding an earlier continue's message was told nothing of it (found by the lane's third
+  review).* The pending tasks are what the first new iteration would have selected, so the approved plan is about the
+  work it releases. The iteration is said to have been left open, not what left it: a crash-left session's continues
+  take the same path as a paused one's (`PD-ORCH-005` clause 18), and the revision's "a rest left open" is the case it
+  names, not a line it draws. *The second build said a rest had left it open, which is false on the crash route (found
+  by the lane's fourth review).*
+- **What the answer launches.** A plan decision's relaunch appends no task: the held run's stored todo already carries
+  every task — the gated work, and after this hold the continue's message too, which `PD-ORCH-005` clause 17 made a task
+  of its own and closed with the resumed iteration, `complete` or `pending` and taken up first — so appending the last
+  request again would duplicate it. *The first statement of this reason said the resumed iteration had dealt with the
+  message, which is false after a `partial` close, and after a Continue action, whose last request is an earlier one
+  (found by the lane's third review); the behaviour was right and is unchanged.* The same append had made every approved
+  prompt a second task, worked twice; that is repaired with it
+  ([`a-plan-decision-appends-the-gated-prompt-as-a-second-task.md`](../defects/fixed/a-plan-decision-appends-the-gated-prompt-as-a-second-task.md)).
+  The approved run is set up as any run is: the resumed root's persona covered the work already under way (OQ-70), and
+  no iteration is open when the plan is decided, so the work after the gate runs as the entry role configured then.
+- **A revise is launched as any revise is.** After this hold the run has closed the resumed iteration, so the revise's
+  relaunch resumes nothing: its plan cycle is told the plan request, the handoff built for it — whose "Latest user
+  request" is the continue's message and whose todo shows that message `complete` (or `pending`) beside the tasks still
+  pending — and the plan and the changes the user stated. It is not told `resumedWorkSection` again; the record keeps no
+  mark that the hold followed a resumed iteration, and the handoff's todo states the same work.
+- **"Continue without them" is unchanged.** It resumes nothing, so its run is held before its first iteration, as any run
+  that resumes nothing is.
+
+**What a ruling decides.** Whether a requeued resumed task should count as work already under way rather than a new
+iteration; whether the answer-group exemption should reach this hold; whether the plan cycle should plan only the
+first pending task or all of them; and whether a revise after this hold should be told again what became of the
+continue's message.
+
+**OQ-78 — What is an agent's fingerprint taken of, when is it compared, and where is the warning stated?** *(`PD-ORCH-005` clause 14 over OQ-68's reading; REQ-SESSION-029, REQ-SESSION-132, REQ-SESSION-134, REQ-SESSION-135, REQ-ORCH-019, REQ-ORCH-088, REQ-ORCH-095, REQ-WORKSPACE-047, REQ-WORKSPACE-050, REQ-WORKSPACE-058, REQ-WORKSPACE-060, REQ-TOOLS-010, REQ-TOOLS-053, REQ-TOOLS-069, REQ-MCP-101, REQ-CONFIG-166 and REQ-MONITOR-305, which the directive does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
+
+Clause 14 has each agent's record keep "a fingerprint of the system instructions and the tool definitions the agent
+started with", and has the run state, as a warning, which agent resumed under changed instructions when its persona's
+current ones differ. It does not say what the instructions are — the persona's own text, or everything the request's
+system prompt carries — nor when the comparison is made, how often a warning is repeated, or where the run states it.
+REQ-MONITOR-305's warnings surface, where a warning would naturally be listed, is not built.
+
+**What the build proceeds under.**
+
+- **What the request carried.** The fingerprint is two SHA-256 digests (`agent_fingerprints`, v24): the system prompt
+  exactly as the agent's first model request carried it — the persona's instructions, its playbook (REQ-ORCH-019), the
+  session's context units (REQ-WORKSPACE-060) and the MCP section (REQ-MCP-101) — and the tool definitions that request
+  offered (REQ-TOOLS-010), in name order with every object's keys sorted, so the order a listing was assembled in is not
+  a change. A digest, not a copy: the instructions are not stored twice (REQ-SESSION-029). The consequence is stated
+  here because it is wider than "its persona" alone: a continue whose pre-flight classifies a different intent (a
+  different playbook), a skill force-loaded since, a changed MCP server, or a permission mode that changes the listing
+  also warns, since each changes what the agent is instructed with or offered. The first is common: every continue
+  runs the pre-flight again with its own message (`launchContinuation`), so a continue by message classified as a
+  different intent warns for every resumed agent whose role has a playbook, though no persona was edited. The model is
+  not part of it.
+- **The workspace's own files are in it too.** The context units include REQ-WORKSPACE-047/050's workspace context —
+  the instruction files (`AGENTS.md` and the like) merged from the run's execution root, the tree the agents write
+  to — and the skill catalog block. So an agent that edits `AGENTS.md` as part of its task changes what every agent
+  resumed after it is instructed with, and each is named "resumed under changed instructions: its system instructions
+  differ", although no persona changed and the change is the run's own. Whether it is named depends on whether the
+  merge was read again: REQ-WORKSPACE-058 holds it per workspace root until a rescan or a session creation clears it
+  (`SkillRegistry.workspaceContext`), so a continue in the same process after nothing else happened is still handed
+  the cached merge and states nothing, while the same continue after the app is relaunched, or after any session is
+  created in that workspace, is handed the edited file and warns for every resumed agent. The warning is true of what
+  the request carried in both cases; which of the two the agent is given is REQ-WORKSPACE-058's, not this build's.
+  A lesser case of the same kind: `ask_questions` is listed only while the run host holds a live presenter
+  (`userPromptChannel`, attendedness under REQ-TOOLS-053/069), so an agent that started during a lapse in the presenter and is resumed
+  with one live is named for its tool definitions.
+- **The first is kept.** The fingerprint is recorded at an agent's first model step and never replaced. Every resume
+  compares against it, so each resume under instructions that still differ warns again; a resume under the instructions
+  it started with states nothing.
+- **Compared at the resumed execution's first model step**, just before the step goes out, once per execution — after
+  the tool port is ready, so an MCP listing is complete. Any later execution of a task id that has a fingerprint is a
+  resume (a task id is never executed twice otherwise). REQ-ORCH-088's fallback retry and REQ-ORCH-095's re-prompt run
+  within one execution and compare nothing, and neither does a root re-entered with its children's reports, although
+  REQ-CONFIG-166 re-reads the context units at every turn: a skill loaded mid-run is not a resume. A resumed root
+  waiting on its children is compared when it next steps; one that never steps again never ran under the changed
+  instructions and is not named.
+- **An agent with no fingerprint** — recorded before v24, or paused before its first model step — has one recorded at
+  its resumed first step and nothing is stated (REQ-SESSION-132).
+- **Stated as a warning issue and a transcript line.** A `resumed_under_changed_instructions` issue at warning severity
+  — a kind coined by this build: the specification's issue-kind vocabulary ("Issue kinds (session diagnostics)" in
+  `docs/spec/01-run-orchestration.md`) has none for it — its actor the agent's canonical name, with its timeline entry
+  (REQ-SESSION-134/135), and one `system` row in the transcript: "Agent <canonical name> (<task id>) resumed under
+  changed instructions: its system instructions | tool definitions | system instructions and tool definitions differ
+  from the ones it started with." The issue's metadata carries the task id, the iteration and which of the two changed.
+- **Every agent**, the root and every child at every depth, each under its task id and its own iteration (the root's
+  iteration number, a child's `children.iteration`). The fingerprint is part of the agent's record for clause 12: it is
+  deleted with its session, and the transcript clear removes closed iterations' fingerprints with their conversations
+  (`fingerprints_removed` in `transcript_cleared`'s metadata), so an open iteration's are kept however many iterations
+  closed before it.
+
+**What a ruling decides.** Whether "the system instructions" should be the persona's own definition only, so a changed
+playbook, skill, MCP server, workspace instruction file (one the run's own agents may have edited) or presenter-bound
+tool does not warn; whether a warning should be stated once per change (replacing the
+fingerprint after a warned resume) rather than at every resume while it differs; and whether the warning should also
+reach REQ-MONITOR-305's warnings surface once that is built, or be stated at the continue rather than at the agent's
+first step; and what the issue kind is called, since the specification's vocabulary has none for it.
+
+**OQ-79 — Whose root is "the iteration's root" when the handoff is built for an iteration that has not started?** *(`PD-ORCH-005` clause 20 over REQ-SESSION-115; REQ-ORCH-153, REQ-ORCH-154, REQ-LIBRARY-093 and REQ-LIBRARY-096, which the directive does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
+
+Clause 20 makes REQ-SESSION-115's artifact "the latest artifact the iteration's root published that nothing supersedes"
+and, when the root published none, the latest of any kind. Every continue builds the handoff, including one that resumes
+an open iteration, but it reaches a model only when a new iteration starts — a new prompt, a continue that finds nothing
+open, "continue without them", the plan gate's approve, or the iteration after a resumed one — since a resumed root is
+handed the new message alone; and that new iteration's root has published nothing yet. The clause does not say which
+iteration it means. Three further edges meet it: a plan cycle's root (REQ-ORCH-153's iteration 0, never recorded as an
+iteration), a root from before the iterations were recorded (v23), and a later iteration of the same run, which starts
+from the launch content computed when the run began.
+
+**What the build proceeds under.**
+
+- **The iteration is the most recent recorded one**, open or closed — the highest-numbered row in `iterations`, the
+  iteration the new one follows. A publish by an earlier iteration's root counts only as "of any kind". The alternative
+  read "the orchestrator" as a role — the latest publish of any iteration's root — and was not taken, because the
+  clause names one iteration's root.
+- **The root is known by its task id.** A root's publish carries its task id as the artifact's `conversation_id` (its
+  own tool port writes it; a child's report and a child's publish carry the child's), and the iteration's row records
+  that id. `created_by` is not used: every root records its persona there
+  (`a-roots-publish-names-its-persona-as-its-author.md`), so it cannot tell one iteration's root from another's.
+- **A plan cycle's root is not an iteration's root.** Its publishes count only as "of any kind"; the approve path
+  carries the plan itself in its own section.
+- **Work that follows a plan cycle follows no iteration.** A plan cycle is never recorded as an iteration, so on the
+  plan gate's approve and revise, and on a prompt after a declined plan, the most recent `iterations` row belongs to
+  an earlier piece of work. Taking its root there would hand over that earlier work's document ahead of everything
+  the plan cycle produced — its children's reports and the plan its root published — although the new work follows
+  the plan cycle, not that iteration. So when the latest plan cycle opened its gate (`plan_cycles.opened_at`) after
+  the latest iteration opened, no iteration's root is preferred and the handoff takes the latest of any kind that
+  nothing supersedes. A prompt that opens a plan cycle on a re-armed session (`PD-ORCH-003`) is handed the latest
+  iteration's root's document, since that plan cycle follows it; and once the approved iteration opens, its root is
+  preferred again. The two instants are the session writer's own ISO times, so an equal pair (possible only under
+  a stopped test clock) counts the iteration as the later.
+- **A root with no recorded iteration or no tool port** (before v23, or a run with no tool port) has no publish to
+  find, and the handoff takes the latest of any kind. Nothing is backfilled.
+- **A root whose every publish is superseded published none.** Only artifacts nothing supersedes are candidates, so
+  when a later record (a child's included) supersedes each of the root's publishes, the handoff takes the latest of any
+  kind that nothing supersedes. The literal alternative — the root did publish, so the fallback does not apply and no
+  artifact is carried — was not taken: it would carry nothing where an unsuperseded artifact stands.
+- **The handoff is read once, when the continuation starts its run.** REQ-SESSION-115's handoff is "the payload handed
+  to the run", built at the continue, and clause 20's "that nothing supersedes" holds of it then. A later iteration of
+  the same run is not a new handoff: it is re-sent the launch content computed at the continue, by the recorded defect
+  `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`, so **its artifact line can name an artifact
+  superseded since, or another agent's where the resumed root published its first artifact after the continue**, as
+  its todo and progress lines can be stale. The artifact line is not recomputed alone; the repair belongs to that
+  defect, which must keep the three flows it names, and `PD-ORCH-004` revision 4 adds only the open offers to that
+  first message.
+- **Everything else stands as OQ-72 records it**: "latest" is the listing's order (created time, then id), a
+  superseded record is never chosen, and the rendering (id first, 80-character title, a published body stated once,
+  6,000 characters) is unchanged.
+
+**What a ruling decides.** Whether "the iteration's root" is the root of the iteration the new one follows, as built,
+or any iteration's root of the session, which would carry an earlier iteration's document forward past a later
+iteration whose root published nothing; whether work that follows a plan cycle takes the latest of any kind, as
+built, or prefers the plan cycle root's own publish, or the root of the last recorded iteration — the reading this
+build first took, which handed an earlier piece of work's document over ahead of the plan cycle's; whether a root whose every publish is superseded counts as having published
+none; and whether a later iteration of the same run should have its handoff's artifact read again when it starts,
+rather than be re-sent the one read at the continue, superseded or not.
+
+**OQ-80 — Which offers is a later iteration's root told, where in its first message, and which roots count?** *(`PD-ORCH-004` revision 4; REQ-ORCH-088, which the directive narrows, REQ-TOOLS-152, which it extends, and REQ-SESSION-115, REQ-SESSION-194, REQ-ORCH-067, REQ-ORCH-072 and REQ-ORCH-153, which it does not name. Raised 2026-09-28 by building `PD-ORCH-004` revision 4 under [R-064](../product/requests.md#r-064).)*
+
+Revision 4: every root that may take up an open offer "SHALL be told of it, once", and among them "the root of each
+later iteration of the same run, in that iteration's first message". It does not say whether "once" is per root or per
+offer, where in the first message the list sits, what a later iteration of a continuation run is told beside the
+handoff it is re-sent, or whether a plan cycle's root is such a root.
+
+**What the build proceeds under.**
+
+- **Once per root.** Each iteration's root is a different agent, so the root of iteration 2 is told an offer even
+  though the root of iteration 1 was. A root is told an offer once: the list is part of its first message, so its
+  record holds it, and a continue that later resumes that root finds it there (`offersToldIn`) and does not tell it
+  again.
+- **The same rule for every execution root.** The first message of every execution iteration's root carries the open
+  offers — every offer of the session no child has taken up, not a subset by iteration — that the message's launch
+  content does not already hold. The root of a new session's first iteration has none to be told. A continuation's
+  first iteration reads them all in its handoff and is told nothing more. Each later iteration of the same run is told
+  those raised since, including any a resumed first iteration raised.
+- **An offer a held list left out is held.** A list names the newest ten and, when there were more, says the earlier
+  ones were left out; that is the whole of what the directive tells a root, so an offer a list left out is not named
+  again in a second list beside it. An offer a list could not have named — raised since it was built — is still told,
+  the newest ten of those with the same elision line, whichever child raised it and however early it was spawned.
+  - *In an iteration's first message.* The session manager passes the run the offers open when the payload's handoff
+    was built (`handoffOffers`), and those are held: the handoff covers them, named or left out.
+  - *At the continue that resumes a root.* The record keeps the lists, not what each covered, so an offer is held by a
+    list recorded as a message when its child was spawned before the oldest offer that list names and the record shows
+    it raised — its child ended, `completed_at` — no later than the list was recorded; an offer with no end recorded
+    counts as raised before. An offer raised in the same millisecond a list was recorded counts as held by it. A list a
+    compression carried into the conversation holds only what it names, as a compression's summary of a list holds
+    nothing (OQ-72).
+  - *The first repair counted every offer spawned before a list's oldest line as held, and only in the first message:
+    the continue that resumed a root named the offers its list had left out, and an offer raised after a handoff was
+    built by a child spawned early was never told to any later root of the run (found by the lane's second review).*
+- **Where.** A text part of its own after the launch content — its text and any attachments — in the same first user
+  message, so the root reads it as part of its task. It is the same list, header, lines, newest ten and elision line
+  as the handoff's and the resumed root's, so a later reader recognises it.
+- **The re-sent handoff is left as it is.** A later iteration of a continuation run is re-sent the payload built at
+  the continue, whose list can name an offer taken up since (the behaviour
+  [`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../defects/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md)
+  records). Those lines are not rewritten; an offer the payload already names is not named again, and one taken up since
+  is refused at admission with "already continued by".
+- **A plan cycle is told none.** A plan cycle is not an iteration (REQ-ORCH-153) and its root takes up no offer
+  (OQ-72), so neither a plan cycle at a run's start nor one held after a resumed iteration (`PD-ORCH-003` revision 2)
+  has the list added; a continuation's plan cycle still reads the handoff's list, as before.
+- **The root's execution record keeps its task.** REQ-ORCH-072's task payload on the root's record is the task string,
+  as before; the list is in the conversation record only.
+
+**What a ruling decides.** Whether "once" means once per offer across the run, so a root whose predecessor in the same
+run was told an offer is not told it again; and whether the stale lines of a re-sent handoff should be rewritten rather
+than left beside a fresh list.
+
+**Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
+
+The key is registered with default 20 and minimum 1. Each background session publishes its own `bg:<id>` stream at up to 50 frames/s (the 20 ms floor), so the produced aggregate is `(agents + background sessions) × 50 frames/s`, and only one of those two factors — agents, REQ-MONITOR-285's 20 — has a ceiling. Part AL reads the key into the manager and caps the *delivered* rate per window at 1,000 frames/s by merging (REQ-MONITOR-306, REQ-SHELL-103), so a user who configures 400 background sessions saturates the run-host → main pipe, not a renderer. A stated maximum on the key would let the produced rate be computed rather than absorbed. The owner's call; recorded, not resolved.
+
+**OQ-81 — What does the audit of clause 15, clause 19, PD-CHAT-001 revision 4 and PD-CHAT-002 revision 2 leave undecided?** *(`PD-ORCH-005` clauses 3, 9, 11, 15 and 19 (revision 4); `PD-CHAT-001` revision 4, "The strip" and "The paused continues"; `PD-CHAT-002` revision 2; REQ-CHAT-029, REQ-CHAT-005, REQ-CHAT-021, REQ-CHAT-169, REQ-MONITOR-004, REQ-SESSION-186, REQ-TOOLS-063, REQ-CHAT-101 and REQ-TRACE-464. Raised 2026-09-28 by building `PD-ORCH-005` revision 4, `PD-CHAT-001` revision 4 and `PD-CHAT-002` revision 2 under [R-064](../product/requests.md#r-064).)*
+
+Most of what these rulings decide was already built under OQ-69 and OQ-71's readings. The audit found one behaviour the
+text contradicts: a board run caught by the application's quit came to rest by `stop`
+(`docs/defects/fixed/a-board-run-caught-by-a-quit-rests-as-a-stop.md`). It also found two strings the rulings fix:
+`/stop`'s description and the paused continue's `Send`. What the text leaves open concerns a plan cycle's waits at a
+stop, the literal reach of "no other control stands outside the dock", REQ-TRACE-464's word "cancel", and a few names
+the build kept.
+
+**What the build proceeds under.**
+
+- **A wait inside a plan cycle at a stop or a quit.** Clause 15 says a stop or a quit during a plan cycle "ends the
+  cycle's agents and records no interruption". Its last bullet, which it decides "in each case", has the quit withdraw
+  an approval its dialog closes (clause 9), and PD-CHAT-002 revision 2 has the quit withdraw a question. Neither makes
+  an exception for a plan cycle, and a withdrawal names its own cause, apart from the agents' and the iteration's
+  interruption. So an approval or a question pending in a plan cycle when the quit lands is **withdrawn by `quit`**
+  (`Run.waitsWithdrawnBy`, which reads the stop request alone and never the plan hold, so the waits' release does not
+  depend on when a plan cycle holds the run), while the cycle's agents still end `cancelled` and nothing records an
+  interruption. The
+  text decides the quit; the build reads the stop the same way, because clause 9 names the stop beside the quit and
+  clause 15 puts the two together for a plan cycle: a wait pending in a plan cycle when a stop lands is withdrawn by
+  `stop`. The explicit cancel still cancels it (clause 3: it is final), and so does a stop the run raised itself. *The
+  first reading built, and superseded in the same round by the review: the pending wait was cancelled
+  (`cancelPending`), on the ground that "a withdrawal is recorded by the interruption that caused it, and a plan cycle
+  records none". That ground confused the wait's cause with the agents' interruption, and the directive's words govern
+  the quit's case.* A stop or a quit at a *parked* gate has no turn in flight and nothing waiting.
+- **A stop during a plan cycle, as the session shows it.** The cycle's agents end `cancelled` with their reports, no
+  iteration row exists, and `plan_released` stays 0, so the next prompt or continue is held again. The session persists
+  `paused` (REQ-SESSION-186's persisted status for a stop). Its result's summary reads "The run came to rest because a
+  person stopped it.", because the summary is classified from the stop reason alone. Both are kept. The status is what
+  a stop persists, and the wording describes the run, not an agent left to resume.
+- **"No other control stands outside the dock."** The sentence governs the run-state notices it names and the strip's
+  input controls. Three controls outside the dock and outside the notices row stay where they are, because each
+  belongs to a surface the directive does not name: REQ-CHAT-021's "Command not run" notice with its dismiss, above the
+  dock; the refusal line with "Open project setup", above the dock; and REQ-CHAT-169's attachment list with its Remove
+  buttons, below the dock.
+- **The names the build kept.** `/stop` is offered as "Stop the active run" and still sends the control op `cancel`,
+  which is REQ-MONITOR-004's enumeration. The op is not renamed, and REQ-CHAT-029's "MUST cancel that run" is read
+  through clause 15's narrowing. The paused strip's continue by message draws its own accessible name ("Continue with
+  a message") and shows `Send`. The send pill's `sendName` arm for a paused session, which the strip never draws, is
+  left as it stands.
+- **The board's quit.** Main's board coordinator ends its runs at the last window's close with the run host's
+  `announceShutdown` (REQ-MONITOR-131's shutdown request), renamed `quitAll`, rather than the stop control's `cancel`.
+  A stop request keeps its first reason, so the `cancel` sent ahead of the run host's `shutdown` rested the run by
+  `stop`. REQ-TRACE-469's unlimited approval wait is still released at once, withdrawn by the quit. REQ-TRACE-464 says
+  "Closing the application SHALL **cancel** the run rather than leave it orphaned", and `PD-ORCH-005`'s Narrows list
+  does not name it. The build reads the requirement's guarantee as the clause's own last words — the run is ended, not
+  orphaned — and ends it as every quit ends a run, clause 3's quit: its agents rest `paused`, its iteration stays open,
+  and a later continue resumes it. The word "cancel" is not met literally, and was not before the repair either (the
+  stop's `cancel` rested the run by `stop`); nothing met it as the explicit cancel. So this is a departure from a
+  requirement no directive names, and a back-pointer is owed: either `PD-ORCH-005` names REQ-TRACE-464 among what it
+  narrows, or a ruling has a board run cancelled explicitly at the quit.
+
+**What a ruling decides.** Whether a stop during a plan cycle, which the text leaves to clause 9, should withdraw its
+pending approval or question as a quit does (the build) or cancel it. Whether REQ-TRACE-464's "SHALL cancel" is narrowed
+by clause 3's quit, which would add it to `PD-ORCH-005`'s Narrows list, or a board run is cancelled explicitly at the
+quit, final and never resumed. Whether the "Command not run" notice and the refusal line should
+move into the notices row, a layout change. Whether a stop during a plan cycle should persist a status and a summary of
+its own rather than a stop's `paused` and "came to rest".
 
 ## Design-reference dependencies
 

@@ -43,7 +43,13 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-09-27**
+## Last reconciled with the code: **2026-09-28**
+
+**The handoff's artifact is the root's own (`PD-ORCH-005` revision 4 clause 20, 2026-09-28, R-064).**
+`latestArtifactText` takes the latest artifact the most recent recorded iteration's root published that nothing
+supersedes, known by the root's task id as the record's `conversation_id`, and falls back to the latest of any kind
+(OQ-79). The **runtime view**'s continuation paragraph is updated. No package, edge, process, channel, command or
+store table changes, so the other views are not.
 
 **A quit answers nothing for a person, and every stored report is an artifact (`PD-ORCH-005` phase 7, 2026-09-27,
 R-062).** Main tells the application's quit apart (`QuitState`, `main/exit.ts`). That covers the immediate exit, every

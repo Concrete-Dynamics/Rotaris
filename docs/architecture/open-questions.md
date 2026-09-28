@@ -3347,6 +3347,42 @@ recommendations.
 Until they are built, the artifact is the latest of any kind, and a later iteration of the same run is told of no
 offer.
 
+**OQ-79 — Whose root is "the iteration's root" when the handoff is built for an iteration that has not started?** *(`PD-ORCH-005` clause 20 over REQ-SESSION-115; REQ-ORCH-153, REQ-LIBRARY-093 and REQ-LIBRARY-096, which the directive does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
+
+Clause 20 makes REQ-SESSION-115's artifact "the latest artifact the iteration's root published that nothing supersedes"
+and, when the root published none, the latest of any kind. The handoff is built only when a continuation starts a new
+iteration — a new prompt, a continue that finds nothing open, "continue without them", the plan gate's approve — and
+that iteration's root has published nothing yet. The clause does not say which iteration it means. Three further edges
+meet it: a plan cycle's root (REQ-ORCH-153's iteration 0, never recorded as an iteration), a root from before the
+iterations were recorded (v23), and a later iteration of the same run, which starts from the launch content computed
+when the run began.
+
+**What the build proceeds under.**
+
+- **The iteration is the most recent recorded one**, open or closed — the highest-numbered row in `iterations`, the
+  iteration the new one follows. A publish by an earlier iteration's root counts only as "of any kind". The alternative
+  read "the orchestrator" as a role — the latest publish of any iteration's root — and was not taken, because the
+  clause names one iteration's root.
+- **The root is known by its task id.** A root's publish carries its task id as the artifact's `conversation_id` (its
+  own tool port writes it; a child's report and a child's publish carry the child's), and the iteration's row records
+  that id. `created_by` is not used: every root records its persona there
+  (`a-roots-publish-names-its-persona-as-its-author.md`), so it cannot tell one iteration's root from another's.
+- **A plan cycle's root is not an iteration's root.** Its publishes count only as "of any kind"; the approve path
+  carries the plan itself in its own section.
+- **A root with no recorded iteration or no tool port** (before v23, or a run with no tool port) has no publish to
+  find, and the handoff takes the latest of any kind. Nothing is backfilled.
+- **A later iteration of the same run is not recomputed.** It starts from the launch content computed at the
+  continuation, so its artifact line is the one current then. Clause 20 says which artifact, not when it is read, and
+  `PD-ORCH-004` revision 4 adds only the open offers to that first message.
+- **Everything else stands as OQ-72 records it**: "latest" is the listing's order (created time, then id), a
+  superseded record is never chosen, and the rendering (id first, 80-character title, a published body stated once,
+  6,000 characters) is unchanged.
+
+**What a ruling decides.** Whether "the iteration's root" is the root of the iteration the new one follows, as built,
+or any iteration's root of the session, which would carry an earlier iteration's document forward past a later
+iteration whose root published nothing; and whether a later iteration of the same run should have its handoff's
+artifact read again when it starts.
+
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 
 The key is registered with default 20 and minimum 1. Each background session publishes its own `bg:<id>` stream at up to 50 frames/s (the 20 ms floor), so the produced aggregate is `(agents + background sessions) × 50 frames/s`, and only one of those two factors — agents, REQ-MONITOR-285's 20 — has a ceiling. Part AL reads the key into the manager and caps the *delivered* rate per window at 1,000 frames/s by merging (REQ-MONITOR-306, REQ-SHELL-103), so a user who configures 400 background sessions saturates the run-host → main pipe, not a renderer. A stated maximum on the key would let the produced rate be computed rather than absorbed. The owner's call; recorded, not resolved.

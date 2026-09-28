@@ -592,8 +592,10 @@ A **paused** session has no live run: `session.continue {action}` is a session c
 it resolves the pause (continue → `idle`; double → the limit ×2; cancel → `paused`, stop reason
 `message_limit_reached`) and, for continue/double and for a manually paused session, launches a **continuation
 run** on the same session with no new user row (Part H's route, the previous intent carried over, the
-continuation payload built to REQ-SESSION-115's budgets, its artifact the latest one the session's store holds,
-id first and cut to 6,000 characters — `latestArtifactText` — and its progress context listing the continuation offers
+continuation payload built to REQ-SESSION-115's budgets, its artifact the latest one the most recent iteration's root
+published that nothing supersedes — known by its root task id as the artifact's `conversation_id` — else the latest
+of any kind that nothing supersedes (PD-ORCH-005 clause 20, OQ-79), id first and cut to 6,000 characters —
+`latestArtifactText` — and its progress context listing the continuation offers
 no child has taken up, the newest ten — `openOffersText`, which a continue that resumes an open iteration records for
 its root instead, OQ-72). **PD-ORCH-005:** where the last run left an iteration open,
 that run resumes it first (§2), and `session.continue`'s `withoutPaused` declines it instead — clause 6's "continue

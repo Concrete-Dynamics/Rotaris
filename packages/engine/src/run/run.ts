@@ -9,7 +9,7 @@ import { Aggregates } from './aggregates.js';
 import { classifyStop, statusForResult, stopCondition, summarise, type StopReason, type TerminalResult } from './stop-conditions.js';
 import { StopRequest } from './stop-request.js';
 import { Todo, type Task, type TodoDocument } from './todo.js';
-import { planRequestSection } from './plan-text.js';
+import { planRequestSection, resumedWorkSection } from './plan-text.js';
 import { runTurn, type ToolPort, type TurnOutcome } from './turn.js';
 import { IterationChildren } from '../children/orchestration.js';
 import type { DelegationOps } from '../children/delegation.js';
@@ -193,6 +193,12 @@ export interface RunDeps {
   readonly onSaved?: (generation: number) => void;
   readonly supervisorFor?: ((conversationId: string) => LoopSupervisor) | undefined;
   readonly resumeTodo?: TodoDocument | undefined;
+  /**
+   * PD-ORCH-003 revision 2: false for a plan decision's relaunch, which appends no task — the held run's stored todo
+   * already carries the gated work, and after a hold that followed a resumed iteration the last request is the continue's
+   * message, which that iteration dealt with. Absent means a continuation appends its prompt (REQ-ORCH-004).
+   */
+  readonly appendsTask?: boolean | undefined;
   readonly initialTodo?: TodoDocument | undefined;
   readonly continuation?: boolean | undefined;
   /** ADR-0036: the configured personas over the built-in table. */
@@ -368,8 +374,9 @@ export class Run {
   private pausedAtLimit: { count: number; limit: number | null } | null = null;
   /**
    * REQ-ORCH-153: whether this run is held at the plan gate. Settled once, after the pre-flight and before the
-   * first thing the gate withholds; never cleared in place, because approval releases execution by launching the
-   * next segment (ADR-0062) rather than by flipping a flag under a running turn.
+   * first thing the gate withholds — or, for a run that resumed an open iteration, once that iteration has closed and
+   * before the first new one (PD-ORCH-003 revision 2); never cleared in place, because approval releases execution by
+   * launching the next segment (ADR-0062) rather than by flipping a flag under a running turn.
    */
   private planHeld = false;
   /** REQ-MONITOR-133/134: pending steering per conversation (`root` for the entry role, the task id for a child). */
@@ -427,7 +434,7 @@ export class Run {
      */
     const declinedWithMessage = open !== null && this.resumeFrom === null && this.todo.holdsFor(open.iteration);
     if (deps.resumeTodo && this.resumeFrom !== null && deps.openIteration?.delivered === true) this.todo.appendHeld('Continued Prompts', deps.taskId, deps.taskLabel ?? deps.task, this.resumeFrom.iteration);
-    else if (deps.resumeTodo && this.resumeFrom === null && !declinedWithMessage) this.todo.appendTask('Continued Prompts', deps.taskId, deps.taskLabel ?? deps.task);
+    else if (deps.resumeTodo && this.resumeFrom === null && !declinedWithMessage && deps.appendsTask !== false) this.todo.appendTask('Continued Prompts', deps.taskId, deps.taskLabel ?? deps.task);
     this.aggregates = Aggregates.rehydrate(stored);
     this.lastUsageEmitted = usageTotals(this.aggregates.usagePayload());
     this.tokenSamples = parseTokenSamples(stored?.token_samples ?? '[]');
@@ -624,8 +631,10 @@ export class Run {
        * the one exemption; a run with no pre-flight falls back to `moderate_feature`, which is outside it, so a
        * plan-mode run with no classifier still holds rather than silently proceeding.
        */
-      // PD-ORCH-005: a run that resumes an open iteration is not held — the work it resumes was released already (OQ-70).
-      this.planHeld = this.deps.plan !== undefined && !isAnswerOnly((this.preflight?.intent ?? NO_PREFLIGHT_INTENT).category) && this.resumeFrom === null;
+      // PD-ORCH-003 revision 2: a run that resumes an open iteration runs it without holding, since it is work already
+      // under way; a gate that would hold the run holds before the first new iteration instead (the loop below).
+      const gated = this.deps.plan !== undefined && !isAnswerOnly((this.preflight?.intent ?? NO_PREFLIGHT_INTENT).category);
+      this.planHeld = gated && this.resumeFrom === null;
       // PD-ORCH-005 clause 11: a pause accepted before the hold was settled is refused now that it is — a plan cycle leaves
       // no agent unfinished, so there is nothing for it to hold (found by phase 3's review).
       if (this.planHeld && this.pauseRequested) {
@@ -689,6 +698,16 @@ export class Run {
             elapsedMs: clocks.monotonic.now() - (this.startedAt ?? clocks.monotonic.now()), timeLimitMs: config.timeLimitMs,
           });
           if (stopReason) break;
+          /*
+           * PD-ORCH-003 revision 2: re-arming asks for a plan before new work, and the resumed iteration was not new work.
+           * A run that resumed one, and that the gate would hold, holds HERE — once that iteration has closed and the stop
+           * conditions found work left, before the first new iteration begins and before anything this segment withholds
+           * (its turn builds its ports under the hold). The pause, the stop and the message limit checked above win.
+           */
+          if (gated && this.resumeFrom !== null) {
+            this.planHeld = true;
+            return await this.parkAtPlanGate(this.resumeFrom.iteration);
+          }
         }
         const escalated = await this.iterate(resuming);
         resuming = null;
@@ -1385,7 +1404,7 @@ export class Run {
    * `start()` and reaches no user surface. Its `stop_reason` is EMPTY: `STOP_REASONS` (REQ-MONITOR-301) is closed
    * and nothing in it names a hold, and the run did not stop, so no reason is claimed.
    */
-  private async parkAtPlanGate(): Promise<RunResult> {
+  private async parkAtPlanGate(resumed: number | null = null): Promise<RunResult> {
     const { writer, owner, bus } = this.deps;
     const cycle = this.deps.plan?.cycle ?? 1;
     const intent = (this.preflight?.intent ?? NO_PREFLIGHT_INTENT).category;
@@ -1399,7 +1418,12 @@ export class Run {
        * with attachments — always, since `Sessions.start` builds one) never reads the task string at all.
        * The root execution record carries what the model was given (REQ-ORCH-072), which is why both are wrapped.
        */
-      const preamble = planRequestSection();
+      /*
+       * PD-ORCH-003 revision 2: a plan cycle after a resumed iteration plans the work still pending — the launch content
+       * is the continue that resumed the iteration, which its root already dealt with — so the tasks the next iteration
+       * would take up, in that order, lead, and the launch content follows as the session's context (OQ-77).
+       */
+      const preamble = resumed === null ? planRequestSection() : `${planRequestSection()}\n\n${resumedWorkSection(resumed, this.todo.pendingTexts())}`;
       const content: readonly ContentPart[] = [
         { kind: 'text', text: preamble },
         ...(this.deps.taskContent ?? [{ kind: 'text' as const, text: this.deps.task }]),

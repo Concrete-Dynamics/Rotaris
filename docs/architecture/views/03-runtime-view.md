@@ -97,7 +97,8 @@ REQ-WORKSPACE-065's "every agent built for a session sees the same catalog" hold
 small slot's rung ladder; the grant; the playbooks; the BUDGET cell) → **the plan gate's hold settled** → the
 launch audit (once per session, REQ-SESSION-138) → `run_start` timeline entry → hook trust announced → the
 effective permission posture (PD-TOOLS-002: the requested mode, never a downgrade row) → save `running` → `session_start` hooks → **the plan cycle
-if the gate holds**, otherwise the loop.
+if the gate holds**, otherwise the loop — for a run that resumes an open iteration, the loop, holding before its
+first new iteration if the gate would hold (PD-ORCH-003 revision 2).
 
 **The plan gate (Part; ADR-0062, REQ-ORCH-152/153/154, PD-ORCH-003).** In `plan` mode a run whose classified
 intent is outside REQ-ORCH-021's answer group **and whose session holds no approved release** is a sequence of
@@ -105,7 +106,12 @@ intent is outside REQ-ORCH-021's answer group **and whose session holds no appro
 approval reaches the session, so every run after it in that session goes straight to execution until the user
 re-arms the gate (`session.planRearm`, sent by the composer's run-start chip) or starts a new session. The hold is settled once, after the pre-flight and before anything it withholds, and never cleared in
 place — so a segment's grants are constant and the model's listing and callable set stay one resolution
-(REQ-TOOLS-010). A held segment takes **one turn of the entry role** through the ordinary `turn()` path, numbered
+(REQ-TOOLS-010). **A run that resumes an open iteration (PD-ORCH-003 revision 2; OQ-77)** runs that iteration unheld,
+whatever the mode and the release; when the gate would hold the run, the loop holds once the resumed iteration has
+closed and the stop conditions found work left — after the pause, the stop and the message limit have had their say,
+and before the first new iteration — and parks there (`parkAtPlanGate(resumed)`), its plan cycle told the tasks still
+pending ahead of the launch content (`resumedWorkSection`). A plan decision relaunches with `RunDeps.appendsTask: false`:
+the held run's stored todo already carries the gated work, and the last user row is not a new task. A held segment takes **one turn of the entry role** through the ordinary `turn()` path, numbered
 **iteration 0** (`root:0`) because a plan cycle is not an iteration, and then `parkAtPlanGate()` mirrors
 `pauseAtLimit` exactly: status `awaiting_plan_decision` with the cycle, the cycle's row written in the same
 durable transaction with a `plan_gate_opened` entry, **no terminal pair**, and an EMPTY stop reason
@@ -230,7 +236,8 @@ persona the open iteration's root ran as (`configure`'s `entryPersona` → the r
 `default_persona`, or the entry role with a warning when that persona is gone), and what the root is told — the notice
 of its background sessions, then its new message with its images — is recorded in the root's conversation there and
 then, so no early end of the run loses it and the user's message is the last the root reads. The run holds the open iteration from its construction, so the explicit cancel during its
-pre-flight closes it (OQ-69). The run is not held at the plan gate,
+pre-flight closes it (OQ-69). The resumed iteration is not held at the plan gate (PD-ORCH-003 revision 2: a gate
+that would hold the run holds before its first new iteration — the plan gate paragraph above),
 and the loop's first iteration is the open one (`iterate(openRow)`): its number, its root's task id and canonical name,
 and its todo task, with no second `iteration.start`, the row's interruption cleared and `iteration_resumed` recorded.
 `turn()` builds the iteration's children over the same root, `IterationChildren.resumePaused` moves each `paused` child

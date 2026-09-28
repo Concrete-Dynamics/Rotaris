@@ -45,6 +45,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-28**
 
+**The plan gate meets a resumed iteration (`PD-ORCH-003` revision 2, 2026-09-28, R-064).** A run that resumes an open
+iteration runs it unheld; when the gate would hold the run, the loop sets the hold once that iteration has closed and
+work is left, and parks before the first new iteration (`parkAtPlanGate(resumed)`, its plan cycle told the pending
+tasks by `resumedWorkSection`). A plan decision's relaunch appends no task (`RunDeps.appendsTask: false`), which also
+repairs the approved prompt being worked twice. Readings in OQ-77. The **runtime view**'s start order, plan gate and
+resume paragraphs say so; ADR-0062 decision 1 carries the amendment. No package, edge, process, channel, message kind or
+store column changed.
+
 **A continue's message is also a task (`PD-ORCH-005` clause 17, 2026-09-28, R-064).** A continue by message that
 resumes an open iteration appends its message to the planner todo as a task that iteration holds (`Todo.appendHeld`,
 `heldBy` in the todo document), which closes with it (`Todo.releaseHeld`): done when it succeeds, pending on any other

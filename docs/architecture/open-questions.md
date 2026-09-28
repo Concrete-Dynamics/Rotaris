@@ -3397,6 +3397,47 @@ answered it; whether leaving the message pending should count toward REQ-ORCH-07
 can finish is abandoned rather than taken up forever; and what the Continue action should append when the last request
 is already a task.
 
+**OQ-77 — Where does the gate hold a run that resumed an iteration, and what does that plan cycle plan?** *(`PD-ORCH-003` revision 2; REQ-ORCH-152, which the directive narrows, and REQ-ORCH-021, REQ-ORCH-067, REQ-ORCH-069, REQ-ORCH-073, REQ-ORCH-085, REQ-ORCH-153 and REQ-ORCH-154, which it does not name. Raised 2026-09-28 by building `PD-ORCH-003` revision 2 under [R-064](../product/requests.md#r-064).)*
+
+Revision 2: a continue that resumes an open iteration "SHALL run that iteration without holding it at the gate … When
+the gate would hold that run … it SHALL hold before the first new iteration the run begins." The paragraph places the
+hold and leaves open what happens at the edges of that point, what the plan cycle held there is asked to plan (the
+launch content is the continue that resumed the iteration, which its root has already dealt with), and what the answer
+at that gate launches.
+
+**What the build proceeds under.**
+
+- **The hold falls where a new iteration would begin.** After the resumed iteration closes, the loop checks the stop,
+  the pause, the queued prompts (REQ-CHAT-040) and the stop conditions (REQ-ORCH-069) as it does before every
+  iteration, and holds only when they found work left. A run with nothing pending, or at its iteration or time limit,
+  ends as it would have, with no gate. The message-limit pause reached as the resumed iteration closes wins (REQ-ORCH-085),
+  and so do a pause or a stop accepted during it. The hold is then set before the park turn builds anything, so that
+  turn's tool listing, its hooks, its children and its supervisor are all the held segment's (REQ-TOOLS-010, PD-ORCH-001),
+  and a pause during it is refused and a stop records no interruption (`PD-ORCH-005` clauses 11 and 15).
+- **Any iteration after the resumed one is new.** A resumed iteration that ends `partial` requeues its task
+  (REQ-ORCH-073), and the next iteration would take it up again under a new number; that iteration is held too, since the
+  directive's line is the iteration, not the task.
+- **The answer group is exempt, as at the start of a run.** The intent is the pre-flight's classification of the
+  continue — its message, or the last request for the Continue action — and a run whose intent is in REQ-ORCH-021's
+  answer group is not held, so whether a run will be held stays answerable without knowing more than at the start.
+- **What the plan cycle plans.** It is told the plan request, then that the run resumed the iteration, which has closed,
+  and the tasks still pending in the order the run takes them up (the first twenty, each cut to 500 characters, as the
+  handoff bounds its todo), then the launch content as the session's context, marked as already dealt with. The pending
+  tasks are what the first new iteration would have selected, so the approved plan is about the work it releases.
+- **What the answer launches.** A plan decision's relaunch appends no task: the held run's stored todo already carries
+  the gated work, and after this hold the last user row is the continue's message, which the resumed iteration dealt
+  with (and which `PD-ORCH-005` clause 17 closed as its own task). The same append had made every approved prompt a
+  second task, worked twice; that is repaired with it
+  ([`a-plan-decision-appends-the-gated-prompt-as-a-second-task.md`](../defects/fixed/a-plan-decision-appends-the-gated-prompt-as-a-second-task.md)).
+  The approved run is set up as any run is: the resumed root's persona covered the work already under way (OQ-70), and
+  no iteration is open when the plan is decided, so the work after the gate runs as the entry role configured then.
+- **"Continue without them" is unchanged.** It resumes nothing, so its run is held before its first iteration, as any run
+  that resumes nothing is.
+
+**What a ruling decides.** Whether a requeued resumed task should count as work already under way rather than a new
+iteration; whether the answer-group exemption should reach this hold; and whether the plan cycle should plan only the
+first pending task or all of them.
+
 ## Design-reference dependencies
 
 The approved visual design reference was **not available** to the architects who produced the slice

@@ -162,6 +162,11 @@ export class Todo {
     return undefined;
   }
 
+  /** REQ-ORCH-067: the texts of the pending tasks, in the order selection takes them up. */
+  pendingTexts(): string[] {
+    return this.all().filter((t) => t.state === 'pending').map((t) => t.text);
+  }
+
   /** REQ-ORCH-072: the selected task flips to in-progress. */
   begin(task: Task): void {
     task.state = 'in_progress';

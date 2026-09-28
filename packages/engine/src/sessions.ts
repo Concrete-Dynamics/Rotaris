@@ -1134,7 +1134,7 @@ export class Sessions {
    * the message a continue by message delivers to its root, which clause 17 also appends as a task the resumed iteration
    * holds — or decline it. Every route resumes unless told to decline.
    */
-  private launchContinuation(s: Live, prompt: string, payload: string, todo: TodoDocument | undefined, priorIntent: IntentCategory | null, setupIn: RunSetup, attachmentContent: readonly ContentPart[] = [], plan?: { readonly cycle: number; readonly changes: string }, openIteration: OpenIterationChoice = { message: null }): void {
+  private launchContinuation(s: Live, prompt: string, payload: string, todo: TodoDocument | undefined, priorIntent: IntentCategory | null, setupIn: RunSetup, attachmentContent: readonly ContentPart[] = [], plan?: { readonly cycle: number; readonly changes: string }, openIteration: OpenIterationChoice = { message: null }, appendsTask = true): void {
     const { model, runtime } = setupIn;
     const sessionId = s.writer.sessionId;
     const storedRow = s.dal.getSession(sessionId)!;
@@ -1237,7 +1237,7 @@ export class Sessions {
       // PD-ORCH-005 clause 17: a message this continue delivered to the resumed root is also a task that closes with it.
       ...(open ? { openIteration: { resume: openIteration !== 'decline', delivered: openIteration !== 'decline' && openIteration.message !== null && openIteration.message.length > 0 } } : {}),
       tools: null, permission, pid: this.deps.pid, host: this.deps.host, readSession: () => s.dal.getSession(sessionId), warn,
-      continuation: true, ...(todo ? { resumeTodo: todo } : {}), ...(hooks ? { hooks } : {}), checkpoints,
+      continuation: true, ...(todo ? { resumeTodo: todo } : {}), ...(appendsTask ? {} : { appendsTask: false }), ...(hooks ? { hooks } : {}), checkpoints,
       ...(supervisors ? { supervisorFor: (conversationId: string) => supervisors.forConversation(conversationId) } : {}),
       onSaved: (generation) => summary.rebuild(generation, () => s.dal.getSession(sessionId)),
       ...(preflight ? { preflight: async (signal: AbortSignal) => { const p = await preflight({ sessionId, workspaceRoot, prompt, signal, warn, countUsage, previousIntent: priorIntent, hasUnfinishedWork: true }); decided.grant = p.grant; decided.intent = p.intent.category; return p; } } : {}),
@@ -1695,7 +1695,9 @@ export class Sessions {
     if (!resolved.ok) return err({ code: resolved.error.code, reason: 'reason' in resolved.error ? resolved.error.reason : resolved.error.code });
     const lastPrompt = [...s.dal.residentRows(sessionId)].reverse().find((r) => r.kind === 'user')?.body ?? stored.session_id;
     const payload = `${buildContinuationPayload(s.dal, s.dal.getSession(sessionId)!, lastPrompt, todo.value)}\n\n${planSection(decision, text, changes)}`;
-    this.launchContinuation(s, lastPrompt, payload, todo.value, previousIntent(s.dal, sessionId), setup.value, [], decision === 'revise' ? { cycle: cycle + 1, changes } : undefined);
+    // PD-ORCH-003 revision 2: the held run's todo already carries the gated work, so the relaunch appends no task — after a
+    // hold that followed a resumed iteration, the last request is the continue's message, which that iteration dealt with.
+    this.launchContinuation(s, lastPrompt, payload, todo.value, previousIntent(s.dal, sessionId), setup.value, [], decision === 'revise' ? { cycle: cycle + 1, changes } : undefined, { message: null }, false);
     return ok({ relaunched: true, cycle });
   }
 

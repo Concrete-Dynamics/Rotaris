@@ -52,7 +52,7 @@ wrong.
 | | `workspace-proof` | reaching a project folder from inside the application: resolution, gates, switch |
 | | `settings-proof` | the Settings categories and the save bar; the About page's two files (`build-id.txt`, `THIRD-PARTY-LICENSES.txt`), absent and present (it stages them in `apps/desktop/resources/` and gives back what was there) |
 | **Surfaces** | `overview-proof` | the Overview painted from the run and the store |
-| | `transcript-proof` | the projection, the caches, the empty state (ADR-0045/0046) |
+| | `transcript-proof` | the projection, the caches, the empty state (ADR-0045/0046), and REQ-CHAT-055's append comparison — alternating launches pooled to thirty a side, in frames and milliseconds with their spread, plus one traced launch of each fixture read back by `lib/trace-summary.mjs` |
 | | `rows-proof` | the one row renderer, in both of its surfaces at once |
 | | `composer-proof` | the composer's chips, drafts, history recall and run header |
 | | `slash-proof` | the composer's slash-command catalogue |

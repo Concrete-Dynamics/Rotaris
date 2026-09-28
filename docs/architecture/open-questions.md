@@ -3347,6 +3347,49 @@ recommendations.
 Until they are built, the artifact is the latest of any kind, and a later iteration of the same run is told of no
 offer.
 
+**OQ-78 — What is an agent's fingerprint taken of, when is it compared, and where is the warning stated?** *(`PD-ORCH-005` clause 14 over OQ-68's reading; REQ-SESSION-029, REQ-SESSION-132, REQ-SESSION-134, REQ-SESSION-135, REQ-ORCH-019, REQ-ORCH-088, REQ-WORKSPACE-060, REQ-TOOLS-010, REQ-MCP-101 and REQ-MONITOR-305, which the directive does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
+
+Clause 14 has each agent's record keep "a fingerprint of the system instructions and the tool definitions the agent
+started with", and has the run state, as a warning, which agent resumed under changed instructions when its persona's
+current ones differ. It does not say what the instructions are — the persona's own text, or everything the request's
+system prompt carries — nor when the comparison is made, how often a warning is repeated, or where the run states it.
+REQ-MONITOR-305's warnings surface, where a warning would naturally be listed, is not built.
+
+**What the build proceeds under.**
+
+- **What the request carried.** The fingerprint is two SHA-256 digests (`agent_fingerprints`, v24): the system prompt
+  exactly as the agent's first model request carried it — the persona's instructions, its playbook (REQ-ORCH-019), the
+  session's context units (REQ-WORKSPACE-060) and the MCP section (REQ-MCP-101) — and the tool definitions that request
+  offered (REQ-TOOLS-010), in name order with every object's keys sorted, so the order a listing was assembled in is not
+  a change. A digest, not a copy: the instructions are not stored twice (REQ-SESSION-029). The consequence is stated
+  here because it is wider than "its persona" alone: a continue whose pre-flight classifies a different intent (a
+  different playbook), a skill force-loaded since, a changed MCP server, or a permission mode that changes the listing
+  also warns, since each changes what the agent is instructed with or offered. The model is not part of it.
+- **The first is kept.** The fingerprint is recorded at an agent's first model step and never replaced. Every resume
+  compares against it, so each resume under instructions that still differ warns again; a resume under the instructions
+  it started with states nothing.
+- **Compared at the resumed execution's first model step**, just before the step goes out, once per execution — after
+  the tool port is ready, so an MCP listing is complete. Any later execution of a task id that has a fingerprint is a
+  resume (a task id is never executed twice otherwise). REQ-ORCH-088's fallback retry and REQ-ORCH-095's re-prompt run
+  within one execution and compare nothing. A resumed root waiting on its children is compared when it next steps; one
+  that never steps again never ran under the changed instructions and is not named.
+- **An agent with no fingerprint** — recorded before v24, or paused before its first model step — has one recorded at
+  its resumed first step and nothing is stated (REQ-SESSION-132).
+- **Stated as a warning issue and a transcript line.** A `resumed_under_changed_instructions` issue at warning severity,
+  its actor the agent's canonical name, with its timeline entry (REQ-SESSION-134/135), and one `system` row in the
+  transcript: "Agent <canonical name> (<task id>) resumed under changed instructions: its system instructions | tool
+  definitions | system instructions and tool definitions differ from the ones it started with." The issue's metadata
+  carries the task id, the iteration and which of the two changed.
+- **Every agent**, the root and every child at every depth, each under its task id. The fingerprint is part of the
+  agent's record for clause 12: it is deleted with its session, and the transcript clear removes closed iterations'
+  fingerprints with their conversations (`fingerprints_removed` in `transcript_cleared`'s metadata).
+
+**What a ruling decides.** Whether "the system instructions" should be the persona's own definition only, so a changed
+playbook, skill or MCP server does not warn; whether a warning should be stated once per change (replacing the
+fingerprint after a warned resume) rather than at every resume while it differs; and whether the warning should also
+reach REQ-MONITOR-305's warnings surface once that is built, or be stated at the continue rather than at the agent's
+first step.
+
 **OQ-79 — Whose root is "the iteration's root" when the handoff is built for an iteration that has not started?** *(`PD-ORCH-005` clause 20 over REQ-SESSION-115; REQ-ORCH-153, REQ-LIBRARY-093 and REQ-LIBRARY-096, which the directive does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
 
 Clause 20 makes REQ-SESSION-115's artifact "the latest artifact the iteration's root published that nothing supersedes"

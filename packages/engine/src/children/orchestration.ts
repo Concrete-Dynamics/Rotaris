@@ -605,6 +605,9 @@ export class IterationChildren implements DelegationOps {
     let rePromptOwed = false;
     /** PD-ORCH-004: whether the child was making progress at the instant its limit expired. */
     let progressing = false;
+    // PD-ORCH-005 revision 4 clause 14: one check per execution, at the child's first model step — REQ-ORCH-088's retry and
+    // REQ-ORCH-095's re-prompt run within it and compare nothing.
+    const fingerprint = deps.record?.fingerprint(row.task_id, row.canonical_name, row.iteration);
     // REQ-ORCH-088: the child runs under the hard timeout; on expiry, once, it is retried on the role's fallback when one is untried.
     for (;;) {
       const controller = new AbortController();
@@ -649,6 +652,7 @@ export class IterationChildren implements DelegationOps {
         onToolCompleted: (call, result) => progress.completed(deps.clocks.monotonic.now(), call.name, result.args, result.status === 'ok' && !result.isError),
         // PD-ORCH-005 clause 1: the child's conversation, recorded under its task id as it happens.
         ...(deps.record ? { recorder: deps.record.recorder(row.task_id, row.iteration) } : {}),
+        ...(fingerprint ? { fingerprint } : {}),
         detached: () => this.detached,
         // REQ-ORCH-093: the resume limb — a child's turn after its first is a parent being resumed with reports.
         parentResume: !wasFirst,

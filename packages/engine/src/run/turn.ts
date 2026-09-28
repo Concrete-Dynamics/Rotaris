@@ -13,6 +13,7 @@ import type { ModelChoice } from './resilience.js';
 import { CompressionRunner, type TurnCompression } from './compression.js';
 import { Conversation, type ConversationRecorder } from './conversation.js';
 import { interruptedResult } from './interruption.js';
+import type { FingerprintCheck } from './record.js';
 
 /**
  * The tool loop inside one iteration (REQ-TOOLS-180, REQ-ORCH-146's non-native case): step the model;
@@ -160,6 +161,11 @@ export interface TurnDeps {
   readonly onToolCompleted?: ((call: PortToolCall, result: PortToolResult) => void) | undefined;
   /** PD-ORCH-005 clause 1: observes every message as it joins this agent's conversation — the conversation record. */
   readonly recorder?: ConversationRecorder | undefined;
+  /**
+   * PD-ORCH-005 revision 4 clause 14: handed the system prompt and the tool definitions each model step's request carries,
+   * just before the step goes out; the agent's record keeps the first and a resume compares against it.
+   */
+  readonly fingerprint?: FingerprintCheck | undefined;
 }
 
 type ToolResultPart = { kind: 'tool-result'; callId: string; name: string; result: string; isError: boolean };
@@ -269,6 +275,9 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
       const afterCompression = stopsHere();
       if (afterCompression) return afterCompression;
     }
+    // PD-ORCH-005 revision 4 clause 14: what this step's request carries — the instructions after the MCP section is
+    // appended and the listing after the port is ready — is what an agent's fingerprint is taken of.
+    deps.fingerprint?.(stepDeps.systemPrompt, specs);
     // REQ-CHAT-054: one stable message key per response SEGMENT. A tool boundary ends a segment, so the next step's
     // response is a distinct row; the ladder re-running THIS step on a fallback reuses the key and so persists once.
     const segment = `${deps.agentName}#${steps}`;

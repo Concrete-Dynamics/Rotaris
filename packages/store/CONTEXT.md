@@ -40,7 +40,10 @@ Every agent's conversation — the iteration root's and every child's at every d
 agent's task id: each message the model was sent and answered, each tool call with its arguments, each tool result. A
 compression is written into it as a replacement, so a resume sends the compressed conversation while the full history
 stays. It belongs to its session and is deleted with it; paging the transcript never touches it, and clearing the
-transcript clears the record of closed iterations only. — `PD-ORCH-005`
+transcript clears the record of closed iterations only. Beside the conversation it keeps the agent's **fingerprint**:
+a digest of the system instructions and the tool definitions the agent started with. A resumed agent runs with its
+persona's current ones, and when they differ the run states, as a warning, which agent resumed under changed
+instructions. — `PD-ORCH-005` (revision 4 clause 14)
 _Avoid_: transcript (the transcript is the rows a surface draws), log, "history" alone (the event history is REQ-EVENTS')
 
 **Open iteration**:

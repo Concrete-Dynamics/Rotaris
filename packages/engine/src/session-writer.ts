@@ -650,8 +650,10 @@ export class SessionWriter {
         // iteration's record is kept until the iteration closes." One transaction with the rows, so a reader never sees
         // the transcript gone and a closed iteration's record still standing, or the other way round.
         const records = dal.clearClosedAgentMessages(sessionId);
+        // PD-ORCH-005 revision 4 clause 14: the fingerprint is part of the agent's record, so it goes with it.
+        const fingerprints = dal.clearClosedAgentFingerprints(sessionId);
         const ordinal = dal.nextTimelineOrdinal(sessionId);
-        dal.insertTimeline(sessionId, ordinal, at, 'transcript_cleared', 'user', `The transcript was cleared: ${removed} row(s) removed. Agent state, artifacts and Git changes were kept.`, JSON.stringify({ removed, next_index: this.nextIndex, records_removed: records }), id, 'info');
+        dal.insertTimeline(sessionId, ordinal, at, 'transcript_cleared', 'user', `The transcript was cleared: ${removed} row(s) removed. Agent state, artifacts and Git changes were kept.`, JSON.stringify({ removed, next_index: this.nextIndex, records_removed: records, fingerprints_removed: fingerprints }), id, 'info');
         dal.touchSession(sessionId, this.status, at);
       });
     } catch (cause) {
@@ -734,6 +736,23 @@ export class SessionWriter {
       return this.fail(cause);
     }
     return ok(undefined);
+  }
+
+  /**
+   * PD-ORCH-005 revision 4 clause 14: the fingerprint of the system instructions and the tool definitions an agent started
+   * with, recorded beside its conversation under its task id. The first is kept: `false` when one was already recorded.
+   * Its own transaction, and nothing is published — a resume reads it, nothing draws it.
+   */
+  recordAgentFingerprint(taskId: string, iteration: number, instructions: string, tools: string): Result<boolean, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    let recorded = false;
+    try {
+      dal.transaction(() => { recorded = dal.insertAgentFingerprint({ session_id: sessionId, task_id: taskId, iteration, instructions, tools, at: toIsoUtc(wall.instant()) }); });
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    return ok(recorded);
   }
 
   /**

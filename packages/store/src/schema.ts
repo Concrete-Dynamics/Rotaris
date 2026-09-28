@@ -906,6 +906,34 @@ export const MIGRATIONS: readonly Migration[] = [
       );
     `,
   },
+  {
+    to: 24,
+    /*
+     * PD-ORCH-005 revision 4 clause 14 (R-063, built under R-064): "Each agent's record SHALL also keep a fingerprint of the
+     * system instructions and the tool definitions the agent started with."
+     *
+     * `agent_fingerprints`: one row per agent, the root's and every child's, keyed as its conversation is in
+     * `agent_messages` (session, task id), so the fingerprint sits beside the agent's record. `instructions` and `tools` are
+     * SHA-256 digests (hex) of the system prompt and of the tool definitions the agent's first model request carried — a
+     * digest, not a second copy of the instructions (REQ-SESSION-029). The first is kept: a resume compares against what
+     * the agent started with, and the writer never replaces a row (OQ-78). `iteration` is what clause 12's transcript clear
+     * reads, as it is for the conversation: it removes the fingerprints of closed iterations with their records. An agent
+     * recorded before this version has none, and a resume of it records one and states nothing (REQ-SESSION-132).
+     *
+     * The table cascades with its session (clause 12). Every read is the primary key.
+     */
+    sql: `
+      CREATE TABLE agent_fingerprints (
+        session_id   TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+        task_id      TEXT NOT NULL,
+        iteration    INTEGER NOT NULL,
+        instructions TEXT NOT NULL,
+        tools        TEXT NOT NULL,
+        at           TEXT NOT NULL,
+        PRIMARY KEY (session_id, task_id)
+      );
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

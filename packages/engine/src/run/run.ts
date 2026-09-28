@@ -1080,6 +1080,8 @@ export class Run {
     let launching = resume === undefined;
     let initial = true;
     const compression = this.compressionFor(this.rootResilience().cell.model, () => this.plannerTodoLines());
+    // PD-ORCH-005 revision 4 clause 14: one check per execution of the root, at its first model step.
+    const fingerprint = this.record.fingerprint(rootTaskId, rootCanonical, iteration);
     const turnFn = (text: string | null, history: readonly ChatMessage[]) => {
       const content = launching ? (contentOverride ?? this.deps.taskContent) : undefined;
       const initialCall = initial;
@@ -1111,6 +1113,8 @@ export class Run {
       onRequestUsage: this.onRequestUsage,
       // PD-ORCH-005 clause 1: the root's conversation is recorded under its task id, with its iteration.
       recorder: this.record.recorder(rootTaskId, iteration),
+      // PD-ORCH-005 revision 4 clause 14: the fingerprint of the instructions and tools the root started with.
+      fingerprint,
       }, text, history, this.abort.signal, content);
     };
     let outcome: TurnOutcome | null = null;

@@ -83,7 +83,7 @@ registry match nor the launcher's variable: ADR-0054 says not updatable, REQ-STA
 (REQ-STARTUP-118 against REQ-SHELL-118 on the download notice's title, persistence and the pause before the apply); **one more by that
 item's verification the same day: OQ-86** (whether the installer's auto-close and the restart's close ask REQ-STARTUP-046's active-run
 confirmation) — the four raised as OQ-76 to OQ-79 on their branch and renumbered at the merge, OQ-76 to OQ-82 having been taken on `main`. **One more was raised on 2026-09-28 by building the setup manifest (`first-release-plan.md` §4.1): OQ-87** (what a machine tool's "archive layout" comprises, and what path its expected executables are relative to — MinGit's entries sit at the archive root and ripgrep's under one directory). **And OQ-88**, raised by the same item's independent verification (whether a manifest may key an archive under REQ-STARTUP-060's raw `<os>-<machine>` fallback); the two were raised as OQ-76 and OQ-77 on their branch and renumbered at the merge, OQ-76 to OQ-86 having been taken on `main`. **And one more the same day by REQ-CHAT-055's measurement round (R-048's order under R-062): OQ-89** (how the append comparison is read when updates arrive faster than frames — each one's shown-update time then holds the
-queue in front of it — and what "an empty transcript" is compared against once the appended rows are on it — raised as OQ-76 on its branch and renumbered at the merge, OQ-76 to OQ-88 having been taken on `main`). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+queue in front of it — and what "an empty transcript" is compared against once the appended rows are on it — raised as OQ-76 on its branch and renumbered at the merge, OQ-76 to OQ-88 having been taken on `main`). **And one more the same day by repairing the notices file's tools section (R-062): OQ-90** (where the file reports the tool-server package versions REQ-STARTUP-152 asks of it, which REQ-STARTUP-142's section names no place for — built as a third sub-heading after the language servers). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -3127,6 +3127,14 @@ it can:
   license}` object per tool, under a `machineTools` key. REQ-STARTUP-058 describes the machine-tool manifest per
   platform, with archives, digests and layouts. Neither the key nor its shape is decided anywhere yet. Machine setup
   decides both, and the generator's reader follows.
+  *Added 2026-09-28 (R-062), a report and not a ruling:* the setup manifest now exists
+  (`apps/desktop/resources/setup-manifest.json`, `SetupManifestSchema`), so the shape is decided and the reader has
+  followed it: `machineTools[]` with `provisionedVersion` as the version. The section lists Git 2.55.0 and ripgrep 15.2.0
+  with their four fields. Machine setup is still not built, so the file does not say "downloaded after installation" as
+  a fact: it says the tools are to be downloaded after installation by machine setup, which this build does not yet
+  carry, so this build downloads none of them. What the file says once machine setup ships, or is ruled out of the
+  first release, is still this question's ruling. The "pins no machine tools" sentence stays for a manifest that pins
+  none (`../defects/fixed/the-notices-file-says-the-setup-manifest-pins-no-machine-tools.md`).
 
 **What a ruling decides.** Whether the first release ships without Manrope, and if so whether REQ-STARTUP-142's
 font clause is narrowed to the faces the build carries; and whether machine setup belongs in the first release —
@@ -3510,6 +3518,24 @@ updates so each is shown before the next arrives, which the benchmark domain's p
 visible-row term is within the requirement while the third sentence's comparison holds, or is itself the thing the
 third sentence forbids. Recommended: the first reading, as the one a reader experiences and the one the benchmark's
 phases can measure, with the third sentence read at one frame of slack as the proof reads it.
+
+**OQ-90 — Where does `THIRD-PARTY-LICENSES.txt` report the tool-server package versions REQ-STARTUP-152 asks it to?** *(REQ-STARTUP-152 with REQ-STARTUP-142 and REQ-STARTUP-058. Raised 2026-09-28 by repairing the notices file's tools section under [R-062](../product/requests.md#r-062); the note is `../defects/fixed/the-notices-file-says-the-setup-manifest-pins-no-machine-tools.md`.)*
+
+REQ-STARTUP-152 requires "the tool and MCP package versions a build provisions and warms" to be "the same versions its
+`THIRD-PARTY-LICENSES.txt` reports". REQ-STARTUP-142 says what the file's `Tools provisioned after installation`
+section contains. It holds Git and ripgrep, then a sub-heading naming the bundled code-intelligence runtime with its
+language servers. It names no place for the MCP packages REQ-STARTUP-058 pins, `@playwright/mcp` 0.0.80 in this
+build. Nor are they "dependencies present in the shipped artifact": the built-in configuration launches them through
+`npx`, which fetches them.
+
+**What the build proceeds under.** A third sub-heading of the same section, `Tool-server packages`, after the language
+servers, lists each package the manifest's `toolServerPackages` pins with REQ-STARTUP-142's four fields. It states
+that a tool server of the built-in configuration launches each through its package runner, which downloads it when
+that tool server is first started, and that none is contained in the artifact. The sub-heading is left out for a
+manifest that pins no package. REQ-STARTUP-142's order, machine tools then the runtime's sub-heading, is kept.
+
+**What a ruling decides.** Whether REQ-STARTUP-142 gains the sub-heading, with its wording, or the versions belong
+somewhere else in the file.
 
 ## Design-reference dependencies
 

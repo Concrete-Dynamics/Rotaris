@@ -14,9 +14,14 @@
 //  - OQ-72: the closure's granularity is what a package manager enumerates. Electron is one component whose own
 //    credits (LICENSES.chromium.html) are reproduced beneath it; two libraries this build compiles into its native
 //    modules from vendored sources, and whose licence files the packager strips, are listed as components of their own.
-//  - OQ-73: this build's setup manifest carries the code-intelligence runtime's language servers and no machine tools,
-//    so the tools section says it provisions no machine tools; Manrope, which REQ-STARTUP-142 names and no build
-//    carries yet, has its licence reproduced and its entry says it is not contained.
+//  - OQ-73: the tools section reads the setup manifest the build ships (`apps/desktop/resources/setup-manifest.json`)
+//    in the shape `packages/config/src/setup-manifest.ts` decides, and lists its machine tools; because the flow that
+//    would download them (machine setup) is not built, the section says so rather than that they are downloaded.
+//    Manrope, which REQ-STARTUP-142 names and no build carries yet, has its licence reproduced and its entry says it is
+//    not contained.
+//  - OQ-90: REQ-STARTUP-152 asks the file to report the tool-server package versions the manifest pins, and
+//    REQ-STARTUP-142 names no place for them; they are a third sub-heading of the tools section, after the language
+//    servers, with the same four fields.
 //  - OQ-74: a component that carries licence text but declares no licence identifier fails validation outright; the
 //    reviewed-exceptions table covers a component with no licence text only, as REQ-STARTUP-143 words it.
 //  - OQ-75: "its full license text" is a file that carries the licence. A file that only names it, only sends the
@@ -40,7 +45,8 @@ export const PATHS = Object.freeze({
   output: `apps/desktop/resources/${NOTICES_FILE}`,
   runtime: 'apps/desktop/resources/code-intelligence/runtime',
   bundleMarker: 'apps/desktop/resources/code-intelligence/bundle.json',
-  setupManifest: 'apps/desktop/scripts/code-intelligence/pins.json',
+  setupManifest: 'apps/desktop/resources/setup-manifest.json',
+  codeIntelligencePins: 'apps/desktop/scripts/code-intelligence/pins.json',
   fontFaces: 'packages/ui/src/fonts.css',
   designAssets: 'docs/design/assets',
   electron: 'node_modules/electron',
@@ -633,32 +639,62 @@ export function bundledAssetComponents(root, problems) {
 // ---- the setup manifest ----------------------------------------------------------------------------------------
 
 /**
- * REQ-STARTUP-058's manifest as this build carries it (OQ-73): the code-intelligence pins, whose `languageServers`
- * is the second list and which carry no machine tools. An unreadable or unparsable manifest — including one whose
- * declared package lacks one of the four fields — fails validation (REQ-STARTUP-143).
+ * The part of the setup manifest's shape this generator reads. The shape's authority is `SetupManifestSchema` in
+ * `packages/config/src/setup-manifest.ts`; this tool imports nothing from `packages/` (the component view), so these
+ * names are a copy, and `notices.test.ts` holds each one to a key the schema declares and validates the shipped file
+ * and the fixture with the schema itself.
+ */
+export const SETUP_MANIFEST_SHAPE = Object.freeze({
+  schemaVersion: 1,
+  /** REQ-STARTUP-058's first list: REQ-STARTUP-142's four fields, the version being the provisioned one. */
+  machineTool: Object.freeze(['name', 'provisionedVersion', 'source', 'license']),
+  /** REQ-STARTUP-058's "exact MCP package pins", with the four fields REQ-STARTUP-152 asks this file to report. */
+  toolServerPackage: Object.freeze(['name', 'version', 'source', 'license']),
+  /** REQ-STARTUP-058's second list: one entry per language, each package with the four fields. */
+  languageServerPackage: Object.freeze(['name', 'version', 'source', 'license']),
+});
+
+/**
+ * REQ-STARTUP-058's manifest as this build ships it: its machine tools, its tool-server packages and its language
+ * servers, each with REQ-STARTUP-142's four fields. The runtime the language-server sub-heading names is read from the
+ * code-intelligence pins, which the manifest does not repeat. An unreadable or unparsable manifest — including one whose
+ * schema version is not 1, or whose declared tool or package lacks one of the four fields — fails validation
+ * (REQ-STARTUP-143).
  */
 export function setupManifest(root, problems) {
-  const pins = readJson(root, PATHS.setupManifest, problems, 'the setup manifest');
-  if (!pins) return null;
+  const manifest = readJson(root, PATHS.setupManifest, problems, 'the setup manifest');
+  const pins = readJson(root, PATHS.codeIntelligencePins, problems, 'the code-intelligence pins');
+  if (!manifest || !pins) return null;
   const bad = (m) => { problems.push(`the setup manifest ${PATHS.setupManifest} cannot be parsed: ${m}`); return null; };
-  if (typeof pins.distribution !== 'string' || typeof pins.version !== 'string') return bad('it names no runtime distribution and version');
-  const machineTools = pins.machineTools ?? [];
-  if (!Array.isArray(machineTools)) return bad('machineTools is not a list');
-  if (!Array.isArray(pins.languageServers)) return bad('languageServers is not a list');
+  if (typeof pins.distribution !== 'string' || typeof pins.version !== 'string') {
+    problems.push(`the code-intelligence pins ${PATHS.codeIntelligencePins} cannot be parsed: they name no runtime distribution and version`);
+    return null;
+  }
+  if (manifest.schemaVersion !== SETUP_MANIFEST_SHAPE.schemaVersion) return bad(`schemaVersion is ${JSON.stringify(manifest.schemaVersion ?? null)}, not ${SETUP_MANIFEST_SHAPE.schemaVersion}`);
+  for (const k of ['machineTools', 'toolServerPackages', 'languageServers']) if (!Array.isArray(manifest[k])) return bad(`${k} is not a list`);
+  const missing = (item, fields) => fields.find((k) => typeof item?.[k] !== 'string' || item[k].trim() === '');
   const languageServers = [];
-  for (const ls of pins.languageServers) {
+  for (const ls of manifest.languageServers) {
     if (typeof ls?.language !== 'string' || ls.language.trim() === '' || !Array.isArray(ls?.packages)) return bad('a language-server entry has no language or packages');
     for (const pkg of ls.packages) {
-      for (const k of ['name', 'version', 'source', 'license']) if (typeof pkg?.[k] !== 'string' || pkg[k].trim() === '') return bad(`language server package ${pkg?.name ?? '?'} (${ls.language}) has no ${k}`);
+      const k = missing(pkg, SETUP_MANIFEST_SHAPE.languageServerPackage);
+      if (k) return bad(`language server package ${pkg?.name ?? '?'} (${ls.language}) has no ${k}`);
       languageServers.push({ language: ls.language, provisioner: ls.provisioner, name: pkg.name, version: pkg.version, source: pkg.source, license: pkg.license });
     }
   }
-  const tools = [];
-  for (const t of machineTools) {
-    for (const k of ['name', 'version', 'source', 'license']) if (typeof t?.[k] !== 'string' || t[k].trim() === '') return bad(`machine tool ${t?.name ?? '?'} has no ${k}`);
-    tools.push({ name: t.name, version: t.version, source: t.source, license: t.license });
+  const machineTools = [];
+  for (const t of manifest.machineTools) {
+    const k = missing(t, SETUP_MANIFEST_SHAPE.machineTool);
+    if (k) return bad(`machine tool ${t?.name ?? '?'} has no ${k}`);
+    machineTools.push({ name: t.name, version: t.provisionedVersion, source: t.source, license: t.license });
   }
-  return { runtime: `${pins.distribution} ${pins.version}`, machineTools: tools, languageServers };
+  const toolServerPackages = [];
+  for (const p of manifest.toolServerPackages) {
+    const k = missing(p, SETUP_MANIFEST_SHAPE.toolServerPackage);
+    if (k) return bad(`tool-server package ${p?.name ?? '?'} has no ${k}`);
+    toolServerPackages.push({ name: p.name, version: p.version, source: p.source, license: p.license });
+  }
+  return { runtime: `${pins.distribution} ${pins.version}`, machineTools, toolServerPackages, languageServers };
 }
 
 // ---- the reviewed exceptions and the release inputs ------------------------------------------------------------
@@ -909,7 +945,11 @@ export function renderNotices(model) {
   if (!manifest || manifest.machineTools.length === 0) {
     out.push(wrap(`The setup manifest of this build pins no machine tools, so this build downloads neither Git nor ripgrep.`), '');
   } else {
-    out.push(wrap(`The tools below are downloaded after installation and are not contained in this artifact.`), '');
+    // OQ-73's reading: REQ-STARTUP-142 has the section say the tools are downloaded after installation, and the flow
+    // that would download them (machine setup, REQ-STARTUP-060 onward) is not in this build, so the sentence says both
+    // what the manifest pins them for and that nothing in this build downloads them yet. What the file says once a
+    // ruling decides whether machine setup ships is the ruling's.
+    out.push(wrap(`The setup manifest of this build pins the tools below. None of them is contained in this artifact: they are to be downloaded after installation by machine setup, which this build does not yet carry, so this build downloads none of them.`), '');
     for (const t of manifest.machineTools) out.push(`  ${t.name}`, `    Version:  ${t.version}`, `    Source:   ${t.source}`, `    License:  ${t.license}`, '');
   }
   const runtimeName = manifest?.runtime ?? 'the bundled code-intelligence runtime';
@@ -918,6 +958,13 @@ export function renderNotices(model) {
   out.push(wrap(`The bundled code-intelligence runtime downloads each package below at the first use of that language. None of them is contained in this artifact.`), '');
   for (const s of manifest?.languageServers ?? []) out.push(`  ${s.name}`, `    Language: ${s.language}`, `    Version:  ${s.version}`, `    Source:   ${s.source}`, `    License:  ${s.license}`, '');
   out.push(wrap(`A further language the runtime supports obtains its language server by the same route, at the first use of that language, and is not declared here.`), '');
+  // REQ-STARTUP-152: the tool-server package versions the manifest pins are the versions this file reports (OQ-90's
+  // reading places them here). The built-in configuration launches each through `npx`/`uvx`, which fetches it.
+  if (manifest && manifest.toolServerPackages.length > 0) {
+    out.push(subheading('Tool-server packages'));
+    out.push(wrap(`A tool server of the built-in configuration launches each package below through its package runner, which downloads the package when that tool server is first started. None of them is contained in this artifact.`), '');
+    for (const p of manifest.toolServerPackages) out.push(`  ${p.name}`, `    Version:  ${p.version}`, `    Source:   ${p.source}`, `    License:  ${p.license}`, '');
+  }
 
   if (electron) {
     out.push(heading(5, `Components compiled into Electron ${electron.version}`));

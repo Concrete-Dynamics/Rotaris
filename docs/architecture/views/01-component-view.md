@@ -242,7 +242,9 @@ It imports nothing from `packages/` or `apps/`, and nothing in the product impor
 (`generate.mjs`, a thin CLI over `notices.mjs`, typed by `notices.d.mts`) reads the installed tree: the desktop
 application's and the workspace packages' `package.json` production edges, `node_modules`, Electron's `dist/`, the
 bundled runtime under `apps/desktop/resources/code-intelligence/`, `packages/ui/src/fonts.css` and the font files it
-names, and `apps/desktop/scripts/code-intelligence/pins.json` as the setup manifest. It writes one file,
+names, `apps/desktop/resources/setup-manifest.json` as the setup manifest (since 2026-09-28; its field names are a copy
+of `config`'s `SetupManifestSchema`, held to it by the test), and `apps/desktop/scripts/code-intelligence/pins.json` for
+the runtime's name only. It writes one file,
 `apps/desktop/resources/THIRD-PARTY-LICENSES.txt`, only when REQ-STARTUP-143's validation passes. Three
 version-controlled tables sit beside it, as REQ-STARTUP-143 asks of the first:
 
@@ -252,7 +254,8 @@ version-controlled tables sit beside it, as REQ-STARTUP-143 asks of the first:
 
 The product meets the tool at one literal: `main/about.ts`'s `THIRD_PARTY_LICENSES_ASSET` equals the generator's
 `NOTICES_FILE`, and `about.test.ts` holds them equal. **Edges unchanged**: `tools/**` is outside the boundary rule, and
-the one test that crosses is a test.
+the two tests that cross are tests — `about.test.ts` into the tool, and (since 2026-09-28) `notices.test.ts` into
+`config`'s `setup-manifest.ts`, to hold the generator's copy of the manifest's field names to the schema.
 
 ### The build-identifier writer and the About page's two files (2026-09-27; `first-release-plan.md` §4.4, ADR-0054)
 
@@ -300,7 +303,7 @@ file, refuses each malformed shape and holds its `languageServers` equal to `pin
 electron-builder's own `copyFiles`. The schema's `PLATFORM_KEYS` (REQ-STARTUP-060) is a second literal of
 `tools/release-naming`'s, the naming authority — `config` has no edge to it — and `tools/release-guard`'s `pins.test.ts`,
 which imports both, holds the two lists equal and every shipped archive under one of them; the raw `<os>-<machine>`
-fallback key is refused as an archive key. The notices generator still reads `pins.json` as its manifest (OQ-73). **Edges
+fallback key is refused as an archive key. The notices generator reads it as its manifest since 2026-09-28, by a copy of the field names rather than an import. **Edges
 unchanged**: `config` gains the `zod` dependency `contracts` already carries; no package edge moves.
 
 ### `ui/design-system` (2026-09-12)

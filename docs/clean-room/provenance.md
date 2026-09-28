@@ -1342,7 +1342,8 @@ None. One identifier minted, five amended in place, every amended sentence quoti
   `packages/config/src/setup-manifest.test.ts` holds its `languageServers` equal to
   `apps/desktop/scripts/code-intelligence/pins.json` (ADR-0054, "The setup manifest"). Still unbuilt: its consumer
   (machine setup, `REQ-STARTUP-060` onward and `REQ-MCP-112`'s setup half), and the notices generator's reading of
-  it, which still reads `pins.json` (OQ-73).*
+  it, which still reads `pins.json` (OQ-73).* *2026-09-28: the notices generator reads it too (R-062); only machine
+  setup remains unbuilt.*
 - **Which languages the release names** is a release decision. Two are declared because two were measured;
   the disclosure says the rest are obtained the same way.
 

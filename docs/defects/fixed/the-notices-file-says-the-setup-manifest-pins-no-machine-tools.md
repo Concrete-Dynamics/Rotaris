@@ -45,3 +45,29 @@ of the same ruling.
   `packages/config/src/setup-manifest.ts` defines them.
 - `apps/desktop/scripts/code-intelligence/pins.json` — what the generator reads today; its `languageServers` is the one
   source of truth for that list, and the setup manifest's copy is held equal to it by `packages/config/src/setup-manifest.test.ts`.
+
+## Repaired 2026-09-28 under R-062
+
+OQ-73 is still open; the repair keeps the reading it states (the section follows the manifest's shape, and what it says
+about tools no flow yet downloads is the ruling's) and makes the file true of the tree.
+
+- `PATHS.setupManifest` is `apps/desktop/resources/setup-manifest.json`, the manifest the build ships. The runtime the
+  language-server sub-heading names is read from `pins.json` (`PATHS.codeIntelligencePins`), because the manifest does
+  not repeat it; the language-server list itself now comes from the manifest, which a test already holds equal to
+  `pins.json`.
+- The reader follows the manifest's shape: schema version 1, the three lists, a machine tool's `provisionedVersion` as
+  its version. `tools/` imports nothing from `packages/` (the component view), so the field names are a copy,
+  `SETUP_MANIFEST_SHAPE`; `notices.test.ts` holds each to a key `SetupManifestSchema` declares and validates both the
+  fixture and the shipped file with the schema itself. A machine tool carrying the old assumed `version` is refused
+  naming `provisionedVersion`.
+- "Machine tools" lists Git 2.55.0 and ripgrep 15.2.0 with name, provisioned version, source URL and licence identifier,
+  and says: "The setup manifest of this build pins the tools below. None of them is contained in this artifact: they are
+  to be downloaded after installation by machine setup, which this build does not yet carry, so this build downloads
+  none of them." The "pins no machine tools" sentence stays only for a manifest that pins none.
+- A third sub-heading, "Tool-server packages", lists `@playwright/mcp` 0.0.80 with its four fields (REQ-STARTUP-152).
+  REQ-STARTUP-142 names no place for it; where it sits is raised as OQ-90.
+
+Pinned by `tools/notices/notices.test.ts`: the tools section over the fixture and over the shipped manifest copied into
+it, the "pins none" branch for a manifest that pins none, the manifest's shape refusals, the pins' refusals, the real
+repository's manifest read, and the field names against the schema. `pnpm notices` on the tree still refuses with the
+same eleven problems as before the repair (the runtime absent, O-3's address, nine components without licence text).

@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-28**
 
+**The notices generator reads the shipped setup manifest (2026-09-28, R-062).** `tools/notices/notices.mjs` reads
+`apps/desktop/resources/setup-manifest.json` rather than `pins.json` as REQ-STARTUP-142's manifest, by a copy of
+`SetupManifestSchema`'s field names that `notices.test.ts` holds to the schema; `pins.json` is read for the runtime's
+name only. The **component view**'s notices-generator and setup-manifest sections say so, and name the second test that
+crosses into a package. No package, edge, process, channel, message kind, store column or owner of state changed.
+
 **REQ-CHAT-055's measurement round: the transcript projects once per change, not once per render (2026-09-28, R-048's
 order under R-062).** The built app was traced appending to an empty transcript and to one of 1,200 rows, and the extra
 time at depth was script — three to four synchronous renders per increment, each re-running ADR-0046 step 4 over the

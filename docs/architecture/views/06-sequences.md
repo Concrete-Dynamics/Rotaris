@@ -104,7 +104,10 @@ sequenceDiagram
     G->>RH: presenter.present(payload)
     RH->>M: event approval.present
     M->>M: queue on the window that owns the session
-    M->>D: modal BrowserWindow, role=approval
+    opt a dialog is open, or requests are queued ahead
+      M->>RH: request approval.queued
+    end
+    M->>D: modal BrowserWindow, role=approval (its turn)
     D->>M: command approval.payload
     M->>RH: request approval.shown {ok}
     D->>M: the person chooses
@@ -122,14 +125,22 @@ The parts that are easy to get wrong:
   `cancelled`, and the application is unattended until main answers again (`ADR-0019`).
 - **Closing the dialog answers Deny** while the application stays: the user closed the dialog, or one main window
   of several. A request already answered or cancelled asks nothing more. A dialog that the application's quit closes
-  answers nothing (`QuitState`, `main/exit.ts`). The quit's `shutdown` then comes to rest and withdraws the approval,
-  or, during a plan cycle, which never comes to rest, cancels it as OQ-69 has it (PD-ORCH-005 clause 9). The question
+  answers nothing (`QuitState`, `main/exit.ts`). The quit's `shutdown` then withdraws the approval — at a rest,
+  and during a plan cycle too, where the cycle's agents end rather than rest (PD-ORCH-005 clauses 9 and 15; OQ-81). The question
   dock's cancellation is held back at a quit the same way. *Until phase 7 the quit's close sent a Deny first, and the
   agent stepped on it: `docs/defects/fixed/a-quit-denies-the-approval-it-should-withdraw.md`.*
 - Presentation order is **oldest first by the published sequence**, and that sequence orders presentation
   *across* windows, not within one.
 - A dialog that cannot be shown is not a hang: `approval.shown {ok: false}` comes back, the pending request is
-  discarded, and the call is denied with source `presenter-error`.
+  discarded, and the call is denied with source `presenter-error`. Main must acknowledge a request within 10 s,
+  either by showing it or, when it waits behind the open dialog, with `approval.queued`. A queued request then waits
+  for its turn without that bound (REQ-TOOLS-063). The gate races the presentation against its own wait, so a queued
+  request that times out or is cancelled is dropped unshown and counts as cancelled (REQ-TOOLS-054), and one answered
+  elsewhere is honoured. A window that closes while the application stays hands its queued requests to main
+  (`MainWindows`' `unshownApprovals`), which answers each `approval.shown {ok: false}`; during a quit it answers
+  nothing, and the shutdown withdraws them. *Until the fourteenth review round of the merged revision 4 build, main acknowledged only
+  what it showed, so a request queued behind a dialog left open for 10 s was denied unshown:
+  `docs/defects/fixed/a-queued-approval-is-denied-unshown-after-ten-seconds.md`.*
 - Only an **answer, a cancellation or a withdrawal** releases the wait. A wait with no limit is still released —
   the explicit cancel cancels whatever is blocked on a person as its first act, and a rest (a pause, a stop, a quit)
   **withdraws** it: the call settles blocked and interrupted, `approval_withdrawn` (or `question_withdrawn` for a
@@ -241,7 +252,9 @@ sequenceDiagram
   summary, report or terminal state for a paused child; no model call after the pause beyond the step in flight.
 - **A crash writes none of this.** The next repair or continue does (`run/crash.ts`): the interruption `crash` on the
   open row, its unfinished agents paused, a dead run's unanswered calls answered, its approvals withdrawn, its
-  background sessions ended. Loading the session writes nothing.
+  background sessions ended. Loading the session writes nothing, and the user's cancel of one crash-left child while the
+  session rests records none of it but the cancelled agents' own cut-off calls, which no later record reaches (answered
+  as interrupted, `answerOpenCalls`): it cancels that child from where it stood (`Sessions.cancelPausedAtRest`, OQ-74).
 - **The explicit cancel is not a rest.** The reserved run id's final stop cancels the waits, drains and finalizes as
   before: every agent `cancelled`, the iteration closed — including when it arrives while a pause or a stop is still
   coming to rest, or later while teardown runs (the iteration this run left open then closes before the run's result is
@@ -249,5 +262,8 @@ sequenceDiagram
   summarising during REQ-ORCH-080's drain finish (OQ-69).
 - **The next continue resumes it** (`03-runtime-view.md` §2): the open iteration first, the same root and task, every
   paused agent moved back and carrying on from its record, told of its background sessions, the root handed a new
-  message as its next. Declined ("continue without them"), its paused agents end `cancelled` and it closes before the
-  new run's first iteration (`closeLeftOpenIteration`).
+  message as its next. At its first model step each resumed agent's instructions and tools are compared with the
+  fingerprint its record kept (PD-ORCH-005 clause 14, OQ-78); when they differ the run writes a
+  `resumed_under_changed_instructions` warning issue and a transcript `system` row naming the agent. Declined
+  ("continue without them"), its paused agents end `cancelled` and it closes before the new run's first iteration
+  (`closeLeftOpenIteration`).

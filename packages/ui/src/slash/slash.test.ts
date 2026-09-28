@@ -190,7 +190,7 @@ describe('slash — REQ-CHAT-028..033, REQ-CHAT-159: the catalogue', () => {
     expect(registry.lookup('about-legal')!.availability(ctx)).toEqual({ ok: false, reason: '/about-legal is not available right now.' });
     // A mirror registered over a built-in name is refused by the mirror, never by the registry.
     const withBuiltIns = buildCatalogue(options({ palette: [{ id: 'x', label: 'Stop', keywords: [], available: () => true, run: () => undefined }] }));
-    expect(withBuiltIns.lookup('stop')?.description).toBe('Cancel the active run');
+    expect(withBuiltIns.lookup('stop')?.description).toBe('Stop the active run');
   });
   it('REQ-CHAT-029: /stop, /pause and /compress are offered only while running, else listed with "No run is active." and start nothing', async () => {
     const registry = buildCatalogue(options());
@@ -208,7 +208,9 @@ describe('slash — REQ-CHAT-028..033, REQ-CHAT-159: the catalogue', () => {
     // A refused control is `failed` with the refusal's own words (what the run host answers for forceCompression until Part AO).
     const refused = fakeContext({ runState: 'running', refuse: { forceCompression: 'The run host does not support forceCompression yet.' } });
     expect(await run(registry, 'compress', '', refused)).toEqual({ kind: 'failed', message: 'The run host does not support forceCompression yet.' });
-    expect(registry.lookup('stop')?.description).toBe('Cancel the active run');
+    // PD-ORCH-005 clause 15 (REQ-CHAT-029 as narrowed): `/stop` is the stop, offered as "Stop the active run", and it sends
+    // the stop's `cancel` op above — never the confirmed explicit cancel.
+    expect(registry.lookup('stop')?.description).toBe('Stop the active run');
     expect(registry.lookup('compress')?.description).toBe('Compress agent context');
   });
   it('REQ-CHAT-030: /clear and /search need at least one transcript row', async () => {

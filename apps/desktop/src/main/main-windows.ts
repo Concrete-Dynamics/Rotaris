@@ -45,7 +45,7 @@ type WorkspaceGate =
   | { readonly ok: true }
   | { readonly ok: false; readonly outcome: CommandOutcome };
 
-export interface MainWindowsDependencies<TWindow, TPersonaWindows, TTerminalWindows> {
+export interface MainWindowsDependencies<TWindow, TPersonaWindows, TTerminalWindows, TApproval = never> {
   readonly adapter: MainWindowAdapter<TWindow, TPersonaWindows, TTerminalWindows>;
   readonly timers: { readonly after: (delayMs: number, callback: () => void) => MainWindowTimer };
   readonly currentDirectory: () => string;
@@ -70,6 +70,11 @@ export interface MainWindowsDependencies<TWindow, TPersonaWindows, TTerminalWind
   ) => void;
   readonly reportFailure: (windowId: number, title: string, audience: 'window' | 'application') => void;
   readonly log: (message: string) => void;
+  /**
+   * REQ-TOOLS-063/064: the requests still queued for a window's dialog when the window closes. Each was acknowledged as
+   * queued (`approval.queued`), so the run host no longer bounds its wait: main must say it was never shown, or it hangs.
+   */
+  readonly unshownApprovals?: (approvals: readonly TApproval[]) => void;
 }
 
 interface WindowRecord<TWindow, TPersonaWindows, TTerminalWindows, TApproval, TDialog> {
@@ -92,7 +97,7 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
   readonly #records = new Map<number, WindowRecord<TWindow, TPersonaWindows, TTerminalWindows, TApproval, TDialog>>();
   readonly #focusOrder: number[] = [];
 
-  constructor(private readonly dependencies: MainWindowsDependencies<TWindow, TPersonaWindows, TTerminalWindows>) {}
+  constructor(private readonly dependencies: MainWindowsDependencies<TWindow, TPersonaWindows, TTerminalWindows, TApproval>) {}
 
   async build(input: { readonly workspace: string; readonly origin: MainWindowOrigin }): Promise<MainWindowView<TWindow, TPersonaWindows, TTerminalWindows>> {
     const built = await this.dependencies.adapter.create(input);
@@ -201,8 +206,17 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
     return sessionId;
   }
 
-  enqueueApproval(senderId: number, approval: TApproval): void {
-    this.#liveRecord(senderId)?.approvals.push(approval);
+  /**
+   * REQ-TOOLS-063: queue a request for this window's one dialog. Answers whether it waits behind another: a dialog is
+   * open, or requests are queued ahead of it. Main tells the run host so (`approval.queued`), which then stops bounding
+   * the wait for `approval.shown`. Otherwise a request left queued past that bound was denied unshown.
+   */
+  enqueueApproval(senderId: number, approval: TApproval): boolean {
+    const record = this.#liveRecord(senderId);
+    if (!record) return false;
+    const waits = record.openDialog !== null || record.approvals.length > 0;
+    record.approvals.push(approval);
+    return waits;
   }
 
   approvalQueue(senderId: number): readonly TApproval[] {
@@ -514,6 +528,8 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
     const index = this.#focusOrder.indexOf(id);
     if (index >= 0) this.#focusOrder.splice(index, 1);
     this.dependencies.adapter.disposeResources(record.win, record.wcId, record.personaWindows, record.terminalWindows);
+    const unshown = record.approvals.splice(0);
+    if (unshown.length > 0) this.dependencies.unshownApprovals?.(unshown);
   }
 }
 

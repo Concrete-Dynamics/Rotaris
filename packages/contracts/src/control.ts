@@ -66,8 +66,15 @@ export type ControlRequest = z.infer<typeof ControlRequestSchema>;
  * `refusal.message` through it is raised in Part AO's handoff as a ruling request rather than done in a file
  * this part does not own.
  */
-/** `run_coming_to_rest`: PD-ORCH-005 clause 2 — a pause or a stop was accepted, and no model call follows it. */
-export const CONTROL_REFUSAL_CODES = ['no_run', 'no_active_conversations', 'transcript_busy', 'clear_failed', 'run_coming_to_rest'] as const;
+/**
+ * `run_coming_to_rest`: PD-ORCH-005 clause 2 — a pause or a stop was accepted, and no model call follows it.
+ * `store_failed` and `session_locked`: PD-ORCH-005 clause 16's cancel of a paused child while its session rests is
+ * refused because the workspace store failed — it requires recovery (OQ-76), it could not be read or written to take
+ * the session's lock, or the chosen child's move could not be written — or because another live process holds the
+ * session's lock (OQ-74). Refusals that say nothing of the agent, so the renderer states them rather than "not
+ * cancellable".
+ */
+export const CONTROL_REFUSAL_CODES = ['no_run', 'no_active_conversations', 'transcript_busy', 'clear_failed', 'run_coming_to_rest', 'store_failed', 'session_locked'] as const;
 export type ControlRefusalCode = (typeof CONTROL_REFUSAL_CODES)[number];
 export const ControlRefusalSchema = z.object({ code: z.enum(CONTROL_REFUSAL_CODES), message: z.string() });
 export type ControlRefusal = z.infer<typeof ControlRefusalSchema>;

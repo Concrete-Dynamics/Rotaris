@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AgentRecord, SessionRecord, TranscriptRow } from '@rotaris/contracts';
-import { cancelConfirmation, chipStates, countNoun, instancesOf, mcpFateText, resolvedTools, rowsOf } from './agents.js';
-import { ConfirmDialog } from './ConfirmDialog.js';
+import { chipStates, countNoun, instancesOf, mcpFateText, resolvedTools, rowsOf } from './agents.js';
+import { AgentCancelConfirm } from './AgentCancelConfirm.js';
 import { elapsedLabel } from './AgentTree.js';
 import { ContextRing } from './ContextRing.js';
 import { RowList, type Acknowledger } from './TranscriptSurface.js';
@@ -175,7 +175,7 @@ export function PersonaWindow(props: PersonaWindowProps) {
         </div>
       )}
       {confirming && (
-        <ConfirmDialog {...cancelConfirmation(confirming, agents)} cancelLabel="Keep running" destructive testId="persona-cancel-confirm" onCancel={() => setConfirming(null)}
+        <AgentCancelConfirm agent={confirming} agents={agents} testId="persona-cancel-confirm" onCancel={() => setConfirming(null)}
           onConfirm={() => { const target = confirming; setConfirming(null); void onCancel(target.id).then((r) => setError(r.ok ? null : r.reason)); }} />
       )}
     </div>

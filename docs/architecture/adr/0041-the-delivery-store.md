@@ -943,6 +943,16 @@ finishes `cancelled` whatever its deadline, which is `REQ-TOOLS-055`'s rule and 
 **this** branch measures is the coordinator's half — a board run blocked on an unlimited approval has the cancel
 issued at once, with nothing answering the approval first (`requirements-runs.test.ts`); a person pressing stop is
 unmeasured here, because that button is `REQ-TRACE-465`'s and no surface in this branch offers it.
+
+> **Reconciled 2026-09-28 (`PD-ORCH-005` clauses 3, 9 and 15, OQ-81, R-064).** The coordinator's `cancelAll` is now
+> `quitAll`, and it sends the run host's `session.control {op: 'announceShutdown'}`, the application's quit, not the
+> stop control's `cancel`: a stop request keeps its first reason, so the `cancel` rested a board run by `stop`
+> (`docs/defects/fixed/a-board-run-caught-by-a-quit-rests-as-a-stop.md`). The run comes to rest by `quit`, and what
+> waits on a person is **withdrawn** by the quit (clause 9), never answered and no longer `cancelled`, so the
+> paragraph above describes the release before the directive. REQ-TRACE-469's guarantee holds unchanged: the unlimited
+> wait still ends at once with the quit. REQ-TRACE-464's "SHALL cancel" is read through clause 3's quit; OQ-81 records
+> that no directive yet names it.
+
 The five panes are **built and exported and nothing in this branch hosts them**: the board that mounts them is Part
 AK′'s, in a worktree of its own, so this row's proof drives the panes' pure halves and the mechanism beneath them,
 never a mounted pane. That is the seam the merge closes, and it is the one thing in this note that a reader should

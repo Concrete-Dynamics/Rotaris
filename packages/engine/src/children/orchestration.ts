@@ -10,7 +10,7 @@ import { callsRun } from '../run/interruption.js';
 import type { AttachmentOutcome, BackgroundOutput, DelegateOutcome, DelegateRequest, DelegationOps, WaitOutcome } from './delegation.js';
 import { fullContextBlock, siblingIndexBlock, type AttachedResolution } from '../artifacts/context.js';
 import type { ArtifactStore } from '../artifacts/store.js';
-import { ChildLedger, storeChildReport, type Budget } from './ledger.js';
+import { ChildLedger, storeChildReport, userCancellation, type Budget } from './ledger.js';
 import { childPayload, completionNotification, parseReport, priorAgentContext, reportBlock, resumeMessage } from './notify.js';
 import { CHILD_STALL_TIMEOUT_MS, continuationRefusal, cutOffLines, cutOffReport, ProgressLog, type CutOff } from './cut-off.js';
 import { BUILT_IN_PERSONAS, type Persona, type PersonaResolver, type RoleName } from './personas.js';
@@ -485,9 +485,9 @@ export class IterationChildren implements DelegationOps {
     for (const t of targets) {
       const r = this.ledger.transition(t.task_id, 'cancelled', 'cancellation');
       if (!r.ok) { this.deps.warn(r.reason); continue; }
-      const summary = t.task_id === taskId ? 'The user cancelled this child.' : `Cancelled with ${row.canonical_name}, which the user cancelled.`;
-      this.ledger.storeReport(t.task_id, { agent_name: t.canonical_name, role: t.persona, status: 'cancelled', summary, key_findings: [], last_response: '', final_response: '', errors: [] });
-      this.deps.writer.appendTimeline('child_user_cancelled', 'user', `The user cancelled child ${t.canonical_name} (${t.task_id})${t.task_id === taskId ? '' : ` with ${row.canonical_name}`}.`, { task_id: t.task_id, ...(t.task_id === taskId ? {} : { cancelled_with: taskId }) });
+      const written = userCancellation(t, row);
+      this.ledger.storeReport(t.task_id, written.report);
+      this.deps.writer.appendTimeline('child_user_cancelled', 'user', written.message, written.metadata);
       this.controllers.get(t.task_id)?.abort();
       this.scheduler.settled(r.row);
     }
@@ -605,6 +605,9 @@ export class IterationChildren implements DelegationOps {
     let rePromptOwed = false;
     /** PD-ORCH-004: whether the child was making progress at the instant its limit expired. */
     let progressing = false;
+    // PD-ORCH-005 revision 4 clause 14: one check per execution, at the child's first model step — REQ-ORCH-088's retry and
+    // REQ-ORCH-095's re-prompt run within it and compare nothing.
+    const fingerprint = deps.record?.fingerprint(row.task_id, row.canonical_name, row.iteration);
     // REQ-ORCH-088: the child runs under the hard timeout; on expiry, once, it is retried on the role's fallback when one is untried.
     for (;;) {
       const controller = new AbortController();
@@ -649,6 +652,7 @@ export class IterationChildren implements DelegationOps {
         onToolCompleted: (call, result) => progress.completed(deps.clocks.monotonic.now(), call.name, result.args, result.status === 'ok' && !result.isError),
         // PD-ORCH-005 clause 1: the child's conversation, recorded under its task id as it happens.
         ...(deps.record ? { recorder: deps.record.recorder(row.task_id, row.iteration) } : {}),
+        ...(fingerprint ? { fingerprint } : {}),
         detached: () => this.detached,
         // REQ-ORCH-093: the resume limb — a child's turn after its first is a parent being resumed with reports.
         parentResume: !wasFirst,

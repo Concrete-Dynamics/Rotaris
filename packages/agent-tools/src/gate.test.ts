@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -279,6 +279,37 @@ describe('gate (ADR-0017, ADR-0019, REQ-TOOLS-011..013, 027, 032, 050..066, 175)
     expect(r.status).toBe('blocked');
     expect(h.rec.decisions[0]).toMatchObject({ source: 'presenter-error' });
     expect(h.approvals.size).toBe(0);
+  });
+
+  /*
+   * REQ-TOOLS-063: a request queued behind another dialog is shown only when that dialog closes, so its presentation
+   * may never come. A timeout or a cancellation while it is queued drops it unshown, and it counts as cancelled
+   * (REQ-TOOLS-054). An answer given elsewhere while it is queued is honoured. Before the gate raced the presentation
+   * against its own wait, a presenter that never confirmed held the call until the presenter's bound denied it.
+   */
+  it('REQ-TOOLS-063/054: a queued request whose wait times out is dropped unshown and counts as cancelled', async () => {
+    const closed: string[] = [];
+    const h = harness({ timeoutMs: 1_000, presenter: { present: () => new Promise(() => undefined), close: (id) => { closed.push(id); } } });
+    const p = h.gate.dispatch(h.call('write_file', { operation: 'create', path: 'a.txt' }), new AbortController().signal);
+    await vi.waitFor(() => expect(h.approvals.size).toBe(1));
+    h.clock.advance(1_000);
+    const r = await p;
+    expect(r.status).toBe('blocked');
+    expect(h.rec.decisions[0]).toMatchObject({ source: 'cancelled', request_id: 'req1' });
+    expect(closed).toEqual(['req1']);
+    expect(h.approvals.size).toBe(0);
+    expect(h.executed).toHaveLength(0);
+  });
+
+  it('REQ-TOOLS-063: a queued request answered elsewhere before it is shown is honoured', async () => {
+    const h = harness({ presenter: { present: () => new Promise(() => undefined), close: () => undefined } });
+    const p = h.gate.dispatch(h.call('write_file', { operation: 'create', path: 'a.txt' }), new AbortController().signal);
+    await vi.waitFor(() => expect(h.approvals.size).toBe(1));
+    expect(h.approvals.resolve('req1', 'once')).toBe(true);
+    const r = await p;
+    expect(r.status).toBe('ok');
+    expect(h.rec.decisions[0]).toMatchObject({ source: 'user-once', request_id: 'req1' });
+    expect(h.executed).toHaveLength(1);
   });
 
   it('REQ-TOOLS-026: approval resolution that raises denies with source fail-closed', async () => {

@@ -298,6 +298,19 @@ export interface AgentMessageRow {
   readonly at: string;
 }
 
+/**
+ * v24 — PD-ORCH-005 revision 4 clause 14: the fingerprint of the system instructions and the tool definitions an agent
+ * started with, each a SHA-256 digest in hex.
+ */
+export interface AgentFingerprintRow {
+  readonly session_id: string;
+  readonly task_id: string;
+  readonly iteration: number;
+  readonly instructions: string;
+  readonly tools: string;
+  readonly at: string;
+}
+
 /** v23 — PD-ORCH-005 clause 10: a background terminal session an agent started, and what became of it. */
 export interface AgentTerminalRow {
   readonly session_id: string;
@@ -555,6 +568,13 @@ export class StoreDal {
       // Clause 12: the transcript clear removes the records of closed iterations and keeps the open one's.
       clearClosedAgentMessages: db.prepare("DELETE FROM agent_messages WHERE session_id = ? AND iteration NOT IN (SELECT iteration FROM iterations WHERE session_id = ? AND state = 'open')"),
 
+      // v24 — PD-ORCH-005 revision 4 clause 14: the fingerprint an agent started with. The first is kept, so a second write is ignored.
+      insertAgentFingerprint: db.prepare(`INSERT OR IGNORE INTO agent_fingerprints (session_id, task_id, iteration, instructions, tools, at)
+        VALUES (@session_id, @task_id, @iteration, @instructions, @tools, @at)`),
+      agentFingerprintOf: db.prepare('SELECT * FROM agent_fingerprints WHERE session_id = ? AND task_id = ?'),
+      // Clause 12, as for the conversation: the fingerprints of closed iterations go with their records.
+      clearClosedAgentFingerprints: db.prepare("DELETE FROM agent_fingerprints WHERE session_id = ? AND iteration NOT IN (SELECT iteration FROM iterations WHERE session_id = ? AND state = 'open')"),
+
       // v23 — PD-ORCH-005 clause 10: the background terminal sessions agents started.
       upsertAgentTerminal: db.prepare(`INSERT INTO agent_terminals (session_id, terminal_id, task_id, command, started_at, state, exit_code, output_tail, updated_at)
         VALUES (@session_id, @terminal_id, @task_id, @command, @started_at, @state, @exit_code, @output_tail, @updated_at)
@@ -723,6 +743,18 @@ export class StoreDal {
   /** Clause 12: the records of every closed iteration removed, an open iteration's kept; the count removed. */
   clearClosedAgentMessages(id: SessionId): number {
     return this.stmts['clearClosedAgentMessages']!.run(id, id).changes;
+  }
+  /** PD-ORCH-005 revision 4 clause 14: the agent's fingerprint, recorded once; `false` when one is already recorded, which is kept. */
+  insertAgentFingerprint(row: AgentFingerprintRow): boolean {
+    return this.stmts['insertAgentFingerprint']!.run(row).changes === 1;
+  }
+  /** The fingerprint the agent started with; undefined for an agent that never took a model step, or one recorded before v24. */
+  agentFingerprintOf(id: SessionId, taskId: string): AgentFingerprintRow | undefined {
+    return this.stmts['agentFingerprintOf']!.get(id, taskId) as AgentFingerprintRow | undefined;
+  }
+  /** Clause 12: the fingerprints of every closed iteration's agents removed, an open iteration's kept; the count removed. */
+  clearClosedAgentFingerprints(id: SessionId): number {
+    return this.stmts['clearClosedAgentFingerprints']!.run(id, id).changes;
   }
   /**
    * A new terminal, or the state, exit code and tail of a recorded one that is still `running`; `false` when the id names

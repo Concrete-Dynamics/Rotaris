@@ -102,7 +102,7 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('config.liveState'), state: z.record(z.string(), z.unknown()) }),
   z.object({ kind: z.literal('session.list'), workspaceId: z.string() }),
   z.object({ kind: z.literal('session.resume'), workspaceId: z.string(), sessionId: z.string().min(1) }),
-  /** REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause (continue, double, cancel) or continue a manually paused session; PD-ORCH-005 clause 6's `withoutPaused` declines the open iteration. */
+  /** REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause (continue, double, cancel) or continue a manually paused session or one a crash left (PD-ORCH-005 clause 18); clause 6's `withoutPaused` declines the open iteration. */
   z.object({ kind: z.literal('session.continue'), sessionId: z.string().min(1), action: z.enum(['continue', 'double', 'cancel']), withoutPaused: z.boolean().optional() }),
   /** REQ-ORCH-153/154 (ADR-0062) and PD-ORCH-003: the plan gate's three entries, forwarded to the run host that owns the session. */
   z.object({ kind: z.literal('session.planEdit'), sessionId: z.string().min(1), text: z.string() }),
@@ -130,6 +130,12 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('hooks.setToggle'), agent: z.enum(HOOK_AGENT_IDS), hookId: z.string().nullable(), on: z.boolean() }),
   z.object({ kind: z.literal('playbooks.catalogue') }),
   z.object({ kind: z.literal('approval.shown'), requestId: z.string().min(1), ok: z.boolean(), error: z.string().optional() }),
+  /**
+   * REQ-TOOLS-063: main has queued the request behind the dialog already open in its window. It is shown as soon as
+   * that dialog closes, so the run host stops bounding the wait for `approval.shown`; only a timeout or a cancellation
+   * drops it unshown.
+   */
+  z.object({ kind: z.literal('approval.queued'), requestId: z.string().min(1) }),
   /**
    * ADR-0039 (Part P): the rows live in the run host. `checkpoint.list` reads them with no Git (REQ-GIT-050), stamps
    * REQ-GIT-093's liveness verdict and runs REQ-GIT-094's stale-session repair; `checkpoint.recordSafety` writes the

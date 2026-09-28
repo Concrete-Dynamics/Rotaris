@@ -128,7 +128,7 @@ describe('session.continue (PD-ORCH-005 clause 6)', () => {
   });
 });
 
-describe('PD-ORCH-005 clause 9: a question the quit closes is withdrawn, never cancelled', () => {
+describe('PD-CHAT-002 revision 2 and PD-ORCH-005 clause 9: a question the quit closes is withdrawn, never cancelled', () => {
   const cancel = { kind: 'session.control', request: { op: 'cancelQuestions', sessionId: 'S1', args: { requestId: 'Q1' } } } as const;
 
   it('the dock\'s cancel while the application stays reaches the run host, as REQ-CHAT-101 has it', async () => {

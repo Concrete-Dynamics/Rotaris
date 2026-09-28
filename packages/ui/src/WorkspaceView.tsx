@@ -5,8 +5,8 @@ import { err, ok } from '@rotaris/kernel';
 import {
   clampComposerHeight, composerChipReason, composerPlaceholderFor, COMPOSER_DEFAULT_HEIGHT, COMPOSER_MIN_HEIGHT, DEFAULT_REASONING,
   DRAFT_PUBLISH_MS, DRAFT_WRITE_MS, formatDuration, historyDown, historyUp, modelCallStartedAt, modelChipLabel,
-  REASONING_LEVELS, runStateOf, sendRefusal,
-  type HistoryWalk, type RunState,
+  pausePendingAfter, REASONING_LEVELS, runStateOf, sendRefusal,
+  type HistoryWalk, type PauseScope, type RunState,
 } from './composer.js';
 import { RunHeader } from './RunHeader.js';
 import { NoticeBanner } from './Notice.js';
@@ -18,7 +18,7 @@ import { COMMAND_NOT_RUN_TITLE, defaultUnavailableReason, parseSlash, slashNameT
 import { SlashPopup, slashRowId } from './slash/SlashPopup.js';
 import type { SlashCommand, SlashContext, SlashOutcome } from './slash/types.js';
 import { AgentTree } from './AgentTree.js';
-import { cancelConfirmation, runLevelAgent } from './agents.js';
+import { cancelOffered, restingView, steerOffered } from './agents.js';
 import { Inspector, type PersonaEntry } from './Inspector.js';
 import { useShellState } from './shell-state.js';
 import { DelegationHeader, ScopeToggle, scopedRows, type Acknowledger } from './TranscriptSurface.js';
@@ -31,6 +31,7 @@ import { addImageBytes, composerTokenEstimate } from './attachments.js';
 import { PlanGate } from './PlanGate.js';
 import { QuestionForm } from './QuestionStepper.js';
 import './attachments.css';
+import { AgentCancelConfirm } from './AgentCancelConfirm.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
 import { Button as DesignButton, Input as DesignInput, PopoverMenu, SearchableSelect as DesignSearchableSelect, SendPill as DesignSendPill, StripActionButton, TextArea as DesignTextArea } from './design-system/index.js';
 
@@ -56,12 +57,14 @@ export interface WorkspaceViewProps {
   readonly onSubmit: (text: string, attachments: readonly ImageAttachmentInput[]) => Promise<{ ok: true } | { ok: false; reason: string }>;
   /**
    * REQ-SESSION-186: the stop control — first activation graceful, the second forces. PD-ORCH-005 clause 3: a stop
-   * brings the run to rest and its unfinished agents resume on a continue, so it asks no confirmation (OQ-69).
+   * brings the run to rest and its unfinished agents resume on a continue, so it asks no confirmation; a forced stop is a
+   * stop (PD-ORCH-005 clause 15).
    */
   readonly onStop: (force: boolean) => Promise<{ ok: true } | { ok: false; reason: string }>;
   /**
    * REQ-MONITOR-126/127 and REQ-MONITOR-009: the confirmed cancel of the whole run — the reserved run id's, which
-   * PD-ORCH-005 clause 3 keeps final (OQ-69). Absent, the surface offers no run-level cancel.
+   * PD-ORCH-005 clause 3 keeps final; every confirmed "Cancel the run?" is that cancel (clause 15). Absent, the surface
+   * offers no run-level cancel.
    */
   readonly onCancelRun?: (() => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
   /** REQ-TOOLS-077 / REQ-MONITOR-150: forwarded to the running session; applies from the next tool call. */
@@ -361,13 +364,13 @@ function SteerDialog({ target, onSteer, onClose }: { target: { id: string; name:
 export function composerPlaceholder(session: SessionRecord | null, localRunActive: boolean, busy = localRunActive): string {
   return composerPlaceholderFor(session !== null, localRunActive, busy);
 }
-/** PD-ORCH-005 clause 6: the Continue action states how many agents will resume — the open iteration's root and every unfinished agent. */
+/** PD-ORCH-005 clauses 6 and 19: the Continue action states how many agents will resume — the open iteration's root, which resumes with them, and every unfinished agent. */
 export function resumeCountText(agents: number): string {
   return agents === 1 ? '1 agent will resume' : `${agents} agents will resume`;
 }
 
 /**
- * PD-ORCH-005 clauses 3, 5 and 6: what declining does — the paused agents end `cancelled`, which cannot be undone, and
+ * PD-ORCH-005 clauses 3, 5, 6 and 19: what declining does — the paused agents end `cancelled`, which cannot be undone, and
  * the open iteration's task is taken up again by a new iteration's root. A count of one is the root alone, which no
  * agent record names as cancelled.
  */
@@ -419,7 +422,8 @@ export function waitHeaderText(wait: NonNullable<SessionRecord['wait']>, nowMs: 
 /**
  * The wait as the user sees it (REQ-NOTIFY-263, REQ-ORCH-091 d): the header and its exactly three choices, here and on no
  * other surface — keep waiting (the absence of a decision: the control acknowledges and changes nothing), change model
- * (the existing model list of REQ-NOTIFY-074, pinned through `setModel`, REQ-NOTIFY-089), cancel the run (`cancel`).
+ * (the existing model list of REQ-NOTIFY-074, pinned through `setModel`, REQ-NOTIFY-089), cancel the run — the confirmed
+ * "Cancel the run?", which sends the reserved run id, the explicit cancel, never the stop (PD-ORCH-005 clause 15).
  * The countdown ticks once a second on the surface's own clock, as the Overview's runtime label does.
  */
 function WaitHeader({ wait, models, onSetModel, onCancel }: { wait: NonNullable<SessionRecord['wait']>; models: readonly string[]; onSetModel?: WorkspaceViewProps['onSetModel']; onCancel?: (() => void) | undefined }) {
@@ -688,6 +692,14 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
   const sessionBusy = session !== null && isBusy(session.executionStatus);
   const runActive = sessionBusy && !needsRecovery;
   const runState: RunState = runStateOf(session?.executionStatus ?? null, needsRecovery);
+  // REQ-MONITOR-296: the accepted pause's pending mark ends with the run that accepted it (`pausePendingAfter`). Derived
+  // during render from the scope last seen, as `useElapsedTick` derives its instant, not in an effect.
+  const pauseScope: PauseScope = { sessionId: session?.id ?? null, busy: sessionBusy };
+  const [pauseScopeSeen, setPauseScopeSeen] = useState<PauseScope>(pauseScope);
+  if (pauseScopeSeen.sessionId !== pauseScope.sessionId || pauseScopeSeen.busy !== pauseScope.busy) {
+    setPauseScopeSeen(pauseScope);
+    if (pausePending && !pausePendingAfter(pausePending, pauseScopeSeen, pauseScope)) setPausePending(false);
+  }
   // A pending stop is one requested against the run that is still active; a new run begins from a submit, which resets it.
   const stopPending = runActive && stopRequested;
   const pending = session?.pendingApprovals ?? [];
@@ -819,7 +831,8 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
     setTheme: async (name) => { if (!slash?.setTheme) throw new Error(defaultUnavailableReason('theme')); okOr(await slash.setTheme(name)); },
     logout: async (provider) => { if (!slash?.logout) throw new Error(defaultUnavailableReason('logout')); okOr(await slash.logout(provider)); },
     control: async (op: ControlOp) => {
-      // REQ-CHAT-029: `/stop` cancels the live run (graceful, the Stop control's first activation) and sends no text anywhere.
+      // PD-ORCH-005 clause 15 (REQ-CHAT-029 as narrowed): `/stop` is the stop — the Stop control's graceful first
+      // activation, which brings the run to rest — and sends no text anywhere.
       if (op === 'cancel') { setStopRequested(true); const r = await onStop(false); if (!r.ok) setStopRequested(false); return r.ok ? ok(undefined) : err(r.reason); }
       if (op === 'pause') { if (!onPause) return err('Pause is unavailable because no active run exists.'); const r = await onPause(); if (r.ok) setPausePending(true); return r.ok ? ok(undefined) : err(r.reason); }
       if (op === 'forceCompression' || op === 'clearTranscript') {
@@ -1099,7 +1112,11 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
   const stripNarrow = density === 'narrow';
   // Memoised so the derivations below (REQ-CHAT-069's scope, PD-CHAT-005's depth) do not see a new array every render.
   const agents = useMemo(() => session?.agents ?? [], [session]);
-  const runLevel = useMemo(() => (entry ? runLevelAgent(session, entry) : null), [session, entry]);
+  // PD-ORCH-005 clauses 6, 13 and 16 (OQ-71, OQ-73, OQ-74): the session rests with an iteration open — paused, left
+  // `interrupted` by a crash, or in REQ-CHAT-008's recovery state, where the run-level agent presents `paused` as its
+  // agents do. One predicate decides the composer's count, the run-level agent's `paused` and a paused child's Cancel,
+  // so the tree, the count and the offer agree.
+  const { runLevel, resting } = useMemo(() => restingView(session, entry, needsRecovery), [session, entry, needsRecovery]);
   const selected = selectedAgent === RUN_AGENT_ID ? runLevel : agents.find((a) => a.id === selectedAgent) ?? null;
   /** REQ-CHAT-088: the engine has already resolved each source; scope chooses the matching published plan. */
   const todoPlan = selected !== null && selected.id !== RUN_AGENT_ID ? session?.childTodos[selected.id] ?? session?.todo ?? null : session?.todo ?? null;
@@ -1162,7 +1179,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
   };
   const inspector = (
     <Inspector session={session} rows={rows} personas={personas} runLevel={runLevel} selectedAgentId={selectedAgent} onSelect={(id) => select(id, 'click')} models={models}
-      compressionThresholdPercent={compressionThresholdPercent} runActive={runActive} nowIso={nowIso}
+      compressionThresholdPercent={compressionThresholdPercent} runActive={runActive} resting={resting} nowIso={nowIso}
       onSteer={(agent) => { if (onOpenPersona) onOpenPersona(agent, true); else setSteering({ id: agent.id, name: agent.name }); }}
       onCancel={inspectorCancel} onPopOut={(agent) => onOpenPersona?.(agent, false)} onSetModel={onSetModel} onSetReasoning={onSetReasoning}
       drawer={narrow} onCloseDrawer={narrow ? () => setDrawer(null) : undefined} />
@@ -1191,10 +1208,17 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
     setPlanCollapsed(false);
   }
   const paused = session !== null && (session.executionStatus === 'paused' || session.executionStatus === 'paused_message_limit' || session.executionStatus === 'awaiting_plan_decision');
-  // PD-ORCH-005 clause 6 (OQ-71): a session at rest states what its continue resumes — a paused one; one a crash left
-  // `interrupted`; and one a crash left persisted busy with no run behind it (REQ-CHAT-008's recovery state), whose
-  // continue by message records the crash and resumes the same agents. Only the Continue action offers to decline.
-  const resumable = session !== null && (session.executionStatus === 'paused' || session.executionStatus === 'interrupted' || (sessionBusy && needsRecovery)) ? session.resumable : null;
+  /**
+   * PD-ORCH-005 clause 18: a session a crash left — `interrupted` after a repair, or persisted busy with no run behind it
+   * (REQ-CHAT-008's recovery state) — offers the Continue action and "Continue without them" as a `paused` session does,
+   * with the same count; either choice records the crash first (clause 8), in the engine. It draws no pause statement:
+   * it is not paused, and its run state says so (OQ-76).
+   */
+  const crashLeft = session !== null && (session.executionStatus === 'interrupted' || (sessionBusy && needsRecovery));
+  // PD-ORCH-005 clauses 6, 18 and 19: a session at rest states what its continue resumes — the open iteration's root and
+  // every unfinished agent — on a paused session and on one a crash left. `resting` is the one predicate the count, the
+  // resting root and a paused child's Cancel share (clauses 13 and 16).
+  const resumable = resting && session !== null ? session.resumable : null;
   /** The send control's accessible name, by composer mode (PD-CHAT-001 revision 2, R-040). Set beside the
     * gate and the pause it reads, so no declaration order can break it again. */
   const sendName = runActive
@@ -1268,10 +1292,12 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
             <span className="agents__title">Agents</span>
             <span className="agents__count mono" data-testid="agents-count">{agents.length} agent{agents.length === 1 ? '' : 's'}</span>
             <div className="agents__spacer" />
-            {selected && !['done', 'failed', 'cancelled'].includes(selected.presentationState) && onSteer && runActive && (
+            {/* A paused agent is not live (PD-ORCH-005 clause 13, OQ-73): it offers no Steer, as the inspector offers none. */}
+            {selected && steerOffered(selected, runActive) && onSteer && (
               <DesignButton type="button" className="btn btn-ghost agents__cancel" onClick={() => setSteering({ id: selected.id, name: selected.name })}>Steer {selected.name}</DesignButton>
             )}
-            {selected && !['done', 'failed', 'cancelled'].includes(selected.presentationState) && onCancelAgent && (
+            {/* PD-ORCH-005 clause 16: a paused child is cancellable while its session rests; a live agent while its run is active. */}
+            {selected && cancelOffered(selected, runActive, resting) && onCancelAgent && (
               <DesignButton type="button" className="btn btn-ghost agents__cancel" onClick={() => setConfirming({ agent: { id: selected.id, name: selected.name } })}>Cancel {selected.name}</DesignButton>
             )}
           </div>
@@ -1510,7 +1536,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
                 * Revision 2: the stop and the queue are the strip's shells — the stop keeps its danger
                 * button, the queue is the send pill in its Queue mode, so the run state the strip draws needs no
                 * button family the strip does not own. PD-ORCH-005 clause 3: the stop brings the run to rest and
-                * destroys nothing, so it acts at once; the confirmed, final cancel is the run-level cancel's (OQ-69). */}
+                * destroys nothing, so it acts at once; the confirmed, final cancel is the run-level cancel's (clause 15). */}
               <DesignButton type="button" className="btn btn-danger btn-compact" onClick={() => { void stop(); }} aria-describedby="stop-hint" title={stopPending ? 'The stop is pending; the next activation forces it.' : 'Stops gracefully; a second activation forces.'}>{stopLabel(stopPending)}</DesignButton>
               <span id="stop-hint" className="visually-hidden">{stopPending ? 'The stop is pending; the next activation forces it.' : 'Stops gracefully; a second activation forces.'}</span>
               <DesignSendPill shortLabel="Queue" sendName="Queue the message for the next iteration" disabled={busy} title={undefined} aria-describedby={undefined} data-testid="composer-send" />
@@ -1525,16 +1551,20 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
               * paused and is therefore not busy: this lock is the gate's, not the status mapping's.
               */
             <DesignButton type="submit" className="btn btn-primary" disabled aria-describedby="plan-gate-hint">Answer the plan first</DesignButton>
-          ) : paused && onContinue ? (
+          ) : (paused || crashLeft) && onContinue ? (
             <>
               {/* PD-ORCH-005 clause 6: both continues resume the open iteration's agents, so the count below describes
-                * both. The strip keeps its one band (PD-CHAT-001): the count and the decline stand in the notices row,
-                * and the two continues take the send pill's place, so they carry short labels at every density as the
-                * pill does — `Continue` is the pill's own (REQ-CHAT-005 as PD-CHAT-001 narrows it) — with the full
-                * name as accessible name and tooltip. At full labels the paused strip scrolled at every density but
-                * narrow (found by phase 5's second review; OQ-71 puts `Message` to the owner). */}
+                * both — on a paused session and on one a crash left (clause 18). The strip keeps its one band
+                * (PD-CHAT-001): the count and the decline stand in the notices row, and the two continues take the
+                * send pill's place, so they carry short labels at every density as the pill does — `Continue` is the
+                * pill's own (REQ-CHAT-005 as PD-CHAT-001 narrows it) — with the full name as accessible name and
+                * tooltip. At full labels the paused strip scrolled at every density but narrow (found by phase 5's
+                * second review). PD-CHAT-001 revision 4 ("The paused continues"): the continue by message reads
+                * `Send`, the word of the send pill it stands in for. That revision prescribes the two continues "on a
+                * paused session" only; drawing them on a crash-left one too is OQ-76's reading of clause 18's "as a
+                * `paused` session does". */}
               <DesignButton type="button" className="btn btn-primary composer__continue" onClick={() => { void continueRun(); }} aria-label="Continue run" title="Continue run" aria-describedby={resumable ? 'composer-resume-count' : undefined}>Continue</DesignButton>
-              <DesignButton type="submit" className="btn btn-secondary composer__continue" disabled={busy} aria-label="Continue with a message" title="Continue with a message" aria-describedby={resumable ? 'composer-resume-count' : undefined}>Message</DesignButton>
+              <DesignButton type="submit" className="btn btn-secondary composer__continue" disabled={busy} aria-label="Continue with a message" title="Continue with a message" aria-describedby={resumable ? 'composer-resume-count' : undefined}>Send</DesignButton>
             </>
           ) : (
             /*
@@ -1555,19 +1585,22 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
         </div>
         {/*
           * PD-CHAT-001 revision 2: the strip carries the controls, so the old two-row composition
-          * (`.composer__chips` first band, `.composer__actions` second) is gone — the rows below are
-          * the gate's and the pause's notices, which stand outside the strip and outside the dock.
+          * (`.composer__chips` first band, `.composer__actions` second) is gone. Revision 4 ("The strip"): a notice and
+          * the action that belongs to it — the plan gate's hint, the pause's statement, the count of agents a continue
+          * resumes and "Continue without them" — stand in this notices row below the dock.
           */}
         <div className="composer__notices">
           {projectSetupPending && <span id={sendReasonId} className="visually-hidden">{PROJECT_SETUP_SEND_REASON}</span>}
           {planGate && <span id="plan-gate-hint" className="composer__hint">A plan is waiting for your decision above. Approve, revise, or cancel the run to continue.</span>}
           {paused && !planGate && <span className="composer__hint">Paused. Run controls need the run continued before they can be used.</span>}
           {resumable && (
-            /* PD-ORCH-005 clause 6 (OQ-71): the continue states how many agents will resume, and the Continue action
-             * offers to continue without them — confirmed, since it ends them `cancelled` for good (clauses 3 and 5). */
+            /* PD-ORCH-005 clauses 6 and 19: the continue states how many agents will resume, and the Continue action
+             * alone offers to continue without them — confirmed, since it ends them `cancelled` for good (clauses 3 and
+             * 5); a continue by message resumes. On a session a crash left too (clause 18). */
             <div className="composer__resume" data-testid="composer-resume">
               <span id="composer-resume-count" className="composer__hint" data-testid="composer-resume-count">{resumeCountText(resumable.agents)}</span>
-              {session?.executionStatus === 'paused' && onContinue && (
+              {/* `resumable` is set only on a paused session or one a crash left, so the decline needs only its handler. */}
+              {onContinue && (
                 <>
                   <DesignButton type="button" className="btn btn-ghost btn-compact" data-testid="composer-continue-without" onClick={() => setConfirming('decline')}
                     title={declineText(resumable.agents)} aria-describedby="composer-decline-hint">Continue without them</DesignButton>
@@ -1579,13 +1612,13 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
         </div>
       </form>
       {confirming === 'cancelRun' && (
-        <ConfirmDialog {...cancelConfirmation({ id: RUN_AGENT_ID, name: 'the run' }, session?.agents ?? [])} cancelLabel="Keep running" destructive testId="cancel-run-confirm" onCancel={() => setConfirming(null)} onConfirm={() => { setConfirming(null); void cancelRun(); }} />
+        <AgentCancelConfirm agent={{ id: RUN_AGENT_ID, name: 'the run' }} agents={session?.agents ?? []} testId="cancel-run-confirm" onCancel={() => setConfirming(null)} onConfirm={() => { setConfirming(null); void cancelRun(); }} />
       )}
       {confirming === 'decline' && resumable && (
         <ConfirmDialog title="Continue without them?" body={declineText(resumable.agents)} confirmLabel="Continue without them" cancelLabel="Keep them" destructive testId="decline-confirm" onCancel={() => setConfirming(null)} onConfirm={() => { setConfirming(null); void continueRun(true); }} />
       )}
       {confirming !== null && confirming !== 'cancelRun' && confirming !== 'decline' && (
-        <ConfirmDialog {...cancelConfirmation(confirming.agent, session?.agents ?? [])} cancelLabel="Keep running" destructive onCancel={() => setConfirming(null)} onConfirm={() => { const target = confirming.agent; setConfirming(null); void onCancelAgent?.(target.id).then((r) => { if (!r.ok) setError(r.reason); }); }} />
+        <AgentCancelConfirm agent={confirming.agent} agents={session?.agents ?? []} onCancel={() => setConfirming(null)} onConfirm={() => { const target = confirming.agent; setConfirming(null); void onCancelAgent?.(target.id).then((r) => { if (!r.ok) setError(r.reason); }); }} />
       )}
       {steering && onSteer && <SteerDialog target={steering} onSteer={onSteer} onClose={() => setSteering(null)} />}
     </div>

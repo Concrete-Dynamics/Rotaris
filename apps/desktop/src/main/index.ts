@@ -774,7 +774,12 @@ async function main(): Promise<void> {
       // presents it. With no main window at all there is nobody to ask, which REQ-TOOLS-064 answers through
       // the headless policy — main says "not shown" and decides nothing itself (ADR-0019).
       const owner = ownerOf(e.payload.session_id);
-      if (owner) { mainWindows.enqueueApproval(owner.wcId, e.payload); void presentNext(owner); }
+      // REQ-TOOLS-063: a request that waits behind the open dialog is acknowledged as queued, so the run host does not
+      // read the wait as a presenter that failed to show it.
+      if (owner) {
+        if (mainWindows.enqueueApproval(owner.wcId, e.payload)) void runHost.request({ kind: 'approval.queued', requestId: e.payload.request_id }, millis(5_000)).catch(() => undefined);
+        void presentNext(owner);
+      }
       else void runHost.request({ kind: 'approval.shown', requestId: e.payload.request_id, ok: false, error: 'no main window is open' }, millis(5_000)).catch(() => undefined);
     }
     else if (e.kind === 'approval.close') {
@@ -947,7 +952,7 @@ async function main(): Promise<void> {
     broadcast: (payload) => { for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(CHANNEL.requirementsChanged, payload); },
     log,
   });
-  app.on('window-all-closed', () => { void requirementsRuns.cancelAll('the last window closed'); });
+  app.on('window-all-closed', () => { void requirementsRuns.quitAll('the last window closed'); });
 
   // A3: hoisted out of the builder below — `runCommand` calls this for whichever window opened the persona
   // window, and it closes over nothing per window (the window it measures is its argument).
@@ -1040,6 +1045,13 @@ async function main(): Promise<void> {
       else raiseNotice('error', title);
     },
     log,
+    // REQ-TOOLS-063/064: a request queued behind a closing window's dialog is never shown there, and the run host no
+    // longer bounds its wait, so main says so — REQ-TOOLS-058's presenter-error denial — rather than leave it to hang.
+    // PD-ORCH-005 clause 9: a quit's closing windows answer nothing; the run host's shutdown withdraws the request.
+    unshownApprovals: (approvals) => {
+      if (quitting()) return;
+      for (const approval of approvals) void runHost.request({ kind: 'approval.shown', requestId: approval.request_id, ok: false, error: 'its main window closed before it was shown' }, millis(5_000)).catch(() => undefined);
+    },
   });
   /**
    * REQ-SHELL-109: "when a stream changes while the window is closed, the preference is on, and that stream is running,

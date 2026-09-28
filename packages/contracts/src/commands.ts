@@ -136,8 +136,9 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   /** REQ-CHAT-173: thumbnail bytes are fetched on demand and never join a transcript snapshot. */
   z.object({ kind: z.literal('session.readAttachment'), sessionId: z.string().min(1), path: z.string().min(1), digest: z.string().regex(/^[0-9a-f]{64}$/) }),
   /**
-   * REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause or continue a paused session. `withoutPaused` is PD-ORCH-005
-   * clause 6's "continue without them": the agents the rest left paused end `cancelled` instead of resuming.
+   * REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause, or continue a paused session or one a crash left (PD-ORCH-005
+   * clause 18). `withoutPaused` is clause 6's "continue without them": the agents the rest or the crash left end
+   * `cancelled` instead of resuming.
    */
   z.object({ kind: z.literal('session.continue'), sessionId: z.string().min(1), action: z.enum(PAUSE_RESOLUTIONS), withoutPaused: z.boolean().optional() }),
   /**

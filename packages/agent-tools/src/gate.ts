@@ -415,7 +415,17 @@ export class Gate {
       };
       const wait = deps.approvals.create(payload, deps.approvalTimeoutMs > 0 ? deps.approvalTimeoutMs : null);
       deps.sink.pendingChanged(deps.approvals.pending());
-      const shown = await deps.presenter.present(payload);
+      // REQ-TOOLS-063: a request queued behind an open dialog stays unshown until that dialog closes. If its wait ends
+      // first (a timeout, a cancellation, a withdrawal, or an answer given elsewhere), it is dropped unshown. A
+      // timeout or a cancellation of a request never shown counts as cancelled (REQ-TOOLS-054).
+      const shown = await Promise.race([deps.presenter.present(payload), wait.then((outcome) => ({ unshown: outcome }))]);
+      if ('unshown' in shown) {
+        deps.sink.pendingChanged(deps.approvals.pending());
+        deps.presenter.close(requestId);
+        const outcome = shown.unshown;
+        if (outcome.kind === 'withdrawn') return { requestId, withdrawn: outcome.cause };
+        return { requestId, decision: this.outcomeDecision(call, req, asked, outcome.kind === 'timed_out' ? { kind: 'cancelled' } : outcome) };
+      }
       if (!shown.ok) {
         // REQ-TOOLS-058: the pending request is discarded and the call denied with source presenter-error.
         deps.approvals.cancel(requestId);

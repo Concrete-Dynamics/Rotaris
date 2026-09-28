@@ -292,6 +292,21 @@ export function toTranscriptRow(r: TranscriptRowRecord): TranscriptRow {
   });
 }
 
+/**
+ * REQ-SESSION-047/083/112: claim a session's lock, reaping it once when its holder is a process of this machine that no
+ * longer exists (a pid that is no positive integer is never reaped). The one copy of the rule: `SessionWriter.open` claims
+ * through it, and so does PD-ORCH-005 clause 16's cancel while the session rests (`Sessions`, OQ-74).
+ */
+export function claimLockReaping(dal: StoreDal, sessionId: SessionId, pid: number, host: MachineId, now: string, isProcessAlive: (pid: number) => boolean): ReturnType<StoreDal['claimLock']> {
+  const claimed = dal.claimLock(sessionId, pid, host, now);
+  if (claimed.claimed) return claimed;
+  const holder = claimed.holder;
+  const locallyReapable = holder.host === host && Number.isInteger(holder.pid) && holder.pid > 0 && !isProcessAlive(holder.pid);
+  if (!locallyReapable) return claimed;
+  dal.releaseLock(sessionId, holder.pid, host);
+  return dal.claimLock(sessionId, pid, host, now);
+}
+
 export class SessionWriter {
   /** One quarantine per open database, shared across all session writers using it. */
   private static readonly storeFailures = new WeakMap<StoreDal['db'], string>();
@@ -426,15 +441,7 @@ export class SessionWriter {
     if (!dal.getSession(sessionId)) return err({ code: 'no-session', sessionId });
     const now = toIsoUtc(wall.instant());
     try {
-      let claimed = dal.claimLock(sessionId, args.pid, args.host, now);
-      if (!claimed.claimed) {
-        const holder = claimed.holder;
-        const locallyReapable = holder.host === args.host && Number.isInteger(holder.pid) && holder.pid > 0 && !args.isProcessAlive(holder.pid);
-        if (locallyReapable) {
-          dal.releaseLock(sessionId, holder.pid, args.host);
-          claimed = dal.claimLock(sessionId, args.pid, args.host, now);
-        }
-      }
+      const claimed = claimLockReaping(dal, sessionId, args.pid, args.host, now, args.isProcessAlive);
       if (!claimed.claimed) return err({ code: 'lock-held', holder: { pid: claimed.holder.pid, host: claimed.holder.host, acquiredAt: claimed.holder.acquired_at } });
       return ok(new SessionWriter(deps));
     } catch (cause) {
@@ -650,8 +657,10 @@ export class SessionWriter {
         // iteration's record is kept until the iteration closes." One transaction with the rows, so a reader never sees
         // the transcript gone and a closed iteration's record still standing, or the other way round.
         const records = dal.clearClosedAgentMessages(sessionId);
+        // PD-ORCH-005 revision 4 clause 14: the fingerprint is part of the agent's record, so it goes with it.
+        const fingerprints = dal.clearClosedAgentFingerprints(sessionId);
         const ordinal = dal.nextTimelineOrdinal(sessionId);
-        dal.insertTimeline(sessionId, ordinal, at, 'transcript_cleared', 'user', `The transcript was cleared: ${removed} row(s) removed. Agent state, artifacts and Git changes were kept.`, JSON.stringify({ removed, next_index: this.nextIndex, records_removed: records }), id, 'info');
+        dal.insertTimeline(sessionId, ordinal, at, 'transcript_cleared', 'user', `The transcript was cleared: ${removed} row(s) removed. Agent state, artifacts and Git changes were kept.`, JSON.stringify({ removed, next_index: this.nextIndex, records_removed: records, fingerprints_removed: fingerprints }), id, 'info');
         dal.touchSession(sessionId, this.status, at);
       });
     } catch (cause) {
@@ -734,6 +743,23 @@ export class SessionWriter {
       return this.fail(cause);
     }
     return ok(undefined);
+  }
+
+  /**
+   * PD-ORCH-005 revision 4 clause 14: the fingerprint of the system instructions and the tool definitions an agent started
+   * with, recorded beside its conversation under its task id. The first is kept: `false` when one was already recorded.
+   * Its own transaction, and nothing is published — a resume reads it, nothing draws it.
+   */
+  recordAgentFingerprint(taskId: string, iteration: number, instructions: string, tools: string): Result<boolean, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    let recorded = false;
+    try {
+      dal.transaction(() => { recorded = dal.insertAgentFingerprint({ session_id: sessionId, task_id: taskId, iteration, instructions, tools, at: toIsoUtc(wall.instant()) }); });
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    return ok(recorded);
   }
 
   /**

@@ -143,7 +143,7 @@ describe('PD-ORCH-005 clause 6: the Continue action', () => {
   });
 });
 
-describe('PD-ORCH-005 clause 3: the stop comes to rest, and the confirmed cancel of the run is final (OQ-69)', () => {
+describe('PD-ORCH-005 clauses 3 and 15: the stop comes to rest, and the confirmed cancel of the run is final', () => {
   it('the stop is the `cancel` control, graceful and then forced — the run comes to rest and its agents resume on a continue', async () => {
     const a = actions([{ ok: true, value: { ok: true } }, { ok: true, value: { ok: true } }]);
     expect(await a.stopRun(false)).toEqual({ ok: true });
@@ -163,5 +163,13 @@ describe('PD-ORCH-005 clause 3: the stop comes to rest, and the confirmed cancel
       { kind: 'session.control', request: { op: 'cancelAgent', sessionId: 'S1', args: { agentId: 'run' } } },
     ]);
     expect(await actions([], null).cancelRun()).toEqual({ ok: false, reason: 'No run is active.' });
+  });
+
+  it('PD-ORCH-005 clause 16: a child\'s cancel refused by the store or another process\'s lock states the engine\'s words, and "not cancellable" only when it states none (REQ-MONITOR-128)', async () => {
+    const locked = { code: 'session_locked', message: 'Another process holds this session, so the agent was not cancelled.' } as const;
+    const a = actions([{ ok: true, value: { ok: false, refusal: locked } }, { ok: true, value: { ok: false } }, { ok: true, value: { ok: true } }]);
+    expect(await a.cancelAgent('bg_000000c1')).toEqual({ ok: false, reason: locked.message });
+    expect(await a.cancelAgent('bg_000000c1')).toEqual({ ok: false, reason: 'That agent is not cancellable (unknown, or already finished).' });
+    expect(await a.cancelAgent('bg_000000c1')).toEqual({ ok: true });
   });
 });

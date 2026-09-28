@@ -243,8 +243,22 @@ waiting ones are left to the scheduler. The root carries on from its own record.
 background sessions (`run/resume.ts`'s `resumeNoticeOf`) joins its conversation as its next message, recorded, at its
 resume; the root's was recorded at the continue.
 An agent whose record ends on its own answer resumes into waiting (`resumedStart`); any other takes a model step,
-compressed first when the conversation is too long, as any is. A continue by message appends no todo task. A resumed
-iteration closes like any other, and it can rest and be resumed again (clause 7).
+compressed first when the conversation is too long, as any is. A resumed iteration closes like any other, and it can
+rest and be resumed again (clause 7).
+
+**A continue's message is also a task (PD-ORCH-005 clause 17; OQ-75).** A continue by message that resumes an open
+iteration (`RunDeps.openIteration.delivered`, set by `launchContinuation` when the continue delivered a message) appends
+the message to the planner todo's `Continued Prompts` phase as a task the resumed iteration **holds** (`Todo.appendHeld`:
+`in_progress`, with `heldBy` the iteration's number, stored in the todo document itself), so no selection takes it while
+the iteration is open. It closes with that iteration (`Todo.releaseHeld`): `complete` when the iteration succeeds, before
+the stop conditions are judged, and back to `pending` — with no consecutive retry counted — on every other close:
+partial, failed, raised, cancelled by the explicit cancel or by a pause that found nothing unfinished, and the closes
+`closeOpenIteration` makes (the decline, a crash-closed iteration, the explicit cancel after a rest or during the
+pre-flight). A rest keeps it held. A task held by an iteration that is no longer open goes back to `pending` when the
+next run is built (`Todo.releaseStale`), and the todo is saved with `starting`, so a death during the pre-flight keeps
+the task as the root's record keeps the message. The Continue action and a plan decision deliver no message and append
+no task; "continue without them" on an iteration that holds a message appends none either, since its last request is
+that message, left pending by the decline.
 
 **An iteration a previous run left open, declined (PD-ORCH-005 clause 6; the repair of the crashed-iteration defect).**
 Every execution iteration has an `iterations` row from the moment its root is minted, and `iteration.end` and the row's

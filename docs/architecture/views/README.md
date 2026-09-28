@@ -43,7 +43,14 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-09-27**
+## Last reconciled with the code: **2026-09-28**
+
+**A continue's message is also a task (`PD-ORCH-005` clause 17, 2026-09-28, R-064).** A continue by message that
+resumes an open iteration appends its message to the planner todo as a task that iteration holds (`Todo.appendHeld`,
+`heldBy` in the todo document), which closes with it (`Todo.releaseHeld`): done when it succeeds, pending on any other
+close. `RunDeps.openIteration` gains `delivered`. Readings in OQ-75. The **runtime view**'s §2 gains the paragraph; the
+phase 4 paragraph below keeps "no todo task is appended" as it was built then. No package, edge, process, channel,
+message kind or store column changed.
 
 **A quit answers nothing for a person, and every stored report is an artifact (`PD-ORCH-005` phase 7, 2026-09-27,
 R-062).** Main tells the application's quit apart (`QuitState`, `main/exit.ts`). That covers the immediate exit, every

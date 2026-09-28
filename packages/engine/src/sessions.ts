@@ -1131,7 +1131,8 @@ export class Sessions {
 
   /**
    * `openIteration` is PD-ORCH-005 clauses 4 and 6 for a session whose last run left an iteration open: resume it — with
-   * the message a continue by message delivers to its root — or decline it. Every route resumes unless told to decline.
+   * the message a continue by message delivers to its root, which clause 17 also appends as a task the resumed iteration
+   * holds — or decline it. Every route resumes unless told to decline.
    */
   private launchContinuation(s: Live, prompt: string, payload: string, todo: TodoDocument | undefined, priorIntent: IntentCategory | null, setupIn: RunSetup, attachmentContent: readonly ContentPart[] = [], plan?: { readonly cycle: number; readonly changes: string }, openIteration: OpenIterationChoice = { message: null }): void {
     const { model, runtime } = setupIn;
@@ -1233,7 +1234,8 @@ export class Sessions {
       // PD-ORCH-005: the store the conversation record, the iteration record and a left-open iteration are read from —
       // every run's, with or without a tool port.
       dal: s.dal,
-      ...(open ? { openIteration: { resume: openIteration !== 'decline' } } : {}),
+      // PD-ORCH-005 clause 17: a message this continue delivered to the resumed root is also a task that closes with it.
+      ...(open ? { openIteration: { resume: openIteration !== 'decline', delivered: openIteration !== 'decline' && openIteration.message !== null && openIteration.message.length > 0 } } : {}),
       tools: null, permission, pid: this.deps.pid, host: this.deps.host, readSession: () => s.dal.getSession(sessionId), warn,
       continuation: true, ...(todo ? { resumeTodo: todo } : {}), ...(hooks ? { hooks } : {}), checkpoints,
       ...(supervisors ? { supervisorFor: (conversationId: string) => supervisors.forConversation(conversationId) } : {}),

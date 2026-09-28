@@ -3351,6 +3351,52 @@ offer.
 
 The key is registered with default 20 and minimum 1. Each background session publishes its own `bg:<id>` stream at up to 50 frames/s (the 20 ms floor), so the produced aggregate is `(agents + background sessions) × 50 frames/s`, and only one of those two factors — agents, REQ-MONITOR-285's 20 — has a ceiling. Part AL reads the key into the manager and caps the *delivered* rate per window at 1,000 frames/s by merging (REQ-MONITOR-306, REQ-SHELL-103), so a user who configures 400 background sessions saturates the run-host → main pipe, not a renderer. A stated maximum on the key would let the produced rate be computed rather than absorbed. The owner's call; recorded, not resolved.
 
+**OQ-75 — How does a continue's message close with the resumed iteration, and which continues make one?** *(`PD-ORCH-005` clause 17 (revision 4); REQ-ORCH-004, which the clause narrows, and REQ-ORCH-067, REQ-ORCH-069, REQ-ORCH-072, REQ-ORCH-077, REQ-ORCH-135 and REQ-MONITOR-125, which it does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
+
+Clause 17: "The message a continue delivers to the resumed root (clause 4) SHALL also be appended to the session's todo
+as a task. That task closes with the resumed iteration: done when the iteration succeeds, and left pending when it is
+cancelled or fails, so the next iteration takes it up." The clause names two closes of an iteration that has four
+outcomes and several ways to close, and does not say what state the task is in while the iteration is open, whether
+leaving it pending counts against it, how it meets the one-task-per-iteration rule, or which continues deliver a
+message.
+
+**What the build proceeds under.**
+
+- **Only `succeeded` is done.** An iteration that ends `partial` — its own task requeued, or abandoned at the retry
+  limit — is neither a success nor a cancel; it did not finish, so the message is left pending. So is every other close:
+  failed, raised, cancelled by the explicit cancel or by a pause that found nothing unfinished, declined by "continue
+  without them", closed because the run that owned it died, and the explicit cancel after a rest or during the
+  continue's pre-flight. A rest does not close the iteration, so the task stays with it and is resumed with it.
+- **While the iteration is open the task is in progress, held by it.** It is appended `in_progress` beside the
+  iteration's own task, as REQ-ORCH-072's selected task is, so the Todo pane shows it active and no selection takes it
+  while its iteration is open. The binding is the iteration's number on the task (`heldBy`), stored in the planner todo
+  document itself, so no store column is added and the binding survives a rest, a quit and a crash with the todo.
+- **Left pending is not a requeue.** No consecutive retry is counted: REQ-ORCH-077's count is an iteration's own task
+  failing to finish, and the message was not the task the iteration selected.
+- **The message is held, not selected.** REQ-ORCH-067's "one task" is the task an iteration selects; the resumed
+  iteration selected its own before the rest, and it answers the message because clause 4 delivers it. When the message
+  is left pending, the next iteration selects it as any pending task, in its place in the todo (the `Continued Prompts`
+  phase, after the tasks before it). One selected by a later iteration of the same continuation run is sent that run's
+  handoff (REQ-SESSION-115), since its id is the run's own task id; in a later run it is sent as its text.
+- **Several continues on one open iteration.** Each continue by message that resumes the iteration appends its own task,
+  held by it; they close together, in the order they were appended.
+- **Which continues make one.** Only a continue that delivers a message: a continue by message (`Sessions.prompt`), with
+  text, images or both. A message of images alone makes a task whose text is empty, as a continued prompt's does. The
+  Continue action and a plan decision deliver none and append none. "Continue without them" on an iteration that holds a
+  message appends no second task for the last request, since that request is the message, which the decline leaves
+  pending; the Continue action's general re-append of the last request is recorded as
+  [`the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`](../defects/the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md)
+  and not decided here.
+- **What a death leaves.** The todo is saved with the run's `starting` save, so a run host that dies during the
+  pre-flight keeps the task as the root's record keeps the message. A task held by an iteration that is no longer open —
+  a death between the iteration's close and the save that recorded the release — goes back to `pending` when the next
+  run is built, so it is never left in progress with nothing to close it.
+
+**What a ruling decides.** Whether a `partial` resumed iteration should close the message as done, since the root
+answered it; whether leaving the message pending should count toward REQ-ORCH-077's limit, so a message no iteration
+can finish is abandoned rather than taken up forever; and what the Continue action should append when the last request
+is already a task.
+
 ## Design-reference dependencies
 
 The approved visual design reference was **not available** to the architects who produced the slice

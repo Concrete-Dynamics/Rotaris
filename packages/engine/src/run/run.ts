@@ -172,9 +172,10 @@ export interface RunDeps {
   /**
    * PD-ORCH-005 clauses 4 and 6: what this run does with the iteration a rest left open — resume it, the default of every
    * continue (the new message a continue by message delivers is already in its root's record); or decline it, clause 6's
-   * "continue without them". Absent means decline; a run with no open iteration ignores it.
+   * "continue without them". Absent means decline; a run with no open iteration ignores it. `delivered` is clause 17: the
+   * continue delivered a message to the resumed root, which is also appended as a task that closes with the iteration.
    */
-  readonly openIteration?: { readonly resume: boolean } | undefined;
+  readonly openIteration?: { readonly resume: boolean; readonly delivered?: boolean } | undefined;
   readonly permission: PermissionPosture;
   /** ADR-0015: the session's hooks; null or absent means none exist and nothing about hooks is observable (REQ-HOOKS-041). */
   readonly hooks?: HookPort | null | undefined;
@@ -411,11 +412,22 @@ export class Run {
       : deps.resumeTodo
         ? Todo.fromDocument(deps.resumeTodo, deps.config.consecutiveRetryLimit)
         : Todo.fresh(deps.taskId, deps.taskLabel ?? deps.task, deps.config.consecutiveRetryLimit);
-    // PD-ORCH-005 clause 4: a continue that resumes an open iteration adds no task — a new message goes to the resumed root.
-    const open = deps.openIteration === undefined ? null : deps.dal?.openIterationOf(deps.sessionId) ?? null;
+    const openRow = deps.dal?.openIterationOf(deps.sessionId) ?? null;
+    // PD-ORCH-005 clause 17: a task held by an iteration that is no longer open goes back to pending before anything reads the todo.
+    if (deps.dal) this.todo.releaseStale(openRow?.iteration ?? null);
+    const open = deps.openIteration === undefined ? null : openRow;
     this.resumeFrom = deps.openIteration?.resume === true ? open : null;
     this.restedIteration = open?.iteration ?? null;
-    if (deps.resumeTodo && this.resumeFrom === null) this.todo.appendTask('Continued Prompts', deps.taskId, deps.taskLabel ?? deps.task);
+    /*
+     * PD-ORCH-005 clause 17: a continue that resumes an open iteration delivers its message to the resumed root (clause 4)
+     * and appends it as a task that iteration holds, closing with it — done when it succeeds, pending otherwise. A continue
+     * that resumes and delivers no message (the Continue action, a plan decision) adds no task. "Continue without them"
+     * declining an iteration that holds a continue's message adds none either: its last request is that message, already
+     * a task, which the decline leaves pending (`closeOpenIteration`).
+     */
+    const declinedWithMessage = open !== null && this.resumeFrom === null && this.todo.holdsFor(open.iteration);
+    if (deps.resumeTodo && this.resumeFrom !== null && deps.openIteration?.delivered === true) this.todo.appendHeld('Continued Prompts', deps.taskId, deps.taskLabel ?? deps.task, this.resumeFrom.iteration);
+    else if (deps.resumeTodo && this.resumeFrom === null && !declinedWithMessage) this.todo.appendTask('Continued Prompts', deps.taskId, deps.taskLabel ?? deps.task);
     this.aggregates = Aggregates.rehydrate(stored);
     this.lastUsageEmitted = usageTotals(this.aggregates.usagePayload());
     this.tokenSamples = parseTokenSamples(stored?.token_samples ?? '[]');
@@ -593,8 +605,9 @@ export class Run {
       // REQ-SESSION-091: a cancellation already requested skips the agent runtime entirely.
       if (this.stop.requested) return await this.teardown(this.stop.reason ?? 'user_cancelled');
 
-      // REQ-SESSION-087, in order and observably.
-      writer.save('starting');
+      // REQ-SESSION-087, in order and observably. PD-ORCH-005 clause 17: the todo with it, so a continue's message task
+      // survives a process that dies during the pre-flight, as the message itself does in the resumed root's record.
+      writer.save('starting', { todo: this.todoJson() });
       this.startedAt = clocks.monotonic.now();
       // REQ-ORCH-005: the intent is in effect before the first iteration; while it is being decided the session reads `classifying`.
       if (this.deps.preflight) {
@@ -733,20 +746,26 @@ export class Run {
         // REQ-ORCH-135: an iteration cancelled mid-run closes as cancelled; the task stays anchored.
         outcome = 'cancelled';
         task.state = 'pending';
+        this.todo.releaseHeld(iteration, false);
         summary = 'the run was cancelled before the agent finished';
         if (this.rootRecord) this.rootRecord.state = 'cancelled';
       } else if (this.pauseRequested) {
         // REQ-MONITOR-123: the current step finished; the task stays pending for the continuation.
         outcome = 'cancelled';
         task.state = 'pending';
+        this.todo.releaseHeld(iteration, false);
         summary = 'the run paused at the user\'s request before the agent finished';
         if (this.rootRecord) this.rootRecord.state = 'cancelled';
       } else if (report.status === 'succeeded') {
         outcome = 'succeeded';
         this.todo.complete(task);
+        // PD-ORCH-005 clause 17: a continue's message the resumed iteration held is done with it, before completion is judged.
+        this.todo.releaseHeld(iteration, true);
         if (this.rootRecord) this.rootRecord.state = 'succeeded';
       } else if (report.status === 'partial') {
         outcome = this.todo.requeue(task) === 'abandoned' ? 'abandoned' : 'partial';
+        // PD-ORCH-005 clause 17: not done, so a continue's message the iteration held is left pending for the next.
+        this.todo.releaseHeld(iteration, false);
         if (this.rootRecord) this.rootRecord.state = outcome === 'abandoned' ? 'failed' : 'succeeded';
       } else {
         // REQ-ORCH-074: failed → the task is abandoned; for the root agent the run ends agent_session_aborted.
@@ -754,6 +773,7 @@ export class Run {
         this.lastFailure = describe(report.error);
         summary = this.lastFailure;
         this.todo.abandon(task);
+        this.todo.releaseHeld(iteration, false);
         escalate = true;
         if (this.rootRecord) this.rootRecord.state = 'failed';
       }
@@ -763,6 +783,7 @@ export class Run {
         this.lastFailure = String(cause);
         summary = `the iteration ended with an unhandled error: ${String(cause)}`;
         this.todo.abandon(task);
+        this.todo.releaseHeld(iteration, false);
         escalate = true;
         if (this.rootRecord) this.rootRecord.state = 'failed';
       } else {
@@ -861,6 +882,8 @@ export class Run {
     // an earlier run began under that run's hooks, and one this run left open ends with the run.
     await this.captureCheckpoint(open.iteration, '');
     this.todo.reopen(open.todo_task_id);
+    // PD-ORCH-005 clause 17: a continue's message the iteration held is left pending, so the next iteration takes it up.
+    this.todo.releaseHeld(open.iteration, false);
     this.iterationsCompleted = Math.max(this.iterationsCompleted, open.iteration);
     return true;
   }

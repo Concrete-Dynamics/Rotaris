@@ -18,6 +18,11 @@ export interface Task {
   readonly text: string;
   state: TaskState;
   consecutiveRetries: number;
+  /**
+   * PD-ORCH-005 clause 17: the open iteration this task closes with — a continue's message, which the resumed iteration
+   * holds beside its own task. Absent on every other task, and removed when the iteration closes (`releaseHeld`).
+   */
+  heldBy?: number;
 }
 export interface Phase {
   readonly name: string;
@@ -53,6 +58,54 @@ export class Todo {
     let phase = this.phases.find((p) => p.name === phaseName);
     if (!phase) { phase = { name: phaseName, tasks: [] }; this.phases.push(phase); }
     phase.tasks.push({ id: taskId, text, state: 'pending', consecutiveRetries: 0 });
+  }
+
+  /**
+   * PD-ORCH-005 clause 17: a continue's message, appended as a task that the resumed iteration `iteration` holds — in
+   * progress while it is open (REQ-ORCH-072), so no selection takes it, and closed with that iteration (`releaseHeld`).
+   */
+  appendHeld(phaseName: string, taskId: string, text: string, iteration: number): void {
+    this.appendTask(phaseName, taskId, text);
+    const task = this.task(taskId)!;
+    task.state = 'in_progress';
+    task.heldBy = iteration;
+  }
+
+  /**
+   * PD-ORCH-005 clause 17: every task the iteration `iteration` holds closes with it — `complete` when it succeeded, and
+   * otherwise back to `pending`, so the next iteration takes it up. Leaving it pending is not a requeue: no consecutive
+   * retry is counted (REQ-ORCH-077 counts an iteration's own task). Returns how many closed.
+   */
+  releaseHeld(iteration: number, done: boolean): number {
+    let n = 0;
+    for (const task of this.all()) {
+      if (task.heldBy !== iteration) continue;
+      delete task.heldBy;
+      task.state = done ? 'complete' : 'pending';
+      if (done) task.consecutiveRetries = 0;
+      n += 1;
+    }
+    return n;
+  }
+
+  /** PD-ORCH-005 clause 17: whether the iteration `iteration` holds a continue's message as a task. */
+  holdsFor(iteration: number): boolean {
+    return this.all().some((t) => t.heldBy === iteration);
+  }
+
+  /**
+   * PD-ORCH-005 clause 17: a task held by an iteration that is no longer open — a process that died between the
+   * iteration's close and the save that recorded the release — goes back to `pending`, so it is never stuck in progress.
+   */
+  releaseStale(openIteration: number | null): number {
+    let n = 0;
+    for (const task of this.all()) {
+      if (task.heldBy === undefined || task.heldBy === openIteration) continue;
+      delete task.heldBy;
+      task.state = 'pending';
+      n += 1;
+    }
+    return n;
   }
 
   /**

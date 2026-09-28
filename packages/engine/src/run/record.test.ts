@@ -157,10 +157,11 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
     expect(sessions.prompt(sid, 'second').ok).toBe(true);
     expect((await sessions.running(sid)!).status).toBe('completed');
     expect(SessionWriter.storeFailure(dal)).toBeUndefined();
-    // One iteration, the same one: its number and its root's task id carried on, and nothing appended to the todo.
+    // One iteration, the same one: its number and its root's task id carried on. PD-ORCH-005 clause 17: the message is
+    // also a task, held by the resumed iteration and done with it — no second iteration runs it.
     expect(dal.iterationsOf(sid)).toMatchObject([{ iteration: 1, state: 'closed', outcome: 'succeeded', root_task_id: root, interruption: null }]);
     const tasks = decodeStoredTodo(dal.getSession(sid)!.todo).planner!.phases.flatMap((p) => p.tasks);
-    expect(tasks.map((t) => [t.text, t.state])).toEqual([['first', 'complete']]);
+    expect(tasks.map((t) => [t.text, t.state, t.heldBy])).toEqual([['first', 'complete', undefined], ['second', 'complete', undefined]]);
     // The root carried on from its record, the new message its next message; the crash's `crash` interruption came and went.
     const last = client.requests.at(-1)!;
     expect(sent(last)).toEqual([...before, { role: 'user', content: [{ kind: 'text', text: 'second' }] }]);
@@ -202,7 +203,8 @@ describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () =
     expect((await sessions.running(sid)!).status).toBe('completed');
     const tasks = decodeStoredTodo(dal.getSession(sid)!.todo).planner!.phases.flatMap((p) => p.tasks);
     expect(new Set(tasks.map((t) => t.id)).size).toBe(tasks.length);
-    expect(tasks.map((t) => [t.text, t.state])).toEqual([['FIRST', 'complete'], ['SECOND', 'complete']]);
+    // PD-ORCH-005 clause 17: the message that resumed iteration 2 is a task of its own, done with it.
+    expect(tasks.map((t) => [t.text, t.state])).toEqual([['FIRST', 'complete'], ['SECOND', 'complete'], ['THIRD', 'complete']]);
     expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.outcome, r.root_task_id === root2])).toEqual([[1, 'succeeded', false], [2, 'succeeded', true]]);
     expect(recorded(sid, root2).filter((m) => m.role === 'user').at(-1)).toEqual({ role: 'user', content: [{ kind: 'text', text: 'THIRD' }] });
   });

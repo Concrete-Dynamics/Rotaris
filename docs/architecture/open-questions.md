@@ -3212,6 +3212,26 @@ eight of O-11's twelve reviews are for a notice or a pointer.
 
 The key is registered with default 20 and minimum 1. Each background session publishes its own `bg:<id>` stream at up to 50 frames/s (the 20 ms floor), so the produced aggregate is `(agents + background sessions) × 50 frames/s`, and only one of those two factors — agents, REQ-MONITOR-285's 20 — has a ceiling. Part AL reads the key into the manager and caps the *delivered* rate per window at 1,000 frames/s by merging (REQ-MONITOR-306, REQ-SHELL-103), so a user who configures 400 background sessions saturates the run-host → main pipe, not a renderer. A stated maximum on the key would let the produced rate be computed rather than absorbed. The owner's call; recorded, not resolved.
 
+**OQ-76 — Does the reserved token's launch of the application's own executable carry the parent's Chromium switches?** *(REQ-MCP-033, REQ-STARTUP-002, REQ-STARTUP-015. Raised 2026-09-28 by repairing `the-code-intelligence-server-dies-when-the-app-runs-as-root.md` (R-062).)*
+
+REQ-MCP-033 fixes that a `stdio` entry carrying the token launches the application's own executable with the token as
+its first argument, REQ-STARTUP-002 that this child is the one exception to the single entry point, and REQ-STARTUP-015
+what the launch is observable as: started from what the user installed, no user interface, no window. None says what
+else stands on the child's command line. The executable is a Chromium, and Chromium refuses to start as root with its
+sandbox on, so an operator who runs the application as root starts it with `--no-sandbox`; the child launched bare is a
+fresh Chromium, does not inherit that, and died with SIGTRAP before its sentinel ran (2026-09-27, a Linux container).
+Running as root is not a supported configuration anyone has ruled on, and Linux artifacts are withheld under IC-3, so
+the question is narrower than it looks: whether the launch is the parent's own line or a fresh one.
+
+**The reading built.** The launch carries exactly the sandbox switch the parent was started with (`--no-sandbox`), and
+nothing else of the parent's command line — the sandbox is a property of the host the parent has already measured,
+and a child of the same executable cannot measure it differently; every other switch (`--enable-logging`, a device
+scale factor, a capture seam) is the parent's business. The switch stands immediately before the token, so "the token
+as its first argument" reads as the first argument that is not that switch; a hand-written entry is unaffected.
+`@rotaris/platform`'s `chromium-switches.ts` holds the definition, and the launch builder, the sentinel and main's fork
+of the run host all read it. **A ruling the other way** — the launch carries nothing of the parent's — leaves the
+product unable to host its own tool server on a host that needs the switch, and would want REQ-MCP-033 to say so.
+
 ## Design-reference dependencies
 
 The approved visual design reference was **not available** to the architects who produced the slice

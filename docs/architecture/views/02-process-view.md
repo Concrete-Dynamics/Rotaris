@@ -348,7 +348,11 @@ MCP tool by its callable name; `ROTARIS_CAPTURE_PROMPT_MS` delays the typed prom
 **The bundled code-intelligence runtime (Part T; ADR-0035's first execution).** A `stdio` entry whose command is the
 reserved token `builtin:code-intelligence` launches **the application's own executable** with the token first and `--`
 second (`Rotaris.exe builtin:code-intelligence -- start-mcp-server --transport stdio --context ide --project <root>`;
-in development `electron.exe out/main/index.js` before them): that process is a **sixth process shape**, the
+in development `electron.exe out/main/index.js` before them; **since 2026-09-28 the one Chromium switch the parent was
+started with, `--no-sandbox`, stands right before the token** — the child is a fresh Chromium and died with SIGTRAP
+before its sentinel ran when the parent ran as root without handing it over; `@rotaris/platform`'s `chromium-switches.ts`
+is the definition, main forks the run host with the switch so `run-host/code-intelligence-launch.ts` can read it off
+its own argv, and the sentinel skips it — OQ-76's reading): that process is a **sixth process shape**, the
 **sentinel** — Electron's main entry whose first module (`main/sentinel.ts`) sees the token, resolves the bundled
 interpreter under `process.resourcesPath/code-intelligence/runtime/` (the source tree's `apps/desktop/resources/` in
 development), seeds the runtime's per-user home once (`<data>/code-intelligence/`, its interface off), and runs the

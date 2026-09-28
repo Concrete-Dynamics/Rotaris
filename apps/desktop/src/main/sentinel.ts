@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, writeSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { resolveUserDirs } from '@rotaris/platform';
+import { afterInheritedSwitches, resolveUserDirs } from '@rotaris/platform';
 
 /**
  * ADR-0035's pre-bootstrap branch (REQ-MCP-033, REQ-STARTUP-002/015; ADR-0055 — this precedes the instance claim).
@@ -91,7 +91,10 @@ function runtimeHome(python: string): string {
   return home;
 }
 
-const tokenAt = process.defaultApp || process.env['ELECTRON_RUN_AS_NODE'] ? 2 : 1;
+// The token stands first — or right after the one Chromium switch the launch inherits from the parent (`--no-sandbox`,
+// when the parent runs as root; REQ-MCP-033 / OQ-76, `@rotaris/platform`'s `chromium-switches.ts`): the child is a fresh
+// Chromium and died before this line ran without it (2026-09-27).
+const tokenAt = afterInheritedSwitches(process.argv, process.defaultApp || process.env['ELECTRON_RUN_AS_NODE'] ? 2 : 1);
 if (process.argv[tokenAt] === CODE_INTELLIGENCE_TOKEN) {
   const python = runtimeExecutable();
   if (python === null) {

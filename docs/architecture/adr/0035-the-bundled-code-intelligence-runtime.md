@@ -302,3 +302,16 @@ spike: the Bash tool resets its working directory to the main checkout, so a tok
 there took the token for a workspace path (REQ-STARTUP-163) and Windows's stream syntax made a directory of it —
 unreachable now that the sentinel precedes `workspaceFromArgv`; removed, not committed.
 
+**As root on Linux — 2026-09-28 (R-062).** The first execution of the launch on a host that needs Chromium's
+`--no-sandbox`: a cloud container, the development entry driven as root. The reserved token's launch was the executable
+with the token and `--` only, so the child — a fresh Chromium — inherited nothing and died with SIGTRAP before the
+sentinel ran; the project setup's `create` step failed, `index` and `memory` were not attempted
+(`../../defects/fixed/the-code-intelligence-server-dies-when-the-app-runs-as-root.md`). None of REQ-MCP-033,
+REQ-STARTUP-002 and REQ-STARTUP-015 says whether the launch carries the parent's switches: raised as **OQ-76**, built
+as "exactly the sandbox switch the parent was started with, immediately before the token, nothing else". Measured on
+the repaired build, driven as root under Xvfb against a scratch workspace holding one TypeScript file: the launch line
+reads `electron out/main/index.js --no-sandbox builtin:code-intelligence --`, and `create` now exits **127** with the
+sentinel's own "the bundled code-intelligence runtime is not present in this installation" — the child reached its
+JavaScript. Not shown: the runtime serving as root, because `apps/desktop/resources/code-intelligence/` is absent on
+this tree and `bundle.mjs` refuses off Windows (above), so `pnpm code-intel-proof` could not run. Nothing in the sentinel's
+own behaviour changed; it finds the token past the one switch.

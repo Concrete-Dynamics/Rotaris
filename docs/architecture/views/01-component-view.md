@@ -117,6 +117,12 @@ Edges worth knowing the reason for:
   bootstrap writer) but still no `store`.
 - **`ui` cannot import `config`**: the Settings screen reads `ConfigSnapshot` and emits a save, a per-field write
   or its live state (`contracts/src/config.ts`); the workspace service commits.
+- **`app-main` → `release-naming` is the updater's edge** (ADR-0054, built 2026-09-28): the asset name it asks the
+  feed for, the strict version order it compares by and the checksum-manifest format it parses are all the one naming
+  authority's (`tools/release-naming/src/index.ts`), so the pipeline that writes those names and that manifest and the
+  updater that reads them cannot disagree. The updater itself is `apps/desktop/src/main/updater/`, in the main root,
+  because it is the process that owns the windows, the notices and the instance record it needs; its ports over
+  Electron and the disk are one file (`electron.ts`) and everything else is pure.
 
 ## Where the responsibilities sit
 
@@ -267,6 +273,15 @@ make it true. `scripts/lib/staged-resources.mjs` is `settings-proof`'s, for stag
 the proof also takes the writer's list of git's redirecting variables from `build-id.mjs`. **Edges unchanged**:
 `apps/desktop/scripts/**` and `tools/**` are outside the boundary rule, the scripts reach the tools and never the
 reverse, and no product code imports either.
+
+*Added 2026-09-28 (R-062, ADR-0054 "The prerelease naming repair").* `scripts/lib/artifact-names.mjs` is a fourth
+shared module: the declared product version read as `apps/desktop/package.json` writes it (`declaredProductVersion`,
+validated through REQ-STARTUP-029's grammar), the installer names rendered from it (`packagingArtifactNames`), the
+configuration electron-builder is run with — the yml with `win.artifactName` and `nsis.artifactName` set to those
+literals (`configurationWithNames`, `namedConfigurationText`) — and the rule a produced file's name is held to
+(`producedNameProblem`). `package.mjs` imports it; `build-hooks.cjs` loads it by dynamic import in `afterPack`'s
+`checkNaming` and in `artifactBuildCompleted`; it imports `tools/release-naming/src/index.ts` by path, as the hook did
+before it. **Edges unchanged**: a script reaching a tool, as above.
 
 ### The setup manifest and its schema (2026-09-28; `first-release-plan.md` §4.1, ADR-0054)
 

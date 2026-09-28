@@ -67,7 +67,8 @@ export function installFinish(host: CaptureHost, capture: string, prompt: string
     }
     for (const selector of probes) {
       // `value` rides along for a control (a select, an input), since its text is every option it offers (Part R's proof reads the strategy selector).
-      const found = await host.win.webContents.executeJavaScript(`(() => [...document.querySelectorAll(${JSON.stringify(selector)})].map((el) => ({ text: (el.textContent || '').trim().slice(0, 400), ...('value' in el && (el.tagName === 'SELECT' || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') ? { value: String(el.value) } : {}), data: Object.fromEntries([...el.attributes].filter((a) => a.name.startsWith('data-') || a.name.startsWith('aria-value')).map((a) => [a.name, a.value])) })))()`) as unknown;
+      // `fontSize` is the computed one, so a proof can hold two texts to one type token (the About caption, 2026-09-28) without a second seam.
+      const found = await host.win.webContents.executeJavaScript(`(() => [...document.querySelectorAll(${JSON.stringify(selector)})].map((el) => ({ text: (el.textContent || '').trim().slice(0, 400), fontSize: getComputedStyle(el).fontSize, ...('value' in el && (el.tagName === 'SELECT' || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') ? { value: String(el.value) } : {}), data: Object.fromEntries([...el.attributes].filter((a) => a.name.startsWith('data-') || a.name.startsWith('aria-value')).map((a) => [a.name, a.value])) })))()`) as unknown;
       host.log(`capture: probe ${selector} → ${JSON.stringify(found)}`);
     }
     const img = await host.win.webContents.capturePage();

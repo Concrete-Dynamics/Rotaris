@@ -89,6 +89,31 @@ standalone build, after the window is visible. — `REQ-STARTUP` update check
 **Banner**:
 The dismissible, non-blocking surface offering a newer release. — `REQ-STARTUP` update notification
 
+**Update offer**:
+The one latest release the check found strictly newer than the running version and carrying this flavour's
+artifact under its exact name, held by the desktop until it is installed or waved off. — `REQ-STARTUP-107`,
+`REQ-STARTUP-108`, `REQ-STARTUP-116`
+
+**Waved-off version**:
+The single version string a dismissal of the update notice remembers, so that version stays silent and any
+newer one notifies again. Never a list, and recorded by that notice alone. — `REQ-STARTUP-116`,
+`REQ-STARTUP-117`
+
+**Staging**:
+The fresh temporary directory, its name prefixed `rotaris-update-`, an asset is streamed into and verified in
+before anything of the installation is touched. — `REQ-STARTUP-122`, `REQ-STARTUP-124`
+
+**Hand-off**:
+An apply outcome in which the application yields to another installer — the setup executable, or the
+platform's file browser — before the replacement is in place, so its message describes the hand-off rather
+than telling the user to restart. — `REQ-STARTUP-119`, `REQ-STARTUP-127`
+_Avoid_: hand-over, which is the passing of a launch, or of the single-instance record, between instances
+
+**Successor**:
+The updated installation an instance starts on `Restart now`, to which the single-instance record passes
+rather than being released; the one case in which the product starts the application while an instance is
+running. — `REQ-STARTUP-121`
+
 ### Launching
 
 **Instance**:

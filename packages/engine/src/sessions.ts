@@ -14,6 +14,7 @@ export { planRequestSection, planSection } from './run/plan-text.js';
 import { ResilienceMemory, type CatalogueEntry, type ModelChoice } from './run/resilience.js';
 import type { ResolvedTrigger } from './run/compression.js';
 import { SessionLog, type LogLevel } from './session-log.js';
+import { UserPresence } from './run/presence.js';
 import type { ToolPort } from './run/turn.js';
 import { settleStaleChildren } from './children/orchestration.js';
 import type { DelegationOps } from './children/delegation.js';
@@ -121,6 +122,12 @@ export interface ToolPortContext {
    * canonical name; a live read through the run, on the terms of `planGateHeld` above.
    */
   readonly writeClaimFor?: ((rel: string) => WriteClaimHolder | null) | undefined;
+  /**
+   * PD-TOOLS-005: the run's away state — ONE holder per run, the same object on every agent's context, delegated
+   * children included. The gate reads it before it would prompt and marks it when a wait ends by timeout; the
+   * session's control arms clear it on the user's next input. Absent means no run holds one (a caller outside a run).
+   */
+  readonly presence?: UserPresence | undefined;
 }
 
 /** PD-TOOLS-006: what a write-scope refusal names — the holding child, its persona and the pattern that matched. */
@@ -161,6 +168,13 @@ export interface SessionsDeps {
   readonly host: MachineId;
   readonly retentionCap: number;
   readonly warn: (message: string) => void;
+  /**
+   * The application log at `info` (PD-MONITOR-002) — the host's line, which its default threshold keeps; never the
+   * per-session log of REQ-SESSION-142. What `HookPortContext.log` and `HookSinks.log` carry ("the application log
+   * only": a hook fault that reduces to a log entry, REQ-HOOKS-079/128/129, and the account of a hook set that
+   * could not be resolved) is written through this. Absent means those lines go nowhere.
+   */
+  readonly log?: ((message: string) => void) | undefined;
   readonly mintSessionId: () => string;
   /** Decision 1 of the run-loop plan: null means no model is configured and a run is refused before it starts. */
   readonly model: ModelSetup | null;
@@ -284,6 +298,8 @@ interface Live {
    * the override at run end so a resumed session does not inherit a previous run's switch.
    */
   modeOverride: { value: string | null };
+  /** PD-TOOLS-005: the run's away state, on the same one-holder-per-run terms as `modeOverride`; the control arms clear it. */
+  presence: UserPresence;
 }
 
 export interface SessionListItem {
@@ -793,7 +809,7 @@ export class Sessions {
     const settled = settleStaleChildren(dal, writer, sessionId, warn);
     if (settled > 0) warn(`${settled} child record(s) from a previous run were settled cancelled before continuation (REQ-ORCH-053)`);
     // Part Q: the memory is rehydrated at the first continuation, when the run's model resolver exists (REQ-SESSION-196's override).
-    this.live.set(sessionId, { writer, owner, dal, run: null, running: null, tools: null, log, commitTarget: entry, memory: null, artifacts: this.newArtifactStore(dal, sessionId, () => writer, warn), modeOverride: { value: null } });
+    this.live.set(sessionId, { writer, owner, dal, run: null, running: null, tools: null, log, commitTarget: entry, memory: null, artifacts: this.newArtifactStore(dal, sessionId, () => writer, warn), modeOverride: { value: null }, presence: new UserPresence({ record: warn }) });
     return ok({ sessionId, settledChildren: settled });
   }
 
@@ -852,7 +868,7 @@ export class Sessions {
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
-    const live: Live = { writer, owner, dal, run: null, running: null, tools: null, log, commitTarget: entry, memory: new ResilienceMemory(), artifacts: this.newArtifactStore(dal, sessionId, () => writer, warn), modeOverride: { value: null } };
+    const live: Live = { writer, owner, dal, run: null, running: null, tools: null, log, commitTarget: entry, memory: new ResilienceMemory(), artifacts: this.newArtifactStore(dal, sessionId, () => writer, warn), modeOverride: { value: null }, presence: new UserPresence({ record: warn }) };
     this.live.set(sessionId, live);
     const row = writer.appendRow('user', prompt, true, { attachments: storedAttachments.attachments });
     if (!row.ok) return err({ code: row.error.code, reason: 'reason' in row.error ? row.error.reason : String(row.error.code) });
@@ -866,9 +882,10 @@ export class Sessions {
       ? new SupervisorRegistry(sessionId, supervisorSetup.config, supervisorSetup.classifier, this.deps.clocks.timers)
       : null;
     // ADR-0015: the hook set is resolved once here, before the run exists, and is fixed for the run (REQ-HOOKS-131).
+    // REQ-HOOKS-138 / PD-MONITOR-002: the port's `log` is the application log, not the session's own.
     let hooks: HookPort | null = null;
     if (this.deps.hooks) {
-      try { hooks = this.deps.hooks({ sessionId, workspaceRoot, effectiveRoot, writer, warn, log: (m) => { log?.info(m); }, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false }); } catch (cause) { warn(`Could not resolve this run's hooks; continuing without them. (${String(cause)})`); }
+      try { hooks = this.deps.hooks({ sessionId, workspaceRoot, effectiveRoot, writer, warn, log: (m) => { this.deps.log?.(m); }, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false }); } catch (cause) { warn(`Could not resolve this run's hooks; continuing without them. (${String(cause)})`); }
     }
     const checkpoints = this.checkpointPortFor({ sessionId, workspaceRoot, effectiveRoot, isolated: opts.worktree !== undefined, dal, writer, warn, log: (m) => { log?.info(m); } });
     // REQ-ORCH-005/016: the pre-flight's grant reaches the entry role's tool port; the ports are created after the pre-flight ran.
@@ -877,7 +894,10 @@ export class Sessions {
     // REQ-TOOLS-075: one override holder per RUN — installed here, read at every agent construction below.
     const modeOverride: { value: string | null } = { value: null };
     live.modeOverride = modeOverride;
-    const baseCtx = { sessionId, workspaceRoot, effectiveRoot, writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
+    // PD-TOOLS-005: one away holder per RUN, on the same terms — reached by every agent through `baseCtx`, discarded with the run.
+    const presence = new UserPresence({ record: warn });
+    live.presence = presence;
+    const baseCtx = { sessionId, workspaceRoot, effectiveRoot, writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, presence, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
     // With delegation the run creates the root's port itself (its own identity); the base port exists only without it.
     const tools: ToolPort | null = null;
     live.tools = tools;
@@ -1004,7 +1024,8 @@ export class Sessions {
     const runRef: { run?: Run } = {};
     let hooks: HookPort | null = null;
     if (this.deps.hooks) {
-      try { hooks = this.deps.hooks({ sessionId, workspaceRoot, effectiveRoot, writer: s.writer, warn, log: (m) => { s.log?.info(m); }, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false }); } catch (cause) { warn(`Could not resolve this continuation's hooks; continuing without them. (${String(cause)})`); }
+      // REQ-HOOKS-138 / PD-MONITOR-002: the port's `log` is the application log, not the session's own.
+      try { hooks = this.deps.hooks({ sessionId, workspaceRoot, effectiveRoot, writer: s.writer, warn, log: (m) => { this.deps.log?.(m); }, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false }); } catch (cause) { warn(`Could not resolve this continuation's hooks; continuing without them. (${String(cause)})`); }
     }
     // REQ-GIT-051: numbering continues across a resume — the port reads the rows and the refs at each capture.
     const checkpoints = this.checkpointPortFor({ sessionId, workspaceRoot, effectiveRoot, isolated: effectiveRootOf(storedRow).binding !== null, dal: s.dal, writer: s.writer, warn, log: (m) => { s.log?.info(m); } });
@@ -1015,7 +1036,10 @@ export class Sessions {
     // REQ-TOOLS-075: a continuation is a new run, so it starts with no override — a previous run's switch is not inherited.
     const modeOverride: { value: string | null } = { value: null };
     s.modeOverride = modeOverride;
-    const baseCtx = { sessionId, workspaceRoot, effectiveRoot, writer: s.writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
+    // PD-TOOLS-005: a continuation is a new run, so it starts with the user present — a previous run's away stretch is not inherited.
+    const presence = new UserPresence({ record: warn });
+    s.presence = presence;
+    const baseCtx = { sessionId, workspaceRoot, effectiveRoot, writer: s.writer, requestedMode: permission.effective, attended: () => this.deps.attended?.() ?? false, warn, abortRun: () => { runRef.run?.stop.request('agent_session_aborted'); }, presence, ...(hooks ? { hooks: hooks.toolHooks } : {}) };
     s.tools = null;
     const stale = settleStaleChildren(s.dal, s.writer, sessionId, warn);
     if (stale > 0) warn(`${stale} child record(s) from a previous run were settled cancelled before the first continuation iteration (REQ-ORCH-053)`);
@@ -1080,7 +1104,8 @@ export class Sessions {
    * at once. One entry rather than an async `control` so the forty-odd synchronous callers keep their shape.
    */
   async controlAsync(req: ControlRequest): Promise<ControlResult> {
-    if (req.op === 'forceCompression') return this.forceCompression(req);
+    // PD-TOOLS-005: the one control that does not pass through `control` is still the user's input to the run.
+    if (req.op === 'forceCompression') { this.live.get(asSessionId(req.sessionId))?.presence.returned(); return this.forceCompression(req); }
     return this.control(req);
   }
 
@@ -1156,9 +1181,13 @@ export class Sessions {
     if (req.op === 'editTodo' && (!run || run.isEnded)) return this.editStoredTodo(s, req);
     // Part AO: the clear reaches a loaded session with or without a run (REQ-CHAT-084's two routes); the compression
     // pass is asynchronous and answered by `controlAsync` — a synchronous caller gets the refusal it would get with no run.
-    if (req.op === 'clearTranscript') return this.clearTranscript(s, req);
+    // PD-TOOLS-005: a confirmed clear on a live run is the user's input to it too (REQ-MONITOR-004, REQ-CHAT-084).
+    if (req.op === 'clearTranscript') { if (run && !run.isEnded) s!.presence.returned(); return this.clearTranscript(s, req); }
     if (req.op === 'forceCompression') return { ok: false, refusal: { code: 'no_run', message: 'No run is active.' } };
     if (!run || run.isEnded) return { ok: false };
+    // PD-TOOLS-005: input the user sends to a live run's session — an answer, a message, a run control, a mode change —
+    // ends the run's away stretch, before the operation is judged. A shutdown announcement is the application's, not the user's.
+    if (req.op !== 'announceShutdown') s!.presence.returned();
     const text = (key: string): string | null => { const v = req.args[key]; return typeof v === 'string' && v.trim() !== '' ? v : null; };
     switch (req.op) {
       case 'cancel': {
@@ -1746,8 +1775,9 @@ export class Sessions {
   /** ADR-0013: an answer is routed by looking the request id up across every live session. */
   answerApproval(requestId: string, option: ApprovalOption): boolean {
     for (const s of this.live.values()) {
-      if (s.run && s.run.answerApproval(requestId, option)) return true;
-      if (s.tools?.answerApproval(requestId, option)) return true;
+      // PD-TOOLS-005: an answer is the user's input to the session that held the request, whichever session was addressed.
+      if (s.run && s.run.answerApproval(requestId, option)) { s.presence.returned(); return true; }
+      if (s.tools?.answerApproval(requestId, option)) { s.presence.returned(); return true; }
     }
     return false;
   }
@@ -1755,15 +1785,15 @@ export class Sessions {
   /** Part AC — REQ-CHAT-096: the same lookup for a question set; a stale prompt id resolves nothing anywhere. */
   answerQuestions(requestId: string, answers: QuestionAnswers): boolean {
     for (const s of this.live.values()) {
-      if (s.run && s.run.answerQuestions(requestId, answers)) return true;
-      if (s.tools?.answerQuestions?.(requestId, answers) === true) return true;
+      if (s.run && s.run.answerQuestions(requestId, answers)) { s.presence.returned(); return true; }
+      if (s.tools?.answerQuestions?.(requestId, answers) === true) { s.presence.returned(); return true; }
     }
     return false;
   }
   cancelQuestions(requestId: string): boolean {
     for (const s of this.live.values()) {
-      if (s.run && s.run.cancelQuestions(requestId)) return true;
-      if (s.tools?.cancelQuestions?.(requestId) === true) return true;
+      if (s.run && s.run.cancelQuestions(requestId)) { s.presence.returned(); return true; }
+      if (s.tools?.cancelQuestions?.(requestId) === true) { s.presence.returned(); return true; }
     }
     return false;
   }

@@ -91,6 +91,19 @@ export function outputOf(result) {
 }
 
 /**
+ * Whether BOTH lines of the here-string shape came back — read from what the command printed, never from the whole
+ * result. The shape's command carries `alpha-one` and `beta-two` itself, and the diagnostic block repeats the command,
+ * so a check over the whole result passed for an observation whose output was `(no output)`; it passed that way on the
+ * live run of 2026-09-22 and proved nothing (`docs/defects/fixed/the-here-string-check-reads-its-own-command-back.md`).
+ * An observation with no output section answers false: nothing came back.
+ */
+export function hereStringLinesReturned(result) {
+  const printed = outputOf(result);
+  if (printed === null) return false;
+  return /alpha-one/.test(printed) && /beta-two/.test(printed);
+}
+
+/**
  * What the long-output assertion asks of one captured result: the distinct markers, and the lines carrying more
  * than one of them. Two markers on one line is the concatenation; fewer than `LONG_OUTPUT_LINES` distinct is a
  * capture that lost output.

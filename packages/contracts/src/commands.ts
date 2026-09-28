@@ -163,6 +163,16 @@ export const CommandRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('session.control'), request: ControlRequestSchema }),
   /** REQ-NOTIFY-026: compare-and-clear with an id; no id clears whatever notice is current (Part V). */
   z.object({ kind: z.literal('notice.acknowledge'), noticeId: z.number().int().optional() }),
+  /**
+   * The updater (first-release-plan.md §4.6, 2026-09-28) — the two notice actions REQ-NOTIFY-044 named with no target
+   * until now. `update.install` is `Update now` on the offer notice and `Try again` on the failure notice
+   * (REQ-STARTUP-116, REQ-STARTUP-120): main holds the offer, runs REQ-STARTUP-122's sequence and reports through the
+   * same notice; the renderer names no version, no asset and no URL. `update.restart` is `Restart now` on the
+   * `Update installed` notice and on no other (REQ-STARTUP-121): the hand-over of the instance record to the updated
+   * installation. Both are refused, never queued, while an update operation is in flight (REQ-STARTUP-114).
+   */
+  z.object({ kind: z.literal('update.install') }),
+  z.object({ kind: z.literal('update.restart') }),
   /** REQ-SESSION-201: main supplies the dialogs and nothing else; the work runs in the workspace service (ADR-0002 c.7). */
   z.object({ kind: z.literal('workspace.backup') }),
   z.object({ kind: z.literal('workspace.restore') }),

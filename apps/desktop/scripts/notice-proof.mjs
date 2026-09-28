@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:
 import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { cleanEnvironment, findDatabases, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
+import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 
 /**
  * ADR-0049's first execution in full (Part V), in the built application.
@@ -63,7 +63,8 @@ function scenario(name, { globalHooks = null, workspaceHook = false } = {}) {
   ].join('\n'));
   if (globalHooks !== null) {
     // The GLOBAL scope is trusted without review (REQ-HOOKS-013), so the run reaches the failure limit without a dialog.
-    const configDir = join(local, 'rotaris', 'config');
+    // By the platform that reads it (`configDirFor`), not the Windows spelling alone.
+    const configDir = configDirFor(local);
     mkdirSync(configDir, { recursive: true });
     writeFileSync(join(configDir, 'agents.yaml'), globalHooks);
   }
@@ -72,7 +73,7 @@ function scenario(name, { globalHooks = null, workspaceHook = false } = {}) {
 function launch(name, s, extra, opts = {}) {
   const png = join(output, `${name}.png`);
   const started = Date.now();
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), s.workspace], {
+  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
     cwd: app, encoding: 'utf8', timeout: opts.timeout ?? 150_000, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local: s.local, preferences: s.preferences }),

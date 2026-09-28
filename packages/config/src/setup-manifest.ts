@@ -29,7 +29,7 @@ import { z } from 'zod';
  * the shipped file carries no `$comment`: a comment edit would make every installation set up again.
  *
  * Readings taken here and recorded: what "archive layout" comprises and what path the expected executables are relative
- * to (OQ-76); the four fields on a tool-server package, mirroring the language servers' (REQ-STARTUP-142's four).
+ * to (OQ-87); the four fields on a tool-server package, mirroring the language servers' (REQ-STARTUP-142's four).
  */
 
 /** The file's name, at the root of `process.resourcesPath` in a packaged build and under `apps/desktop/resources/` in the source tree. */
@@ -45,7 +45,7 @@ export const SETUP_MANIFEST_SCHEMA_VERSION = 1 as const;
  * REQ-STARTUP-060's raw `<os>-<machine>` fallback is read as a key a host may compute, never one a manifest archive is
  * written under: the schema refuses it, so a host whose key is a fallback finds no archive to select. What machine setup
  * then does is the consumer's, which is not built (ADR-0054, "The setup manifest — first execution"). The reading is
- * raised as OQ-77, not ruled.
+ * raised as OQ-88, not ruled.
  */
 export const PLATFORM_KEYS = ['windows-x64', 'macos-arm64', 'linux-x86_64'] as const;
 export type PlatformKey = (typeof PLATFORM_KEYS)[number];

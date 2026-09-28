@@ -26,7 +26,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
-import { app as appDirectory, buildDesktop, cleanEnvironment, electron, evidenceDirectory, mainEntry, proofIsolationEnv } from './lib/harness.mjs';
+import { app as appDirectory, buildDesktop, cleanEnvironment, electron, evidenceDirectory, hostSwitches, mainEntry, proofIsolationEnv } from './lib/harness.mjs';
 import { startApp } from './lib/driver.mjs';
 
 const output = evidenceDirectory('.workspace-proof');
@@ -121,7 +121,9 @@ let handOverSequence = 0;
 /** Launch the same profile again and wait for the secondary process to hand its request to the owner. */
 async function handOver(started, workspace) {
   const sequence = ++handOverSequence;
-  const child = spawn(electron, [mainEntry, ...(workspace ? [workspace] : [])], {
+  // `hostSwitches` as the driver's launch carries them: as root this second instance died with SIGTRAP and the proof's
+  // two hand-over checks were red for the host, not the product (`fixed/a-driven-launch-dies-as-root-on-linux.md`).
+  const child = spawn(electron, [mainEntry, ...hostSwitches, ...(workspace ? [workspace] : [])], {
     cwd: appDirectory,
     windowsHide: false,
     stdio: ['ignore', 'pipe', 'pipe'],

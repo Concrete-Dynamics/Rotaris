@@ -48,4 +48,4 @@ helper loses its `machineDir` (checked by removing it from `host()`). One case i
 **What this note does not cover.** The skill search's own machine-wide root, `/etc/codex/skills`, is a separate
 literal with no seam. With a skill there, three catalog cases still fail. That gap is open, with the proofs'
 equivalent, in
-[`three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md`](../three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md).
+[`three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md`](three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md).

@@ -53,6 +53,104 @@ is `config`'s `setup-manifest.ts`, read by the pre-build guard now and by the ma
 the file's row (`process.resourcesPath/setup-manifest.json`, read by the guard and by nothing in the product yet). No package, edge, process, channel, message
 kind or store column changed; `config` gains the `zod` dependency `contracts` already carries.
 
+**The updater (first-release-plan.md §4.6, ADR-0054; built 2026-09-28, R-062).** ADR-0054's bespoke main-process
+updater exists: `apps/desktop/src/main/updater/` — the flavour classified once from the artifact the launch started
+from (REQ-STARTUP-106), the one endpoint and the offer rule (105/107–110/112), the compiled-in key set — EMPTY until
+O-2 — and the Ed25519 detached-signature format (167/168), REQ-STARTUP-122's strict sequence with the signature verified
+before the manifest is parsed, the 1 MiB download into a `rotaris-update-` staging directory (118/124), the portable
+and installer strategies (115/125/126; the dmg and AppImage ones wait for `PD-STARTUP-001`'s withdrawal), and the
+orchestrator holding the one offer and the one operation in flight (114/116–121, REQ-STARTUP-046). The **process view**
+gains the updater in main's row, the feed as an endpoint in the diagram, the `update.install`/`update.restart`
+commands, and three rows in the file table (the staging directory, the portable's `.update`/`.old` siblings, the
+`updates/dismissedVersion` key); the **sequences view**'s launch gains the post-show activation the check rides and a
+new section for `Update now` and `Restart now`, the latter ADR-0055's hand-over of the record to a successor started on
+the sentinel branch (`builtin:update-successor`, `inheritInstance`); the **runtime view**'s §8 states what no
+configuration tier reaches (REQ-STARTUP-111); the **state-ownership view** gains the held offer, the classification, the
+waved-off version and the key set; the **component view** names the `app-main → release-naming` edge as the updater's.
+`MainWindows` gains a post-show activation hook (REQ-STARTUP-043), the notice store an `update` in place (REQ-SHELL-118),
+the notice action a `disabled` description, and the preference table `updates/dismissedVersion`. No package, edge,
+process, channel or store column changed; two command kinds were added. Three questions were raised (OQ-83, OQ-84,
+OQ-85 — OQ-76 to OQ-78 on the branch, renumbered at the merge) and one defect noticed beside the mechanism (`redirector.gvt1.com`). **Repaired at verification the same day:**
+the **state-ownership view**'s instance-record row and the **sequences view**'s `Restart now` now say the record passes
+only while a restart this instance started waits for its successor (`acceptSuccessor`, REQ-STARTUP-161); the sequences
+view's launch and the process view's `.old` row say the backup cleanup runs at a launch's first check only and that an
+update already installed in this process is not offered again (REQ-STARTUP-115/119); OQ-86 raised (OQ-79 on the branch, renumbered at the merge). **Repaired at the
+second verification:** the **process view**'s main row names `updater/successor.ts`; the **sequences view**'s `Restart now` and the **state-ownership view**'s instance-record row
+say that an accepted successor the record cannot be passed to fails the waiting restart (`onRecordPassFailed`,
+`updater/successor.ts`, REQ-STARTUP-121) and that a refusal answers with its reason; the **seams view**'s §6 names the
+notice store's `update` in place and `action.disabled` as REQ-SHELL-118's exception to "a second notice replaces".
+
+**The reserved token's launch carries the parent's sandbox switch (2026-09-28, R-062).** Three defect notes repaired
+in `apps/desktop` and `packages/ui`; one moved a process fact. The reserved token's launch of the application's own
+executable (REQ-MCP-033) now carries `--no-sandbox` when the parent was started with it, between the token and `--`
+(the token stays first; a first build that put it before the token is superseded), and main forks the run host with the
+same switch so the launch builder reads it off its own argv; the sentinel drops it before the separator. `@rotaris/platform` gains `chromium-switches.ts` (no new edge: main and the run host already import
+platform). **OQ-82** holds the reading (OQ-76 on its branch, renumbered at the merge). The **process view**'s bundled-runtime paragraph names it; no package, channel,
+message kind, command or store column changed. The About caption's type token and `settings-proof`'s computed-size
+probe changed no view.
+
+**`inherited_context` reaches the child (REQ-TOOLS-152, REQ-TOOLS-154 item (5), REQ-ORCH-032; repaired 2026-09-28,
+R-062).** A `delegate` call's `inherited_context` ids were stored on the child's row and read by nothing. `ChildLedger.spawn`
+now resolves them: an id no task in the session has (the root execution record included, REQ-ORCH-072) refuses the call
+with no record (REQ-TOOLS-153's `rejected`), one naming a task that has not completed — the root, the caller's own task, a
+failed, cancelled, unfinished or report-less one — is ignored, and the caller's completed children come back on
+`Spawned.inherited`. `IterationChildren.delegate` renders their `reportBlock`s under one heading
+(`notify.ts`'s `inheritedContextBlock`) and remembers the text per task id on `attached`'s terms; `childPayload` takes it
+as a sixth argument and places it as item (5), after the artifact blocks and before the task. The **runtime view** §4
+gains a paragraph; the **state-ownership view** gains the remembered block as a volatile fact. Another parent's completed
+child refused for ownership is OQ-81 (OQ-76 on its branch, renumbered at the merge). No package, edge, process, channel, message kind or store column changed.
+
+**A prerelease's installer is named from the declared version (2026-09-28, R-062).** `pnpm package` now reads the manifest's
+`version` as written (`0.1.0rc1`), renders the installer's name through `tools/release-naming` and writes it as a literal into
+the configuration electron-builder runs with (`release/electron-builder.package.yml`); `electron-builder.yml` carries no
+`artifactName`, whose `${version}` was the normalised `0.1.0-rc1`. `build-hooks.cjs` compares the configured names and, in a
+new `artifactBuildCompleted` hook, the produced file against the same text. The **process view**'s row for the manifest's
+`version` gains `pnpm package` among its readers, and the **component view**'s section on the scripts' shared modules gains
+`scripts/lib/artifact-names.mjs`, which both scripts load and which reaches `tools/release-naming`. No package, edge,
+process, channel, message kind or store column changed.
+The installer's own Windows metadata stays normalised — OQ-80.
+
+**One machine-wide directory for both discoveries, and a strict decode at the port (REQ-WORKSPACE-045, 051, 053; built
+2026-09-28, R-062).** `SkillRootsEnv` gains `machineDir`, so REQ-WORKSPACE-051's fourth user-scope root is
+`<machineDir>/skills` where it was the literal `/etc/codex/skills`; the literal now lives once, in
+`config/src/skills/roots.ts` (`MACHINE_CODEX_DIR`, `machineCodexDir`), and `PD-WORKSPACE-002`'s instruction base reads
+it from there. The run host's existing `SkillHostDeps.machineDir` now reaches `discoverSkills` too, fed by
+`ROTARIS_CAPTURE_SKILLS_MACHINE ?? ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE` under `__ROTARIS_SEAMS__`. `NODE_DISCOVERY_PORTS.readFile`
+decodes with a fatal `TextDecoder`, so a file that is not UTF-8 reaches the unreadable-file arm of every walk that shares
+the port (OQ-79 for a `SKILL.md`). The **runtime view**'s §1 passage on the machine-wide base and its §7 Instructions
+bullet name both. No package, edge, process, channel, command, message kind or store column changed.
+
+**After one unanswered approval, a run treats the user as away (`PD-TOOLS-005`, built 2026-09-28, R-062).** One holder
+per run, `UserPresence` (`engine/run/presence.ts`), installed by `Sessions.start` and every continuation beside the mode
+override and handed to every agent's port through `ToolPortContext.presence`, a delegated child's included. The gate
+(`GateDeps.presence`, passed by `run-host/tools.ts`) marks it when a brokered wait ends by timeout and, while it is
+marked, resolves every ask that would prompt at once under the headless policy with a reason naming the timeout that
+expired; the user returns on the first input to the run's session, wired at the top of `Sessions.control` and in its
+`clearTranscript` branch, in `controlAsync` and in the id-routed answers. The **runtime view** gains a clause in §3 and a
+paragraph after §5's table; the **sequences view** gains one bullet in §2; the **state-ownership view** gains a volatile
+row for the run's away mark — owned by the run host, set only by the gate's timeout arm, cleared only by `Sessions`'
+input arms, never persisted. No package, edge, process, channel, message kind or store column changed;
+the two transitions are session-log lines because the timeline vocabulary has no word for them (OQ-76).
+
+**Hook faults reach the application log (defect repair, 2026-09-28, R-062).** `HookPortContext.log` and `HookSinks.log`
+were documented "the application log only" and wired by `Sessions` to the per-session log at `INFO`, where the
+`WARNING` default of `session_log_level` dropped them, so a hook fault that reduces to a log entry (REQ-HOOKS-079/128/129)
+and the run host's account of an unresolvable hook set (REQ-HOOKS-085) were recorded nowhere at the default
+configuration. `SessionsDeps` gains `log`, the application log at `info` (PD-MONITOR-002), which the run host fills with
+its `log` event; both hook-port construction sites write through it. `CheckpointPortContext.log` is decided the other
+way and says so: it stays the per-session log, since `run-host/checkpoints.ts` already writes every checkpoint line to
+the application log through `CheckpointRootDeps.log` as well. The **process view**'s application-log paragraph gains
+the sentence. No package, edge, process, channel, message kind or store column changed.
+**Three permission-gate defects repaired (2026-09-28, R-062).** The path scope of REQ-TOOLS-018 joins each path argument
+to the workspace root before the resolver, so a workspace-relative read no longer resolves against the run host's process
+directory; `realPathOf` rebuilds a relative path's missing tail with `basename` and drops no character; and PD-TOOLS-004's
+`publicTool` predicate now decides whether a rule's tool set holds a call (`toolSetHolds` in `agent-tools/src/policy.ts`)
+and whether the plan gate withholds it (`withheldUnderPlanGate(name, isPublicTool)`, passed `false` by the run host's MCP
+loop and by the gate for a name it serves with something other than the public tool or removed itself), so an MCP tool
+offered under a public name is ruled as the undeclared tool it is. The **sequences view** §2 gains two sentences on the
+approval bullet and the **runtime view**'s MCP-surface passage one clause; no package, edge, process, channel, message
+kind or store column changed.
+
 **A session approval of a file write covers that path (`PD-TOOLS-004`, built 2026-09-27, R-057).** A grant made by
 "approve for session" on a call of the public `write_file` or `haet_edit` (`haet` folded in) now stores the set of
 paths its REQ-TOOLS-018 path arguments resolved to, against the workspace root, when it was made, and matches a later

@@ -13,8 +13,8 @@
  *   2. instructions — the same workspace with `AGENTS.md` and `AGENTS.override.md` on disk: two rows, in the
  *                     requirement's order, source `workspace`, described by absolute path; the first row's switch
  *                     is turned off and saved, and the `instructions.overrides` policy lands in the file
- *                     (PD-WORKSPACE-002). The home-relative bases resolve into a scratch home, so the operator's
- *                     own files never reach the inventory.
+ *                     (PD-WORKSPACE-002). The home-relative bases resolve into a scratch home and the machine-wide
+ *                     base into a scratch directory, so the operator's own files never reach the inventory.
  *   3. display      — the Display category: the four caps moved, the save bar going dirty and back to saved, the
  *                     file written under REQ-CONFIG-172's key names with unlimited as `0`, and the two desktop
  *                     preferences written the moment they move.
@@ -41,7 +41,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmdirSync, rmSync, wr
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cleanEnvironment, proofIsolationEnv } from './lib/harness.mjs';
+import { cleanEnvironment, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
 import { ABOUT_ASSETS } from './lib/about-assets.mjs';
 import { produce, put, restore, stage } from './lib/staged-resources.mjs';
 import { REDIRECTING } from '../../../tools/build-id/build-id.mjs';
@@ -73,7 +73,7 @@ if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${ele
 
 const PROBES = [
   '.app-shell', '.save-bar__status', '[data-testid="about-row"]', '[data-testid="legal-link"]',
-  '[data-testid="legal-error"]', '[data-testid="licenses-caption"]', '[data-testid="licenses-error"]',
+  '[data-testid="legal-error"]', '[data-testid="licenses-caption"]', '[data-testid="licenses-error"]', '.about__value',
   '[data-testid="inventory-row"]', '[data-testid="inventory-empty"]', '[data-testid="instruction-toggle"]',
   '[data-testid="tool-result-lines"]', '[data-testid="tool-input-lines"]',
   '[data-testid="show-tool-results"]', '[data-testid="show-tool-inputs"]',
@@ -83,7 +83,8 @@ const PROBES = [
 
 function launch(name, workspace, local, preferences, extra, timeoutMs = 120_000) {
   const png = join(output, `${name}.png`);
-  const args = [join(app, 'out', 'main', 'index.js')];
+  // `hostSwitches`: as root Chromium starts only with `--no-sandbox`; on every other host the list is empty.
+  const args = [join(app, 'out', 'main', 'index.js'), ...hostSwitches];
   if (workspace !== null) args.push(workspace);
   const result = spawnSync(electron, args, {
     cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
@@ -91,8 +92,11 @@ function launch(name, workspace, local, preferences, extra, timeoutMs = 120_000)
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ROTARIS_CAPTURE_PROBE: PROBES.join(';;'), ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
       // PD-WORKSPACE-002: the scratch home for instruction-file discovery, so this proof exercises the
-      // home-relative bases without reading the operator's own files (the skills proof's seam pattern).
+      // home-relative bases without reading the operator's own files (the skills proof's seam pattern), and the
+      // scratch machine-wide directory for the same reason: an `/etc/codex/AGENTS.md` on the host would otherwise be
+      // a third row in the exact Instructions inventory below, and an `/etc/codex/skills` entry would reach the run.
       ROTARIS_CAPTURE_INSTRUCTIONS_HOME: home,
+      ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE: machine,
       ...extra,
     },
   });
@@ -116,9 +120,11 @@ const workspace = join(root, 'workspace');
 const local = join(root, 'local');
 const preferences = join(root, 'preferences');
 const home = join(root, 'home');
+const machine = join(root, 'machine-codex');
 mkdirSync(workspace, { recursive: true });
 mkdirSync(local, { recursive: true });
 mkdirSync(home, { recursive: true });
+mkdirSync(machine, { recursive: true });
 mkdirSync(join(workspace, '.rotaris'), { recursive: true });
 const configFile = join(workspace, '.rotaris', 'agents.yaml');
 writeFileSync(configFile, [
@@ -188,7 +194,6 @@ const aboutRows = Object.fromEntries(rows(noWorkspace.probes, '[data-testid="abo
 // (`tools/release-guard`), never Electron's own — this unpacked build read "v44.1.1" until `main/version.ts`.
 const declaredVersion = JSON.parse(readFileSync(join(app, 'package.json'), 'utf8')).version;
 if (aboutRows.Version !== `v${declaredVersion}`) throw new Error(`the Version row read "${aboutRows.Version}", not the declared v${declaredVersion}`);
-if (!/^v\d/.test(aboutRows.Version ?? '')) throw new Error(`the Version row did not carry a version: ${JSON.stringify(aboutRows)}`);
 // REQ-SHELL-140: with no build asset where the app reads it, the row is the em dash rather than an invented identifier.
 if (aboutRows.Build !== '—') throw new Error(`the Build row was "${aboutRows.Build}", not the em dash`);
 if (aboutRows.Publisher !== 'Concrete Dynamics UG (haftungsbeschränkt)') throw new Error(`the publisher row was "${aboutRows.Publisher}"`);
@@ -205,8 +210,14 @@ if (text(noWorkspace.probes, '[data-testid="legal-error"]').length !== 0) throw 
 // REQ-SHELL-142: with no bundle where the app reads it, the caption says so and the click is refused.
 const caption = text(noWorkspace.probes, '[data-testid="licenses-caption"]')[0] ?? '';
 if (caption !== 'This build does not carry a third-party license bundle.') throw new Error(`the licensing caption was "${caption}"`);
+// The caption is set at its neighbours' type token (`--rt-text-sm`, `.about__value`'s), not the browser's default: until 2026-09-28
+// it was the largest text on the page (docs/defects/fixed/the-about-pages-licence-caption-is-set-in-the-browsers-default-size.md).
+const captionSize = first(noWorkspace.probes, '[data-testid="licenses-caption"]')?.fontSize;
+const valueSizes = [...new Set(rows(noWorkspace.probes, '.about__value').map((p) => p.fontSize))];
+if (valueSizes.length !== 1 || valueSizes[0] === undefined) throw new Error(`the About values did not share one computed font size: ${JSON.stringify(valueSizes)}`);
+if (captionSize !== valueSizes[0]) throw new Error(`the licensing caption is set at ${captionSize}, its neighbours at ${valueSizes[0]}`);
 if (text(noWorkspace.probes, '[data-testid="licenses-error"]')[0] !== 'Could not open the third-party license bundle.') throw new Error('clicking the bundle control reported no refusal');
-results.about = { rows: aboutRows, legal: legal.length, opened: 'https://rotaris.ai/privacy', caption };
+results.about = { rows: aboutRows, legal: legal.length, opened: 'https://rotaris.ai/privacy', caption, captionSize, valueSize: valueSizes[0] };
 
 // REQ-SHELL-140 / REQ-SHELL-142, the present branch of each (first-release-plan.md §4.4).
 const presentRows = Object.fromEntries(rows(present.probes, '[data-testid="about-row"]').map((r) => [r.data['data-name'], r.data['data-value']]));

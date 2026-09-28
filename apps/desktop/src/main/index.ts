@@ -21,7 +21,7 @@ import { mkdirSync, statSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { millis, toIsoUtc } from '@rotaris/kernel';
 import { type AcknowledgementAction, CHANNEL, CommandRequestSchema, type CommandRequest, CONTRACT_SCHEMA_VERSION, oklchToSrgb, parseOklch, resolveTheme, srgbToHex, type Theme, type HooksSummary, type ApprovalPayload, type PausePayload, type CommandOutcome, type NoticeSeverity, type ProposalStatus, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest, TERMINAL_WINDOW_ROLE, TERMINAL_AUTO_OPEN_PREFERENCE, type TerminalWindowCommand, type TerminalWindowOpened, type TerminalWindowPayload } from '@rotaris/contracts';
-import { claimInstance, inheritInstance, dataLayout, inheritedChromiumSwitches, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, type HandOver, type InstanceRecord } from '@rotaris/platform';
+import { claimInstance, inheritInstance, dataLayout, takeArtifactVariables, inheritedChromiumSwitches, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, type HandOver, type InstanceRecord } from '@rotaris/platform';
 // The updater (first-release-plan.md §4.6, ADR-0054): the pure module, and the one file of it that touches Electron.
 import { createUpdater } from './updater/updater.js';
 import { createSuccessorWait } from './updater/successor.js';
@@ -66,6 +66,17 @@ import { refusal, type ApprovalDialogState, type CommandContext, type CommandHan
  * The walking skeleton does exactly what is listed here and no product
  * behaviour beyond it.
  */
+/**
+ * REQ-STARTUP-106 / REQ-STARTUP-147 (ADR-0054, "The updater"): the variables that name the artifact this launch started
+ * from are read HERE, once, and taken out of main's own environment in the same step — before the run host or a
+ * workspace service is forked, before anything is spawned. Every child of the product inherits its environment from
+ * main's: `utilityProcess.fork` gives the run host and each workspace service main's environment as it is when they are
+ * forked, and the run host hands its own to the confinement service, the terminals, the hooks, the MCP servers and the
+ * code-intelligence branch. This is the one seam that reaches all of them, so none of them can carry this artifact's
+ * path to a Rotaris started from inside it, which would otherwise classify itself from somebody else's file. The values
+ * go to the updater's classification alone (`classifyThisInstallation(launchArtifact)` below).
+ */
+const launchArtifact = takeArtifactVariables(process.env);
 const clocks = nodeClocks();
 /** Every immediate exit goes through this: on Linux, `app.exit` over an open modal child segfaults (`exit.ts`). */
 const exitCleanly = (code: number): void => exitAfterChildWindows({ windows: () => BrowserWindow.getAllWindows(), exit: (c) => app.exit(c), timers: clocks.timers, nextTurn: (fn) => setImmediate(fn) }, code);
@@ -394,7 +405,7 @@ async function main(): Promise<void> {
    * network, the disk or a process; everything else is decided in its tests.
    */
   const updaterPorts = createUpdaterPorts();
-  const classification = await classifyThisInstallation();
+  const classification = await classifyThisInstallation(launchArtifact);
   const updater = createUpdater({
     classification,
     runningVersion: productVersion(),

@@ -3,6 +3,7 @@ import { createWriteStream, promises as fsp } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { app, net } from 'electron';
+import type { ArtifactVariables } from '@rotaris/platform';
 import type { DownloadSink } from './download.js';
 import { classifyInstallation, parseInstallDir, type Classification } from './classify.js';
 import type { NetworkResponse, StagingArea, UpdateNetwork } from './install.js';
@@ -54,11 +55,15 @@ async function readInstallDir(): Promise<string | null> {
   });
 }
 
-/** The installation this process runs from, classified once (REQ-STARTUP-106: stable across launches, no user input). */
-export async function classifyThisInstallation(): Promise<Classification> {
+/**
+ * The installation this process runs from, classified once (REQ-STARTUP-106: stable across launches, no user input).
+ * `artifact` is what main took out of its environment at its first statement (`takeArtifactVariables`), before any
+ * child was started — never `process.env`, which no longer carries either variable by the time this runs.
+ */
+export async function classifyThisInstallation(artifact: ArtifactVariables): Promise<Classification> {
   const packaged = app.isPackaged;
   const installDir = packaged ? await readInstallDir() : null;
-  return classifyInstallation({ platform: process.platform, packaged, execPath: process.execPath, env: process.env, installDir });
+  return classifyInstallation({ platform: process.platform, packaged, execPath: process.execPath, env: artifact, installDir });
 }
 
 export interface UpdaterPorts {

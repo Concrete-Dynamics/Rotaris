@@ -598,6 +598,14 @@ so that the next release can add the updater without stranding anyone.
 > (`onRecordPassFailed`), main's wait (`updater/successor.ts`) rejects, and `Update not installed` surfaces with the
 > reason (REQ-STARTUP-121). 162 unit cases in 15 files. A successor whose 5 s bound expired while the predecessor was
 > blocked can still be passed the record after it has gone — filed in `../defects/`, not repaired.
+>
+> **Repaired the same day: the artifact variables stay with their launch.** `APPIMAGE` and `ROTARIS_PORTABLE_ARTIFACT`
+> stayed in main's environment and reached every child — observed in the built app, a scripted terminal call's shell
+> carried both — so a Rotaris started from inside a portable's terminal would have classified itself from the other
+> artifact's file. Main's first statement now takes both out of its own environment and hands them to the
+> classification alone (`takeArtifactVariables`, `packages/platform`; ADR-0054 "The updater" item 6). `pnpm updater-proof`
+> gains a second launch that reads a tool shell's environment, 11 checks. **Raised:** OQ-90 (REQ-STARTUP-147 names no
+> variable removed from a child; REQ-HOOKS-032's "exactly the environment the application itself was started with").
 
 **4.7 The manifest, the signature and the key record.** The pipeline writes and signs these:
 

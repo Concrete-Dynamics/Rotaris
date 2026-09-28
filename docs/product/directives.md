@@ -1769,6 +1769,16 @@ are not recorded, and cannot be recovered afterwards.
 > teardown at quit and `utilityProcess.kill()` reported 0. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **2026-09-28, under [R-062](requests.md#r-062):** the one obliged surface the note above left outside this log is
+> inside it. The hook engine's `log` sink and the run host's account of an unresolvable hook set (REQ-HOOKS-085) now
+> reach `Sessions` as its new `SessionsDeps.log`, which the run host fills with its `log` event at `info`, so REQ-HOOKS-138's
+> hook lines are written at the default threshold and the per-session log no longer receives them. The checkpoint port's
+> `log`, which said nothing about which log it meant, is documented as the per-session log, because its root already
+> writes every checkpoint line to this log through a channel of its own. Measured by unit tests against the store, not on
+> a driven run with a failing hook. The note is moved to
+> [`hook-faults-reach-only-the-session-log-at-a-level-it-drops.md`](../defects/fixed/hook-faults-reach-only-the-session-log-at-a-level-it-drops.md)
+> and the row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-tools-006"></a>

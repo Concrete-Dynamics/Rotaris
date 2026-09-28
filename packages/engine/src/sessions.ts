@@ -161,6 +161,13 @@ export interface SessionsDeps {
   readonly host: MachineId;
   readonly retentionCap: number;
   readonly warn: (message: string) => void;
+  /**
+   * The application log at `info` (PD-MONITOR-002) — the host's line, which its default threshold keeps; never the
+   * per-session log of REQ-SESSION-142. What `HookPortContext.log` and `HookSinks.log` carry ("the application log
+   * only": a hook fault that reduces to a log entry, REQ-HOOKS-079/128/129, and the account of a hook set that
+   * could not be resolved) is written through this. Absent means those lines go nowhere.
+   */
+  readonly log?: ((message: string) => void) | undefined;
   readonly mintSessionId: () => string;
   /** Decision 1 of the run-loop plan: null means no model is configured and a run is refused before it starts. */
   readonly model: ModelSetup | null;
@@ -866,9 +873,10 @@ export class Sessions {
       ? new SupervisorRegistry(sessionId, supervisorSetup.config, supervisorSetup.classifier, this.deps.clocks.timers)
       : null;
     // ADR-0015: the hook set is resolved once here, before the run exists, and is fixed for the run (REQ-HOOKS-131).
+    // REQ-HOOKS-138 / PD-MONITOR-002: the port's `log` is the application log, not the session's own.
     let hooks: HookPort | null = null;
     if (this.deps.hooks) {
-      try { hooks = this.deps.hooks({ sessionId, workspaceRoot, effectiveRoot, writer, warn, log: (m) => { log?.info(m); }, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false }); } catch (cause) { warn(`Could not resolve this run's hooks; continuing without them. (${String(cause)})`); }
+      try { hooks = this.deps.hooks({ sessionId, workspaceRoot, effectiveRoot, writer, warn, log: (m) => { this.deps.log?.(m); }, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false }); } catch (cause) { warn(`Could not resolve this run's hooks; continuing without them. (${String(cause)})`); }
     }
     const checkpoints = this.checkpointPortFor({ sessionId, workspaceRoot, effectiveRoot, isolated: opts.worktree !== undefined, dal, writer, warn, log: (m) => { log?.info(m); } });
     // REQ-ORCH-005/016: the pre-flight's grant reaches the entry role's tool port; the ports are created after the pre-flight ran.
@@ -1004,7 +1012,8 @@ export class Sessions {
     const runRef: { run?: Run } = {};
     let hooks: HookPort | null = null;
     if (this.deps.hooks) {
-      try { hooks = this.deps.hooks({ sessionId, workspaceRoot, effectiveRoot, writer: s.writer, warn, log: (m) => { s.log?.info(m); }, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false }); } catch (cause) { warn(`Could not resolve this continuation's hooks; continuing without them. (${String(cause)})`); }
+      // REQ-HOOKS-138 / PD-MONITOR-002: the port's `log` is the application log, not the session's own.
+      try { hooks = this.deps.hooks({ sessionId, workspaceRoot, effectiveRoot, writer: s.writer, warn, log: (m) => { this.deps.log?.(m); }, planGateHeld: () => runRef.run?.isPlanGateHeld ?? false }); } catch (cause) { warn(`Could not resolve this continuation's hooks; continuing without them. (${String(cause)})`); }
     }
     // REQ-GIT-051: numbering continues across a resume — the port reads the rows and the refs at each capture.
     const checkpoints = this.checkpointPortFor({ sessionId, workspaceRoot, effectiveRoot, isolated: effectiveRootOf(storedRow).binding !== null, dal: s.dal, writer: s.writer, warn, log: (m) => { s.log?.info(m); } });

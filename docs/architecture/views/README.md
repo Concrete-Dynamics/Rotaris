@@ -57,46 +57,47 @@ the warning; no package, edge, process, channel or command changes.
 **The handoff's artifact is the root's own (`PD-ORCH-005` revision 4 clause 20, 2026-09-28, R-064).**
 `latestArtifactText` takes the latest artifact the most recent recorded iteration's root published that nothing
 supersedes, known by the root's task id as the record's `conversation_id`, and falls back to the latest of any kind
-(OQ-79) — also when a plan cycle opened its gate after that iteration, so the plan gate's approve and revise never
-hand over an earlier piece of work's document ahead of the plan cycle's; the plan cycle `PD-ORCH-003` revision 2 holds
-after a resumed iteration is taken the same way, so there the resumed root's document counts only as "of any kind"
-(OQ-79). It is read once, at the continue: a later iteration of the same run is re-sent it as it stood then. The
-**runtime view**'s continuation paragraph is updated. No package, edge, process, channel, command or
-store table changes, so the other views are not.
+(OQ-79) — also when a plan cycle opened its gate after that iteration, so the plan gate's approve and revise never hand
+over an earlier piece of work's document ahead of the plan cycle's; the plan cycle `PD-ORCH-003` revision 2 holds after
+a resumed iteration is taken the same way, so there the resumed root's document counts only as "of any kind" (OQ-79). It
+is read once, at the continue: a later iteration of the same run is re-sent it as it stood then. The **runtime view**'s
+continuation paragraph is updated. No package, edge, process, channel, command or store table changes, so the other
+views are not.
 
 **One paused child is cancellable while its session rests (`PD-ORCH-005` clause 16, revision 4, 2026-09-28, R-064).**
-`session.control`'s `cancelAgent` reaches `Sessions.cancelPausedAtRest` when no run is behind the session: the child
-and each `paused` descendant end `cancelled` with the live cancel's report, timeline entry and artifact, the iteration
-stays open, and `resumable` drops. A child a crash not yet recorded left unfinished, and each such descendant, is
-cancelled from the state it is stored in, its calls the crash cut off answered as interrupted; the crash itself is left
-for the next repair or continue to record (clauses 3 and 8, OQ-74). It is refused under a store failure, as every
-continue is (OQ-76). The cancel writes under the
-session's lock, taken for the write and given back, a dead local holder reaped by the `claimLockReaping` that
-`SessionWriter.open` claims through, and is refused while another live process holds it (`lockForWrite`); a target it
-refuses outright is judged before the lock is taken. Every confirmation and cascade note now names each unfinished descendant a cancel ends, live or paused (`cancelCascade`,
-OQ-73 and OQ-74), and both cancels write through one `userCancellation`. The surfaces offer a paused child's Cancel while its session rests
+`session.control`'s `cancelAgent` reaches `Sessions.cancelPausedAtRest` when no run is behind the session: the child and
+each `paused` descendant end `cancelled` with the live cancel's report, timeline entry and artifact, the iteration stays
+open, and `resumable` drops. A child a crash not yet recorded left unfinished, and each such descendant, is cancelled
+from the state it is stored in, its calls the crash cut off answered as interrupted; the crash itself is left for the
+next repair or continue to record (clauses 3 and 8, OQ-74). It is refused under a store failure, as every continue is
+(OQ-76). The cancel writes under the session's lock, taken for the write and given back, a dead local holder reaped by
+the `claimLockReaping` that `SessionWriter.open` claims through, and is refused while another live process holds it
+(`lockForWrite`); a target it refuses outright is judged before the lock is taken. Every confirmation and cascade note
+names each unfinished descendant a cancel ends, live or paused (`cancelCascade`, OQ-73 and OQ-74), and both cancels
+write through one `userCancellation`. The surfaces offer a paused child's Cancel while its session rests
 (`cancelOffered(agent, runActive, resting)`, `resting` being `runLevelResting`, the predicate the composer's count and
 the resting root share) and confirm by `cancelConfirmation` — the Workspace and a persona window through
-`AgentCancelConfirm` (`packages/ui/src/AgentCancelConfirm.tsx`, which the run's cancel on the Workspace now uses too),
-which takes no label of its own and whose call sites a source test pins, the Mission view through
-`missionConfirmation`. The
-**runtime view**'s `cancelAgent` and `children` rows and its crash paragraph, the **state-ownership view**'s rest and
-session-lock rows and the **sequences view**'s crash note name the new writer; the `iterations` and `agent_terminals`
-rows say only that the crash record is written at a repair or a continue, which the cancel is not. No package, edge,
-process, channel or command changes.
+`AgentCancelConfirm` (`packages/ui/src/AgentCancelConfirm.tsx`), which also confirms the run's cancel on the Workspace,
+takes no label of its own and has its call sites pinned by a source test, and the Mission view through
+`missionConfirmation`. The **runtime view**'s `cancelAgent` and `children` rows and its crash paragraph, the
+**state-ownership view**'s rest and session-lock rows and the **sequences view**'s crash note name the new writer; the
+`iterations` and `agent_terminals` rows say only that the crash record is written at a repair or a continue, which the
+cancel is not. No package, edge, process, channel or command changes.
 
 **A paused agent presents as paused on every agent surface (`PD-ORCH-005` clause 13, revision 4, 2026-09-28, R-064).**
 `PRESENTATION_CHILD_STATES` gains `paused` and `presentationChildState` maps the child state to it, so `AgentRecord`'s
 `presentationState` widens on the existing session-record channel. `toAgentRecord` presents the agents a crash left
 unfinished, before the crash is recorded, as the record will leave them (`crashLeftOf`, asked once per projection;
 OQ-73's departure from clause 13's last sentence) — never for a session a store failure left busy, which is not one a
-crash left and states nothing to resume (`Sessions.restingOf`, OQ-76); `runLevelAgent`
-presents the resting root `paused`, the Workspace and the Mission view asking it and `runLevelResting` through one call
-(`restingView`) with REQ-CHAT-008's recovery state (`useNeedsRecovery`, moved to `renderer/session-view.ts`), and the
-Mission view, handed that fact as `recovery`, reads no run active in it, so it offers no Pause beside the root it draws
-`paused` and labels the run REQ-CHAT-008's "Run needs recovery" rather than "Running" (`docs/defects/fixed/the-mission-view-offers-pause-and-cancel-with-no-run-behind-the-session.md`). The Overview counts paused agents on their own. The **runtime view**'s eleventh-state and
-projection paragraphs and the **state-ownership view**'s rest row are updated; no package, edge, process, channel or
-command changes.
+crash left and states nothing to resume (`Sessions.restingOf`, OQ-76); `runLevelAgent` presents the resting root
+`paused`, the Workspace, the Mission view and a persona window asking it and `runLevelResting` through one call
+(`restingView`, whose recovery argument, like `runLevelAgent`'s, is required) with REQ-CHAT-008's recovery state
+(`useNeedsRecovery`, moved to `renderer/session-view.ts`; the two renderer roots' wiring is pinned by
+`renderer/recovery-wiring.test.ts`), and the Mission view, handed that fact as `recovery`, reads no run active in it, so
+it offers no Pause beside the root it draws `paused` and labels the run REQ-CHAT-008's "Run needs recovery" rather than
+"Running" (`docs/defects/fixed/the-mission-view-offers-pause-and-cancel-with-no-run-behind-the-session.md`). The
+Overview counts paused agents on their own. The **runtime view**'s eleventh-state and projection paragraphs and the
+**state-ownership view**'s rest row are updated; no package, edge, process, channel or command changes.
 
 **A quit ends a board run as a quit, and clause 15's audit re-cites the stop and the cancel (`PD-ORCH-005` clauses 15
 and 19, `PD-CHAT-001` revision 4, `PD-CHAT-002` revision 2, 2026-09-28, R-064).** Main's board coordinator ends its runs

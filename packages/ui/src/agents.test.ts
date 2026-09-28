@@ -25,19 +25,19 @@ describe('agents — the shared selection (REQ-MONITOR-042) and the run-level ag
   });
   it('the run-level agent is the entry role: live while the run is busy, its own tool calls the session total less the children, no record-carried context', () => {
     const entry = { persona: 'orchestrator', model: 'scripted/alpha', reasoning: 'high', tools: ['delegate', 'read_file'] };
-    const r = runLevelAgent(session({ agents: [agent({ toolCalls: 2 })] }), entry)!;
+    const r = runLevelAgent(session({ agents: [agent({ toolCalls: 2 })] }), entry, false)!;
     expect(r).toMatchObject({ id: RUN_AGENT_ID, name: 'orchestrator', persona: 'orchestrator', presentationState: 'running', live: true, toolCalls: 3, model: 'scripted/alpha', reasoning: 'high', grantedTools: ['delegate', 'read_file'], contextUsed: 0, contextLimit: DEFAULT_CONTEXT_CAPACITY, completedAt: null });
-    expect(runLevelAgent(session({ executionStatus: 'completed' }), entry)).toMatchObject({ presentationState: 'done', live: false, completedAt: '2026-09-05T10:05:00.000Z' });
-    expect(runLevelAgent(session({ executionStatus: 'failed' }), entry)?.presentationState).toBe('failed');
-    expect(runLevelAgent(session({ executionStatus: 'paused' }), entry)?.presentationState).toBe('cancelled');
-    expect(runLevelAgent(session({ runStartedAt: null }), entry)).toBeNull();
-    expect(runLevelAgent(null, entry)).toBeNull();
+    expect(runLevelAgent(session({ executionStatus: 'completed' }), entry, false)).toMatchObject({ presentationState: 'done', live: false, completedAt: '2026-09-05T10:05:00.000Z' });
+    expect(runLevelAgent(session({ executionStatus: 'failed' }), entry, false)?.presentationState).toBe('failed');
+    expect(runLevelAgent(session({ executionStatus: 'paused' }), entry, false)?.presentationState).toBe('cancelled');
+    expect(runLevelAgent(session({ runStartedAt: null }), entry, false)).toBeNull();
+    expect(runLevelAgent(null, entry, false)).toBeNull();
   });
 });
 
 describe('agents — the inspector follows the latest author (REQ-MONITOR-053/054/056)', () => {
   const helper = agent({});
-  const runLevel = runLevelAgent(session({ agents: [helper] }), { persona: 'orchestrator', model: 'm', reasoning: 'medium', tools: [] })!;
+  const runLevel = runLevelAgent(session({ agents: [helper] }), { persona: 'orchestrator', model: 'm', reasoning: 'medium', tools: [] }, false)!;
   it('scans backwards past user, system, intent, verifier and unknown rows to the latest known agent', () => {
     const rows = [
       row({ index: 0, kind: 'user', body: 'go' }),
@@ -158,19 +158,20 @@ describe('agents — PD-ORCH-005 clause 13 (revision 4): a paused agent presents
   const resumable = { iteration: 1, agents: 2 };
   it('the run-level agent of a session resting with an iteration open presents `paused`, not live and not ended — the root the Continue action counts', () => {
     for (const executionStatus of ['paused', 'interrupted']) {
-      expect(runLevelAgent(session({ executionStatus, resumable }), entry)).toMatchObject({ state: 'paused', presentationState: 'paused', live: false, completedAt: null });
+      expect(runLevelAgent(session({ executionStatus, resumable }), entry, false)).toMatchObject({ state: 'paused', presentationState: 'paused', live: false, completedAt: null });
     }
     // REQ-CHAT-008's recovery state: only the caller knows no run is behind the busy status.
     expect(runLevelAgent(session({ executionStatus: 'running', resumable }), entry, true)).toMatchObject({ presentationState: 'paused', live: false, completedAt: null });
     // A live run holds its iteration open too, and presents running; a rest with nothing open presents as before.
-    expect(runLevelAgent(session({ executionStatus: 'running', resumable }), entry)).toMatchObject({ presentationState: 'running', live: true });
-    expect(runLevelAgent(session({ executionStatus: 'paused', resumable: null }), entry)?.presentationState).toBe('cancelled');
-    expect(runLevelAgent(session({ executionStatus: 'completed', resumable }), entry)?.presentationState).toBe('done');
+    expect(runLevelAgent(session({ executionStatus: 'running', resumable }), entry, false)).toMatchObject({ presentationState: 'running', live: true });
+    expect(runLevelAgent(session({ executionStatus: 'paused', resumable: null }), entry, false)?.presentationState).toBe('cancelled');
+    expect(runLevelAgent(session({ executionStatus: 'completed', resumable }), entry, false)?.presentationState).toBe('done');
   });
-  it('the inspector\'s meta line names it; it is not live, so it offers no steer', () => {
+  it('the inspector\'s meta line names it; it is not live, so it offers no steer, and its Cancel is clause 16\'s alone', () => {
     const paused = agent({ id: 'bg_00000002', parentId: 'bg_00000001', state: 'paused', presentationState: 'paused', live: false, interruption: 'stop' });
     expect(metaLine(paused, null)).toBe('paused · — · 2 tool calls');
-    expect(inspectorEnablement('paused')).toEqual({ steer: false, cancel: true, popOut: true });
+    // REQ-MONITOR-063's live-agent rule offers a paused agent nothing but Pop out; `cancelOffered` decides its Cancel.
+    expect(inspectorEnablement('paused')).toEqual({ steer: false, cancel: false, popOut: true });
   });
 });
 

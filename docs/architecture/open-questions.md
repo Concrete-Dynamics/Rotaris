@@ -3594,11 +3594,12 @@ message.
   task of that request's text pending, or in progress and held by the open iteration (its own task, or a message it
   holds) — a continue's message a resumed iteration left pending or holds, or any request whose task a rest put back —
   they append none, and the run takes that task up as it stands. A request whose task is complete or abandoned is
-  appended as before, and so is one whose task is in progress with no iteration holding it: a selection takes only
-  pending tasks, so nothing would take that task up, and the run would end at once with the request not done. A message
-  a closed iteration still holds (see "What a death leaves") is judged as the run will take it: it is settled first, as
-  the run settles it before it selects, so one returned to pending is not appended a second time and one completed is
-  appended as any completed request is. A continue by message is never judged so: it states a request, so it appends
+  appended as before — a `paused` session holds its last request complete when its pause or stop was accepted after
+  its iteration closed (OQ-76, "Nothing open to resume") — and so is one whose task is in progress with no iteration
+  holding it: a selection takes only pending tasks, so nothing would take that task up, and the run would end at once
+  with the request not done. A message a closed iteration still holds (see "What a death leaves") is judged as the run
+  will take it: it is settled first, as the run settles it before it selects, so one returned to pending is not
+  appended a second time and one completed is appended as any completed request is. A continue by message is never judged so: it states a request, so it appends
   its task even when a task of the same text is still pending (REQ-ORCH-004), and the request is worked once for each
   time it was sent (pinned by the iteration lane's sixth review). *The fourth build judged such a message unheld, so a Continue action after the
   death appended it beside the task the run then returned to pending, and the run worked it twice (found by the iteration lane's
@@ -3670,15 +3671,21 @@ say what the decline's wording means before the crash is recorded.
   manually paused session does. `continue` and `double` continue it; `cancel` leaves it as it is.
 - **Nothing open to resume.** A crash-left session with no open iteration draws the two continues where the send pill
   stood, with no count and no decline, as a `paused` session with nothing to resume does. Its Continue action continues
-  the last request, which is REQ-MONITOR-125's "resumed from the composer". A `paused` session with nothing open always
-  holds that request unfinished, because a pause that found nothing unfinished puts its task back to pending, so OQ-75's
-  no-append rule keeps its Continue from appending it again. A crash is different. If the host dies after an iteration
-  closed `succeeded` and before the run's teardown settled the status, the session is left busy with nothing open and
-  its last request `complete`. Clause 18's "as a `paused` session does" has no counterpart for that. The build appends
-  the finished request again as a new task (REQ-ORCH-004: OQ-75's rule covers only a request held unfinished), and a
-  new iteration re-works a request that already succeeded. The message-limit resolution does not reach this state,
-  because a crash-left session is not at the limit. Measured in `run/crash.test.ts`, "…nothing open and the last request
-  finished…", for the recovery state and for `interrupted`.
+  the last request, which is REQ-MONITOR-125's "resumed from the composer". Where the todo holds that request
+  unfinished, OQ-75's no-append rule keeps the Continue from appending it again. It does not always hold it unfinished.
+  If the host dies after an iteration closed `succeeded` and before the run's teardown settled the status, the session
+  is left busy with nothing open and its last request `complete`. A `paused` session reaches the same state with no
+  crash: a pause or a stop the run accepts after the iteration closed, while its checkpoint is captured, its
+  `iteration_end` hooks fire or its events drain, is met at the loop head, which comes to rest before the stop
+  conditions run. Only a pause or a stop accepted during the turn puts the iteration's task back to pending. On either
+  route the build appends the finished request again as a new task (REQ-ORCH-004: OQ-75's rule covers only a request
+  held unfinished), and a new iteration re-works a request that already succeeded, so the crash-left session does here
+  what a `paused` one does, as clause 18 has it. The message-limit resolution does not reach this state: a crash-left
+  session is not at the limit, and the pause and the stop leave `paused`, not `paused_message_limit`. Measured in
+  `run/crash.test.ts`: "…nothing open and the last request finished…", for the recovery state and for `interrupted`,
+  and "…accepted after the iteration closed…", for a pause and for a stop. *Until the merged build's sixth review
+  round this bullet said no `paused` session reaches the state, so clause 18's "as a `paused` session does" had no
+  counterpart for it, and the ruling question below named the crash-left session alone.*
 - **No pause statement.** "Paused. Run controls need the run continued…" stays on a paused session only. A crash-left
   session is not paused, and its run state already says what it is (REQ-CHAT-008's "Run needs recovery", or the
   interrupted presentation). REQ-CHAT-006's chip reason in the recovery state is left as it stands. The Continue action
@@ -3701,9 +3708,10 @@ say what the decline's wording means before the crash is recorded.
 confirmation, rather than refused. Whether a crash-left session should state something of its own in the notices row,
 where a paused session states its pause. Whether a crash that left a durable hold should offer anything beyond that
 hold's own continues. Whether the composer should withhold the continues on a session the store's failure left busy,
-rather than draw them and have the engine refuse them. Whether the Continue action on a crash-left session with nothing open and its last request
-finished should re-run that request as built, append nothing and run nothing, or not be offered at all, which would
-narrow clause 18's "SHALL offer".
+rather than draw them and have the engine refuse them. Whether the Continue action on a session with nothing open and
+its last request finished — crash-left, or `paused` by a pause or a stop accepted after its iteration closed — should
+re-run that request as built, append nothing and run nothing, or not be offered at all, which for the crash-left
+session would narrow clause 18's "SHALL offer".
 
 **OQ-77 — Where does the gate hold a run that resumed an iteration, and what does that plan cycle plan?** *(`PD-ORCH-003` revision 2, with `PD-ORCH-005` clause 18; REQ-ORCH-152, which the directive narrows, and REQ-ORCH-021, REQ-ORCH-067, REQ-ORCH-069, REQ-ORCH-073, REQ-ORCH-085, REQ-ORCH-153 and REQ-ORCH-154, which it does not name. Raised 2026-09-28 by building `PD-ORCH-003` revision 2 under [R-064](../product/requests.md#r-064).)*
 

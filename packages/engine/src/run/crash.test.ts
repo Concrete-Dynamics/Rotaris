@@ -6,7 +6,8 @@ import { FakeClock, mintMachineId, ok, type MachineId, type SessionId } from '@r
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, type ChatMessage, type ModelRequest } from '@rotaris/model';
 import type { ApprovalPayload, SessionRecord } from '@rotaris/contracts';
-import { RUN_CONFIG_DEFAULTS, Sessions, SessionWriter, type Publisher, type RunConfig, type ToolPort } from '../index.js';
+import { RUN_CONFIG_DEFAULTS, Sessions, SessionWriter, type CheckpointPort, type Publisher, type RunConfig, type ToolPort } from '../index.js';
+import { decodeStoredTodo } from '../todo-view.js';
 import { recordCrash } from './crash.js';
 import { crashLeftOf, resumableOf } from '../sessions.js';
 import { conversationOf } from './record.js';
@@ -157,8 +158,9 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
     /**
      * `configured`: the process resolves each run's setup through `configure`, which reports the entry persona asked for.
      * `publisher`: where its projections publish. `alive`: REQ-GIT-093's process probe (every other process is dead).
+     * `checkpoints`: the run's checkpoint port, when a test needs to hold the run between an iteration's close and its next.
      */
-    function sessionsAs(pid: number, configured?: (entryPersona: string | undefined) => void, publisher: Publisher = NONE, alive: (pid: number) => boolean = () => false, warn: (m: string) => void = () => undefined) {
+    function sessionsAs(pid: number, configured?: (entryPersona: string | undefined) => void, publisher: Publisher = NONE, alive: (pid: number) => boolean = () => false, warn: (m: string) => void = () => undefined, checkpoints?: CheckpointPort) {
       const client = new ScriptedModelClient([]);
       const original = client.stream.bind(client);
       client.stream = (req) => { asked.push(req); client.push(answer('Answered.')); return original(req); };
@@ -173,6 +175,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         clocks: clock, publisher, pid, host: HOST, retentionCap: 20_000, warn, mintSessionId: () => 'S-dead', isProcessAlive: alive,
         model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
         tools: () => port(),
+        ...(checkpoints ? { checkpoints: () => checkpoints } : {}),
         ...(configured ? { configure: (_ws: string, ctx: { readonly entryPersona?: string | undefined }) => { configured(ctx.entryPersona); return ok({ model: { backend: new DefaultAgentBackend(client), config }, runtime }); } } : {}),
       });
     }
@@ -380,6 +383,42 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         expect(dal.getChild(sid, 'bg_000000c2')).toMatchObject({ state: 'paused', interruption: 'crash' });
         expect([dal.getChild(sid, 'bg_000000c1')!.state, dal.getChild(sid, 'bg_000000c3')!.state]).toEqual(['cancelled', 'cancelled']);
       });
+
+      /**
+       * Clause 16 meets clause 18: a crash-left child cancelled while the session rests stays cancelled through either
+       * continue, each of which records the rest of the crash first (`Sessions.launchContinuation`) — the Continue action
+       * resumes the others, and "continue without them" ends only those still unfinished.
+       */
+      for (const state of ['recovery', 'interrupted'] as const) {
+        it(`${state}: after one child is cancelled at rest, the Continue action resumes the rest and the cancelled child stays cancelled`, async () => {
+          const sid = await crashed();
+          const next = sessionsAs(88);
+          expect(next.resume(dal, 'C:/ws', sid).ok).toBe(true);
+          if (state === 'interrupted') expect(next.checkpointListing(dal, 'C:/ws', sid).ok).toBe(true);
+          expect(cancel(next, sid, 'bg_000000c2')).toEqual({ ok: true });
+          expect(resumableOf(dal, dal.getSession(sid)!)).toEqual({ iteration: 2, agents: 3 });
+          expect(next.continueSession(sid, 'continue').ok).toBe(true);
+          expect((await next.running(sid))!.status).toBe('completed');
+          expect(['bg_000000c1', 'bg_000000c2', 'bg_000000c3'].map((id) => dal.getChild(sid, id)!.state)).toEqual(['succeeded', 'cancelled', 'succeeded']);
+          expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.state, r.outcome])).toEqual([[1, 'closed', 'succeeded'], [2, 'closed', 'succeeded']]);
+        });
+
+        it(`${state}: after one child and its descendant are cancelled at rest, "continue without them" ends only the one left and continues as a new iteration`, async () => {
+          const sid = await crashed();
+          const next = sessionsAs(88);
+          expect(next.resume(dal, 'C:/ws', sid).ok).toBe(true);
+          if (state === 'interrupted') expect(next.checkpointListing(dal, 'C:/ws', sid).ok).toBe(true);
+          expect(cancel(next, sid, 'bg_000000c1')).toEqual({ ok: true });
+          expect(resumableOf(dal, dal.getSession(sid)!)).toEqual({ iteration: 2, agents: 2 });
+          expect(next.continueSession(sid, 'continue', { withoutPaused: true }).ok).toBe(true);
+          await next.running(sid);
+          expect(dal.getIteration(sid, 2)).toMatchObject({ state: 'closed', outcome: 'cancelled', interruption: 'crash' });
+          expect(['bg_000000c1', 'bg_000000c2', 'bg_000000c3'].map((id) => dal.getChild(sid, id)!.state)).toEqual(['cancelled', 'cancelled', 'cancelled']);
+          // The crash record paused only the child the cancel left; the cancelled two were never paused.
+          expect(dal.timelineOf(sid).filter((t) => t.name === 'child_paused').map((t) => (JSON.parse(t.metadata) as { interruption: string }).interruption)).toEqual(['crash']);
+          expect(dal.iterationsOf(sid).map((r) => r.iteration)).toEqual([1, 2, 3]);
+        });
+      }
 
       it('OQ-76: a session the store\'s failure left busy is not one a crash left — its agents present as before, nothing is resumable, and the at-rest cancel is refused, writing and warning nothing', async () => {
         const sid = await crashed();
@@ -641,11 +680,10 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
 
       /**
        * OQ-76's undecided reading: a crash between an iteration closing `succeeded` and the run's teardown leaves the
-       * session busy with nothing open and the last request `complete`. No `paused` session reaches this state (a pause that
-       * finds nothing unfinished puts its task back to pending), so clause 18's "as a `paused` session does" does not say
-       * what the Continue action does here. The build continues the last request, as REQ-MONITOR-125 has it, and OQ-75's
-       * no-append covers only a request the todo holds unfinished — so the finished request is appended again and a second
-       * iteration re-works it. Pinned so that a ruling either way turns this red.
+       * session busy with nothing open and the last request `complete`. The build continues the last request, as
+       * REQ-MONITOR-125 has it, and OQ-75's no-append covers only a request the todo holds unfinished — so the finished
+       * request is appended again and a second iteration re-works it, as on the `paused` session below that reaches the
+       * same state. Pinned so that a ruling either way turns this red.
        */
       for (const state of ['recovery', 'interrupted'] as const) {
         it(`${state}, nothing open and the last request finished: the Continue action appends that request again and a new iteration re-works it (OQ-76)`, async () => {
@@ -669,6 +707,38 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
           expect(rows[1]!.todo_task_id).not.toBe(rows[0]!.todo_task_id);
           expect(rows[1]!.task).toContain('first');
           expect(userRows(sid)).toBe(before);
+        });
+      }
+
+      /**
+       * The same state reached with no crash: a pause or a stop the run accepts after an iteration closed `succeeded` —
+       * while its checkpoint is captured, its `iteration_end` hooks fire or its events drain — is met at the loop head,
+       * which comes to rest before the stop conditions run. Nothing is open, the last request is `complete`, and the
+       * session is `paused`; only a pause accepted during the turn puts the task back to pending. So the Continue action
+       * re-works the finished request here too, and OQ-76's question covers both routes. Pinned so that a ruling either
+       * way turns this red.
+       */
+      for (const op of ['pause', 'cancel'] as const) {
+        it(`a ${op === 'pause' ? 'pause' : 'stop'} accepted after the iteration closed leaves a \`paused\` session in the same state, and the Continue action re-works the request there too (OQ-76)`, async () => {
+          let entered!: () => void;
+          const capturing = new Promise<void>((r) => { entered = r; });
+          let release!: () => void;
+          const held = new Promise<void>((r) => { release = r; });
+          const port: CheckpointPort = { enabled: true, capture: async () => { entered(); await held; return { outcome: 'disabled' }; } };
+          const first = sessionsAs(77, undefined, NONE, () => false, () => undefined, port);
+          const sid = (first.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
+          await capturing;
+          expect(first.control({ op, sessionId: sid, args: {} })).toEqual({ ok: true });
+          release();
+          await first.running(sid);
+          expect(dal.getSession(sid)!.execution_status).toBe('paused');
+          expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.state, r.outcome])).toEqual([[1, 'closed', 'succeeded']]);
+          const tasks = () => decodeStoredTodo(dal.getSession(sid)!.todo).planner!.phases.flatMap((p) => p.tasks).map((t) => [t.text, t.state]);
+          expect(tasks()).toEqual([['first', 'complete']]);
+          expect(first.continueSession(sid, 'continue')).toEqual({ ok: true, value: { resumed: true, messageLimit: null } });
+          await first.running(sid);
+          expect(tasks()).toEqual([['first', 'complete'], ['first', 'complete']]);
+          expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.state, r.outcome])).toEqual([[1, 'closed', 'succeeded'], [2, 'closed', 'succeeded']]);
         });
       }
 

@@ -432,21 +432,21 @@ function continuedTaskId(dal: StoreDal, sessionId: SessionId, todo: TodoDocument
 }
 
 /**
- * REQ-SESSION-115's artifact, as PD-ORCH-005 clause 20 (revision 4) decides it: the latest artifact the iteration's root
- * published that nothing supersedes and, when the root published none, the latest artifact of any kind that nothing
- * supersedes — the child reports and the documents its agents published are where a run's work is recorded — cut to
- * the requirement's 6,000 characters. The iteration is the session's most recent recorded one, the iteration the new
- * one follows (OQ-79). Its root is known by the task id its publishes carry as their conversation, which only its own
- * tool port writes (a child's report carries the child's), never by `created_by`, which every root shares. A plan
- * cycle's root is not an iteration's (REQ-ORCH-153), so its publishes count only as "of any kind"; and when a plan cycle
- * opened its gate after the latest iteration opened (the plan gate's approve and revise, a prompt after a declined
- * plan), the new work follows that plan cycle, not the iteration, so no iteration's root is preferred and the handoff
- * takes the latest of any kind — an earlier piece of work's document never outranks what the plan cycle produced
- * (OQ-79). The plan cycle PD-ORCH-003 revision 2 holds after a resumed iteration is taken the same way, although that
- * iteration is of the same run: a resume never rewrites `opened_at`, so the resumed root's document counts only as "of
- * any kind" on the approve and revise (OQ-79). The two times are the writer's own ISO instants, so they compare as text. Its id leads, so no
- * cut reaches it (REQ-SESSION-194). A published document's summary is its body's first line and its key findings its
- * body (REQ-LIBRARY-093), so it is stated once, as its body. The repair of
+ * REQ-SESSION-115's artifact, as PD-ORCH-005 clause 20 (revision 4) decides it: the latest artifact the iteration's
+ * root published that nothing supersedes and, when the root published none, the latest artifact of any kind that
+ * nothing supersedes — the child reports and the documents its agents published are where a run's work is recorded —
+ * cut to the requirement's 6,000 characters. The iteration is the session's most recent recorded one, the iteration the
+ * new one follows (OQ-79). Its root is known by the task id its publishes carry as their conversation, which only its
+ * own tool port writes (a child's report carries the child's), never by `created_by`, which every root shares. A plan
+ * cycle's root is not an iteration's (REQ-ORCH-153), so its publishes count only as "of any kind"; and when a plan
+ * cycle opened its gate after the latest iteration opened (the plan gate's approve and revise, a prompt after a
+ * declined plan), the new work follows that plan cycle, not the iteration, so no iteration's root is preferred and the
+ * handoff takes the latest of any kind — an earlier piece of work's document never outranks what the plan cycle
+ * produced (OQ-79). The plan cycle PD-ORCH-003 revision 2 holds after a resumed iteration is taken the same way,
+ * although that iteration is of the same run: a resume never rewrites `opened_at`, so the resumed root's document
+ * counts only as "of any kind" on the approve and revise (OQ-79). The two times are the writer's own ISO instants, so
+ * they compare as text. Its id leads, so no cut reaches it (REQ-SESSION-194). A published document's summary is its
+ * body's first line and its key findings its body (REQ-LIBRARY-093), so it is stated once, as its body. The repair of
  * `the-continuation-payload-says-no-artifact-is-recorded.md` (OQ-72).
  */
 export function latestArtifactText(dal: StoreDal, sessionId: SessionId): string {

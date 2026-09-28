@@ -9,12 +9,13 @@ import { treeRows } from './AgentTree.js';
  */
 
 /**
- * REQ-MONITOR-063: Steer while running or waiting; Cancel while running, waiting or queued — and, by PD-ORCH-005 clause 16
- * (revision 4, narrowing REQ-MONITOR-063), while paused; Pop out always.
+ * REQ-MONITOR-063: Steer while running or waiting; Cancel while running, waiting or queued; Pop out always. A paused
+ * agent's Cancel, which PD-ORCH-005 clause 16 (revision 4) makes available while its session rests, is decided by
+ * `cancelOffered` before it reaches this rule, so a paused agent is offered neither here.
  */
 export function inspectorEnablement(state: AgentRecord['presentationState'] | null): { steer: boolean; cancel: boolean; popOut: boolean } {
   if (state === null) return { steer: false, cancel: false, popOut: false };
-  return { steer: state === 'running' || state === 'waiting', cancel: state === 'running' || state === 'waiting' || state === 'queued' || state === 'paused', popOut: true };
+  return { steer: state === 'running' || state === 'waiting', cancel: state === 'running' || state === 'waiting' || state === 'queued', popOut: true };
 }
 
 /**
@@ -62,7 +63,7 @@ export function runLevelResting(session: SessionRecord, recovery = false): boole
  * from Part AH's `entryContext` (REQ-MONITOR-089) — before that every root-level meter drew zero for a run that
  * spawned no child, whatever the run had actually spent.
  */
-export function runLevelAgent(session: SessionRecord | null, entry: { readonly persona: string; readonly model: string; readonly reasoning: string; readonly tools: readonly string[] }, recovery = false): AgentRecord | null {
+export function runLevelAgent(session: SessionRecord | null, entry: { readonly persona: string; readonly model: string; readonly reasoning: string; readonly tools: readonly string[] }, recovery: boolean): AgentRecord | null {
   if (!session || session.runStartedAt === null) return null;
   const resting = runLevelResting(session, recovery);
   const busy = isBusy(session.executionStatus) && !resting;
@@ -86,8 +87,8 @@ export function runLevelAgent(session: SessionRecord | null, entry: { readonly p
 /**
  * PD-ORCH-005 clauses 13 and 16 (OQ-73, OQ-74): what a surface drawing the run-level agent and a paused child's Cancel
  * asks, in one call — the run-level agent (`runLevelAgent`) and whether the session rests (`runLevelResting`), both from
- * the same REQ-CHAT-008 `recovery` fact, so the Workspace and the Mission view cannot pass it to one and not the other.
- * With no entry role known the run-level agent is null, as the Workspace draws none.
+ * the same REQ-CHAT-008 `recovery` fact, so the Workspace, the Mission view and a persona window cannot pass it to one and
+ * not the other. With no entry role known the run-level agent is null, as the Workspace draws none.
  */
 export function restingView(session: SessionRecord | null, entry: Parameters<typeof runLevelAgent>[1] | undefined, recovery: boolean): { readonly runLevel: AgentRecord | null; readonly resting: boolean } {
   return { runLevel: entry ? runLevelAgent(session, entry, recovery) : null, resting: session !== null && runLevelResting(session, recovery) };

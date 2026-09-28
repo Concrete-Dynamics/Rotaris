@@ -238,9 +238,11 @@ cancels that child and its descendants from where they stood, answers their own 
 record reaches a cancelled agent), and leaves the rest of the crash to the next repair or continue (OQ-74). A session a
 store failure left busy is not one a crash left (OQ-76).
 
-**Resuming the open iteration (PD-ORCH-005 clauses 4, 5, 7, 10; OQ-70).** Every continue — a new message, the Continue
-action, a plan decision — resumes an iteration a rest or a crash left open before anything else runs (`RunDeps.openIteration`,
-set by `Sessions.launchContinuation` once the crash record and the settle are done). That continue is set up as the
+**Resuming the open iteration (PD-ORCH-005 clauses 4, 5, 7, 10; OQ-70).** A continue by a new message and the Continue
+action resume an iteration a rest or a crash left open before anything else runs (`RunDeps.openIteration`, set by
+`Sessions.launchContinuation` once the crash record and the settle are done); "continue without them" declines it
+instead (clause 6), and a plan decision finds none open, the resumed iteration having closed before the gate held
+(PD-ORCH-003 revision 2, clause 11). That continue is set up as the
 persona the open iteration's root ran as (`configure`'s `entryPersona` → the run host's `prepareRun`, in place of
 `default_persona`, or the entry role with a warning when that persona is gone), and what the root is told — the notice
 of its background sessions, then its new message with its images — is recorded in the root's conversation there and

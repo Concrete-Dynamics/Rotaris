@@ -6,7 +6,7 @@ import type { DisplayRow } from './types.js';
  * ADR-0046 step 4, run ONCE per change of its inputs rather than once per render (REQ-CHAT-055, REQ-CHAT-154).
  *
  * The R-048 measurement round traced the built app appending to an empty transcript and to one of 1,200 rows
- * (`docs/defects/fixed/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md`). The main thread's extra
+ * (`docs/defects/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md`). The main thread's extra
  * time at depth was **script**, not layout, paint or the observer pass: every increment causes three to four
  * synchronous React renders of the pane — the increment's own, the measurement pass's (`measuredVersion`), the tail
  * pin's scroll event (`scrollTop`), and any whole-session update arriving beside it — and each of those renders

@@ -447,7 +447,7 @@ const behaviour = launch('behaviour', {
 // REQ-CHAT-055's append clause, read as that requirement fixes it: a comparison of two SHOWN-UPDATE times, taken
 // after the frame showing the update has been painted. Never a synchronous figure.
 //
-// The R-048 measurement round (docs/defects/fixed/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md)
+// The R-048 measurement round (docs/defects/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md)
 // tightened how the comparison is taken, because two passes in three with a spread wider than the effect was not a
 // verdict either way:
 //

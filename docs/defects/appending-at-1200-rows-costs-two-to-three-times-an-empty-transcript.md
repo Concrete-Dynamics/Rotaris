@@ -122,7 +122,7 @@ What is kept from this round is the falsification, as a test rather than as pros
 if one of these terms ever becomes the dominant one — which is the only condition under which the seam
 change would be worth revisiting.
 
-## Measurement round authorized — 2026-09-23 ([R-048](../../product/requests.md#r-048))
+## Measurement round authorized — 2026-09-23 ([R-048](../product/requests.md#r-048))
 
 No directive is owed: REQ-CHAT-055 is correct and the product fails it. The owner authorized the round this
 note ends on, in this order:
@@ -135,7 +135,7 @@ note ends on, in this order:
    laid out again on every append and a pin-to-bottom scroll write forcing a synchronous layout; neither is
    to be taken on a guess (`.agents/skills/debug-ui` step 8).
 
-## Not taken 2026-09-27 ([R-054](../../product/requests.md#r-054))
+## Not taken 2026-09-27 ([R-054](../product/requests.md#r-054))
 
 The owner asked for this round again under R-054, and it did not start. All three steps drive the built
 application, and the session ran in a Linux container as uid 0, where Electron will not start with Chromium's
@@ -144,7 +144,7 @@ and neither was done. So no proof was re-run, no trace was taken and no code cha
 R-048 left it, for a host that can launch the application: a Windows or Linux desktop, or a container running as
 an unprivileged user.
 
-## The round taken — 2026-09-28 ([R-062](../../product/requests.md#r-062), in R-048's order)
+## The round taken — 2026-09-28 ([R-062](../product/requests.md#r-062), in R-048's order)
 
 Host: a Linux container as uid 0, Node 24.21.0, Electron 44.1.1 (Chromium 152), the app under `xvfb-run` with
 `--no-sandbox` (`hostSwitches`), four vCPUs. The frame cadence measured in the renderer — sixty consecutive animation
@@ -272,10 +272,10 @@ since (the others are the resume's whole read, a cap or state change, and the tr
 
 **Two runs did not reach the comparison, and both were the harness's.** Run 5 was refused its session by the previous
 launch's run host, still exiting when the next launch opened the same session (pid liveness; the proof now waits for a
-launch's children — `../a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md`,
+launch's children — `a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md`,
 open, because the window is the product's too). Run 6 aborted at the geometry stage, whose first sample was an
 appointment at 3.0 s and whose live line closed at about 2.35 s — six runs of seven had caught it in exactly one sample
-(`the-geometry-stage-catches-its-live-line-in-one-sample-or-none.md`; the first sample now waits for the line).
+(`fixed/the-geometry-stage-catches-its-live-line-in-one-sample-or-none.md`; the first sample now waits for the line).
 
 **The trace, after** (run 5b's traced pair, per increment over the whole run): script **7.59 ms empty against 7.38 ms
 loaded** (from 6.83 against 8.63 before), style 1.12 against 1.05, layout 3.51 against 2.09 (forced 4.27 against
@@ -285,7 +285,10 @@ above the empty side in the pooled `sync` (0.6–1.8 ms in the three passing run
 pursued: it is the bounded projection, the replica's own upsert over the resident window and the measurement pass's
 second render — each of them work step 4 or REQ-CHAT-058 asks for.
 
-## Repaired — 2026-09-28 under R-062
+## ~~Repaired — 2026-09-28 under R-062~~ — withdrawn the same day (fix round 1, below)
+
+*Kept as written, because the fix round falsified it: the three passing runs were measured on a first form of
+`changedFrom` that drew removed rows, and six runs after its repair did not pass three in a row.*
 
 REQ-CHAT-055's append comparison passes in three consecutive runs of `transcript-proof` on Linux (runs 5b, 7 and 8
 above — the third with the geometry stage's first sample repaired, the product code identical across the three), each
@@ -297,3 +300,65 @@ the bounded form's `from` and its agreement with the whole window across a run) 
 reading the round left open — the comparison under a burst, and what "an empty transcript" is compared against — is
 **OQ-76**. The three runs' `results.json`, `append.json` and the two traces are under `.proof/transcript-proof/` of the
 last run; the earlier runs' logs and figures were kept beside the work and are summarised in the tables above.
+
+## Fix round 1 — 2026-09-28 (R-062): reopened
+
+**What the independent verifier found.** The first form of `changedFrom` fell back to the whole window only when the
+rows array got SHORTER. When the row at the first differing position had been removed and at least as many rows
+followed, it returned the next array's later index, and the bounded form kept the removed row: switching REQ-CHAT-069's
+"This task" from one agent to another drew the first agent's row inside the second's scoped transcript
+(`[row 0, row 1, row 2, row 3]` where the whole projection gives `[row 0, row 2, row 3]`), and an increment removing its
+earliest-changed row while appending kept it too. "Nothing about WHAT is projected changes here", as written above and in
+ADR-0045, was false for those shapes.
+
+**Repaired** (`projector.ts`, `project.ts`, `projector.test.ts`): the bounded form is taken only for an append past the
+previous end or a row replaced at its own index; a different index at the first differing position projects the whole
+window. A seeded walk of 600 steps over every shape the pane can be handed (appends of every kind across three agents,
+settles and growth, a kind changed in place, removals through `projectIncrement`, scope switches through `scopedRows`,
+truncations, rows paged in above) found one more in step 4 itself — a previous run stranded below the cut when a member
+was replaced by a row that no longer joins it — recorded and repaired as
+`fixed/the-bounded-projection-strands-a-run-whose-member-changed-in-place.md`. With either repair reverted the tests fail.
+Appends and settles are untouched: **31 bounded projections a launch** (of 34–36) in every launch below, as before.
+
+**The proof, re-run on the repaired form.** The first three runs aborted at the geometry stage before the comparison
+("no sample caught a live line") — a race in the stage's own first sample, repaired in the same round
+(`fixed/the-geometry-stage-catches-its-live-line-in-one-sample-or-none.md`, whose earlier diagnosis is falsified and
+kept). Then six complete runs, same host, same built product, the harness unchanged between them; the host was shared
+with other agents' Electron proofs throughout, which is noise this proof cannot remove:
+
+| run | every update, loaded vs empty | row appends | IQR empty / loaded (every update) | `sync` median, loaded vs empty | verdict |
+| --- | --- | --- | --- | --- | --- |
+| F1 | 88.2 vs 79.0 ms, +9.2 | 82.5 vs 76.2, +6.3 | 50.1 / 50.7 | 4.8 vs 4.0 | pass |
+| F2 | 94.0 vs 76.1, **+17.9** | 86.5 vs 71.0, +15.6 | 44.6 / 57.0 | 5.0 vs 3.35 | **fail** |
+| F3 | 89.2 vs 95.0, −5.8 | 83.4 vs 88.2, −4.8 | 60.4 / 60.0 | 5.45 vs 5.0 | pass |
+| F4 | 96.0 vs 85.8, +10.3 | 90.6 vs 82.4, +8.2 | 51.0 / 56.2 | 5.4 vs 4.15 | pass |
+| F5 | 89.7 vs 66.8, **+22.9** | 84.8 vs 64.6, **+20.1** | 44.5 / 54.7 | 5.8 vs 3.3 | **fail** |
+| F6 | 86.0 vs 72.2, +13.8 | 78.5 vs 69.8, +8.7 | 51.1 / 56.8 | 4.55 vs 4.0 | pass |
+
+Slack one frame at the measured cadence, 16.7 ms in every launch; 62 pooled samples a side a run. The verifier's own
+run on the first form read +4.5 / +11.0 with pooled IQRs of 94.1 and 62.3 ms. **Four passes in six, never three in a
+row**, and the loaded side above the empty side at the median in five of six (median difference over the six, every
+update: +12.1 ms). The builder's "loaded faster than empty" (−8.4, −15.1, −16.0) did not recur and is not a result.
+
+The traced pair a run, per increment over the whole run (script / layout, empty against loaded, ms):
+
+| run | script | layout | React flushes an increment |
+| --- | --- | --- | --- |
+| F1 | 6.31 / 6.04 | 2.72 / 1.81 | 3.45 / 3.52 |
+| F2 | 5.01 / 5.84 | 1.99 / 1.73 | 3.52 / 3.45 |
+| F3 | 7.35 / 6.46 | 2.50 / 1.87 | 3.45 / 3.55 |
+| F4 | 4.80 / 6.81 | 1.83 / 2.17 | 3.45 / 3.45 |
+| F5 | 6.25 / 6.13 | 2.54 / 1.80 | 3.55 / 3.58 |
+| F6 | 5.03 / 7.59 | 1.79 / 2.59 | 3.45 / 3.55 |
+
+**The state now.** The main thread's cost per increment does not grow with the rows held — script is higher on the
+loaded side in three traced pairs of six and lower in three, and layout is lower on the loaded side in four of six — which is what the repair was for and
+still holds. The pooled comparison does not pass reliably: a residual of about two thirds of a frame stands on the loaded
+side at the median, inside a spread three times the slack, and the pooled `sync` stays 0.45–2.5 ms above the empty side
+in every run. Not measured and so not claimed: whether the residual is the bounded projection, the replica's O(n) upsert
+and the measurement pass's second render (the earlier section's reasoning), or the fixtures, which are NOT reseeded
+between launches — `S0` holds 1, 18 and 35 rows before its three append launches and `S1200` 1,200, 1,217 and 1,234
+(OQ-76 names the question of what "an empty transcript" is). This note therefore stays open, with the comparison's
+reading under a burst still OQ-76's and no second repair taken on a guess (`.agents/skills/debug-ui` step 8). The six
+runs' logs, `append.json` files and traces were kept beside the work; `.proof/transcript-proof/` holds only the last.
+

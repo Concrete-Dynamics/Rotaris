@@ -31,9 +31,11 @@ record already decides, and every ruling it needs is named as the owner's rather
 - The other product gaps in `codebase.md`'s "Where the next work lands", for example providers' device-code and
   PKCE authenticators, Git integration and merge, the manual compression part, and persona memory.
 - The open notes in `../defects/`.
-- The four red proofs: ~~`transcript-proof`,~~ `library-proof`, `part-h-proof`, and `theme-proof`'s contrast section
-  (OQ-56). *`transcript-proof` passed on 2026-09-28 — REQ-CHAT-055's measurement round under R-062, three consecutive
-  runs on Linux; its note is in [`../defects/fixed/`](../defects/fixed/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md).* *Two more were measured red on 2026-09-27 while §2.2 was built, both before it and unchanged by it:*
+- The four red proofs: `transcript-proof`, `library-proof`, `part-h-proof`, and `theme-proof`'s contrast section
+  (OQ-56). *`transcript-proof` was recorded as passing on 2026-09-28 (REQ-CHAT-055's measurement round under R-062) and
+  reopened the same day: its fix round passed four runs of six, never three in a row, on Linux; the per-increment cost
+  no longer grows with depth, the pooled comparison stands about two thirds of a frame over at the median
+  ([note](../defects/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md), open; OQ-76).* *Two more were measured red on 2026-09-27 while §2.2 was built, both before it and unchanged by it:*
   `slash-proof` at its first catalogue assertion since ADR-0063
   ([note](../defects/slash-proof-expects-every-built-in-to-carry-the-action-badge.md)), and `skills-proof`'s policy
   launch on Linux only ([note](../defects/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md)).

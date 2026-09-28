@@ -560,7 +560,7 @@ The coordinate contract remains `translateY(measuredOffset)`: offsets retain the
 
 *Reported here because this record fixed the measurement point — the double `requestAnimationFrame` — and predicted that
 appending would cost the frame cadence and nothing more. The defect note
-`docs/defects/fixed/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md` holds every run and figure;
+`docs/defects/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md` holds every run and figure;
 this is what the round found about the point itself and about the recycler.*
 
 **The point measures the queue in front of an update, and the proof had been measuring a queue without knowing it.**
@@ -593,6 +593,17 @@ transcript's median shown-update time **below** the empty one's by 8.4, 15.1 and
 7.59 ms empty against 7.38 ms loaded, from 6.83 against 8.63 before. The comparison this record's first execution had
 measured passing on 2026-09-07 and the note had measured failing since 2026-09-22 passes again, and for a reason that is
 now written down rather than a figure that was not kept.
+
+**Fix round 1, the same day — the pass above is withdrawn, and kept.** The three passing runs were measured on a first
+form of the bounded projection that drew removed rows (an agent's row inside another agent's scoped transcript,
+REQ-CHAT-069; a row an increment removed at its earliest-changed index), so "nothing this record decided moved" held for
+the pool and the anchor but not for what step 4 drew. The bounded form is now taken only for an append or a row replaced
+at its own index, and step 4 projects the window when a previous run would be stranded below its cut. Six runs of the
+proof on the repaired form: every update +9.2, **+17.9**, −5.8, +10.3, **+22.9**, +13.8 ms (loaded against empty; the
+bold two fail at one frame of slack), four passes in six and never three in a row, pooled spreads of 45–60 ms. The
+per-increment main-thread cost is at parity in all six traced pairs (script 4.8–7.6 ms a side, higher on the loaded side
+in three and lower in three), so what the round found about the recycler stands; what it measured about the comparison
+does not — "the loaded transcript faster than the empty one" did not recur and is not a result. The note is open again.
 
 **What the point still does not do, unchanged:** it says a frame boundary passed after the change was committed, not
 that a frame carrying it was presented. And one reading the round surfaced is on the register rather than settled here

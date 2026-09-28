@@ -38,10 +38,10 @@ under `packages/` — the nested glossaries the context map names as well as the
 target file or directory does not exist, or when a `#fragment` names no heading (GitHub's slug, repeats numbered) and
 no explicit `<a id>` / `{#id}` in the file it points at. Links inside fenced code, inline code and HTML comments are
 text, not links, and are skipped. A failure names the file, the line, the link and the reason. Pinned by
-[`tools/check-record-links.test.ts`](../../../tools/check-record-links.test.ts) (12 cases): a fixture with one link
+[`tools/check-record-links.test.ts`](../../../tools/check-record-links.test.ts) (13 cases): a fixture with one link
 to a note at its pre-`fixed/` path and one good heading anchor, the dangling one failing with file, line and target
 and the anchor passing; a fragment naming no heading; a same-file fragment; the set of files walked; the three kinds
-of code and comment skipped with line numbers kept; a stray backtick that may not pair across a blank line; the slug rules; a repeated heading and the explicit anchors.
+of code and comment skipped with line numbers kept; a ```` ``` ```` fence and a `~~~` fence that each hold a blank line; a stray backtick that may not pair across a blank line; the slug rules; a repeated heading and the explicit anchors.
 
 **Its first execution over the whole record** (985 relative links in 361 files, on `main` at `392f681`) found **51** dangling links, not the
 seven this note had by hand — the note's own count was of the documents one branch touched. Every one is repaired,
@@ -102,4 +102,12 @@ the gate read 1015 relative links in 365 files, every one resolving.
 **Limits the review named, none met in the record today.** A footnote definition (`[^1]: text`) is read as a
 reference link. An indented (four-space) code block is not skipped. A Setext heading (text underlined with `===` or
 `---`) is not read as an anchor. A path is checked with the host's case sensitivity, so a wrongly-cased link passes on
-Windows and macOS and fails on Linux. Each would be a false failure or a false pass if the record started to use it.
+Windows and macOS and fails on Linux. Each would be a false failure or a false pass if the record started to use it. A
+fragment is also accepted when it matches a heading or anchor only after lower-casing, which is lenient against a
+case-sensitive explicit `id="…"`: a wrongly-cased fragment to one passes.
+
+**A test that proved nothing, found by the branch's third review.** The fenced-code case held a fence with no blank
+line inside it, so the inline-code rule paired its ```` ``` ```` opener with its closer and blanked the link on its own:
+with the fence rule removed from `withoutCode`, all twelve cases still passed. The thirteenth case holds a
+```` ``` ```` fence and a `~~~` fence, each with a blank line before its link, which only the fence rule can blank; it
+fails with the rule removed (both fenced links extracted) and passes with it. The gate's code did not change.

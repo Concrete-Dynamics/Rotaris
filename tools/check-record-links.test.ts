@@ -94,6 +94,27 @@ describe('check-record-links — what is not a link', () => {
     expect(links).toEqual([{ line: 6, text: 'real', target: 'missing.md' }]);
   });
 
+  it('skips a ``` fence and a ~~~ fence that hold a blank line, which inline code alone would not hide', () => {
+    // A fence with no blank line inside is hidden by the inline-code rule too (its ``` opener and
+    // closer pair as one span), so it cannot show that the fence rule works. A blank line ends a
+    // code span, and a tilde fence holds no backtick at all: only the fence rule blanks these two.
+    const text = [
+      '# T',
+      '```md',
+      '',
+      '[in a fence](missing.md)',
+      '```',
+      '~~~',
+      'x',
+      '',
+      '[tilde](missing.md)',
+      '~~~',
+      '[real](missing.md)',
+      '',
+    ].join('\n');
+    expect(extractLinks(withoutCode(text), text)).toEqual([{ line: 11, text: 'real', target: 'missing.md' }]);
+  });
+
   it('does not let a stray backtick pair across a blank line and hide the links between', () => {
     const text = ['A lone ` in one paragraph.', '', '[hidden?](missing.md)', '', 'and a ` in another.', ''].join('\n');
     expect(extractLinks(withoutCode(text), text)).toEqual([{ line: 3, text: 'hidden?', target: 'missing.md' }]);

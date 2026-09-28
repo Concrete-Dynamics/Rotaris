@@ -3380,30 +3380,34 @@ REQ-MONITOR-305's warnings surface, where a warning would naturally be listed, i
   instructions and is not named.
 - **An agent with no fingerprint** — recorded before v24, or paused before its first model step — has one recorded at
   its resumed first step and nothing is stated (REQ-SESSION-132).
-- **Stated as a warning issue and a transcript line.** A `resumed_under_changed_instructions` issue at warning severity,
-  its actor the agent's canonical name, with its timeline entry (REQ-SESSION-134/135), and one `system` row in the
-  transcript: "Agent <canonical name> (<task id>) resumed under changed instructions: its system instructions | tool
-  definitions | system instructions and tool definitions differ from the ones it started with." The issue's metadata
-  carries the task id, the iteration and which of the two changed.
-- **Every agent**, the root and every child at every depth, each under its task id. The fingerprint is part of the
-  agent's record for clause 12: it is deleted with its session, and the transcript clear removes closed iterations'
-  fingerprints with their conversations (`fingerprints_removed` in `transcript_cleared`'s metadata).
+- **Stated as a warning issue and a transcript line.** A `resumed_under_changed_instructions` issue at warning severity
+  — a kind coined by this build: the specification's issue-kind vocabulary ("Issue kinds (session diagnostics)" in
+  `docs/spec/01-run-orchestration.md`) has none for it — its actor the agent's canonical name, with its timeline entry
+  (REQ-SESSION-134/135), and one `system` row in the transcript: "Agent <canonical name> (<task id>) resumed under
+  changed instructions: its system instructions | tool definitions | system instructions and tool definitions differ
+  from the ones it started with." The issue's metadata carries the task id, the iteration and which of the two changed.
+- **Every agent**, the root and every child at every depth, each under its task id and its own iteration (the root's
+  iteration number, a child's `children.iteration`). The fingerprint is part of the agent's record for clause 12: it is
+  deleted with its session, and the transcript clear removes closed iterations' fingerprints with their conversations
+  (`fingerprints_removed` in `transcript_cleared`'s metadata), so an open iteration's are kept however many iterations
+  closed before it.
 
 **What a ruling decides.** Whether "the system instructions" should be the persona's own definition only, so a changed
 playbook, skill or MCP server does not warn; whether a warning should be stated once per change (replacing the
 fingerprint after a warned resume) rather than at every resume while it differs; and whether the warning should also
 reach REQ-MONITOR-305's warnings surface once that is built, or be stated at the continue rather than at the agent's
-first step.
+first step; and what the issue kind is called, since the specification's vocabulary has none for it.
 
 **OQ-79 — Whose root is "the iteration's root" when the handoff is built for an iteration that has not started?** *(`PD-ORCH-005` clause 20 over REQ-SESSION-115; REQ-ORCH-153, REQ-LIBRARY-093 and REQ-LIBRARY-096, which the directive does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
 
 Clause 20 makes REQ-SESSION-115's artifact "the latest artifact the iteration's root published that nothing supersedes"
-and, when the root published none, the latest of any kind. The handoff is built only when a continuation starts a new
-iteration — a new prompt, a continue that finds nothing open, "continue without them", the plan gate's approve — and
-that iteration's root has published nothing yet. The clause does not say which iteration it means. Three further edges
-meet it: a plan cycle's root (REQ-ORCH-153's iteration 0, never recorded as an iteration), a root from before the
-iterations were recorded (v23), and a later iteration of the same run, which starts from the launch content computed
-when the run began.
+and, when the root published none, the latest of any kind. Every continue builds the handoff, including one that resumes
+an open iteration, but it reaches a model only when a new iteration starts — a new prompt, a continue that finds nothing
+open, "continue without them", the plan gate's approve, or the iteration after a resumed one — since a resumed root is
+handed the new message alone; and that new iteration's root has published nothing yet. The clause does not say which
+iteration it means. Three further edges meet it: a plan cycle's root (REQ-ORCH-153's iteration 0, never recorded as an
+iteration), a root from before the iterations were recorded (v23), and a later iteration of the same run, which starts
+from the launch content computed when the run began.
 
 **What the build proceeds under.**
 

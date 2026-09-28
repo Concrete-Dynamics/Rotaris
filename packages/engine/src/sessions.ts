@@ -1591,7 +1591,10 @@ export class Sessions {
    */
   private cancelPausedAtRest(s: Live | undefined, req: ControlRequest): ControlResult {
     if (!s) return { ok: false };
-    if (storeFailureOf(s.dal, s.writer) !== null) return { ok: false };
+    // PD-ORCH-005 clause 16: the two refusals that say nothing of the agent carry the engine's words, so the renderer
+    // does not tell the user a paused child is "not cancellable" when the store or another process stood in the way.
+    const storeFailure = storeFailureOf(s.dal, s.writer);
+    if (storeFailure !== null) return { ok: false, refusal: { code: 'store_failed', message: `The workspace store requires recovery before an agent can be cancelled: ${storeFailure}` } };
     const sid = s.writer.sessionId;
     const agentId = typeof req.args['agentId'] === 'string' ? req.args['agentId'] : '';
     const row = s.dal.getSession(sid);
@@ -1609,7 +1612,7 @@ export class Sessions {
     // one copy of that rule), and refuses while another live process holds it — one that has loaded or is resuming the
     // session (OQ-74).
     const lock = this.lockForWrite(s.dal, sid, warn);
-    if (!lock) return { ok: false };
+    if (!lock) return { ok: false, refusal: { code: 'session_locked', message: 'Another process holds this session, so the agent was not cancelled.' } };
     try { return this.cancelPausedUnderLock(s, sid, agentId, row, open, warn); }
     finally { lock.release(); }
   }
@@ -1736,12 +1739,12 @@ export class Sessions {
       return ok({ resumed: false, messageLimit: limit });
     }
     // The continuation: the last user request stands and no user row is appended (REQ-MONITOR-125's "resumed from the composer").
-    // A session with nothing open and that request finished — crash-left (clause 18), `paused` by a pause or a stop accepted
-    // after its iteration closed, `paused` by a plan Cancel or a stop of the plan cycle held after a resumed iteration
-    // that carried out the continue's message (PD-ORCH-003 revision 2, OQ-77), or `paused_message_limit` by a limit reached
-    // as the iteration that finished it closed (this resolution's 'continue' and 'double') — appends it to the todo again
-    // (REQ-ORCH-004; OQ-75's no-append covers only a request held unfinished): the undecided case of OQ-76's "Nothing open
-    // to resume".
+    // A session with nothing open and that request finished — crash-left (clause 18), `paused` by a pause, a stop or
+    // the application's quit accepted after its iteration closed, `paused` by a plan Cancel, a stop or a quit of the
+    // plan cycle held after a resumed iteration that carried out the continue's message (PD-ORCH-003 revision 2,
+    // OQ-77), or `paused_message_limit` by a limit reached as the iteration that finished it closed (this resolution's
+    // 'continue' and 'double') — appends it to the todo again (REQ-ORCH-004; OQ-75's no-append covers only a request
+    // held unfinished): the undecided case of OQ-76's "Nothing open to resume".
     const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId, effectiveRootOf(stored).root, resumedPersona(s.dal, sessionId, opts.withoutPaused === true));
     if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
     const lastPrompt = [...s.dal.residentRows(sessionId)].reverse().find((row) => row.kind === 'user')?.body ?? stored.session_id;

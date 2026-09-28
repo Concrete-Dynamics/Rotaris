@@ -435,7 +435,8 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         expect(snapshot.resumable).toBeNull();
         expect(snapshot.agents.find((a) => a.id === 'bg_000000c1')).toMatchObject({ state: 'running', presentationState: 'running', interruption: null });
         const before = crashWrites(sid);
-        expect(cancel(viewer, sid, 'bg_000000c1')).toEqual({ ok: false });
+        // The refusal carries the engine's words: it is the store, not the agent, that stands in the way.
+        expect(cancel(viewer, sid, 'bg_000000c1')).toMatchObject({ ok: false, refusal: { code: 'store_failed', message: expect.stringContaining('The workspace store requires recovery before an agent can be cancelled') } });
         expect(dal.getChild(sid, 'bg_000000c1')!.state).toBe('running');
         expect(crashWrites(sid)).toEqual(before);
         expect(warned).toEqual([]);
@@ -548,6 +549,8 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         expect(viewer.resume(dal, 'C:/ws', sid).ok).toBe(true);
         dal.releaseLock(sid, 88, HOST);
         expect(dal.claimLock(sid, 99, OTHER, at()).claimed).toBe(true);
+        // Another machine's lock reads live (REQ-GIT-093), so the child is not crash-left to this process: the target is
+        // refused before the lock is asked, stating nothing of its own.
         expect(cancel(viewer, sid, 'bg_000000c1')).toEqual({ ok: false });
         expect(dal.getIteration(sid, 2)!.interruption).toBeNull();
         expect(dal.getChild(sid, 'bg_000000c1')!.state).toBe('running');
@@ -648,7 +651,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         expect(viewer.resume(dal, 'C:/ws', sid).ok).toBe(true);
         dal.releaseLock(sid, 88, HOST);
         expect(dal.claimLock(sid, 0, HOST, at()).claimed).toBe(true);
-        expect(cancel(viewer, sid, 'bg_000000c1')).toEqual({ ok: false });
+        expect(cancel(viewer, sid, 'bg_000000c1')).toEqual({ ok: false, refusal: { code: 'session_locked', message: 'Another process holds this session, so the agent was not cancelled.' } });
         expect(dal.getChild(sid, 'bg_000000c1')!.state).toBe('paused');
         expect(dal.getLock(sid)).toMatchObject({ pid: 0, host: HOST });
       });
@@ -744,15 +747,18 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       }
 
       /**
-       * The same state reached with no crash: a pause or a stop the run accepts after an iteration closed `succeeded` —
-       * while its checkpoint is captured, its `iteration_end` hooks fire or its events drain — is met at the loop head,
-       * which comes to rest before the stop conditions run. Nothing is open, the last request is `complete`, and the
-       * session is `paused`; only a pause accepted during the turn puts the task back to pending. So the Continue action
-       * re-works the finished request here too, and OQ-76's question covers every route (the plan mode's third and the
-       * message limit's fourth are pinned in `plan-gate-resume.test.ts`). Pinned so that a ruling either way turns this red.
+       * The same state reached with no crash: a pause, a stop or the application's quit (`application_shutdown`, which
+       * `classifyStop` rests as `interrupted`, PD-ORCH-005 clause 15) the run accepts after an iteration closed
+       * `succeeded` — while its checkpoint is captured, its `iteration_end` hooks fire or its events drain — is met at
+       * the loop head, which comes to rest before the stop conditions run. Nothing is open, the last request is
+       * `complete`, and the session is `paused`; only a pause accepted during the turn puts the task back to pending.
+       * So the Continue action re-works the finished request here too, and OQ-76's question covers every route (the
+       * plan mode's third and the message limit's fourth are pinned in `plan-gate-resume.test.ts`). Pinned so that a
+       * ruling either way turns this red.
        */
-      for (const op of ['pause', 'cancel'] as const) {
-        it(`a ${op === 'pause' ? 'pause' : 'stop'} accepted after the iteration closed leaves a \`paused\` session in the same state, and the Continue action re-works the request there too (OQ-76)`, async () => {
+      const restingBy = { pause: 'pause', cancel: 'stop', announceShutdown: 'quit' } as const;
+      for (const op of ['pause', 'cancel', 'announceShutdown'] as const) {
+        it(`a ${restingBy[op]} accepted after the iteration closed leaves a \`paused\` session in the same state, and the Continue action re-works the request there too (OQ-76)`, async () => {
           let entered!: () => void;
           const capturing = new Promise<void>((r) => { entered = r; });
           let release!: () => void;

@@ -184,13 +184,14 @@ describe('PD-ORCH-003 revision 2: a resumed iteration and the gate', () => {
 
   /**
    * OQ-76 "Nothing open to resume" and OQ-77 "What a cancel leaves": the third route to a `paused` session whose last
-   * request is finished. The resumed iteration closes the continue's message `complete` (PD-ORCH-005 clause 17), the run
-   * holds (PD-ORCH-003 revision 2), and a plan Cancel — or a stop during that plan cycle (clause 15) — leaves `paused`
-   * with nothing open. The Continue action then finds no unfinished task of the last request's text (OQ-75), so it
-   * appends the finished message again beside the pending work, and the next plan cycle is asked to plan it as the latest
-   * request; approved, it is worked a second time. Pinned as built, so a ruling either way turns it red.
+   * request is finished. The resumed iteration closes the continue's message `complete` (PD-ORCH-005 clause 17), the
+   * run holds (PD-ORCH-003 revision 2), and a plan Cancel — or a stop or the application's quit during that plan cycle
+   * (clause 15) — leaves `paused` with nothing open. The Continue action then finds no unfinished task of the last
+   * request's text (OQ-75), so it appends the finished message again beside the pending work, and the next plan cycle
+   * is asked to plan it as the latest request; approved, it is worked a second time. Pinned as built, so a ruling
+   * either way turns it red.
    */
-  for (const route of ['a plan Cancel', 'a stop during the plan cycle'] as const) it(`after the hold that follows a resumed iteration, ${route} and then the Continue action append the finished message again (OQ-76, OQ-77)`, async () => {
+  for (const route of ['a plan Cancel', 'a stop during the plan cycle', 'a quit during the plan cycle'] as const) it(`after the hold that follows a resumed iteration, ${route} and then the Continue action append the finished message again (OQ-76, OQ-77)`, async () => {
     let release!: () => void;
     const hold = new Promise<void>((r) => { release = r; });
     const planned = route === 'a plan Cancel' ? answer('Plan: do later.') : { parts: [{ hold }, ...answer('Plan: do later.').parts] };
@@ -201,7 +202,7 @@ describe('PD-ORCH-003 revision 2: a resumed iteration and the gate', () => {
       expect(sessions.planDecision(sid, 'cancel').ok).toBe(true);
     } else {
       for (let i = 0; i < 100 && !sessions.run(sid)!.isPlanGateHeld; i++) await new Promise((r) => setTimeout(r, 5));
-      expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+      expect(sessions.control({ op: route === 'a quit during the plan cycle' ? 'announceShutdown' : 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
       release();
       await sessions.running(sid)!;
     }

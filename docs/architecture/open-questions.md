@@ -3499,7 +3499,12 @@ only with a run behind it. The clause does not say:
   here), reaps a dead holder on this machine as loading a session does — through the one copy of that rule,
   `claimLockReaping`, which never reaps a holder whose pid is no positive integer — and is refused while another live
   process holds it — one that has loaded the session, or is resuming it — so it never writes into a session another
-  instance owns.
+  instance owns. These two refusals say nothing of the agent, so they carry the engine's words (`store_failed`: "The
+  workspace store requires recovery before an agent can be cancelled: …"; `session_locked`: "Another process holds this
+  session, so the agent was not cancelled."), which the renderer states in place of "not cancellable"; every other
+  refusal states none and keeps REQ-MONITOR-128's "not cancellable". *Until the merged build's twelfth review round
+  every refusal read "That agent is not cancellable (unknown, or already finished).", false of a paused child the store
+  or another process's lock stood in front of.*
 - **A crash not yet recorded — left to the next repair or continue.** A child a crash left unfinished, the crash not
   yet recorded (`crashLeftOf`), presents `paused` (OQ-73) and so is offered Cancel, but it is stored `running`,
   `queued` and so on. The cancel ends it, and each descendant the crash left or a rest paused, `cancelled` from the state
@@ -3627,19 +3632,19 @@ message.
   iteration (its own task, or a message it holds) — a continue's message a resumed iteration left pending or holds, or
   any request whose task a rest put back — they append none, and the run takes that task up as it stands. A request
   whose task is complete or abandoned is appended as before — a `paused` session holds its last request complete when
-  its pause or stop was accepted after its iteration closed, or when the plan cycle held after a resumed iteration that
-  carried out the continue's message was cancelled or stopped, and a `paused_message_limit` one when the limit was
-  reached as the iteration that finished it closed, a resumed one included (OQ-76, "Nothing open to resume"; OQ-77,
-  "What a cancel leaves") — and so is one whose task is in progress with no iteration holding it: a selection takes only
-  pending tasks, so nothing would take that task up, and the run would end at once with the request not done. A message
-  a closed iteration still holds (see "What a death leaves") is judged as the run will take it: it is settled first, as
-  the run settles it before it selects, so one returned to pending is not appended a second time and one completed is
-  appended as any completed request is. A continue by message is never judged so: it states a request, so it appends its
-  task even when a task of the same text is still pending (REQ-ORCH-004), and the request is worked once for each time
-  it was sent (pinned by the iteration lane's sixth review). *The fourth build judged such a message unheld, so a
-  Continue action after the death appended it beside the task the run then returned to pending, and the run worked it
-  twice (found by the iteration lane's fifth review).* *The second build counted any task in progress, which ended such
-  a continue `no_pending_tasks` (found by the iteration lane's third review); the stranded task itself is
+  its pause, stop or quit was accepted after its iteration closed, or when the plan cycle held after a resumed iteration
+  that carried out the continue's message was cancelled, stopped or quit, and a `paused_message_limit` one when the
+  limit was reached as the iteration that finished it closed, a resumed one included (OQ-76, "Nothing open to resume";
+  OQ-77, "What a cancel leaves") — and so is one whose task is in progress with no iteration holding it: a selection
+  takes only pending tasks, so nothing would take that task up, and the run would end at once with the request not done.
+  A message a closed iteration still holds (see "What a death leaves") is judged as the run will take it: it is settled
+  first, as the run settles it before it selects, so one returned to pending is not appended a second time and one
+  completed is appended as any completed request is. A continue by message is never judged so: it states a request, so
+  it appends its task even when a task of the same text is still pending (REQ-ORCH-004), and the request is worked once
+  for each time it was sent (pinned by the iteration lane's sixth review). *The fourth build judged such a message
+  unheld, so a Continue action after the death appended it beside the task the run then returned to pending, and the run
+  worked it twice (found by the iteration lane's fifth review).* *The second build counted any task in progress, which
+  ended such a continue `no_pending_tasks` (found by the iteration lane's third review); the stranded task itself is
   [`an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md`](../defects/an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md).*
   This repairs
   [`the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`](../defects/fixed/the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md),
@@ -3699,6 +3704,10 @@ say what the decline's wording means before the crash is recorded.
   nothing to resume (`Sessions.restingOf`, OQ-73), and the at-rest cancel of a child is refused, writing nothing, as
   the continues are (OQ-74). In the process whose run failed the projection is frozen at the run's last live record
   (OQ-42), whose count the composer still draws beside the two continues, with the decline, all refused the same way.
+  The projection withholds only for a busy status (`storeLeftBusy`). An `interrupted` or `paused` session whose store
+  fails while it is followed keeps its count, its decline and a paused child's Cancel, and the engine refuses each
+  (`store-failed`; the cancel's `store_failed`, whose words the surface states). Nothing is written, and the reopen is
+  the recovery, as above. Recorded at the merged build's twelfth review round.
   *Until the merged build's review the projection named such a session's agents crash-left and the cancel wrote a crash
   record against the failed writer
   ([`the-at-rest-cancel-writes-against-a-failed-store.md`](../defects/fixed/the-at-rest-cancel-writes-against-a-failed-store.md)).* *The first build accepted such a
@@ -3712,31 +3721,35 @@ say what the decline's wording means before the crash is recorded.
   unfinished, OQ-75's no-append rule keeps the Continue from appending it again. It does not always hold it unfinished.
   If the host dies after an iteration closed `succeeded` and before the run's teardown settled the status, the session
   is left busy with nothing open and its last request `complete`. A `paused` session reaches the same state with no
-  crash: a pause or a stop the run accepts after the iteration closed, while its checkpoint is captured, its
-  `iteration_end` hooks fire or its events drain, is met at the loop head, which comes to rest before the stop
-  conditions run. Only a pause or a stop accepted during the turn puts the iteration's task back to pending. A third
-  route is the plan mode's: a resumed iteration closes the continue's message `complete` (clause 17), the gate then
-  holds before the first new iteration (`PD-ORCH-003` revision 2), and a plan Cancel, or a stop during that plan cycle
-  (clause 15), leaves `paused` with nothing open and the continue's message, the last user row, finished (OQ-77, "What a
-  cancel leaves"). A fresh hold does not reach it, because the gated request's task is still pending. A fourth route is
-  the message limit's, and it needs no directive: the limit is checked as each iteration closes, before the stop
-  conditions and the gate (REQ-ORCH-085/087), so a limit reached as the iteration that finished the last request closes
-  leaves `paused_message_limit` with nothing open and that request `complete` — after a resumed iteration that carried
-  out the continue's message (clause 17), where the limit wins over the gate (OQ-77), and after any iteration that
-  finished the request its run was launched with, as at the base. The resolution's 'continue' and 'double'
-  (REQ-SESSION-110) reach `continueSession` as the Continue action does. On every route the build appends the finished
-  request again as a new task (REQ-ORCH-004: OQ-75's rule covers only a request held unfinished), and a new iteration
-  re-works a request that already succeeded, so the crash-left session does here what a `paused` one does, as clause 18
-  has it. Measured in `run/crash.test.ts`: "…nothing open and the last request finished…", for the recovery state and
-  for `interrupted`, and "…accepted after the iteration closed…", for a pause and for a stop; and in
-  `run/plan-gate-resume.test.ts`, "after the hold that follows a resumed iteration, …", for a plan Cancel and for a
-  stop during the plan cycle, and "the message-limit resolution …", for 'continue' and 'double' after a resumed
-  iteration and after a fresh run's only iteration. *Until the merged build's sixth review round this bullet said no
-  `paused` session reaches the state, so clause 18's "as a `paused` session does" had no counterpart for it, and the
-  ruling question below named the crash-left session alone. Until the eighth it named two routes and not the plan
-  mode's, which is the likeliest in `plan` mode. Until the tenth it said "The message-limit resolution does not reach
-  this state: a crash-left session is not at the limit, and the pause and the stop leave `paused`, not
-  `paused_message_limit`", which is false of the limit's own pause.*
+  crash: a pause, a stop or the application's quit (`application_shutdown`, which rests `paused` as the stop does,
+  clause 15) the run accepts after the iteration closed, while its checkpoint is captured, its `iteration_end` hooks
+  fire or its events drain, is met at the loop head, which comes to rest before the stop conditions run. Only a pause,
+  a stop or a quit accepted during the turn puts the iteration's task back to pending. A third route is the plan mode's:
+  a resumed iteration closes the continue's message `complete` (clause 17), the gate then holds before the first new
+  iteration (`PD-ORCH-003` revision 2), and a plan Cancel, or a stop or a quit during that plan cycle (clause 15, which
+  pairs the two), leaves `paused` with nothing open and the continue's message, the last user row, finished (OQ-77,
+  "What a cancel leaves"). The quit is the likeliest way there: the user closes the application while the plan is being
+  drafted, and on relaunch the Continue action appends the finished message again. A fresh hold does not reach it,
+  because the gated request's task is still pending. A fourth route is the message limit's, and it needs no directive:
+  the limit is checked as each iteration closes, before the stop conditions and the gate (REQ-ORCH-085/087), so a limit
+  reached as the iteration that finished the last request closes leaves `paused_message_limit` with nothing open and
+  that request `complete` — after a resumed iteration that carried out the continue's message (clause 17), where the
+  limit wins over the gate (OQ-77), and after any iteration that finished the request its run was launched with, as at
+  the base. The resolution's 'continue' and 'double' (REQ-SESSION-110) reach `continueSession` as the Continue action
+  does. On every route the build appends the finished request again as a new task (REQ-ORCH-004: OQ-75's rule covers
+  only a request held unfinished), and a new iteration re-works a request that already succeeded, so the crash-left
+  session does here what a `paused` one does, as clause 18 has it. Measured in `run/crash.test.ts`: "…nothing open and
+  the last request finished…", for the recovery state and for `interrupted`, and "…accepted after the iteration
+  closed…", for a pause, a stop and a quit; and in `run/plan-gate-resume.test.ts`, "after the hold that follows a
+  resumed iteration, …", for a plan Cancel and for a stop and a quit during the plan cycle, and "the message-limit
+  resolution …", for 'continue' and 'double' after a resumed iteration and after a fresh run's only iteration. *Until
+  the merged build's sixth review round this bullet said no `paused` session reaches the state, so clause 18's "as a
+  `paused` session does" had no counterpart for it, and the ruling question below named the crash-left session alone.
+  Until the eighth it named two routes and not the plan mode's, which is the likeliest in `plan` mode. Until the tenth
+  it said "The message-limit resolution does not reach this state: a crash-left session is not at the limit, and the
+  pause and the stop leave `paused`, not `paused_message_limit`", which is false of the limit's own pause. Until the
+  twelfth it named the pause and the stop on the first and third routes and not the application's quit, which reaches
+  both the same way.*
 - **The two continues take the send pill's place.** A crash-left session with an iteration open draws the Continue
   action and the continue by message (`Send`) in the strip where the send pill stood, and the count and "Continue
   without them" in the notices row, as a `paused` session does (`crashLeft` in `WorkspaceView`); with nothing open it
@@ -3777,13 +3790,14 @@ as built, or keep the send pill (REQ-CHAT-005) with the Continue action and the 
 liveness should also be continuable, for example after a confirmation, rather than refused. Whether a crash-left session
 should state something of its own in the notices row, where a paused session states its pause. Whether a crash that left
 a durable hold should offer anything beyond that hold's own continues. Whether the composer should withhold the
-continues on a session the store's failure left busy, rather than draw them and have the engine refuse them. Whether the
-Continue action on a session with nothing open and its last request finished — crash-left, `paused` by a pause or a stop
-accepted after its iteration closed, `paused` by a plan Cancel or a stop of the plan cycle held after a resumed
-iteration that carried out the continue's message, or `paused_message_limit` by a limit reached as the iteration that
-finished it closed, whose resolution's 'continue' and 'double' take the same path — should re-run that request as built,
-append nothing and run nothing, or not be offered at all, which for the crash-left session would narrow clause 18's
-"SHALL offer".
+continues on a session the store's failure left busy, or on an `interrupted` or `paused` one whose store failed while it
+was followed (and the surfaces a paused child's Cancel there), rather than draw them and have the engine refuse them.
+Whether the Continue action on a session with nothing open and its last request finished — crash-left, `paused` by a
+pause, a stop or the application's quit accepted after its iteration closed, `paused` by a plan Cancel, a stop or a quit
+of the plan cycle held after a resumed iteration that carried out the continue's message, or `paused_message_limit` by a
+limit reached as the iteration that finished it closed, whose resolution's 'continue' and 'double' take the same path —
+should re-run that request as built, append nothing and run nothing, or not be offered at all, which for the crash-left
+session would narrow clause 18's "SHALL offer".
 
 **OQ-77 — Where does the gate hold a run that resumed an iteration, and what does that plan cycle plan?** *(`PD-ORCH-003` revision 2, with `PD-ORCH-005` clause 18; REQ-ORCH-152, which the directive narrows for an iteration a rest left open (`PD-ORCH-005` clause 4), and which the reading below that an iteration a crash left open resumes unheld too departs from for an iteration the directive does not govern; REQ-ORCH-153, whose gate that reading also departs from for the same iteration; and REQ-ORCH-021, REQ-ORCH-067, REQ-ORCH-069, REQ-ORCH-073, REQ-ORCH-085, REQ-ORCH-154, REQ-CHAT-040, REQ-SESSION-115 and REQ-TOOLS-010, which it does not name. Raised 2026-09-28 by building `PD-ORCH-003` revision 2 under [R-064](../product/requests.md#r-064).)*
 
@@ -3869,18 +3883,20 @@ and what the answer at that gate launches.
   mark that the hold followed a resumed iteration, and the handoff's todo states the same work.
 - **"Continue without them" is unchanged.** It resumes nothing, so its run is held before its first iteration, as any run
   that resumes nothing is.
-- **What a cancel leaves.** A plan Cancel at this hold, or a stop during its plan cycle (`PD-ORCH-005` clause 15),
-  leaves the session `paused` with no iteration open, as at any hold. When the resumed iteration succeeded, the
-  continue's message — the last user row — is `complete` (clause 17), so the next Continue action finds no unfinished
-  task of its text and appends it again beside the pending work (OQ-75 appends a completed request as before). The plan
-  cycle that run is held at is asked to plan the message as its latest request, and approved, the message is worked a
-  second time. A cancel at a fresh hold does not do this: the gated request's task is still pending, so the Continue
-  action appends nothing. OQ-76's "Nothing open to resume" records it beside the other routes to the same state, and
-  its ruling question covers it. Measured in `plan-gate-resume.test.ts`, "after the hold that follows a resumed
-  iteration, …", for a plan Cancel and for a stop during the plan cycle. Recorded at the merged build's eighth review.
-  The message-limit pause that wins over this hold (above) leaves the same state at `paused_message_limit`: nothing
-  open and the message `complete`, so the resolution's 'continue' and 'double' append it again as the Continue action
-  does ("the message-limit resolution's …", in the same file). Recorded at the merged build's tenth review.
+- **What a cancel leaves.** A plan Cancel at this hold, or a stop or the application's quit during its plan cycle
+  (`PD-ORCH-005` clause 15, which pairs the two), leaves the session `paused` with no iteration open, as at any hold.
+  When the resumed iteration succeeded, the continue's message — the last user row — is `complete` (clause 17), so the
+  next Continue action finds no unfinished task of its text and appends it again beside the pending work (OQ-75 appends
+  a completed request as before). The plan cycle that run is held at is asked to plan the message as its latest request,
+  and approved, the message is worked a second time. A cancel at a fresh hold does not do this: the gated request's task
+  is still pending, so the Continue action appends nothing. OQ-76's "Nothing open to resume" records it beside the other
+  routes to the same state, and its ruling question covers it. Measured in `plan-gate-resume.test.ts`, "after the hold
+  that follows a resumed iteration, …", for a plan Cancel and for a stop and a quit during the plan cycle. Recorded at
+  the merged build's eighth review; the quit, the likeliest of the three (the user closes the application while the plan
+  is drafted), at the twelfth. The message-limit pause that wins over this hold (above) leaves the same state at
+  `paused_message_limit`: nothing open and the message `complete`, so the resolution's 'continue' and 'double' append it
+  again as the Continue action does ("the message-limit resolution's …", in the same file). Recorded at the merged
+  build's tenth review.
 
 **What a ruling decides.** Whether the revision's unheld resume reaches an iteration a crash left open once clause 18
 has recorded the crash, as built, or only one a rest left, so that a crash-left iteration is held at the gate like a new
@@ -3888,8 +3904,8 @@ one; whether a requeued resumed task should count as work already under way rath
 answer-group exemption should reach this hold; whether the plan cycle should plan only the first pending task or all of
 them; whether this plan cycle should be sent a handoff rebuilt after the resumed iteration closed, rather than the
 continue's, or be told that the handoff predates that iteration; whether a revise after this hold should be told again
-what became of the continue's message; and whether a Continue action after a Cancel or a stop at this hold, or the
-message-limit resolution after the limit won over it, should re-run a message the resumed iteration carried out, as
+what became of the continue's message; and whether a Continue action after a Cancel, a stop or a quit at this hold, or
+the message-limit resolution after the limit won over it, should re-run a message the resumed iteration carried out, as
 built, or continue with the pending work alone (with OQ-76's ruling on the same state).
 
 **OQ-78 — What is an agent's fingerprint taken of, when is it compared, and where is the warning stated?** *(`PD-ORCH-005` clause 14 over OQ-68's reading; REQ-SESSION-029, REQ-SESSION-132, REQ-SESSION-134, REQ-SESSION-135, REQ-ORCH-019, REQ-ORCH-088, REQ-ORCH-095, REQ-WORKSPACE-047, REQ-WORKSPACE-050, REQ-WORKSPACE-058, REQ-WORKSPACE-060, REQ-TOOLS-010, REQ-TOOLS-053, REQ-TOOLS-069, REQ-MCP-101, REQ-CONFIG-166 and REQ-MONITOR-305, which the directive does not name; and REQ-ORCH-139, whose issue-kind vocabulary has no kind for the warning, which the reading below departs from by coining `resumed_under_changed_instructions`. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*

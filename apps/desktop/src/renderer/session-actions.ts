@@ -104,13 +104,18 @@ export function createSessionActions({ bridge, replica }: SessionActionDeps) {
     return (r.value as { ok: boolean }).ok ? { ok: true } : { ok: false, reason: 'The run is no longer cancellable.' };
   }
 
-  /** REQ-MONITOR-009: cancel one child; the shell resolves the session, the run decides. */
+  /**
+   * REQ-MONITOR-009: cancel one child; the shell resolves the session, the run decides. A refusal carries the engine's
+   * words when it states them — PD-ORCH-005 clause 16's at-rest cancel refused by the store's failure or another
+   * process's lock, which say nothing of the agent — and otherwise says the agent is not cancellable (REQ-MONITOR-128).
+   */
   async function cancelAgent(agentId: string): Promise<{ ok: true } | { ok: false; reason: string }> {
     const sessionId = replica.getState().sessionId;
     if (!sessionId) return { ok: false, reason: 'No run is active.' };
     const r = await send({ kind: 'session.control', request: { op: 'cancelAgent', sessionId, args: { agentId } } });
     if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
-    return (r.value as { ok: boolean }).ok ? { ok: true } : { ok: false, reason: 'That agent is not cancellable (unknown, or already finished).' };
+    const v = r.value as { ok: boolean; refusal?: { message?: string } };
+    return v.ok ? { ok: true } : { ok: false, reason: v.refusal?.message ?? 'That agent is not cancellable (unknown, or already finished).' };
   }
 
   /** ADR-0010 channel 1: one control against the focused session, `false` named as a refusal (REQ-MONITOR-006). */

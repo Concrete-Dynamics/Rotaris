@@ -33,10 +33,11 @@ export function cancelOffered(agent: Pick<AgentRecord, 'id' | 'presentationState
 }
 
 /**
- * Why a surface's Cancel is not offered for the shown agent (`cancelOffered` false), one wording for the inspector and the
- * Mission view: nothing selected, which only the Mission view reaches and whose wording names the run its "Cancel
- * selection" cancels when the run row is selected (REQ-MONITOR-126); the run-level agent at rest, whose whole-iteration equivalent is clause 6's "Continue
- * without them" (PD-ORCH-005 clause 16, OQ-74); or any other agent, whose rule is stated.
+ * Why a surface's Cancel is not offered for the shown agent (`cancelOffered` false), one wording for the inspector and
+ * the Mission view: nothing selected, which only the Mission view reaches and whose wording names the run its "Cancel
+ * selection" cancels when the run row is selected (REQ-MONITOR-126); the run-level agent at rest, whose whole-iteration
+ * equivalent is clause 6's "Continue without them" (PD-ORCH-005 clause 16, OQ-74); or any other agent, whose rule is
+ * stated.
  */
 export function cancelUnavailableReason(agent: Pick<AgentRecord, 'id' | 'presentationState'> | null): string {
   if (agent === null) return 'Select a live agent or the run while the run is active, or a paused child while its session rests, to cancel it.';
@@ -160,13 +161,13 @@ export function resolvedTools(agent: Pick<AgentRecord, 'grantedTools'>, declared
 
 /**
  * What cancelling an agent cancels with it — the set the engine ends, so the confirmation never understates it
- * (REQ-MONITOR-064/128): every descendant not yet finished, live or paused, through a finished one; for the run, its every
- * live or paused agent. Since clause 13 made a paused agent its own state rather than `queued`, a live agent's cancel
- * still ends its paused descendants (OQ-73), so counting them departs from REQ-MONITOR-064/128's "live" descendants —
- * a departure OQ-73 and OQ-74 record and put to the owner. A paused child's is the same set: at rest every unfinished descendant is
- * paused, so it is the paused ones the at-rest cancel ends (PD-ORCH-005 clause 16, OQ-74); while a run is still
- * `pausing`, a persona window's cancel (REQ-SHELL-075(g)) reaches the live cancel, which also ends a descendant whose
- * in-flight call has not yet let it rest.
+ * (REQ-MONITOR-064/128): every descendant not yet finished, live or paused, through a finished one; for the run, its
+ * every live or paused agent. Since clause 13 made a paused agent its own state rather than `queued`, a live agent's
+ * cancel still ends its paused descendants (OQ-73), so counting them departs from REQ-MONITOR-064/128's "live"
+ * descendants — a departure OQ-73 and OQ-74 record and put to the owner. A paused child's is the same set: at rest
+ * every unfinished descendant is paused, so it is the paused ones the at-rest cancel ends (PD-ORCH-005 clause 16,
+ * OQ-74); while a run is still `pausing`, a persona window's cancel (REQ-SHELL-075(g)) reaches the live cancel, which
+ * also ends a descendant whose in-flight call has not yet let it rest.
  */
 export function cancelCascade(agents: readonly AgentRecord[], agent: Pick<AgentRecord, 'id'>): AgentRecord[] {
   const reached = (a: AgentRecord) => a.presentationState === 'paused' || a.presentationState === 'running' || a.presentationState === 'waiting' || a.presentationState === 'queued';

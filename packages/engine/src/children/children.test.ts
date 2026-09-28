@@ -1983,7 +1983,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
         expect(dal.getLock(sid)).toBeUndefined();
         const at = new Date(Number(clock.instant())).toISOString();
         expect(dal.claimLock(sid, 999, HOST, at).claimed).toBe(true);
-        expect(cancel(sessions, sid, byName(sid, 'two').task_id)).toEqual({ ok: false });
+        expect(cancel(sessions, sid, byName(sid, 'two').task_id)).toEqual({ ok: false, refusal: { code: 'session_locked', message: 'Another process holds this session, so the agent was not cancelled.' } });
         expect(byName(sid, 'two').state).toBe('paused');
         expect(dal.timelineOf(sid).filter((t) => t.name === 'child_user_cancelled')).toEqual([]);
         expect(dal.getLock(sid)).toMatchObject({ pid: 999 });

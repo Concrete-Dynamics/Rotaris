@@ -344,6 +344,50 @@ describe('policy (ADR-0017, REQ-TOOLS-011..029, 039..047)', () => {
   });
 });
 
+/**
+ * A persona's MCP surface prefixes a server's tool only when its name is already taken, so a server's `read_file` or
+ * `fetch` reaches a persona whose public set lacks one under the plain name; `publicTool` is what tells the two apart.
+ * REQ-TOOLS-007's classes are classes of public tools, and a tool outside the registry carries no declaration and has
+ * none inferred from its name (REQ-TOOLS-001 as ADR-0016 reads it) — so no class rule fires for it.
+ */
+describe('an MCP tool offered under a public name is not the public tool (REQ-TOOLS-001, REQ-TOOLS-043, REQ-TOOLS-045)', () => {
+  const server: EvaluationEnv = { ...env, publicTool: () => false };
+
+  it('ask:read-only-tool (REQ-TOOLS-043) allows the public read-only class alone; the preset default decides a server\'s tool of the same name', () => {
+    const p = buildPolicy({ preset: 'ask', workspaceRoot: ROOT });
+    expect(evaluate(p, [], permissionRequest('read_file', 'o', { path: 'D:/elsewhere/secrets' }), env).ruleId).toBe('ask:read-only-tool');
+    expect(evaluate(p, [], permissionRequest('read_file', 'o', { path: 'D:/elsewhere/secrets' }), server)).toMatchObject({ decision: 'ask', ruleId: 'preset:ask', source: 'preset' });
+    // case and alias make no difference: the name is not what decides
+    expect(evaluate(p, [], permissionRequest('Read_File', 'o', { path: 'a' }), server).ruleId).toBe('preset:ask');
+    expect(evaluate(p, [], permissionRequest('haet_read', 'o', { path: 'a' }), server).ruleId).toBe('preset:ask');
+  });
+
+  it('the fetch pair (REQ-TOOLS-045) reads the network class, which is the public fetch alone', () => {
+    const p = buildPolicy({ preset: 'ask', workspaceRoot: ROOT });
+    expect(evaluate(p, [], permissionRequest('fetch', 'o', { url: 'http://localhost:3000' }), env).ruleId).toBe('ask:fetch-local-host');
+    expect(evaluate(p, [], permissionRequest('fetch', 'o', { url: 'http://localhost:3000' }), server).ruleId).toBe('preset:ask');
+    expect(evaluate(p, [], permissionRequest('fetch', 'o', { url: 'https://example.com' }), server).ruleId).toBe('preset:ask');
+  });
+
+  it('under restricted neither read rule fires for it and the default denies — a rule that grants sees nothing declared (ADR-0016)', () => {
+    const p = buildPolicy({ preset: 'restricted', workspaceRoot: ROOT });
+    expect(evaluate(p, [], permissionRequest('read_file', 'o', { path: 'src/a.ts' }), server)).toMatchObject({ decision: 'deny', ruleId: 'preset:restricted' });
+    expect(evaluate(p, [], permissionRequest('glob', 'o', { pattern: '**' }), server)).toMatchObject({ decision: 'deny', ruleId: 'preset:restricted' });
+    expect(evaluate(p, [], permissionRequest('fetch', 'o', { url: 'http://localhost:3000' }), server)).toMatchObject({ decision: 'deny', ruleId: 'preset:restricted' });
+  });
+
+  it('the rules that name no tool set still decide it, and a session approval still covers it (REQ-TOOLS-024)', () => {
+    const p = buildPolicy({ preset: 'ask', workspaceRoot: ROOT });
+    expect(evaluate(p, [], permissionRequest('read_file', 'o', { command: 'rm -rf /' }), server).ruleId).toBe('starter:deny-recursive-delete');
+    const ctx = new PolicyContext(p);
+    const call = permissionRequest('read_file', 'o', { path: 'a' });
+    expect(ctx.evaluate(call, server).ruleId).toBe('preset:ask');
+    ctx.grant(call, server);
+    expect(ctx.evaluate(call, server).ruleId).toBe('session:allow:1');
+    expect(ctx.evaluate(permissionRequest('read_file', 'o', { path: 'b' }), server).ruleId).toBe('preset:ask');
+  });
+});
+
 describe('PD-TOOLS-004: a session approval of a file write covers that path (narrows REQ-TOOLS-024)', () => {
   let ws: string;
   let fsEnv: EvaluationEnv;

@@ -470,6 +470,25 @@ describe('the plan gate at dispatch (REQ-ORCH-153, ADR-0062)', () => {
     expect(h.rec.decisions).toEqual([]);
   });
 
+  it('withholds a server\'s tool offered under a public read-only name — the declaration is the tool\'s, not the name\'s (REQ-TOOLS-001, ADR-0016)', async () => {
+    const reads: unknown[] = [];
+    const serverRead = simpleExecutor('read_file', 'a server\'s read_file', anySchema, async (a) => { reads.push(a); return { text: 'read', isError: false }; });
+    const h = harness({ preset: 'autonomous', planGateHeld: true, extraExecutors: [['read_file', serverRead]], publicTool: (name) => name !== 'read_file' });
+    const r = await h.gate.dispatch(h.call('read_file', { path: 'a.ts' }), new AbortController().signal);
+    expect(r).toMatchObject({ status: 'blocked', isError: true });
+    expect(r.text).toContain('held at the plan gate');
+    expect(h.rec.settles[0]).toMatchObject({ failure_kind: 'plan_gate_withheld' });
+    expect(reads).toEqual([]);
+    // the public tool of that name is what the requirement leaves a held run
+    const pub = harness({ preset: 'autonomous', planGateHeld: true, extraExecutors: [['read_file', simpleExecutor('read_file', 'r', anySchema, async () => ({ text: 'read', isError: false }))]] });
+    expect((await pub.gate.dispatch(pub.call('read_file', { path: 'a.ts' }), new AbortController().signal)).status).toBe('ok');
+    // a public read-only name the port never offered is still no tool here: no approval could make it exist
+    const none = harness({ preset: 'autonomous', planGateHeld: true, publicTool: () => false });
+    const u = await none.gate.dispatch(none.call('read_file', { path: 'a.ts' }), new AbortController().signal);
+    expect(u.status).toBe('failed');
+    expect(u.text).toContain("Unknown tool 'read_file'");
+  });
+
   it('refuses a name this port never offered — an MCP tool reaching the role by another route', async () => {
     const h = harness({ preset: 'autonomous', planGateHeld: true, planGateWithheldNames: ['mcp__x__write'] });
     const r = await h.gate.dispatch(h.call('mcp__x__write', { any: 1 }), new AbortController().signal);

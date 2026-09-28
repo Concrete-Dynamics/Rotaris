@@ -50,7 +50,8 @@ order under R-062).** The built app was traced appending to an empty transcript 
 time at depth was script — three to four synchronous renders per increment, each re-running ADR-0046 step 4 over the
 whole resident window and each re-rendering every bound row through a context value rebuilt per render — not layout,
 paint or the `ResizeObserver` pass. `ui/transcript/projector.ts` now keys step 4 on every input it reads, takes the
-bounded form when the rows alone changed (the earliest-changed row read off the two arrays, no prop across the seam),
+bounded form when the rows alone changed (the earliest-changed row read off the two arrays, no prop across the seam;
+only for an append or a row replaced at its own index — the fix round found a removal and a scope switch taken wrongly),
 and the pane holds one (`TranscriptPane.tsx`); the offset table and the surface value rows read are built once per
 change of what they carry. The
 **runtime view**'s step-4 row and the **component view**'s `ui/transcript` module list gain the projector. The proof's

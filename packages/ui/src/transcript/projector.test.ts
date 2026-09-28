@@ -7,9 +7,12 @@
  * reads is a key, so a change to any one of them projects again.
  */
 import { describe, expect, it } from 'vitest';
-import type { ApprovalPayload, QuestionPrompt, TranscriptRow } from '@rotaris/contracts';
+import type { AgentRecord, ApprovalPayload, QuestionPrompt, TranscriptRow } from '@rotaris/contracts';
+import { projectIncrement } from '@rotaris/ui-core';
+import { scopedRows } from '../TranscriptSurface.js';
 import { CAP_DEFAULTS, projectDisplay, type ProjectOptions } from './project.js';
 import { changedFrom, createProjector } from './projector.js';
+import type { DisplayRow } from './types.js';
 
 function rows(total: number): TranscriptRow[] {
   return Array.from({ length: total }, (_, i) => {
@@ -145,6 +148,107 @@ describe('REQ-CHAT-055: the projector projects once per change of its inputs', (
       step(held, false, { running: false });                                                // the run ends: another input
       expect(projector.projections).toBe(10);
       expect(projector.incrementals).toBe(6);
+    });
+
+    // Fix round 1 of R-062: the first form of `changedFrom` returned the next array's row index at the first differing
+    // position even when the previous array's row there was GONE, and the bounded form kept the removed row.
+    const indices = (display: readonly DisplayRow[]) => display.map((d) => (d.shape === 'row' ? `row:${d.row.index}` : d.shape === 'group' ? `group:${d.members.map((m) => m.index).join(',')}` : d.shape));
+    const said = (i: number, name: string, over: Partial<TranscriptRow> = {}): TranscriptRow => ({ ...rows(i + 1)[i]!, name, persona: 'coder', kind: 'agent', ...over } as TranscriptRow);
+
+    it('REQ-CHAT-069: switching "This task" from one agent to another draws the second agent\'s rows and none of the first\'s', () => {
+      const all = [rows(1)[0]!, said(1, 'X'), said(2, 'Y'), said(3, 'Y')];
+      const x = { id: 'x', name: 'X', persona: 'coder' } as unknown as AgentRecord;
+      const y = { id: 'y', name: 'Y', persona: 'coder' } as unknown as AgentRecord;
+      const projector = createProjector();
+      const o = options({ rows: scopedRows(all, x) });
+      expect(indices(projector.project(o).display)).toEqual(['row:0', 'row:1']);
+      // The pane survives the switch (it has no key), so its projector holds X's projection when Y's rows arrive.
+      const toY = { ...o, rows: scopedRows(all, y) };
+      expect(changedFrom(o, toY)).toBeNull();
+      expect(indices(projector.project(toY).display)).toEqual(['row:0', 'row:2', 'row:3']);
+      expect(projector.project(toY).display).toEqual(projectDisplay(toY));
+      // And back to "All activity": rows inserted below the previous end are not a shape the bounded form takes either.
+      const toAll = { ...o, rows: all };
+      expect(changedFrom(toY, toAll)).toBeNull();
+      expect(projector.project(toAll).display).toEqual(projectDisplay(toAll));
+      expect(projector.incrementals).toBe(0);
+    });
+
+    it('REQ-EVENTS-052: an increment that removes the row at its earliest-changed index while appending projects without it', () => {
+      const held = rows(12);
+      const projector = createProjector();
+      const o = options({ rows: held });
+      projector.project(o);
+      // Row 5 removed, rows 6 to 11 re-sent, row 12 appended — the array is LONGER than before.
+      const next = { ...o, rows: projectIncrement(held, 5, rows(13).slice(6)) };
+      expect(next.rows.length).toBe(12);
+      expect(changedFrom(o, next)).toBeNull();
+      const { display } = projector.project(next);
+      expect(indices(display)).not.toContain('row:5');
+      expect(display).toEqual(projectDisplay(next));
+      // A row replaced at its own index, with a later one removed behind it, is still bounded — and still right.
+      const replaced = { ...next, rows: [...next.rows.slice(0, 7), { ...next.rows[7]!, body: 'row 8 changed' } as TranscriptRow, ...next.rows.slice(9)] };
+      expect(changedFrom(next, replaced)).toBe(8);
+      expect(projector.project(replaced).display).toEqual(projectDisplay(replaced));
+      expect(projector.incrementals).toBe(1);
+    });
+
+    it('ADR-0046 step 4: a run member replaced in place by a row that no longer joins the run projects the window, losing none of the run', () => {
+      const held = [rows(1)[0]!, tool(1, 'ok', true), tool(2, 'ok', true)];
+      const projector = createProjector();
+      const o = options({ rows: held });
+      expect(indices(projector.project(o).display)).toEqual(['row:0', 'group:1,2']);
+      const prose = { ...o, rows: [held[0]!, held[1]!, { ...rows(3)[2]!, kind: 'agent', body: 'now prose' } as TranscriptRow] };
+      expect(changedFrom(o, prose)).toBe(2);
+      expect(indices(projector.project(prose).display)).toEqual(['row:0', 'row:1', 'row:2']);
+      expect(projector.project(prose).display).toEqual(projectDisplay(prose));
+    });
+
+    it('agrees with the whole-state projection over a seeded walk of every shape the pane can be handed', () => {
+      // A small deterministic generator (mulberry32): appends of every kind across three agents, settles and growth
+      // in place, a kind changed in place, removals and re-sends through the replica's own upsert, scope switches
+      // through the surface's own filter, truncations, and older rows paged in above.
+      let seed = 0x5eed;
+      const rand = () => { seed = (seed + 0x6d2b79f5) | 0; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+      const pick = <T,>(xs: readonly T[]): T => xs[Math.floor(rand() * xs.length)]!;
+      const names = ['X', 'Y', 'Z'];
+      const agents = names.map((name) => ({ id: name.toLowerCase(), name, persona: 'coder' }) as unknown as AgentRecord);
+      const make = (i: number): TranscriptRow => {
+        const name = pick(names);
+        switch (pick(['user', 'agent', 'tool', 'tool', 'tool', 'thinking', 'system'])) {
+          case 'user': return { ...rows(1)[0]!, index: i };
+          case 'system': return { ...said(i, '', { kind: 'system' }), name: undefined, persona: undefined } as unknown as TranscriptRow;
+          case 'thinking': return said(i, name, { kind: 'thinking', streamId: `s${i}`, settled: rand() < 0.5, body: `thought ${i % 3}` } as Partial<TranscriptRow>);
+          case 'tool': return { ...tool(i, rand() < 0.5 ? 'running' : 'ok', rand() < 0.5), name, persona: 'coder' };
+          default: return said(i, name);
+        }
+      };
+      let all: TranscriptRow[] = [rows(1)[0]!];
+      let scope: AgentRecord | null = null;
+      const projector = createProjector();
+      const base = options({ running: true });
+      let checked = 0;
+      for (let step = 0; step < 600; step += 1) {
+        const top = all[all.length - 1]!.index;
+        const r = rand();
+        if (r < 0.4) all = [...all, make(top + 1)];
+        else if (r < 0.55) { const at = all.length - 1 - Math.floor(rand() * Math.min(4, all.length - 1)); all = [...all.slice(0, at), { ...all[at]!, settled: true, toolStatus: 'ok', body: `${all[at]!.body}+` } as TranscriptRow, ...all.slice(at + 1)]; }
+        else if (r < 0.62) { const at = Math.max(1, all.length - 1 - Math.floor(rand() * 3)); all = [...all.slice(0, at), make(all[at]!.index), ...all.slice(at + 1)]; }
+        else if (r < 0.72 && all.length > 3) {
+          const from = all[Math.max(1, all.length - 1 - Math.floor(rand() * 5))]!.index;
+          all = projectIncrement(all, from, [...all.filter((row) => row.index >= from && rand() < 0.6).map((row) => ({ ...row })), make(top + 1)]);
+        }
+        else if (r < 0.85) scope = rand() < 0.3 ? null : pick(agents);
+        else if (r < 0.9 && all.length > 4) all = all.slice(0, all.length - 2);
+        else if (r < 0.93) { const bottom = all[0]!.index; all = [{ ...make(bottom - 1), index: bottom - 1 } as TranscriptRow, ...all]; }
+        else all = [...all, make(top + 1), make(top + 2)];
+        const o = { ...base, rows: scopedRows(all, scope) };
+        expect(projector.project(o).display, `step ${step}`).toEqual(projectDisplay(o));
+        checked += 1;
+      }
+      expect(checked).toBe(600);
+      // The walk exercised the bounded form, not only the whole window it falls back to.
+      expect(projector.incrementals).toBeGreaterThan(100);
     });
   });
 });

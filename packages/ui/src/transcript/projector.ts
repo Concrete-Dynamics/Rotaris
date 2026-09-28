@@ -28,7 +28,11 @@ import type { DisplayRow } from './types.js';
  * its first line — `{ previous, from }`, from the earliest-changed row back to the nearest clean cut — with `from`
  * read off the two arrays (`changedFrom`) rather than threaded across the seam. The earlier round measured that form
  * at a third of the whole-state cost at 1,200 rows and declined it for buying "0.6 ms of a 47 ms gap"; under a burst
- * that multiplies every per-increment millisecond by the queue in front of the sample, it is worth having.
+ * that multiplies every per-increment millisecond by the queue in front of the sample, it is worth having. It is
+ * taken only where it projects what the whole-state form projects — an append, or a row replaced at its own index —
+ * and `projector.test.ts` holds it to that over a seeded walk of every shape the pane can be handed, including a
+ * removal, a scope switch and a run member changed in place (R-062's fix round 1 found the first two taken wrongly
+ * here and the third in step 4 itself).
  */
 export interface Projection {
   readonly display: readonly DisplayRow[];
@@ -82,17 +86,27 @@ function sameInputs(a: ProjectOptions, b: ProjectOptions): boolean {
  *
  * The replica upserts by index and keeps every untouched row OBJECT (`ui-core/replica.ts`), so the first position at
  * which the two arrays hold different objects is where the update began — the same fact `earliestChanged` carries on
- * the wire, read back from the arrays rather than threaded across the pane's seam as a prop. Three shapes fall back
- * to the whole window: rows removed (a truncation keeps a prefix, but the bounded form would keep the removed rows'
- * displayed prefix too), a change reaching position 0 (older rows paged in above — REQ-CHAT-165 — or a reset), and
- * any other input changing (the previous projection is not one of these rows under these inputs).
+ * the wire, read back from the arrays rather than threaded across the pane's seam as a prop.
+ *
+ * The bounded form reuses every previously displayed row whose index is below the cut, so it is sound only when the
+ * rows below the cut are the same rows in both arrays. That holds for exactly two shapes of the first differing
+ * position `i`: it lies past the previous end (an append), or it holds the SAME row index in both arrays (a row
+ * replaced in place — a growth tick, a settle — whatever follows it). Everything else projects the whole window:
+ *  - a different row index at `i` — a row REMOVED there (the next array's row at `i` is a later one: an increment
+ *    carrying a removal, or REQ-CHAT-069's scope switched from one agent to another, whose rows the pane receives as
+ *    `scopedRows` of the same window) or a row INSERTED there (the scope widened to "All activity"). The first form
+ *    of this function returned the next array's index here, and the bounded form then kept the removed row: an
+ *    agent's row drawn inside another agent's scoped transcript (fix round 1 of R-062, `projector.test.ts`);
+ *  - nothing left at `i` (a truncation), and a change reaching position 0 (older rows paged in above — REQ-CHAT-165 —
+ *    or a reset);
+ *  - any other input changing (the previous projection is not one of these rows under these inputs).
  */
 export function changedFrom(prev: ProjectOptions, next: ProjectOptions): number | null {
   if (!sameButRows(prev, next)) return null;
-  if (next.rows.length < prev.rows.length) return null;
   let i = 0;
   while (i < prev.rows.length && prev.rows[i] === next.rows[i]) i += 1;
   if (i === 0 || i === next.rows.length) return null;
+  if (i < prev.rows.length && prev.rows[i]!.index !== next.rows[i]!.index) return null;
   return next.rows[i]!.index;
 }
 

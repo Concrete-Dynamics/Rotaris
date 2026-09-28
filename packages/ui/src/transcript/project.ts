@@ -567,6 +567,16 @@ export function projectDisplay(o: ProjectOptions, incremental?: { readonly previ
     // A reusable prefix must be a prefix: stop at the first displayed row that is not below the boundary.
     const cut = incremental.previous.findIndex((d) => d.shape === 'trailer' || lastIndexOf(d) >= boundaryIndex);
     if (cut !== -1) prefix = incremental.previous.slice(0, cut) as DisplayRow[];
+    // `cleanCut` reads the runs of the NEW rows. A previous run could still reach across the boundary when a row it
+    // held was replaced in place by one that does not join it (a tool row become prose): its members below the
+    // boundary would be neither reused (the header reaches past it) nor re-projected (they sit before it). The
+    // bounded form cannot take that change, so it projects the window instead. Found when the pane began taking the
+    // bounded form (R-062's fix round 1, `projector.test.ts`); unreachable by an append or a settle, whose previous
+    // runs the new rows still hold.
+    if (cut !== -1 && incremental.previous.slice(cut).some((d) => d.shape === 'group' && d.members[0]!.index < boundaryIndex)) {
+      startRow = 0;
+      prefix = [];
+    }
   }
 
   const suffix = deduped.slice(startRow);

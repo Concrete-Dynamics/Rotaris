@@ -395,8 +395,9 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
     if (restored !== null && Math.abs(restored - el.scrollTop) > 0.5) scrollSelf(el, restored);
     el.dataset['shape'] = shape;
     if (restored === null) pendingAnchor.current = null;
-    // `table` is rebuilt every render, so depending on the object itself re-pinned the tail continuously; its
-    // total height is the only part of it this effect reacts to. (The first execution measured that: see ADR-0046.)
+    // `table` was once rebuilt every render, so depending on the object itself re-pinned the tail continuously; it is
+    // now rebuilt once per change of rows, width, expansion or a measurement, and its total height is still the only
+    // part of it this effect reacts to. (The first execution measured the continuous re-pin: see ADR-0046.)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [display, table.total, following]);
 

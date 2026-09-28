@@ -639,6 +639,39 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         });
       }
 
+      /**
+       * OQ-76's undecided reading: a crash between an iteration closing `succeeded` and the run's teardown leaves the
+       * session busy with nothing open and the last request `complete`. No `paused` session reaches this state (a pause that
+       * finds nothing unfinished puts its task back to pending), so clause 18's "as a `paused` session does" does not say
+       * what the Continue action does here. The build continues the last request, as REQ-MONITOR-125 has it, and OQ-75's
+       * no-append covers only a request the todo holds unfinished — so the finished request is appended again and a second
+       * iteration re-works it. Pinned so that a ruling either way turns this red.
+       */
+      for (const state of ['recovery', 'interrupted'] as const) {
+        it(`${state}, nothing open and the last request finished: the Continue action appends that request again and a new iteration re-works it (OQ-76)`, async () => {
+          const first = sessionsAs(77);
+          const sid = (first.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
+          expect((await first.running(sid))!.status).toBe('completed');
+          // The host died after iteration 1 closed and before the teardown settled the status.
+          const w = SessionWriter.open({ dal, sessionId: sid, wall: clock, retentionCap: 0, warn: () => undefined, onCommitted: () => undefined }, { pid: 66, host: HOST, isProcessAlive: () => false });
+          if (!w.ok) throw new Error('writer');
+          w.value.save('running');
+          w.value.release(66, HOST);
+          const next = sessionsAs(88);
+          expect(next.resume(dal, 'C:/ws', sid).ok).toBe(true);
+          if (state === 'interrupted') expect(next.checkpointListing(dal, 'C:/ws', sid).ok).toBe(true);
+          expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.state, r.outcome])).toEqual([[1, 'closed', 'succeeded']]);
+          const before = userRows(sid);
+          expect(next.continueSession(sid, 'continue')).toEqual({ ok: true, value: { resumed: true, messageLimit: null } });
+          expect((await next.running(sid))!.status).toBe('completed');
+          const rows = dal.iterationsOf(sid);
+          expect(rows.map((r) => [r.iteration, r.state, r.outcome])).toEqual([[1, 'closed', 'succeeded'], [2, 'closed', 'succeeded']]);
+          expect(rows[1]!.todo_task_id).not.toBe(rows[0]!.todo_task_id);
+          expect(rows[1]!.task).toContain('first');
+          expect(userRows(sid)).toBe(before);
+        });
+      }
+
       it('a busy session whose process may still be running it is refused, and nothing is recorded', async () => {
         const sid = await crashed();
         const next = sessionsAs(88);

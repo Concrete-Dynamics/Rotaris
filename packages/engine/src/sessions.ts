@@ -1721,7 +1721,9 @@ export class Sessions {
     } else if (action === 'cancel') {
       return ok({ resumed: false, messageLimit: limit });
     }
-    // The continuation: the last user request stands, nothing new is appended (REQ-MONITOR-125's "resumed from the composer").
+    // The continuation: the last user request stands and no user row is appended (REQ-MONITOR-125's "resumed from the composer").
+    // A crash-left session with nothing open and that request finished appends it to the todo again (REQ-ORCH-004; OQ-75's no-append
+    // covers only a request held unfinished) — clause 18's undecided case, OQ-76.
     const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId, effectiveRootOf(stored).root, resumedPersona(s.dal, sessionId, opts.withoutPaused === true));
     if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
     const lastPrompt = [...s.dal.residentRows(sessionId)].reverse().find((row) => row.kind === 'user')?.body ?? stored.session_id;
@@ -1842,9 +1844,10 @@ export class Sessions {
     if (!resolved.ok) return err({ code: resolved.error.code, reason: 'reason' in resolved.error ? resolved.error.reason : resolved.error.code });
     const lastPrompt = [...s.dal.residentRows(sessionId)].reverse().find((r) => r.kind === 'user')?.body ?? stored.session_id;
     const payload = `${buildContinuationPayload(s.dal, s.dal.getSession(sessionId)!, lastPrompt, todo.value)}\n\n${planSection(decision, text, changes)}`;
-    // PD-ORCH-003 revision 2: the held run's todo already carries every task — the gated work, and a continue's message
-    // (complete, or pending and taken up first) after a hold that followed a resumed iteration — so the relaunch appends
-    // none: appending the last request again would duplicate it (OQ-77).
+    // REQ-ORCH-004 / REQ-ORCH-154 (OQ-77): a plan decision states no new top-level task — the held run's todo already
+    // carries the gated work — so the relaunch appends none; appending the last request again would duplicate it. After
+    // a hold that followed a resumed iteration (PD-ORCH-003 revision 2) that todo also carries the continue's message,
+    // complete, or pending and taken up first.
     this.launchContinuation(s, lastPrompt, payload, todo.value, previousIntent(s.dal, sessionId), setup.value, [], decision === 'revise' ? { cycle: cycle + 1, changes } : undefined, { message: null }, false);
     return ok({ relaunched: true, cycle });
   }

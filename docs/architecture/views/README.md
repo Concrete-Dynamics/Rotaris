@@ -75,8 +75,10 @@ refuses outright is judged before the lock is taken. Every confirmation and casc
 OQ-73 and OQ-74), and both cancels write through one `userCancellation`. The surfaces offer a paused child's Cancel while its session rests
 (`cancelOffered(agent, runActive, resting)`, `resting` being `runLevelResting`, the predicate the composer's count and
 the resting root share) and confirm by `cancelConfirmation`, the Mission view through `missionConfirmation`. The
-**runtime view**'s `cancelAgent`, `children`, `iterations` and `agent_terminals` rows and the **state-ownership view**'s
-rest and session-lock rows name the new writer; no package, edge, process, channel or command changes.
+**runtime view**'s `cancelAgent` and `children` rows and its crash paragraph, the **state-ownership view**'s rest and
+session-lock rows and the **sequences view**'s crash note name the new writer; the `iterations` and `agent_terminals`
+rows say only that the crash record is written at a repair or a continue, which the cancel is not. No package, edge,
+process, channel or command changes.
 
 **A paused agent presents as paused on every agent surface (`PD-ORCH-005` clause 13, revision 4, 2026-09-28, R-064).**
 `PRESENTATION_CHILD_STATES` gains `paused` and `presentationChildState` maps the child state to it, so `AgentRecord`'s
@@ -87,7 +89,7 @@ crash left and states nothing to resume (`Sessions.restingOf`, OQ-76); `runLevel
 presents the resting root `paused`, the Workspace and the Mission view asking it and `runLevelResting` through one call
 (`restingView`) with REQ-CHAT-008's recovery state (`useNeedsRecovery`, moved to `renderer/session-view.ts`), and the
 Mission view, handed that fact as `recovery`, reads no run active in it, so it offers no Pause beside the root it draws
-`paused` (`docs/defects/fixed/the-mission-view-offers-pause-in-the-recovery-state.md`). The Overview counts paused agents on their own. The **runtime view**'s eleventh-state and
+`paused` and labels the run REQ-CHAT-008's "Run needs recovery" rather than "Running" (`docs/defects/fixed/the-mission-view-offers-pause-and-cancel-with-no-run-behind-the-session.md`). The Overview counts paused agents on their own. The **runtime view**'s eleventh-state and
 projection paragraphs and the **state-ownership view**'s rest row are updated; no package, edge, process, channel or
 command changes.
 

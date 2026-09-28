@@ -59,7 +59,7 @@ describe('Todo — a task held by an open iteration (PD-ORCH-005 clause 17)', ()
     back.releaseHeld(3, false);
     const again = Todo.fromDocument(JSON.parse(JSON.stringify(back.toDocument())) as ReturnType<Todo['toDocument']>);
     expect(again.selectNext()!.id).toBe('m');
-    // The mark that it is a continue's message outlives its release and the stored document (review round 4).
+    // The mark that it is a continue's message outlives its release and the stored document (found by the iteration lane review).
     expect(again.task('m')!.message).toBe(true);
     expect(again.task('a')!.message).toBeUndefined();
   });
@@ -76,7 +76,7 @@ describe('Todo — a task held by an open iteration (PD-ORCH-005 clause 17)', ()
     expect(t.holdsUnfinished('first', null)).toBe(true);
     expect(t.holdsUnfinished('other', null)).toBe(false);
     t.begin(t.selectNext()!);
-    // The open iteration's own task counts; an in-progress task that nothing open holds does not (review round 3).
+    // The open iteration's own task counts; an in-progress task that nothing open holds does not (found by the iteration lane review).
     expect(t.holdsUnfinished('first', { iteration: 1, taskId: 'a' })).toBe(true);
     expect(t.holdsUnfinished('first', null)).toBe(false);
     expect(t.holdsUnfinished('first', { iteration: 1, taskId: 'other' })).toBe(false);

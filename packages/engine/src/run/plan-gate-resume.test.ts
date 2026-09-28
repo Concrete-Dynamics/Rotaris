@@ -221,7 +221,7 @@ describe('PD-ORCH-003 revision 2: a resumed iteration and the gate', () => {
     expect(planned).not.toContain('already');
   });
 
-  it('a Continue action that resumes an iteration holding an earlier continue\'s message tells the plan cycle that message was carried out (review round 3)', async () => {
+  it('a Continue action that resumes an iteration holding an earlier continue\'s message tells the plan cycle that message was carried out (found by the iteration lane review)', async () => {
     const { sessions, client, sid } = await restedWithPending([answer('Plan: do later.')]);
     // An earlier continue by message delivered `earlier` to iteration 1, which then came to rest again holding it.
     const stored = decodeStoredTodo(dal.getSession(sid)!.todo);
@@ -236,7 +236,7 @@ describe('PD-ORCH-003 revision 2: a resumed iteration and the gate', () => {
     expect(planned).toContain('the resumed iteration has already carried out its message.');
   });
 
-  it('a plan cycle held after a resumed iteration whose own task is an earlier message is not given that message as its task (PD-ORCH-005 clause 17; review round 5)', async () => {
+  it('a plan cycle held after a resumed iteration whose own task is an earlier message is not given that message as its task (PD-ORCH-005 clause 17; found by the iteration lane review)', async () => {
     const { sessions, client, sid } = await restedWithPending([answer('resumed, done'), answer('Plan: do later.')]);
     // Iteration 1 took up an earlier continue's message, `first`, while the launch content named another request.
     const stored = decodeStoredTodo(dal.getSession(sid)!.todo);

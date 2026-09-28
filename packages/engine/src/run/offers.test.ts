@@ -256,7 +256,7 @@ describe('PD-ORCH-004 revision 4: a later iteration\'s root is told the open off
     expect(told[1]).toBe(`${OFFERS_HEADER}\n- early (bg_0000ff00)`);
   });
 
-  it('a continue that resumes a compressed root reads the offers its compression names as held — the replacement row is no message of its own (review round 4)', async () => {
+  it('a continue that resumes a compressed root reads the offers its compression names as held — the replacement row is no message of its own (found by the iteration lane review)', async () => {
     const { sessions } = sessionsWith([answer('first, done'), answer('resumed, done')]);
     const sid = (sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
     await sessions.running(sid)!;
@@ -275,7 +275,7 @@ describe('PD-ORCH-004 revision 4: a later iteration\'s root is told the open off
     expect(listsHeldBy(sid, 1)).toEqual([`${OFFERS_HEADER}\n- c1 (bg_00000d01)`]);
   });
 
-  it('offersHeldIn: an offer raised in the same millisecond a list was recorded counts as held by it, and one raised a millisecond later does not (OQ-80; review round 5)', () => {
+  it('offersHeldIn: an offer raised in the same millisecond a list was recorded counts as held by it, and one raised a millisecond later does not (OQ-80; found by the iteration lane review)', () => {
     const sid = asSessionId('S-same-ms');
     const at = new Date(clock.instant()).toISOString();
     dal.upsertSession({ session_id: sid, execution_status: 'completed', workspace_root: 'C:/ws', created_at: at, updated_at: at });
@@ -295,7 +295,7 @@ describe('PD-ORCH-004 revision 4: a later iteration\'s root is told the open off
     expect(held.has('bg_0000ee02')).toBe(false);
   });
 
-  it('an iteration that takes up an earlier message is sent the launch content, then that message, then the offers raised since (PD-ORCH-005 clause 17, PD-ORCH-004 revision 4; review round 5)', async () => {
+  it('an iteration that takes up an earlier message is sent the launch content, then that message, then the offers raised since (PD-ORCH-005 clause 17, PD-ORCH-004 revision 4; found by the iteration lane review)', async () => {
     let sid!: SessionId;
     const { sessions } = sessionsWith([answer('first, done'), answer('M1, done'), answer('M2, done'), answer('third, done')], {
       during: (k) => { if (k === 2) offer(sid, 'bg_0000dd01', 'raised'); },

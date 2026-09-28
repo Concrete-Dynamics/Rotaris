@@ -119,7 +119,7 @@ describe('PD-ORCH-005 clause 17: a continue\'s message is also a task', () => {
     expect(shape(sid)).toEqual([['first', 'complete', undefined]]);
   });
 
-  it('a resumed iteration that fails leaves the message pending, and the next continue\'s iteration takes it up — it is sent the message, and the new request is worked once (review round 4)', async () => {
+  it('a resumed iteration that fails leaves the message pending, and the next continue\'s iteration takes it up — it is sent the message, and the new request is worked once (found by the iteration lane review)', async () => {
     // No script remains for the resumed root: its turn fails, the iteration closes failed and the run ends.
     const h = sessionsWith([answer('first, done')]);
     const sid = (h.sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
@@ -292,7 +292,7 @@ describe('PD-ORCH-005 clause 17: a continue\'s message is also a task', () => {
     expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.outcome])).toEqual([[1, 'cancelled'], [2, 'succeeded']]);
   });
 
-  it.each(['continue', 'double'] as const)('the message-limit resolution \'%s\' restates the last request too, so a request a pause put back is worked once (OQ-75, review round 7)', async (action) => {
+  it.each(['continue', 'double'] as const)('the message-limit resolution \'%s\' restates the last request too, so a request a pause put back is worked once (OQ-75, found by the iteration lane review)', async (action) => {
     let release!: () => void;
     const hold = new Promise<void>((r) => { release = r; });
     const h = sessionsWith([{ parts: [{ hold }, ...answer('first, answered').parts] }, answer('first, done'), answer('first, done again')]);
@@ -310,7 +310,7 @@ describe('PD-ORCH-005 clause 17: a continue\'s message is also a task', () => {
     expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.outcome])).toEqual([[1, 'cancelled'], [2, 'succeeded']]);
   });
 
-  it('a task left in progress that no open iteration holds does not stop the Continue action appending the request, so it is done (review round 3)', async () => {
+  it('a task left in progress that no open iteration holds does not stop the Continue action appending the request, so it is done (found by the iteration lane review)', async () => {
     const h = sessionsWith([answer('first, done'), answer('first, again')]);
     const sid = (h.sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
     await h.sessions.running(sid)!;
@@ -328,7 +328,7 @@ describe('PD-ORCH-005 clause 17: a continue\'s message is also a task', () => {
     expect(tasksOf(sid).filter((t) => t.text === 'first' && t.state === 'complete')).toHaveLength(1);
   });
 
-  it('a continue by message that resumes an iteration holding an earlier message: each message is sent to the iteration that takes it up (review round 4)', async () => {
+  it('a continue by message that resumes an iteration holding an earlier message: each message is sent to the iteration that takes it up (found by the iteration lane review)', async () => {
     let release!: () => void;
     const hold = new Promise<void>((r) => { release = r; });
     const { sessions, client, sid } = await restedSession([
@@ -354,7 +354,7 @@ describe('PD-ORCH-005 clause 17: a continue\'s message is also a task', () => {
     expect(four).not.toContain(TAKEN_UP);
   });
 
-  it('a Continue action after a death left a cancelled iteration holding the message appends it no second time: it is worked once (review round 5)', async () => {
+  it('a Continue action after a death left a cancelled iteration holding the message appends it no second time: it is worked once (found by the iteration lane review)', async () => {
     let release!: () => void;
     const hold = new Promise<void>((r) => { release = r; });
     const { sessions, sid } = await restedSession([{ parts: [{ hold }, ...answer('never').parts] }, answer('second, done'), answer('first, done again')]);
@@ -380,7 +380,7 @@ describe('PD-ORCH-005 clause 17: a continue\'s message is also a task', () => {
     expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.todo_task_id === own!.id ? 'own' : r.todo_task_id === taken!.id ? 'message' : '?', r.outcome])).toEqual([[1, 'own', 'cancelled'], [2, 'message', 'succeeded'], [3, 'own', 'succeeded']]);
   });
 
-  it('a Continue action after a death left a succeeded iteration holding the message judges it done, so the request is appended as any completed one is (review round 5)', async () => {
+  it('a Continue action after a death left a succeeded iteration holding the message judges it done, so the request is appended as any completed one is (found by the iteration lane review)', async () => {
     const { sessions, sid } = await restedSession([answer('second, done'), answer('second, again')]);
     expect(sessions.prompt(sid, 'second').ok).toBe(true);
     expect((await sessions.running(sid)!).status).toBe('completed');
@@ -398,7 +398,7 @@ describe('PD-ORCH-005 clause 17: a continue\'s message is also a task', () => {
     expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.outcome])).toEqual([[1, 'succeeded'], [2, 'succeeded']]);
   });
 
-  it('a continue by message always appends its task, even when its text matches a request still pending: the user stated it again, so it is worked again (OQ-75, review round 6)', async () => {
+  it('a continue by message always appends its task, even when its text matches a request still pending: the user stated it again, so it is worked again (OQ-75, found by the iteration lane review)', async () => {
     let release!: () => void;
     const hold = new Promise<void>((r) => { release = r; });
     const h = sessionsWith([{ parts: [{ hold }, ...answer('first, answered').parts] }, answer('first, done'), answer('first, done again')]);

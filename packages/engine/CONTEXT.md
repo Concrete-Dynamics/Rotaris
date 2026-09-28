@@ -285,8 +285,9 @@ _Avoid_: suspended, frozen, held (the **plan gate** and the **message-limit paus
 **Interruption**:
 What left an agent `paused` — exactly one of `pause`, `stop`, `quit` or `crash` — recorded on the agent and on its open
 iteration. A crash is recorded when the session is next repaired or continued, since nothing runs to record it at the
-time; the user's cancel of one child while the session rests records nothing of it (OQ-74). An explicit cancel is not an interruption: it ends its agents `cancelled`, and those are
-never resumed. — `PD-ORCH-005`
+time; the user's cancel of one child while the session rests records nothing of it but the cancelled agents' own calls
+the crash cut off, answered as interrupted, which no later record reaches (OQ-74). An explicit cancel is not an
+interruption: it ends its agents `cancelled`, and those are never resumed. — `PD-ORCH-005`
 _Avoid_: stop reason (that is the run's, `REQ-MONITOR-301`), cancellation
 
 **Comes to rest** (a run):

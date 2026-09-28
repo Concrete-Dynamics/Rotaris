@@ -3,6 +3,7 @@ import { DELEGATION_STRATEGY_NAMES, isBusy, presentationStatus, RUN_AGENT_ID, ST
 import { AgentTable } from './AgentTable.js';
 import { AgentTree } from './AgentTree.js';
 import { CANCEL_RUN_TEXT, cancelCascade, cancelConfirmation, cancelOffered, cascadeNote, pauseAvailability } from './agents.js';
+import { RUN_STATE_LABELS } from './composer.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
 import { markMotionStart } from './motion.js';
 import { Button as DesignButton, PageHeader as DesignPageHeader, Select as DesignSelect } from './design-system/index.js';
@@ -103,7 +104,10 @@ export function MissionView(props: MissionViewProps) {
     const r = target.id === RUN_AGENT_ID ? await onCancelRun() : await onCancelAgent(target.id);
     setError(r.ok ? null : r.reason);
   };
-  const subtitle = session ? `delegation tree · ${sessionLabel ?? session.id.slice(0, 8)} · ${STATUS_LABELS[presentationStatus(session.executionStatus)]}` : 'No session is active.';
+  // REQ-CHAT-008: a busy status with no run here reads as the recovery state, as the Workspace's run header reads it, never
+  // as running beside a run-level agent drawn `paused` (PD-ORCH-005 clause 13, OQ-73).
+  const statusLabel = session === null ? null : recovery && isBusy(session.executionStatus) ? RUN_STATE_LABELS.recovery : STATUS_LABELS[presentationStatus(session.executionStatus)];
+  const subtitle = session ? `delegation tree · ${sessionLabel ?? session.id.slice(0, 8)} · ${statusLabel}` : 'No session is active.';
   return (
     <div className="mission" data-testid="mission" data-refresh-ms={refresh ? refresh.ms.toFixed(1) : ''} data-refresh-agents={refresh ? String(refresh.agents) : ''} data-selected={selectedAgentId ?? ''}>
       <DesignPageHeader className="mission__header page-header">
@@ -118,7 +122,7 @@ export function MissionView(props: MissionViewProps) {
             onClick={() => onSelect(RUN_AGENT_ID, 'click')} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(RUN_AGENT_ID, 'key'); } }}>
             <span ref={(element) => { if (element && runActive) markMotionStart(element); }} className={`agent-row__dot agent-row__dot--${runLevel?.presentationState ?? 'idle'}`} aria-hidden="true" />
             <span className="mission__run-label">Run{runLevel ? ` · ${runLevel.persona}` : ''}</span>
-            <span className="mission__run-state mono text-secondary">{session ? STATUS_LABELS[presentationStatus(session.executionStatus)] : 'no session'}</span>
+            <span className="mission__run-state mono text-secondary">{statusLabel ?? 'no session'}</span>
           </div>
           <AgentTree agents={agents} selected={selectedAgentId} onSelect={onSelect} nowIso={nowIso} />
           <div className="mission__actions" aria-label="Selection actions">

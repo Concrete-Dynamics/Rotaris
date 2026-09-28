@@ -81,6 +81,15 @@ describe('PD-ORCH-005 clauses 13 and 16 (revision 4, OQ-73/OQ-74): the Mission v
     // The same busy status with a run under way here still offers it.
     expect(button(mission(RUN_AGENT_ID, { session: recovery, resting: false, recovery: false, runLevel: restingRun }), 'mission-pause')).toContain('data-enabled="1"');
   });
+  it('in REQ-CHAT-008\'s recovery state the Mission view\'s run row and subtitle read the recovery label, not "Running" beside a root drawn `paused`', () => {
+    const recovery = session({ executionStatus: 'running' });
+    const html = mission(RUN_AGENT_ID, { session: recovery, recovery: true, runLevel: restingRun });
+    expect(html).toMatch(/data-testid="mission-run-row"[\s\S]*?mission__run-state[^>]*>Run needs recovery</);
+    expect(html).toContain('· Run needs recovery</span>');
+    expect(html).not.toMatch(/>Running</);
+    // With a run under way here the same status still reads as running.
+    expect(mission(RUN_AGENT_ID, { session: recovery, resting: false, recovery: false, runLevel: restingRun })).toMatch(/mission__run-state[^>]*>Running</);
+  });
   it('a live run\'s run-level agent still offers it', () => {
     const live = agent({ id: RUN_AGENT_ID, name: 'orchestrator', persona: 'orchestrator', parentId: '', depth: 0, state: 'running', presentationState: 'running', live: true, interruption: null });
     expect(button(mission(RUN_AGENT_ID, { session: session({ executionStatus: 'running' }), runLevel: live, resting: false }), 'mission-cancel')).not.toContain('disabled');

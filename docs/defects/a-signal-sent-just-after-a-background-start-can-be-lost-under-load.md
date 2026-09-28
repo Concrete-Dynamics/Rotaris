@@ -7,6 +7,11 @@ times in a row on its own. The likeliest reading, not established, is a race: un
 session before its shell has started the command, and nothing re-delivers it. Noticed while gating other work; not
 root-caused.
 
+It recurred on 2026-09-28 in at least three full gate runs of the merged revision 4 build of `PD-ORCH-005` (R-064),
+which changed nothing under `packages/agent-tools`, listed each time as a new failure against the baseline: "Sent
+SIGINT" was reported and the session list still showed it `▶ … running` twenty seconds later. The test passed alone
+and its file passed 33 of 33. Still not reproduced in isolation and not repaired.
+
 ## Specs
 
 `OQ-10` as ruled by `R-044` — `send_signal SIGINT` stops a background session instead of refusing it. A signal that is

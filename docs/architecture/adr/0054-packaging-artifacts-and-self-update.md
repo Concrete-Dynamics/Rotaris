@@ -1548,3 +1548,19 @@ unreachable; the check now stays silent while an update is applied or handed off
 backup the same process's apply had just made; it is launch-time, once per process. Also aligned: the copy port
 replaces `<name>.update`, the updater's own sibling, as its contract now says. Unit: 152 cases in the same 14 files;
 `pnpm updater-proof`: 8 checks, all green.
+
+**Repaired at the second verification, 2026-09-28 (same item, R-062).** (5) *A refused pass left the restart waiting
+for ever.* A successor that started and was accepted, but that the record could not be passed to — the record no
+longer named this instance (a REQ-STARTUP-164 (3) reclaim meanwhile), or its atomic replacement failed (on Windows, a
+scanner or indexer holding the file through the rename) — was answered not-passed and ended quietly, while main's wait
+stayed armed: `Update not installed` never surfaced and every later `Update now`, `Try again`, `Restart now` and window
+check answered `update.busy` for the rest of the process. REQ-STARTUP-121 puts that case on its failure branch, and it
+is not ADR-0055's "successor that never signals", because the predecessor sees the refusal itself. The claim now takes
+`onRecordPassFailed(successor, reason)`, fired only for an announcement `acceptSuccessor` accepted; main's wait
+(`updater/successor.ts`) settles exactly once — passed, the spawn failed, or the pass failed — so the restart raises
+`Update not installed` with the reason as its detail and the in-flight guard clears. The refusal's answer now carries
+its reason, and the successor's `launch refused` line names the check that refused it. Pinned by `instance.test.ts`
+(a failing replacement, and a record rewritten for another pid: the callback fires, the record is byte-for-byte
+unchanged; an announcement never accepted does not fire it), `successor.test.ts` and `updater.test.ts`. Still not
+decided here: an answer the successor no longer waits for — its 5 s bound expired while this process was blocked — is
+recorded in `../../defects/` as a defect, not repaired. Unit: 162 cases in 15 files.

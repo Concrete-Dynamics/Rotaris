@@ -101,6 +101,10 @@ sequenceDiagram
     S->>S: no claim; open its own endpoint (inheritInstance)
     S->>M: {"successor": {pid, host, acquired_at, endpoint}}
     M->>M: only while this restart waits (acceptSuccessor) — replace the record file atomically with the successor's fields (passRecord)
+    alt the record is not this instance's, or the replacement fails
+      M-->>S: {"ok":false,"reason":…} — the successor ends
+      M->>M: onRecordPassFailed → the wait rejects → "Update not installed", nothing closes (REQ-STARTUP-121)
+    end
     M-->>S: {"ok":true,"record":"passed"}
     M->>M: destroy the windows; the ordinary quit; close leaves a record that no longer names it
   else installer: spawn the setup, detached (REQ-STARTUP-125)
@@ -112,8 +116,13 @@ sequenceDiagram
 
 A successor that cannot be started surfaces through `Update not installed` and nothing closes; one that never
 signals leaves this instance holding its record and its window, with no timeout (REQ-STARTUP-121, ADR-0055). A
-successor announcement that arrives while no restart is waiting — a sentinel launch nobody started — is answered
-`{"ok":false}`, the record is unchanged, and that launch ends; the instance stays the only one (REQ-STARTUP-161).
+successor that started and was accepted, but that the record cannot be passed to — the record no longer names this
+instance, or its atomic replacement fails — is answered `{"ok":false,"reason":…}` and ends; the claim reports it to
+main (`onRecordPassFailed`), main's wait (`updater/successor.ts`) rejects with the reason, and the restart takes the
+same failure branch: `Update not installed`, nothing closes, the in-flight guard clears. A successor announcement that
+arrives while no restart is waiting — a sentinel launch nobody started — is answered `{"ok":false,"reason":…}`, the
+record is unchanged, nothing is reported to main, and that launch ends; the instance stays the only one
+(REQ-STARTUP-161).
 Nothing of the installation is moved or modified before the replacement is fetched whole and verified
 (REQ-STARTUP-126). The apply strategies and the restart are decided by unit tests over fakes; their run against a real
 Windows artifact is owed to the next Windows package (IC-3) — ADR-0054's "The updater" note says what was executed.

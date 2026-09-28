@@ -1,8 +1,8 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { millis, type MachineId } from '@rotaris/kernel';
+import { err, millis, type MachineId } from '@rotaris/kernel';
 import { nodeClocks } from './clock.js';
 import { claimInstance, inheritInstance, type ClaimDeps, type HandOver, type InstanceRecord } from './instance.js';
 
@@ -122,6 +122,67 @@ describe('the update restart as a hand-over of the record — REQ-STARTUP-121, R
     expect(passed).toHaveLength(1);
     await armed.close();
     if (successor.outcome === 'instance') await successor.close();
+  });
+
+  it('an accepted successor the record cannot be passed to is reported to the waiting restart, and the record is unchanged — the replacement failed (REQ-STARTUP-121)', async () => {
+    const passed: InstanceRecord[] = [];
+    const failed: { successor: InstanceRecord; reason: string }[] = [];
+    const predecessor = await claimInstance(deps({
+      pid: PREDECESSOR_PID, onRecordPassed: (s) => passed.push(s), acceptSuccessor: () => true,
+      onRecordPassFailed: (successor, reason) => failed.push({ successor, reason }),
+      replaceRecord: async () => err({ code: 'document.rename', headline: 'Could not replace the document', detail: 'EBUSY: resource busy or locked' }),
+    }));
+    if (predecessor.outcome !== 'instance') throw new Error(predecessor.outcome);
+    const before = readFileSync(join(dir, 'instance.json'), 'utf8');
+
+    const successor = await inheritInstance(deps({ handOverIntervalMs: millis(1_000) }), predecessor.record.endpoint);
+    expect(successor.outcome).toBe('refused');
+    // The successor learns which check refused it, and ends; the predecessor's restart is told the same reason.
+    if (successor.outcome === 'refused') expect(successor.reason).toContain('the instance record could not be replaced: Could not replace the document — EBUSY');
+    expect(failed).toHaveLength(1);
+    expect(failed[0]?.successor.pid).toBe(process.pid);
+    expect(failed[0]?.reason).toBe('the instance record could not be replaced: Could not replace the document — EBUSY: resource busy or locked');
+    expect(passed).toEqual([]);
+    expect(readFileSync(join(dir, 'instance.json'), 'utf8')).toBe(before);
+    await predecessor.close();
+  });
+
+  it('an accepted successor the record cannot be passed to is reported to the waiting restart, and the record is unchanged — the record no longer names this instance (REQ-STARTUP-121, REQ-STARTUP-164)', async () => {
+    const passed: InstanceRecord[] = [];
+    const failed: string[] = [];
+    const predecessor = await claimInstance(deps({
+      pid: PREDECESSOR_PID, onRecordPassed: (s) => passed.push(s), acceptSuccessor: () => true,
+      onRecordPassFailed: (_successor, reason) => failed.push(reason),
+    }));
+    if (predecessor.outcome !== 'instance') throw new Error(predecessor.outcome);
+    // A reclaim (REQ-STARTUP-164 (3)) rewrote the record for another process meanwhile.
+    const other = `${JSON.stringify({ ...predecessor.record, pid: PREDECESSOR_PID + 1_000_000 })}\n`;
+    writeFileSync(join(dir, 'instance.json'), other);
+
+    const successor = await inheritInstance(deps({ handOverIntervalMs: millis(1_000) }), predecessor.record.endpoint);
+    expect(successor.outcome).toBe('refused');
+    if (successor.outcome === 'refused') expect(successor.reason).toContain('the instance record no longer names the running instance');
+    expect(failed).toEqual(['the instance record no longer names the running instance']);
+    expect(passed).toEqual([]);
+    expect(readFileSync(join(dir, 'instance.json'), 'utf8')).toBe(other);
+    await predecessor.close();
+  });
+
+  it('an announcement that was never accepted is not reported as a pass failure: no restart pending, or malformed (REQ-STARTUP-161)', async () => {
+    const failed: string[] = [];
+    const idle = await claimInstance(deps({ pid: PREDECESSOR_PID, acceptSuccessor: () => false, onRecordPassFailed: (_s, reason) => failed.push(reason) }));
+    if (idle.outcome !== 'instance') throw new Error(idle.outcome);
+    const stray = await inheritInstance(deps({ handOverIntervalMs: millis(1_000) }), idle.record.endpoint);
+    expect(stray.outcome).toBe('refused');
+    if (stray.outcome === 'refused') expect(stray.reason).toContain('the running instance is not waiting for a successor');
+    await idle.close();
+
+    const armed = await claimInstance(deps({ pid: PREDECESSOR_PID, acceptSuccessor: () => true, onRecordPassFailed: (_s, reason) => failed.push(reason) }));
+    if (armed.outcome !== 'instance') throw new Error(armed.outcome);
+    const foreign = await inheritInstance(deps({ machineId: 'another-machine' as MachineId, handOverIntervalMs: millis(1_000) }), armed.record.endpoint);
+    expect(foreign.outcome).toBe('refused');
+    expect(failed).toEqual([]);
+    await armed.close();
   });
 
   it('an ordinary hand-over line is unchanged by the successor branch: it surfaces the instance and is acknowledged', async () => {

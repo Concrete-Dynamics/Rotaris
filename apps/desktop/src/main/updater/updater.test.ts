@@ -9,6 +9,7 @@ import type { DownloadSink } from './download.js';
 import { FEED_ACCEPT, FEED_ENDPOINT, FEED_TIMEOUT_MS, SUMMARY_FALLBACK } from './feed.js';
 import type { NetworkResponse, StagingArea, UpdateNetwork } from './install.js';
 import type { StrategyFiles, StrategySpawn } from './strategies.js';
+import { passFailedSentence } from './successor.js';
 import { createUpdater, DOWNLOAD_IN_PROGRESS, downloadingMessage, downloadingTitle, FINISH_TITLE, INSTALLED_TITLE, INSTALLER_AUTO_CLOSE_MS, NOT_INSTALLED_MESSAGE, NOT_INSTALLED_TITLE, offerTitle, RESTART_NOW, TRY_AGAIN, UPDATE_NOW, type UpdaterDeps } from './updater.js';
 
 const PORTABLE = 'Rotaris-0.2.0-windows-x64-portable.exe';
@@ -104,7 +105,7 @@ const portable: Classification = { updatable: true, flavour: 'portable', target:
 const installer: Classification = { updatable: true, flavour: 'installer', target: INSTALL_DIR };
 const dev: Classification = { updatable: false, reason: 'a development or source-tree launch, not a released standalone artifact (REQ-STARTUP-106)' };
 
-function harness(options: { classification?: Classification; feed?: FeedOptions; running?: string; dismissed?: string; keys?: 'carried' | 'empty' | 'other'; successor?: 'passes' | 'fails' | 'never'; volumeFiles?: Record<string, string> } = {}) {
+function harness(options: { classification?: Classification; feed?: FeedOptions; running?: string; dismissed?: string; keys?: 'carried' | 'empty' | 'other'; successor?: 'passes' | 'fails' | 'never' | 'refused'; volumeFiles?: Record<string, string> } = {}) {
   const srv = server(options.feed);
   const clock = new FakeClock();
   const logged: string[] = [];
@@ -136,6 +137,8 @@ function harness(options: { classification?: Classification; feed?: FeedOptions;
       started.push(target);
       if (options.successor === 'fails') throw new Error('EACCES: cannot execute');
       if (options.successor === 'never') await new Promise<void>(() => undefined);
+      // Started and accepted, but the record could not be passed to it (main's `successor.ts` rejects the same way).
+      if (options.successor === 'refused') throw new Error(passFailedSentence('the instance record could not be replaced: EBUSY'));
     },
     closeWindows: () => { closed += 1; },
   };
@@ -445,6 +448,19 @@ describe('`Restart now` — REQ-STARTUP-121', () => {
     expect(h.closed()).toBe(0);
     expect(h.notices.current()).toMatchObject({ id: 1, severity: 'error', title: NOT_INSTALLED_TITLE, action: { label: TRY_AGAIN } });
     expect(h.notices.current()?.detail).toBe(`could not start the updated Rotaris at ${TARGET}: EACCES: cannot execute`);
+  });
+
+  it('a successor that started but could not be given the record surfaces `Update not installed`, closes nothing, and frees the in-flight guard', async () => {
+    const h = harness({ successor: 'refused' });
+    await h.updater.activate({ windowId: 1 });
+    await h.updater.install();
+    const sentence = `could not start the updated Rotaris at ${TARGET}: ${passFailedSentence('the instance record could not be replaced: EBUSY')}`;
+    expect(await h.updater.restart()).toMatchObject({ ok: false, code: 'update.restart', headline: NOT_INSTALLED_TITLE, detail: sentence });
+    expect(h.closed()).toBe(0);
+    expect(h.updater.inFlight()).toBe(false);
+    expect(h.notices.current()).toMatchObject({ id: 1, severity: 'error', title: NOT_INSTALLED_TITLE, detail: sentence, action: { label: TRY_AGAIN } });
+    // The guard is free: `Try again` runs the sequence again rather than answering `update.busy`.
+    expect(await h.updater.install()).not.toMatchObject({ code: 'update.busy' });
   });
 
   it('a successor that never signals leaves this instance holding its window; nothing times it out', async () => {

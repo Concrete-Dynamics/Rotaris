@@ -24,6 +24,7 @@ import { type AcknowledgementAction, CHANNEL, CommandRequestSchema, type Command
 import { claimInstance, inheritInstance, dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, type HandOver, type InstanceRecord } from '@rotaris/platform';
 // The updater (first-release-plan.md §4.6, ADR-0054): the pure module, and the one file of it that touches Electron.
 import { createUpdater } from './updater/updater.js';
+import { createSuccessorWait } from './updater/successor.js';
 import { classifyThisInstallation, createUpdaterPorts, successorArguments, successorEndpointFromArgv } from './updater/electron.js';
 import { updateCommands } from './commands/update.js';
 import { productVersion } from './version.js';
@@ -140,7 +141,7 @@ async function main(): Promise<void> {
   const pendingHandOvers: HandOver[] = [];
   let surface: ((h: HandOver) => void) | undefined;
   /** REQ-STARTUP-121: armed by the updater's restart while it waits for the record to pass to the successor it started. */
-  let recordPassed: ((successor: InstanceRecord) => void) | undefined;
+  const successorWait = createSuccessorWait();
 
   /**
    * REQ-STARTUP-121 / ADR-0055 ("The update restart is a hand-over of the record"): a launch the running instance
@@ -153,11 +154,17 @@ async function main(): Promise<void> {
     recordFile: layout.instanceRecord, endpointDir: dirs.data, machineId, pid: process.pid,
     wall: clocks.wall, timers: clocks.timers, handOverIntervalMs: millis(5_000),
     onHandOver: (h: HandOver) => { if (surface) surface(h); else pendingHandOvers.push(h); },
-    onRecordPassed: (successor: InstanceRecord) => { recordPassed?.(successor); },
+    onRecordPassed: () => { successorWait.passed(); },
+    // REQ-STARTUP-121: an accepted successor the record could not be passed to fails the waiting restart, which then
+    // surfaces `Update not installed` and clears the updater's in-flight guard, instead of waiting for ever.
+    onRecordPassFailed: (_successor: InstanceRecord, reason: string) => {
+      log(`update restart: the record could not be passed to the successor — ${reason} (REQ-STARTUP-121)`, 'warn');
+      successorWait.failed(reason);
+    },
     // REQ-STARTUP-161/121: the record passes only while a restart this instance started is waiting for its successor;
     // any other announcement is refused and leaves the record as it is. Not matched on the pid the restart spawned:
     // the portable's launcher (ADR-0054) stands between that process and the one that announces itself.
-    acceptSuccessor: () => recordPassed !== undefined,
+    acceptSuccessor: () => successorWait.accepting(),
   };
   const claim = successorOf === null
     ? await claimInstance(claimDeps, argvWorkspace ? { workspace: argvWorkspace } : {})
@@ -396,13 +403,11 @@ async function main(): Promise<void> {
     /**
      * REQ-STARTUP-121: the successor is the updated installation itself, started with the sentinel and this instance's
      * hand-over endpoint (`successorArguments`). The promise settles when `onRecordPassed` fires — the record has been
-     * rewritten with the successor's fields and the successor told — and fails when the process cannot be started.
+     * rewritten with the successor's fields and the successor told — and fails when the process cannot be started, or
+     * when it started and was accepted but the record could not be passed to it (`onRecordPassFailed`; `successor.ts`).
      * It has no timeout of its own (ADR-0055): a successor that never signals leaves this instance as it is.
      */
-    startSuccessor: (target) => new Promise<void>((resolve, reject) => {
-      recordPassed = () => { recordPassed = undefined; resolve(); };
-      updaterPorts.spawn.spawnDetached(target, successorArguments(claim.record.endpoint)).catch((cause: unknown) => { recordPassed = undefined; reject(cause); });
-    }),
+    startSuccessor: (target) => successorWait.start(() => updaterPorts.spawn.spawnDetached(target, successorArguments(claim.record.endpoint))),
     // The window closes only after the successor has started, and the installer's hand-off closes it after its delay
     // (REQ-STARTUP-119/121): every main window is destroyed and the ordinary quit path follows.
     closeWindows: () => { mainWindows.dispose(); },

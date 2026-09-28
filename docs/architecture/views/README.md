@@ -66,7 +66,11 @@ OQ-78) and one defect noticed beside the mechanism (`redirector.gvt1.com`). **Re
 the **state-ownership view**'s instance-record row and the **sequences view**'s `Restart now` now say the record passes
 only while a restart this instance started waits for its successor (`acceptSuccessor`, REQ-STARTUP-161); the sequences
 view's launch and the process view's `.old` row say the backup cleanup runs at a launch's first check only and that an
-update already installed in this process is not offered again (REQ-STARTUP-115/119); OQ-79 raised.
+update already installed in this process is not offered again (REQ-STARTUP-115/119); OQ-79 raised. **Repaired at the
+second verification:** the **process view**'s main row names `updater/successor.ts`; the **sequences view**'s `Restart now` and the **state-ownership view**'s instance-record row
+say that an accepted successor the record cannot be passed to fails the waiting restart (`onRecordPassFailed`,
+`updater/successor.ts`, REQ-STARTUP-121) and that a refusal answers with its reason; the **seams view**'s §6 names the
+notice store's `update` in place and `action.disabled` as REQ-SHELL-118's exception to "a second notice replaces".
 
 **A session approval of a file write covers that path (`PD-TOOLS-004`, built 2026-09-27, R-057).** A grant made by
 "approve for session" on a call of the public `write_file` or `haet_edit` (`haet` folded in) now stores the set of

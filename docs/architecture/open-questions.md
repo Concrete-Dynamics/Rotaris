@@ -83,7 +83,7 @@ registry match nor the launcher's variable: ADR-0054 says not updatable, REQ-STA
 (REQ-STARTUP-118 against REQ-SHELL-118 on the download notice's title, persistence and the pause before the apply); **one more by that
 item's verification the same day: OQ-86** (whether the installer's auto-close and the restart's close ask REQ-STARTUP-046's active-run
 confirmation) — the four raised as OQ-76 to OQ-79 on their branch and renumbered at the merge, OQ-76 to OQ-82 having been taken on `main`. **One more was raised on 2026-09-28 by building the setup manifest (`first-release-plan.md` §4.1): OQ-87** (what a machine tool's "archive layout" comprises, and what path its expected executables are relative to — MinGit's entries sit at the archive root and ripgrep's under one directory). **And OQ-88**, raised by the same item's independent verification (whether a manifest may key an archive under REQ-STARTUP-060's raw `<os>-<machine>` fallback); the two were raised as OQ-76 and OQ-77 on their branch and renumbered at the merge, OQ-76 to OQ-86 having been taken on `main`. **And one more the same day by REQ-CHAT-055's measurement round (R-048's order under R-062): OQ-89** (how the append comparison is read when updates arrive faster than frames — each one's shown-update time then holds the
-queue in front of it — and what "an empty transcript" is compared against once the appended rows are on it — raised as OQ-76 on its branch and renumbered at the merge, OQ-76 to OQ-88 having been taken on `main`). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+queue in front of it — and what "an empty transcript" is compared against once the appended rows are on it — raised as OQ-76 on its branch and renumbered at the merge, OQ-76 to OQ-88 having been taken on `main`). **And one more the same day by repairing the artifact variables' reach into the product's children (R-062): OQ-90** (whether the variables naming a launch's artifact are removed from what its children inherit — built so — and which of REQ-STARTUP-147 and REQ-HOOKS-032 says so). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -3510,6 +3510,24 @@ updates so each is shown before the next arrives, which the benchmark domain's p
 visible-row term is within the requirement while the third sentence's comparison holds, or is itself the thing the
 third sentence forbids. Recommended: the first reading, as the one a reader experiences and the one the benchmark's
 phases can measure, with the third sentence read at one frame of slack as the proof reads it.
+
+**OQ-90 — Are the variables that name a launch's artifact removed from what the product's children inherit, and which requirement says so?** *(REQ-STARTUP-147, REQ-STARTUP-106, REQ-HOOKS-032; ADR-0054, "The updater", item (6). Raised 2026-09-28 by repairing `docs/defects/fixed/the-artifact-variables-reach-the-products-own-child-processes.md` under [R-062](../product/requests.md#r-062).)*
+
+REQ-STARTUP-147 says a variable naming the artifact a launch started from is "set by the artifact's own runtime rather
+than by a user" and "decides which file an update replaces", and REQ-STARTUP-106 takes the classification from "the
+artifact the launch started from". Neither says what the product's own children receive. REQ-STARTUP-147's closing
+sentence lists the "Variables written for child processes" — `PATH`/`Path`, `UV_CACHE_DIR`, `npm_config_cache` — and
+names none removed; REQ-HOOKS-032 says a run started from the desktop application "sees exactly the environment the
+application itself was started with", which read literally includes `APPIMAGE` and the portable launcher's
+`ROTARIS_PORTABLE_ARTIFACT`.
+
+**What the build proceeds under.** Main takes both names out of its own environment before it starts any child, so no
+run host, workspace service, tool, terminal, hook, MCP server or code-intelligence branch carries them: a copy a child
+inherits names an artifact that is not the child's launch, and a Rotaris started from inside one would otherwise
+classify itself from the other's file. A hook therefore sees the application's environment less those two names.
+**A ruling would decide** whether REQ-STARTUP-147 gains the removal beside the variables it writes for child
+processes, and whether REQ-HOOKS-032's "exactly" is read over the environment less the artifact's own variables.
+Recommended: both, as one sentence in REQ-STARTUP-147 that REQ-HOOKS-032 cites.
 
 ## Design-reference dependencies
 

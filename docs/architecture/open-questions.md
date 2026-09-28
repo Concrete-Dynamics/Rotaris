@@ -3393,7 +3393,12 @@ no more; its last sentence settles "every other unfinished agent of a session at
   count for. Only the renderer knows the recovery state (`useNeedsRecovery`, moved to `renderer/session-view.ts` so the
   Workspace, the Mission view and a persona window ask the one liveness predicate alike). It carries no
   `interruption`: the session record does not carry the iteration's. A session at rest with nothing open presents it as
-  before, and a live run's root presents running though its iteration is open.
+  before, and a live run's root presents running though its iteration is open. In the recovery state the window's status
+  strip names the run `Run needs recovery`, as the run header and the Mission view do (`statusStripRunItem`), so no
+  surface reads a run as active beside a root drawn `paused`. A persona window's first view of the replica is renewed as
+  it subscribes (`followCoalesced`), because a session at rest publishes nothing more, so the root keeps its last activity
+  there too. *Until the fourteenth review round the strip read "run Running", and one drive showed that window's root
+  with no rows; that second defect was not reproduced (`docs/defects/fixed/`).*
 - **What a crash left — a departure from clause 13's last sentence and from REQ-MONITOR-211/213.** The agents the
   crash record will pause present as it will leave them — `paused`, interruption `crash`, their activity kept, no chip
   — before it is recorded, although they are not in the child state `paused` and the sentence settles them: every

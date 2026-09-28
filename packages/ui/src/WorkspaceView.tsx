@@ -5,8 +5,8 @@ import { err, ok } from '@rotaris/kernel';
 import {
   clampComposerHeight, composerChipReason, composerPlaceholderFor, COMPOSER_DEFAULT_HEIGHT, COMPOSER_MIN_HEIGHT, DEFAULT_REASONING,
   DRAFT_PUBLISH_MS, DRAFT_WRITE_MS, formatDuration, historyDown, historyUp, modelCallStartedAt, modelChipLabel,
-  REASONING_LEVELS, runStateOf, sendRefusal,
-  type HistoryWalk, type RunState,
+  pausePendingAfter, REASONING_LEVELS, runStateOf, sendRefusal,
+  type HistoryWalk, type PauseScope, type RunState,
 } from './composer.js';
 import { RunHeader } from './RunHeader.js';
 import { NoticeBanner } from './Notice.js';
@@ -692,6 +692,14 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
   const sessionBusy = session !== null && isBusy(session.executionStatus);
   const runActive = sessionBusy && !needsRecovery;
   const runState: RunState = runStateOf(session?.executionStatus ?? null, needsRecovery);
+  // REQ-MONITOR-296: the accepted pause's pending mark ends with the run that accepted it (`pausePendingAfter`). Derived
+  // during render from the scope last seen, as `useElapsedTick` derives its instant, not in an effect.
+  const pauseScope: PauseScope = { sessionId: session?.id ?? null, busy: sessionBusy };
+  const [pauseScopeSeen, setPauseScopeSeen] = useState<PauseScope>(pauseScope);
+  if (pauseScopeSeen.sessionId !== pauseScope.sessionId || pauseScopeSeen.busy !== pauseScope.busy) {
+    setPauseScopeSeen(pauseScope);
+    if (pausePending && !pausePendingAfter(pausePending, pauseScopeSeen, pauseScope)) setPausePending(false);
+  }
   // A pending stop is one requested against the run that is still active; a new run begins from a submit, which resets it.
   const stopPending = runActive && stopRequested;
   const pending = session?.pendingApprovals ?? [];

@@ -201,8 +201,17 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
     return sessionId;
   }
 
-  enqueueApproval(senderId: number, approval: TApproval): void {
-    this.#liveRecord(senderId)?.approvals.push(approval);
+  /**
+   * REQ-TOOLS-063: queue a request for this window's one dialog. Answers whether it waits behind another: a dialog is
+   * open, or requests are queued ahead of it. Main tells the run host so (`approval.queued`), which then stops bounding
+   * the wait for `approval.shown`. Otherwise a request left queued past that bound was denied unshown.
+   */
+  enqueueApproval(senderId: number, approval: TApproval): boolean {
+    const record = this.#liveRecord(senderId);
+    if (!record) return false;
+    const waits = record.openDialog !== null || record.approvals.length > 0;
+    record.approvals.push(approval);
+    return waits;
   }
 
   approvalQueue(senderId: number): readonly TApproval[] {

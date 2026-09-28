@@ -104,7 +104,10 @@ sequenceDiagram
     G->>RH: presenter.present(payload)
     RH->>M: event approval.present
     M->>M: queue on the window that owns the session
-    M->>D: modal BrowserWindow, role=approval
+    opt a dialog is open, or requests are queued ahead
+      M->>RH: request approval.queued
+    end
+    M->>D: modal BrowserWindow, role=approval (its turn)
     D->>M: command approval.payload
     M->>RH: request approval.shown {ok}
     D->>M: the person chooses
@@ -129,7 +132,13 @@ The parts that are easy to get wrong:
 - Presentation order is **oldest first by the published sequence**, and that sequence orders presentation
   *across* windows, not within one.
 - A dialog that cannot be shown is not a hang: `approval.shown {ok: false}` comes back, the pending request is
-  discarded, and the call is denied with source `presenter-error`.
+  discarded, and the call is denied with source `presenter-error`. Main must acknowledge a request within 10 s,
+  either by showing it or, when it waits behind the open dialog, with `approval.queued`. A queued request then waits
+  for its turn without that bound (REQ-TOOLS-063). The gate races the presentation against its own wait, so a queued
+  request that times out or is cancelled is dropped unshown and counts as cancelled (REQ-TOOLS-054), and one answered
+  elsewhere is honoured. *Until the fourteenth review round of the merged revision 4 build, main acknowledged only
+  what it showed, so a request queued behind a dialog left open for 10 s was denied unshown:
+  `docs/defects/fixed/a-queued-approval-is-denied-unshown-after-ten-seconds.md`.*
 - Only an **answer, a cancellation or a withdrawal** releases the wait. A wait with no limit is still released —
   the explicit cancel cancels whatever is blocked on a person as its first act, and a rest (a pause, a stop, a quit)
   **withdraws** it: the call settles blocked and interrupted, `approval_withdrawn` (or `question_withdrawn` for a

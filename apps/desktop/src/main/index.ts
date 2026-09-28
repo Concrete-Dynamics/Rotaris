@@ -774,7 +774,12 @@ async function main(): Promise<void> {
       // presents it. With no main window at all there is nobody to ask, which REQ-TOOLS-064 answers through
       // the headless policy — main says "not shown" and decides nothing itself (ADR-0019).
       const owner = ownerOf(e.payload.session_id);
-      if (owner) { mainWindows.enqueueApproval(owner.wcId, e.payload); void presentNext(owner); }
+      // REQ-TOOLS-063: a request that waits behind the open dialog is acknowledged as queued, so the run host does not
+      // read the wait as a presenter that failed to show it.
+      if (owner) {
+        if (mainWindows.enqueueApproval(owner.wcId, e.payload)) void runHost.request({ kind: 'approval.queued', requestId: e.payload.request_id }, millis(5_000)).catch(() => undefined);
+        void presentNext(owner);
+      }
       else void runHost.request({ kind: 'approval.shown', requestId: e.payload.request_id, ok: false, error: 'no main window is open' }, millis(5_000)).catch(() => undefined);
     }
     else if (e.kind === 'approval.close') {

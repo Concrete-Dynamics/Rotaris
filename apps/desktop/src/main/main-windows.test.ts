@@ -114,7 +114,7 @@ function harness(options: {
     log: (message) => actions.push(`log:${message}`),
   };
 
-  const mainWindows = new MainWindows(dependencies);
+  const mainWindows = new MainWindows<MemoryWindow, string, string, string, string>(dependencies);
   return {
     mainWindows, actions, notices, folders, windows, openFailures,
     deferOpens: () => { deferOpens = true; },
@@ -257,6 +257,18 @@ describe('MainWindows', () => {
       `log:offering the first-launch project chooser for window ${second.wcId}`,
     ]);
     expect(h.notices.map((notice) => notice.windowId)).toEqual([first.wcId, second.wcId]);
+  });
+
+  it('REQ-TOOLS-063: answers whether a queued approval waits behind an open dialog or requests ahead of it', async () => {
+    const h = harness();
+    const win = await h.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });
+    expect(h.mainWindows.enqueueApproval(win.wcId, 'first')).toBe(false);
+    h.mainWindows.takeApproval(win.wcId, () => 0);
+    h.mainWindows.setOpenDialog(win.wcId, 'dialog of first');
+    expect(h.mainWindows.enqueueApproval(win.wcId, 'second')).toBe(true);
+    h.mainWindows.setOpenDialog(win.wcId, null);
+    expect(h.mainWindows.enqueueApproval(win.wcId, 'third')).toBe(true);
+    expect(h.mainWindows.enqueueApproval(win.wcId + 999, 'nobody')).toBe(false);
   });
 
   it('destroys and cleans up a window if loading fails after registration', async () => {

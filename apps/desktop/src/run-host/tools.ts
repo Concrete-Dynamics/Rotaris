@@ -30,28 +30,44 @@ export function fileAppender(file: string): (line: string) => void {
   };
 }
 
-/** ADR-0019: the run host's side of the presenter channel — post a present-request, await main's `approval.shown`. */
+/**
+ * ADR-0019: the run host's side of the presenter channel. It posts a present-request and awaits main's `approval.shown`.
+ * Main must acknowledge within `shownBoundMs`, either by showing the dialog or, when a dialog is already open in its
+ * window, with `approval.queued` (REQ-TOOLS-063: shown one at a time, the next as soon as the open one closes). A queued
+ * request is then awaited without a bound, because a person's reading of the open dialog is not a presenter fault. The
+ * gate's own wait ends it if it times out or is cancelled while queued, and `close` releases it.
+ */
 export class RunHostPresenter implements PresenterPort {
-  private readonly waiters = new Map<string, (r: { ok: true } | { ok: false; error: string }) => void>();
+  private readonly waiters = new Map<string, { readonly settle: (r: { ok: true } | { ok: false; error: string }) => void; readonly bound: { cancel(): void } }>();
   constructor(private readonly deps: { readonly post: (payload: ApprovalPayload) => void; readonly close: (requestId: string) => void; readonly clocks: Clocks; readonly shownBoundMs: number }) {}
   present(payload: ApprovalPayload): Promise<{ ok: true } | { ok: false; error: string }> {
     return new Promise((resolve) => {
-      const h = this.deps.clocks.timers.after(this.deps.shownBoundMs as never, () => {
+      const bound = this.deps.clocks.timers.after(this.deps.shownBoundMs as never, () => {
         this.waiters.delete(payload.request_id);
         resolve({ ok: false, error: `main did not confirm the dialog within ${this.deps.shownBoundMs} ms` });
       });
-      this.waiters.set(payload.request_id, (r) => { h.cancel(); resolve(r); });
+      this.waiters.set(payload.request_id, { settle: (r) => { bound.cancel(); resolve(r); }, bound });
       this.deps.post(payload);
     });
+  }
+  /** REQ-TOOLS-063: main queued the request behind its open dialog; the bound no longer applies. */
+  queued(requestId: string): boolean {
+    const w = this.waiters.get(requestId);
+    if (!w) return false;
+    w.bound.cancel();
+    return true;
   }
   shown(requestId: string, ok: boolean, error?: string): boolean {
     const w = this.waiters.get(requestId);
     if (!w) return false;
     this.waiters.delete(requestId);
-    w(ok ? { ok: true } : { ok: false, error: error ?? 'the dialog could not be shown' });
+    w.settle(ok ? { ok: true } : { ok: false, error: error ?? 'the dialog could not be shown' });
     return true;
   }
   close(requestId: string): void {
+    // A request closed while still queued is never shown; its waiter is released so nothing is left behind.
+    const w = this.waiters.get(requestId);
+    if (w) { this.waiters.delete(requestId); w.settle({ ok: false, error: 'the request was closed before it was shown' }); }
     this.deps.close(requestId);
   }
 }

@@ -131,6 +131,12 @@ export const RunHostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('playbooks.catalogue') }),
   z.object({ kind: z.literal('approval.shown'), requestId: z.string().min(1), ok: z.boolean(), error: z.string().optional() }),
   /**
+   * REQ-TOOLS-063: main has queued the request behind the dialog already open in its window. It is shown as soon as
+   * that dialog closes, so the run host stops bounding the wait for `approval.shown`; only a timeout or a cancellation
+   * drops it unshown.
+   */
+  z.object({ kind: z.literal('approval.queued'), requestId: z.string().min(1) }),
+  /**
    * ADR-0039 (Part P): the rows live in the run host. `checkpoint.list` reads them with no Git (REQ-GIT-050), stamps
    * REQ-GIT-093's liveness verdict and runs REQ-GIT-094's stale-session repair; `checkpoint.recordSafety` writes the
    * pre-restore row through the writer's one transaction (REQ-GIT-058 gate 5); `checkpoint.recordRestore` writes the

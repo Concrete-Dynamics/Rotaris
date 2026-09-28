@@ -49,10 +49,22 @@ describe('PD-ORCH-005 clauses 13, 16 and 18 (OQ-73, OQ-74, OQ-76): the renderer 
    */
   it('main.tsx hands the Workspace the recovery fact (PD-ORCH-005 clauses 13 and 18)', () => {
     const text = source('main.tsx');
-    expect(text.match(/const needsRecovery = useNeedsRecovery\(session\?\.id \?\? null, session\?\.executionStatus \?\? null\);/g)).toHaveLength(2);
+    expect(text.match(/const needsRecovery = useNeedsRecovery\(session\?\.id \?\? null, session\?\.executionStatus \?\? null\);/g)).toHaveLength(3);
     const start = text.indexOf('<WorkspaceView ');
     const element = text.slice(start, text.indexOf('/></>;', start));
     expect(start).toBeGreaterThan(-1);
     expect(element).toMatch(/\sneedsRecovery=\{needsRecovery\}\s/);
+  });
+
+  /*
+   * REQ-SHELL-038 with REQ-CHAT-008: the window's status strip names the recovery state as the run header and the Mission
+   * view do (`statusStripRunItem`, pinned in `packages/ui` by composer.test.ts), from the third of main.tsx's
+   * `useNeedsRecovery` calls, the one the window root makes. Handing it `false`, or naming the status without it, would
+   * read "run Running" beside a run-level agent drawn `paused` (PD-ORCH-005 clause 13, OQ-73) and fails here.
+   */
+  it('main.tsx names the strip\'s run item from the recovery fact', () => {
+    const text = source('main.tsx');
+    expect(text).toContain('statusStripRunItem(session?.executionStatus ?? null, needsRecovery)');
+    expect(text).not.toMatch(/`run \$\{STATUS_LABELS/);
   });
 });

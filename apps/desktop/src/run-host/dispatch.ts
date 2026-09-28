@@ -544,6 +544,8 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       return { kind: 'ack' };
     case 'approval.shown':
       return presenter.shown(req.requestId, req.ok, req.error) ? { kind: 'ack' } : { kind: 'refused', code: 'approval.unknown', headline: 'No present-request waits for that id' };
+    case 'approval.queued':
+      return presenter.queued(req.requestId) ? { kind: 'ack' } : { kind: 'refused', code: 'approval.unknown', headline: 'No present-request waits for that id' };
     case 'session.attach':
       return sessions.attach(asSessionId(req.sessionId)) ? { kind: 'ack' } : { kind: 'refused', code: 'session.not-live', headline: 'That session is not live' };
     case 'session.detach':

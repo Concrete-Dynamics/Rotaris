@@ -18,7 +18,7 @@ import { COMMAND_NOT_RUN_TITLE, defaultUnavailableReason, parseSlash, slashNameT
 import { SlashPopup, slashRowId } from './slash/SlashPopup.js';
 import type { SlashCommand, SlashContext, SlashOutcome } from './slash/types.js';
 import { AgentTree } from './AgentTree.js';
-import { cancelConfirmation, cancelOffered, runLevelAgent, runLevelResting, steerOffered } from './agents.js';
+import { cancelConfirmation, cancelOffered, restingView, steerOffered } from './agents.js';
 import { Inspector, type PersonaEntry } from './Inspector.js';
 import { useShellState } from './shell-state.js';
 import { DelegationHeader, ScopeToggle, scopedRows, type Acknowledger } from './TranscriptSurface.js';
@@ -1103,12 +1103,11 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
   const stripNarrow = density === 'narrow';
   // Memoised so the derivations below (REQ-CHAT-069's scope, PD-CHAT-005's depth) do not see a new array every render.
   const agents = useMemo(() => session?.agents ?? [], [session]);
-  // PD-ORCH-005 clause 13 (OQ-73): in REQ-CHAT-008's recovery state the run-level agent presents `paused`, as its agents do.
-  const runLevel = useMemo(() => (entry ? runLevelAgent(session, entry, needsRecovery) : null), [session, entry, needsRecovery]);
   // PD-ORCH-005 clauses 6, 13 and 16 (OQ-71, OQ-73, OQ-74): the session rests with an iteration open — paused, left
-  // `interrupted` by a crash, or in REQ-CHAT-008's recovery state. One predicate decides the composer's count, the
-  // run-level agent's `paused` and a paused child's Cancel, so the tree, the count and the offer agree.
-  const resting = session !== null && runLevelResting(session, needsRecovery);
+  // `interrupted` by a crash, or in REQ-CHAT-008's recovery state, where the run-level agent presents `paused` as its
+  // agents do. One predicate decides the composer's count, the run-level agent's `paused` and a paused child's Cancel,
+  // so the tree, the count and the offer agree.
+  const { runLevel, resting } = useMemo(() => restingView(session, entry, needsRecovery), [session, entry, needsRecovery]);
   const selected = selectedAgent === RUN_AGENT_ID ? runLevel : agents.find((a) => a.id === selectedAgent) ?? null;
   /** REQ-CHAT-088: the engine has already resolved each source; scope chooses the matching published plan. */
   const todoPlan = selected !== null && selected.id !== RUN_AGENT_ID ? session?.childTodos[selected.id] ?? session?.todo ?? null : session?.todo ?? null;

@@ -110,6 +110,27 @@ describe('PD-ORCH-003 revision 2: a resumed iteration and the gate', () => {
     expect(dal.eventsOfKind(sid, 'result')).toHaveLength(1);
   });
 
+  /**
+   * PD-ORCH-005 clause 18 meets PD-ORCH-003 revision 2: the same session left by a crash rather than a rest — iteration 1
+   * open with no interruption, the session still `running` with no lock, REQ-CHAT-008's recovery state. Either continue
+   * records the crash first, and the iteration it resumes is held no more than a rested one.
+   */
+  for (const route of ['a message', 'the Continue action'] as const) it(`left by a crash and resumed by ${route}, the crash is recorded, the iteration runs unheld, and the run holds before its first new iteration`, async () => {
+    const { sessions, sid } = await restedWithPending(route === 'a message' ? [answer('resumed, done'), answer('Plan: do later.')] : [answer('Plan: do later.')]);
+    dal.db.prepare('UPDATE iterations SET interruption = NULL WHERE session_id = ? AND iteration = 1').run(sid);
+    dal.db.prepare("UPDATE sessions SET execution_status = 'running' WHERE session_id = ?").run(sid);
+    expect(dal.getLock(sid)).toBeUndefined();
+    expect(sessions.liveness(dal, sid)).toBe('not-live');
+    expect((route === 'a message' ? sessions.prompt(sid, 'go on') : sessions.continueSession(sid, 'continue')).ok).toBe(true);
+    expect((await sessions.running(sid)!).execution_status).toBe('awaiting_plan_decision');
+    expect(dal.getSession(sid)).toMatchObject({ execution_status: 'awaiting_plan_decision', plan_cycle: 1, plan_released: 0 });
+    const paused = dal.timelineOf(sid).filter((t) => t.name === 'iteration_paused').map((t) => (JSON.parse(t.metadata) as { interruption: string }).interruption);
+    expect(paused).toEqual(['crash']);
+    expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.state, r.outcome, r.interruption])).toEqual([[1, 'closed', 'succeeded', null]]);
+    expect(dal.eventsOfKind(sid, 'iteration.start')).toHaveLength(1);
+    expect(tasksOf(sid).map((t) => [t.text, t.state])).toEqual(route === 'a message' ? [['first', 'complete'], ['later', 'pending'], ['go on', 'complete']] : [['first', 'complete'], ['later', 'pending']]);
+  });
+
   it('approved, the pending work runs and the continue\'s message is not run again — the relaunch appends no task', async () => {
     const { sessions, sid } = await restedWithPending([answer('resumed, done'), answer('Plan: do later.'), answer('later, done'), answer('spare')]);
     expect(sessions.prompt(sid, 'go on').ok).toBe(true);

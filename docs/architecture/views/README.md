@@ -65,8 +65,10 @@ store table changes, so the other views are not.
 **One paused child is cancellable while its session rests (`PD-ORCH-005` clause 16, revision 4, 2026-09-28, R-064).**
 `session.control`'s `cancelAgent` reaches `Sessions.cancelPausedAtRest` when no run is behind the session: the child
 and each `paused` descendant end `cancelled` with the live cancel's report, timeline entry and artifact, the iteration
-stays open, and `resumable` drops; a crash not yet recorded is recorded first, only when something is crash-left —
-the whole crash record, at a moment clauses 3 and 8 do not name (OQ-74's departure). The cancel writes under the
+stays open, and `resumable` drops. A child a crash not yet recorded left unfinished, and each such descendant, is
+cancelled from the state it is stored in, its calls the crash cut off answered as interrupted; the crash itself is left
+for the next repair or continue to record (clauses 3 and 8, OQ-74). It is refused under a store failure, as every
+continue is (OQ-76). The cancel writes under the
 session's lock, taken for the write and given back, a dead local holder reaped by the `claimLockReaping` that
 `SessionWriter.open` claims through, and is refused while another live process holds it (`lockForWrite`); a target it
 refuses outright is judged before the lock is taken. Every confirmation and cascade note now names each unfinished descendant a cancel ends, live or paused (`cancelCascade`,
@@ -74,16 +76,16 @@ OQ-73 and OQ-74), and both cancels write through one `userCancellation`. The sur
 (`cancelOffered(agent, runActive, resting)`, `resting` being `runLevelResting`, the predicate the composer's count and
 the resting root share) and confirm by `cancelConfirmation`, the Mission view through `missionConfirmation`. The
 **runtime view**'s `cancelAgent`, `children`, `iterations` and `agent_terminals` rows and the **state-ownership view**'s
-rest and session-lock rows name the new writer, and the **sequences view**'s "The pause and the rest" names it among
-the crash record's moments; no package, edge, process, channel or command changes.
+rest and session-lock rows name the new writer; no package, edge, process, channel or command changes.
 
 **A paused agent presents as paused on every agent surface (`PD-ORCH-005` clause 13, revision 4, 2026-09-28, R-064).**
 `PRESENTATION_CHILD_STATES` gains `paused` and `presentationChildState` maps the child state to it, so `AgentRecord`'s
 `presentationState` widens on the existing session-record channel. `toAgentRecord` presents the agents a crash left
 unfinished, before the crash is recorded, as the record will leave them (`crashLeftOf`, asked once per projection;
-OQ-73's departure from clause 13's last sentence); `runLevelAgent`
-presents the resting root `paused`, its callers passing REQ-CHAT-008's recovery state (`useNeedsRecovery`, moved to
-`renderer/session-view.ts`). The Overview counts paused agents on their own. The **runtime view**'s eleventh-state and
+OQ-73's departure from clause 13's last sentence) — never for a session a store failure left busy, which is not one a
+crash left and states nothing to resume (`Sessions.restingOf`, OQ-76); `runLevelAgent`
+presents the resting root `paused`, the Workspace and the Mission view asking it and `runLevelResting` through one call
+(`restingView`) with REQ-CHAT-008's recovery state (`useNeedsRecovery`, moved to `renderer/session-view.ts`). The Overview counts paused agents on their own. The **runtime view**'s eleventh-state and
 projection paragraphs and the **state-ownership view**'s rest row are updated; no package, edge, process, channel or
 command changes.
 
@@ -101,9 +103,10 @@ approval note say so. No package, edge, process, channel or command changes.
 accepts a session a crash left — `interrupted`, or persisted busy and `not-live` (REQ-CHAT-008's recovery state) — beside
 `paused`, and refuses a busy one whose process may still be running it (`run-active`) and, first, any session whose
 store has failed (`store-failed`, as the continue by message is: a run ended on a recording failure is not a crash,
-OQ-42; a `paused` session under a store failure is refused the same way). The composer draws the two continues and
-"Continue without them" on it (`crashLeft`), with the same count; either choice records the crash first,
-in `launchContinuation`. Readings in OQ-76. The **runtime view**'s §5 Continue paragraph and the **process view**'s
+OQ-42; a `paused` session under a store failure is refused the same way). The composer draws the two continues on it
+(`crashLeft`), and the count and "Continue without them" wherever the session rests with an iteration open
+(`resumable`, `runLevelResting`), the same count as a paused session's; either choice records the crash first, in
+`launchContinuation`. Readings in OQ-76. The **runtime view**'s §5 Continue paragraph and the **process view**'s
 `session.continue` note are updated; the command's shape does not change, and no package, edge, process or channel does.
 
 **`/stop` is offered as the stop, and the paused continue by message reads `Send` (`PD-ORCH-005` clause 15,
@@ -112,68 +115,37 @@ sends the stop's `cancel` op and never the explicit cancel. The paused strip's s
 `Continue with a message`. The **runtime view**'s §5 `cancel` row and Continue paragraph are updated; no package, edge,
 process, channel or command changes.
 
-**Review round 7 of the iteration lane (`PD-ORCH-005` clause 17, 2026-09-28, R-064).** The runtime view's message-task
-paragraph names the message-limit resolution's 'continue' and 'double' among the continues that deliver no message and
-append no task while the last request is unfinished — `continueSession` launches them the same way, so the guard already
-covered them. No package, edge, process, channel, message kind or store column changed.
-
-**Review round 5 of the iteration lane (`PD-ORCH-005` clause 17, `PD-ORCH-003` revision 2, `PD-ORCH-004` revision 4,
-2026-09-28, R-064).** A continue that delivers no message judges the todo after settling the messages closed iterations
-still hold (`Todo.releaseStale` against `succeededIterationsOf`, which the run's constructor now shares), so a message a
-death left held is not appended twice. The message an iteration takes up is sent only to an execution root
-(`Run.firstMessage`), never to the plan cycle held after a resumed iteration. The **runtime view**'s message-task
-paragraph says so. No package, edge, process, channel, message kind or store column changed.
-
-**Review round 4 of the iteration lane (`PD-ORCH-005` clause 17, `PD-ORCH-003` revision 2, `PD-ORCH-004` revision 4,
-2026-09-28, R-064).** A continue's message is marked as one in the todo document for good (`Task.message`), and the
-iteration that takes it up while the launch content names another request is sent its text after the launch content
-(`Run.firstMessage`). The plan cycle after a resumed iteration says the iteration was left open, not that a rest left
-it. The **runtime view**'s message-task paragraph says so. No package, edge, process, channel, message kind or store
-column changed.
-
-**Review round 3 of the iteration lane (`PD-ORCH-005` clause 17, `PD-ORCH-003` revision 2, 2026-09-28, R-064).** A task
-in progress counts as the last request unfinished only when the open iteration holds it (`Todo.holdsUnfinished` takes
-the open row), so a task a death stranded in progress no longer stops a Continue action appending its request. The plan
-cycle after a resumed iteration reads what became of every message that iteration held (`Todo.heldIds`), not only the
-one this run's continue delivered. The **runtime view**'s message-task paragraph says so. No package, edge, process,
-channel, message kind or store column changed.
-
-**Review round 2 of the iteration lane (`PD-ORCH-005` clause 17, `PD-ORCH-003` revision 2, `PD-ORCH-004` revision 4,
-2026-09-28, R-064).** A continue's message a resumed iteration leaves pending is taken up by the next iteration
-(`Task.nextUp`, `Todo.selectNext`). A continue that delivers no message appends no task while the todo still holds its
-last request unfinished (`Todo.holdsUnfinished`, `launchContinuation`), which repairs
-`the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`. The plan cycle after a resumed
-iteration is told the continue's message was carried out only when it was. The offers a handoff covers are passed to
-the run (`RunDeps.handoffOffers`) in place of the spawn-order floor, and the continue that resumes a root counts an
-offer its lists left out as held (`offersHeldIn`). The **runtime view**'s plan gate, message-task and continuation
-paragraphs say so. No package, edge, process, channel, message kind or store column changed.
-
-**Review round 1 of the iteration lane (`PD-ORCH-005` clause 17, `PD-ORCH-003` revision 2, `PD-ORCH-004` revision 4,
-2026-09-28, R-064).** A stale held message closes as the record says its iteration did (`Todo.releaseStale` reads the
-iteration rows' outcome); an offer a held list elided counts as told (`offersForFirstMessage`); REQ-SESSION-194's cut
-is one function, `run/cut.ts`, shared by the handoff, the offers list and the plan cycle's pending tasks. The **runtime
-view**'s message-task and continuation paragraphs say so. No package, edge, process, channel, message kind or store
-column changed.
-
 **A later iteration's root is told the open offers (`PD-ORCH-004` revision 4, 2026-09-28, R-064).** The offers list and
 its reader (`openOffersText`, `offersToldIn`) move from `sessions.ts` to `run/offers.ts`, re-exported where they were, so
 the run can use them without importing the session manager. `Run.turn()` adds to every execution iteration root's first
-message the offers that message does not already hold (`offersForFirstMessage`); a plan cycle is told none. Readings in
-OQ-80. The **runtime view**'s continuation paragraph and the **state-ownership view**'s record row say so. No package,
+message the offers that message does not already hold (`offersForFirstMessage`); a plan cycle is told none. The offers a
+handoff covers are passed to the run (`RunDeps.handoffOffers`), an offer a held list elided counts as told, and the
+continue that resumes a root counts an offer its lists left out as held (`offersHeldIn`). REQ-SESSION-194's cut is one
+function, `run/cut.ts`, shared by the handoff, the offers list and the plan cycle's pending tasks. Readings in OQ-80. The **runtime view**'s continuation paragraph and the **state-ownership view**'s record row say so. No package,
 edge, process, channel, message kind or store column changed.
 
 **The plan gate meets a resumed iteration (`PD-ORCH-003` revision 2, 2026-09-28, R-064).** A run that resumes an open
 iteration runs it unheld; when the gate would hold the run, the loop sets the hold once that iteration has closed and
 work is left, and parks before the first new iteration (`parkAtPlanGate(resumed)`, its plan cycle told the pending
-tasks by `resumedWorkSection`). A plan decision's relaunch appends no task (`RunDeps.appendsTask: false`), which also
+tasks by `resumedWorkSection`, that the iteration was left open, and what became of every message it held,
+`Todo.heldIds`). The message an iteration takes up is sent only to an execution root (`Run.firstMessage`), never to that
+plan cycle. A plan decision's relaunch appends no task (`RunDeps.appendsTask: false`), which also
 repairs the approved prompt being worked twice. Readings in OQ-77. The **runtime view**'s start order, plan gate and
 resume paragraphs say so; ADR-0062 decision 1 carries the amendment. No package, edge, process, channel, message kind or
 store column changed.
 
 **A continue's message is also a task (`PD-ORCH-005` clause 17, 2026-09-28, R-064).** A continue by message that
 resumes an open iteration appends its message to the planner todo as a task that iteration holds (`Todo.appendHeld`,
-`heldBy` in the todo document), which closes with it (`Todo.releaseHeld`): done when it succeeds, pending on any other
-close. `RunDeps.openIteration` gains `delivered`. Readings in OQ-75. The **runtime view**'s §2 gains the paragraph; the
+`heldBy` in the todo document), marked as a message for good (`Task.message`), which closes with it
+(`Todo.releaseHeld`): done when it succeeds, pending on any other close. A message left pending is taken up by the next
+iteration (`Task.nextUp`, `Todo.selectNext`), which is sent its text after the launch content when that names another
+request (`Run.firstMessage`). A held message a death left stale closes as the record says its iteration did
+(`Todo.releaseStale`, against `succeededIterationsOf`, which the run's constructor shares). A continue that delivers no
+message — the Continue action, "continue without them", and the message-limit resolution's 'continue' and 'double' —
+judges the todo after that settle, and appends no task while the open iteration holds the last request unfinished
+(`Todo.holdsUnfinished`, `launchContinuation`): OQ-75's reading, beyond what clause 17 governs, which repairs
+`the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`. `RunDeps.openIteration` gains
+`delivered`. Readings in OQ-75. The **runtime view**'s §2 gains the paragraph; the
 phase 4 paragraph below keeps "no todo task is appended" as it was built then. No package, edge, process, channel,
 message kind or store column changed.
 

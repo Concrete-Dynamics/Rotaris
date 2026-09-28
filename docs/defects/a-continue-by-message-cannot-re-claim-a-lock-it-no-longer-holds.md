@@ -9,6 +9,10 @@ writes the session's rows with no lock of its own. That can happen when another 
 `PD-ORCH-005` clause 18 (R-064). `continueSession` was to mirror the branch for a session a crash left, and a probe that
 threw inside it was never reached by any crash-left path, so it was not mirrored. Not repaired.
 
+The same root cause — a continue in a process that already holds the live entry claims no lock — is seen from the run's
+teardown in [`a-continuation-in-the-process-that-ran-the-session-holds-no-lock.md`](a-continuation-in-the-process-that-ran-the-session-holds-no-lock.md).
+One repair answers both, and moves both notes.
+
 ## Specs
 
 ADR-0005 (the lock is the capability that authorises writing the session's rows) and REQ-SESSION-083/112/118 (load,

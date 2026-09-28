@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -158,7 +158,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
      * `configured`: the process resolves each run's setup through `configure`, which reports the entry persona asked for.
      * `publisher`: where its projections publish. `alive`: REQ-GIT-093's process probe (every other process is dead).
      */
-    function sessionsAs(pid: number, configured?: (entryPersona: string | undefined) => void, publisher: Publisher = NONE, alive: (pid: number) => boolean = () => false) {
+    function sessionsAs(pid: number, configured?: (entryPersona: string | undefined) => void, publisher: Publisher = NONE, alive: (pid: number) => boolean = () => false, warn: (m: string) => void = () => undefined) {
       const client = new ScriptedModelClient([]);
       const original = client.stream.bind(client);
       client.stream = (req) => { asked.push(req); client.push(answer('Answered.')); return original(req); };
@@ -170,7 +170,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
       });
       return new Sessions({
-        clocks: clock, publisher, pid, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-dead', isProcessAlive: alive,
+        clocks: clock, publisher, pid, host: HOST, retentionCap: 20_000, warn, mintSessionId: () => 'S-dead', isProcessAlive: alive,
         model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
         tools: () => port(),
         ...(configured ? { configure: (_ws: string, ctx: { readonly entryPersona?: string | undefined }) => { configured(ctx.entryPersona); return ok({ model: { backend: new DefaultAgentBackend(client), config }, runtime }); } } : {}),
@@ -353,19 +353,54 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       });
     });
 
-    describe('PD-ORCH-005 clauses 16 and 18 (OQ-74): cancelling one child a crash left records the crash first, as any continue does', () => {
+    describe('PD-ORCH-005 clauses 3, 8 and 16 (OQ-74): cancelling one child a crash left ends it from its stored state, and leaves the crash for the next repair or continue to record', () => {
       const cancel = (s: Sessions, sid: SessionId, agentId: string) => s.control({ op: 'cancelAgent', sessionId: sid, args: { agentId } });
-      it('in REQ-CHAT-008\'s recovery state: the crash is recorded, then the child and its paused descendant end cancelled, and the rest stay paused by the crash', async () => {
-        const sid = await crashed();
+      /** What a crash record writes beyond the agents: the iteration's interruption, the approvals and the background sessions. */
+      const crashWrites = (sid: SessionId) => ({ interruption: dal.getIteration(sid, 2)!.interruption, approvals: dal.getSession(sid)!.pending_approvals, terminals: dal.agentTerminalsOf(sid).map((t) => [t.terminal_id, t.state]), paused: dal.timelineOf(sid).filter((t) => t.name === 'iteration_paused').length });
+      it('in REQ-CHAT-008\'s recovery state: the child and its descendant end cancelled from where they stood, and nothing of the crash is recorded — the rest stay as stored, presenting paused', async () => {
+        // c1 had asked for a call the crash cut off: no crash record will reach it once it is cancelled, so the cancel answers it.
+        const sid = await crashed((w) => { w.recordAgentMessage('bg_000000c1', 2, 'message', { role: 'assistant', content: [{ kind: 'tool-call', callId: 'c', name: 'grep', args: '{}' }] }); });
         const viewer = sessionsAs(88);
         expect(viewer.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        const before = crashWrites(sid);
         expect(cancel(viewer, sid, 'bg_000000c1')).toEqual({ ok: true });
-        expect(dal.getIteration(sid, 2)).toMatchObject({ state: 'open', interruption: 'crash' });
-        expect(dal.getChild(sid, 'bg_000000c1')).toMatchObject({ state: 'cancelled', interruption: 'crash' });
-        expect(dal.getChild(sid, 'bg_000000c3')).toMatchObject({ state: 'cancelled', interruption: 'crash' });
-        expect(dal.getChild(sid, 'bg_000000c2')).toMatchObject({ state: 'paused', interruption: 'crash' });
+        expect(crashWrites(sid)).toEqual(before);
+        expect(before.interruption).toBeNull();
+        expect(dal.getChild(sid, 'bg_000000c1')).toMatchObject({ state: 'cancelled', interruption: null });
+        expect(dal.getChild(sid, 'bg_000000c3')).toMatchObject({ state: 'cancelled', interruption: null });
+        expect(dal.getChild(sid, 'bg_000000c2')).toMatchObject({ state: 'starting', interruption: null });
         expect(JSON.parse(dal.getChild(sid, 'bg_000000c3')!.report!)).toMatchObject({ status: 'cancelled', summary: 'Cancelled with c1, which the user cancelled.' });
+        expect(conversationOf(dal.agentConversation(sid, 'bg_000000c1')).at(-1)).toEqual({ role: 'tool', content: [{ kind: 'tool-result', callId: 'c', name: 'grep', isError: true, result: interruptedResult('crash', false, '') }] });
+        // The root's calls are the crash record's, not the cancel's.
+        expect(conversationOf(dal.agentConversation(sid, ROOT))).toHaveLength(2);
         expect(resumableOf(dal, dal.getSession(sid)!)).toEqual({ iteration: 2, agents: 2 });
+        // The next repair records the crash: it pauses what is left, and the cancelled stay cancelled.
+        viewer.repair(dal, 'C:/ws', { sessionId: sid });
+        expect(dal.getIteration(sid, 2)!.interruption).toBe('crash');
+        expect(dal.getChild(sid, 'bg_000000c2')).toMatchObject({ state: 'paused', interruption: 'crash' });
+        expect([dal.getChild(sid, 'bg_000000c1')!.state, dal.getChild(sid, 'bg_000000c3')!.state]).toEqual(['cancelled', 'cancelled']);
+      });
+
+      it('OQ-76: a session the store\'s failure left busy is not one a crash left — its agents present as before, nothing is resumable, and the at-rest cancel is refused, writing and warning nothing', async () => {
+        const sid = await crashed();
+        const snapshots: SessionRecord[] = [];
+        const warned: string[] = [];
+        const viewer = sessionsAs(88, undefined, { increment: () => undefined, snapshot: (p) => { snapshots.push(p.session); } }, () => false, (m) => { warned.push(m); });
+        expect(viewer.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        const insert = vi.spyOn(dal, 'insertEvent').mockImplementationOnce(() => { throw new Error('injected full disk'); });
+        expect(viewer.writer(sid)!.recordEvent('error', { message: 'failure probe' }).ok).toBe(false);
+        insert.mockRestore();
+        warned.length = 0;
+        viewer.owner(sid)!.attach();
+        const snapshot = snapshots.at(-1)!;
+        expect(snapshot.resumable).toBeNull();
+        expect(snapshot.agents.find((a) => a.id === 'bg_000000c1')).toMatchObject({ state: 'running', presentationState: 'running', interruption: null });
+        const before = crashWrites(sid);
+        expect(cancel(viewer, sid, 'bg_000000c1')).toEqual({ ok: false });
+        expect(dal.getChild(sid, 'bg_000000c1')!.state).toBe('running');
+        expect(crashWrites(sid)).toEqual(before);
+        expect(warned).toEqual([]);
+        expect(SessionWriter.recoverStore(dal).ok).toBe(true);
       });
 
       it('a refusal records nothing: a finished agent, another root\'s child, and the run', async () => {
@@ -498,22 +533,23 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         expect(entries(sid)).toEqual(['The user cancelled child c1 (bg_000000c1) while the session rested.', 'The user cancelled child c3 (bg_000000c3) with c1 while the session rested.']);
       });
 
-      it('the chosen child already paused, a sibling left unfinished by the crash: the crash is recorded first — the sibling paused by it, the approval withdrawn, the background sessions ended', async () => {
+      it('the chosen child already paused, a sibling and a descendant left unfinished by the crash: nothing of the crash is recorded — the descendant is cancelled from where it stood, the sibling, the approval and the background sessions left for the next continue', async () => {
         // A `pausing` run: c1 had come to rest, c2's and c3's calls were still in flight when the host died.
         const sid = await crashed((w) => { w.restChild('bg_000000c1', 'pause', 'running'); });
         const viewer = sessionsAs(88);
         expect(viewer.resume(dal, 'C:/ws', sid).ok).toBe(true);
-        expect(dal.getSession(sid)!.pending_approvals).not.toBe('[]');
+        const approvals = dal.getSession(sid)!.pending_approvals;
+        expect(approvals).not.toBe('[]');
         expect(cancel(viewer, sid, 'bg_000000c1')).toEqual({ ok: true });
-        expect(dal.getIteration(sid, 2)).toMatchObject({ state: 'open', interruption: 'crash' });
-        expect(dal.getChild(sid, 'bg_000000c2')).toMatchObject({ state: 'paused', interruption: 'crash' });
-        // c3, c1's child, was paused by the crash record and so is cancelled with c1.
+        expect(dal.getIteration(sid, 2)).toMatchObject({ state: 'open', interruption: null });
+        expect(dal.getChild(sid, 'bg_000000c2')).toMatchObject({ state: 'starting', interruption: null });
+        // c3, c1's child, the crash left unfinished: it is cancelled with c1 from the state it is stored in.
         expect([dal.getChild(sid, 'bg_000000c1')!.state, dal.getChild(sid, 'bg_000000c3')!.state]).toEqual(['cancelled', 'cancelled']);
-        expect(JSON.parse(dal.getSession(sid)!.pending_approvals)).toEqual([]);
-        expect(dal.agentTerminalsOf(sid).map((t) => [t.terminal_id, t.state])).not.toContainEqual(['ts_dead', 'running']);
+        expect(dal.getSession(sid)!.pending_approvals).toBe(approvals);
+        expect(dal.agentTerminalsOf(sid).map((t) => [t.terminal_id, t.state])).toContainEqual(['ts_dead', 'running']);
       });
 
-      it('when the chosen child\'s own move fails after the crash was recorded, what the record wrote is published — its save publishes it, and its agents already presented so', async () => {
+      it('when the chosen child\'s own move fails, nothing is written and nothing needs republishing: the crash is still unrecorded, and its agents present as before', async () => {
         const sid = await crashed();
         const snapshots: SessionRecord[] = [];
         const viewer = sessionsAs(88, undefined, { increment: () => undefined, snapshot: (p) => { snapshots.push(p.session); } });
@@ -522,9 +558,10 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         expect(snapshots.at(-1)!.pendingApprovals).toHaveLength(1);
         dal.db.exec("CREATE TRIGGER refuse_c1 BEFORE UPDATE OF state ON children WHEN NEW.state = 'cancelled' AND OLD.task_id = 'bg_000000c1' BEGIN SELECT RAISE(ABORT, 'refused'); END;");
         expect(cancel(viewer, sid, 'bg_000000c1')).toEqual({ ok: false });
-        expect(dal.getIteration(sid, 2)!.interruption).toBe('crash');
-        expect(snapshots.at(-1)!.pendingApprovals).toEqual([]);
-        expect(snapshots.at(-1)!.agents.find((a) => a.id === 'bg_000000c2')).toMatchObject({ state: 'paused', presentationState: 'paused', interruption: 'crash' });
+        expect(dal.getIteration(sid, 2)!.interruption).toBeNull();
+        expect([dal.getChild(sid, 'bg_000000c1')!.state, dal.getChild(sid, 'bg_000000c3')!.state]).toEqual(['running', 'waiting_on_dependencies']);
+        expect(dal.getSession(sid)!.pending_approvals).not.toBe('[]');
+        expect(snapshots.at(-1)!.agents.find((a) => a.id === 'bg_000000c1')).toMatchObject({ state: 'paused', presentationState: 'paused', interruption: 'crash' });
       });
 
       it('a refused target is judged before the lock is taken: a dead local holder\'s lock is not reaped for it', async () => {

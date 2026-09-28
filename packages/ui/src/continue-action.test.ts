@@ -95,7 +95,7 @@ describe('PD-ORCH-005 clause 6: the Continue action states how many agents will 
   });
 });
 
-describe('item D — PD-ORCH-005 clause 18: a crash offers the Continue action as a pause does', () => {
+describe('PD-ORCH-005 clause 18: a crash offers the Continue action as a pause does', () => {
   it('a session a crash left with nothing open to resume still draws the two continues, with no count and no decline, as a paused one does', () => {
     for (const [executionStatus, recovery] of [['interrupted', false], ['running', true]] as const) {
       const html = render(session({ executionStatus, resumable: null }), recovery);

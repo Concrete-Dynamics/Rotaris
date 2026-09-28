@@ -83,6 +83,16 @@ export function runLevelAgent(session: SessionRecord | null, entry: { readonly p
   };
 }
 
+/**
+ * PD-ORCH-005 clauses 13 and 16 (OQ-73, OQ-74): what a surface drawing the run-level agent and a paused child's Cancel
+ * asks, in one call — the run-level agent (`runLevelAgent`) and whether the session rests (`runLevelResting`), both from
+ * the same REQ-CHAT-008 `recovery` fact, so the Workspace and the Mission view cannot pass it to one and not the other.
+ * With no entry role known the run-level agent is null, as the Workspace draws none.
+ */
+export function restingView(session: SessionRecord | null, entry: Parameters<typeof runLevelAgent>[1] | undefined, recovery: boolean): { readonly runLevel: AgentRecord | null; readonly resting: boolean } {
+  return { runLevel: entry ? runLevelAgent(session, entry, recovery) : null, resting: session !== null && runLevelResting(session, recovery) };
+}
+
 const NOT_FOLLOWED_KINDS = new Set(['user', 'system', 'intent', 'verifier', 'diff']);
 
 /**

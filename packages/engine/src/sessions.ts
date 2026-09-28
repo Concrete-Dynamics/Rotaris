@@ -10,7 +10,7 @@ import { claimLockReaping, SessionWriter, toTranscriptRow, type CheckpointRecord
 import type { CheckpointPort, CheckpointPortContext } from './checkpoint-port.js';
 import { EventBus } from './run/event-bus.js';
 import { parseTokenSamples, Run, succeededIterationsOf, type AgentTerminals, type ModelLookup, type PermissionPosture, type RunConfig, type RunResult } from './run/run.js';
-import { iterationAgents, recordCrash } from './run/crash.js';
+import { answerOpenCalls, iterationAgents, recordCrash } from './run/crash.js';
 import { resumeNoticeOf } from './run/resume.js';
 import { offersHeldIn, openOfferIds, openOffersText } from './run/offers.js';
 import { cut } from './run/cut.js';
@@ -790,10 +790,15 @@ export function toAgentRecord(c: ChildRow, clocks: Clocks, facts: AgentFacts = {
  * process is behind — REQ-CHAT-008's recovery state, which `notLive` confirms by the one liveness predicate
  * (REQ-SESSION-171), asked only then. Empty for every other session, a live run above all. Reads the store and
  * records nothing (clause 8).
+ *
+ * `storeFailed` (OQ-76): a session the store's failure left busy (OQ-42) reads `not-live` too — its run ended in this
+ * process — but it did not crash, and nothing can be recorded of it, so it names none: its agents present as before,
+ * and none of them is offered the at-rest cancel (OQ-73, OQ-74).
  */
-export function crashLeftOf(dal: StoreDal, r: SessionRow, notLive: () => boolean): ReadonlySet<string> {
+export function crashLeftOf(dal: StoreDal, r: SessionRow, notLive: () => boolean, storeFailed = false): ReadonlySet<string> {
   const status = r.execution_status;
   if (status !== 'interrupted' && !isActiveStatus(status)) return NONE_CRASH_LEFT;
+  if (storeFailed && isActiveStatus(status)) return NONE_CRASH_LEFT;
   const open = dal.openIterationOf(asSessionId(r.session_id));
   if (!open || open.interruption !== null) return NONE_CRASH_LEFT;
   if (isActiveStatus(status) && !notLive()) return NONE_CRASH_LEFT;
@@ -918,7 +923,7 @@ export class Sessions {
     const writer = opened.value;
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const current = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const crashLeft = crashLeftOf(dal, current, () => this.liveness(dal, sessionId) === 'not-live'); return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, current), resumableOf(dal, current)), ...projectSessionTodos(current, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: current.execution_status, updatedAt: current.updated_at }, crashLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
+      readSession: () => { const current = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, resumable } = this.restingOf(dal, current, writer); return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, current), resumable), ...projectSessionTodos(current, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: current.execution_status, updatedAt: current.updated_at }, crashLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
@@ -978,7 +983,7 @@ export class Sessions {
     if (!storedAttachments.ok) return err({ code: 'attachment-invalid', reason: storedAttachments.reason });
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const row = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const crashLeft = crashLeftOf(dal, row, () => this.liveness(dal, sessionId) === 'not-live'); return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, row), resumableOf(dal, row)), ...projectSessionTodos(row, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: row.execution_status, updatedAt: row.updated_at }, crashLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
+      readSession: () => { const row = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); const { crashLeft, resumable } = this.restingOf(dal, row, writer); return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, row), resumable), ...projectSessionTodos(row, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: row.execution_status, updatedAt: row.updated_at }, crashLeft })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
@@ -1190,8 +1195,9 @@ export class Sessions {
       if (openIteration.message !== null && openIteration.message.length > 0) tell({ role: 'user', content: [...openIteration.message] });
     }
     /*
-     * PD-ORCH-005 clause 17 (OQ-75), and the repair of
-     * `the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`: a continue that delivers no
+     * OQ-75's reading beside PD-ORCH-005 clause 17, which governs only a continue that delivers a message, and the repair
+     * of `the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md` (departing from REQ-ORCH-004,
+     * which no directive governs for these continues): a continue that delivers no
      * message — the Continue action, "continue without them", and the message-limit resolution's 'continue' and
      * 'double' (REQ-SESSION-110, REQ-ORCH-086/087), which `continueSession` launches the same way — restates the last
      * request, so it appends no task while the
@@ -1554,17 +1560,24 @@ export class Sessions {
    * rest's whole-iteration equivalent is clause 6's "Continue without them"), an id that is no agent of the open
    * iteration, and one neither `paused` nor left unfinished by a crash, when the chosen child's own move fails, and
    * while another live process holds the session's lock (`lockForWrite`). A paused descendant whose move fails is warned
-   * of and left paused, and the cancel of the chosen child still stands (OQ-74). A
-   * crash not yet recorded — only when `crashLeftOf` names an agent, never otherwise — is recorded first, so what
-   * it cancels is what the crash record left `paused` — a reading that departs from clauses 3 and 8, which record a crash
-   * only at a repair or when a run is about to start (OQ-74): the record also closes nothing but writes the iteration's
-   * interruption, withdraws every stored pending approval and ends the background sessions still marked running. With
-   * nothing crash-left, none of that is written — a rest's approvals and running background sessions stay (clause 10).
-   * The background sessions the cancelled agents started are otherwise left as a live cancel leaves them, for the next
-   * stop, quit or crash to end (clause 10).
+   * of and left paused, and the cancel of the chosen child still stands (OQ-74). Refused too under a store failure, as
+   * every continue is (`store-failed`, OQ-76): nothing can be recorded of the session until the reopen rebuilds the
+   * writer.
+   *
+   * A child a crash not yet recorded left unfinished (`crashLeftOf`), which presents `paused` (OQ-73), is cancelled from
+   * the state it is stored in, as clause 3's cancellation of one agent ends its agents `cancelled`; so is each such
+   * descendant. The crash is not recorded here: clause 3 records it "when the session is next repaired or continued" and
+   * clause 8 records interruptions "only when a run of the session is about to start", so the iteration's interruption,
+   * the other agents the crash left, the stored pending approvals and the background sessions still marked running are
+   * left for the next repair or continue to record. The one thing written of the crash is what no later record reaches: a
+   * cancelled agent is terminal, so a crash record never answers its calls the crash cut off, and they are answered here
+   * as interrupted, their rows settling (`answerOpenCalls`, REQ-SESSION-129: no row is left `running`). The background
+   * sessions the cancelled agents started are left as a live cancel leaves them, for the next stop, quit or crash to end
+   * (clause 10).
    */
   private cancelPausedAtRest(s: Live | undefined, req: ControlRequest): ControlResult {
     if (!s) return { ok: false };
+    if ((SessionWriter.storeFailure(s.dal) ?? s.writer.failed ?? null) !== null) return { ok: false };
     const sid = s.writer.sessionId;
     const agentId = typeof req.args['agentId'] === 'string' ? req.args['agentId'] : '';
     const row = s.dal.getSession(sid);
@@ -1615,16 +1628,15 @@ export class Sessions {
     // The row is read again under the lock, which is what the write rests on.
     const judged = this.cancellableAtRest(s.dal, sid, agentId, s.dal.getSession(sid) ?? row, open, () => true);
     if (!judged) return { ok: false };
-    if (judged.crashLeft.size > 0) this.recordCrashOf(s.dal, s.writer, sid, warn);
-    // Read again: the crash record has just paused what the crash left.
+    const { crashLeft } = judged;
+    const resting = (c: ChildRow): boolean => c.state === 'paused' || crashLeft.has(c.task_id);
     const agents = iterationAgents(s.dal, sid, open);
     const byParent = new Map<string, ChildRow[]>();
     for (const c of agents) byParent.set(c.parent_id, [...(byParent.get(c.parent_id) ?? []), c]);
     const targets: ChildRow[] = [];
-    const walk = (c: ChildRow) => { if (c.state === 'paused') targets.push(c); for (const d of byParent.get(c.task_id) ?? []) walk(d); };
+    const walk = (c: ChildRow) => { if (resting(c)) targets.push(c); for (const d of byParent.get(c.task_id) ?? []) walk(d); };
     const self = agents.find((c) => c.task_id === agentId);
-    // Defensive: a crash record whose write failed leaves the target unpaused, and nothing is cancelled.
-    if (!self || self.state !== 'paused') return { ok: false };
+    if (!self || !resting(self)) return { ok: false };
     walk(self);
     const artifacts = s.artifacts ?? this.newArtifactStore(s.dal, sid, () => s.writer, warn);
     s.artifacts = artifacts;
@@ -1632,15 +1644,17 @@ export class Sessions {
       const own = t.task_id === agentId;
       const r = s.writer.transitionChild(t.task_id, 'cancelled', 'cancellation');
       if (!r.ok) {
-        warn(r.error.code === 'illegal-move' ? r.error.reason : `cancelling paused ${t.task_id} failed: ${r.error.code}`);
-        // The chosen child is first; a failed move of it leaves it paused and cancels nothing below it, and the renderer is
-        // answered that it could not be cancelled (REQ-MONITOR-128) rather than shown a cancel that did not happen. What a
-        // crash record wrote before it needs no republish here: its save publishes the record through the writer's hand-off
-        // (`ProjectionOwner.onCommitted`), and its agents already presented as it leaves them (clause 13, OQ-73).
+        warn(r.error.code === 'illegal-move' ? r.error.reason : `cancelling ${t.task_id} at rest failed: ${r.error.code}`);
+        // The chosen child is first; a failed move of it leaves it where it stood and cancels nothing below it, and the
+        // renderer is answered that it could not be cancelled (REQ-MONITOR-128) rather than shown a cancel that did not
+        // happen. Nothing was written before it, so nothing needs republishing.
         if (own) return { ok: false };
-        // A descendant whose move fails is left paused, and resumes; the chosen child's cancel stands (OQ-74).
+        // A descendant whose move fails is left where it stood — paused, or left by the crash for its record to pause — and
+        // resumes; the chosen child's cancel stands (OQ-74).
         continue;
       }
+      // A crash-left agent's calls the crash cut off: no crash record reaches a cancelled agent, so they are answered now.
+      if (crashLeft.has(t.task_id)) answerOpenCalls(s.dal, s.writer, sid, { taskId: t.task_id, name: t.canonical_name }, open.iteration, 'crash');
       const written = userCancellation(t, self, true);
       storeChildReport({ writer: s.writer, artifacts, warn }, t.task_id, t, written.report);
       s.writer.appendTimeline('child_user_cancelled', 'user', written.message, written.metadata);
@@ -1848,6 +1862,23 @@ export class Sessions {
    * the one reading taken: a lock this process itself holds with no run behind it (a resumed session) is not live,
    * because the process that would race a restore is this one and it is running nothing for the session.
    */
+  /**
+   * PD-ORCH-005 clauses 6, 13 and 18 (OQ-73, OQ-76): what a projection states of a session at rest — the agents a crash
+   * left, the crash not yet recorded (`crashLeftOf`), and what the Continue action would resume (`resumableOf`). A
+   * session the store's failure left busy (OQ-42) is not one a crash left, and every continue on it is refused
+   * `store-failed` (`continueSession`): it names no crash-left agent and states nothing to resume, so the tree, the
+   * run-level agent (`runLevelResting`) and the composer's count and decline present it as before, and none of its agents
+   * is offered the at-rest cancel. Reads the store and records nothing (clause 8).
+   */
+  private restingOf(dal: StoreDal, row: SessionRow, writer: SessionWriter): { readonly crashLeft: ReadonlySet<string>; readonly resumable: ResumablePayload | null } {
+    const sessionId = asSessionId(row.session_id);
+    const storeLeftBusy = isActiveStatus(row.execution_status) && (SessionWriter.storeFailure(dal) ?? writer.failed ?? null) !== null;
+    return {
+      crashLeft: crashLeftOf(dal, row, () => this.liveness(dal, sessionId) === 'not-live', storeLeftBusy),
+      resumable: storeLeftBusy ? null : resumableOf(dal, row),
+    };
+  }
+
   liveness(dal: StoreDal, sessionId: SessionId): SessionLiveness {
     const s = this.live.get(sessionId);
     if (s?.run && !s.run.isEnded) return 'live';

@@ -1,10 +1,17 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONTEXT_CAPACITY, RUN_AGENT_ID, type AgentRecord, type SessionRecord } from '@rotaris/contracts';
 import { MissionView, missionCancelBody, missionConfirmation } from './MissionView.js';
-import { CANCEL_RUN_TEXT } from './agents.js';
+import { CANCEL_RUN_TEXT, restingView } from './agents.js';
 import { Inspector } from './Inspector.js';
+import { useShellState } from './shell-state.js';
+import { WorkspaceView } from './WorkspaceView.js';
+import type * as HostModule from './terminal/host.js';
+
+// The transcript toolbar draws the terminal host's live counts through `useSyncExternalStore`, which a static render
+// cannot serve; the Workspace's agents panel is what these tests read, so the control is drawn as nothing here.
+vi.mock('./terminal/host.js', async (importOriginal) => ({ ...(await importOriginal<typeof HostModule>()), TerminalToolbarControl: () => null }));
 
 /**
  * PD-ORCH-005 clause 16 (revision 4, OQ-74): "A `paused` child SHALL offer Cancel wherever a live agent offers it." What a
@@ -93,5 +100,55 @@ describe('PD-ORCH-005 clause 13 (revision 4, OQ-73): a live agent\'s cancel name
     expect(button(html, 'inspector-cancel')).not.toContain('disabled');
     expect(html).toContain('Cancelling cascades to 1 paused descendant.');
     expect(missionConfirmation(live, [grand], [live, grand]).body).toBe('one (coding-agent) will be cancelled. Cancelling cascades to 1 paused descendant.');
+  });
+});
+
+/**
+ * PD-ORCH-005 clauses 13 and 16 (revision 4, OQ-73/OQ-74) on the Workspace, the main surface: what connects the helpers
+ * pinned above to it — the agents header's Cancel, the `resting` its inspector is handed, and the REQ-CHAT-008 recovery
+ * fact the run-level agent is drawn from (`restingView`, which the Mission root in the desktop renderer calls too).
+ */
+describe('PD-ORCH-005 clauses 13 and 16 (revision 4, OQ-73/OQ-74): the Workspace offers a paused child\'s Cancel and draws the resting root `paused`', () => {
+  const entry = { persona: 'orchestrator', model: 'm', reasoning: 'medium', tools: [] };
+  const workspace = (selected: string, s: SessionRecord, needsRecovery = false) => {
+    // A static render reads the store's initial state (zustand's server snapshot), so the selection is made there.
+    const initial = useShellState.getInitialState() as { selectedAgentId: string | null };
+    const was = initial.selectedAgentId;
+    initial.selectedAgentId = selected;
+    try {
+      return renderToStaticMarkup(createElement(WorkspaceView, {
+        session: s, rows: [], needsRecovery, entry,
+        onSubmit: ok, onStop: ok, onContinue: ok, onCancelAgent: ok,
+      }));
+    } finally { initial.selectedAgentId = was; }
+  };
+  /** The agents header's Cancel for the selected agent, which only it draws with this label. */
+  const headerCancel = (html: string, name: string) => new RegExp(`<button[^>]*agents__cancel[^>]*>Cancel ${name}</button>`).test(html);
+  const recovering = session({ executionStatus: 'running', agents: [agent({ interruption: 'crash' }), grand, finished] });
+
+  it('a paused child of a resting session: the agents header and the inspector offer its Cancel, paused or in REQ-CHAT-008\'s recovery state', () => {
+    for (const [s, recovery] of [[session(), false], [session({ executionStatus: 'interrupted' }), false], [recovering, true]] as const) {
+      const html = workspace(paused.id, s, recovery);
+      expect(headerCancel(html, 'one'), s.executionStatus).toBe(true);
+      expect(button(html, 'inspector-cancel'), s.executionStatus).not.toContain('disabled');
+    }
+  });
+
+  it('the same session with a live run behind it rests not: neither offers the paused child\'s Cancel', () => {
+    const html = workspace(paused.id, recovering, false);
+    expect(headerCancel(html, 'one')).toBe(false);
+    expect(button(html, 'inspector-cancel')).toContain('disabled');
+  });
+
+  it('the run-level agent presents `paused` in REQ-CHAT-008\'s recovery state, as its agents do, and running while a run is live behind it', () => {
+    expect(workspace(RUN_AGENT_ID, recovering, true)).toMatch(/data-testid="inspector-meta">paused · /);
+    expect(workspace(RUN_AGENT_ID, recovering, false)).toMatch(/data-testid="inspector-meta">running · /);
+  });
+
+  it('restingView answers the run-level agent and the rest from the one recovery fact', () => {
+    expect(restingView(recovering, entry, true)).toMatchObject({ resting: true, runLevel: { presentationState: 'paused' } });
+    expect(restingView(recovering, entry, false)).toMatchObject({ resting: false, runLevel: { presentationState: 'running' } });
+    expect(restingView(session(), undefined, false)).toEqual({ resting: true, runLevel: null });
+    expect(restingView(null, entry, true)).toEqual({ resting: false, runLevel: null });
   });
 });

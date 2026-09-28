@@ -14,7 +14,7 @@ import { conversationOf } from './record.js';
  */
 
 /** PD-ORCH-004 revision 3: how many open offers a later root is told of — the newest; the rest are elided. */
-export const OFFERS_TOLD = 10;
+const OFFERS_TOLD = 10;
 export const OFFERS_HEADER = 'Open continuation offers (delegate with `continuation_of` set to the task id to take one up):';
 /** The line a list carries, after its header, when it left earlier offers out. */
 const ELIDED_LINE = '- [... earlier continuation offers elided]';

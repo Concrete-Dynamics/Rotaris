@@ -113,8 +113,9 @@ export class Todo {
   }
 
   /**
-   * PD-ORCH-005 clause 17 (OQ-75): whether a task carrying `text` is still to be worked, so a continue that states no new
-   * request (the Continue action, "continue without them") appends it no second time: pending, or in progress and held by
+   * OQ-75's reading, beside PD-ORCH-005 clause 17 (which governs only a continue's message): whether a task carrying
+   * `text` is still to be worked, so a continue that states no new request (the Continue action, "continue without
+   * them", the message-limit resolution's 'continue' and 'double') appends it no second time: pending, or in progress and held by
    * the open iteration `open` — its own task, or a message it holds — which closes it to pending before the run selects.
    * A task in progress that nothing open holds and no iteration holds either is no one's to take up (a selection takes
    * only pending tasks), so it does not count, and the request is appended again, as REQ-ORCH-004 states (found by review

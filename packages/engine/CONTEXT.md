@@ -195,8 +195,10 @@ and is never a role's own tier. — `REQ-ORCH-019`
 The run's work plan: phases holding tasks, created at run start with a single phase named "main" and
 appended to on resume. A continue that resumes an open iteration appends its message as a task that iteration
 holds beside its own, closing with it — done when it succeeds, pending on any other close and then taken up by the
-next iteration before any other pending task, which is sent the message as its task. A continue that states no new
-request appends none while the last request is still to be worked. — `REQ-ORCH-004`, `PD-ORCH-005` clause 17
+next iteration before any other pending task, which is sent the message as its task (`PD-ORCH-005` clause 17). A
+continue that states no new request appends none while the last request is still to be worked — OQ-75's reading and
+the repair of `the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`, which no directive
+governs. — `REQ-ORCH-004`, `PD-ORCH-005` clause 17, OQ-75
 _Avoid_: backlog (that is a delivery state on the requirements board), checklist
 
 ### Finishing work
@@ -273,8 +275,9 @@ conversation if it had, `summarizing` if it was writing its report. It presents 
 own, keeps its last activity, and is not settled for display with its session (`PD-ORCH-005` clause 13, revision 4); an
 agent a crash left unfinished presents so before the crash is recorded (OQ-73, a departure from clause 13's last
 sentence). One `paused` child may be cancelled while its session rests: it and its `paused` descendants end `cancelled`,
-and the rest resume (clause 16); cancelling a crash-left one records the crash first (OQ-74, a departure from clauses 3
-and 8), and is made under the session's lock. Any cancel ends every unfinished descendant, live or `paused`, and its
+and the rest resume (clause 16); a crash-left one is cancelled from the state it is stored in, the crash left for the
+next repair or continue to record (clauses 3 and 8, OQ-74); the cancel is made under the session's lock. A session a
+store failure left busy is not one a crash left (OQ-76). Any cancel ends every unfinished descendant, live or `paused`, and its
 confirmation names each one (OQ-73, OQ-74). Not a
 terminal state and not an outcome: a `paused` agent has no report until it ends. — `PD-ORCH-005`, `REQ-MONITOR-300`
 _Avoid_: suspended, frozen, held (the **plan gate** and the **message-limit pause** hold a run; they leave no agent paused)
@@ -301,10 +304,11 @@ it, and the call is recorded as interrupted and never run. Never a denial, and n
 _Avoid_: denied, cancelled (REQ-TOOLS-052's cancellation is a denial)
 
 **Resume** (an iteration):
-What a continue does with the iteration a rest left open: the same iteration carries on before anything else runs, its
-root and every `paused` agent restored from its record with its identity, each from its last message. Declining it —
-"continue without them" — ends those agents `cancelled` and closes the iteration. A resume is never a
-**continuation** (PD-ORCH-004's new child that carries on a cut-off child's work). — `PD-ORCH-005` clauses 4, 6 and 7
+What a continue does with the iteration a rest left open, or a crash left open once the crash is recorded: the same
+iteration carries on before anything else runs, its root and every `paused` agent restored from its record with its
+identity, each from its last message. Declining it — "continue without them" — ends those agents `cancelled` and
+closes the iteration. A resume is never a **continuation** (PD-ORCH-004's new child that carries on a cut-off child's
+work). — `PD-ORCH-005` clauses 4, 6, 7 and 18
 _Avoid_: restart, replay, rerun
 
 **Explicit cancel**:

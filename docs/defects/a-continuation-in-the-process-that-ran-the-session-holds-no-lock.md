@@ -11,6 +11,10 @@ takes a single-instance lock. Two runs then write one session's rows.
 Noticed while repairing the at-rest cancel of `PD-ORCH-005` clause 16 (R-064, 2026-09-28). That cancel now takes the
 lock for its write and gives it back (`lockForWrite`, OQ-74). The continue paths are not repaired.
 
+The same root cause is seen from `prompt`'s re-claim branch in
+[`a-continue-by-message-cannot-re-claim-a-lock-it-no-longer-holds.md`](a-continue-by-message-cannot-re-claim-a-lock-it-no-longer-holds.md).
+One repair answers both, and moves both notes.
+
 ## Specs
 
 ADR-0005 (one holder per session: its lock row, claimed at load and held for writes). REQ-SESSION-047/083/112 (claim an

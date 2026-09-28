@@ -533,7 +533,7 @@ describe('engine/run — the run loop end to end against a real store and a scri
 });
 
 /**
- * PD-ORCH-005 clause 18 (item D, round 2 of its review): the Continue action and its decline are offered to a session a
+ * PD-ORCH-005 clause 18 (found by the second review of its build): the Continue action and its decline are offered to a session a
  * crash left — one persisted busy that no process runs (`not-live`). A session the store's failure left busy in THIS
  * process reads the same (OQ-42), but it did not crash and nothing can be recorded of it: every continue is refused
  * `store-failed`, as the continue by message is, until the reopen rebuilds the writer (OQ-76). The guard stands first,

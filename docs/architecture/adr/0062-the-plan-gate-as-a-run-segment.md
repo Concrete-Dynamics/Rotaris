@@ -64,11 +64,13 @@ the listing and the callable set would diverge — the model would be told it ma
 thing the gate withholds, and is never cleared in place.
 
 > **Amended by [`PD-ORCH-003`](../../product/directives.md#pd-orch-003) revision 2, 2026-09-28.** A run that resumes
-> an iteration a rest left open (`PD-ORCH-005` clause 4) runs it unheld, and when the gate would hold the run it
-> holds once that iteration has closed and the stop conditions found work left, before the first new iteration. So a
-> segment boundary can now fall inside a run: the resumed iteration belongs to the execution that was already
-> released, and the plan cycle after it is a segment of its own, whose turn builds its ports under the hold. The flag
-> is still set once and never cleared in place, and every point that enforces it still reads it live.
+> an iteration a rest left open (`PD-ORCH-005` clause 4) — or, by OQ-77's reading, one a crash left open once the
+> crash is recorded (clause 18) — runs it unheld, and when the gate would hold the run it holds once that iteration
+> has closed and the stop conditions found work left, before the first new iteration. So a segment boundary can now
+> fall inside a run: the resumed iteration is work already under way — usually of an execution that was already
+> released, though not always, since a session that never held a release can be switched to `plan` before it is
+> continued — and the plan cycle after it is a segment of its own, whose turn builds its ports under the hold. The
+> flag is still set once and never cleared in place, and every point that enforces it still reads it live.
 
 The enforcement points nevertheless read it through a **closure** rather than copying a boolean. That costs
 nothing and keeps the code honest: if release-in-place is ever adopted, the three points follow the run's

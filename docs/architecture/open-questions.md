@@ -3347,6 +3347,10 @@ recommendations.
 Until they are built, the artifact is the latest of any kind, and a later iteration of the same run is told of no
 offer.
 
+**Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
+
+The key is registered with default 20 and minimum 1. Each background session publishes its own `bg:<id>` stream at up to 50 frames/s (the 20 ms floor), so the produced aggregate is `(agents + background sessions) × 50 frames/s`, and only one of those two factors — agents, REQ-MONITOR-285's 20 — has a ceiling. Part AL reads the key into the manager and caps the *delivered* rate per window at 1,000 frames/s by merging (REQ-MONITOR-306, REQ-SHELL-103), so a user who configures 400 background sessions saturates the run-host → main pipe, not a renderer. A stated maximum on the key would let the produced rate be computed rather than absorbed. The owner's call; recorded, not resolved.
+
 **OQ-73 — How does the counters' line spell the `paused` count clause 13 decides, where does the run-level agent that clause 13 does not name present, what does a live agent's cancel state for its paused descendants, and may the agents a crash left present `paused` before it is recorded, against clause 13's last sentence?** *(`PD-ORCH-005` clause 13, revision 4 — including its last sentence, "every other unfinished agent of a session at rest is settled as before", which the third reading below departs from — with clauses 8, 18 and 19; REQ-MONITOR-211/213, which that sentence keeps for every agent not `paused` and the third reading also departs from; REQ-MONITOR-169, whose count the clause's "the counters" decides and whose line's wording it does not; REQ-MONITOR-043/057, REQ-MONITOR-045, REQ-MONITOR-064/128, REQ-SHELL-036 and REQ-CHAT-008, which the directive does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
 
 Clause 13 gives an agent in the child state `paused` a presentation state of its own, `paused`, on "the agent tree,
@@ -3515,7 +3519,8 @@ only with a run behind it. The clause does not say:
 - **The confirmation.** Titled "Cancel <name>?", it gives one line per descendant cancelled with it — the set the cascade
   note counts — and states that it cannot be undone, that the agent will not resume (clause 3's "final"), and which
   descendants are cancelled with it by the same adjective ("paused", or "live and paused" in a `pausing` run); with no
-  descendant cancelled, that the other paused agents resume when the session continues. Its dismissal reads "Keep it paused" rather than "Keep running". The
+  descendant cancelled, that the other paused agents resume when the session continues. Its dismissal reads "Keep it paused" rather than "Keep running", on the Workspace and in a persona window
+  through `AgentCancelConfirm`, whose props take no label a call site could override. The
   Mission view's own confirmation adds "and will not resume" to its sentence (`missionCancelBody`), and takes its title
   and both buttons from the same `cancelConfirmation` (`missionConfirmation`). The confirmation describes the session
   as it was when Cancel was pressed: a continue confirmed in another window before this one is answered sends the
@@ -3943,10 +3948,6 @@ handoff it is re-sent, or whether a plan cycle's root is such a root.
 **What a ruling decides.** Whether "once" means once per offer across the run, so a root whose predecessor in the same
 run was told an offer is not told it again; and whether the stale lines of a re-sent handoff should be rewritten rather
 than left beside a fresh list.
-
-**Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
-
-The key is registered with default 20 and minimum 1. Each background session publishes its own `bg:<id>` stream at up to 50 frames/s (the 20 ms floor), so the produced aggregate is `(agents + background sessions) × 50 frames/s`, and only one of those two factors — agents, REQ-MONITOR-285's 20 — has a ceiling. Part AL reads the key into the manager and caps the *delivered* rate per window at 1,000 frames/s by merging (REQ-MONITOR-306, REQ-SHELL-103), so a user who configures 400 background sessions saturates the run-host → main pipe, not a renderer. A stated maximum on the key would let the produced rate be computed rather than absorbed. The owner's call; recorded, not resolved.
 
 **OQ-81 — What does the audit of clause 15, clause 19, PD-CHAT-001 revision 4 and PD-CHAT-002 revision 2 leave undecided?** *(`PD-ORCH-005` clauses 3, 9, 11, 15 and 19 (revision 4); `PD-CHAT-001` revision 4, "The strip" and "The paused continues"; `PD-CHAT-002` revision 2; REQ-TOOLS-063 and REQ-CHAT-029, which `PD-ORCH-005` narrows, REQ-CHAT-005, which `PD-CHAT-001` narrows, and REQ-CHAT-101, which `PD-CHAT-002` narrows; REQ-TRACE-464, which the reading below departs from; and REQ-CHAT-021, REQ-CHAT-169, REQ-MONITOR-004, REQ-MONITOR-131, REQ-SESSION-186 and REQ-TRACE-469, which the directives do not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4, `PD-CHAT-001` revision 4 and `PD-CHAT-002` revision 2 under [R-064](../product/requests.md#r-064).)*
 

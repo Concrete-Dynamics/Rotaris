@@ -74,7 +74,8 @@ session's lock, taken for the write and given back, a dead local holder reaped b
 refuses outright is judged before the lock is taken. Every confirmation and cascade note now names each unfinished descendant a cancel ends, live or paused (`cancelCascade`,
 OQ-73 and OQ-74), and both cancels write through one `userCancellation`. The surfaces offer a paused child's Cancel while its session rests
 (`cancelOffered(agent, runActive, resting)`, `resting` being `runLevelResting`, the predicate the composer's count and
-the resting root share) and confirm by `cancelConfirmation`, the Mission view through `missionConfirmation`. The
+the resting root share) and confirm by `cancelConfirmation` — the Workspace and a persona window through
+`AgentCancelConfirm`, which takes no label of its own, the Mission view through `missionConfirmation`. The
 **runtime view**'s `cancelAgent` and `children` rows and its crash paragraph, the **state-ownership view**'s rest and
 session-lock rows and the **sequences view**'s crash note name the new writer; the `iterations` and `agent_terminals`
 rows say only that the crash record is written at a repair or a continue, which the cancel is not. No package, edge,

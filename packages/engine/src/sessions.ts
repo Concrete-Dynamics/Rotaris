@@ -1205,7 +1205,7 @@ export class Sessions {
      * request whose task a rest put back. Its task is then taken up as it stands. The todo is judged as the run will read
      * it: a message a closed iteration still holds — a process that died between that iteration's close and the save of
      * its release — is settled first, as the run's constructor settles it (`releaseStale`), so a message it returns to
-     * pending is not appended a second time (found by review round 5).
+     * pending is not appended a second time (found by the iteration lane review).
      */
     const judged = todo === undefined ? null : Todo.fromDocument(todo);
     judged?.releaseStale(open?.iteration ?? null, succeededIterationsOf(s.dal, sessionId));

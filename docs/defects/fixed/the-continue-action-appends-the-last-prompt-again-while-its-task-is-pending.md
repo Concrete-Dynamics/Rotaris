@@ -50,5 +50,5 @@ call is sent the launch content (the behaviour `every-iteration-is-sent-the-prom
 records). Evidence: `run/message-task.test.ts` — the Continue action after a message was left pending works it once,
 taken up first, and a request a pause put back in the first run is worked once; reverting the guard turns both red, and
 so does narrowing it to pending tasks alone (the decline case). The message-limit route is pinned by "the message-limit
-resolution 'continue'/'double' restates the last request too" (review round 7): sending that route a message of no parts
+resolution 'continue'/'double' restates the last request too" (found by the iteration lane review): sending that route a message of no parts
 while the paused route keeps none turns both cases red.

@@ -887,7 +887,7 @@ export class Run {
     // PD-ORCH-005 clause 17: the continue's message this iteration takes up, when the launch content is another request's.
     // Only `iterate()` sets it, and every continuation carries its launch content (`Sessions.launchContinuation`). A plan
     // cycle is not an iteration and has no iteration task (REQ-ORCH-153), and PD-ORCH-003 revision 2's plan cycle runs
-    // after the resumed iteration's `iterate()` has set it — so only an execution root is told it (found by review round 5).
+    // after the resumed iteration's `iterate()` has set it — so only an execution root is told it (found by the iteration lane review).
     const takenUp: ContentPart[] = !execution || this.messageTakenUp === null ? [] : [{ kind: 'text', text: messageTakenUpText(this.messageTakenUp) }];
     const offers = execution && this.deps.dal ? offersForFirstMessage(this.deps.dal, this.sessionId, base, this.deps.handoffOffers) : null;
     if (offers === null && takenUp.length === 0) return launch;
@@ -1478,7 +1478,7 @@ export class Run {
        * is the continue that resumed the iteration — so the tasks the next iteration would take up, in that order, lead,
        * and the launch content follows as the session's context, said to be carried out only when the resumed iteration
        * closed the messages it held as done (PD-ORCH-005 clause 17; OQ-77) — this continue's, or an earlier one's that the
-       * Continue action resumed it with (found by review round 3).
+       * Continue action resumed it with (found by the iteration lane review).
        */
       const held = this.resumedMessageIds.map((id) => this.todo.task(id)?.state);
       const message = held.length === 0 ? 'none' : held.every((state) => state === 'complete') ? 'done' : 'pending';

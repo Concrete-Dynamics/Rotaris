@@ -118,9 +118,9 @@ export class Todo {
    * them", the message-limit resolution's 'continue' and 'double') appends it no second time: pending, or in progress and held by
    * the open iteration `open` — its own task, or a message it holds — which closes it to pending before the run selects.
    * A task in progress that nothing open holds and no iteration holds either is no one's to take up (a selection takes
-   * only pending tasks), so it does not count, and the request is appended again, as REQ-ORCH-004 states (found by review
-   * round 3). A message a closed iteration still holds is not that case: the caller settles it first with `releaseStale`,
-   * as the run does before it selects, so it is judged pending or complete as it will be taken (found by review round 5).
+   * only pending tasks), so it does not count, and the request is appended again, as REQ-ORCH-004 states (found by the
+   * iteration lane review). A message a closed iteration still holds is not that case: the caller settles it first with `releaseStale`,
+   * as the run does before it selects, so it is judged pending or complete as it will be taken (found by the iteration lane review).
    */
   holdsUnfinished(text: string, open: { readonly iteration: number; readonly taskId: string } | null): boolean {
     return this.all().some((t) => t.text === text && (t.state === 'pending'

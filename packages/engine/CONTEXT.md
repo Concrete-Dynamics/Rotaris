@@ -78,9 +78,9 @@ cycle with the plan as it stands and the changes the user stated, without limit.
 The hold a `plan`-mode run takes before any file-modifying work is done, where it waits indefinitely for
 one of exactly three answers — approve, revise, cancel. It withholds capability rather than preventing
 the run from starting, and approval installs the run's execution grants for the remainder of that run. A
-continue that resumes an iteration a rest left open runs it unheld, since it is work already under way; a gate
-that would hold that run holds before its first new iteration. — `REQ-ORCH-153`, `REQ-ORCH-154`,
-`PD-ORCH-003` (revision 2)
+continue that resumes an iteration a rest left open, or a crash left open once the crash is recorded, runs it
+unheld, since it is work already under way; a gate that would hold that run holds before its first new
+iteration. — `REQ-ORCH-153`, `REQ-ORCH-154`, `PD-ORCH-003` (revision 2), `PD-ORCH-005` clause 18, OQ-77
 _Avoid_: plan mode dialog, plan approval prompt
 
 **Planning grants**:

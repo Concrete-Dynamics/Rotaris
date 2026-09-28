@@ -31,7 +31,7 @@ import { addImageBytes, composerTokenEstimate } from './attachments.js';
 import { PlanGate } from './PlanGate.js';
 import { QuestionForm } from './QuestionStepper.js';
 import './attachments.css';
-import { ConfirmDialog } from './ConfirmDialog.js';
+import { AgentCancelConfirm, ConfirmDialog } from './ConfirmDialog.js';
 import { Button as DesignButton, Input as DesignInput, PopoverMenu, SearchableSelect as DesignSearchableSelect, SendPill as DesignSendPill, StripActionButton, TextArea as DesignTextArea } from './design-system/index.js';
 
 // Part AA: the row helpers moved to `transcript/Row.tsx`, the ONE row renderer, and are exported from the package
@@ -1607,7 +1607,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
         <ConfirmDialog title="Continue without them?" body={declineText(resumable.agents)} confirmLabel="Continue without them" cancelLabel="Keep them" destructive testId="decline-confirm" onCancel={() => setConfirming(null)} onConfirm={() => { setConfirming(null); void continueRun(true); }} />
       )}
       {confirming !== null && confirming !== 'cancelRun' && confirming !== 'decline' && (
-        <ConfirmDialog {...cancelConfirmation(confirming.agent, session?.agents ?? [])} destructive onCancel={() => setConfirming(null)} onConfirm={() => { const target = confirming.agent; setConfirming(null); void onCancelAgent?.(target.id).then((r) => { if (!r.ok) setError(r.reason); }); }} />
+        <AgentCancelConfirm agent={confirming.agent} agents={session?.agents ?? []} onCancel={() => setConfirming(null)} onConfirm={() => { const target = confirming.agent; setConfirming(null); void onCancelAgent?.(target.id).then((r) => { if (!r.ok) setError(r.reason); }); }} />
       )}
       {steering && onSteer && <SteerDialog target={steering} onSteer={onSteer} onClose={() => setSteering(null)} />}
     </div>

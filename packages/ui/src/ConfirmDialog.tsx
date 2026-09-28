@@ -1,4 +1,6 @@
 import { useEffect, useId, useState } from 'react';
+import type { AgentRecord } from '@rotaris/contracts';
+import { cancelConfirmation } from './agents.js';
 import { Button as DesignButton } from './design-system/index.js';
 
 /**
@@ -44,4 +46,21 @@ export function ConfirmDialog({ title, body, lines = [], confirmLabel, cancelLab
       </div>
     </div>
   );
+}
+
+/**
+ * REQ-MONITOR-126/128 and PD-ORCH-005 clause 16 (OQ-74): one agent's cancel confirmation, as the Workspace and a persona
+ * window draw it. Every label comes from `cancelConfirmation` — a paused child is dismissed with "Keep it paused", a live
+ * agent with "Keep running" — and the props take no label of their own, so a call site cannot override it.
+ */
+export interface AgentCancelConfirmProps {
+  readonly agent: { readonly id: string; readonly name: string };
+  readonly agents: readonly AgentRecord[];
+  readonly onConfirm: () => void;
+  readonly onCancel: () => void;
+  readonly testId?: string | undefined;
+}
+
+export function AgentCancelConfirm({ agent, agents, onConfirm, onCancel, testId }: AgentCancelConfirmProps) {
+  return <ConfirmDialog {...cancelConfirmation(agent, agents)} destructive testId={testId} onCancel={onCancel} onConfirm={onConfirm} />;
 }

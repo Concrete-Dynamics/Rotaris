@@ -160,7 +160,7 @@ artifacts with their hashes, a licence and the capabilities it enables. — `REQ
 
 **Platform key**:
 The per-platform selector shared by release artifact naming, updater asset selection and manifest artifact
-selection — one of the three fixed keys, or the raw `<os>-<machine>` fallback for anything else. — `REQ-STARTUP-060`
+selection — one of the three fixed keys, or a raw fallback for anything else. — `REQ-STARTUP-060`
 
 **Probe**:
 Running a tool's declared command to learn whether it is present and at what version. —

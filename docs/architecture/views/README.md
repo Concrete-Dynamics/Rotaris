@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-28**
 
+**A later iteration's root is told the open offers (`PD-ORCH-004` revision 4, 2026-09-28, R-064).** The offers list and
+its reader (`openOffersText`, `offersToldIn`) move from `sessions.ts` to `run/offers.ts`, re-exported where they were, so
+the run can use them without importing the session manager. `Run.turn()` adds to every execution iteration root's first
+message the offers that message does not already hold (`offersForFirstMessage`); a plan cycle is told none. Readings in
+OQ-80. The **runtime view**'s continuation paragraph and the **state-ownership view**'s record row say so. No package,
+edge, process, channel, message kind or store column changed.
+
 **The plan gate meets a resumed iteration (`PD-ORCH-003` revision 2, 2026-09-28, R-064).** A run that resumes an open
 iteration runs it unheld; when the gate would hold the run, the loop sets the hold once that iteration has closed and
 work is left, and parks before the first new iteration (`parkAtPlanGate(resumed)`, its plan cycle told the pending

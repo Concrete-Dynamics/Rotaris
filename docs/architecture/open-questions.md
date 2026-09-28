@@ -3438,6 +3438,42 @@ at that gate launches.
 iteration; whether the answer-group exemption should reach this hold; and whether the plan cycle should plan only the
 first pending task or all of them.
 
+**OQ-80 — Which offers is a later iteration's root told, where in its first message, and which roots count?** *(`PD-ORCH-004` revision 4; REQ-ORCH-088, which the directive narrows, REQ-TOOLS-152, which it extends, and REQ-SESSION-115, REQ-SESSION-194, REQ-ORCH-067, REQ-ORCH-072 and REQ-ORCH-153, which it does not name. Raised 2026-09-28 by building `PD-ORCH-004` revision 4 under [R-064](../product/requests.md#r-064).)*
+
+Revision 4: every root that may take up an open offer "SHALL be told of it, once", and among them "the root of each
+later iteration of the same run, in that iteration's first message". It does not say whether "once" is per root or per
+offer, where in the first message the list sits, what a later iteration of a continuation run is told beside the
+handoff it is re-sent, or whether a plan cycle's root is such a root.
+
+**What the build proceeds under.**
+
+- **Once per root.** Each iteration's root is a different agent, so the root of iteration 2 is told an offer even
+  though the root of iteration 1 was. A root is told an offer once: the list is part of its first message, so its
+  record holds it, and a continue that later resumes that root finds it there (`offersToldIn`) and does not tell it
+  again.
+- **The same rule for every execution root.** The first message of every execution iteration's root carries the open
+  offers — every offer of the session no child has taken up, not a subset by iteration — that the message's launch
+  content does not already hold. The root of a new session's first iteration has none to be told. A continuation's
+  first iteration reads them all in its handoff and is told nothing more. Each later iteration of the same run is told
+  those raised since, including any a resumed first iteration raised.
+- **Where.** A text part of its own after the launch content — its text and any attachments — in the same first user
+  message, so the root reads it as part of its task. It is the same list, header, lines, newest ten and elision line
+  as the handoff's and the resumed root's, so a later reader recognises it.
+- **The re-sent handoff is left as it is.** A later iteration of a continuation run is re-sent the payload built at
+  the continue, whose list can name an offer taken up since (the behaviour
+  [`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../defects/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md)
+  records). Those lines are not rewritten; an offer the payload already names is not named again, and one taken up since
+  is refused at admission with "already continued by".
+- **A plan cycle is told none.** A plan cycle is not an iteration (REQ-ORCH-153) and its root takes up no offer
+  (OQ-72), so neither a plan cycle at a run's start nor one held after a resumed iteration (`PD-ORCH-003` revision 2)
+  has the list added; a continuation's plan cycle still reads the handoff's list, as before.
+- **The root's execution record keeps its task.** REQ-ORCH-072's task payload on the root's record is the task string,
+  as before; the list is in the conversation record only.
+
+**What a ruling decides.** Whether "once" means once per offer across the run, so a root whose predecessor in the same
+run was told an offer is not told it again; and whether the stale lines of a re-sent handoff should be rewritten rather
+than left beside a fresh list.
+
 ## Design-reference dependencies
 
 The approved visual design reference was **not available** to the architects who produced the slice

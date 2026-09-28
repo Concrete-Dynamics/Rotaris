@@ -615,8 +615,11 @@ it resolves the pause (continue → `idle`; double → the limit ×2; cancel →
 run** on the same session with no new user row (Part H's route, the previous intent carried over, the
 continuation payload built to REQ-SESSION-115's budgets, its artifact the latest one the session's store holds,
 id first and cut to 6,000 characters — `latestArtifactText` — and its progress context listing the continuation offers
-no child has taken up, the newest ten — `openOffersText`, which a continue that resumes an open iteration records for
-its root instead, OQ-72). **PD-ORCH-005:** where the last run left an iteration open,
+no child has taken up, the newest ten — `openOffersText` (`run/offers.ts`), which a continue that resumes an open
+iteration records for its root instead, OQ-72; and which `Run.turn()` adds to the first message of every execution
+iteration's root as a text part after the launch content, naming only the offers that content does not already hold —
+so a continuation's first iteration, which reads them in its handoff, is told nothing more, each later iteration of
+the same run is told those raised since, and a plan cycle is told none: `PD-ORCH-004` revision 4, OQ-80). **PD-ORCH-005:** where the last run left an iteration open,
 that run resumes it first (§2), and `session.continue`'s `withoutPaused` declines it instead — clause 6's "continue
 without them" (renderer `continueSession(action, {withoutPaused})` → main → run host → `Sessions.continueSession`). The
 Continue action states what it resumes from `SessionRecord.resumable` (`resumableOf`: the open iteration, and its root

@@ -12,6 +12,9 @@ import { EventBus } from './run/event-bus.js';
 import { parseTokenSamples, Run, type AgentTerminals, type ModelLookup, type PermissionPosture, type RunConfig, type RunResult } from './run/run.js';
 import { iterationAgents, recordCrash } from './run/crash.js';
 import { resumeNoticeOf } from './run/resume.js';
+import { offersToldIn, openOffersText } from './run/offers.js';
+// PD-ORCH-004 revision 4: the offers list lives beside the run, which tells a later iteration's root; kept public here.
+export { offersToldIn, openOffersText } from './run/offers.js';
 import { planSection } from './run/plan-text.js';
 export { planRequestSection, planSection } from './run/plan-text.js';
 import { ResilienceMemory, type CatalogueEntry, type ModelChoice } from './run/resilience.js';
@@ -28,7 +31,6 @@ import { isActiveStatus } from './run/stop-conditions.js';
 import type { HookPort, HookPortContext, RunNotice, ToolHookBridge } from './hooks-port.js';
 import { ArtifactStore } from './artifacts/store.js';
 import { toArtifactRecord } from './artifacts/record.js';
-import { parseReport } from './children/notify.js';
 import { persistAttachments, projectAttachments, readAttachmentBody, validateAttachmentInputs } from './attachments.js';
 import { artifactOps, type ArtifactOps } from './artifacts/port.js';
 import type { Preflight, PreflightContext } from './preflight.js';
@@ -462,51 +464,6 @@ function textOfMessage(m: ChatMessage): string {
 function toldSinceLastAnswer(messages: readonly ChatMessage[]): ReadonlySet<string> {
   const lastAnswer = messages.map((m) => m.role).lastIndexOf('assistant');
   return new Set(messages.slice(lastAnswer + 1).filter((m) => m.role === 'user').map(textOfMessage));
-}
-
-/** PD-ORCH-004 revision 3: how many open offers a later root is told of — the newest; the rest are elided. */
-const OFFERS_TOLD = 10;
-const OFFERS_HEADER = 'Open continuation offers (delegate with `continuation_of` set to the task id to take one up):';
-
-/**
- * PD-ORCH-004 revision 3: the task ids whose continuation offer a conversation already holds — the offer itself, as a
- * child's report carries it (`continuation_of: "<id>"`, in a message or a tool result), or a line of an offers list it
- * was told, alone or in a handoff. A task id merely mentioned is not an offer told (found by phase 6's fourth review).
- */
-export function offersToldIn(messages: readonly ChatMessage[]): ReadonlySet<string> {
-  const told = new Set<string>();
-  for (const m of messages) {
-    for (const p of m.content) {
-      const text = p.kind === 'text' ? p.text : p.kind === 'tool-result' ? p.result : '';
-      for (const hit of text.matchAll(/continuation_of: \\?"(bg_[0-9a-f]{8})\\?"/g)) told.add(hit[1]!);
-      if (p.kind !== 'text') continue;
-      // An offers list stands alone when a resumed root is told it, and inside the handoff a new iteration's root reads.
-      for (let at = p.text.indexOf(OFFERS_HEADER); at >= 0; at = p.text.indexOf(OFFERS_HEADER, at + 1)) {
-        for (const line of p.text.slice(at + OFFERS_HEADER.length + 1).split('\n')) {
-          if (!line.startsWith('- ')) break;
-          const hit = /\((bg_[0-9a-f]{8})\)$/.exec(line);
-          if (hit !== null) told.add(hit[1]!);
-        }
-      }
-    }
-  }
-  return told;
-}
-
-/**
- * PD-ORCH-004 revision 3: the continuation offers the session holds that no child has taken up, which a later root may
- * take up — each by its child's name and task id, the newest ten, with the way to take one up (OQ-72). A new iteration's
- * root reads it in the handoff's progress context, a resumed root at the continue (only those `include` admits).
- * Empty when there is none.
- */
-export function openOffersText(dal: StoreDal, sessionId: SessionId, include: (taskId: string) => boolean = () => true): string {
-  const all = dal.childrenOf(sessionId);
-  const continued = new Set(all.flatMap((c) => (c.continuation_of === null ? [] : [c.continuation_of])));
-  const open = all.filter((c) => typeof parseReport(c)?.cut_off?.continuation_offer === 'string' && !continued.has(c.task_id) && include(c.task_id));
-  if (open.length === 0) return '';
-  const told = open.slice(-OFFERS_TOLD).map((c) => `- ${cut(c.canonical_name, 80)} (${c.task_id})`);
-  const elided = open.length > OFFERS_TOLD ? ['- [... earlier continuation offers elided]'] : [];
-  return [OFFERS_HEADER, ...elided, ...told].join('\n');
 }
 
 export function buildContinuationPayload(dal: StoreDal, row: SessionRow, prompt: string, todo: TodoDocument | undefined): string {

@@ -35,6 +35,7 @@ import { ConversationRegistry, type ManualCompressionReport } from './conversati
 import { ConversationRecord } from './record.js';
 import { answerOpenCalls, iterationAgents } from './crash.js';
 import { firstTurn, resumedStart, resumeNoticeOf, type TurnStart } from './resume.js';
+import { offersForFirstMessage } from './offers.js';
 import { randomUUID } from 'node:crypto';
 import { decodeStoredTodo, editAgentTodo, encodeStoredTodo, isAgentTodoDocument, type AgentTodoDocument } from '../todo-view.js';
 
@@ -843,6 +844,18 @@ export class Run {
     return resumedStart(this.record.load(rootTaskId));
   }
 
+  /**
+   * The first message of a fresh root: the launch content, and — for an execution iteration's root, never a plan cycle's
+   * (REQ-ORCH-153: a plan cycle is not an iteration and takes up no offer) — PD-ORCH-004 revision 4's list of the open
+   * continuation offers that content does not already hold, as a text part after it. A continuation's first iteration
+   * holds them all in its handoff; each later iteration of the same run is told those raised since (OQ-80).
+   */
+  private firstMessage(task: string, launch: readonly ContentPart[] | undefined, execution: boolean): readonly ContentPart[] | undefined {
+    const offers = execution && this.deps.dal ? offersForFirstMessage(this.deps.dal, this.sessionId, launch ?? [{ kind: 'text', text: task }]) : null;
+    if (offers === null) return launch;
+    return [...(launch ?? [{ kind: 'text', text: task }]), offers];
+  }
+
   /** PD-ORCH-005 clause 10: what the agent `taskId` is told, when it resumes, of the background sessions it had started. */
   private resumeNotice(taskId: string): ChatMessage | null {
     return this.deps.dal ? resumeNoticeOf(this.deps.dal, this.sessionId, taskId, this.deps.terminals) : null;
@@ -1123,7 +1136,7 @@ export class Run {
     let initial = true;
     const compression = this.compressionFor(this.rootResilience().cell.model, () => this.plannerTodoLines());
     const turnFn = (text: string | null, history: readonly ChatMessage[]) => {
-      const content = launching ? (contentOverride ?? this.deps.taskContent) : undefined;
+      const content = launching ? this.firstMessage(text ?? task, contentOverride ?? this.deps.taskContent, iterationOverride === undefined) : undefined;
       const initialCall = initial;
       launching = false;
       initial = false;

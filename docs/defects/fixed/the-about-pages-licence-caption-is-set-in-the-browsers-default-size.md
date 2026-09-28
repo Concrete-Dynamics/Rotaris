@@ -38,3 +38,9 @@ not a literal, so the error line under it keeps the same air the licence line ke
 words are unchanged. The report-only critic (`pnpm ui-review --views=7`) could not run on this tree: the audit it wraps dies
 on the window controls' contract before writing a pack (`../the-window-controls-contract-is-an-object-and-kills-every-ui-audit.md`),
 so the surface was read from `.proof/settings-proof/no-workspace.png` by eye against the mockup, not by the critic.
+**Pinned inside `pnpm check` too** (added in the verification round): `packages/ui/src/settings/About.test.ts` renders the
+About category and requires the caption to carry `about__caption` — it fails on the pre-repair `text-secondary`, checked
+by setting the class back — and reads `shell.css` to require `.about__caption`'s `font-size` to be the named token
+`.about__value`'s (`--rt-text-sm`). The built-app assertion stays the evidence of the computed size; the unit test pins
+what it rests on. When the window-controls defect is repaired, `pnpm ui-review --views=7` over About is owed and its
+findings belong here.

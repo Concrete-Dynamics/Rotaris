@@ -24,7 +24,7 @@ record already decides, and every ruling it needs is named as the owner's rather
 | Workspace-context injection, REQ-WORKSPACE-041..050 | built 2026-09-22 under `PD-WORKSPACE-002` | §3 |
 | Injection — REQ-WORKSPACE-049's latency bound, a built-app proof | **built 2026-09-27** (`pnpm injection-proof`); the bound **met on Linux**, the Windows gate-class reading **owed**; OQ-64 **ruled 2026-09-27**; OQ-68 raised | §3 |
 | The Windows release pipeline, REQ-STARTUP-027..038, 141..143, 156, 158, 167, 168 | the installer built once (ADR-0054, 2026-09-04); **the version guard built 2026-09-27** (§4.1), and the setup manifest it checks is owed; **the notices generator built 2026-09-27** (§4.3), its validation refusing until O-3, O-11 and OQ-74; **the two bundled assets wired into `pnpm package` 2026-09-27** (§4.4), so a package refuses with it | §4 |
-| The updater, REQ-STARTUP-107..124 | ~~**not built** — no module in `apps/desktop/src/main/`~~; **in the first release**, ruled 2026-09-27; **built 2026-09-28** (`apps/desktop/src/main/updater/`, `pnpm updater-proof`; the compiled-in key set empty until O-2; the apply and the restart unit-tested over fakes, their run against a real artifact owed to the next Windows package, IC-3); OQ-76, OQ-77, OQ-78 raised | §4.6 |
+| The updater, REQ-STARTUP-107..124 | ~~**not built** — no module in `apps/desktop/src/main/`~~; **in the first release**, ruled 2026-09-27; **built 2026-09-28** (`apps/desktop/src/main/updater/`, `pnpm updater-proof`; the compiled-in key set empty until O-2; the apply and the restart unit-tested over fakes, their run against a real artifact owed to the next Windows package, IC-3); OQ-76, OQ-77, OQ-78 raised; repaired at verification the same day (classification order, the record pass, the re-offer, the launch-time cleanup), OQ-79 raised | §4.6 |
 
 **Deferred by "thats it".** Each item stays owed where the record already carries it:
 
@@ -520,6 +520,16 @@ so that the next release can add the updater without stranding anyone.
 > REQ-SHELL-118 on the download notice's title, persistence and the pause before the apply). **Two obligations the
 > portable stub (§4.5) inherits:** publish `ROTARIS_PORTABLE_ARTIFACT` with the artifact's absolute path, and forward
 > its arguments to the payload, which the successor launch's token depends on.
+>
+> **Repaired at verification, the same day.** The independent verification found three defects and the repair's tests
+> a fourth, each now pinned beside its unit (ADR-0054 "The updater", *Repaired at verification*): an inherited
+> `APPIMAGE` made a source-tree launch updatable and contacted the feed (the released-artifact test now runs first, the
+> AppImage test on a packaged Linux build alone; `pnpm updater-proof` now launches with both artifact variables set, 8
+> checks); the instance record passed to any announced successor, not only one a waiting restart started (a second
+> instance — `acceptSuccessor`); a later window's check re-offered an installed update and dropped `Restart now`; and
+> the `<name>.old` cleanup ran per window rather than per launch, deleting the backup the same process had just made.
+> 152 unit cases. **Raised by it:** OQ-79 (whether the installer's auto-close and the restart's close ask
+> REQ-STARTUP-046's active-run confirmation); OQ-77 now cites REQ-STARTUP-147's sentence too.
 
 **4.7 The manifest, the signature and the key record.** The pipeline writes and signs these:
 

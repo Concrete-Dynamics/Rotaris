@@ -62,7 +62,11 @@ waved-off version and the key set; the **component view** names the `app-main â†
 `MainWindows` gains a post-show activation hook (REQ-STARTUP-043), the notice store an `update` in place (REQ-SHELL-118),
 the notice action a `disabled` description, and the preference table `updates/dismissedVersion`. No package, edge,
 process, channel or store column changed; two command kinds were added. Three questions were raised (OQ-76, OQ-77,
-OQ-78) and one defect noticed beside the mechanism (`redirector.gvt1.com`).
+OQ-78) and one defect noticed beside the mechanism (`redirector.gvt1.com`). **Repaired at verification the same day:**
+the **state-ownership view**'s instance-record row and the **sequences view**'s `Restart now` now say the record passes
+only while a restart this instance started waits for its successor (`acceptSuccessor`, REQ-STARTUP-161); the sequences
+view's launch and the process view's `.old` row say the backup cleanup runs at a launch's first check only and that an
+update already installed in this process is not offered again (REQ-STARTUP-115/119); OQ-79 raised.
 
 **A session approval of a file write covers that path (`PD-TOOLS-004`, built 2026-09-27, R-057).** A grant made by
 "approve for session" on a call of the public `write_file` or `haet_edit` (`haet` folded in) now stores the set of

@@ -1525,4 +1525,26 @@ reached", in REQ-STARTUP-125's shape for that case, and only an artifact missing
 for every window until the demo entry (REQ-SHELL-162) is built. Every line the updater writes is `info`
 (`PD-MONITOR-002`), a failed install `warning`, a successor that could not be started `error`. The installer's
 auto-close and the restart's close destroy the main windows rather than asking the close guard: the user chose the
-action, and after the record has passed the predecessor must not stay. **Nothing in this record's decision changes.**
+action, and after the record has passed the predecessor must not stay. That is a reading between two SHALLs —
+REQ-STARTUP-119's "the window SHALL auto-close" and REQ-STARTUP-121's close against REQ-STARTUP-046's confirmation
+"when a run is active" — and **OQ-79** asks which governs. **Nothing in this record's decision changes.**
+
+**Repaired at verification, 2026-09-28 (same item, R-062).** The independent verification found three defects in the
+build above, and writing the third's test found a fourth; each is repaired with a test beside it, and nothing in this
+record's decision moved. (1) *The classification order.* The AppImage test ran before the released-artifact test, so a
+`pnpm dev` inheriting `APPIMAGE` from an AppImage-hosted terminal was the appimage flavour and contacted the feed
+(reproduced in the built app), and the same variable on a packaged Windows build selected a flavour `PD-STARTUP-001`
+never offers. REQ-STARTUP-106's "before any other flavour test" orders the **flavour** tests; the released-artifact
+test is not one, and no variable overrides it. The packaged test now runs first and the AppImage test applies to a
+packaged Linux build alone (`classify.ts`); `pnpm updater-proof` launches with `APPIMAGE` and
+`ROTARIS_PORTABLE_ARTIFACT` set and still records no request. (2) *The record passed to anyone.* `passRecord` rewrote
+the record for any well-formed successor on this host, whether or not a restart was waiting, so an unsolicited
+`builtin:update-successor` launch became a second instance (REQ-STARTUP-161). The claim now takes `acceptSuccessor`, and
+main answers true only while its restart waits; it does not match the spawned pid, because the portable's launcher
+stands between that process and the one that announces itself. (3) *An installed update offered again.* A later
+window's check after `Update installed` re-offered the same version, replaced the notice and made `Restart now`
+unreachable; the check now stays silent while an update is applied or handed off for that version or a newer one.
+(4) *The cleanup ran per window.* REQ-STARTUP-115's `<name>.old` cleanup ran at every window's check and so deleted the
+backup the same process's apply had just made; it is launch-time, once per process. Also aligned: the copy port
+replaces `<name>.update`, the updater's own sibling, as its contract now says. Unit: 152 cases in the same 14 files;
+`pnpm updater-proof`: 8 checks, all green.

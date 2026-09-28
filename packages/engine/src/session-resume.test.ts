@@ -279,7 +279,7 @@ describe('G — the handoff prefers the root\'s own artifact (PD-ORCH-005 clause
     const at = new Date(clock.instant()).toISOString();
     dal.upsertSession({ session_id: sid, execution_status: 'completed', workspace_root: 'C:/ws', created_at: at, updated_at: at });
   };
-  const iteration = (sid: SessionId, n: number, rootTaskId: string): void => dal.insertIteration({ session_id: sid, iteration: n, root_task_id: rootTaskId, root_canonical_name: 'orchestrator', root_persona: 'orchestrator', todo_task_id: `t${n}`, task: 'work', opened_at: '2026-09-27T00:00:00.000Z' });
+  const iteration = (sid: SessionId, n: number, rootTaskId: string, openedAt = '2026-09-27T00:00:00.000Z'): void => dal.insertIteration({ session_id: sid, iteration: n, root_task_id: rootTaskId, root_canonical_name: 'orchestrator', root_persona: 'orchestrator', todo_task_id: `t${n}`, task: 'work', opened_at: openedAt });
   const artifact = (sid: SessionId, id: string, kind: 'child_report' | 'agent_published', conversationId: string | null, createdAt: string, supersededBy: string | null = null) => dal.insertArtifact({
     session_id: sid, id, slug: id, title: `${id} title`, kind, source_task_id: conversationId ?? 'bg_00000001', canonical_name: 'build', source_persona: 'coding-agent', status: kind === 'child_report' ? 'succeeded' : 'published',
     summary: `${id} summary`, key_findings: `${id} body`, highlight_paths: '[]', snippets: '[]', edited_files: '[]', created_files: '[]', commands: '[]', tags: '[]',
@@ -331,6 +331,27 @@ describe('G — the handoff prefers the root\'s own artifact (PD-ORCH-005 clause
     expect(handoffArtifact(sid)).toBe('a0000004');
     artifact(sid, 'a0000005', 'agent_published', 'bg_root0002', '2026-09-27T01:00:00.000Z');
     expect(handoffArtifact(sid)).toBe('a0000005');
+  });
+
+  it('a plan cycle that ran after the latest iteration is what the new work follows: an earlier iteration\'s root document never outranks what the plan cycle produced (OQ-79)', () => {
+    const sid = asSessionId('S-root-plan-cycle');
+    seed(sid);
+    iteration(sid, 1, 'bg_root0001', '2026-09-27T00:00:00.000Z');
+    dal.closeIteration(sid, 1, 'succeeded', '2026-09-27T01:30:00.000Z');
+    artifact(sid, 'a0000001', 'agent_published', 'bg_root0001', '2026-09-27T01:00:00.000Z');
+    // The session is re-armed and a prompt starts a plan cycle: its child reports, its root publishes the plan, and the
+    // gate opens. The handoff the approve (or the revise) builds takes the latest of any kind — the plan — not X.
+    artifact(sid, 'a0000002', 'child_report', 'bg_child002', '2026-09-27T02:00:00.000Z');
+    artifact(sid, 'a0000003', 'agent_published', 'bg_plan0001', '2026-09-27T02:30:00.000Z');
+    expect(handoffArtifact(sid)).toBe('a0000001');
+    dal.insertPlanCycle(sid, 1, '2026-09-27T03:00:00.000Z', 'The plan.', 'implementation', '', '');
+    expect(handoffArtifact(sid)).toBe('a0000003');
+    // Approved: the iteration the plan led into opens after the gate, so its root is preferred again once it publishes.
+    iteration(sid, 2, 'bg_root0002', '2026-09-27T04:00:00.000Z');
+    expect(handoffArtifact(sid)).toBe('a0000003');
+    artifact(sid, 'a0000004', 'agent_published', 'bg_root0002', '2026-09-27T05:00:00.000Z');
+    artifact(sid, 'a0000005', 'child_report', 'bg_child005', '2026-09-27T06:00:00.000Z');
+    expect(handoffArtifact(sid)).toBe('a0000004');
   });
 
   it('end to end: a root\'s publish carries its task id as its conversation, and the next iteration\'s handoff names it over a later report', async () => {

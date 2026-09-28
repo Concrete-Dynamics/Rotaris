@@ -601,8 +601,9 @@ it resolves the pause (continue → `idle`; double → the limit ×2; cancel →
 `message_limit_reached`) and, for continue/double and for a manually paused session, launches a **continuation
 run** on the same session with no new user row (Part H's route, the previous intent carried over, the
 continuation payload built to REQ-SESSION-115's budgets, its artifact the latest one the most recent iteration's root
-published that nothing supersedes — known by its root task id as the artifact's `conversation_id` — else the latest
-of any kind that nothing supersedes (PD-ORCH-005 clause 20, OQ-79), id first and cut to 6,000 characters —
+published that nothing supersedes — known by its root task id as the artifact's `conversation_id`, and none when a
+plan cycle opened its gate after that iteration opened — else the latest of any kind that nothing supersedes
+(PD-ORCH-005 clause 20, OQ-79), id first and cut to 6,000 characters —
 `latestArtifactText`, read once at the continue, so a later iteration of that run is re-sent it as it stood then —
 and its progress context listing the continuation offers
 no child has taken up, the newest ten — `openOffersText`, which a continue that resumes an open iteration records for

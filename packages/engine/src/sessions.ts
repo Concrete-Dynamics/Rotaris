@@ -443,14 +443,20 @@ function continuedTaskId(dal: StoreDal, sessionId: SessionId, todo: TodoDocument
  * the requirement's 6,000 characters. The iteration is the session's most recent recorded one, the iteration the new
  * one follows (OQ-79). Its root is known by the task id its publishes carry as their conversation, which only its own
  * tool port writes (a child's report carries the child's), never by `created_by`, which every root shares. A plan
- * cycle's root is not an iteration's (REQ-ORCH-153), so its publishes count only as "of any kind". Its id leads, so no
+ * cycle's root is not an iteration's (REQ-ORCH-153), so its publishes count only as "of any kind"; and when a plan cycle
+ * opened its gate after the latest iteration opened (the plan gate's approve and revise, a prompt after a declined
+ * plan), the new work follows that plan cycle, not the iteration, so no iteration's root is preferred and the handoff
+ * takes the latest of any kind — an earlier piece of work's document never outranks what the plan cycle produced
+ * (OQ-79). The two times are the writer's own ISO instants, so they compare as text. Its id leads, so no
  * cut reaches it (REQ-SESSION-194). A published document's summary is its body's first line and its key findings its
  * body (REQ-LIBRARY-093), so it is stated once, as its body. The repair of
  * `the-continuation-payload-says-no-artifact-is-recorded.md` (OQ-72).
  */
 export function latestArtifactText(dal: StoreDal, sessionId: SessionId): string {
   const records = dal.artifactsOf(sessionId).flatMap((r) => { const a = toArtifactRecord(r); return a && a.supersededBy === null ? [a] : []; });
-  const root = dal.iterationsOf(sessionId).at(-1)?.root_task_id;
+  const iteration = dal.iterationsOf(sessionId).at(-1);
+  const cycle = dal.planCyclesOf(sessionId).at(-1);
+  const root = cycle !== undefined && iteration !== undefined && cycle.opened_at > iteration.opened_at ? undefined : iteration?.root_task_id;
   const latest = records.findLast((a) => a.conversationId === root) ?? records.at(-1);
   if (!latest) return 'Artifact: (none recorded in this session)';
   const header = `Artifact: ${latest.id} — ${cut(latest.title, 80)} (${latest.kind}, ${latest.status})`;

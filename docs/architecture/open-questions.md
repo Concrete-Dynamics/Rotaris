@@ -3347,7 +3347,7 @@ recommendations.
 Until they are built, the artifact is the latest of any kind, and a later iteration of the same run is told of no
 offer.
 
-**OQ-78 — What is an agent's fingerprint taken of, when is it compared, and where is the warning stated?** *(`PD-ORCH-005` clause 14 over OQ-68's reading; REQ-SESSION-029, REQ-SESSION-132, REQ-SESSION-134, REQ-SESSION-135, REQ-ORCH-019, REQ-ORCH-088, REQ-ORCH-095, REQ-WORKSPACE-060, REQ-TOOLS-010, REQ-MCP-101, REQ-CONFIG-166 and REQ-MONITOR-305, which the directive does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
+**OQ-78 — What is an agent's fingerprint taken of, when is it compared, and where is the warning stated?** *(`PD-ORCH-005` clause 14 over OQ-68's reading; REQ-SESSION-029, REQ-SESSION-132, REQ-SESSION-134, REQ-SESSION-135, REQ-ORCH-019, REQ-ORCH-088, REQ-ORCH-095, REQ-WORKSPACE-047, REQ-WORKSPACE-050, REQ-WORKSPACE-058, REQ-WORKSPACE-060, REQ-TOOLS-010, REQ-TOOLS-053, REQ-TOOLS-069, REQ-MCP-101, REQ-CONFIG-166 and REQ-MONITOR-305, which the directive does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
 
 Clause 14 has each agent's record keep "a fingerprint of the system instructions and the tool definitions the agent
 started with", and has the run state, as a warning, which agent resumed under changed instructions when its persona's
@@ -3368,6 +3368,19 @@ REQ-MONITOR-305's warnings surface, where a warning would naturally be listed, i
   runs the pre-flight again with its own message (`launchContinuation`), so a continue by message classified as a
   different intent warns for every resumed agent whose role has a playbook, though no persona was edited. The model is
   not part of it.
+- **The workspace's own files are in it too.** The context units include REQ-WORKSPACE-047/050's workspace context —
+  the instruction files (`AGENTS.md` and the like) merged from the run's execution root, the tree the agents write
+  to — and the skill catalog block. So an agent that edits `AGENTS.md` as part of its task changes what every agent
+  resumed after it is instructed with, and each is named "resumed under changed instructions: its system instructions
+  differ", although no persona changed and the change is the run's own. Whether it is named depends on whether the
+  merge was read again: REQ-WORKSPACE-058 holds it per workspace root until a rescan or a session creation clears it
+  (`SkillRegistry.workspaceContext`), so a continue in the same process after nothing else happened is still handed
+  the cached merge and states nothing, while the same continue after the app is relaunched, or after any session is
+  created in that workspace, is handed the edited file and warns for every resumed agent. The warning is true of what
+  the request carried in both cases; which of the two the agent is given is REQ-WORKSPACE-058's, not this build's.
+  A lesser case of the same kind: `ask_questions` is listed only while the run host holds a live presenter
+  (`userPromptChannel`, attendedness under REQ-TOOLS-053/069), so an agent that started during a lapse in the presenter and is resumed
+  with one live is named for its tool definitions.
 - **The first is kept.** The fingerprint is recorded at an agent's first model step and never replaced. Every resume
   compares against it, so each resume under instructions that still differ warns again; a resume under the instructions
   it started with states nothing.
@@ -3393,12 +3406,13 @@ REQ-MONITOR-305's warnings surface, where a warning would naturally be listed, i
   closed before it.
 
 **What a ruling decides.** Whether "the system instructions" should be the persona's own definition only, so a changed
-playbook, skill or MCP server does not warn; whether a warning should be stated once per change (replacing the
+playbook, skill, MCP server, workspace instruction file (one the run's own agents may have edited) or presenter-bound
+tool does not warn; whether a warning should be stated once per change (replacing the
 fingerprint after a warned resume) rather than at every resume while it differs; and whether the warning should also
 reach REQ-MONITOR-305's warnings surface once that is built, or be stated at the continue rather than at the agent's
 first step; and what the issue kind is called, since the specification's vocabulary has none for it.
 
-**OQ-79 — Whose root is "the iteration's root" when the handoff is built for an iteration that has not started?** *(`PD-ORCH-005` clause 20 over REQ-SESSION-115; REQ-ORCH-153, REQ-LIBRARY-093 and REQ-LIBRARY-096, which the directive does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
+**OQ-79 — Whose root is "the iteration's root" when the handoff is built for an iteration that has not started?** *(`PD-ORCH-005` clause 20 over REQ-SESSION-115; REQ-ORCH-153, REQ-ORCH-154, REQ-LIBRARY-093 and REQ-LIBRARY-096, which the directive does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
 
 Clause 20 makes REQ-SESSION-115's artifact "the latest artifact the iteration's root published that nothing supersedes"
 and, when the root published none, the latest of any kind. Every continue builds the handoff, including one that resumes
@@ -3421,6 +3435,16 @@ from the launch content computed when the run began.
   (`a-roots-publish-names-its-persona-as-its-author.md`), so it cannot tell one iteration's root from another's.
 - **A plan cycle's root is not an iteration's root.** Its publishes count only as "of any kind"; the approve path
   carries the plan itself in its own section.
+- **Work that follows a plan cycle follows no iteration.** A plan cycle is never recorded as an iteration, so on the
+  plan gate's approve and revise, and on a prompt after a declined plan, the most recent `iterations` row belongs to
+  an earlier piece of work. Taking its root there would hand over that earlier work's document ahead of everything
+  the plan cycle produced — its children's reports and the plan its root published — although the new work follows
+  the plan cycle, not that iteration. So when the latest plan cycle opened its gate (`plan_cycles.opened_at`) after
+  the latest iteration opened, no iteration's root is preferred and the handoff takes the latest of any kind that
+  nothing supersedes. A prompt that opens a plan cycle on a re-armed session (`PD-ORCH-003`) is handed the latest
+  iteration's root's document, since that plan cycle follows it; and once the approved iteration opens, its root is
+  preferred again. The two instants are the session writer's own ISO times, so an equal pair (possible only under
+  a stopped test clock) counts the iteration as the later.
 - **A root with no recorded iteration or no tool port** (before v23, or a run with no tool port) has no publish to
   find, and the handoff takes the latest of any kind. Nothing is backfilled.
 - **A root whose every publish is superseded published none.** Only artifacts nothing supersedes are candidates, so
@@ -3441,7 +3465,9 @@ from the launch content computed when the run began.
 
 **What a ruling decides.** Whether "the iteration's root" is the root of the iteration the new one follows, as built,
 or any iteration's root of the session, which would carry an earlier iteration's document forward past a later
-iteration whose root published nothing; whether a root whose every publish is superseded counts as having published
+iteration whose root published nothing; whether work that follows a plan cycle takes the latest of any kind, as
+built, or prefers the plan cycle root's own publish, or the root of the last recorded iteration — the reading this
+build first took, which handed an earlier piece of work's document over ahead of the plan cycle's; whether a root whose every publish is superseded counts as having published
 none; and whether a later iteration of the same run should have its handoff's artifact read again when it starts,
 rather than be re-sent the one read at the continue, superseded or not.
 

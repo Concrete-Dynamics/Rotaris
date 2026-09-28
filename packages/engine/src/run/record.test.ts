@@ -507,6 +507,8 @@ describe('F — the fingerprint an agent started with (PD-ORCH-005 clause 14)', 
     expect(JSON.parse(warnings(sid)[0]!.metadata)).toEqual({ task_id: root.root_task_id, iteration: 1, instructions_changed: true, tools_changed: false });
     expect(dal.timelineOf(sid).filter((t) => t.name === 'issue' && t.message === message)).toHaveLength(1);
     expect(systemRows(sid)).toEqual([message]);
+    // A finished row, as every system row the writer commits is — never one drawn as still streaming (REQ-CHAT-054).
+    expect(dal.residentRows(sid).filter((r) => r.body === message).map((r) => r.settled)).toEqual([1]);
     // The fingerprint is of what it STARTED with: a resume never replaces it.
     expect(dal.agentFingerprintOf(sid, root.root_task_id)).toEqual(started);
   });

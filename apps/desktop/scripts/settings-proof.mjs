@@ -41,7 +41,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmdirSync, rmSync, wr
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cleanEnvironment, proofIsolationEnv } from './lib/harness.mjs';
+import { cleanEnvironment, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
 import { ABOUT_ASSETS } from './lib/about-assets.mjs';
 import { produce, put, restore, stage } from './lib/staged-resources.mjs';
 import { REDIRECTING } from '../../../tools/build-id/build-id.mjs';
@@ -83,7 +83,7 @@ const PROBES = [
 
 function launch(name, workspace, local, preferences, extra, timeoutMs = 120_000) {
   const png = join(output, `${name}.png`);
-  const args = [join(app, 'out', 'main', 'index.js')];
+  const args = [join(app, 'out', 'main', 'index.js'), ...hostSwitches];
   if (workspace !== null) args.push(workspace);
   const result = spawnSync(electron, args, {
     cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,

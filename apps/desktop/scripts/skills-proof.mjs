@@ -35,7 +35,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { app, buildDesktop, electron, evidenceDirectory, launchOptions, readProbes, repo } from './lib/harness.mjs';
+import { app, buildDesktop, configDirFor, electron, evidenceDirectory, hostSwitches, launchOptions, readProbes, repo } from './lib/harness.mjs';
 
 const output = evidenceDirectory('skills-proof');
 rmSync(output, { recursive: true, force: true });
@@ -66,7 +66,7 @@ const fail = (message) => { writeFileSync(join(output, 'results.json'), JSON.str
 
 function launch(name, workspace, extra, timeoutMs = 120_000) {
   const png = join(output, `${name}.png`);
-  const args = [join(app, 'out', 'main', 'index.js')];
+  const args = [join(app, 'out', 'main', 'index.js'), ...hostSwitches];
   if (workspace !== null) args.push(workspace);
   const result = spawnSync(electron, args, {
     cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
@@ -230,10 +230,13 @@ results.push({ launch: 'listing-reopen', session: listingSession, count: reread[
 // ── 2. policy ───────────────────────────────────────────────────────────────────────────────────────
 /*
  * A GLOBAL policy for one skill, so REQ-CONFIG-258's "write the baseline out explicitly" case is reachable at
- * all. The path is `resolveUserDirs().config`, which on Windows is `%LOCALAPPDATA%/rotaris/config` — the proof
- * points LOCALAPPDATA at the scratch tree, so this is that tree's own global scope and not the operator's.
+ * all. The path is `resolveUserDirs().config` by the platform that reads it (`configDirFor`): on Windows
+ * `%LOCALAPPDATA%/rotaris/config`, off Windows `<XDG_CONFIG_HOME>/rotaris` — the proof points both at the scratch
+ * tree, so this is that tree's own global scope and not the operator's. Spelled for Windows alone, the run host
+ * never read it off Windows and this launch failed at the explicit baseline
+ * (`docs/defects/fixed/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md`).
  */
-const globalAgents = join(scratch.local, 'rotaris', 'config', 'agents.yaml');
+const globalAgents = join(configDirFor(scratch.local), 'agents.yaml');
 write(globalAgents, 'skills:\n  overrides:\n    home-skill: on\n');
 const policy = launch('policy', workspace, openSkills({
   // The Load selector for `ws-skill` to always, its Invocation to manual only, and `home-skill` back to the

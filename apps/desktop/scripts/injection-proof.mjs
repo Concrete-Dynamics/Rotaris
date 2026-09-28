@@ -60,7 +60,7 @@ import { createHash } from 'node:crypto';
 import { cpus, platform as hostPlatform, release } from 'node:os';
 import { dirname, join } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { app, buildDesktop, configDirFor, electron, evidenceDirectory, launchOptions, readProbes, repo } from './lib/harness.mjs';
+import { app, buildDesktop, configDirFor, electron, evidenceDirectory, hostSwitches, launchOptions, readProbes, repo } from './lib/harness.mjs';
 
 const output = evidenceDirectory('injection-proof');
 rmSync(output, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
@@ -95,7 +95,7 @@ function launch(name, profile, workspace, extra, timeoutMs = 120_000) {
   const png = join(output, `${name}.png`);
   const calls = join(output, `${name}.model-calls.jsonl`);
   rmSync(calls, { force: true });
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), workspace], {
+  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
     cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
     env: {
       ...launchOptions({ local: profile.local, preferences: profile.preferences, ...(scratchHome ? { home: profile.home } : {}) }),

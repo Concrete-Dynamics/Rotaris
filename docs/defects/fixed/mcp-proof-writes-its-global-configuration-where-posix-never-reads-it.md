@@ -38,3 +38,23 @@ REQ-MCP-027 and the rest it asserts), so a red there is the harness's, not the p
   sets `XDG_CONFIG_HOME`.
 - `packages/platform/src/dirs.ts`: `resolveUserDirs`, the three platform answers.
 - The nine other proof scripts named above, each with the same `join(local, 'rotaris', 'config')`.
+
+## Repaired — 2026-09-28, under R-062
+
+`configDir` is `configDirFor(local)`, so `agents.yaml` (per launch) and `secrets.yaml` land where the platform's
+`resolveUserDirs` reads them; every launch carries `hostSwitches`. Launch 7's one Windows-only check — the `.cmd`
+runner standing in for `browser` probing healthy through REQ-MCP-113's wrap — is asserted on win32 and **stated not
+applicable** elsewhere, with its reason and the observed health recorded in `results.settings.cmdRunner`, so the
+launch's other checks (the probing states, the two contacts of REQ-MCP-054, the masked and scoped secret, no secret in
+any line) and launches 8 and 9 run off Windows rather than stopping there.
+
+Measured as root under Xvfb on Linux, Node 24, after one `pnpm build`: `pnpm mcp-proof --skip-build` — **nine launches,
+exit 0**. Launch 1's section is character-exact with the three fixture servers and the handshakes name `rotaris 0.1.0`;
+launch 7 reads alpha, beta and gamma `healthy`, ghost and off `unreachable`, the mask `***`, scope `Global`,
+`ALPHA_KEY:yes,FROM_SHELL:no`, alpha contacted twice, and `browser` observed `unreachable` under the stated
+non-applicability (a POSIX kernel does not execute `runner.cmd`); launch 9's discovery returned at 35,001 ms and the
+application exited 1,028 ms after the quit. The first run of the same tree stopped at launch 6 with the beta row's
+toggle "not on screen" at the 2,200 ms click; the second run passed it, and my own timing probe found the rows on
+screen at 1,500 ms — a fixed offset on a shared 4-vCPU host, recorded as
+[`mcp-proofs-drop-rules-launch-clicks-at-a-fixed-offset.md`](../mcp-proofs-drop-rules-launch-clicks-at-a-fixed-offset.md),
+not repaired here. Not re-run on Windows: no Windows host here (IC-3), and the win32 spelling is unchanged.

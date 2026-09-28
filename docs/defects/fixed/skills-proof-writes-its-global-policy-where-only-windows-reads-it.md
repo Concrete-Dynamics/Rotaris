@@ -35,3 +35,17 @@ requirement and the launches after it (REQ-WORKSPACE-058/060/062/064/069/151 in 
 - `apps/desktop/scripts/skills-proof.mjs` — launch 2's `globalAgents` path and the comment that states the Windows rule.
 - `apps/desktop/scripts/lib/harness.mjs` — `proofIsolationEnv`, which sets `XDG_CONFIG_HOME` to `<local>/rotaris/config`.
 - `packages/platform/src/dirs.ts` — `resolveUserDirs`, whose Linux branch appends the product name to `XDG_CONFIG_HOME`.
+
+## Repaired — 2026-09-28, under R-062
+
+`globalAgents` is `join(configDirFor(scratch.local), 'agents.yaml')` — the harness's copy of `resolveUserDirs().config`
+by platform (`<local>/rotaris/config` on win32, `<local>/rotaris/config/rotaris` elsewhere), the rule
+`proof-isolation.test.ts` keeps in step with the product's own; the comment beside it names both spellings. The launch
+also carries `hostSwitches`. Measured as root under Xvfb on Linux, Node 24, after one `pnpm build`:
+`pnpm skills-proof --skip-build` — **10 checks over 9 launches, exit 0**; the policy launch wrote
+`.rotaris/agents.yaml` with `overrides: { home-skill: name-only, ws-skill: on }` and
+`invocation_overrides: { ws-skill: manual-only }` — the baseline written out explicitly because the global scope, now
+read at `scratch/local/rotaris/config/rotaris/agents.yaml`, states a policy for it (REQ-CONFIG-258) — and the
+reopen, run, rescan and disabled launches ran after it (REQ-WORKSPACE-058/060/062/064/069/151 measured in the built
+app on Linux for the first time). Pinned by `proof-isolation.test.ts`'s comparison of `configDirFor` with
+`resolveUserDirs` on both platforms; the proof itself is the evidence.

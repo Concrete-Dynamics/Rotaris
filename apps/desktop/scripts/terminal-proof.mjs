@@ -18,7 +18,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { cleanEnvironment } from './lib/harness.mjs';
+import { cleanEnvironment, hostSwitches } from './lib/harness.mjs';
 
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const electron = process.platform === 'win32' ? join(repo, 'node_modules', 'electron', 'dist', 'electron.exe') : join(repo, 'node_modules', 'electron', 'dist', 'electron');
@@ -86,7 +86,7 @@ await esbuild.build({
 
 // ── 3. Electron ────────────────────────────────────────────────────────────────────────────────────────────────
 
-const run = spawnSync(electron, [join(repo, 'apps', 'desktop', 'scripts', 'terminal-proof', 'main.cjs')], {
+const run = spawnSync(electron, [join(repo, 'apps', 'desktop', 'scripts', 'terminal-proof', 'main.cjs'), ...hostSwitches], {
   cwd: repo, encoding: 'utf8', timeout: 400_000, windowsHide: true,
   env: {
     ...cleanEnvironment(), TERMINAL_PROOF_OUT: output, TERMINAL_PROOF_PAGE: join(page, 'index.html'), ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',

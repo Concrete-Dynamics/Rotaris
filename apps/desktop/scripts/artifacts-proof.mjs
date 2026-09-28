@@ -30,7 +30,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { cleanEnvironment, findDatabases, proofIsolationEnv } from './lib/harness.mjs';
+import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -54,7 +54,8 @@ if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${ele
 const root = join(output, 'profile');
 const workspace = join(root, 'workspace');
 const local = join(root, 'local');
-const configDir = join(local, 'rotaris', 'config');
+// The global configuration directory by the platform that reads it (`configDirFor`), not the Windows spelling alone.
+const configDir = configDirFor(local);
 const preferences = join(root, 'preferences');
 mkdirSync(join(workspace, '.rotaris'), { recursive: true });
 mkdirSync(configDir, { recursive: true });
@@ -94,7 +95,7 @@ function launch(name, extra, { files = {}, timeout = 180_000 } = {}) {
   writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), files.workspace ?? WORKSPACE_SINGLE);
   const png = join(output, `${name}.png`);
   const started = Date.now();
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), workspace], {
+  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
     cwd: app, encoding: 'utf8', timeout, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),

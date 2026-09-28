@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { ImprovementArtifactRecord, ImprovementProposal } from '@rotaris/contracts';
+import { layoutContractAttributes } from '../design-system/index.js';
 import {
+  PROPOSALS_LAYOUT,
   artifactCounts,
   proposalMatches,
   proposalRows,
@@ -73,5 +75,16 @@ describe('Library proposal presentation', () => {
     expect(relativeCreatedLabel('2026-09-15T05:00:00.000Z', now)).toBe('5h');
     expect(relativeCreatedLabel('2026-09-14T10:00:00.000Z', now)).toBe('1d');
     expect(rollbackLabel(record('impart_00000001', []))).toBe('no rollback point');
+  });
+});
+
+describe('Library proposals layout contract (PD-LIBRARY-002; design README §7)', () => {
+  it('publishes the same two relations it used to write by hand, as an array, through the one publisher', () => {
+    const attributes = layoutContractAttributes(PROPOSALS_LAYOUT);
+    expect(attributes['data-ui']).toBe('library-proposals');
+    expect(JSON.parse(attributes['data-ui-contract'] ?? 'null')).toEqual([
+      { kind: 'containment' },
+      { kind: 'viewport-scroll', axis: 'both', expected: false },
+    ]);
   });
 });

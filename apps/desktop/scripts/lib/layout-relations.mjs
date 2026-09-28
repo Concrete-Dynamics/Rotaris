@@ -139,7 +139,7 @@ export function shrunkBoxes(geometryItems, styleItems, tolerance = DEFAULT_TOLER
 /** Every measurement the probe collected, judged. */
 export function evaluateContracts(measured) {
   return measured.flatMap((entry) => {
-    if (entry.unreadable === true) return [{ id: entry.id, kind: 'schema', target: null, pass: false, detail: 'contract JSON is unreadable' }];
+    if (entry.unreadable === true) return [{ id: entry.id, kind: 'schema', target: null, pass: false, detail: entry.reason ?? 'contract JSON is unreadable' }];
     return entry.relations.map(({ relation, measurement }) => ({
       id: entry.id,
       kind: relation.kind,

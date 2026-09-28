@@ -6,6 +6,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { extname, join, relative, sep } from 'node:path';
 import ts from 'typescript';
 import { baselineDocument, compareDebt } from './ui-language-debt.mjs';
+import { handWrittenContracts } from './ui-contract-publisher.mjs';
 
 const root = join(import.meta.dirname, '..');
 // Every place that draws: the component package and the renderer composition root, which
@@ -15,6 +16,8 @@ const baselinePath = join(import.meta.dirname, 'ui-language-baseline.json');
 const writing = process.argv.includes('--write-baseline');
 const forbiddenTags = new Set(['button', 'input', 'textarea', 'select', 'table']);
 const raw = [];
+/** A `data-ui-contract` written anywhere but `layoutContractAttributes` — the design system included. */
+const contracts = [];
 const debt = {};
 
 function walk(directory) {
@@ -35,9 +38,11 @@ function addDebt(path, category, signature) {
 
 for (const path of drawingRoots.flatMap((drawingRoot) => walk(drawingRoot))) {
   const rel = relative(root, path).split(sep).join('/');
-  if (rel.includes('/design-system/') || /\.test\.[^.]+$/.test(path)) continue;
+  if (/\.test\.[^.]+$/.test(path)) continue;
   const extension = extname(path);
   const text = readFileSync(path, 'utf8');
+  contracts.push(...handWrittenContracts(rel, text));
+  if (rel.includes('/design-system/')) continue;
   if (extension === '.tsx') {
     const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
     const visit = (node) => {
@@ -79,11 +84,12 @@ const baseline = JSON.parse(readFileSync(baselinePath, 'utf8')).debt ?? {};
 // Burn-down only: a reduction lowers the baseline, so the allowance can never be re-spent
 // elsewhere. Paying debt therefore ends in one command, never in a silently loose ceiling.
 const { growth, stale } = compareDebt(normalized, baseline);
-if (raw.length > 0 || growth.length > 0 || stale.length > 0) {
+if (raw.length > 0 || contracts.length > 0 || growth.length > 0 || stale.length > 0) {
+  if (contracts.length > 0) process.stderr.write(`A layout contract is published only by layoutContractAttributes (packages/ui/src/design-system/layout-contract.ts):\n${contracts.join('\n')}\n`);
   if (raw.length > 0) process.stderr.write(`Raw design-equivalent JSX belongs in packages/ui/src/design-system:\n${raw.join('\n')}\n`);
   if (growth.length > 0) process.stderr.write(`UI-language literal debt grew:\n${growth.map(({ key, count, allowed }) => `${key}: ${count} > ${allowed}`).join('\n')}\n`);
   if (stale.length > 0) process.stderr.write(`UI-language debt fell below the baseline — lower it with \`node tools/check-ui-language.mjs --write-baseline\`:\n${stale.map(({ key, count, allowed }) => `${key}: ${count} < ${allowed}`).join('\n')}\n`);
   process.exitCode = 1;
 } else {
-  process.stdout.write(`UI language: 0 raw controls; ${Object.keys(normalized).length} normalized legacy debt entries at the baseline\n`);
+  process.stdout.write(`UI language: 0 raw controls, 0 hand-written layout contracts; ${Object.keys(normalized).length} normalized legacy debt entries at the baseline\n`);
 }

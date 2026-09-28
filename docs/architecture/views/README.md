@@ -59,6 +59,21 @@ environment a child is started with* beside the ownership table, and main's upda
 two variables come from. No package, edge, process, channel, message kind or store column changed; `platform` gains
 `artifact-environment.ts`.
 
+**REQ-CHAT-048's duplicate-reasoning hygiene compares per agent (2026-09-28, R-062; OQ-91).** Step 4 kept one lookback —
+the previous thinking row of any agent — so an agent's repeated burst survived whenever another agent reasoned between
+the copies. `ui/transcript/project.ts` now keeps each agent's own previous thinking row, and the bounded form looks one
+up below its cut only for an agent whose unstamped reasoning is in the suffix. The **runtime view**'s step-4 row says so.
+No package, edge, process, channel, message kind, store column or owner of state changed.
+
+**The layout contract has one publisher, and `ui-audit` survives a thrown expression (2026-09-28, R-062).** The window
+controls (`PD-SHELL-003`) wrote their `data-ui-contract` by hand as an object; the audit's CONTRACTS sweep iterates the
+relations array, threw in the renderer on every view carrying the title bar, and the script died on the driver's
+`{ error }` answer before any evidence pack. The controls and the Proposals tab now publish through
+`layoutContractAttributes`; `tools/check-ui-language.mjs` refuses a hand-written `data-ui-contract` anywhere in the drawing
+roots (`tools/ui-contract-publisher.mjs`); `ui-audit` reports a thrown audit expression as an `AUDIT-ERROR` finding and
+a non-array contract as a `schema` finding, and moves on. The **seams view** §8 steps 4 and 6 and the **component view**'s
+design-system paragraph say so. No package, edge, process, channel, message kind, store column or owner of state changed.
+
 **REQ-CHAT-055's measurement round: the transcript projects once per change, not once per render (2026-09-28, R-048's
 order under R-062).** The built app was traced appending to an empty transcript and to one of 1,200 rows, and the extra
 time at depth was script — three to four synchronous renders per increment, each re-running ADR-0046 step 4 over the

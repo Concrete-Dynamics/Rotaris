@@ -55,7 +55,7 @@ credentials     → main, and main alone
 | The waved-off update version — `updates/dismissedVersion`, one string, never a list (REQ-STARTUP-116/117/146) | `preferences.json` | **main only**, when the update-offer notice is dismissed and before it is cleared | main, at every check; no renderer (absent from the allow-list) |
 | The compiled-in release-verification key set (REQ-STARTUP-167/168) | `main/updater/keys.ts`, in main's bundle — empty until O-2 | **the build**, and only the build: nothing at run time adds to, replaces or disables it | main, at every install |
 | `tokens/<provider_id>.json` (+ `.lock`), owner and SYSTEM only | `%LOCALAPPDATA%/rotaris/data/` | **main only**, under the adjacent lock | main; the run host is **leased bearers**, never the file |
-| The instance record and the machine id | `%LOCALAPPDATA%/rotaris/data/` | main, at the claim | main |
+| The instance record and the machine id | `%LOCALAPPDATA%/rotaris/data/` | main, at the claim; and the holder, rewriting it with a successor's fields, only while a restart it started waits for that successor (`acceptSuccessor`, REQ-STARTUP-121/161 — an unsolicited announcement is refused and the record left as it is) | main |
 | The initialization marker | the workspace | the workspace service | main's coordinator; read outside the layered merge |
 | Source, tests, branches, worktrees | the workspace and its Git repository | agents through tools; **every `git` invocation is the workspace service's** | everyone, through their owner |
 

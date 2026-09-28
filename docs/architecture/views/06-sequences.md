@@ -100,7 +100,7 @@ sequenceDiagram
     M->>S: spawn <artifact> builtin:update-successor -- <this endpoint>, detached
     S->>S: no claim; open its own endpoint (inheritInstance)
     S->>M: {"successor": {pid, host, acquired_at, endpoint}}
-    M->>M: replace the record file atomically with the successor's fields (passRecord)
+    M->>M: only while this restart waits (acceptSuccessor) — replace the record file atomically with the successor's fields (passRecord)
     M-->>S: {"ok":true,"record":"passed"}
     M->>M: destroy the windows; the ordinary quit; close leaves a record that no longer names it
   else installer: spawn the setup, detached (REQ-STARTUP-125)
@@ -111,7 +111,9 @@ sequenceDiagram
 ```
 
 A successor that cannot be started surfaces through `Update not installed` and nothing closes; one that never
-signals leaves this instance holding its record and its window, with no timeout (REQ-STARTUP-121, ADR-0055).
+signals leaves this instance holding its record and its window, with no timeout (REQ-STARTUP-121, ADR-0055). A
+successor announcement that arrives while no restart is waiting — a sentinel launch nobody started — is answered
+`{"ok":false}`, the record is unchanged, and that launch ends; the instance stays the only one (REQ-STARTUP-161).
 Nothing of the installation is moved or modified before the replacement is fetched whole and verified
 (REQ-STARTUP-126). The apply strategies and the restart are decided by unit tests over fakes; their run against a real
 Windows artifact is owed to the next Windows package (IC-3) — ADR-0054's "The updater" note says what was executed.

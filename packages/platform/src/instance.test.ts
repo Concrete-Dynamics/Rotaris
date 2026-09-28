@@ -24,7 +24,8 @@ function deps(over: Partial<ClaimDeps> & { seen?: HandOver[]; passed?: InstanceR
     recordFile: join(dir, 'instance.json'), endpointDir: dir, socketDir: dir, machineId: M as MachineId, pid: process.pid,
     wall: clocks.wall, timers: clocks.timers, handOverIntervalMs: millis(2_000),
     onHandOver: (h) => seen?.push(h),
-    ...(passed === undefined ? {} : { onRecordPassed: (s) => passed.push(s) }),
+    // A predecessor that records passes is one whose restart is waiting for its successor (main's `startSuccessor`).
+    ...(passed === undefined ? {} : { onRecordPassed: (s) => passed.push(s), acceptSuccessor: () => true }),
     ...rest,
   };
 }
@@ -90,6 +91,37 @@ describe('the update restart as a hand-over of the record — REQ-STARTUP-121, R
     expect(passed).toEqual([]);
     expect(record(join(dir, 'instance.json')).endpoint).toBe(predecessor.record.endpoint);
     await predecessor.close();
+  });
+
+  it('an unsolicited successor — no restart pending — is refused: the record is unchanged and the instance stays the only one (REQ-STARTUP-161)', async () => {
+    const passed: InstanceRecord[] = [];
+    let restartPending = false;
+    const predecessor = await claimInstance(deps({ pid: PREDECESSOR_PID, onRecordPassed: (s) => passed.push(s), acceptSuccessor: () => restartPending }));
+    if (predecessor.outcome !== 'instance') throw new Error(predecessor.outcome);
+    const before = readFileSync(join(dir, 'instance.json'), 'utf8');
+
+    const unsolicited = await inheritInstance(deps({ handOverIntervalMs: millis(1_000) }), predecessor.record.endpoint);
+    expect(unsolicited.outcome).toBe('refused');
+    expect(passed).toEqual([]);
+    expect(readFileSync(join(dir, 'instance.json'), 'utf8')).toBe(before);
+
+    // A claim that supplies no answer at all passes its record to nobody either.
+    await predecessor.close();
+    const silent = await claimInstance(deps({ pid: PREDECESSOR_PID, onRecordPassed: (s) => passed.push(s) }));
+    if (silent.outcome !== 'instance') throw new Error(silent.outcome);
+    expect((await inheritInstance(deps({ handOverIntervalMs: millis(1_000) }), silent.record.endpoint)).outcome).toBe('refused');
+    expect(passed).toEqual([]);
+    await silent.close();
+
+    // Once a restart is pending the same announcement passes it.
+    restartPending = true;
+    const armed = await claimInstance(deps({ pid: PREDECESSOR_PID, onRecordPassed: (s) => passed.push(s), acceptSuccessor: () => restartPending }));
+    if (armed.outcome !== 'instance') throw new Error(armed.outcome);
+    const successor = await inheritInstance(deps(), armed.record.endpoint);
+    expect(successor.outcome).toBe('instance');
+    expect(passed).toHaveLength(1);
+    await armed.close();
+    if (successor.outcome === 'instance') await successor.close();
   });
 
   it('an ordinary hand-over line is unchanged by the successor branch: it surfaces the instance and is acknowledged', async () => {

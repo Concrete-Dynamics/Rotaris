@@ -154,6 +154,10 @@ async function main(): Promise<void> {
     wall: clocks.wall, timers: clocks.timers, handOverIntervalMs: millis(5_000),
     onHandOver: (h: HandOver) => { if (surface) surface(h); else pendingHandOvers.push(h); },
     onRecordPassed: (successor: InstanceRecord) => { recordPassed?.(successor); },
+    // REQ-STARTUP-161/121: the record passes only while a restart this instance started is waiting for its successor;
+    // any other announcement is refused and leaves the record as it is. Not matched on the pid the restart spawned:
+    // the portable's launcher (ADR-0054) stands between that process and the one that announces itself.
+    acceptSuccessor: () => recordPassed !== undefined,
   };
   const claim = successorOf === null
     ? await claimInstance(claimDeps, argvWorkspace ? { workspace: argvWorkspace } : {})

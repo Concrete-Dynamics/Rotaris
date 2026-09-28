@@ -66,6 +66,14 @@ export interface ClaimDeps {
    * successor told so. What the predecessor does then — close its window and exit — is main's; this only reports it.
    */
   readonly onRecordPassed?: (successor: InstanceRecord) => void;
+  /**
+   * REQ-STARTUP-121 / REQ-STARTUP-161: whether this instance is waiting for a successor it started itself. The record
+   * passes only while this answers true: a restart is the one case in which a second process may start, so a launch
+   * that announces itself as a successor when no restart is pending — a hand-typed or stale sentinel launch — is
+   * answered not-passed, the record is left as it is, and that launch ends as REQ-STARTUP-121's failure branch has it.
+   * Absent is never: a claim that supplies no answer passes its record to nobody.
+   */
+  readonly acceptSuccessor?: (successor: InstanceRecord) => boolean;
   readonly platform?: NodeJS.Platform;
   /**
    * Where a unix socket for the hand-over endpoint may live, on platforms that
@@ -143,7 +151,8 @@ function listen(endpoint: string, onHandOver: (h: HandOver) => void, platform: N
  * REQ-STARTUP-121, ADR-0055: the predecessor "replaces the record's contents with the successor's pid, host and
  * endpoint address in one atomic replacement" — a sibling written and renamed over, never truncate-and-rewrite, so a
  * reader observes the old fields or the new and never a half-written record that REQ-STARTUP-164 (3) would reclaim.
- * Only the holder passes its own record: a record that no longer names this process is left alone.
+ * Only the holder passes its own record: a record that no longer names this process is left alone. And only a holder
+ * waiting for a successor it started passes it at all (`acceptSuccessor`): an unsolicited announcement is refused.
  */
 async function passRecord(deps: ClaimDeps, successor: InstanceRecord): Promise<boolean> {
   const wellFormed = typeof successor.pid === 'number' && Number.isInteger(successor.pid) && successor.pid > 0
@@ -151,6 +160,8 @@ async function passRecord(deps: ClaimDeps, successor: InstanceRecord): Promise<b
     && typeof successor.acquired_at === 'string' && successor.acquired_at !== ''
     && typeof successor.endpoint === 'string' && successor.endpoint !== '';
   if (!wellFormed) return false;
+  // Only while a restart this instance started is waiting for its successor (REQ-STARTUP-161: never a second instance).
+  if (deps.acceptSuccessor?.(successor) !== true) return false;
   const current = readRecord(deps.recordFile);
   if (current === undefined || current.pid !== deps.pid) return false;
   const record: InstanceRecord = { pid: successor.pid, host: successor.host, acquired_at: successor.acquired_at, endpoint: successor.endpoint };

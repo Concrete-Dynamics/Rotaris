@@ -21,6 +21,9 @@
  *               `contain` — which silently makes that ancestor the containing block, so the element is
  *               positioned against a box it was never measured for and its `z-index` cannot escape.
  *
+ * A sweep that cannot run is itself reported: `AUDIT-ERROR` names the view (or overlay), the size, the
+ * expression and what the renderer threw, and the audit moves on, so one exception never costs the pack.
+ *
  *   node apps/desktop/scripts/ui-audit.mjs [--skip-build] [--sizes=1400x900,1000x680] [--views=1,2,3]
  *
  * Evidence under `.ui-audit/`: a PNG per view per size, and `report.json`.
@@ -30,6 +33,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import { buildDesktop, evidenceDirectory, repo } from './lib/harness.mjs';
 import { startApp } from './lib/driver.mjs';
 import { evaluateContracts, shrunkBoxes } from './lib/layout-relations.mjs';
+import { readAuditAnswer } from './lib/audit-answer.mjs';
 
 const argv = process.argv.slice(2);
 const flag = (name, fallback) => {
@@ -250,7 +254,10 @@ const AUDIT = `JSON.stringify((() => {
     const id = el.dataset.ui || cls(el);
     let relations;
     try { relations = JSON.parse(el.dataset.uiContract || '[]'); }
-    catch { measured.push({ id, unreadable: true, relations: [] }); continue; }
+    catch { measured.push({ id, unreadable: true, reason: 'contract JSON is unreadable', relations: [] }); continue; }
+    // layoutContractAttributes publishes the relations ARRAY. Anything else is a finding about that one box,
+    // never an exception: an object here once threw on the first view and ended every audit.
+    if (!Array.isArray(relations)) { measured.push({ id, unreadable: true, reason: 'contract is not a relations array', relations: [] }); continue; }
     const own = box(el.getBoundingClientRect());
     const rows = [];
     for (const relation of relations) {
@@ -427,7 +434,14 @@ try {
       const reached = await d.waitFor(view.root, { timeoutMs: 15_000 }).then(() => true).catch(() => false);
       if (!reached) { note('UNREACHED', view.name, size.label, { root: view.root }); continue; }
       await sleep(450);
-      const a = JSON.parse(await d.eval(AUDIT));
+      // A renderer exception is a named finding for THIS view, and the sweep goes on to the next one.
+      const answer = readAuditAnswer(await d.eval(AUDIT));
+      if (!answer.ok) {
+        note('AUDIT-ERROR', view.name, size.label, { expression: 'AUDIT', error: answer.error });
+        await d.screenshot(join(output, `${view.n}-${view.name.toLowerCase()}-${size.label}.png`));
+        continue;
+      }
+      const a = answer.value;
       await d.screenshot(join(output, `${view.n}-${view.name.toLowerCase()}-${size.label}.png`));
       geometryEvidence.push({ view: view.name, size: size.label, viewport: a.viewport, items: a.geometry });
       styleEvidence.push({ view: view.name, size: size.label, items: a.styles });
@@ -494,7 +508,14 @@ try {
         // themselves rather than guessing a duration.
         await d.eval('Promise.all(document.getAnimations().map((a) => a.finished.catch(() => undefined))).then(() => true)').catch(() => undefined);
         await sleep(350);
-        const a = JSON.parse(await d.eval(OVERLAY_AUDIT(overlay.root)));
+        const answer = readAuditAnswer(await d.eval(OVERLAY_AUDIT(overlay.root)));
+        if (!answer.ok) {
+          note('AUDIT-ERROR', `overlay: ${overlay.name}`, size.label, { expression: `OVERLAY_AUDIT(${overlay.root})`, error: answer.error });
+          await d.chord('Escape');
+          await sleep(300);
+          continue;
+        }
+        const a = answer.value;
         if (a.tested === 0 && a.controls > 0) note('UNTESTED', `overlay: ${overlay.name}`, size.label, { controls: a.controls, clipped: a.clipped, why: 'every control was excluded as clipped — the sweep proved nothing' });
         await d.screenshot(join(output, `overlay-${overlay.name.replace(/\s+/g, '-')}-${size.label}.png`));
         if (a.outside) note('CONTAINMENT', `overlay: ${overlay.name}`, size.label, { box: a.box, viewport: a.viewport });

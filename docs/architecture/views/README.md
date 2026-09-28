@@ -45,6 +45,15 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-28**
 
+**The layout contract has one publisher, and `ui-audit` survives a thrown expression (2026-09-28, R-062).** The window
+controls (`PD-SHELL-003`) wrote their `data-ui-contract` by hand as an object; the audit's CONTRACTS sweep iterates the
+relations array, threw in the renderer on every view carrying the title bar, and the script died on the driver's
+`{ error }` answer before any evidence pack. The controls and the Proposals tab now publish through
+`layoutContractAttributes`; `tools/check-ui-language.mjs` refuses a hand-written `data-ui-contract` anywhere in the drawing
+roots (`tools/ui-contract-publisher.mjs`); `ui-audit` reports a thrown audit expression as an `AUDIT-ERROR` finding and
+a non-array contract as a `schema` finding, and moves on. The **seams view** §8 steps 4 and 6 and the **component view**'s
+design-system paragraph say so. No package, edge, process, channel, message kind, store column or owner of state changed.
+
 **REQ-CHAT-055's measurement round: the transcript projects once per change, not once per render (2026-09-28, R-048's
 order under R-062).** The built app was traced appending to an empty transcript and to one of 1,200 rows, and the extra
 time at depth was script — three to four synchronous renders per increment, each re-running ADR-0046 step 4 over the

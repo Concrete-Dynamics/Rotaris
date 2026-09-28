@@ -1793,6 +1793,21 @@ Neither was kept. What the numbers say is that `.git__body` hands the checkpoint
 seven-column table the remainder, and choosing between a narrower checkpoint column, a stacked layout and fewer
 columns at the minimum size is the design material's call — not a CSS nudge at the end of a repair round.
 
+**The layout contract's first evaluation on the window controls, and the audit that could not survive it
+(2026-09-28, R-062).** The controls `PD-SHELL-003` added wrote their contract by hand as `{"relations":[…]}`; the
+CONTRACTS sweep iterates an array, threw in the renderer on every view (the title bar is on all seven), and the script
+died on the driver's `{ error }` answer, so no pack could be produced on any view. Repaired in three parts: the controls
+(and the Proposals tab, the one other hand-written attribute) publish through `layoutContractAttributes`; `pnpm lint`
+refuses a `data-ui-contract` written anywhere else in the drawing roots (`tools/ui-contract-publisher.mjs`, called from
+`check-ui-language.mjs`); and `ui-audit` reads each answer through `lib/audit-answer.mjs`, so a thrown expression is an
+`AUDIT-ERROR` finding naming the view, the size and the expression, and a non-array contract is a `schema` finding for
+its own box. First run of the whole sweep with the controls' contract in it: 14 captures and 12 overlay captures,
+**0 findings**, 9 contracts per capture, the containment in `shell-title` passing. What it could not show: About is a
+Settings category, not a view, so no pack reaches it and the owed critique of the About caption is still owed
+(`../defects/fixed/the-window-controls-contract-is-an-object-and-kills-every-ui-audit.md`). One more defect in the same
+script was found by the counterfactual and recorded, not repaired: a `CONTRACT` finding's own `kind` is overwritten by
+the relation's (`../defects/a-contract-finding-in-ui-audit-is-filed-under-its-relation-kind.md`).
+
 ### The third cycle's critique, recovered from the reader rather than from the disk
 
 The file was gone; the reading was not. The critic still held its own transcript, so the twenty-four entries came

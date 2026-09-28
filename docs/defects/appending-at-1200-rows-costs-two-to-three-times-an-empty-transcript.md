@@ -430,3 +430,52 @@ were kept beside the work; `.proof/transcript-proof/` holds only G6.
 `TranscriptPane.tsx`. The vitest environment is `node`, with no DOM testing library in the repository; a stale
 dependency there (the offset table keyed without `measuredVersion`, say) would be caught only by `transcript-proof`'s
 geometry and append stages.
+
+## Fix round 3 — 2026-09-28 (R-062): a record-only round, still open
+
+**What the independent verifier found.** The record outside this note still gave fix round 1's reading as the current
+state: `first-release-plan.md` said, in the present tense, that the per-increment cost "no longer grows with depth" and
+that the comparison stands "about two thirds of a frame over at the median"; `codebase.md` said the first; and
+`first-executions.md` placed the original round's traced script (7.6 against 7.4 ms, from 6.8 against 8.6) after fix
+round 2's sentence, where it read as fix round 2's. Fix round 2's own series does not support either reading — its six
+runs stand +24.1 ms over at the median (1.4 frames), and its per-increment script is at parity in two traced pairs of
+five. Each place now keeps fix round 1's figure struck or labelled as that round's, beside fix round 2's. No code
+changed for it.
+
+**The verifier's three runs on fix round 2's build**, reported with the finding: every update +8.95, **+40.65** and
+**+18.1** ms — one pass in three.
+
+**Three re-runs on the same build** (H1–H3; the build made from fix round 2's tree before this round's only code edit,
+a doc comment in `project.ts`; then `xvfb-run -a -s "-screen 0 1600x1000x24" node apps/desktop/scripts/transcript-proof.mjs --skip-build`
+three times in a row, each exiting 0). Unlike G1–G6 the host was quiet: no other Electron process at the start or after
+any run, load average 0.04 when the first began. 62 pooled samples a side, frame 16.7 ms in every run, 31 bounded
+projections a launch of 34–36, trace coverage 31 of 31 in every traced launch:
+
+| run | every update, loaded vs empty | row appends | IQR empty / loaded (every update) | `sync` median, loaded vs empty | frames median, loaded vs empty | verdict |
+| --- | --- | --- | --- | --- | --- | --- |
+| H1 | 95.25 vs 92.4 ms, +2.85 | 85.25 vs 85.2, +0.05 | 64.5 / 87.8 | 6.4 vs 4.8 | 5.70 vs 5.54 | pass |
+| H2 | 92.95 vs 82.0, +10.95 | 84.75 vs 76.5, +8.25 | 48.7 / 62.6 | 4.9 vs 3.65 | 5.57 vs 4.91 | pass |
+| H3 | 105.2 vs 104.3, +0.9 | 100.9 vs 88.55, +12.35 | 65.0 / 42.6 | 5.3 vs 5.0 | 6.30 vs 6.25 | pass |
+
+The traced pair a run, per increment over the whole run (the first increment dropped, 31 a side; empty against loaded,
+ms):
+
+| run | script | layout | busy |
+| --- | --- | --- | --- |
+| H1 | 6.23 / 8.46 | 2.04 / 2.61 | 11.01 / 14.95 |
+| H2 | 5.44 / 6.63 | 1.90 / 2.46 | 10.97 / 11.41 |
+| H3 | 5.02 / 9.26 | 1.69 / 2.18 | 8.85 / 15.34 |
+
+**The state now.** H1–H3 are three consecutive passes, the count this item names for moving the note — and the note is
+**not** moved, because the same build's other nine runs pass three (G1–G6 two, the verifier's one), and because the
+traces do not agree with the passes: in all three traced pairs the loaded side's script is 1.2–4.2 ms higher per
+increment and its layout 0.5–0.6 ms higher, on a quiet host where a neighbour's load cannot explain it. On fix round
+2's build the comparison reads **six passes in twelve**, and over the twenty-one runs since the fix rounds began,
+thirteen; the loaded side sits above the empty side at the median in eighteen of the twenty-one. Its per-increment
+script is at parity in two traced pairs of eight and 1.2–4.8 ms higher on the loaded side in six, so **whether the
+per-increment cost still grows with depth is unshown** — fix round 1's "at parity in every traced pair" is that round's
+reading, not this build's. What the quiet host adds is one observation, not a cause: every run on it passed, every
+failure of this build was on a shared host or the verifier's. No trace yet names the loaded side's extra script, so no
+repair is taken (`.agents/skills/debug-ui` step 8); the candidates stay the ones fix round 2 named. OQ-76 still holds the
+reading under a burst and what "an empty transcript" holds. The three runs' logs, `append.json` files and traces were
+kept beside the work; `.proof/transcript-proof/` holds only H3.

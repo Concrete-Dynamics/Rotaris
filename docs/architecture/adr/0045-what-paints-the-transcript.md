@@ -616,6 +616,15 @@ fix rounds began pass nine, the loaded side above the empty one at the median in
 that the per-increment cost is no longer the whole window's; what it cannot say is that the shown-update comparison
 holds on this host, and it does not claim it.
 
+**Fix round 3, the same day — record only, still open.** The release plan and the codebase map still gave fix round 1's
+reading ("the per-increment cost no longer grows with depth", "two thirds of a frame over") as current; both now keep it
+labelled beside fix round 2's. The verifier's three runs on fix round 2's build read +9.0, **+40.7**, **+18.1** ms, and
+three re-runs of it on a quiet host +2.9, +11.0, +0.9 ms — three consecutive passes, six in twelve on that build. In all
+three re-runs' traced pairs the loaded side's script is 1.2–4.2 ms higher per increment, so this record no longer says
+the per-increment cost is at parity: on fix round 2's build it is at parity in two traced pairs of eight. What it can
+say is unchanged — the cost per increment is no longer the whole window's projection — and the comparison is not
+claimed.
+
 **What the point still does not do, unchanged:** it says a frame boundary passed after the change was committed, not
 that a frame carrying it was presented. And one reading the round surfaced is on the register rather than settled here
 — whether REQ-CHAT-055's comparison is read on the update as it arrived or on one that arrived alone, and what "an empty

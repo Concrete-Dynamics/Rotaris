@@ -33,8 +33,15 @@ record already decides, and every ruling it needs is named as the owner's rather
 - The open notes in `../defects/`.
 - The four red proofs: `transcript-proof`, `library-proof`, `part-h-proof`, and `theme-proof`'s contrast section
   (OQ-56). *`transcript-proof` was recorded as passing on 2026-09-28 (REQ-CHAT-055's measurement round under R-062) and
-  reopened the same day: its fix round passed four runs of six, never three in a row, on Linux, and fix round 2 two of six (nine passes in fifteen); the per-increment cost
-  no longer grows with depth, the pooled comparison stands about two thirds of a frame over at the median
+  reopened the same day: its fix round passed four runs of six, never three in a row, on Linux, and fix round 2 two of six (nine passes in fifteen); ~~the per-increment cost
+  no longer grows with depth, the pooled comparison stands about two thirds of a frame over at the median~~ *(fix round 1's
+  reading: the per-increment cost at parity in its six traced pairs, the pooled comparison about two thirds of a frame over
+  at the median)*; fix round 2 reads the per-increment script at parity in two traced pairs of five and 2.5–4.8 ms higher
+  on the loaded side in three, so whether the cost still grows with depth is unshown, and its six runs stand about a frame
+  and a half over at the median (+24.1 ms); the verifier's three on that build read +9.0, +40.7 and +18.1 ms, and fix
+  round 3 (record only) re-ran it three times on a quiet host, +2.9, +11.0 and +0.9 ms, three passes, with the loaded
+  side's script still 1.2–4.2 ms higher per increment in each traced pair — six passes in twelve on that build, so the
+  note is not moved
   ([note](../defects/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md), open; OQ-76).* *Two more were measured red on 2026-09-27 while §2.2 was built, both before it and unchanged by it:*
   `slash-proof` at its first catalogue assertion since ADR-0063
   ([note](../defects/slash-proof-expects-every-built-in-to-carry-the-action-badge.md)), and `skills-proof`'s policy

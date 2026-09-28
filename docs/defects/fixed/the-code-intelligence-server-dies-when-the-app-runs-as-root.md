@@ -41,7 +41,8 @@ root without --no-sandbox is not supported`. Neither proof is at fault, and neit
 this note's repair lands.
 
 `code-intel-proof`'s section 1 does not fail on this; it hangs, because its branch client never notices the child
-exiting ([note](../code-intel-proofs-branch-client-waits-forever-on-a-child-that-has-exited.md)).
+exiting ([note](code-intel-proofs-branch-client-waits-forever-on-a-child-that-has-exited.md); repaired 2026-09-28, it
+now fails with the child's exit).
 
 ## Repaired 2026-09-28 under R-062
 

@@ -51,5 +51,5 @@ of the three asserts, once the two fixed skill commands are named.
 its first catalogue assertion, the three badge assertions, the popup's geometry, focus and row texts, REQ-CHAT-027's
 four colours and their contrast, Tab completion and the usage notice, and then stops at a **second, pre-existing** red
 this one had hidden since 2026-09-18 — two evals scheduled at the same 5,900 ms offset, recorded as
-[`slash-proofs-model-chip-eval-shares-its-offset-with-the-usage-notice-read.md`](../slash-proofs-model-chip-eval-shares-its-offset-with-the-usage-notice-read.md)
+[`slash-proofs-model-chip-eval-shares-its-offset-with-the-usage-notice-read.md`](slash-proofs-model-chip-eval-shares-its-offset-with-the-usage-notice-read.md)
 and not repaired under this item. The launch also carries `hostSwitches`.

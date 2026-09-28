@@ -1773,11 +1773,6 @@ export class Run {
 }
 
 /**
- * PD-ORCH-005 clause 17 ("so the next iteration takes it up"): what a fresh root is told when the todo task its iteration
- * selected is a continue's message and the launch content's request is another — the message, as the task to work on.
- * Its attachments are not carried: the task holds the message's text only (OQ-75).
- */
-/**
  * PD-ORCH-005 clause 17: the iterations the record holds closed `succeeded` — what a task a closed iteration still holds
  * is settled against (`Todo.releaseStale`), here and by the session manager before it judges what a continue restates.
  */
@@ -1785,6 +1780,11 @@ export function succeededIterationsOf(dal: StoreDal, sessionId: SessionId): Read
   return new Set(dal.iterationsOf(sessionId).filter((i) => i.state === 'closed' && i.outcome === 'succeeded').map((i) => i.iteration));
 }
 
+/**
+ * PD-ORCH-005 clause 17 ("so the next iteration takes it up"): what a fresh root is told when the todo task its iteration
+ * selected is a continue's message and the launch content's request is another — the message, as the task to work on.
+ * Its attachments are not carried: the task holds the message's text only (OQ-75).
+ */
 function messageTakenUpText(message: string): string {
   return `The task for this iteration is an earlier message from the user, which the iteration it was sent to did not finish. Work on it now; the latest user request above is a separate task.\n\n${message}`;
 }

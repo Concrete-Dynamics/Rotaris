@@ -379,4 +379,22 @@ describe('PD-ORCH-005 clause 17: a continue\'s message is also a task', () => {
     expect(shape(sid)).toEqual([['first', 'complete', undefined], ['second', 'complete', undefined], ['second', 'complete', undefined]]);
     expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.outcome])).toEqual([[1, 'succeeded'], [2, 'succeeded']]);
   });
+
+  it('a continue by message always appends its task, even when its text matches a request still pending: the user stated it again, so it is worked again (OQ-75, review round 6)', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    const h = sessionsWith([{ parts: [{ hold }, ...answer('first, answered').parts] }, answer('first, done'), answer('first, done again')]);
+    const sid = (h.sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
+    await tick();
+    expect(h.sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    release();
+    await h.sessions.running(sid)!;
+    // Nothing was unfinished: iteration 1 closed cancelled, no iteration is open, and the request is pending.
+    expect(shape(sid)).toEqual([['first', 'pending', undefined]]);
+    expect(h.sessions.prompt(sid, 'first').ok).toBe(true);
+    expect((await h.sessions.running(sid)!).status).toBe('completed');
+    // REQ-ORCH-004: the message is a new request, appended beside the pending one — unlike the Continue action's restatement.
+    expect(shape(sid)).toEqual([['first', 'complete', undefined], ['first', 'complete', undefined]]);
+    expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.outcome])).toEqual([[1, 'cancelled'], [2, 'succeeded'], [3, 'succeeded']]);
+  });
 });

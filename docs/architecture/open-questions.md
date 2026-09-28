@@ -3405,7 +3405,9 @@ message.
   pending tasks, so nothing would take that task up, and the run would end at once with the request not done. A message
   a closed iteration still holds (see "What a death leaves") is judged as the run will take it: it is settled first, as
   the run settles it before it selects, so one returned to pending is not appended a second time and one completed is
-  appended as any completed request is. *The fourth build judged such a message unheld, so a Continue action after the
+  appended as any completed request is. A continue by message is never judged so: it states a request, so it appends
+  its task even when a task of the same text is still pending (REQ-ORCH-004), and the request is worked once for each
+  time it was sent (pinned by review round 6). *The fourth build judged such a message unheld, so a Continue action after the
   death appended it beside the task the run then returned to pending, and the run worked it twice (found by the lane's
   fifth review).* *The second build counted any task in progress, which ended such a continue `no_pending_tasks` (found
   by the lane's third review); the stranded task itself is

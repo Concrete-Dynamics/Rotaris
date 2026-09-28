@@ -274,7 +274,8 @@ request, so `launchContinuation` passes `appendsTask: false` while the todo stil
 a message it holds), and the run takes that task up as it stands; a task in progress that no iteration holds does
 not count, since no selection would take it up. The todo is judged as the run will read it: a message a closed iteration
 still holds is settled first (`Todo.releaseStale` against `succeededIterationsOf`, as the run's constructor settles
-it), so one a death left held and the run returns to pending is not appended a second time. The plan cycle held after a resumed iteration is told what became of
+it), so one a death left held and the run returns to pending is not appended a second time. A continue by message always
+appends its task, even beside a pending task of the same text: it states a request (REQ-ORCH-004, OQ-75). The plan cycle held after a resumed iteration is told what became of
 every message that iteration held (`Todo.heldIds`, read when the run is built): this continue's, or an earlier one's a
 Continue action resumed it with. A message is marked as one for good (`Task.message`), so the iteration that takes it up
 is sent it: `iterate()` records the selected message's text when it is not the launch content's own request, and

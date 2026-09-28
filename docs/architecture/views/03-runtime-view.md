@@ -547,6 +547,19 @@ is unscoped or scoped to that same session and no other (REQ-NOTIFY-029/058), an
 written to the session's timeline as a `notice` entry BEFORE it is broadcast (REQ-NOTIFY-268, `timeline.append` to the
 run host), so a notice replaced within the same turn is still readable afterwards.
 
+**The application's end, and the locks the run host holds (ADR-0014 "Main is gone only after the run host",
+2026-09-28).** A run's teardown releases its lock at the end of cleanup; the application's end reaches the same point
+from outside. The orderly quit (`window-all-closed`, `main/index.ts`) asks the run host to `shutdown` — every run asked
+to stop before any is waited on, then `Sessions.closeAll` releases every lock a finished session still holds — and races
+that request against the run host's exit (`shutdownAtQuit`); then the workspace services the same way; then
+**`endBeforeMain`** (`main/exit.ts`) waits at most `RUN_HOST_END_BOUND_MS` (2 000 ms) for the run host to exit by
+itself, ends it (`utilityProcess.kill()`) if it has not, and waits the bound again before `app.quit()`. An immediate
+exit (`exitCleanly`: the capture seam, the driver's `quit`) asks the run host nothing, ends it at once and waits the
+bound before `app.exit`. So main is gone only after the run host is: a lock left by a run host that was ended names a
+pid that is gone, the case REQ-SESSION-047 reaps on the next claim, and no launch meets a session "held by another run
+in this application" by a run host still exiting. The lock is never released early from inside a stopping run host and
+the liveness probe is unchanged (REQ-SESSION-049/050/056).
+
 ## 6a. The session browser's actions reaching a record no run holds (Part U)
 
 Three actions of REQ-SESSION-182 reach a session's record from OUTSIDE a run, all in the run host, none a control operation

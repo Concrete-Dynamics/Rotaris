@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ProcessReply } from '@rotaris/contracts';
-import { FakeClock } from '@rotaris/kernel';
-import { CHILD_CLOSE_BOUND_MS, exitAfterChildWindows, shutdownAtQuit, watchChildExit, type ClosableWindow } from './exit.js';
+import { FakeClock, millis } from '@rotaris/kernel';
+import { CHILD_CLOSE_BOUND_MS, endBeforeMain, exitAfterChildWindows, RUN_HOST_END_BOUND_MS, shutdownAtQuit, watchChildExit, type ClosableWindow } from './exit.js';
 
 /** A window whose destruction reports `closed` at once, later, or never. */
 function win(opts: { parent: boolean; closes?: 'now' | 'never' }, log: string[], name: string): ClosableWindow & { closed: () => void } {
@@ -153,5 +153,101 @@ describe("a child's shutdown at quit, raced against its own exit (exit.ts)", () 
     c.exit(0);
     await flush();
     expect(said).toHaveLength(1);
+  });
+});
+
+describe('main is gone only after the run host — a session lock ends with the application (REQ-SESSION-047, REQ-SESSION-056, REQ-STARTUP-161)', () => {
+  /**
+   * A run host as main's end sees it: a process with a pid that probes alive until it exits, which it does by itself
+   * `exitsAfterMs` after the wait begins (null: never by itself), or `killedExitMs` after it is ended (null: never).
+   */
+  function runHost(clock: FakeClock, opts: { exitsAfterMs: number | null; killedExitMs: number | null }) {
+    let listener: ((code: number) => void) | null = null;
+    let alive = true;
+    let kills = 0;
+    const exitNow = (code: number) => { if (!alive) return; alive = false; listener?.(code); };
+    if (opts.exitsAfterMs !== null) clock.after(millis(opts.exitsAfterMs), () => exitNow(0));
+    return {
+      once: (_e: 'exit', l: (code: number) => void) => { listener = l; },
+      kill: () => { kills += 1; if (opts.killedExitMs !== null) clock.after(millis(opts.killedExitMs), () => exitNow(0)); return true; },
+      probe: () => alive,
+      kills: () => kills,
+    };
+  }
+  const flush = async () => { for (let i = 0; i < 5; i += 1) await new Promise<void>((r) => setImmediate(r)); };
+  /** Drive the fake clock in small steps until `done` settles, and say at what instant it did. */
+  async function settle(clock: FakeClock, done: Promise<void>, limitMs = 20_000): Promise<number> {
+    let settled = false;
+    void done.then(() => { settled = true; });
+    const start = clock.instant();
+    await flush();
+    while (!settled && clock.instant() - start < limitMs) { clock.advance(10); await flush(); }
+    return clock.instant() - start;
+  }
+
+  it('an immediate exit ends the run host at once and resolves when it has exited — the pid is dead before main goes', async () => {
+    const clock = new FakeClock(); const said: string[] = [];
+    // Measured: without this, a run host left by `app.exit` outlived main by ~1.7 s; ended, it exits at once.
+    const host = runHost(clock, { exitsAfterMs: 1_750, killedExitMs: 5 });
+    const exit = watchChildExit(host);
+    const at = await settle(clock, endBeforeMain(host, exit, clock, { graceMs: 0, boundMs: RUN_HOST_END_BOUND_MS }, () => said.push('still running')));
+    expect(host.kills()).toBe(1);
+    expect(at).toBeLessThan(1_750);
+    // The relaunch this defect was seen in starts only once main is gone: the lock's holder then probes dead, which
+    // is the one condition under which REQ-SESSION-047 reaps it and the session opens.
+    expect(host.probe()).toBe(false);
+    expect(said).toEqual([]);
+  });
+
+  it('after an answered shutdown the run host exits by itself: main waits for that exit and ends nothing', async () => {
+    const clock = new FakeClock(); const said: string[] = [];
+    const host = runHost(clock, { exitsAfterMs: 0, killedExitMs: 5 });
+    const exit = watchChildExit(host);
+    await settle(clock, endBeforeMain(host, exit, clock, { graceMs: RUN_HOST_END_BOUND_MS, boundMs: RUN_HOST_END_BOUND_MS }, () => said.push('still running')));
+    expect(host.kills()).toBe(0);
+    expect(host.probe()).toBe(false);
+    expect(said).toEqual([]);
+  });
+
+  it('a run host still running when the grace elapses — its shutdown unanswered or refused — is ended, and main goes after its exit', async () => {
+    const clock = new FakeClock(); const said: string[] = [];
+    const host = runHost(clock, { exitsAfterMs: null, killedExitMs: 5 });
+    const exit = watchChildExit(host);
+    const at = await settle(clock, endBeforeMain(host, exit, clock, { graceMs: RUN_HOST_END_BOUND_MS, boundMs: RUN_HOST_END_BOUND_MS }, () => said.push('still running')));
+    expect(host.kills()).toBe(1);
+    expect(at).toBeGreaterThanOrEqual(RUN_HOST_END_BOUND_MS);
+    expect(at).toBeLessThan(RUN_HOST_END_BOUND_MS * 2);
+    expect(host.probe()).toBe(false);
+    expect(said).toEqual([]);
+  });
+
+  it('a run host that does not exit even when ended is said once, and main is not held open past the bound', async () => {
+    const clock = new FakeClock(); const said: string[] = [];
+    const host = runHost(clock, { exitsAfterMs: null, killedExitMs: null });
+    const exit = watchChildExit(host);
+    const at = await settle(clock, endBeforeMain(host, exit, clock, { graceMs: 0, boundMs: RUN_HOST_END_BOUND_MS }, () => said.push('still running')));
+    expect(at).toBeGreaterThanOrEqual(RUN_HOST_END_BOUND_MS);
+    expect(at).toBeLessThan(RUN_HOST_END_BOUND_MS + 100);
+    expect(said).toEqual(['still running']);
+  });
+
+  it('a run host already gone is neither ended nor waited on', async () => {
+    const clock = new FakeClock(); const said: string[] = [];
+    const host = runHost(clock, { exitsAfterMs: 0, killedExitMs: 5 });
+    const exit = watchChildExit(host);
+    clock.advance(0); await flush();
+    expect(exit.code).toBe(0);
+    await endBeforeMain(host, exit, clock, { graceMs: 0, boundMs: RUN_HOST_END_BOUND_MS }, () => said.push('still running'));
+    expect(host.kills()).toBe(0);
+    expect(said).toEqual([]);
+  });
+
+  it('a kill that throws is not a failure of its own: the wait says whether the run host is gone', async () => {
+    const clock = new FakeClock(); const said: string[] = [];
+    const host = runHost(clock, { exitsAfterMs: 3, killedExitMs: null });
+    const exit = watchChildExit(host);
+    await settle(clock, endBeforeMain({ kill: () => { throw new Error('already gone'); } }, exit, clock, { graceMs: 0, boundMs: RUN_HOST_END_BOUND_MS }, () => said.push('still running')));
+    expect(exit.code).toBe(0);
+    expect(said).toEqual([]);
   });
 });

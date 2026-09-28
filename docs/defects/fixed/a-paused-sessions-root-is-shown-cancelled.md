@@ -16,3 +16,12 @@ clause 6 (the Continue action states that it resumes), which a root shown cancel
 
 - `packages/ui/src/agents.ts` — `runLevelAgent`, the status-to-state mapping that falls through to `cancelled`.
 - `packages/ui/src/Inspector.tsx`, `packages/ui/src/AgentTree.tsx` — where the root's state is drawn.
+
+## Repaired — 2026-09-28
+
+`PD-ORCH-005` clause 13 (revision 4) gives a paused agent the presentation state `paused`, and clause 19 counts the
+root among the agents that resume. `runLevelAgent` now presents the run-level agent `paused` (state `paused`, not live,
+not ended) while its session rests with an iteration open — `paused`, `interrupted`, or in REQ-CHAT-008's recovery state,
+which its callers pass (`runLevelResting`, OQ-73) — so the root agrees with the Continue action's count. A session at
+rest with nothing open presents its root as before. Evidence: `packages/ui/src/agents.test.ts`, the describe
+"PD-ORCH-005 clause 13 (revision 4): a paused agent presents as paused (OQ-73)"; reverting `runLevelResting` turns it red.

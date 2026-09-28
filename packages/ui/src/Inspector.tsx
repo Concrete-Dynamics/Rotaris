@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { RUN_AGENT_ID, type AgentRecord, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
-import { cascadeNote, chipStates, followedAgent, inspectorEnablement, instancesOf, liveDescendants, mcpChipStates, mcpFateText, metaLine, resolvedTools } from './agents.js';
+import { cancelCascade, cancelOffered, cascadeNote, chipStates, followedAgent, inspectorEnablement, instancesOf, mcpChipStates, mcpFateText, metaLine, resolvedTools } from './agents.js';
 import { elapsedLabel } from './AgentTree.js';
 import { ContextRing } from './ContextRing.js';
 import { markMotionStart } from './motion.js';
@@ -37,6 +37,11 @@ export interface InspectorProps {
   readonly withheldModels?: readonly { readonly model: string; readonly reason: string }[] | undefined;
   readonly compressionThresholdPercent: number;
   readonly runActive: boolean;
+  /**
+   * PD-ORCH-005 clause 16 (OQ-74): the session rests with an iteration open (`runLevelResting`, which only the caller can
+   * ask, since REQ-CHAT-008's recovery state is the renderer's to know) — when a `paused` child offers Cancel.
+   */
+  readonly resting: boolean;
   readonly nowIso: string | null;
   readonly onSteer: (agent: AgentRecord) => void;
   readonly onCancel: (agent: AgentRecord, cascade: number) => void;
@@ -55,7 +60,7 @@ export const NEXT_ITERATION_NOTE = 'Takes effect from the next iteration.';
 export const NO_ARTIFACTS = 'No artifacts yet — this build has no artifact store.';
 
 export function Inspector(props: InspectorProps) {
-  const { session, rows, personas, runLevel, selectedAgentId, onSelect, models, withheldModels = [], compressionThresholdPercent, runActive, nowIso, onSteer, onCancel, onPopOut, onSetModel, onSetReasoning, drawer = false, onCloseDrawer } = props;
+  const { session, rows, personas, runLevel, selectedAgentId, onSelect, models, withheldModels = [], compressionThresholdPercent, runActive, resting, nowIso, onSteer, onCancel, onPopOut, onSetModel, onSetReasoning, drawer = false, onCloseDrawer } = props;
   const agents = useMemo(() => session?.agents ?? [], [session]);
   const selected = useMemo(() => (selectedAgentId === RUN_AGENT_ID ? runLevel : agents.find((a) => a.id === selectedAgentId) ?? null), [selectedAgentId, agents, runLevel]);
   const followed = useMemo(() => (selected ? null : followedAgent(rows, agents, runLevel)), [selected, rows, agents, runLevel]);
@@ -71,7 +76,9 @@ export function Inspector(props: InspectorProps) {
   const enablement = inspectorEnablement(shown?.presentationState ?? null);
   const isRunLevel = shown !== null && shown.id === RUN_AGENT_ID;
   const writable = isRunLevel && runActive && shown?.live === true;
-  const cascade = shown ? liveDescendants(agents, shown.id).length : 0;
+  const cascade = shown ? cancelCascade(agents, shown) : [];
+  // PD-ORCH-005 clause 16: a paused child offers Cancel while its session rests; a live agent while its run is active.
+  const cancellable = cancelOffered(shown, runActive, resting);
   const chips = shown ? chipStates(resolvedTools(shown, persona?.tools ?? []), shown.calledTools, shown.activeTools) : [];
   const elapsed = shown && (shown.live || shown.completedAt) ? elapsedLabel(shown, nowIso) : null;
   const currentModel = shown?.model ?? '';
@@ -167,7 +174,7 @@ export function Inspector(props: InspectorProps) {
           {error && <div className="composer__error" role="alert">{error}</div>}
           <div className="inspector__actions">
             <DesignButton type="button" className="btn btn-secondary btn-compact" disabled={!enablement.steer || !runActive} title={enablement.steer && runActive ? `Steer ${shown.name} through its persona window` : 'Steer is enabled while the agent is running or waiting.'} onClick={() => onSteer(shown)}>Steer</DesignButton>
-            <DesignButton type="button" className="btn btn-danger btn-compact" disabled={!enablement.cancel || !runActive} title={enablement.cancel && runActive ? `Cancel ${shown.name}` : 'Cancel is enabled while the agent is running, waiting or queued.'} onClick={() => onCancel(shown, cascade)}>Cancel</DesignButton>
+            <DesignButton type="button" className="btn btn-danger btn-compact" data-testid="inspector-cancel" disabled={!cancellable} title={cancellable ? `Cancel ${shown.name}` : 'Cancel is enabled while the agent is running, waiting or queued, and for a paused agent while its session rests.'} onClick={() => onCancel(shown, cascade.length)}>Cancel</DesignButton>
             <DesignButton type="button" className="btn btn-secondary btn-compact" disabled={!enablement.popOut} onClick={() => onPopOut(shown)}>Pop out</DesignButton>
           </div>
         </div>

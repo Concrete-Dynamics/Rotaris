@@ -27,6 +27,20 @@ export function commandsForArtifact(v: unknown): RanCommand[] {
 }
 
 /**
+ * REQ-ORCH-133 / REQ-MONITOR-128: what the user's cancel of one child writes for each agent it ends — the report and the
+ * timeline entry — shared by the live cancel (`IterationChildren.cancel`) and PD-ORCH-005 clause 16's cancel while the
+ * session rests (`Sessions`, OQ-74), so the two cannot drift. `whileResting` adds that clause's words to the entry.
+ */
+export function userCancellation(t: Pick<ChildRow, 'task_id' | 'canonical_name' | 'persona'>, chosen: Pick<ChildRow, 'task_id' | 'canonical_name'>, whileResting = false): { readonly report: Record<string, unknown>; readonly message: string; readonly metadata: Record<string, unknown> } {
+  const own = t.task_id === chosen.task_id;
+  return {
+    report: { agent_name: t.canonical_name, role: t.persona, status: 'cancelled', summary: own ? 'The user cancelled this child.' : `Cancelled with ${chosen.canonical_name}, which the user cancelled.`, key_findings: [], last_response: '', final_response: '', errors: [] },
+    message: `The user cancelled child ${t.canonical_name} (${t.task_id})${own ? '' : ` with ${chosen.canonical_name}`}${whileResting ? ' while the session rested' : ''}.`,
+    metadata: { task_id: t.task_id, ...(own ? {} : { cancelled_with: chosen.task_id }) },
+  };
+}
+
+/**
  * REQ-LIBRARY-092: EVERY terminal child report is materialised as an artifact. The materialisation lives beside the one
  * write every stored report passes through — the ledger's own reports, the scheduler's cancellation, the user's cancel,
  * the settle of a child a previous run left (REQ-ORCH-053) and the decline of a resumable iteration (PD-ORCH-005

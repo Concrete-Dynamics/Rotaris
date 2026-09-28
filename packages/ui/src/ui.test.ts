@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentRecord, CheckpointListPayload, SessionListItemPayload } from '@rotaris/contracts';
 import { useShellState } from './shell-state.js';
-import { applyTheme, assertDistinctRoleColours, deriveShade, filterSessions, motionReduced, setStoredMotionPreference, agentCounts, clampRight, formatTokens, sessionDot, sparklinePath, tokenTotal, branchStripItem, clampGitRight, defaultSessionBranch, filesCell, headerBranch, joinBindings, mergeEligible, pickerLabel, syncLabel, worktreeDialogMessage, NOT_A_REPOSITORY, REFRESHING_LABEL, formatRemaining, waitHeaderText, composerPlaceholder, checkpointsEmptyText, effectivePicked, restoreDisabledReason, CHECKPOINTS_NO_SESSION, CHECKPOINTS_EMPTY, RESTORE_NO_SESSION, RESTORE_NO_ROW } from './index.js';
+import { applyTheme, assertDistinctRoleColours, deriveShade, filterSessions, motionReduced, setStoredMotionPreference, agentCounts, agentStatesLine, clampRight, formatTokens, sessionDot, sparklinePath, tokenTotal, branchStripItem, clampGitRight, defaultSessionBranch, filesCell, headerBranch, joinBindings, mergeEligible, pickerLabel, syncLabel, worktreeDialogMessage, NOT_A_REPOSITORY, REFRESHING_LABEL, formatRemaining, waitHeaderText, composerPlaceholder, checkpointsEmptyText, effectivePicked, restoreDisabledReason, CHECKPOINTS_NO_SESSION, CHECKPOINTS_EMPTY, RESTORE_NO_SESSION, RESTORE_NO_ROW } from './index.js';
 import type { GitViewState, GitWorktreeRow } from '@rotaris/contracts';
 import { resolveTheme, isBusy, presentationStatus } from '@rotaris/contracts';
 
@@ -89,7 +89,14 @@ describe('ui — the Overview view (REQ-MONITOR-165..171)', () => {
   });
   it('REQ-MONITOR-169: waiting counts queued, failed counts cancelled and blocked; the depth is the deepest agent', () => {
     const a = (state: string, depth: number) => ({ id: state + depth, name: 'n', givenName: 'n', persona: 'p', state, presentationState: 'running', parentId: '', dependencies: [], activity: '', model: 'm', depth, background: true, category: '', spawnedAt: 't', completedAt: null, toolCalls: 0, delegationTask: '', live: false }) as unknown as AgentRecord;
-    expect(agentCounts([a('running', 1), a('queued', 1), a('waiting_on_dependencies', 2), a('succeeded', 1), a('cancelled', 3), a('blocked', 1), a('failed', 1)])).toEqual({ running: 1, waiting: 2, done: 1, failed: 3, depth: 3 });
+    expect(agentCounts([a('running', 1), a('queued', 1), a('waiting_on_dependencies', 2), a('succeeded', 1), a('cancelled', 3), a('blocked', 1), a('failed', 1)])).toEqual({ running: 1, waiting: 2, paused: 0, done: 1, failed: 3, depth: 3 });
+  });
+  it('PD-ORCH-005 clause 13 (OQ-73): a paused agent is counted paused — never waiting or failed — and the line names the count only while one is paused', () => {
+    const a = (state: string) => ({ id: state, name: 'n', givenName: 'n', persona: 'p', state, presentationState: 'running', parentId: '', dependencies: [], activity: '', model: 'm', depth: 1, background: true, category: '', spawnedAt: 't', completedAt: null, toolCalls: 0, delegationTask: '', live: false }) as unknown as AgentRecord;
+    const counts = agentCounts([a('paused'), a('paused'), a('queued'), a('succeeded')]);
+    expect(counts).toMatchObject({ running: 0, waiting: 1, paused: 2, done: 1, failed: 0 });
+    expect(agentStatesLine(counts)).toBe('running 0 · waiting 1 · paused 2 · done 1 · failed 0');
+    expect(agentStatesLine(agentCounts([a('succeeded')]))).toBe('running 0 · waiting 0 · done 1 · failed 0');
   });
   it('REQ-MONITOR-171: the dot — attached run, background informational, other busy pulsing, failed, idle', () => {
     expect(sessionDot(row({ status: 'running' }), true)).toMatchObject({ tone: 'run', pulse: false });

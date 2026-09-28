@@ -6,7 +6,7 @@ import { isBusy, isViewId, LIBRARY_TABS, presentationStatus, STATUS_LABELS, THEM
 // provider that carries this window's preview registry down to every transcript surface (ADR-0047).
 import { TERMINAL_WINDOW_ROLE } from '@rotaris/contracts';
 import { TerminalHostProvider } from '@rotaris/ui';
-import { Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, rebasePending, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, runLevelAgent, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, type SlashHost, RequirementsBoard } from '@rotaris/ui';
+import { Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, rebasePending, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, runLevelAgent, runLevelResting, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, type SlashHost, RequirementsBoard } from '@rotaris/ui';
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls, and the shape it answers.
 import { bindPromptRootsReader } from '@rotaris/ui';
 import type { PromptsRootsResult } from '@rotaris/contracts';
@@ -23,7 +23,7 @@ import '@phosphor-icons/web/fill';
 // the theme — everything this window has before a surface mounts (`shell.ts`).
 import { acknowledge, acknowledgements, answerQuestions, bridge, cancelAgent, cancelQuestions, cancelRun, continueSession, control, displayPrefs, notices, openLink, pendingDisplay, planDecision, planEdit, readDisplayPrefs, refreshStats, replica, setMode, setRunStartMode, stopRun, submitPrompt, terminalHost, windowTheme, writeDisplayPref } from './shell.js';
 // What a transcript surface reads about the session it is following, shared with the persona window (`session-view.ts`).
-import { entryOf, openPersona, personasOf, useConfigSnapshot, useElapsedTick } from './session-view.js';
+import { entryOf, openPersona, personasOf, useConfigSnapshot, useElapsedTick, useNeedsRecovery } from './session-view.js';
 // The other windows this same bundle is the root of, each one a role on the route (`windows.tsx`, ADR-0056).
 import { bootApproval, bootHookReview, bootPause, bootPersona, bootProvider, bootTerminal } from './windows.js';
 /**
@@ -122,31 +122,6 @@ async function pageOlder(beforeIndex: number): Promise<boolean> {
   const page = r.value as { rows?: TranscriptRow[]; oldest?: boolean };
   replica.getState().prependOlder(page.rows ?? [], page.oldest === true);
   return true;
-}
-
-/**
- * Part AB — REQ-CHAT-008's synthetic state: the persisted session claims busy but no local run exists. The verdict
- * comes from the ONE liveness predicate (REQ-SESSION-171) through `session.list`'s `stale`, never from this window
- * inferring it from silence, and it is re-asked only when the followed session or its status changes — there is no
- * poll, because a wrong answer here would mislabel a live run and a timer would make it a race.
- */
-function useNeedsRecovery(sessionId: string | null, executionStatus: string | null): boolean {
-  const [recovery, setRecovery] = useState(false);
-  const busy = executionStatus !== null && isBusy(executionStatus);
-  useEffect(() => {
-    let live = true;
-    queueMicrotask(() => {
-      if (!live) return;
-      if (!sessionId || !busy) { setRecovery(false); return; }
-      void bridge.command({ kind: 'session.list' }).then((r) => {
-        if (!live || !r.ok) return;
-        const rows = (r.value as { sessions?: readonly SessionListItemPayload[] }).sessions ?? [];
-        setRecovery(rows.find((s) => s.sessionId === sessionId)?.stale === true);
-      });
-    });
-    return () => { live = false; };
-  }, [sessionId, busy, executionStatus]);
-  return recovery;
 }
 
 /**
@@ -355,7 +330,11 @@ function Mission({ workspace, popOut }: { workspace: string; popOut: boolean }) 
   const snapshot = useConfigSnapshot(workspace);
   const refresh = useStore(refreshStats, (st) => st);
   const entry = useMemo(() => entryOf(snapshot, rows, session?.agents ?? []), [snapshot, rows, session]);
-  const runLevel = useMemo(() => runLevelAgent(session, entry), [session, entry]);
+  // PD-ORCH-005 clause 13 (OQ-73): in REQ-CHAT-008's recovery state the run-level agent presents `paused`, as its agents do.
+  const needsRecovery = useNeedsRecovery(session?.id ?? null, session?.executionStatus ?? null);
+  const runLevel = useMemo(() => runLevelAgent(session, entry, needsRecovery), [session, entry, needsRecovery]);
+  // PD-ORCH-005 clause 16 (OQ-74): a paused child offers "Cancel selection" while its session rests, by the same predicate.
+  const resting = session !== null && runLevelResting(session, needsRecovery);
   const nowIso = useElapsedTick(session);
   const [sessions, setSessions] = useState<readonly SessionListItemPayload[]>([]);
   useEffect(() => { if (workspace !== '(no workspace)') queueMicrotask(() => { void bridge.command({ kind: 'session.list' }).then((r) => { if (r.ok) setSessions((r.value as { sessions: SessionListItemPayload[] }).sessions); }); }); }, [workspace, session?.id]);
@@ -371,7 +350,7 @@ function Mission({ workspace, popOut }: { workspace: string; popOut: boolean }) 
     useShellState.getState().switchView('workspace');
   };
   return <MissionView
-    session={session} sessionLabel={label} runLevel={runLevel} selectedAgentId={selectedAgentId} nowIso={nowIso} refresh={refresh}
+    session={session} sessionLabel={label} runLevel={runLevel} resting={resting} selectedAgentId={selectedAgentId} nowIso={nowIso} refresh={refresh}
     onSelect={(id, source) => { selectAgent(id); if (source === 'click' && popOut && id !== null && id !== RUN_AGENT_ID) { const agent = session?.agents.find((a) => a.id === id); if (agent) void openPersona(agent, false); } }}
     strategy={snapshot?.delegationStrategy ?? null} maxDepth={snapshot?.runtime.max_depth ?? null}
     onSetStrategy={(value) => setField({ rotaris: { delegation_strategy: value } })} onSetDepth={(value) => setField({ runtime: { max_depth: value } })}

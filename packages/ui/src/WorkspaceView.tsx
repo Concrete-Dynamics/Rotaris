@@ -18,7 +18,7 @@ import { COMMAND_NOT_RUN_TITLE, defaultUnavailableReason, parseSlash, slashNameT
 import { SlashPopup, slashRowId } from './slash/SlashPopup.js';
 import type { SlashCommand, SlashContext, SlashOutcome } from './slash/types.js';
 import { AgentTree } from './AgentTree.js';
-import { cancelConfirmation, runLevelAgent } from './agents.js';
+import { cancelConfirmation, cancelOffered, runLevelAgent, runLevelResting, steerOffered } from './agents.js';
 import { Inspector, type PersonaEntry } from './Inspector.js';
 import { useShellState } from './shell-state.js';
 import { DelegationHeader, ScopeToggle, scopedRows, type Acknowledger } from './TranscriptSurface.js';
@@ -1099,7 +1099,12 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
   const stripNarrow = density === 'narrow';
   // Memoised so the derivations below (REQ-CHAT-069's scope, PD-CHAT-005's depth) do not see a new array every render.
   const agents = useMemo(() => session?.agents ?? [], [session]);
-  const runLevel = useMemo(() => (entry ? runLevelAgent(session, entry) : null), [session, entry]);
+  // PD-ORCH-005 clause 13 (OQ-73): in REQ-CHAT-008's recovery state the run-level agent presents `paused`, as its agents do.
+  const runLevel = useMemo(() => (entry ? runLevelAgent(session, entry, needsRecovery) : null), [session, entry, needsRecovery]);
+  // PD-ORCH-005 clauses 6, 13 and 16 (OQ-71, OQ-73, OQ-74): the session rests with an iteration open — paused, left
+  // `interrupted` by a crash, or in REQ-CHAT-008's recovery state. One predicate decides the composer's count, the
+  // run-level agent's `paused` and a paused child's Cancel, so the tree, the count and the offer agree.
+  const resting = session !== null && runLevelResting(session, needsRecovery);
   const selected = selectedAgent === RUN_AGENT_ID ? runLevel : agents.find((a) => a.id === selectedAgent) ?? null;
   /** REQ-CHAT-088: the engine has already resolved each source; scope chooses the matching published plan. */
   const todoPlan = selected !== null && selected.id !== RUN_AGENT_ID ? session?.childTodos[selected.id] ?? session?.todo ?? null : session?.todo ?? null;
@@ -1162,7 +1167,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
   };
   const inspector = (
     <Inspector session={session} rows={rows} personas={personas} runLevel={runLevel} selectedAgentId={selectedAgent} onSelect={(id) => select(id, 'click')} models={models}
-      compressionThresholdPercent={compressionThresholdPercent} runActive={runActive} nowIso={nowIso}
+      compressionThresholdPercent={compressionThresholdPercent} runActive={runActive} resting={resting} nowIso={nowIso}
       onSteer={(agent) => { if (onOpenPersona) onOpenPersona(agent, true); else setSteering({ id: agent.id, name: agent.name }); }}
       onCancel={inspectorCancel} onPopOut={(agent) => onOpenPersona?.(agent, false)} onSetModel={onSetModel} onSetReasoning={onSetReasoning}
       drawer={narrow} onCloseDrawer={narrow ? () => setDrawer(null) : undefined} />
@@ -1194,7 +1199,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
   // PD-ORCH-005 clause 6 (OQ-71): a session at rest states what its continue resumes — a paused one; one a crash left
   // `interrupted`; and one a crash left persisted busy with no run behind it (REQ-CHAT-008's recovery state), whose
   // continue by message records the crash and resumes the same agents. Only the Continue action offers to decline.
-  const resumable = session !== null && (session.executionStatus === 'paused' || session.executionStatus === 'interrupted' || (sessionBusy && needsRecovery)) ? session.resumable : null;
+  const resumable = resting && session !== null ? session.resumable : null;
   /** The send control's accessible name, by composer mode (PD-CHAT-001 revision 2, R-040). Set beside the
     * gate and the pause it reads, so no declaration order can break it again. */
   const sendName = runActive
@@ -1268,10 +1273,12 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
             <span className="agents__title">Agents</span>
             <span className="agents__count mono" data-testid="agents-count">{agents.length} agent{agents.length === 1 ? '' : 's'}</span>
             <div className="agents__spacer" />
-            {selected && !['done', 'failed', 'cancelled'].includes(selected.presentationState) && onSteer && runActive && (
+            {/* A paused agent is not live (PD-ORCH-005 clause 13, OQ-73): it offers no Steer, as the inspector offers none. */}
+            {selected && steerOffered(selected, runActive) && onSteer && (
               <DesignButton type="button" className="btn btn-ghost agents__cancel" onClick={() => setSteering({ id: selected.id, name: selected.name })}>Steer {selected.name}</DesignButton>
             )}
-            {selected && !['done', 'failed', 'cancelled'].includes(selected.presentationState) && onCancelAgent && (
+            {/* PD-ORCH-005 clause 16: a paused child is cancellable while its session rests; a live agent while its run is active. */}
+            {selected && cancelOffered(selected, runActive, resting) && onCancelAgent && (
               <DesignButton type="button" className="btn btn-ghost agents__cancel" onClick={() => setConfirming({ agent: { id: selected.id, name: selected.name } })}>Cancel {selected.name}</DesignButton>
             )}
           </div>
@@ -1585,7 +1592,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
         <ConfirmDialog title="Continue without them?" body={declineText(resumable.agents)} confirmLabel="Continue without them" cancelLabel="Keep them" destructive testId="decline-confirm" onCancel={() => setConfirming(null)} onConfirm={() => { setConfirming(null); void continueRun(true); }} />
       )}
       {confirming !== null && confirming !== 'cancelRun' && confirming !== 'decline' && (
-        <ConfirmDialog {...cancelConfirmation(confirming.agent, session?.agents ?? [])} cancelLabel="Keep running" destructive onCancel={() => setConfirming(null)} onConfirm={() => { const target = confirming.agent; setConfirming(null); void onCancelAgent?.(target.id).then((r) => { if (!r.ok) setError(r.reason); }); }} />
+        <ConfirmDialog {...cancelConfirmation(confirming.agent, session?.agents ?? [])} destructive onCancel={() => setConfirming(null)} onConfirm={() => { const target = confirming.agent; setConfirming(null); void onCancelAgent?.(target.id).then((r) => { if (!r.ok) setError(r.reason); }); }} />
       )}
       {steering && onSteer && <SteerDialog target={steering} onSteer={onSteer} onClose={() => setSteering(null)} />}
     </div>

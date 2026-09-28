@@ -188,6 +188,15 @@ export function scopedRows(rows: readonly TranscriptRow[], agent: AgentRecord | 
 }
 
 /**
+ * REQ-CHAT-069's state and elapsed time for "This task". The time is shown, as the agent tree shows it, only for an agent
+ * live or ended: a `paused` one is neither (PD-ORCH-005 clause 13, OQ-73), so in REQ-CHAT-008's recovery state, whose busy
+ * status keeps the clock ticking, it does not count up while nothing runs.
+ */
+export function scopeDetail(agent: AgentRecord, nowIso: string | null): string {
+  return agent.live || agent.completedAt ? `${agent.presentationState} · ${elapsedLabel(agent, nowIso)}` : agent.presentationState;
+}
+
+/**
  * REQ-CHAT-069: "All activity" / "This task", the second naming the agent it refers to and showing that
  * agent's state and its live elapsed wall-clock time, so the reader can tell whose output is being shown
  * without leaving the transcript. With no agent selected "This task" is unavailable **with that as its stated
@@ -196,7 +205,7 @@ export function scopedRows(rows: readonly TranscriptRow[], agent: AgentRecord | 
 export function ScopeToggle({ scope, agent, nowIso, onScope }: { scope: 'all' | 'task'; agent: AgentRecord | null; nowIso: string | null; onScope: (s: 'all' | 'task') => void }) {
   const available = agent !== null;
   const label = agent === null ? 'This task' : `This task · ${agent.name}`;
-  const detail = agent === null ? SCOPE_NO_AGENT : `${agent.presentationState} · ${elapsedLabel(agent, nowIso)}`;
+  const detail = agent === null ? SCOPE_NO_AGENT : scopeDetail(agent, nowIso);
   return (
     <div className="seg row__scope" role="radiogroup" aria-label="Transcript scope" data-testid="scope-toggle" data-scope={scope}>
       <DesignButton type="button" role="radio" aria-checked={scope === 'all'} className={`seg-opt${scope === 'all' ? ' is-active' : ''}`} onClick={() => onScope('all')}>All activity</DesignButton>

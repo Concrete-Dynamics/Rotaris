@@ -3475,6 +3475,180 @@ rather than be re-sent the one read at the continue, superseded or not.
 
 The key is registered with default 20 and minimum 1. Each background session publishes its own `bg:<id>` stream at up to 50 frames/s (the 20 ms floor), so the produced aggregate is `(agents + background sessions) × 50 frames/s`, and only one of those two factors — agents, REQ-MONITOR-285's 20 — has a ceiling. Part AL reads the key into the manager and caps the *delivered* rate per window at 1,000 frames/s by merging (REQ-MONITOR-306, REQ-SHELL-103), so a user who configures 400 background sessions saturates the run-host → main pipe, not a renderer. A stated maximum on the key would let the produced rate be computed rather than absorbed. The owner's call; recorded, not resolved.
 
+**OQ-73 — How does the counters' line spell the `paused` count clause 13 decides, where does the run-level agent that clause 13 does not name present, what does a live agent's cancel state for its paused descendants, and may the agents a crash left present `paused` before it is recorded, against clause 13's last sentence?** *(`PD-ORCH-005` clause 13, revision 4 — including its last sentence, "every other unfinished agent of a session at rest is settled as before", which the third reading below departs from — with clauses 8, 18 and 19; REQ-MONITOR-211/213, which that sentence keeps for every agent not `paused` and the third reading also departs from; REQ-MONITOR-169, whose count the clause's "the counters" decides and whose line's wording it does not; REQ-MONITOR-043/057, REQ-MONITOR-045, REQ-MONITOR-064/128, REQ-SHELL-036 and REQ-CHAT-008, which the directive does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
+
+Clause 13 gives an agent in the child state `paused` a presentation state of its own, `paused`, on "the agent tree,
+the counters, the inspector, the Mission view and a persona window", keeps its last activity, and settles it for display
+no more; its last sentence settles "every other unfinished agent of a session at rest ... as before". The mapping
+(`presentationChildState`) and the projection (`toAgentRecord`) carry it to every surface, which each draw
+`presentationState` as their dot's class and their state text. Four edges the clause does not reach, and one it does:
+
+- **The counters' line — its wording, not its count.** Clause 13 names "the counters" among the surfaces on which a
+  paused agent presents `paused`, so the count itself is decided: a paused agent counts as `paused`, never as waiting
+  or failed (the built count had fallen to its last arm, failed). What the clause leaves open is how REQ-MONITOR-169's
+  detail line, which names four counts — running, waiting (with queued), done, and failed (with cancelled and
+  blocked) — spells the fifth: whether always, and where in the line.
+- **The run-level agent.** The run's root is not a child and has no `children` row; the surfaces synthesise it from the
+  session (REQ-MONITOR-043/057), and a session at rest drew it `cancelled`. Yet clause 19 counts it among the agents
+  that resume, and the run records it `paused` at a rest.
+- **What a crash left, before the crash is recorded — which the clause does reach.** Clause 8 records a crash only when
+  a run of the session is about to start, or at a repair; a checkpoint listing's repair records none (OQ-69). Until
+  then its agents are stored `running`, `queued` and so on, so they are not in the child state `paused`: they are
+  among clause 13's "every other unfinished agent", settled "as before". In REQ-CHAT-008's recovery state "as before"
+  drew them running, live and pulsing, and once `interrupted` REQ-MONITOR-211/213 settle them `cancelled`. Yet clause
+  18 offers the Continue action for such a session "with the same count", and that count (`resumableOf`) counts every
+  one of them as resuming — so the text, read literally, has the tree say `cancelled` (or running) for agents the
+  Continue action says will resume.
+- **The colour.** The mockup draws no paused agent.
+- **A live agent's cancel.** Before clause 13 a paused agent presented `queued` and so was among the live descendants
+  REQ-MONITOR-064 counts and REQ-MONITOR-128's confirmation lists. The live cancel (`IterationChildren.cancel`) still
+  ends every descendant not terminal, `paused` among them — in a `pausing` run, a live child whose own child has
+  already come to rest — so a confirmation that listed only live descendants would understate what it cancels.
+
+**What the build proceeds under.**
+
+- **The counters.** A paused agent is counted as `paused`, never as waiting or failed, as clause 13 decides; the
+  reading is the line's wording: it names that count between waiting and done — `running 1 · waiting 0 · paused 2 · done 1 · failed 0` — **only while an agent is paused**,
+  so every other session's line reads exactly as REQ-MONITOR-169 words it (`agentCounts`, `agentStatesLine`).
+- **The run-level agent.** While its session rests with an iteration open — `paused`, `interrupted`, or in
+  REQ-CHAT-008's recovery state — and only then, it presents `paused` (state `paused`), not live and not ended, its
+  activity the run's summary as before (`runLevelAgent`, `runLevelResting`): the same sessions the composer states a
+  count for. Only the renderer knows the recovery state (`useNeedsRecovery`, moved to `renderer/session-view.ts` so the
+  Workspace, the Mission view and a persona window ask the one liveness predicate alike). It carries no
+  `interruption`: the session record does not carry the iteration's. A session at rest with nothing open presents it as
+  before, and a live run's root presents running though its iteration is open.
+- **What a crash left — a departure from clause 13's last sentence and from REQ-MONITOR-211/213.** The agents the
+  crash record will pause present as it will leave them — `paused`, interruption `crash`, their activity kept, no chip
+  — before it is recorded, although they are not in the child state `paused` and the sentence settles them: every
+  agent of the open iteration neither terminal nor `paused`, while that iteration's interruption is still NULL (no rest
+  recorded one), and the session is `interrupted` or claims a run the one liveness predicate (REQ-SESSION-171) finds no
+  process behind (`crashLeftOf`, asked once per projection). Nothing is written (clause 8). The build departs because
+  the cross-lane contract of R-064's build asked the tree to agree with clause 18's count, and a tree that settles
+  `cancelled` the agents a Continue action promises to resume would state two contradictory outcomes at once; the
+  departure is the smallest that removes that contradiction, since the crash record, when it comes, leaves exactly
+  these agents `paused`. Concretely, it changes two things "as before" meant: in REQ-CHAT-008's recovery state those
+  agents no longer draw running, live and pulsing; and in a session `interrupted` by a checkpoint listing's repair
+  (OQ-69), which recorded no crash, they are no longer settled `cancelled` for display. Every other unfinished agent of
+  a session at rest — one of no open iteration, or of an iteration a rest already recorded — is settled as before.
+- **The colour.** The dot takes `--rt-wait`, REQ-SHELL-036's waiting family, which already names `paused` for a
+  session; full opacity, no pulse. The state text `paused` is what tells it from `queued` (`docs/design/README.md`'s
+  "A paused agent — no design").
+- **The controls.** A paused agent is not live (REQ-MONITOR-045): it offers no Steer — neither in the inspector
+  (`inspectorEnablement`) nor in the Workspace's agents header (`steerOffered`, which keeps the header's older `queued`).
+  Its own Cancel is clause 16's (OQ-74). Neither live nor ended, it shows no elapsed time: the transcript's "This task"
+  reads its state alone (`scopeDetail`), as the agent tree, the table and the inspector already did — in REQ-CHAT-008's
+  recovery state the busy status keeps the clock ticking, and REQ-CHAT-069's "live elapsed wall-clock time" would
+  otherwise count up while nothing runs.
+- **A live agent's cancel.** Its confirmation and cascade note name every descendant its cancel ends — live and
+  paused, through a finished one (`cancelCascade`) — as REQ-MONITOR-128's "one line per ... descendant that will also be
+  cancelled" requires of what is cancelled; the body and the note name what they are: "Its live descendants", "Its
+  paused descendants" or "Its live and paused descendants will be cancelled with it:", and "Cancelling cascades to 2
+  live and paused descendants." (`cascadeKind`). The run's cancel, which ends every unfinished agent, lists every live
+  or paused one in the Mission view. A live agent none of whose descendants rests reads exactly as before.
+
+**What a ruling decides.** Whether REQ-MONITOR-169's line should name the paused count always rather than only while
+one is paused, and where. Whether REQ-MONITOR-064's "live (running, waiting, or queued) descendants" should be named as
+narrowed so that a live agent's cascade counts its paused descendants, as the build counts them. Whether the run-level agent should present `paused` (it has no child
+state), and carry the iteration's interruption. Whether clause 13's last sentence, which settles every unfinished
+agent not in the child state `paused` as before, should yield for the agents a crash left before the crash is recorded
+so that they present `paused` as the build presents them — and with it REQ-MONITOR-211/213 for an `interrupted`
+session — or whether they should present as before (running in REQ-CHAT-008's recovery state, `cancelled` once
+`interrupted`) until the crash is recorded, the tree disagreeing with clause 18's count until then.
+
+**OQ-74 — What does cancelling one paused child at rest reach, say and leave, and may it record a crash that clauses 3 and 8 record only at a repair or a continue?** *(`PD-ORCH-005` clause 16, revision 4, with clauses 3 and 8 — "a crash is recorded when the session is next repaired or continued", and "settling, recording interruptions and resuming happen only when a run of the session is about to start" — which the crash reading below departs from, and clauses 10 and 18, whose "Either choice records the crash first" names the Continue action and "continue without them" and not the cancel; REQ-MONITOR-063, which the directive narrows, and REQ-MONITOR-064, REQ-MONITOR-128, REQ-MONITOR-055, REQ-ORCH-133, REQ-LIBRARY-092, REQ-TOOLS-111 and REQ-SHELL-075, which it does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
+
+Clause 16 has "a `paused` child" offer Cancel "wherever a live agent offers it", confirmed as REQ-MONITOR-128 requires —
+naming the child and one line per paused descendant — and has it and each paused descendant end `cancelled`, the
+iteration open, the rest resuming, and the Continue action's count dropping. The session command it takes had worked
+only with a run behind it. The clause does not say:
+
+- which agent a surface offers it for, when the run-level agent now presents `paused` too (OQ-73);
+- what it does with a child a crash left, before the crash is recorded, which presents `paused` (OQ-73) but is stored
+  `running`;
+- what the cancelled child's report, timeline entry and background sessions become;
+- what REQ-MONITOR-064's cascade note, which counts live descendants only, says for a paused child;
+- what the confirmation says beyond naming.
+
+**What the build proceeds under.**
+
+- **Where it is offered.** A `paused` child offers Cancel on every surface a live agent does — the inspector, the
+  Mission view's "Cancel selection" and the Workspace's agents header — **while its session rests** with an iteration
+  open (`cancelOffered(agent, runActive, resting)`, `resting` being `runLevelResting`: `paused`, `interrupted`, or
+  REQ-CHAT-008's recovery state, the same predicate that decides the composer's count and the run-level agent's
+  `paused`), as clause 16's heading and REQ-MONITOR-063's back-pointer say. It is not offered while a run is active and
+  the session does not rest: a `pausing` run is still bringing its agents to rest one by one, and a continue has not yet
+  resumed them all; a cancel sent then would reach the live run's cancel, which cancels every unfinished descendant.
+  A persona window offers Cancel always (REQ-SHELL-075(g)). The run-level agent at rest is never offered it: clause 16
+  names a child, and the whole iteration's equivalent is clause 6's "Continue without them". The Workspace's agents
+  header now offers a live agent's Cancel only while its run is active, as the inspector already did; it had offered it
+  with no run, and the engine refused. It offers a paused agent no Steer, as the inspector offers none (OQ-73).
+- **The command.** `session.control`'s `cancelAgent` with no run behind the session goes to `Sessions.cancelPausedAtRest`.
+  It is refused (`{ok: false}`, which the renderer states as "not cancellable", REQ-MONITOR-128) for the run's id or the
+  root's, an id that is no child of the open iteration, and a child neither `paused` nor left by a crash; a refusal
+  records nothing, and those are judged before the lock is taken, so none of them claims or reaps it. It is refused too
+  when the chosen child's own move to `cancelled` fails (a failed store write), and then nothing below it is cancelled
+  (what a crash record wrote before it stands, and is published by the record's own save); a paused descendant whose own move fails is warned of and left `paused`, to resume
+  with the rest, and the chosen child's cancel stands. It is written under the session's lock (ADR-0005), which it does
+  not otherwise hold: a run releases the lock at its teardown, so a session paused in this process holds none. The
+  cancel takes the lock for its write and gives it back after, keeps it when this process already holds it (a session
+  loaded here), reaps a dead holder on this machine as loading a session does — through the one copy of that rule,
+  `claimLockReaping`, which never reaps a holder whose pid is no positive integer — and is refused while another live
+  process holds it — one that has loaded the session, or is resuming it — so it never writes into a session another
+  instance owns.
+- **A crash not yet recorded — a departure from clauses 3 and 8.** It is recorded first (`recordCrashOf`), and the
+  cancel then acts on what the record left `paused` — **only when a crash left something unfinished** (`crashLeftOf`
+  names an agent neither terminal nor `paused` of an open iteration whose interruption is still NULL). Otherwise the
+  cancel writes no crash record at all: a session a pause left at rest whose host died since keeps its stored pending
+  approvals and its background sessions still marked running (clause 10), and a crash that came after every agent had
+  already come to rest, before the rest recorded the iteration's interruption, is left for the next continue to
+  record. No run is about to start and nothing is repaired or continued, so
+  this is a moment clauses 3 and 8 do not allow a crash to be recorded at, and clause 18's "records the crash first"
+  names the Continue action and "continue without them", not the cancel. The build departs because the child the user
+  cancels presents `paused` (OQ-73's departure) while it is stored `running` or `queued`: the cancel moves a stored
+  `paused` child, and recording the crash is what makes it one — with its interruption and resume state, as every other
+  agent the crash left — and it is the cross-lane contract of R-064's build that the cancel records the crash first, as
+  any continue does. The
+  record is the whole crash record, not one child's: it writes the open iteration's interruption `crash`, leaves every
+  agent the crash left unfinished `paused` by `crash` (answering its open tool calls), withdraws every stored pending
+  approval (clause 9), and records every background terminal session still marked running as ended by the crash
+  (clause 10) — all of it what the next continue would have recorded, and none of it undone. In REQ-CHAT-008's
+  recovery state the session's status is left as it is, still claiming `running`: recording the crash is not the
+  repair (REQ-SESSION-060).
+- **What it cancels.** The child and every `paused` descendant at any depth, including one below a descendant that had
+  already finished; a finished descendant is left as it is. Each moves `paused` → `cancelled` by the cancellation path,
+  keeps its `interruption` and `resume_state` (as the decline does), and gains the live cancel's report — "The user
+  cancelled this child." or "Cancelled with <name>, which the user cancelled." — its artifact (REQ-LIBRARY-092), and a
+  `child_user_cancelled` entry whose message adds "while the session rested". Nothing else is written: the iteration,
+  its task and the todo stay as they are, and the parent learns of the cancel when it resumes, as of any child that
+  ended unobserved (REQ-ORCH-054).
+- **Background sessions.** A cancelled agent's background terminal sessions are left as a live cancel of one child
+  leaves them, for the next stop, quit or crash to end (clause 10, REQ-TOOLS-111).
+- **The cascade note.** For any agent it counts every unfinished descendant its cancel ends, live and paused, through a
+  finished one (OQ-73). For a paused child at rest those are its paused descendants — "Cancelling cascades to 1 paused
+  descendant." — since at rest every unfinished descendant is `paused`. While a run is still `pausing`, a paused child
+  a persona window cancels (REQ-SHELL-075(g) offers it Cancel always) reaches the live run's cancel, which also ends a
+  descendant whose in-flight call has not yet let it rest; the note then says "live and paused", so the confirmation
+  never understates what the engine ends.
+- **The confirmation.** Titled "Cancel <name>?", it gives one line per descendant cancelled with it — the set the cascade
+  note counts — and states that it cannot be undone, that the agent will not resume (clause 3's "final"), and which
+  descendants are cancelled with it by the same adjective ("paused", or "live and paused" in a `pausing` run); with no
+  descendant cancelled, that the other paused agents resume when the session continues. Its dismissal reads "Keep it paused" rather than "Keep running". The
+  Mission view's own confirmation adds "and will not resume" to its sentence (`missionCancelBody`), and takes its title
+  and both buttons from the same `cancelConfirmation` (`missionConfirmation`). The confirmation describes the session
+  as it was when Cancel was pressed: a continue confirmed in another window before this one is answered sends the
+  cancel to the live run, which cancels every unfinished descendant rather than the paused ones listed — the same
+  window a live agent's confirmation has when its descendants change under it.
+- **Not built.** REQ-MONITOR-128's optimistic display: the surfaces wait for the republished record, for this cancel as
+  for a live one.
+
+**What a ruling decides.** Whether a single-child cancel may record the crash — the whole crash record, with the
+iteration's interruption, the withdrawn approvals and the ended background sessions — at a moment clauses 3 and 8 do
+not name, or whether a crash-left child should instead be offered no Cancel until the crash is recorded, or be
+cancelled from its stored state without the record. Whether a cancelled paused agent's running background sessions
+should end at the cancel, since it will never resume. Whether REQ-MONITOR-064 should be named as narrowed for the
+paused count. Whether the recovery state's cancel should also repair the session's status. Whether the resting
+run-level agent should offer a Cancel that declines the iteration.
+
 ## Design-reference dependencies
 
 The approved visual design reference was **not available** to the architects who produced the slice

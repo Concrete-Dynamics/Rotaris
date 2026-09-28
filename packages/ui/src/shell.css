@@ -784,6 +784,8 @@
 .agent-row__dot--done { background: var(--rt-ok); }
 .agent-row__dot--failed { background: var(--rt-danger-300); }
 .agent-row__dot--cancelled { background: var(--rt-warn); }
+/* PD-ORCH-005 clause 13: a paused agent's dot is REQ-SHELL-036's waiting family, never pulsing; its state text says `paused` (no design). */
+.agent-row__dot--paused { background: var(--rt-wait); }
 .agent-row__main { display: flex; flex-direction: column; min-width: 0; }
 .agent-row__persona { font-weight: var(--rt-weight-medium, 500); }
 .agent-row__task { color: var(--rt-text-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

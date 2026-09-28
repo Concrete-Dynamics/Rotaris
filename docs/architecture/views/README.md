@@ -62,6 +62,31 @@ hand over an earlier piece of work's document ahead of the plan cycle's. It is r
 **runtime view**'s continuation paragraph is updated. No package, edge, process, channel, command or
 store table changes, so the other views are not.
 
+**One paused child is cancellable while its session rests (`PD-ORCH-005` clause 16, revision 4, 2026-09-28, R-064).**
+`session.control`'s `cancelAgent` reaches `Sessions.cancelPausedAtRest` when no run is behind the session: the child
+and each `paused` descendant end `cancelled` with the live cancel's report, timeline entry and artifact, the iteration
+stays open, and `resumable` drops; a crash not yet recorded is recorded first, only when something is crash-left —
+the whole crash record, at a moment clauses 3 and 8 do not name (OQ-74's departure). The cancel writes under the
+session's lock, taken for the write and given back, a dead local holder reaped by the `claimLockReaping` that
+`SessionWriter.open` claims through, and is refused while another live process holds it (`lockForWrite`); a target it
+refuses outright is judged before the lock is taken. Every confirmation and cascade note now names each unfinished descendant a cancel ends, live or paused (`cancelCascade`,
+OQ-73 and OQ-74), and both cancels write through one `userCancellation`. The surfaces offer a paused child's Cancel while its session rests
+(`cancelOffered(agent, runActive, resting)`, `resting` being `runLevelResting`, the predicate the composer's count and
+the resting root share) and confirm by `cancelConfirmation`, the Mission view through `missionConfirmation`. The
+**runtime view**'s `cancelAgent`, `children`, `iterations` and `agent_terminals` rows and the **state-ownership view**'s
+rest and session-lock rows name the new writer, and the **sequences view**'s "The pause and the rest" names it among
+the crash record's moments; no package, edge, process, channel or command changes.
+
+**A paused agent presents as paused on every agent surface (`PD-ORCH-005` clause 13, revision 4, 2026-09-28, R-064).**
+`PRESENTATION_CHILD_STATES` gains `paused` and `presentationChildState` maps the child state to it, so `AgentRecord`'s
+`presentationState` widens on the existing session-record channel. `toAgentRecord` presents the agents a crash left
+unfinished, before the crash is recorded, as the record will leave them (`crashLeftOf`, asked once per projection;
+OQ-73's departure from clause 13's last sentence); `runLevelAgent`
+presents the resting root `paused`, its callers passing REQ-CHAT-008's recovery state (`useNeedsRecovery`, moved to
+`renderer/session-view.ts`). The Overview counts paused agents on their own. The **runtime view**'s eleventh-state and
+projection paragraphs and the **state-ownership view**'s rest row are updated; no package, edge, process, channel or
+command changes.
+
 **A quit answers nothing for a person, and every stored report is an artifact (`PD-ORCH-005` phase 7, 2026-09-27,
 R-062).** Main tells the application's quit apart (`QuitState`, `main/exit.ts`). That covers the immediate exit, every
 main window's close confirmed by its guard (`guardClose`), and a quit Electron starts on its own account, which

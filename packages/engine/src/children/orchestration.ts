@@ -10,7 +10,7 @@ import { callsRun } from '../run/interruption.js';
 import type { AttachmentOutcome, BackgroundOutput, DelegateOutcome, DelegateRequest, DelegationOps, WaitOutcome } from './delegation.js';
 import { fullContextBlock, siblingIndexBlock, type AttachedResolution } from '../artifacts/context.js';
 import type { ArtifactStore } from '../artifacts/store.js';
-import { ChildLedger, storeChildReport, type Budget } from './ledger.js';
+import { ChildLedger, storeChildReport, userCancellation, type Budget } from './ledger.js';
 import { childPayload, completionNotification, parseReport, priorAgentContext, reportBlock, resumeMessage } from './notify.js';
 import { CHILD_STALL_TIMEOUT_MS, continuationRefusal, cutOffLines, cutOffReport, ProgressLog, type CutOff } from './cut-off.js';
 import { BUILT_IN_PERSONAS, type Persona, type PersonaResolver, type RoleName } from './personas.js';
@@ -485,9 +485,9 @@ export class IterationChildren implements DelegationOps {
     for (const t of targets) {
       const r = this.ledger.transition(t.task_id, 'cancelled', 'cancellation');
       if (!r.ok) { this.deps.warn(r.reason); continue; }
-      const summary = t.task_id === taskId ? 'The user cancelled this child.' : `Cancelled with ${row.canonical_name}, which the user cancelled.`;
-      this.ledger.storeReport(t.task_id, { agent_name: t.canonical_name, role: t.persona, status: 'cancelled', summary, key_findings: [], last_response: '', final_response: '', errors: [] });
-      this.deps.writer.appendTimeline('child_user_cancelled', 'user', `The user cancelled child ${t.canonical_name} (${t.task_id})${t.task_id === taskId ? '' : ` with ${row.canonical_name}`}.`, { task_id: t.task_id, ...(t.task_id === taskId ? {} : { cancelled_with: taskId }) });
+      const written = userCancellation(t, row);
+      this.ledger.storeReport(t.task_id, written.report);
+      this.deps.writer.appendTimeline('child_user_cancelled', 'user', written.message, written.metadata);
       this.controllers.get(t.task_id)?.abort();
       this.scheduler.settled(r.row);
     }

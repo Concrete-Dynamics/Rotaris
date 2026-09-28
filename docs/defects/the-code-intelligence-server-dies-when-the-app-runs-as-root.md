@@ -39,3 +39,6 @@ the background task recorded nothing, because `code-intelligence-setup` failed a
 records only a completed task. Both logs carry `mcp setup: create failed — exited with signal SIGTRAP … Running as
 root without --no-sandbox is not supported`. Neither proof is at fault, and neither is changed; both measure again once
 this note's repair lands.
+
+`code-intel-proof`'s section 1 does not fail on this; it hangs, because its branch client never notices the child
+exiting ([note](code-intel-proofs-branch-client-waits-forever-on-a-child-that-has-exited.md)).

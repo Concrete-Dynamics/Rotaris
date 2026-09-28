@@ -27,3 +27,10 @@ a loaded host is the expensive failure `codebase.md` warns of. REQ-MCP-115 is th
 
 Noticed 2026-09-28 while re-running the proofs on Linux under R-062. Not repaired: moving the launch onto the driver
 is a rewrite of its evidence, outside that item.
+
+**Seen again, 2026-09-28, at the relaunch (R-062, review round).** The fix round re-ran the proof on the same kind of
+host, with another worktree's Electron running beside it. Launch 6 passed its click, its wording, the fates, the
+granted set and the issues. Its relaunch (`drop-rules-relaunch`) then probed `tr[data-mcp-server="beta"]` at its fixed
+2,500 ms and logged `→ []`, no row on screen yet. The proof threw "after a relaunch beta should be back to its
+configured value". That makes two fixed offsets in the one launch seen red, each once. REQ-MCP-115's relaunch clause
+went unasserted on that run, not falsified.

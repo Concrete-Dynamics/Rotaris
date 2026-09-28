@@ -36,7 +36,16 @@ import { z } from 'zod';
 export const SETUP_MANIFEST_FILE = 'setup-manifest.json' as const;
 /** REQ-STARTUP-058: schema version 1. The pre-build guard reads the same number (`SETUP_MANIFEST_SCHEMA_VERSION` in `tools/release-guard`). */
 export const SETUP_MANIFEST_SCHEMA_VERSION = 1 as const;
-/** REQ-STARTUP-060: the three platform keys, shared with artifact naming and updater asset selection. */
+/**
+ * REQ-STARTUP-060: the three platform keys, shared with artifact naming and updater asset selection. Their authority is
+ * `PLATFORM_KEYS` in `tools/release-naming` (artifact naming and the updater read it); `config` has no edge to that
+ * package, so this is a second literal, and `tools/release-guard/src/pins.test.ts` — the one package with both edges —
+ * holds the two lists equal, order included, so neither can gain, lose or rename a key alone.
+ *
+ * REQ-STARTUP-060's raw `<os>-<machine>` fallback is read as a key a host may compute, never one a manifest archive is
+ * written under: the schema refuses it, so a host whose key is a fallback finds no archive to select. What machine setup
+ * then does is the consumer's, which is not built (ADR-0054, "The setup manifest — first execution").
+ */
 export const PLATFORM_KEYS = ['windows-x64', 'macos-arm64', 'linux-x86_64'] as const;
 export type PlatformKey = (typeof PLATFORM_KEYS)[number];
 /** REQ-STARTUP-085: the only archive formats extraction accepts. */

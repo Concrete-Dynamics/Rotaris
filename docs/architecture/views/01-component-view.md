@@ -280,7 +280,10 @@ complete-version pattern from the same module; the product's reader, the machine
 (REQ-STARTUP-089), and main imports `config`. **That flow is not built.** `setup-manifest.test.ts` validates the shipped
 file, refuses each malformed shape and holds its `languageServers` equal to `pins.json` and to
 `CODE_INTELLIGENCE_LANGUAGE_SERVERS`, so the two files cannot drift; `about-assets.test.ts` copies the file through
-electron-builder's own `copyFiles`. The notices generator still reads `pins.json` as its manifest (OQ-73). **Edges
+electron-builder's own `copyFiles`. The schema's `PLATFORM_KEYS` (REQ-STARTUP-060) is a second literal of
+`tools/release-naming`'s, the naming authority — `config` has no edge to it — and `tools/release-guard`'s `pins.test.ts`,
+which imports both, holds the two lists equal and every shipped archive under one of them; the raw `<os>-<machine>`
+fallback key is refused as an archive key. The notices generator still reads `pins.json` as its manifest (OQ-73). **Edges
 unchanged**: `config` gains the `zod` dependency `contracts` already carries; no package edge moves.
 
 ### `ui/design-system` (2026-09-12)

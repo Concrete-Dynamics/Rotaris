@@ -2,7 +2,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { BROWSER_PACKAGE, BROWSER_PACKAGE_VERSION, SHIPPED_MCP_SERVERS } from '@rotaris/config';
+import { BROWSER_PACKAGE, BROWSER_PACKAGE_VERSION, PLATFORM_KEYS as MANIFEST_PLATFORM_KEYS, SetupManifestSchema, SHIPPED_MCP_SERVERS } from '@rotaris/config';
+import { PLATFORM_KEYS as NAMING_PLATFORM_KEYS } from '@rotaris/release-naming';
 import {
   DEFAULT_CONFIGURATION_LOCATION, defaultLaunches, isCompleteVersion, packageSpecs, pinDisagreements, readSetupManifest,
   SETUP_MANIFEST_LOCATION, SETUP_MANIFEST_SCHEMA_VERSION, splitPackageSpec, type DefaultLaunch, type ManifestReading,
@@ -131,6 +132,25 @@ describe('the shipped setup manifest against the shipped defaults (first-release
     const { launches, errors } = defaultLaunches(SHIPPED_MCP_SERVERS);
     expect(errors).toEqual([]);
     expect(pinDisagreements(launches, manifest)).toEqual([]);
+  });
+
+  it('REQ-STARTUP-060: the manifest schema\'s platform keys are release naming\'s, key for key and in order', () => {
+    // `config` has no edge to `release-naming`, so the schema carries a second literal; this package has both edges.
+    expect([...MANIFEST_PLATFORM_KEYS]).toEqual([...NAMING_PLATFORM_KEYS]);
+  });
+
+  it('REQ-STARTUP-060: every archive the shipped manifest carries is under a key release naming selects artifacts by', () => {
+    const parsed = SetupManifestSchema.parse(JSON.parse(readFileSync(join(REPO, SETUP_MANIFEST_LOCATION), 'utf8')));
+    const keys = parsed.machineTools.flatMap((tool) => Object.keys(tool.archives));
+    expect(keys.length).toBeGreaterThan(0);
+    for (const key of keys) expect(NAMING_PLATFORM_KEYS).toContain(key);
+  });
+
+  it('REQ-STARTUP-060: an archive under the raw `<os>-<machine>` fallback key is refused', () => {
+    const shipped = JSON.parse(readFileSync(join(REPO, SETUP_MANIFEST_LOCATION), 'utf8'));
+    const tool = shipped.machineTools[0];
+    tool.archives = { 'freebsd-x86_64': Object.values(tool.archives)[0] };
+    expect(SetupManifestSchema.safeParse(shipped).success).toBe(false);
   });
 });
 

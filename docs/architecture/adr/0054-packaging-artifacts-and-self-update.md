@@ -1253,7 +1253,15 @@ of `REQ-STARTUP-061` is over the whole canonical JSON, so an edited comment woul
 a key the schema does not name refuses the file, at any level), the platform keys of `REQ-STARTUP-060`, the three archive
 formats of `REQ-STARTUP-085`, the two provisioner families, the complete-version pattern (`REQ-STARTUP-059`'s discipline,
 now imported by the guard's `isCompleteVersion` so the two admit the same strings) and `readSetupManifest`, which names
-every problem by its JSON path and reports them all at once. `config` is the one package both readers may import:
+every problem by its JSON path and reports them all at once. **The platform keys are a second copy, bound by a test.**
+`REQ-STARTUP-060` has one set of keys shared by artifact naming, updater asset selection and manifest artifact
+selection, and `tools/release-naming`'s `PLATFORM_KEYS` is the authority for the first two; `config` has no edge to that
+package, so the schema carries its own literal, and `tools/release-guard/src/pins.test.ts` — the guard imports both —
+holds the two equal key for key and in order, and every archive the shipped manifest carries under one of them (found by
+the independent verification of this item: the first build had the second literal and nothing binding it). The raw
+`<os>-<machine>` fallback key of the same requirement is read as a key a host may compute, never one a manifest archive
+is written under — the schema refuses it, so a fallback host finds no archive to select; what machine setup then does is
+the consumer's, not built. `config` is the one package both readers may import:
 the guard (`tools/**`, outside the boundary matrix) already reads `SHIPPED_MCP_SERVERS` and `resolveCommand` there, and
 the product's reader — the machine-setup flow, main's by `REQ-STARTUP-089` — has `config` in main's allowed edges; and
 `config` already owns both things the manifest is cross-checked against. `zod` is `config`'s first use of it, a dependency
@@ -1284,8 +1292,9 @@ tested through electron-builder's own `copyFiles` over a fixture (`about-assets.
 pack that places the file; the "assets" rule was left to its two files, and the artifact check is owed to the next
 Windows package (IC-3), as the two About files' is.
 
-**Measured:** 14 cases in `setup-manifest.test.ts` (6 over the shipped file, 8 over malformed shapes); 1 new case in
-`pins.test.ts` (the shipped manifest against the shipped defaults) and the guard's constant now equal to the schema's; 2
+**Measured:** 14 cases in `setup-manifest.test.ts` (6 over the shipped file, 8 over malformed shapes); 4 new cases in
+`pins.test.ts` (the shipped manifest against the shipped defaults; the two platform-key lists equal, every shipped archive
+under a naming key, a fallback-keyed archive refused — a key renamed in the schema's copy alone turns the first two red) and the guard's constant now equal to the schema's; 2
 cases in `guard.test.ts` tightened; 1 new case in `about-assets.test.ts` (the manifest copied byte for byte). Three
 mutations of the shipped file were run and each turned the tests red: the browser pin (`0.0.81` — 2 tests and the
 guard), a language-server version drifting from `pins.json` (`typescript` 5.9.4 — the equality case), a digest in upper

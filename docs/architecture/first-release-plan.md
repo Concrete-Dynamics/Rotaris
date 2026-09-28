@@ -46,7 +46,7 @@ record already decides, and every ruling it needs is named as the owner's rather
   root, `resilience-proof`, `sandbox-proof`, `notice-proof` and `init-proof` are red for their recorded notes
   ([override select](../defects/resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md),
   [Windows verdict](../defects/sandbox-proof-asserts-the-windows-verdict-on-every-platform.md), and
-  [code intelligence as root](../defects/the-code-intelligence-server-dies-when-the-app-runs-as-root.md) for the last
+  [code intelligence as root](../defects/fixed/the-code-intelligence-server-dies-when-the-app-runs-as-root.md) for the last
   two).
 - The unbuilt directives `PD-TOOLS-003`, `PD-TOOLS-004`, `PD-TOOLS-005` (**built 2026-09-28**, R-062), `PD-ORCH-004` and `PD-MONITOR-002`.
 - The macOS and Linux artifacts, which are bound by IC-3 and IC-8 and now also by `PD-STARTUP-001`.

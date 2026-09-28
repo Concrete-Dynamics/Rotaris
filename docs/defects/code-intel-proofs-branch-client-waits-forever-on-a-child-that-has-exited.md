@@ -7,7 +7,7 @@ without answering `initialize` leaves `await send('initialize', …)` pending fo
 fail.
 
 Measured 2026-09-28 in R-062's review round, as root under Xvfb on Linux (the branch is not recognised there; see
-[`the-code-intelligence-server-dies-when-the-app-runs-as-root.md`](the-code-intelligence-server-dies-when-the-app-runs-as-root.md)).
+[`the-code-intelligence-server-dies-when-the-app-runs-as-root.md`](fixed/the-code-intelligence-server-dies-when-the-app-runs-as-root.md)).
 Eight minutes into section 1 the proof had printed nothing. No Electron process of the worktree was alive; the two
 left behind were `<defunct>`. The node process sat idle in `ep_poll` with no child, and it ended only when it was
 killed (exit 143). The builder's earlier run hung the same way for 12 minutes (exit 137). A child that has exited

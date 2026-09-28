@@ -302,3 +302,30 @@ spike: the Bash tool resets its working directory to the main checkout, so a tok
 there took the token for a workspace path (REQ-STARTUP-163) and Windows's stream syntax made a directory of it —
 unreachable now that the sentinel precedes `workspaceFromArgv`; removed, not committed.
 
+**As root on Linux — 2026-09-28 (R-062).** The first execution of the launch on a host that needs Chromium's
+`--no-sandbox`: a cloud container, the development entry driven as root. The reserved token's launch was the executable
+with the token and `--` only, so the child — a fresh Chromium — inherited nothing and died with SIGTRAP before the
+sentinel ran; the project setup's `create` step failed, `index` and `memory` were not attempted
+(`../../defects/fixed/the-code-intelligence-server-dies-when-the-app-runs-as-root.md`). None of REQ-MCP-033,
+REQ-STARTUP-002 and REQ-STARTUP-015 says whether the launch carries the parent's switches: raised as **OQ-82**, built
+as "exactly the sandbox switch the parent was started with, immediately before the token, nothing else". Measured on
+the repaired build, driven as root under Xvfb against a scratch workspace holding one TypeScript file: the launch line
+reads `electron out/main/index.js --no-sandbox builtin:code-intelligence --`, and `create` now exits **127** with the
+sentinel's own "the bundled code-intelligence runtime is not present in this installation" — the child reached its
+JavaScript. Not shown: the runtime serving as root, because `apps/desktop/resources/code-intelligence/` is absent on
+this tree and `bundle.mjs` refuses off Windows (above), so `pnpm code-intel-proof` could not run. Nothing in the sentinel's
+own behaviour changed; it finds the token past the one switch.
+**Corrected the same day — the token stays first.** The placement above put the switch in front of the token and read
+REQ-MCP-033's "first argument" as the first argument that is not the switch; the verifier found that a stated clause
+reinterpreted. The launch is now the token first and the switch between it and `--`
+(`electron out/main/index.js builtin:code-intelligence --no-sandbox --`; packaged `Rotaris builtin:code-intelligence
+--no-sandbox --`): the sentinel reads the token at its fixed index again and drops the switch standing before the
+separator, so the runtime never receives it. Measured as root on this tree: `electron out/main/index.js
+builtin:code-intelligence --no-sandbox -- start-mcp-server` reaches the sentinel (exit 127, "not present"), the same line
+without the switch dies with SIGTRAP (exit 133); the driven app's `create` line reads
+`… builtin:code-intelligence --no-sandbox -- project create <root>` and exits 127 at the sentinel; and with a stand-in
+`bin/python3` (a shell script writing its arguments, placed under the git-ignored `apps/desktop/resources/` and removed
+after) the runtime received `-c <entry> start-mcp-server --transport stdio` — no switch — and its exit status 7 was
+propagated. **Unmeasured on Windows (IC-3):** the 2026-09-06 spike's quirk is a scheme-looking positional FOLLOWED BY
+another positional exiting before JavaScript; `--no-sandbox` is a switch, not a positional, and a packaged Windows
+parent does not normally carry it, but `Rotaris.exe builtin:code-intelligence --no-sandbox --` has not been run.

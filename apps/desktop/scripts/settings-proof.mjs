@@ -73,7 +73,7 @@ if (!existsSync(electron)) throw new Error(`Electron executable is absent: ${ele
 
 const PROBES = [
   '.app-shell', '.save-bar__status', '[data-testid="about-row"]', '[data-testid="legal-link"]',
-  '[data-testid="legal-error"]', '[data-testid="licenses-caption"]', '[data-testid="licenses-error"]',
+  '[data-testid="legal-error"]', '[data-testid="licenses-caption"]', '[data-testid="licenses-error"]', '.about__value',
   '[data-testid="inventory-row"]', '[data-testid="inventory-empty"]', '[data-testid="instruction-toggle"]',
   '[data-testid="tool-result-lines"]', '[data-testid="tool-input-lines"]',
   '[data-testid="show-tool-results"]', '[data-testid="show-tool-inputs"]',
@@ -83,6 +83,7 @@ const PROBES = [
 
 function launch(name, workspace, local, preferences, extra, timeoutMs = 120_000) {
   const png = join(output, `${name}.png`);
+  // `hostSwitches`: as root Chromium starts only with `--no-sandbox`; on every other host the list is empty.
   const args = [join(app, 'out', 'main', 'index.js'), ...hostSwitches];
   if (workspace !== null) args.push(workspace);
   const result = spawnSync(electron, args, {
@@ -193,7 +194,6 @@ const aboutRows = Object.fromEntries(rows(noWorkspace.probes, '[data-testid="abo
 // (`tools/release-guard`), never Electron's own — this unpacked build read "v44.1.1" until `main/version.ts`.
 const declaredVersion = JSON.parse(readFileSync(join(app, 'package.json'), 'utf8')).version;
 if (aboutRows.Version !== `v${declaredVersion}`) throw new Error(`the Version row read "${aboutRows.Version}", not the declared v${declaredVersion}`);
-if (!/^v\d/.test(aboutRows.Version ?? '')) throw new Error(`the Version row did not carry a version: ${JSON.stringify(aboutRows)}`);
 // REQ-SHELL-140: with no build asset where the app reads it, the row is the em dash rather than an invented identifier.
 if (aboutRows.Build !== '—') throw new Error(`the Build row was "${aboutRows.Build}", not the em dash`);
 if (aboutRows.Publisher !== 'Concrete Dynamics UG (haftungsbeschränkt)') throw new Error(`the publisher row was "${aboutRows.Publisher}"`);
@@ -210,8 +210,14 @@ if (text(noWorkspace.probes, '[data-testid="legal-error"]').length !== 0) throw 
 // REQ-SHELL-142: with no bundle where the app reads it, the caption says so and the click is refused.
 const caption = text(noWorkspace.probes, '[data-testid="licenses-caption"]')[0] ?? '';
 if (caption !== 'This build does not carry a third-party license bundle.') throw new Error(`the licensing caption was "${caption}"`);
+// The caption is set at its neighbours' type token (`--rt-text-sm`, `.about__value`'s), not the browser's default: until 2026-09-28
+// it was the largest text on the page (docs/defects/fixed/the-about-pages-licence-caption-is-set-in-the-browsers-default-size.md).
+const captionSize = first(noWorkspace.probes, '[data-testid="licenses-caption"]')?.fontSize;
+const valueSizes = [...new Set(rows(noWorkspace.probes, '.about__value').map((p) => p.fontSize))];
+if (valueSizes.length !== 1 || valueSizes[0] === undefined) throw new Error(`the About values did not share one computed font size: ${JSON.stringify(valueSizes)}`);
+if (captionSize !== valueSizes[0]) throw new Error(`the licensing caption is set at ${captionSize}, its neighbours at ${valueSizes[0]}`);
 if (text(noWorkspace.probes, '[data-testid="licenses-error"]')[0] !== 'Could not open the third-party license bundle.') throw new Error('clicking the bundle control reported no refusal');
-results.about = { rows: aboutRows, legal: legal.length, opened: 'https://rotaris.ai/privacy', caption };
+results.about = { rows: aboutRows, legal: legal.length, opened: 'https://rotaris.ai/privacy', caption, captionSize, valueSize: valueSizes[0] };
 
 // REQ-SHELL-140 / REQ-SHELL-142, the present branch of each (first-release-plan.md §4.4).
 const presentRows = Object.fromEntries(rows(present.probes, '[data-testid="about-row"]').map((r) => [r.data['data-name'], r.data['data-value']]));

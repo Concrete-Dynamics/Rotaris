@@ -27,7 +27,7 @@ The proof imports `electron` from the harness (the Windows spelling on win32, `e
 On the branch the switches sit **before** the token, the only place Chromium honours a switch (a bare `--` ends switch
 parsing); the sentinel (`apps/desktop/src/main/sentinel.ts`) reads the token at a fixed index and so does not find it past
 a switch, which is the same fact behind the open note
-[`the-code-intelligence-server-dies-when-the-app-runs-as-root.md`](../the-code-intelligence-server-dies-when-the-app-runs-as-root.md)
+[`the-code-intelligence-server-dies-when-the-app-runs-as-root.md`](the-code-intelligence-server-dies-when-the-app-runs-as-root.md)
 and is recorded on it; that repair is another item's. The build step and the sampler are left as they were: `--skip-build`
 bypasses the first and the second is caught. Pinned by no unit test — the spelling is one constant — and measured by
 attempting the proof on Linux as root (its outcome is in the R-062 report and `first-executions.md`'s row of 2026-09-28).

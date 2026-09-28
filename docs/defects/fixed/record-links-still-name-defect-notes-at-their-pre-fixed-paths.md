@@ -80,3 +80,11 @@ same review found one false negative in the gate: inline code was allowed to spa
 in one paragraph paired with one paragraphs later and hid the links between — one link in
 `views/02-process-view.md` (line 345, `#message-families`, which resolves) was not being read. A code span now ends
 at a blank line, as CommonMark's does; the gate reads 991 links after the repair, every one resolving.
+
+**The five `requests.md` repoints are not this branch's to land.** The task that built the gate forbids a branch to
+edit `docs/product/requests.md`, and the bundle's verification held the edit in `f180732` blocking on that rule alone.
+The log's own rule ("appended and never rewritten") was not the test it failed. The log's owner lands the five
+repoints on `main` or waives the rule for this hunk, and until then the branch keeps them. Dropping them would fail
+`pnpm lint` on exactly those five links: with `requests.md` at `main`'s text, the gate names lines 71, 71, 75, 77 and
+77, and nothing else. Exempting the file is not an option either, because the gate covers every relative link under
+`docs/`. Once `main` carries the identical change, merging `main` into the branch drops the hunk with no conflict.

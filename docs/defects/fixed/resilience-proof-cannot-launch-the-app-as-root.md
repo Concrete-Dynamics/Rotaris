@@ -46,3 +46,19 @@ this note's: its `ROTARIS_CAPTURE_SELECT` names `.wait-header select`, and the w
 not repaired here. Scenarios 5 to 7 (REQ-ORCH-088's child timeout among them) are therefore still unmeasured in the
 built app on Linux. `workspace-proof`'s two hand-over reds named in `a-driven-launch-dies-as-root-on-linux.md` were
 not re-run in this round.
+
+**Corrected in review, 2026-09-28 (R-062).** The paragraph above counted `traceability-proof`'s driver launch as
+done, and it was not. The sweep put `...hostSwitches` right after the driver script, ahead of the four positional
+arguments the driver destructures from `process.argv.slice(2)`. Electron keeps a Chromium switch in `process.argv`, so
+as root the driver took `--no-sandbox` for the service bundle. `utilityProcess.fork` then failed with
+`ERR_MODULE_NOT_FOUND … /--no-sandbox`, and the stage printed "the workspace service exited with 1". The SIGTRAP had
+become a misread argument. The switch now goes **after** the positional arguments; Chromium reads a switch anywhere
+before a bare `--`. Measured as root under Xvfb: `pnpm traceability-proof` **passed**, and its process path forked
+`workspace-service.js` (check 272 ms, regenerate 5 ms, cancelled check 42 ms).
+
+The `grep` above could not see ordering. `apps/desktop/scripts/lib/launch-sites.test.ts` now keeps the rule in
+`pnpm check`. It scans every script under `apps/desktop/scripts/` and requires three things of each spawn of `electron`
+or `exe`, unless the launch runs with `ELECTRON_RUN_AS_NODE`: it carries `...hostSwitches`; the switch sits ahead of
+any bare `'--'`; and, when the entry is not the product's own main (whose `workspaceFromArgv` skips a switch), the
+switch comes last. It sees 42 spawn sites in 40 files: 41 carry the switch, and `build-hooks.cjs`'s node-mode probe is
+exempt. Run against the committed ordering, it fails on `traceability-proof.mjs` alone.

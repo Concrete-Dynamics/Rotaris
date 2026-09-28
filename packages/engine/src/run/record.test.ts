@@ -402,7 +402,7 @@ describe('F — the fingerprint an agent started with (PD-ORCH-005 clause 14)', 
   const CHILD = BUILT_IN_PERSONAS['coding-agent' as RoleName]!;
 
   /** A root and its children over `delegate` and `probe`; `extraTool` widens every agent's listing. */
-  function harness(script: (persona: string, turn: number) => ScriptedCall, over: { rootPrompt?: string; childPrompt?: string; extraTool?: boolean; contextUnits?: () => readonly string[]; childTimeoutMs?: number; childFallback?: ModelRef } = {}) {
+  function harness(script: (persona: string, turn: number) => ScriptedCall, over: { rootPrompt?: string; rootPersona?: string; childPrompt?: string; extraTool?: boolean; contextUnits?: () => readonly string[]; childTimeoutMs?: number; childFallback?: ModelRef } = {}) {
     const counts = new Map<string, number>();
     const client = new ScriptedModelClient([]);
     const original = client.stream.bind(client);
@@ -428,7 +428,7 @@ describe('F — the fingerprint an agent started with (PD-ORCH-005 clause 14)', 
       promptSection: () => 'MCP servers: none connected.',
       cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
     });
-    const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k', systemPrompt: over.rootPrompt ?? ROOT };
+    const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k', systemPrompt: over.rootPrompt ?? ROOT, ...(over.rootPersona === undefined ? {} : { persona: over.rootPersona }) };
     const backend = new DefaultAgentBackend(client);
     const models = (key: string): ModelLookup => ({ ok: false, reason: `'${key}' is not a configured model` });
     const personas = { resolve: (name: string) => { const base = BUILT_IN_PERSONAS[name as RoleName]; if (!base) return null; const child = name === 'coding-agent'; return { persona: { ...base, ...(child && over.childPrompt ? { systemPrompt: over.childPrompt } : {}), ...(child && over.childFallback ? { fallbackModel: over.childFallback } : {}) }, alias: null }; }, knownRoles: () => Object.keys(BUILT_IN_PERSONAS) };
@@ -482,14 +482,18 @@ describe('F — the fingerprint an agent started with (PD-ORCH-005 clause 14)', 
   });
 
   it('a root resumed after its instructions changed is named in a warning issue, its timeline entry and a transcript line; the fingerprint it started with is kept', async () => {
-    const first = harness(() => answer('Answered.'));
+    // A persona id the canonicaliser rewrites (REQ-ORCH-045), so the name the warning carries is seen to be the
+    // agent's canonical name and not its persona's id.
+    const rootPersona = 'Lead Orchestrator';
+    const first = harness(() => answer('Answered.'), { rootPersona });
     const sid = (first.sessions.start(dal, 'C:/ws', 'answer') as { value: SessionId }).value;
     expect((await first.sessions.running(sid)!).status).toBe('completed');
     const root = dal.iterationsOf(sid)[0]!;
+    expect(root.root_canonical_name).toBe('Lead-Orchestrator');
     const started = dal.agentFingerprintOf(sid, root.root_task_id)!;
     dieIn(sid);
 
-    const changed = harness(() => answer('Answered under new instructions.'), { rootPrompt: `${ROOT} Always answer in French.` });
+    const changed = harness(() => answer('Answered under new instructions.'), { rootPrompt: `${ROOT} Always answer in French.`, rootPersona });
     expect(changed.sessions.resume(dal, 'C:/ws', sid).ok).toBe(true);
     expect(changed.sessions.prompt(sid, 'go on').ok).toBe(true);
     expect((await changed.sessions.running(sid)!).status).toBe('completed');

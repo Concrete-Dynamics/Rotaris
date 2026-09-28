@@ -451,7 +451,7 @@ function continuedTaskId(dal: StoreDal, sessionId: SessionId, todo: TodoDocument
 export function latestArtifactText(dal: StoreDal, sessionId: SessionId): string {
   const records = dal.artifactsOf(sessionId).flatMap((r) => { const a = toArtifactRecord(r); return a && a.supersededBy === null ? [a] : []; });
   const root = dal.iterationsOf(sessionId).at(-1)?.root_task_id;
-  const latest = records.findLast((a) => root !== undefined && a.conversationId === root) ?? records.at(-1);
+  const latest = records.findLast((a) => a.conversationId === root) ?? records.at(-1);
   if (!latest) return 'Artifact: (none recorded in this session)';
   const header = `Artifact: ${latest.id} — ${cut(latest.title, 80)} (${latest.kind}, ${latest.status})`;
   const findings = latest.keyFindings.trim();

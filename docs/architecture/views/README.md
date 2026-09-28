@@ -51,8 +51,8 @@ first model request carried. `runTurn` hands both to `TurnDeps.fingerprint` just
 (`ConversationRecord.fingerprint`, built once per execution by `turn()` and `execute()`) records the first and, on a
 resume, states a changed one as a `resumed_under_changed_instructions` warning issue and a transcript `system` row
 naming the agent (OQ-78). The transcript clear removes closed iterations' fingerprints. The **runtime view**'s record
-paragraph and §7 table and the **state-ownership view** gain the table; no package, edge, process, channel or command
-changes.
+paragraph and §7 table and the **state-ownership view** gain the table, and the **sequences view**'s resume bullet names
+the warning; no package, edge, process, channel or command changes.
 
 **The handoff's artifact is the root's own (`PD-ORCH-005` revision 4 clause 20, 2026-09-28, R-064).**
 `latestArtifactText` takes the latest artifact the most recent recorded iteration's root published that nothing

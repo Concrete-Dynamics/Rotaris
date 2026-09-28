@@ -69,4 +69,16 @@ that the launch's `HOME` is the profile's `home`; that the product reads the fil
 `~/Library/Application Support/rotaris`. It must also show that an Electron launch on macOS survives a moved `HOME`,
 which on Windows it does not; if it does not, the macOS half of this repair is the thing that is wrong. The proofs
 not re-run here on Linux with the moved `HOME` (every one but the five above) take it for the first time on their
-next run.
+next run. Three of them are named because they differ from the rest:
+
+- `live-run` spends the owner's money, and no agent runs it without asking. Its launches now run with `HOME` at the
+  sandbox's `home`. The script's own process still reads its endpoint registry from the operator's
+  `~/.rotaris/live-run`, because the launch's environment does not reach that process.
+- `package.mjs` makes the packaged launch.
+- `code-intel-proof` starts the bundled code-intelligence runtime.
+
+`config-proof`'s exit 0 above also has a limit. It ran with no code-intelligence bundle in this tree
+(`apps/desktop/resources/code-intelligence/` absent). The sweep's run of the same proof with the bundle built is red:
+the initialization runner appends its `initialization:` block to the workspace file, and Discard's byte-identical
+check fails. So this exit 0 shows the moved `HOME` did not break `config-proof`'s launches. It is not evidence about
+that red, which comes from the initialization write and not from `HOME`.

@@ -98,6 +98,10 @@ const log = (m: string, level: AppLogLevel = 'info'): void => { logAt(level, nul
 process.on('uncaughtException', (e) => { log(`UNCAUGHT in main: ${e.stack ?? String(e)}`, 'error'); });
 process.on('unhandledRejection', (reason) => { log(`UNHANDLED rejection in main: ${reason instanceof Error ? reason.stack ?? reason.message : String(reason)}`, 'error'); });
 
+// REQ-STARTUP-160 / REQ-SHELL-005: the runtime makes no request of its own. Registered before `app.whenReady()` so the
+// default session is reached while it is built — later is too late (`runtime-requests.ts` says what was measured).
+app.on('session-created', (created) => { withoutRuntimeRequests(created, (m) => { log(m, 'error'); }); });
+
 /*
  * Why the process is going away, written down while it still can be.
  *
@@ -112,9 +116,6 @@ process.on('unhandledRejection', (reason) => { log(`UNHANDLED rejection in main:
  * `process.on('exit')` is the last line the main process can write, so a log that ends with NONE of them is
  * itself the finding: the process went away without passing through its own shutdown.
  */
-// REQ-STARTUP-160 / REQ-SHELL-005: the runtime makes no request of its own. Registered before `app.whenReady()` so the
-// default session is reached while it is built — later is too late (`runtime-requests.ts` says what was measured).
-app.on('session-created', (created) => { withoutRuntimeRequests(created); });
 app.on('before-quit', () => { log('quit: requested (before-quit)'); });
 app.on('quit', (_e, code) => { log(`quit: exiting with status ${code}`); });
 // PD-MONITOR-002: a process lost for any reason but `clean-exit` is an `error`, so a log kept at `warning` or `error`

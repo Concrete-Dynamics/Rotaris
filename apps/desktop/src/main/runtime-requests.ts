@@ -30,8 +30,16 @@ export interface SpellcheckerSession {
 /**
  * Leave a newly created session with no dictionary to download and no spellchecker to ask for one. Call it from
  * `app.on('session-created')`, which is registered before `app.whenReady()` so the default session is reached too.
+ *
+ * Measured on Linux only (IC-3). Should either call throw on another platform, the failure is reported through
+ * `report` with its reason, naming REQ-STARTUP-160, rather than reaching main's uncaught-exception line unnamed; the
+ * session is still built, and `pnpm updater-proof`'s zero-connection check is what would then go red.
  */
-export function withoutRuntimeRequests(session: SpellcheckerSession): void {
-  session.setSpellCheckerLanguages([]);
-  session.setSpellCheckerEnabled(false);
+export function withoutRuntimeRequests(session: SpellcheckerSession, report: (message: string) => void): void {
+  try {
+    session.setSpellCheckerLanguages([]);
+    session.setSpellCheckerEnabled(false);
+  } catch (e) {
+    report(`REQ-STARTUP-160: the spellchecker of a new session could not be turned off, so the runtime may request a dictionary of its own: ${e instanceof Error ? e.message : String(e)}`);
+  }
 }

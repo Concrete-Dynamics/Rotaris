@@ -67,12 +67,15 @@ flowchart LR
   FEED(("the release feed<br/>api.github.com/repos/theUpsider/Rotaris-crw/releases/latest<br/>and the release's asset URLs (302 → a storage host)"))
 ```
 
-**The runtime's own requests: none (REQ-STARTUP-160, REQ-SHELL-005; 2026-09-28).** The endpoints above are every host
-the product reaches. Electron's built-in spellchecker would add one — a Hunspell dictionary from
-`redirector.gvt1.com`, requested while each session is built — so main registers `app.on('session-created')` before
-`app.whenReady()` and empties that session's dictionary list and turns its spellchecker off there
-(`main/runtime-requests.ts`); no switch and nothing later prevents the download. `pnpm updater-proof` holds the built
-application to zero connections at a proxy sink from launch to first paint and an orderly quit. Whether a text field is
+**The runtime's own requests: none (REQ-STARTUP-160, REQ-SHELL-005; 2026-09-28).** Electron and Chromium add no host
+of their own to the ones the product reaches, so every host the application reaches is one the product itself asks
+for. The diagram draws only some of those — the agent's fetch tool and a remote MCP server, for two, reach hosts it
+does not show — so it is not the list of them. Electron's built-in spellchecker would add one — a Hunspell dictionary
+from `redirector.gvt1.com`, requested while each session is built — so main registers `app.on('session-created')`
+before `app.whenReady()` and empties that session's dictionary list and turns its spellchecker off there
+(`main/runtime-requests.ts`; a failure there is logged at `error`, naming REQ-STARTUP-160); no switch and nothing later
+prevents the download. `pnpm updater-proof` holds the built application to zero connections at a proxy sink from launch
+to first paint and an orderly quit — that interval is measured; later in a session is not. Whether a text field is
 spell-checked at all is OQ-91.
 
 ## What each process owns

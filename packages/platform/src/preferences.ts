@@ -92,6 +92,16 @@ export const PREFERENCE_KEYS = {
    * Written by MAIN alone: it is deliberately absent from `PREFERENCE_COMMAND_KEYS`, so no renderer can set it.
    */
   'workspace/lastOpened': { type: 'string', default: undefined, owner: 'REQ-STARTUP-146', coerce: (value: unknown) => (typeof value === 'string' && value.trim() !== '' ? value : undefined) },
+  /**
+   * REQ-STARTUP-146's second key, REQ-STARTUP-116/117's meaning (the updater, first-release-plan.md §4.6, 2026-09-28):
+   * the ONE waved-off update version — a single version string, never a list. Written by main alone, when the update
+   * offer naming that version is dismissed and before it is cleared; read at every check, where an offer of exactly
+   * that version is silently ignored and any newer version notifies again. Absent means nothing was waved off.
+   *
+   * Like `workspace/lastOpened` it is deliberately absent from `PREFERENCE_COMMAND_KEYS`, so no renderer can read or
+   * write it. Nothing in this store disables the check itself: REQ-STARTUP-111 forbids such a key, and this is not one.
+   */
+  'updates/dismissedVersion': { type: 'string', default: undefined, owner: 'REQ-STARTUP-146', coerce: (value: unknown) => (typeof value === 'string' && value.trim() !== '' ? value : undefined) },
 } as const;
 
 /**

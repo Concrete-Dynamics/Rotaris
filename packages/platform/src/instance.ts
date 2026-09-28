@@ -4,7 +4,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { posix } from 'node:path';
 import type { MachineId, Millis, Timers, WallClock } from '@rotaris/kernel';
 import { toIsoUtc } from '@rotaris/kernel';
-import { exclusiveCreate } from './document.js';
+import { exclusiveCreate, replaceDocument } from './document.js';
 import { isLockLive, type LockRecord } from './liveness.js';
 
 /**
@@ -36,6 +36,14 @@ export interface InstanceRecord extends LockRecord {
 export interface HandOver {
   /** REQ-STARTUP-163: a workspace directory the launch carries, honoured by the instance. */
   readonly workspace?: string;
+  /**
+   * REQ-STARTUP-121 / ADR-0055 ("The update restart is a hand-over of the record"): the successor an update restart
+   * started announces itself to the instance with its own record. The instance replaces the record file's contents
+   * with it in one atomic replacement and answers `{"ok":true,"record":"passed"}`; from that moment the record is the
+   * successor's, and a launch arriving at any moment reads either the predecessor's fields or the successor's — never
+   * an unheld record. Set by `inheritInstance` and by nothing an ordinary launch does.
+   */
+  readonly successor?: InstanceRecord;
 }
 
 export type ClaimOutcome =
@@ -53,6 +61,11 @@ export interface ClaimDeps {
   readonly handOverIntervalMs: Millis;
   /** Called on the instance side for every hand-over it acknowledges. */
   readonly onHandOver: (h: HandOver) => void;
+  /**
+   * REQ-STARTUP-121: called on the instance side once the record has been rewritten with a successor's fields and the
+   * successor told so. What the predecessor does then — close its window and exit — is main's; this only reports it.
+   */
+  readonly onRecordPassed?: (successor: InstanceRecord) => void;
   readonly platform?: NodeJS.Platform;
   /**
    * Where a unix socket for the hand-over endpoint may live, on platforms that
@@ -95,7 +108,7 @@ function readRecord(file: string): InstanceRecord | undefined {
   return undefined;
 }
 
-function listen(endpoint: string, onHandOver: (h: HandOver) => void, platform: NodeJS.Platform): Promise<Server> {
+function listen(endpoint: string, onHandOver: (h: HandOver) => void, platform: NodeJS.Platform, onSuccessor: (successor: InstanceRecord) => Promise<boolean>): Promise<Server> {
   return new Promise((resolve, reject) => {
     if (platform !== 'win32') {
       try { unlinkSync(endpoint); } catch { /* absent */ }
@@ -111,6 +124,11 @@ function listen(endpoint: string, onHandOver: (h: HandOver) => void, platform: N
         buf = buf.slice(nl + 1);
         let h: HandOver = {};
         try { h = JSON.parse(line) as HandOver; } catch { /* malformed → empty hand-over */ }
+        if (h.successor !== undefined) {
+          // REQ-STARTUP-121: the record passes, or it does not, and the successor is told which.
+          void onSuccessor(h.successor).then((passed) => { sock.end(passed ? '{"ok":true,"record":"passed"}\n' : '{"ok":false}\n'); }, () => { sock.end('{"ok":false}\n'); });
+          return;
+        }
         onHandOver(h);
         sock.end('{"ok":true}\n');
       });
@@ -119,6 +137,48 @@ function listen(endpoint: string, onHandOver: (h: HandOver) => void, platform: N
     server.once('error', reject);
     server.listen(endpoint, () => { server.off('error', reject); resolve(server); });
   });
+}
+
+/**
+ * REQ-STARTUP-121, ADR-0055: the predecessor "replaces the record's contents with the successor's pid, host and
+ * endpoint address in one atomic replacement" — a sibling written and renamed over, never truncate-and-rewrite, so a
+ * reader observes the old fields or the new and never a half-written record that REQ-STARTUP-164 (3) would reclaim.
+ * Only the holder passes its own record: a record that no longer names this process is left alone.
+ */
+async function passRecord(deps: ClaimDeps, successor: InstanceRecord): Promise<boolean> {
+  const wellFormed = typeof successor.pid === 'number' && Number.isInteger(successor.pid) && successor.pid > 0
+    && typeof successor.host === 'string' && successor.host === deps.machineId
+    && typeof successor.acquired_at === 'string' && successor.acquired_at !== ''
+    && typeof successor.endpoint === 'string' && successor.endpoint !== '';
+  if (!wellFormed) return false;
+  const current = readRecord(deps.recordFile);
+  if (current === undefined || current.pid !== deps.pid) return false;
+  const record: InstanceRecord = { pid: successor.pid, host: successor.host, acquired_at: successor.acquired_at, endpoint: successor.endpoint };
+  const replaced = await replaceDocument(deps.recordFile, `${JSON.stringify(record)}\n`);
+  if (!replaced.ok) return false;
+  deps.onRecordPassed?.(record);
+  return true;
+}
+
+/** The socket directory a claim listens under, created where the launch makes the profile; read ONCE per launch. */
+function socketDirectoryFor(deps: ClaimDeps, platform: NodeJS.Platform): string | undefined {
+  const socketDir = deps.socketDir ?? (platform === 'win32' ? undefined : process.env['XDG_RUNTIME_DIR']);
+  if (platform !== 'win32' && socketDir !== undefined && socketDir !== deps.endpointDir) {
+    try { mkdirSync(socketDir, { recursive: true }); } catch { /* the listen reports it */ }
+  }
+  return socketDir;
+}
+
+/** Release what this process holds: its record (only while it still names this process), its server, its socket. */
+function closerFor(deps: ClaimDeps, server: Server, endpoint: string, platform: NodeJS.Platform): () => Promise<void> {
+  return async () => {
+    try {
+      const now = readRecord(deps.recordFile);
+      if (now && now.pid === deps.pid) rmSync(deps.recordFile, { force: true });
+    } catch { /* */ }
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    if (platform !== 'win32') { try { unlinkSync(endpoint); } catch { /* */ } }
+  };
 }
 
 function tryHandOver(endpoint: string, h: HandOver, timers: Timers, bound: Millis): Promise<boolean> {
@@ -149,26 +209,15 @@ export async function claimInstance(deps: ClaimDeps, handOver: HandOver = {}): P
    * left to the listen, because a scratch runtime directory does not exist until the harness's launch
    * makes the profile that names it.
    */
-  const socketDir = deps.socketDir ?? (platform === 'win32' ? undefined : process.env['XDG_RUNTIME_DIR']);
-  if (platform !== 'win32' && socketDir !== undefined && socketDir !== deps.endpointDir) {
-    try { mkdirSync(socketDir, { recursive: true }); } catch { /* the listen reports it */ }
-  }
+  const socketDir = socketDirectoryFor(deps, platform);
   const attempt = async (): Promise<ClaimOutcome | 'lost'> => {
     const endpoint = endpointFor(deps.endpointDir, deps.pid, platform, socketDir);
     const record: InstanceRecord = { pid: deps.pid, host: deps.machineId, acquired_at: toIsoUtc(deps.wall.instant()), endpoint };
     const r = exclusiveCreate(deps.recordFile, `${JSON.stringify(record)}\n`);
     if (!r.ok) return { outcome: 'refused', reason: `${r.error.headline}: ${r.error.detail ?? ''}` };
     if (r.value.minted) {
-      const server = await listen(endpoint, deps.onHandOver, platform);
-      const close = async () => {
-        try {
-          const now = readRecord(deps.recordFile);
-          if (now && now.pid === deps.pid) rmSync(deps.recordFile, { force: true });
-        } catch { /* */ }
-        await new Promise<void>((resolve) => server.close(() => resolve()));
-        if (platform !== 'win32') { try { unlinkSync(endpoint); } catch { /* */ } }
-      };
-      return { outcome: 'instance', record, server, close };
+      const server = await listen(endpoint, deps.onHandOver, platform, (successor) => passRecord(deps, successor));
+      return { outcome: 'instance', record, server, close: closerFor(deps, server, endpoint, platform) };
     }
     return 'lost';
   };
@@ -188,4 +237,37 @@ export async function claimInstance(deps: ClaimDeps, handOver: HandOver = {}): P
   const second = await attempt();
   if (second !== 'lost') return second;
   return { outcome: 'refused', reason: 'the record was recreated by another party between the reclaim and the retry; no third attempt is made (REQ-STARTUP-164)' };
+}
+
+/**
+ * REQ-STARTUP-121 / ADR-0055 — the SUCCESSOR's side of the update restart. Not an ordinary launch: it performs no
+ * claim and no hand-over attempt. It opens its own hand-over endpoint, announces its record to the predecessor at
+ * `predecessorEndpoint`, and becomes the instance the moment the predecessor answers that the record has passed.
+ * The predecessor then closes its window and exits; a launch arriving meanwhile is handed to whichever of the two the
+ * record names at that moment, and no third process is ever started.
+ *
+ * The one bound here is the successor's wait for the predecessor's ANSWER — the hand-over interval — because the
+ * predecessor rewrites the record and answers at once, and a successor that got no answer must not become a rival:
+ * it closes its endpoint and reports `refused`, and main ends it quietly while the predecessor keeps its record and
+ * its window (REQ-STARTUP-121's failure branch). The predecessor's own wait for the successor to arrive has no bound
+ * (ADR-0055), and that wait is the updater's.
+ */
+export async function inheritInstance(deps: ClaimDeps, predecessorEndpoint: string): Promise<ClaimOutcome> {
+  const platform = deps.platform ?? process.platform;
+  const socketDir = socketDirectoryFor(deps, platform);
+  const endpoint = endpointFor(deps.endpointDir, deps.pid, platform, socketDir);
+  const record: InstanceRecord = { pid: deps.pid, host: deps.machineId, acquired_at: toIsoUtc(deps.wall.instant()), endpoint };
+  let server: Server;
+  try {
+    server = await listen(endpoint, deps.onHandOver, platform, (successor) => passRecord(deps, successor));
+  } catch (cause) {
+    return { outcome: 'refused', reason: `the successor could not open its hand-over endpoint: ${String(cause)}` };
+  }
+  const close = closerFor(deps, server, endpoint, platform);
+  const passed = await tryHandOver(predecessorEndpoint, { successor: record }, deps.timers, deps.handOverIntervalMs);
+  if (!passed) {
+    await close();
+    return { outcome: 'refused', reason: 'the running instance did not pass its record within the hand-over interval; this launch ends, and the instance keeps its record and its window (REQ-STARTUP-121)' };
+  }
+  return { outcome: 'instance', record, server, close };
 }

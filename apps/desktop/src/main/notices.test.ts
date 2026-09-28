@@ -211,3 +211,60 @@ describe('the action vocabulary — REQ-NOTIFY-044, REQ-SHELL-115', () => {
     expect(h.store.current()?.action).toEqual({ label: 'Open Models settings', action: { kind: 'open-settings', category: 'models' } });
   });
 });
+
+describe('a notice updated in place — REQ-SHELL-118, REQ-STARTUP-118, REQ-NOTIFY-024/268', () => {
+  it('keeps the identity, changes only the fields patched, and broadcasts the same id', async () => {
+    const h = harness();
+    const { id } = await h.store.report({ severity: 'info', title: 'Rotaris 0.2.0 is available', message: 'Faster startup', action: { label: 'Update now', action: { kind: 'install-update' } } });
+    expect(await h.store.update(id, { title: 'Downloading Rotaris 0.2.0', message: '41% — verifying', persistent: false, action: { label: 'Update now', action: { kind: 'install-update' }, disabled: 'The download is in progress.' } })).toBe(true);
+    expect(h.store.current()).toEqual({ id, severity: 'info', title: 'Downloading Rotaris 0.2.0', message: '41% — verifying', detail: '', persistent: false, sessionId: '', action: { label: 'Update now', action: { kind: 'install-update' }, disabled: 'The download is in progress.' } });
+    expect(await h.store.update(id, { message: '83% — verifying' })).toBe(true);
+    expect(h.store.current()).toMatchObject({ id, title: 'Downloading Rotaris 0.2.0', message: '83% — verifying', action: { disabled: 'The download is in progress.' } });
+    expect(h.broadcasts.map((n) => n?.id)).toEqual([id, id, id]);
+    expect(h.store.lastId()).toBe(id);
+  });
+
+  it('`action: null` removes the action; an absent action keeps it', async () => {
+    const h = harness();
+    const { id } = await h.store.report({ severity: 'info', title: 't', action: { label: 'Go', action: { kind: 'open-view', view: 'git' } } });
+    await h.store.update(id, { message: 'kept' });
+    expect(h.store.current()?.action).toEqual({ label: 'Go', action: { kind: 'open-view', view: 'git' } });
+    await h.store.update(id, { action: null });
+    expect(h.store.current()?.action).toBeUndefined();
+    expect('action' in (h.store.current() ?? {})).toBe(false);
+  });
+
+  it('answers false and draws nothing when the notice is no longer current — the replacement stays (REQ-NOTIFY-024)', async () => {
+    const h = harness();
+    const first = await h.store.report({ severity: 'info', title: 'offer' });
+    await h.store.report({ severity: 'warning', title: 'later' });
+    expect(await h.store.update(first.id, { message: 'progress' })).toBe(false);
+    expect(h.store.current()).toMatchObject({ id: 2, title: 'later' });
+    await h.store.dismiss();
+    expect(await h.store.update(2, { message: 'x' })).toBe(false);
+  });
+
+  it('records a patch that turns the notice into a warning or an error before rendering it, and not a progress patch on one already recorded', async () => {
+    const h = harness();
+    h.focus('s1');
+    const { id } = await h.store.report({ severity: 'info', title: 'Downloading Rotaris 0.2.0', message: '41%' });
+    expect(h.recorded).toEqual([]);
+    await h.store.update(id, { severity: 'error', title: 'Update not installed', message: 'Rotaris is unchanged.', detail: 'the sentence' });
+    expect(h.recorded).toEqual([{ noticeId: id, severity: 'error', title: 'Update not installed', message: 'Rotaris is unchanged.', detail: 'the sentence', sessionId: 's1' }]);
+    expect(h.order.slice(-2)).toEqual([`record:${id}`, `broadcast:${id}`]);
+    await h.store.update(id, { message: 'Rotaris is unchanged. Try again.' });
+    expect(h.recorded).toHaveLength(1);
+  });
+
+  it('is applied on the same serialised chain as a publication, in acceptance order', async () => {
+    const h = harness();
+    const { id } = await h.store.report({ severity: 'info', title: 'offer' });
+    const [updated, replaced] = await Promise.all([
+      h.store.update(id, { message: 'progress' }),
+      h.store.report({ severity: 'info', title: 'replacement' }),
+    ]);
+    expect(updated).toBe(true);
+    expect(replaced.id).toBe(2);
+    expect(h.broadcasts.map((n) => `${n?.id}:${n?.message ?? ''}`)).toEqual([`${id}:`, `${id}:progress`, '2:']);
+  });
+});

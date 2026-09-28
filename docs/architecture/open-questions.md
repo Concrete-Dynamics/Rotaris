@@ -83,7 +83,7 @@ registry match nor the launcher's variable: ADR-0054 says not updatable, REQ-STA
 (REQ-STARTUP-118 against REQ-SHELL-118 on the download notice's title, persistence and the pause before the apply); **one more by that
 item's verification the same day: OQ-86** (whether the installer's auto-close and the restart's close ask REQ-STARTUP-046's active-run
 confirmation) — the four raised as OQ-76 to OQ-79 on their branch and renumbered at the merge, OQ-76 to OQ-82 having been taken on `main`. **One more was raised on 2026-09-28 by building the setup manifest (`first-release-plan.md` §4.1): OQ-87** (what a machine tool's "archive layout" comprises, and what path its expected executables are relative to — MinGit's entries sit at the archive root and ripgrep's under one directory). **And OQ-88**, raised by the same item's independent verification (whether a manifest may key an archive under REQ-STARTUP-060's raw `<os>-<machine>` fallback); the two were raised as OQ-76 and OQ-77 on their branch and renumbered at the merge, OQ-76 to OQ-86 having been taken on `main`. **And one more the same day by REQ-CHAT-055's measurement round (R-048's order under R-062): OQ-89** (how the append comparison is read when updates arrive faster than frames — each one's shown-update time then holds the
-queue in front of it — and what "an empty transcript" is compared against once the appended rows are on it — raised as OQ-76 on its branch and renumbered at the merge, OQ-76 to OQ-88 having been taken on `main`). **And one more the same day by repairing the artifact variables' reach into the product's children (R-062): OQ-90** (whether the variables naming a launch's artifact are removed from what its children inherit — built so — and which of REQ-STARTUP-147 and REQ-HOOKS-032 says so). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+queue in front of it — and what "an empty transcript" is compared against once the appended rows are on it — raised as OQ-76 on its branch and renumbered at the merge, OQ-76 to OQ-88 having been taken on `main`). **And one more the same day by repairing the artifact variables' reach into the product's children (R-062): OQ-90** (whether the variables naming a launch's artifact are removed from what its children inherit — built so — and which of REQ-STARTUP-147 and REQ-HOOKS-032 says so). **And OQ-91**, raised the same day by repairing REQ-CHAT-048's duplicate-reasoning hygiene under R-062 (whether "per agent" scopes the comparison — each agent's own previous thinking row, the reading built — or only the row dropped), raised as OQ-90 on its branch and renumbered at the merge, OQ-90 having been taken on `main`. **And OQ-92**, raised the same day by repairing the notices file's tools section under R-062 (where the file reports the tool-server package versions REQ-STARTUP-152 asks of it, which REQ-STARTUP-142's section names no place for — built as a third sub-heading after the language servers), raised as OQ-90 on its branch and renumbered at the merge, OQ-90 and OQ-91 having been taken on `main`. **And OQ-93** (whether a text field is spell-checked — the runtime's spellchecker fetched a dictionary no requirement names; built as none), raised 2026-09-28 by the repair of the updater proof's runtime connection, raised as OQ-91 on its branch and renumbered at the merge, OQ-90 to OQ-92 having been taken on `main`. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -3127,6 +3127,14 @@ it can:
   license}` object per tool, under a `machineTools` key. REQ-STARTUP-058 describes the machine-tool manifest per
   platform, with archives, digests and layouts. Neither the key nor its shape is decided anywhere yet. Machine setup
   decides both, and the generator's reader follows.
+  *Added 2026-09-28 (R-062), a report and not a ruling:* the setup manifest now exists
+  (`apps/desktop/resources/setup-manifest.json`, `SetupManifestSchema`), so the shape is decided and the reader has
+  followed it: `machineTools[]` with `provisionedVersion` as the version. The section lists Git 2.55.0 and ripgrep 15.2.0
+  with their four fields. Machine setup is still not built, so the file does not say "downloaded after installation" as
+  a fact: it says the tools are to be downloaded after installation by machine setup, which this build does not yet
+  carry, so this build downloads none of them. What the file says once machine setup ships, or is ruled out of the
+  first release, is still this question's ruling. The "pins no machine tools" sentence stays for a manifest that pins
+  none (`../defects/fixed/the-notices-file-says-the-setup-manifest-pins-no-machine-tools.md`).
 
 **What a ruling decides.** Whether the first release ships without Manrope, and if so whether REQ-STARTUP-142's
 font clause is narrowed to the faces the build carries; and whether machine setup belongs in the first release —
@@ -3528,6 +3536,70 @@ classify itself from the other's file. A hook therefore sees the application's e
 **A ruling would decide** whether REQ-STARTUP-147 gains the removal beside the variables it writes for child
 processes, and whether REQ-HOOKS-032's "exactly" is read over the environment less the artifact's own variables.
 Recommended: both, as one sentence in REQ-STARTUP-147 that REQ-HOOKS-032 cites.
+
+**OQ-91 — Does REQ-CHAT-048's "per agent" scope the comparison, or only the row that is dropped?** *(REQ-CHAT-048;
+ADR-0046 step 4, the lookback its bounded form preserves. Raised 2026-09-28 by repairing
+`docs/defects/fixed/duplicate-reasoning-hygiene-compares-with-the-previous-thinking-row-of-any-agent.md` under
+[R-062](../product/requests.md#r-062); raised as OQ-90 on its branch and renumbered at the merge, OQ-90 having been taken on `main`.)*
+
+REQ-CHAT-048 reads: "per agent, an unstamped (no duration) thinking row whose content equals the immediately previous
+thinking row's content MUST project to zero rows". When two agents' reasoning interleaves — agent A's burst, then
+agent B's, then an unstamped repeat of A's — the sentence has two readings:
+
+- **"per agent" scopes the whole rule**: "the immediately previous thinking row" is A's own, so A's repeat is dropped
+  whatever other agents reasoned in between, and an agent's burst is never compared with another agent's; or
+- **"per agent" scopes only the dropped row**: "the immediately previous thinking row" is the transcript's, so the
+  repeat is compared with B's row, is not equal to it (or names another agent), and is kept — A's duplicated burst
+  is displayed twice whenever any other agent reasoned between the two copies.
+
+**What the build proceeds under.** The first reading: the requirement's purpose clause — "so sessions recorded with
+duplicated streamed reasoning display each burst once" — is met by it for every interleaving and by the second only
+when no other agent reasons between the copies, which is the common case once children run in parallel. The
+projection keeps, per agent, that agent's immediately previous thinking row (`previousThinkingByAgent` in
+`packages/ui/src/transcript/project.ts`), and the bounded form of ADR-0046 step 4 looks each agent's row up lazily
+below its cut, so the two forms agree (`projector.test.ts`'s seeded walk). Agent identity is the row's `name`, as the
+comparison always read it. **A ruling for the second reading** would restore the any-agent lookback
+(`lastThinkingBefore`, one scan below the cut) and turn the interleaved cases in `transcript.test.ts` around; nothing
+else depends on it.
+
+**OQ-92 — Where does `THIRD-PARTY-LICENSES.txt` report the tool-server package versions REQ-STARTUP-152 asks it to?** *(REQ-STARTUP-152 with REQ-STARTUP-142 and REQ-STARTUP-058. Raised 2026-09-28 by repairing the notices file's tools section under [R-062](../product/requests.md#r-062); the note is `../defects/fixed/the-notices-file-says-the-setup-manifest-pins-no-machine-tools.md`; raised as OQ-90 on its branch and renumbered at the merge, OQ-90 and OQ-91 having been taken on `main`.)*
+
+REQ-STARTUP-152 requires "the tool and MCP package versions a build provisions and warms" to be "the same versions its
+`THIRD-PARTY-LICENSES.txt` reports". REQ-STARTUP-142 says what the file's `Tools provisioned after installation`
+section contains. It holds Git and ripgrep, then a sub-heading naming the bundled code-intelligence runtime with its
+language servers. It names no place for the MCP packages REQ-STARTUP-058 pins, `@playwright/mcp` 0.0.80 in this
+build. Nor are they "dependencies present in the shipped artifact": the built-in configuration launches them through
+`npx`, which fetches them.
+
+**What the build proceeds under.** A third sub-heading of the same section, `Tool-server packages`, after the language
+servers, lists each package the manifest's `toolServerPackages` pins with REQ-STARTUP-142's four fields. It states
+that a tool server of the built-in configuration launches each through its package runner, which downloads it when
+that tool server is first started, and that none is contained in the artifact. The sub-heading is left out for a
+manifest that pins no package. REQ-STARTUP-142's order, machine tools then the runtime's sub-heading, is kept.
+
+**What a ruling decides.** Whether REQ-STARTUP-142 gains the sub-heading, with its wording, or the versions belong
+somewhere else in the file.
+
+**OQ-93 — Is a text field spell-checked, and if so, from what?** *(REQ-STARTUP-160, REQ-SHELL-005, REQ-STARTUP-159. Raised 2026-09-28 by the repair of `docs/defects/fixed/the-built-app-opens-a-connection-to-chromiums-component-updater.md`, under [R-062](../product/requests.md#r-062). Numbered OQ-91 on its branch because OQ-90 was already taken on a branch in flight beside it; renumbered OQ-93 at the merge, OQ-91 and OQ-92 having been taken on `main`.)*
+
+The specification says nothing about spell-checking the composer or any other text field. The runtime's built-in
+spellchecker, left at its default, fetches a Hunspell dictionary for the OS locale from `redirector.gvt1.com` whenever a
+session is created — on Linux measured, on Windows owed to the next package (IC-3); on macOS the OS spellchecker is used
+and nothing is fetched. That request is one REQ-STARTUP-160's disclosure may not name ("SHALL name no host, endpoint, or
+request this document does not require"), one REQ-SHELL-005's demo mode forbids for the whole lifetime, and one the
+offline launch of REQ-STARTUP-159 would attempt and fail. Three readings:
+
+- **no text field is spell-checked** — the dictionary list is emptied and the spellchecker turned off for every session,
+  on every platform, so the product's behaviour is one and its network activity is exactly what the document names;
+- **spell-checking from what was installed** — dictionaries carried inside the artifact (REQ-STARTUP-159's "resolves
+  from within what was installed"), which adds payload and a licence line under REQ-STARTUP-142, and a choice of
+  languages the specification does not make; or
+- **the OS spellchecker where the platform has one** — macOS's (and Windows' if the runtime uses it there), none on
+  Linux, so the behaviour differs by platform.
+
+**What the build proceeds under:** the first reading (`apps/desktop/src/main/runtime-requests.ts`), because it is the
+only one that needs no requirement the specification lacks and adds no request. **A ruling would decide** whether
+spell-checking is a behaviour the product owes; either of the other readings is additive to this build.
 
 ## Design-reference dependencies
 

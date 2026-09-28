@@ -1285,7 +1285,15 @@ says something false of the tree.** The generator reads `pins.json` as its manif
 this build pins no machine tools"; the manifest pins two. `REQ-STARTUP-142` wants that section generated from the setup
 manifest and listing Git and ripgrep. Recorded and not repaired — the build was told to leave what the notices file lists
 alone while **OQ-73** is open, and OQ-73's gate-review addendum already says the generator's reader follows the shape
-machine setup decides (`../../defects/the-notices-file-says-the-setup-manifest-pins-no-machine-tools.md`). (4) **Nothing
+machine setup decides (`../../defects/fixed/the-notices-file-says-the-setup-manifest-pins-no-machine-tools.md`).
+*Repaired 2026-09-28 under R-062, OQ-73 still open:* the generator now reads this manifest in `SetupManifestSchema`'s
+shape (a copy of the field names, held to the schema by `notices.test.ts`, because `tools/notices` imports nothing from
+`packages/`) and lists Git 2.55.0 and ripgrep 15.2.0 with their four fields. It states that machine setup, which would
+download them, is not yet in the build. It lists `@playwright/mcp` 0.0.80 under a third sub-heading for
+`REQ-STARTUP-152`, a placement OQ-92 raises. That first reading of the real manifest found the generator's assumed
+shape wrong on one field (`version` where the manifest says `provisionedVersion`), and the runtime's name absent from
+the manifest, so the sub-heading still reads it from `pins.json`. `pnpm notices` refuses on the same eleven problems as
+before. (4) **Nothing
 in the product reads the file.** The machine-setup flow (`REQ-STARTUP-060` onward, `REQ-MCP-112`'s setup half), the
 fingerprint (`REQ-STARTUP-061`), the probe, the download and the promotion are not built and are not in the first-release
 plan; the manifest is what they will read, and `SETUP_MANIFEST_FILE` is the name main would resolve the way `about.ts`
@@ -1684,7 +1692,14 @@ places on the Windows host; their first execution is owed to the next `pnpm pack
 rule's. **The proof found one thing beside the mechanism:** the sink recorded `CONNECT redirector.gvt1.com:443` —
 Chromium's own component updater reaching out from the built application, a request no requirement names and
 REQ-STARTUP-160's disclosure cannot carry — filed as
-`../../defects/the-built-app-opens-a-connection-to-chromiums-component-updater.md`, not repaired here.
+`../../defects/fixed/the-built-app-opens-a-connection-to-chromiums-component-updater.md`, not repaired here.
+*Corrected 2026-09-28 by the repair (R-062): the cause named in that sentence was wrong.* A net-log of the same launch
+named the request as Electron's spellchecker downloading a Hunspell dictionary
+(`https://redirector.gvt1.com/edgedl/chrome/dict/en-us-10-1.bdic`), not the component updater, and
+`--disable-component-update` was measured to change nothing. `apps/desktop/src/main/runtime-requests.ts` empties each
+session's dictionary list and turns the spellchecker off in `session-created`, the one point measured to prevent the
+download; `pnpm updater-proof` now asserts **zero** connections at the sink from launch to first paint and an orderly
+quit (9 checks), beside its `github.com` check. OQ-93 asks whether any text field is spell-checked.
 
 **Readings stated rather than left in code.** REQ-STARTUP-123's two hash outcomes follow the download as its sentences
 say ("the download was discarded"), so an asset the manifest does not list is downloaded and then discarded rather than
@@ -1757,3 +1772,15 @@ terminal's reading measures. **Raised: OQ-90** — REQ-STARTUP-147 names the var
 none removed from them, and REQ-HOOKS-032 says a run "sees exactly the environment the application itself was started
 with"; the build proceeds on this record's reading that a variable describing the artifact is not part of the
 environment a child is handed. The note: `../../defects/fixed/the-artifact-variables-reach-the-products-own-child-processes.md`.
+
+**Repaired 2026-09-28 (R-062): (7) the record passed to a successor that had stopped waiting.** The defect the
+paragraph above filed (`../../defects/fixed/the-record-can-pass-to-a-successor-that-stopped-waiting.md`) is repaired
+by making the pass two steps, as ADR-0055's restart section now records (*Amended 2026-09-28*). The predecessor offers
+the record. It rewrites the record only once the successor has acknowledged within the hand-over interval, on the
+timer port. A successor that closed first, or whose acknowledgement is late, leaves the record intact and fails the
+restart through `onRecordPassFailed`, so `Update not installed` surfaces and nothing closes. The updater's side is
+unchanged: `updater/successor.ts` already rejects on any pass failure. Pinned by `instance.test.ts`: the offer
+before the pass; a successor that closed before answering; an acknowledgement missing past the interval on a
+`FakeClock`, and a late one refused; a predecessor loop blocked past the successor's bound, red against the one-step
+pass; the successor's unbounded wait once it has acknowledged; its reading of the record when the predecessor ends
+without a last word; and the ordinary hand-over unchanged.

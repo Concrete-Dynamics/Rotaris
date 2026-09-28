@@ -7,7 +7,9 @@
  *   - the record passed to the successor → resolve, and the updater closes the windows;
  *   - the successor could not be started (the spawn failed) → reject;
  *   - the successor started and announced itself, was accepted, but the record could not be passed to it — the record
- *     no longer names this instance, or its atomic replacement failed → reject with that reason.
+ *     no longer names this instance, the successor stopped waiting (it closed before acknowledging the offer, or its
+ *     acknowledgement did not arrive within the hand-over interval — `instance.ts`'s two-step pass), or the record's
+ *     atomic replacement failed → reject with that reason.
  * Every rejection reaches REQ-STARTUP-121's failure branch: nothing closes, `Update not installed` surfaces, and the
  * updater's one-operation-in-flight guard clears. The third way was missing at the first verification: the wait stayed
  * armed for ever and every later update action answered `update.busy`.

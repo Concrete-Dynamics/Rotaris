@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-28**
 
+**The notices generator reads the shipped setup manifest (2026-09-28, R-062).** `tools/notices/notices.mjs` reads
+`apps/desktop/resources/setup-manifest.json` rather than `pins.json` as REQ-STARTUP-142's manifest, by a copy of
+`SetupManifestSchema`'s field names that `notices.test.ts` holds to the schema; `pins.json` is read for the runtime's
+name only. The **component view**'s notices-generator and setup-manifest sections say so, and name the second test that
+crosses into a package. No package, edge, process, channel, message kind, store column or owner of state changed.
+
 **A session's lock ends with the application that held it (ADR-0014, 2026-09-28, R-062).** Main is gone only after
 the run host: the orderly quit waits, bounded, for the run host's exit after its `shutdown` and ends it if it has not
 come, and an immediate exit (`exitCleanly`) ends it at once (`endBeforeMain`, `main/exit.ts`). The **runtime view**'s §6
@@ -58,6 +64,36 @@ host, the workspace services and everything the run host starts inherit neither.
 environment a child is started with* beside the ownership table, and main's updater clause says where the classification's
 two variables come from. No package, edge, process, channel, message kind or store column changed; `platform` gains
 `artifact-environment.ts`.
+
+**REQ-CHAT-048's duplicate-reasoning hygiene compares per agent (2026-09-28, R-062; OQ-91).** Step 4 kept one lookback —
+the previous thinking row of any agent — so an agent's repeated burst survived whenever another agent reasoned between
+the copies. `ui/transcript/project.ts` now keeps each agent's own previous thinking row, and the bounded form looks one
+up below its cut only for an agent whose unstamped reasoning is in the suffix. The **runtime view**'s step-4 row says so.
+No package, edge, process, channel, message kind, store column or owner of state changed.
+
+**The layout contract has one publisher, and `ui-audit` survives a thrown expression (2026-09-28, R-062).** The window
+controls (`PD-SHELL-003`) wrote their `data-ui-contract` by hand as an object; the audit's CONTRACTS sweep iterates the
+relations array, threw in the renderer on every view carrying the title bar, and the script died on the driver's
+`{ error }` answer before any evidence pack. The controls and the Proposals tab now publish through
+`layoutContractAttributes`; `tools/check-ui-language.mjs` refuses a hand-written `data-ui-contract` anywhere in the drawing
+roots (`tools/ui-contract-publisher.mjs`); `ui-audit` reports a thrown audit expression as an `AUDIT-ERROR` finding and
+a non-array contract as a `schema` finding, and moves on. The **seams view** §8 steps 4 and 6 and the **component view**'s
+design-system paragraph say so. No package, edge, process, channel, message kind, store column or owner of state changed.
+
+**The update restart's record passes in two steps (REQ-STARTUP-121, REQ-STARTUP-161; ADR-0055 *Amended 2026-09-28*,
+R-062).** `packages/platform/src/instance.ts` now offers the record, waits on the timer port for the successor's
+acknowledgement within the hand-over interval, and rewrites it only then, so a successor that stopped waiting is never
+named by it. The **sequences view**'s `Restart now` diagram and prose gain the offer, the acknowledgement and the
+refusals they add. The ordinary hand-over of a second launch is unchanged. No package, edge, process, channel, command,
+store column or owner of state changed.
+
+**The runtime makes no request of its own (REQ-STARTUP-160, REQ-SHELL-005; repaired 2026-09-28 under R-062).** The
+connection `pnpm updater-proof` recorded at launch was Electron's spellchecker fetching a Hunspell dictionary, not
+Chromium's component updater; main now empties each session's dictionary list and turns its spellchecker off in
+`session-created` (`main/runtime-requests.ts`). The **process view** gains a paragraph under its diagram saying that
+Electron and Chromium add no host of their own to the ones the product reaches, and why — not that the endpoints drawn
+are all of those hosts, which they are not (corrected at verification). No package, edge, process, channel, message kind, store
+column or owner of state changed; OQ-93 raised (OQ-91 on its branch).
 
 **REQ-CHAT-055's measurement round: the transcript projects once per change, not once per render (2026-09-28, R-048's
 order under R-062).** The built app was traced appending to an empty transcript and to one of 1,200 rows, and the extra

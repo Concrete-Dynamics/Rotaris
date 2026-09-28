@@ -10,7 +10,7 @@ export declare const TOOLS_SECTION: string;
 export declare const MAX_EXCEPTION_DAYS: number;
 /** Every input and the output, relative to the repository root. */
 export declare const PATHS: Readonly<{
-  desktop: string; output: string; runtime: string; bundleMarker: string; setupManifest: string; fontFaces: string;
+  desktop: string; output: string; runtime: string; bundleMarker: string; setupManifest: string; codeIntelligencePins: string; fontFaces: string;
   designAssets: string; electron: string; assets: string; exceptions: string; releaseInputs: string;
 }>;
 
@@ -39,8 +39,18 @@ export interface Component {
 export interface Credit { readonly title: string; readonly homepage: string | null; readonly text: string }
 export interface ElectronComponent extends Component { readonly credits: readonly Credit[] }
 export interface ProvisionedPackage { readonly language: string; readonly provisioner?: string; readonly name: string; readonly version: string; readonly source: string; readonly license: string }
+/** A machine tool as the file lists it: `version` is the manifest's `provisionedVersion` (REQ-STARTUP-142). */
 export interface MachineTool { readonly name: string; readonly version: string; readonly source: string; readonly license: string }
-export interface SetupManifest { readonly runtime: string; readonly machineTools: readonly MachineTool[]; readonly languageServers: readonly ProvisionedPackage[] }
+/** A tool-server package the manifest pins (REQ-STARTUP-058, REQ-STARTUP-152). */
+export interface ToolServerPackage { readonly name: string; readonly version: string; readonly source: string; readonly license: string }
+export interface SetupManifest { readonly runtime: string; readonly machineTools: readonly MachineTool[]; readonly toolServerPackages: readonly ToolServerPackage[]; readonly languageServers: readonly ProvisionedPackage[] }
+/** The field names this generator reads from the manifest; `SetupManifestSchema` is their authority. */
+export declare const SETUP_MANIFEST_SHAPE: Readonly<{
+  schemaVersion: 1;
+  machineTool: readonly string[];
+  toolServerPackage: readonly string[];
+  languageServerPackage: readonly string[];
+}>;
 export interface NoticesModel {
   readonly product: { readonly name: string; readonly version: string };
   readonly address: string;

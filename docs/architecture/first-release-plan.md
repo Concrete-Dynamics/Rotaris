@@ -369,8 +369,11 @@ lives in `tools/release-naming`. What the build decided and found:
   `copyFiles`. **`pnpm release:guard v0.1.0` passes both halves, exit 0.** OQ-87 raised (what "archive layout" comprises), and OQ-88 (whether a manifest may key an archive under REQ-STARTUP-060's fallback) — raised as OQ-76 and OQ-77 on the branch, renumbered at the merge.
   **Still owed, and not by this step:** the flow that reads the manifest — machine setup, `REQ-STARTUP-060` onward and
   `REQ-MCP-112`'s setup half, with `REQ-STARTUP-061`'s fingerprint — is not built and not in this plan; the notices
-  generator still reads `pins.json` and its file says the manifest pins no machine tools, which is now false of the tree
-  (OQ-73 decides whose reader follows; `../defects/the-notices-file-says-the-setup-manifest-pins-no-machine-tools.md`);
+  generator ~~still reads `pins.json` and its file says the manifest pins no machine tools, which is now false of the tree
+  (OQ-73 decides whose reader follows)~~ reads the shipped manifest since 2026-09-28 (R-062;
+  `../defects/fixed/the-notices-file-says-the-setup-manifest-pins-no-machine-tools.md`) — Git and ripgrep listed with
+  their four fields and stated not yet downloaded by this build (OQ-73's reading), `@playwright/mcp` under a third
+  sub-heading (REQ-STARTUP-152, OQ-92);
   `afterPack` does not yet assert the manifest inside `win-unpacked` (the next Windows package, IC-3).
 - **electron-builder hyphenates a prerelease version** (`0.1.0rc1` → `0.1.0-rc1`), so step 5's prerelease would be named
   `Rotaris-0.1.0-rc1-…` unless §4.2/§4.5 render the name from the tag through `tools/release-naming`
@@ -420,6 +423,12 @@ naming each problem otherwise (REQ-STARTUP-149). It builds under four readings, 
 - OQ-73, Manrope and the machine tools;
 - OQ-74, an identifier a dependency does not declare;
 - OQ-75, when a licence file carries the licence's text. It was added by the gate review the same day.
+
+*2026-09-28 (R-062): the section is generated from the setup manifest the build ships.* The generator reads
+`apps/desktop/resources/setup-manifest.json` in `SetupManifestSchema`'s shape and lists Git 2.55.0 and ripgrep 15.2.0
+with their four fields, saying machine setup is not yet in the build (OQ-73's reading); the language servers follow
+from the same file; `@playwright/mcp` 0.0.80 sits under a third sub-heading for REQ-STARTUP-152, a place OQ-92 asks
+about. Validation still refuses on the same eleven problems (O-3, O-11's components, the runtime absent from the tree).
 
 **Where the owner writes the O-3 address.** In `tools/notices/release-inputs.json`, as the value of
 `lgplCorrespondingSourcesAddress`. That file is the one place the generator reads it. The value must be one literal
@@ -579,7 +588,11 @@ so that the next release can add the updater without stranding anyone.
 >
 > **Found beside it:** the built application's runtime opens `CONNECT redirector.gvt1.com:443` on its own — Chromium's
 > component updater — which REQ-STARTUP-160's disclosure cannot name
-> ([note](../defects/the-built-app-opens-a-connection-to-chromiums-component-updater.md)). **Raised:** OQ-83 (the
+> ([note](../defects/fixed/the-built-app-opens-a-connection-to-chromiums-component-updater.md)). *Repaired 2026-09-28
+> (R-062), and the cause corrected:* it was Electron's spellchecker fetching a Hunspell dictionary, not the component
+> updater; each session now has no dictionary and no spellchecker (`main/runtime-requests.ts`), and `pnpm updater-proof`
+> asserts zero connections from launch to first paint and quit (9 checks). OQ-93 raised (spell-checking a text field; OQ-91 on its branch, renumbered at the merge).
+> The packaged Windows build behind the same sink is owed to the next `pnpm package` (IC-3). **Raised:** OQ-83 (the
 > signature's form), OQ-84 (a packaged Windows build with neither a registry match nor the launcher's variable —
 > ADR-0054 says not updatable, REQ-STARTUP-106's copied-tree sentence says portable), OQ-85 (REQ-STARTUP-118 against
 > REQ-SHELL-118 on the download notice's title, persistence and the pause before the apply). **Two obligations the
@@ -601,7 +614,12 @@ so that the next release can add the updater without stranding anyone.
 > restart waiting for ever and every later update action `update.busy`; the claim now reports the refusal
 > (`onRecordPassFailed`), main's wait (`updater/successor.ts`) rejects, and `Update not installed` surfaces with the
 > reason (REQ-STARTUP-121). 162 unit cases in 15 files. A successor whose 5 s bound expired while the predecessor was
-> blocked can still be passed the record after it has gone — filed in `../defects/`, not repaired.
+> blocked can still be passed the record after it has gone — filed in `../defects/`, not repaired. *Repaired
+> 2026-09-28 (R-062):* the pass is two steps, offer then acknowledgement within the hand-over interval, and only then
+> the rewrite. A successor that stopped waiting leaves the record intact and fails the restart
+> (ADR-0055's *Amended 2026-09-28*;
+> [note](../defects/fixed/the-record-can-pass-to-a-successor-that-stopped-waiting.md)). The restart between two real
+> processes on Windows is still owed to the next package (IC-3).
 >
 > **Repaired the same day: the artifact variables stay with their launch.** `APPIMAGE` and `ROTARIS_PORTABLE_ARTIFACT`
 > stayed in main's environment and reached every child — observed in the built app, a scripted terminal call's shell
@@ -691,7 +709,7 @@ supply, and each stays owed (R-053). O-11 is the same kind of item: a review onl
      that step is where it most naturally lands, and it lands packed: an `extraResources` entry, and either the
      guard's `toolServerPackages` field or a change to the guard's constant — **the manifest built 2026-09-28** (§4.1's
      second note): packed by `extraResources`, under the guard's `toolServerPackages`, its schema in `packages/config`;
-     `pnpm release:guard v0.1.0` passes. §4.3's reader still reads `pins.json` (OQ-73), and the manifest's consumer,
+     `pnpm release:guard v0.1.0` passes. §4.3's reader ~~still reads `pins.json` (OQ-73)~~ reads the manifest since 2026-09-28 (R-062), and the manifest's consumer,
      machine setup, stays outside this plan;
    - §4.3 the notices generator with the About defect — *built 2026-09-27; validation refuses until O-3, O-11 and OQ-74.
      OQ-72 does not stop validation, but until it is ruled the file knowingly leaves out the libraries linked into

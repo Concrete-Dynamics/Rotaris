@@ -228,6 +228,29 @@ describe('REQ-CHAT-055: the projector projects once per change of its inputs', (
       expect(projector.incrementals).toBe(1);
     });
 
+    // REQ-CHAT-048 per agent (OQ-91): the bounded form's lookback reaches past another agent's reasoning to the
+    // appending agent's OWN previous thinking row, exactly as the whole-state loop carries it.
+    it('REQ-CHAT-048: an agent\'s repeat appended after another agent\'s reasoning projects to zero rows in the bounded form too', () => {
+      const think = (i: number, name: string, body: string, over: Partial<TranscriptRow> = {}) =>
+        said(i, name, { kind: 'thinking', streamId: `s${i}`, body, ...over } as Partial<TranscriptRow>);
+      const held = [rows(1)[0]!, think(1, 'X', 'plan'), said(2, 'Y'), think(3, 'Y', 'other'), said(4, 'X'), said(5, 'Y')];
+      for (const groupTools of [false, true]) {
+        const projector = createProjector();
+        const o = options({ rows: held, groupTools, showReasoning: true });
+        projector.project(o);
+        const appended = { ...o, rows: [...held, think(6, 'X', 'plan')] };
+        expect(changedFrom(o, appended)).toBe(6);
+        const members = (display: readonly DisplayRow[]) => display.flatMap((d) => (d.shape === 'row' ? [d.row.index] : d.shape === 'group' ? d.members.map((m) => m.index) : []));
+        // 6 repeats X's own 1 with Y's 3 between, so it is not drawn — bounded and whole alike.
+        expect(members(projectDisplay(appended))).not.toContain(6);
+        expect(projector.project(appended).display).toEqual(projectDisplay(appended));
+        const differs = { ...o, rows: [...held, think(6, 'X', 'other')] };
+        expect(members(projectDisplay(differs))).toContain(6);
+        expect(projector.project(differs).display).toEqual(projectDisplay(differs));
+        expect(projector.incrementals, `groupTools ${groupTools}`).toBeGreaterThanOrEqual(1);
+      }
+    });
+
     it('REQ-CHAT-050: a repeated diff replaced at its own index, with the rows behind it removed, reuses none of them', () => {
       const diff = (i: number, body: string) => ({ ...said(i, 'Y'), kind: 'diff', callKey: 'call-edit', body } as TranscriptRow);
       const held = [rows(1)[0]!, diff(1, 'a.md +1 -0'), said(2, 'Y'), diff(3, 'a.md +1 -0'), said(4, 'Y'), said(5, 'Y')];

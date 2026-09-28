@@ -577,6 +577,32 @@ successor that never arrives. And the successor
 must not be sent through phase 0's ordinary path at all, which means the sentinel branch is now load-
 bearing for a third case; **OQ-43 covers two of the three and should be read as covering this one too.**
 
+**Amended 2026-09-28 (R-062) — the pass is two steps, because "tells the successor" is not "the successor was
+told".** The sequence above has the predecessor rewrite the record and *then* tell the successor. Built that way
+(`packages/platform/src/instance.ts`, `passRecord`), it assumed the successor was still there to be told. The successor
+bounds its wait for the answer by the hand-over interval, as it must, since an unanswered successor may not become a
+rival. If the predecessor's loop was blocked past that bound, the successor had closed and ended, but its announcement
+was still buffered. The predecessor then read it, rewrote the record for a process that had gone, and closed its own
+window. The record then named nobody running and no instance was left, which is what `REQ-STARTUP-121` and
+`REQ-STARTUP-161` exist to prevent. A later launch reclaims the dead pid's record under `REQ-STARTUP-164` (3), but the
+user who chose `Restart now` was left with nothing on screen. The note is
+`../../defects/fixed/the-record-can-pass-to-a-successor-that-stopped-waiting.md`. The sequence is now: the predecessor
+**offers** the record (`{"record":"offered"}`, deliberately not `ok:true`); the successor **acknowledges**
+(`{"ack":true}`), which proves it is still waiting and commits it to take the record; the predecessor waits for that
+acknowledgement **at most the hand-over interval, on the timer port**; and only then does it replace the record
+atomically, answer `{"ok":true,"record":"passed"}` and close. A successor that closed before acknowledging, or whose
+acknowledgement does not arrive within the interval, leaves the record exactly as it was. The restart fails through
+`onRecordPassFailed` — `Update not installed`, nothing closes — which is `REQ-STARTUP-121`'s failure branch.
+**One reading is stated rather than hidden:** once it has acknowledged, the successor waits for the last word with **no
+bound of its own**. From that moment the record may name it, so a successor that gave up then would be exactly the
+process the record must never be left naming. The predecessor's own bound, its answer, or its exit ends that wait. If
+the connection ends with no last word, the successor reads the record: the pass happened if and only if the record names
+it. A predecessor hung for ever between the acknowledgement and the rewrite leaves a windowless successor waiting on it.
+That is the mirror of this section's accepted "successor that never signals", and it does not produce a second instance.
+The ordinary hand-over of a second launch (`REQ-STARTUP-162`) is unchanged: one line in, `{"ok":true}` out. The
+successor's readiness signal still has no timeout of its own; the new bound applies only to the acknowledgement, after
+the predecessor has offered.
+
 ### Verification obligation on `REQ-STARTUP-164` — taken, 2026-09-02, and it fired
 
 `REQ-STARTUP-164` fixes a 5 second hand-over wait, at most one reclaim, at most two claim attempts, no

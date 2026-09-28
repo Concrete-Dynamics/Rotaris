@@ -27,10 +27,23 @@ export interface DiscoveryPorts {
   readonly isFile: (path: string) => boolean;
 }
 
+/**
+ * REQ-WORKSPACE-045 names two ways a file can be unreadable — an I/O error and a **decoding** error — and asks that
+ * each be skipped with a warning naming the path and the error. `readFileSync(path, 'utf8')` reports only the first:
+ * Node's lenient decode replaces every undecodable sequence with U+FFFD and never throws, so a file that is not UTF-8
+ * was merged, replacement characters and all, with no warning (measured 2026-09-27 over the bytes
+ * `68 69 0a ff fe c3 28 0a`, which came back as `"hi\n���(\n"`). The decoder here is strict: an undecodable
+ * sequence throws, and the throw reaches the same warning path an I/O error does. The BOM is left in place
+ * (`ignoreBOM`), so a file that decodes reads exactly as it did before — only the file that cannot be decoded changes
+ * what happens. Every reader of these ports shares the rule: an instruction file (REQ-WORKSPACE-045), a `SKILL.md`
+ * (REQ-WORKSPACE-053, OQ-76), a force-loaded body (REQ-WORKSPACE-062) and the disable manifest (REQ-WORKSPACE-052).
+ */
+const STRICT_UTF8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+
 /** `node:fs`, with every "it is not there" answer folded into the shape the walk expects. */
 export const NODE_DISCOVERY_PORTS: DiscoveryPorts = {
   readDir: (dir) => { try { return readdirSync(dir); } catch { return []; } },
-  readFile: (path) => readFileSync(path, 'utf8'),
+  readFile: (path) => STRICT_UTF8.decode(readFileSync(path)),
   isDirectory: (path) => { try { return statSync(path).isDirectory(); } catch { return false; } },
   isFile: (path) => { try { return statSync(path).isFile(); } catch { return false; } },
 };
@@ -94,6 +107,8 @@ export function discoverSkills(env: SkillRootsEnv, ports: DiscoveryPorts = NODE_
       try {
         text = ports.readFile(path);
       } catch (cause) {
+        // REQ-WORKSPACE-053's "unreadable file", which a file that is not UTF-8 is read as too (OQ-76): skipped with
+        // the reason, never parsed with replacement characters standing in for what the author wrote.
         skipped.push({ path, reason: `unreadable file: ${cause instanceof Error ? cause.message : String(cause)}` });
         continue;
       }

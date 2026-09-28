@@ -69,7 +69,10 @@ reviewed-exceptions table may supply an identifier a dependency does not declare
 runtime). **One more was raised the same day by that generator's gate review: OQ-75** (when a component carries "its
 full license text": a licence file that only pointed elsewhere, or only carried a licence's per-file notice, had
 counted as the text, and 4 components without text became 12); the four were raised as OQ-66 to OQ-69 on their own branch and renumbered when they reached `main`
-after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71. **One more was raised on 2026-09-28 by
+repairing REQ-WORKSPACE-045's decoding half: OQ-76** (whether a `SKILL.md` that cannot be decoded as UTF-8 is an "unreadable file"
+under REQ-WORKSPACE-053, which names the reason without saying what encoding a skill file has; built as one, skipped with the
+decoder's error). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -3211,6 +3214,35 @@ eight of O-11's twelve reviews are for a notice or a pointer.
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 
 The key is registered with default 20 and minimum 1. Each background session publishes its own `bg:<id>` stream at up to 50 frames/s (the 20 ms floor), so the produced aggregate is `(agents + background sessions) × 50 frames/s`, and only one of those two factors — agents, REQ-MONITOR-285's 20 — has a ceiling. Part AL reads the key into the manager and caps the *delivered* rate per window at 1,000 frames/s by merging (REQ-MONITOR-306, REQ-SHELL-103), so a user who configures 400 background sessions saturates the run-host → main pipe, not a renderer. A stated maximum on the key would let the produced rate be computed rather than absorbed. The owner's call; recorded, not resolved.
+
+**OQ-76 — Is a `SKILL.md` that cannot be decoded as UTF-8 an "unreadable file"?** *(REQ-WORKSPACE-053, with REQ-WORKSPACE-045 and REQ-WORKSPACE-044. Raised 2026-09-28 by repairing REQ-WORKSPACE-045's decoding half, R-062.)*
+
+REQ-WORKSPACE-045 names two ways a context file can be unreadable — "I/O or decoding error" — and REQ-WORKSPACE-044
+measures every limit "as UTF-8 bytes", so for an instruction file the encoding is settled: it is UTF-8, and a file that is
+not is skipped with a warning. REQ-WORKSPACE-053 lists "unreadable file" among the reasons a `SKILL.md` is skipped, but
+names no encoding for the file, and the format it does name — YAML frontmatter — is one whose own specification admits
+UTF-16 and UTF-32 as well as UTF-8. Nothing in the corpus says whether a skill file saved in one of those, or holding a
+byte sequence no UTF-8 decoder accepts, is "unreadable" (skipped with a logged reason) or is to be read leniently, each
+undecodable sequence standing as U+FFFD, and parsed.
+
+The question is live because one port serves both walks. `NODE_DISCOVERY_PORTS.readFile` reads instruction files for
+REQ-WORKSPACE-045's merge, `SKILL.md` files for REQ-WORKSPACE-053's walk, a force-loaded body for REQ-WORKSPACE-062 and
+the disable manifest for REQ-WORKSPACE-052, and until 2026-09-28 it decoded leniently, so the decoding half of
+REQ-WORKSPACE-045 was unmet (`docs/defects/fixed/an-instruction-file-that-is-not-utf-8-is-injected-with-no-warning.md`).
+Making it strict for the instruction files makes it strict for the skill files in the same line.
+
+**What the build proceeds under.** A `SKILL.md` that cannot be decoded as UTF-8 is an unreadable file: it is skipped
+with the reason `unreadable file: <the decoder's error>`, discovery continues, and the skip is listed and logged like
+every other (REQ-WORKSPACE-053). The reasons: a file parsed with replacement characters standing in for what its author
+wrote is not the file the author wrote, and a skill's `name` or `description` read that way would be silently wrong in a
+catalog a model acts on; the sibling walk that shares the port says "decoding error" outright; and REQ-WORKSPACE-044
+already fixes UTF-8 as the encoding these files are measured in. The cost is stated too: a `SKILL.md` saved in UTF-16 or
+UTF-32 — encodings YAML admits — was previously parsed as mojibake and is now skipped with a reason that names the
+path, which is the better of the two failures but is still a file the product declines. A force-loaded body and the
+disable manifest take the same arm through the same port. If the owner rules the other way, only the port changes:
+the walk's skip arm stays for the I/O half, and the decode becomes lenient for `SKILL.md` alone. The case is pinned in
+`packages/config/src/skills/skills.test.ts` ("REQ-WORKSPACE-053 — a SKILL.md that is not UTF-8, through the real port
+(OQ-76)").
 
 ## Design-reference dependencies
 

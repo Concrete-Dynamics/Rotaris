@@ -117,11 +117,11 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: false });
   });
 
-  it('PD-ORCH-005 (OQ-70): a continue that resumes an open iteration is not held — the work it resumes was released already', async () => {
+  it('PD-ORCH-003 revision 2: a continue that resumes an open iteration runs it without holding, and with no new work after it no plan cycle opens', async () => {
     let release!: () => void;
     const hold = new Promise<void>((r) => { release = r; });
     // The execution segment's step is in flight when the pause is accepted; the call it asks for is never run, so the root is mid-turn.
-    const sessions = sessionsWith(scripted([answer('Step 1: do it.'), { parts: [{ hold }, ...toolCalls([{ callId: 'g1', name: 'grep', args: { pattern: 'x' } }]).parts] }, answer('resumed and done'), answer('the approved run\'s own task, done')]).backend, { grep: true });
+    const sessions = sessionsWith(scripted([answer('Step 1: do it.'), { parts: [{ hold }, ...toolCalls([{ callId: 'g1', name: 'grep', args: { pattern: 'x' } }]).parts] }, answer('resumed and done')]).backend, { grep: true });
     const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
     await sessions.running(sid)!;
     expect(sessions.planDecision(sid, 'approve').ok).toBe(true);
@@ -130,7 +130,8 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     release();
     await sessions.running(sid)!;
     expect(dal.iterationsOf(sid)).toMatchObject([{ iteration: 1, state: 'open', interruption: 'pause' }]);
-    // Re-armed, a fresh prompt would be held; this one resumes the open iteration instead, and no plan cycle opens.
+    // Re-armed, a fresh prompt would be held; this one resumes the open iteration instead, and — its message done with
+    // the iteration (PD-ORCH-005 clause 17) and the approve having appended no second task — no new iteration, so no cycle.
     expect(sessions.planRearm(sid).ok).toBe(true);
     expect(sessions.prompt(sid, 'go on').ok).toBe(true);
     const result = await sessions.running(sid)!;

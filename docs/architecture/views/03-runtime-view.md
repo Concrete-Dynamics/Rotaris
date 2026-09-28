@@ -97,7 +97,8 @@ REQ-WORKSPACE-065's "every agent built for a session sees the same catalog" hold
 small slot's rung ladder; the grant; the playbooks; the BUDGET cell) → **the plan gate's hold settled** → the
 launch audit (once per session, REQ-SESSION-138) → `run_start` timeline entry → hook trust announced → the
 effective permission posture (PD-TOOLS-002: the requested mode, never a downgrade row) → save `running` → `session_start` hooks → **the plan cycle
-if the gate holds**, otherwise the loop.
+if the gate holds**, otherwise the loop — for a run that resumes an open iteration, the loop, holding before its
+first new iteration if the gate would hold (PD-ORCH-003 revision 2).
 
 **The plan gate (Part; ADR-0062, REQ-ORCH-152/153/154, PD-ORCH-003).** In `plan` mode a run whose classified
 intent is outside REQ-ORCH-021's answer group **and whose session holds no approved release** is a sequence of
@@ -105,7 +106,14 @@ intent is outside REQ-ORCH-021's answer group **and whose session holds no appro
 approval reaches the session, so every run after it in that session goes straight to execution until the user
 re-arms the gate (`session.planRearm`, sent by the composer's run-start chip) or starts a new session. The hold is settled once, after the pre-flight and before anything it withholds, and never cleared in
 place — so a segment's grants are constant and the model's listing and callable set stay one resolution
-(REQ-TOOLS-010). A held segment takes **one turn of the entry role** through the ordinary `turn()` path, numbered
+(REQ-TOOLS-010). **A run that resumes an open iteration (PD-ORCH-003 revision 2; OQ-77)** runs that iteration unheld,
+whatever the mode and the release; when the gate would hold the run, the loop holds once the resumed iteration has
+closed and the stop conditions found work left — after the pause, the stop and the message limit have had their say,
+and before the first new iteration — and parks there (`parkAtPlanGate(resumed)`), its plan cycle told the tasks still
+pending ahead of the launch content (`resumedWorkSection`), which it is told the resumed iteration carried out only
+when that iteration closed the continue's message as done (`done`, `pending` or `none`: PD-ORCH-005 clause 17). A plan
+decision relaunches with `RunDeps.appendsTask: false`:
+the held run's stored todo already carries the gated work, and the last user row is not a new task. A held segment takes **one turn of the entry role** through the ordinary `turn()` path, numbered
 **iteration 0** (`root:0`) because a plan cycle is not an iteration, and then `parkAtPlanGate()` mirrors
 `pauseAtLimit` exactly: status `awaiting_plan_decision` with the cycle, the cycle's row written in the same
 durable transaction with a `plan_gate_opened` entry, **no terminal pair**, and an EMPTY stop reason
@@ -234,7 +242,8 @@ persona the open iteration's root ran as (`configure`'s `entryPersona` → the r
 `default_persona`, or the entry role with a warning when that persona is gone), and what the root is told — the notice
 of its background sessions, then its new message with its images — is recorded in the root's conversation there and
 then, so no early end of the run loses it and the user's message is the last the root reads. The run holds the open iteration from its construction, so the explicit cancel during its
-pre-flight closes it (OQ-69). The run is not held at the plan gate,
+pre-flight closes it (OQ-69). The resumed iteration is not held at the plan gate (PD-ORCH-003 revision 2: a gate
+that would hold the run holds before its first new iteration — the plan gate paragraph above),
 and the loop's first iteration is the open one (`iterate(openRow)`): its number, its root's task id and canonical name,
 and its todo task, with no second `iteration.start`, the row's interruption cleared and `iteration_resumed` recorded.
 `turn()` builds the iteration's children over the same root, `IterationChildren.resumePaused` moves each `paused` child
@@ -247,8 +256,36 @@ waiting ones are left to the scheduler. The root carries on from its own record.
 background sessions (`run/resume.ts`'s `resumeNoticeOf`) joins its conversation as its next message, recorded, at its
 resume; the root's was recorded at the continue.
 An agent whose record ends on its own answer resumes into waiting (`resumedStart`); any other takes a model step,
-compressed first when the conversation is too long, as any is. A continue by message appends no todo task. A resumed
-iteration closes like any other, and it can rest and be resumed again (clause 7).
+compressed first when the conversation is too long, as any is. A resumed iteration closes like any other, and it can
+rest and be resumed again (clause 7).
+
+**A continue's message is also a task (PD-ORCH-005 clause 17; OQ-75).** A continue by message that resumes an open
+iteration (`RunDeps.openIteration.delivered`, set by `launchContinuation` when the continue delivered a message) appends
+the message to the planner todo's `Continued Prompts` phase as a task the resumed iteration **holds** (`Todo.appendHeld`:
+`in_progress`, with `heldBy` the iteration's number, stored in the todo document itself), so no selection takes it while
+the iteration is open. It closes with that iteration (`Todo.releaseHeld`): `complete` when the iteration succeeds, before
+the stop conditions are judged, and back to `pending` — with no consecutive retry counted, and marked `nextUp`, so the
+next selection takes it before every other pending task (`Todo.selectNext`; begun, it is an ordinary task again) — on
+every other close: partial, failed, raised, cancelled by the explicit cancel or by a pause that found nothing
+unfinished, and the closes `closeOpenIteration` makes (the decline, a crash-closed iteration, the explicit cancel after a
+rest or during the pre-flight). A rest keeps it held. A task held by an iteration that is no longer open closes when the
+next run is built as the record says that iteration closed (`Todo.releaseStale`): `complete` when its row reads
+`succeeded`, `pending` and `nextUp` otherwise. The todo is saved with `starting`, so a death during the pre-flight keeps
+the task as the root's record keeps the message. The Continue action and a plan decision deliver no message and append
+no task for it. A continue that delivers no message — the Continue action, "continue without them", the message-limit
+resolution's 'continue' and 'double' (REQ-SESSION-110) — restates the last request, so `launchContinuation` passes `appendsTask: false` while the todo still holds that request unfinished
+(`Todo.holdsUnfinished`: a task of that text pending, or in progress and held by the open iteration — its own task or
+a message it holds), and the run takes that task up as it stands; a task in progress that no iteration holds does
+not count, since no selection would take it up. The todo is judged as the run will read it: a message a closed iteration
+still holds is settled first (`Todo.releaseStale` against `succeededIterationsOf`, as the run's constructor settles
+it), so one a death left held and the run returns to pending is not appended a second time. A continue by message always
+appends its task, even beside a pending task of the same text: it states a request (REQ-ORCH-004, OQ-75). The plan cycle held after a resumed iteration is told what became of
+every message that iteration held (`Todo.heldIds`, read when the run is built): this continue's, or an earlier one's a
+Continue action resumed it with. A message is marked as one for good (`Task.message`), so the iteration that takes it up
+is sent it: `iterate()` records the selected message's text when it is not the launch content's own request, and
+`Run.firstMessage` adds it to an execution root's first message after the launch content and before the offers list —
+never to a plan cycle's, which is not an iteration, including the one held after a resumed iteration whose own task was
+a message.
 
 **An iteration a previous run left open, declined (PD-ORCH-005 clause 6; the repair of the crashed-iteration defect).**
 Every execution iteration has an `iterations` row from the moment its root is minted, and `iteration.end` and the row's
@@ -617,8 +654,16 @@ plan cycle opened its gate after that iteration opened — else the latest of an
 (PD-ORCH-005 clause 20, OQ-79), id first and cut to 6,000 characters —
 `latestArtifactText`, read once at the continue, so a later iteration of that run is re-sent it as it stood then —
 and its progress context listing the continuation offers
-no child has taken up, the newest ten — `openOffersText`, which a continue that resumes an open iteration records for
-its root instead, OQ-72). **PD-ORCH-005:** where the last run left an iteration open,
+no child has taken up, the newest ten — `openOffersText` (`run/offers.ts`), which a continue that resumes an open
+iteration records for its root instead, OQ-72; and which `Run.turn()` adds to the first message of every execution
+iteration's root as a text part after the launch content, naming only the offers that content does not already hold
+and the offers open when its handoff was built, named or left out (`RunDeps.handoffOffers`, `openOfferIds` at the
+continue) —
+so a continuation's first iteration, which reads them in its handoff, is told nothing more, each later iteration of
+the same run is told those raised since, whichever child raised them, and a plan cycle is told none; the continue
+that resumes a root tells it only the offers its record does not hold (`offersHeldIn`: those it names, and those a
+list it holds left out and the record shows raised no later than that list was recorded): `PD-ORCH-004` revision 4,
+OQ-80). **PD-ORCH-005:** where the last run left an iteration open,
 that run resumes it first (§2), and `session.continue`'s `withoutPaused` declines it instead — clause 6's "continue
 without them" (renderer `continueSession(action, {withoutPaused})` → main → run host → `Sessions.continueSession`). The
 Continue action states what it resumes from `SessionRecord.resumable` (`resumableOf`: the open iteration, and its root

@@ -112,6 +112,71 @@ sends the stop's `cancel` op and never the explicit cancel. The paused strip's s
 `Continue with a message`. The **runtime view**'s §5 `cancel` row and Continue paragraph are updated; no package, edge,
 process, channel or command changes.
 
+**Review round 7 of the iteration lane (`PD-ORCH-005` clause 17, 2026-09-28, R-064).** The runtime view's message-task
+paragraph names the message-limit resolution's 'continue' and 'double' among the continues that deliver no message and
+append no task while the last request is unfinished — `continueSession` launches them the same way, so the guard already
+covered them. No package, edge, process, channel, message kind or store column changed.
+
+**Review round 5 of the iteration lane (`PD-ORCH-005` clause 17, `PD-ORCH-003` revision 2, `PD-ORCH-004` revision 4,
+2026-09-28, R-064).** A continue that delivers no message judges the todo after settling the messages closed iterations
+still hold (`Todo.releaseStale` against `succeededIterationsOf`, which the run's constructor now shares), so a message a
+death left held is not appended twice. The message an iteration takes up is sent only to an execution root
+(`Run.firstMessage`), never to the plan cycle held after a resumed iteration. The **runtime view**'s message-task
+paragraph says so. No package, edge, process, channel, message kind or store column changed.
+
+**Review round 4 of the iteration lane (`PD-ORCH-005` clause 17, `PD-ORCH-003` revision 2, `PD-ORCH-004` revision 4,
+2026-09-28, R-064).** A continue's message is marked as one in the todo document for good (`Task.message`), and the
+iteration that takes it up while the launch content names another request is sent its text after the launch content
+(`Run.firstMessage`). The plan cycle after a resumed iteration says the iteration was left open, not that a rest left
+it. The **runtime view**'s message-task paragraph says so. No package, edge, process, channel, message kind or store
+column changed.
+
+**Review round 3 of the iteration lane (`PD-ORCH-005` clause 17, `PD-ORCH-003` revision 2, 2026-09-28, R-064).** A task
+in progress counts as the last request unfinished only when the open iteration holds it (`Todo.holdsUnfinished` takes
+the open row), so a task a death stranded in progress no longer stops a Continue action appending its request. The plan
+cycle after a resumed iteration reads what became of every message that iteration held (`Todo.heldIds`), not only the
+one this run's continue delivered. The **runtime view**'s message-task paragraph says so. No package, edge, process,
+channel, message kind or store column changed.
+
+**Review round 2 of the iteration lane (`PD-ORCH-005` clause 17, `PD-ORCH-003` revision 2, `PD-ORCH-004` revision 4,
+2026-09-28, R-064).** A continue's message a resumed iteration leaves pending is taken up by the next iteration
+(`Task.nextUp`, `Todo.selectNext`). A continue that delivers no message appends no task while the todo still holds its
+last request unfinished (`Todo.holdsUnfinished`, `launchContinuation`), which repairs
+`the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`. The plan cycle after a resumed
+iteration is told the continue's message was carried out only when it was. The offers a handoff covers are passed to
+the run (`RunDeps.handoffOffers`) in place of the spawn-order floor, and the continue that resumes a root counts an
+offer its lists left out as held (`offersHeldIn`). The **runtime view**'s plan gate, message-task and continuation
+paragraphs say so. No package, edge, process, channel, message kind or store column changed.
+
+**Review round 1 of the iteration lane (`PD-ORCH-005` clause 17, `PD-ORCH-003` revision 2, `PD-ORCH-004` revision 4,
+2026-09-28, R-064).** A stale held message closes as the record says its iteration did (`Todo.releaseStale` reads the
+iteration rows' outcome); an offer a held list elided counts as told (`offersForFirstMessage`); REQ-SESSION-194's cut
+is one function, `run/cut.ts`, shared by the handoff, the offers list and the plan cycle's pending tasks. The **runtime
+view**'s message-task and continuation paragraphs say so. No package, edge, process, channel, message kind or store
+column changed.
+
+**A later iteration's root is told the open offers (`PD-ORCH-004` revision 4, 2026-09-28, R-064).** The offers list and
+its reader (`openOffersText`, `offersToldIn`) move from `sessions.ts` to `run/offers.ts`, re-exported where they were, so
+the run can use them without importing the session manager. `Run.turn()` adds to every execution iteration root's first
+message the offers that message does not already hold (`offersForFirstMessage`); a plan cycle is told none. Readings in
+OQ-80. The **runtime view**'s continuation paragraph and the **state-ownership view**'s record row say so. No package,
+edge, process, channel, message kind or store column changed.
+
+**The plan gate meets a resumed iteration (`PD-ORCH-003` revision 2, 2026-09-28, R-064).** A run that resumes an open
+iteration runs it unheld; when the gate would hold the run, the loop sets the hold once that iteration has closed and
+work is left, and parks before the first new iteration (`parkAtPlanGate(resumed)`, its plan cycle told the pending
+tasks by `resumedWorkSection`). A plan decision's relaunch appends no task (`RunDeps.appendsTask: false`), which also
+repairs the approved prompt being worked twice. Readings in OQ-77. The **runtime view**'s start order, plan gate and
+resume paragraphs say so; ADR-0062 decision 1 carries the amendment. No package, edge, process, channel, message kind or
+store column changed.
+
+**A continue's message is also a task (`PD-ORCH-005` clause 17, 2026-09-28, R-064).** A continue by message that
+resumes an open iteration appends its message to the planner todo as a task that iteration holds (`Todo.appendHeld`,
+`heldBy` in the todo document), which closes with it (`Todo.releaseHeld`): done when it succeeds, pending on any other
+close. `RunDeps.openIteration` gains `delivered`. Readings in OQ-75. The **runtime view**'s §2 gains the paragraph; the
+phase 4 paragraph below keeps "no todo task is appended" as it was built then. No package, edge, process, channel,
+message kind or store column changed.
+
 **A quit answers nothing for a person, and every stored report is an artifact (`PD-ORCH-005` phase 7, 2026-09-27,
 R-062).** Main tells the application's quit apart (`QuitState`, `main/exit.ts`). That covers the immediate exit, every
 main window's close confirmed by its guard (`guardClose`), and a quit Electron starts on its own account, which

@@ -77,8 +77,10 @@ cycle with the plan as it stands and the changes the user stated, without limit.
 **Plan gate**:
 The hold a `plan`-mode run takes before any file-modifying work is done, where it waits indefinitely for
 one of exactly three answers — approve, revise, cancel. It withholds capability rather than preventing
-the run from starting, and approval installs the run's execution grants for the remainder of that run. —
-`REQ-ORCH-153`, `REQ-ORCH-154`
+the run from starting, and approval installs the run's execution grants for the remainder of that run. A
+continue that resumes an iteration a rest left open runs it unheld, since it is work already under way; a gate
+that would hold that run holds before its first new iteration. — `REQ-ORCH-153`, `REQ-ORCH-154`,
+`PD-ORCH-003` (revision 2)
 _Avoid_: plan mode dialog, plan approval prompt
 
 **Planning grants**:
@@ -155,8 +157,9 @@ A new child a parent delegates to take up the remaining work of a child whose re
 record names the child it continues. A piece of work is continued once and a continuation is never offered one of its
 own. An offer outlives its run: the agent that delegated the child takes it up while that agent runs, and the root of a
 later iteration or a later run takes up one the session left before — including a resumed iteration's own, from an
-earlier run — told of it in the handoff, or at the continue that resumes it. Not a resume: the timed-out child is never
-restarted and earns no corrective message (`REQ-NOTIFY-112`). — `PD-ORCH-004` (revision 3)
+earlier run — told of it once: in the handoff, at the continue that resumes it, or in the first message of a later
+iteration of the same run. Not a resume: the timed-out child is never
+restarted and earns no corrective message (`REQ-NOTIFY-112`). — `PD-ORCH-004` (revisions 3 and 4)
 _Avoid_: resume, retry (the one retry is REQ-ORCH-088's fallback model), and "continuation" alone where a session's
 next run is meant
 
@@ -190,7 +193,10 @@ and is never a role's own tier. — `REQ-ORCH-019`
 
 **Todo list**:
 The run's work plan: phases holding tasks, created at run start with a single phase named "main" and
-appended to on resume. — `REQ-ORCH-004`
+appended to on resume. A continue that resumes an open iteration appends its message as a task that iteration
+holds beside its own, closing with it — done when it succeeds, pending on any other close and then taken up by the
+next iteration before any other pending task, which is sent the message as its task. A continue that states no new
+request appends none while the last request is still to be worked. — `REQ-ORCH-004`, `PD-ORCH-005` clause 17
 _Avoid_: backlog (that is a delivery state on the requirements board), checklist
 
 ### Finishing work

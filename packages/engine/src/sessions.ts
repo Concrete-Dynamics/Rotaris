@@ -9,9 +9,13 @@ import { SequenceCounters } from './sequence.js';
 import { claimLockReaping, SessionWriter, toTranscriptRow, type CheckpointRecordInput, type Committed, type RestoreRecordInput } from './session-writer.js';
 import type { CheckpointPort, CheckpointPortContext } from './checkpoint-port.js';
 import { EventBus } from './run/event-bus.js';
-import { parseTokenSamples, Run, type AgentTerminals, type ModelLookup, type PermissionPosture, type RunConfig, type RunResult } from './run/run.js';
+import { parseTokenSamples, Run, succeededIterationsOf, type AgentTerminals, type ModelLookup, type PermissionPosture, type RunConfig, type RunResult } from './run/run.js';
 import { iterationAgents, recordCrash } from './run/crash.js';
 import { resumeNoticeOf } from './run/resume.js';
+import { offersHeldIn, openOfferIds, openOffersText } from './run/offers.js';
+import { cut } from './run/cut.js';
+// PD-ORCH-004 revision 4: the offers list lives beside the run, which tells a later iteration's root; kept public here.
+export { offersToldIn, openOffersText } from './run/offers.js';
 import { planSection } from './run/plan-text.js';
 export { planRequestSection, planSection } from './run/plan-text.js';
 import { ResilienceMemory, type CatalogueEntry, type ModelChoice } from './run/resilience.js';
@@ -28,7 +32,6 @@ import { isActiveStatus } from './run/stop-conditions.js';
 import type { HookPort, HookPortContext, RunNotice, ToolHookBridge } from './hooks-port.js';
 import { ArtifactStore } from './artifacts/store.js';
 import { toArtifactRecord } from './artifacts/record.js';
-import { parseReport } from './children/notify.js';
 import { persistAttachments, projectAttachments, readAttachmentBody, validateAttachmentInputs } from './attachments.js';
 import { artifactOps, type ArtifactOps } from './artifacts/port.js';
 import type { Preflight, PreflightContext } from './preflight.js';
@@ -383,14 +386,6 @@ export interface ResumeSuccess {
 
 type ResumeFailure = { readonly code: string; readonly reason: string };
 
-const cut = (text: string, cap: number): string => {
-  if (text.length <= cap) return text;
-  const end = Math.max(0, cap - 3);
-  // Never between the two halves of a surrogate pair (found by phase 6's review).
-  const kept = end > 0 && /[\uD800-\uDBFF]/.test(text[end - 1]!) ? end - 1 : end;
-  return `${text.slice(0, kept)}...`;
-};
-
 function parseTodoDocument(row: SessionRow): Result<TodoDocument | undefined, ResumeFailure> {
   if (row.todo === null) return ok(undefined);
   try {
@@ -474,51 +469,6 @@ function textOfMessage(m: ChatMessage): string {
 function toldSinceLastAnswer(messages: readonly ChatMessage[]): ReadonlySet<string> {
   const lastAnswer = messages.map((m) => m.role).lastIndexOf('assistant');
   return new Set(messages.slice(lastAnswer + 1).filter((m) => m.role === 'user').map(textOfMessage));
-}
-
-/** PD-ORCH-004 revision 3: how many open offers a later root is told of — the newest; the rest are elided. */
-const OFFERS_TOLD = 10;
-const OFFERS_HEADER = 'Open continuation offers (delegate with `continuation_of` set to the task id to take one up):';
-
-/**
- * PD-ORCH-004 revision 3: the task ids whose continuation offer a conversation already holds — the offer itself, as a
- * child's report carries it (`continuation_of: "<id>"`, in a message or a tool result), or a line of an offers list it
- * was told, alone or in a handoff. A task id merely mentioned is not an offer told (found by phase 6's fourth review).
- */
-export function offersToldIn(messages: readonly ChatMessage[]): ReadonlySet<string> {
-  const told = new Set<string>();
-  for (const m of messages) {
-    for (const p of m.content) {
-      const text = p.kind === 'text' ? p.text : p.kind === 'tool-result' ? p.result : '';
-      for (const hit of text.matchAll(/continuation_of: \\?"(bg_[0-9a-f]{8})\\?"/g)) told.add(hit[1]!);
-      if (p.kind !== 'text') continue;
-      // An offers list stands alone when a resumed root is told it, and inside the handoff a new iteration's root reads.
-      for (let at = p.text.indexOf(OFFERS_HEADER); at >= 0; at = p.text.indexOf(OFFERS_HEADER, at + 1)) {
-        for (const line of p.text.slice(at + OFFERS_HEADER.length + 1).split('\n')) {
-          if (!line.startsWith('- ')) break;
-          const hit = /\((bg_[0-9a-f]{8})\)$/.exec(line);
-          if (hit !== null) told.add(hit[1]!);
-        }
-      }
-    }
-  }
-  return told;
-}
-
-/**
- * PD-ORCH-004 revision 3: the continuation offers the session holds that no child has taken up, which a later root may
- * take up — each by its child's name and task id, the newest ten, with the way to take one up (OQ-72). A new iteration's
- * root reads it in the handoff's progress context, a resumed root at the continue (only those `include` admits).
- * Empty when there is none.
- */
-export function openOffersText(dal: StoreDal, sessionId: SessionId, include: (taskId: string) => boolean = () => true): string {
-  const all = dal.childrenOf(sessionId);
-  const continued = new Set(all.flatMap((c) => (c.continuation_of === null ? [] : [c.continuation_of])));
-  const open = all.filter((c) => typeof parseReport(c)?.cut_off?.continuation_offer === 'string' && !continued.has(c.task_id) && include(c.task_id));
-  if (open.length === 0) return '';
-  const told = open.slice(-OFFERS_TOLD).map((c) => `- ${cut(c.canonical_name, 80)} (${c.task_id})`);
-  const elided = open.length > OFFERS_TOLD ? ['- [... earlier continuation offers elided]'] : [];
-  return [OFFERS_HEADER, ...elided, ...told].join('\n');
 }
 
 export function buildContinuationPayload(dal: StoreDal, row: SessionRow, prompt: string, todo: TodoDocument | undefined): string {
@@ -1171,9 +1121,10 @@ export class Sessions {
 
   /**
    * `openIteration` is PD-ORCH-005 clauses 4 and 6 for a session whose last run left an iteration open: resume it — with
-   * the message a continue by message delivers to its root — or decline it. Every route resumes unless told to decline.
+   * the message a continue by message delivers to its root, which clause 17 also appends as a task the resumed iteration
+   * holds — or decline it. Every route resumes unless told to decline.
    */
-  private launchContinuation(s: Live, prompt: string, payload: string, todo: TodoDocument | undefined, priorIntent: IntentCategory | null, setupIn: RunSetup, attachmentContent: readonly ContentPart[] = [], plan?: { readonly cycle: number; readonly changes: string }, openIteration: OpenIterationChoice = { message: null }): void {
+  private launchContinuation(s: Live, prompt: string, payload: string, todo: TodoDocument | undefined, priorIntent: IntentCategory | null, setupIn: RunSetup, attachmentContent: readonly ContentPart[] = [], plan?: { readonly cycle: number; readonly changes: string }, openIteration: OpenIterationChoice = { message: null }, appendsTask = true): void {
     const { model, runtime } = setupIn;
     const sessionId = s.writer.sessionId;
     const storedRow = s.dal.getSession(sessionId)!;
@@ -1221,7 +1172,8 @@ export class Sessions {
       const tell = (m: ChatMessage): void => { s.writer.recordAgentMessage(open.root_task_id, open.iteration, 'message', m); };
       // A continue whose run came to rest before the resumed root took a step has told it already: a notice or an offer
       // list it has not yet answered is not repeated (found by phase 4's third review).
-      const conversation = conversationOf(s.dal.agentConversation(sessionId, open.root_task_id));
+      const recorded = s.dal.agentConversation(sessionId, open.root_task_id);
+      const conversation = conversationOf(recorded);
       const unanswered = toldSinceLastAnswer(conversation);
       const notice = resumeNoticeOf(s.dal, sessionId, open.root_task_id, this.deps.terminals?.(sessionId));
       if (notice !== null && !unanswered.has(textOfMessage(notice))) tell(notice);
@@ -1229,13 +1181,29 @@ export class Sessions {
        * PD-ORCH-004 revision 3: a resumed root is told the offers it may take up, as a new iteration's reads them in the
        * handoff it is not sent (found by phase 6's second review) — only those its conversation does not already hold:
        * its own children's reports carry theirs, and an offer told once is not told again, so a root that had answered
-       * and waits takes no step for a list it has read (found by phase 6's third and fourth reviews).
+       * and waits takes no step for a list it has read (found by phase 6's third and fourth reviews). PD-ORCH-004 revision
+       * 4: an offer a list it holds left out as earlier is held too, so it is not named in a second list (OQ-80).
        */
-      const told = offersToldIn(conversation);
+      const told = offersHeldIn(s.dal, sessionId, recorded);
       const offers = openOffersText(s.dal, sessionId, (taskId) => !told.has(taskId));
       if (offers !== '') tell({ role: 'user', content: [{ kind: 'text', text: offers }] });
       if (openIteration.message !== null && openIteration.message.length > 0) tell({ role: 'user', content: [...openIteration.message] });
     }
+    /*
+     * PD-ORCH-005 clause 17 (OQ-75), and the repair of
+     * `the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`: a continue that delivers no
+     * message — the Continue action, "continue without them", and the message-limit resolution's 'continue' and
+     * 'double' (REQ-SESSION-110, REQ-ORCH-086/087), which `continueSession` launches the same way — restates the last
+     * request, so it appends no task while the
+     * todo still holds that request unfinished: a continue's message a resumed iteration left pending or holds, or any
+     * request whose task a rest put back. Its task is then taken up as it stands. The todo is judged as the run will read
+     * it: a message a closed iteration still holds — a process that died between that iteration's close and the save of
+     * its release — is settled first, as the run's constructor settles it (`releaseStale`), so a message it returns to
+     * pending is not appended a second time (found by review round 5).
+     */
+    const judged = todo === undefined ? null : Todo.fromDocument(todo);
+    judged?.releaseStale(open?.iteration ?? null, succeededIterationsOf(s.dal, sessionId));
+    const restatesUnfinished = (openIteration === 'decline' || openIteration.message === null) && judged !== null && judged.holdsUnfinished(prompt, open ? { iteration: open.iteration, taskId: open.todo_task_id } : null);
     // REQ-EVENTS-053, PD-MONITOR-001: the run's model calls that are no agent's turn count against the run itself.
     const countUsage: CountUsage = (usage, ref) => { runRef.run?.countUsage(usage, ref); };
     const supervisorSetup = this.deps.supervisor?.(workspaceRoot, sessionId, countUsage) ?? null;
@@ -1273,9 +1241,12 @@ export class Sessions {
       // PD-ORCH-005: the store the conversation record, the iteration record and a left-open iteration are read from —
       // every run's, with or without a tool port.
       dal: s.dal,
-      ...(open ? { openIteration: { resume: openIteration !== 'decline' } } : {}),
+      // PD-ORCH-005 clause 17: a message this continue delivered to the resumed root is also a task that closes with it.
+      ...(open ? { openIteration: { resume: openIteration !== 'decline', delivered: openIteration !== 'decline' && openIteration.message !== null } } : {}),
+      // PD-ORCH-004 revision 4: the offers the payload's handoff covers, named or left out, told no later root again.
+      handoffOffers: openOfferIds(s.dal, sessionId),
       tools: null, permission, pid: this.deps.pid, host: this.deps.host, readSession: () => s.dal.getSession(sessionId), warn,
-      continuation: true, ...(todo ? { resumeTodo: todo } : {}), ...(hooks ? { hooks } : {}), checkpoints,
+      continuation: true, ...(todo ? { resumeTodo: todo } : {}), ...(appendsTask && !restatesUnfinished ? {} : { appendsTask: false }), ...(hooks ? { hooks } : {}), checkpoints,
       ...(supervisors ? { supervisorFor: (conversationId: string) => supervisors.forConversation(conversationId) } : {}),
       onSaved: (generation) => summary.rebuild(generation, () => s.dal.getSession(sessionId)),
       ...(preflight ? { preflight: async (signal: AbortSignal) => { const p = await preflight({ sessionId, workspaceRoot, prompt, signal, warn, countUsage, previousIntent: priorIntent, hasUnfinishedWork: true }); decided.grant = p.grant; decided.intent = p.intent.category; return p; } } : {}),
@@ -1857,7 +1828,10 @@ export class Sessions {
     if (!resolved.ok) return err({ code: resolved.error.code, reason: 'reason' in resolved.error ? resolved.error.reason : resolved.error.code });
     const lastPrompt = [...s.dal.residentRows(sessionId)].reverse().find((r) => r.kind === 'user')?.body ?? stored.session_id;
     const payload = `${buildContinuationPayload(s.dal, s.dal.getSession(sessionId)!, lastPrompt, todo.value)}\n\n${planSection(decision, text, changes)}`;
-    this.launchContinuation(s, lastPrompt, payload, todo.value, previousIntent(s.dal, sessionId), setup.value, [], decision === 'revise' ? { cycle: cycle + 1, changes } : undefined);
+    // PD-ORCH-003 revision 2: the held run's todo already carries every task — the gated work, and a continue's message
+    // (complete, or pending and taken up first) after a hold that followed a resumed iteration — so the relaunch appends
+    // none: appending the last request again would duplicate it (OQ-77).
+    this.launchContinuation(s, lastPrompt, payload, todo.value, previousIntent(s.dal, sessionId), setup.value, [], decision === 'revise' ? { cycle: cycle + 1, changes } : undefined, { message: null }, false);
     return ok({ relaunched: true, cycle });
   }
 

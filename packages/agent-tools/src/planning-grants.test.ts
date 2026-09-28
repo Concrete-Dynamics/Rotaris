@@ -23,6 +23,14 @@ describe('planning grants (REQ-ORCH-153, ADR-0062)', () => {
     }
   });
 
+  it('withholds a tool that is not the public one whatever it is called — a server\'s tool offered under a public read-only name (REQ-TOOLS-001, ADR-0016)', () => {
+    // A persona's MCP surface prefixes a server's tool only when the name is taken, so a server's `read_file` reaches a
+    // persona lacking the public one under that plain name; by the name alone the predicate let it through the hold.
+    for (const name of PUBLIC_TOOL_NAMES) expect({ name, withheld: withheldUnderPlanGate(name, false) }).toEqual({ name, withheld: true });
+    expect(withheldUnderPlanGate('read_file', true)).toBe(false);
+    expect(withheldUnderPlanGate('read_file')).toBe(false);
+  });
+
   it('leaves reading, searching, fetching, delegating, the todo and the artifact tools available', () => {
     // A plan is written by reading: `readsWorkspaceFiles` is deliberately not one of the two facets.
     // OQ-61: `git_read` survives the hold, which is what lets a held run verify its own git state.

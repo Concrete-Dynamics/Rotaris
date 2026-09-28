@@ -43,7 +43,27 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-09-27**
+## Last reconciled with the code: **2026-09-28**
+
+**Hook faults reach the application log (defect repair, 2026-09-28, R-062).** `HookPortContext.log` and `HookSinks.log`
+were documented "the application log only" and wired by `Sessions` to the per-session log at `INFO`, where the
+`WARNING` default of `session_log_level` dropped them, so a hook fault that reduces to a log entry (REQ-HOOKS-079/128/129)
+and the run host's account of an unresolvable hook set (REQ-HOOKS-085) were recorded nowhere at the default
+configuration. `SessionsDeps` gains `log`, the application log at `info` (PD-MONITOR-002), which the run host fills with
+its `log` event; both hook-port construction sites write through it. `CheckpointPortContext.log` is decided the other
+way and says so: it stays the per-session log, since `run-host/checkpoints.ts` already writes every checkpoint line to
+the application log through `CheckpointRootDeps.log` as well. The **process view**'s application-log paragraph gains
+the sentence. No package, edge, process, channel, message kind or store column changed.
+**Three permission-gate defects repaired (2026-09-28, R-062).** The path scope of REQ-TOOLS-018 joins each path argument
+to the workspace root before the resolver, so a workspace-relative read no longer resolves against the run host's process
+directory; `realPathOf` rebuilds a relative path's missing tail with `basename` and drops no character; and PD-TOOLS-004's
+`publicTool` predicate now decides whether a rule's tool set holds a call (`toolSetHolds` in `agent-tools/src/policy.ts`)
+and whether the plan gate withholds it (`withheldUnderPlanGate(name, isPublicTool)`, passed `false` by the run host's MCP
+loop and by the gate for a name it serves with something other than the public tool or removed itself), so an MCP tool
+offered under a public name is ruled as the undeclared tool it is. The **sequences view** §2 gains two sentences on the
+approval bullet and the **runtime view**'s MCP-surface passage one clause; no package, edge, process, channel, message
+kind or store column changed.
+
 
 **A session approval of a file write covers that path (`PD-TOOLS-004`, built 2026-09-27, R-057).** A grant made by
 "approve for session" on a call of the public `write_file` or `haet_edit` (`haet` folded in) now stores the set of

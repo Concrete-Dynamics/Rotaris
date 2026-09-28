@@ -6,11 +6,22 @@ import type { ArtifactKind } from '@rotaris/release-naming';
  * never from the running image. Pure over the facts it is handed; `electron.ts` gathers them once per process,
  * because the classification is stable across launches of the same installation and takes no user input.
  *
- * The order is the requirement's: the AppImage variable first, then whether this is a released standalone artifact
- * at all, then the macOS bundle, then on Windows the installer's own registry record (`InstallDir` under
- * `HKCU\Software\Rotaris`, REQ-STARTUP-016) tested against the artifact — never against the running image, which
- * under a preparation (REQ-STARTUP-165) sits inside a copy the product can recreate at will. Everything else on
- * Windows that names an artifact is portable.
+ * The order: first whether this is a released standalone artifact at all — which is not a flavour test and which no
+ * variable overrides, because REQ-STARTUP-106 classifies "any build that is not running from one of the released
+ * standalone artifacts" not updatable, a source checkout or a development environment among them — and only then the
+ * flavour tests, in the requirement's order: the AppImage variable before any other flavour test, then the macOS
+ * bundle, then on Windows the installer's own registry record (`InstallDir` under `HKCU\Software\Rotaris`,
+ * REQ-STARTUP-016) tested against the artifact — never against the running image, which under a preparation
+ * (REQ-STARTUP-165) sits inside a copy the product can recreate at will. Everything else on Windows that names an
+ * artifact is portable.
+ *
+ * The AppImage test is applied to a packaged Linux build alone. `APPIMAGE` is inherited by every child of an
+ * AppImage-hosted terminal or editor, so on any other launch it names somebody else's file: read on a source-tree
+ * launch it would contact the endpoint REQ-STARTUP-106 forbids, and read on a packaged Windows or macOS build it would
+ * select a flavour that platform never carries (REQ-STARTUP-031) — under PD-STARTUP-001 one never offered — so a
+ * variable a user can set would silently stop the check from ever offering anything (REQ-STARTUP-111). The AppImage
+ * artifact exists for `linux-x86_64` alone, so the test is still "before any other flavour test" on the one platform
+ * where it can hold.
  *
  * Which file the artifact is (ADR-0054, "How the artifact is identified for the update path"): the portable's own
  * launcher publishes its absolute path in `ROTARIS_PORTABLE_ARTIFACT` — the variable REQ-STARTUP-147 admits as "the
@@ -88,14 +99,16 @@ export function enclosingBundle(execPath: string): string | null {
 }
 
 export function classifyInstallation(facts: ClassificationFacts): Classification {
+  // Not a flavour test, and nothing overrides it: a build that is not a released standalone artifact is not updatable
+  // whatever its environment says, and issues no request (REQ-STARTUP-106, REQ-STARTUP-150).
+  if (!facts.packaged) {
+    return { updatable: false, reason: 'a development or source-tree launch, not a released standalone artifact (REQ-STARTUP-106)' };
+  }
   const appImage = facts.env[APPIMAGE_VARIABLE];
-  if (appImage !== undefined && appImage !== '') {
+  if (facts.platform === 'linux' && appImage !== undefined && appImage !== '') {
     // The AppImage clause is applied before any other flavour test; the target is the file the variable names,
     // never the executable image unpacked from it (REQ-STARTUP-106).
     return { updatable: true, flavour: 'appimage', target: appImage };
-  }
-  if (!facts.packaged) {
-    return { updatable: false, reason: 'a development or source-tree launch, not a released standalone artifact (REQ-STARTUP-106)' };
   }
   if (facts.platform === 'darwin') {
     const bundle = enclosingBundle(facts.execPath);

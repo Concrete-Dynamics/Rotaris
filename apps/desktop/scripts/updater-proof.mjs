@@ -10,6 +10,12 @@
  * them — arrives here as a connection or a CONNECT, and the listener records each one. A launch that made the request
  * would show `api.github.com` in that record. The listener records nothing.
  *
+ * The launch's environment is fixed here rather than inherited from the operator's shell: `APPIMAGE` and
+ * `ROTARIS_PORTABLE_ARTIFACT` are SET, to files that name other things, because both are inherited by every child of an
+ * AppImage-hosted terminal or editor (or of a shell that ran the portable), and a source-tree launch must stay not
+ * updatable whatever they say (REQ-STARTUP-106: no variable overrides the released-artifact test). A launch the
+ * classification got wrong would show a flavour and a `GET` in its `update check:` line, and `api.github.com` at the sink.
+ *
  * What this proof cannot show (IC-3; first-release-plan.md §4.6's first-execution note): a check that DOES go out, an
  * offer, a download, the installer or portable apply, and the restart, all of which need a packaged Windows artifact
  * launched from its own install directory or its own launcher. Those steps are decided by the unit tests beside
@@ -49,10 +55,13 @@ await new Promise((resolve) => sink.listen(0, '127.0.0.1', resolve));
 const port = sink.address().port;
 console.log(`proxy sink listening on 127.0.0.1:${port}`);
 
+/** What an AppImage-hosted editor and a shell the portable started would leave in a `pnpm dev`'s environment. */
+const INHERITED_APPIMAGE = '/tmp/SomeEditor-x86_64.AppImage';
+const INHERITED_PORTABLE = '/tmp/Rotaris-0.1.0-windows-x64-portable.exe';
 const started = await startApp({
   root: output,
   electronArgs: [`--proxy-server=127.0.0.1:${port}`],
-  extra: { ROTARIS_APP_LOG_LEVEL: 'info' },
+  extra: { ROTARIS_APP_LOG_LEVEL: 'info', APPIMAGE: INHERITED_APPIMAGE, ROTARIS_PORTABLE_ARTIFACT: INHERITED_PORTABLE },
 });
 let log = '';
 try {
@@ -89,6 +98,7 @@ const githubConnections = connections.filter((c) => /github\.com/i.test(c.firstL
 
 check('the application log carries exactly one `update check:` line — one main window, one activation (REQ-STARTUP-114)', checkLines.length === 1, `${checkLines.length} line(s)`);
 check('that line says the build is not updatable and that no request is made (REQ-STARTUP-106)', notUpdatable.length === 1, notUpdatable[0] ?? checkLines[0] ?? '(none)');
+check('with APPIMAGE and ROTARIS_PORTABLE_ARTIFACT set in the launch\'s environment, the reason is still the source-tree launch (REQ-STARTUP-106)', notUpdatable.length === 1 && !/appimage flavour|portable flavour/.test(log), `APPIMAGE=${INHERITED_APPIMAGE}, ROTARIS_PORTABLE_ARTIFACT=${INHERITED_PORTABLE}`);
 check('the line names a development or source-tree launch as the reason', notUpdatable.some((l) => l.includes('development or source-tree launch')), notUpdatable[0] ?? '(none)');
 check('the line is written at `info`, in the level column (PD-MONITOR-002)', notUpdatable.some((l) => /^\[main [^\]]+\] info\s+update check:/.test(l)), notUpdatable[0]?.slice(0, 60) ?? '(none)');
 check('no line records a request to the feed endpoint (REQ-STARTUP-150)', requestLines.length === 0, `${requestLines.length} line(s)`);
@@ -96,7 +106,7 @@ check('the proxy sink saw no connection for github.com — no update request lef
 check('the launch quit cleanly after the check (REQ-STARTUP-046: nothing was in flight to wait for)', /quit: exiting with status 0/.test(log), lines.filter((l) => l.includes('quit:')).join(' / '));
 
 writeFileSync(join(output, 'proxy-record.json'), `${JSON.stringify(connections, null, 2)}\n`);
-writeFileSync(join(output, 'report.json'), `${JSON.stringify({ at: new Date().toISOString(), proxyPort: port, checkLines, requestLines, connections: connections.length, githubConnections: githubConnections.length, checks }, null, 2)}\n`);
+writeFileSync(join(output, 'report.json'), `${JSON.stringify({ at: new Date().toISOString(), proxyPort: port, environment: { APPIMAGE: INHERITED_APPIMAGE, ROTARIS_PORTABLE_ARTIFACT: INHERITED_PORTABLE }, checkLines, requestLines, connections: connections.length, githubConnections: githubConnections.length, checks }, null, 2)}\n`);
 const failed = checks.filter((c) => !c.pass).length;
 console.log(`\n${checks.length - failed}/${checks.length} checks passed; evidence in ${output}`);
 if (!existsSync(started.logFile)) console.log('(no application log was written)');

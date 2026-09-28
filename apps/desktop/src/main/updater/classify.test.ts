@@ -17,8 +17,26 @@ describe('installation-flavour classification — REQ-STARTUP-106', () => {
   it('the AppImage variable is tested before any other flavour test, and the target is the file it names', () => {
     const c = classifyInstallation({ platform: 'linux', packaged: true, execPath: '/tmp/.mount_abc/rotaris', env: { [APPIMAGE_VARIABLE]: '/home/u/Rotaris-0.1.0-linux-x86_64.AppImage' }, installDir: null });
     expect(c).toEqual({ updatable: true, flavour: 'appimage', target: '/home/u/Rotaris-0.1.0-linux-x86_64.AppImage' });
-    // Even a build that is not packaged: the variable is the artifact's runtime saying what it launched.
-    expect(classifyInstallation({ platform: 'linux', packaged: false, execPath: '/x', env: { [APPIMAGE_VARIABLE]: '/a.AppImage' }, installDir: null })).toMatchObject({ flavour: 'appimage' });
+  });
+
+  it('an inherited APPIMAGE never makes a source-tree or development launch updatable, on any platform', () => {
+    // APPIMAGE is inherited by every child of an AppImage-hosted terminal or editor; a `pnpm dev` started from one
+    // carries it. The released-artifact test comes first and no variable overrides it.
+    for (const platform of ['linux', 'win32', 'darwin'] as const) {
+      const c = classifyInstallation({ platform, packaged: false, execPath: '/repo/node_modules/electron/dist/electron', env: { [APPIMAGE_VARIABLE]: '/tmp/SomeEditor-x86_64.AppImage' }, installDir: null });
+      expect(c.updatable, platform).toBe(false);
+      if (!c.updatable) expect(c.reason).toContain('development or source-tree');
+    }
+  });
+
+  it('APPIMAGE on a packaged Windows or macOS build selects nothing: the flavour follows the artifact that platform carries (REQ-STARTUP-111)', () => {
+    // A variable a user can set must not turn a Windows build into a flavour PD-STARTUP-001 never offers.
+    const installed = classifyInstallation(win({ env: { [APPIMAGE_VARIABLE]: 'C:\\tools\\SomeEditor.AppImage' }, installDir: 'C:\\Users\\u\\AppData\\Local\\Rotaris' }));
+    expect(installed).toEqual({ updatable: true, flavour: 'installer', target: 'C:\\Users\\u\\AppData\\Local\\Rotaris' });
+    const portable = classifyInstallation(win({ env: { [APPIMAGE_VARIABLE]: 'C:\\tools\\SomeEditor.AppImage', [PORTABLE_ARTIFACT_VARIABLE]: 'E:\\Rotaris-0.1.0-windows-x64-portable.exe' } }));
+    expect(portable).toEqual({ updatable: true, flavour: 'portable', target: 'E:\\Rotaris-0.1.0-windows-x64-portable.exe' });
+    const bundle = classifyInstallation({ platform: 'darwin', packaged: true, execPath: '/Applications/rotaris.app/Contents/MacOS/rotaris', env: { [APPIMAGE_VARIABLE]: '/tmp/x.AppImage' }, installDir: null });
+    expect(bundle).toEqual({ updatable: true, flavour: 'app-bundle', target: '/Applications/rotaris.app' });
   });
 
   it('a packaged Linux build without the variable is not one of the released artifacts', () => {

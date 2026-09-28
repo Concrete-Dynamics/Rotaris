@@ -3377,8 +3377,10 @@ say what the decline's wording means before the crash is recorded.
 - **The decline's wording before the crash is recorded.** In the recovery state the agents the count names are still
   `running` in the store, yet the decline says "The N paused agents end cancelled". The text is kept. The crash record
   pauses them first (clause 8), then the decline cancels them, so the words describe the act at the moment it happens.
-  This matches how those agents present: as `paused` before the crash is recorded, so the agent tree agrees with the
-  count (clause 13).
+  The wording does not rest on how those agents present, which is lane "surfaces"' reading (clause 13 and REQ-CHAT-008's
+  recovery state): at this commit they still present as the build's catch-all, and the reading that lane is expected to
+  take is that they present as `paused` before the crash is recorded, so the agent tree agrees with the count. If that
+  reading is refined, this bullet is re-read against it.
 - **Either choice records the crash first, in one place.** Every continue passes `Sessions.launchContinuation`, which
   records the crash before the stale-child settle and before it resumes or declines the open iteration. So the Continue
   action, the continue by message (`Sessions.prompt`) and the decline need no crash-specific path.
@@ -3398,16 +3400,24 @@ Most of what these rulings decide was already built under OQ-69 and OQ-71's read
 text contradicts: a board run caught by the application's quit came to rest by `stop`
 (`docs/defects/fixed/a-board-run-caught-by-a-quit-rests-as-a-stop.md`). It also found two strings the rulings fix:
 `/stop`'s description and the paused continue's `Send`. What the text leaves open concerns a plan cycle's waits at a
-quit, the literal reach of "no other control stands outside the dock", and a few names the build kept.
+stop, the literal reach of "no other control stands outside the dock", REQ-TRACE-464's word "cancel", and a few names
+the build kept.
 
 **What the build proceeds under.**
 
-- **A wait inside a plan cycle at a quit.** Clause 15 says a quit during a plan cycle "ends the cycle's agents and
-  records no interruption". Its last bullet has the quit withdraw an approval (clause 9), and PD-CHAT-002 revision 2
-  has it withdraw a question. A withdrawal is recorded by the interruption that caused it, and a plan cycle records
-  none. So an approval or a question pending in a plan cycle when the quit lands is released as before the build:
-  cancelled (`cancelPending`), not withdrawn. The dock's own dismissal at the quit still cancels nothing, because main
-  holds it back; the cancellation is the run's. A quit at a *parked* gate has no turn in flight and nothing waiting.
+- **A wait inside a plan cycle at a stop or a quit.** Clause 15 says a stop or a quit during a plan cycle "ends the
+  cycle's agents and records no interruption". Its last bullet, which it decides "in each case", has the quit withdraw
+  an approval its dialog closes (clause 9), and PD-CHAT-002 revision 2 has the quit withdraw a question. Neither makes
+  an exception for a plan cycle, and a withdrawal names its own cause, apart from the agents' and the iteration's
+  interruption. So an approval or a question pending in a plan cycle when the quit lands is **withdrawn by `quit`**
+  (`Run.waitsWithdrawnBy`), while the cycle's agents still end `cancelled` and nothing records an interruption. The
+  text decides the quit; the build reads the stop the same way, because clause 9 names the stop beside the quit and
+  clause 15 puts the two together for a plan cycle: a wait pending in a plan cycle when a stop lands is withdrawn by
+  `stop`. The explicit cancel still cancels it (clause 3: it is final), and so does a stop the run raised itself. *The
+  first reading built, and superseded in the same round by the review: the pending wait was cancelled
+  (`cancelPending`), on the ground that "a withdrawal is recorded by the interruption that caused it, and a plan cycle
+  records none". That ground confused the wait's cause with the agents' interruption, and the directive's words govern
+  the quit's case.* A stop or a quit at a *parked* gate has no turn in flight and nothing waiting.
 - **A stop during a plan cycle, as the session shows it.** The cycle's agents end `cancelled` with their reports, no
   iteration row exists, and `plan_released` stays 0, so the next prompt or continue is held again. The session persists
   `paused` (REQ-SESSION-186's persisted status for a stop). Its result's summary reads "The run came to rest because a
@@ -3426,10 +3436,19 @@ quit, the literal reach of "no other control stands outside the dock", and a few
 - **The board's quit.** Main's board coordinator ends its runs at the last window's close with the run host's
   `announceShutdown` (REQ-MONITOR-131's shutdown request), renamed `quitAll`, rather than the stop control's `cancel`.
   A stop request keeps its first reason, so the `cancel` sent ahead of the run host's `shutdown` rested the run by
-  `stop`. REQ-TRACE-469's unlimited approval wait is still released at once, withdrawn by the quit.
+  `stop`. REQ-TRACE-469's unlimited approval wait is still released at once, withdrawn by the quit. REQ-TRACE-464 says
+  "Closing the application SHALL **cancel** the run rather than leave it orphaned", and `PD-ORCH-005`'s Narrows list
+  does not name it. The build reads the requirement's guarantee as the clause's own last words — the run is ended, not
+  orphaned — and ends it as every quit ends a run, clause 3's quit: its agents rest `paused`, its iteration stays open,
+  and a later continue resumes it. The word "cancel" is not met literally, and was not before the repair either (the
+  stop's `cancel` rested the run by `stop`); nothing met it as the explicit cancel. So this is a departure from a
+  requirement no directive names, and a back-pointer is owed: either `PD-ORCH-005` names REQ-TRACE-464 among what it
+  narrows, or a ruling has a board run cancelled explicitly at the quit.
 
-**What a ruling decides.** Whether a quit during a plan cycle should withdraw its pending approval or question, which
-would need a withdrawal that names no interruption. Whether the "Command not run" notice and the refusal line should
+**What a ruling decides.** Whether a stop during a plan cycle, which the text leaves to clause 9, should withdraw its
+pending approval or question as a quit does (the build) or cancel it. Whether REQ-TRACE-464's "SHALL cancel" is narrowed
+by clause 3's quit, which would add it to `PD-ORCH-005`'s Narrows list, or a board run is cancelled explicitly at the
+quit, final and never resumed. Whether the "Command not run" notice and the refusal line should
 move into the notices row, a layout change. Whether a stop during a plan cycle should persist a status and a summary of
 its own rather than a stop's `paused` and "came to rest".
 

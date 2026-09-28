@@ -50,8 +50,10 @@ and 19, `PD-CHAT-001` revision 4, `PD-CHAT-002` revision 2, 2026-09-28, R-064).*
 at the last window's close with the application's quit (`quitAll` → `announceShutdown`), not the stop control's
 `cancel`, so a board run rests by `quit` (`docs/defects/fixed/a-board-run-caught-by-a-quit-rests-as-a-stop.md`). The
 **process view**'s board paragraph, the **runtime view**'s rest paragraph and §5 rows and the **sequences view**'s
-approval note now cite the rulings in place of OQ-69; readings in OQ-81. No package, edge, process, channel or command
-changes.
+approval note now cite the rulings in place of OQ-69; readings in OQ-81. A stop or a quit during a plan cycle now
+withdraws what waits on a person rather than cancelling it (`Run.waitsWithdrawnBy`, clause 15's last bullet and
+`PD-CHAT-002` revision 2): the **runtime view**'s rest paragraph and `cancelQuestions` row and the **sequences view**'s
+approval note say so. No package, edge, process, channel or command changes.
 
 **A crash offers the same choice as a pause (`PD-ORCH-005` clause 18, 2026-09-28, R-064).** `Sessions.continueSession`
 accepts a session a crash left — `interrupted`, or persisted busy and `not-live` (REQ-CHAT-008's recovery state) — beside

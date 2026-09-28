@@ -197,7 +197,10 @@ export function createRequirementsRuns(deps: RequirementsRunsDeps): Requirements
     dispatch,
     live: () => [...runs.entries()].map(([sessionId, l]) => ({ sessionId, id: l.id, unit: l.unit, waitingOnPerson: l.waiting, permissions: l.permissions })),
     /**
-     * REQ-TRACE-464 (closing the application) and REQ-TRACE-469 (an unlimited wait stays cancellable). The request is the
+     * REQ-TRACE-464 ("Closing the application SHALL cancel the run rather than leave it orphaned") and REQ-TRACE-469 (an
+     * unlimited wait stays cancellable). The run is ended, never orphaned, but by clause 3's quit and not the explicit
+     * cancel: no directive names REQ-TRACE-464 yet, so its word "cancel" is read through the quit and recorded in OQ-81.
+     * The request is the
      * run host's existing `session.control {op: 'announceShutdown'}` — the application's quit (REQ-MONITOR-131), one per
      * board run this process owns, issued at once and bounded. It is never gated on what the run is doing, so a run
      * blocked on an approval with no limit (`runtime.approval_timeout_seconds` = 0, REQ-TRACE-467/468) is stopped without

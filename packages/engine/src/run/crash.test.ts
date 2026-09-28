@@ -156,9 +156,9 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
     const asked: ModelRequest[] = [];
     /**
      * `configured`: the process resolves each run's setup through `configure`, which reports the entry persona asked for.
-     * `publisher`: where its projections publish.
+     * `publisher`: where its projections publish. `alive`: REQ-GIT-093's process probe (every other process is dead).
      */
-    function sessionsAs(pid: number, configured?: (entryPersona: string | undefined) => void, publisher: Publisher = NONE) {
+    function sessionsAs(pid: number, configured?: (entryPersona: string | undefined) => void, publisher: Publisher = NONE, alive: (pid: number) => boolean = () => false) {
       const client = new ScriptedModelClient([]);
       const original = client.stream.bind(client);
       client.stream = (req) => { asked.push(req); client.push(answer('Answered.')); return original(req); };
@@ -170,7 +170,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
       });
       return new Sessions({
-        clocks: clock, publisher, pid, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-dead', isProcessAlive: () => false,
+        clocks: clock, publisher, pid, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-dead', isProcessAlive: alive,
         model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
         tools: () => port(),
         ...(configured ? { configure: (_ws: string, ctx: { readonly entryPersona?: string | undefined }) => { configured(ctx.entryPersona); return ok({ model: { backend: new DefaultAgentBackend(client), config }, runtime }); } } : {}),
@@ -339,6 +339,21 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         expect(next.resume(dal, 'C:/ws', sid).ok).toBe(true);
         // REQ-GIT-093: a lock naming another machine is live — this process cannot tell whether that run goes on.
         dal.db.prepare('UPDATE session_locks SET host = ? WHERE session_id = ?').run('0000000000000000000000000000000b', sid);
+        expect(next.continueSession(sid, 'continue')).toMatchObject({ ok: false, error: { code: 'run-active' } });
+        expect(next.continueSession(sid, 'continue', { withoutPaused: true })).toMatchObject({ ok: false, error: { code: 'run-active' } });
+        expect(dal.getIteration(sid, 2)!.interruption).toBeNull();
+        expect(dal.getChild(sid, 'bg_000000c1')!.state).toBe('running');
+      });
+
+      it('a busy session whose liveness is unknown is refused, and nothing is recorded (REQ-GIT-093: unknown resolves toward running)', async () => {
+        const sid = await crashed();
+        let probe: 'dead' | 'throws' = 'dead';
+        const next = sessionsAs(88, undefined, NONE, () => { if (probe === 'throws') throw new Error('the probe cannot tell'); return false; });
+        expect(next.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        // The lock names another process on this machine, and the probe cannot say whether it lives.
+        dal.db.prepare('UPDATE session_locks SET host = ?, pid = ? WHERE session_id = ?').run(HOST, 66, sid);
+        probe = 'throws';
+        expect(next.liveness(dal, sid)).toBe('unknown');
         expect(next.continueSession(sid, 'continue')).toMatchObject({ ok: false, error: { code: 'run-active' } });
         expect(next.continueSession(sid, 'continue', { withoutPaused: true })).toMatchObject({ ok: false, error: { code: 'run-active' } });
         expect(dal.getIteration(sid, 2)!.interruption).toBeNull();

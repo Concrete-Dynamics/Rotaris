@@ -551,4 +551,52 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
       expect(dal.getSession(sid)!).toMatchObject({ execution_status: 'awaiting_plan_decision', plan_released: 0 });
     });
   });
+
+  /**
+   * PD-ORCH-005 clause 15 (revision 4), last bullet: "an approval dialog the application's quit closes SHALL answer
+   * nothing, and the quit withdraws the approval (clause 9)"; PD-CHAT-002 revision 2: a question the quit dismisses is
+   * withdrawn, never cancelled. The directive decides this "in each case", a plan cycle among them: the cycle's agents end
+   * and no interruption is recorded of them, but what waits on a person is withdrawn by the stop or the quit (OQ-81).
+   */
+  describe('PD-ORCH-005 clause 15: a wait inside a plan cycle is withdrawn by the stop or the quit', () => {
+    for (const how of ['stop', 'quit', 'cancel'] as const) it(how === 'cancel'
+      ? 'the explicit cancel while the plan turn waits on a person cancels the wait and withdraws nothing (clause 3: it is final)'
+      : `a ${how} while the plan turn waits on a person withdraws the wait by \`${how}\` and cancels nothing`, async () => {
+      const released = { cancelled: 0, withdrawn: [] as string[] };
+      let waiting = false;
+      const port: ToolPort = {
+        specs: () => [{ name: 'glob', description: 'find', parameters: { type: 'object' } }],
+        // The call a person must answer: it waits until the run releases it.
+        dispatch: async (_c, signal) => {
+          waiting = true;
+          await new Promise<void>((r) => signal.addEventListener('abort', () => r(), { once: true }));
+          return { text: 'released', isError: true, status: 'failed', durationMs: 1, label: 'glob', args: {} };
+        },
+        cancelPending: () => { released.cancelled += 1; return 1; },
+        withdrawPending: (cause) => { released.withdrawn.push(cause); return 1; },
+        setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
+      };
+      const sessions = sessionsWith(scripted([toolCalls([{ callId: 'c1', name: 'glob', args: {} }]), answer('Step 1: the plan.')]).backend, { tools: port });
+      const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+      for (let i = 0; i < 100 && !waiting; i++) await new Promise((r) => setTimeout(r, 5));
+      expect(waiting).toBe(true);
+      expect(sessions.run(sid)!.isPlanGateHeld).toBe(true);
+      let closed: Promise<void> | null = null;
+      if (how === 'stop') expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+      else if (how === 'cancel') expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: 'run' } })).toEqual({ ok: true });
+      else closed = sessions.closeAll();
+      await sessions.running(sid);
+      await closed;
+      if (how === 'cancel') {
+        expect(released.withdrawn).toEqual([]);
+        expect(released.cancelled).toBeGreaterThan(0);
+        return;
+      }
+      expect(released.withdrawn[0]).toBe(how);
+      expect(released.cancelled).toBe(0);
+      // Nothing of the cycle is recorded as interrupted: a plan cycle is not an iteration, and the gate keeps its hold.
+      expect(dal.iterationsOf(sid)).toEqual([]);
+      expect(dal.getSession(sid)!.plan_released).toBe(0);
+    });
+  });
 });

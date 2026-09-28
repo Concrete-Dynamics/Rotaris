@@ -283,9 +283,10 @@ raises on its own account, and a plan cycle never come to rest. — `PD-ORCH-005
 _Avoid_: suspend, park (a run **parks** at the plan gate, which is a durable hold)
 
 **Withdrawn** (an approval or a question):
-Taken back because the run came to rest while a call waited on a person: it leaves the pending list, the timeline
-records which interruption withdrew it, and the call is recorded as interrupted and never run. Never a denial, and no
-answer is replayed later. — `PD-ORCH-005` clause 9, narrowing `REQ-TOOLS-054` and `REQ-SESSION-025`
+Taken back because the run came to rest while a call waited on a person — or a stop or a quit landed during a plan
+cycle, whose agents end rather than rest: it leaves the pending list, the timeline records which interruption withdrew
+it, and the call is recorded as interrupted and never run. Never a denial, and no answer is replayed later. —
+`PD-ORCH-005` clauses 9 and 15, `PD-CHAT-002` revision 2, narrowing `REQ-TOOLS-054` and `REQ-SESSION-025` (OQ-81)
 _Avoid_: denied, cancelled (REQ-TOOLS-052's cancellation is a denial)
 
 **Resume** (an iteration):

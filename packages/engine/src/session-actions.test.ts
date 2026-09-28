@@ -1,11 +1,30 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { asSessionId, FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { forgetSpelling, migrateStore, openStore, RING_CAPS, StoreDal } from '@rotaris/store';
 import { batchDocument, readRecords, readTrajectory, renderExport, Sessions, summariseTrajectory, timelineId, trajectoryWarnings, writeExport, DELETE_LIVE_REFUSAL, DELETE_LIVENESS_UNKNOWN_REFUSAL, type JsonValue } from './index.js';
+
+/**
+ * The immutable-attribute refusal, for the uid that ignores mode bits. Root bypasses DAC, so a write-denied
+ * parent does not refuse its rename; a file marked immutable it cannot rename over either — EPERM, the transient
+ * class the ladder retries. Setting the flag needs exactly that privilege, so an unprivileged user cannot set it
+ * and does not need to: for that uid the parent's mode still refuses the staging write. `chattr` is Linux,
+ * `chflags` macOS; anywhere else, or without the privilege, this returns false and the caller falls back.
+ */
+const IMMUTABLE_SET = process.platform === 'linux' ? (['chattr', '+i'] as const) : process.platform === 'darwin' ? (['chflags', 'uchg'] as const) : null;
+const IMMUTABLE_CLEAR = process.platform === 'linux' ? (['chattr', '-i'] as const) : process.platform === 'darwin' ? (['chflags', 'nouchg'] as const) : null;
+function makeImmutable(path: string): boolean {
+  if (!IMMUTABLE_SET) return false;
+  try { execFileSync(IMMUTABLE_SET[0], [IMMUTABLE_SET[1], path], { stdio: 'ignore' }); return true; } catch { return false; }
+}
+function clearImmutable(path: string): void {
+  if (!IMMUTABLE_CLEAR) return;
+  try { execFileSync(IMMUTABLE_CLEAR[0], [IMMUTABLE_CLEAR[1], path], { stdio: 'ignore' }); } catch { /* best effort */ }
+}
 
 const HOST = mintMachineId('0000000000000000000000000000000a') as MachineId;
 const OTHER = mintMachineId('0000000000000000000000000000000b') as MachineId;
@@ -316,21 +335,28 @@ describe('Part U — repair, delete and the exports', () => {
 
     /**
      * A9 / REQ-EVENTS-145 / REQ-TRACE-061: the destination-failure half. The refusal is REAL — a reader's open
-     * descriptor on Windows (constraint D-06, the condition the ladder exists for), a write-denied parent
-     * elsewhere — never a stubbed `fs`, because what is under test is that the previous export survives the
-     * refusal and that the refusal is recoverable, and a stub proves nothing about either.
+     * descriptor on Windows (constraint D-06, the condition the ladder exists for), an immutable target for a
+     * uid that ignores mode bits (root), a write-denied parent for an unprivileged uid — never a stubbed `fs`,
+     * because what is under test is that the previous export survives the refusal and that the refusal is
+     * recoverable, and a stub proves nothing about either.
      *
-     * The two refusals do not land in the same place, and the test says which rather than pretending they do.
-     * An open descriptor leaves ADR-0004's STAGING write untouched and refuses only the rename, which is the
-     * ladder's own condition, so the exhaustion is observable. A write-denied parent refuses BOTH, and the
-     * staging write is the first to be refused — `document.stage`, ADR-0004's own separate outcome, reached
-     * before any rename is attempted. No POSIX permission can deny the rename while allowing the staging write
-     * into the same directory, so the ladder is not reachable that way (found on Linux, 2026-09-16).
+     * The refusals do not all land in the same place, and the test says which rather than pretending they do.
+     * An open descriptor, and an immutable target, leave ADR-0004's STAGING write untouched and refuse only the
+     * rename — the ladder's own condition, so the exhaustion is observable and the error is `document.replace`
+     * "after 5 attempt(s)". A write-denied parent refuses BOTH, and the staging write is the first to be refused
+     * — `document.stage`, ADR-0004's own separate outcome, reached before any rename is attempted; no unprivileged
+     * POSIX permission can deny the rename while allowing the staging write into the same directory, so that uid
+     * takes the staging path (found on Linux, 2026-09-16). Root ignores those mode bits, so a `chmod 0o555`
+     * refusal it silently rename-through was the defect this test's two notes recorded; the immutable attribute,
+     * which root cannot set aside for a rename, restores a real laddered refusal for it.
      */
     const refuseReplacement = (target: string): { readonly release: () => void; readonly code: string; readonly laddered: boolean } => {
       if (process.platform === 'win32') {
         const fd = fs.openSync(target, 'r');
         return { release: () => fs.closeSync(fd), code: 'document.replace', laddered: true };
+      }
+      if (makeImmutable(target)) {
+        return { release: () => clearImmutable(target), code: 'document.replace', laddered: true };
       }
       const parent = join(target, '..');
       const before = fs.statSync(parent).mode;

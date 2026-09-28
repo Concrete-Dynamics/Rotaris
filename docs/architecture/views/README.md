@@ -49,7 +49,8 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 `apps/desktop/resources/setup-manifest.json` exists — Git and ripgrep as the requirement pins them, the `@playwright/mcp`
 pin the guard checks, the language servers as `pins.json` declares them — and `electron-builder.yml` packs it. Its schema
 is `config`'s `setup-manifest.ts`, read by the pre-build guard now and by the machine-setup flow when that is built. The
-**component view** gains a section and its `config` node names the schema. No package, edge, process, channel, message
+**component view** gains a section and its `config` node names the schema; the **process view**'s files-on-disk table gains
+the file's row (`process.resourcesPath/setup-manifest.json`, read by the guard and by nothing in the product yet). No package, edge, process, channel, message
 kind or store column changed; `config` gains the `zod` dependency `contracts` already carries.
 
 **A session approval of a file write covers that path (`PD-TOOLS-004`, built 2026-09-27, R-057).** A grant made by

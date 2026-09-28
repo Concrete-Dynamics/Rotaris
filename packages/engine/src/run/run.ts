@@ -440,7 +440,7 @@ export class Run {
     const openRow = deps.dal?.openIterationOf(deps.sessionId) ?? null;
     // PD-ORCH-005 clause 17: a task held by an iteration that is no longer open closes as the record says that iteration
     // did — done when it closed succeeded, pending otherwise — before anything reads the todo.
-    if (deps.dal) this.todo.releaseStale(openRow?.iteration ?? null, new Set(deps.dal.iterationsOf(deps.sessionId).filter((i) => i.state === 'closed' && i.outcome === 'succeeded').map((i) => i.iteration)));
+    if (deps.dal) this.todo.releaseStale(openRow?.iteration ?? null, succeededIterationsOf(deps.dal, deps.sessionId));
     const open = deps.openIteration === undefined ? null : openRow;
     this.resumeFrom = deps.openIteration?.resume === true ? open : null;
     this.restedIteration = open?.iteration ?? null;
@@ -762,8 +762,9 @@ export class Run {
     const iteration = resume?.iteration ?? this.iterationsCompleted + 1;
     this.iterationTask = { id: task.id, text: task.text };
     // PD-ORCH-005 clause 17: a continue's message this iteration takes up is its task even when the run was launched by
-    // another request — the launch content names that one as the latest, so the message is sent beside it (OQ-75).
-    this.messageTakenUp = resume === null && task.message === true && task.text !== (this.deps.taskLabel ?? this.deps.task) ? task.text : null;
+    // another request — the launch content names that one as the latest, so the message is sent beside it (OQ-75). A
+    // resumed root carries on from its record and is sent no launch content, so for it this is never read.
+    this.messageTakenUp = task.message === true && task.text !== (this.deps.taskLabel ?? this.deps.task) ? task.text : null;
     if (resume) {
       writer.recordIterationInterruption(iteration, null);
       writer.appendTimeline('iteration_resumed', 'rotaris', `Iteration ${iteration}, left open by ${interruptionPhrase(resume.interruption ?? '')}, resumed.`, { iteration, interruption: resume.interruption, root_task_id: resume.root_task_id });
@@ -869,18 +870,19 @@ export class Run {
 
   /**
    * The first message of a fresh root: the launch content, and — for an execution iteration's root, never a plan cycle's
-   * (REQ-ORCH-153: a plan cycle is not an iteration and takes up no offer) — PD-ORCH-004 revision 4's list of the open
-   * continuation offers that content does not already hold, as a text part after it. A continuation's first iteration
-   * holds them all in its handoff — those it names and those it left out (`handoffOffers`); each later iteration of the
-   * same run is told those raised since (OQ-80). Between the two, PD-ORCH-005 clause 17's message the iteration takes
-   * up, when the launch content's request is another (`messageTakenUp`, OQ-75).
+   * (REQ-ORCH-153: a plan cycle is not an iteration and takes up no offer or task) — PD-ORCH-004 revision 4's list of the
+   * open continuation offers that content does not already hold, as a text part after it. A continuation's first
+   * iteration holds them all in its handoff — those it names and those it left out (`handoffOffers`); each later
+   * iteration of the same run is told those raised since (OQ-80). Between the two, PD-ORCH-005 clause 17's message the
+   * iteration takes up, when the launch content's request is another (`messageTakenUp`, OQ-75).
    */
   private firstMessage(task: string, launch: readonly ContentPart[] | undefined, execution: boolean): readonly ContentPart[] | undefined {
     const base = launch ?? [{ kind: 'text', text: task }];
     // PD-ORCH-005 clause 17: the continue's message this iteration takes up, when the launch content is another request's.
-    // Only `iterate()` sets it, and every continuation carries its launch content (`Sessions.launchContinuation`); a plan
-    // cycle runs before its run's first new iteration selects anything, so it never finds one set.
-    const takenUp: ContentPart[] = this.messageTakenUp === null ? [] : [{ kind: 'text', text: messageTakenUpText(this.messageTakenUp) }];
+    // Only `iterate()` sets it, and every continuation carries its launch content (`Sessions.launchContinuation`). A plan
+    // cycle is not an iteration and has no iteration task (REQ-ORCH-153), and PD-ORCH-003 revision 2's plan cycle runs
+    // after the resumed iteration's `iterate()` has set it — so only an execution root is told it (found by review round 5).
+    const takenUp: ContentPart[] = !execution || this.messageTakenUp === null ? [] : [{ kind: 'text', text: messageTakenUpText(this.messageTakenUp) }];
     const offers = execution && this.deps.dal ? offersForFirstMessage(this.deps.dal, this.sessionId, base, this.deps.handoffOffers) : null;
     if (offers === null && takenUp.length === 0) return launch;
     return [...base, ...takenUp, ...(offers === null ? [] : [offers])];
@@ -1775,6 +1777,14 @@ export class Run {
  * selected is a continue's message and the launch content's request is another — the message, as the task to work on.
  * Its attachments are not carried: the task holds the message's text only (OQ-75).
  */
+/**
+ * PD-ORCH-005 clause 17: the iterations the record holds closed `succeeded` — what a task a closed iteration still holds
+ * is settled against (`Todo.releaseStale`), here and by the session manager before it judges what a continue restates.
+ */
+export function succeededIterationsOf(dal: StoreDal, sessionId: SessionId): ReadonlySet<number> {
+  return new Set(dal.iterationsOf(sessionId).filter((i) => i.state === 'closed' && i.outcome === 'succeeded').map((i) => i.iteration));
+}
+
 function messageTakenUpText(message: string): string {
   return `The task for this iteration is an earlier message from the user, which the iteration it was sent to did not finish. Work on it now; the latest user request above is a separate task.\n\n${message}`;
 }

@@ -274,4 +274,45 @@ describe('PD-ORCH-004 revision 4: a later iteration\'s root is told the open off
     await sessions.running(sid)!;
     expect(listsHeldBy(sid, 1)).toEqual([`${OFFERS_HEADER}\n- c1 (bg_00000d01)`]);
   });
+
+  it('offersHeldIn: an offer raised in the same millisecond a list was recorded counts as held by it, and one raised a millisecond later does not (OQ-80; review round 5)', () => {
+    const sid = asSessionId('S-same-ms');
+    const at = new Date(clock.instant()).toISOString();
+    dal.upsertSession({ session_id: sid, execution_status: 'completed', workspace_root: 'C:/ws', created_at: at, updated_at: at });
+    for (const id of ['bg_0000ee01', 'bg_0000ee02']) dal.insertChild({ session_id: sid, task_id: id, canonical_name: id, given_name: id, persona: 'coding-agent', state: 'running', parent_id: 'bg_0000a11e', depth: 1, iteration: 1, model_key: 'm', category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't' });
+    for (let i = 1; i <= 11; i += 1) offer(sid, `bg_00000e${i.toString(16).padStart(2, '0')}`, `c${i}`);
+    const list = openOffersText(dal, sid, () => true);
+    expect(list).toContain('- [... earlier continuation offers elided]');
+    dal.insertAgentMessage({ session_id: sid, task_id: 'root', iteration: 1, kind: 'message', body: JSON.stringify({ role: 'user', content: [{ kind: 'text', text: list }] }), at });
+    const raise = (id: string, when: string): void => {
+      dal.setChildReport(sid, id, JSON.stringify({ status: 'failed', summary: 'timed out', cut_off: { statement: 's', changed_paths: [], changes: '', continuation_offer: `Continue with continuation_of: "${id}".` } }));
+      dal.setChildState(sid, id, 'failed', when);
+    };
+    raise('bg_0000ee01', at);
+    raise('bg_0000ee02', new Date(clock.instant() + 1).toISOString());
+    const held = offersHeldIn(dal, sid, dal.agentMessagesOf(sid, 'root'));
+    expect(held.has('bg_0000ee01')).toBe(true);
+    expect(held.has('bg_0000ee02')).toBe(false);
+  });
+
+  it('an iteration that takes up an earlier message is sent the launch content, then that message, then the offers raised since (PD-ORCH-005 clause 17, PD-ORCH-004 revision 4; review round 5)', async () => {
+    let sid!: SessionId;
+    const { sessions } = sessionsWith([answer('first, done'), answer('M1, done'), answer('M2, done'), answer('third, done')], {
+      during: (k) => { if (k === 2) offer(sid, 'bg_0000dd01', 'raised'); },
+    });
+    sid = (sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    // Two continues' messages a failed iteration left pending, each to be taken up by an iteration launched by another request.
+    const stored = decodeStoredTodo(dal.getSession(sid)!.todo);
+    const planner = { ...stored.planner!, phases: [...stored.planner!.phases, { name: 'Continued Prompts', tasks: ['M1', 'M2'].map((text, i) => ({ id: `${sid}:continued:${i + 2}`, text, state: 'pending' as const, consecutiveRetries: 0, message: true as const })) }] };
+    dal.updateSessionRun(sid, { todo: encodeStoredTodo({ ...stored, planner }) });
+    expect(sessions.prompt(sid, 'third').ok).toBe(true);
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(dal.iterationsOf(sid).map((r) => r.iteration)).toEqual([1, 2, 3, 4]);
+    const third = firstMessageOf(sid, 3).map((p) => (p.kind === 'text' ? p.text : ''));
+    expect(third).toHaveLength(3);
+    expect(third[0]).toContain('Latest user request:\nthird');
+    expect(third[1]).toMatch(/^The task for this iteration is an earlier message from the user[\s\S]*\n\nM2$/);
+    expect(third[2]).toBe(`${OFFERS_HEADER}\n- raised (bg_0000dd01)`);
+  });
 });

@@ -9,7 +9,7 @@ import { SequenceCounters } from './sequence.js';
 import { SessionWriter, toTranscriptRow, type CheckpointRecordInput, type Committed, type RestoreRecordInput } from './session-writer.js';
 import type { CheckpointPort, CheckpointPortContext } from './checkpoint-port.js';
 import { EventBus } from './run/event-bus.js';
-import { parseTokenSamples, Run, type AgentTerminals, type ModelLookup, type PermissionPosture, type RunConfig, type RunResult } from './run/run.js';
+import { parseTokenSamples, Run, succeededIterationsOf, type AgentTerminals, type ModelLookup, type PermissionPosture, type RunConfig, type RunResult } from './run/run.js';
 import { iterationAgents, recordCrash } from './run/crash.js';
 import { resumeNoticeOf } from './run/resume.js';
 import { offersHeldIn, openOfferIds, openOffersText } from './run/offers.js';
@@ -1154,9 +1154,14 @@ export class Sessions {
      * `the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`: a continue that delivers no
      * message — the Continue action, "continue without them" — restates the last request, so it appends no task while the
      * todo still holds that request unfinished: a continue's message a resumed iteration left pending or holds, or any
-     * request whose task a rest put back. Its task is then taken up as it stands.
+     * request whose task a rest put back. Its task is then taken up as it stands. The todo is judged as the run will read
+     * it: a message a closed iteration still holds — a process that died between that iteration's close and the save of
+     * its release — is settled first, as the run's constructor settles it (`releaseStale`), so a message it returns to
+     * pending is not appended a second time (found by review round 5).
      */
-    const restatesUnfinished = (openIteration === 'decline' || openIteration.message === null) && todo !== undefined && Todo.fromDocument(todo).holdsUnfinished(prompt, open ? { iteration: open.iteration, taskId: open.todo_task_id } : null);
+    const judged = todo === undefined ? null : Todo.fromDocument(todo);
+    judged?.releaseStale(open?.iteration ?? null, succeededIterationsOf(s.dal, sessionId));
+    const restatesUnfinished = (openIteration === 'decline' || openIteration.message === null) && judged !== null && judged.holdsUnfinished(prompt, open ? { iteration: open.iteration, taskId: open.todo_task_id } : null);
     // REQ-EVENTS-053, PD-MONITOR-001: the run's model calls that are no agent's turn count against the run itself.
     const countUsage: CountUsage = (usage, ref) => { runRef.run?.countUsage(usage, ref); };
     const supervisorSetup = this.deps.supervisor?.(workspaceRoot, sessionId, countUsage) ?? null;

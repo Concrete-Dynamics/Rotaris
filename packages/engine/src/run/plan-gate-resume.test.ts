@@ -214,4 +214,19 @@ describe('PD-ORCH-003 revision 2: a resumed iteration and the gate', () => {
     expect(planned).toContain('Pending tasks:\n- later\n');
     expect(planned).toContain('the resumed iteration has already carried out its message.');
   });
+
+  it('a plan cycle held after a resumed iteration whose own task is an earlier message is not given that message as its task (PD-ORCH-005 clause 17; review round 5)', async () => {
+    const { sessions, client, sid } = await restedWithPending([answer('resumed, done'), answer('Plan: do later.')]);
+    // Iteration 1 took up an earlier continue's message, `first`, while the launch content named another request.
+    const stored = decodeStoredTodo(dal.getSession(sid)!.todo);
+    const planner = structuredClone(stored.planner!);
+    planner.phases[0]!.tasks[0]!.message = true;
+    dal.updateSessionRun(sid, { todo: encodeStoredTodo({ ...stored, planner }) });
+    expect(sessions.prompt(sid, 'go on').ok).toBe(true);
+    expect((await sessions.running(sid)!).execution_status).toBe('awaiting_plan_decision');
+    expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.outcome])).toEqual([[1, 'succeeded']]);
+    const planned = textOf(client.requests.at(-1)!);
+    expect(planned).toContain('held at the plan gate');
+    expect(planned).not.toContain('The task for this iteration is an earlier message');
+  });
 });

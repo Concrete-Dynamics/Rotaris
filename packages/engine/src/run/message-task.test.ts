@@ -335,4 +335,48 @@ describe('PD-ORCH-005 clause 17: a continue\'s message is also a task', () => {
     expect(three).not.toContain(TAKEN_UP);
     expect(four).not.toContain(TAKEN_UP);
   });
+
+  it('a Continue action after a death left a cancelled iteration holding the message appends it no second time: it is worked once (review round 5)', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    const { sessions, sid } = await restedSession([{ parts: [{ hold }, ...answer('never').parts] }, answer('second, done'), answer('first, done again')]);
+    expect(sessions.prompt(sid, 'second').ok).toBe(true);
+    await tick();
+    expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: 'run' } })).toEqual({ ok: true });
+    release();
+    await sessions.running(sid)!;
+    expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.outcome])).toEqual([[1, 'cancelled']]);
+    // The residue of a death between the iteration's close and the save of its release: the message still held by iteration 1.
+    const stored = decodeStoredTodo(dal.getSession(sid)!.todo);
+    const planner = structuredClone(stored.planner!);
+    const message = planner.phases.flatMap((p) => p.tasks).find((t) => t.text === 'second')!;
+    message.state = 'in_progress';
+    message.heldBy = 1;
+    delete message.nextUp;
+    dal.updateSessionRun(sid, { todo: encodeStoredTodo({ ...stored, planner }) });
+    dal.db.prepare("UPDATE sessions SET execution_status = 'paused' WHERE session_id = ?").run(sid);
+    expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(shape(sid)).toEqual([['first', 'complete', undefined], ['second', 'complete', undefined]]);
+    const [own, taken] = tasksOf(sid);
+    expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.todo_task_id === own!.id ? 'own' : r.todo_task_id === taken!.id ? 'message' : '?', r.outcome])).toEqual([[1, 'own', 'cancelled'], [2, 'message', 'succeeded'], [3, 'own', 'succeeded']]);
+  });
+
+  it('a Continue action after a death left a succeeded iteration holding the message judges it done, so the request is appended as any completed one is (review round 5)', async () => {
+    const { sessions, sid } = await restedSession([answer('second, done'), answer('second, again')]);
+    expect(sessions.prompt(sid, 'second').ok).toBe(true);
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.outcome])).toEqual([[1, 'succeeded']]);
+    const stored = decodeStoredTodo(dal.getSession(sid)!.todo);
+    const planner = structuredClone(stored.planner!);
+    const message = planner.phases.flatMap((p) => p.tasks).find((t) => t.text === 'second')!;
+    message.state = 'in_progress';
+    message.heldBy = 1;
+    dal.updateSessionRun(sid, { todo: encodeStoredTodo({ ...stored, planner }) });
+    dal.db.prepare("UPDATE sessions SET execution_status = 'paused' WHERE session_id = ?").run(sid);
+    expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(shape(sid)).toEqual([['first', 'complete', undefined], ['second', 'complete', undefined], ['second', 'complete', undefined]]);
+    expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.outcome])).toEqual([[1, 'succeeded'], [2, 'succeeded']]);
+  });
 });

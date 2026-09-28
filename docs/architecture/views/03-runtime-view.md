@@ -271,12 +271,16 @@ the task as the root's record keeps the message. The Continue action and a plan 
 no task for it. A continue that delivers no message — the Continue action, "continue without them" — restates the last
 request, so `launchContinuation` passes `appendsTask: false` while the todo still holds that request unfinished
 (`Todo.holdsUnfinished`: a task of that text pending, or in progress and held by the open iteration — its own task or
-a message it holds), and the run takes that task up as it stands; a task in progress that no open iteration holds does
-not count, since no selection would take it up. The plan cycle held after a resumed iteration is told what became of
+a message it holds), and the run takes that task up as it stands; a task in progress that no iteration holds does
+not count, since no selection would take it up. The todo is judged as the run will read it: a message a closed iteration
+still holds is settled first (`Todo.releaseStale` against `succeededIterationsOf`, as the run's constructor settles
+it), so one a death left held and the run returns to pending is not appended a second time. The plan cycle held after a resumed iteration is told what became of
 every message that iteration held (`Todo.heldIds`, read when the run is built): this continue's, or an earlier one's a
 Continue action resumed it with. A message is marked as one for good (`Task.message`), so the iteration that takes it up
 is sent it: `iterate()` records the selected message's text when it is not the launch content's own request, and
-`Run.firstMessage` adds it to the fresh root's first message after the launch content and before the offers list.
+`Run.firstMessage` adds it to an execution root's first message after the launch content and before the offers list —
+never to a plan cycle's, which is not an iteration, including the one held after a resumed iteration whose own task was
+a message.
 
 **An iteration a previous run left open, declined (PD-ORCH-005 clause 6; the repair of the crashed-iteration defect).**
 Every execution iteration has an `iterations` row from the moment its root is minted, and `iteration.end` and the row's

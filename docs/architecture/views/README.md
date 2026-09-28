@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-28**
 
+**Review round 5 of the iteration lane (`PD-ORCH-005` clause 17, `PD-ORCH-003` revision 2, `PD-ORCH-004` revision 4,
+2026-09-28, R-064).** A continue that delivers no message judges the todo after settling the messages closed iterations
+still hold (`Todo.releaseStale` against `succeededIterationsOf`, which the run's constructor now shares), so a message a
+death left held is not appended twice. The message an iteration takes up is sent only to an execution root
+(`Run.firstMessage`), never to the plan cycle held after a resumed iteration. The **runtime view**'s message-task
+paragraph says so. No package, edge, process, channel, message kind or store column changed.
+
 **Review round 4 of the iteration lane (`PD-ORCH-005` clause 17, `PD-ORCH-003` revision 2, `PD-ORCH-004` revision 4,
 2026-09-28, R-064).** A continue's message is marked as one in the todo document for good (`Task.message`), and the
 iteration that takes it up while the launch content names another request is sent its text after the launch content

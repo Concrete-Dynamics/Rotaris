@@ -3386,7 +3386,9 @@ message.
   under its own task. So a task that is a continue's message (`message`, set when it is appended and kept for good, in
   the todo document) is sent to the fresh root of the iteration that selects it, as a text part after the launch
   content naming it the iteration's task and the latest request a separate one — unless the launch content's request
-  is that same text, when the launch content already says it. Only the message's text is sent; its images are not, as
+  is that same text, when the launch content already says it. It is sent only to an iteration's root: a plan cycle is
+  not an iteration and has no iteration task (REQ-ORCH-153), so the plan cycle held after a resumed iteration whose own
+  task was a message is not told it (found by the lane's fifth review). Only the message's text is sent; its images are not, as
   the task holds its text only. Every other task keeps the recorded defect's behaviour, which this does not repair. *The
   second build selected the message and sent it nothing of it (found by the lane's fourth review).*
 - **Several continues on one open iteration.** Each continue by message that resumes the iteration appends its own task,
@@ -3399,10 +3401,14 @@ message.
   task of that request's text pending, or in progress and held by the open iteration (its own task, or a message it
   holds) — a continue's message a resumed iteration left pending or holds, or any request whose task a rest put back —
   they append none, and the run takes that task up as it stands. A request whose task is complete or abandoned is
-  appended as before, and so is one whose task is in progress with no open iteration holding it: a selection takes only
-  pending tasks, so nothing would take that task up, and the run would end at once with the request not done. *The
-  second build counted any task in progress, which ended such a continue `no_pending_tasks` (found by the lane's third
-  review); the stranded task itself is
+  appended as before, and so is one whose task is in progress with no iteration holding it: a selection takes only
+  pending tasks, so nothing would take that task up, and the run would end at once with the request not done. A message
+  a closed iteration still holds (see "What a death leaves") is judged as the run will take it: it is settled first, as
+  the run settles it before it selects, so one returned to pending is not appended a second time and one completed is
+  appended as any completed request is. *The fourth build judged such a message unheld, so a Continue action after the
+  death appended it beside the task the run then returned to pending, and the run worked it twice (found by the lane's
+  fifth review).* *The second build counted any task in progress, which ended such a continue `no_pending_tasks` (found
+  by the lane's third review); the stranded task itself is
   [`an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md`](../defects/an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md).* This repairs
   [`the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`](../defects/fixed/the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md),
   which the clause had widened: a message left pending is the last user row, so a Continue action appended it beside

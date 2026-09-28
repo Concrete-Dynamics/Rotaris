@@ -10,7 +10,7 @@ interruption reads `stop`, and it ends the background sessions as a stop. A sess
 same quit, rests by `quit`. The doc comment on `cancelAll` also says every waiter "then finishes `cancelled`". That has
 been false since clause 9: a rest withdraws a waiting approval, it does not cancel it.
 
-Found 2026-09-28 by the audit of `PD-ORCH-005` clause 15 while building revision 4 (R-064). Not yet repaired.
+Found 2026-09-28 by the audit of `PD-ORCH-005` clause 15 while building revision 4 (R-064).
 
 ## Specs
 
@@ -25,3 +25,20 @@ approval at a rest; it does not cancel it.
 - `packages/engine/src/run/stop-request.ts`: `request`, where the first reason stands.
 - `packages/engine/src/run/run.ts`: `restCause`, which maps `user_cancelled` to `stop` and `application_shutdown` to `quit`.
 - `packages/engine/src/sessions.ts`: the `announceShutdown` control and `closeAll`.
+
+## Repaired — 2026-09-28
+
+By the audit of `PD-ORCH-005` clause 15 (R-064). Main's board coordinator no longer sends the stop control's `cancel`
+at the last window's close. It sends the run host's `session.control {op: 'announceShutdown'}` (REQ-MONITOR-131), the
+same request the run host's `shutdown` makes, so the first reason each board run receives is `application_shutdown`,
+and it comes to rest by `quit`. The method is renamed `quitAll`, and its doc comment says that a rest withdraws what
+waits on a person rather than cancelling it (clause 9). REQ-TRACE-469's unlimited approval wait is still released at
+once, now withdrawn by the quit.
+
+Evidence:
+- `apps/desktop/src/main/requirements-runs.test.ts`: `quitAll` sends `announceShutdown` and no `cancel`. Reverting the
+  op to `cancel` turns both of its cases red.
+- `packages/engine/src/children/children.test.ts`, "PD-ORCH-005 clause 15": `announceShutdown` rests a run's child
+  by `quit`; a `cancel` that reaches the run before it keeps its reason, and the run rests by `stop`.
+- Not driven in the built app. The evidence there would be `children.interruption = 'quit'` for a board run after the
+  application quits.

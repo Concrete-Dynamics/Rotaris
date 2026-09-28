@@ -140,25 +140,28 @@ describe('the run\'s lifetime (REQ-TRACE-466/476/477)', () => {
     expect(h.sent[h.sent.length - 1]).toMatchObject({ command: { name: 'requirements.run.reap', live: [] } });
     expect(h.runs.live()).toEqual([]);
   });
-  it('closing the application stops every board run it owns (REQ-TRACE-464)', async () => {
+  it('closing the application ends every board run it owns as the quit (REQ-TRACE-464; PD-ORCH-005 clauses 3 and 15)', async () => {
     const h = harness({ claims: [CLAIM] });
     await h.runs.dispatch();
-    await h.runs.cancelAll('the window closed');
-    expect(h.hostSent[h.hostSent.length - 1]).toEqual({ kind: 'session.control', request: { op: 'cancel', sessionId: 'sess-1', args: {} } });
+    await h.runs.quitAll('the window closed');
+    // The quit, never the stop control's `cancel`: a stop request keeps its first reason, so a `cancel` sent ahead of the
+    // run host's `shutdown` would rest the run by `stop` (docs/defects/fixed/a-board-run-caught-by-a-quit-rests-as-a-stop.md).
+    expect(h.hostSent[h.hostSent.length - 1]).toEqual({ kind: 'session.control', request: { op: 'announceShutdown', sessionId: 'sess-1', args: {} } });
+    expect(h.hostSent.some((r) => r.kind === 'session.control' && r.request.op === 'cancel')).toBe(false);
   });
-  it('an unlimited approval wait is released by the stop, not by the budget (REQ-TRACE-469)', async () => {
-    // `approvalTimeoutSeconds: 0` is REQ-TRACE-467/468's unlimited wait, and the run is blocked on a person when the stop arrives.
+  it('an unlimited approval wait is released by the quit, not by the budget (REQ-TRACE-469)', async () => {
+    // `approvalTimeoutSeconds: 0` is REQ-TRACE-467/468's unlimited wait, and the run is blocked on a person when the quit arrives.
     const h = harness({ claims: [CLAIM], preview: { approvalTimeoutSeconds: 0 } });
     expect(await h.runs.handle({ kind: 'requirements.runs', op: 'preview', id: 'REQ-101', action: 'release' })).toMatchObject({ ok: true, value: { approvalWait: { seconds: 0, unlimited: true } } });
     await h.runs.dispatch();
     h.event({ kind: 'publish.snapshot', payload: { v: 1, sessionId: 'sess-1', seq: 1, session: { pendingApprovals: [{ request_id: 'r0' }], pendingQuestions: [] } as never } });
     await new Promise((r) => setTimeout(r, 0));
     expect(h.runs.live()).toMatchObject([{ sessionId: 'sess-1', waitingOnPerson: true }]);
-    // Nothing ever answers that approval: the cancel goes out and returns on its own, rather than sitting out a budget with no end.
+    // Nothing ever answers that approval: the quit goes out and returns on its own, rather than sitting out a budget with no end.
     const at = Date.now();
-    await h.runs.cancelAll('the user stopped the run');
+    await h.runs.quitAll('the last window closed');
     expect(Date.now() - at).toBeLessThan(5_000);
-    expect(h.hostSent[h.hostSent.length - 1]).toEqual({ kind: 'session.control', request: { op: 'cancel', sessionId: 'sess-1', args: {} } });
+    expect(h.hostSent[h.hostSent.length - 1]).toEqual({ kind: 'session.control', request: { op: 'announceShutdown', sessionId: 'sess-1', args: {} } });
     expect(h.sent.some((r) => r.kind === 'requirements.command' && r.command.name === 'requirements.run.ended')).toBe(false);
   });
 });

@@ -102,7 +102,8 @@ export function liveDescendants(agents: readonly AgentRecord[], id: string): Age
 }
 /**
  * REQ-MONITOR-126: the confirmation the run's cancel states, the one text every surface that cancels the whole run
- * shows. PD-ORCH-005 clause 3 keeps that cancel final, so "cannot be undone" stays true of it (OQ-69).
+ * shows. PD-ORCH-005 clause 3 keeps that cancel final, so "cannot be undone" stays true of it, from whichever surface asks
+ * (clause 15).
  */
 export const CANCEL_RUN_TEXT = 'Cancellation cannot be undone in this session. The active run and every active task agent will be cancelled.';
 

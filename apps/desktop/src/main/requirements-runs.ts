@@ -37,10 +37,11 @@ export interface RequirementsRuns {
   dispatch(): Promise<DispatchReport>;
   live(): readonly LiveBoardRun[];
   /**
-   * REQ-TRACE-464: closing the application cancels the board's runs rather than orphaning them. Best effort, bounded.
-   * REQ-TRACE-469: this same cancel is what releases an unlimited approval wait — see the note on the implementation.
+   * REQ-TRACE-464: closing the application ends the board's runs rather than orphaning them — as the application's quit,
+   * which brings each to rest by `quit` (PD-ORCH-005 clauses 3 and 15). Best effort, bounded.
+   * REQ-TRACE-469: this same request is what releases an unlimited approval wait — see the note on the implementation.
    */
-  cancelAll(reason: string): Promise<void>;
+  quitAll(reason: string): Promise<void>;
 }
 
 const BOUND_SERVICE = millis(60_000);
@@ -196,22 +197,24 @@ export function createRequirementsRuns(deps: RequirementsRunsDeps): Requirements
     dispatch,
     live: () => [...runs.entries()].map(([sessionId, l]) => ({ sessionId, id: l.id, unit: l.unit, waitingOnPerson: l.waiting, permissions: l.permissions })),
     /**
-     * REQ-TRACE-464 (closing the application) and REQ-TRACE-469 (an unlimited wait stays cancellable). The stop is the
-     * run host's existing `session.control {op: 'cancel'}`, one per board run this process owns, issued at once and
-     * bounded; it is never gated on what the run is doing, so a run blocked on an approval with no limit
-     * (`runtime.approval_timeout_seconds` = 0, REQ-TRACE-467/468) is stopped without sitting out a budget that has no
-     * end. The release itself is the engine's: `run.stop`'s FIRST act is to cancel whatever is blocked on a person
-     * (REQ-MONITOR-012, `packages/engine/src/run/run.ts`), and every waiter then finishes `cancelled` whatever its
-     * deadline (`approvals.cancelAll`) — REQ-TOOLS-055's "only an answer or a cancellation releases the wait", which is
-     * measured in `packages/agent-tools/src/gate.test.ts`. What this branch measures is the coordinator's half
-     * (`requirements-runs.test.ts`); what it does NOT offer is the button a person presses, which is REQ-TRACE-465's
+     * REQ-TRACE-464 (closing the application) and REQ-TRACE-469 (an unlimited wait stays cancellable). The request is the
+     * run host's existing `session.control {op: 'announceShutdown'}` — the application's quit (REQ-MONITOR-131), one per
+     * board run this process owns, issued at once and bounded. It is never gated on what the run is doing, so a run
+     * blocked on an approval with no limit (`runtime.approval_timeout_seconds` = 0, REQ-TRACE-467/468) is stopped without
+     * sitting out a budget that has no end. PD-ORCH-005 clauses 3 and 15: a quit brings the run to rest by `quit`, as it
+     * does a session the user started by hand. The stop control's `cancel` would rest it by `stop`, and since a stop
+     * request keeps its first reason, the run host's `shutdown` behind it could not correct that
+     * (`docs/defects/fixed/a-board-run-caught-by-a-quit-rests-as-a-stop.md`). The release itself is the engine's: at a
+     * rest, what waits on a person is withdrawn by the quit (clause 9), never answered, which is REQ-TOOLS-055's "only an
+     * answer or a cancellation releases the wait" as clause 9 narrows it. What this branch measures is the coordinator's
+     * half (`requirements-runs.test.ts`); what it does NOT offer is the button a person presses, which is REQ-TRACE-465's
      * stop control on a board this branch does not host — stated as not built in the ADR note and the handoff.
      */
-    async cancelAll(reason) {
+    async quitAll(reason) {
       const ids = [...runs.keys()];
       if (ids.length === 0) return;
-      deps.log(`requirements: cancelling ${ids.length} board run(s): ${reason}`);
-      await Promise.all(ids.map((sessionId) => deps.runHost.request({ kind: 'session.control', request: { op: 'cancel', sessionId, args: {} } }, BOUND_SHORT).catch(() => undefined)));
+      deps.log(`requirements: ending ${ids.length} board run(s) for the quit: ${reason}`);
+      await Promise.all(ids.map((sessionId) => deps.runHost.request({ kind: 'session.control', request: { op: 'announceShutdown', sessionId, args: {} } }, BOUND_SHORT).catch(() => undefined)));
     },
   };
 }

@@ -139,9 +139,9 @@ export function sessionCommands(
       return { ok: true, value: { sessionId: r.sessionId } };
     },
     'session.control': async (req, { senderId }) => {
-      // PD-ORCH-005 clause 9: the question dock cancels its prompt as its window unloads (REQ-CHAT-101). When the unload
-      // is the application's quit, the cancellation is the quit's and is not sent: the run host's `shutdown` withdraws
-      // the question instead, and a withdrawn question is never an answer.
+      // PD-CHAT-002 revision 2 with PD-ORCH-005 clause 9: the question dock cancels its prompt as its window unloads
+      // (REQ-CHAT-101). A dismissal the application's quit causes cancels nothing: the cancellation is not sent, the run
+      // host's `shutdown` withdraws the question instead, and a withdrawn question is never an answer.
       if (req.request.op === 'cancelQuestions' && quitting()) {
         log(`question ${String(req.request.args['requestId'] ?? '')} left for the quit to withdraw: its dock closed with the application (PD-ORCH-005 clause 9)`);
         return { ok: true, value: { ok: true } };

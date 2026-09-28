@@ -475,4 +475,80 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     expect(again.ok).toBe(false);
     expect(sessions.planEdit(sid, 'too late').ok).toBe(false);
   });
+
+  /**
+   * PD-ORCH-005 clause 15 (revision 4): "A stop or a quit during a plan cycle ends the cycle's agents and records no
+   * interruption, and the plan gate keeps its hold (clause 11)." The quit at a PARKED gate is covered above; these reach
+   * the cycle while its turn is still in flight, with a child it delegated still running (a role that withholds nothing
+   * is admitted during a plan cycle, REQ-ORCH-153).
+   */
+  describe('PD-ORCH-005 clause 15: a stop or a quit during a plan cycle', () => {
+    function planCycleWithChild() {
+      let release!: () => void;
+      const hold = new Promise<void>((r) => { release = r; });
+      const client = new ScriptedModelClient([]);
+      const original = client.stream.bind(client);
+      const counts = new Map<string, number>();
+      client.stream = (req) => {
+        const first = req.messages[0]?.content.map((p) => (p.kind === 'text' ? p.text : '')).join('') ?? '';
+        const persona = /^You are the orchestrator/.test(first) ? 'orchestrator' : /summarise/i.test(first) ? 'summariser' : 'child';
+        const n = (counts.get(persona) ?? 0) + 1;
+        counts.set(persona, n);
+        client.push(persona === 'orchestrator'
+          ? (n === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'work', task: 'TASK: work' } }]) : answer('Step 1: the plan.'))
+          : persona === 'summariser' ? answer('{}') : { parts: [{ hold }, ...answer('late').parts] });
+        return original(req);
+      };
+      const base: Pick<ToolPort, 'cancelPending' | 'setMode' | 'currentMode' | 'answerApproval'> = { cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false };
+      const runtime: RuntimePosture = { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', runStartMode: 'plan' };
+      const sessions = new Sessions({
+        clocks: clock, publisher: recorder(), pid: 77, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), mintSessionId: () => 'S1',
+        model: { backend: new DefaultAgentBackend(client), config: config() }, runtime, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
+        planWithholds: () => false, attended: () => true,
+        // The root's port delegates (its only tool); a child's offers nothing.
+        tools: (ctx): ToolPort => {
+          const ops = ctx.delegation;
+          if (!ops) return { ...base, specs: () => [], dispatch: async () => ({ text: '', isError: true, status: 'failed', durationMs: 0, label: '', args: {} }) };
+          return {
+            ...base,
+            specs: () => [{ name: 'delegate', description: 'delegate', parameters: { type: 'object' } }],
+            dispatch: async (c) => {
+              const a = JSON.parse(c.rawArgs) as Record<string, unknown>;
+              const r = await ops.delegate(ctx.parentId ?? 'root', { persona: String(a['persona']), taskName: String(a['task_name']), task: String(a['task']), dependsOn: [], inheritedContext: [], category: '', runInBackground: true, writeScope: [] });
+              return { text: `${r.status} ${r.message}`, isError: r.status === 'rejected', status: r.status === 'rejected' ? 'failed' : 'ok', durationMs: 1, label: 'delegate', args: a };
+            },
+          };
+        },
+      });
+      return { sessions, release: () => release() };
+    }
+
+    for (const how of ['stop', 'quit'] as const) it(`a ${how} while the plan turn and its child are in flight ends the child, records no interruption and opens no iteration, and the next prompt is held at the gate again`, async () => {
+      const { sessions, release } = planCycleWithChild();
+      const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+      for (let i = 0; i < 100 && dal.childrenOf(sid).length === 0; i++) await new Promise((r) => setTimeout(r, 5));
+      await new Promise((r) => setTimeout(r, 10));
+      expect(sessions.run(sid)!.isPlanGateHeld).toBe(true);
+      expect(dal.childrenOf(sid).map((c) => c.state)).toEqual(['running']);
+      let closed: Promise<void> | null = null;
+      if (how === 'stop') expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+      else closed = sessions.closeAll();
+      release();
+      await sessions.running(sid);
+      await closed;
+      // The cycle's agent is ended as before — settled with its result — never left paused, and no interruption is named.
+      expect(dal.childrenOf(sid).map((c) => [c.state, c.interruption, c.resume_state])).toEqual([['cancelled', null, null]]);
+      const timeline = dal.timelineOf(sid).map((t) => t.name);
+      expect(timeline).toContain('child_result');
+      expect(timeline).not.toContain('child_paused');
+      // A plan cycle is not an iteration: nothing is left open for a continue to resume.
+      expect(dal.iterationsOf(sid)).toEqual([]);
+      // The gate keeps its hold: nothing was released, so the next prompt is held again.
+      expect(dal.getSession(sid)!.plan_released).toBe(0);
+      if (how === 'quit') expect(sessions.resume(dal, 'C:/ws', sid).ok).toBe(true);
+      expect(sessions.prompt(sid, 'try again').ok).toBe(true);
+      await sessions.running(sid);
+      expect(dal.getSession(sid)!).toMatchObject({ execution_status: 'awaiting_plan_decision', plan_released: 0 });
+    });
+  });
 });

@@ -56,12 +56,14 @@ export interface WorkspaceViewProps {
   readonly onSubmit: (text: string, attachments: readonly ImageAttachmentInput[]) => Promise<{ ok: true } | { ok: false; reason: string }>;
   /**
    * REQ-SESSION-186: the stop control — first activation graceful, the second forces. PD-ORCH-005 clause 3: a stop
-   * brings the run to rest and its unfinished agents resume on a continue, so it asks no confirmation (OQ-69).
+   * brings the run to rest and its unfinished agents resume on a continue, so it asks no confirmation; a forced stop is a
+   * stop (PD-ORCH-005 clause 15).
    */
   readonly onStop: (force: boolean) => Promise<{ ok: true } | { ok: false; reason: string }>;
   /**
    * REQ-MONITOR-126/127 and REQ-MONITOR-009: the confirmed cancel of the whole run — the reserved run id's, which
-   * PD-ORCH-005 clause 3 keeps final (OQ-69). Absent, the surface offers no run-level cancel.
+   * PD-ORCH-005 clause 3 keeps final; every confirmed "Cancel the run?" is that cancel (clause 15). Absent, the surface
+   * offers no run-level cancel.
    */
   readonly onCancelRun?: (() => Promise<{ ok: true } | { ok: false; reason: string }>) | undefined;
   /** REQ-TOOLS-077 / REQ-MONITOR-150: forwarded to the running session; applies from the next tool call. */
@@ -361,13 +363,13 @@ function SteerDialog({ target, onSteer, onClose }: { target: { id: string; name:
 export function composerPlaceholder(session: SessionRecord | null, localRunActive: boolean, busy = localRunActive): string {
   return composerPlaceholderFor(session !== null, localRunActive, busy);
 }
-/** PD-ORCH-005 clause 6: the Continue action states how many agents will resume — the open iteration's root and every unfinished agent. */
+/** PD-ORCH-005 clauses 6 and 19: the Continue action states how many agents will resume — the open iteration's root, which resumes with them, and every unfinished agent. */
 export function resumeCountText(agents: number): string {
   return agents === 1 ? '1 agent will resume' : `${agents} agents will resume`;
 }
 
 /**
- * PD-ORCH-005 clauses 3, 5 and 6: what declining does — the paused agents end `cancelled`, which cannot be undone, and
+ * PD-ORCH-005 clauses 3, 5, 6 and 19: what declining does — the paused agents end `cancelled`, which cannot be undone, and
  * the open iteration's task is taken up again by a new iteration's root. A count of one is the root alone, which no
  * agent record names as cancelled.
  */
@@ -419,7 +421,8 @@ export function waitHeaderText(wait: NonNullable<SessionRecord['wait']>, nowMs: 
 /**
  * The wait as the user sees it (REQ-NOTIFY-263, REQ-ORCH-091 d): the header and its exactly three choices, here and on no
  * other surface — keep waiting (the absence of a decision: the control acknowledges and changes nothing), change model
- * (the existing model list of REQ-NOTIFY-074, pinned through `setModel`, REQ-NOTIFY-089), cancel the run (`cancel`).
+ * (the existing model list of REQ-NOTIFY-074, pinned through `setModel`, REQ-NOTIFY-089), cancel the run — the confirmed
+ * "Cancel the run?", which sends the reserved run id, the explicit cancel, never the stop (PD-ORCH-005 clause 15).
  * The countdown ticks once a second on the surface's own clock, as the Overview's runtime label does.
  */
 function WaitHeader({ wait, models, onSetModel, onCancel }: { wait: NonNullable<SessionRecord['wait']>; models: readonly string[]; onSetModel?: WorkspaceViewProps['onSetModel']; onCancel?: (() => void) | undefined }) {
@@ -1517,7 +1520,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
                 * Revision 2: the stop and the queue are the strip's shells — the stop keeps its danger
                 * button, the queue is the send pill in its Queue mode, so the run state the strip draws needs no
                 * button family the strip does not own. PD-ORCH-005 clause 3: the stop brings the run to rest and
-                * destroys nothing, so it acts at once; the confirmed, final cancel is the run-level cancel's (OQ-69). */}
+                * destroys nothing, so it acts at once; the confirmed, final cancel is the run-level cancel's (clause 15). */}
               <DesignButton type="button" className="btn btn-danger btn-compact" onClick={() => { void stop(); }} aria-describedby="stop-hint" title={stopPending ? 'The stop is pending; the next activation forces it.' : 'Stops gracefully; a second activation forces.'}>{stopLabel(stopPending)}</DesignButton>
               <span id="stop-hint" className="visually-hidden">{stopPending ? 'The stop is pending; the next activation forces it.' : 'Stops gracefully; a second activation forces.'}</span>
               <DesignSendPill shortLabel="Queue" sendName="Queue the message for the next iteration" disabled={busy} title={undefined} aria-describedby={undefined} data-testid="composer-send" />
@@ -1563,16 +1566,18 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
         </div>
         {/*
           * PD-CHAT-001 revision 2: the strip carries the controls, so the old two-row composition
-          * (`.composer__chips` first band, `.composer__actions` second) is gone — the rows below are
-          * the gate's and the pause's notices, which stand outside the strip and outside the dock.
+          * (`.composer__chips` first band, `.composer__actions` second) is gone. Revision 4 ("The strip"): a notice and
+          * the action that belongs to it — the plan gate's hint, the pause's statement, the count of agents a continue
+          * resumes and "Continue without them" — stand in this notices row below the dock.
           */}
         <div className="composer__notices">
           {projectSetupPending && <span id={sendReasonId} className="visually-hidden">{PROJECT_SETUP_SEND_REASON}</span>}
           {planGate && <span id="plan-gate-hint" className="composer__hint">A plan is waiting for your decision above. Approve, revise, or cancel the run to continue.</span>}
           {paused && !planGate && <span className="composer__hint">Paused. Run controls need the run continued before they can be used.</span>}
           {resumable && (
-            /* PD-ORCH-005 clause 6 (OQ-71): the continue states how many agents will resume, and the Continue action
-             * offers to continue without them — confirmed, since it ends them `cancelled` for good (clauses 3 and 5). */
+            /* PD-ORCH-005 clauses 6 and 19: the continue states how many agents will resume, and the Continue action
+             * alone offers to continue without them — confirmed, since it ends them `cancelled` for good (clauses 3 and
+             * 5); a continue by message resumes. On a session a crash left too (clause 18). */
             <div className="composer__resume" data-testid="composer-resume">
               <span id="composer-resume-count" className="composer__hint" data-testid="composer-resume-count">{resumeCountText(resumable.agents)}</span>
               {(session?.executionStatus === 'paused' || crashLeft) && onContinue && (

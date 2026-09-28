@@ -3392,6 +3392,47 @@ confirmation, rather than refused. Whether a crash-left session should state som
 where a paused session states its pause. Whether a crash that left a durable hold should offer anything beyond that
 hold's own continues.
 
+**OQ-81 — What does the audit of clause 15, clause 19, PD-CHAT-001 revision 4 and PD-CHAT-002 revision 2 leave undecided?** *(`PD-ORCH-005` clauses 3, 9, 11, 15 and 19 (revision 4); `PD-CHAT-001` revision 4, "The strip" and "The paused continues"; `PD-CHAT-002` revision 2; REQ-CHAT-029, REQ-CHAT-005, REQ-CHAT-021, REQ-CHAT-169, REQ-MONITOR-004, REQ-SESSION-186, REQ-TOOLS-063, REQ-CHAT-101 and REQ-TRACE-464. Raised 2026-09-28 by building `PD-ORCH-005` revision 4, `PD-CHAT-001` revision 4 and `PD-CHAT-002` revision 2 under [R-064](../product/requests.md#r-064).)*
+
+Most of what these rulings decide was already built under OQ-69 and OQ-71's readings. The audit found one behaviour the
+text contradicts: a board run caught by the application's quit came to rest by `stop`
+(`docs/defects/fixed/a-board-run-caught-by-a-quit-rests-as-a-stop.md`). It also found two strings the rulings fix:
+`/stop`'s description and the paused continue's `Send`. What the text leaves open concerns a plan cycle's waits at a
+quit, the literal reach of "no other control stands outside the dock", and a few names the build kept.
+
+**What the build proceeds under.**
+
+- **A wait inside a plan cycle at a quit.** Clause 15 says a quit during a plan cycle "ends the cycle's agents and
+  records no interruption". Its last bullet has the quit withdraw an approval (clause 9), and PD-CHAT-002 revision 2
+  has it withdraw a question. A withdrawal is recorded by the interruption that caused it, and a plan cycle records
+  none. So an approval or a question pending in a plan cycle when the quit lands is released as before the build:
+  cancelled (`cancelPending`), not withdrawn. The dock's own dismissal at the quit still cancels nothing, because main
+  holds it back; the cancellation is the run's. A quit at a *parked* gate has no turn in flight and nothing waiting.
+- **A stop during a plan cycle, as the session shows it.** The cycle's agents end `cancelled` with their reports, no
+  iteration row exists, and `plan_released` stays 0, so the next prompt or continue is held again. The session persists
+  `paused` (REQ-SESSION-186's persisted status for a stop). Its result's summary reads "The run came to rest because a
+  person stopped it.", because the summary is classified from the stop reason alone. Both are kept. The status is what
+  a stop persists, and the wording describes the run, not an agent left to resume.
+- **"No other control stands outside the dock."** The sentence governs the run-state notices it names and the strip's
+  input controls. Three controls outside the dock and outside the notices row stay where they are, because each
+  belongs to a surface the directive does not name: REQ-CHAT-021's "Command not run" notice with its dismiss, above the
+  dock; the refusal line with "Open project setup", above the dock; and REQ-CHAT-169's attachment list with its Remove
+  buttons, below the dock.
+- **The names the build kept.** `/stop` is offered as "Stop the active run" and still sends the control op `cancel`,
+  which is REQ-MONITOR-004's enumeration. The op is not renamed, and REQ-CHAT-029's "MUST cancel that run" is read
+  through clause 15's narrowing. The paused strip's continue by message draws its own accessible name ("Continue with
+  a message") and shows `Send`. The send pill's `sendName` arm for a paused session, which the strip never draws, is
+  left as it stands.
+- **The board's quit.** Main's board coordinator ends its runs at the last window's close with the run host's
+  `announceShutdown` (REQ-MONITOR-131's shutdown request), renamed `quitAll`, rather than the stop control's `cancel`.
+  A stop request keeps its first reason, so the `cancel` sent ahead of the run host's `shutdown` rested the run by
+  `stop`. REQ-TRACE-469's unlimited approval wait is still released at once, withdrawn by the quit.
+
+**What a ruling decides.** Whether a quit during a plan cycle should withdraw its pending approval or question, which
+would need a withdrawal that names no interruption. Whether the "Command not run" notice and the refusal line should
+move into the notices row, a layout change. Whether a stop during a plan cycle should persist a status and a summary of
+its own rather than a stop's `paused` and "came to rest".
+
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 
 The key is registered with default 20 and minimum 1. Each background session publishes its own `bg:<id>` stream at up to 50 frames/s (the 20 ms floor), so the produced aggregate is `(agents + background sessions) × 50 frames/s`, and only one of those two factors — agents, REQ-MONITOR-285's 20 — has a ceiling. Part AL reads the key into the manager and caps the *delivered* rate per window at 1,000 frames/s by merging (REQ-MONITOR-306, REQ-SHELL-103), so a user who configures 400 background sessions saturates the run-host → main pipe, not a renderer. A stated maximum on the key would let the produced rate be computed rather than absorbed. The owner's call; recorded, not resolved.

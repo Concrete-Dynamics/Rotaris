@@ -66,7 +66,8 @@ export function createSessionActions({ bridge, replica }: SessionActionDeps) {
   /**
    * REQ-SESSION-186 / ADR-0013: the stop control — graceful, and forced on a second activation. The shell resolves focus
    * to a session id, then sends the control. PD-ORCH-005 clause 3: a stop brings the run to rest, and its unfinished
-   * agents resume when the session is continued, so it is never the cancel below (OQ-69).
+   * agents resume when the session is continued, so it is never the cancel below; forced or not, it is a stop
+   * (PD-ORCH-005 clause 15).
    */
   async function stopRun(force: boolean): Promise<{ ok: true } | { ok: false; reason: string }> {
     const sessionId = replica.getState().sessionId;
@@ -92,7 +93,8 @@ export function createSessionActions({ bridge, replica }: SessionActionDeps) {
   /**
    * REQ-MONITOR-126/127 and REQ-MONITOR-009: the confirmed cancel of the whole run, sent as the cancellation of the
    * reserved run id. PD-ORCH-005 clause 3 keeps it final — every agent ends `cancelled` and none is resumed — which is
-   * what tells it apart from the stop above (OQ-69). A refusal says the run is no longer cancellable (REQ-MONITOR-127).
+   * what tells it apart from the stop above; every confirmed "Cancel the run?" sends it (clause 15). A refusal says the
+   * run is no longer cancellable (REQ-MONITOR-127).
    */
   async function cancelRun(): Promise<{ ok: true } | { ok: false; reason: string }> {
     const sessionId = replica.getState().sessionId;

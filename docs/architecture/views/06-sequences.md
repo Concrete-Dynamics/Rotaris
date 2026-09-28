@@ -123,7 +123,7 @@ The parts that are easy to get wrong:
 - **Closing the dialog answers Deny** while the application stays: the user closed the dialog, or one main window
   of several. A request already answered or cancelled asks nothing more. A dialog that the application's quit closes
   answers nothing (`QuitState`, `main/exit.ts`). The quit's `shutdown` then comes to rest and withdraws the approval,
-  or, during a plan cycle, which never comes to rest, cancels it as OQ-69 has it (PD-ORCH-005 clause 9). The question
+  or, during a plan cycle, which never comes to rest (clause 15), cancels it (OQ-81; PD-ORCH-005 clause 9). The question
   dock's cancellation is held back at a quit the same way. *Until phase 7 the quit's close sent a Deny first, and the
   agent stepped on it: `docs/defects/fixed/a-quit-denies-the-approval-it-should-withdraw.md`.*
 - Presentation order is **oldest first by the published sequence**, and that sequence orders presentation

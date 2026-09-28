@@ -144,7 +144,7 @@ export function PersonaApp({ persona, initialSelect }: { persona: string; initia
       nowIso={nowIso} compressionThresholdPercent={snapshot?.compressorThresholdPercentage ?? 60} focusSteer={focusSteer}
       onSteer={(agentId, text) => control('submitSteeringPrompt', { agentId, text }, 'Steering is unavailable for this run.')}
       // REQ-SHELL-075(g) / REQ-MONITOR-009: the confirmed Cancel of the run's own instance is the run's final cancel
-      // (PD-ORCH-005 clause 3, OQ-69); of a child, that child's.
+      // (PD-ORCH-005 clauses 3 and 15); of a child, that child's.
       onCancel={(agentId) => (agentId === RUN_AGENT_ID ? cancelRun() : cancelAgent(agentId))}
     />
     {/* ADR-0049's fourth decision: the acknowledgement stack is PER WINDOW, so this window owns its own — the same

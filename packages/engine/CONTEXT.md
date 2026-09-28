@@ -279,7 +279,7 @@ _Avoid_: stop reason (that is the run's, `REQ-MONITOR-301`), cancellation
 **Comes to rest** (a run):
 A run stops by a pause, a stop (the stop control, graceful or forced) or a quit and leaves its unfinished agents
 `paused`, its iteration open; a crash leaves the same state once it is recorded. The explicit cancel, a stop the run
-raises on its own account, and a plan cycle never come to rest (OQ-69). — `PD-ORCH-005` clauses 2 and 3
+raises on its own account, and a plan cycle never come to rest. — `PD-ORCH-005` clauses 2, 3 and 15
 _Avoid_: suspend, park (a run **parks** at the plan gate, which is a durable hold)
 
 **Withdrawn** (an approval or a question):
@@ -297,7 +297,8 @@ _Avoid_: restart, replay, rerun
 
 **Explicit cancel**:
 REQ-MONITOR-126's confirmed control, which cancels the run by its reserved agent id: final — every agent it ends is
-`cancelled` and never resumed. Distinct from the stop control. — `PD-ORCH-005` clause 3, `REQ-MONITOR-009`,
+`cancelled` and never resumed. Every confirmed "Cancel the run?" is it, whichever surface asks. Distinct from the stop
+control, which a second activation forces and which stays a stop. — `PD-ORCH-005` clauses 3 and 15, `REQ-MONITOR-009`,
 `REQ-MONITOR-126`
 _Avoid_: stop (the stop control comes to rest)
 

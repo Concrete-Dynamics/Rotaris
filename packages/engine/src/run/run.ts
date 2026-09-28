@@ -464,7 +464,8 @@ export class Run {
    * explicit cancel, `pause` for an accepted pause — or null when it is not coming to rest: running, cancelled (clause 3:
    * "an explicit cancel is final"), aborted on its own account (`agent_session_aborted`: a recording failure, the headless
    * abort hook, an escalation), or held at the plan gate (clause 11: a durable hold leaves no agent unfinished, so a stop
-   * or a quit during a plan cycle ends its agents as before — OQ-69).
+   * or a quit during a plan cycle ends its agents and records no interruption — PD-ORCH-005 clause 15). A forced stop is
+   * a stop (clause 15): `forced` is never read here.
    */
   get restCause(): Interruption | null {
     if (this.planHeld) return null;
@@ -1456,7 +1457,8 @@ export class Run {
   /**
    * REQ-MONITOR-009 / REQ-ORCH-133: cancel one child — it and its live descendants stop and settle `cancelled`
    * (`IterationChildren.cancel`, the per-child abort). The reserved run id is the full cancellation, which PD-ORCH-005
-   * clause 3 keeps final: REQ-MONITOR-126's cancel control, "cannot be undone in this session" (OQ-69).
+   * clause 3 keeps final: REQ-MONITOR-126's cancel control, "cannot be undone in this session", which every confirmed
+   * "Cancel the run?" sends (clause 15).
    */
   cancelAgent(taskId: string): boolean {
     if (this.ended) return false;

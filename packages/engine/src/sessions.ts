@@ -20,7 +20,7 @@ import { SessionLog, type LogLevel } from './session-log.js';
 import type { ToolPort } from './run/turn.js';
 import { settleStaleChildren } from './children/orchestration.js';
 import type { DelegationOps } from './children/delegation.js';
-import { DEFAULT_BUDGET, type Budget } from './children/ledger.js';
+import { DEFAULT_BUDGET, storeChildReport, type Budget } from './children/ledger.js';
 import { DEFAULT_CONTEXT_CAPACITY, isInterruption, isTerminalChildState, presentationChildState, reconciledState, type AgentRecord, type ChildState } from '@rotaris/contracts';
 import type { ChildRow } from '@rotaris/store';
 import { SummaryWriter } from './run/summary.js';
@@ -1371,6 +1371,8 @@ export class Sessions {
     // pass is asynchronous and answered by `controlAsync` — a synchronous caller gets the refusal it would get with no run.
     if (req.op === 'clearTranscript') return this.clearTranscript(s, req);
     if (req.op === 'forceCompression') return { ok: false, refusal: { code: 'no_run', message: 'No run is active.' } };
+    // PD-ORCH-005 clause 16: one paused child is cancellable while its session rests, with no run behind it.
+    if (req.op === 'cancelAgent' && (!run || run.isEnded)) return this.cancelPausedAtRest(s, req);
     if (!run || run.isEnded) return { ok: false };
     const text = (key: string): string | null => { const v = req.args[key]; return typeof v === 'string' && v.trim() !== '' ? v : null; };
     switch (req.op) {
@@ -1556,6 +1558,57 @@ export class Sessions {
     }
     s.owner.reconcile();
     return { ok: true, ...(assigned === undefined ? {} : { value: assigned }) };
+  }
+
+  /**
+   * PD-ORCH-005 clause 16 (revision 4, narrowing REQ-MONITOR-063; OQ-74): the user cancels one `paused` child while its
+   * session rests. It and each of its `paused` descendants end `cancelled` — final, as clause 3 says — each with the
+   * report, the timeline entry and the artifact a live cancel writes (REQ-ORCH-133, REQ-LIBRARY-092). Nothing else moves:
+   * the open iteration stays open, the rest of its agents resume with it, and `resumableOf` counts as many fewer. A
+   * parent learns of it when it resumes, as of any child that ended unobserved (REQ-ORCH-054).
+   *
+   * Refused — `{ok: false}`, which the renderer states as "not cancellable" (REQ-MONITOR-128) — for the run itself (a
+   * rest's whole-iteration equivalent is clause 6's "Continue without them"), an id that is no agent of the open
+   * iteration, and one neither `paused` nor left unfinished by a crash. A crash not yet recorded is recorded first, as any continue records it
+   * (clauses 8 and 18), so what it cancels is what the crash left `paused`. Background sessions the cancelled agents
+   * started are left as a live cancel leaves them, for the next stop, quit or crash to end (clause 10).
+   */
+  private cancelPausedAtRest(s: Live | undefined, req: ControlRequest): ControlResult {
+    if (!s) return { ok: false };
+    const sid = s.writer.sessionId;
+    const agentId = typeof req.args['agentId'] === 'string' ? req.args['agentId'] : '';
+    const row = s.dal.getSession(sid);
+    const open = s.dal.openIterationOf(sid);
+    // The run's id and the root's are no child of the iteration, so the lookup below refuses them.
+    if (!row || !open) return { ok: false };
+    // This process holds the session's lock and runs nothing for it, so no other run is behind it (REQ-GIT-093's reading).
+    const crashLeft = crashLeftOf(s.dal, row, () => this.liveness(s.dal, sid) === 'not-live');
+    const target = iterationAgents(s.dal, sid, open).find((c) => c.task_id === agentId);
+    if (!target || (target.state !== 'paused' && !crashLeft.has(agentId))) return { ok: false };
+    const warn = (m: string) => { s.log?.warn(m); this.deps.warn(m); };
+    if (crashLeft.size > 0) this.recordCrashOf(s.dal, s.writer, sid, warn);
+    // Read again: the crash record has just paused what the crash left.
+    const agents = iterationAgents(s.dal, sid, open);
+    const byParent = new Map<string, ChildRow[]>();
+    for (const c of agents) byParent.set(c.parent_id, [...(byParent.get(c.parent_id) ?? []), c]);
+    const targets: ChildRow[] = [];
+    const walk = (c: ChildRow) => { if (c.state === 'paused') targets.push(c); for (const d of byParent.get(c.task_id) ?? []) walk(d); };
+    const self = agents.find((c) => c.task_id === agentId);
+    // Defensive: a crash record whose write failed leaves the target unpaused, and nothing is cancelled.
+    if (!self || self.state !== 'paused') return { ok: false };
+    walk(self);
+    const artifacts = s.artifacts ?? this.newArtifactStore(s.dal, sid, () => s.writer, warn);
+    s.artifacts = artifacts;
+    for (const t of targets) {
+      const r = s.writer.transitionChild(t.task_id, 'cancelled', 'cancellation');
+      if (!r.ok) { warn(r.error.code === 'illegal-move' ? r.error.reason : `cancelling paused ${t.task_id} failed: ${r.error.code}`); continue; }
+      const own = t.task_id === agentId;
+      const summary = own ? 'The user cancelled this child.' : `Cancelled with ${self.canonical_name}, which the user cancelled.`;
+      storeChildReport({ writer: s.writer, artifacts, warn }, t.task_id, t, { agent_name: t.canonical_name, role: t.persona, status: 'cancelled', summary, key_findings: [], last_response: '', final_response: '', errors: [] });
+      s.writer.appendTimeline('child_user_cancelled', 'user', `The user cancelled child ${t.canonical_name} (${t.task_id})${own ? '' : ` with ${self.canonical_name}`} while the session rested.`, { task_id: t.task_id, ...(own ? {} : { cancelled_with: agentId }) });
+    }
+    s.owner.reconcile();
+    return { ok: true };
   }
 
   /**

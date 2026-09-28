@@ -352,5 +352,30 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         expect(shown(snapshot)).toMatchObject(expected);
       });
     });
+
+    describe('PD-ORCH-005 clauses 16 and 18 (OQ-74): cancelling one child a crash left records the crash first, as any continue does', () => {
+      const cancel = (s: Sessions, sid: SessionId, agentId: string) => s.control({ op: 'cancelAgent', sessionId: sid, args: { agentId } });
+      it('in REQ-CHAT-008\'s recovery state: the crash is recorded, then the child and its paused descendant end cancelled, and the rest stay paused by the crash', async () => {
+        const sid = await crashed();
+        const viewer = sessionsAs(88);
+        expect(viewer.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        expect(cancel(viewer, sid, 'bg_000000c1')).toEqual({ ok: true });
+        expect(dal.getIteration(sid, 2)).toMatchObject({ state: 'open', interruption: 'crash' });
+        expect(dal.getChild(sid, 'bg_000000c1')).toMatchObject({ state: 'cancelled', interruption: 'crash' });
+        expect(dal.getChild(sid, 'bg_000000c3')).toMatchObject({ state: 'cancelled', interruption: 'crash' });
+        expect(dal.getChild(sid, 'bg_000000c2')).toMatchObject({ state: 'paused', interruption: 'crash' });
+        expect(JSON.parse(dal.getChild(sid, 'bg_000000c3')!.report!)).toMatchObject({ status: 'cancelled', summary: 'Cancelled with c1, which the user cancelled.' });
+        expect(resumableOf(dal, dal.getSession(sid)!)).toEqual({ iteration: 2, agents: 2 });
+      });
+
+      it('a refusal records nothing: a finished agent, another root\'s child, and the run', async () => {
+        const sid = await crashed();
+        const viewer = sessionsAs(88);
+        expect(viewer.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        for (const id of ['bg_000000c4', 'bg_000000x1', 'run', ROOT]) expect(cancel(viewer, sid, id)).toEqual({ ok: false });
+        expect(dal.getIteration(sid, 2)!.interruption).toBeNull();
+        expect(dal.getChild(sid, 'bg_000000c1')!.state).toBe('running');
+      });
+    });
   });
 });

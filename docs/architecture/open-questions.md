@@ -3400,6 +3400,59 @@ always rather than only while one is paused. Whether the run-level agent should 
 state), and carry the iteration's interruption. Whether an agent a crash left should read `paused` before the crash is
 recorded, or only once it is.
 
+**OQ-74 — What does cancelling one paused child at rest reach, say and leave?** *(`PD-ORCH-005` clause 16, revision 4, with clauses 3, 8, 10 and 18; REQ-MONITOR-063, which the directive narrows, and REQ-MONITOR-064, REQ-MONITOR-128, REQ-MONITOR-055, REQ-ORCH-133, REQ-LIBRARY-092, REQ-TOOLS-111 and REQ-SHELL-075, which it does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
+
+Clause 16 has "a `paused` child" offer Cancel "wherever a live agent offers it", confirmed as REQ-MONITOR-128 requires —
+naming the child and one line per paused descendant — and has it and each paused descendant end `cancelled`, the
+iteration open, the rest resuming, and the Continue action's count dropping. The session command it takes had worked
+only with a run behind it. The clause does not say:
+
+- which agent a surface offers it for, when the run-level agent now presents `paused` too (OQ-73);
+- what it does with a child a crash left, before the crash is recorded, which presents `paused` (OQ-73) but is stored
+  `running`;
+- what the cancelled child's report, timeline entry and background sessions become;
+- what REQ-MONITOR-064's cascade note, which counts live descendants only, says for a paused child;
+- what the confirmation says beyond naming.
+
+**What the build proceeds under.**
+
+- **Where it is offered.** A `paused` child offers Cancel on every surface a live agent does, whether or not a run is
+  active (`cancelOffered`): the inspector, the Mission view's "Cancel selection" and the Workspace's agents header. A
+  persona window offers Cancel always (REQ-SHELL-075(g)). The run-level agent at rest is never offered it: clause 16
+  names a child, and the whole iteration's equivalent is clause 6's "Continue without them". The Workspace's agents
+  header now offers a live agent's Cancel only while its run is active, as the inspector already did; it had offered it
+  with no run, and the engine refused.
+- **The command.** `session.control`'s `cancelAgent` with no run behind the session goes to `Sessions.cancelPausedAtRest`.
+  It is refused (`{ok: false}`, which the renderer states as "not cancellable", REQ-MONITOR-128) for the run's id or the
+  root's, an id that is no child of the open iteration, and a child neither `paused` nor left by a crash. A refusal
+  records nothing. The session it reaches is one this process has loaded and holds the lock of, so no other run can be
+  behind it.
+- **A crash not yet recorded.** It is recorded first (`recordCrashOf`), as a continue records it (clauses 8 and 18), and
+  the cancel then acts on what the record left `paused`. In REQ-CHAT-008's recovery state the session's status is
+  left as it is: recording the crash is not the repair (REQ-SESSION-060).
+- **What it cancels.** The child and every `paused` descendant at any depth, including one below a descendant that had
+  already finished; a finished descendant is left as it is. Each moves `paused` → `cancelled` by the cancellation path,
+  keeps its `interruption` and `resume_state` (as the decline does), and gains the live cancel's report — "The user
+  cancelled this child." or "Cancelled with <name>, which the user cancelled." — its artifact (REQ-LIBRARY-092), and a
+  `child_user_cancelled` entry whose message adds "while the session rested". Nothing else is written: the iteration,
+  its task and the todo stay as they are, and the parent learns of the cancel when it resumes, as of any child that
+  ended unobserved (REQ-ORCH-054).
+- **Background sessions.** A cancelled agent's background terminal sessions are left as a live cancel of one child
+  leaves them, for the next stop, quit or crash to end (clause 10, REQ-TOOLS-111).
+- **The cascade note.** For a paused child it counts the paused descendants cancelled with it — "Cancelling cascades to 1
+  paused descendant." — and REQ-MONITOR-064's live count otherwise.
+- **The confirmation.** Titled "Cancel <name>?", it gives one line per paused descendant and states that it cannot be
+  undone and that the agent will not resume (clause 3's "final"); with no paused descendant, that the other paused
+  agents resume when the session continues. Its dismissal reads "Keep it paused" rather than "Keep running". The
+  Mission view's own confirmation adds "and will not resume" to its sentence (`missionCancelBody`).
+- **Not built.** REQ-MONITOR-128's optimistic display: the surfaces wait for the republished record, for this cancel as
+  for a live one.
+
+**What a ruling decides.** Whether a cancelled paused agent's running background sessions should end at the cancel,
+since it will never resume. Whether REQ-MONITOR-064 should be named as narrowed for the paused count. Whether the
+recovery state's cancel should also repair the session's status. Whether the resting run-level agent should offer a
+Cancel that declines the iteration.
+
 ## Design-reference dependencies
 
 The approved visual design reference was **not available** to the architects who produced the slice

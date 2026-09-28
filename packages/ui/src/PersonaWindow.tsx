@@ -175,7 +175,7 @@ export function PersonaWindow(props: PersonaWindowProps) {
         </div>
       )}
       {confirming && (
-        <ConfirmDialog {...cancelConfirmation(confirming, agents)} cancelLabel="Keep running" destructive testId="persona-cancel-confirm" onCancel={() => setConfirming(null)}
+        <ConfirmDialog {...cancelConfirmation(confirming, agents)} destructive testId="persona-cancel-confirm" onCancel={() => setConfirming(null)}
           onConfirm={() => { const target = confirming; setConfirming(null); void onCancel(target.id).then((r) => setError(r.ok ? null : r.reason)); }} />
       )}
     </div>

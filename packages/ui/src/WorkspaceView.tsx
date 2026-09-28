@@ -18,7 +18,7 @@ import { COMMAND_NOT_RUN_TITLE, defaultUnavailableReason, parseSlash, slashNameT
 import { SlashPopup, slashRowId } from './slash/SlashPopup.js';
 import type { SlashCommand, SlashContext, SlashOutcome } from './slash/types.js';
 import { AgentTree } from './AgentTree.js';
-import { cancelConfirmation, runLevelAgent } from './agents.js';
+import { cancelConfirmation, cancelOffered, runLevelAgent } from './agents.js';
 import { Inspector, type PersonaEntry } from './Inspector.js';
 import { useShellState } from './shell-state.js';
 import { DelegationHeader, ScopeToggle, scopedRows, type Acknowledger } from './TranscriptSurface.js';
@@ -1272,7 +1272,8 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
             {selected && !['done', 'failed', 'cancelled'].includes(selected.presentationState) && onSteer && runActive && (
               <DesignButton type="button" className="btn btn-ghost agents__cancel" onClick={() => setSteering({ id: selected.id, name: selected.name })}>Steer {selected.name}</DesignButton>
             )}
-            {selected && !['done', 'failed', 'cancelled'].includes(selected.presentationState) && onCancelAgent && (
+            {/* PD-ORCH-005 clause 16: a paused child is cancellable while its session rests; a live agent while its run is active. */}
+            {selected && cancelOffered(selected, runActive) && onCancelAgent && (
               <DesignButton type="button" className="btn btn-ghost agents__cancel" onClick={() => setConfirming({ agent: { id: selected.id, name: selected.name } })}>Cancel {selected.name}</DesignButton>
             )}
           </div>
@@ -1586,7 +1587,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
         <ConfirmDialog title="Continue without them?" body={declineText(resumable.agents)} confirmLabel="Continue without them" cancelLabel="Keep them" destructive testId="decline-confirm" onCancel={() => setConfirming(null)} onConfirm={() => { setConfirming(null); void continueRun(true); }} />
       )}
       {confirming !== null && confirming !== 'cancelRun' && confirming !== 'decline' && (
-        <ConfirmDialog {...cancelConfirmation(confirming.agent, session?.agents ?? [])} cancelLabel="Keep running" destructive onCancel={() => setConfirming(null)} onConfirm={() => { const target = confirming.agent; setConfirming(null); void onCancelAgent?.(target.id).then((r) => { if (!r.ok) setError(r.reason); }); }} />
+        <ConfirmDialog {...cancelConfirmation(confirming.agent, session?.agents ?? [])} destructive onCancel={() => setConfirming(null)} onConfirm={() => { const target = confirming.agent; setConfirming(null); void onCancelAgent?.(target.id).then((r) => { if (!r.ok) setError(r.reason); }); }} />
       )}
       {steering && onSteer && <SteerDialog target={steering} onSteer={onSteer} onClose={() => setSteering(null)} />}
     </div>

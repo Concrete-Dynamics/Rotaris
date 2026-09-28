@@ -1890,4 +1890,91 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(result.status).toBe('interrupted');
     });
   });
+
+  describe('PD-ORCH-005 clause 16 (revision 4, OQ-74): one paused child is cancelled while its session rests', () => {
+    const userText = (req: ModelRequest): string => req.messages.filter((m) => m.role === 'user').map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('')).join('\n');
+    const settle = async (until: () => boolean) => { for (let i = 0; i < 400 && !until(); i += 1) await new Promise((r) => setTimeout(r, 5)); };
+    const byName = (sid: SessionId, name: string): ChildRow => children(sid).find((c) => c.canonical_name === name)!;
+    const cancel = (sessions: Sessions, sid: SessionId, agentId: string) => sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId } });
+
+    /**
+     * The root delegates `one` and `two`; `one` delegates `grand` and `quick`, which finishes at once; the others hold a
+     * step that asks for a call, so a pause leaves them and the root paused, and `quick` a finished descendant of `one`.
+     */
+    async function restedFamily() {
+      let release!: () => void;
+      const hold = new Promise<void>((r) => { release = r; });
+      const state = { resumed: false };
+      const rootAsked: string[] = [];
+      const snapshots: SessionRecord[] = [];
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          rootAsked.push(req.messages.map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : p.kind === 'tool-result' ? p.result : '')).join('')).join('\n'));
+          return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'one', task: 'TASK: one' } }, { callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'two', task: 'TASK: two' } }]) : answer('both delegated');
+        }
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        if (state.resumed) return answer('done');
+        const text = userText(req);
+        if (text.includes('TASK: quick')) return answer('quick done');
+        if (text.includes('TASK: one') && !req.messages.some((m) => m.role === 'tool')) return toolCalls([{ callId: 'g1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'grand', task: 'TASK: grand' } }, { callId: 'g2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'quick', task: 'TASK: quick' } }], 'Delegating.');
+        return { parts: [{ hold }, ...toolCalls([{ callId: 'p1', name: 'background_output', args: { task_id: 'bg_00000000' } }], 'Checking.').parts] };
+      }, { publisher: { increment: () => undefined, snapshot: (p) => { snapshots.push(p.session); } } });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => children(sid).length === 4 && byName(sid, 'quick').state === 'succeeded' && children(sid).filter((c) => c.state === 'running').length === 3);
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      release();
+      await sessions.running(sid)!;
+      expect(children(sid).map((c) => [c.canonical_name, c.state]).sort()).toEqual([['grand', 'paused'], ['one', 'paused'], ['quick', 'succeeded'], ['two', 'paused']]);
+      warnings.length = 0;
+      return { sessions, sid, state, rootAsked, snapshots };
+    }
+
+    it('it and its paused descendant end cancelled with the live cancel\'s report, entry and artifact; the rest stay paused, the iteration open, and the count drops', async () => {
+      const { sessions, sid, snapshots } = await restedFamily();
+      expect(resumableOf(dal, dal.getSession(sid)!)).toEqual({ iteration: 1, agents: 4 });
+      const one = byName(sid, 'one').task_id;
+      const grand = byName(sid, 'grand').task_id;
+      expect(cancel(sessions, sid, one)).toEqual({ ok: true });
+      expect([byName(sid, 'one').state, byName(sid, 'grand').state, byName(sid, 'two').state]).toEqual(['cancelled', 'cancelled', 'paused']);
+      // A finished descendant is left as it is, and nothing is attempted on it.
+      expect(byName(sid, 'quick').state).toBe('succeeded');
+      expect(warnings).toEqual([]);
+      expect(JSON.parse(byName(sid, 'one').report!)).toMatchObject({ status: 'cancelled', summary: 'The user cancelled this child.' });
+      expect(JSON.parse(byName(sid, 'grand').report!)).toMatchObject({ status: 'cancelled', summary: 'Cancelled with one, which the user cancelled.' });
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'child_user_cancelled').map((t) => JSON.parse(t.metadata) as Record<string, unknown>)).toEqual([{ task_id: one }, { task_id: grand, cancelled_with: one }]);
+      expect(dal.artifactsOf(sid).filter((a) => a.kind === 'child_report' && a.status === 'cancelled').map((a) => a.source_task_id).sort()).toEqual([one, grand].sort());
+      // Clause 16: the iteration stays open, its task still held, and the Continue action's count drops by two.
+      expect(dal.iterationsOf(sid)).toMatchObject([{ iteration: 1, state: 'open', interruption: 'pause' }]);
+      expect(dal.getSession(sid)!.execution_status).toBe('paused');
+      expect(resumableOf(dal, dal.getSession(sid)!)).toEqual({ iteration: 1, agents: 2 });
+      const last = snapshots.at(-1)!;
+      expect(last.resumable).toEqual({ iteration: 1, agents: 2 });
+      expect(Object.fromEntries(last.agents.map((a) => [a.name, a.presentationState]))).toEqual({ one: 'cancelled', two: 'paused', grand: 'cancelled', quick: 'done' });
+    });
+
+    it('refused for the run, the root, an unknown id, and an agent no longer paused; a descendant alone takes nothing above it', async () => {
+      const { sessions, sid } = await restedFamily();
+      const root = dal.openIterationOf(sid)!.root_task_id;
+      for (const id of [RUN_AGENT_ID, root, 'bg_ffffffff', '']) expect(cancel(sessions, sid, id)).toEqual({ ok: false });
+      expect(cancel(sessions, sid, byName(sid, 'grand').task_id)).toEqual({ ok: true });
+      expect([byName(sid, 'one').state, byName(sid, 'grand').state, byName(sid, 'two').state]).toEqual(['paused', 'cancelled', 'paused']);
+      expect(cancel(sessions, sid, byName(sid, 'grand').task_id)).toEqual({ ok: false });
+      expect(resumableOf(dal, dal.getSession(sid)!)).toEqual({ iteration: 1, agents: 3 });
+    });
+
+    it('the continue resumes the rest: the root is given the cancelled child\'s report, the other child finishes, and the iteration closes', async () => {
+      const { sessions, sid, state, rootAsked } = await restedFamily();
+      expect(cancel(sessions, sid, byName(sid, 'one').task_id)).toEqual({ ok: true });
+      state.resumed = true;
+      const before = rootAsked.length;
+      expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+      await sessions.running(sid)!;
+      expect(byName(sid, 'two').state).toBe('succeeded');
+      expect([byName(sid, 'one').state, byName(sid, 'grand').state]).toEqual(['cancelled', 'cancelled']);
+      expect(rootAsked.slice(before).some((t) => t.includes('The user cancelled this child.'))).toBe(true);
+      expect(dal.iterationsOf(sid)[0]).toMatchObject({ iteration: 1, state: 'closed' });
+      // Nothing is left open, so nothing is cancellable at rest any more.
+      expect(cancel(sessions, sid, byName(sid, 'two').task_id)).toEqual({ ok: false });
+    });
+  });
 });

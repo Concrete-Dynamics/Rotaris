@@ -58,7 +58,9 @@ the warning; no package, edge, process, channel or command changes.
 `latestArtifactText` takes the latest artifact the most recent recorded iteration's root published that nothing
 supersedes, known by the root's task id as the record's `conversation_id`, and falls back to the latest of any kind
 (OQ-79) — also when a plan cycle opened its gate after that iteration, so the plan gate's approve and revise never
-hand over an earlier piece of work's document ahead of the plan cycle's. It is read once, at the continue: a later iteration of the same run is re-sent it as it stood then. The
+hand over an earlier piece of work's document ahead of the plan cycle's; the plan cycle `PD-ORCH-003` revision 2 holds
+after a resumed iteration is taken the same way, so there the resumed root's document counts only as "of any kind"
+(OQ-79). It is read once, at the continue: a later iteration of the same run is re-sent it as it stood then. The
 **runtime view**'s continuation paragraph is updated. No package, edge, process, channel, command or
 store table changes, so the other views are not.
 
@@ -75,7 +77,9 @@ refuses outright is judged before the lock is taken. Every confirmation and casc
 OQ-73 and OQ-74), and both cancels write through one `userCancellation`. The surfaces offer a paused child's Cancel while its session rests
 (`cancelOffered(agent, runActive, resting)`, `resting` being `runLevelResting`, the predicate the composer's count and
 the resting root share) and confirm by `cancelConfirmation` — the Workspace and a persona window through
-`AgentCancelConfirm`, which takes no label of its own, the Mission view through `missionConfirmation`. The
+`AgentCancelConfirm` (`packages/ui/src/AgentCancelConfirm.tsx`, which the run's cancel on the Workspace now uses too),
+which takes no label of its own and whose call sites a source test pins, the Mission view through
+`missionConfirmation`. The
 **runtime view**'s `cancelAgent` and `children` rows and its crash paragraph, the **state-ownership view**'s rest and
 session-lock rows and the **sequences view**'s crash note name the new writer; the `iterations` and `agent_terminals`
 rows say only that the crash record is written at a repair or a continue, which the cancel is not. No package, edge,

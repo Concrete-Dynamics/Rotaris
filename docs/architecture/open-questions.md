@@ -3520,7 +3520,9 @@ only with a run behind it. The clause does not say:
   note counts — and states that it cannot be undone, that the agent will not resume (clause 3's "final"), and which
   descendants are cancelled with it by the same adjective ("paused", or "live and paused" in a `pausing` run); with no
   descendant cancelled, that the other paused agents resume when the session continues. Its dismissal reads "Keep it paused" rather than "Keep running", on the Workspace and in a persona window
-  through `AgentCancelConfirm`, whose props take no label a call site could override. The
+  through `AgentCancelConfirm` (its own module beside the cancel rules, the run's cancel on the Workspace included),
+  whose props take no label a call site could override; a test over both call sites' source fails when either takes
+  the labels itself again. The
   Mission view's own confirmation adds "and will not resume" to its sentence (`missionCancelBody`), and takes its title
   and both buttons from the same `cancelConfirmation` (`missionConfirmation`). The confirmation describes the session
   as it was when Cancel was pressed: a continue confirmed in another window before this one is answered sends the
@@ -3703,7 +3705,7 @@ rather than draw them and have the engine refuse them. Whether the Continue acti
 finished should re-run that request as built, append nothing and run nothing, or not be offered at all, which would
 narrow clause 18's "SHALL offer".
 
-**OQ-77 — Where does the gate hold a run that resumed an iteration, and what does that plan cycle plan?** *(`PD-ORCH-003` revision 2; REQ-ORCH-152, which the directive narrows, and REQ-ORCH-021, REQ-ORCH-067, REQ-ORCH-069, REQ-ORCH-073, REQ-ORCH-085, REQ-ORCH-153 and REQ-ORCH-154, which it does not name. Raised 2026-09-28 by building `PD-ORCH-003` revision 2 under [R-064](../product/requests.md#r-064).)*
+**OQ-77 — Where does the gate hold a run that resumed an iteration, and what does that plan cycle plan?** *(`PD-ORCH-003` revision 2, with `PD-ORCH-005` clause 18; REQ-ORCH-152, which the directive narrows, and REQ-ORCH-021, REQ-ORCH-067, REQ-ORCH-069, REQ-ORCH-073, REQ-ORCH-085, REQ-ORCH-153 and REQ-ORCH-154, which it does not name. Raised 2026-09-28 by building `PD-ORCH-003` revision 2 under [R-064](../product/requests.md#r-064).)*
 
 Revision 2: a continue that resumes an open iteration "SHALL run that iteration without holding it at the gate … When
 the gate would hold that run … it SHALL hold before the first new iteration the run begins." The paragraph places the
@@ -3720,6 +3722,17 @@ and what the answer at that gate launches.
   and so do a pause or a stop accepted during it. The hold is then set before the park turn builds anything, so that
   turn's tool listing, its hooks, its children and its supervisor are all the held segment's (REQ-TOOLS-010, PD-ORCH-001),
   and a pause during it is refused and a stop records no interruption (`PD-ORCH-005` clauses 11 and 15).
+- **An iteration a crash left open resumes unheld too, once the crash is recorded.** The revision names "an iteration a
+  rest left open (`PD-ORCH-005` clause 4)"; it does not name one a crash left. Clause 18 has either continue of a
+  crash-left session record the crash first, which writes the open iteration's interruption `crash` — the record a rest
+  would have left, by another cause — and then resume it as a paused session's continue does. The build takes the
+  revision to reach that iteration: it runs unheld, and the run holds before its first new iteration, by the same route
+  and whichever continue resumed it (`plan-gate-resume.test.ts`, "left by a crash and resumed by …"). The alternative —
+  hold the crash-left iteration at the gate, since the revision's words name only a rest — was not taken, because once
+  the crash is recorded nothing in the run tells the two apart, and holding would put the work already under way behind
+  a plan cycle that clause 18's continue does not otherwise meet. ADR-0062's amendment and the engine glossary's Plan
+  gate entry cite this reading. Recorded at the merged build's review, which found both citing it here before it was
+  stated.
 - **Any iteration after the resumed one is new.** A resumed iteration that ends `partial` requeues its task
   (REQ-ORCH-073), and the next iteration would take it up again under a new number; that iteration is held too, since the
   directive's line is the iteration, not the task.
@@ -3761,7 +3774,9 @@ and what the answer at that gate launches.
 - **"Continue without them" is unchanged.** It resumes nothing, so its run is held before its first iteration, as any run
   that resumes nothing is.
 
-**What a ruling decides.** Whether a requeued resumed task should count as work already under way rather than a new
+**What a ruling decides.** Whether the revision's unheld resume reaches an iteration a crash left open once clause 18
+has recorded the crash, as built, or only one a rest left, so that a crash-left iteration is held at the gate like a
+new one; whether a requeued resumed task should count as work already under way rather than a new
 iteration; whether the answer-group exemption should reach this hold; whether the plan cycle should plan only the
 first pending task or all of them; and whether a revise after this hold should be told again what became of the
 continue's message.
@@ -3831,7 +3846,7 @@ fingerprint after a warned resume) rather than at every resume while it differs;
 reach REQ-MONITOR-305's warnings surface once that is built, or be stated at the continue rather than at the agent's
 first step; and what the issue kind is called, since the specification's vocabulary has none for it.
 
-**OQ-79 — Whose root is "the iteration's root" when the handoff is built for an iteration that has not started?** *(`PD-ORCH-005` clause 20 over REQ-SESSION-115, with clause 16; REQ-ORCH-153, REQ-ORCH-154, REQ-LIBRARY-092, REQ-LIBRARY-093 and REQ-LIBRARY-096, which the directive does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
+**OQ-79 — Whose root is "the iteration's root" when the handoff is built for an iteration that has not started?** *(`PD-ORCH-005` clause 20 over REQ-SESSION-115, with clause 16 and `PD-ORCH-003` revision 2; REQ-ORCH-153, REQ-ORCH-154, REQ-LIBRARY-092, REQ-LIBRARY-093 and REQ-LIBRARY-096, which the directive does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
 
 Clause 20 makes REQ-SESSION-115's artifact "the latest artifact the iteration's root published that nothing supersedes"
 and, when the root published none, the latest of any kind. Every continue builds the handoff, including one that resumes
@@ -3864,6 +3879,18 @@ from the launch content computed when the run began.
   iteration's root's document, since that plan cycle follows it; and once the approved iteration opens, its root is
   preferred again. The two instants are the session writer's own ISO times, so an equal pair (possible only under
   a stopped test clock) counts the iteration as the later.
+- **The plan cycle `PD-ORCH-003` revision 2 holds after a resumed iteration is taken the same way, although it
+  follows the same piece of work.** There the premise above does not hold: the most recent `iterations` row is the
+  resumed iteration of the run that is still under way, and the plan cycle plans the work it left pending. A resume
+  never rewrites `iterations.opened_at` (it records only the interruption's clearing), so that plan cycle always opened
+  after the iteration, and the approve or revise relaunch prefers no root: the resumed root's own document counts only
+  as "of any kind", and a later record — the plan cycle's own plan, a plan-cycle child's report, or a cancelled
+  child's stub from clause 16's at-rest cancel or the decline — is handed over ahead of it. The build keeps the one
+  rule because the new work still follows the plan cycle, whose plan the approve carries in its own section; the
+  alternative — prefer the resumed root's publish when the plan cycle was held after that iteration, since both
+  belong to one run — was not taken, because the clause names the iteration the new one follows and nothing
+  distinguishes the two plan cycles in the record except the order of the two instants. Found by the merged build's
+  review.
 - **A root with no recorded iteration or no tool port** (before v23, or a run with no tool port) has no publish to
   find, and the handoff takes the latest of any kind. Nothing is backfilled.
 - **A root whose every publish is superseded published none.** Only artifacts nothing supersedes are candidates, so
@@ -3893,7 +3920,9 @@ from the launch content computed when the run began.
 or any iteration's root of the session, which would carry an earlier iteration's document forward past a later
 iteration whose root published nothing; whether work that follows a plan cycle takes the latest of any kind, as
 built, or prefers the plan cycle root's own publish, or the root of the last recorded iteration — the reading this
-build first took, which handed an earlier piece of work's document over ahead of the plan cycle's; whether a root whose every publish is superseded counts as having published
+build first took, which handed an earlier piece of work's document over ahead of the plan cycle's; whether the plan
+cycle `PD-ORCH-003` revision 2 holds after a resumed iteration of the same run is taken the same way, as built, or
+prefers that resumed root's own publish over what the plan cycle produced; whether a root whose every publish is superseded counts as having published
 none; whether a later iteration of the same run should have its handoff's artifact read again when it starts,
 rather than be re-sent the one read at the continue, superseded or not; and whether the fallback of any kind should pass
 over a cancelled agent's stub report, which clause 16's at-rest cancel writes every time.

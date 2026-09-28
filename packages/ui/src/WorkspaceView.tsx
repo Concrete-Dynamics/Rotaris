@@ -18,7 +18,7 @@ import { COMMAND_NOT_RUN_TITLE, defaultUnavailableReason, parseSlash, slashNameT
 import { SlashPopup, slashRowId } from './slash/SlashPopup.js';
 import type { SlashCommand, SlashContext, SlashOutcome } from './slash/types.js';
 import { AgentTree } from './AgentTree.js';
-import { cancelConfirmation, cancelOffered, restingView, steerOffered } from './agents.js';
+import { cancelOffered, restingView, steerOffered } from './agents.js';
 import { Inspector, type PersonaEntry } from './Inspector.js';
 import { useShellState } from './shell-state.js';
 import { DelegationHeader, ScopeToggle, scopedRows, type Acknowledger } from './TranscriptSurface.js';
@@ -31,7 +31,8 @@ import { addImageBytes, composerTokenEstimate } from './attachments.js';
 import { PlanGate } from './PlanGate.js';
 import { QuestionForm } from './QuestionStepper.js';
 import './attachments.css';
-import { AgentCancelConfirm, ConfirmDialog } from './ConfirmDialog.js';
+import { AgentCancelConfirm } from './AgentCancelConfirm.js';
+import { ConfirmDialog } from './ConfirmDialog.js';
 import { Button as DesignButton, Input as DesignInput, PopoverMenu, SearchableSelect as DesignSearchableSelect, SendPill as DesignSendPill, StripActionButton, TextArea as DesignTextArea } from './design-system/index.js';
 
 // Part AA: the row helpers moved to `transcript/Row.tsx`, the ONE row renderer, and are exported from the package
@@ -1601,7 +1602,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
         </div>
       </form>
       {confirming === 'cancelRun' && (
-        <ConfirmDialog {...cancelConfirmation({ id: RUN_AGENT_ID, name: 'the run' }, session?.agents ?? [])} cancelLabel="Keep running" destructive testId="cancel-run-confirm" onCancel={() => setConfirming(null)} onConfirm={() => { setConfirming(null); void cancelRun(); }} />
+        <AgentCancelConfirm agent={{ id: RUN_AGENT_ID, name: 'the run' }} agents={session?.agents ?? []} testId="cancel-run-confirm" onCancel={() => setConfirming(null)} onConfirm={() => { setConfirming(null); void cancelRun(); }} />
       )}
       {confirming === 'decline' && resumable && (
         <ConfirmDialog title="Continue without them?" body={declineText(resumable.agents)} confirmLabel="Continue without them" cancelLabel="Keep them" destructive testId="decline-confirm" onCancel={() => setConfirming(null)} onConfirm={() => { setConfirming(null); void continueRun(true); }} />

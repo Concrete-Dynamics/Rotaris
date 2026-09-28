@@ -354,6 +354,26 @@ describe('PD-ORCH-005 clause 20: the handoff prefers the root\'s own artifact', 
     expect(handoffArtifact(sid)).toBe('a0000004');
   });
 
+  it('the plan cycle PD-ORCH-003 revision 2 holds after a resumed iteration is taken the same way: the resumed root\'s document counts only as "of any kind" (OQ-79)', () => {
+    const sid = asSessionId('S-root-resumed-hold');
+    seed(sid);
+    // Iteration 1 opens, its root publishes, a pause leaves it open; a continue resumes it (opened_at is never rewritten),
+    // the resumed root publishes again, and the iteration closes. With no release in `plan` mode the run then holds: a
+    // plan cycle plans the work still pending, and a child of that plan cycle reports.
+    iteration(sid, 1, 'bg_root0001', '2026-09-27T00:00:00.000Z');
+    artifact(sid, 'a0000001', 'agent_published', 'bg_root0001', '2026-09-27T01:00:00.000Z');
+    expect(dal.setIterationInterruption(sid, 1, 'pause')).toBe(true);
+    expect(dal.setIterationInterruption(sid, 1, null)).toBe(true);
+    artifact(sid, 'a0000002', 'agent_published', 'bg_root0001', '2026-09-27T02:00:00.000Z');
+    dal.closeIteration(sid, 1, 'succeeded', '2026-09-27T02:30:00.000Z');
+    expect(dal.iterationsOf(sid)[0]!.opened_at).toBe('2026-09-27T00:00:00.000Z');
+    expect(handoffArtifact(sid)).toBe('a0000002');
+    artifact(sid, 'a0000003', 'child_report', 'bg_child003', '2026-09-27T02:45:00.000Z');
+    dal.insertPlanCycle(sid, 1, '2026-09-27T03:00:00.000Z', 'The plan.', 'implementation', '', '');
+    // The approve's (or the revise's) handoff: the plan-cycle child's later report, not the resumed root's own document.
+    expect(handoffArtifact(sid)).toBe('a0000003');
+  });
+
   it('end to end: a root\'s publish carries its task id as its conversation, and the next iteration\'s handoff names it over a later report', async () => {
     const calls: unknown[] = [];
     const script: ScriptedCall[] = [

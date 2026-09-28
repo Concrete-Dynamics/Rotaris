@@ -442,7 +442,9 @@ function continuedTaskId(dal: StoreDal, sessionId: SessionId, todo: TodoDocument
  * opened its gate after the latest iteration opened (the plan gate's approve and revise, a prompt after a declined
  * plan), the new work follows that plan cycle, not the iteration, so no iteration's root is preferred and the handoff
  * takes the latest of any kind — an earlier piece of work's document never outranks what the plan cycle produced
- * (OQ-79). The two times are the writer's own ISO instants, so they compare as text. Its id leads, so no
+ * (OQ-79). The plan cycle PD-ORCH-003 revision 2 holds after a resumed iteration is taken the same way, although that
+ * iteration is of the same run: a resume never rewrites `opened_at`, so the resumed root's document counts only as "of
+ * any kind" on the approve and revise (OQ-79). The two times are the writer's own ISO instants, so they compare as text. Its id leads, so no
  * cut reaches it (REQ-SESSION-194). A published document's summary is its body's first line and its key findings its
  * body (REQ-LIBRARY-093), so it is stated once, as its body. The repair of
  * `the-continuation-payload-says-no-artifact-is-recorded.md` (OQ-72).

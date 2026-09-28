@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AgentRecord, SessionRecord, TranscriptRow } from '@rotaris/contracts';
 import { chipStates, countNoun, instancesOf, mcpFateText, resolvedTools, rowsOf } from './agents.js';
-import { AgentCancelConfirm } from './ConfirmDialog.js';
+import { AgentCancelConfirm } from './AgentCancelConfirm.js';
 import { elapsedLabel } from './AgentTree.js';
 import { ContextRing } from './ContextRing.js';
 import { RowList, type Acknowledger } from './TranscriptSurface.js';

@@ -1684,7 +1684,14 @@ places on the Windows host; their first execution is owed to the next `pnpm pack
 rule's. **The proof found one thing beside the mechanism:** the sink recorded `CONNECT redirector.gvt1.com:443` —
 Chromium's own component updater reaching out from the built application, a request no requirement names and
 REQ-STARTUP-160's disclosure cannot carry — filed as
-`../../defects/the-built-app-opens-a-connection-to-chromiums-component-updater.md`, not repaired here.
+`../../defects/fixed/the-built-app-opens-a-connection-to-chromiums-component-updater.md`, not repaired here.
+*Corrected 2026-09-28 by the repair (R-062): the cause named in that sentence was wrong.* A net-log of the same launch
+named the request as Electron's spellchecker downloading a Hunspell dictionary
+(`https://redirector.gvt1.com/edgedl/chrome/dict/en-us-10-1.bdic`), not the component updater, and
+`--disable-component-update` was measured to change nothing. `apps/desktop/src/main/runtime-requests.ts` empties each
+session's dictionary list and turns the spellchecker off in `session-created`, the one point measured to prevent the
+download; `pnpm updater-proof` now asserts **zero** connections at the sink from launch to first paint and an orderly
+quit (9 checks), beside its `github.com` check. OQ-91 asks whether any text field is spell-checked.
 
 **Readings stated rather than left in code.** REQ-STARTUP-123's two hash outcomes follow the download as its sentences
 say ("the download was discarded"), so an asset the manifest does not list is downloaded and then discarded rather than

@@ -575,7 +575,11 @@ so that the next release can add the updater without stranding anyone.
 >
 > **Found beside it:** the built application's runtime opens `CONNECT redirector.gvt1.com:443` on its own — Chromium's
 > component updater — which REQ-STARTUP-160's disclosure cannot name
-> ([note](../defects/the-built-app-opens-a-connection-to-chromiums-component-updater.md)). **Raised:** OQ-83 (the
+> ([note](../defects/fixed/the-built-app-opens-a-connection-to-chromiums-component-updater.md)). *Repaired 2026-09-28
+> (R-062), and the cause corrected:* it was Electron's spellchecker fetching a Hunspell dictionary, not the component
+> updater; each session now has no dictionary and no spellchecker (`main/runtime-requests.ts`), and `pnpm updater-proof`
+> asserts zero connections from launch to first paint and quit (9 checks). OQ-91 raised (spell-checking a text field).
+> The packaged Windows build behind the same sink is owed to the next `pnpm package` (IC-3). **Raised:** OQ-83 (the
 > signature's form), OQ-84 (a packaged Windows build with neither a registry match nor the launcher's variable —
 > ADR-0054 says not updatable, REQ-STARTUP-106's copied-tree sentence says portable), OQ-85 (REQ-STARTUP-118 against
 > REQ-SHELL-118 on the download notice's title, persistence and the pause before the apply). **Two obligations the

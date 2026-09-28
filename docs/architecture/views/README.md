@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-28**
 
+**The runtime makes no request of its own (REQ-STARTUP-160, REQ-SHELL-005; repaired 2026-09-28 under R-062).** The
+connection `pnpm updater-proof` recorded at launch was Electron's spellchecker fetching a Hunspell dictionary, not
+Chromium's component updater; main now empties each session's dictionary list and turns its spellchecker off in
+`session-created` (`main/runtime-requests.ts`). The **process view** gains a paragraph under its diagram saying the
+endpoints drawn are every host the product reaches, and why. No package, edge, process, channel, message kind, store
+column or owner of state changed; OQ-91 raised.
+
 **REQ-CHAT-055's measurement round: the transcript projects once per change, not once per render (2026-09-28, R-048's
 order under R-062).** The built app was traced appending to an empty transcript and to one of 1,200 rows, and the extra
 time at depth was script — three to four synchronous renders per increment, each re-running ADR-0046 step 4 over the

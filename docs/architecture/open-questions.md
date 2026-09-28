@@ -83,7 +83,7 @@ registry match nor the launcher's variable: ADR-0054 says not updatable, REQ-STA
 (REQ-STARTUP-118 against REQ-SHELL-118 on the download notice's title, persistence and the pause before the apply); **one more by that
 item's verification the same day: OQ-86** (whether the installer's auto-close and the restart's close ask REQ-STARTUP-046's active-run
 confirmation) — the four raised as OQ-76 to OQ-79 on their branch and renumbered at the merge, OQ-76 to OQ-82 having been taken on `main`. **One more was raised on 2026-09-28 by building the setup manifest (`first-release-plan.md` §4.1): OQ-87** (what a machine tool's "archive layout" comprises, and what path its expected executables are relative to — MinGit's entries sit at the archive root and ripgrep's under one directory). **And OQ-88**, raised by the same item's independent verification (whether a manifest may key an archive under REQ-STARTUP-060's raw `<os>-<machine>` fallback); the two were raised as OQ-76 and OQ-77 on their branch and renumbered at the merge, OQ-76 to OQ-86 having been taken on `main`. **And one more the same day by REQ-CHAT-055's measurement round (R-048's order under R-062): OQ-89** (how the append comparison is read when updates arrive faster than frames — each one's shown-update time then holds the
-queue in front of it — and what "an empty transcript" is compared against once the appended rows are on it — raised as OQ-76 on its branch and renumbered at the merge, OQ-76 to OQ-88 having been taken on `main`). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+queue in front of it — and what "an empty transcript" is compared against once the appended rows are on it — raised as OQ-76 on its branch and renumbered at the merge, OQ-76 to OQ-88 having been taken on `main`). **And OQ-91** (whether a text field is spell-checked — the runtime's spellchecker fetched a dictionary no requirement names; built as none), raised 2026-09-28 by the repair of the updater proof's runtime connection. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -3510,6 +3510,27 @@ updates so each is shown before the next arrives, which the benchmark domain's p
 visible-row term is within the requirement while the third sentence's comparison holds, or is itself the thing the
 third sentence forbids. Recommended: the first reading, as the one a reader experiences and the one the benchmark's
 phases can measure, with the third sentence read at one frame of slack as the proof reads it.
+
+**OQ-91 — Is a text field spell-checked, and if so, from what?** *(REQ-STARTUP-160, REQ-SHELL-005, REQ-STARTUP-159. Raised 2026-09-28 by the repair of `docs/defects/fixed/the-built-app-opens-a-connection-to-chromiums-component-updater.md`, under [R-062](../product/requests.md#r-062). Numbered OQ-91 on its branch because OQ-90 was already taken on a branch in flight beside it.)*
+
+The specification says nothing about spell-checking the composer or any other text field. The runtime's built-in
+spellchecker, left at its default, fetches a Hunspell dictionary for the OS locale from `redirector.gvt1.com` whenever a
+session is created — on Linux measured, on Windows owed to the next package (IC-3); on macOS the OS spellchecker is used
+and nothing is fetched. That request is one REQ-STARTUP-160's disclosure may not name ("SHALL name no host, endpoint, or
+request this document does not require"), one REQ-SHELL-005's demo mode forbids for the whole lifetime, and one the
+offline launch of REQ-STARTUP-159 would attempt and fail. Three readings:
+
+- **no text field is spell-checked** — the dictionary list is emptied and the spellchecker turned off for every session,
+  on every platform, so the product's behaviour is one and its network activity is exactly what the document names;
+- **spell-checking from what was installed** — dictionaries carried inside the artifact (REQ-STARTUP-159's "resolves
+  from within what was installed"), which adds payload and a licence line under REQ-STARTUP-142, and a choice of
+  languages the specification does not make; or
+- **the OS spellchecker where the platform has one** — macOS's (and Windows' if the runtime uses it there), none on
+  Linux, so the behaviour differs by platform.
+
+**What the build proceeds under:** the first reading (`apps/desktop/src/main/runtime-requests.ts`), because it is the
+only one that needs no requirement the specification lacks and adds no request. **A ruling would decide** whether
+spell-checking is a behaviour the product owes; either of the other readings is additive to this build.
 
 ## Design-reference dependencies
 

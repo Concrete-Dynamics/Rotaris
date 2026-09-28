@@ -51,6 +51,7 @@ import { windowCommands, windowsCommands } from './commands/windows.js';
 import { exitAfterChildWindows, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
 import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, type AppLogLevel } from './app-log.js'; // PD-MONITOR-002
 import { workspaceCommands } from './commands/workspace.js';
+import { withoutRuntimeRequests } from './runtime-requests.js'; // REQ-STARTUP-160
 // The answer every command ends in, and the inventory the facets above are given (ADR-0019, REQ-SHELL-020).
 import { refusal, type ApprovalDialogState, type CommandContext, type CommandHandler, type CommandHandlers, type MainWindowState, type Recovery } from './commands/context.js';
 
@@ -111,6 +112,9 @@ process.on('unhandledRejection', (reason) => { log(`UNHANDLED rejection in main:
  * `process.on('exit')` is the last line the main process can write, so a log that ends with NONE of them is
  * itself the finding: the process went away without passing through its own shutdown.
  */
+// REQ-STARTUP-160 / REQ-SHELL-005: the runtime makes no request of its own. Registered before `app.whenReady()` so the
+// default session is reached while it is built — later is too late (`runtime-requests.ts` says what was measured).
+app.on('session-created', (created) => { withoutRuntimeRequests(created); });
 app.on('before-quit', () => { log('quit: requested (before-quit)'); });
 app.on('quit', (_e, code) => { log(`quit: exiting with status ${code}`); });
 // PD-MONITOR-002: a process lost for any reason but `clean-exit` is an `error`, so a log kept at `warning` or `error`

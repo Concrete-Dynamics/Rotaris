@@ -33,9 +33,14 @@ record already decides, and every ruling it needs is named as the owner's rather
 - The open notes in `../defects/`.
 - The four red proofs: `transcript-proof`, `library-proof`, `part-h-proof`, and `theme-proof`'s contrast section
   (OQ-56). *Two more were measured red on 2026-09-27 while §2.2 was built, both before it and unchanged by it:*
-  `slash-proof` at its first catalogue assertion since ADR-0063
+  ~~`slash-proof` at its first catalogue assertion since ADR-0063
   ([note](../defects/slash-proof-expects-every-built-in-to-carry-the-action-badge.md)), and `skills-proof`'s policy
-  launch on Linux only ([note](../defects/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md)).
+  launch on Linux only ([note](../defects/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md)).~~
+  **Both repaired 2026-09-28 under R-062, in the proofs and not the product** — the badge assertion reads ADR-0063's
+  set (`action` for the built-ins and mirrors, `skill` for `/skill` and `/skills`), and every proof takes the global
+  configuration directory from `configDirFor`; `skills-proof` passed 10 checks over 9 launches as root on Linux
+  ([fixed](../defects/fixed/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md),
+  [fixed](../defects/fixed/slash-proof-expects-every-built-in-to-carry-the-action-badge.md)).
 - The unbuilt directives `PD-TOOLS-003`, `PD-TOOLS-004`, `PD-TOOLS-005`, `PD-ORCH-004` and `PD-MONITOR-002`.
 - The macOS and Linux artifacts, which are bound by IC-3 and IC-8 and now also by `PD-STARTUP-001`.
 

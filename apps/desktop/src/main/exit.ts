@@ -98,3 +98,61 @@ export async function shutdownAtQuit(request: () => Promise<ProcessReply>, exit:
 function unacknowledged(reply: ProcessReply): string {
   return reply.kind === 'refused' ? `refused (${reply.code}): ${reply.headline}` : `answered '${reply.kind}' rather than 'ack'`;
 }
+
+/**
+ * How long main waits for the run host to be gone at its own end, once when the run host is expected to exit by itself
+ * and once more after it has been ended (`endBeforeMain`). Measured on Linux: a run host main does not wait for
+ * outlived main by 1.7–1.8 s in two launches of three when the launch ended through `app.exit`; one that has answered
+ * its `shutdown` exits on a 0 ms timer, and one that is ended exits at once.
+ */
+export const RUN_HOST_END_BOUND_MS = 2_000;
+
+/**
+ * Main is gone only after the run host is (`docs/defects/fixed/a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md`).
+ *
+ * The run host holds every session lock this instance holds, keyed on its own pid, and a lock is proved unheld only when
+ * that pid probes dead (REQ-SESSION-047, REQ-SESSION-056). A run host that outlives main therefore keeps each session it
+ * held refused to the next launch — "held by another run in this application" — for as long as it takes to exit, although
+ * no run holds it and the application that did is gone. So main's end waits for the run host's exit, bounded, and ends
+ * the run host itself when it has not exited: then a launch that becomes the instance after this one (REQ-STARTUP-161,
+ * REQ-STARTUP-164) finds the pid dead, and the lock is reaped by the one path that exists for a lock whose holder is gone.
+ *
+ * This is not the race `shutdownAtQuit` runs, and does not undo it: that race is over the `shutdown` ANSWER, which can be
+ * lost to the exit, and it lets the exit count as the answer. Nothing there argues against waiting for the exit itself;
+ * after an answered `shutdown` the run host exits on a 0 ms timer, so the wait costs that timer on an orderly quit.
+ *
+ * - the child has already exited → nothing, at once;
+ * - `graceMs` > 0 (the orderly quit, after its `shutdown`) → wait that long for the exit, and end the child only if it
+ *   has not come;
+ * - `graceMs` = 0 (an immediate exit — the capture seam, the driver's `quit`: nothing was asked of the run host) → end
+ *   it at once, which is what Electron's own teardown does anyway, only later;
+ * - then wait `boundMs` for the exit; `stillRunning` is called, once, only when it has not come by then, and this
+ *   resolves regardless — nothing here may hold main open for ever. Never rejects.
+ *
+ * Ending the run host this way leaves its locks in the store with a pid that is gone, exactly as a crash does; the next
+ * claim reaps them (REQ-SESSION-047). Releasing them first from inside a run host that is still stopping was not taken:
+ * holding the lock is what owning the session consists of (REQ-SESSION-050), a stopping run is still writing its
+ * history under it, and REQ-SESSION-049 orders the release after the session's long-lived services are torn down.
+ */
+export async function endBeforeMain(
+  child: { kill(): boolean },
+  exit: ChildExit,
+  timers: Timers,
+  bounds: { readonly graceMs: number; readonly boundMs: number },
+  stillRunning: () => void,
+): Promise<void> {
+  if (exit.code !== null) return;
+  if (bounds.graceMs > 0 && await exitedWithin(exit, bounds.graceMs, timers)) return;
+  try { child.kill(); } catch { /* already gone, or not ours to end: the wait below says which */ }
+  if (await exitedWithin(exit, bounds.boundMs, timers)) return;
+  stillRunning();
+}
+
+/** Whether the child's exit arrives within `ms` on the timer port (at once when it already has). */
+function exitedWithin(exit: ChildExit, ms: number, timers: Timers): Promise<boolean> {
+  if (exit.code !== null) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const bound = timers.after(millis(ms), () => resolve(false));
+    void exit.exited.then(() => { bound.cancel(); resolve(true); });
+  });
+}

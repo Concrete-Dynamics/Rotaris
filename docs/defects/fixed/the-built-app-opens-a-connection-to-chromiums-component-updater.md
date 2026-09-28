@@ -57,7 +57,7 @@ load begins while the session is built. Electron's `session-created` event fires
 dictionary list there discards the loaders before their file check returns. `apps/desktop/src/main/runtime-requests.ts`
 (`withoutRuntimeRequests`) does that and turns the spellchecker off, so no text field later asks for a dictionary of its
 own; `index.ts` registers it on `app.on('session-created')` before `app.whenReady()`. The consequence the user sees is
-that no text field underlines a misspelling, which the specification does not speak to: **OQ-91** asks it.
+that no text field underlines a misspelling, which the specification does not speak to: **OQ-93** asks it (raised as OQ-91 on its branch, renumbered OQ-93 at the merge).
 
 **The proof now asserts the finding stays found.** `pnpm updater-proof` checks that the sink records **zero**
 connections from launch to first paint and an orderly quit (REQ-STARTUP-160, REQ-SHELL-005), beside its `github.com`

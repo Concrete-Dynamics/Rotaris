@@ -8,8 +8,12 @@ import { brotliCompressSync } from 'node:zlib';
 import {
   addressProblem, bundledAssetComponents, compareVersions, declaredFontFiles, exceptionFor, generateNotices, licenseTextKind, MAX_EXCEPTION_DAYS,
   NOTICES_FILE, parseChromiumCredits, parseCoreMetadata, PATHS, pythonLicenseOf, reviewedExceptions, runNoticesStep, setupManifest,
-  TOOLS_SECTION, versionInRange, woff2Names, WORKSPACE_DIRS,
+  SETUP_MANIFEST_SHAPE, TOOLS_SECTION, versionInRange, woff2Names, WORKSPACE_DIRS,
 } from './notices.mjs';
+// The manifest's shape is `config`'s; a test may cross where the generator does not (the component view).
+import {
+  LanguageServerSchema, MachineToolSchema, PinnedPackageSchema, SETUP_MANIFEST_SCHEMA_VERSION, SetupManifestSchema,
+} from '../../packages/config/src/setup-manifest.js';
 
 /**
  * The notices generator (REQ-STARTUP-141/142/143; first-release-plan.md §4.3). Almost every case runs the generator
@@ -28,6 +32,22 @@ const ADDRESS = 'Fixture Maintainers, Postfach 1234, 10115 Fixturestadt';
 const MIT = 'MIT License\n\nCopyright (c) Fixture Authors\n\nPermission is hereby granted, free of charge, to any person obtaining a copy.';
 /** A stand-in for one licence's full text: more than the one line that only names a licence (OQ-75). */
 const body = (title: string): string => `${title}\n\nThe terms of the ${title}, as the fixture carries them.`;
+/** A fixture setup manifest: a machine tool's archive, probe and capabilities are there because the schema asks for them. */
+const archive = (name: string) => ({
+  url: `https://example.org/fixture/${name}.zip`, sha256: 'a'.repeat(64), layout: { format: 'zip', topLevelDirectory: null }, executables: [`${name}.exe`],
+});
+const FIXTURE_MANIFEST = {
+  schemaVersion: 1,
+  machineTools: [
+    { name: 'git', probe: { command: 'git', versionArguments: ['--version'] }, minimumVersion: null, provisionedVersion: '2.55.0', archives: { 'windows-x64': archive('git') }, source: 'https://github.com/git-for-windows/git', license: 'GPL-2.0-only', capabilities: ['worktrees', 'checkpoints'] },
+    { name: 'ripgrep', probe: { command: 'rg', versionArguments: ['--version'] }, minimumVersion: '14.1.0', provisionedVersion: '15.2.0', archives: { 'linux-x86_64': archive('rg') }, source: 'https://github.com/BurntSushi/ripgrep', license: 'Unlicense OR MIT', capabilities: ['search'] },
+  ],
+  toolServerPackages: [{ name: '@playwright/mcp', version: '0.0.80', source: 'https://registry.npmjs.org/@playwright/mcp', license: 'Apache-2.0' }],
+  languageServers: [
+    { language: 'typescript', provisioner: 'npm', packages: [{ name: 'typescript', version: '5.9.3', source: 'https://registry.npmjs.org/typescript', license: 'Apache-2.0' }] },
+    { language: 'python', provisioner: 'uvx', packages: [{ name: 'pyright', version: '1.1.403', source: 'https://pypi.org/project/pyright/', license: 'MIT' }] },
+  ],
+};
 /** The per-file notice Apache-2.0 asks to be applied with, which sends the reader elsewhere for the licence (OQ-75). */
 const APACHE_NOTICE = 'Copyright 2023 Fixture, Inc.\n\nLicensed under the Apache License, Version 2.0 (the "License");\nyou may not use this file except in compliance with the License.\nYou may obtain a copy of the License at\n\n    http://www.apache.org/licenses/LICENSE-2.0';
 const OFL_BODY = 'This Font Software is licensed under the SIL Open Font License, Version 1.1.\n\nSIL OPEN FONT LICENSE Version 1.1 - 26 February 2007';
@@ -124,14 +144,10 @@ function writeFixture(): void {
   put(`${SITE}/serena_agent-1.7.0.dist-info/licenses/LICENSE`, MIT);
   put(`${SITE}/pystray-0.19.5.dist-info/METADATA`, 'Metadata-Version: 2.1\nName: pystray\nVersion: 0.19.5\nLicense: LGPLv3\nClassifier: License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)\n');
   put(`${SITE}/pystray-0.19.5.dist-info/COPYING.LGPL`, body('GNU LESSER GENERAL PUBLIC LICENSE Version 3'));
-  // The setup manifest as this build carries it: the language servers, no machine tools (OQ-73).
-  put(PATHS.setupManifest, json({
-    python: '3.13.15', distribution: 'serena-agent', version: '1.7.0',
-    languageServers: [
-      { language: 'typescript', provisioner: 'npm', packages: [{ name: 'typescript', version: '5.9.3', source: 'https://registry.npmjs.org/typescript', license: 'Apache-2.0' }] },
-      { language: 'python', provisioner: 'uvx', packages: [{ name: 'pyright', version: '1.1.403', source: 'https://pypi.org/project/pyright/', license: 'MIT' }] },
-    ],
-  }));
+  // The setup manifest in the shape the build ships (REQ-STARTUP-058; `SetupManifestSchema` accepts it): two machine
+  // tools, one tool-server package, two language servers. The runtime's name is the code-intelligence pins'.
+  put(PATHS.setupManifest, json(FIXTURE_MANIFEST));
+  put(PATHS.codeIntelligencePins, json({ python: '3.13.15', distribution: 'serena-agent', version: '1.7.0', languageServers: FIXTURE_MANIFEST.languageServers }));
   put(PATHS.fontFaces, "@font-face { font-family: 'Fixture Sans'; src: url('@design-assets/aa11.woff2') format('woff2-variations'); }\n");
   put(`${PATHS.designAssets}/aa11.woff2`, woff2({ 0: FONT_COPYRIGHT, 5: 'Version 1.001; ttfautohint', 13: 'SIL Open Font License, Version 1.1' }));
   put('tools/notices/licenses/FixtureSans-OFL.txt', `${FONT_COPYRIGHT}\n\n${OFL_BODY}`);
@@ -232,25 +248,53 @@ describe('REQ-STARTUP-142: the shipped closure, and nothing else', () => {
     expect(flat(without.slice(0, without.indexOf('Contents')))).not.toContain(sentence);
   });
 
-  it('writes the tools section from the setup manifest: no machine tools in this build, then every language server with its four fields (IC-7)', () => {
-    const { text } = generate();
+  /** The sentence OQ-73's reading writes: pinned, not contained, and not yet downloaded by anything in this build. */
+  const PINNED_NOT_DOWNLOADED = 'The setup manifest of this build pins the tools below. None of them is contained in this artifact: they are to be downloaded after installation by machine setup, which this build does not yet carry, so this build downloads none of them.';
+
+  it('writes the tools section from the setup manifest: Git and ripgrep with their four fields, then every language server, then every tool-server package (REQ-STARTUP-142, REQ-STARTUP-152, IC-7)', () => {
+    const { text, problems } = generate();
+    expect(problems).toEqual([]);
     const tools = section(text, 4);
     expect(tools.startsWith(`\n4. ${TOOLS_SECTION}\n`)).toBe(true);
-    expect(flat(tools)).toContain('The setup manifest of this build pins no machine tools, so this build downloads neither Git nor ripgrep.');
+    expect(flat(tools)).toContain(PINNED_NOT_DOWNLOADED);
+    expect(tools).not.toContain('pins no machine tools');
+    expect(tools).toContain('  git\n    Version:  2.55.0\n    Source:   https://github.com/git-for-windows/git\n    License:  GPL-2.0-only\n');
+    expect(tools).toContain('  ripgrep\n    Version:  15.2.0\n    Source:   https://github.com/BurntSushi/ripgrep\n    License:  Unlicense OR MIT\n');
     expect(tools).toContain('Language servers provisioned by the bundled code-intelligence runtime (serena-agent 1.7.0)\n');
     expect(flat(tools)).toContain('downloads each package below at the first use of that language. None of them is contained in this artifact.');
     expect(tools).toContain('  typescript\n    Language: typescript\n    Version:  5.9.3\n    Source:   https://registry.npmjs.org/typescript\n    License:  Apache-2.0\n');
     expect(tools).toContain('  pyright\n    Language: python\n    Version:  1.1.403\n    Source:   https://pypi.org/project/pyright/\n    License:  MIT\n');
     expect(flat(tools)).toContain('A further language the runtime supports obtains its language server by the same route, at the first use of that language, and is not declared here.');
+    expect(tools).toContain('Tool-server packages\n');
+    expect(flat(tools)).toContain('which downloads the package when that tool server is first started. None of them is contained in this artifact.');
+    expect(tools).toContain('  @playwright/mcp\n    Version:  0.0.80\n    Source:   https://registry.npmjs.org/@playwright/mcp\n    License:  Apache-2.0\n');
+    // The order REQ-STARTUP-142 fixes — machine tools, then the runtime's sub-heading — with the packages after both (OQ-92).
+    expect(tools.indexOf('  ripgrep\n')).toBeLessThan(tools.indexOf('Language servers provisioned'));
+    expect(tools.indexOf('Language servers provisioned')).toBeLessThan(tools.indexOf('Tool-server packages'));
   });
 
-  it('lists machine tools when a setup manifest pins them, as downloaded and not contained', () => {
-    const pins = JSON.parse(readFileSync(join(root, PATHS.setupManifest), 'utf8'));
-    pins.machineTools = [{ name: 'ripgrep', version: '15.2.0', source: 'https://github.com/BurntSushi/ripgrep/releases', license: 'Unlicense OR MIT' }];
-    put(PATHS.setupManifest, json(pins));
+  it('says the manifest pins no machine tools only for a manifest that pins none, and drops the tool-server sub-heading when it pins no package', () => {
+    put(PATHS.setupManifest, json({ ...FIXTURE_MANIFEST, machineTools: [], toolServerPackages: [] }));
     const { text, problems } = generate();
     expect(problems).toEqual([]);
-    expect(flat(section(text, 4))).toContain('The tools below are downloaded after installation and are not contained in this artifact. ripgrep Version: 15.2.0 Source: https://github.com/BurntSushi/ripgrep/releases License: Unlicense OR MIT');
+    const tools = section(text, 4);
+    expect(flat(tools)).toContain('The setup manifest of this build pins no machine tools, so this build downloads neither Git nor ripgrep.');
+    expect(flat(tools)).not.toContain(PINNED_NOT_DOWNLOADED);
+    expect(tools).not.toContain('Tool-server packages');
+    expect(tools).toContain('  pyright\n');
+  });
+
+  it('renders the shipped manifest itself: Git 2.55.0 and ripgrep 15.2.0 as it pins them, and @playwright/mcp at the pinned version (REQ-STARTUP-152)', () => {
+    put(PATHS.setupManifest, readFileSync(join(REPO, PATHS.setupManifest), 'utf8'));
+    put(PATHS.codeIntelligencePins, readFileSync(join(REPO, PATHS.codeIntelligencePins), 'utf8'));
+    const { text, problems } = generate();
+    expect(problems).toEqual([]);
+    const tools = section(text, 4);
+    expect(flat(tools)).toContain(PINNED_NOT_DOWNLOADED);
+    expect(tools).toContain('  git\n    Version:  2.55.0\n    Source:   https://github.com/git-for-windows/git\n    License:  GPL-2.0-only\n');
+    expect(tools).toContain('  ripgrep\n    Version:  15.2.0\n    Source:   https://github.com/BurntSushi/ripgrep\n    License:  Unlicense OR MIT\n');
+    expect(tools).toContain('  @playwright/mcp\n    Version:  0.0.80\n    Source:   https://registry.npmjs.org/@playwright/mcp\n    License:  Apache-2.0\n');
+    expect(tools).toContain('  typescript-language-server\n    Language: typescript\n    Version:  5.1.3\n');
   });
 
   it('is deterministic: the same inputs render the same bytes, and nothing of the machine or the day is in them', () => {
@@ -419,11 +463,42 @@ describe('REQ-STARTUP-143: validation fails naming the component or path, one co
     expect(generate().problems).toEqual([`the setup manifest ${PATHS.setupManifest} cannot be read: ENOENT`]);
     put(PATHS.setupManifest, '{ "languageServers": [');
     expect(generate().problems[0]).toMatch(new RegExp(`^the setup manifest ${PATHS.setupManifest} cannot be parsed: `));
-    put(PATHS.setupManifest, json({ distribution: 'serena-agent', version: '1.7.0', languageServers: [{ language: 'python', packages: [{ name: 'pyright', version: '1.1.403', source: 'https://pypi.org/project/pyright/' }] }] }));
+    const pyright = { name: 'pyright', version: '1.1.403', source: 'https://pypi.org/project/pyright/', license: 'MIT' };
+    const withLs = (pkg: object) => json({ ...FIXTURE_MANIFEST, languageServers: [{ language: 'python', provisioner: 'uvx', packages: [pkg] }] });
+    put(PATHS.setupManifest, withLs({ ...pyright, license: undefined }));
     expect(generate().problems).toEqual([`the setup manifest ${PATHS.setupManifest} cannot be parsed: language server package pyright (python) has no license`]);
     // A field that is only whitespace is no field: it would render an empty `License:` line (gate round 2).
-    put(PATHS.setupManifest, json({ distribution: 'serena-agent', version: '1.7.0', languageServers: [{ language: 'python', packages: [{ name: 'pyright', version: ' ', source: 'https://pypi.org/project/pyright/', license: 'MIT' }] }] }));
+    put(PATHS.setupManifest, withLs({ ...pyright, version: ' ' }));
     expect(generate().problems).toEqual([`the setup manifest ${PATHS.setupManifest} cannot be parsed: language server package pyright (python) has no version`]);
+  });
+
+  it('the setup manifest is read in the shape it ships: schema version 1, the three lists, a machine tool\'s provisionedVersion, a tool-server package\'s four fields', () => {
+    const cannot = (m: string) => [`the setup manifest ${PATHS.setupManifest} cannot be parsed: ${m}`];
+    put(PATHS.setupManifest, json({ ...FIXTURE_MANIFEST, schemaVersion: 2 }));
+    expect(generate().problems).toEqual(cannot('schemaVersion is 2, not 1'));
+    put(PATHS.setupManifest, json({ ...FIXTURE_MANIFEST, schemaVersion: undefined }));
+    expect(generate().problems).toEqual(cannot('schemaVersion is null, not 1'));
+    for (const list of ['machineTools', 'toolServerPackages', 'languageServers'] as const) {
+      put(PATHS.setupManifest, json({ ...FIXTURE_MANIFEST, [list]: undefined }));
+      expect(generate().problems, list).toEqual(cannot(`${list} is not a list`));
+    }
+    // The generator's own earlier assumption — `version` on a machine tool — is not the manifest's shape.
+    const [git, ripgrep] = FIXTURE_MANIFEST.machineTools;
+    const assumed: Record<string, unknown> = { ...ripgrep, version: '15.2.0' };
+    delete assumed.provisionedVersion;
+    put(PATHS.setupManifest, json({ ...FIXTURE_MANIFEST, machineTools: [git, assumed] }));
+    expect(generate().problems).toEqual(cannot('machine tool ripgrep has no provisionedVersion'));
+    put(PATHS.setupManifest, json({ ...FIXTURE_MANIFEST, machineTools: [{ ...git, source: '' }] }));
+    expect(generate().problems).toEqual(cannot('machine tool git has no source'));
+    put(PATHS.setupManifest, json({ ...FIXTURE_MANIFEST, toolServerPackages: [{ ...FIXTURE_MANIFEST.toolServerPackages[0], license: ' ' }] }));
+    expect(generate().problems).toEqual(cannot('tool-server package @playwright/mcp has no license'));
+  });
+
+  it('the code-intelligence pins, which name the runtime of the language-server sub-heading, cannot be read or name no runtime', () => {
+    rmSync(join(root, PATHS.codeIntelligencePins));
+    expect(generate().problems).toEqual([`the code-intelligence pins ${PATHS.codeIntelligencePins} cannot be read: ENOENT`]);
+    put(PATHS.codeIntelligencePins, json({ python: '3.13.15' }));
+    expect(generate().problems).toEqual([`the code-intelligence pins ${PATHS.codeIntelligencePins} cannot be parsed: they name no runtime distribution and version`]);
   });
 
   it('an input that parses to no object — null, false, 0, "" or a list — cannot be parsed as that input (gate round 2)', () => {
@@ -433,6 +508,7 @@ describe('REQ-STARTUP-143: validation fails naming the component or path, one co
       [PATHS.releaseInputs, 'the release inputs'],
       [PATHS.assets, 'the bundled-assets table'],
       [PATHS.setupManifest, 'the setup manifest'],
+      [PATHS.codeIntelligencePins, 'the code-intelligence pins'],
       [PATHS.bundleMarker, 'the bundle marker'],
       [PATHS.exceptions, 'the reviewed-exceptions table'],
     ] as const;
@@ -647,12 +723,31 @@ describe('the real repository: what `pnpm check` can say without the bundled run
     expect(assets.find((a) => a.name === 'Space Grotesk')?.version).toBe('2.000');
   });
 
-  it('the setup manifest lists the language servers IC-7 names, each with its four fields', () => {
+  it('reads the setup manifest the build ships, not the code-intelligence pins (REQ-STARTUP-142: "generated from the setup manifest of that same build")', () => {
+    expect(PATHS.setupManifest).toBe('apps/desktop/resources/setup-manifest.json');
+  });
+
+  it('the shipped setup manifest pins Git and ripgrep, the tool-server package and the language servers IC-7 names, each with its four fields (REQ-STARTUP-058, REQ-STARTUP-152)', () => {
     const problems: string[] = [];
     const manifest = setupManifest(REPO, problems);
     expect(problems).toEqual([]);
-    expect(manifest?.machineTools).toEqual([]);
+    expect(manifest?.runtime).toBe('serena-agent 1.7.0');
+    expect(manifest?.machineTools).toEqual([
+      { name: 'git', version: '2.55.0', source: 'https://github.com/git-for-windows/git', license: 'GPL-2.0-only' },
+      { name: 'ripgrep', version: '15.2.0', source: 'https://github.com/BurntSushi/ripgrep', license: 'Unlicense OR MIT' },
+    ]);
+    expect(manifest?.toolServerPackages).toEqual([{ name: '@playwright/mcp', version: '0.0.80', source: 'https://registry.npmjs.org/@playwright/mcp', license: 'Apache-2.0' }]);
     expect(manifest?.languageServers.map((s) => `${s.name} ${s.version} ${s.license}`)).toEqual(['typescript 5.9.3 Apache-2.0', 'typescript-language-server 5.1.3 MIT', 'pyright 1.1.403 MIT']);
+  });
+
+  it('the field names the generator reads are keys the setup-manifest schema declares, and the fixture and the shipped file are manifests that schema accepts', () => {
+    expect(SETUP_MANIFEST_SHAPE.schemaVersion).toBe(SETUP_MANIFEST_SCHEMA_VERSION);
+    for (const k of SETUP_MANIFEST_SHAPE.machineTool) expect(Object.keys(MachineToolSchema.shape), k).toContain(k);
+    for (const k of SETUP_MANIFEST_SHAPE.toolServerPackage) expect(Object.keys(PinnedPackageSchema.shape), k).toContain(k);
+    for (const k of SETUP_MANIFEST_SHAPE.languageServerPackage) expect(Object.keys(PinnedPackageSchema.shape), k).toContain(k);
+    expect(Object.keys(LanguageServerSchema.shape)).toEqual(expect.arrayContaining(['language', 'packages']));
+    expect(SetupManifestSchema.safeParse(FIXTURE_MANIFEST).success).toBe(true);
+    expect(SetupManifestSchema.safeParse(JSON.parse(readFileSync(join(REPO, PATHS.setupManifest), 'utf8'))).success).toBe(true);
   });
 
   it('the reviewed-exceptions table and the release inputs are readable, and every exception in the table is well-formed', () => {

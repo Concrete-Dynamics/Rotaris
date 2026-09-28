@@ -18,7 +18,7 @@
  * dictionaries the constructor began loading are discarded before their file check returns, so no download starts.
  * The spellchecker is switched off with it, so no text field later asks for a dictionary of its own (measured: typing
  * into a text area made no request). REQ-STARTUP-160 names no such host and forbids the disclosure to name one the
- * document does not require; the specification says nothing about spell-checking a text field, and **OQ-91** asks it.
+ * document does not require; the specification says nothing about spell-checking a text field, and **OQ-93** asks it.
  */
 
 /** The two calls of an Electron `Session` this uses — a port, so the rule is tested without Electron. */

@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-28**
 
+**The update restart's record passes in two steps (REQ-STARTUP-121, REQ-STARTUP-161; ADR-0055 *Amended 2026-09-28*,
+R-062).** `packages/platform/src/instance.ts` now offers the record, waits on the timer port for the successor's
+acknowledgement within the hand-over interval, and rewrites it only then, so a successor that stopped waiting is never
+named by it. The **sequences view**'s `Restart now` diagram and prose gain the offer, the acknowledgement and the
+refusals they add. The ordinary hand-over of a second launch is unchanged. No package, edge, process, channel, command,
+store column or owner of state changed.
+
 **The runtime makes no request of its own (REQ-STARTUP-160, REQ-SHELL-005; repaired 2026-09-28 under R-062).** The
 connection `pnpm updater-proof` recorded at launch was Electron's spellchecker fetching a Hunspell dictionary, not
 Chromium's component updater; main now empties each session's dictionary list and turns its spellchecker off in

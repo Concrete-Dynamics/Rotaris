@@ -601,7 +601,12 @@ so that the next release can add the updater without stranding anyone.
 > restart waiting for ever and every later update action `update.busy`; the claim now reports the refusal
 > (`onRecordPassFailed`), main's wait (`updater/successor.ts`) rejects, and `Update not installed` surfaces with the
 > reason (REQ-STARTUP-121). 162 unit cases in 15 files. A successor whose 5 s bound expired while the predecessor was
-> blocked can still be passed the record after it has gone — filed in `../defects/`, not repaired.
+> blocked can still be passed the record after it has gone — filed in `../defects/`, not repaired. *Repaired
+> 2026-09-28 (R-062):* the pass is two steps, offer then acknowledgement within the hand-over interval, and only then
+> the rewrite. A successor that stopped waiting leaves the record intact and fails the restart
+> (ADR-0055's *Amended 2026-09-28*;
+> [note](../defects/fixed/the-record-can-pass-to-a-successor-that-stopped-waiting.md)). The restart between two real
+> processes on Windows is still owed to the next package (IC-3).
 
 **4.7 The manifest, the signature and the key record.** The pipeline writes and signs these:
 

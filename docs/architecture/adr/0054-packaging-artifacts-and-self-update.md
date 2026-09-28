@@ -1740,3 +1740,15 @@ its reason, and the successor's `launch refused` line names the check that refus
 unchanged; an announcement never accepted does not fire it), `successor.test.ts` and `updater.test.ts`. Still not
 decided here: an answer the successor no longer waits for — its 5 s bound expired while this process was blocked — is
 recorded in `../../defects/` as a defect, not repaired. Unit: 162 cases in 15 files.
+
+**Repaired 2026-09-28 (R-062): (6) the record passed to a successor that had stopped waiting.** The defect the
+paragraph above filed (`../../defects/fixed/the-record-can-pass-to-a-successor-that-stopped-waiting.md`) is repaired
+by making the pass two steps, as ADR-0055's restart section now records (*Amended 2026-09-28*). The predecessor offers
+the record. It rewrites the record only once the successor has acknowledged within the hand-over interval, on the
+timer port. A successor that closed first, or whose acknowledgement is late, leaves the record intact and fails the
+restart through `onRecordPassFailed`, so `Update not installed` surfaces and nothing closes. The updater's side is
+unchanged: `updater/successor.ts` already rejects on any pass failure. Pinned by `instance.test.ts`: the offer
+before the pass; a successor that closed before answering; an acknowledgement missing past the interval on a
+`FakeClock`, and a late one refused; a predecessor loop blocked past the successor's bound, red against the one-step
+pass; the successor's unbounded wait once it has acknowledged; its reading of the record when the predecessor ends
+without a last word; and the ordinary hand-over unchanged.

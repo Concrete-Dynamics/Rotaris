@@ -14,7 +14,7 @@
 # or with any other name, and artifactBuildCompleted refuses a produced file by any
 # other name (scripts/build-hooks.cjs, `checkNaming`; scripts/lib/artifact-names.mjs).
 # The installer's OWN version metadata (VERSION define → DisplayVersion,
-# ProductVersion) still carries electron-builder's normalised value — OQ-76.
+# ProductVersion) still carries electron-builder's normalised value — OQ-80.
 # The portable is NOT the tool's `portable` target (refused, ADR-0054 P1); it is
 # assembled by the release pipeline from win-unpacked around our own stub, later.
 appId: dev.rotaris.desktop

@@ -438,7 +438,12 @@ its own stderr. The token process is an MCP stdio child, so that stderr reaches 
 child's: line by line at `debug` (`run host: mcp code_intelligence stderr: …`, `packages/mcp/src/transport.ts`), and
 quoted in the failure lines — REQ-MCP-107's stderr tail in a failed discovery's line at `warning`, and a failed setup
 step's last output at `info` (`mcp setup: create failed — …; its last output: …`, the detail `packages/mcp/src/setup.ts`
-builds). At the default threshold only the quoted route is written.
+builds). At the default threshold only the quoted route is written. **The hook engine's `log` sink reaches this log
+(REQ-HOOKS-138, repaired 2026-09-28)**: a hook fault that reduces to a log entry (REQ-HOOKS-079/128/129) and the run
+host's account of a hook set it could not resolve (REQ-HOOKS-085) are handed to `Sessions` through `HookPortContext.log`,
+which `Sessions` writes through its `SessionsDeps.log` — the run host's `log` event at `info` — and never through the
+per-session log, whose `WARNING` default had dropped them. The checkpoint port's `CheckpointPortContext.log` stays the
+per-session log by decision, because its root writes every checkpoint line to both logs through a channel of its own.
 
 **Every window subscribes for itself (Part R).** `session.subscribe` / `session.unsubscribe` bind the relay subscription to the **sender's** webContents id — the persona window's when it asks — not the main window's (the twenty-seventh defect, ADR-0043's note); the run host's `session.attach` then re-delivers the whole-session update and the resident rows to every subscriber of the session. A persona window subscribes on show and unsubscribes on hide (ADR-0048's zero-work rule).
 

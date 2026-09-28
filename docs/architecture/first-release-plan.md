@@ -36,7 +36,7 @@ record already decides, and every ruling it needs is named as the owner's rather
   `slash-proof` at its first catalogue assertion since ADR-0063
   ([note](../defects/slash-proof-expects-every-built-in-to-carry-the-action-badge.md)), and `skills-proof`'s policy
   launch on Linux only ([note](../defects/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md)).
-- The unbuilt directives `PD-TOOLS-003`, `PD-TOOLS-004`, `PD-TOOLS-005`, `PD-ORCH-004` and `PD-MONITOR-002`.
+- The unbuilt directives `PD-TOOLS-003`, `PD-TOOLS-004`, `PD-TOOLS-005` (**built 2026-09-28**, R-062), `PD-ORCH-004` and `PD-MONITOR-002`.
 - The macOS and Linux artifacts, which are bound by IC-3 and IC-8 and now also by `PD-STARTUP-001`.
 
 **One deferral the owner should look at twice.** Persona memory is a named empty slot in REQ-WORKSPACE-060's
@@ -241,8 +241,9 @@ execution root.
 > The first repair of that note missed the catalog cases' `host()` helper, and the gate's verification found it; it is
 > now repaired, with a case that decides the isolation on any host. On POSIX the proof also sets `HOME` to its scratch
 > home, after the gate traced a launch reading the operator's `~/.agents/prompts`. **One root of the operator's machine
-> is still read**: the skill search's `/etc/codex/skills`, which has no seam
-> ([`three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md`](../defects/three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md)).
+> was still read**: the skill search's `/etc/codex/skills`, which had no seam
+> ([`three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md`](../defects/fixed/three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md));
+> closed 2026-09-28, below.
 >
 > **Four launches.**
 >
@@ -263,9 +264,24 @@ execution root.
 > by neither the proof nor a unit test: the child's system text goes through the same `withContextUnits` call
 > (`packages/engine/src/children/orchestration.ts`), which is an argument, not an observation. The recorded calls are
 > the classifier, the entry agent (the only one carrying context) and the post-run analyst, which rightly carries none. Two defects in the same requirements were
-> noticed by the gate and recorded, not repaired here:
-> [`an-instruction-file-that-is-not-utf-8-is-injected-with-no-warning.md`](../defects/an-instruction-file-that-is-not-utf-8-is-injected-with-no-warning.md)
+> noticed by the gate and recorded, not repaired there:
+> [`an-instruction-file-that-is-not-utf-8-is-injected-with-no-warning.md`](../defects/fixed/an-instruction-file-that-is-not-utf-8-is-injected-with-no-warning.md)
 > (REQ-WORKSPACE-045's decoding half) and the `/etc/codex/skills` read above.
+>
+> **Both repaired 2026-09-28 (R-062; first-executions row 2026-09-28).** The port every discovery reads through
+> (`NODE_DISCOVERY_PORTS.readFile`) decodes with a fatal `TextDecoder`, so the note's bytes `68 69 0a ff fe c3 28 0a`
+> now produce REQ-WORKSPACE-045's warning naming the path and the error, and no block — pinned through the real port in
+> `packages/config/src/instructions.test.ts`, and red against the lenient decode. The same strictness reaches a
+> `SKILL.md`, which is skipped as an unreadable file with the decoder's reason; REQ-WORKSPACE-053's silence on the
+> encoding is **OQ-79**. The skill search's machine-wide root moved under the one injectable directory the instruction
+> base already had (`SkillRootsEnv.machineDir`; `ROTARIS_CAPTURE_SKILLS_MACHINE ?? ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE`
+> in the run host, compiled out of a packaged build), so this proof's existing variable now isolates the catalog too,
+> `skills-proof` stages a skill under its scratch machine root and lists it off Windows, `settings-proof` sets the
+> instruction seam, and the catalog tests decide the isolation of both roots on any host by recording every probe.
+> **What the repair did not observe:** no proof lays an undecodable file down for the built app — the decoding half is
+> shown by the unit cases over the real port alone; and `skills-proof`'s launches after its policy launch did not run
+> on Linux, for the reason [`skills-proof-writes-its-global-policy-where-only-windows-reads-it.md`](../defects/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md)
+> records, so the run launch's catalog naming the machine skill is asserted in the script and unproven on this host.
 
 **3.4 A live run.** One `pnpm live-run` scenario with a workspace `AGENTS.md` whose instruction the model can
 only follow if it was injected. Owner-approved, like §2.3.
@@ -323,7 +339,7 @@ lives in `tools/release-naming`. What the build decided and found:
   and writes it as a literal into the configuration electron-builder runs with (`release/electron-builder.package.yml`);
   `electron-builder.yml` carries no `artifactName`; `afterPack` refuses any other configured name and a new
   `artifactBuildCompleted` hook any other produced file. The installer's own Windows metadata (`DisplayVersion`,
-  `ProductVersion`) still carries the normalised value — **OQ-76**. Unmeasured on a Windows package (IC-3): the next one
+  `ProductVersion`) still carries the normalised value — **OQ-80**. Unmeasured on a Windows package (IC-3): the next one
   must show the lines ADR-0054 names.*
 - Two readings were raised rather than taken silently: **OQ-69**, whether the switched-off `browser` default counts
   (built: it does), and **OQ-70**, whether tag numbers are canonical decimals (built: they are).

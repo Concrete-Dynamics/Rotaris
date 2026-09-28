@@ -1465,13 +1465,13 @@ but they reach electron-builder as **literals**, rendered from the declared text
   after the installer, so it carries the declared text; whether the pipeline publishes it is §4.7's and REQ-STARTUP-152's
   business, not the build's.
 
-**What stays normalised, and the question it raises (OQ-76).** The installer's own Windows metadata is still written from
+**What stays normalised, and the question it raises (OQ-80).** The installer's own Windows metadata is still written from
 electron-builder's `appInfo.version`: the NSIS `VERSION` define, which becomes REQ-STARTUP-018's `DisplayVersion` and the
 uninstall display name `Rotaris 0.1.0-rc1`; the `ProductVersion` version key; and `VIProductVersion`, four numbers by
 Windows' own rule (`0.1.0.0`), which no spelling could carry a suffix in. `extraMetadata.version` would have forced the
 declared text through — electron-builder deep-assigns it *after* normalising — and was not used, because §4.1 decided that
 either it or `buildVersion` is a second place a version is declared. Whether REQ-STARTUP-158 reaches that metadata is
-**OQ-76**; the build proceeds with it as electron-builder writes it, said in `electron-builder.yml`'s header.
+**OQ-80**; the build proceeds with it as electron-builder writes it, said in `electron-builder.yml`'s header.
 
 **Measured.** 26 new unit cases: `apps/desktop/scripts/lib/artifact-names.test.ts` (15 — the names for `0.1.0`, `0.1.0rc1`,
 `0.1.0a2`, `0.1.0b3`; `0.1.0-rc1` and `0.1.0dev1` refused by the grammar; the manifest read raw for all four and refused
@@ -1495,6 +1495,6 @@ separator Windows prints, then `electron-builder.package.yml (from electron-buil
 afterPack's `[ic6] naming: declared 0.1.0rc1, electron-builder's normalised 0.1.0-rc1; configured to produce
 Rotaris-0.1.0rc1-windows-x64-setup.exe, Rotaris-0.1.0rc1-windows-x64-setup.exe`; `[ic6] naming: produced
 Rotaris-0.1.0rc1-windows-x64-setup.exe` and the same for its `.blockmap`; the file by that name under `release/`; and the
-installer's `DisplayVersion` read back from `HKCU\…\Uninstall\Rotaris` after a scratch install, for OQ-76's record. With
+installer's `DisplayVersion` read back from `HKCU\…\Uninstall\Rotaris` after a scratch install, for OQ-80's record. With
 `0.1.0` declared it must package exactly as the 2026-09-04 execution did. The "assets" rule's first real run, owed above,
 happens at the same package.

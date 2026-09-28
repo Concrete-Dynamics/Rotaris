@@ -24,6 +24,7 @@ export * from './run/ladder.js';
 export * from './run/compression.js';
 export * from './run/conversation.js';
 export * from './run/waits.js';
+export * from './run/presence.js';
 export * from './session-log.js';
 export * from './children/naming.js';
 export * from './children/personas.js';

@@ -17,7 +17,7 @@ export interface VersionPlace {
  * `first-release-plan.md`): the desktop application's manifest. `pnpm package` renders its text into every artifact
  * name through `tools/release-naming` (REQ-STARTUP-031; electron-builder's own `${version}` is that text normalised,
  * `0.1.0rc1` → `0.1.0-rc1`, so it is not used — `apps/desktop/scripts/lib/artifact-names.mjs`), electron-builder
- * renders the normalised value into the installer's own metadata (OQ-76), and packs the file into the archive the
+ * renders the normalised value into the installer's own metadata (OQ-80), and packs the file into the archive the
  * application runs from. Everything the running product reports as its version is READ from that packed copy, never written a second
  * time: the About surface (main) and the MCP client's `clientInfo.version` in every handshake (the run host) both go
  * through `@rotaris/platform`'s `installedProductVersion` (REQ-STARTUP-004/007/158). The MCP client carried a literal

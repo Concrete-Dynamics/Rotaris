@@ -63,11 +63,11 @@ normalised `appInfo.version`: the NSIS `VERSION` define, which becomes the unins
 `VIProductVersion`, which Windows fixes as four numbers (`0.1.0.0`) and could never carry a suffix. The running
 application reports `0.1.0rc1` from the packed manifest, and every published filename is the declared text. Whether
 REQ-STARTUP-158's "every artifact … SHALL declare … that same version" reaches the installer's Windows metadata, and if
-it does whether a custom NSIS `WriteRegStr` over `DisplayVersion` is wanted, is **OQ-76**; the build proceeds with the
+it does whether a custom NSIS `WriteRegStr` over `DisplayVersion` is wanted, is **OQ-80**; the build proceeds with the
 metadata as electron-builder writes it, stated in `electron-builder.yml`'s header and in ADR-0054.
 
 **Not shown here.** No Windows package can run on this host (IC-3). The next Windows `pnpm package` with the manifest
 declaring `0.1.0rc1` must show `[package] declared 0.1.0rc1 → Rotaris-0.1.0rc1-windows-x64-setup.exe`, an afterPack line
 `[ic6] naming: declared 0.1.0rc1, electron-builder's normalised 0.1.0-rc1`, `release/Rotaris-0.1.0rc1-windows-x64-setup.exe`
-on disk with `artifactBuildCompleted`'s acceptance line, and the installer's `DisplayVersion` as OQ-76 records it. A stable
+on disk with `artifactBuildCompleted`'s acceptance line, and the installer's `DisplayVersion` as OQ-80 records it. A stable
 `0.1.0` must package exactly as before.

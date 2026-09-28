@@ -262,16 +262,39 @@ describe('policy (ADR-0017, REQ-TOOLS-011..029, 039..047)', () => {
     expect(evaluate(p, [], permissionRequest('fetch', 'o', { url: 'http://169.254.169.254/' }), env).ruleId).toBe('ask:fetch-remote-host');
   });
 
-  it('REQ-TOOLS-018: path scope over the seven keys; unresolvable counts as outside; no path key never fires', () => {
-    const p = buildPolicy({ preset: 'restricted', workspaceRoot: ROOT });
-    expect(evaluate(p, [], permissionRequest('read_file', 'o', { path: 'src/a.ts' }), env).ruleId).toBe('restricted:read-only-tool');
-    expect(evaluate(p, [], permissionRequest('read_file', 'o', { path: 'D:/elsewhere/a.ts' }), env).ruleId).toBe('restricted:read-outside-workspace');
-    expect(evaluate(p, [], permissionRequest('grep', 'o', { paths: ['src', 'D:/elsewhere'] }), env).ruleId).toBe('restricted:read-outside-workspace');
-    const unresolvable: EvaluationEnv = { ...env, resolvePath: (x) => (x === ROOT ? ROOT : null) };
-    expect(evaluate(p, [], permissionRequest('read_file', 'o', { path: 'src/a.ts' }), unresolvable).ruleId).toBe('restricted:read-outside-workspace');
-    expect(evaluate(p, [], permissionRequest('read_file', 'o', { offset: 1 }), env).ruleId).toBe('restricted:read-only-tool');
-    // REQ-TOOLS-044: autonomous never carries a path-scoped ask
-    expect(evaluate(buildPolicy({ preset: 'autonomous', workspaceRoot: ROOT }), [], permissionRequest('read_file', 'o', { path: 'D:/elsewhere' }), env).decision).toBe('allow');
+  it('REQ-TOOLS-018: path scope over the seven keys; a relative path resolves against the workspace root, not the process directory; unresolvable counts as outside; no path key never fires', () => {
+    /*
+     * A real directory and the run host's own resolver (`realPathOf`, a throw read as unresolvable). Until 2026-09-28
+     * this case ran over `D:/ws` with a resolver that joined the root itself, which is how the path scope handing the
+     * resolver the RAW argument hid: in the run host that argument resolved against the process directory, and this
+     * process's directory is not the workspace (`docs/defects/fixed/path-scope-resolves-a-relative-path-against-the-process-directory.md`).
+     */
+    const ws = realPathOf(mkdtempSync(join(tmpdir(), 'req-tools-018-')));
+    const elsewhere = realPathOf(mkdtempSync(join(tmpdir(), 'req-tools-018-elsewhere-')));
+    try {
+      mkdirSync(join(ws, 'src'));
+      writeFileSync(join(ws, 'src', 'a.ts'), 'x\n');
+      expect(realPathOf(process.cwd()).startsWith(ws)).toBe(false);
+      const fs: EvaluationEnv = { attended: true, workspaceRoot: ws, resolvePath: (x) => { try { return realPathOf(x); } catch { return null; } }, publicTool: () => true };
+      const p = buildPolicy({ preset: 'restricted', workspaceRoot: ws });
+      // a workspace-relative path: an existing file, one that does not exist yet, a list, and a directory
+      expect(evaluate(p, [], permissionRequest('read_file', 'o', { path: 'src/a.ts' }), fs).ruleId).toBe('restricted:read-only-tool');
+      expect(evaluate(p, [], permissionRequest('read_file', 'o', { file_path: 'src/new.ts' }), fs).ruleId).toBe('restricted:read-only-tool');
+      expect(evaluate(p, [], permissionRequest('grep', 'o', { paths: ['src', 'src/a.ts'] }), fs).ruleId).toBe('restricted:read-only-tool');
+      expect(evaluate(p, [], permissionRequest('glob', 'o', { dir: '.' }), fs).ruleId).toBe('restricted:read-only-tool');
+      // one path escaping is enough, absolute or relative
+      expect(evaluate(p, [], permissionRequest('read_file', 'o', { path: join(elsewhere, 'a.ts') }), fs).ruleId).toBe('restricted:read-outside-workspace');
+      expect(evaluate(p, [], permissionRequest('grep', 'o', { paths: ['src', elsewhere] }), fs).ruleId).toBe('restricted:read-outside-workspace');
+      expect(evaluate(p, [], permissionRequest('read_file', 'o', { path: '../escaped.ts' }), fs).ruleId).toBe('restricted:read-outside-workspace');
+      const unresolvable: EvaluationEnv = { ...fs, resolvePath: (x) => (x === ws ? ws : null) };
+      expect(evaluate(p, [], permissionRequest('read_file', 'o', { path: 'src/a.ts' }), unresolvable).ruleId).toBe('restricted:read-outside-workspace');
+      expect(evaluate(p, [], permissionRequest('read_file', 'o', { offset: 1 }), fs).ruleId).toBe('restricted:read-only-tool');
+      // REQ-TOOLS-044: autonomous never carries a path-scoped ask
+      expect(evaluate(buildPolicy({ preset: 'autonomous', workspaceRoot: ws }), [], permissionRequest('read_file', 'o', { path: elsewhere }), fs).decision).toBe('allow');
+    } finally {
+      rmSync(ws, { recursive: true, force: true });
+      rmSync(elsewhere, { recursive: true, force: true });
+    }
   });
 
   it('REQ-TOOLS-023/024/025: session approvals first, most recent first, exact facet or exact args, surviving replacement', () => {
@@ -318,6 +341,50 @@ describe('policy (ADR-0017, REQ-TOOLS-011..029, 039..047)', () => {
     expect(effectiveMode({ requested: 'autonomous', attended: true, sandboxed: false, allowUnsandboxedAutonomous: false }).downgraded).toBe(false);
     expect(effectiveMode({ requested: 'autonomous', attended: false, sandboxed: false, allowUnsandboxedAutonomous: true }).downgraded).toBe(false);
     expect(effectiveMode({ requested: 'ask', attended: false, sandboxed: false, allowUnsandboxedAutonomous: false }).downgraded).toBe(false);
+  });
+});
+
+/**
+ * A persona's MCP surface prefixes a server's tool only when its name is already taken, so a server's `read_file` or
+ * `fetch` reaches a persona whose public set lacks one under the plain name; `publicTool` is what tells the two apart.
+ * REQ-TOOLS-007's classes are classes of public tools, and a tool outside the registry carries no declaration and has
+ * none inferred from its name (REQ-TOOLS-001 as ADR-0016 reads it) — so no class rule fires for it.
+ */
+describe('an MCP tool offered under a public name is not the public tool (REQ-TOOLS-001, REQ-TOOLS-043, REQ-TOOLS-045)', () => {
+  const server: EvaluationEnv = { ...env, publicTool: () => false };
+
+  it('ask:read-only-tool (REQ-TOOLS-043) allows the public read-only class alone; the preset default decides a server\'s tool of the same name', () => {
+    const p = buildPolicy({ preset: 'ask', workspaceRoot: ROOT });
+    expect(evaluate(p, [], permissionRequest('read_file', 'o', { path: 'D:/elsewhere/secrets' }), env).ruleId).toBe('ask:read-only-tool');
+    expect(evaluate(p, [], permissionRequest('read_file', 'o', { path: 'D:/elsewhere/secrets' }), server)).toMatchObject({ decision: 'ask', ruleId: 'preset:ask', source: 'preset' });
+    // case and alias make no difference: the name is not what decides
+    expect(evaluate(p, [], permissionRequest('Read_File', 'o', { path: 'a' }), server).ruleId).toBe('preset:ask');
+    expect(evaluate(p, [], permissionRequest('haet_read', 'o', { path: 'a' }), server).ruleId).toBe('preset:ask');
+  });
+
+  it('the fetch pair (REQ-TOOLS-045) reads the network class, which is the public fetch alone', () => {
+    const p = buildPolicy({ preset: 'ask', workspaceRoot: ROOT });
+    expect(evaluate(p, [], permissionRequest('fetch', 'o', { url: 'http://localhost:3000' }), env).ruleId).toBe('ask:fetch-local-host');
+    expect(evaluate(p, [], permissionRequest('fetch', 'o', { url: 'http://localhost:3000' }), server).ruleId).toBe('preset:ask');
+    expect(evaluate(p, [], permissionRequest('fetch', 'o', { url: 'https://example.com' }), server).ruleId).toBe('preset:ask');
+  });
+
+  it('under restricted neither read rule fires for it and the default denies — a rule that grants sees nothing declared (ADR-0016)', () => {
+    const p = buildPolicy({ preset: 'restricted', workspaceRoot: ROOT });
+    expect(evaluate(p, [], permissionRequest('read_file', 'o', { path: 'src/a.ts' }), server)).toMatchObject({ decision: 'deny', ruleId: 'preset:restricted' });
+    expect(evaluate(p, [], permissionRequest('glob', 'o', { pattern: '**' }), server)).toMatchObject({ decision: 'deny', ruleId: 'preset:restricted' });
+    expect(evaluate(p, [], permissionRequest('fetch', 'o', { url: 'http://localhost:3000' }), server)).toMatchObject({ decision: 'deny', ruleId: 'preset:restricted' });
+  });
+
+  it('the rules that name no tool set still decide it, and a session approval still covers it (REQ-TOOLS-024)', () => {
+    const p = buildPolicy({ preset: 'ask', workspaceRoot: ROOT });
+    expect(evaluate(p, [], permissionRequest('read_file', 'o', { command: 'rm -rf /' }), server).ruleId).toBe('starter:deny-recursive-delete');
+    const ctx = new PolicyContext(p);
+    const call = permissionRequest('read_file', 'o', { path: 'a' });
+    expect(ctx.evaluate(call, server).ruleId).toBe('preset:ask');
+    ctx.grant(call, server);
+    expect(ctx.evaluate(call, server).ruleId).toBe('session:allow:1');
+    expect(ctx.evaluate(permissionRequest('read_file', 'o', { path: 'b' }), server).ruleId).toBe('preset:ask');
   });
 });
 

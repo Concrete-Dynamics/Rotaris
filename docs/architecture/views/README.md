@@ -80,6 +80,21 @@ roots (`tools/ui-contract-publisher.mjs`); `ui-audit` reports a thrown audit exp
 a non-array contract as a `schema` finding, and moves on. The **seams view** §8 steps 4 and 6 and the **component view**'s
 design-system paragraph say so. No package, edge, process, channel, message kind, store column or owner of state changed.
 
+**The update restart's record passes in two steps (REQ-STARTUP-121, REQ-STARTUP-161; ADR-0055 *Amended 2026-09-28*,
+R-062).** `packages/platform/src/instance.ts` now offers the record, waits on the timer port for the successor's
+acknowledgement within the hand-over interval, and rewrites it only then, so a successor that stopped waiting is never
+named by it. The **sequences view**'s `Restart now` diagram and prose gain the offer, the acknowledgement and the
+refusals they add. The ordinary hand-over of a second launch is unchanged. No package, edge, process, channel, command,
+store column or owner of state changed.
+
+**The runtime makes no request of its own (REQ-STARTUP-160, REQ-SHELL-005; repaired 2026-09-28 under R-062).** The
+connection `pnpm updater-proof` recorded at launch was Electron's spellchecker fetching a Hunspell dictionary, not
+Chromium's component updater; main now empties each session's dictionary list and turns its spellchecker off in
+`session-created` (`main/runtime-requests.ts`). The **process view** gains a paragraph under its diagram saying that
+Electron and Chromium add no host of their own to the ones the product reaches, and why — not that the endpoints drawn
+are all of those hosts, which they are not (corrected at verification). No package, edge, process, channel, message kind, store
+column or owner of state changed; OQ-93 raised (OQ-91 on its branch).
+
 **REQ-CHAT-055's measurement round: the transcript projects once per change, not once per render (2026-09-28, R-048's
 order under R-062).** The built app was traced appending to an empty transcript and to one of 1,200 rows, and the extra
 time at depth was script — three to four synchronous renders per increment, each re-running ADR-0046 step 4 over the

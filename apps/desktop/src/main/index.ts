@@ -51,6 +51,7 @@ import { windowCommands, windowsCommands } from './commands/windows.js';
 import { endBeforeMain, exitAfterChildWindows, RUN_HOST_END_BOUND_MS, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
 import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, type AppLogLevel } from './app-log.js'; // PD-MONITOR-002
 import { workspaceCommands } from './commands/workspace.js';
+import { withoutRuntimeRequests } from './runtime-requests.js'; // REQ-STARTUP-160
 // The answer every command ends in, and the inventory the facets above are given (ADR-0019, REQ-SHELL-020).
 import { refusal, type ApprovalDialogState, type CommandContext, type CommandHandler, type CommandHandlers, type MainWindowState, type Recovery } from './commands/context.js';
 
@@ -112,6 +113,10 @@ const log = (m: string, level: AppLogLevel = 'info'): void => { logAt(level, nul
 // error box — a synchronous modal that blocks the loop and every poll reply. Log it instead; nothing here may hang.
 process.on('uncaughtException', (e) => { log(`UNCAUGHT in main: ${e.stack ?? String(e)}`, 'error'); });
 process.on('unhandledRejection', (reason) => { log(`UNHANDLED rejection in main: ${reason instanceof Error ? reason.stack ?? reason.message : String(reason)}`, 'error'); });
+
+// REQ-STARTUP-160 / REQ-SHELL-005: the runtime makes no request of its own. Registered before `app.whenReady()` so the
+// default session is reached while it is built — later is too late (`runtime-requests.ts` says what was measured).
+app.on('session-created', (created) => { withoutRuntimeRequests(created, (m) => { log(m, 'error'); }); });
 
 /*
  * Why the process is going away, written down while it still can be.

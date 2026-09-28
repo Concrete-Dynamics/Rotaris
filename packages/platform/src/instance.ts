@@ -38,10 +38,12 @@ export interface HandOver {
   readonly workspace?: string;
   /**
    * REQ-STARTUP-121 / ADR-0055 ("The update restart is a hand-over of the record"): the successor an update restart
-   * started announces itself to the instance with its own record. The instance replaces the record file's contents
-   * with it in one atomic replacement and answers `{"ok":true,"record":"passed"}`; from that moment the record is the
-   * successor's, and a launch arriving at any moment reads either the predecessor's fields or the successor's — never
-   * an unheld record. Set by `inheritInstance` and by nothing an ordinary launch does.
+   * started announces itself to the instance with its own record. The pass is two steps on the one connection: the
+   * instance answers `{"record":"offered"}`, the successor acknowledges with `{"ack":true}` — proving it is still
+   * waiting — and only then does the instance replace the record file's contents with it in one atomic replacement and
+   * answer `{"ok":true,"record":"passed"}`. From that moment the record is the successor's, and a launch arriving at any
+   * moment reads either the predecessor's fields or the successor's — never an unheld record, and never one naming a
+   * successor that had stopped waiting. Set by `inheritInstance` and by nothing an ordinary launch does.
    */
   readonly successor?: InstanceRecord;
 }
@@ -62,8 +64,9 @@ export interface ClaimDeps {
   /** Called on the instance side for every hand-over it acknowledges. */
   readonly onHandOver: (h: HandOver) => void;
   /**
-   * REQ-STARTUP-121: called on the instance side once the record has been rewritten with a successor's fields and the
-   * successor told so. What the predecessor does then — close its window and exit — is main's; this only reports it.
+   * REQ-STARTUP-121: called on the instance side once the successor has acknowledged the offer and the record has been
+   * rewritten with its fields; the successor is told so as this returns. What the predecessor does then — close its
+   * window and exit — is main's; this only reports it.
    */
   readonly onRecordPassed?: (successor: InstanceRecord) => void;
   /**
@@ -76,11 +79,14 @@ export interface ClaimDeps {
   readonly acceptSuccessor?: (successor: InstanceRecord) => boolean;
   /**
    * REQ-STARTUP-121: called on the instance side when a successor it ACCEPTED (`acceptSuccessor` answered true) could
-   * not be given the record — the record no longer names this process (REQ-STARTUP-164 (3) reclaimed it meanwhile), or
-   * the atomic replacement failed (a scanner or indexer holding the file through the rename). The successor is answered
-   * not-passed with the same reason and ends quietly; the record is left exactly as it was. Main uses this to fail the
-   * restart it is waiting on, so the failure surfaces through `Update not installed` instead of a wait that never ends.
-   * An announcement that was never accepted — malformed, or no restart pending — does not reach this.
+   * not be given the record — the record no longer names this process (REQ-STARTUP-164 (3) reclaimed it meanwhile), the
+   * successor stopped waiting (it closed its connection before acknowledging the offer, or its acknowledgement did not
+   * arrive within the hand-over interval — the announcement was read late, after the successor's own bound), or the
+   * atomic replacement failed (a scanner or indexer holding the file through the rename). The successor, if it is still
+   * there, is answered not-passed with the same reason and ends quietly; the record is left exactly as it was. Main uses
+   * this to fail the restart it is waiting on, so the failure surfaces through `Update not installed` instead of a wait
+   * that never ends, or a close that leaves no instance running. An announcement that was never accepted — malformed,
+   * or no restart pending — does not reach this.
    */
   readonly onRecordPassFailed?: (successor: InstanceRecord, reason: string) => void;
   /** The atomic replacement of the record; `replaceDocument` unless a test substitutes one that fails. */
@@ -134,34 +140,93 @@ function answerLine(answer: PassAnswer): string {
   return answer.passed ? '{"ok":true,"record":"passed"}\n' : `${JSON.stringify({ ok: false, reason: answer.reason })}\n`;
 }
 
-function listen(endpoint: string, onHandOver: (h: HandOver) => void, platform: NodeJS.Platform, onSuccessor: (successor: InstanceRecord) => Promise<PassAnswer>): Promise<Server> {
+/** The offer: the first step of the pass. Deliberately not `ok:true`, so it can never be read as the pass itself. */
+const OFFER_LINE = '{"record":"offered"}\n';
+/** The successor's acknowledgement of the offer: it is still waiting, and takes the record. */
+const ACK_LINE = '{"ack":true}\n';
+
+/**
+ * The predecessor's half of one successor's connection (REQ-STARTUP-121). `offer` writes the offer and resolves with
+ * the successor's acknowledgement, or with the reason it did not come: the connection ended first, or the bound
+ * elapsed on the timer port. A peer that had already closed before the offer — its announcement read late, after its
+ * own bound — resolves at once.
+ */
+interface SuccessorLink {
+  offer(timers: Timers, bound: Millis): Promise<{ readonly acknowledged: true } | { readonly acknowledged: false; readonly reason: string }>;
+}
+
+function isAck(line: string): boolean {
+  try { return (JSON.parse(line) as { ack?: unknown }).ack === true; } catch { return false; }
+}
+
+function listen(endpoint: string, onHandOver: (h: HandOver) => void, platform: NodeJS.Platform, onSuccessor: (successor: InstanceRecord, link: SuccessorLink) => Promise<PassAnswer>): Promise<Server> {
   return new Promise((resolve, reject) => {
     if (platform !== 'win32') {
       try { unlinkSync(endpoint); } catch { /* absent */ }
     }
     const server = createServer((sock: Socket) => {
       let buf = '';
+      let first = true;
+      /** Set while an offer waits for its acknowledgement: the next line, or `undefined` when the connection ends. */
+      let awaitingAck: ((line: string | undefined) => void) | undefined;
+      let peerGone = false;
+      const gone = (): void => {
+        peerGone = true;
+        const waiter = awaitingAck;
+        awaitingAck = undefined;
+        waiter?.(undefined);
+      };
       sock.setEncoding('utf8');
       sock.on('data', (chunk: string) => {
         buf += chunk;
-        const nl = buf.indexOf('\n');
-        if (nl < 0) return;
-        const line = buf.slice(0, nl);
-        buf = buf.slice(nl + 1);
-        let h: HandOver = {};
-        try { h = JSON.parse(line) as HandOver; } catch { /* malformed → empty hand-over */ }
-        if (h.successor !== undefined) {
-          // REQ-STARTUP-121: the record passes, or it does not, and the successor is told which.
-          void onSuccessor(h.successor).then(
-            (answer) => { sock.end(answerLine(answer)); },
-            (cause: unknown) => { sock.end(answerLine({ passed: false, reason: `the running instance failed while passing its record: ${String(cause)}` })); },
-          );
+        for (;;) {
+          const nl = buf.indexOf('\n');
+          if (nl < 0) return;
+          const line = buf.slice(0, nl);
+          buf = buf.slice(nl + 1);
+          if (!first) {
+            // Only an offer waits for a second line; anything else after the first line is ignored.
+            const waiter = awaitingAck;
+            awaitingAck = undefined;
+            waiter?.(line);
+            continue;
+          }
+          first = false;
+          let h: HandOver = {};
+          try { h = JSON.parse(line) as HandOver; } catch { /* malformed → empty hand-over */ }
+          if (h.successor !== undefined) {
+            const link: SuccessorLink = {
+              offer: (timers, bound) => new Promise((settle) => {
+                const closed = { acknowledged: false as const, reason: 'the successor stopped waiting: it closed its connection before acknowledging the record' };
+                if (peerGone || sock.destroyed) { settle(closed); return; }
+                const timer = timers.after(bound, () => {
+                  awaitingAck = undefined;
+                  settle({ acknowledged: false, reason: 'the successor did not acknowledge the record within the hand-over interval' });
+                });
+                awaitingAck = (answer) => {
+                  timer.cancel();
+                  if (answer === undefined) settle(closed);
+                  else if (isAck(answer)) settle({ acknowledged: true });
+                  else settle({ acknowledged: false, reason: 'the successor answered the offer with something other than an acknowledgement' });
+                };
+                sock.write(OFFER_LINE);
+              }),
+            };
+            // REQ-STARTUP-121: the record passes, or it does not, and the successor — if it is still there — is told which.
+            void onSuccessor(h.successor, link).then(
+              (answer) => { if (!sock.destroyed) sock.end(answerLine(answer)); },
+              (cause: unknown) => { if (!sock.destroyed) sock.end(answerLine({ passed: false, reason: `the running instance failed while passing its record: ${String(cause)}` })); },
+            );
+            continue;
+          }
+          onHandOver(h);
+          sock.end('{"ok":true}\n');
           return;
         }
-        onHandOver(h);
-        sock.end('{"ok":true}\n');
       });
-      sock.on('error', () => { /* a client that vanished */ });
+      sock.on('end', gone);
+      sock.on('close', gone);
+      sock.on('error', () => { /* a client that vanished; 'close' follows */ });
     });
     server.once('error', reject);
     server.listen(endpoint, () => { server.off('error', reject); resolve(server); });
@@ -174,8 +239,15 @@ function listen(endpoint: string, onHandOver: (h: HandOver) => void, platform: N
  * reader observes the old fields or the new and never a half-written record that REQ-STARTUP-164 (3) would reclaim.
  * Only the holder passes its own record: a record that no longer names this process is left alone. And only a holder
  * waiting for a successor it started passes it at all (`acceptSuccessor`): an unsolicited announcement is refused.
+ *
+ * The pass is two steps (repaired 2026-09-28): the record is OFFERED, and rewritten only once the successor has
+ * acknowledged the offer within the hand-over interval. The successor bounds its own wait for an answer by that same
+ * interval and, when it expires, closes and ends; if this process's loop was blocked past that moment, its announcement
+ * is still read here afterwards, and a one-step pass rewrote the record for a process that had already gone — then
+ * reported the pass, and main closed the last window with no instance left running. The acknowledgement is the proof
+ * the successor is still there; without it the record is left as it was and the restart fails (`onRecordPassFailed`).
  */
-async function passRecord(deps: ClaimDeps, successor: InstanceRecord): Promise<PassAnswer> {
+async function passRecord(deps: ClaimDeps, successor: InstanceRecord, link: SuccessorLink): Promise<PassAnswer> {
   const wellFormed = typeof successor.pid === 'number' && Number.isInteger(successor.pid) && successor.pid > 0
     && typeof successor.host === 'string' && successor.host === deps.machineId
     && typeof successor.acquired_at === 'string' && successor.acquired_at !== ''
@@ -192,8 +264,14 @@ async function passRecord(deps: ClaimDeps, successor: InstanceRecord): Promise<P
     deps.onRecordPassFailed?.(successor, reason);
     return { passed: false, reason };
   };
-  const current = readRecord(deps.recordFile);
-  if (current === undefined || current.pid !== deps.pid) return refuse('the instance record no longer names the running instance');
+  const holds = (): boolean => readRecord(deps.recordFile)?.pid === deps.pid;
+  if (!holds()) return refuse('the instance record no longer names the running instance');
+  // Step one: offer the record, and wait — on the timer port, bounded by the hand-over interval — for the successor to
+  // acknowledge it. A successor that closed, or that is silent past the bound, has stopped waiting: nothing is rewritten.
+  const acknowledgement = await link.offer(deps.timers, deps.handOverIntervalMs);
+  if (!acknowledgement.acknowledged) return refuse(acknowledgement.reason);
+  // Step two: the record passes. Read again first — a reclaim may have rewritten it during the wait.
+  if (!holds()) return refuse('the instance record no longer names the running instance');
   const record: InstanceRecord = { pid: successor.pid, host: successor.host, acquired_at: successor.acquired_at, endpoint: successor.endpoint };
   const replaced = await (deps.replaceRecord ?? replaceDocument)(deps.recordFile, `${JSON.stringify(record)}\n`);
   if (!replaced.ok) return refuse(`the instance record could not be replaced: ${replaced.error.headline}${replaced.error.detail === undefined ? '' : ` — ${replaced.error.detail}`}`);
@@ -254,6 +332,66 @@ function tryHandOver(endpoint: string, h: HandOver, timers: Timers, bound: Milli
 }
 
 /**
+ * REQ-STARTUP-121 — the successor's side of the two-step pass. Announce; wait at most the hand-over interval for the
+ * offer (the timer port's); acknowledge it; then wait for the predecessor's last word: `passed`, or a refusal with its
+ * reason. Past the acknowledgement no timer runs, because the predecessor may be rewriting the record at that moment
+ * and a successor that gave up then is exactly the process a record must never be left naming. Should the connection
+ * end with no last word — the predecessor exited between the rewrite and its answer — the record decides: the pass
+ * happened if and only if the record now names this successor.
+ */
+function announceSuccessor(deps: ClaimDeps, predecessorEndpoint: string, record: InstanceRecord): Promise<HandOverAnswer> {
+  return new Promise((resolve) => {
+    let done = false;
+    let acknowledged = false;
+    let buf = '';
+    const finish = (v: HandOverAnswer) => { if (!done) { done = true; resolve(v); } };
+    const t = deps.timers.after(deps.handOverIntervalMs, () => {
+      if (acknowledged) return;
+      try { sock.destroy(); } catch { /* */ }
+      finish({ acked: false });
+    });
+    const sock = connect(predecessorEndpoint);
+    sock.setEncoding('utf8');
+    sock.on('connect', () => sock.write(`${JSON.stringify({ successor: record })}\n`));
+    sock.on('data', (chunk: string) => {
+      buf += chunk;
+      for (;;) {
+        const nl = buf.indexOf('\n');
+        if (nl < 0 || done) return;
+        const line = buf.slice(0, nl);
+        buf = buf.slice(nl + 1);
+        let offered = false;
+        try { offered = (JSON.parse(line) as { record?: unknown }).record === 'offered'; } catch { /* not an offer */ }
+        if (offered && !acknowledged) {
+          acknowledged = true;
+          t.cancel();
+          sock.write(ACK_LINE);
+          continue;
+        }
+        // The last word: `passed`, or a refusal and its reason. Nothing else is a pass.
+        t.cancel();
+        sock.end();
+        const answer = readAnswer(line);
+        let passed = false;
+        try { passed = answer.acked && (JSON.parse(line) as { record?: unknown }).record === 'passed'; } catch { /* not an answer */ }
+        finish(passed ? { acked: true } : { acked: false, ...(answer.reason === undefined ? {} : { reason: answer.reason }) });
+        return;
+      }
+    });
+    sock.on('error', () => { /* 'close' follows */ });
+    sock.on('close', () => {
+      t.cancel();
+      if (done) return;
+      if (!acknowledged) { finish(readAnswer(buf)); return; }
+      const now = readRecord(deps.recordFile);
+      finish(now !== undefined && now.pid === record.pid && now.endpoint === record.endpoint
+        ? { acked: true }
+        : { acked: false, reason: 'the running instance ended without passing its record' });
+    });
+  });
+}
+
+/**
  * Resolve the launch to exactly one of two outcomes (and `refused` only for the
  * bounded failure the requirement names: two claim attempts both lost).
  */
@@ -273,7 +411,7 @@ export async function claimInstance(deps: ClaimDeps, handOver: HandOver = {}): P
     const r = exclusiveCreate(deps.recordFile, `${JSON.stringify(record)}\n`);
     if (!r.ok) return { outcome: 'refused', reason: `${r.error.headline}: ${r.error.detail ?? ''}` };
     if (r.value.minted) {
-      const server = await listen(endpoint, deps.onHandOver, platform, (successor) => passRecord(deps, successor));
+      const server = await listen(endpoint, deps.onHandOver, platform, (successor, link) => passRecord(deps, successor, link));
       return { outcome: 'instance', record, server, close: closerFor(deps, server, endpoint, platform) };
     }
     return 'lost';
@@ -303,11 +441,13 @@ export async function claimInstance(deps: ClaimDeps, handOver: HandOver = {}): P
  * The predecessor then closes its window and exits; a launch arriving meanwhile is handed to whichever of the two the
  * record names at that moment, and no third process is ever started.
  *
- * The one bound here is the successor's wait for the predecessor's ANSWER — the hand-over interval — because the
- * predecessor rewrites the record and answers at once, and a successor that got no answer must not become a rival:
- * it closes its endpoint and reports `refused`, and main ends it quietly while the predecessor keeps its record and
- * its window (REQ-STARTUP-121's failure branch). The predecessor's own wait for the successor to arrive has no bound
- * (ADR-0055), and that wait is the updater's.
+ * The one bound here is the successor's wait for the predecessor's OFFER — the hand-over interval — because the
+ * predecessor offers at once, and a successor that got no offer must not become a rival: it closes its endpoint and
+ * reports `refused`, and main ends it quietly while the predecessor keeps its record and its window (REQ-STARTUP-121's
+ * failure branch). Once it has acknowledged an offer it waits for the predecessor's last word without a bound of its
+ * own, because from that moment the record may name it: the predecessor's own bound on the acknowledgement, its
+ * answer, or — should it end without one — the record itself decides (`announceSuccessor`). The predecessor's wait for
+ * the successor to arrive has no bound (ADR-0055), and that wait is the updater's.
  */
 export async function inheritInstance(deps: ClaimDeps, predecessorEndpoint: string): Promise<ClaimOutcome> {
   const platform = deps.platform ?? process.platform;
@@ -316,12 +456,12 @@ export async function inheritInstance(deps: ClaimDeps, predecessorEndpoint: stri
   const record: InstanceRecord = { pid: deps.pid, host: deps.machineId, acquired_at: toIsoUtc(deps.wall.instant()), endpoint };
   let server: Server;
   try {
-    server = await listen(endpoint, deps.onHandOver, platform, (successor) => passRecord(deps, successor));
+    server = await listen(endpoint, deps.onHandOver, platform, (successor, link) => passRecord(deps, successor, link));
   } catch (cause) {
     return { outcome: 'refused', reason: `the successor could not open its hand-over endpoint: ${String(cause)}` };
   }
   const close = closerFor(deps, server, endpoint, platform);
-  const answer = await tryHandOver(predecessorEndpoint, { successor: record }, deps.timers, deps.handOverIntervalMs);
+  const answer = await announceSuccessor(deps, predecessorEndpoint, record);
   if (!answer.acked) {
     await close();
     const why = answer.reason === undefined ? 'the running instance did not pass its record within the hand-over interval' : `the running instance refused to pass its record — ${answer.reason}`;

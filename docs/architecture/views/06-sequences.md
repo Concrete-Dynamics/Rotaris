@@ -99,13 +99,16 @@ sequenceDiagram
     R->>M: update.restart
     M->>S: spawn <artifact> builtin:update-successor -- <this endpoint>, detached
     S->>S: no claim; open its own endpoint (inheritInstance)
-    S->>M: {"successor": {pid, host, acquired_at, endpoint}}
-    M->>M: only while this restart waits (acceptSuccessor) — replace the record file atomically with the successor's fields (passRecord)
-    alt the record is not this instance's, or the replacement fails
-      M-->>S: {"ok":false,"reason":…} — the successor ends
+    S->>M: {"successor": {pid, host, acquired_at, endpoint}} — then waits ≤ the hand-over interval for the offer
+    M->>M: only while this restart waits (acceptSuccessor), and only while the record names this instance (passRecord)
+    M-->>S: {"record":"offered"} — the record is NOT yet passed
+    S->>M: {"ack":true} — still waiting; from here it waits for the last word with no bound of its own
+    M->>M: the acknowledgement within the hand-over interval (timer port), then replace the record atomically with the successor's fields
+    alt the successor closed before acknowledging, no acknowledgement within the interval, the record is not this instance's, or the replacement fails
+      M-->>S: {"ok":false,"reason":…} (if it is still there) — the successor ends; the record is as it was
       M->>M: onRecordPassFailed → the wait rejects → "Update not installed", nothing closes (REQ-STARTUP-121)
     end
-    M-->>S: {"ok":true,"record":"passed"}
+    M-->>S: {"ok":true,"record":"passed"} (should the connection end without it, the successor reads the record)
     M->>M: destroy the windows; the ordinary quit; close leaves a record that no longer names it
   else installer: spawn the setup, detached (REQ-STARTUP-125)
     M->>M: "Finish the update", no action; the window closes after ONE 1200 ms delay (REQ-STARTUP-119)
@@ -117,12 +120,16 @@ sequenceDiagram
 A successor that cannot be started surfaces through `Update not installed` and nothing closes; one that never
 signals leaves this instance holding its record and its window, with no timeout (REQ-STARTUP-121, ADR-0055). A
 successor that started and was accepted, but that the record cannot be passed to — the record no longer names this
-instance, or its atomic replacement fails — is answered `{"ok":false,"reason":…}` and ends; the claim reports it to
+instance, the successor stopped waiting (it closed before acknowledging the offer, or its acknowledgement did not arrive
+within the hand-over interval: its announcement was read after its own bound had expired, the predecessor's loop having
+been blocked), or its atomic replacement fails — is answered `{"ok":false,"reason":…}` if it is still there, and ends; the claim reports it to
 main (`onRecordPassFailed`), main's wait (`updater/successor.ts`) rejects with the reason, and the restart takes the
 same failure branch: `Update not installed`, nothing closes, the in-flight guard clears. A successor announcement that
 arrives while no restart is waiting — a sentinel launch nobody started — is answered `{"ok":false,"reason":…}`, the
 record is unchanged, nothing is reported to main, and that launch ends; the instance stays the only one
-(REQ-STARTUP-161).
+(REQ-STARTUP-161). **The pass is two steps (2026-09-28)** so the record is never rewritten for a successor that has
+stopped waiting: the offer, the acknowledgement within the interval, then the rewrite and `passed`. An ordinary launch's
+hand-over (REQ-STARTUP-162) is one line in and `{"ok":true}` out, unchanged.
 Nothing of the installation is moved or modified before the replacement is fetched whole and verified
 (REQ-STARTUP-126). The apply strategies and the restart are decided by unit tests over fakes; their run against a real
 Windows artifact is owed to the next Windows package (IC-3) — ADR-0054's "The updater" note says what was executed.

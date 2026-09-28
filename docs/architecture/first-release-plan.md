@@ -588,7 +588,11 @@ so that the next release can add the updater without stranding anyone.
 >
 > **Found beside it:** the built application's runtime opens `CONNECT redirector.gvt1.com:443` on its own — Chromium's
 > component updater — which REQ-STARTUP-160's disclosure cannot name
-> ([note](../defects/the-built-app-opens-a-connection-to-chromiums-component-updater.md)). **Raised:** OQ-83 (the
+> ([note](../defects/fixed/the-built-app-opens-a-connection-to-chromiums-component-updater.md)). *Repaired 2026-09-28
+> (R-062), and the cause corrected:* it was Electron's spellchecker fetching a Hunspell dictionary, not the component
+> updater; each session now has no dictionary and no spellchecker (`main/runtime-requests.ts`), and `pnpm updater-proof`
+> asserts zero connections from launch to first paint and quit (9 checks). OQ-93 raised (spell-checking a text field; OQ-91 on its branch, renumbered at the merge).
+> The packaged Windows build behind the same sink is owed to the next `pnpm package` (IC-3). **Raised:** OQ-83 (the
 > signature's form), OQ-84 (a packaged Windows build with neither a registry match nor the launcher's variable —
 > ADR-0054 says not updatable, REQ-STARTUP-106's copied-tree sentence says portable), OQ-85 (REQ-STARTUP-118 against
 > REQ-SHELL-118 on the download notice's title, persistence and the pause before the apply). **Two obligations the
@@ -610,7 +614,12 @@ so that the next release can add the updater without stranding anyone.
 > restart waiting for ever and every later update action `update.busy`; the claim now reports the refusal
 > (`onRecordPassFailed`), main's wait (`updater/successor.ts`) rejects, and `Update not installed` surfaces with the
 > reason (REQ-STARTUP-121). 162 unit cases in 15 files. A successor whose 5 s bound expired while the predecessor was
-> blocked can still be passed the record after it has gone — filed in `../defects/`, not repaired.
+> blocked can still be passed the record after it has gone — filed in `../defects/`, not repaired. *Repaired
+> 2026-09-28 (R-062):* the pass is two steps, offer then acknowledgement within the hand-over interval, and only then
+> the rewrite. A successor that stopped waiting leaves the record intact and fails the restart
+> (ADR-0055's *Amended 2026-09-28*;
+> [note](../defects/fixed/the-record-can-pass-to-a-successor-that-stopped-waiting.md)). The restart between two real
+> processes on Windows is still owed to the next package (IC-3).
 >
 > **Repaired the same day: the artifact variables stay with their launch.** `APPIMAGE` and `ROTARIS_PORTABLE_ARTIFACT`
 > stayed in main's environment and reached every child — observed in the built app, a scripted terminal call's shell

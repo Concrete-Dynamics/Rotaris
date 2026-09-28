@@ -57,7 +57,9 @@ control is a stop and which the final cancel, and what a rest does at the edges 
 (how a resumed iteration carries on where the directive gives the what and not the how), **OQ-71** (what the
 Continue action counts, where it says so, and which continues offer the decline) **and OQ-72** (which artifact
 REQ-SESSION-115's handoff carries, and who takes up an earlier offer), each stating the
-reading the build proceeds under. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+reading the build proceeds under. **All six were ruled on 2026-09-28** as recommended ([R-063](../product/requests.md#r-063)):
+by `PD-ORCH-005` revision 4, with `PD-ORCH-004` revision 4, `PD-ORCH-003` revision 2, `PD-CHAT-001` revision 4 and
+`PD-CHAT-002` revision 2. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -2912,6 +2914,11 @@ settled exactly as before.
 as narrowed by `paused`, as built; and whether a paused agent should present as `queued` or as a presentation state of
 its own (widening REQ-MONITOR-046's closed vocabulary), which would change the chip every agent surface draws for it.
 
+**Ruled 2026-09-28 — by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 4, [R-063](../product/requests.md#r-063).** The owner took both recommendations. REQ-MONITOR-211/213,
+REQ-SESSION-078/180 and REQ-MONITOR-014 join the Narrows list, as built, and each carries its back-pointer. A `paused`
+agent presents in a presentation state of its own, `paused`, and REQ-MONITOR-046 is narrowed to map it so (clause 13).
+Until that is built, a paused agent presents as `queued`, as the reading above says.
+
 **OQ-68 — Is the transcript drawn from the conversation record, and what of a model exchange does the record hold?** *(`PD-ORCH-005` clauses 1 and 12; REQ-MONITOR-248, REQ-SESSION-196, REQ-CHAT-046 and REQ-SESSION-029, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-005` revision 2 under [R-060](../product/requests.md#r-060).)*
 
 Clause 1 calls the conversation record "the record a resume is made from, and the same record a session's transcript
@@ -2949,6 +2956,12 @@ record's content and the transcript's rows one fact with one writer, at the pric
 projection — or whether the two stay parallel records of the same run, as built; and whether the record should also
 keep the system prompt and tool definitions each request carried, so a resume replays the instructions the agent had
 rather than the persona's current ones.
+
+**Ruled 2026-09-28 — by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 4, [R-063](../product/requests.md#r-063).** The owner took both recommendations. The transcript
+and the conversation record stay two records of one run, each written as the run happens, and clause 1's last sentence
+is replaced to say so. Each agent's record also keeps a fingerprint of the instructions and tools it started with; a
+resumed agent runs with its persona's current ones, and the run states, as a warning, when they changed (clause 14).
+Until that is built, a resume says nothing of a changed persona.
 
 **OQ-69 — Which control is a stop and which the final cancel, and what does a rest do at the edges the directive does not reach?** *(`PD-ORCH-005` clauses 2, 3, 8, 9, 10 and 11; REQ-MONITOR-009, REQ-MONITOR-126, REQ-MONITOR-130, REQ-MONITOR-092, REQ-SESSION-092, REQ-SESSION-108, REQ-SESSION-186, REQ-SESSION-025, REQ-ORCH-080, REQ-ORCH-135, REQ-GIT-094, REQ-TOOLS-063 and REQ-CHAT-101, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3 under [R-060](../product/requests.md#r-060) and [R-061](../product/requests.md#r-061).)*
 
@@ -3100,6 +3113,18 @@ REQ-ORCH-135, REQ-MONITOR-130, REQ-SESSION-108, REQ-TOOLS-063 and REQ-CHAT-101 s
 build reads them. Each would change a control's reach, a surface's offer or the record's traceability, and
 none is decided by the directive.
 
+**Ruled 2026-09-28 — by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 4 and [`PD-CHAT-002`](../product/directives.md#pd-chat-002) revision 2, [R-063](../product/requests.md#r-063).** The owner took every
+recommendation (clauses 15 and 16).
+- A forced stop is a stop.
+- A stop during a plan cycle ends the cycle's agents, and the plan gate keeps its hold.
+- One paused child may be cancelled while its session rests, confirmed as REQ-MONITOR-128 requires; REQ-MONITOR-063 is
+  narrowed.
+- `/stop` is the stop and is described as "Stop the active run"; REQ-CHAT-029 is narrowed.
+- REQ-ORCH-135, REQ-MONITOR-130, REQ-SESSION-108 and REQ-TOOLS-063 join the Narrows list, as the build reads them.
+- REQ-CHAT-101 is already narrowed by `PD-CHAT-002`, so its quit case is that directive's revision 2.
+
+Until they are built, a paused child is not cancellable at rest, and `/stop` keeps its old description.
+
 **OQ-70 — How does a resumed iteration carry on where the directive says what and not how?** *(`PD-ORCH-005` clauses 4, 5, 6, 7 and 10; PD-TOOLS-006 revision 2; REQ-ORCH-095, REQ-ORCH-088, REQ-ORCH-152, REQ-HOOKS-075 and REQ-MONITOR-125, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3 under [R-060](../product/requests.md#r-060) and [R-061](../product/requests.md#r-061).)*
 
 Clause 4 restores the iteration's agents "with their identity … and their conversation, and each carries on from its
@@ -3179,6 +3204,16 @@ the Continue action, and with it "continue without them"? And should a re-armed 
 resume, after it, or not at all — as built, the run that resumes is not held, and neither are the iterations it runs
 after the resumed one?
 
+**Ruled 2026-09-28 — by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 4 and [`PD-ORCH-003`](../product/directives.md#pd-orch-003) revision 2, [R-063](../product/requests.md#r-063).** The owner took every
+recommendation.
+- A continue's message is also a task, which closes with the resumed iteration (clause 17); REQ-ORCH-004 is narrowed.
+- A session a crash left offers the Continue action and "continue without them" (clause 18); REQ-MONITOR-125 is
+  extended.
+- A resumed iteration is never held at the plan gate, and a gate that would hold the run holds before its first new
+  iteration. That is `PD-ORCH-003` revision 2, since that directive already narrows REQ-ORCH-152.
+
+Until they are built, the readings above stand.
+
 **OQ-71 — What does the Continue action count, where does it say so, and which continues offer the decline?** *(`PD-ORCH-005` clause 6; REQ-SHELL-023, REQ-MONITOR-125 and REQ-SESSION-110, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3 under [R-060](../product/requests.md#r-060) and [R-061](../product/requests.md#r-061).)*
 
 Clause 6: "The Continue action SHALL state how many agents will resume, and SHALL offer to continue without them;
@@ -3239,6 +3274,16 @@ declined one. Whether PD-CHAT-001's body still keeps every composer control in t
 short label should be, if not `Message`. And whether the design material should draw the Continue action's paused
 state, which it does not.
 
+**Ruled 2026-09-28 — by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 4 and [`PD-CHAT-001`](../product/directives.md#pd-chat-001) revision 4, [R-063](../product/requests.md#r-063).** The owner took every
+recommendation.
+- The count includes the root, and "continue without them" is offered beside the Continue action alone, as built
+  (clause 19).
+- `PD-CHAT-001`'s body is revised: a notice and the action that belongs to it stand in the notices row below the dock.
+- The message continue's short label is `Send`, from the send pill it stands in for.
+- The design material is asked to draw the composer's paused state (`docs/design/README.md` §3.2).
+
+Until they are built, the label reads `Message`.
+
 **OQ-72 — Which artifact is REQ-SESSION-115's "latest orchestrator artifact", and how does a later root take up an offer?** *(`PD-ORCH-004` revision 3; REQ-SESSION-115, which `PD-ORCH-005` narrows for a resumed iteration and which nothing narrows here, and REQ-TOOLS-155, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-004` revision 3 with `PD-ORCH-005` under [R-059](../product/requests.md#r-059), and by the repair of `the-continuation-payload-says-no-artifact-is-recorded.md`.)*
 
 REQ-SESSION-115's handoff carries "at most 6000 characters for the latest orchestrator artifact against an
@@ -3292,6 +3337,15 @@ keeps its number across runs, nor how a later root learns an offer exists.
 leaving the line empty until it does. Whether the open offers belong in the handoff, which REQ-SESSION-115 defines as
 "artifact, todo, and progress context", or should reach a later root some other way — and whether a later iteration of
 the same run should be told of them too.
+
+**Ruled 2026-09-28 — by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 4 and [`PD-ORCH-004`](../product/directives.md#pd-orch-004) revision 4, [R-063](../product/requests.md#r-063).** The owner took both
+recommendations.
+- The handoff's artifact is the latest one the iteration's root published and, when the root published none, the latest
+  of any kind (clause 20).
+- The open offers stay in the handoff, and the root of each later iteration of the same run is told them too, once.
+
+Until they are built, the artifact is the latest of any kind, and a later iteration of the same run is told of no
+offer.
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

@@ -334,7 +334,13 @@ lives in `tools/release-naming`. What the build decided and found:
   `extraResources` (ADR-0054's note). **Owed; see §7.**
 - **electron-builder hyphenates a prerelease version** (`0.1.0rc1` → `0.1.0-rc1`), so step 5's prerelease would be named
   `Rotaris-0.1.0-rc1-…` unless §4.2/§4.5 render the name from the tag through `tools/release-naming`
-  (`../defects/a-prerelease-version-reaches-the-installer-hyphenated.md`).
+  (`../defects/fixed/a-prerelease-version-reaches-the-installer-hyphenated.md`). *Repaired 2026-09-28 (R-062; ADR-0054,
+  "The prerelease naming repair"): `pnpm package` renders the name from the declared text through `tools/release-naming`
+  and writes it as a literal into the configuration electron-builder runs with (`release/electron-builder.package.yml`);
+  `electron-builder.yml` carries no `artifactName`; `afterPack` refuses any other configured name and a new
+  `artifactBuildCompleted` hook any other produced file. The installer's own Windows metadata (`DisplayVersion`,
+  `ProductVersion`) still carries the normalised value — **OQ-80**. Unmeasured on a Windows package (IC-3): the next one
+  must show the lines ADR-0054 names.*
 - Two readings were raised rather than taken silently: **OQ-69**, whether the switched-off `browser` default counts
   (built: it does), and **OQ-70**, whether tag numbers are canonical decimals (built: they are).
 
@@ -345,7 +351,9 @@ the release on its own:
 1. guards — after `pnpm symbols`, which the version guard needs (it reads `@rotaris/config`, whose kernel re-exports
    the generated symbols; without them it fails closed), and as `pnpm release:guard <tag>`;
 2. the notices step;
-3. `pnpm package` on a `windows-latest` x64 runner;
+3. `pnpm package` on a `windows-latest` x64 runner — it renders the installer's name from the declared version itself
+   (§4.1's repair of 2026-09-28), so the workflow passes it nothing about names; the tag must equal the declared text
+   exactly, which stage 1 has already decided;
 4. portable assembly;
 5. manifest and signature;
 6. the release body.
@@ -477,7 +485,8 @@ Two facts from §4.3 bear on this step:
 was run here (IC-3).
 
 **4.5 The portable and its launcher stub.** REQ-STARTUP-031 names two Windows artifacts, so the portable is part of
-the first release. The stub is ADR-0054's second build technology and has never been built. It is the largest
+the first release. Its name is `artifactName(declared, 'portable')` from the same declared text `pnpm package` reads
+(`scripts/lib/artifact-names.mjs`, `declaredProductVersion`), never a version electron-builder has normalised (2026-09-28). The stub is ADR-0054's second build technology and has never been built. It is the largest
 unknown in this plan, so its spike is taken as the first act of building it (CLAUDE.md), and the result goes
 back into ADR-0054. Dropping the portable would need a further directive. This plan does not propose one.
 
@@ -571,7 +580,8 @@ supply, and each stays owed (R-053). O-11 is the same kind of item: a review onl
    - ~~§2.2 `/skills`;~~ **built 2026-09-27** (§2.2's first-execution note);
    - ~~§3.2 the latency measurement plus §3.3 the injection proof;~~ **built 2026-09-27** (the Windows gate-class
      reading owed);
-   - ~~§4.1 the version guard~~ **built 2026-09-27**. It found that **the setup manifest is owed and scheduled nowhere**.
+   - ~~§4.1 the version guard~~ **built 2026-09-27**; *the prerelease naming defect it found repaired 2026-09-28 (R-062),
+     unmeasured on a Windows package (IC-3)*. It found that **the setup manifest is owed and scheduled nowhere**.
      The manifest has to exist, with Git, ripgrep, the language servers and the `@playwright/mcp` pin
      (`REQ-STARTUP-058/059`), before §5's first check can pass. §4.3's section is generated from the same file, so
      that step is where it most naturally lands, and it lands packed: an `extraResources` entry, and either the

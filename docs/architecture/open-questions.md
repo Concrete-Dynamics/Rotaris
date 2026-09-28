@@ -71,7 +71,10 @@ full license text": a licence file that only pointed elsewhere, or only carried 
 counted as the text, and 4 components without text became 12); the four were raised as OQ-66 to OQ-69 on their own branch and renumbered when they reached `main`
 after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71. **Two more were raised on 2026-09-28 by building `PD-TOOLS-005` (R-062): OQ-76** (which timeline word records a run's user going away and returning — REQ-ORCH-139 closes the vocabulary and it has none, so the build writes both transitions to the session log) **and OQ-77** (whether the away state resolves the approval an `ask_questions` call itself needs under the `ask` preset, which keeps every question from an away user under the default preset), **and one by its verification: OQ-78** (whether an approval already outstanding when the first wait expires keeps its own full wait, as built, or is ended with the directive's reason). **And one more the same day by repairing REQ-WORKSPACE-045's decoding half: OQ-79** (whether a `SKILL.md` that cannot be decoded as UTF-8 is an "unreadable file"
 under REQ-WORKSPACE-053, which names the reason without saying what encoding a skill file has; built as one, skipped with the
-decoder's error — raised as OQ-76 on its branch and renumbered at the merge, OQ-76 to OQ-78 having been taken on `main`). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+decoder's error — raised as OQ-76 on its branch and renumbered at the merge, OQ-76 to OQ-78 having been taken on `main`). **And one more the same day by repairing the prerelease naming defect (R-062): OQ-80** (whether REQ-STARTUP-158 reaches the Windows
+installer's own version metadata — `DisplayVersion`, `ProductVersion` and the uninstall display name, which electron-builder
+writes from its normalised `0.1.0-rc1` while the artifact's name carries the declared `0.1.0rc1` — raised as OQ-76 on its branch
+and renumbered at the merge, OQ-76 to OQ-79 having been taken on `main`). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -3308,6 +3311,27 @@ half already used, where it used to load the skill with U+FFFD in its text. If t
 the walk's skip arm stays for the I/O half, and the decode becomes lenient for `SKILL.md` alone. The cases are pinned in
 `packages/config/src/skills/skills.test.ts` ("REQ-WORKSPACE-053 — a SKILL.md that is not UTF-8, through the real port
 (OQ-79)"), the walk's and the hand-loaded one's.
+
+**OQ-80 — Does REQ-STARTUP-158's "every artifact … SHALL declare … that same version" reach the Windows installer's own version metadata?** *(REQ-STARTUP-158, REQ-STARTUP-018, REQ-STARTUP-027, REQ-STARTUP-031. Raised 2026-09-28 by repairing the prerelease naming defect, R-062; `docs/defects/fixed/a-prerelease-version-reaches-the-installer-hyphenated.md` Raised as OQ-76 on its branch; renumbered OQ-80 at the merge, because OQ-76 to OQ-79 were already on `main`.)*
+
+A prerelease is written without a separator (`0.1.0rc1`, REQ-STARTUP-027), and after the repair every published filename
+carries that text and the running application reports it. electron-builder still normalises the manifest's version through
+loose SemVer when it reads it, and the NSIS installer's own metadata is written from that normalised value: the `VERSION`
+define, which becomes the per-user uninstall entry's `DisplayVersion` that REQ-STARTUP-018 names and the uninstall display
+name `Rotaris 0.1.0-rc1`; the `ProductVersion` version key; and `VIProductVersion`, which Windows fixes as four numbers
+(`0.1.0.0`) and so can carry no suffix in any spelling. A stable version is identical in every place.
+
+**What the build proceeds under.** The installer's Windows metadata carries electron-builder's normalised value, stated in
+`electron-builder.yml`'s header and in ADR-0054; the artifact's name and its run-time report carry the declared text, which
+is what REQ-STARTUP-158 points at (REQ-STARTUP-031 "is where the version appears in each artifact's name") and what the
+guard of REQ-STARTUP-028 compares. `extraMetadata.version` was not used to force the text through: ADR-0054 decided that
+either it or `buildVersion` would be a second place a version is declared.
+
+**What a ruling decides.** Whether `DisplayVersion` and `ProductVersion` are "declaring" the release's version in
+REQ-STARTUP-158's sense. If they are, the pipeline must write the declared text over them — a custom NSIS include with a
+`WriteRegStr` of `DisplayVersion` and a `VIAddVersionKey ProductVersion`, which electron-builder allows — and the guard
+gains a place to check in the produced installer; if they are not, the spelling Windows shows in "Installed apps" for a
+prerelease is `0.1.0-rc1` and the record says so.
 
 ## Design-reference dependencies
 

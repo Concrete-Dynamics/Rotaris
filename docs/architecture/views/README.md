@@ -45,6 +45,16 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-28**
 
+**A prerelease's installer is named from the declared version (2026-09-28, R-062).** `pnpm package` now reads the manifest's
+`version` as written (`0.1.0rc1`), renders the installer's name through `tools/release-naming` and writes it as a literal into
+the configuration electron-builder runs with (`release/electron-builder.package.yml`); `electron-builder.yml` carries no
+`artifactName`, whose `${version}` was the normalised `0.1.0-rc1`. `build-hooks.cjs` compares the configured names and, in a
+new `artifactBuildCompleted` hook, the produced file against the same text. The **process view**'s row for the manifest's
+`version` gains `pnpm package` among its readers, and the **component view**'s section on the scripts' shared modules gains
+`scripts/lib/artifact-names.mjs`, which both scripts load and which reaches `tools/release-naming`. No package, edge,
+process, channel, message kind or store column changed.
+The installer's own Windows metadata stays normalised — OQ-80.
+
 **One machine-wide directory for both discoveries, and a strict decode at the port (REQ-WORKSPACE-045, 051, 053; built
 2026-09-28, R-062).** `SkillRootsEnv` gains `machineDir`, so REQ-WORKSPACE-051's fourth user-scope root is
 `<machineDir>/skills` where it was the literal `/etc/codex/skills`; the literal now lives once, in

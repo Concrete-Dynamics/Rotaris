@@ -215,7 +215,8 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     };
   }
 
-  function sessionsWith(script: (persona: string, turn: number, req: ModelRequest) => ScriptedCall, over: { cap?: number | null; childTimeoutMs?: number; childStallTimeoutMs?: number; tool?: TestTool } = {}) {
+  /** `pending`: request ids every port reports as its own live approval or question set, so an id-routed answer finds a holder. */
+  function sessionsWith(script: (persona: string, turn: number, req: ModelRequest) => ScriptedCall, over: { cap?: number | null; childTimeoutMs?: number; childStallTimeoutMs?: number; tool?: TestTool; pending?: ReadonlySet<string> } = {}) {
     // The scripted client answers by persona and by the number of calls that persona has made.
     const counts = new Map<string, number>();
     const client = new ScriptedModelClient([]);
@@ -244,7 +245,8 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
         built.push({ persona: ctx.persona, mode: selected });
         contexts.set(ctx.agentName, ctx);
         let mode: PermissionPreset = selected;
-        const base = { cancelPending: () => 0, setMode: (m: string) => { const previous = mode; mode = m as PermissionPreset; return { requested: mode, effective: mode, downgraded: false, reason: '', previous }; }, currentMode: () => mode, answerApproval: () => false };
+        const held = (id: string): boolean => over.pending?.has(id) ?? false;
+        const base = { cancelPending: () => 0, setMode: (m: string) => { const previous = mode; mode = m as PermissionPreset; return { requested: mode, effective: mode, downgraded: false, reason: '', previous }; }, currentMode: () => mode, answerApproval: held, answerQuestions: held, cancelQuestions: held };
         return ctx.delegation
           ? { ...delegationPort(ctx.delegation, ctx.parentId ?? 'root', over.tool, ctx), ...base }
           : { specs: () => [], dispatch: async () => ({ text: '', isError: true, status: 'failed', durationMs: 0, label: '', args: {} }), ...base };
@@ -528,6 +530,42 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(next).not.toBe(presence);
       expect(next.away()).toBeNull();
       expect(presence.away()).toEqual({ afterSeconds: 5 });
+    });
+
+    it('the user returns on a confirmed transcript clear, a compression, and an approval or question answer the run holds', async () => {
+      const hold = gate();
+      const { sessions, contexts } = sessionsWith((persona, turn) => {
+        if (persona !== 'orchestrator') return answer('unused');
+        if (turn === 1) return toolCalls([{ callId: 'w0', name: 'write_file', args: { path: 'unanswered.ts', content: 'a' } }, { callId: 'r1', name: 'read_file', args: { path: 'hold' } }]);
+        return answer(`root turn ${turn}`);
+      }, {
+        tool: (name, a, ctx) => (name === 'read_file' ? hold.p.then(() => ({ text: 'held', isError: false, status: 'ok' as const, durationMs: 1, label: name, args: a })) : gateStandIn(name, a, ctx)),
+        pending: new Set(['live-approval', 'live-questions', 'cancelled-questions']),
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'build the thing') as { value: SessionId }).value;
+      await tick();
+      const presence = contexts.get('orchestrator')!.presence!;
+      expect(presence.away()).toEqual({ afterSeconds: 5 });
+      // REQ-MONITOR-004 / REQ-CHAT-084: the confirmed clear is an operation on the live run, answered before `control`'s common line.
+      expect(sessions.control({ op: 'clearTranscript', sessionId: sid, args: {} }).ok).toBe(true);
+      expect(presence.away()).toBeNull();
+      // REQ-MONITOR-092: the compression the host awaits reaches `controlAsync`, never `control`; the return is taken before it settles.
+      presence.markAway(5);
+      const compressing = sessions.controlAsync({ op: 'forceCompression', sessionId: sid, args: {} });
+      expect(presence.away()).toBeNull();
+      await compressing;
+      // ADR-0013: answers routed by request id — the session whose run holds the id is the one whose user returns.
+      presence.markAway(5);
+      expect(sessions.answerApproval('live-approval', 'once')).toBe(true);
+      expect(presence.away()).toBeNull();
+      presence.markAway(5);
+      expect(sessions.answerQuestions('live-questions', {})).toBe(true);
+      expect(presence.away()).toBeNull();
+      presence.markAway(5);
+      expect(sessions.cancelQuestions('cancelled-questions')).toBe(true);
+      expect(presence.away()).toBeNull();
+      hold.open();
+      expect((await sessions.running(sid)!).status).toBe('completed');
     });
   });
 

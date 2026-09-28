@@ -69,7 +69,7 @@ reviewed-exceptions table may supply an identifier a dependency does not declare
 runtime). **One more was raised the same day by that generator's gate review: OQ-75** (when a component carries "its
 full license text": a licence file that only pointed elsewhere, or only carried a licence's per-file notice, had
 counted as the text, and 4 components without text became 12); the four were raised as OQ-66 to OQ-69 on their own branch and renumbered when they reached `main`
-after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71. **Two more were raised on 2026-09-28 by building `PD-TOOLS-005` (R-062): OQ-76** (which timeline word records a run's user going away and returning — REQ-ORCH-139 closes the vocabulary and it has none, so the build writes both transitions to the session log) **and OQ-77** (whether the away state resolves the approval an `ask_questions` call itself needs under the `ask` preset, which keeps every question from an away user under the default preset). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71. **Two more were raised on 2026-09-28 by building `PD-TOOLS-005` (R-062): OQ-76** (which timeline word records a run's user going away and returning — REQ-ORCH-139 closes the vocabulary and it has none, so the build writes both transitions to the session log) **and OQ-77** (whether the away state resolves the approval an `ask_questions` call itself needs under the `ask` preset, which keeps every question from an away user under the default preset), **and one by its verification: OQ-78** (whether an approval already outstanding when the first wait expires keeps its own full wait, as built, or is ended with the directive's reason). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -3208,6 +3208,10 @@ Apache-2.0 or MPL-2.0 the honest answer is that the text is obtainable and the p
 would change REQ-STARTUP-143's route for such a component, and it would close `tqdm`'s gap as well. Until then,
 eight of O-11's twelve reviews are for a notice or a pointer.
 
+**Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
+
+The key is registered with default 20 and minimum 1. Each background session publishes its own `bg:<id>` stream at up to 50 frames/s (the 20 ms floor), so the produced aggregate is `(agents + background sessions) × 50 frames/s`, and only one of those two factors — agents, REQ-MONITOR-285's 20 — has a ceiling. Part AL reads the key into the manager and caps the *delivered* rate per window at 1,000 frames/s by merging (REQ-MONITOR-306, REQ-SHELL-103), so a user who configures 400 background sessions saturates the run-host → main pipe, not a renderer. A stated maximum on the key would let the produced rate be computed rather than absorbed. The owner's call; recorded, not resolved.
+
 **OQ-76 — Which timeline word records that a run's user went away, and came back?** *(REQ-ORCH-139, REQ-SESSION-142,
 `PD-TOOLS-005`. Raised 2026-09-28 by building `PD-TOOLS-005` under [R-062](../product/requests.md#r-062).)*
 
@@ -3251,9 +3255,26 @@ who is away in the approval sense and may still answer one. Recommendation: exem
 from the away resolution and nothing else; a question is the one prompt the directive means to keep, and the preset's
 decision on the call otherwise stands.
 
-**Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
+**OQ-78 — Does an approval already queued when the first wait expires still get its own full wait?**
+*(`PD-TOOLS-005`, REQ-TOOLS-052, REQ-TOOLS-055. Raised 2026-09-28 by the verification of the `PD-TOOLS-005` build under
+[R-062](../product/requests.md#r-062).)*
 
-The key is registered with default 20 and minimum 1. Each background session publishes its own `bg:<id>` stream at up to 50 frames/s (the 20 ms floor), so the produced aggregate is `(agents + background sessions) × 50 frames/s`, and only one of those two factors — agents, REQ-MONITOR-285's 20 — has a ceiling. Part AL reads the key into the manager and caps the *delivered* rate per window at 1,000 frames/s by merging (REQ-MONITOR-306, REQ-SHELL-103), so a user who configures 400 background sessions saturates the run-host → main pipe, not a renderer. A stated maximum on the key would let the produced rate be computed rather than absorbed. The owner's call; recorded, not resolved.
+The directive says every further approval that would prompt in the run resolves at once once one wait has ended by
+timeout. The gate consults the away state when it brokers an ask, before a wait exists. An ask brokered *before* the
+first wait expired already has its wait running: it was put to the user (published, and shown or queued behind the
+first dialog in main), so the build does not cut it short, and its own expiry is not a second transition. With several
+agents asking concurrently, each such ask can still cost a full `runtime.approval_timeout_seconds` after the first —
+the cost the directive exists to remove, reduced from one per ask to one per ask *already outstanding* at the first
+expiry.
+
+**What the build proceeds under.** The reading stated in the directive's first-execution note: a wait already running
+when the user was marked away runs to its own end; only asks brokered afterwards resolve at once.
+
+**What a ruling decides.** Whether marking the user away also ends the waits already outstanding in that run (each
+resolved under `runtime.headless_approval_policy` with the directive's reason, its dialog withdrawn), or whether a
+request that has reached the user keeps its own full wait. Recommendation: end the outstanding waits too, with the
+directive's reason — a request queued behind an unanswered dialog was never seen, and the directive's intent is that
+one unanswered approval costs one timeout.
 
 ## Design-reference dependencies
 

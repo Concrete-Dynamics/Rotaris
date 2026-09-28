@@ -29,7 +29,8 @@ directive is built.
 per run, handed to every agent's port through `ToolPortContext.presence`) when a brokered wait ends by timeout, and while
 it is marked resolves every further ask that would prompt at once under `runtime.headless_approval_policy`, with the
 decision source `headless-policy` and a reason naming the timeout that expired; the user returns on their first input
-to the session (`packages/engine/src/sessions.ts` — the top of `control`, `controlAsync`, the id-routed answers). In
+to the session (`packages/engine/src/sessions.ts` — the top of `control` and its `clearTranscript` branch,
+`controlAsync`, the id-routed answers). In
 this run the second `write_file` ask would have been refused at once: two unanswered asks cost one timeout, not two.
 Pinned by `packages/agent-tools/src/gate.test.ts` ("PD-TOOLS-005: … the first ask waits the full timeout … the second
 resolves at once with the directive's reason" — still waiting at 4,999 ms, marked at 5,000, the second ask with no wait

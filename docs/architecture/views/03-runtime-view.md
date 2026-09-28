@@ -474,9 +474,12 @@ never marks it) and, while it is marked, resolves every ask that would prompt at
 `runtime.headless_approval_policy`, source `headless-policy`, with a reason naming the timeout that expired and never
 "no approval UI"; a session that has genuinely lost its presenter is still reported with REQ-TOOLS-065's own reason,
 checked first. The return is one line at the top of `control` — before the operation is judged, so a message the
-operation then refuses still returns the user — plus `controlAsync`'s `forceCompression` and the id-routed
-`answerApproval` / `answerQuestions` / `cancelQuestions`, which return the user of the session that held the id. A new
-run installs a fresh holder, so no run starts away. Both transitions are session-log lines at `WARNING`
+operation then refuses still returns the user — plus the `clearTranscript` branch, which `control` answers ahead of that
+line for both of REQ-CHAT-084's routes and which returns the user only when a run is live, `controlAsync`'s
+`forceCompression` and the id-routed `answerApproval` / `answerQuestions` / `cancelQuestions`, which return the user of
+the session that held the id. The terminal-stream operations (keystrokes, resize, interrupt, kill) reach
+`run-host/terminal.ts` by stream id and never `Sessions`, so they do not return the user — a reading, stated in the
+directive's note. A new run installs a fresh holder, so no run starts away. Both transitions are session-log lines at `WARNING`
 (REQ-SESSION-142); the timeline vocabulary has no word for them (REQ-ORCH-139, **OQ-76**). Questions (REQ-TOOLS-158)
 still prompt and wait where the call is permitted; under the `ask` preset the question tool's own dispatch is an
 approval ask, which the away state resolves (**OQ-77**).

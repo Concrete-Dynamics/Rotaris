@@ -1172,7 +1172,8 @@ export class Sessions {
     if (req.op === 'editTodo' && (!run || run.isEnded)) return this.editStoredTodo(s, req);
     // Part AO: the clear reaches a loaded session with or without a run (REQ-CHAT-084's two routes); the compression
     // pass is asynchronous and answered by `controlAsync` — a synchronous caller gets the refusal it would get with no run.
-    if (req.op === 'clearTranscript') return this.clearTranscript(s, req);
+    // PD-TOOLS-005: a confirmed clear on a live run is the user's input to it too (REQ-MONITOR-004, REQ-CHAT-084).
+    if (req.op === 'clearTranscript') { if (run && !run.isEnded) s!.presence.returned(); return this.clearTranscript(s, req); }
     if (req.op === 'forceCompression') return { ok: false, refusal: { code: 'no_run', message: 'No run is active.' } };
     if (!run || run.isEnded) return { ok: false };
     // PD-TOOLS-005: input the user sends to a live run's session — an answer, a message, a run control, a mode change —

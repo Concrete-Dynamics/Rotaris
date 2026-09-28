@@ -50,9 +50,11 @@ per run, `UserPresence` (`engine/run/presence.ts`), installed by `Sessions.start
 override and handed to every agent's port through `ToolPortContext.presence`, a delegated child's included. The gate
 (`GateDeps.presence`, passed by `run-host/tools.ts`) marks it when a brokered wait ends by timeout and, while it is
 marked, resolves every ask that would prompt at once under the headless policy with a reason naming the timeout that
-expired; the user returns on the first input to the run's session, wired at the top of `Sessions.control`, in
-`controlAsync` and in the id-routed answers. The **runtime view** gains a clause in §3 and a paragraph after §5's table;
-the **sequences view** gains one bullet in §2. No package, edge, process, channel, message kind or store column changed;
+expired; the user returns on the first input to the run's session, wired at the top of `Sessions.control` and in its
+`clearTranscript` branch, in `controlAsync` and in the id-routed answers. The **runtime view** gains a clause in §3 and a
+paragraph after §5's table; the **sequences view** gains one bullet in §2; the **state-ownership view** gains a volatile
+row for the run's away mark — owned by the run host, set only by the gate's timeout arm, cleared only by `Sessions`'
+input arms, never persisted. No package, edge, process, channel, message kind or store column changed;
 the two transitions are session-log lines because the timeline vocabulary has no word for them (OQ-76).
 
 **A session approval of a file write covers that path (`PD-TOOLS-004`, built 2026-09-27, R-057).** A grant made by

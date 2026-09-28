@@ -1582,9 +1582,17 @@ waiting for them; answering or writing anything to the session ends that.
 > holder, `UserPresence` (`packages/engine/src/run/presence.ts`), reaching the gate through `ToolPortContext.presence`
 > and `GateDeps.presence`. It ends with the run because the next run installs a fresh one; nothing resets it, and a
 > delegated child reads the same object its root's expired wait marked. **(2) Where input arrives.** Every control on
-> a live run passes one line at the top of `Sessions.control`, so the return is wired there, before the operation is
-> judged: input the operation then refuses (a blank message) still returns the user, because the directive counts the
-> input and not its success. `announceShutdown` is excluded — it is the application's, not the user's. The asynchronous
+> a live run but one passes one line at the top of `Sessions.control`, so the return is wired there, before the
+> operation is judged: input the operation then refuses (a blank message) still returns the user, because the directive
+> counts the input and not its success. `announceShutdown` is excluded — it is the application's, not the user's. The
+> one control that does not pass that line is the confirmed transcript clear (REQ-CHAT-084, one of REQ-MONITOR-004's
+> operations on a live run), which `control` answers ahead of it because the clear also reaches a loaded idle session;
+> its branch returns the user when a run is live. *The first cut stated that every control passed the common line and
+> missed the clear; the build's verification found it, and the branch and its engine case were added in the same round.*
+> The terminal-stream operations REQ-MONITOR-004 also counts (keystrokes, resize, interrupt, kill) reach
+> `run-host/terminal.ts` by stream id and never `Sessions`, so typing into an agent's terminal does not return the user —
+> a reading: the directive names answers, messages, run controls and a mode change, and a terminal stream is the
+> agent's process, not the run's controls. The asynchronous
 > `forceCompression` and the id-routed answers (`answerApproval`, `answerQuestions`, `cancelQuestions`) return the user
 > of the session that held the id, whichever session the request addressed; a stale id held by none returns nobody. A
 > new message with no run active is `prompt`, which launches a continuation run — a fresh holder, so it starts present
@@ -1601,7 +1609,8 @@ waiting for them; answering or writing anything to the session ends that.
 > user. The clause is built as read — it governs the question the executor raises, which still prompts and waits
 > wherever the call is permitted — and the tension is raised as [OQ-77](../architecture/open-questions.md).
 > **Readings taken where the text leaves room:** a second wait already running when the first expired is not cut short
-> (it was already put to the user) and its own expiry is not a second transition; the return clears the mark before the
+> (it was already put to the user) and its own expiry is not a second transition — with concurrent agents that can
+> still cost a second full timeout, raised as [OQ-78](../architecture/open-questions.md); the return clears the mark before the
 > operation is judged; a session with no presenter is still reported with REQ-TOOLS-065's own reason, checked ahead of
 > the away state, because it is the truer statement; the reason's `<N>` is REQ-TOOLS-052's own figure, the timeout in
 > seconds as that reason prints it. **What was measured:** unit tests only. Five gate cases over the fake clock in
@@ -1609,10 +1618,12 @@ waiting for them; answering or writing anything to the session ends that.
 > no wait created and nothing presented; the `abort` variant with and without a hook; a timeout of 0 through a day and a
 > cancellation, never marking; a permitted question waiting while away, a rule's allow and a rule's deny untouched, and
 > the `ask`-preset question denied; the presenter-less precedence. One real-port case in `run-host/tools.test.ts`: the
-> configured 300 s wait expiring, the next ask presented to nobody with the exact reason, the return brokered again. Two
+> configured 300 s wait expiring, the next ask presented to nobody with the exact reason, the return brokered again. Three
 > engine cases in `children/children.test.ts`: a delegated child's port reading the mark the root's expired wait set, on
 > the one holder; the return on a mode change, on a message the operation refuses and on a run control, a stale answer id
-> returning nobody, and a continuation run starting present on a fresh holder. Two on the holder itself. Mutations: with
+> returning nobody, and a continuation run starting present on a fresh holder; and the return on a confirmed clear
+> during the live run, on the awaited compression, and on an approval answer, a question answer and a question
+> cancellation the run holds — each of those five return lines, taken out alone, fails that case. Two on the holder itself. Mutations: with
 > the away arm taken out of `broker`, four cases fail (the port case and three gate cases, each by waiting for an
 > approval nobody answers); with the `markAway` call taken out of the timeout arm, the first-ask case and the port case
 > fail on a null mark. **What was not measured:** no built-app run exercised the mechanism. `pnpm questions-proof` and

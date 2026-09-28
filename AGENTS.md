@@ -56,7 +56,7 @@ wrong.
 | | `transcript-proof` | the projection, the caches, the empty state (ADR-0045/0046), and REQ-CHAT-055's append comparison — alternating launches pooled to thirty a side, in frames and milliseconds with their spread, plus one traced launch of each fixture read back by `lib/trace-summary.mjs` |
 | | `rows-proof` | the one row renderer, in both of its surfaces at once |
 | | `composer-proof` | the composer's chips, drafts, history recall and run header |
-| | `slash-proof` | the composer's slash-command catalogue |
+| | `slash-proof` | the composer's slash-command catalogue; every eval is read by offset AND expression (`lib/capture-evals.mjs`), and REQ-CHAT-027's ground is the first opaque background from the input up; **red on the product** since the composer dock: the partial shade is corrected against `--rt-bg` and painted on `--rt-surface` (`docs/defects/the-slash-token-colours-clear-their-floor-on-a-ground-the-composer-no-longer-paints.md`) |
 | | `chat-controls-proof` | manual compression, the transcript clear, the prompt-file commands |
 | | `palette-proof` | one action vocabulary reaching the screen three ways |
 | | `notice-proof` | the notice store and its chain (ADR-0049) |

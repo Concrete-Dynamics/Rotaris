@@ -32,7 +32,14 @@ races the presentation against its own wait. A queued request that times out or 
 counts as cancelled; a withdrawal withdraws it; an answer given elsewhere is honoured. `close` releases a request still
 queued and tells main to drop it.
 
+The repair's first cut left one route to a hang, found by the orchestrator's review of that round: a request acknowledged
+as queued had no bound, and a window that closed while the application stayed (another main window open) dropped its
+queue with its record, so nothing ever settled the request, against REQ-TOOLS-064's "never a hang". `MainWindows` now
+hands a closing window's queued requests to main (`unshownApprovals`), which answers each `approval.shown` not shown, so
+the gate denies it as REQ-TOOLS-058 says, as the 10 s bound did before. During the application's quit it answers nothing,
+and the run host's shutdown withdraws them (`PD-ORCH-005` clause 9).
+
 Evidence: `gate.test.ts` (two "queued request" cases), `tools.test.ts` ("RunHostPresenter"), and `main-windows.test.ts`
-("answers whether a queued approval waits…"), each red against the unrepaired code. In the built app, with the
+("answers whether a queued approval waits…" and "a closing window hands over the requests still queued…"), each red against the unrepaired code. In the built app, with the
 reviewer's script in ask mode, the root's second `delegate` waited 36 s behind child one's `write_file` dialog and was
 presented when that dialog was answered.

@@ -89,7 +89,7 @@ function harness(options: {
     return { cancel: () => { pending.cancelled = true; } };
   };
 
-  const dependencies: MainWindowsDependencies<MemoryWindow, string, string> = {
+  const dependencies: MainWindowsDependencies<MemoryWindow, string, string, string> = {
     adapter,
     timers: { after },
     currentDirectory: () => options.cwd ?? 'C:/cwd',
@@ -112,6 +112,7 @@ function harness(options: {
     },
     reportFailure: (windowId, title) => notices.push({ windowId, title }),
     log: (message) => actions.push(`log:${message}`),
+    unshownApprovals: (approvals) => { actions.push(`unshown:${approvals.join(',')}`); },
   };
 
   const mainWindows = new MainWindows<MemoryWindow, string, string, string, string>(dependencies);
@@ -269,6 +270,25 @@ describe('MainWindows', () => {
     h.mainWindows.setOpenDialog(win.wcId, null);
     expect(h.mainWindows.enqueueApproval(win.wcId, 'third')).toBe(true);
     expect(h.mainWindows.enqueueApproval(win.wcId + 999, 'nobody')).toBe(false);
+  });
+
+  it('REQ-TOOLS-063/064: a closing window hands over the requests still queued for its dialog, so none is left to hang', async () => {
+    const h = harness();
+    const first = await h.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });
+    const second = await h.mainWindows.build({ workspace: 'C:/b', origin: 'open-request' });
+    h.mainWindows.enqueueApproval(first.wcId, 'shown');
+    h.mainWindows.takeApproval(first.wcId, () => 0);
+    h.mainWindows.setOpenDialog(first.wcId, 'dialog of shown');
+    h.mainWindows.enqueueApproval(first.wcId, 'queued-1');
+    h.mainWindows.enqueueApproval(first.wcId, 'queued-2');
+    h.windows.get(first.wcId)!.destroyed = true;
+    h.windows.get(first.wcId)!.closedListeners[0]!();
+    expect(h.actions.filter((action) => action.startsWith('unshown:'))).toEqual(['unshown:queued-1,queued-2']);
+    expect(h.mainWindows.approvalQueue(first.wcId)).toEqual([]);
+    // A window that closes with nothing queued hands over nothing.
+    h.windows.get(second.wcId)!.destroyed = true;
+    h.windows.get(second.wcId)!.closedListeners[0]!();
+    expect(h.actions.filter((action) => action.startsWith('unshown:'))).toHaveLength(1);
   });
 
   it('destroys and cleans up a window if loading fails after registration', async () => {

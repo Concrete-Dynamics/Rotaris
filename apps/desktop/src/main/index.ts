@@ -1045,6 +1045,13 @@ async function main(): Promise<void> {
       else raiseNotice('error', title);
     },
     log,
+    // REQ-TOOLS-063/064: a request queued behind a closing window's dialog is never shown there, and the run host no
+    // longer bounds its wait, so main says so — REQ-TOOLS-058's presenter-error denial — rather than leave it to hang.
+    // PD-ORCH-005 clause 9: a quit's closing windows answer nothing; the run host's shutdown withdraws the request.
+    unshownApprovals: (approvals) => {
+      if (quitting()) return;
+      for (const approval of approvals) void runHost.request({ kind: 'approval.shown', requestId: approval.request_id, ok: false, error: 'its main window closed before it was shown' }, millis(5_000)).catch(() => undefined);
+    },
   });
   /**
    * REQ-SHELL-109: "when a stream changes while the window is closed, the preference is on, and that stream is running,

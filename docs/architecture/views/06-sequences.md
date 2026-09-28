@@ -136,7 +136,9 @@ The parts that are easy to get wrong:
   either by showing it or, when it waits behind the open dialog, with `approval.queued`. A queued request then waits
   for its turn without that bound (REQ-TOOLS-063). The gate races the presentation against its own wait, so a queued
   request that times out or is cancelled is dropped unshown and counts as cancelled (REQ-TOOLS-054), and one answered
-  elsewhere is honoured. *Until the fourteenth review round of the merged revision 4 build, main acknowledged only
+  elsewhere is honoured. A window that closes while the application stays hands its queued requests to main
+  (`MainWindows`' `unshownApprovals`), which answers each `approval.shown {ok: false}`; during a quit it answers
+  nothing, and the shutdown withdraws them. *Until the fourteenth review round of the merged revision 4 build, main acknowledged only
   what it showed, so a request queued behind a dialog left open for 10 s was denied unshown:
   `docs/defects/fixed/a-queued-approval-is-denied-unshown-after-ten-seconds.md`.*
 - Only an **answer, a cancellation or a withdrawal** releases the wait. A wait with no limit is still released —

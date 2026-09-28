@@ -57,7 +57,9 @@ approval note say so. No package, edge, process, channel or command changes.
 
 **A crash offers the same choice as a pause (`PD-ORCH-005` clause 18, 2026-09-28, R-064).** `Sessions.continueSession`
 accepts a session a crash left — `interrupted`, or persisted busy and `not-live` (REQ-CHAT-008's recovery state) — beside
-`paused`, and refuses a busy one whose process may still be running it (`run-active`). The composer draws the two
+`paused`, and refuses a busy one whose process may still be running it (`run-active`) and, first, any session whose
+store has failed (`store-failed`, as the continue by message is: a run ended on a recording failure is not a crash, OQ-42).
+The composer draws the two
 continues and "Continue without them" on it (`crashLeft`), with the same count; either choice records the crash first,
 in `launchContinuation`. Readings in OQ-76. The **runtime view**'s §5 Continue paragraph and the **process view**'s
 `session.continue` note are updated; the command's shape does not change, and no package, edge, process or channel does.

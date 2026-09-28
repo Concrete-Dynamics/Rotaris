@@ -557,10 +557,14 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
    * nothing, and the quit withdraws the approval (clause 9)"; PD-CHAT-002 revision 2: a question the quit dismisses is
    * withdrawn, never cancelled. The directive decides this "in each case", a plan cycle among them: the cycle's agents end
    * and no interruption is recorded of them, but what waits on a person is withdrawn by the stop or the quit (OQ-81).
+   * The explicit cancel is final (clause 3), and a stop the run raises itself (`agent_session_aborted`: a recording
+   * failure, the headless abort hook, an escalation) is neither: both still cancel the wait (REQ-TOOLS-052).
    */
   describe('PD-ORCH-005 clause 15: a wait inside a plan cycle is withdrawn by the stop or the quit', () => {
-    for (const how of ['stop', 'quit', 'cancel'] as const) it(how === 'cancel'
+    for (const how of ['stop', 'quit', 'cancel', 'raised'] as const) it(how === 'cancel'
       ? 'the explicit cancel while the plan turn waits on a person cancels the wait and withdraws nothing (clause 3: it is final)'
+      : how === 'raised'
+      ? 'a stop the run raises itself while the plan turn waits on a person cancels the wait and withdraws nothing (no one stopped it)'
       : `a ${how} while the plan turn waits on a person withdraws the wait by \`${how}\` and cancels nothing`, async () => {
       const released = { cancelled: 0, withdrawn: [] as string[] };
       let waiting = false;
@@ -584,10 +588,12 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
       let closed: Promise<void> | null = null;
       if (how === 'stop') expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
       else if (how === 'cancel') expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: 'run' } })).toEqual({ ok: true });
+      // What the tool context's `abortRun` does (the headless abort hook), and a recording failure's writer.onFailed.
+      else if (how === 'raised') sessions.run(sid)!.stop.request('agent_session_aborted');
       else closed = sessions.closeAll();
       await sessions.running(sid);
       await closed;
-      if (how === 'cancel') {
+      if (how === 'cancel' || how === 'raised') {
         expect(released.withdrawn).toEqual([]);
         expect(released.cancelled).toBeGreaterThan(0);
         return;

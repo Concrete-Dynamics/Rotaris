@@ -1546,10 +1546,16 @@ export class Sessions {
    * process is live, or whose liveness is unknown, is refused: another process may still be running it. Either choice
    * records the crash first, as any continue does (clause 8), because `launchContinuation` records it before it resumes
    * or declines the open iteration. Readings in OQ-76.
+   *
+   * A session the store's failure left busy (OQ-42) reads `not-live` too — its run ended in this process — but it did not
+   * crash, and nothing can be recorded of it: every continue is refused `store-failed` until the reopen rebuilds the
+   * writer, as the continue by message (`prompt`) and the plan decision are (OQ-76).
    */
   continueSession(sessionId: SessionId, action: 'continue' | 'double' | 'cancel', opts: { readonly withoutPaused?: boolean } = {}): Result<{ readonly resumed: boolean; readonly messageLimit: number | null }, { readonly code: string; readonly reason: string }> {
     const s = this.live.get(sessionId);
     if (!s) return err({ code: 'not-live', reason: `${sessionId} is not a live session` });
+    const storeFailure = SessionWriter.storeFailure(s.dal) ?? s.writer.failed;
+    if (storeFailure) return err({ code: 'store-failed', reason: `The workspace store requires recovery before continuing work: ${storeFailure}` });
     if (s.run && !s.run.isEnded) return err({ code: 'run-active', reason: 'A run is already active.' });
     const stored = s.dal.getSession(sessionId);
     if (!stored) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });

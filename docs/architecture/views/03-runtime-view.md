@@ -609,8 +609,9 @@ describing every continue that resumes them, on a `paused` session, on one a cra
 REQ-CHAT-008's recovery state, and "Continue without them" beside it, behind a confirmation. A session a crash left —
 `interrupted`, or in the recovery state (`not-live` by REQ-GIT-093's predicate) — offers both continues and the decline
 as a `paused` one does, and `Sessions.continueSession` accepts it, refusing a busy session whose process may still be
-running it (`run-active`); either choice records the crash first, in `launchContinuation` (PD-ORCH-005 clause 18,
-OQ-76). The strip
+running it (`run-active`) and, first of all, one whose store has failed (`store-failed`, as `prompt` and `planDecision`
+refuse it: a run ended on a recording failure reads `not-live` too, but did not crash, OQ-42); either choice records the
+crash first, in `launchContinuation` (PD-ORCH-005 clause 18, OQ-76). The strip
 keeps its one band, its two continues showing short labels as the send pill does — `Continue` and `Send`, named
 `Continue run` and `Continue with a message` (`PD-CHAT-001` revision 4).
 

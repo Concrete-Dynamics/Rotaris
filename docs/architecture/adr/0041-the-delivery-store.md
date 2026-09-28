@@ -952,6 +952,7 @@ unmeasured here, because that button is `REQ-TRACE-465`'s and no surface in this
 > paragraph above describes the release before the directive. REQ-TRACE-469's guarantee holds unchanged: the unlimited
 > wait still ends at once with the quit. REQ-TRACE-464's "SHALL cancel" is read through clause 3's quit; OQ-81 records
 > that no directive yet names it.
+
 The five panes are **built and exported and nothing in this branch hosts them**: the board that mounts them is Part
 AK′'s, in a worktree of its own, so this row's proof drives the panes' pure halves and the mechanism beneath them,
 never a mounted pane. That is the seam the merge closes, and it is the one thing in this note that a reader should

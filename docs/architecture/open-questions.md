@@ -3365,6 +3365,19 @@ say what the decline's wording means before the crash is recorded.
   `crashLeft`: `interrupted`, or busy with `needsRecovery` (the session list's `stale`). `paused_message_limit` and
   `awaiting_plan_decision` are durable holds, not busy statuses, so a crash does not make them crash-left. They keep
   their own continues (clause 11).
+- **A session the store's failure left busy is not one a crash left.** A run that ends on a recording failure (OQ-42)
+  leaves the durable status busy and this process's lock with no run behind it, so the liveness predicate reads
+  `not-live`, the session list marks it `stale`, and the renderer's `crashLeft` draws the two continues on it. It did not
+  crash, and nothing can be recorded of it. `Sessions.continueSession` therefore refuses every continue on it
+  `store-failed` ("The workspace store requires recovery before continuing work"), as `Sessions.prompt` and the plan
+  decision already do, so the Continue action, the decline and the continue by message all refuse the same state the
+  same way. The guard stands first in `continueSession`, so a `paused` session under a store failure is refused too,
+  where it was accepted before. The recovery is OQ-42's: restore storage and reopen the session, which rebuilds the
+  writer. After the reopen the session is busy with nothing running it, which is REQ-CHAT-008's recovery state, and a
+  continue then records the crash as for any other. The renderer does not tell this state apart: it knows nothing of
+  the writer's failure beyond the recording-failure notice, whose action is the reopen. *The first build accepted such a
+  session and reported `{resumed: true}` against the failed writer, where the same call had been refused `not-paused`
+  before clause 18; the round-2 review found it.*
 - **The actions at the message limit.** A crash-left session is not at the message limit, so it takes `action` as a
   manually paused session does. `continue` and `double` continue it; `cancel` leaves it as it is.
 - **Nothing open to resume.** A crash-left session with no open iteration draws the two continues where the send pill
@@ -3392,7 +3405,8 @@ say what the decline's wording means before the crash is recorded.
 **What a ruling decides.** Whether a busy session of unknown liveness should also be continuable, for example after a
 confirmation, rather than refused. Whether a crash-left session should state something of its own in the notices row,
 where a paused session states its pause. Whether a crash that left a durable hold should offer anything beyond that
-hold's own continues.
+hold's own continues. Whether the composer should withhold the continues on a session the store's failure left busy,
+rather than draw them and have the engine refuse them.
 
 **OQ-81 — What does the audit of clause 15, clause 19, PD-CHAT-001 revision 4 and PD-CHAT-002 revision 2 leave undecided?** *(`PD-ORCH-005` clauses 3, 9, 11, 15 and 19 (revision 4); `PD-CHAT-001` revision 4, "The strip" and "The paused continues"; `PD-CHAT-002` revision 2; REQ-CHAT-029, REQ-CHAT-005, REQ-CHAT-021, REQ-CHAT-169, REQ-MONITOR-004, REQ-SESSION-186, REQ-TOOLS-063, REQ-CHAT-101 and REQ-TRACE-464. Raised 2026-09-28 by building `PD-ORCH-005` revision 4, `PD-CHAT-001` revision 4 and `PD-CHAT-002` revision 2 under [R-064](../product/requests.md#r-064).)*
 

@@ -1580,7 +1580,8 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
              * 5); a continue by message resumes. On a session a crash left too (clause 18). */
             <div className="composer__resume" data-testid="composer-resume">
               <span id="composer-resume-count" className="composer__hint" data-testid="composer-resume-count">{resumeCountText(resumable.agents)}</span>
-              {(session?.executionStatus === 'paused' || crashLeft) && onContinue && (
+              {/* `resumable` is set only on a paused session or one a crash left, so the decline needs only its handler. */}
+              {onContinue && (
                 <>
                   <DesignButton type="button" className="btn btn-ghost btn-compact" data-testid="composer-continue-without" onClick={() => setConfirming('decline')}
                     title={declineText(resumable.agents)} aria-describedby="composer-decline-hint">Continue without them</DesignButton>

@@ -43,7 +43,14 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-09-27**
+## Last reconciled with the code: **2026-09-28**
+
+**The setup manifest (REQ-STARTUP-058/059, `first-release-plan.md` §4.1, built 2026-09-28).**
+`apps/desktop/resources/setup-manifest.json` exists — Git and ripgrep as the requirement pins them, the `@playwright/mcp`
+pin the guard checks, the language servers as `pins.json` declares them — and `electron-builder.yml` packs it. Its schema
+is `config`'s `setup-manifest.ts`, read by the pre-build guard now and by the machine-setup flow when that is built. The
+**component view** gains a section and its `config` node names the schema. No package, edge, process, channel, message
+kind or store column changed; `config` gains the `zod` dependency `contracts` already carries.
 
 **A session approval of a file write covers that path (`PD-TOOLS-004`, built 2026-09-27, R-057).** A grant made by
 "approve for session" on a call of the public `write_file` or `haet_edit` (`haet` folded in) now stores the set of

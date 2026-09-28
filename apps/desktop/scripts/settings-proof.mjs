@@ -188,7 +188,6 @@ const aboutRows = Object.fromEntries(rows(noWorkspace.probes, '[data-testid="abo
 // (`tools/release-guard`), never Electron's own — this unpacked build read "v44.1.1" until `main/version.ts`.
 const declaredVersion = JSON.parse(readFileSync(join(app, 'package.json'), 'utf8')).version;
 if (aboutRows.Version !== `v${declaredVersion}`) throw new Error(`the Version row read "${aboutRows.Version}", not the declared v${declaredVersion}`);
-if (!/^v\d/.test(aboutRows.Version ?? '')) throw new Error(`the Version row did not carry a version: ${JSON.stringify(aboutRows)}`);
 // REQ-SHELL-140: with no build asset where the app reads it, the row is the em dash rather than an invented identifier.
 if (aboutRows.Build !== '—') throw new Error(`the Build row was "${aboutRows.Build}", not the em dash`);
 if (aboutRows.Publisher !== 'Concrete Dynamics UG (haftungsbeschränkt)') throw new Error(`the publisher row was "${aboutRows.Publisher}"`);

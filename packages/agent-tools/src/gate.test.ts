@@ -61,7 +61,7 @@ function recordingSink() {
   return { sink, decisions, requested, issues, timeline, opens, settles, pending, warnings };
 }
 
-function harness(opts: { preset?: string; attended?: boolean; presenter?: PresenterPort | null; headless?: 'deny' | 'abort'; abortHook?: (() => void) | null; timeoutMs?: number; extraExecutors?: [string, ReturnType<typeof simpleExecutor>][]; hooks?: ToolHooks | null; planGateHeld?: boolean; planGateWithheldNames?: readonly string[]; writeClaimFor?: GateDeps['writeClaimFor']; root?: string; publicTool?: GateDeps['publicTool']; resolvePath?: GateDeps['resolvePath'] } = {}) {
+function harness(opts: { preset?: string; attended?: boolean; presenter?: PresenterPort | null; headless?: 'deny' | 'abort'; abortHook?: (() => void) | null; timeoutMs?: number; extraExecutors?: [string, ReturnType<typeof simpleExecutor>][]; hooks?: ToolHooks | null; planGateHeld?: boolean; planGateWithheldNames?: readonly string[]; writeClaimFor?: GateDeps['writeClaimFor']; root?: string; publicTool?: GateDeps['publicTool']; resolvePath?: GateDeps['resolvePath']; presence?: GateDeps['presence'] } = {}) {
   const clock = new FakeClock();
   const rec = recordingSink();
   const approvals = new PendingApprovals(clock);
@@ -82,6 +82,7 @@ function harness(opts: { preset?: string; attended?: boolean; presenter?: Presen
     planGateHeld: () => opts.planGateHeld ?? false,
     planGateWithheldNames: () => new Set(opts.planGateWithheldNames ?? []),
     ...(opts.writeClaimFor ? { writeClaimFor: opts.writeClaimFor } : {}),
+    ...(opts.presence ? { presence: opts.presence } : {}),
   });
   const call = (name: string, args: unknown): ToolCall => ({ callId: `c-${name}`, name, rawArgs: typeof args === 'string' ? args : (args as Record<string, unknown>), persona: 'orchestrator', agentId: 'orchestrator', agentName: 'orchestrator' });
   return { gate, clock, rec, approvals, policy, executed, call };
@@ -585,5 +586,145 @@ describe('write scopes at dispatch (PD-TOOLS-006)', () => {
     await h.gate.dispatch(h.call('terminal', { command: 'echo src/api/users.ts' }), new AbortController().signal);
     await h.gate.dispatch(h.call('todo', { operation: 'list' }), new AbortController().signal);
     expect(claims.asked).toEqual(['src/ui/view.ts']);
+  });
+});
+
+/**
+ * PD-TOOLS-005: after one approval wait ends by timeout, the run treats the user as away and every further ask that
+ * would prompt resolves at once under the headless policy, until the user's next input. The holder is the engine's
+ * (one per run, on every agent's port); here it is a stand-in with the same two methods, so each clause is decided
+ * against the gate alone.
+ */
+describe('PD-TOOLS-005: after one unanswered approval, a run treats the user as away', () => {
+  const presence = () => {
+    let mark: { afterSeconds: number } | null = null;
+    return { away: () => mark, markAway: (afterSeconds: number) => { mark ??= { afterSeconds }; }, returned: () => { mark = null; } };
+  };
+  const write = (h: ReturnType<typeof harness>, path: string, s = new AbortController().signal) => h.gate.dispatch(h.call('write_file', { operation: 'create', path }), s);
+  const ASKED = "No rule matched; permission mode 'ask' defaults to ask.";
+
+  it('the first ask waits the full timeout with REQ-TOOLS-052\'s reason and marks the user away with that timeout; the second resolves at once with the directive\'s reason', async () => {
+    const p = presence();
+    const h = harness({ timeoutMs: 5_000, presence: p });
+    const first = write(h, 'a.txt');
+    await Promise.resolve();
+    expect(h.rec.requested[0]).toMatchObject({ resolver: 'brokered', timeout_seconds: 5, unattended_reason: '' });
+    // Not a second early: the full wait is paid, and the user is not away while it runs.
+    h.clock.advance(4_999);
+    expect(h.approvals.size).toBe(1);
+    expect(p.away()).toBeNull();
+    h.clock.advance(1);
+    const r1 = await first;
+    expect(r1.status).toBe('blocked');
+    expect(h.rec.decisions[0]).toMatchObject({ source: 'timeout', request_id: 'req1' });
+    expect(h.rec.decisions[0]!['reason']).toBe(`${ASKED} Denied because no answer arrived within 5 seconds.`);
+    expect(p.away()).toEqual({ afterSeconds: 5 });
+
+    // The second ask: no wait is created, nothing is presented, the decision is the headless policy's with the away reason.
+    const r2 = await write(h, 'b.txt');
+    expect(r2.status).toBe('blocked');
+    expect(h.approvals.size).toBe(0);
+    expect(h.rec.requested).toHaveLength(2);
+    expect(h.rec.requested[1]).toMatchObject({ resolver: 'headless', timeout_seconds: null, unattended_reason: 'headless-policy' });
+    expect(h.rec.decisions[1]).toMatchObject({ decision: 'deny', source: 'headless-policy', rule_id: 'preset:ask', request_id: h.rec.requested[1]!['request_id'] });
+    expect(h.rec.decisions[1]!['reason']).toBe(`${ASKED} The user is treated as away because an earlier approval in this run went unanswered for 5 seconds, so the request was denied.`);
+    expect(String(h.rec.decisions[1]!['reason'])).not.toMatch(/No approval UI/);
+    expect(r2.blockedReason).toBe(h.rec.decisions[1]!['reason']);
+    // The autopsy reads the cause from the permission_denied issue the deny records.
+    expect(h.rec.issues.at(-1)).toMatchObject({ kind: 'permission_denied' });
+    expect(String(h.rec.issues.at(-1)!['message'])).toContain('treated as away');
+    expect(h.executed).toHaveLength(0);
+
+    // The user returns (the engine clears the holder on their input): the next ask is brokered and waits again.
+    p.returned();
+    const third = write(h, 'c.txt');
+    await Promise.resolve();
+    expect(h.rec.requested[2]).toMatchObject({ resolver: 'brokered', timeout_seconds: 5 });
+    expect(h.approvals.size).toBe(1);
+    h.approvals.resolve(String(h.rec.requested[2]!['request_id']), 'once');
+    expect((await third).status).toBe('ok');
+  });
+
+  it('under `abort` the away ask is refused, the abort hook is invoked, and the reason says so without claiming no approval UI exists', async () => {
+    const p = presence();
+    p.markAway(300);
+    let aborted = 0;
+    const h = harness({ headless: 'abort', abortHook: () => { aborted += 1; }, presence: p });
+    const r = await write(h, 'a.txt');
+    expect(r.status).toBe('blocked');
+    expect(aborted).toBe(1);
+    expect(h.rec.decisions[0]).toMatchObject({ source: 'headless-policy' });
+    expect(h.rec.decisions[0]!['reason']).toBe(`${ASKED} The user is treated as away because an earlier approval in this run went unanswered for 300 seconds, so the request was denied and the headless approval policy aborts the run.`);
+    // No hook registered: REQ-TOOLS-065's degrade to deny, with the away reason.
+    const h2 = harness({ headless: 'abort', presence: p });
+    const r2 = await write(h2, 'a.txt');
+    expect(r2.blockedReason).toBe(`${ASKED} The user is treated as away because an earlier approval in this run went unanswered for 300 seconds, so the request was denied.`);
+    expect(h2.rec.warnings[0]).toMatch(/degrading to deny/);
+  });
+
+  it('a timeout of 0 waits without limit and never marks the user away (REQ-TOOLS-055)', async () => {
+    const p = presence();
+    const h = harness({ timeoutMs: 0, presence: p });
+    const first = write(h, 'a.txt');
+    await Promise.resolve();
+    h.clock.advance(24 * 3_600_000);
+    expect(h.approvals.size).toBe(1);
+    expect(p.away()).toBeNull();
+    // Released by a cancellation, as before: still not a timeout, still not away.
+    expect(h.approvals.cancelAll()).toBe(1);
+    expect((await first).status).toBe('blocked');
+    expect(h.rec.decisions[0]).toMatchObject({ source: 'cancelled' });
+    expect(p.away()).toBeNull();
+    const second = write(h, 'b.txt');
+    await Promise.resolve();
+    expect(h.rec.requested[1]).toMatchObject({ resolver: 'brokered', timeout_seconds: 0 });
+    expect(h.approvals.size).toBe(1);
+    h.approvals.resolve(String(h.rec.requested[1]!['request_id']), 'once');
+    expect((await second).status).toBe('ok');
+  });
+
+  it('a question still prompts and waits while the user is away (REQ-TOOLS-158/178), and asks a rule resolves without prompting are unaffected', async () => {
+    const p = presence();
+    p.markAway(300);
+    const questions = new PendingQuestions(new FakeClock());
+    const ask = askQuestionsTool({ pending: questions, conversationId: 'root', agentId: 'orchestrator', timeoutMs: 300_000, publish: () => true });
+    const h = harness({ presence: p, extraExecutors: [['ask_questions', ask]] });
+    // A question whose call is permitted reaches its executor and WAITS on the user-prompt channel, untouched by the
+    // away state: under `autonomous` nothing asks, so the call is permitted outright.
+    const h2 = harness({ preset: 'autonomous', presence: p, extraExecutors: [['ask_questions', ask]] });
+    const pending = h2.gate.dispatch(h2.call('ask_questions', { steps: [{ id: 'a', title: 'A', options: [{ id: 'x', label: 'X' }] }] }), new AbortController().signal);
+    await Promise.resolve(); await Promise.resolve();
+    expect(questions.pending()).toHaveLength(1);
+    expect(h2.rec.requested).toHaveLength(0);
+    const id = questions.pending()[0]!.request_id;
+    expect(questions.resolve(id, { a: { selected_option: 'x', freeform_text: null } })).toBe(true);
+    const answered = await pending;
+    expect(answered.status).toBe('ok');
+    expect(answered.text).toContain('## User Answers');
+    // A rule that allows: the read-only class executes without an approval and without the away state being consulted.
+    const g = await h.gate.dispatch(h.call('grep', { pattern: 'x' }), new AbortController().signal);
+    expect(g.status).toBe('failed'); // the stand-in executor throws — it RAN, which is the point
+    expect(h.rec.decisions.at(-1)).toMatchObject({ decision: 'allow', rule_id: 'ask:read-only-tool' });
+    // A rule that denies: the rule's own source and reason, not the headless policy's.
+    const d = await h.gate.dispatch(h.call('terminal', { command: 'rm -rf build' }), new AbortController().signal);
+    expect(d.status).toBe('blocked');
+    expect(h.rec.decisions.at(-1)).toMatchObject({ decision: 'deny', rule_id: 'starter:deny-recursive-delete', source: 'rule' });
+    expect(h.rec.requested).toHaveLength(0);
+    // The reading taken, raised as OQ-77: `ask_questions` is outside REQ-TOOLS-007's read-only class, so under the
+    // `ask` preset its own dispatch is an APPROVAL ask, and that ask is one the away state resolves at once — the
+    // question is never put to the user. The directive's "questions still prompt" clause governs the question the
+    // executor raises, and is reachable only where the call itself is permitted.
+    const q = await h.gate.dispatch(h.call('ask_questions', { steps: [{ id: 'b', title: 'B' }] }), new AbortController().signal);
+    expect(q.status).toBe('blocked');
+    expect(q.blockedReason).toBe(`${ASKED} The user is treated as away because an earlier approval in this run went unanswered for 300 seconds, so the request was denied.`);
+    expect(questions.pending()).toHaveLength(0);
+  });
+
+  it('a session with no presenter is still reported as such: REQ-TOOLS-065\'s reason, not the away one', async () => {
+    const p = presence();
+    p.markAway(300);
+    const h = harness({ attended: false, presence: p });
+    const r = await write(h, 'a.txt');
+    expect(r.blockedReason).toBe(`${ASKED} No approval UI is available in this host, so the request was denied.`);
   });
 });

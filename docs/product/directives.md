@@ -1583,6 +1583,64 @@ waiting for them; answering or writing anything to the session ends that.
 
 *Raised by the owner, 2026-09-23; logged as [R-048](requests.md#r-048).*
 
+> **First execution, 2026-09-28, built under [R-062](requests.md#r-062):** the mechanism was built as written, and the
+> text met the code in five places. **(1) Where the state lives.** No per-run fact reached every agent's gate before
+> this; the mode override (REQ-TOOLS-075) had exactly the shape wanted — one holder per run, installed by `Sessions.start`
+> and by every continuation, handed to each agent's port context as it is built — so the away state is a second such
+> holder, `UserPresence` (`packages/engine/src/run/presence.ts`), reaching the gate through `ToolPortContext.presence`
+> and `GateDeps.presence`. It ends with the run because the next run installs a fresh one; nothing resets it, and a
+> delegated child reads the same object its root's expired wait marked. **(2) Where input arrives.** Every control on
+> a live run but one passes one line at the top of `Sessions.control`, so the return is wired there, before the
+> operation is judged: input the operation then refuses (a blank message) still returns the user, because the directive
+> counts the input and not its success. `announceShutdown` is excluded — it is the application's, not the user's. The
+> one control that does not pass that line is the confirmed transcript clear (REQ-CHAT-084, one of REQ-MONITOR-004's
+> operations on a live run), which `control` answers ahead of it because the clear also reaches a loaded idle session;
+> its branch returns the user when a run is live. *The first cut stated that every control passed the common line and
+> missed the clear; the build's verification found it, and the branch and its engine case were added in the same round.*
+> The terminal-stream operations REQ-MONITOR-004 also counts (keystrokes, resize, interrupt, kill) reach
+> `run-host/terminal.ts` by stream id and never `Sessions`, so typing into an agent's terminal does not return the user —
+> a reading: the directive names answers, messages, run controls and a mode change, and a terminal stream is the
+> agent's process, not the run's controls. The asynchronous
+> `forceCompression` and the id-routed answers (`answerApproval`, `answerQuestions`, `cancelQuestions`) return the user
+> of the session that held the id, whichever session the request addressed; a stale id held by none returns nobody. A
+> new message with no run active is `prompt`, which launches a continuation run — a fresh holder, so it starts present
+> by construction. **(3) What the event says.** REQ-EVENTS-049 fixes `unattended_reason` at exactly one value,
+> `headless-policy`, on every `headless` request, so the `approval.requested` event of an away ask is indistinguishable
+> from a presenter-less one; the cause is stated where this directive puts it, in the decision's reason, which the
+> `permission_denied` issue carries into the store an autopsy reads. **(4) Where the transitions are recorded.**
+> REQ-ORCH-139 closes the timeline vocabulary and neither it nor domain 05's permission events has a word for the user's
+> presence, so both transitions are session-log lines (REQ-SESSION-142) at `WARNING`, the default level — the end of an
+> away stretch is as much an autopsy fact as its start, and one written below the default level would leave the stretch
+> looking open; a timeline word is raised as [OQ-76](../architecture/open-questions.md). **(5) The question clause under
+> `ask`.** `ask_questions` is outside REQ-TOOLS-007's read-only class, so under the `ask` preset its own dispatch is an
+> approval ask, and that ask is one the away state resolves at once: under the default preset no question reaches an away
+> user. The clause is built as read — it governs the question the executor raises, which still prompts and waits
+> wherever the call is permitted — and the tension is raised as [OQ-77](../architecture/open-questions.md).
+> **Readings taken where the text leaves room:** a second wait already running when the first expired is not cut short
+> (it was already put to the user) and its own expiry is not a second transition — with concurrent agents that can
+> still cost a second full timeout, raised as [OQ-78](../architecture/open-questions.md); the return clears the mark before the
+> operation is judged; a session with no presenter is still reported with REQ-TOOLS-065's own reason, checked ahead of
+> the away state, because it is the truer statement; the reason's `<N>` is REQ-TOOLS-052's own figure, the timeout in
+> seconds as that reason prints it. **What was measured:** unit tests only. Five gate cases over the fake clock in
+> `gate.test.ts`: the full wait paid (still waiting at 4,999 ms, marked at 5,000) and the second ask's exact reason with
+> no wait created and nothing presented; the `abort` variant with and without a hook; a timeout of 0 through a day and a
+> cancellation, never marking; a permitted question waiting while away, a rule's allow and a rule's deny untouched, and
+> the `ask`-preset question denied; the presenter-less precedence. One real-port case in `run-host/tools.test.ts`: the
+> configured 300 s wait expiring, the next ask presented to nobody with the exact reason, the return brokered again. Three
+> engine cases in `children/children.test.ts`: a delegated child's port reading the mark the root's expired wait set, on
+> the one holder; the return on a mode change, on a message the operation refuses and on a run control, a stale answer id
+> returning nobody, and a continuation run starting present on a fresh holder; and the return on a confirmed clear
+> during the live run, on the awaited compression, and on an approval answer, a question answer and a question
+> cancellation the run holds — each of those five return lines, taken out alone, fails that case. Two on the holder itself. Mutations: with
+> the away arm taken out of `broker`, four cases fail (the port case and three gate cases, each by waiting for an
+> approval nobody answers); with the `markAway` call taken out of the timeout arm, the first-ask case and the port case
+> fail on a null mark. **What was not measured:** no built-app run exercised the mechanism. `pnpm questions-proof` and
+> `pnpm plan-gate-proof`, the proofs nearest this path, could not launch the app on this host: each spawns Electron
+> without the harness's `hostSwitches`, and as root Chromium exits `SIGTRAP` with "Running as root without --no-sandbox
+> is not supported" — the harness reason another item sweeps, not repaired here. No live run was made, so the reason's
+> wording has not met a real model, and run `1ddeb71b`'s two waits have not been replayed. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-orch-004"></a>

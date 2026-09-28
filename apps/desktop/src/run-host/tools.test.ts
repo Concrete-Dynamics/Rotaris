@@ -6,7 +6,7 @@ import { asSessionId, FakeClock, mintMachineId } from '@rotaris/kernel';
 import { TOOL_IMPLEMENTATIONS, type ApprovalPayload, type PermissionPreset } from '@rotaris/contracts';
 import { loadConfiguration } from '@rotaris/config';
 import { anySchema, gitReadTool, permissivePolicyRead, simpleExecutor, TodoList, todoTool, type ToolExecutor } from '@rotaris/agent-tools';
-import { SessionWriter, type ToolPortContext } from '@rotaris/engine';
+import { SessionWriter, UserPresence, type ToolPortContext } from '@rotaris/engine';
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import { personaResolverFor, runtimeFromConfiguration, type ConfiguredRun } from './configuration.js';
 import type { McpHost } from './mcp.js';
@@ -113,15 +113,18 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
   afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
 
   const presented: ApprovalPayload[] = [];
-  function portFor(pin: string | null, modeOverride: string | null, extra: Pick<ToolPortContext, 'writeClaimFor' | 'planGateHeld'> = {}, surface: { tools?: string; mcp?: readonly ToolExecutor[] } = {}) {
+  /** The port's clocks, advanced by the PD-TOOLS-005 case to expire an approval wait. */
+  let portClock = new FakeClock();
+  function portFor(pin: string | null, modeOverride: string | null, extra: Pick<ToolPortContext, 'writeClaimFor' | 'planGateHeld' | 'presence'> = {}, surface: { tools?: string; mcp?: readonly ToolExecutor[] } = {}) {
     mkdirSync(join(dir, '.rotaris'), { recursive: true });
     writeFileSync(join(dir, '.rotaris', 'agents.yaml'), yaml(pin, surface.tools ?? null));
     const loaded = loadConfiguration({ globalDir: join(dir, 'global'), workspaceRoot: dir });
     if (!loaded.ok) throw new Error('configuration');
     const cfg = loaded.value;
     const resolver = personaResolverFor(cfg, true, (m) => warnings.push(m));
+    portClock = new FakeClock();
     const deps: ToolPortDeps = {
-      clocks: new FakeClock(), runtime: () => runtimeFromConfiguration(cfg), personas: () => resolver,
+      clocks: portClock, runtime: () => runtimeFromConfiguration(cfg), personas: () => resolver,
       presenter: { present: async (p) => { presented.push(p); return { ok: true }; }, close: () => undefined },
       nextSequence: () => 1, fileStates: new Map(), terminal: null,
       egress: () => permissivePolicyRead,
@@ -136,6 +139,40 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
       requestedMode: 'ask', modeOverride, attended: () => true, warn: (m) => warnings.push(m), abortRun: () => undefined, ...extra,
     }, deps);
   }
+
+  /**
+   * PD-TOOLS-005 through the real port: the engine's away holder reaches the gate, which marks it when the configured
+   * wait (`runtime.approval_timeout_seconds`, 300 s here) expires unanswered and, while it is marked, resolves the next
+   * ask at once with the directive's reason and presents nothing. The return is the engine's (`sessions.ts`); here the
+   * holder is cleared directly, and the following ask is brokered again.
+   */
+  it('PD-TOOLS-005: the run\'s away holder reaches the gate — marked by the expired wait, read before the next prompt, brokered again after the return', async () => {
+    const lines: string[] = [];
+    const presence = new UserPresence({ record: (m) => lines.push(m) });
+    const port = portFor(null, null, { presence });
+    const call = (id: string, path: string) => ({ callId: id, name: 'write_file', rawArgs: JSON.stringify({ operation: 'create', path, content: 'x' }), persona: 'coding-agent', agentId: 'coding-agent', agentName: 'coding-agent' });
+    const first = port.dispatch(call('c1', 'a.txt'), new AbortController().signal);
+    await vi.waitFor(() => expect(presented).toHaveLength(1));
+    portClock.advance(299_999);
+    expect(presence.away()).toBeNull();
+    portClock.advance(1);
+    const r1 = await first;
+    expect(r1).toMatchObject({ status: 'blocked', isError: true });
+    expect(r1.blockedReason).toMatch(/Denied because no answer arrived within 300 seconds\.$/);
+    expect(presence.away()).toEqual({ afterSeconds: 300 });
+    expect(lines[0]).toMatch(/^user away: an approval in this run went unanswered for 300 seconds/);
+    const r2 = await port.dispatch(call('c2', 'b.txt'), new AbortController().signal);
+    expect(presented).toHaveLength(1);
+    expect(r2.status).toBe('blocked');
+    expect(r2.blockedReason).toBe("No rule matched; permission mode 'ask' defaults to ask. The user is treated as away because an earlier approval in this run went unanswered for 300 seconds, so the request was denied.");
+    expect(existsSync(join(dir, 'b.txt'))).toBe(false);
+    presence.returned();
+    const third = port.dispatch(call('c3', 'c.txt'), new AbortController().signal);
+    await vi.waitFor(() => expect(presented).toHaveLength(2));
+    expect(port.answerApproval(presented[1]!.request_id, 'once')).toBe(true);
+    expect((await third).status).toBe('ok');
+    expect(existsSync(join(dir, 'c.txt'))).toBe(true);
+  });
 
   it('PD-TOOLS-006: the engine\'s write-claim predicate reaches the gate, which refuses a claimed write before it runs', async () => {
     const asked: string[] = [];

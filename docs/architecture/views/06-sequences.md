@@ -47,9 +47,9 @@ sequenceDiagram
     alt not updatable (a source-tree or development launch, a payload run without its launcher) or a demo window
       M->>M: one application-log line at info; NO request (REQ-STARTUP-106/057/150)
     else a released artifact, no operation in flight
-      M->>M: delete a portable's leftover <name>.old (REQ-STARTUP-115)
+      M->>M: first check of the launch only — delete a portable's leftover <name>.old (REQ-STARTUP-115)
       M-->>M: GET the one endpoint, 10 s, Accept header (REQ-STARTUP-105)
-      Note over M: a strictly newer release carrying this flavour's exact asset<br/>and not the waved-off version → the offer notice (REQ-STARTUP-107/108/109/116);<br/>every failure one log line, never a surface (REQ-STARTUP-110)
+      Note over M: a strictly newer release carrying this flavour's exact asset<br/>and not the waved-off version → the offer notice (REQ-STARTUP-107/108/109/116);<br/>an update already installed or handed off in this process is not offered again (REQ-STARTUP-119);<br/>every failure one log line, never a surface (REQ-STARTUP-110)
     end
     MW->>WS: open(root) — fork one service per workspace
     WS->>WS: identify workspace, open and migrate the store

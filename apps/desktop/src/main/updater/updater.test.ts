@@ -232,11 +232,50 @@ describe('activation — REQ-STARTUP-106, REQ-STARTUP-114, REQ-STARTUP-057, REQ-
     expect(h.notices.lastId()).toBe(1);
   });
 
+  it('a later window\'s check after `Update installed` offers the installed version not again: `Restart now` stays reachable (REQ-STARTUP-119, REQ-STARTUP-121)', async () => {
+    const h = harness();
+    await h.updater.activate({ windowId: 1 });
+    await h.updater.install();
+    const installed = h.notices.current();
+    expect(installed).toMatchObject({ title: INSTALLED_TITLE, action: { label: RESTART_NOW } });
+    const opsBefore = [...h.vol.ops];
+    // A hand-over launch's added window or a replacement window goes through the same post-show activation.
+    expect(await h.updater.activate({ windowId: 2 })).toBe('already-applied');
+    expect(h.notices.current()).toEqual(installed);
+    expect(h.updater.state().kind).toBe('applied');
+    expect(h.logged.some((l) => l.includes('is already installed and waits for Restart now'))).toBe(true);
+    // Nothing re-applied: the backup of the running version is untouched, and the restart is still offered.
+    expect(await h.updater.install()).toMatchObject({ ok: false, code: 'update.none' });
+    expect(h.vol.ops).toEqual(opsBefore);
+    expect(await h.updater.restart()).toEqual({ ok: true, value: { outcome: 'handed-over' } });
+  });
+
+  it('a later window\'s check after the installer hand-off leaves `Finish the update` as it is (REQ-STARTUP-119)', async () => {
+    const h = harness({ classification: installer });
+    await h.updater.activate({ windowId: 1 });
+    await h.updater.install();
+    const handedOff = h.notices.current();
+    expect(handedOff).toMatchObject({ title: FINISH_TITLE });
+    expect(await h.updater.activate({ windowId: 2 })).toBe('already-applied');
+    expect(h.notices.current()).toEqual(handedOff);
+    expect(h.updater.state().kind).toBe('handed-off');
+  });
+
   it('deletes the portable\'s leftover <name>.old before the network round trip (REQ-STARTUP-115)', async () => {
     const h = harness({ volumeFiles: { [TARGET]: 'v0.1.0', [`${TARGET}.old`]: 'old' } });
     await h.updater.activate({ windowId: 1 });
     expect(h.vol.ops[0]).toBe(`remove:${TARGET}.old`);
     expect(h.logged.some((l) => l.includes('REQ-STARTUP-115'))).toBe(true);
+  });
+
+  it('the cleanup is launch-time: a later window\'s check in the same process never deletes the backup this process\'s own apply made (REQ-STARTUP-115)', async () => {
+    const h = harness();
+    await h.updater.activate({ windowId: 1 });
+    await h.updater.install();
+    expect(h.vol.files.get(`${TARGET}.old`)).toBe('v0.1.0');
+    await h.updater.activate({ windowId: 2 });
+    expect(h.vol.files.get(`${TARGET}.old`)).toBe('v0.1.0');
+    expect(h.vol.ops.filter((o) => o === `remove:${TARGET}.old`)).toHaveLength(1);
   });
 });
 

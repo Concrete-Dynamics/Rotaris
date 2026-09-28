@@ -1,4 +1,5 @@
 import type { CommandOutcome, Notice, NoticeSeverity } from '@rotaris/contracts';
+import { isStrictlyNewer } from '@rotaris/release-naming';
 import { millis, type Millis, type TimerHandle, type Timers } from '@rotaris/kernel';
 import type { AppLogLevel } from '../app-log.js';
 import type { NoticePatch, NoticeStore } from '../notices.js';
@@ -81,7 +82,7 @@ export interface UpdaterDeps {
   readonly closeWindows: () => void;
 }
 
-export type ActivationOutcome = 'not-updatable' | 'demo' | 'refused' | 'failed' | 'none' | 'dismissed' | 'already-offered' | 'offered';
+export type ActivationOutcome = 'not-updatable' | 'demo' | 'refused' | 'failed' | 'none' | 'dismissed' | 'already-offered' | 'already-applied' | 'offered';
 
 export type UpdaterState =
   | { readonly kind: 'idle' }
@@ -150,6 +151,8 @@ export function createUpdater(deps: UpdaterDeps): Updater {
   let state: UpdaterState = { kind: 'idle' };
   let busy: Promise<void> | null = null;
   let abort: AbortController | null = null;
+  /** REQ-STARTUP-115: the launch-time cleanup has run in this process. */
+  let cleanedThisLaunch = false;
   /** REQ-STARTUP-119: the hand-off's auto-close is armed once and never re-armed. */
   let autoClose: TimerHandle | null = null;
 
@@ -180,7 +183,11 @@ export function createUpdater(deps: UpdaterDeps): Updater {
   };
 
   const check = async (windowId: number, updatable: Extract<Classification, { updatable: true }>): Promise<ActivationOutcome> => {
-    const cleaned = await cleanupPortableBackup(updatable.flavour, updatable.target, deps.files);
+    // REQ-STARTUP-115's cleanup is LAUNCH-time: once per process, before the first round trip. Run again at a later
+    // window's check it would delete the backup this process's own apply made moments earlier, which is not "left by
+    // a previous update" — the previous update is the one a later launch finds.
+    const cleaned = cleanedThisLaunch ? 'nothing' : await cleanupPortableBackup(updatable.flavour, updatable.target, deps.files);
+    cleanedThisLaunch = true;
     if (cleaned !== 'nothing') deps.log('info', `update check: the previous update's backup beside the artifact was ${cleaned === 'removed' ? 'removed' : 'left for a later launch'} (REQ-STARTUP-115)`);
     abort = new AbortController();
     deps.log('info', `update check: window ${windowId}, ${updatable.flavour} flavour, GET ${FEED_ENDPOINT} (REQ-STARTUP-105)`);
@@ -202,6 +209,14 @@ export function createUpdater(deps: UpdaterDeps): Updater {
     if (deps.dismissedVersion.read() === offer.version) {
       deps.log('info', `update check: Rotaris ${offer.version} was waved off earlier; the offer is silently ignored (REQ-STARTUP-116)`);
       return 'dismissed';
+    }
+    if ((state.kind === 'applied' || state.kind === 'handed-off') && !isStrictlyNewer(offer.version, state.offer.version)) {
+      // The running version is still the old one until the restart, so the feed offers again what is already
+      // installed. `Update installed` keeps `Restart now` and `Finish the update` stays as it is (REQ-STARTUP-119,
+      // REQ-STARTUP-121); re-offering would drop the restart and let a second apply overwrite the backup of the
+      // version the user is running.
+      deps.log('info', `update check: Rotaris ${state.offer.version} is already ${state.kind === 'applied' ? 'installed and waits for Restart now' : 'handed off'}; Rotaris ${offer.version} is not offered again (REQ-STARTUP-119)`);
+      return 'already-applied';
     }
     if ((state.kind === 'offered' || state.kind === 'failed') && state.offer.version === offer.version && deps.notices.current()?.id === state.noticeId) {
       deps.log('info', `update check: Rotaris ${offer.version} is already offered on notice #${state.noticeId}`);

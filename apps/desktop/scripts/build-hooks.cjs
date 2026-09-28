@@ -8,6 +8,8 @@
  *    cannot skip on its .forge-meta and node-gyp cannot report "up to date"), the binding's own
  *    prebuild-skip is overridden (force_build=1 reaches node-gyp as -Dforce_build=1 through
  *    npm_config_force_build), and the moment is stamped as the rebuild marker.
+ *  artifactBuildCompleted — REQ-STARTUP-031: each produced file carries the name the DECLARED version renders
+ *    (`lib/artifact-names.mjs`), never electron-builder's normalised one.
  *  afterPack — rule 1a: for each binding a compiled binary exists in node_modules, is newer than the
  *    marker, is byte-identical to the copy the artifact carries under app.asar.unpacked, and no prebuild
  *    rides in the artifact (neither unpacked nor inside app.asar, where the loader's existsSync would find
@@ -214,17 +216,56 @@ function checkRule4(probe, rule1a, unpackedRoot, marker) {
   return { versions: rep.versions, sqlite: rep.sqlite, journal: rep.journal, pty: rep.pty, dlopen: rep.dlopen };
 }
 
-/** REQ-STARTUP-031: the yml's template renders to the naming module's answer, composed nowhere else. */
-async function checkNaming(version) {
-  const naming = await import(path.join(path.dirname(path.dirname(APP_DIR)), 'tools', 'release-naming', 'src', 'index.ts').replace(/\\/g, '/').replace(/^([A-Za-z]):/, 'file:///$1:'));
-  const yml = readFileSync(path.join(APP_DIR, 'electron-builder.yml'), 'utf8');
-  const templates = [...yml.matchAll(/artifactName:\s*"([^"]+)"/g)].map((m) => m[1]);
-  const expected = naming.artifactName(version, 'setup');
-  for (const t of templates) {
-    const rendered = t.replace('${version}', version).replace('${ext}', 'exe');
-    if (rendered !== expected) throw new Error(`REQ-STARTUP-031: the yml template "${t}" renders to "${rendered}", the naming module says "${expected}"`);
+/** `scripts/lib/artifact-names.mjs` — the names the declared version renders, and the declared version itself. */
+async function artifactNames() {
+  return import(pathToFileURL(path.join(__dirname, 'lib', 'artifact-names.mjs')).href);
+}
+
+/**
+ * REQ-STARTUP-031 / REQ-STARTUP-158: every installer name electron-builder is configured to produce equals the name the
+ * DECLARED version renders through the naming module, composed nowhere else. `declared` is the manifest's own text
+ * (`0.1.0rc1`), never electron-builder's `appInfo.version`, which is that text normalised through loose SemVer
+ * (`0.1.0-rc1`): comparing against the normalised value made both sides equally wrong and let a hyphenated prerelease
+ * name through (`docs/defects/fixed/a-prerelease-version-reaches-the-installer-hyphenated.md`). `renderedNames` are the
+ * names as electron-builder will produce them — one per configured `artifactName`, its macros expanded by electron-builder
+ * itself (`configuredArtifactNames`). No configured name at all is refused too: `pnpm package` supplies them, and a bare
+ * `electron-builder --win` would fall back to electron-builder's own pattern.
+ */
+async function checkNaming(declared, renderedNames) {
+  const { packagingArtifactNames } = await artifactNames();
+  const expected = packagingArtifactNames(declared).setup;
+  if (renderedNames.length === 0) throw new Error(`REQ-STARTUP-031: no artifactName is configured, so electron-builder would name the installer by its own pattern rather than "${expected}"; pnpm package (scripts/package.mjs) supplies the names from the declared version`);
+  for (const rendered of renderedNames) {
+    if (rendered !== expected) throw new Error(`REQ-STARTUP-031: electron-builder is configured to produce "${rendered}", the naming module renders "${expected}" from the declared version ${declared}${/-(?:a|b|rc)\d/.test(rendered) ? ' (the version reached electron-builder hyphenated: its \${version} macro is the normalised value, not the declared text)' : ''}`);
   }
-  return { templates, expected };
+  return { declared, expected, rendered: renderedNames };
+}
+
+/**
+ * The installer names electron-builder will produce from the configuration it is running with — every configured
+ * `artifactName` this target reads (`nsis`, then `win`), expanded by electron-builder's own macro expander with the
+ * values it will use, so a `${version}` template renders to the normalised version exactly as the artifact would be named.
+ */
+function configuredArtifactNames(ctx) {
+  const config = ctx.packager.config;
+  const patterns = [config.win && config.win.artifactName, config.nsis && config.nsis.artifactName].filter((p) => typeof p === 'string' && p !== '');
+  return patterns.map((pattern) => ctx.packager.expandMacro(pattern, 'x64', { ext: 'exe' }));
+}
+
+/**
+ * electron-builder: called for each file an artifact build produced, before the build ends. The file's name is compared
+ * against the declared version's name — the installer exactly, or its block map — so a name composed anywhere but the
+ * authority refuses the build after the fact as well as before it (REQ-STARTUP-031, REQ-STARTUP-152).
+ */
+async function artifactBuildCompleted(ctx) {
+  const { declaredProductVersion, packagingArtifactNames, producedNameProblem } = await artifactNames();
+  const names = packagingArtifactNames(declaredProductVersion(APP_DIR));
+  const problem = producedNameProblem(path.basename(ctx.file), names);
+  if (problem !== null) {
+    console.error(`[ic6] BUILD REFUSED — ${problem}`);
+    throw new Error(problem);
+  }
+  console.log(`[ic6] naming: produced ${path.basename(ctx.file)}, the declared version's name`);
 }
 
 /**
@@ -296,7 +337,9 @@ async function afterPack(ctx) {
     report.asarEntries = asarEntries.length;
     for (const b of BINDINGS) report.rule1a.push(checkRule1a(b, platform, arch, marker, unpackedRoot, asarEntries));
     console.log(`[ic6] rule 1a: ${report.rule1a.map((b) => `${b.name} ${b.files.map((f) => `${path.basename(f.rel)} ${f.size} B`).join(', ')}`).join('; ')} — all newer than the marker, byte-identical in the artifact, no prebuild`);
-    report.naming = await checkNaming(ctx.packager.appInfo.version);
+    const { declaredProductVersion } = await artifactNames();
+    report.naming = { normalised: ctx.packager.appInfo.version, ...(await checkNaming(declaredProductVersion(APP_DIR), configuredArtifactNames(ctx))) };
+    console.log(`[ic6] naming: declared ${report.naming.declared}, electron-builder's normalised ${report.naming.normalised}; configured to produce ${report.naming.rendered.join(', ')}`);
     report.runtime = checkRuntime(appOutDir);
     console.log(`[ic6] runtime: ${report.runtime.python} answered Python ${report.runtime.answers.python}, ${report.runtime.answers.distribution} ${report.runtime.answers.version} from inside the artifact (${report.runtime.files} files, ${(report.runtime.bytes / 1048576).toFixed(1)} MiB)`);
     report.assets = await checkAssets(appOutDir);
@@ -311,4 +354,4 @@ async function afterPack(ctx) {
   }
 }
 
-module.exports = { beforeBuild, afterPack, BINDINGS, checkRule1a, checkRule4, checkNaming, checkAssets, MARKER, REPORT };
+module.exports = { beforeBuild, afterPack, artifactBuildCompleted, BINDINGS, checkRule1a, checkRule4, checkNaming, configuredArtifactNames, checkAssets, MARKER, REPORT };

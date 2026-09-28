@@ -4,7 +4,10 @@
  * Six launches against the built product, with a scratch profile **and a scratch home directory**, so the
  * user-scope roots and the disable manifest are fixtures rather than whatever this machine happens to hold.
  * `HOME`, `USERPROFILE` and `HOMEPATH` are all set, because Node's `homedir()` reads a different one per
- * platform and a proof that set only one would silently read the operator's own skills on the other.
+ * platform and a proof that set only one would silently read the operator's own skills on the other. The
+ * machine-wide root, `/etc/codex/skills` (REQ-WORKSPACE-051, off Windows only), is a fixture too: it is redirected
+ * into the scratch tree by `ROTARIS_CAPTURE_SKILLS_MACHINE` and holds one skill there, so the seam is exercised in
+ * the built app on every host that has an `/etc` hierarchy and the operator's own `/etc/codex` is never read.
  *
  *   1. discover   — a workspace inside a git repository with project, repository and user-scope skills, a
  *                   shadowed duplicate, an invalid file, a disabled one and a name that collides with a
@@ -82,6 +85,15 @@ function launch(name, workspace, extra, timeoutMs = 120_000) {
        * exited 0. The seam is read only by the run host's skill host and only when it is set.
        */
       ROTARIS_CAPTURE_SKILLS_HOME: scratch.home,
+      /*
+       * The scratch machine-wide directory: the fourth user-scope skill root is its `skills` child, and PD-WORKSPACE-002's
+       * machine-wide instruction base is the directory itself, so the run host reads neither from the machine's own
+       * `/etc/codex`. The instruction seam names the same directory because the workspace service's inventory reads only
+       * that one, so no process of any launch here reads the machine's own. Both compiled out of a packaged build; inert
+       * on Windows, where the product declares no such root.
+       */
+      ROTARIS_CAPTURE_SKILLS_MACHINE: scratch.machine,
+      ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE: scratch.machine,
       ROTARIS_CAPTURE_PNG: png,
       ROTARIS_CAPTURE_PROBE: PROBES.join(';;'),
       ...extra,
@@ -104,13 +116,16 @@ const scratch = {
   local: join(output, 'scratch', 'local'),
   preferences: join(output, 'scratch', 'prefs'),
   home: join(output, 'scratch', 'home'),
+  machine: join(output, 'scratch', 'machine-codex'),
   repoRoot: join(output, 'scratch', 'repo'),
 };
+/** The platform rule the product applies to the machine-wide root (`hasEtcHierarchy`): every platform but Windows. */
+const hasMachineRoot = process.platform !== 'win32';
 const workspace = join(scratch.repoRoot, 'project');
 const skill = (name, description, extra = '') => `---\nname: ${name}\ndescription: ${description}\n${extra}---\n${name.toUpperCase().replace(/[^A-Z]/g, '_')}_BODY\n`;
 const write = (path, text) => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, text); };
 
-for (const dir of [scratch.local, scratch.preferences, scratch.home, workspace]) mkdirSync(dir, { recursive: true });
+for (const dir of [scratch.local, scratch.preferences, scratch.home, scratch.machine, workspace]) mkdirSync(dir, { recursive: true });
 // A `.git` FILE, not a directory — the linked-worktree shape REQ-WORKSPACE-051 names, and the one this
 // repository's own proofs run under.
 write(join(scratch.repoRoot, '.git'), 'gitdir: /elsewhere/.git/worktrees/repo\n');
@@ -129,6 +144,8 @@ write(join(scratch.home, '.agents', 'skills', 'home-skill', 'SKILL.md'), skill('
 write(join(scratch.home, '.openhands', 'skills', 'installed', 'kept', 'SKILL.md'), skill('kept', 'An installed skill that stays.'));
 write(join(scratch.home, '.openhands', 'skills', 'installed', 'dropped', 'SKILL.md'), skill('dropped', 'An installed skill the manifest disables.'));
 write(join(scratch.home, '.openhands', 'skills', '.installed.json'), JSON.stringify({ disabled: ['dropped'] }));
+// REQ-WORKSPACE-051's fourth user-scope root, redirected into the scratch tree: listed off Windows, absent on it.
+write(join(scratch.machine, 'skills', 'machine-skill', 'SKILL.md'), skill('machine-skill', 'A skill from the machine-wide root.'));
 // A skill outside every search root, for the hand-loaded case.
 write(join(scratch.base, 'by-hand', 'SKILL.md'), skill('by-hand', 'Loaded by hand for this session.'));
 const agentsYaml = join(workspace, '.rotaris', 'agents.yaml');
@@ -136,7 +153,7 @@ const agentsYaml = join(workspace, '.rotaris', 'agents.yaml');
 // ── 1. discover ─────────────────────────────────────────────────────────────────────────────────────
 const discover = launch('discover', workspace, openSkills());
 const discovered = rows(discover.probes, '[data-testid="skill-row"]').map((r) => r.data['data-name']);
-const expected = ['auto-only', 'home-skill', 'kept', 'repo-wide', 'stop', 'ws-skill'];
+const expected = ['auto-only', 'home-skill', 'kept', ...(hasMachineRoot ? ['machine-skill'] : []), 'repo-wide', 'stop', 'ws-skill'];
 if (JSON.stringify(discovered) !== JSON.stringify(expected)) fail(`the table listed ${JSON.stringify(discovered)}, not ${JSON.stringify(expected)} in ascending name order`);
 results.push({ launch: 'discover', skills: discovered });
 
@@ -144,6 +161,8 @@ const byName = Object.fromEntries(rows(discover.probes, '[data-testid="skill-row
 // REQ-WORKSPACE-051: the scopes, and every project location outranking every user one.
 if (byName['ws-skill'].data['data-scope'] !== 'project') fail('the workspace skill did not read as project scope');
 if (byName['home-skill'].data['data-scope'] !== 'user') fail('the home skill did not read as user scope');
+// The machine-wide root is user scope too (its path is checked against the scratch directory in launch 1c, whose entries carry it whole).
+if (hasMachineRoot && byName['machine-skill'].data['data-scope'] !== 'user') fail('the machine-wide skill did not read as user scope');
 // REQ-WORKSPACE-052: the manifest's entry never appears, and is not listed as skipped either.
 if (discovered.includes('dropped')) fail('the disabled skill was listed');
 // REQ-WORKSPACE-053: the invalid file is skipped WITH its reason rather than silently absent.
@@ -151,7 +170,7 @@ const skipped = rows(discover.probes, '[data-testid="skill-skipped"]');
 if (skipped.length !== 1 || !skipped[0].data['data-path'].includes('broken')) fail(`the skipped list was ${JSON.stringify(skipped.map((s) => s.data['data-path']))}`);
 if (!discover.log.includes('skills: skipped')) fail('the run host logged no skip reason');
 // REQ-WORKSPACE-054: the shadowed duplicate is recorded against the winner and reportable per name.
-if (!discover.log.includes('6 discovered')) fail('the discovery log did not report six skills');
+if (!discover.log.includes(`${expected.length} discovered`)) fail(`the discovery log did not report ${expected.length} skills`);
 // REQ-WORKSPACE-056: `user-invocable: false` derives auto-only from the frontmatter alone.
 if (byName['auto-only'].data['data-invocation'] !== 'auto-only') fail('the frontmatter-derived invocation mode was not auto-only');
 // REQ-WORKSPACE-065: the default policy with nothing recorded is on-demand.
@@ -193,6 +212,8 @@ if (!listed[0].text.startsWith(`${expected.length} skills listed`)) fail(`the ro
 const entries = Object.fromEntries(rows(listingLaunch.probes, '[data-testid="skill-listing-entry"]').map((r) => [r.data['data-name'], r.data]));
 const wsEntry = entries['ws-skill'];
 if (!wsEntry) fail(`the listing drew no entry for ws-skill: ${JSON.stringify(Object.keys(entries))}`);
+// REQ-WORKSPACE-051's machine-wide root, read from the scratch directory the seam names and never from `/etc/codex/skills`.
+if (hasMachineRoot && entries['machine-skill']?.['data-path'] !== join(scratch.machine, 'skills', 'machine-skill', 'SKILL.md')) fail(`the machine-wide skill was not read from the scratch root: ${JSON.stringify(entries['machine-skill'])}`);
 // The five facts per skill: normalized name (the key above), scope, trigger keywords, description, SKILL.md path.
 if (wsEntry['data-scope'] !== 'project' || entries['home-skill']?.['data-scope'] !== 'user') fail(`the scopes read ${wsEntry['data-scope']} / ${entries['home-skill']?.['data-scope']}`);
 if (wsEntry['data-triggers'] !== 'render, /pdf') fail(`ws-skill's triggers read ${JSON.stringify(wsEntry['data-triggers'])}`);
@@ -283,7 +304,7 @@ const unitLine = run.log.split(/\r?\n/).find((l) => l.includes('skills: context 
 if (!unitLine) fail('the run host logged no context units, so nothing proves injection happened');
 if (!/force-loaded [^;]*ws-skill/.test(unitLine)) fail(`the always-load skill was not force-loaded: ${unitLine}`);
 if (/catalog [^;]*ws-skill/.test(unitLine)) fail(`a force-loaded skill was still listed in the catalog: ${unitLine}`);
-for (const name of ['home-skill', 'repo-wide', 'kept', 'auto-only']) {
+for (const name of ['home-skill', 'repo-wide', 'kept', 'auto-only', ...(hasMachineRoot ? ['machine-skill'] : [])]) {
   if (!unitLine.includes(name)) fail(`${name} was not in the injected catalog: ${unitLine}`);
 }
 results.push({ launch: 'run', units: unitLine.slice(unitLine.indexOf('skills:')) });

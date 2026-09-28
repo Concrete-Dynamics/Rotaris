@@ -1,17 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { mergeLayers } from '../merge.js';
 import { readSkillsSection } from '../sections/skills.js';
 import type { ProblemSink } from '../sections/field.js';
 import { collapseWhitespace, normalizeSkillName } from './names.js';
-import { hasEtcHierarchy, installedManifestPath, projectDirectories, skillRoots } from './roots.js';
+import { hasEtcHierarchy, installedManifestPath, MACHINE_CODEX_DIR, machineCodexDir, projectDirectories, skillRoots } from './roots.js';
 import { isDisabled, readInstalledManifest } from './manifest.js';
 import {
   parseSkill, readInvocation, readTrigger,
   SKILL_EMPTY_NAME, SKILL_NO_FRONTMATTER, SKILL_NOT_A_MAPPING, SKILL_UNCLOSED_FRONTMATTER,
 } from './parse.js';
-import { discoverSkills, skillReadRoots, type DiscoveredSkill, type DiscoveryPorts } from './discover.js';
+import { discoverSkills, NODE_DISCOVERY_PORTS, skillReadRoots, type DiscoveredSkill, type DiscoveryPorts } from './discover.js';
 import { resolveSkills } from './policy.js';
 import { skillActivationStatement, skillCatalogBlock, skillCatalogLine } from './blocks.js';
 import { expandHome, loadManualSkill, skillNotFound, skillPathNotAcceptable } from './manual.js';
@@ -86,6 +87,21 @@ describe('REQ-WORKSPACE-051 — the search order', () => {
     expect(hasEtcHierarchy('win32')).toBe(false);
     expect(roots.filter((r) => r.scope === 'user')).toHaveLength(3);
     expect(roots.some((r) => r.dir.includes('etc'))).toBe(false);
+  });
+  it('`machineDir` moves the fourth user-scope root to `<machineDir>/skills` and nothing else — the seam the proofs and the catalog tests isolate through', () => {
+    const roots = skillRoots({ workspaceRoot: '/repo', home: '/home/u', platform: 'linux', machineDir: '/scratch/machine-codex', exists: () => false }).map((r) => `${r.scope}:${r.dir.replace(/\\/g, '/')}`);
+    // Same scope, same rank — last of the user roots — and nowhere under the real `/etc/codex`.
+    expect(roots.at(-1)).toBe(`user:${resolve('/scratch/machine-codex').replace(/\\/g, '/')}/skills`);
+    expect(roots.filter((r) => r.includes('/etc/codex'))).toEqual([]);
+    expect(roots).toHaveLength(6);
+    // Absent or blank, the real directory — the one `PD-WORKSPACE-002`'s instruction base reads too.
+    expect(machineCodexDir(undefined)).toBe(MACHINE_CODEX_DIR);
+    expect(machineCodexDir('  ')).toBe(MACHINE_CODEX_DIR);
+    expect(MACHINE_CODEX_DIR.replace(/\\/g, '/')).toBe('/etc/codex');
+    // On a platform with no `/etc` hierarchy the seam changes nothing: still no fourth root, wherever it points.
+    const win = skillRoots({ workspaceRoot: 'C:/ws', home: 'C:/Users/u', platform: 'win32', machineDir: 'C:/scratch/machine-codex', exists: () => false });
+    expect(win.filter((r) => r.scope === 'user')).toHaveLength(3);
+    expect(win.some((r) => r.dir.includes('machine-codex'))).toBe(false);
   });
 });
 
@@ -173,6 +189,69 @@ describe('REQ-WORKSPACE-053/055/056 — the SKILL.md document', () => {
     expect(readInvocation({ 'disable-model-invocation': true })).toBe('manual-only');
     // Both stated: the requirement lists user-invocable first and states no combination rule; the narrower wins.
     expect(readInvocation({ 'user-invocable': false, 'disable-model-invocation': true })).toBe('auto-only');
+  });
+});
+
+describe('REQ-WORKSPACE-053 — a SKILL.md that is not UTF-8, through the real port (OQ-79)', () => {
+  /*
+   * REQ-WORKSPACE-045 names a decoding error as one way an instruction file is unreadable; REQ-WORKSPACE-053 lists
+   * "unreadable file" among the reasons a SKILL.md is skipped without saying whether a decoding error is one. The
+   * build reads it as one (OQ-79): the same port serves both walks, and a file parsed with U+FFFD standing in for what
+   * its author wrote is not the file the author wrote. The bytes are the defect note's: `68 69 0a ff fe c3 28 0a`.
+   */
+  const NOT_UTF8 = Buffer.from([0x68, 0x69, 0x0a, 0xff, 0xfe, 0xc3, 0x28, 0x0a]);
+
+  it('is skipped with a reason naming the path and the decoding error, and the walk goes on to the next skill', () => {
+    const base = mkdtempSync(join(tmpdir(), 'rotaris-skill-decode-'));
+    try {
+      const root = join(base, 'ws');
+      mkdirSync(join(root, '.agents', 'skills', 'bad'), { recursive: true });
+      mkdirSync(join(root, '.agents', 'skills', 'good'), { recursive: true });
+      writeFileSync(join(root, '.agents', 'skills', 'bad', 'SKILL.md'), NOT_UTF8);
+      writeFileSync(join(root, '.agents', 'skills', 'good', 'SKILL.md'), skillFile('good'));
+      // The home and the machine directory are scratch too, so this decides the same thing on every host.
+      const d = discoverSkills({ workspaceRoot: root, home: join(base, 'home'), platform: 'linux', machineDir: join(base, 'machine'), exists: (p) => NODE_DISCOVERY_PORTS.isDirectory(p) || NODE_DISCOVERY_PORTS.isFile(p) }, NODE_DISCOVERY_PORTS);
+      expect(d.skills.map((s) => s.name)).toEqual(['good']);
+      expect(d.skipped).toHaveLength(1);
+      expect(d.skipped[0]!.path).toBe(join(root, '.agents', 'skills', 'bad', 'SKILL.md'));
+      expect(d.skipped[0]!.reason).toMatch(/^unreadable file: /);
+      // The error is the decoder's, not a replacement character quietly parsed: nothing of the file reached a skill.
+      expect(d.skipped[0]!.reason).not.toContain('\uFFFD');
+      expect(d.skills[0]!.body).not.toContain('\uFFFD');
+    } finally { rmSync(base, { recursive: true, force: true }); }
+  });
+
+  it('REQ-WORKSPACE-057 — a SKILL.md loaded by hand that is not UTF-8 fails with "SKILL.md not found" and the decoder\'s reason, loading nothing', () => {
+    /*
+     * The fifth reader of the port. Before the strict decode this loaded a skill with U+FFFD in its text; now the throw
+     * takes the arm the I/O half already used — the requirement's first sentence, with the reason in parentheses.
+     */
+    const base = mkdtempSync(join(tmpdir(), 'rotaris-skill-decode-'));
+    try {
+      const dir = join(base, 'hand');
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, 'SKILL.md'), NOT_UTF8);
+      for (const raw of [dir, join(dir, 'SKILL.md')]) {
+        const r = loadManualSkill(raw, { workspaceRoot: base, home: join(base, 'home') });
+        expect(r.ok).toBe(false);
+        if (r.ok) continue;
+        expect(r.reason.startsWith(`${skillNotFound(raw)} (`)).toBe(true);
+        expect(r.reason).not.toContain('\uFFFD');
+      }
+    } finally { rmSync(base, { recursive: true, force: true }); }
+  });
+
+  it('the real port keeps reading a UTF-8 file exactly as before — non-ASCII text intact, a BOM left where it was', () => {
+    const base = mkdtempSync(join(tmpdir(), 'rotaris-skill-decode-'));
+    try {
+      const plain = join(base, 'plain.md');
+      const bom = join(base, 'bom.md');
+      writeFileSync(plain, 'héllo — 日本\n');
+      writeFileSync(bom, Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('x\n')]));
+      expect(NODE_DISCOVERY_PORTS.readFile(plain)).toBe('héllo — 日本\n');
+      expect(NODE_DISCOVERY_PORTS.readFile(bom)).toBe('\uFEFFx\n');
+      expect(() => NODE_DISCOVERY_PORTS.readFile(join(base, 'absent.md'))).toThrow(/ENOENT/);
+    } finally { rmSync(base, { recursive: true, force: true }); }
   });
 });
 

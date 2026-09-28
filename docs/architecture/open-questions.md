@@ -69,7 +69,14 @@ reviewed-exceptions table may supply an identifier a dependency does not declare
 runtime). **One more was raised the same day by that generator's gate review: OQ-75** (when a component carries "its
 full license text": a licence file that only pointed elsewhere, or only carried a licence's per-file notice, had
 counted as the text, and 4 components without text became 12); the four were raised as OQ-66 to OQ-69 on their own branch and renumbered when they reached `main`
-after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71. **Two more were raised on 2026-09-28 by building `PD-TOOLS-005` (R-062): OQ-76** (which timeline word records a run's user going away and returning — REQ-ORCH-139 closes the vocabulary and it has none, so the build writes both transitions to the session log) **and OQ-77** (whether the away state resolves the approval an `ask_questions` call itself needs under the `ask` preset, which keeps every question from an away user under the default preset), **and one by its verification: OQ-78** (whether an approval already outstanding when the first wait expires keeps its own full wait, as built, or is ended with the directive's reason). **And one more the same day by repairing REQ-WORKSPACE-045's decoding half: OQ-79** (whether a `SKILL.md` that cannot be decoded as UTF-8 is an "unreadable file"
+under REQ-WORKSPACE-053, which names the reason without saying what encoding a skill file has; built as one, skipped with the
+decoder's error — raised as OQ-76 on its branch and renumbered at the merge, OQ-76 to OQ-78 having been taken on `main`). **And one more the same day by repairing the prerelease naming defect (R-062): OQ-80** (whether REQ-STARTUP-158 reaches the Windows
+installer's own version metadata — `DisplayVersion`, `ProductVersion` and the uninstall display name, which electron-builder
+writes from its normalised `0.1.0-rc1` while the artifact's name carries the declared `0.1.0rc1` — raised as OQ-76 on its branch
+and renumbered at the merge, OQ-76 to OQ-79 having been taken on `main`). **And one more the same day by repairing `inherited_context`'s path to the child (R-062): OQ-81** (what an `inherited_context` id naming another parent's, or an earlier
+iteration's, completed task is — refused for ownership, as built, on REQ-TOOLS-155's scoping — and whether the caller is told
+which ids were ignored — raised as OQ-76 on its branch and renumbered at the merge, OQ-76 to OQ-80 having been taken on `main`). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -3211,6 +3218,160 @@ eight of O-11's twelve reviews are for a notice or a pointer.
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 
 The key is registered with default 20 and minimum 1. Each background session publishes its own `bg:<id>` stream at up to 50 frames/s (the 20 ms floor), so the produced aggregate is `(agents + background sessions) × 50 frames/s`, and only one of those two factors — agents, REQ-MONITOR-285's 20 — has a ceiling. Part AL reads the key into the manager and caps the *delivered* rate per window at 1,000 frames/s by merging (REQ-MONITOR-306, REQ-SHELL-103), so a user who configures 400 background sessions saturates the run-host → main pipe, not a renderer. A stated maximum on the key would let the produced rate be computed rather than absorbed. The owner's call; recorded, not resolved.
+
+**OQ-76 — Which timeline word records that a run's user went away, and came back?** *(REQ-ORCH-139, REQ-SESSION-142,
+`PD-TOOLS-005`. Raised 2026-09-28 by building `PD-TOOLS-005` under [R-062](../product/requests.md#r-062).)*
+
+`PD-TOOLS-005` makes a run treat the user as away once an approval wait has expired unanswered, and present again on
+their next input to the session. An autopsy of such a run wants both instants: every approval ask between them was
+refused without a prompt, and the stretch is what explains a row of `permission_denied` issues. REQ-ORCH-139 closes
+the timeline-event vocabulary to the list in domain 01's Data & Formats, and domain 05's own Data & Formats names the
+only other timeline events a permission mechanism may write (`permission_approved`, `permission_mode_changed`,
+`permission_mode_downgraded`). Neither has a word for the user's presence, and the directive mints none.
+
+**What the build proceeds under.** Both transitions are written to the session log (REQ-SESSION-142) at `WARNING` —
+the default level, so that the end of a stretch is visible wherever its start is — in the words `user away: an approval
+in this run went unanswered for <N> seconds …` and `user returned: input reached this session …`
+(`packages/engine/src/run/presence.ts`). The denials themselves carry the cause in the decision's reason, which the
+`permission_denied` issue records, so an autopsy reading the store alone still sees why each ask was refused; what it
+cannot read from the store is the instant the user returned.
+
+**What a ruling decides.** Whether the timeline gains two names for the transitions, and in which domain's list, or
+whether the log line is the record. Recommendation: two names in domain 05's list, because the timeline is what an
+autopsy reads first and is among the records the export reaches (REQ-SESSION-199), and the session log is neither.
+
+**OQ-77 — Does the away state resolve the approval an `ask_questions` call itself needs under the `ask` preset?**
+*(`PD-TOOLS-005`, REQ-TOOLS-007, REQ-TOOLS-158, REQ-TOOLS-178. Raised 2026-09-28 by building `PD-TOOLS-005` under
+[R-062](../product/requests.md#r-062).)*
+
+The directive keeps questions prompting and waiting while the user is away: "questions put to the user (REQ-TOOLS-158,
+REQ-TOOLS-178) still prompt and wait". But `ask_questions` is outside REQ-TOOLS-007's read-only class, so under the
+`ask` preset — the default — its dispatch resolves to the preset's default decision, `ask`, and the call needs an
+approval before the question exists. That approval is an ask that would prompt, so while the user is away it is
+resolved at once and denied: under the default preset no question reaches an away user, and the clause is reachable
+only where the call is permitted outright — `autonomous`, a rule, or a session approval of the tool.
+
+**What the build proceeds under.** The literal reading: the away state resolves every approval ask, the question
+tool's own included, and the clause governs the question the executor raises, which still prompts and waits wherever
+the call is permitted. A gate case pins both halves (`gate.test.ts`, "a question still prompts and waits while the user
+is away").
+
+**What a ruling decides.** Whether `ask_questions`'s own dispatch is exempt from the away resolution — or from the
+preset default altogether, as the loop-control tools are under REQ-TOOLS-014 — so that a question can reach a user
+who is away in the approval sense and may still answer one. Recommendation: exempt the question tool's own dispatch
+from the away resolution and nothing else; a question is the one prompt the directive means to keep, and the preset's
+decision on the call otherwise stands.
+
+**OQ-78 — Does an approval already queued when the first wait expires still get its own full wait?**
+*(`PD-TOOLS-005`, REQ-TOOLS-052, REQ-TOOLS-055. Raised 2026-09-28 by the verification of the `PD-TOOLS-005` build under
+[R-062](../product/requests.md#r-062).)*
+
+The directive says every further approval that would prompt in the run resolves at once once one wait has ended by
+timeout. The gate consults the away state when it brokers an ask, before a wait exists. An ask brokered *before* the
+first wait expired already has its wait running: it was put to the user (published, and shown or queued behind the
+first dialog in main), so the build does not cut it short, and its own expiry is not a second transition. With several
+agents asking concurrently, each such ask can still cost a full `runtime.approval_timeout_seconds` after the first —
+the cost the directive exists to remove, reduced from one per ask to one per ask *already outstanding* at the first
+expiry.
+
+**What the build proceeds under.** The reading stated in the directive's first-execution note: a wait already running
+when the user was marked away runs to its own end; only asks brokered afterwards resolve at once.
+
+**What a ruling decides.** Whether marking the user away also ends the waits already outstanding in that run (each
+resolved under `runtime.headless_approval_policy` with the directive's reason, its dialog withdrawn), or whether a
+request that has reached the user keeps its own full wait. Recommendation: end the outstanding waits too, with the
+directive's reason — a request queued behind an unanswered dialog was never seen, and the directive's intent is that
+one unanswered approval costs one timeout.
+
+**OQ-79 — Is a `SKILL.md` that cannot be decoded as UTF-8 an "unreadable file"?** *(REQ-WORKSPACE-053, with REQ-WORKSPACE-045 and REQ-WORKSPACE-044. Raised 2026-09-28 by repairing REQ-WORKSPACE-045's decoding half, R-062. Raised as OQ-76 on its branch; renumbered OQ-79 at the merge, because OQ-76 to OQ-78 were already on `main`.)*
+
+REQ-WORKSPACE-045 names two ways a context file can be unreadable — "I/O or decoding error" — and REQ-WORKSPACE-044
+measures every limit "as UTF-8 bytes", so for an instruction file the encoding is settled: it is UTF-8, and a file that is
+not is skipped with a warning. REQ-WORKSPACE-053 lists "unreadable file" among the reasons a `SKILL.md` is skipped, but
+names no encoding for the file, and the format it does name — YAML frontmatter — is one whose own specification admits
+UTF-16 and UTF-32 as well as UTF-8. Nothing in the corpus says whether a skill file saved in one of those, or holding a
+byte sequence no UTF-8 decoder accepts, is "unreadable" (skipped with a logged reason) or is to be read leniently, each
+undecodable sequence standing as U+FFFD, and parsed.
+
+The question is live because one port serves both walks. `NODE_DISCOVERY_PORTS.readFile` reads instruction files for
+REQ-WORKSPACE-045's merge, `SKILL.md` files for REQ-WORKSPACE-053's walk, a force-loaded body for REQ-WORKSPACE-062,
+the disable manifest for REQ-WORKSPACE-052 and a `SKILL.md` loaded by hand for REQ-WORKSPACE-057/151, and until 2026-09-28 it decoded leniently, so the decoding half of
+REQ-WORKSPACE-045 was unmet (`docs/defects/fixed/an-instruction-file-that-is-not-utf-8-is-injected-with-no-warning.md`).
+Making it strict for the instruction files makes it strict for the skill files in the same line.
+
+**What the build proceeds under.** A `SKILL.md` that cannot be decoded as UTF-8 is an unreadable file: it is skipped
+with the reason `unreadable file: <the decoder's error>`, discovery continues, and the skip is listed and logged like
+every other (REQ-WORKSPACE-053). The reasons: a file parsed with replacement characters standing in for what its author
+wrote is not the file the author wrote, and a skill's `name` or `description` read that way would be silently wrong in a
+catalog a model acts on; the sibling walk that shares the port says "decoding error" outright; and REQ-WORKSPACE-044
+already fixes UTF-8 as the encoding these files are measured in. The cost is stated too: a `SKILL.md` saved in UTF-16 or
+UTF-32 — encodings YAML admits — was previously parsed as mojibake and is now skipped with a reason that names the
+path, which is the better of the two failures but is still a file the product declines. A force-loaded body and the
+disable manifest take the same arm through the same port, and so does a `SKILL.md` loaded by hand: `loadManualSkill`
+now fails with REQ-WORKSPACE-057's "SKILL.md not found: {raw}" and the decoder's reason in parentheses, the arm its I/O
+half already used, where it used to load the skill with U+FFFD in its text. If the owner rules the other way, only the port changes:
+the walk's skip arm stays for the I/O half, and the decode becomes lenient for `SKILL.md` alone. The cases are pinned in
+`packages/config/src/skills/skills.test.ts` ("REQ-WORKSPACE-053 — a SKILL.md that is not UTF-8, through the real port
+(OQ-79)"), the walk's and the hand-loaded one's.
+
+**OQ-80 — Does REQ-STARTUP-158's "every artifact … SHALL declare … that same version" reach the Windows installer's own version metadata?** *(REQ-STARTUP-158, REQ-STARTUP-018, REQ-STARTUP-027, REQ-STARTUP-031. Raised 2026-09-28 by repairing the prerelease naming defect, R-062; `docs/defects/fixed/a-prerelease-version-reaches-the-installer-hyphenated.md` Raised as OQ-76 on its branch; renumbered OQ-80 at the merge, because OQ-76 to OQ-79 were already on `main`.)*
+
+A prerelease is written without a separator (`0.1.0rc1`, REQ-STARTUP-027), and after the repair every published filename
+carries that text and the running application reports it. electron-builder still normalises the manifest's version through
+loose SemVer when it reads it, and the NSIS installer's own metadata is written from that normalised value: the `VERSION`
+define, which becomes the per-user uninstall entry's `DisplayVersion` that REQ-STARTUP-018 names and the uninstall display
+name `Rotaris 0.1.0-rc1`; the `ProductVersion` version key; and `VIProductVersion`, which Windows fixes as four numbers
+(`0.1.0.0`) and so can carry no suffix in any spelling. A stable version is identical in every place.
+
+**What the build proceeds under.** The installer's Windows metadata carries electron-builder's normalised value, stated in
+`electron-builder.yml`'s header and in ADR-0054; the artifact's name and its run-time report carry the declared text, which
+is what REQ-STARTUP-158 points at (REQ-STARTUP-031 "is where the version appears in each artifact's name") and what the
+guard of REQ-STARTUP-028 compares. `extraMetadata.version` was not used to force the text through: ADR-0054 decided that
+either it or `buildVersion` would be a second place a version is declared.
+
+**What a ruling decides.** Whether `DisplayVersion` and `ProductVersion` are "declaring" the release's version in
+REQ-STARTUP-158's sense. If they are, the pipeline must write the declared text over them — a custom NSIS include with a
+`WriteRegStr` of `DisplayVersion` and a `VIAddVersionKey ProductVersion`, which electron-builder allows — and the guard
+gains a place to check in the produced installer; if they are not, the spelling Windows shows in "Installed apps" for a
+prerelease is `0.1.0-rc1` and the record says so.
+
+**OQ-81 — What is another parent's completed task to a `delegate` call's `inherited_context`?** *(REQ-TOOLS-152 with
+REQ-TOOLS-155, REQ-ORCH-032 and REQ-ORCH-072; REQ-ORCH-046. Raised 2026-09-28 by repairing
+`the-inherited-context-reports-never-reach-the-child` under [R-062](../product/requests.md#r-062). Raised as OQ-76 on its branch; renumbered OQ-81 at the merge, because OQ-76 to OQ-80 were already on `main`.)*
+
+REQ-TOOLS-152 handles an `inherited_context` id by field: one "that names no task at all refuses the call", one "naming a
+task that failed or has not finished is ignored without refusing", and the field carries "the reports of already-completed
+**sibling** tasks". It does not say what an id is that names a *completed* task which exists but is not the caller's child —
+another agent's child in the same run, or a child of an earlier iteration. (A task that exists and has not completed
+is not in question, whoever owns it: the requirement ignores it. Nor is the root execution record: REQ-ORCH-072 puts
+its id in the children's namespace, so a lookup naming it resolves to it, and an agent is never told it does not exist.) REQ-TOOLS-155 scopes `background_output` to the
+caller's own children ("a task whose parent is not the caller reads as `not_found`"), REQ-TOOLS-156 lets an agent wait
+only for its direct children, and REQ-ORCH-046 refuses a `depends_on` naming another parent's child with a reason that
+names the owner; none of the three is written for `inherited_context`.
+
+**What the build proceeds under.** Existence is asked of the session's child records and the root execution record:
+an id no task has refuses with `inherited_context id '<id>' refers to nothing: no task has that id`, and an id naming a
+task that has not completed is ignored. A completed task that is not the caller's own child refuses, for ownership, with
+`inherited_context id '<id>' is not a sibling's: it is owned by parent '<owner>', not '<caller>'` — the shape of
+REQ-ORCH-046's dependency refusal. That it refuses at all is REQ-TOOLS-155's scoping applied to the one delegation lookup
+it does not name, and it keeps a child from reading a report its parent could not have read itself. (The first build of
+this repair refused every id outside the caller's own children as referring to nothing, the root's and the caller's own
+included; verification the same day showed that contradicts REQ-TOOLS-152 and REQ-ORCH-072, and it was corrected before
+merge — ADR-0012 keeps that reading beside its replacement.) "Completed" is read as REQ-ORCH-047 reads it for a dependency — `succeeded` with the report stored —
+since the report is what is carried; a cancelled sibling, and a succeeded one whose report is not yet stored, are
+ignored with the failed. The ids that were ignored are not reported to the caller: REQ-TOOLS-153 fixes the message's
+content to the alias resolution and the attachment warning, and adding a third item there is a change to that
+requirement rather than a reading of this one.
+
+**What a ruling decides.** Whether another parent's completed task should be refused at all, or ignored as the text
+ignores an unfinished one, or carried — "no task at all" favours existence anywhere, and naming the owner tells the caller
+that the id is real and not its own, a fact REQ-TOOLS-155 withholds from `background_output`; whether an id of an earlier
+iteration's completed child should be carried rather than refused, which would need the carrying to leave the
+per-iteration ledger; and whether the caller should be told which ids were ignored, which is REQ-TOOLS-153's to widen.
+An earlier iteration's *root* is held in memory by the run and not in the store, so an id naming one finds no task and
+refuses as referring to nothing; whether it must be found is part of the same ruling. Until then the field carries the
+reports of the caller's own completed children, ignores every task that has not completed, and refuses a completed task
+it may not carry for that reason.
 
 ## Design-reference dependencies
 

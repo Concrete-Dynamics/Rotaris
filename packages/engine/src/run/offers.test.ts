@@ -7,7 +7,7 @@ import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/stor
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ContentPart, type ModelRequest, type ScriptedCall } from '@rotaris/model';
 import { ProjectionOwner, Run, RUN_CONFIG_DEFAULTS, SequenceCounters, Sessions, SessionWriter, toSessionRecord, toTranscriptRow, type RunConfig, type RuntimePosture, type ToolPort } from '../index.js';
 import { conversationOf } from './record.js';
-import { OFFERS_HEADER, offersForFirstMessage, offersToldIn, openOfferIds, openOffersText } from './offers.js';
+import { OFFERS_HEADER, offersForFirstMessage, offersHeldIn, offersToldIn, openOfferIds, openOffersText } from './offers.js';
 import { decodeStoredTodo, encodeStoredTodo } from '../todo-view.js';
 
 /**
@@ -254,5 +254,24 @@ describe('PD-ORCH-004 revision 4: a later iteration\'s root is told the open off
     expect(told).toHaveLength(2);
     expect(told[0]).toContain('- [... earlier continuation offers elided]\n- c2 (bg_00000c02)');
     expect(told[1]).toBe(`${OFFERS_HEADER}\n- early (bg_0000ff00)`);
+  });
+
+  it('a continue that resumes a compressed root reads the offers its compression names as held — the replacement row is no message of its own (review round 4)', async () => {
+    const { sessions } = sessionsWith([answer('first, done'), answer('resumed, done')]);
+    const sid = (sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    offer(sid, 'bg_00000d01', 'c1');
+    const root = dal.iterationsOf(sid)[0]!.root_task_id;
+    const before = conversationOf(dal.agentConversation(sid, root));
+    // PD-ORCH-005 clause 12: the root's conversation compressed, the list it was told carried into the replacement.
+    const compressed = [{ role: 'user', content: [{ kind: 'text', text: 'Earlier work, compressed.' }, { kind: 'text', text: `${OFFERS_HEADER}\n- c1 (bg_00000d01)` }] }, before.at(-1)!];
+    dal.insertAgentMessage({ session_id: sid, task_id: root, iteration: 1, kind: 'replacement', body: JSON.stringify(compressed), at: new Date(clock.instant()).toISOString() });
+    const rows = dal.agentConversation(sid, root);
+    expect(rows.map((r) => r.kind)).toEqual(['replacement']);
+    expect([...offersHeldIn(dal, sid, [...rows, ...dal.agentMessagesOf(sid, root).filter((r) => r.kind === 'message')])]).toEqual(['bg_00000d01']);
+    restIn(sid, 1);
+    expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+    await sessions.running(sid)!;
+    expect(listsHeldBy(sid, 1)).toEqual([`${OFFERS_HEADER}\n- c1 (bg_00000d01)`]);
   });
 });

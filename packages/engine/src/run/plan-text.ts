@@ -38,15 +38,16 @@ export function planRequestSection(): string {
  * launch content it is also given is the continue that resumed the iteration, so the work to plan for is the todo's
  * pending tasks, stated first and in the order the run takes them up — the first twenty, the count the handoff shows of
  * its todo (REQ-SESSION-115), each cut to 500 characters rather than the handoff's 80, since here a task's text is the
- * work to plan and not a display title (OQ-77). `message` is what became of the message that continue delivered
- * (PD-ORCH-005 clause 17): `done` when the resumed iteration succeeded, `pending` when it closed otherwise — the message
- * is then among the pending tasks, taken up first — and `none` when the continue delivered no message.
+ * work to plan and not a display title (OQ-77). `message` is what became of the continues' messages the resumed iteration
+ * held (PD-ORCH-005 clause 17): `done` when it succeeded, `pending` when it closed otherwise — they are then among the
+ * pending tasks, taken up first — and `none` when it held none. The iteration is said to have been "left open", not by
+ * what: a rest or a crash left it, and a crash-left session's continues take this path too (OQ-77).
  */
 export function resumedWorkSection(iteration: number, pending: readonly string[], message: 'done' | 'pending' | 'none'): string {
   const shown = pending.slice(0, 20).map((text) => `- ${cut(text, 500)}`);
   if (pending.length > 20) shown.push('- [... additional pending tasks elided]');
   return [
-    `This run resumed iteration ${iteration}, which a rest had left open, and that iteration has closed. What follows it is new work, and the plan is for that work: the tasks still pending, in the order the run takes them up.`,
+    `This run resumed iteration ${iteration}, which was left open, and that iteration has closed. What follows it is new work, and the plan is for that work: the tasks still pending, in the order the run takes them up.`,
     '',
     'Pending tasks:',
     ...(shown.length > 0 ? shown : ['- (none)']),

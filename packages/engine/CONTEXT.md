@@ -195,8 +195,8 @@ and is never a role's own tier. — `REQ-ORCH-019`
 The run's work plan: phases holding tasks, created at run start with a single phase named "main" and
 appended to on resume. A continue that resumes an open iteration appends its message as a task that iteration
 holds beside its own, closing with it — done when it succeeds, pending on any other close and then taken up by the
-next iteration before any other pending task. A continue that states no new request appends none while the last
-request is still to be worked. — `REQ-ORCH-004`, `PD-ORCH-005` clause 17
+next iteration before any other pending task, which is sent the message as its task. A continue that states no new
+request appends none while the last request is still to be worked. — `REQ-ORCH-004`, `PD-ORCH-005` clause 17
 _Avoid_: backlog (that is a delivery state on the requirements board), checklist
 
 ### Finishing work

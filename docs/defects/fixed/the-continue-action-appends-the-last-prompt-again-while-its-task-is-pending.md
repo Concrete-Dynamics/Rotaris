@@ -35,9 +35,10 @@ clause 17: the message's task is to be taken up by the next iteration, once.
 ## Repaired — 2026-09-28
 
 `launchContinuation` passes `appendsTask: false` for a continue that delivers no message — the Continue action and
-"continue without them" — while the todo still holds a task of the last request's text pending or in progress
-(`Todo.holdsUnfinished`), and the run takes that task up as it stands; a request whose task is complete or abandoned is
-appended as before. This replaces the narrower guard the clause 17 build had in the `Run` constructor for "continue
+"continue without them" — while the todo still holds a task of the last request's text pending, or in progress and
+held by the open iteration (`Todo.holdsUnfinished`), and the run takes that task up as it stands; a request whose task
+is complete or abandoned, or in progress with no open iteration holding it, is appended as before (the last narrowed by
+the lane's third review, since no selection takes an unheld task in progress up). This replaces the narrower guard the clause 17 build had in the `Run` constructor for "continue
 without them" on an iteration that holds a message. The reading is recorded in OQ-75 ("A continue that states no new
 request appends no second task"). The handoff still reaches every iteration's root, because every iteration's first
 call is sent the launch content (the behaviour `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`

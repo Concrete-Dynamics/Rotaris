@@ -3378,6 +3378,17 @@ message.
   begins it, it is an ordinary task: requeued, it goes back to its place in the todo (the `Continued Prompts` phase).
   *The first build selected it in its place in the todo, after every task before it, so a partial close or a decline
   had the next iteration take the resumed iteration's own task instead (found by the lane's second review).*
+- **Taking it up sends it.** An iteration's first message is the launch content, whose latest request is whatever
+  launched the run
+  ([`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../defects/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md)),
+  so a message taken up by a later run's iteration, or by the iteration after a continue by a second message, would be
+  selected and marked done without ever being sent as the request, and the newer request worked in its place and again
+  under its own task. So a task that is a continue's message (`message`, set when it is appended and kept for good, in
+  the todo document) is sent to the fresh root of the iteration that selects it, as a text part after the launch
+  content naming it the iteration's task and the latest request a separate one — unless the launch content's request
+  is that same text, when the launch content already says it. Only the message's text is sent; its images are not, as
+  the task holds its text only. Every other task keeps the recorded defect's behaviour, which this does not repair. *The
+  second build selected the message and sent it nothing of it (found by the lane's fourth review).*
 - **Several continues on one open iteration.** Each continue by message that resumes the iteration appends its own task,
   held by it; they close together, in the order they were appended.
 - **Which continues make one.** Only a continue that delivers a message: a continue by message (`Sessions.prompt`), with
@@ -3385,9 +3396,14 @@ message.
   Continue action and a plan decision deliver none and append none for a message.
 - **A continue that states no new request appends no second task.** The Continue action and "continue without them"
   continue from the last request (REQ-MONITOR-125) and append it as a task (REQ-ORCH-004); while the todo still holds a
-  task of that request's text pending or in progress — a continue's message a resumed iteration left pending or holds,
-  or any request whose task a rest put back — they append none, and the run takes that task up as it stands. A request
-  whose task is complete or abandoned is appended as before. This repairs
+  task of that request's text pending, or in progress and held by the open iteration (its own task, or a message it
+  holds) — a continue's message a resumed iteration left pending or holds, or any request whose task a rest put back —
+  they append none, and the run takes that task up as it stands. A request whose task is complete or abandoned is
+  appended as before, and so is one whose task is in progress with no open iteration holding it: a selection takes only
+  pending tasks, so nothing would take that task up, and the run would end at once with the request not done. *The
+  second build counted any task in progress, which ended such a continue `no_pending_tasks` (found by the lane's third
+  review); the stranded task itself is
+  [`an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md`](../defects/an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md).* This repairs
   [`the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`](../defects/fixed/the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md),
   which the clause had widened: a message left pending is the last user row, so a Continue action appended it beside
   its own task and the run worked it twice. *The first build closed only "continue without them" on an iteration that
@@ -3402,16 +3418,17 @@ message.
 **What a ruling decides.** Whether a `partial` resumed iteration should close the message as done, since the root
 answered it; whether leaving the message pending should count toward REQ-ORCH-077's limit, so a message no iteration
 can finish is abandoned rather than taken up forever; whether a message left pending should be taken up before the
-resumed iteration's own unfinished task, as built, or after it; and whether a continue that states no new request
-should recognise its last request's task by more than its text.
+resumed iteration's own unfinished task, as built, or after it; whether a continue that states no new request
+should recognise its last request's task by more than its text; and whether a message taken up by a later iteration
+should be sent with its images, or become that iteration's launch content in place of the latest request.
 
 **OQ-77 — Where does the gate hold a run that resumed an iteration, and what does that plan cycle plan?** *(`PD-ORCH-003` revision 2; REQ-ORCH-152, which the directive narrows, and REQ-ORCH-021, REQ-ORCH-067, REQ-ORCH-069, REQ-ORCH-073, REQ-ORCH-085, REQ-ORCH-153 and REQ-ORCH-154, which it does not name. Raised 2026-09-28 by building `PD-ORCH-003` revision 2 under [R-064](../product/requests.md#r-064).)*
 
 Revision 2: a continue that resumes an open iteration "SHALL run that iteration without holding it at the gate … When
 the gate would hold that run … it SHALL hold before the first new iteration the run begins." The paragraph places the
 hold and leaves open what happens at the edges of that point, what the plan cycle held there is asked to plan (the
-launch content is the continue that resumed the iteration, which its root has already dealt with), and what the answer
-at that gate launches.
+launch content is the continue that resumed the iteration, whose work that iteration may or may not have finished),
+and what the answer at that gate launches.
 
 **What the build proceeds under.**
 
@@ -3433,14 +3450,25 @@ at that gate launches.
   todo under REQ-SESSION-115, each cut to 500 characters rather than the handoff's 80, since here a task's text is the
   work to plan and not a display title), then the launch content as the session's context. What it is told of the
   continue's message follows what `PD-ORCH-005` clause 17 made of it: carried out when the resumed iteration succeeded;
-  not finished, among the pending tasks and taken up first, when it closed otherwise; and nothing when the continue
-  delivered no message. *The first build told it the message was already dealt with in every case, which contradicted
-  the pending list after a `partial` close and after a Continue action (found by the lane's second review).* The pending
-  tasks are what the first new iteration would have selected, so the approved plan is about the work it releases.
+  not finished, among the pending tasks and taken up first, when it closed otherwise; and nothing when the resumed
+  iteration held no message. The messages meant are every one the resumed iteration held — this continue's, and one an
+  earlier continue by message delivered to it before it came to rest again, which a Continue action then resumed — and
+  "carried out" is said only when all of them closed done. *The first build told it the message was already dealt with
+  in every case, which contradicted the pending list after a `partial` close and after a Continue action (found by the
+  lane's second review); the second read only the message this run's own continue delivered, so a Continue action that
+  resumed an iteration holding an earlier continue's message was told nothing of it (found by the lane's third
+  review).* The pending tasks are what the first new iteration would have selected, so the approved plan is about the
+  work it releases. The iteration is said to have been left open, not what left it: a crash-left session's continues
+  take the same path as a paused one's (`PD-ORCH-005` clause 18), and the revision's "a rest left open" is the case it
+  names, not a line it draws. *The second build said a rest had left it open, which is false on the crash route (found
+  by the lane's fourth review).*
 - **What the answer launches.** A plan decision's relaunch appends no task: the held run's stored todo already carries
-  the gated work, and after this hold the last user row is the continue's message, which the resumed iteration dealt
-  with (and which `PD-ORCH-005` clause 17 closed as its own task). The same append had made every approved prompt a
-  second task, worked twice; that is repaired with it
+  every task — the gated work, and after this hold the continue's message too, which `PD-ORCH-005` clause 17 made a task
+  of its own and closed with the resumed iteration, `complete` or `pending` and taken up first — so appending the last
+  request again would duplicate it. *The first statement of this reason said the resumed iteration had dealt with the
+  message, which is false after a `partial` close, and after a Continue action, whose last request is an earlier one
+  (found by the lane's third review); the behaviour was right and is unchanged.* The same append had made every approved
+  prompt a second task, worked twice; that is repaired with it
   ([`a-plan-decision-appends-the-gated-prompt-as-a-second-task.md`](../defects/fixed/a-plan-decision-appends-the-gated-prompt-as-a-second-task.md)).
   The approved run is set up as any run is: the resumed root's persona covered the work already under way (OQ-70), and
   no iteration is open when the plan is decided, so the work after the gate runs as the entry role configured then.
@@ -3454,8 +3482,8 @@ at that gate launches.
 
 **What a ruling decides.** Whether a requeued resumed task should count as work already under way rather than a new
 iteration; whether the answer-group exemption should reach this hold; whether the plan cycle should plan only the
-first pending task or all of them; and whether a revise after this hold should be told again that the continue's
-message was already dealt with.
+first pending task or all of them; and whether a revise after this hold should be told again what became of the
+continue's message.
 
 **OQ-80 — Which offers is a later iteration's root told, where in its first message, and which roots count?** *(`PD-ORCH-004` revision 4; REQ-ORCH-088, which the directive narrows, REQ-TOOLS-152, which it extends, and REQ-SESSION-115, REQ-SESSION-194, REQ-ORCH-067, REQ-ORCH-072 and REQ-ORCH-153, which it does not name. Raised 2026-09-28 by building `PD-ORCH-004` revision 4 under [R-064](../product/requests.md#r-064).)*
 

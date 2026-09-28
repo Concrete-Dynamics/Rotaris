@@ -270,7 +270,13 @@ next run is built as the record says that iteration closed (`Todo.releaseStale`)
 the task as the root's record keeps the message. The Continue action and a plan decision deliver no message and append
 no task for it. A continue that delivers no message — the Continue action, "continue without them" — restates the last
 request, so `launchContinuation` passes `appendsTask: false` while the todo still holds that request unfinished
-(`Todo.holdsUnfinished`: a task of that text pending or in progress), and the run takes that task up as it stands.
+(`Todo.holdsUnfinished`: a task of that text pending, or in progress and held by the open iteration — its own task or
+a message it holds), and the run takes that task up as it stands; a task in progress that no open iteration holds does
+not count, since no selection would take it up. The plan cycle held after a resumed iteration is told what became of
+every message that iteration held (`Todo.heldIds`, read when the run is built): this continue's, or an earlier one's a
+Continue action resumed it with. A message is marked as one for good (`Task.message`), so the iteration that takes it up
+is sent it: `iterate()` records the selected message's text when it is not the launch content's own request, and
+`Run.firstMessage` adds it to the fresh root's first message after the launch content and before the offers list.
 
 **An iteration a previous run left open, declined (PD-ORCH-005 clause 6; the repair of the crashed-iteration defect).**
 Every execution iteration has an `iterations` row from the moment its root is minted, and `iteration.end` and the row's

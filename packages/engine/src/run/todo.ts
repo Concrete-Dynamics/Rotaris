@@ -30,6 +30,11 @@ export interface Task {
    * iteration takes it up" — selected before every other pending task, and cleared when an iteration begins it.
    */
   nextUp?: true;
+  /**
+   * PD-ORCH-005 clause 17: a continue's message — set when it is appended (`appendHeld`) and kept for good, so an iteration
+   * that later takes it up is sent its text as the task to work on (`Run.firstMessage`, OQ-75).
+   */
+  message?: true;
 }
 export interface Phase {
   readonly name: string;
@@ -76,21 +81,16 @@ export class Todo {
     const task = this.task(taskId)!;
     task.state = 'in_progress';
     task.heldBy = iteration;
+    task.message = true;
   }
 
   /**
    * PD-ORCH-005 clause 17: every task the iteration `iteration` holds closes with it — `complete` when it succeeded, and
    * otherwise back to `pending`, marked to be taken up by the next iteration (`nextUp`). Leaving it pending is not a
-   * requeue: no consecutive retry is counted (REQ-ORCH-077 counts an iteration's own task). Returns how many closed.
+   * requeue: no consecutive retry is counted (REQ-ORCH-077 counts an iteration's own task).
    */
-  releaseHeld(iteration: number, done: boolean): number {
-    let n = 0;
-    for (const task of this.all()) {
-      if (task.heldBy !== iteration) continue;
-      this.close(task, done);
-      n += 1;
-    }
-    return n;
+  releaseHeld(iteration: number, done: boolean): void {
+    for (const task of this.all()) if (task.heldBy === iteration) this.close(task, done);
   }
 
   /**
@@ -99,14 +99,10 @@ export class Todo {
    * holds it closed `succeeded` (`succeeded`), and otherwise back to `pending`, so it is never stuck in progress and a
    * message its iteration already carried out is never worked again.
    */
-  releaseStale(openIteration: number | null, succeeded: ReadonlySet<number>): number {
-    let n = 0;
+  releaseStale(openIteration: number | null, succeeded: ReadonlySet<number>): void {
     for (const task of this.all()) {
-      if (task.heldBy === undefined || task.heldBy === openIteration) continue;
-      this.close(task, succeeded.has(task.heldBy));
-      n += 1;
+      if (task.heldBy !== undefined && task.heldBy !== openIteration) this.close(task, succeeded.has(task.heldBy));
     }
-    return n;
   }
 
   /** PD-ORCH-005 clause 17: a held task closes with its iteration — done, or pending and taken up next. */
@@ -117,11 +113,20 @@ export class Todo {
   }
 
   /**
-   * PD-ORCH-005 clause 17 (OQ-75): whether a task carrying `text` is still to be worked — pending, or in progress — so a
-   * continue that states no new request (the Continue action, "continue without them") appends it no second time.
+   * PD-ORCH-005 clause 17 (OQ-75): whether a task carrying `text` is still to be worked, so a continue that states no new
+   * request (the Continue action, "continue without them") appends it no second time: pending, or in progress and held by
+   * the open iteration `open` — its own task, or a message it holds — which closes it to pending before the run selects.
+   * A task in progress that nothing open holds is no one's to take up (a selection takes only pending tasks), so it does
+   * not count, and the request is appended again, as REQ-ORCH-004 states (found by review round 3).
    */
-  holdsUnfinished(text: string): boolean {
-    return this.all().some((t) => t.text === text && (t.state === 'pending' || t.state === 'in_progress'));
+  holdsUnfinished(text: string, open: { readonly iteration: number; readonly taskId: string } | null): boolean {
+    return this.all().some((t) => t.text === text && (t.state === 'pending'
+      || (t.state === 'in_progress' && open !== null && (t.heldBy === open.iteration || t.id === open.taskId))));
+  }
+
+  /** PD-ORCH-005 clause 17: the ids of the tasks the iteration `iteration` holds — the continues' messages it was given. */
+  heldIds(iteration: number): string[] {
+    return this.all().filter((t) => t.heldBy === iteration).map((t) => t.id);
   }
 
   /**

@@ -123,7 +123,9 @@ export function offersHeldIn(dal: StoreDal, sessionId: SessionId, rows: readonly
   const children = dal.childrenOf(sessionId);
   const order = new Map(children.map((c, i) => [c.task_id, i]));
   for (const row of rows) {
-    // A replacement's body is the compressed conversation, an array with no role of its own: only what it names counts.
+    // A replacement's body is the compressed conversation, an array with no role of its own: only what it names counts
+    // (PD-ORCH-005 clause 12 writes every compression into the record, so every compressed root's resume meets one). The
+    // role check below is what passes it by; the lists the compression carried are counted through `conversationOf`.
     const message = JSON.parse(row.body) as ChatMessage;
     if (message.role !== 'user') continue;
     for (const oldest of elidedBeforeIn(message.content)) {

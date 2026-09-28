@@ -18,11 +18,11 @@ describe('Todo — a task held by an open iteration (PD-ORCH-005 clause 17)', ()
     done.appendHeld('Continued Prompts', 'm1', 'one', 1);
     done.appendHeld('Continued Prompts', 'm2', 'two', 1);
     done.appendHeld('Continued Prompts', 'm3', 'other', 2);
-    expect(done.releaseHeld(1, true)).toBe(2);
+    done.releaseHeld(1, true);
     expect(shape(done).slice(1)).toEqual([['m1', 'complete', undefined, 0], ['m2', 'complete', undefined, 0], ['m3', 'in_progress', 2, 0]]);
     const failed = Todo.fresh('a', 'first');
     failed.appendHeld('Continued Prompts', 'm', 'one', 1);
-    expect(failed.releaseHeld(1, false)).toBe(1);
+    failed.releaseHeld(1, false);
     expect(shape(failed)[1]).toEqual(['m', 'pending', undefined, 0]);
     // "So the next iteration takes it up": the released message is selected before the task ahead of it.
     expect(failed.pendingTexts()).toEqual(['one', 'first']);
@@ -38,9 +38,9 @@ describe('Todo — a task held by an open iteration (PD-ORCH-005 clause 17)', ()
     const t = Todo.fresh('a', 'first');
     t.appendHeld('Continued Prompts', 'm1', 'one', 1);
     t.appendHeld('Continued Prompts', 'm2', 'two', 2);
-    expect(t.releaseStale(2, new Set())).toBe(1);
+    t.releaseStale(2, new Set());
     expect(shape(t).slice(1)).toEqual([['m1', 'pending', undefined, 0], ['m2', 'in_progress', 2, 0]]);
-    expect(t.releaseStale(null, new Set())).toBe(1);
+    t.releaseStale(null, new Set());
     expect(shape(t)[2]).toEqual(['m2', 'pending', undefined, 0]);
   });
 
@@ -48,7 +48,7 @@ describe('Todo — a task held by an open iteration (PD-ORCH-005 clause 17)', ()
     const t = Todo.fresh('a', 'first');
     t.appendHeld('Continued Prompts', 'm1', 'one', 1);
     t.appendHeld('Continued Prompts', 'm2', 'two', 2);
-    expect(t.releaseStale(null, new Set([1]))).toBe(2);
+    t.releaseStale(null, new Set([1]));
     expect(shape(t).slice(1)).toEqual([['m1', 'complete', undefined, 0], ['m2', 'pending', undefined, 0]]);
   });
 
@@ -56,9 +56,12 @@ describe('Todo — a task held by an open iteration (PD-ORCH-005 clause 17)', ()
     const t = Todo.fresh('a', 'first');
     t.appendHeld('Continued Prompts', 'm', 'one', 3);
     const back = Todo.fromDocument(JSON.parse(JSON.stringify(t.toDocument())) as ReturnType<Todo['toDocument']>);
-    expect(back.releaseHeld(3, false)).toBe(1);
+    back.releaseHeld(3, false);
     const again = Todo.fromDocument(JSON.parse(JSON.stringify(back.toDocument())) as ReturnType<Todo['toDocument']>);
     expect(again.selectNext()!.id).toBe('m');
+    // The mark that it is a continue's message outlives its release and the stored document (review round 4).
+    expect(again.task('m')!.message).toBe(true);
+    expect(again.task('a')!.message).toBeUndefined();
   });
 
   it('releaseStale leaves a message it returns to pending to be taken up next', () => {
@@ -68,16 +71,25 @@ describe('Todo — a task held by an open iteration (PD-ORCH-005 clause 17)', ()
     expect(t.selectNext()!.id).toBe('m');
   });
 
-  it('holdsUnfinished: a task carrying the text is pending or in progress (OQ-75)', () => {
+  it('holdsUnfinished: a task carrying the text is pending, or in progress and held by the open iteration (OQ-75)', () => {
     const t = Todo.fresh('a', 'first');
-    expect(t.holdsUnfinished('first')).toBe(true);
-    expect(t.holdsUnfinished('other')).toBe(false);
+    expect(t.holdsUnfinished('first', null)).toBe(true);
+    expect(t.holdsUnfinished('other', null)).toBe(false);
     t.begin(t.selectNext()!);
-    expect(t.holdsUnfinished('first')).toBe(true);
+    // The open iteration's own task counts; an in-progress task that nothing open holds does not (review round 3).
+    expect(t.holdsUnfinished('first', { iteration: 1, taskId: 'a' })).toBe(true);
+    expect(t.holdsUnfinished('first', null)).toBe(false);
+    expect(t.holdsUnfinished('first', { iteration: 1, taskId: 'other' })).toBe(false);
+    // A message the open iteration holds counts; one another iteration holds does not.
+    t.appendHeld('Continued Prompts', 'm', 'the message', 1);
+    expect(t.holdsUnfinished('the message', { iteration: 1, taskId: 'a' })).toBe(true);
+    expect(t.holdsUnfinished('the message', { iteration: 2, taskId: 'x' })).toBe(false);
+    expect(t.heldIds(1)).toEqual(['m']);
+    expect(t.heldIds(2)).toEqual([]);
     t.complete(t.task('a')!);
-    expect(t.holdsUnfinished('first')).toBe(false);
+    expect(t.holdsUnfinished('first', { iteration: 1, taskId: 'a' })).toBe(false);
     t.appendTask('Continued Prompts', 'b', 'second');
     t.abandon(t.task('b')!);
-    expect(t.holdsUnfinished('second')).toBe(false);
+    expect(t.holdsUnfinished('second', null)).toBe(false);
   });
 });

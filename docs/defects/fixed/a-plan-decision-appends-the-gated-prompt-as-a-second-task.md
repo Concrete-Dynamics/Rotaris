@@ -5,8 +5,9 @@ A run held at the plan gate appends its prompt to the todo (a fresh session's `m
 the last user row as its prompt, and the `Run` constructor appended every continuation's prompt as a new task, so the
 approved run held the gated prompt twice under two ids and worked it twice: its own `main:1` first, then the copy. The
 plan-gate tests carried a "spare" scripted answer for the second pass. Building `PD-ORCH-003` revision 2 made it worse:
-after a hold that follows a resumed iteration, the last user row is the continue's message, which the resumed iteration
-already dealt with, so the approved run would have worked that message again as new work.
+after a hold that follows a resumed iteration, the last user row is the continue's message, which `PD-ORCH-005` clause
+17 already made a task of its own (`complete`, or `pending` and taken up first), so the approved run would have worked
+that message a second time.
 
 Found 2026-09-28 by building `PD-ORCH-003` revision 2 under R-064, and reproduced by driving the engine (a plan-mode
 session approved at its first cycle ran two iterations for one prompt).

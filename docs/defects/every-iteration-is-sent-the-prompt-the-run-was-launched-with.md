@@ -16,6 +16,15 @@ recent context are only in the payload). Sending a non-own task as its bare text
 `PD-ORCH-005` phase 2, loses all three; the reviewer's proposal is the launch content as the base of every iteration
 with the selected task's own text added as the task to work on.
 
+`PD-ORCH-005` clause 17 (revision 4) made the defect bite on its own new tasks: a continue's message a resumed iteration
+left pending is taken up by the next iteration, which is often launched by a newer message — a later run's continue, or
+a second continue by message on the same open iteration — so the message was selected and marked done without being
+sent, and the newer message worked in its place and again under its own task. Its build (the iteration lane's fourth
+review under R-064, OQ-75) repairs that case alone, along the reviewer's proposal above: a task marked as a continue's
+message (`Task.message`) is sent to the fresh root that takes it up, after the launch content, whenever the launch
+content's request is another. Every other task selected that is not the run's own is still sent only the launch
+content.
+
 Noticed 2026-09-27 by phase 2's re-review of `PD-ORCH-005`, whose repair of a crashed iteration puts that iteration's
 task back to `pending`. Reproduced by driving the engine (`record.test.ts` and the reviewer's probes); not driven in
 the built app.
@@ -27,6 +36,6 @@ todo on; the task stays anchored) — a task that is selected and never sent is 
 
 ## Relevant files
 
-- `packages/engine/src/run/run.ts` — `iterate()` (`modelTask`), `turn()`'s `initial ? (contentOverride ?? this.deps.taskContent)`.
+- `packages/engine/src/run/run.ts` — `iterate()` (`modelTask`, `messageTakenUp`), `turn()`'s `initial ? (contentOverride ?? this.deps.taskContent)`, `firstMessage`.
 - `packages/engine/src/run/todo.ts` — `appendTask`, which queued and continued prompts go through.
 - `packages/engine/src/sessions.ts` — `planDecision`, `launchContinuation`; `apps/desktop/src/main/commands/improvements.ts` — the executor's launch prompt.

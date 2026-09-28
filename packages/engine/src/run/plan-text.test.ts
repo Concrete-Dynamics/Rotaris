@@ -5,7 +5,9 @@ import { resumedWorkSection } from './plan-text.js';
 describe('resumedWorkSection (PD-ORCH-003 revision 2)', () => {
   it('names the resumed iteration and the pending tasks in the order given', () => {
     const text = resumedWorkSection(4, ['alpha', 'beta'], 'done');
-    expect(text).toContain('This run resumed iteration 4');
+    // Left open by a rest or by a crash — a crash-left session's continues take this path too (review round 4).
+    expect(text).toContain('This run resumed iteration 4, which was left open, and that iteration has closed.');
+    expect(text).not.toContain('rest');
     expect(text).toContain('Pending tasks:\n- alpha\n- beta\n');
   });
 

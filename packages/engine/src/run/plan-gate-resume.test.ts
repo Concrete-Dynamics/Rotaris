@@ -199,4 +199,19 @@ describe('PD-ORCH-003 revision 2: a resumed iteration and the gate', () => {
     expect(planned).toContain('did not finish its message, which is among the pending tasks above and is taken up first.');
     expect(planned).not.toContain('already');
   });
+
+  it('a Continue action that resumes an iteration holding an earlier continue\'s message tells the plan cycle that message was carried out (review round 3)', async () => {
+    const { sessions, client, sid } = await restedWithPending([answer('Plan: do later.')]);
+    // An earlier continue by message delivered `earlier` to iteration 1, which then came to rest again holding it.
+    const stored = decodeStoredTodo(dal.getSession(sid)!.todo);
+    const planner = { ...stored.planner!, phases: [...stored.planner!.phases, { name: 'Continued Prompts', tasks: [{ id: `${sid}:continued:2`, text: 'earlier', state: 'in_progress' as const, consecutiveRetries: 0, heldBy: 1 }] }] };
+    dal.updateSessionRun(sid, { todo: encodeStoredTodo({ ...stored, planner }) });
+    expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+    expect((await sessions.running(sid)!).execution_status).toBe('awaiting_plan_decision');
+    expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.outcome])).toEqual([[1, 'succeeded']]);
+    expect(tasksOf(sid).map((t) => [t.text, t.state])).toEqual([['first', 'complete'], ['later', 'pending'], ['earlier', 'complete']]);
+    const planned = textOf(client.requests.at(-1)!);
+    expect(planned).toContain('Pending tasks:\n- later\n');
+    expect(planned).toContain('the resumed iteration has already carried out its message.');
+  });
 });

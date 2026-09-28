@@ -1156,7 +1156,7 @@ export class Sessions {
      * todo still holds that request unfinished: a continue's message a resumed iteration left pending or holds, or any
      * request whose task a rest put back. Its task is then taken up as it stands.
      */
-    const restatesUnfinished = (openIteration === 'decline' || openIteration.message === null) && todo !== undefined && Todo.fromDocument(todo).holdsUnfinished(prompt);
+    const restatesUnfinished = (openIteration === 'decline' || openIteration.message === null) && todo !== undefined && Todo.fromDocument(todo).holdsUnfinished(prompt, open ? { iteration: open.iteration, taskId: open.todo_task_id } : null);
     // REQ-EVENTS-053, PD-MONITOR-001: the run's model calls that are no agent's turn count against the run itself.
     const countUsage: CountUsage = (usage, ref) => { runRef.run?.countUsage(usage, ref); };
     const supervisorSetup = this.deps.supervisor?.(workspaceRoot, sessionId, countUsage) ?? null;
@@ -1657,8 +1657,9 @@ export class Sessions {
     if (!resolved.ok) return err({ code: resolved.error.code, reason: 'reason' in resolved.error ? resolved.error.reason : resolved.error.code });
     const lastPrompt = [...s.dal.residentRows(sessionId)].reverse().find((r) => r.kind === 'user')?.body ?? stored.session_id;
     const payload = `${buildContinuationPayload(s.dal, s.dal.getSession(sessionId)!, lastPrompt, todo.value)}\n\n${planSection(decision, text, changes)}`;
-    // PD-ORCH-003 revision 2: the held run's todo already carries the gated work, so the relaunch appends no task — after a
-    // hold that followed a resumed iteration, the last request is the continue's message, which that iteration dealt with.
+    // PD-ORCH-003 revision 2: the held run's todo already carries every task — the gated work, and a continue's message
+    // (complete, or pending and taken up first) after a hold that followed a resumed iteration — so the relaunch appends
+    // none: appending the last request again would duplicate it (OQ-77).
     this.launchContinuation(s, lastPrompt, payload, todo.value, previousIntent(s.dal, sessionId), setup.value, [], decision === 'revise' ? { cycle: cycle + 1, changes } : undefined, { message: null }, false);
     return ok({ relaunched: true, cycle });
   }

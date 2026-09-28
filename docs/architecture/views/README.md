@@ -45,6 +45,20 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-28**
 
+**Review round 4 of the iteration lane (`PD-ORCH-005` clause 17, `PD-ORCH-003` revision 2, `PD-ORCH-004` revision 4,
+2026-09-28, R-064).** A continue's message is marked as one in the todo document for good (`Task.message`), and the
+iteration that takes it up while the launch content names another request is sent its text after the launch content
+(`Run.firstMessage`). The plan cycle after a resumed iteration says the iteration was left open, not that a rest left
+it. The **runtime view**'s message-task paragraph says so. No package, edge, process, channel, message kind or store
+column changed.
+
+**Review round 3 of the iteration lane (`PD-ORCH-005` clause 17, `PD-ORCH-003` revision 2, 2026-09-28, R-064).** A task
+in progress counts as the last request unfinished only when the open iteration holds it (`Todo.holdsUnfinished` takes
+the open row), so a task a death stranded in progress no longer stops a Continue action appending its request. The plan
+cycle after a resumed iteration reads what became of every message that iteration held (`Todo.heldIds`), not only the
+one this run's continue delivered. The **runtime view**'s message-task paragraph says so. No package, edge, process,
+channel, message kind or store column changed.
+
 **Review round 2 of the iteration lane (`PD-ORCH-005` clause 17, `PD-ORCH-003` revision 2, `PD-ORCH-004` revision 4,
 2026-09-28, R-064).** A continue's message a resumed iteration leaves pending is taken up by the next iteration
 (`Task.nextUp`, `Todo.selectNext`). A continue that delivers no message appends no task while the todo still holds its

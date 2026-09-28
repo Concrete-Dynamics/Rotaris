@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
-import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ScriptedCall } from '@rotaris/model';
+import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ModelRequest, type ScriptedCall } from '@rotaris/model';
 import { RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type RunConfig, type ToolPort } from '../index.js';
 import { decodeStoredTodo, encodeStoredTodo } from '../todo-view.js';
 import type { Task } from './todo.js';
@@ -58,6 +58,8 @@ describe('PD-ORCH-005 clause 17: a continue\'s message is also a task', () => {
   const tasksOf = (sid: SessionId): Task[] => decodeStoredTodo(dal.getSession(sid)!.todo).planner!.phases.flatMap((p) => p.tasks);
   const shape = (sid: SessionId) => tasksOf(sid).map((t) => [t.text, t.state, t.heldBy]);
   const tick = () => new Promise((r) => setTimeout(r, 10));
+  const textOf = (r: ModelRequest): string => r.messages.flatMap((m) => [...m.content]).map((c) => (c.kind === 'text' ? c.text : '')).join('\n');
+  const TAKEN_UP = 'The task for this iteration is an earlier message from the user';
 
   /** The residue a rest leaves: iteration `n` open by a pause, its task in progress, and the session `paused`. */
   function restIn(sid: SessionId, n: number): void {
@@ -117,7 +119,7 @@ describe('PD-ORCH-005 clause 17: a continue\'s message is also a task', () => {
     expect(shape(sid)).toEqual([['first', 'complete', undefined]]);
   });
 
-  it('a resumed iteration that fails leaves the message pending, and the next continue\'s iteration takes it up', async () => {
+  it('a resumed iteration that fails leaves the message pending, and the next continue\'s iteration takes it up — it is sent the message, and the new request is worked once (review round 4)', async () => {
     // No script remains for the resumed root: its turn fails, the iteration closes failed and the run ends.
     const h = sessionsWith([answer('first, done')]);
     const sid = (h.sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
@@ -135,6 +137,12 @@ describe('PD-ORCH-005 clause 17: a continue\'s message is also a task', () => {
     const message = tasksOf(sid)[1]!;
     expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.todo_task_id === message.id, r.outcome])).toEqual([[1, false, 'failed'], [2, true, 'succeeded'], [3, false, 'succeeded']]);
     expect(shape(sid).map(([text, state]) => [text, state])).toEqual([['first', 'abandoned'], ['second', 'complete'], ['third', 'complete']]);
+    // "So the next iteration takes it up": iteration 2, launched by `third`, is sent `second` as its task after the
+    // launch content; iteration 3's task is `third`, the launch content's own request, so it is told nothing more.
+    const [second, third] = h.client.requests.slice(-2).map(textOf);
+    expect(second).toContain('Latest user request:\nthird');
+    expect(second).toContain(`${TAKEN_UP}, which the iteration it was sent to did not finish. Work on it now; the latest user request above is a separate task.\n\nsecond`);
+    expect(third).not.toContain(TAKEN_UP);
   });
 
   it('a resumed iteration that raises closes failed and leaves the message pending', async () => {
@@ -282,5 +290,49 @@ describe('PD-ORCH-005 clause 17: a continue\'s message is also a task', () => {
     expect((await h.sessions.running(sid)!).status).toBe('completed');
     expect(shape(sid)).toEqual([['first', 'complete', undefined]]);
     expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.outcome])).toEqual([[1, 'cancelled'], [2, 'succeeded']]);
+  });
+
+  it('a task left in progress that no open iteration holds does not stop the Continue action appending the request, so it is done (review round 3)', async () => {
+    const h = sessionsWith([answer('first, done'), answer('first, again')]);
+    const sid = (h.sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
+    await h.sessions.running(sid)!;
+    // The residue of a death between an iteration's close and the save of its todo: the row closed, its task still in progress.
+    dal.db.prepare("UPDATE iterations SET outcome = 'cancelled' WHERE session_id = ? AND iteration = 1").run(sid);
+    const stored = decodeStoredTodo(dal.getSession(sid)!.todo);
+    const planner = structuredClone(stored.planner!);
+    planner.phases[0]!.tasks[0]!.state = 'in_progress';
+    dal.updateSessionRun(sid, { todo: encodeStoredTodo({ ...stored, planner }) });
+    dal.db.prepare("UPDATE sessions SET execution_status = 'paused' WHERE session_id = ?").run(sid);
+    expect(h.sessions.continueSession(sid, 'continue').ok).toBe(true);
+    const result = await h.sessions.running(sid)!;
+    expect(result.status).toBe('completed');
+    expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.outcome])).toEqual([[1, 'cancelled'], [2, 'succeeded']]);
+    expect(tasksOf(sid).filter((t) => t.text === 'first' && t.state === 'complete')).toHaveLength(1);
+  });
+
+  it('a continue by message that resumes an iteration holding an earlier message: each message is sent to the iteration that takes it up (review round 4)', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    const { sessions, client, sid } = await restedSession([
+      // The first continue's resumed step is in flight when the pause lands; the call never runs, so iteration 1 rests holding M-ONE.
+      { parts: [{ hold }, ...toolCalls([{ callId: 'p1', name: 'probe', args: {} }]).parts] },
+      toolCalls([{ callId: 'p2', name: 'probe', args: {} }]), // the second continue: one step, then the step belt ends it partial
+      answer('M-ONE, done'), answer('M-TWO, done'), answer('first, done again'),
+    ], { config: { maxStepsPerTurn: 1 } });
+    expect(sessions.prompt(sid, 'M-ONE').ok).toBe(true);
+    await tick();
+    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    release();
+    await sessions.running(sid)!;
+    expect(shape(sid)).toEqual([['first', 'in_progress', undefined], ['M-ONE', 'in_progress', 1]]);
+    expect(sessions.prompt(sid, 'M-TWO').ok).toBe(true);
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    const text = (id: string) => tasksOf(sid).find((t) => t.id === id)?.text;
+    expect(dal.iterationsOf(sid).map((r) => [r.iteration, text(r.todo_task_id), r.outcome])).toEqual([[1, 'first', 'partial'], [2, 'M-ONE', 'succeeded'], [3, 'M-TWO', 'succeeded'], [4, 'first', 'succeeded']]);
+    const [two, three, four] = client.requests.slice(-3).map(textOf);
+    expect(two).toContain('Latest user request:\nM-TWO');
+    expect(two).toContain(`${TAKEN_UP}, which the iteration it was sent to did not finish. Work on it now; the latest user request above is a separate task.\n\nM-ONE`);
+    expect(three).not.toContain(TAKEN_UP);
+    expect(four).not.toContain(TAKEN_UP);
   });
 });

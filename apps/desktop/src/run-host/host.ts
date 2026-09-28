@@ -315,6 +315,8 @@ export function createRunHost() {
     // REQ-CONFIG-473: the loaded `event_retention_per_session` per run; this is the shipped default behind it.
     retentionCap: RUNTIME_DEFAULTS.event_retention_per_session,
     warn: (m) => log(m, 'warn'),
+    // REQ-HOOKS-138 / PD-MONITOR-002: the hook port's `log` — a `log` event at `info`, which main's default threshold keeps.
+    log: (m) => log(m),
     mintSessionId: () => randomUUID(),
     model: null,
     // ADR-0036/0037: the files, the live state, the loader's passes — once per run start.

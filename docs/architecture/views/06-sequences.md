@@ -132,7 +132,11 @@ The parts that are easy to get wrong:
   the grant stores the set of paths its REQ-TOOLS-018 path arguments resolved to, and a later call of that tool
   from that persona is allowed without a dialog when its own set is exactly that one — a retried edit with a new
   `old_string` included. Every other tool's grant, an MCP tool's under a public name among them, still needs the
-  identical command facet or argument set.
+  identical command facet or argument set. The same predicate decides whether a rule's tool set holds a call at all
+  (`toolSetHolds`, 2026-09-28): `ask:read-only-tool`, `restricted`'s two read rules and the fetch pair are written over
+  REQ-TOOLS-007's classes of public tools, so a server's `read_file` or `fetch` offered under the plain name is decided
+  by the preset's default, not by the class rule. And the path scope of REQ-TOOLS-018 joins each path argument to the
+  workspace root before the resolver, as the approval's `resolvedPathSet` always did.
 - **One unanswered wait makes the user away for the rest of the run (`PD-TOOLS-005`).** When a brokered wait ends by
   timeout the gate marks the run's `UserPresence` — the engine's, one holder per run, on every agent's port, a
   delegated child's included. From then until the user's next input to that session (an answer, a message, a run

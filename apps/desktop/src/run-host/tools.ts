@@ -344,8 +344,11 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
       for (const e of mcp.executorsFor({ cfg: run.cfg, workspaceRoot: ctx.workspaceRoot, role: ctx.persona, surface, ctx: session, remove, log: (m) => ctx.warn(m) })) {
         // REQ-ORCH-153: an MCP tool carries no declaration, so the fail-closed predicate withholds it while the
         // gate is held (ADR-0016's reading, the same one `restricted` and `read_only` already take above). The
-        // gate's dispatch check would refuse it anyway; removing it here keeps the listing honest.
-        if (planGateHeld() && withheldUnderPlanGate(e.name)) { withheldAtPlanGate.add(e.name); ctx.warn(`mcp: '${e.name}' is withheld while this run is held at the plan gate (REQ-ORCH-153)`); continue; }
+        // gate's dispatch check would refuse it anyway; removing it here keeps the listing honest. Every executor
+        // this loop sees is a server's, and the predicate is told so: asked about the NAME alone it let a server's
+        // tool offered under a public read-only name (`read_file`, on a persona whose public set lacks one) through
+        // the hold until 2026-09-28.
+        if (planGateHeld() && withheldUnderPlanGate(e.name, false)) { withheldAtPlanGate.add(e.name); ctx.warn(`mcp: '${e.name}' is withheld while this run is held at the plan gate (REQ-ORCH-153)`); continue; }
         if (callable.has(e.name)) { ctx.warn(`mcp: the tool name '${e.name}' collides with a native tool of ${ctx.persona}; the MCP tool is not offered`); continue; }
         callable.set(e.name, e);
         specs.push(toolSpec(e));

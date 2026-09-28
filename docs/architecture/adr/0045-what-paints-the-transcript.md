@@ -605,6 +605,17 @@ per-increment main-thread cost is at parity in all six traced pairs (script 4.8�
 in three and lower in three), so what the round found about the recycler stands; what it measured about the comparison
 does not — "the loaded transcript faster than the empty one" did not recur and is not a result. The note is open again.
 
+**Fix round 2, the same day — still open.** The bounded form was still wrong on a pure append: its cut read runs on the
+raw rows while the fold reads the rows hygiene keeps (REQ-CHAT-048's dropped reasoning split an activity line), and a
+repeated diff REQ-CHAT-050 drops let the reused prefix pass the changed index; both repaired in step 4 and pinned
+(`docs/defects/fixed/the-bounded-projection-reads-runs-on-rows-hygiene-drops.md`). The repair moves the bounded
+projection's own cost by nothing measurable (0.117 → 0.119 ms at 1,200 rows). Six runs on it: every update **+29.6**,
++11.7, **+35.9**, **+18.7**, **+43.7**, +4.5 ms — two passes in six, on a host carrying other agents' Electron proofs;
+the verifier's three runs on fix round 1's build had passed three in a row (+11.5, −4.4, −12.4). Fifteen runs since the
+fix rounds began pass nine, the loaded side above the empty one at the median in twelve. What this record can say is
+that the per-increment cost is no longer the whole window's; what it cannot say is that the shown-update comparison
+holds on this host, and it does not claim it.
+
 **What the point still does not do, unchanged:** it says a frame boundary passed after the change was committed, not
 that a frame carrying it was presented. And one reading the round surfaced is on the register rather than settled here
 — whether REQ-CHAT-055's comparison is read on the update as it arrived or on one that arrived alone, and what "an empty

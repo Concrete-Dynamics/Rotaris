@@ -362,3 +362,71 @@ between launches — `S0` holds 1, 18 and 35 rows before its three append launch
 reading under a burst still OQ-76's and no second repair taken on a guess (`.agents/skills/debug-ui` step 8). The six
 runs' logs, `append.json` files and traces were kept beside the work; `.proof/transcript-proof/` holds only the last.
 
+
+## Fix round 2 — 2026-09-28 (R-062): still open
+
+**What the independent verifier found, and what changed.** The bounded projection the pane takes on every append still
+drew something the whole-state projection does not, on a pure append: `cleanCut` read runs on the raw rows while the fold
+reads the rows hygiene keeps (a live duplicate reasoning row REQ-CHAT-048 drops split its agent's activity line), and a
+repeated edit diff REQ-CHAT-050 drops, re-sent at its own index with the rows behind it removed, let the reused prefix
+reach past `from`. Recorded and repaired as
+[`fixed/the-bounded-projection-reads-runs-on-rows-hygiene-drops.md`](fixed/the-bounded-projection-reads-runs-on-rows-hygiene-drops.md);
+`projector.test.ts` pins both, and its seeded walks now run seven seeds with diff rows and reasoning durations over every
+value of `running`, `groupTools` and `showReasoning`. Fix round 1's claim that the bounded form is "taken only where it
+projects what the whole-state form projects" was false for those two shapes until this repair; the pass/fail series above
+was measured on that form.
+
+**The repair costs nothing measurable at the unit.** A throwaway median of 400 calls at the proof's S1200 shape (the
+bounded projection of one appended tool row, not kept): 0.117 ms before the repair, 0.119 ms after; the whole-window
+projection 0.21 and 0.20 ms. At one row, 0.002 and 0.004 ms. Whatever moves the proof below, it is not this change.
+
+**The verifier's three runs on fix round 1's build**, which the note did not yet hold: every update +11.45, −4.4 and
+−12.4 ms — three passes in a row. With F1–F6 that build read **7 passes in 9**, and its three consecutive passes were
+the verifier's, not a series this note had recorded.
+
+**Six runs on the repaired build** (G1–G6; `pnpm build`, then
+`xvfb-run -a -s "-screen 0 1600x1000x24" node apps/desktop/scripts/transcript-proof.mjs --skip-build`, same Linux host
+as root, 62 pooled samples a side, slack one frame at the measured cadence of 16.7 ms in every run, 31 bounded
+projections a launch of 34–36, trace coverage 31 of 31 in every traced launch). The host carried other agents' Electron
+proofs throughout (sixteen Electron processes counted during G1), and G5 additionally overlapped a vitest run of this
+round's own for about ten seconds:
+
+| run | every update, loaded vs empty | row appends | IQR empty / loaded (every update) | `sync` median, loaded vs empty | verdict |
+| --- | --- | --- | --- | --- | --- |
+| G1 | 114.1 vs 84.55 ms, **+29.55** | 105.65 vs 81.6, **+24.05** | 45.1 / 66.2 | 6.2 vs 4.0 | **fail** |
+| G2 | 92.2 vs 80.55, +11.65 | 86.35 vs 77.4, +8.95 | 51.8 / 64.1 | 5.65 vs 4.3 | pass |
+| G3 | 118.45 vs 82.6, **+35.85** | 112.6 vs 76.0, **+36.6** | 48.9 / 63.8 | 5.6 vs 4.55 | **fail** |
+| G4 | 99.75 vs 81.1, **+18.65** | 94.25 vs 74.75, **+19.5** | 55.5 / 60.0 | 5.95 vs 4.25 | **fail** |
+| G5 | 130.1 vs 86.4, **+43.7** | 123.35 vs 82.3, **+41.05** | 58.6 / 67.7 | 7.0 vs 4.45 | **fail** |
+| G6 | 99.7 vs 95.2, +4.5 | 92.65 vs 87.9, +4.75 | 60.5 / 60.4 | 5.9 vs 4.55 | pass |
+
+The traced pair a run, per increment over the whole run (the first increment dropped, 31 a side; script / layout /
+main thread busy, empty against loaded, ms). G1's traces were overwritten by an aborted second run before they were
+copied, so G1 has the comparison and no trace account:
+
+| run | script | layout | busy |
+| --- | --- | --- | --- |
+| G2 | 5.09 / 7.64 | 1.63 / 2.24 | 8.81 / 13.73 |
+| G3 | 5.23 / 8.43 | 2.02 / 2.62 | 9.76 / 14.98 |
+| G4 | 6.38 / 6.42 | 2.46 / 2.29 | 11.47 / 11.27 |
+| G5 | 4.95 / 9.76 | 1.93 / 5.04 | 9.32 / 19.49 |
+| G6 | 7.44 / 7.22 | 2.09 / 2.13 | 13.62 / 11.98 |
+
+**The state now.** Two passes in six on the repaired build, against four in six (and the verifier's three of three) on
+fix round 1's — with the projection's own cost unchanged at the unit, the per-increment script at parity in two traced
+pairs and 2.5–4.8 ms higher on the loaded side in three, and the pooled `sync` 1.05–2.55 ms above the empty side in every
+run. Over the fifteen runs since the fix rounds began, the comparison passed nine; its outcome on this host moves with
+something the proof does not control. What the fifteen runs agree on: the loaded side sits above the empty side at the
+median in twelve of them, by a residual larger than the projection could explain (0.12 ms at the unit), inside
+spreads three to four times the slack. Not measured, and so not claimed: whether that residual is the replica's O(n)
+upsert and the measurement pass's second render, the fixtures growing between launches (`S0` at 1, 18 and 35 rows;
+`S1200` at 1,200, 1,217 and 1,234), or contention on a shared host — the loaded traces of G3 and G5 carry
+layout and busy time the empty ones do not, which a neighbour's load could equally produce. No further repair is taken
+without a trace naming its cause (`.agents/skills/debug-ui` step 8), the note stays open, and OQ-76 still holds the
+reading under a burst and what "an empty transcript" holds. The six runs' logs, `append.json` files and traces (G2–G6)
+were kept beside the work; `.proof/transcript-proof/` holds only G6.
+
+**Not reached by any test, and so guarded by this proof alone:** the offset table and surface-value memos in
+`TranscriptPane.tsx`. The vitest environment is `node`, with no DOM testing library in the repository; a stale
+dependency there (the offset table keyed without `measuredVersion`, say) would be caught only by `transcript-proof`'s
+geometry and append stages.

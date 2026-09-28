@@ -33,7 +33,7 @@ record already decides, and every ruling it needs is named as the owner's rather
 - The open notes in `../defects/`.
 - The four red proofs: `transcript-proof`, `library-proof`, `part-h-proof`, and `theme-proof`'s contrast section
   (OQ-56). *`transcript-proof` was recorded as passing on 2026-09-28 (REQ-CHAT-055's measurement round under R-062) and
-  reopened the same day: its fix round passed four runs of six, never three in a row, on Linux; the per-increment cost
+  reopened the same day: its fix round passed four runs of six, never three in a row, on Linux, and fix round 2 two of six (nine passes in fifteen); the per-increment cost
   no longer grows with depth, the pooled comparison stands about two thirds of a frame over at the median
   ([note](../defects/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md), open; OQ-76).* *Two more were measured red on 2026-09-27 while §2.2 was built, both before it and unchanged by it:*
   `slash-proof` at its first catalogue assertion since ADR-0063

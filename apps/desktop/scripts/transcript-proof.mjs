@@ -399,12 +399,19 @@ const behaviour = launch('behaviour', {
   // One line, deliberately: the log reader's `capture: eval-at (\d+) (.*?) → (.*)$` cannot span newlines, and a
   // multi-line expression parses as no result at all rather than as an error.
   //
-  // The FIRST sample is taken the moment a live activity line exists (`>>.activity__now@~8000`), the other
-  // twenty-five at appointments. The scripted run ends at `think` about 2.35 s after the session opens, and the
-  // first appointment at 3,000 ms caught the live line in six runs of seven on 2026-09-28 and missed it in the
-  // seventh (docs/defects/fixed/the-geometry-stage-catches-its-live-line-in-one-sample-or-none.md). A sample that
-  // waits for the state cannot miss it while it exists, and gives up at 8 s so the guard below still fails honestly.
+  // The FIRST sample watches for a live activity line from inside the renderer, one animation frame at a time, and
+  // reads the boxes on the frame after it first sees one if the line is still live; the other twenty-five are
+  // appointments. The live line this stage catches is NOT the scripted run's (that run ends at `think` within
+  // milliseconds of starting): it is the PLANTED running call, live in two windows each shorter than 150 ms — when the session
+  // is first drawn, before the view learns no run is live (REQ-CHAT-049), and when the scripted run starts, before
+  // stale detection settles the call (ADR-0002). An appointment catches such a window by luck, and so did the
+  // main-process wait this replaced (`>>.activity__now@~8000`), whose read ran as a separate script after its match
+  // and lost the window in three runs of three on 2026-09-28 (fix round 1 of R-062; the probe that timed the windows
+  // is recorded in docs/defects/fixed/the-geometry-stage-catches-its-live-line-in-one-sample-or-none.md). Gives up at
+  // 8 s and reads whatever is there, so the guard below still fails honestly.
   const LIVE_SAMPLE_AT = 8000;
+  const LIVE_WATCH_FROM = 1;
+  const LIVE_FIRST = `(async () => { const until = performance.now() + ${LIVE_SAMPLE_AT}; const frame = () => new Promise((resolve) => requestAnimationFrame(resolve)); while (performance.now() < until) { if (document.querySelector('.activity__now')) { await frame(); if (document.querySelector('.activity__now')) break; } await frame(); } return OVERLAP_READ; })()`;
   const SAMPLE_AT = Array.from({ length: 25 }, (_, i) => 3300 + i * 300);
   const OVERLAP = `(() => { const boxes = [...document.querySelectorAll('.transcript__slot')].filter((n) => n.dataset.bound).map((n) => { const r = n.getBoundingClientRect(); return { key: n.dataset.bound, top: r.top, bottom: r.bottom, keyed: n.dataset.measure !== '' }; }).sort((a, b) => a.top - b.top); let worst = 0; let pair = null; for (let i = 1; i < boxes.length; i += 1) { const o = boxes[i - 1].bottom - boxes[i].top; if (o > worst) { worst = o; pair = [boxes[i - 1].key, boxes[i].key]; } } const seg = document.querySelector('[data-shape="group"] .activity__segments'); const segmentLines = seg ? new Set([...seg.querySelectorAll('.activity__segment')].map((e) => Math.round(e.getBoundingClientRect().top))).size : 0; const roles = [...document.querySelectorAll('.row__role')].map((e) => Math.round(e.getBoundingClientRect().height)); const g = document.querySelector('[data-shape="group"]'); return { bound: boxes.length, unkeyed: boxes.filter((b) => !b.keyed).length, worstOverlapPx: Math.round(worst * 10) / 10, pair, segmentLines, tallestRolePx: Math.max(0, ...roles), live: document.querySelectorAll('.activity__now').length, summaryTail: g ? g.innerText.replace(/\\s+/g, ' ').trim().slice(-90) : null }; })()`;
   const geometry = launch('geometry', {
@@ -414,10 +421,10 @@ const behaviour = launch('behaviour', {
     ROTARIS_CAPTURE_RESUME: 'SLIVE',
     ROTARIS_SCRIPT: 'think,read,answer',
     ROTARIS_CAPTURE_PROMPT: 'Say something about the notes.',
-    ROTARIS_CAPTURE_EVAL_AT: [`${OVERLAP}>>.activity__now@~${LIVE_SAMPLE_AT}`, ...SAMPLE_AT.map((ms) => `${OVERLAP}@${ms}`)].join(';;'),
+    ROTARIS_CAPTURE_EVAL_AT: [`${LIVE_FIRST.replace('OVERLAP_READ', () => OVERLAP)}@${LIVE_WATCH_FROM}`, ...SAMPLE_AT.map((ms) => `${OVERLAP}@${ms}`)].join(';;'),
     ROTARIS_CAPTURE_AFTER_MS: '11000',
   }, 240_000);
-  const samples = [{ ms: 'on the first live line', ...(evalAt(geometry, LIVE_SAMPLE_AT) ?? {}) }, ...SAMPLE_AT.map((ms) => ({ ms, ...(evalAt(geometry, ms) ?? {}) }))].filter((s) => typeof s.bound === 'number');
+  const samples = [{ ms: 'on the first live line', ...(evalAt(geometry, LIVE_WATCH_FROM) ?? {}) }, ...SAMPLE_AT.map((ms) => ({ ms, ...(evalAt(geometry, ms) ?? {}) }))].filter((s) => typeof s.bound === 'number');
   expect(samples.length >= 4, `the geometry stage took ${samples.length} readable samples, not enough to say anything`);
   expect(samples.every((s) => s.bound > 1), `a sample bound one slot or none, so nothing could overlap: ${JSON.stringify(samples)}`);
   // The two guards that keep the assertions below from being satisfied by construction. The line has to actually

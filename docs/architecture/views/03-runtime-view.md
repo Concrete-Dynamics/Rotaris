@@ -297,7 +297,9 @@ Every execution iteration has an `iterations` row from the moment its root is mi
 close commit in one transaction (`endIteration`). A rest or a dead run host leaves that row open. **Declined** —
 `continueSession(…, { withoutPaused: true })`, "continue without them" — before its first iteration a run ends every
 `paused` agent of the open iteration `cancelled` with a report saying so (`cancelPausedAgents`), closes the row `cancelled`
-(`closeLeftOpenIteration`, REQ-ORCH-135) and attempts that iteration's one
+(`closeLeftOpenIteration`, REQ-ORCH-135) — its `iteration.end` summary names the decline and what left the agents paused,
+a crash on clause 18's route included, and only a run told nothing of the open iteration records a dead run's wording —
+and attempts that iteration's one
 checkpoint capture (REQ-GIT-051, no child credited; its hooks' `iteration_end` is not fired — the hooks that saw it
 begin were the dead run's): the task it held goes back to `pending` (`Todo.reopen`), and the count moves past it, so
 the run's own first iteration takes the next number rather than the dead one's. The count is also never below the

@@ -927,9 +927,14 @@ export class Run {
    * this run's first iteration takes the next number rather than the dead one's. It counts toward no limit of this run.
    */
   private async closeLeftOpenIteration(): Promise<void> {
-    const closed = await this.closeOpenIteration((open) => (open.interruption === null || open.interruption === 'crash'
-      ? 'the run that owned this iteration ended before it closed'
-      : `the session was continued without the agents ${interruptionPhrase(open.interruption)} had left paused`),
+    // The summary follows whether this run declined the iteration (PD-ORCH-005 clause 6), not what left it open: clause
+    // 18's "continue without them" declines a crash-left iteration after recording the crash, so a crash is the user's
+    // decline too, and names what left the agents paused as its agents' reports do. Only a run told nothing about the
+    // open iteration closes it as a dead run's.
+    const declined = this.deps.openIteration?.resume === false;
+    const closed = await this.closeOpenIteration((open) => (declined
+      ? `the session was continued without the agents ${interruptionPhrase(open.interruption ?? 'crash')} had left paused`
+      : 'the run that owned this iteration ended before it closed'),
     (c) => `Cancelled: the session was continued without this agent, which ${interruptionPhrase(c.interruption ?? '')} had left paused.`);
     if (!closed) return;
     this.initialIterations = this.iterationsCompleted;

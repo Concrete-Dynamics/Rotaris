@@ -39,5 +39,6 @@ run row and the subtitle read REQ-CHAT-008's "Run needs recovery" rather than "R
 
 Evidence: `packages/ui/src/cancel-paused.test.ts`, "in REQ-CHAT-008's recovery state the Mission view offers no "Pause"
 for the run it draws `paused`" (reverting `&& !recovery` turns it red) and "… the Mission view's run row and subtitle
-read the recovery label" (reverting the label turns it red). The Mission root's `recovery={needsRecovery}` is
-composition-root wiring that only `pnpm app:drive` reaches.
+read the recovery label" (reverting the label turns it red). The Mission root's `recovery={needsRecovery}` is pinned by
+its source in `apps/desktop/src/renderer/recovery-wiring.test.ts`, "main.tsx hands the Mission view the same recovery
+fact" (handing it `false` turns it red), added by the seventh fix round.

@@ -3713,7 +3713,7 @@ its last request finished — crash-left, or `paused` by a pause or a stop accep
 re-run that request as built, append nothing and run nothing, or not be offered at all, which for the crash-left
 session would narrow clause 18's "SHALL offer".
 
-**OQ-77 — Where does the gate hold a run that resumed an iteration, and what does that plan cycle plan?** *(`PD-ORCH-003` revision 2, with `PD-ORCH-005` clause 18; REQ-ORCH-152, which the directive narrows, and REQ-ORCH-021, REQ-ORCH-067, REQ-ORCH-069, REQ-ORCH-073, REQ-ORCH-085, REQ-ORCH-153 and REQ-ORCH-154, which it does not name. Raised 2026-09-28 by building `PD-ORCH-003` revision 2 under [R-064](../product/requests.md#r-064).)*
+**OQ-77 — Where does the gate hold a run that resumed an iteration, and what does that plan cycle plan?** *(`PD-ORCH-003` revision 2, with `PD-ORCH-005` clause 18; REQ-ORCH-152, which the directive narrows for an iteration a rest left open (`PD-ORCH-005` clause 4), and which the reading below that an iteration a crash left open resumes unheld too departs from for an iteration the directive does not govern; REQ-ORCH-153, whose gate that reading also departs from for the same iteration; and REQ-ORCH-021, REQ-ORCH-067, REQ-ORCH-069, REQ-ORCH-073, REQ-ORCH-085 and REQ-ORCH-154, which it does not name. Raised 2026-09-28 by building `PD-ORCH-003` revision 2 under [R-064](../product/requests.md#r-064).)*
 
 Revision 2: a continue that resumes an open iteration "SHALL run that iteration without holding it at the gate … When
 the gate would hold that run … it SHALL hold before the first new iteration the run begins." The paragraph places the
@@ -3738,9 +3738,11 @@ and what the answer at that gate launches.
   and whichever continue resumed it (`plan-gate-resume.test.ts`, "left by a crash and resumed by …"). The alternative —
   hold the crash-left iteration at the gate, since the revision's words name only a rest — was not taken, because once
   the crash is recorded nothing in the run tells the two apart, and holding would put the work already under way behind
-  a plan cycle that clause 18's continue does not otherwise meet. ADR-0062's amendment and the engine glossary's Plan
-  gate entry cite this reading. Recorded at the merged build's review, which found both citing it here before it was
-  stated.
+  a plan cycle that clause 18's continue does not otherwise meet. Because the revision governs only a rest's iteration,
+  running a crash-left one unheld under `plan` departs from REQ-ORCH-152 ("In `plan` mode the gate of REQ-ORCH-153
+  applies") and REQ-ORCH-153 beyond the revision, as the provenance above states. ADR-0062's amendment and the engine
+  glossary's Plan gate entry cite this reading. Recorded at the merged build's review, which found both citing it here
+  before it was stated.
 - **Any iteration after the resumed one is new.** A resumed iteration that ends `partial` requeues its task
   (REQ-ORCH-073), and the next iteration would take it up again under a new number; that iteration is held too, since the
   directive's line is the iteration, not the task.
@@ -4026,7 +4028,10 @@ the build kept.
   which is REQ-MONITOR-004's enumeration. The op is not renamed, and REQ-CHAT-029's "MUST cancel that run" is read
   through clause 15's narrowing. The paused strip's continue by message draws its own accessible name ("Continue with
   a message") and shows `Send`. The send pill's `sendName` arm for a paused session, which the strip never draws, is
-  left as it stands.
+  left as it stands. `PD-CHAT-001` revision 4 gives the word's source as "the send pill it stands in for", but the
+  built pill never shows `Send`: its visible word is `Run`, `Continue` (any existing session at rest, a paused one
+  included) or `Queue` (`sendShortLabel`, REQ-CHAT-005). The build draws `Send` because the directive names it, and
+  reads the stated source as the directive's rationale rather than a rule that would make the word `Continue`.
 - **The board's quit.** Main's board coordinator ends its runs at the last window's close with the run host's
   `announceShutdown` (REQ-MONITOR-131's shutdown request), renamed `quitAll`, rather than the stop control's `cancel`.
   A stop request keeps its first reason, so the `cancel` sent ahead of the run host's `shutdown` rested the run by

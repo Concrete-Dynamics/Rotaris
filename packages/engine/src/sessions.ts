@@ -1724,8 +1724,9 @@ export class Sessions {
       return ok({ resumed: false, messageLimit: limit });
     }
     // The continuation: the last user request stands and no user row is appended (REQ-MONITOR-125's "resumed from the composer").
-    // A crash-left session with nothing open and that request finished appends it to the todo again (REQ-ORCH-004; OQ-75's no-append
-    // covers only a request held unfinished) — clause 18's undecided case, OQ-76.
+    // A session with nothing open and that request finished — crash-left (clause 18), or `paused` by a pause or a stop accepted
+    // after its iteration closed — appends it to the todo again (REQ-ORCH-004; OQ-75's no-append covers only a request held
+    // unfinished): the undecided case of OQ-76's "Nothing open to resume".
     const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId, effectiveRootOf(stored).root, resumedPersona(s.dal, sessionId, opts.withoutPaused === true));
     if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
     const lastPrompt = [...s.dal.residentRows(sessionId)].reverse().find((row) => row.kind === 'user')?.body ?? stored.session_id;

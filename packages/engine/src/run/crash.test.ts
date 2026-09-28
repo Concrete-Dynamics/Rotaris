@@ -675,6 +675,10 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
           expect(dal.getIteration(sid, 2)).toMatchObject({ state: 'closed', outcome: 'cancelled', interruption: 'crash' });
           for (const id of ['bg_000000c1', 'bg_000000c2', 'bg_000000c3']) expect(dal.getChild(sid, id)!.state, id).toBe('cancelled');
           expect(dal.iterationsOf(sid).map((r) => r.iteration)).toEqual([1, 2, 3]);
+          // The iteration's close records the user's decline, in the words its agents' reports use — not a dead run's.
+          const closed = dal.eventsOfKind(sid, 'iteration.end').map((e) => JSON.parse(e.payload) as { iteration: number; summary: string }).find((e) => e.iteration === 2)!;
+          expect(closed.summary).toBe('the session was continued without the agents a crash had left paused');
+          expect(JSON.parse(dal.getChild(sid, 'bg_000000c1')!.report!)).toMatchObject({ status: 'cancelled', summary: 'Cancelled: the session was continued without this agent, which a crash had left paused.' });
         });
       }
 

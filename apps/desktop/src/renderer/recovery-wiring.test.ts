@@ -18,4 +18,14 @@ describe('PD-ORCH-005 clause 13 (OQ-73): the Mission root and a persona window d
     expect(text).toContain(`restingView(${session}, entry, needsRecovery)`);
     expect(text).not.toMatch(/\brunLevelAgent\b/);
   });
+
+  /*
+   * The repair of `docs/defects/fixed/the-mission-view-offers-pause-and-cancel-with-no-run-behind-the-session.md`: the
+   * Mission view reads a run as active only when it is busy and not in recovery, so the root must hand it the same fact.
+   * `recovery` is required, so dropping it fails typecheck; handing it `false` would offer Pause beside a root drawn
+   * `paused` and fails here (`cancel-paused.test.ts` pins the view itself).
+   */
+  it('main.tsx hands the Mission view the same recovery fact', () => {
+    expect(source('main.tsx')).toContain('recovery={needsRecovery}');
+  });
 });

@@ -106,18 +106,22 @@ at the last window's close with the application's quit (`quitAll` → `announceS
 **process view**'s board paragraph, the **runtime view**'s rest paragraph and §5 rows and the **sequences view**'s
 approval note now cite the rulings in place of OQ-69; readings in OQ-81. A stop or a quit during a plan cycle now
 withdraws what waits on a person rather than cancelling it (`Run.waitsWithdrawnBy`, which reads the stop request alone
-and never the plan hold; clause 15's last bullet and `PD-CHAT-002` revision 2): the **runtime view**'s rest paragraph and `cancelQuestions` row and the **sequences view**'s
-approval note say so. No package, edge, process, channel or command changes.
+and never the plan hold; clause 15's last bullet and `PD-CHAT-002` revision 2): the **runtime view**'s rest paragraph
+and `cancelQuestions` row and the **sequences view**'s approval note say so. No package, edge, process, channel or
+command changes.
 
 **A crash offers the same choice as a pause (`PD-ORCH-005` clause 18, 2026-09-28, R-064).** `Sessions.continueSession`
-accepts a session a crash left — `interrupted`, or persisted busy and `not-live` (REQ-CHAT-008's recovery state) — beside
-`paused`, and refuses a busy one whose process may still be running it (`run-active`) and, first, any session whose
-store has failed (`store-failed`, as the continue by message is: a run ended on a recording failure is not a crash,
-OQ-42; a `paused` session under a store failure is refused the same way). The composer draws the two continues on it
-(`crashLeft`), and the count and "Continue without them" wherever the session rests with an iteration open
+accepts a session a crash left — `interrupted`, or persisted busy and `not-live` (REQ-CHAT-008's recovery state) —
+beside `paused`, and refuses a busy one whose process may still be running it (`run-active`) and, first, any session
+whose store has failed (`store-failed`, as the continue by message is: a run ended on a recording failure is not a
+crash, OQ-42; a `paused` session under a store failure is refused the same way). The composer draws the two continues on
+it (`crashLeft`), and the count and "Continue without them" wherever the session rests with an iteration open
 (`resumable`, `runLevelResting`), the same count as a paused session's; either choice records the crash first, in
 `launchContinuation`. Readings in OQ-76. The **runtime view**'s §5 Continue paragraph and the **process view**'s
 `session.continue` note are updated; the command's shape does not change, and no package, edge, process or channel does.
+A declined crash-left iteration's `iteration.end` summary names the decline and the crash, as its agents' reports do
+(`closeLeftOpenIteration` reads whether the run declined, not what left the iteration open); the **runtime view**'s
+declined-iteration paragraph says so.
 
 **`/stop` is offered as the stop, and the paused continue by message reads `Send` (`PD-ORCH-005` clause 15,
 `PD-CHAT-001` revision 4, 2026-09-28, R-064).** The slash catalogue describes `/stop` as "Stop the active run"; it still
@@ -126,12 +130,13 @@ sends the stop's `cancel` op and never the explicit cancel. The paused strip's s
 process, channel or command changes.
 
 **A later iteration's root is told the open offers (`PD-ORCH-004` revision 4, 2026-09-28, R-064).** The offers list and
-its reader (`openOffersText`, `offersToldIn`) move from `sessions.ts` to `run/offers.ts`, re-exported where they were, so
-the run can use them without importing the session manager. `Run.turn()` adds to every execution iteration root's first
-message the offers that message does not already hold (`offersForFirstMessage`); a plan cycle is told none. The offers a
-handoff covers are passed to the run (`RunDeps.handoffOffers`), an offer a held list elided counts as told, and the
-continue that resumes a root counts an offer its lists left out as held (`offersHeldIn`). REQ-SESSION-194's cut is one
-function, `run/cut.ts`, shared by the handoff, the offers list and the plan cycle's pending tasks. Readings in OQ-80. The **runtime view**'s continuation paragraph and the **state-ownership view**'s record row say so. No package,
+its reader (`openOffersText`, `offersToldIn`) move from `sessions.ts` to `run/offers.ts`, re-exported where they were,
+so the run can use them without importing the session manager. `Run.turn()` adds to every execution iteration root's
+first message the offers that message does not already hold (`offersForFirstMessage`); a plan cycle is told none. The
+offers a handoff covers are passed to the run (`RunDeps.handoffOffers`), an offer a held list elided counts as told, and
+the continue that resumes a root counts an offer its lists left out as held (`offersHeldIn`). REQ-SESSION-194's cut is
+one function, `run/cut.ts`, shared by the handoff, the offers list and the plan cycle's pending tasks. Readings in
+OQ-80. The **runtime view**'s continuation paragraph and the **state-ownership view**'s record row say so. No package,
 edge, process, channel, message kind or store column changed.
 
 **The plan gate meets a resumed iteration (`PD-ORCH-003` revision 2, 2026-09-28, R-064).** A run that resumes an open

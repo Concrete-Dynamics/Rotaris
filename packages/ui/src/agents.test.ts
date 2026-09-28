@@ -81,7 +81,7 @@ describe('agents — chips, enablement, cascade, pause (REQ-MONITOR-060/062/063/
     expect(inspectorEnablement('done')).toEqual({ steer: false, cancel: false, popOut: true });
     expect(inspectorEnablement(null)).toEqual({ steer: false, cancel: false, popOut: false });
   });
-  it('the cascade counts live descendants only, and the run cascades to every live agent', () => {
+  it('the cascade reaches unfinished descendants only, never a settled one, and the run cascades to every unfinished agent (its reach to a paused one, OQ-73, is pinned below)', () => {
     const a = agent({ id: 'a', name: 'a', parentId: 'root:1' });
     const b = agent({ id: 'b', name: 'b', parentId: 'a', presentationState: 'queued', state: 'queued', live: false });
     const c = agent({ id: 'c', name: 'c', parentId: 'b', presentationState: 'done', state: 'succeeded', live: false });

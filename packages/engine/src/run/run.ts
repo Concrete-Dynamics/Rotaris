@@ -173,8 +173,10 @@ export interface RunDeps {
   /**
    * PD-ORCH-005 clauses 4 and 6: what this run does with the iteration a rest left open — resume it, the default of every
    * continue (the new message a continue by message delivers is already in its root's record); or decline it, clause 6's
-   * "continue without them". Absent means decline; a run with no open iteration ignores it. `delivered` is clause 17: the
-   * continue delivered a message to the resumed root, which is also appended as a task that closes with the iteration.
+   * "continue without them". Absent means decline, and the declined iteration's close and its agents' reports say so; a
+   * run with no open iteration ignores it, and only such a run — a new session's — is launched without it. `delivered`
+   * is clause 17: the continue delivered a message to the resumed root, which is also appended as a task that closes
+   * with the iteration.
    */
   readonly openIteration?: { readonly resume: boolean; readonly delivered?: boolean } | undefined;
   readonly permission: PermissionPosture;
@@ -927,15 +929,12 @@ export class Run {
    * this run's first iteration takes the next number rather than the dead one's. It counts toward no limit of this run.
    */
   private async closeLeftOpenIteration(): Promise<void> {
-    // The summary follows whether this run declined the iteration (PD-ORCH-005 clause 6), not what left it open: clause
-    // 18's "continue without them" declines a crash-left iteration after recording the crash, so a crash is the user's
-    // decline too, and names what left the agents paused as its agents' reports do. Only a run told nothing about the
-    // open iteration closes it as a dead run's.
-    const declined = this.deps.openIteration?.resume === false;
-    const closed = await this.closeOpenIteration((open) => (declined
-      ? `the session was continued without the agents ${interruptionPhrase(open.interruption ?? 'crash')} had left paused`
-      : 'the run that owned this iteration ended before it closed'),
-    (c) => `Cancelled: the session was continued without this agent, which ${interruptionPhrase(c.interruption ?? '')} had left paused.`);
+    // The summary is the decline's (PD-ORCH-005 clause 6), whatever left the iteration open: clause 18's "continue without
+    // them" declines a crash-left iteration after recording the crash, so a crash is the user's decline too, and names
+    // what left the agents paused as its agents' reports do. Every run that reaches here was told to decline: a run is
+    // told nothing only when it opens a new session (`Sessions.start`), where no iteration is open (`RunDeps.openIteration`).
+    const closed = await this.closeOpenIteration((open) => `the session was continued without the agents ${interruptionPhrase(open.interruption ?? 'crash')} had left paused`,
+      (c) => `Cancelled: the session was continued without this agent, which ${interruptionPhrase(c.interruption ?? '')} had left paused.`);
     if (!closed) return;
     this.initialIterations = this.iterationsCompleted;
     this.saveRunning({});

@@ -183,7 +183,8 @@ describe('agents — PD-ORCH-005 clause 16 (revision 4): one paused child is can
   const agents = [one, done, grand, two];
   it('Cancel is offered for a paused child while its session rests, never for the resting run itself; a live agent still needs its run', () => {
     expect(cancelOffered(one, false, true)).toBe(true);
-    // REQ-CHAT-008's recovery state: the Mission view counts the persisted busy status as a run, and the session rests.
+    // `resting` alone decides a paused child's Cancel, whatever the caller reads of a run: no surface passes both today
+    // (a resting session is never read as an active run), so this pins only that the second argument cannot withhold it.
     expect(cancelOffered(one, true, true)).toBe(true);
     expect(cancelOffered({ id: RUN_AGENT_ID, presentationState: 'paused' }, false, true)).toBe(false);
     expect(cancelOffered({ id: RUN_AGENT_ID, presentationState: 'paused' }, true, true)).toBe(false);

@@ -298,7 +298,7 @@ close commit in one transaction (`endIteration`). A rest or a dead run host leav
 `continueSession(…, { withoutPaused: true })`, "continue without them" — before its first iteration a run ends every
 `paused` agent of the open iteration `cancelled` with a report saying so (`cancelPausedAgents`), closes the row `cancelled`
 (`closeLeftOpenIteration`, REQ-ORCH-135) — its `iteration.end` summary names the decline and what left the agents paused,
-a crash on clause 18's route included, and only a run told nothing of the open iteration records a dead run's wording —
+a crash on clause 18's route included; every run that closes one was told to decline it —
 and attempts that iteration's one
 checkpoint capture (REQ-GIT-051, no child credited; its hooks' `iteration_end` is not fired — the hooks that saw it
 begin were the dead run's): the task it held goes back to `pending` (`Todo.reopen`), and the count moves past it, so
@@ -685,7 +685,8 @@ running it (`run-active`) and, first of all, one whose store has failed (`store-
 refuse it: a run ended on a recording failure reads `not-live` too, but did not crash, OQ-42); either choice records the
 crash first, in `launchContinuation` (PD-ORCH-005 clause 18, OQ-76). The strip
 keeps its one band, its two continues showing short labels as the send pill does — `Continue` and `Send`, named
-`Continue run` and `Continue with a message` (`PD-CHAT-001` revision 4).
+`Continue run` and `Continue with a message` (`PD-CHAT-001` revision 4) — and draws them in the send pill's place on a
+crash-left session too, which that revision prescribes only on a paused one (OQ-76's reading).
 
 ## 6. End
 

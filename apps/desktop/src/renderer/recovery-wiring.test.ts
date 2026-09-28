@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
  * drawing the run-level agent through any other call, fails here; the helper itself is pinned in `packages/ui`
  * (`cancel-paused.test.ts`, "restingView answers the run-level agent and the rest from the one recovery fact").
  */
-describe('PD-ORCH-005 clause 13 (OQ-73): the Mission root and a persona window draw the run-level agent from the recovery fact', () => {
+describe('PD-ORCH-005 clauses 13, 16 and 18 (OQ-73, OQ-74, OQ-76): the renderer roots draw from the recovery fact', () => {
   const source = (file: string): string => readFileSync(new URL(`./${file}`, import.meta.url), 'utf8');
   for (const [file, session] of [['main.tsx', 'session'], ['windows.tsx', 'state.session']] as const) it(file, () => {
     const text = source(file);
@@ -27,5 +27,32 @@ describe('PD-ORCH-005 clause 13 (OQ-73): the Mission root and a persona window d
    */
   it('main.tsx hands the Mission view the same recovery fact', () => {
     expect(source('main.tsx')).toContain('recovery={needsRecovery}');
+  });
+
+  /*
+   * What `restingView` answers must also reach the view, and each prop is a plain boolean or record, so handing a
+   * constant in its place typechecks. PD-ORCH-005 clause 16: the Mission view's "Cancel selection" offers a paused child's
+   * Cancel at rest only through `resting` (`cancelOffered`); clause 13: the run-level agent it and a persona window draw
+   * is `runLevel`. Handing either a constant fails here.
+   */
+  it('main.tsx and windows.tsx hand the views what restingView answered', () => {
+    expect(source('main.tsx')).toContain('runLevel={runLevel} resting={resting} recovery={needsRecovery}');
+    expect(source('windows.tsx')).toContain('runLevel={runLevel}');
+  });
+
+  /*
+   * The Workspace root reads the recovery fact itself (the first of main.tsx's two `useNeedsRecovery` calls) and hands it
+   * to `WorkspaceView`, whose `needsRecovery` is optional and defaults to `false`. Clause 18's recovery-state offer — the
+   * Continue action, the count and "continue without them" on a crash-left busy session — and clause 13's run-level
+   * `paused` root in that state are drawn from it (`crashLeft` and `resting` in `WorkspaceView`), so handing it `false`,
+   * or leaving it out, fails here.
+   */
+  it('main.tsx hands the Workspace the recovery fact (PD-ORCH-005 clauses 13 and 18)', () => {
+    const text = source('main.tsx');
+    expect(text.match(/const needsRecovery = useNeedsRecovery\(session\?\.id \?\? null, session\?\.executionStatus \?\? null\);/g)).toHaveLength(2);
+    const start = text.indexOf('<WorkspaceView ');
+    const element = text.slice(start, text.indexOf('/></>;', start));
+    expect(start).toBeGreaterThan(-1);
+    expect(element).toMatch(/\sneedsRecovery=\{needsRecovery\}\s/);
   });
 });

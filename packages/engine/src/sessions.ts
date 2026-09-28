@@ -361,6 +361,16 @@ export function parseBinding(json: string | null): WorktreeBinding | null {
 }
 
 /** REQ-GIT-019/022: the run's effective root is the worktree while the record stays anchored to the base. */
+/**
+ * OQ-42, and OQ-76's "the same state the same way": why the workspace store refuses to record for this session — the
+ * store's own failure or the writer's — or null when it records. Every entry point that would write (the continue by
+ * message, the Continue action and the decline, the plan decision, the at-rest cancel) and the projection that states
+ * what a continue would resume ask this one question.
+ */
+function storeFailureOf(dal: StoreDal, writer: SessionWriter): string | null {
+  return SessionWriter.storeFailure(dal) ?? writer.failed ?? null;
+}
+
 function effectiveRootOf(row: SessionRow): { readonly root: string; readonly binding: WorktreeBinding | null } {
   const binding = parseBinding(row.worktree);
   return { root: binding?.worktree_path ?? row.workspace_root, binding };
@@ -1074,8 +1084,8 @@ export class Sessions {
   prompt(sessionId: SessionId, prompt: string, inputs: readonly ImageAttachmentInput[] = []): Result<TranscriptRow, { code: string; reason: string }> {
     let s = this.live.get(sessionId);
     if (!s) return err({ code: 'not-live', reason: `${sessionId} is not a live session` });
-    const storeFailure = SessionWriter.storeFailure(s.dal) ?? s.writer.failed;
-    if (storeFailure) return err({ code: 'store-failed', reason: `The workspace store requires recovery before continuing work: ${storeFailure}` });
+    const storeFailure = storeFailureOf(s.dal, s.writer);
+    if (storeFailure !== null) return err({ code: 'store-failed', reason: `The workspace store requires recovery before continuing work: ${storeFailure}` });
     if (s.run && !s.run.isEnded) return err({ code: 'run-active', reason: 'A run is already active.' });
     const storedForSetup = s.dal.getSession(sessionId);
     const setup = this.setupFor(storedForSetup?.workspace_root ?? '', this.deps.attended?.() ?? false, sessionId, storedForSetup ? effectiveRootOf(storedForSetup).root : '', resumedPersona(s.dal, sessionId, false));
@@ -1579,7 +1589,7 @@ export class Sessions {
    */
   private cancelPausedAtRest(s: Live | undefined, req: ControlRequest): ControlResult {
     if (!s) return { ok: false };
-    if ((SessionWriter.storeFailure(s.dal) ?? s.writer.failed ?? null) !== null) return { ok: false };
+    if (storeFailureOf(s.dal, s.writer) !== null) return { ok: false };
     const sid = s.writer.sessionId;
     const agentId = typeof req.args['agentId'] === 'string' ? req.args['agentId'] : '';
     const row = s.dal.getSession(sid);
@@ -1689,8 +1699,8 @@ export class Sessions {
   continueSession(sessionId: SessionId, action: 'continue' | 'double' | 'cancel', opts: { readonly withoutPaused?: boolean } = {}): Result<{ readonly resumed: boolean; readonly messageLimit: number | null }, { readonly code: string; readonly reason: string }> {
     const s = this.live.get(sessionId);
     if (!s) return err({ code: 'not-live', reason: `${sessionId} is not a live session` });
-    const storeFailure = SessionWriter.storeFailure(s.dal) ?? s.writer.failed;
-    if (storeFailure) return err({ code: 'store-failed', reason: `The workspace store requires recovery before continuing work: ${storeFailure}` });
+    const storeFailure = storeFailureOf(s.dal, s.writer);
+    if (storeFailure !== null) return err({ code: 'store-failed', reason: `The workspace store requires recovery before continuing work: ${storeFailure}` });
     if (s.run && !s.run.isEnded) return err({ code: 'run-active', reason: 'A run is already active.' });
     const stored = s.dal.getSession(sessionId);
     if (!stored) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
@@ -1724,9 +1734,10 @@ export class Sessions {
       return ok({ resumed: false, messageLimit: limit });
     }
     // The continuation: the last user request stands and no user row is appended (REQ-MONITOR-125's "resumed from the composer").
-    // A session with nothing open and that request finished — crash-left (clause 18), or `paused` by a pause or a stop accepted
-    // after its iteration closed — appends it to the todo again (REQ-ORCH-004; OQ-75's no-append covers only a request held
-    // unfinished): the undecided case of OQ-76's "Nothing open to resume".
+    // A session with nothing open and that request finished — crash-left (clause 18), `paused` by a pause or a stop accepted
+    // after its iteration closed, or `paused` by a plan Cancel or a stop of the plan cycle held after a resumed iteration
+    // that carried out the continue's message (PD-ORCH-003 revision 2, OQ-77) — appends it to the todo again (REQ-ORCH-004;
+    // OQ-75's no-append covers only a request held unfinished): the undecided case of OQ-76's "Nothing open to resume".
     const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId, effectiveRootOf(stored).root, resumedPersona(s.dal, sessionId, opts.withoutPaused === true));
     if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
     const lastPrompt = [...s.dal.residentRows(sessionId)].reverse().find((row) => row.kind === 'user')?.body ?? stored.session_id;
@@ -1819,8 +1830,8 @@ export class Sessions {
   planDecision(sessionId: SessionId, decision: PlanDecision, changes = ''): Result<{ readonly relaunched: boolean; readonly cycle: number }, { readonly code: string; readonly reason: string }> {
     const s = this.live.get(sessionId);
     if (!s) return err({ code: 'not-live', reason: `${sessionId} is not a live session` });
-    const storeFailure = SessionWriter.storeFailure(s.dal) ?? s.writer.failed;
-    if (storeFailure) return err({ code: 'store-failed', reason: `The workspace store requires recovery before continuing work: ${storeFailure}` });
+    const storeFailure = storeFailureOf(s.dal, s.writer);
+    if (storeFailure !== null) return err({ code: 'store-failed', reason: `The workspace store requires recovery before continuing work: ${storeFailure}` });
     const stored = s.dal.getSession(sessionId);
     if (!stored) return err({ code: 'no-session', reason: `No session exists under id ${sessionId}.` });
     if (stored.execution_status !== 'awaiting_plan_decision' || stored.plan_cycle === null) {
@@ -1871,7 +1882,7 @@ export class Sessions {
    */
   private restingOf(dal: StoreDal, row: SessionRow, writer: SessionWriter): { readonly crashLeft: ReadonlySet<string>; readonly resumable: ResumablePayload | null } {
     const sessionId = asSessionId(row.session_id);
-    const storeLeftBusy = isActiveStatus(row.execution_status) && (SessionWriter.storeFailure(dal) ?? writer.failed ?? null) !== null;
+    const storeLeftBusy = isActiveStatus(row.execution_status) && storeFailureOf(dal, writer) !== null;
     return {
       crashLeft: crashLeftOf(dal, row, () => this.liveness(dal, sessionId) === 'not-live', storeLeftBusy),
       resumable: storeLeftBusy ? null : resumableOf(dal, row),

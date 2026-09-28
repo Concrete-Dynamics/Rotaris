@@ -47,11 +47,12 @@ export function steerOffered(agent: Pick<AgentRecord, 'presentationState'> | nul
 /**
  * PD-ORCH-005 clauses 13 and 19 (OQ-73): the iteration's root resumes with its paused agents and the Continue action
  * counts it, so while the session rests with an iteration open — `paused` or `interrupted`, or in REQ-CHAT-008's
- * recovery state, which only the caller knows (`recovery`) — the run-level agent presents as `paused` too, the tree
- * agreeing with the count. The one predicate for the composer's count (`WorkspaceView`'s `resumable`), the resting root
+ * recovery state, which only the caller knows (`recovery`, required as `runLevelAgent`'s is, so no caller can leave
+ * that state out and withhold the resting root or a paused child's Cancel) — the run-level agent presents as `paused`
+ * too, the tree agreeing with the count. The one predicate for the composer's count (`WorkspaceView`'s `resumable`), the resting root
  * and a paused child's Cancel (`cancelOffered`'s `resting`, clause 16), so the three cannot drift apart.
  */
-export function runLevelResting(session: SessionRecord, recovery = false): boolean {
+export function runLevelResting(session: SessionRecord, recovery: boolean): boolean {
   const status = session.executionStatus;
   return session.resumable !== null && (status === 'paused' || status === 'interrupted' || (recovery && isBusy(status)));
 }

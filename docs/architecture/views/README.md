@@ -91,9 +91,10 @@ unfinished, before the crash is recorded, as the record will leave them (`crashL
 OQ-73's departure from clause 13's last sentence) — never for a session a store failure left busy, which is not one a
 crash left and states nothing to resume (`Sessions.restingOf`, OQ-76); `runLevelAgent` presents the resting root
 `paused`, the Workspace, the Mission view and a persona window asking it and `runLevelResting` through one call
-(`restingView`, whose recovery argument, like `runLevelAgent`'s, is required) with REQ-CHAT-008's recovery state
+(`restingView`, whose recovery argument, like `runLevelAgent`'s and `runLevelResting`'s, is required) with REQ-CHAT-008's recovery state
 (`useNeedsRecovery`, moved to `renderer/session-view.ts`; the two renderer roots' wiring is pinned by
-`renderer/recovery-wiring.test.ts`), and the Mission view, handed that fact as `recovery`, reads no run active in it, so
+`renderer/recovery-wiring.test.ts`, with the props that carry it and what `restingView` answers to the Workspace, the
+Mission view and a persona window), and the Mission view, handed that fact as `recovery`, reads no run active in it, so
 it offers no Pause beside the root it draws `paused` and labels the run REQ-CHAT-008's "Run needs recovery" rather than
 "Running" (`docs/defects/fixed/the-mission-view-offers-pause-and-cancel-with-no-run-behind-the-session.md`). The
 Overview counts paused agents on their own. The **runtime view**'s eleventh-state and projection paragraphs and the
@@ -115,13 +116,14 @@ accepts a session a crash left — `interrupted`, or persisted busy and `not-liv
 beside `paused`, and refuses a busy one whose process may still be running it (`run-active`) and, first, any session
 whose store has failed (`store-failed`, as the continue by message is: a run ended on a recording failure is not a
 crash, OQ-42; a `paused` session under a store failure is refused the same way). The composer draws the two continues on
-it (`crashLeft`), and the count and "Continue without them" wherever the session rests with an iteration open
+it (`crashLeft`) in the send pill's place, which `PD-CHAT-001` revision 4 prescribes on a paused session only (OQ-76's
+reading), and the count and "Continue without them" wherever the session rests with an iteration open
 (`resumable`, `runLevelResting`), the same count as a paused session's; either choice records the crash first, in
 `launchContinuation`. Readings in OQ-76. The **runtime view**'s §5 Continue paragraph and the **process view**'s
 `session.continue` note are updated; the command's shape does not change, and no package, edge, process or channel does.
 A declined crash-left iteration's `iteration.end` summary names the decline and the crash, as its agents' reports do
-(`closeLeftOpenIteration` reads whether the run declined, not what left the iteration open); the **runtime view**'s
-declined-iteration paragraph says so.
+(`closeLeftOpenIteration` writes the decline's summary whatever left the iteration open; every run that reaches it was
+told to decline); the **runtime view**'s declined-iteration paragraph says so.
 
 **`/stop` is offered as the stop, and the paused continue by message reads `Send` (`PD-ORCH-005` clause 15,
 `PD-CHAT-001` revision 4, 2026-09-28, R-064).** The slash catalogue describes `/stop` as "Stop the active run"; it still

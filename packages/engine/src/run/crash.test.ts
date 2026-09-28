@@ -719,8 +719,8 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
        * while its checkpoint is captured, its `iteration_end` hooks fire or its events drain — is met at the loop head,
        * which comes to rest before the stop conditions run. Nothing is open, the last request is `complete`, and the
        * session is `paused`; only a pause accepted during the turn puts the task back to pending. So the Continue action
-       * re-works the finished request here too, and OQ-76's question covers both routes. Pinned so that a ruling either
-       * way turns this red.
+       * re-works the finished request here too, and OQ-76's question covers every route (the plan mode's third is pinned in
+       * `plan-gate-resume.test.ts`). Pinned so that a ruling either way turns this red.
        */
       for (const op of ['pause', 'cancel'] as const) {
         it(`a ${op === 'pause' ? 'pause' : 'stop'} accepted after the iteration closed leaves a \`paused\` session in the same state, and the Continue action re-works the request there too (OQ-76)`, async () => {

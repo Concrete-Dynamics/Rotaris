@@ -3595,7 +3595,8 @@ message.
   holds) — a continue's message a resumed iteration left pending or holds, or any request whose task a rest put back —
   they append none, and the run takes that task up as it stands. A request whose task is complete or abandoned is
   appended as before — a `paused` session holds its last request complete when its pause or stop was accepted after
-  its iteration closed (OQ-76, "Nothing open to resume") — and so is one whose task is in progress with no iteration
+  its iteration closed, or when the plan cycle held after a resumed iteration that carried out the continue's message was
+  cancelled or stopped (OQ-76, "Nothing open to resume"; OQ-77, "What a cancel leaves") — and so is one whose task is in progress with no iteration
   holding it: a selection takes only pending tasks, so nothing would take that task up, and the run would end at once
   with the request not done. A message a closed iteration still holds (see "What a death leaves") is judged as the run
   will take it: it is settled first, as the run settles it before it selects, so one returned to pending is not
@@ -3629,7 +3630,7 @@ clause 17 speaks only of the message a continue delivers — and, if so, whether
 by more than its text; and whether a message taken up by a later iteration
 should be sent with its images, or become that iteration's launch content in place of the latest request.
 
-**OQ-76 — Which sessions has a crash left, and what does the Continue action offer on one with nothing to resume?** *(`PD-ORCH-005` clause 18 (revision 4), with clauses 8, 11 and 19; REQ-MONITOR-125 as clause 18 extends it; REQ-CHAT-008, REQ-GIT-093, REQ-SESSION-171, REQ-SESSION-060, REQ-GIT-094, REQ-CHAT-006 and REQ-ORCH-004, which the directive does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
+**OQ-76 — Which sessions has a crash left, and what does the Continue action offer on one with nothing to resume?** *(`PD-ORCH-005` clause 18 (revision 4), with clauses 8, 11 and 19; REQ-MONITOR-125 as clause 18 extends it; REQ-CHAT-008, REQ-GIT-093, REQ-SESSION-171, REQ-SESSION-060, REQ-GIT-094, REQ-CHAT-006 and REQ-ORCH-004, which the directive does not name; and `PD-CHAT-001` revision 4 ("The strip" and "The paused continues"), with REQ-CHAT-005 as it narrows it, which the reading below departs from by drawing the two continues in the send pill's place on a session that is not paused. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
 
 Clause 18: "A session a crash left — `interrupted` after a repair, or in REQ-CHAT-008's recovery state before one — SHALL
 offer the Continue action and 'continue without them' as a `paused` session does, with the same count. Either choice
@@ -3677,15 +3678,36 @@ say what the decline's wording means before the crash is recorded.
   is left busy with nothing open and its last request `complete`. A `paused` session reaches the same state with no
   crash: a pause or a stop the run accepts after the iteration closed, while its checkpoint is captured, its
   `iteration_end` hooks fire or its events drain, is met at the loop head, which comes to rest before the stop
-  conditions run. Only a pause or a stop accepted during the turn puts the iteration's task back to pending. On either
-  route the build appends the finished request again as a new task (REQ-ORCH-004: OQ-75's rule covers only a request
+  conditions run. Only a pause or a stop accepted during the turn puts the iteration's task back to pending. A third
+  route is the plan mode's: a resumed iteration closes the continue's message `complete` (clause 17), the gate then
+  holds before the first new iteration (`PD-ORCH-003` revision 2), and a plan Cancel, or a stop during that plan cycle
+  (clause 15), leaves `paused` with nothing open and the continue's message, the last user row, finished (OQ-77, "What a
+  cancel leaves"). A fresh hold does not reach it, because the gated request's task is still pending. On every route the
+  build appends the finished request again as a new task (REQ-ORCH-004: OQ-75's rule covers only a request
   held unfinished), and a new iteration re-works a request that already succeeded, so the crash-left session does here
   what a `paused` one does, as clause 18 has it. The message-limit resolution does not reach this state: a crash-left
   session is not at the limit, and the pause and the stop leave `paused`, not `paused_message_limit`. Measured in
   `run/crash.test.ts`: "…nothing open and the last request finished…", for the recovery state and for `interrupted`,
-  and "…accepted after the iteration closed…", for a pause and for a stop. *Until the merged build's sixth review
-  round this bullet said no `paused` session reaches the state, so clause 18's "as a `paused` session does" had no
-  counterpart for it, and the ruling question below named the crash-left session alone.*
+  and "…accepted after the iteration closed…", for a pause and for a stop; and in `run/plan-gate-resume.test.ts`,
+  "after the hold that follows a resumed iteration, …", for a plan Cancel and for a stop during the plan cycle. *Until
+  the merged build's sixth review round this bullet said no `paused` session reaches the state, so clause 18's "as a
+  `paused` session does" had no counterpart for it, and the ruling question below named the crash-left session alone.
+  Until the eighth it named two routes and not the plan mode's, which is the likeliest in `plan` mode.*
+- **The two continues take the send pill's place.** A crash-left session with an iteration open draws the Continue
+  action and the continue by message (`Send`) in the strip where the send pill stood, and the count and "Continue
+  without them" in the notices row, as a `paused` session does (`crashLeft` in `WorkspaceView`); with nothing open it
+  draws the two continues and no count (below). `PD-CHAT-001` revision 4 prescribes that layout "on a paused session"
+  alone ("the send pill, or on a paused session the two continues that take its place"; "On a paused session the send
+  pill's place is taken by two continues"), and REQ-CHAT-005's send pill as it narrows it governs everywhere else.
+  Clause 18 grants a crash-left session "the Continue action and 'continue without them' … as a `paused` session does";
+  it names neither the strip nor the continue by message. The build reads clause 18's "as a `paused` session does" to
+  carry the paused session's presentation of those continues, and draws the continue by message beside them because
+  the send pill it would otherwise keep sends a continue by message on that session too (`Sessions.prompt` records the
+  crash first, as every continue does). Drawing it there departs from `PD-CHAT-001` revision 4's strip sentence and from
+  REQ-CHAT-005 for a session neither directive governs; the alternative — keep the send pill, with the Continue action
+  and the decline beside it in the notices row — was not taken, because the strip would then draw two different
+  controls for the same pair of continues depending on why the session rests. *Until the merged build's eighth review
+  round this was stated only in passing, in the bullet below, and not asked.*
 - **No pause statement.** "Paused. Run controls need the run continued…" stays on a paused session only. A crash-left
   session is not paused, and its run state already says what it is (REQ-CHAT-008's "Run needs recovery", or the
   interrupted presentation). REQ-CHAT-006's chip reason in the recovery state is left as it stands. The Continue action
@@ -3704,13 +3726,17 @@ say what the decline's wording means before the crash is recorded.
   `continueSession` does not copy it
   (`docs/defects/a-continue-by-message-cannot-re-claim-a-lock-it-no-longer-holds.md`).
 
-**What a ruling decides.** Whether a busy session of unknown liveness should also be continuable, for example after a
+**What a ruling decides.** Whether a crash-left session's strip should draw the two continues in the send pill's
+place, as built, or keep the send pill (REQ-CHAT-005) with the Continue action and the decline in the notices row,
+since `PD-CHAT-001` revision 4 prescribes the paused continues on a paused session only. Whether a busy session of
+unknown liveness should also be continuable, for example after a
 confirmation, rather than refused. Whether a crash-left session should state something of its own in the notices row,
 where a paused session states its pause. Whether a crash that left a durable hold should offer anything beyond that
 hold's own continues. Whether the composer should withhold the continues on a session the store's failure left busy,
 rather than draw them and have the engine refuse them. Whether the Continue action on a session with nothing open and
-its last request finished — crash-left, or `paused` by a pause or a stop accepted after its iteration closed — should
-re-run that request as built, append nothing and run nothing, or not be offered at all, which for the crash-left
+its last request finished — crash-left, `paused` by a pause or a stop accepted after its iteration closed, or `paused`
+by a plan Cancel or a stop of the plan cycle held after a resumed iteration that carried out the continue's message —
+should re-run that request as built, append nothing and run nothing, or not be offered at all, which for the crash-left
 session would narrow clause 18's "SHALL offer".
 
 **OQ-77 — Where does the gate hold a run that resumed an iteration, and what does that plan cycle plan?** *(`PD-ORCH-003` revision 2, with `PD-ORCH-005` clause 18; REQ-ORCH-152, which the directive narrows for an iteration a rest left open (`PD-ORCH-005` clause 4), and which the reading below that an iteration a crash left open resumes unheld too departs from for an iteration the directive does not govern; REQ-ORCH-153, whose gate that reading also departs from for the same iteration; and REQ-ORCH-021, REQ-ORCH-067, REQ-ORCH-069, REQ-ORCH-073, REQ-ORCH-085 and REQ-ORCH-154, which it does not name. Raised 2026-09-28 by building `PD-ORCH-003` revision 2 under [R-064](../product/requests.md#r-064).)*
@@ -3783,13 +3809,24 @@ and what the answer at that gate launches.
   mark that the hold followed a resumed iteration, and the handoff's todo states the same work.
 - **"Continue without them" is unchanged.** It resumes nothing, so its run is held before its first iteration, as any run
   that resumes nothing is.
+- **What a cancel leaves.** A plan Cancel at this hold, or a stop during its plan cycle (`PD-ORCH-005` clause 15),
+  leaves the session `paused` with no iteration open, as at any hold. When the resumed iteration succeeded, the
+  continue's message — the last user row — is `complete` (clause 17), so the next Continue action finds no unfinished
+  task of its text and appends it again beside the pending work (OQ-75 appends a completed request as before). The plan
+  cycle that run is held at is asked to plan the message as its latest request, and approved, the message is worked a
+  second time. A cancel at a fresh hold does not do this: the gated request's task is still pending, so the Continue
+  action appends nothing. OQ-76's "Nothing open to resume" records it beside the other routes to the same state, and
+  its ruling question covers it. Measured in `plan-gate-resume.test.ts`, "after the hold that follows a resumed
+  iteration, …", for a plan Cancel and for a stop during the plan cycle. Recorded at the merged build's eighth review.
 
 **What a ruling decides.** Whether the revision's unheld resume reaches an iteration a crash left open once clause 18
 has recorded the crash, as built, or only one a rest left, so that a crash-left iteration is held at the gate like a
 new one; whether a requeued resumed task should count as work already under way rather than a new
 iteration; whether the answer-group exemption should reach this hold; whether the plan cycle should plan only the
-first pending task or all of them; and whether a revise after this hold should be told again what became of the
-continue's message.
+first pending task or all of them; whether a revise after this hold should be told again what became of the
+continue's message; and whether a Continue action after a Cancel or a stop at this hold should re-run a message the
+resumed iteration carried out, as built, or continue with the pending work alone (with OQ-76's ruling on the same
+state).
 
 **OQ-78 — What is an agent's fingerprint taken of, when is it compared, and where is the warning stated?** *(`PD-ORCH-005` clause 14 over OQ-68's reading; REQ-SESSION-029, REQ-SESSION-132, REQ-SESSION-134, REQ-SESSION-135, REQ-ORCH-019, REQ-ORCH-088, REQ-ORCH-095, REQ-WORKSPACE-047, REQ-WORKSPACE-050, REQ-WORKSPACE-058, REQ-WORKSPACE-060, REQ-TOOLS-010, REQ-TOOLS-053, REQ-TOOLS-069, REQ-MCP-101, REQ-CONFIG-166 and REQ-MONITOR-305, which the directive does not name; and REQ-ORCH-139, whose issue-kind vocabulary has no kind for the warning, which the reading below departs from by coining `resumed_under_changed_instructions`. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
 
@@ -3901,6 +3938,14 @@ from the launch content computed when the run began.
   belong to one run — was not taken, because the clause names the iteration the new one follows and nothing
   distinguishes the two plan cycles in the record except the order of the two instants. Found by the merged build's
   review.
+- **A plan cycle that ended before its gate leaves no mark, so the work after it follows the earlier iteration.** The
+  `plan_cycles` row is written only when the run parks at the gate (`SessionWriter.openPlanGate`). A plan cycle
+  stopped, quit, crashed or failed before its root answered with a plan leaves none, so the next continuation finds
+  the latest iteration the most recent record and prefers its root's document, ahead of anything that plan cycle's
+  root or children published, although the new work follows the plan cycle. The code does what the rule above says;
+  the rule's premise — that the record shows a plan cycle came after the iteration — does not hold here. The build
+  keeps it: nothing in the record says a plan cycle ran, and adding a mark for an unparked cycle is a store change no
+  directive asks for. Recorded at the merged build's eighth review, from the record lane's final-round nit.
 - **A root with no recorded iteration or no tool port** (before v23, or a run with no tool port) has no publish to
   find, and the handoff takes the latest of any kind. Nothing is backfilled.
 - **A root whose every publish is superseded published none.** Only artifacts nothing supersedes are candidates, so
@@ -3932,7 +3977,9 @@ iteration whose root published nothing; whether work that follows a plan cycle t
 built, or prefers the plan cycle root's own publish, or the root of the last recorded iteration — the reading this
 build first took, which handed an earlier piece of work's document over ahead of the plan cycle's; whether the plan
 cycle `PD-ORCH-003` revision 2 holds after a resumed iteration of the same run is taken the same way, as built, or
-prefers that resumed root's own publish over what the plan cycle produced; whether a root whose every publish is superseded counts as having published
+prefers that resumed root's own publish over what the plan cycle produced; whether a plan cycle that ended before its
+gate should also stop the earlier iteration's root being preferred, which needs a record of a plan cycle that never
+parked; whether a root whose every publish is superseded counts as having published
 none; whether a later iteration of the same run should have its handoff's artifact read again when it starts,
 rather than be re-sent the one read at the continue, superseded or not; and whether the fallback of any kind should pass
 over a cancelled agent's stub report, which clause 16's at-rest cancel writes every time.

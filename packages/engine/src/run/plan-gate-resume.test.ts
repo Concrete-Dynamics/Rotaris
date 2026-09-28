@@ -182,6 +182,48 @@ describe('PD-ORCH-003 revision 2: a resumed iteration and the gate', () => {
     expect(dal.timelineOf(sid).filter((t) => t.name === 'iteration_paused')).toHaveLength(0);
   });
 
+  /**
+   * OQ-76 "Nothing open to resume" and OQ-77 "What a cancel leaves": the third route to a `paused` session whose last
+   * request is finished. The resumed iteration closes the continue's message `complete` (PD-ORCH-005 clause 17), the run
+   * holds (PD-ORCH-003 revision 2), and a plan Cancel — or a stop during that plan cycle (clause 15) — leaves `paused`
+   * with nothing open. The Continue action then finds no unfinished task of the last request's text (OQ-75), so it
+   * appends the finished message again beside the pending work, and the next plan cycle is asked to plan it as the latest
+   * request; approved, it is worked a second time. Pinned as built, so a ruling either way turns it red.
+   */
+  for (const route of ['a plan Cancel', 'a stop during the plan cycle'] as const) it(`after the hold that follows a resumed iteration, ${route} and then the Continue action append the finished message again (OQ-76, OQ-77)`, async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    const planned = route === 'a plan Cancel' ? answer('Plan: do later.') : { parts: [{ hold }, ...answer('Plan: do later.').parts] };
+    const { sessions, client, sid } = await restedWithPending([answer('resumed, done'), planned, answer('Plan: again.'), answer('later, done'), answer('go on, again'), answer('spare')]);
+    expect(sessions.prompt(sid, 'go on').ok).toBe(true);
+    if (route === 'a plan Cancel') {
+      expect((await sessions.running(sid)!).execution_status).toBe('awaiting_plan_decision');
+      expect(sessions.planDecision(sid, 'cancel').ok).toBe(true);
+    } else {
+      for (let i = 0; i < 100 && !sessions.run(sid)!.isPlanGateHeld; i++) await new Promise((r) => setTimeout(r, 5));
+      expect(sessions.control({ op: 'cancel', sessionId: sid, args: {} })).toEqual({ ok: true });
+      release();
+      await sessions.running(sid)!;
+    }
+    expect(dal.getSession(sid)!.execution_status).toBe('paused');
+    expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.state, r.outcome])).toEqual([[1, 'closed', 'succeeded']]);
+    expect(tasksOf(sid).map((t) => [t.text, t.state])).toEqual([['first', 'complete'], ['later', 'pending'], ['go on', 'complete']]);
+    expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+    expect((await sessions.running(sid)!).execution_status).toBe('awaiting_plan_decision');
+    expect(tasksOf(sid).map((t) => [t.text, t.state])).toEqual([['first', 'complete'], ['later', 'pending'], ['go on', 'complete'], ['go on', 'pending']]);
+    // The plan cycle is asked to plan the finished message as the latest request; its handoff, built before the append,
+    // still shows that message's first task complete.
+    const plan = textOf(client.requests.at(-1)!);
+    expect(plan).toContain('The task to plan for follows.');
+    expect(plan).toContain('Latest user request:\ngo on\n');
+    expect(plan).toContain('- [complete] go on');
+    // Approved, the message the resumed iteration already carried out is worked by an iteration of its own.
+    expect(sessions.planDecision(sid, 'approve').ok).toBe(true);
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(tasksOf(sid).map((t) => [t.text, t.state])).toEqual([['first', 'complete'], ['later', 'complete'], ['go on', 'complete'], ['go on', 'complete']]);
+    expect(dal.iterationsOf(sid).map((r) => r.outcome)).toEqual(['succeeded', 'succeeded', 'succeeded']);
+  });
+
   it('the message limit reached as the resumed iteration closes wins over the gate (REQ-ORCH-085)', async () => {
     const { sessions, runtime, sid } = await restedWithPending([answer('resumed, done'), answer('never')]);
     runtime.messageLimit = 1;

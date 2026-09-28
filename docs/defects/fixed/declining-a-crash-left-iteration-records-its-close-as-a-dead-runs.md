@@ -32,8 +32,9 @@ iteration left open closes as cancelled, its task anchored).
 By the seventh fix round of the merged revision 4 build (R-064). `closeLeftOpenIteration` chooses the summary by whether
 this run declined the iteration (`openIteration.resume === false`), not by what left it open. A declined iteration reads
 "the session was continued without the agents … had left paused" with the recorded interruption's phrase (`a crash` on
-clause 18's route), matching its agents' reports. Only a run told nothing about the open iteration still records the
-dead run's wording.
+clause 18's route), matching its agents' reports. The seventh round kept the dead run's wording for a run told nothing
+about the open iteration; the eighth dropped it, since no route reaches it (only a new session's run is told nothing, and
+it has no iteration open) and, reached, it would have brought this contradiction back.
 
 Evidence: `packages/engine/src/run/crash.test.ts`, "recovery: / interrupted: "continue without them" records the crash
 first, …" now assert iteration 2's `iteration.end` summary "the session was continued without the agents a crash had

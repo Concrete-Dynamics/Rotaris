@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONTEXT_CAPACITY, RUN_AGENT_ID, type AgentRecord, type SessionRecord } from '@rotaris/contracts';
 import { MissionView, missionCancelBody, missionConfirmation } from './MissionView.js';
-import { CANCEL_RUN_TEXT, restingView } from './agents.js';
+import { CANCEL_RUN_TEXT, PAUSE_NO_RUN, restingView } from './agents.js';
 import { Inspector } from './Inspector.js';
 import { useShellState } from './shell-state.js';
 import { WorkspaceView } from './WorkspaceView.js';
@@ -37,8 +37,8 @@ const inspector = (selected: string, over: { runActive?: boolean; resting?: bool
   session: over.session ?? session(), rows: [], personas: [], runLevel: null, selectedAgentId: selected, onSelect: () => undefined, models: [], compressionThresholdPercent: 60, runActive: over.runActive ?? false, resting: over.resting ?? true, nowIso: null,
   onSteer: () => undefined, onCancel: () => undefined, onPopOut: () => undefined,
 }));
-const mission = (selected: string, over: { resting?: boolean; session?: SessionRecord; runLevel?: AgentRecord | null } = {}) => renderToStaticMarkup(createElement(MissionView, {
-  session: over.session ?? session(), sessionLabel: null, runLevel: over.runLevel ?? null, resting: over.resting ?? true, selectedAgentId: selected, onSelect: () => undefined, nowIso: null, strategy: null, maxDepth: null,
+const mission = (selected: string, over: { resting?: boolean; recovery?: boolean; session?: SessionRecord; runLevel?: AgentRecord | null } = {}) => renderToStaticMarkup(createElement(MissionView, {
+  session: over.session ?? session(), sessionLabel: null, runLevel: over.runLevel ?? null, resting: over.resting ?? true, recovery: over.recovery ?? false, selectedAgentId: selected, onSelect: () => undefined, nowIso: null, strategy: null, maxDepth: null,
   onSetStrategy: ok, onSetDepth: ok, onPause: ok, onCancelAgent: ok, onCancelRun: ok, onOpen: () => undefined, onPopOut: () => undefined,
 }));
 /** The attributes of the one button a test id names. */
@@ -68,9 +68,18 @@ describe('PD-ORCH-005 clauses 13 and 16 (revision 4, OQ-73/OQ-74): the Mission v
   const restingRun = agent({ id: RUN_AGENT_ID, name: 'orchestrator', persona: 'orchestrator', parentId: '', depth: 0, interruption: null });
   it('in REQ-CHAT-008\'s recovery state the persisted status reads busy, yet the resting run-level agent offers no "Cancel selection" — the engine would refuse it', () => {
     const recovery = session({ executionStatus: 'running' });
-    expect(button(mission(RUN_AGENT_ID, { session: recovery, runLevel: restingRun }), 'mission-cancel')).toContain('disabled');
+    expect(button(mission(RUN_AGENT_ID, { session: recovery, recovery: true, runLevel: restingRun }), 'mission-cancel')).toContain('disabled');
     // …while a paused child of the same session offers it.
-    expect(button(mission(paused.id, { session: recovery, runLevel: restingRun }), 'mission-cancel')).not.toContain('disabled');
+    expect(button(mission(paused.id, { session: recovery, recovery: true, runLevel: restingRun }), 'mission-cancel')).not.toContain('disabled');
+  });
+  it('in REQ-CHAT-008\'s recovery state the Mission view offers no "Pause" for the run it draws `paused`: no run is active', () => {
+    const recovery = session({ executionStatus: 'running' });
+    const html = mission(RUN_AGENT_ID, { session: recovery, recovery: true, runLevel: restingRun });
+    expect(button(html, 'mission-pause')).toContain('data-enabled="0"');
+    expect(html).toContain(PAUSE_NO_RUN);
+    expect(html).not.toContain('Pauses the whole run after its current step.');
+    // The same busy status with a run under way here still offers it.
+    expect(button(mission(RUN_AGENT_ID, { session: recovery, resting: false, recovery: false, runLevel: restingRun }), 'mission-pause')).toContain('data-enabled="1"');
   });
   it('a live run\'s run-level agent still offers it', () => {
     const live = agent({ id: RUN_AGENT_ID, name: 'orchestrator', persona: 'orchestrator', parentId: '', depth: 0, state: 'running', presentationState: 'running', live: true, interruption: null });

@@ -29,6 +29,12 @@ export interface MissionViewProps {
    * alone knows REQ-CHAT-008's recovery state) — when a `paused` child offers "Cancel selection".
    */
   readonly resting: boolean;
+  /**
+   * REQ-CHAT-008's recovery state (PD-ORCH-005 clause 13, OQ-73): the persisted status reads busy but no run is under way
+   * here, so the run is not active — no Pause and no live Cancel beside a run-level agent drawn `paused`, as the Workspace
+   * reads `runActive`.
+   */
+  readonly recovery: boolean;
   readonly selectedAgentId: string | null;
   readonly onSelect: (id: string | null, source?: 'click' | 'key') => void;
   readonly nowIso: string | null;
@@ -69,9 +75,10 @@ export function missionConfirmation(agent: AgentRecord, cascade: readonly AgentR
 }
 
 export function MissionView(props: MissionViewProps) {
-  const { session, sessionLabel, runLevel, resting, selectedAgentId, onSelect, nowIso, strategy, maxDepth, onSetStrategy, onSetDepth, onPause, onCancelAgent, onCancelRun, onOpen, onPopOut, refresh = null } = props;
+  const { session, sessionLabel, runLevel, resting, recovery, selectedAgentId, onSelect, nowIso, strategy, maxDepth, onSetStrategy, onSetDepth, onPause, onCancelAgent, onCancelRun, onOpen, onPopOut, refresh = null } = props;
   const agents = session?.agents ?? [];
-  const runActive = session !== null && isBusy(session.executionStatus);
+  // PD-ORCH-005 clause 13 (OQ-73): a busy status in REQ-CHAT-008's recovery state is no active run (the Workspace's reading).
+  const runActive = session !== null && isBusy(session.executionStatus) && !recovery;
   const pause = pauseAvailability(selectedAgentId, runActive, session?.executionStatus ?? null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);

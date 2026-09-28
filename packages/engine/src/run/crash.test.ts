@@ -412,7 +412,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         expect(dal.getChild(sid, 'bg_000000c1')!.state).toBe('running');
       });
     });
-    describe('PD-ORCH-005 clause 16 (revision 4, OQ-74): the at-rest cancel walks through a finished descendant, records a crash only when one left something, and answers a failed move', () => {
+    describe('PD-ORCH-005 clause 16 (revision 4, OQ-74): the at-rest cancel walks through a finished descendant, records nothing of the crash, and answers a failed move', () => {
       const cancel = (s: Sessions, sid: SessionId, agentId: string) => s.control({ op: 'cancelAgent', sessionId: sid, args: { agentId } });
       /** c1, c2 and c3 brought to rest by a pause; `recorded` whether the rest also wrote the iteration's interruption. */
       const rested = (recorded: boolean) => (w: SessionWriter) => {

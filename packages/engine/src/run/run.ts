@@ -195,11 +195,12 @@ export interface RunDeps {
   readonly supervisorFor?: ((conversationId: string) => LoopSupervisor) | undefined;
   readonly resumeTodo?: TodoDocument | undefined;
   /**
-   * PD-ORCH-003 revision 2: false for a plan decision's relaunch, which appends no task — the held run's stored todo
-   * already carries every task, the gated work and any continue's message among them (complete, or pending and taken up
-   * first), so appending the last request again would duplicate it (OQ-77). PD-ORCH-005 clause 17 (OQ-75): false too
-   * for a continue that states no new request while the todo still holds the last one unfinished. Absent means a
-   * continuation appends its prompt (REQ-ORCH-004).
+   * REQ-ORCH-004 / REQ-ORCH-154: false for a plan decision's relaunch, which states no new task — the held run's stored
+   * todo already carries every task, the gated work and any continue's message among them (complete, or pending and
+   * taken up first), so appending the last request again would duplicate it (OQ-77, the reading kept under PD-ORCH-003
+   * revision 2's hold). False too for a continue that states no new request while the todo still holds the last one
+   * unfinished: OQ-75's reading, a departure from REQ-ORCH-004 that no directive governs, since PD-ORCH-005 clause 17
+   * speaks only of the message a continue delivers. Absent means a continuation appends its prompt (REQ-ORCH-004).
    */
   readonly appendsTask?: boolean | undefined;
   /**
@@ -447,10 +448,12 @@ export class Run {
     /*
      * PD-ORCH-005 clause 17: a continue that resumes an open iteration delivers its message to the resumed root (clause 4)
      * and appends it as a task that iteration holds, closing with it — done when it succeeds, pending otherwise. A continue
-     * that resumes and delivers no message (the Continue action) adds no task. A continue that states no new request while
-     * the todo holds the last one unfinished — the Continue action or "continue without them" after a message was left
-     * pending, or while the open iteration holds it — adds none either (`appendsTask`, set by the session manager). A plan
-     * decision resumes nothing (the iteration closed before the hold) and appends nothing (`appendsTask`, PD-ORCH-003).
+     * that resumes and delivers no message (the Continue action) adds no task for a message. Beyond the clause, by OQ-75's
+     * reading (a departure from REQ-ORCH-004 no directive governs): a continue that states no new request while the todo
+     * holds the last one unfinished — the Continue action, "continue without them" or the message-limit resolution, after
+     * a message was left pending or while the open iteration holds it — adds none either (`appendsTask`, set by the session
+     * manager). A plan decision resumes nothing (the iteration closed before the hold) and states no new task, so it
+     * appends nothing (`appendsTask`, REQ-ORCH-004 / REQ-ORCH-154, OQ-77).
      */
     if (deps.resumeTodo && this.resumeFrom !== null && deps.openIteration?.delivered === true) {
       this.todo.appendHeld('Continued Prompts', deps.taskId, deps.taskLabel ?? deps.task, this.resumeFrom.iteration);

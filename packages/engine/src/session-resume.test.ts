@@ -262,7 +262,7 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
  * nothing supersedes and, when the root published none, the latest of any kind that nothing supersedes. The iteration is
  * the session's most recent recorded one (OQ-79), and its root is known by the task id its publishes carry.
  */
-describe('G — the handoff prefers the root\'s own artifact (PD-ORCH-005 clause 20)', () => {
+describe('PD-ORCH-005 clause 20: the handoff prefers the root\'s own artifact', () => {
   let dir: string;
   let dal: StoreDal;
   let clock: FakeClock;

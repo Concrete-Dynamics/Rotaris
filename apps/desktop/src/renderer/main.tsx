@@ -350,7 +350,7 @@ function Mission({ workspace, popOut }: { workspace: string; popOut: boolean }) 
     useShellState.getState().switchView('workspace');
   };
   return <MissionView
-    session={session} sessionLabel={label} runLevel={runLevel} resting={resting} selectedAgentId={selectedAgentId} nowIso={nowIso} refresh={refresh}
+    session={session} sessionLabel={label} runLevel={runLevel} resting={resting} recovery={needsRecovery} selectedAgentId={selectedAgentId} nowIso={nowIso} refresh={refresh}
     onSelect={(id, source) => { selectAgent(id); if (source === 'click' && popOut && id !== null && id !== RUN_AGENT_ID) { const agent = session?.agents.find((a) => a.id === id); if (agent) void openPersona(agent, false); } }}
     strategy={snapshot?.delegationStrategy ?? null} maxDepth={snapshot?.runtime.max_depth ?? null}
     onSetStrategy={(value) => setField({ rotaris: { delegation_strategy: value } })} onSetDepth={(value) => setField({ runtime: { max_depth: value } })}

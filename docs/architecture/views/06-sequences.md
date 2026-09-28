@@ -242,7 +242,8 @@ sequenceDiagram
 - **A crash writes none of this.** The next repair or continue does (`run/crash.ts`): the interruption `crash` on the
   open row, its unfinished agents paused, a dead run's unanswered calls answered, its approvals withdrawn, its
   background sessions ended. Loading the session writes nothing, and the user's cancel of one crash-left child while the
-  session rests records none of it: it cancels that child from where it stood (`Sessions.cancelPausedAtRest`, OQ-74).
+  session rests records none of it but the cancelled agents' own cut-off calls, which no later record reaches (answered
+  as interrupted, `answerOpenCalls`): it cancels that child from where it stood (`Sessions.cancelPausedAtRest`, OQ-74).
 - **The explicit cancel is not a rest.** The reserved run id's final stop cancels the waits, drains and finalizes as
   before: every agent `cancelled`, the iteration closed — including when it arrives while a pause or a stop is still
   coming to rest, or later while teardown runs (the iteration this run left open then closes before the run's result is

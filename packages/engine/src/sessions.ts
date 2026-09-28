@@ -1856,13 +1856,6 @@ export class Sessions {
   }
 
   /**
-   * REQ-GIT-093: live exactly when a run for the session is under way here, or its persisted status is active AND the
-   * process its lock names is alive, or liveness cannot be established. A persisted active status on its own is not
-   * live. The probe asks one question — does a process bearing the pid exist — and every residual resolves to live;
-   * the one reading taken: a lock this process itself holds with no run behind it (a resumed session) is not live,
-   * because the process that would race a restore is this one and it is running nothing for the session.
-   */
-  /**
    * PD-ORCH-005 clauses 6, 13 and 18 (OQ-73, OQ-76): what a projection states of a session at rest — the agents a crash
    * left, the crash not yet recorded (`crashLeftOf`), and what the Continue action would resume (`resumableOf`). A
    * session the store's failure left busy (OQ-42) is not one a crash left, and every continue on it is refused
@@ -1879,6 +1872,13 @@ export class Sessions {
     };
   }
 
+  /**
+   * REQ-GIT-093: live exactly when a run for the session is under way here, or its persisted status is active AND the
+   * process its lock names is alive, or liveness cannot be established. A persisted active status on its own is not
+   * live. The probe asks one question — does a process bearing the pid exist — and every residual resolves to live;
+   * the one reading taken: a lock this process itself holds with no run behind it (a resumed session) is not live,
+   * because the process that would race a restore is this one and it is running nothing for the session.
+   */
   liveness(dal: StoreDal, sessionId: SessionId): SessionLiveness {
     const s = this.live.get(sessionId);
     if (s?.run && !s.run.isEnded) return 'live';

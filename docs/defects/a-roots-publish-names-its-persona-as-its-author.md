@@ -8,7 +8,7 @@ name (`artifactOps(artifacts, { canonicalName: agentName, … })`). A root's `ar
 an ordinary persona id and differ for one with spaces or other characters the canonicaliser rewrites. Every
 iteration's root also shares the one value, so `created_by` cannot tell one iteration's root from another's.
 `PD-ORCH-005` clause 20's root-first artifact (`latestArtifactText`) keys on `conversation_id` for that reason. Noticed
-2026-09-28 by the scout of `PD-ORCH-005` revision 4 item G and confirmed while building it; not repaired.
+2026-09-28 while scouting `PD-ORCH-005` revision 4's clause 20 and confirmed while building it; not repaired.
 
 ## Specs
 

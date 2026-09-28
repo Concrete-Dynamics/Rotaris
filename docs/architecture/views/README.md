@@ -85,7 +85,9 @@ unfinished, before the crash is recorded, as the record will leave them (`crashL
 OQ-73's departure from clause 13's last sentence) — never for a session a store failure left busy, which is not one a
 crash left and states nothing to resume (`Sessions.restingOf`, OQ-76); `runLevelAgent`
 presents the resting root `paused`, the Workspace and the Mission view asking it and `runLevelResting` through one call
-(`restingView`) with REQ-CHAT-008's recovery state (`useNeedsRecovery`, moved to `renderer/session-view.ts`). The Overview counts paused agents on their own. The **runtime view**'s eleventh-state and
+(`restingView`) with REQ-CHAT-008's recovery state (`useNeedsRecovery`, moved to `renderer/session-view.ts`), and the
+Mission view, handed that fact as `recovery`, reads no run active in it, so it offers no Pause beside the root it draws
+`paused` (`docs/defects/fixed/the-mission-view-offers-pause-in-the-recovery-state.md`). The Overview counts paused agents on their own. The **runtime view**'s eleventh-state and
 projection paragraphs and the **state-ownership view**'s rest row are updated; no package, edge, process, channel or
 command changes.
 
@@ -142,7 +144,8 @@ iteration (`Task.nextUp`, `Todo.selectNext`), which is sent its text after the l
 request (`Run.firstMessage`). A held message a death left stale closes as the record says its iteration did
 (`Todo.releaseStale`, against `succeededIterationsOf`, which the run's constructor shares). A continue that delivers no
 message — the Continue action, "continue without them", and the message-limit resolution's 'continue' and 'double' —
-judges the todo after that settle, and appends no task while the open iteration holds the last request unfinished
+judges the todo after that settle, and appends no task while the todo holds the last request unfinished — a task of
+that text pending, or in progress and held by the open iteration
 (`Todo.holdsUnfinished`, `launchContinuation`): OQ-75's reading, beyond what clause 17 governs, which repairs
 `the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`. `RunDeps.openIteration` gains
 `delivered`. Readings in OQ-75. The **runtime view**'s §2 gains the paragraph; the

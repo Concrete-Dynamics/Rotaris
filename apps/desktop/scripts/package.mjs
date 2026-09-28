@@ -32,7 +32,7 @@ import { createRequire } from 'node:module';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { proofIsolationEnv, workspacesRootFor } from './lib/harness.mjs';
+import { hostSwitches, proofIsolationEnv, workspacesRootFor } from './lib/harness.mjs';
 import { closingLines, reached, STEPS } from './lib/package-verdict.mjs';
 import { ABOUT_ASSETS, flagUsage, settleNoticesStep, WITHOUT_NOTICES } from './lib/about-assets.mjs';
 import { declaredProductVersion, namedConfigurationText, packagingArtifactNames } from './lib/artifact-names.mjs';
@@ -230,7 +230,7 @@ appRun = step('the packaged app opens a store and runs a terminal call', () => {
     ROTARIS_CAPTURE_AFTER_MS: '9000',
   };
   for (const k of Object.keys(env)) if (k.startsWith('ROTARIS_CAPTURE_') && !(k in { ROTARIS_CAPTURE_PNG: 1, ROTARIS_CAPTURE_PROMPT: 1, ROTARIS_CAPTURE_AFTER_MS: 1 })) delete env[k];
-  const r = spawnSync(exe, [ws], { env, encoding: 'utf8', timeout: 120_000, windowsHide: true });
+  const r = spawnSync(exe, [...hostSwitches, ws], { env, encoding: 'utf8', timeout: 120_000, windowsHide: true });
   const log = `${r.stdout || ''}\n${r.stderr || ''}`;
   writeFileSync(join(RELEASE, 'load-proof.app.log'), log);
   const dbs = [];

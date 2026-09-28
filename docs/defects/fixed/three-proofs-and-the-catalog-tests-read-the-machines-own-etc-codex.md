@@ -86,4 +86,9 @@ The outcomes are in the first-executions row of 2026-09-28. On this host Chromiu
 verification-only wrapper around the worktree's own `node_modules/electron/dist/electron` that inserts the switch after
 the main entry, exactly as `hostSwitches` does in the driver, and nothing in the repository was changed for it.
 
+**A fifth (2026-09-28, R-062).** `slash-proof` now asserts exactly two `skill`-badged rows, `/skill` and `/skills`
+(ADR-0063 decision 5). A skill under the host's `/etc/codex/skills` would add a third, and the proof would go red on a
+POSIX host that holds one, because the proof does not set `ROTARIS_CAPTURE_SKILLS_MACHINE`. Its assertion names that
+dependency in a comment. The proof is not changed.
+
 Repaired 2026-09-28 under R-062, on the branch `fix-config-isolation-decoding`.

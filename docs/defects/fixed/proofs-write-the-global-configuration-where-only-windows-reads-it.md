@@ -27,3 +27,17 @@ platform.
 
 Noticed 2026-09-27 while measuring the MCP client's handshake identity for the version guard's gate round (first-release
 plan §4.1). Not repaired here: each proof has to be re-run on both platforms once it reads `configDirFor`.
+
+## Repaired — 2026-09-28, under R-062
+
+Every script that wrote or read the scratch global configuration now takes the directory from `configDirFor(local)`
+in `scripts/lib/harness.mjs`: `artifacts-proof`, `code-intel-proof`, `config-proof`, `init-proof`, `mcp-proof`,
+`notice-proof`, `plan-gate-proof`, `resilience-proof`, `sandbox-proof`, `skills-proof` and `mcp-console-spike` — and
+`slice-proof`, found by the same grep, which read the discovery snapshot at the Windows spelling. No script under
+`apps/desktop/scripts/` joins `'rotaris', 'config'` itself any more (`grep -rn "'rotaris', 'config'"` answers only
+the harness). The rule is pinned against the product's `resolveUserDirs` on win32 and linux by
+`proof-isolation.test.ts`. Which of the proofs then pass on Linux is a measurement, recorded per proof in the R-062
+report and `first-executions.md`'s row of 2026-09-28: `skills-proof` and `mcp-proof` are in the sibling notes; the
+others were attempted on the same host and each red there is a note of its own, not a repair here. Not re-run on
+Windows in this round: no Windows host in the container (IC-3), and `configDirFor`'s win32 answer is the spelling the
+scripts had, so nothing changed for that platform.

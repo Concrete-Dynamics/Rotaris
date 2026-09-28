@@ -93,7 +93,9 @@ out of a packaged build) and never widens the platform rule. The port every read
 (`NODE_DISCOVERY_PORTS.readFile`) decodes strictly since the same day: a file that is not UTF-8 throws, and the throw
 reaches the arm each walk already had for an unreadable file — REQ-WORKSPACE-045's warning naming the path and the
 error for an instruction file, REQ-WORKSPACE-053's skip with a reason for a `SKILL.md` (OQ-76), REQ-WORKSPACE-062's
-"no block" for a force-loaded body — where the lenient decode had merged replacement characters with no warning.
+"no block" for a force-loaded body, the disable manifest's unreadable arm, and REQ-WORKSPACE-057's "SKILL.md not found"
+with the decoder's reason for a `SKILL.md` loaded by hand (`loadManualSkill`) — where the lenient decode had merged
+replacement characters with no warning.
 
 **The set is decided in one place because it has two readers.** `instructionFiles` is a method rather than a
 step inside the context because the retrospective consumes the same list (`PD-LIBRARY-002` over

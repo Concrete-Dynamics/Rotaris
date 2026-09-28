@@ -36,7 +36,9 @@ export interface DiscoveryPorts {
  * sequence throws, and the throw reaches the same warning path an I/O error does. The BOM is left in place
  * (`ignoreBOM`), so a file that decodes reads exactly as it did before — only the file that cannot be decoded changes
  * what happens. Every reader of these ports shares the rule: an instruction file (REQ-WORKSPACE-045), a `SKILL.md`
- * (REQ-WORKSPACE-053, OQ-76), a force-loaded body (REQ-WORKSPACE-062) and the disable manifest (REQ-WORKSPACE-052).
+ * (REQ-WORKSPACE-053, OQ-76), a force-loaded body (REQ-WORKSPACE-062), the disable manifest (REQ-WORKSPACE-052) and a
+ * `SKILL.md` loaded by hand (`loadManualSkill`, REQ-WORKSPACE-057/151), which now fails with its "SKILL.md not found"
+ * sentence and the decoder's reason where it used to load with U+FFFD in the text.
  */
 const STRICT_UTF8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 

@@ -3226,8 +3226,8 @@ byte sequence no UTF-8 decoder accepts, is "unreadable" (skipped with a logged r
 undecodable sequence standing as U+FFFD, and parsed.
 
 The question is live because one port serves both walks. `NODE_DISCOVERY_PORTS.readFile` reads instruction files for
-REQ-WORKSPACE-045's merge, `SKILL.md` files for REQ-WORKSPACE-053's walk, a force-loaded body for REQ-WORKSPACE-062 and
-the disable manifest for REQ-WORKSPACE-052, and until 2026-09-28 it decoded leniently, so the decoding half of
+REQ-WORKSPACE-045's merge, `SKILL.md` files for REQ-WORKSPACE-053's walk, a force-loaded body for REQ-WORKSPACE-062,
+the disable manifest for REQ-WORKSPACE-052 and a `SKILL.md` loaded by hand for REQ-WORKSPACE-057/151, and until 2026-09-28 it decoded leniently, so the decoding half of
 REQ-WORKSPACE-045 was unmet (`docs/defects/fixed/an-instruction-file-that-is-not-utf-8-is-injected-with-no-warning.md`).
 Making it strict for the instruction files makes it strict for the skill files in the same line.
 
@@ -3239,10 +3239,12 @@ catalog a model acts on; the sibling walk that shares the port says "decoding er
 already fixes UTF-8 as the encoding these files are measured in. The cost is stated too: a `SKILL.md` saved in UTF-16 or
 UTF-32 — encodings YAML admits — was previously parsed as mojibake and is now skipped with a reason that names the
 path, which is the better of the two failures but is still a file the product declines. A force-loaded body and the
-disable manifest take the same arm through the same port. If the owner rules the other way, only the port changes:
-the walk's skip arm stays for the I/O half, and the decode becomes lenient for `SKILL.md` alone. The case is pinned in
+disable manifest take the same arm through the same port, and so does a `SKILL.md` loaded by hand: `loadManualSkill`
+now fails with REQ-WORKSPACE-057's "SKILL.md not found: {raw}" and the decoder's reason in parentheses, the arm its I/O
+half already used, where it used to load the skill with U+FFFD in its text. If the owner rules the other way, only the port changes:
+the walk's skip arm stays for the I/O half, and the decode becomes lenient for `SKILL.md` alone. The cases are pinned in
 `packages/config/src/skills/skills.test.ts` ("REQ-WORKSPACE-053 — a SKILL.md that is not UTF-8, through the real port
-(OQ-76)").
+(OQ-76)"), the walk's and the hand-loaded one's.
 
 ## Design-reference dependencies
 

@@ -221,6 +221,26 @@ describe('REQ-WORKSPACE-053 — a SKILL.md that is not UTF-8, through the real p
     } finally { rmSync(base, { recursive: true, force: true }); }
   });
 
+  it('REQ-WORKSPACE-057 — a SKILL.md loaded by hand that is not UTF-8 fails with "SKILL.md not found" and the decoder\'s reason, loading nothing', () => {
+    /*
+     * The fifth reader of the port. Before the strict decode this loaded a skill with U+FFFD in its text; now the throw
+     * takes the arm the I/O half already used — the requirement's first sentence, with the reason in parentheses.
+     */
+    const base = mkdtempSync(join(tmpdir(), 'rotaris-skill-decode-'));
+    try {
+      const dir = join(base, 'hand');
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, 'SKILL.md'), NOT_UTF8);
+      for (const raw of [dir, join(dir, 'SKILL.md')]) {
+        const r = loadManualSkill(raw, { workspaceRoot: base, home: join(base, 'home') });
+        expect(r.ok).toBe(false);
+        if (r.ok) continue;
+        expect(r.reason.startsWith(`${skillNotFound(raw)} (`)).toBe(true);
+        expect(r.reason).not.toContain('\uFFFD');
+      }
+    } finally { rmSync(base, { recursive: true, force: true }); }
+  });
+
   it('the real port keeps reading a UTF-8 file exactly as before — non-ASCII text intact, a BOM left where it was', () => {
     const base = mkdtempSync(join(tmpdir(), 'rotaris-skill-decode-'));
     try {

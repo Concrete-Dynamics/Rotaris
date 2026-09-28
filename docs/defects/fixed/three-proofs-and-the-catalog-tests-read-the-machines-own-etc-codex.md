@@ -14,7 +14,7 @@ Linux or macOS reads the operator's own:
   private `/etc` holding `codex/skills/zeta/SKILL.md` bind-mounted over the real one (`unshare -m`), three failed:
   "discovers on a cold cache…", "REQ-WORKSPACE-058: session creation clears the cache…" and "REQ-WORKSPACE-062: an
   unreadable body adds no block…". The instruction base's half of the same gap in those tests is repaired
-  ([`fixed/the-instruction-discovery-tests-read-the-machines-own-etc-codex.md`](fixed/the-instruction-discovery-tests-read-the-machines-own-etc-codex.md)).
+  ([`fixed/the-instruction-discovery-tests-read-the-machines-own-etc-codex.md`](the-instruction-discovery-tests-read-the-machines-own-etc-codex.md)).
 
 A fourth case is the instruction base itself: **`settings-proof`** isolates the home-relative instruction bases
 through `ROTARIS_CAPTURE_INSTRUCTIONS_HOME` but not the machine-wide `/etc/codex`, so its exact Instructions inventory

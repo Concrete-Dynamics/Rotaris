@@ -54,7 +54,9 @@ mirroring the `SKILLS_HOME ?? INSTRUCTIONS_HOME` pair, read only under `__ROTARI
 `scripts/package.mjs`'s forbidden list so a packaged bundle that still carried it would fail the seam check. The
 workspace service keeps reading the instructions variable alone, as it does for `home`; it runs no skill discovery.
 
-**The three proofs.** `skills-proof` sets `ROTARIS_CAPTURE_SKILLS_MACHINE` to `scratch/machine-codex` and stages
+**The three proofs.** `skills-proof` sets `ROTARIS_CAPTURE_SKILLS_MACHINE` to `scratch/machine-codex` (and
+`ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE` to the same directory, since the workspace service's inventory reads only that
+one and the run host reads the skills variable first, so no process of any of its launches opens `/etc/codex`) and stages
 `skills/machine-skill/SKILL.md` there, so off Windows the seam is exercised in the built app: the discover launch's exact
 list gains `machine-skill` (scope `user`), the discovery log's count follows the list, the `/skills` listing's entry
 for it carries the scratch path, and the run launch's catalog names it. `injection-proof` already set
@@ -76,8 +78,10 @@ fourth root on Windows whatever `machineDir` names.
 **What was run.** `pnpm settings-proof` and `pnpm injection-proof --skip-latency` under Xvfb, and `pnpm skills-proof`
 up to the point its policy launch fails on Linux for the reason
 [`../skills-proof-writes-its-global-policy-where-only-windows-reads-it.md`](../skills-proof-writes-its-global-policy-where-only-windows-reads-it.md)
-records — the launches before it (discover, commands, listing, listing-reopen) are the ones that read the machine root;
-the outcomes are in the first-executions row of 2026-09-28. On this host Chromium refuses to start as root without
+records. The launches before it (discover, commands, listing, listing-reopen) ran and read the machine root from the
+scratch directory; the run launch after it reads the root too, and its assertion is the one that proves the injected
+catalog names `machine-skill`, so on this host that assertion is written and not observed until that note is repaired.
+The outcomes are in the first-executions row of 2026-09-28. On this host Chromium refuses to start as root without
 `--no-sandbox`, which none of the three scripts passes yet (another item sweeps them); they were run through a
 verification-only wrapper around the worktree's own `node_modules/electron/dist/electron` that inserts the switch after
 the main entry, exactly as `hostSwitches` does in the driver, and nothing in the repository was changed for it.

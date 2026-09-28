@@ -88,9 +88,12 @@ function launch(name, workspace, extra, timeoutMs = 120_000) {
       /*
        * The scratch machine-wide directory: the fourth user-scope skill root is its `skills` child, and PD-WORKSPACE-002's
        * machine-wide instruction base is the directory itself, so the run host reads neither from the machine's own
-       * `/etc/codex`. Compiled out of a packaged build; inert on Windows, where the product declares no such root.
+       * `/etc/codex`. The instruction seam names the same directory because the workspace service's inventory reads only
+       * that one, so no process of any launch here reads the machine's own. Both compiled out of a packaged build; inert
+       * on Windows, where the product declares no such root.
        */
       ROTARIS_CAPTURE_SKILLS_MACHINE: scratch.machine,
+      ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE: scratch.machine,
       ROTARIS_CAPTURE_PNG: png,
       ROTARIS_CAPTURE_PROBE: PROBES.join(';;'),
       ...extra,

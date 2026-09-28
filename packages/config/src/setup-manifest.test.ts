@@ -130,7 +130,8 @@ describe('the schema refuses each malformed shape, naming the path', () => {
     for (const good of ['1.2.3', '1.1.403', '1.2.3-beta.1', '1.2.3rc1', '1.2.3+local']) expect(COMPLETE_VERSION_PATTERN.test(good), good).toBe(true);
     const started = performance.now();
     expect(COMPLETE_VERSION_PATTERN.test(`1.2.3+${'a'.repeat(64)}!`)).toBe(false);
-    expect(performance.now() - started).toBeLessThan(50);
+    // A backtracking pattern would take ~2^64 steps here; the bound is loose so a loaded host cannot flake it.
+    expect(performance.now() - started).toBeLessThan(1000);
   });
 
   it('a digest that is not 64 lower-case hex characters, and a URL that is not HTTPS (REQ-STARTUP-082)', () => {

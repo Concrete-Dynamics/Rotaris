@@ -133,6 +133,14 @@ The parts that are easy to get wrong:
   from that persona is allowed without a dialog when its own set is exactly that one — a retried edit with a new
   `old_string` included. Every other tool's grant, an MCP tool's under a public name among them, still needs the
   identical command facet or argument set.
+- **One unanswered wait makes the user away for the rest of the run (`PD-TOOLS-005`).** When a brokered wait ends by
+  timeout the gate marks the run's `UserPresence` — the engine's, one holder per run, on every agent's port, a
+  delegated child's included. From then until the user's next input to that session (an answer, a message, a run
+  control, a mode change — `03-runtime-view.md` §5) every ask that would prompt takes the headless branch above with
+  no wait created and nothing presented: `approval.requested` in its headless shape (REQ-EVENTS-049 admits no other
+  `unattended_reason`), and the decision `headless-policy` with a reason naming the timeout that expired. A session
+  with no presenter is still reported as such, ahead of the away check. The first ask still waits the full timeout, a
+  timeout of 0 never marks the user away, and every run starts with the user present.
 
 ---
 

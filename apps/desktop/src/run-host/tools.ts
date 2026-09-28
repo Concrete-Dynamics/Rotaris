@@ -311,6 +311,8 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     planGateWithheldNames: () => withheldAtPlanGate,
     // PD-TOOLS-006: the live write-scope claims, bound to this port's agent by the engine.
     ...(ctx.writeClaimFor ? { writeClaimFor: ctx.writeClaimFor } : {}),
+    // PD-TOOLS-005: the run's away holder — the engine's one object per run, so a child's gate reads what the root's marked.
+    ...(ctx.presence ? { presence: ctx.presence } : {}),
   });
 
   // ADR-0034 (Part S): the persona's MCP surface — demanded on `ready()`, after the discovery the run start kicked off, and

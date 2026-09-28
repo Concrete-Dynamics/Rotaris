@@ -62,6 +62,14 @@ _Avoid_: confirmation, consent dialog
 How an `ask` resolves when no one can answer: the fail-safe policy `deny` or `abort`. An
 unrecognised value behaves as `deny`. — `REQ-TOOLS-065`
 
+**Away**:
+The condition a run holds its user in once an approval wait has ended by timeout, until their next
+input to the session — an answer to an approval or a question, a message, a run control or a
+permission-mode change. While the user is away, an `ask` that would prompt is resolved at once by
+headless resolution, with a reason naming the timeout that expired. The condition belongs to one run
+and reaches every agent of it. — `PD-TOOLS-005`
+_Avoid_: idle, AFK, unattended (which is the absence of a presenter, `REQ-TOOLS-053` — a different fact)
+
 **Denial**:
 A refusal returned to the agent as a recoverable tool error, not as a run failure. — `REQ-TOOLS` §2
 

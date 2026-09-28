@@ -69,7 +69,7 @@ reviewed-exceptions table may supply an identifier a dependency does not declare
 runtime). **One more was raised the same day by that generator's gate review: OQ-75** (when a component carries "its
 full license text": a licence file that only pointed elsewhere, or only carried a licence's per-file notice, had
 counted as the text, and 4 components without text became 12); the four were raised as OQ-66 to OQ-69 on their own branch and renumbered when they reached `main`
-after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71. **Two more were raised on 2026-09-28 by building `PD-TOOLS-005` (R-062): OQ-76** (which timeline word records a run's user going away and returning — REQ-ORCH-139 closes the vocabulary and it has none, so the build writes both transitions to the session log) **and OQ-77** (whether the away state resolves the approval an `ask_questions` call itself needs under the `ask` preset, which keeps every question from an away user under the default preset). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -3207,6 +3207,49 @@ text of the identifier it declares, reproduced by the generator from a version-c
 Apache-2.0 or MPL-2.0 the honest answer is that the text is obtainable and the package left it out. That ruling
 would change REQ-STARTUP-143's route for such a component, and it would close `tqdm`'s gap as well. Until then,
 eight of O-11's twelve reviews are for a notice or a pointer.
+
+**OQ-76 — Which timeline word records that a run's user went away, and came back?** *(REQ-ORCH-139, REQ-SESSION-142,
+`PD-TOOLS-005`. Raised 2026-09-28 by building `PD-TOOLS-005` under [R-062](../product/requests.md#r-062).)*
+
+`PD-TOOLS-005` makes a run treat the user as away once an approval wait has expired unanswered, and present again on
+their next input to the session. An autopsy of such a run wants both instants: every approval ask between them was
+refused without a prompt, and the stretch is what explains a row of `permission_denied` issues. REQ-ORCH-139 closes
+the timeline-event vocabulary to the list in domain 01's Data & Formats, and domain 05's own Data & Formats names the
+only other timeline events a permission mechanism may write (`permission_approved`, `permission_mode_changed`,
+`permission_mode_downgraded`). Neither has a word for the user's presence, and the directive mints none.
+
+**What the build proceeds under.** Both transitions are written to the session log (REQ-SESSION-142) at `WARNING` —
+the default level, so that the end of a stretch is visible wherever its start is — in the words `user away: an approval
+in this run went unanswered for <N> seconds …` and `user returned: input reached this session …`
+(`packages/engine/src/run/presence.ts`). The denials themselves carry the cause in the decision's reason, which the
+`permission_denied` issue records, so an autopsy reading the store alone still sees why each ask was refused; what it
+cannot read from the store is the instant the user returned.
+
+**What a ruling decides.** Whether the timeline gains two names for the transitions, and in which domain's list, or
+whether the log line is the record. Recommendation: two names in domain 05's list, because the timeline is what an
+autopsy reads first and is among the records the export reaches (REQ-SESSION-199), and the session log is neither.
+
+**OQ-77 — Does the away state resolve the approval an `ask_questions` call itself needs under the `ask` preset?**
+*(`PD-TOOLS-005`, REQ-TOOLS-007, REQ-TOOLS-158, REQ-TOOLS-178. Raised 2026-09-28 by building `PD-TOOLS-005` under
+[R-062](../product/requests.md#r-062).)*
+
+The directive keeps questions prompting and waiting while the user is away: "questions put to the user (REQ-TOOLS-158,
+REQ-TOOLS-178) still prompt and wait". But `ask_questions` is outside REQ-TOOLS-007's read-only class, so under the
+`ask` preset — the default — its dispatch resolves to the preset's default decision, `ask`, and the call needs an
+approval before the question exists. That approval is an ask that would prompt, so while the user is away it is
+resolved at once and denied: under the default preset no question reaches an away user, and the clause is reachable
+only where the call is permitted outright — `autonomous`, a rule, or a session approval of the tool.
+
+**What the build proceeds under.** The literal reading: the away state resolves every approval ask, the question
+tool's own included, and the clause governs the question the executor raises, which still prompts and waits wherever
+the call is permitted. A gate case pins both halves (`gate.test.ts`, "a question still prompts and waits while the user
+is away").
+
+**What a ruling decides.** Whether `ask_questions`'s own dispatch is exempt from the away resolution — or from the
+preset default altogether, as the loop-control tools are under REQ-TOOLS-014 — so that a question can reach a user
+who is away in the approval sense and may still answer one. Recommendation: exempt the question tool's own dispatch
+from the away resolution and nothing else; a question is the one prompt the directive means to keep, and the preset's
+decision on the call otherwise stands.
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

@@ -185,15 +185,18 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
   });
   afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
 
-  /** A tool the test answers itself, in place of the gate's executors; undefined leaves the call to the delegation tools. */
-  type TestTool = (name: string, args: Record<string, unknown>) => Promise<PortToolResult> | undefined;
+  /**
+   * A tool the test answers itself, in place of the gate's executors; undefined leaves the call to the delegation tools.
+   * The third argument is the calling agent's port context, for a stand-in that reads what the run handed the port.
+   */
+  type TestTool = (name: string, args: Record<string, unknown>, ctx: ToolPortContext) => Promise<PortToolResult> | undefined;
 
   /** A tool port whose only tools are the three delegation tools, dispatched straight to the ops (the gate is Part A's, tested there). */
-  function delegationPort(ops: DelegationOps, parentId: string, tool?: TestTool): ToolPort {
+  function delegationPort(ops: DelegationOps, parentId: string, tool?: TestTool, ctx?: ToolPortContext): ToolPort {
     const dispatch = async (name: string, raw: string): Promise<PortToolResult> => {
       const a = JSON.parse(raw) as Record<string, unknown>;
       const ok = (text: string): PortToolResult => ({ text, isError: false, status: 'ok', durationMs: 1, label: name, args: a });
-      const own = tool?.(name, a);
+      const own = ctx ? tool?.(name, a, ctx) : undefined;
       if (own) return own;
       if (name === 'delegate') {
         const r = await ops.delegate(parentId, { persona: String(a['persona']), taskName: String(a['task_name']), task: String(a['task']), dependsOn: (a['depends_on'] as string[]) ?? [], inheritedContext: [], category: '', runInBackground: a['run_in_background'] !== false, writeScope: (a['write_scope'] as string[] | undefined) ?? [], ...(typeof a['continuation_of'] === 'string' ? { continuationOf: a['continuation_of'] } : {}) });
@@ -243,7 +246,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
         let mode: PermissionPreset = selected;
         const base = { cancelPending: () => 0, setMode: (m: string) => { const previous = mode; mode = m as PermissionPreset; return { requested: mode, effective: mode, downgraded: false, reason: '', previous }; }, currentMode: () => mode, answerApproval: () => false };
         return ctx.delegation
-          ? { ...delegationPort(ctx.delegation, ctx.parentId ?? 'root', over.tool), ...base }
+          ? { ...delegationPort(ctx.delegation, ctx.parentId ?? 'root', over.tool, ctx), ...base }
           : { specs: () => [], dispatch: async () => ({ text: '', isError: true, status: 'failed', durationMs: 0, label: '', args: {} }), ...base };
       },
       attended: () => true,
@@ -438,6 +441,94 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     // The entry agent was built before the switch; the child was built after it and must carry the new mode.
     expect(built[0]).toMatchObject({ persona: 'orchestrator', mode: 'ask' });
     expect(built.slice(1).map((b) => b.mode)).not.toContain('ask');
+  });
+
+  /**
+   * PD-TOOLS-005, the engine's half: ONE away holder per run reaches every agent's port context, delegated children
+   * included; the user's input to the run's session — a mode change, a message, an answer — clears it; and a later run of
+   * the session starts with the user present. The gate's half (marking on the expired wait, resolving at once with the
+   * directive's reason) is `gate.test.ts`'s and `run-host/tools.test.ts`'s; here a stand-in reads the holder as the gate does.
+   */
+  describe('PD-TOOLS-005: the run\'s away state reaches every agent, ends on the user\'s input, and does not outlive the run', () => {
+    const tick = () => new Promise((r) => setTimeout(r, 10));
+    const gate = () => { let open!: () => void; const p = new Promise<void>((r) => { open = r; }); return { p, open }; };
+    /** The gate's consultation, stood in: a `write_file` ask is denied at once while away, and "times out" (marks away) when the path says so. */
+    const asks: { agent: string; away: { afterSeconds: number } | null }[] = [];
+    const gateStandIn = (name: string, a: Record<string, unknown>, ctx: ToolPortContext): Promise<PortToolResult> | undefined => {
+      if (name !== 'write_file') return undefined;
+      const away = ctx.presence?.away() ?? null;
+      asks.push({ agent: ctx.agentName, away });
+      if (away !== null) return Promise.resolve({ text: `Permission denied. The user is treated as away because an earlier approval in this run went unanswered for ${away.afterSeconds} seconds, so the request was denied.`, isError: true, status: 'blocked', durationMs: 0, label: name, args: a });
+      if (String(a['path']) === 'unanswered.ts') { ctx.presence?.markAway(5); return Promise.resolve({ text: 'Permission denied. Denied because no answer arrived within 5 seconds.', isError: true, status: 'blocked', durationMs: 5_000, label: name, args: a }); }
+      return Promise.resolve({ text: 'ok', isError: false, status: 'ok', durationMs: 1, label: name, args: a });
+    };
+
+    it('a child\'s ask in an away run reads the mark the root\'s expired wait set, on the one holder the run hands every port', async () => {
+      asks.length = 0;
+      const { sessions, contexts } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'w0', name: 'write_file', args: { path: 'unanswered.ts', content: 'a' } }]);
+          if (turn === 2) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coder', task_name: 'implement', task: 'TASK: write it', run_in_background: false } }]);
+          return answer('Done.');
+        }
+        if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+        return turn === 1 ? toolCalls([{ callId: 'w1', name: 'write_file', args: { path: 'child.ts', content: 'b' } }]) : answer('I could not write.');
+      }, { tool: gateStandIn });
+      const sid = (sessions.start(dal, 'C:/ws', 'build the thing') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      const root = contexts.get('orchestrator')!;
+      const child = contexts.get('implement')!;
+      expect(root.presence).toBeDefined();
+      expect(child.presence).toBe(root.presence);
+      expect(asks).toEqual([{ agent: 'orchestrator', away: null }, { agent: 'implement', away: { afterSeconds: 5 } }]);
+      // The transition is in the session log's words, once.
+      expect(warnings.filter((w) => w.startsWith('user away: an approval in this run went unanswered for 5 seconds'))).toHaveLength(1);
+      // The run ended: the holder is the run's, and a later run of this session starts present (below).
+      expect(root.presence!.away()).toEqual({ afterSeconds: 5 });
+    });
+
+    it('the user returns on a permission-mode change, a message or an answer; shutdown is not the user; a new run starts present', async () => {
+      asks.length = 0;
+      const hold = gate();
+      let sid = '' as SessionId;
+      const { sessions, contexts } = sessionsWith((persona, turn) => {
+        if (persona !== 'orchestrator') return answer('unused');
+        if (turn === 1) return toolCalls([{ callId: 'w0', name: 'write_file', args: { path: 'unanswered.ts', content: 'a' } }, { callId: 'r1', name: 'read_file', args: { path: 'hold' } }]);
+        return answer(`root turn ${turn}`);
+      }, { tool: (name, a, ctx) => (name === 'read_file' ? hold.p.then(() => ({ text: 'held', isError: false, status: 'ok' as const, durationMs: 1, label: name, args: a })) : gateStandIn(name, a, ctx)) });
+      sid = (sessions.start(dal, 'C:/ws', 'build the thing') as { value: SessionId }).value;
+      // The run is live, parked on the held read, with the user marked away by the expired wait before it.
+      await tick();
+      const presence = contexts.get('orchestrator')!.presence!;
+      expect(presence.away()).toEqual({ afterSeconds: 5 });
+      // A permission-mode change returns the user …
+      expect(sessions.control({ op: 'setPermissionMode', sessionId: sid, args: { mode: 'autonomous' } })).toEqual({ ok: true });
+      expect(presence.away()).toBeNull();
+      expect(warnings.filter((w) => w.startsWith('user returned:'))).toHaveLength(1);
+      // … so does a message to the run, even one the operation then refuses (blank text) — the input is the user's.
+      presence.markAway(5);
+      expect(sessions.control({ op: 'createQueuedPrompt', sessionId: sid, args: { text: '   ' } })).toEqual({ ok: false });
+      expect(presence.away()).toBeNull();
+      // An answer routed by request id returns the user of the session that held it; a stale id, held by none, returns nobody.
+      presence.markAway(5);
+      expect(sessions.answerApproval('no-such-request', 'once')).toBe(false);
+      expect(presence.away()).toEqual({ afterSeconds: 5 });
+      // The application's shutdown announcement is not the user's input; a run control is. (Shutdown is not sent here — it would stop the run.)
+      expect(sessions.control({ op: 'setReasoning', sessionId: sid, args: { level: 'low' } }).ok).toBe(true);
+      expect(presence.away()).toBeNull();
+      presence.markAway(5);
+      hold.open();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      // A later run of the same session: a fresh holder, present, and the old one is not consulted.
+      contexts.clear();
+      const again = sessions.prompt(sid, 'and again');
+      expect(again.ok).toBe(true);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      const next = contexts.get('orchestrator')!.presence!;
+      expect(next).not.toBe(presence);
+      expect(next.away()).toBeNull();
+      expect(presence.away()).toEqual({ afterSeconds: 5 });
+    });
   });
 
   it('REQ-MONITOR-102: the persisted tool-call total is session-wide — the entry agent\'s calls AND its children\'s', async () => {

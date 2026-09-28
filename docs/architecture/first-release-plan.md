@@ -36,7 +36,7 @@ record already decides, and every ruling it needs is named as the owner's rather
   `slash-proof` at its first catalogue assertion since ADR-0063
   ([note](../defects/slash-proof-expects-every-built-in-to-carry-the-action-badge.md)), and `skills-proof`'s policy
   launch on Linux only ([note](../defects/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md)).
-- The unbuilt directives `PD-TOOLS-003`, `PD-TOOLS-004`, `PD-TOOLS-005`, `PD-ORCH-004` and `PD-MONITOR-002`.
+- The unbuilt directives `PD-TOOLS-003`, `PD-TOOLS-004`, `PD-TOOLS-005` (**built 2026-09-28**, R-062), `PD-ORCH-004` and `PD-MONITOR-002`.
 - The macOS and Linux artifacts, which are bound by IC-3 and IC-8 and now also by `PD-STARTUP-001`.
 
 **One deferral the owner should look at twice.** Persona memory is a named empty slot in REQ-WORKSPACE-060's

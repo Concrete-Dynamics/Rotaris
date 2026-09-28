@@ -43,7 +43,17 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-09-27**
+## Last reconciled with the code: **2026-09-28**
+
+**After one unanswered approval, a run treats the user as away (`PD-TOOLS-005`, built 2026-09-28, R-062).** One holder
+per run, `UserPresence` (`engine/run/presence.ts`), installed by `Sessions.start` and every continuation beside the mode
+override and handed to every agent's port through `ToolPortContext.presence`, a delegated child's included. The gate
+(`GateDeps.presence`, passed by `run-host/tools.ts`) marks it when a brokered wait ends by timeout and, while it is
+marked, resolves every ask that would prompt at once under the headless policy with a reason naming the timeout that
+expired; the user returns on the first input to the run's session, wired at the top of `Sessions.control`, in
+`controlAsync` and in the id-routed answers. The **runtime view** gains a clause in §3 and a paragraph after §5's table;
+the **sequences view** gains one bullet in §2. No package, edge, process, channel, message kind or store column changed;
+the two transitions are session-log lines because the timeline vocabulary has no word for them (OQ-76).
 
 **A session approval of a file write covers that path (`PD-TOOLS-004`, built 2026-09-27, R-057).** A grant made by
 "approve for session" on a call of the public `write_file` or `haet_edit` (`haet` folded in) now stores the set of

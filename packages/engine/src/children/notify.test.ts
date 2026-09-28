@@ -1,27 +1,53 @@
 import { describe, expect, it } from 'vitest';
 import type { ChildRow } from '@rotaris/store';
 import { cutOffReport } from './cut-off.js';
-import { childPayload, REPORT_BLOCK_CAP, reportBlock } from './notify.js';
+import { childPayload, inheritedContextBlock, REPORT_BLOCK_CAP, reportBlock } from './notify.js';
 
-describe('the child payload order — REQ-TOOLS-154, REQ-ORCH-035, PD-TOOLS-006', () => {
+describe('the child payload order — REQ-TOOLS-154, REQ-ORCH-035, PD-TOOLS-006, REQ-TOOLS-152', () => {
   const prior = '[Prior agent context — authoritative: rely on these findings rather than repeating the investigation]';
   const index = 'PRIOR SIBLING ARTIFACT INDEX\n- a';
   const attached = 'PRIOR AGENT CONTEXT (FULL)\n- b';
   const scopes = "Write scopes:\n- Yours: 'src/**'.";
+  const inherited = '[Inherited context — the reports of sibling tasks that had already completed when you were delegated]\n\n### survey (codebase-analyst) — succeeded\nThe module is small.';
 
-  it('puts the prior-agent context first, then the workspace root and write scopes, then the artifacts, then the task', () => {
-    const payload = childPayload('/ws', 'the task', prior, [index, attached], scopes);
+  it('puts the prior-agent context first, then the workspace root and write scopes, then the artifacts (3) and (4), then the inherited context (5), then the task', () => {
+    const payload = childPayload('/ws', 'the task', prior, [index, attached], scopes, inherited);
     const at = (text: string) => payload.indexOf(text);
-    const order = [prior, 'Workspace root: /ws.', scopes, index, attached, 'the task'].map(at);
+    const order = [prior, 'Workspace root: /ws.', scopes, index, attached, inherited, 'the task'].map(at);
     expect(order.every((position) => position >= 0)).toBe(true);
     expect(order).toEqual([...order].sort((a, b) => a - b));
     expect(payload.endsWith('the task')).toBe(true);
+    // (5) sits between the attached artifacts and the task with nothing else between them.
+    expect(payload).toContain(`${attached}\n\n${inherited}\n\nthe task`);
   });
 
   it('starts with the workspace root when the child has no dependencies, and omits the blocks it has none of', () => {
     const payload = childPayload('/ws', 'the task', '', [index, ''], '');
     expect(payload.split('\n\n')[0]).toMatch(/^Workspace root: \/ws\./);
     expect(payload.split('\n\n').slice(1)).toEqual([...index.split('\n\n'), 'the task']);
+  });
+
+  it('with nothing inherited the payload is what it was before item (5) existed', () => {
+    expect(childPayload('/ws', 'the task', prior, [index, attached], scopes, '')).toBe(childPayload('/ws', 'the task', prior, [index, attached], scopes));
+  });
+});
+
+describe('the inherited-context block — REQ-TOOLS-152, REQ-TOOLS-154 item (5), REQ-ORCH-032', () => {
+  const row = (name: string, report: Record<string, unknown>): ChildRow => ({ task_id: `bg_${name.padStart(8, '0')}`, canonical_name: name, persona: 'codebase-analyst', state: 'succeeded', report: JSON.stringify(report) } as ChildRow);
+
+  it('is empty when no completed sibling was named, so the payload gains no block', () => {
+    expect(inheritedContextBlock([])).toBe('');
+  });
+
+  it('opens with a heading that says the reports are context and not a dependency, then one REQ-ORCH-060 report block per sibling in the order named', () => {
+    const block = inheritedContextBlock([row('survey', { status: 'succeeded', final_response: 'The module is small.' }), row('audit', { status: 'succeeded', last_response: 'Two findings.' })]);
+    const parts = block.split('\n\n');
+    expect(parts[0]).toMatch(/^\[Inherited context — .*completed.*\]$/);
+    expect(parts[0]).toMatch(/context, not/);
+    expect(parts[0]).toMatch(/not as a dependency/);
+    expect(parts.slice(1)).toEqual(['### survey (codebase-analyst) — succeeded\nThe module is small.', '### audit (codebase-analyst) — succeeded\nTwo findings.']);
+    // The sibling's block is the one the parent reads on a resume — one rendering, not a second.
+    expect(parts[1]).toBe(reportBlock(row('survey', { status: 'succeeded', final_response: 'The module is small.' })));
   });
 });
 

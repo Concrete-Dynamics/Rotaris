@@ -1907,6 +1907,9 @@
 /* Part AG — REQ-SHELL-140/142: About's rows and its licence line are selectable text, since a user copies a
    version, a build identifier or a security address out of them. Tokens by name (docs/design/system). */
 .about__value { user-select: text; color: var(--rt-text); font-size: var(--rt-text-sm, 13px); }
+/* REQ-SHELL-142's caption: the licence line's own type token (`.about__value`'s), in the secondary ink — never the browser's
+   default size; no literal fallback, since the lint's literal-debt ratchet counts one. Its margins are the base rhythm's (`p` in base.css). */
+.about__caption { color: var(--rt-text-secondary); font-size: var(--rt-text-sm); }
 /* REQ-SHELL-141: the five documents read as one row of links, in the order the requirement gives them. */
 .about__links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rt-space-4, 16px); margin-top: var(--rt-space-2, 8px); }
 .about__links .btn-link { padding: 0; }

@@ -350,7 +350,13 @@ MCP tool by its callable name; `ROTARIS_CAPTURE_PROMPT_MS` delays the typed prom
 **The bundled code-intelligence runtime (Part T; ADR-0035's first execution).** A `stdio` entry whose command is the
 reserved token `builtin:code-intelligence` launches **the application's own executable** with the token first and `--`
 second (`Rotaris.exe builtin:code-intelligence -- start-mcp-server --transport stdio --context ide --project <root>`;
-in development `electron.exe out/main/index.js` before them): that process is a **sixth process shape**, the
+in development `electron.exe out/main/index.js` before them; **since 2026-09-28 the one Chromium switch the parent was
+started with, `--no-sandbox`, stands between the token and `--`** — the token stays the first argument (REQ-MCP-033);
+the child is a fresh Chromium and died with SIGTRAP before its sentinel ran when the parent ran as root without handing
+it over; `@rotaris/platform`'s `chromium-switches.ts` is the definition, main forks the run host with the switch so
+`run-host/code-intelligence-launch.ts` can read it off its own argv, and the sentinel drops it before the separator so
+the runtime never receives it — OQ-82's reading; the first build that day put it in front of the token, superseded):
+that process is a **sixth process shape**, the
 **sentinel** — Electron's main entry whose first module (`main/sentinel.ts`) sees the token, resolves the bundled
 interpreter under `process.resourcesPath/code-intelligence/runtime/` (the source tree's `apps/desktop/resources/` in
 development), seeds the runtime's per-user home once (`<data>/code-intelligence/`, its interface off), and runs the
@@ -440,7 +446,12 @@ its own stderr. The token process is an MCP stdio child, so that stderr reaches 
 child's: line by line at `debug` (`run host: mcp code_intelligence stderr: …`, `packages/mcp/src/transport.ts`), and
 quoted in the failure lines — REQ-MCP-107's stderr tail in a failed discovery's line at `warning`, and a failed setup
 step's last output at `info` (`mcp setup: create failed — …; its last output: …`, the detail `packages/mcp/src/setup.ts`
-builds). At the default threshold only the quoted route is written.
+builds). At the default threshold only the quoted route is written. **The hook engine's `log` sink reaches this log
+(REQ-HOOKS-138, repaired 2026-09-28)**: a hook fault that reduces to a log entry (REQ-HOOKS-079/128/129) and the run
+host's account of a hook set it could not resolve (REQ-HOOKS-085) are handed to `Sessions` through `HookPortContext.log`,
+which `Sessions` writes through its `SessionsDeps.log` — the run host's `log` event at `info` — and never through the
+per-session log, whose `WARNING` default had dropped them. The checkpoint port's `CheckpointPortContext.log` stays the
+per-session log by decision, because its root writes every checkpoint line to both logs through a channel of its own.
 
 **Every window subscribes for itself (Part R).** `session.subscribe` / `session.unsubscribe` bind the relay subscription to the **sender's** webContents id — the persona window's when it asks — not the main window's (the twenty-seventh defect, ADR-0043's note); the run host's `session.attach` then re-delivers the whole-session update and the resident rows to every subscriber of the session. A persona window subscribes on show and unsubscribes on hide (ADR-0048's zero-work rule).
 
@@ -483,6 +494,6 @@ licensed.
 | `%LOCALAPPDATA%/rotaris/config/project_settings.yaml` (+ `.lock`) | main (`ProjectSettingsStore`: under the lock, behind the secret screen, mode 0644) | run host and workspace service (layer 3 of every `loadConfiguration`, no lock) |
 | the instance claim | main (ADR-0055) | main (a second launch hands over and exits) |
 | **verification only, compiled out of a packaged build:** the file `ROTARIS_CAPTURE_MODEL_REQUESTS` names — one JSON line per scripted model call (`call`, `who`, `model`, `system`), what the model port received | run host (the scripted client alone, so no provider's traffic can reach it) | `injection-proof` |
-| the application manifest's `version` — `apps/desktop/package.json` in development, `resources/app.asar/package.json` packaged (`out/main/../../package.json` either way) | the developer; packed by electron-builder; the one place a release declares the product version, checked against the tag by `pnpm release:guard` before any build (REQ-STARTUP-028/158) | main (`version.ts`, once per process — the version `shell.hello` reports) and the run host (`host.ts`, once — the `clientInfo.version` of every MCP handshake, handed to `McpHost`); both through `@rotaris/platform`'s `installedProductVersion`, from `out/main/`, so neither process carries a version of its own |
+| the application manifest's `version` — `apps/desktop/package.json` in development, `resources/app.asar/package.json` packaged (`out/main/../../package.json` either way) | the developer; packed by electron-builder; the one place a release declares the product version, checked against the tag by `pnpm release:guard` before any build (REQ-STARTUP-028/158) | `pnpm package` (`scripts/lib/artifact-names.mjs`, the text as written — every artifact name is rendered from it through `tools/release-naming`, never from electron-builder's normalised `${version}`, and `build-hooks.cjs` compares the configured and the produced names against it; REQ-STARTUP-031); main (`version.ts`, once per process — the version `shell.hello` reports) and the run host (`host.ts`, once — the `clientInfo.version` of every MCP handshake, handed to `McpHost`); both through `@rotaris/platform`'s `installedProductVersion`, from `out/main/`, so neither process carries a version of its own |
 | `process.resourcesPath/THIRD-PARTY-LICENSES.txt` — the notices file (REQ-STARTUP-141/142); in the source tree `apps/desktop/resources/THIRD-PARTY-LICENSES.txt`, git-ignored | **the build**, never the product: `pnpm notices` (`tools/notices/`), per platform before freezing and only when REQ-STARTUP-143's validation passes; `pnpm package` runs it and `extraResources` carries it into the artifact (§4.4, 2026-09-27) | main (`about.ts`, `thirdPartyLicensesPath`) — the About page's `shell.openThirdPartyLicenses` opens it as a local file; `afterPack`'s "assets" rule; a person |
 | `process.resourcesPath/build-id.txt` — the build identifier (REQ-SHELL-140): one line, HEAD's commit name, `-dirty` when the tree differed; in the source tree `apps/desktop/resources/build-id.txt`, git-ignored | **the build**, never the product: `pnpm build-id` (`tools/build-id/`), which `pnpm package` runs before freezing; `extraResources` carries it into the artifact (§4.4, 2026-09-27) | main (`about.ts`, `buildIdentifier`) — `shell.hello`'s `build`, the About page's Build row; `afterPack`'s "assets" rule |

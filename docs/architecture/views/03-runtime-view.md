@@ -84,9 +84,18 @@ reads it back. The policy read counts towards the figure because `PD-WORKSPACE-0
 deciding what is merged. Nothing warms the merge at workspace open, as the catalog is warmed. The first read happens
 at the first agent built for a session, in the run host, after the typed prompt has been recorded as row 0. It
 therefore cannot delay the window's first input, and it never runs in the window's process. The first measurement
-(2026-09-27, Linux) is in `first-release-plan.md` §3.2. The machine-wide base's directory is injectable
-(`SkillHostDeps.machineDir`, `/etc/codex` when absent). It is a verification seam in the built app and never
-widens the platform rule.
+(2026-09-27, Linux) is in `first-release-plan.md` §3.2. The machine-wide directory is injectable
+(`SkillHostDeps.machineDir`, `/etc/codex` when absent) and, since 2026-09-28, moves both discoveries at once: the
+instruction base is the directory itself and REQ-WORKSPACE-051's fourth user-scope skill root is its `skills` child
+(`SkillRootsEnv.machineDir`, `machineCodexDir` in `config/src/skills/roots.ts`, the one place the literal lives). It is
+a verification seam in the built app (`ROTARIS_CAPTURE_SKILLS_MACHINE ?? ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE`, compiled
+out of a packaged build) and never widens the platform rule. The port every read goes through
+(`NODE_DISCOVERY_PORTS.readFile`) decodes strictly since the same day: a file that is not UTF-8 throws, and the throw
+reaches the arm each walk already had for an unreadable file — REQ-WORKSPACE-045's warning naming the path and the
+error for an instruction file, REQ-WORKSPACE-053's skip with a reason for a `SKILL.md` (OQ-79), REQ-WORKSPACE-062's
+"no block" for a force-loaded body, the disable manifest's unreadable arm, and REQ-WORKSPACE-057's "SKILL.md not found"
+with the decoder's reason for a `SKILL.md` loaded by hand (`loadManualSkill`) — where the lenient decode had merged
+replacement characters with no warning.
 
 **The set is decided in one place because it has two readers.** `instructionFiles` is a method rather than a
 step inside the context because the retrospective consumes the same list (`PD-LIBRARY-002` over
@@ -220,7 +229,8 @@ makes a replayed event persist once and a ladder retry update the row in place r
 marks the live row `stalledSince`, the next output clears it, and neither publishes anything into the record
 (REQ-CHAT-164's detection half; the drawing half is the renderer's). After the step: the supervisor observes the
 message; each tool call is observed, written as a running `tool` row, dispatched through the **gate** (policy →
-approval when needed → executor; hooks in its two slots), settled with its outcome (and a `diff` row for an
+approval when needed — resolved at once under the headless policy while the run treats the user as **away**,
+`PD-TOOLS-005`, §5 → executor; hooks in its two slots), settled with its outcome (and a `diff` row for an
 edit); the results go back as one tool message; hook feedback follows as a user message. A reply with no tool call ends the turn — unless a steer is pending, in which case
 the agent takes another round; an empty reply with no call is the runtime's stuck report to the supervisor.
 
@@ -364,7 +374,7 @@ watchdog on the clock port) and the turn awaits the port's `ready()` before read
 collision prefix) and from it, in one place, the executors outside the registry (named by callable name, dispatching the
 reported name to the session's shared connection under the entry's allowance, 300 s by default), the model's listing and
 `## MCP servers` appended to the system prompt (REQ-MCP-101, byte-exact). Under `restricted` or `read_only` the MCP
-tools are withheld from the surface (ADR-0016's reading). The session's connections open on first demand under a keyed
+tools are withheld from the surface (ADR-0016's reading), and while the plan gate holds every server executor is withheld by identity — `withheldUnderPlanGate(name, false)` — rather than by the registry's answer for its name, which a server's tool offered under a free public name such as `read_file` would otherwise borrow (REQ-ORCH-153; the gate refuses the same call on dispatch through its `publicTool` predicate and the port's withheld set). The session's connections open on first demand under a keyed
 single-flight (one process per server per session, shared by every child), a per-call failure is that call's (no retry,
 no reconnect; the next call re-establishes; one `mcp_config` warning per server per session), a `tools/list_changed`
 recomputes and only narrows (the executor deleted, the prompt untouched). **Their lifetime:** the connections of a
@@ -430,6 +440,21 @@ its payload is assembled as any child's is, with nothing of the timed-out child 
 the current iteration's root task, so a continuation can be taken up only within the iteration whose child was cut off.
 The field itself is not in REQ-TOOLS-152, which the directive does not name: **OQ-66**.
 
+**Inherited context (REQ-TOOLS-152, REQ-TOOLS-154 item (5), REQ-ORCH-032; `children/ledger.ts`, `notify.ts`).** A
+`delegate` call may carry `inherited_context`, task ids of siblings whose reports the child is to read without waiting on
+them. `ChildLedger.spawn` resolves each after REQ-ORCH-046's dependency checks and before its cycle check. Existence is
+asked of the session's child records and the root execution record, which shares their namespace (REQ-ORCH-072): an id no
+task has refuses the call with no record and no id, reported as REQ-TOOLS-153's `rejected`; an id naming a task that exists
+and has not completed — the root, the caller's own task, any task that failed, was cancelled, has not finished, or
+succeeded without its report stored — is ignored; the caller's own children `succeeded` with a report stored are returned on
+`Spawned.inherited`, once each in the caller's order; a completed task that is not the caller's own child is refused for
+ownership, naming its parent as the `depends_on` refusal does, never as nonexistent (**OQ-81**). `IterationChildren.delegate` renders them at once — a heading saying
+the reports are context and not a dependency, then one REQ-ORCH-060 `reportBlock` per sibling, the same block the parent
+reads on a resume — and keeps the text per task id in memory for the life of the run, exactly as the attachment list is
+kept. `childPayload`'s sixth argument places it as item (5), after the artifact blocks and immediately before the task;
+`execute` passes what was remembered and nothing else of it changed. The ids stay on `children.inherited_context` for the
+agent surfaces (REQ-MONITOR-074); the run holds no other record of which of them counted.
+
 **The record the agent surfaces read (Part R; REQ-MONITOR-044).** Each child's `AgentRecord` carries, beside what Part B
 projected, `reasoning` (the persona's configured level, `medium` when none), `contextUsed` (the input count of its latest
 model step) and `contextLimit` — **from Part AH the model's own `max_input_tokens`** where the configuration states one
@@ -463,6 +488,25 @@ sweep on open settles the row first in this build's routes.
 | `forceCompression` | `run.forceCompression()` → the run's **`ConversationRegistry`** (`run/conversations.ts`, ADR-0060 decision 1's second reader) → each live turn's `CompressionRunner.manual` | **Part AO** (REQ-CHAT-078..081, REQ-MONITOR-090..096): every conversation live inside `runTurn` — the root's and each child's, registered for the span of the turn and unregistered on every exit — compresses CONCURRENTLY and the answer settles once ALL have; unconditional (neither the threshold nor the futility latch is read; the `context_compressed` entry carries `trigger: manual` and NO threshold field); one pass per conversation at a time, shared with the automatic trigger (a pass in flight is joined, `due()` answers false meanwhile); refused `no_run` ("No run is active.") or `no_active_conversations` ("No active agent contexts are available to compress."); the run host raises the count toast or the persistent "Context compression incomplete" with each failing agent and reason in the detail block. **The one asynchronous control:** `Sessions.controlAsync` is its entry and the run host awaits it; the synchronous `control` answers the `no_run` refusal |
 | `clearTranscript` | `SessionWriter.clearTranscript()` — the run's own writer, or the loaded idle session's | **Part AO** (REQ-CHAT-082..084, both routes): every transcript row, resident or released to a page, deleted in ONE transaction with the **`transcript_cleared`** timeline entry, so a reader sees the old rows or none; the writer's resident count and open response rows reset so the run's next write cannot resurrect a row, the row index counter NOT reset (the `events` history keeps REQ-EVENTS-052's contiguity, the next row takes the next index); the commit hand-off carries `clear` and the projection owner drops every held row, cancels a pending growth tick and republishes — an increment from 0 with no rows, then the record. Failures: the persistent "Could not clear transcript" with the store's reason as detail; "Transcript is busy and could not be cleared." is a toast whose condition the store's synchronous transactions make unreachable in this build (stated in `sessions.ts`) |
 | everything else in REQ-MONITOR-004 | — | answers `false` (no mechanism yet) |
+
+**Every operation above but `announceShutdown` is the user's input to the run, and the first of them after an approval
+wait expired unanswered *returns* the user (`PD-TOOLS-005`).** The run's away state is one holder per run,
+`UserPresence` (`engine/run/presence.ts`), installed by `start` and every continuation beside the mode override and
+handed to every agent's port through `ToolPortContext.presence` — a delegated child's included. The gate marks it when a
+brokered wait ends by timeout (the first ask still pays the full `runtime.approval_timeout_seconds`; a timeout of 0
+never marks it) and, while it is marked, resolves every ask that would prompt at once under
+`runtime.headless_approval_policy`, source `headless-policy`, with a reason naming the timeout that expired and never
+"no approval UI"; a session that has genuinely lost its presenter is still reported with REQ-TOOLS-065's own reason,
+checked first. The return is one line at the top of `control` — before the operation is judged, so a message the
+operation then refuses still returns the user — plus the `clearTranscript` branch, which `control` answers ahead of that
+line for both of REQ-CHAT-084's routes and which returns the user only when a run is live, `controlAsync`'s
+`forceCompression` and the id-routed `answerApproval` / `answerQuestions` / `cancelQuestions`, which return the user of
+the session that held the id. The terminal-stream operations (keystrokes, resize, interrupt, kill) reach
+`run-host/terminal.ts` by stream id and never `Sessions`, so they do not return the user — a reading, stated in the
+directive's note. A new run installs a fresh holder, so no run starts away. Both transitions are session-log lines at `WARNING`
+(REQ-SESSION-142); the timeline vocabulary has no word for them (REQ-ORCH-139, **OQ-76**). Questions (REQ-TOOLS-158)
+still prompt and wait where the call is permitted; under the `ask` preset the question tool's own dispatch is an
+approval ask, which the away state resolves (**OQ-77**).
 
 A session **waiting at the plan gate** likewise has no live run. `session.planEdit {text}` records the user's own
 text and moves nothing else; `session.planDecision {decision, changes?}` carries one of exactly three answers
@@ -589,7 +633,9 @@ of §5 and none a channel: each is a request answered once.
   service), the same seam the skills proof uses and for the same reason: overriding `HOME` kills Electron on Windows.
   The machine-wide base's directory is injected too (`ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE`, read by the workspace
   service and the run host alike, compiled out of a packaged build), so a proof can place a file at every base
-  without writing into the machine's own `/etc`.
+  without writing into the machine's own `/etc`; in the run host the same value moves the skill search's
+  `/etc/codex/skills` as well (`ROTARIS_CAPTURE_SKILLS_MACHINE` is read first there, as `ROTARIS_CAPTURE_SKILLS_HOME` is
+  for the home), so a driven run reads no skill of the operator's machine either.
 - **The MCP layer (Part S)** — the two `mcp.json` files are layer 2 of the load (defaults → discovered → global → workspace,
   REQ-MCP-025), the merged `mcp_servers` map is resolved at load (origin, command, availability, environment with secrets
   overlaid, the URL, the normalised description) and rides on `LoadedConfiguration.mcp`; Tier B resolves it again over the

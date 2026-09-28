@@ -40,5 +40,12 @@ export interface CheckpointPortContext {
   readonly dal: StoreDal;
   readonly writer: SessionWriter;
   readonly warn: (message: string) => void;
+  /**
+   * The per-session log of REQ-SESSION-142, at `INFO` — decided 2026-09-28, when `HookPortContext.log` was rerouted
+   * to the application log and this port was found silent on which log it meant. It stays the session's own because
+   * the root has a channel of its own for the application log (`CheckpointRootDeps.log`, `run-host/checkpoints.ts`)
+   * and writes every checkpoint line to both, so nothing here is a line another requirement obliges into the
+   * application log (PD-MONITOR-002); the session log keeps it at the level `session_log_level` sets.
+   */
   readonly log: (message: string) => void;
 }

@@ -27,9 +27,11 @@ function tree(): { root: string; home: string; cleanup: () => void } {
 }
 
 /*
- * `contextUnits` always runs instruction discovery too, so the catalog cases name a scratch machine-wide base as
- * `contextHost` does: on a Linux host the default is the real `/etc/codex`, and a file there made three exact
- * assertions below fail on what the machine held (the gap the first repair of the `/etc/codex` defect left).
+ * Both discoveries read under one machine-wide directory — `PD-WORKSPACE-002`'s instruction base is `/etc/codex` and
+ * REQ-WORKSPACE-051's fourth skill root is `/etc/codex/skills` — so the catalog cases name a scratch one as
+ * `contextHost` does: on a Linux host the default is the real directory, and a file there made three exact assertions
+ * below fail on what the machine held (an `AGENTS.md`, the gap the first repair of the `/etc/codex` defect left; then a
+ * `skills/zeta/SKILL.md`, the gap this seam closes). With it, every case here is decidable on any host.
  */
 const host = (_root: string, home: string, section: SkillsSection = SKILLS_DEFAULTS, extra: Partial<SkillHostDeps> = {}) =>
   new SkillHost({ home, machineDir: join(home, 'machine'), section: () => section, log: () => undefined, ...extra });
@@ -113,6 +115,32 @@ describe('the skill catalog (REQ-WORKSPACE-058, 069, 073, 057)', () => {
       expect(units[0]).not.toContain('- beta:');
       expect(units[1]).toContain('BETA BODY');
       expect(units[1]).not.toContain('description:');
+    } finally { t.cleanup(); }
+  });
+
+  it('REQ-WORKSPACE-051: a skill in the machine-wide root is found through the directory the host was given — user scope, outranked by every other root, on any host', () => {
+    /*
+     * The note that found the gap staged `/etc/codex/skills/zeta/SKILL.md` in a private `/etc` (`unshare -m`) and
+     * watched three cases here fail. The same skill now sits under the scratch machine directory, where the seam
+     * puts the fourth user-scope root, so the same fact is decided without a mount namespace and on every host.
+     */
+    const t = tree();
+    try {
+      mkdirSync(join(t.home, 'machine', 'skills', 'zeta'), { recursive: true });
+      writeFileSync(join(t.home, 'machine', 'skills', 'zeta', 'SKILL.md'), '---\nname: zeta\ndescription: Machine-wide.\n---\nZETA BODY\n');
+      // The machine root is the last user-scope root: a same-named skill anywhere else wins and shadows it.
+      mkdirSync(join(t.home, '.agents', 'skills', 'alpha'), { recursive: true });
+      writeFileSync(join(t.home, '.agents', 'skills', 'alpha', 'SKILL.md'), '---\nname: alpha\ndescription: The home copy.\n---\na\n');
+      mkdirSync(join(t.home, 'machine', 'skills', 'alpha'), { recursive: true });
+      writeFileSync(join(t.home, 'machine', 'skills', 'alpha', 'SKILL.md'), '---\nname: alpha\ndescription: The machine copy.\n---\na\n');
+      const linux = host(t.root, t.home, SKILLS_DEFAULTS, { platform: 'linux' }).state(t.root);
+      expect(linux.skills.map((s) => [s.name, s.scope, s.path])).toEqual([
+        ['alpha', 'project', join(t.root, '.agents', 'skills', 'alpha', 'SKILL.md')],
+        ['zeta', 'user', join(t.home, 'machine', 'skills', 'zeta', 'SKILL.md')],
+      ]);
+      expect(linux.skills[0]!.shadowed).toEqual([join(t.home, '.agents', 'skills', 'alpha', 'SKILL.md'), join(t.home, 'machine', 'skills', 'alpha', 'SKILL.md')]);
+      // On a platform with no `/etc` hierarchy the root is not searched at all, wherever the seam points.
+      expect(host(t.root, t.home, SKILLS_DEFAULTS, { platform: 'win32' }).state(t.root).skills.map((s) => s.name)).toEqual(['alpha']);
     } finally { t.cleanup(); }
   });
 
@@ -213,29 +241,38 @@ const contextHost = (home: string, globalDir: string, overrides: Record<string, 
   });
 
 describe('the workspace context unit (REQ-WORKSPACE-041..048, PD-WORKSPACE-002)', () => {
-  it('isolation: neither helper here probes the machine’s own `/etc/codex` for an instruction file, whatever the host holds', () => {
+  it('isolation: neither helper here probes the machine’s own `/etc/codex` — for an instruction file or for a skill — whatever the host holds', () => {
     /*
      * An exact assertion over a merge fails only on a host that HOLDS an `/etc/codex/AGENTS.md`, which is how the
      * first repair of that defect missed `host()` on a host that holds none. The probes are recorded instead, so the
      * isolation is decided on any host. The platform is pinned so the machine-wide base is consulted on Windows too.
-     * The skill search's own machine-wide root, `/etc/codex/skills`, has no seam yet and is not asked about here
-     * (`docs/defects/three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md`).
+     * The skill search's own machine-wide root, `/etc/codex/skills`, is asked about the same way: its listing is a
+     * `readDir`, so those are recorded too, and it must land under the scratch directory and nowhere under the real one
+     * (`docs/defects/fixed/three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md`).
      */
     const t = tree();
     try {
-      const probesOf = (make: (ports: DiscoveryPorts) => SkillHost): string[] => {
-        const probed: string[] = [];
-        const ports: DiscoveryPorts = { ...NODE_DISCOVERY_PORTS, isFile: (p) => { probed.push(p); return NODE_DISCOVERY_PORTS.isFile(p); } };
+      const probesOf = (make: (ports: DiscoveryPorts) => SkillHost): { files: string[]; dirs: string[] } => {
+        const files: string[] = [];
+        const dirs: string[] = [];
+        const ports: DiscoveryPorts = {
+          ...NODE_DISCOVERY_PORTS,
+          isFile: (p) => { files.push(p); return NODE_DISCOVERY_PORTS.isFile(p); },
+          readDir: (p) => { dirs.push(p); return NODE_DISCOVERY_PORTS.readDir(p); },
+        };
         make(ports).contextUnits(t.root, 's1');
-        return probed.filter((p) => /^(AGENTS|CLAUDE)(\.override)?\.md$/.test(basename(p)));
+        return { files: files.filter((p) => /^(AGENTS|CLAUDE)(\.override)?\.md$/.test(basename(p))), dirs };
       };
       for (const probed of [
         probesOf((ports) => host(t.root, t.home, SKILLS_DEFAULTS, { ports, platform: 'linux' })),
         probesOf((ports) => contextHost(t.home, join(t.home, 'cfg'), {}, true, { ports, platform: 'linux' })),
       ]) {
         // The machine-wide base WAS consulted — at the scratch directory, and nowhere under the real one.
-        expect(probed).toContain(join(t.home, 'machine', 'AGENTS.md'));
-        expect(probed.filter((p) => p.startsWith(join('/etc', 'codex')))).toEqual([]);
+        expect(probed.files).toContain(join(t.home, 'machine', 'AGENTS.md'));
+        expect(probed.files.filter((p) => p.startsWith(join('/etc', 'codex')))).toEqual([]);
+        // And so was the machine-wide skill root — the scratch directory's `skills` child, never `/etc/codex/skills`.
+        expect(probed.dirs).toContain(join(t.home, 'machine', 'skills'));
+        expect(probed.dirs.filter((p) => p.startsWith(join('/etc', 'codex')))).toEqual([]);
       }
     } finally { t.cleanup(); }
   });

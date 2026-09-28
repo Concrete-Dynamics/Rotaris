@@ -1,12 +1,16 @@
 /**
  * REQ-STARTUP-030, REQ-STARTUP-031 — the build matrix and the artifact names.
  *
- * One authority. `electron-builder`'s `artifactName` templates, the updater's
- * expectation of what a release contains, and the portable's assembly step all
- * read this module and compose nothing of their own.
+ * One authority. The installer names `pnpm package` writes as literals into
+ * electron-builder's configuration (`apps/desktop/scripts/lib/artifact-names.mjs`,
+ * rendered from the declared version, never from electron-builder's normalised
+ * `${version}` — ADR-0054, 2026-09-28), the updater's expectation of what a release
+ * contains, and the portable's assembly step all read this module and compose
+ * nothing of their own.
  *
- * ONE FILE OF ERASABLE SYNTAX, and it must stay so: the packaging hook's naming check
- * (`apps/desktop/scripts/build-hooks.cjs`, `checkNaming`) imports this file with plain
+ * ONE FILE OF ERASABLE SYNTAX, and it must stay so: the packaging scripts
+ * (`apps/desktop/scripts/lib/artifact-names.mjs`, which `package.mjs` and
+ * `build-hooks.cjs`'s `checkNaming` load) import this file with plain
  * Node, whose type stripping neither maps a `./x.js` specifier to `x.ts` nor accepts
  * parameter properties. A relative import or a `constructor(readonly …)` here refuses
  * every installer build at `afterPack` (measured 2026-09-27, when the tag grammar

@@ -31,3 +31,25 @@ REQ-LIBRARY-142, REQ-CHAT-042..044 in the built app — is unproven on a run tha
 - `packages/ui/src/slash/skills.ts` — `skillPathCommand` and `skillsListCommand`, both `kind: 'skill'`, and
   `FIXED_SKILL_COMMAND_NAMES`.
 - `packages/ui/src/slash/controls.tsx` — where the two fixed commands register beside `/compress` and `/clear`.
+
+## Repaired — 2026-09-28, under R-062 — in the proof, reading the record; the product's badges are unchanged
+
+**The reading.** REQ-CHAT-025 fixes the closed set `action`, `skill`, `prompt` and says only that `prompt` marks a
+prompt-file entry; it does not say which badge a fixed command *about* skills carries. REQ-CHAT-162 names the two
+commands — one listing the discovered skills, one loading a skill from a path — without a badge. ADR-0063 decision 5
+put them in `packages/ui/src/slash/skills.ts` beside the per-skill commands, each `kind: 'skill'`, and the record has
+since built on that choice (`FIXED_SKILL_COMMAND_NAMES`, the "a `skill` holder is mine" rule and its two repairs). So
+the badge set the record decided is: `action` for the built-ins and the palette mirrors, `skill` for `/skill <path>`
+and `/skills`, `prompt` for a prompt-file entry. The proof asserts that reading and does not move the product's badges.
+
+**The assertion.** The launch discovers no skill and has no prompt file, so the popup's kind set is exactly
+`action,skill`; the rows carrying `data-kind="skill"` are exactly `/skill` and `/skills`; and both are listed
+(REQ-CHAT-162). The sentence "every built-in and mirror carries the action badge" still holds and is what the first
+of the three asserts, once the two fixed skill commands are named.
+
+**Measured** as root under Xvfb on Linux, Node 24, after one `pnpm build`: `pnpm slash-proof --skip-build` passes
+its first catalogue assertion, the three badge assertions, the popup's geometry, focus and row texts, REQ-CHAT-027's
+four colours and their contrast, Tab completion and the usage notice, and then stops at a **second, pre-existing** red
+this one had hidden since 2026-09-18 — two evals scheduled at the same 5,900 ms offset, recorded as
+[`slash-proofs-model-chip-eval-shares-its-offset-with-the-usage-notice-read.md`](../slash-proofs-model-chip-eval-shares-its-offset-with-the-usage-notice-read.md)
+and not repaired under this item. The launch also carries `hostSwitches`.

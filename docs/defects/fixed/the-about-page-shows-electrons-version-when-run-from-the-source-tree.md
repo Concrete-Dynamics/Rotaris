@@ -21,3 +21,16 @@ proof that reads the About page reads Electron's version as if it were the produ
 - `apps/desktop/src/main/commands/shell.ts`: `shell.hello` answers `version: app.getVersion()`.
 - `apps/desktop/scripts/settings-proof.mjs`: the Version check accepts any `v<digit>` value.
 - `apps/desktop/package.json`: the version the row should show.
+
+## Repaired — before this note was written; recorded 2026-09-28 under R-062
+
+This note duplicates
+[`the-unpacked-build-reports-electrons-version-as-the-products.md`](the-unpacked-build-reports-electrons-version-as-the-products.md),
+filed the same day by the version guard's build (first-release-plan.md §4.1), which repaired it in commit **`b345598`**
+(`fix(main): report the declared product version, not Electron's`): `shell.hello` answers `productVersion()`
+(`apps/desktop/src/main/version.ts`, the cached call of `@rotaris/platform`'s `installedProductVersion`), and
+`apps/desktop/src/main/version.test.ts` pins that the value is the manifest's and not `process.versions.electron`. The
+same commit made `settings-proof`'s Version check assert `v` plus the version `apps/desktop/package.json` declares;
+`git log -S productVersion -- apps/desktop/src/main/commands/shell.ts` names it as the one commit that introduced the
+reader there. Verified 2026-09-28 on this tree: the proof's launch 1 read `v0.1.0`, and the `/^v\d/` line that
+could not fail was removed, so the declared-version comparison is the one check the row has.

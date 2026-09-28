@@ -81,10 +81,10 @@ describe('installation-flavour classification — REQ-STARTUP-106', () => {
     expect(c).toMatchObject({ flavour: 'installer' });
   });
 
-  it('a packaged Windows build with neither a registry match nor a published artifact is not updatable (ADR-0054\'s reading, OQ-77)', () => {
+  it('a packaged Windows build with neither a registry match nor a published artifact is not updatable (ADR-0054\'s reading, OQ-84)', () => {
     const c = classifyInstallation(win({ execPath: 'D:\\copied-tree\\Rotaris.exe' }));
     expect(c.updatable).toBe(false);
-    if (!c.updatable) expect(c.reason).toContain('OQ-77');
+    if (!c.updatable) expect(c.reason).toContain('OQ-84');
   });
 
   it('maps each flavour to the artifact kind REQ-STARTUP-107 names', () => {

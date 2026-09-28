@@ -13,10 +13,10 @@
  * (`proofIsolationEnv`), so every other home-relative read — the prompt library's `~/.agents/prompts`, for one —
  * lands there too; Windows keeps its real home, because overriding it kills Electron before it paints there.
  *
- * ONE root of the operator's machine is still read: the skill search's machine-wide root, `/etc/codex/skills`
- * (REQ-WORKSPACE-051, off Windows only), which has no seam. A skill there would enter the scripted model's catalog
- * and the captured calls. No assertion here is exact over the catalog, so it cannot turn the proof red, but it is not
- * isolation (`docs/defects/three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md`).
+ * The same variable moves the skill search's machine-wide root, `/etc/codex/skills` (REQ-WORKSPACE-051, off Windows
+ * only): both discoveries read under the one machine-wide directory, so the run host lists `<profile.machine>/skills`
+ * and never the operator's own. Before the seam existed a skill there entered the scripted model's catalog and the
+ * captured calls (`docs/defects/fixed/three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md`).
  *
  * The functional half, four launches against one scratch profile whose workspace is a Git repository in which every
  * workspace instruction file's committed text differs from its working copy:
@@ -60,7 +60,7 @@ import { createHash } from 'node:crypto';
 import { cpus, platform as hostPlatform, release } from 'node:os';
 import { dirname, join } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { app, buildDesktop, configDirFor, electron, evidenceDirectory, launchOptions, readProbes, repo } from './lib/harness.mjs';
+import { app, buildDesktop, configDirFor, electron, evidenceDirectory, hostSwitches, launchOptions, readProbes, repo } from './lib/harness.mjs';
 
 const output = evidenceDirectory('injection-proof');
 rmSync(output, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
@@ -95,7 +95,7 @@ function launch(name, profile, workspace, extra, timeoutMs = 120_000) {
   const png = join(output, `${name}.png`);
   const calls = join(output, `${name}.model-calls.jsonl`);
   rmSync(calls, { force: true });
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), workspace], {
+  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
     cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
     env: {
       ...launchOptions({ local: profile.local, preferences: profile.preferences, ...(scratchHome ? { home: profile.home } : {}) }),

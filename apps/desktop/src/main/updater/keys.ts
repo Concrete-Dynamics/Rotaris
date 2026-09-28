@@ -26,7 +26,7 @@ import { createPublicKey, verify, type KeyObject } from 'node:crypto';
  * signature over the manifest's exact published bytes (REQ-STARTUP-032) — no armour, no envelope, no digest step
  * of ours in between — which is what `openssl pkeyutl -sign -inkey <private.pem> -rawin -in SHA256SUMS.txt -out
  * SHA256SUMS.txt.sig` writes. The specification leaves the form of a key and of a signature to the implementation
- * (domain 11's Data & Formats); ADR-0054 records this choice and OQ-76 asks whether the record should fix it.
+ * (domain 11's Data & Formats); ADR-0054 records this choice and OQ-83 asks whether the record should fix it.
  */
 export const SIGNATURE_ALGORITHM = 'Ed25519' as const;
 /** The raw Ed25519 signature is exactly this long; anything else is not a signature of this format. */

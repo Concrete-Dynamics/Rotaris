@@ -18,7 +18,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { proofIsolationEnv } from './lib/harness.mjs';
+import { configDirFor, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -33,7 +33,8 @@ mkdirSync(output, { recursive: true });
 const root = join(output, 'profile');
 const workspace = join(root, 'workspace');
 const local = join(root, 'local');
-const configDir = join(local, 'rotaris', 'config');
+// The global configuration directory by the platform that reads it (`configDirFor`), not the Windows spelling alone.
+const configDir = configDirFor(local);
 mkdirSync(join(workspace, '.rotaris'), { recursive: true });
 mkdirSync(configDir, { recursive: true });
 writeFileSync(join(workspace, 'README.md'), '# console spike\n');
@@ -53,7 +54,7 @@ writeFileSync(join(output, 'console.pids'), '');
 const env = { ...process.env };
 for (const key of Object.keys(env)) if (key.startsWith('ROTARIS_')) delete env[key];
 const launchedAt = new Date();
-const child = spawn(exe, [workspace], {
+const child = spawn(exe, [...hostSwitches, workspace], {
   cwd: dirname(exe), windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
   env: { ...env, ...proofIsolationEnv({ local, preferences: join(root, 'preferences') }), ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_INTENT_SCRIPT: 'explicit_trivial', ROTARIS_CIRCUIT_BREAKER: 'off', ROTARIS_CAPTURE_PNG: join(output, 'window.png'), ROTARIS_CAPTURE_PROMPT: 'echo through cmd', ROTARIS_SCRIPT: 'mcp:console.echo,answer', ROTARIS_CAPTURE_AFTER_MS: '12000', ELECTRON_DISABLE_SECURITY_WARNINGS: 'true' },
 });

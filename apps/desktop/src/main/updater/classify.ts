@@ -29,7 +29,7 @@ import type { ArtifactKind } from '@rotaris/release-naming';
  * else. An installed tree made no copy of itself, so its artifact is the executable that is running. With neither a
  * variable nor a registry match, a packaged Windows build is **not updatable** here — ADR-0054's reading ("absent
  * variable → not updatable"), where REQ-STARTUP-106's copied-tree sentence would read it as portable; that
- * disagreement is OQ-77 and the build proceeds under ADR-0054.
+ * disagreement is OQ-84 and the build proceeds under ADR-0054.
  *
  * A build that is not packaged — the source tree, `pnpm dev`, every proof — is classified not updatable: no check is
  * performed, and the process issues no request to the endpoint and none to any release-asset URL (REQ-STARTUP-150).
@@ -127,7 +127,7 @@ export function classifyInstallation(facts: ClassificationFacts): Classification
     }
     return {
       updatable: false,
-      reason: `a packaged Windows build outside the installer's InstallDir with no ${PORTABLE_ARTIFACT_VARIABLE} naming the artifact it started from — the payload run directly, or an installed tree copied elsewhere (ADR-0054's reading; OQ-77)`,
+      reason: `a packaged Windows build outside the installer's InstallDir with no ${PORTABLE_ARTIFACT_VARIABLE} naming the artifact it started from — the payload run directly, or an installed tree copied elsewhere (ADR-0054's reading; OQ-84)`,
     };
   }
   return { updatable: false, reason: `a packaged ${facts.platform} build with no ${APPIMAGE_VARIABLE} is not one of the released artifacts (REQ-STARTUP-031, REQ-STARTUP-106)` };

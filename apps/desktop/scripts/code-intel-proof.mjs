@@ -28,13 +28,14 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, w
 import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { cleanEnvironment, proofIsolationEnv, workspacesRootFor } from './lib/harness.mjs';
+import { cleanEnvironment, configDirFor, electron, hostSwitches, proofIsolationEnv, workspacesRootFor } from './lib/harness.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
 const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
-const electron = join(repo, 'node_modules', 'electron', 'dist', 'electron.exe');
+// `electron` is the harness's, by platform: this proof spelled `electron.exe` alone and could not launch off Windows
+// (`docs/defects/fixed/code-intel-proof-names-the-windows-electron-binary-alone.md`).
 const mainEntry = join(app, 'out', 'main', 'index.js');
 const packagedExe = join(app, 'release', 'win-unpacked', 'Rotaris.exe');
 const packaged = process.env['ROTARIS_CODE_INTEL_PACKAGED'] === '1';
@@ -79,7 +80,8 @@ if (packaged && !existsSync(packagedExe)) throw new Error(`ROTARIS_CODE_INTEL_PA
 
 const workspace = join(root, 'workspace');
 const noCode = join(root, 'workspace-nocode');
-const configDir = join(local, 'rotaris', 'config');
+// The global configuration directory by the platform that reads it (`configDirFor`), not the Windows spelling alone.
+const configDir = configDirFor(local);
 const preferences = join(root, 'preferences');
 mkdirSync(join(workspace, '.rotaris'), { recursive: true });
 mkdirSync(join(workspace, 'src'), { recursive: true });
@@ -132,7 +134,7 @@ function launch(name, extra, { ws = workspace, global = GLOBAL, timeout = 150_00
   writeFileSync(join(ws, '.rotaris', 'agents.yaml'), WORKSPACE);
   const png = join(output, `${name}.png`);
   const started = Date.now();
-  const result = spawnSync(electron, [mainEntry, ws], {
+  const result = spawnSync(electron, [mainEntry, ...hostSwitches, ws], {
     cwd: app, encoding: 'utf8', timeout, windowsHide: true, maxBuffer: 64 * 1024 * 1024,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
@@ -155,7 +157,8 @@ function launch(name, extra, { ws = workspace, global = GLOBAL, timeout = 150_00
 async function branch({ exe, before, tail, ws, env, call = null, callTimeoutMs = 120_000, sample = true }) {
   const t0 = Date.now();
   const launchedAt = new Date();
-  const child = spawn(exe, [...before, TOKEN, '--', ...tail], { env, cwd: ws, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  // `hostSwitches` ahead of the token: the branch is a Chromium process too, and as root it dies without them.
+  const child = spawn(exe, [...before, ...hostSwitches, TOKEN, '--', ...tail], { env, cwd: ws, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   let out = Buffer.alloc(0); let stderr = ''; let preamble = null; let firstByteAt = null; const nonJson = [];
   const pending = new Map(); let id = 0;
   child.stderr.setEncoding('utf8'); child.stderr.on('data', (d) => { stderr += d; });
@@ -210,7 +213,7 @@ async function branch({ exe, before, tail, ws, env, call = null, callTimeoutMs =
   return result;
 }
 async function exitStatus({ exe, before, env }) {
-  const r = spawnSync(exe, [...before, TOKEN, '--', 'no-such-subcommand'], { env, encoding: 'utf8', windowsHide: true, timeout: 60_000 });
+  const r = spawnSync(exe, [...before, ...hostSwitches, TOKEN, '--', 'no-such-subcommand'], { env, encoding: 'utf8', windowsHide: true, timeout: 60_000 });
   return { code: r.status, stdout: r.stdout ?? '', stderrTail: (r.stderr ?? '').trim().split(/\r?\n/).at(-1) ?? '' };
 }
 const SERVER_TAIL = (ws) => ['start-mcp-server', '--transport', 'stdio', '--context', 'ide', '--project', ws];

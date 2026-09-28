@@ -14,6 +14,10 @@ model can cost a few millionths: 50 tokens at 0.0000001 is 0.000005, and its lab
 
 Noticed 2026-09-23 while moving `money.ts` into `kernel` for R-049.
 
+**Raised with the owner 2026-09-28 as ESC-42** (`docs/architecture/owner-decisions.md`, under R-062): both requirements
+quoted, three options costed, one recommended. The note stays open until the ESC is ruled and built; the code keeps
+`REQ-PROVIDER-121`'s rule as written meanwhile.
+
 ## Specs
 
 - `REQ-SHELL-045`: "so a cost that is small but not nothing is never rendered as zero". Its own rounding rule

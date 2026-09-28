@@ -103,9 +103,9 @@ import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
-import { cleanEnvironment, configDirFor, findDatabases, proofIsolationEnv, tokensDirFor } from './lib/harness.mjs';
+import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, proofIsolationEnv, tokensDirFor } from './lib/harness.mjs';
 import { startRecordingProxy } from './lib/model-traffic.mjs';
-import { LONG_OUTPUT_LINES, diagnosticOf, longOutputReading, outputOf, terminalShapes } from './lib/terminal-shapes.mjs';
+import { LONG_OUTPUT_LINES, diagnosticOf, hereStringLinesReturned, longOutputReading, outputOf, terminalShapes } from './lib/terminal-shapes.mjs';
 
 const require = createRequire(import.meta.url);
 const repo = resolve(import.meta.dirname, '..', '..', '..');
@@ -746,7 +746,7 @@ async function launch(name, extra, timeoutMs = 180_000) {
   const paced = budget > 0 && extra['ROTARIS_CAPTURE_PNG_AT'] === undefined
     ? { ROTARIS_CAPTURE_PNG_AT: `${join(dir, `${name}.early.png`)}@${Math.round(budget * 0.2)};;${join(dir, `${name}.mid.png`)}@${Math.round(budget * 0.6)}` }
     : {};
-  const result = await runElectron([join(app, 'out', 'main', 'index.js'), workspace], {
+  const result = await runElectron([join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
     timeout: timeoutMs,
     env: {
       ...cleanEnvironment(),
@@ -1609,7 +1609,11 @@ if (wanted.includes('terminal')) {
     // delimiter that never comes and the call dies on its timeout rather than on its own last line.
     check(String(hereString.args.command ?? '').includes('\n'), 'the multi-line command reached the tool with its newlines', `${String(hereString.args.command ?? '').split('\n').length} line(s) in args.command`);
     check(d?.timeout !== true && d?.exit_code === 0, 'the here-string terminated rather than hanging on a lost delimiter', `exit ${d?.exit_code ?? 'none'}${d?.timeout ? ', timed out' : ''}`);
-    check(/alpha-one/.test(hereString.result) && /beta-two/.test(hereString.result), 'both lines of the here-string came back', hereString.result.includes('alpha-one') ? 'alpha-one present' : 'alpha-one absent');
+    // Read from the OUTPUT section alone (`hereStringLinesReturned`): the diagnostic repeats the command, which carries
+    // both words, so the whole result matched whether or not the shell printed anything — the 2026-09-22 pass was not
+    // evidence (`docs/defects/fixed/the-here-string-check-reads-its-own-command-back.md`).
+    const printedLines = outputOf(hereString.result) ?? '';
+    check(hereStringLinesReturned(hereString.result), 'both lines of the here-string came back, in the output the shell printed', `alpha-one ${/alpha-one/.test(printedLines) ? 'present' : 'absent'}, beta-two ${/beta-two/.test(printedLines) ? 'present' : 'absent'} in the output section`);
   }
 
   const longOutput = attempted('long-output')[0];

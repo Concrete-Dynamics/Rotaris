@@ -21,7 +21,7 @@ import { mkdirSync, statSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { millis, toIsoUtc } from '@rotaris/kernel';
 import { type AcknowledgementAction, CHANNEL, CommandRequestSchema, type CommandRequest, CONTRACT_SCHEMA_VERSION, oklchToSrgb, parseOklch, resolveTheme, srgbToHex, type Theme, type HooksSummary, type ApprovalPayload, type PausePayload, type CommandOutcome, type NoticeSeverity, type ProposalStatus, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest, TERMINAL_WINDOW_ROLE, TERMINAL_AUTO_OPEN_PREFERENCE, type TerminalWindowCommand, type TerminalWindowOpened, type TerminalWindowPayload } from '@rotaris/contracts';
-import { claimInstance, inheritInstance, dataLayout, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, type HandOver, type InstanceRecord } from '@rotaris/platform';
+import { claimInstance, inheritInstance, dataLayout, inheritedChromiumSwitches, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, type HandOver, type InstanceRecord } from '@rotaris/platform';
 // The updater (first-release-plan.md §4.6, ADR-0054): the pure module, and the one file of it that touches Electron.
 import { createUpdater } from './updater/updater.js';
 import { createSuccessorWait } from './updater/successor.js';
@@ -212,7 +212,10 @@ async function main(): Promise<void> {
   const providers = new ProviderService({ credentials, settings: projectSettings, wall: clocks.wall, log: (m) => log(`providers: ${m}`), warn: (m) => log(`providers: ${m}`, 'warn') });
 
   // ADR-0002: one run host for the application's lifetime; one workspace service per open workspace.
-  const runHostChild = utilityProcess.fork(join(__dirname, 'run-host.js'), [], { serviceName: 'rotaris-run-host' });
+  // REQ-MCP-033 / OQ-82: the run host builds the reserved token's launch of this executable, and that launch carries the
+  // sandbox switch THIS process was started with (`--no-sandbox`, as root on Linux). A utility process's argv is what it
+  // is forked with, not the parent's, so the switch is handed over here; the run host reads it back from its own argv.
+  const runHostChild = utilityProcess.fork(join(__dirname, 'run-host.js'), [...inheritedChromiumSwitches(process.argv)], { serviceName: 'rotaris-run-host' });
   // Watched from the fork so the quit can race its `shutdown` against it and never miss the event (`exit.ts`).
   const runHostExit = watchChildExit(runHostChild);
   const runHost = new ProcessLink<RunHostRequest>(portOf(runHostChild), clocks.timers);

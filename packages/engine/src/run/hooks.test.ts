@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ScriptedCall } from '@rotaris/model';
-import { RUN_CONFIG_DEFAULTS, Sessions, type HookPort, type PortToolResult, type Publisher, type RunNotice, type ToolPort } from '../index.js';
+import { RUN_CONFIG_DEFAULTS, Sessions, type HookPort, type HookPortContext, type PortToolResult, type Publisher, type RunNotice, type ToolPort } from '../index.js';
 
 const HOST = mintMachineId('0000000000000000000000000000000b') as MachineId;
 const MODEL = { providerId: 'p', modelId: 'm', dialect: 'chat' as const };
@@ -44,17 +44,22 @@ describe('engine/run — the lifecycle hook points (ADR-0015, REQ-HOOKS-003/080/
   });
   afterEach(() => { dal.db.close(); forgetSpelling(dir); rmSync(dir, { recursive: true, force: true }); });
 
-  function sessionsWith(calls: ScriptedCall[], hooks: HookPort | null, port: ToolPort | null = null) {
+  function sessionsWith(calls: ScriptedCall[], hooks: HookPort | null | ((ctx: HookPortContext) => HookPort | null), port: ToolPort | null = null) {
     const client = new ScriptedModelClient(calls);
     let n = 0;
+    /** The application log (`SessionsDeps.log`) and the per-session log file, kept apart so a line's destination is decidable. */
+    const appLog: string[] = [];
+    const sessionLog: string[] = [];
     const sessions = new Sessions({
-      clocks: clock, publisher: NONE, pid: 77, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), mintSessionId: () => `H${++n}`,
+      clocks: clock, publisher: NONE, pid: 77, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), log: (m) => appLog.push(m), mintSessionId: () => `H${++n}`,
       model: { backend: new DefaultAgentBackend(client), config: { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k' } }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
       ...(port ? { tools: () => port } : {}), attended: () => true,
-      runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING' },
-      ...(hooks ? { hooks: () => hooks } : {}), notice: (nn) => notices.push(nn),
+      // DEBUG, so that a line wrongly sent to the session log is kept there and the assertion can see it.
+      runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'DEBUG' },
+      sessionLogAppender: () => (line) => { sessionLog.push(line); },
+      ...(hooks ? { hooks: typeof hooks === 'function' ? hooks : () => hooks } : {}), notice: (nn) => notices.push(nn),
     });
-    return { sessions, client };
+    return { sessions, client, appLog, sessionLog };
   }
 
   it('session_start before iteration 1, iteration_end after each iteration.end, session_end with the one status string; the audit snapshot', async () => {
@@ -120,5 +125,47 @@ describe('engine/run — the lifecycle hook points (ADR-0015, REQ-HOOKS-003/080/
     expect(last.content[0]).toEqual({ kind: 'text', text: "Hook 'P' reported after the 'read_file' call: noted" });
     // the hook feedback is not a transcript row (REQ-HOOKS-138)
     expect(dal.residentRows(sid).map((r) => r.kind)).toEqual(['user', 'tool', 'agent', 'system']);
+  });
+
+  /**
+   * `docs/defects/fixed/hook-faults-reach-only-the-session-log-at-a-level-it-drops.md`: the port's `log` — "the
+   * application log only" — was wired to the session's own log at `INFO`, which its `WARNING` default drops, so a hook
+   * fault that reduces to a log entry (REQ-HOOKS-079/128/129) was recorded nowhere. REQ-HOOKS-138 admits the
+   * application log and not the session log; PD-MONITOR-002 keeps `info` there by default.
+   */
+  it('REQ-HOOKS-138 / PD-MONITOR-002: a hook fault that reduces to a log entry reaches the application log, and the session log does not receive it — at the run start and at a continuation', async () => {
+    const h = fakeHooks();
+    const logs: ((m: string) => void)[] = [];
+    const { sessions, appLog, sessionLog } = sessionsWith([answer('done'), answer('done again')], (ctx) => { logs.push(ctx.log); ctx.log(`the hook_run entry for global:0:session_end could not be written: boom (${logs.length})`); return h.port; });
+    const sid = (sessions.start(dal, 'C:/ws', 't') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    expect(sessions.prompt(sid, 'again').ok).toBe(true);
+    await sessions.running(sid)!;
+    // the port was built twice — once per run — and each build's line went to the application log, in order
+    expect(logs).toHaveLength(2);
+    expect(appLog).toEqual([
+      'the hook_run entry for global:0:session_end could not be written: boom (1)',
+      'the hook_run entry for global:0:session_end could not be written: boom (2)',
+    ]);
+    // the session log was open at DEBUG throughout and received other lines, and none of these
+    expect(sessionLog.length).toBeGreaterThan(0);
+    expect(sessionLog.filter((l) => l.includes('could not be written'))).toEqual([]);
+    // a fault is a log entry, not a warning (REQ-HOOKS-129)
+    expect(warnings.filter((w) => w.includes('could not be written'))).toEqual([]);
+  });
+  it('REQ-HOOKS-138: a host that supplies no application log loses the line rather than having it fall to the session log', async () => {
+    const h = fakeHooks();
+    const sessionLog: string[] = [];
+    let n = 0;
+    const sessions = new Sessions({
+      clocks: clock, publisher: NONE, pid: 77, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), mintSessionId: () => `L${++n}`,
+      model: { backend: new DefaultAgentBackend(new ScriptedModelClient([answer('done')])), config: { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k' } }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
+      attended: () => true, runtime: { permissionMode: 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'DEBUG' },
+      sessionLogAppender: () => (line) => { sessionLog.push(line); },
+      hooks: (ctx) => { ctx.log('publishing a hook event for global:0:session_start failed: boom'); return h.port; },
+    });
+    const sid = (sessions.start(dal, 'C:/ws', 't') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    expect(sessionLog.filter((l) => l.includes('publishing a hook event'))).toEqual([]);
   });
 });

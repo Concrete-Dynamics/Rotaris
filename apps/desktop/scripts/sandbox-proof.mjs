@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { cleanEnvironment, proofIsolationEnv } from './lib/harness.mjs';
+import { cleanEnvironment, configDirFor, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
 
 /**
  * ADR-0022's first execution in the built app (Part AR).
@@ -49,7 +49,8 @@ function scenario(name, workspaceYaml) {
   const root = join(output, name);
   const workspace = join(root, 'workspace');
   const local = join(root, 'local');
-  const configDir = join(local, 'rotaris', 'config');
+  // The global configuration directory by the platform that reads it (`configDirFor`), not the Windows spelling alone.
+  const configDir = configDirFor(local);
   mkdirSync(join(workspace, '.rotaris'), { recursive: true });
   mkdirSync(configDir, { recursive: true });
   writeFileSync(join(workspace, 'README.md'), '# proof\n');
@@ -60,7 +61,7 @@ function scenario(name, workspaceYaml) {
 
 function launch(name, s, extra) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), s.workspace], {
+  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
     cwd: app, encoding: 'utf8', timeout: 180_000, windowsHide: true,
     env: {
       ...cleanEnvironment(),

@@ -68,7 +68,11 @@ export interface HookPortContext {
   readonly writer: SessionWriter;
   /** The user's warning channel. */
   readonly warn: (message: string) => void;
-  /** The application log only. */
+  /**
+   * The application log only, at `info` (REQ-HOOKS-138, PD-MONITOR-002): a hook fault that reduces to a log entry
+   * (REQ-HOOKS-079/128/129) and the root's account of a hook set it could not resolve. `Sessions` wires it to its
+   * `SessionsDeps.log`, never to the per-session log of REQ-SESSION-142, whose `WARNING` default would drop it.
+   */
   readonly log: (message: string) => void;
   /**
    * REQ-ORCH-153 / REQ-HOOKS-126: whether the run is held at the plan gate, read live at each invocation. While

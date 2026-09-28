@@ -32,7 +32,10 @@ export interface HookSinks {
   issue(input: { kind: 'hook_failure' | 'hook_trust'; severity: 'warning'; actor: string; message: string; metadata: Record<string, unknown> }): void;
   /** The user's warning channel (REQ-HOOKS-054: never anything delivered to the agent). */
   warn(message: string): void;
-  /** The application log only. */
+  /**
+   * The application log only, at `info` (REQ-HOOKS-138, PD-MONITOR-002) — where a fault that has no warning of its
+   * own reduces to a log entry (REQ-HOOKS-079/128/129). Never the per-session log, whose default level drops `INFO`.
+   */
   log(message: string): void;
 }
 

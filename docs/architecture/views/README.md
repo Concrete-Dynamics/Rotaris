@@ -45,6 +45,11 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-28**
 
+**Review round 7 of the iteration lane (`PD-ORCH-005` clause 17, 2026-09-28, R-064).** The runtime view's message-task
+paragraph names the message-limit resolution's 'continue' and 'double' among the continues that deliver no message and
+append no task while the last request is unfinished — `continueSession` launches them the same way, so the guard already
+covered them. No package, edge, process, channel, message kind or store column changed.
+
 **Review round 5 of the iteration lane (`PD-ORCH-005` clause 17, `PD-ORCH-003` revision 2, `PD-ORCH-004` revision 4,
 2026-09-28, R-064).** A continue that delivers no message judges the todo after settling the messages closed iterations
 still hold (`Todo.releaseStale` against `succeededIterationsOf`, which the run's constructor now shares), so a message a

@@ -3396,8 +3396,10 @@ message.
 - **Which continues make one.** Only a continue that delivers a message: a continue by message (`Sessions.prompt`), with
   text, images or both. A message of images alone makes a task whose text is empty, as a continued prompt's does. The
   Continue action and a plan decision deliver none and append none for a message.
-- **A continue that states no new request appends no second task.** The Continue action and "continue without them"
-  continue from the last request (REQ-MONITOR-125) and append it as a task (REQ-ORCH-004); while the todo still holds a
+- **A continue that states no new request appends no second task.** The Continue action, "continue without them", and
+  the message-limit resolution's 'continue' and 'double' (REQ-SESSION-110, REQ-ORCH-086/087 — the dialog and the
+  palette entry reach the same `continueSession`) continue from the last request (REQ-MONITOR-125) and append it as a
+  task (REQ-ORCH-004); while the todo still holds a
   task of that request's text pending, or in progress and held by the open iteration (its own task, or a message it
   holds) — a continue's message a resumed iteration left pending or holds, or any request whose task a rest put back —
   they append none, and the run takes that task up as it stands. A request whose task is complete or abandoned is
@@ -3415,7 +3417,10 @@ message.
   [`the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`](../defects/fixed/the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md),
   which the clause had widened: a message left pending is the last user row, so a Continue action appended it beside
   its own task and the run worked it twice. *The first build closed only "continue without them" on an iteration that
-  holds a message, and left the Continue action undecided (found by the lane's second review).*
+  holds a message, and left the Continue action undecided (found by the lane's second review).* *Until the lane's seventh
+  review the record named only the Continue action and the decline, though the guard covered the message-limit
+  resolution from the second build: a session paused at its limit with the last request's task still pending appended it
+  a second time on 'continue' or 'double' at the base, and appends none now.*
 - **What a death leaves.** The todo is saved with the run's `starting` save, so a run host that dies during the
   pre-flight keeps the task as the root's record keeps the message. A task held by an iteration that is no longer open —
   a death between the iteration's close and the save that recorded the release — closes when the next run is built as

@@ -268,8 +268,8 @@ rest or during the pre-flight). A rest keeps it held. A task held by an iteratio
 next run is built as the record says that iteration closed (`Todo.releaseStale`): `complete` when its row reads
 `succeeded`, `pending` and `nextUp` otherwise. The todo is saved with `starting`, so a death during the pre-flight keeps
 the task as the root's record keeps the message. The Continue action and a plan decision deliver no message and append
-no task for it. A continue that delivers no message — the Continue action, "continue without them" — restates the last
-request, so `launchContinuation` passes `appendsTask: false` while the todo still holds that request unfinished
+no task for it. A continue that delivers no message — the Continue action, "continue without them", the message-limit
+resolution's 'continue' and 'double' (REQ-SESSION-110) — restates the last request, so `launchContinuation` passes `appendsTask: false` while the todo still holds that request unfinished
 (`Todo.holdsUnfinished`: a task of that text pending, or in progress and held by the open iteration — its own task or
 a message it holds), and the run takes that task up as it stands; a task in progress that no iteration holds does
 not count, since no selection would take it up. The todo is judged as the run will read it: a message a closed iteration

@@ -9,11 +9,15 @@ under a new id, and the run works it twice. Clause 17 of `PD-ORCH-005` adds one 
 pending by a resumed iteration that closed without succeeding is the last user row, so a later Continue action appends
 it again beside its own task.
 
-The one route the clause 17 build closed is "continue without them" on an iteration that holds a continue's message:
-that decline appends nothing, since the message it leaves pending is the last request (OQ-75). The general case is not
-repaired, because what the Continue action should append when the last request is already a task is not decided: the
-task that carries the last user row is not recorded as such, and appending nothing would change what a Continue action
-on a session whose todo is complete does.
+The message-limit resolution's 'continue' and 'double' (REQ-SESSION-110; REQ-ORCH-086/087's dialog and palette entry)
+reach the same `continueSession` with the same last user row, so a session paused at its message limit with that
+request's task still pending appended it a second time too.
+
+*(As written by the clause 17 build, and superseded by the repair below:)* The one route the clause 17 build closed is
+"continue without them" on an iteration that holds a continue's message: that decline appends nothing, since the message
+it leaves pending is the last request (OQ-75). The general case is not repaired, because what the Continue action should
+append when the last request is already a task is not decided: the task that carries the last user row is not recorded
+as such, and appending nothing would change what a Continue action on a session whose todo is complete does.
 
 Noticed 2026-09-28 while building `PD-ORCH-005` clause 17 under R-064; reproduced by driving the engine (a pause
 during the resumed root's last model step, then `continueSession(sid, 'continue')`: the todo ends
@@ -21,7 +25,8 @@ during the resumed root's last model step, then `continueSession(sid, 'continue'
 
 ## Specs
 
-`REQ-MONITOR-125` ("can be resumed from the composer") and `REQ-ORCH-004` ("the new top-level task MUST be appended") —
+`REQ-MONITOR-125` ("can be resumed from the composer"), `REQ-SESSION-110` (the message-limit resolution's 'continue'
+and 'double', which continue the same request) and `REQ-ORCH-004` ("the new top-level task MUST be appended") —
 a Continue action states no new task, so appending the last request again makes one piece of work two. `PD-ORCH-005`
 clause 17: the message's task is to be taken up by the next iteration, once.
 
@@ -34,8 +39,8 @@ clause 17: the message's task is to be taken up by the next iteration, once.
 
 ## Repaired — 2026-09-28
 
-`launchContinuation` passes `appendsTask: false` for a continue that delivers no message — the Continue action and
-"continue without them" — while the todo still holds a task of the last request's text pending, or in progress and
+`launchContinuation` passes `appendsTask: false` for a continue that delivers no message — the Continue action,
+"continue without them", and the message-limit resolution's 'continue' and 'double' — while the todo still holds a task of the last request's text pending, or in progress and
 held by the open iteration (`Todo.holdsUnfinished`), and the run takes that task up as it stands; a request whose task
 is complete or abandoned, or in progress with no open iteration holding it, is appended as before (the last narrowed by
 the lane's third review, since no selection takes an unheld task in progress up). This replaces the narrower guard the clause 17 build had in the `Run` constructor for "continue
@@ -44,4 +49,6 @@ request appends no second task"). The handoff still reaches every iteration's ro
 call is sent the launch content (the behaviour `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`
 records). Evidence: `run/message-task.test.ts` — the Continue action after a message was left pending works it once,
 taken up first, and a request a pause put back in the first run is worked once; reverting the guard turns both red, and
-so does narrowing it to pending tasks alone (the decline case).
+so does narrowing it to pending tasks alone (the decline case). The message-limit route is pinned by "the message-limit
+resolution 'continue'/'double' restates the last request too" (review round 7): sending that route a message of no parts
+while the paused route keeps none turns both cases red.

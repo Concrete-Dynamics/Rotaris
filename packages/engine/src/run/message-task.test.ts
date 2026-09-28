@@ -292,6 +292,24 @@ describe('PD-ORCH-005 clause 17: a continue\'s message is also a task', () => {
     expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.outcome])).toEqual([[1, 'cancelled'], [2, 'succeeded']]);
   });
 
+  it.each(['continue', 'double'] as const)('the message-limit resolution \'%s\' restates the last request too, so a request a pause put back is worked once (OQ-75, review round 7)', async (action) => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    const h = sessionsWith([{ parts: [{ hold }, ...answer('first, answered').parts] }, answer('first, done'), answer('first, done again')]);
+    const sid = (h.sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
+    await tick();
+    expect(h.sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    release();
+    await h.sessions.running(sid)!;
+    expect(shape(sid)).toEqual([['first', 'pending', undefined]]);
+    // REQ-SESSION-110: the same residue, reached as a pause at the message limit rather than a manual one.
+    dal.setPause(sid, 'paused_message_limit', 1, 5, '2026-09-28T00:00:00.000Z');
+    expect(h.sessions.continueSession(sid, action)).toEqual({ ok: true, value: { resumed: true, messageLimit: action === 'double' ? 10 : 5 } });
+    expect((await h.sessions.running(sid)!).status).toBe('completed');
+    expect(shape(sid)).toEqual([['first', 'complete', undefined]]);
+    expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.outcome])).toEqual([[1, 'cancelled'], [2, 'succeeded']]);
+  });
+
   it('a task left in progress that no open iteration holds does not stop the Continue action appending the request, so it is done (review round 3)', async () => {
     const h = sessionsWith([answer('first, done'), answer('first, again')]);
     const sid = (h.sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;

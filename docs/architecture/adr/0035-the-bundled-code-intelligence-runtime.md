@@ -216,7 +216,9 @@ on IC-7:** the notices generator's section (`REQ-STARTUP-141/142/143`), not buil
 release until it lists the servers.
 
 **IC-7 discharged — the notices generator lists the servers (2026-09-27, `first-release-plan.md` §4.3).**
-`pnpm notices` (`tools/notices/`) reads `pins.json` as the setup manifest this build carries and writes its
+`pnpm notices` (`tools/notices/`) reads `pins.json` as the setup manifest this build carries *(since 2026-09-28 it reads
+the shipped `apps/desktop/resources/setup-manifest.json`, whose `languageServers` a test holds equal to `pins.json`;
+`pins.json` still names the runtime; ADR-0054, "The setup manifest")* and writes its
 `languageServers` into `THIRD-PARTY-LICENSES.txt`'s `Tools provisioned after installation` section. The sub-heading
 names this runtime (`serena-agent 1.7.0`), and each of the three packages appears with its language, version, source
 and licence. The generator also reads the runtime itself as part of the shipped closure: the interpreter (`CPython`

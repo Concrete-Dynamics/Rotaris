@@ -369,8 +369,11 @@ lives in `tools/release-naming`. What the build decided and found:
   `copyFiles`. **`pnpm release:guard v0.1.0` passes both halves, exit 0.** OQ-87 raised (what "archive layout" comprises), and OQ-88 (whether a manifest may key an archive under REQ-STARTUP-060's fallback) — raised as OQ-76 and OQ-77 on the branch, renumbered at the merge.
   **Still owed, and not by this step:** the flow that reads the manifest — machine setup, `REQ-STARTUP-060` onward and
   `REQ-MCP-112`'s setup half, with `REQ-STARTUP-061`'s fingerprint — is not built and not in this plan; the notices
-  generator still reads `pins.json` and its file says the manifest pins no machine tools, which is now false of the tree
-  (OQ-73 decides whose reader follows; `../defects/the-notices-file-says-the-setup-manifest-pins-no-machine-tools.md`);
+  generator ~~still reads `pins.json` and its file says the manifest pins no machine tools, which is now false of the tree
+  (OQ-73 decides whose reader follows)~~ reads the shipped manifest since 2026-09-28 (R-062;
+  `../defects/fixed/the-notices-file-says-the-setup-manifest-pins-no-machine-tools.md`) — Git and ripgrep listed with
+  their four fields and stated not yet downloaded by this build (OQ-73's reading), `@playwright/mcp` under a third
+  sub-heading (REQ-STARTUP-152, OQ-92);
   `afterPack` does not yet assert the manifest inside `win-unpacked` (the next Windows package, IC-3).
 - **electron-builder hyphenates a prerelease version** (`0.1.0rc1` → `0.1.0-rc1`), so step 5's prerelease would be named
   `Rotaris-0.1.0-rc1-…` unless §4.2/§4.5 render the name from the tag through `tools/release-naming`
@@ -420,6 +423,12 @@ naming each problem otherwise (REQ-STARTUP-149). It builds under four readings, 
 - OQ-73, Manrope and the machine tools;
 - OQ-74, an identifier a dependency does not declare;
 - OQ-75, when a licence file carries the licence's text. It was added by the gate review the same day.
+
+*2026-09-28 (R-062): the section is generated from the setup manifest the build ships.* The generator reads
+`apps/desktop/resources/setup-manifest.json` in `SetupManifestSchema`'s shape and lists Git 2.55.0 and ripgrep 15.2.0
+with their four fields, saying machine setup is not yet in the build (OQ-73's reading); the language servers follow
+from the same file; `@playwright/mcp` 0.0.80 sits under a third sub-heading for REQ-STARTUP-152, a place OQ-92 asks
+about. Validation still refuses on the same eleven problems (O-3, O-11's components, the runtime absent from the tree).
 
 **Where the owner writes the O-3 address.** In `tools/notices/release-inputs.json`, as the value of
 `lgplCorrespondingSourcesAddress`. That file is the one place the generator reads it. The value must be one literal
@@ -691,7 +700,7 @@ supply, and each stays owed (R-053). O-11 is the same kind of item: a review onl
      that step is where it most naturally lands, and it lands packed: an `extraResources` entry, and either the
      guard's `toolServerPackages` field or a change to the guard's constant — **the manifest built 2026-09-28** (§4.1's
      second note): packed by `extraResources`, under the guard's `toolServerPackages`, its schema in `packages/config`;
-     `pnpm release:guard v0.1.0` passes. §4.3's reader still reads `pins.json` (OQ-73), and the manifest's consumer,
+     `pnpm release:guard v0.1.0` passes. §4.3's reader ~~still reads `pins.json` (OQ-73)~~ reads the manifest since 2026-09-28 (R-062), and the manifest's consumer,
      machine setup, stays outside this plan;
    - §4.3 the notices generator with the About defect — *built 2026-09-27; validation refuses until O-3, O-11 and OQ-74.
      OQ-72 does not stop validation, but until it is ruled the file knowingly leaves out the libraries linked into

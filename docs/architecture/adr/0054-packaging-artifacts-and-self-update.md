@@ -1285,7 +1285,15 @@ says something false of the tree.** The generator reads `pins.json` as its manif
 this build pins no machine tools"; the manifest pins two. `REQ-STARTUP-142` wants that section generated from the setup
 manifest and listing Git and ripgrep. Recorded and not repaired — the build was told to leave what the notices file lists
 alone while **OQ-73** is open, and OQ-73's gate-review addendum already says the generator's reader follows the shape
-machine setup decides (`../../defects/the-notices-file-says-the-setup-manifest-pins-no-machine-tools.md`). (4) **Nothing
+machine setup decides (`../../defects/fixed/the-notices-file-says-the-setup-manifest-pins-no-machine-tools.md`).
+*Repaired 2026-09-28 under R-062, OQ-73 still open:* the generator now reads this manifest in `SetupManifestSchema`'s
+shape (a copy of the field names, held to the schema by `notices.test.ts`, because `tools/notices` imports nothing from
+`packages/`) and lists Git 2.55.0 and ripgrep 15.2.0 with their four fields. It states that machine setup, which would
+download them, is not yet in the build. It lists `@playwright/mcp` 0.0.80 under a third sub-heading for
+`REQ-STARTUP-152`, a placement OQ-92 raises. That first reading of the real manifest found the generator's assumed
+shape wrong on one field (`version` where the manifest says `provisionedVersion`), and the runtime's name absent from
+the manifest, so the sub-heading still reads it from `pins.json`. `pnpm notices` refuses on the same eleven problems as
+before. (4) **Nothing
 in the product reads the file.** The machine-setup flow (`REQ-STARTUP-060` onward, `REQ-MCP-112`'s setup half), the
 fingerprint (`REQ-STARTUP-061`), the probe, the download and the promotion are not built and are not in the first-release
 plan; the manifest is what they will read, and `SETUP_MANIFEST_FILE` is the name main would resolve the way `about.ts`

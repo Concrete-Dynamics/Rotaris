@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-28**
 
+**The notices generator reads the shipped setup manifest (2026-09-28, R-062).** `tools/notices/notices.mjs` reads
+`apps/desktop/resources/setup-manifest.json` rather than `pins.json` as REQ-STARTUP-142's manifest, by a copy of
+`SetupManifestSchema`'s field names that `notices.test.ts` holds to the schema; `pins.json` is read for the runtime's
+name only. The **component view**'s notices-generator and setup-manifest sections say so, and name the second test that
+crosses into a package. No package, edge, process, channel, message kind, store column or owner of state changed.
+
 **A session's lock ends with the application that held it (ADR-0014, 2026-09-28, R-062).** Main is gone only after
 the run host: the orderly quit waits, bounded, for the run host's exit after its `shutdown` and ends it if it has not
 come, and an immediate exit (`exitCleanly`) ends it at once (`endBeforeMain`, `main/exit.ts`). The **runtime view**'s §6

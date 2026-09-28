@@ -43,7 +43,26 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-09-27**
+## Last reconciled with the code: **2026-09-28**
+
+**The updater (first-release-plan.md §4.6, ADR-0054; built 2026-09-28, R-062).** ADR-0054's bespoke main-process
+updater exists: `apps/desktop/src/main/updater/` — the flavour classified once from the artifact the launch started
+from (REQ-STARTUP-106), the one endpoint and the offer rule (105/107–110/112), the compiled-in key set — EMPTY until
+O-2 — and the Ed25519 detached-signature format (167/168), REQ-STARTUP-122's strict sequence with the signature verified
+before the manifest is parsed, the 1 MiB download into a `rotaris-update-` staging directory (118/124), the portable
+and installer strategies (115/125/126; the dmg and AppImage ones wait for `PD-STARTUP-001`'s withdrawal), and the
+orchestrator holding the one offer and the one operation in flight (114/116–121, REQ-STARTUP-046). The **process view**
+gains the updater in main's row, the feed as an endpoint in the diagram, the `update.install`/`update.restart`
+commands, and three rows in the file table (the staging directory, the portable's `.update`/`.old` siblings, the
+`updates/dismissedVersion` key); the **sequences view**'s launch gains the post-show activation the check rides and a
+new section for `Update now` and `Restart now`, the latter ADR-0055's hand-over of the record to a successor started on
+the sentinel branch (`builtin:update-successor`, `inheritInstance`); the **runtime view**'s §8 states what no
+configuration tier reaches (REQ-STARTUP-111); the **state-ownership view** gains the held offer, the classification, the
+waved-off version and the key set; the **component view** names the `app-main → release-naming` edge as the updater's.
+`MainWindows` gains a post-show activation hook (REQ-STARTUP-043), the notice store an `update` in place (REQ-SHELL-118),
+the notice action a `disabled` description, and the preference table `updates/dismissedVersion`. No package, edge,
+process, channel or store column changed; two command kinds were added. Three questions were raised (OQ-76, OQ-77,
+OQ-78) and one defect noticed beside the mechanism (`redirector.gvt1.com`).
 
 **A session approval of a file write covers that path (`PD-TOOLS-004`, built 2026-09-27, R-057).** A grant made by
 "approve for session" on a call of the public `write_file` or `haet_edit` (`haet` folded in) now stores the set of

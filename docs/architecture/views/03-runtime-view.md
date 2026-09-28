@@ -548,6 +548,13 @@ of §5 and none a channel: each is a request answered once.
 
 ## 8. Configuration's three tiers (ADR-0037) as they touch the run
 
+- **What no tier reaches — the update check (REQ-STARTUP-111, the updater of 2026-09-28).** Whether, when and
+  where a supported standalone build checks for an update is decided by no configuration value in any tier, no
+  preference, no environment variable and no control: the endpoint is a constant of `main/updater/feed.ts`, the
+  once-per-window trigger is `MainWindows`' post-show activation, and the one preference the updater reads,
+  `updates/dismissedVersion`, silences one version's offer and touches the check itself not at all. REQ-STARTUP-111's
+  acceptance criterion is a property of the four closed enumerations — this section's keys among them — carrying no
+  entry that names update checking, an endpoint, a release source or a channel; none does.
 - **Tier A** — Settings Save, the diagnostics toggle, the composer's permission-mode control: the workspace
   service writes through one of the four writers and loads again; main broadcasts `config:changed`.
 - **Tier B** — at every run start the run host loads the files — layer 3, the discovery snapshot, folded first

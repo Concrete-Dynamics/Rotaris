@@ -117,6 +117,12 @@ Edges worth knowing the reason for:
   bootstrap writer) but still no `store`.
 - **`ui` cannot import `config`**: the Settings screen reads `ConfigSnapshot` and emits a save, a per-field write
   or its live state (`contracts/src/config.ts`); the workspace service commits.
+- **`app-main` → `release-naming` is the updater's edge** (ADR-0054, built 2026-09-28): the asset name it asks the
+  feed for, the strict version order it compares by and the checksum-manifest format it parses are all the one naming
+  authority's (`tools/release-naming/src/index.ts`), so the pipeline that writes those names and that manifest and the
+  updater that reads them cannot disagree. The updater itself is `apps/desktop/src/main/updater/`, in the main root,
+  because it is the process that owns the windows, the notices and the instance record it needs; its ports over
+  Electron and the disk are one file (`electron.ts`) and everything else is pure.
 
 ## Where the responsibilities sit
 

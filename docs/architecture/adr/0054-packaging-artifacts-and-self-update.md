@@ -1429,3 +1429,100 @@ closing lines are `scripts/lib/package-verdict.mjs`'s, tested). With it, a refus
 (REQ-STARTUP-149), and a counterfactual that ended before `electron-builder` is reported as not exercised. It also
 found one craft note on the About page, recorded in `docs/defects/`. **Nothing in this record's decision changes.**
 The gate review's corrections above change how decision 3 is carried out. They do not change the decision.
+
+## The updater — 2026-09-28, first execution (`first-release-plan.md` §4.6; O-10, R-062)
+
+*REQ-STARTUP-043, 046, 057, 105–126, 146, 150, 161–164, 167, 168; REQ-SHELL-114, 118, 121; `PD-STARTUP-001`;
+`PD-MONITOR-002`. Reported in place under the standing policy; row in `../first-executions.md`.* The bespoke main-process
+updater this record decided is built, in the shape the Decision fixed: `apps/desktop/src/main/updater/` — `classify.ts`
+(106), `feed.ts` (105, 107–110, 112), `keys.ts` (167, 168), `download.ts` (118, 124), `install.ts` (122, 123),
+`strategies.ts` (115, 125, 126), `updater.ts` (the orchestrator: 114, 116–121, 046) and `electron.ts`, the one file of
+it that touches Electron (`net.fetch`, so the system proxy and certificate store apply), the disk, `reg.exe` and a
+process. Everything else is pure over ports and decided by the tests beside it. The names and the order come from the
+one naming authority, which gained REQ-STARTUP-109's order and the manifest format for it (`tools/release-naming`), so
+the exact-string lookup the Decision requires is structural. Four things the record left open were decided here, each
+stated so a reader can check the design against the requirement.
+
+**1. Where the key set lives, and its form.** `RELEASE_SIGNING_KEYS` in `apps/desktop/src/main/updater/keys.ts`,
+compiled into main's bundle: resolved from within what was installed (REQ-STARTUP-159), reachable from no configuration
+value, preference, environment variable, control or download (REQ-STARTUP-167). The signature is **Ed25519** (RFC 8032)
+through Node's `crypto`: `SHA256SUMS.txt.sig` holds the **raw 64-byte signature over the manifest's exact published
+bytes**, and a key is an **SPKI PEM** text block — what `openssl genpkey -algorithm ed25519` and `openssl pkey -pubout`
+produce, and what `openssl pkeyutl -sign -rawin` signs with. The specification leaves both forms to the implementation
+(domain 11's Data & Formats: "the form of a key, the form of a signature, and how many keys a build carries are
+implementation choices"); **OQ-76** asks whether the record should fix them so the pipeline (§4.7) cannot choose
+differently, and the build proceeds under this reading. **What O-2 must add, and where:** one element in that array —
+the public half of the release signing key as an SPKI PEM block, between `-----BEGIN PUBLIC KEY-----` and
+`-----END PUBLIC KEY-----`. The private half is the pipeline's secret and never enters the repository. A rotation
+appends the incoming key while the outgoing one is still carried (168 (a)); a withdrawal removes it so no later build
+carries it (168 (d)); the pipeline's key record (§4.7, 168 (b)) starts with the first build that carries a key, and
+this build carries none. **The set ships EMPTY on this tree.** With no key, `verifyDetachedSignature` answers `no-key`,
+the install step refuses every manifest with one sentence saying the build carries no verification key, and nothing is
+downloaded — measured in `install.test.ts`: the manifest and its signature fetched, no third request, no staging
+directory. That is REQ-STARTUP-122/123's outcome for an unverifiable release, not a stub.
+
+**2. The launcher's variable is named.** The record decided the launcher "publishes its own declared variable" and did
+not name it. It is **`ROTARIS_PORTABLE_ARTIFACT`** (`classify.ts`), the variable REQ-STARTUP-147 admits as "the variable
+by which that form names the artifact file a launch started from", a file path and nothing else. Two obligations on the
+portable stub (§4.5, not built), recorded here so its spike inherits them: it must publish that variable with the
+artifact's absolute path, and it must **forward its own arguments to the payload**, because the successor launch below
+carries a token the payload has to see.
+
+**3. The classification's residue.** A packaged Windows build with neither a registry match nor the variable — the
+payload run directly out of a preparation, or an installed tree copied elsewhere — is **not updatable** here, this
+record's reading ("absent variable → not updatable … the requirement's own default"). REQ-STARTUP-106's copied-tree
+sentence reads the same case as portable, with the running executable replaced by a single-file portable. The two texts
+disagree; the build follows this record, the launch performs no check, and its log line names the reason. **OQ-77.**
+
+**4. The offer notice under two requirements.** REQ-STARTUP-118 gives the download a non-persistent notice titled
+`Downloading Rotaris {version}` with a fixed message; REQ-SHELL-118 keeps the offer's title and identity, updated in
+place, with a message conveying two things and no more, and re-enables the action "ready to install" when the download
+completes — where REQ-STARTUP-122 runs download → verify → apply without a pause. Built: the **identity is kept and the
+notice updated in place** (REQ-SHELL-118, and this record's "the same notice by identity, never by replacement"), through
+a new `update` on the notice store; the **title and the message are REQ-STARTUP-118's** (Distribution owns the words,
+Shell the surface — `CONTEXT-MAP.md`'s relationship); **not persistent while downloading**, so no dismissal can wave off
+a version whose install is in flight; the action **disabled** with `The download is in progress; the same download
+cannot be started twice.` as its accessible description (the notice contract's new `action.disabled`, drawn by
+`Notice.tsx`); and **the apply follows the verified download without a second click**, so REQ-SHELL-118's "ready to
+install" state stands only for the length of the apply. A failure becomes the `Update not installed` error notice in
+place (REQ-STARTUP-120; REQ-SHELL-118's "SHALL become"), recorded before it is rendered (REQ-NOTIFY-268). **OQ-78** asks
+which requirement governs the title, the persistence and the pause.
+
+**The restart, built on ADR-0055's decision.** `Restart now` starts the target — the updated portable — with
+`builtin:update-successor -- <this instance's hand-over endpoint>` on the sentinel branch (OQ-43 covers the composition,
+as ADR-0055 says it should); the successor performs no claim and no hand-over attempt, opens its own endpoint and
+announces its record over the predecessor's (`inheritInstance`, `packages/platform/src/instance.ts`); the predecessor
+replaces the record's contents with the successor's fields in one atomic replacement (`replaceDocument`: a sibling
+renamed over), answers, and only then destroys its windows and quits through the ordinary path — its `close` at quit
+leaves a record that no longer names it. A successor that cannot be started surfaces through `Update not installed` and
+nothing closes; one that never signals leaves the predecessor as it was, with no timeout of its own (ADR-0055). The
+successor's own wait for the predecessor's answer is bounded by the hand-over interval, because the predecessor answers
+at once and a successor left unanswered must not become a rival: it ends quietly. `instance.test.ts` drives the pass in
+one process: the record names the successor afterwards, the predecessor's close leaves it, a third launch is handed to
+the successor, a successor with no answer is refused within the interval and changes nothing, and a successor from
+another machine is not accepted.
+
+**What was executed, and what was not.** Unit: 145 cases in 14 files — the seven updater modules, the notice store's
+`update`, the instance record's pass, `MainWindows`' post-show activation, the two commands, the naming authority's
+order and manifest format — under `pnpm vitest run`. Built application, on Linux under Xvfb (`pnpm updater-proof`,
+7 checks, all green): the source-tree launch is classified not updatable, writes exactly one `update check:` line at
+`info` for its one main window naming REQ-STARTUP-106, records no request, quits cleanly with nothing in flight, and a
+proxy sink that every request of Chromium's stack would reach (`--proxy-server=127.0.0.1:<port>`) saw no connection for
+`github.com`. **Not executed here, and not faked:** a check that goes out to the endpoint; an offer on screen; a
+download; the installer and portable apply against a real artifact; the restart between two real processes. Every one
+of them needs a packaged Windows artifact launched from its install directory or through its launcher, which IC-3
+places on the Windows host; their first execution is owed to the next `pnpm package` on Windows, with the "assets"
+rule's. **The proof found one thing beside the mechanism:** the sink recorded `CONNECT redirector.gvt1.com:443` —
+Chromium's own component updater reaching out from the built application, a request no requirement names and
+REQ-STARTUP-160's disclosure cannot carry — filed as
+`../../defects/the-built-app-opens-a-connection-to-chromiums-component-updater.md`, not repaired here.
+
+**Readings stated rather than left in code.** REQ-STARTUP-123's two hash outcomes follow the download as its sentences
+say ("the download was discarded"), so an asset the manifest does not list is downloaded and then discarded rather than
+refused before the download. A portable whose medium is gone since launch reads as "the directory holding it cannot be
+reached", in REQ-STARTUP-125's shape for that case, and only an artifact missing from a directory that is there reads as
+"not installed from a released artifact". The demo flavour (REQ-STARTUP-057) is a parameter of the activation, false
+for every window until the demo entry (REQ-SHELL-162) is built. Every line the updater writes is `info`
+(`PD-MONITOR-002`), a failed install `warning`, a successor that could not be started `error`. The installer's
+auto-close and the restart's close destroy the main windows rather than asking the close guard: the user chose the
+action, and after the record has passed the predecessor must not stay. **Nothing in this record's decision changes.**

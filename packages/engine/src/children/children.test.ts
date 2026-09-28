@@ -82,6 +82,35 @@ describe('the ledger and the scheduler against a real store (ADR-0012)', () => {
     expect(dal.eventsOfKind(sid, 'child.spawn')).toHaveLength(3);
   });
 
+  it('REQ-TOOLS-152: an inherited-context id naming no task of the caller refuses the call with no record; one naming a failed or unfinished sibling is ignored; a completed sibling with its report is carried once', () => {
+    const l = ledger();
+    const done = spawn(l, 'done'); const idDone = done.ok ? done.value.row.task_id : '';
+    const failed = spawn(l, 'failed'); const idFailed = failed.ok ? failed.value.row.task_id : '';
+    const queued = spawn(l, 'queued'); const idQueued = queued.ok ? queued.value.row.task_id : '';
+    const noReport = spawn(l, 'no-report'); const idNoReport = noReport.ok ? noReport.value.row.task_id : '';
+    for (const id of [idDone, idFailed, idNoReport]) { l.claimStart(id); l.transition(id, 'running'); }
+    l.transition(idDone, 'succeeded'); l.storeReport(idDone, { status: 'succeeded', summary: 's', final_response: 'The module is small.' });
+    l.transition(idFailed, 'failed'); l.storeReport(idFailed, { status: 'failed', summary: 'f' });
+    l.transition(idNoReport, 'succeeded');
+    const other = spawn(l, 'other', { parentId: 'someone-else' }); const idOther = other.ok ? other.value.row.task_id : '';
+    const before = dal.childrenOf(sid).length;
+    // "an id … that names no task at all refuses the call": no record, no id, the reason names the id.
+    expect(spawn(l, 'x', { inheritedContext: [idDone, 'bg_00000000'] })).toMatchObject({ ok: false, error: { reason: "inherited_context id 'bg_00000000' refers to nothing: no task of yours has that id" } });
+    // Another parent's child is no task of this caller (REQ-TOOLS-155's scoping — OQ-76).
+    expect(spawn(l, 'x', { inheritedContext: [idOther] })).toMatchObject({ ok: false, error: { reason: `inherited_context id '${idOther}' refers to nothing: no task of yours has that id` } });
+    expect(spawn(l, 'x', { inheritedContext: [' '] })).toMatchObject({ ok: false, error: { reason: 'A malformed inherited-context entry (empty) was rejected' } });
+    expect(dal.childrenOf(sid)).toHaveLength(before);
+    // "an id … naming a task that failed or has not finished is ignored without refusing"; a report is what is carried, so succeeded-without-report is not yet complete either.
+    const r = spawn(l, 'reader', { inheritedContext: [idFailed, idDone, idQueued, idNoReport, idDone] });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.inherited.map((c) => c.task_id)).toEqual([idDone]);
+    expect(r.value.row.state).toBe('queued');
+    expect(JSON.parse(r.value.row.inherited_context)).toEqual([idFailed, idDone, idQueued, idNoReport, idDone]);
+    // Inheriting imposes no ordering: the reader does not wait on anything (REQ-ORCH-032).
+    expect(JSON.parse(r.value.row.depends_on)).toEqual([]);
+  });
+
   it('REQ-MONITOR-016: an illegal move is refused naming both states, the record untouched, no event; a legal terminal move stamps completed_at', () => {
     const l = ledger();
     const a = spawn(l, 'a');
@@ -196,7 +225,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       const own = tool?.(name, a);
       if (own) return own;
       if (name === 'delegate') {
-        const r = await ops.delegate(parentId, { persona: String(a['persona']), taskName: String(a['task_name']), task: String(a['task']), dependsOn: (a['depends_on'] as string[]) ?? [], inheritedContext: [], category: '', runInBackground: a['run_in_background'] !== false, writeScope: (a['write_scope'] as string[] | undefined) ?? [], ...(typeof a['continuation_of'] === 'string' ? { continuationOf: a['continuation_of'] } : {}) });
+        const r = await ops.delegate(parentId, { persona: String(a['persona']), taskName: String(a['task_name']), task: String(a['task']), dependsOn: (a['depends_on'] as string[]) ?? [], inheritedContext: (a['inherited_context'] as string[] | undefined) ?? [], category: '', runInBackground: a['run_in_background'] !== false, writeScope: (a['write_scope'] as string[] | undefined) ?? [], ...(typeof a['continuation_of'] === 'string' ? { continuationOf: a['continuation_of'] } : {}) });
         if (r.status === 'rejected') return { ...ok(`Task '${r.canonicalName}': rejected — ${r.message}`), isError: true, status: 'failed' };
         let text = `Task '${r.canonicalName}': ${r.status} — ${r.message}\ntask_id: ${r.taskId}`;
         if (a['run_in_background'] === false) { const w = await ops.waitForTasks(parentId, [r.taskId]); text += `\n\n${'refused' in w ? w.refused : w.text}`; }
@@ -415,6 +444,60 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(children(sid)).toEqual([]);
       const resumed = textOf(client.requests.at(-1)!);
       expect(resumed).toContain("Task 'escape': rejected — write_scope pattern '../elsewhere/**' reaches outside the workspace root.");
+      expect(resumed).not.toContain('task_id:');
+    });
+  });
+
+  describe('REQ-TOOLS-152 / REQ-TOOLS-154 (5): inherited context reaches the child', () => {
+    const textOf = (req: ModelRequest): string => req.messages.map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : p.kind === 'tool-result' ? p.result : '')).join('')).join('\n');
+
+    it('the named completed sibling\'s report is item (5) of the child\'s payload: after the workspace root, immediately before the task, as the block the parent read', async () => {
+      const payloads = new Map<string, string>();
+      const { sessions, client } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'survey', task: 'TASK: survey', run_in_background: false } }], 'Surveying.');
+          if (turn === 2) {
+            const surveyId = /task_id: (bg_[0-9a-f]{8})/.exec(textOf(req))![1]!;
+            return toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'coder', task_name: 'build', task: 'TASK: build', inherited_context: [surveyId], run_in_background: false } }], 'Building.');
+          }
+          return answer('Done.');
+        }
+        if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+        const text = textOf(req);
+        const name = text.includes('TASK: build') ? 'build' : 'survey';
+        if (!payloads.has(name)) payloads.set(name, text);
+        return answer(name === 'survey' ? 'The module is small.' : 'Built it.');
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'survey then build') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      const rows = children(sid);
+      expect(rows.map((c) => c.canonical_name).sort()).toEqual(['build', 'survey']);
+      const survey = rows.find((c) => c.canonical_name === 'survey')!;
+      const build = rows.find((c) => c.canonical_name === 'build')!;
+      expect(JSON.parse(build.inherited_context)).toEqual([survey.task_id]);
+      // (1) the root, (3) the sibling-artifact index the survey's report became, (5) the same report block the parent
+      // was handed, (6) the task — in REQ-TOOLS-154's order, with nothing between (5) and (6).
+      expect(payloads.get('build')).toMatch(/Workspace root: C:\/ws\.[^\n]*\n\nPRIOR SIBLING ARTIFACT INDEX\n[^\n]*survey[^\n]*\n\n\[Inherited context — [^\n]*\]\n\n### survey \(codebase-analyst\) — succeeded\nThe module is small\.\n\nTASK: build$/);
+      const parentRead = textOf(client.requests.find((r) => textOf(r).includes('TASK: build'))!);
+      expect(parentRead).toContain('### survey (codebase-analyst) — succeeded\nThe module is small.');
+      // The survey's own payload carried no such block: nothing had been named for it.
+      expect(payloads.get('survey')).not.toContain('[Inherited context');
+      // The delegation itself was ordinary: accepted, no wait on the sibling (REQ-ORCH-032).
+      expect(JSON.parse(build.depends_on)).toEqual([]);
+    });
+
+    it('an id naming no task refuses the delegation: no child, no task id, the reason names the id (REQ-TOOLS-153)', async () => {
+      const { sessions, client } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') {
+          return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coder', task_name: 'build', task: 'TASK: x', inherited_context: ['bg_00000000'] } }], 'Delegating.') : answer('Understood.');
+        }
+        return answer('unreachable');
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'try it') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(children(sid)).toEqual([]);
+      const resumed = textOf(client.requests.at(-1)!);
+      expect(resumed).toContain("Task 'build': rejected — inherited_context id 'bg_00000000' refers to nothing: no task of yours has that id");
       expect(resumed).not.toContain('task_id:');
     });
   });

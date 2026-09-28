@@ -69,7 +69,10 @@ reviewed-exceptions table may supply an identifier a dependency does not declare
 runtime). **One more was raised the same day by that generator's gate review: OQ-75** (when a component carries "its
 full license text": a licence file that only pointed elsewhere, or only carried a licence's per-file notice, had
 counted as the text, and 4 components without text became 12); the four were raised as OQ-66 to OQ-69 on their own branch and renumbered when they reached `main`
-after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71. **One more was raised on 2026-09-28 by
+repairing `inherited_context`'s path to the child (R-062): OQ-76** (whether a task that exists under another parent, or in an earlier
+iteration, is "no task at all" to an `inherited_context` id — refused, as built, on REQ-TOOLS-155's scoping — and whether the caller is told
+which ids were ignored). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -3207,6 +3210,35 @@ text of the identifier it declares, reproduced by the generator from a version-c
 Apache-2.0 or MPL-2.0 the honest answer is that the text is obtainable and the package left it out. That ruling
 would change REQ-STARTUP-143's route for such a component, and it would close `tqdm`'s gap as well. Until then,
 eight of O-11's twelve reviews are for a notice or a pointer.
+
+**OQ-76 — Is another parent's task "no task at all" to a `delegate` call's `inherited_context`?** *(REQ-TOOLS-152 with
+REQ-TOOLS-155 and REQ-ORCH-032; REQ-ORCH-046. Raised 2026-09-28 by repairing
+`the-inherited-context-reports-never-reach-the-child` under [R-062](../product/requests.md#r-062).)*
+
+REQ-TOOLS-152 handles an `inherited_context` id by field: one "that names no task at all refuses the call", one "naming a
+task that failed or has not finished is ignored without refusing", and the field carries "the reports of already-completed
+**sibling** tasks". It does not say what an id is that names a task which exists but is not the caller's child — another
+agent's child in the same run, or a child of an earlier iteration. REQ-TOOLS-155 scopes `background_output` to the
+caller's own children ("a task whose parent is not the caller reads as `not_found`"), REQ-TOOLS-156 lets an agent wait
+only for its direct children, and REQ-ORCH-046 refuses a `depends_on` naming another parent's child with a reason that
+names the owner; none of the three is written for `inherited_context`.
+
+**What the build proceeds under.** The lookup is the caller's own children, in the current iteration's ledger, so a
+task that exists under another parent — or in an earlier iteration — refuses exactly as an unknown id does, with the
+reason `inherited_context id '<id>' refers to nothing: no task of yours has that id`. This is REQ-TOOLS-155's scoping
+applied to the one delegation lookup it does not name, and it keeps a child from reading a report its parent could not
+have read itself. "Completed" is read as REQ-ORCH-047 reads it for a dependency — `succeeded` with the report stored —
+since the report is what is carried; a cancelled sibling, and a succeeded one whose report is not yet stored, are
+ignored with the failed. The ids that were ignored are not reported to the caller: REQ-TOOLS-153 fixes the message's
+content to the alias resolution and the attachment warning, and adding a third item there is a change to that
+requirement rather than a reading of this one.
+
+**What a ruling decides.** Whether the refusal should instead name the owner, as REQ-ORCH-046's dependency refusal does
+(which tells the caller that the id is real and not its own — a fact REQ-TOOLS-155 withholds from `background_output`);
+whether an id of an earlier iteration's completed child should be carried rather than refused, which would need the
+lookup to leave the per-iteration ledger; and whether the caller should be told which ids were ignored, which is
+REQ-TOOLS-153's to widen. Until then the field carries the reports of the caller's own completed children and refuses
+everything it cannot see.
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

@@ -395,3 +395,32 @@ allowance now lives in `run/grace.ts`, which neither file imports the other to r
 **Still true, and still not a defect.** The wait remains unbounded and partial results remain
 unavailable: `REQ-TOOLS-156` forbids a deadline in those words and `REQ-ORCH-064` blesses the long
 block. What this execution changes is what the block is worth at the end of it.
+
+## First execution of the inherited-context path — 2026-09-28: a field the ledger stored and nothing read
+
+`REQ-TOOLS-152`'s `inherited_context` — "ids of already-completed sibling tasks whose reports are carried into the
+child without imposing any ordering" — had been accepted by the tool, written to `children.inherited_context` by
+this ledger, and resolved by nothing since the ledger was first executed on 2026-09-03. `childPayload` had no place
+for `REQ-TOOLS-154`'s item (5); an id naming no task was accepted where the requirement refuses the call. It was
+found by reading, while the payload order was being repaired (R-054), and is recorded as
+`docs/defects/fixed/the-inherited-context-reports-never-reach-the-child.md`.
+
+**Where the rule was put, and why here.** The refusal is admission's, so it lives in `spawn` after `REQ-ORCH-046`'s
+five checks, beside the empty-entry refusal that had stood alone: an unknown id creates no record and issues no id,
+as every refusal of this ledger does. The lookup is the caller's own children, because every delegation lookup in
+this record is parent-scoped (`REQ-TOOLS-155`) and the requirement's own word is "sibling"; that another parent's
+child therefore refuses like an unknown id is a reading, raised as **OQ-76**. "Completed" is read as this record
+already reads it for a dependency: `succeeded` with the report stored, since the report is the thing carried. The
+rendering reuses `reportBlock`, so a child inherits the same block its parent read on the resume, and the block is
+rendered at the call — a terminal child's report does not change — and remembered per task id on the same in-memory
+terms as the attachment list, so `execute` gained one argument and nothing else while `PD-ORCH-005` rewrites it.
+
+**What the first run showed.** Against the scripted model with the session artifact store in place, the `build`
+child's payload read (1) the workspace root, (3) the sibling-artifact index the `survey` report had become, (5) the
+survey's report block, (6) the task — the first time items (3) and (5) were both present in one payload, and they
+stood in `REQ-TOOLS-154`'s order without further change. **Nothing in the mechanism was found wrong**; what the
+execution corrected was the test written for it, which had assumed `childrenOf` returns rows in spawn order (it does
+not, and no requirement says it should), and which had first been written without knowing the harness holds an
+artifact store — the block it expected immediately after the workspace root stood after the index instead, which is
+where the requirement puts it. **What it could not show:** the refusal under a real model, and whether a caller ever
+names a sibling of a previous iteration, which this ledger — one per iteration — reads as no task.

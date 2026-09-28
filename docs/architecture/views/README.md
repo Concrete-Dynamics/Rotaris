@@ -43,7 +43,19 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-09-27**
+## Last reconciled with the code: **2026-09-28**
+
+**REQ-CHAT-055's measurement round: the transcript projects once per change, not once per render (2026-09-28, R-048's
+order under R-062).** The built app was traced appending to an empty transcript and to one of 1,200 rows, and the extra
+time at depth was script — three to four synchronous renders per increment, each re-running ADR-0046 step 4 over the
+whole resident window and each re-rendering every bound row through a context value rebuilt per render — not layout,
+paint or the `ResizeObserver` pass. `ui/transcript/projector.ts` now keys step 4 on every input it reads, takes the
+bounded form when the rows alone changed (the earliest-changed row read off the two arrays, no prop across the seam),
+and the pane holds one (`TranscriptPane.tsx`); the offset table and the surface value rows read are built once per
+change of what they carry. The
+**runtime view**'s step-4 row and the **component view**'s `ui/transcript` module list gain the projector. The proof's
+side of the round is `apps/desktop/scripts/transcript-proof.mjs` and `lib/trace-summary.mjs`, which no view describes.
+No package, edge, process, channel, message kind, store column or owner of state changed.
 
 **A session approval of a file write covers that path (`PD-TOOLS-004`, built 2026-09-27, R-057).** A grant made by
 "approve for session" on a call of the public `write_file` or `haet_edit` (`haet` folded in) now stores the set of

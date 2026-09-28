@@ -1,14 +1,15 @@
-import { createElement, useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react';
+import { createElement, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import type { ApprovalPayload, ImageAttachment, QuestionPrompt, TranscriptRow } from '@rotaris/contracts';
 import {
   LIVE_REFRESH_MS, PAGE_OLDER_THRESHOLD, POOL_CAPACITY, TAIL_EPSILON, capacityFor, countUiObjects, countWidgets,
 } from './constants.js';
 import { createMeasurementCache, createRenderCache, identityOf, measureKey, reuseKey, sourceTextOf, type TranscriptCacheStats } from './cache.js';
-import { CAP_DEFAULTS, isLive, projectDisplay, rowKey, type DisplayCaps } from './project.js';
+import { CAP_DEFAULTS, isLive, rowKey, type DisplayCaps } from './project.js';
+import { createProjector } from './projector.js';
 import { buildOffsets, captureAnchor, estimateHeight, newUpdatesLabel, restoreAnchor, updateShape, visibleRange, type Anchor } from './pool.js';
 import { isOwnScroll } from './scroll.js';
 import { countLabel, indexAll, step as stepMatch, type Match } from './search.js';
-import { Row, TranscriptSurfaceProvider, isReasoningRow, placements, rowMenuEntries, type RowMenuRequest, type TranscriptSurface } from './Row.js';
+import { Row, TranscriptSurfaceProvider, isReasoningRow, rowMenuEntries, type RowMenuRequest, type TranscriptSurface } from './Row.js';
 import { RowContextMenu, copyRowEntry, moveCurrentRow, type Acknowledger } from '../TranscriptSurface.js';
 import { useTerminalHost } from '../terminal/host.js'; // Part AL2 — the renderer's terminal host, read for the two terminal fields of the surface
 import type { DisplayRow, RowRenderProps, TrailerRow } from './types.js';
@@ -190,22 +191,34 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
    * off** (`runnable` in `project.ts`), and `defaultExpanded` answers true only while it is on. The two are the
    * same switch read from opposite sides, so no row is ever both folded and defaulted open. The condition this
    * note states is met by that rule and by nothing else — change one and this shortcut has to go.
+   *
+   * Built once per change of what it reads, not once per render: it is one of the projector's keys below, and a
+   * fresh set on every render would make every render a projection (the R-048 measurement round). It reads the rows
+   * ONLY while `display/showReasoning` is on; off — the default — an increment leaves it the same set, which is what
+   * lets the projector take the bounded form for the rows alone having changed. (The first form of this memo depended
+   * on the rows unconditionally, and the bounded form was never taken in the built app: measured, not read.)
    */
-  const expanded = ((): ReadonlySet<string> => {
+  const reasoningRows = showReasoning ? rows : null;
+  const expanded = useMemo((): ReadonlySet<string> => {
     const set = new Set<string>();
     for (const [key, open] of overrides) if (open) set.add(key);
-    if (showReasoning) {
-      for (const r of rows) {
+    if (reasoningRows !== null) {
+      for (const r of reasoningRows) {
         if (!isReasoningRow(r)) continue;
         const key = rowKey(r);
         if (overrides.get(key) !== false) set.add(key);
       }
     }
     return set;
-  })();
+  }, [overrides, reasoningRows]);
 
   // ---- ADR-0046 step 4 ------------------------------------------------------------------------------------
-  const display = projectDisplay({ rows, running, groupTools, showReasoning, caps, expanded, pendingQuestions, pendingApprovals, questionAgent });
+  // Through the projector, so the three or four renders one increment causes — its own, the measurement pass's, the
+  // pin's scroll event, a whole-session update's — project the resident window ONCE rather than each time. The R-048
+  // measurement round traced the append cost at depth to exactly those repeated projections (`projector.ts`).
+  const [projector] = useState(createProjector);
+  /** REQ-CHAT-057 / REQ-CHAT-067: `places` is the two facts a row cannot know about itself, once per projection. */
+  const { display, places } = projector.project({ rows, running, groupTools, showReasoning, caps, expanded, pendingQuestions, pendingApprovals, questionAgent });
 
   /**
    * The services and preferences every row in THIS pane shares (Part AA's `TranscriptSurface`). One value per
@@ -223,8 +236,24 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
   // renderer's terminal host (`terminal/host.tsx`), a context and not a prop, so this pane's props and the view above it
   // do not change for the terminal's sake; with no host mounted a row keeps its one-line `⤷` preview, as before.
   const terminalHost = useTerminalHost();
-  const surface: TranscriptSurface = {
-    showReasoning, autoCollapseTools, runActive: running, nowMs: nowMs === 0 ? ticked : nowMs,
+  /** REQ-CHAT-167: a row the reader toggles keeps the state the reader gave it, overriding the preference. */
+  const toggle = useCallback((key: string, openNow: boolean): void => {
+    setOverrides((held) => {
+      const next = new Map(held);
+      next.set(key, !openNow);
+      return next;
+    });
+  }, []);
+  /**
+   * One value per surface, and one value per CHANGE of what it carries: a context value rebuilt on every render
+   * re-renders every row that reads it — every bound slot, on each of the three or four renders an increment
+   * causes — although the rendering cache had handed the slot the very element it held. The R-048 measurement round
+   * traced the append cost at depth to script, and this was part of it: a transcript with a full viewport of rows
+   * paid a viewport of row renders per render for nothing a row could see change.
+   */
+  const live = nowMs === 0 ? ticked : nowMs;
+  const surface: TranscriptSurface = useMemo(() => ({
+    showReasoning, autoCollapseTools, runActive: running, nowMs: live,
     openLink: onOpenLink, openMenu: (request) => setMenu(request), openTrailer: onOpenTrailer,
     openTerminal: terminalHost ? (streamId) => terminalHost.open(streamId) : undefined,
     terminalPreview: terminalHost ? (streamId) => terminalHost.streams.previewOf(streamId) : undefined,
@@ -232,10 +261,7 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
     memberExpanded: (key) => expanded.has(key),
     toggleMember: (key) => toggle(key, expanded.has(key)),
     agentDepth,
-  };
-
-  /** REQ-CHAT-057 / REQ-CHAT-067: the two facts a row cannot know about itself, once for the whole array. */
-  const places = placements(display);
+  }), [showReasoning, autoCollapseTools, running, live, onOpenLink, onOpenTrailer, terminalHost, attachmentBodies, expanded, toggle, agentDepth]);
 
   // ---- REQ-CHAT-058: heights, measured rather than assumed -------------------------------------------------
   // `measuredVersion` is read so the table is rebuilt once the observer has recorded a real height; a `peek` is a
@@ -245,12 +271,19 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
   // Three answers in order of how much they are worth: what this exact content measured; what this row last
   // measured under any content; what a width-aware estimate says. A LIVE row reaches the first of those now —
   // it never used to, because the measurement key was the rendering-reuse key, which refuses one.
-  const heights = display.map((d) => {
+  //
+  // Rebuilt when the displayed rows, the width, the expansion or a measurement change — not on every render. At a
+  // thousand rows the pass is a thousand lookups and, for every row never yet on screen, an estimate; run three or
+  // four times an increment it was part of the script the R-048 measurement round traced the append cost to. The
+  // measurement cache is mutated in place by the observer and `measuredVersion` is the signal that it has, which is
+  // why the version is a dependency though nothing here reads its value.
+  const table = useMemo(() => buildOffsets(display.map((d) => {
     const open = expanded.has(d.key);
     const key = measureKey(d, viewport.width, open, null);
     return measurements.peek(key) ?? lastByIdentity.peek(d.key) ?? estimateHeight(d, open, viewport.width);
-  });
-  const table = buildOffsets(heights);
+  })),
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `measuredVersion` is the observer's "the cache changed" signal
+  [display, expanded, viewport.width, measurements, lastByIdentity, measuredVersion]);
 
   // ---- REQ-CHAT-074: the match set, indexed against DISPLAYED rows -----------------------------------------
   const matches: Match[] = searchOpen && query !== '' ? indexAll(display, query) : [];
@@ -263,15 +296,6 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
   };
 
   const unseen = following || seenCount === null ? 0 : Math.max(0, display.length - seenCount);
-
-  /** REQ-CHAT-167: a row the reader toggles keeps the state the reader gave it, overriding the preference. */
-  const toggle = (key: string, openNow: boolean): void => {
-    setOverrides((held) => {
-      const next = new Map(held);
-      next.set(key, !openNow);
-      return next;
-    });
-  };
 
   // ---- REQ-CHAT-070: following the tail -------------------------------------------------------------------
   const onScroll = (): void => {
@@ -490,6 +514,8 @@ export function TranscriptPane(props: TranscriptPaneProps): ReactElement {
         data-paging={paging}
         data-measured={measuredVersion}
         data-cache={`${renderings.stats.entries}/${renderings.stats.characters}/${renderings.stats.hits}/${renderings.stats.misses}`}
+        // Verification only, like `data-cache`: how many projections this pane has run, and how many took the bounded form.
+        data-projections={`${projector.projections}/${projector.incrementals}`}
         // REQ-CHAT-070: the description states which of the two states is current, and never describes both alike.
         aria-description={following
           ? 'Following new output as it arrives.'

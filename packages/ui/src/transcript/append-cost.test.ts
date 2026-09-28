@@ -1,7 +1,7 @@
 /**
  * Where the append cost at depth is NOT (REQ-CHAT-055, ADR-0045).
  *
- * `docs/defects/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md` recorded a driven
+ * `docs/defects/fixed/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md` recorded a driven
  * measurement — 83.9 ms median at 1,200 rows against 36.8 ms on an empty transcript — and, after the two
  * memoisations in `cache.ts`, left one candidate for the remainder: that `projectDisplay` runs whole-state
  * on every render while an incremental form (`{ previous, from }`) exists and the pane does not use it,

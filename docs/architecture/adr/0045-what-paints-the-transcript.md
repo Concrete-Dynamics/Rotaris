@@ -555,3 +555,47 @@ The fixed pool originally declared `will-change: transform` on every one of its 
 The coordinate contract remains `translateY(measuredOffset)`: offsets retain their measured fractional values, and the pool retains its fixed slot count. The stylesheet leaves `will-change` at the browser default, which returns text-layer selection to Chromium during steady-state reading.
 
 `rows-proof` records the contract in the built renderer: bound Workspace slots expose `willChange: "auto"` and a live coordinate transform. Its density assertion follows PD-CHAT-003's content-sized one-line rows.
+
+### The measurement point under a burst — 2026-09-28, the round R-048 authorized, taken under R-062
+
+*Reported here because this record fixed the measurement point — the double `requestAnimationFrame` — and predicted that
+appending would cost the frame cadence and nothing more. The defect note
+`docs/defects/fixed/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md` holds every run and figure;
+this is what the round found about the point itself and about the recycler.*
+
+**The point measures the queue in front of an update, and the proof had been measuring a queue without knowing it.**
+The scripted run the proof appends is a burst — thirty increments 4–13 ms apart, faster than the renderer shows them —
+so the sample of an increment applied while the previous one was still being shown carries every increment queued
+before it. The pooled median stood at five to seven frames on BOTH fixtures, while an increment that arrived alone showed
+in one to two: the floor this record predicted, met exactly where the point measures what it names. That is not a fault
+of the proxy; it is what a reader waits. But it changes what the append comparison compares: not one append against
+another, but the per-increment cost times the queue. A millisecond of depth-dependent work per render — dismissed by the
+note's earlier round as "0.6 ms of a 47 ms gap" — had become the gap: three or four synchronous renders an increment,
+fifteen increments in front of the median sample.
+
+**Where the recycler spent it** (Chromium's own trace of the built app, per increment at 1,200 rows against empty):
+script +1.8 ms — React's synchronous flush, 3.4–3.7 a increment — style +0.5, layout +0.15 with the same 26 dirty
+objects a pass on both sides (the full-height scroll container is not laid out again at depth), the pin's forced layout
++0.6, paint and the `ResizeObserver` delivery unchanged. The two candidates the note carried are both falsified as the
+cause and kept there.
+
+**What changed in the recycler** (`TranscriptPane.tsx`, `projector.ts`): step 4 runs once per change of its inputs and,
+for the rows alone having changed, in the bounded form it always had (`{ previous, from }`, `from` read off the two
+rows arrays' identity prefix — the replica keeps untouched row objects — rather than threaded across the seam); the
+offset table is rebuilt when the rows, the width, the expansion or a measurement change, not every render; the surface
+value every row reads is built once per change of what it carries, so a render no longer re-renders a viewport of rows
+for a value none of them could see change. Nothing this record decided moved: the pool, its capacity, the slot index as
+key, the measured heights, the anchor and the counting rule are as they were.
+
+**Measured after, three consecutive runs of the proof (62 pooled samples a side, alternating launches):** the loaded
+transcript's median shown-update time **below** the empty one's by 8.4, 15.1 and 16.0 ms (83.6 vs 92.0, 68.8 vs 83.9,
+82.3 vs 98.3), on the row appends alone by 9.0, 17.3 and 15.9 ms; the traced pair's main-thread script per increment
+7.59 ms empty against 7.38 ms loaded, from 6.83 against 8.63 before. The comparison this record's first execution had
+measured passing on 2026-09-07 and the note had measured failing since 2026-09-22 passes again, and for a reason that is
+now written down rather than a figure that was not kept.
+
+**What the point still does not do, unchanged:** it says a frame boundary passed after the change was committed, not
+that a frame carrying it was presented. And one reading the round surfaced is on the register rather than settled here
+— whether REQ-CHAT-055's comparison is read on the update as it arrived or on one that arrived alone, and what "an empty
+transcript" holds once the run has appended to it — **OQ-76**, with the reading the proof takes: both cuts, one frame
+of slack at the cadence it measured.

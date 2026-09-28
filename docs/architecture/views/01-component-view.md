@@ -159,7 +159,9 @@ REQ-CHAT-046's twelve row categories map onto three display shapes), `constants.
 **the product's ONE definition of `widgets` and `ui_objects`** — ADR-0045's closing obligation, cited from the proof
 and owed to ADR-0053 rather than restated by it), `project.ts` (ADR-0046 step 4, pure), `pool.ts` (the offset table,
 the visible span, the anchor, REQ-CHAT-053's four update shapes, pure), `cache.ts` (REQ-CHAT-058's two bounded LRU
-caches and the four-part reuse predicate), `search.ts` (REQ-CHAT-074, incremental), `TranscriptPane.tsx` (the fixed
+caches and the four-part reuse predicate), `search.ts` (REQ-CHAT-074, incremental), `projector.ts` (2026-09-28: step 4
+run once per change of its inputs rather than once per render — the R-048 measurement round's repair, pure,
+`projector.test.ts` beside it), `TranscriptPane.tsx` (the fixed
 slot pool and step 5) and `Row.tsx` (Part AA's renderer, which the pane binds into each slot; Part Z's
 `PlaceholderRow.tsx` stood in for it until the two branches merged and is gone). **Edges unchanged** —
 `ui -> kernel, contracts, ui-core`. **`PD-CHAT-004` (2026-09-15) moved one decision inside this module and added

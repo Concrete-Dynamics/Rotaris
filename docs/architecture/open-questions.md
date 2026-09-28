@@ -69,7 +69,9 @@ reviewed-exceptions table may supply an identifier a dependency does not declare
 runtime). **One more was raised the same day by that generator's gate review: OQ-75** (when a component carries "its
 full license text": a licence file that only pointed elsewhere, or only carried a licence's per-file notice, had
 counted as the text, and 4 components without text became 12); the four were raised as OQ-66 to OQ-69 on their own branch and renumbered when they reached `main`
-after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71. **One more was raised on 2026-09-28 by REQ-CHAT-055's measurement
+round (R-048's order under R-062): OQ-76** (how the append comparison is read when updates arrive faster than frames — each one's shown-update time then holds the
+queue in front of it — and what "an empty transcript" is compared against once the appended rows are on it). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -3207,6 +3209,37 @@ text of the identifier it declares, reproduced by the generator from a version-c
 Apache-2.0 or MPL-2.0 the honest answer is that the text is obtainable and the package left it out. That ruling
 would change REQ-STARTUP-143's route for such a component, and it would close `tqdm`'s gap as well. Until then,
 eight of O-11's twelve reviews are for a notice or a pointer.
+
+**OQ-76 — Under a burst, is REQ-CHAT-055's append comparison read on the update as it arrived, or on an update that arrived alone?** *(REQ-CHAT-055, REQ-CHAT-154, REQ-CHAT-157; ADR-0045's measurement point. Raised 2026-09-28 by the measurement round R-048 authorized, taken under [R-062](../product/requests.md#r-062); the note is `docs/defects/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md`.)*
+
+REQ-CHAT-055 fixes "cost" as the time from an update's application to the frame that shows it, and compares that
+figure for an appended row at a thousand rows with the same figure on an empty transcript. The round found the proof's
+scripted run to be a burst: thirty increments arriving 4–13 ms apart, faster than the renderer shows them, so 57 of 62
+samples a side measured the queue in front of them and the median stood at five to seven frames on BOTH sides while an
+increment that arrived alone showed in two. The requirement does not say which of these the comparison is made on:
+
+- **the update as it arrived**, queue included — what the reader waits, and the reading under which any work the
+  product does per increment is multiplied by the increments queued in front of the one measured; or
+- **an update that arrived to a quiet surface** — the cost of showing one row and nothing else, which in a scripted
+  run is a handful of samples a launch, too few for a verdict on their own.
+
+A second reading is bound up with it. The requirement's first sentence permits work proportional to **how many rows
+are visible**, and its third compares against **an empty transcript** — which, once the run has appended to it, shows
+eight rows where the loaded transcript shows a full viewport of nineteen. Work the first sentence permits therefore
+moves the comparison the third sentence makes, and the requirement does not say by how much it may.
+
+**What the build proceeds under.** `transcript-proof` reads the comparison **both ways and requires both to hold**
+with one frame of slack at the cadence it measured: on every update as it arrived (pooled, sixty-two a side,
+alternating launches) and on the row appends among them; it reports the samples that arrived alone and the isolated
+ones beside them without a verdict of their own, because their count does not carry one. The burst is the same on
+both sides, so the first reading is a fair comparison of per-increment cost; the repair made that cost independent
+of the rows held (one bounded projection per increment, no row re-rendered for a value it could not see change), and
+the residual difference — a full viewport of rows moving under the tail pin against a part-empty one — is inside the
+slack. **A ruling would decide** whether a conformance harness must construct the quiet-surface case (spacing its
+updates so each is shown before the next arrives, which the benchmark domain's phases do not do), and whether a
+visible-row term is within the requirement while the third sentence's comparison holds, or is itself the thing the
+third sentence forbids. Recommended: the first reading, as the one a reader experiences and the one the benchmark's
+phases can measure, with the third sentence read at one frame of slack as the proof reads it.
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

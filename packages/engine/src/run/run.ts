@@ -197,9 +197,16 @@ export interface RunDeps {
   /**
    * PD-ORCH-003 revision 2: false for a plan decision's relaunch, which appends no task — the held run's stored todo
    * already carries the gated work, and after a hold that followed a resumed iteration the last request is the continue's
-   * message, which that iteration dealt with. Absent means a continuation appends its prompt (REQ-ORCH-004).
+   * message, which that iteration dealt with. PD-ORCH-005 clause 17 (OQ-75): false too for a continue that states no new
+   * request while the todo still holds the last one unfinished. Absent means a continuation appends its prompt
+   * (REQ-ORCH-004).
    */
   readonly appendsTask?: boolean | undefined;
+  /**
+   * PD-ORCH-004 revision 4: the offers that were open when the launch content's handoff was built — the ones its list names
+   * and the ones it left out as earlier — so an iteration's root re-sent that handoff is told only the offers raised since.
+   */
+  readonly handoffOffers?: ReadonlySet<string> | undefined;
   readonly initialTodo?: TodoDocument | undefined;
   readonly continuation?: boolean | undefined;
   /** ADR-0036: the configured personas over the built-in table. */
@@ -404,6 +411,8 @@ export class Run {
   private readonly record: ConversationRecord;
   /** PD-ORCH-005 clause 1: the todo task the current iteration works on, recorded with the iteration and its root. */
   private iterationTask: { readonly id: string; readonly text: string } | null = null;
+  /** PD-ORCH-005 clause 17: the task this run appended for the message its continue delivered to the resumed root. */
+  private messageTaskId: string | null = null;
   private appliedEntryModel: ModelRef | null = null;
 
   constructor(private readonly deps: RunDeps) {
@@ -430,13 +439,14 @@ export class Run {
     /*
      * PD-ORCH-005 clause 17: a continue that resumes an open iteration delivers its message to the resumed root (clause 4)
      * and appends it as a task that iteration holds, closing with it — done when it succeeds, pending otherwise. A continue
-     * that resumes and delivers no message (the Continue action, a plan decision) adds no task. "Continue without them"
-     * declining an iteration that holds a continue's message adds none either: its last request is that message, already
-     * a task, which the decline leaves pending (`closeOpenIteration`).
+     * that resumes and delivers no message (the Continue action, a plan decision) adds no task. A continue that states no
+     * new request while the todo holds the last one unfinished — the Continue action or "continue without them" after a
+     * message was left pending, or while one is held — adds none either (`appendsTask`, set by the session manager).
      */
-    const declinedWithMessage = open !== null && this.resumeFrom === null && this.todo.holdsFor(open.iteration);
-    if (deps.resumeTodo && this.resumeFrom !== null && deps.openIteration?.delivered === true) this.todo.appendHeld('Continued Prompts', deps.taskId, deps.taskLabel ?? deps.task, this.resumeFrom.iteration);
-    else if (deps.resumeTodo && this.resumeFrom === null && !declinedWithMessage && deps.appendsTask !== false) this.todo.appendTask('Continued Prompts', deps.taskId, deps.taskLabel ?? deps.task);
+    if (deps.resumeTodo && this.resumeFrom !== null && deps.openIteration?.delivered === true) {
+      this.todo.appendHeld('Continued Prompts', deps.taskId, deps.taskLabel ?? deps.task, this.resumeFrom.iteration);
+      this.messageTaskId = deps.taskId;
+    } else if (deps.resumeTodo && this.resumeFrom === null && deps.appendsTask !== false) this.todo.appendTask('Continued Prompts', deps.taskId, deps.taskLabel ?? deps.task);
     this.aggregates = Aggregates.rehydrate(stored);
     this.lastUsageEmitted = usageTotals(this.aggregates.usagePayload());
     this.tokenSamples = parseTokenSamples(stored?.token_samples ?? '[]');
@@ -849,10 +859,11 @@ export class Run {
    * The first message of a fresh root: the launch content, and — for an execution iteration's root, never a plan cycle's
    * (REQ-ORCH-153: a plan cycle is not an iteration and takes up no offer) — PD-ORCH-004 revision 4's list of the open
    * continuation offers that content does not already hold, as a text part after it. A continuation's first iteration
-   * holds them all in its handoff; each later iteration of the same run is told those raised since (OQ-80).
+   * holds them all in its handoff — those it names and those it left out (`handoffOffers`); each later iteration of the
+   * same run is told those raised since (OQ-80).
    */
   private firstMessage(task: string, launch: readonly ContentPart[] | undefined, execution: boolean): readonly ContentPart[] | undefined {
-    const offers = execution && this.deps.dal ? offersForFirstMessage(this.deps.dal, this.sessionId, launch ?? [{ kind: 'text', text: task }]) : null;
+    const offers = execution && this.deps.dal ? offersForFirstMessage(this.deps.dal, this.sessionId, launch ?? [{ kind: 'text', text: task }], this.deps.handoffOffers) : null;
     if (offers === null) return launch;
     return [...(launch ?? [{ kind: 'text', text: task }]), offers];
   }
@@ -1434,10 +1445,12 @@ export class Run {
        */
       /*
        * PD-ORCH-003 revision 2: a plan cycle after a resumed iteration plans the work still pending — the launch content
-       * is the continue that resumed the iteration, which its root already dealt with — so the tasks the next iteration
-       * would take up, in that order, lead, and the launch content follows as the session's context (OQ-77).
+       * is the continue that resumed the iteration — so the tasks the next iteration would take up, in that order, lead,
+       * and the launch content follows as the session's context, said to be carried out only when the resumed iteration
+       * closed the continue's message as done (PD-ORCH-005 clause 17; OQ-77).
        */
-      const preamble = resumed === null ? planRequestSection() : `${planRequestSection()}\n\n${resumedWorkSection(resumed, this.todo.pendingTexts())}`;
+      const message = this.messageTaskId === null ? 'none' : this.todo.task(this.messageTaskId)?.state === 'complete' ? 'done' : 'pending';
+      const preamble = resumed === null ? planRequestSection() : `${planRequestSection()}\n\n${resumedWorkSection(resumed, this.todo.pendingTexts(), message)}`;
       const content: readonly ContentPart[] = [
         { kind: 'text', text: preamble },
         ...(this.deps.taskContent ?? [{ kind: 'text' as const, text: this.deps.task }]),

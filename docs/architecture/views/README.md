@@ -45,6 +45,16 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-28**
 
+**Review round 2 of the iteration lane (`PD-ORCH-005` clause 17, `PD-ORCH-003` revision 2, `PD-ORCH-004` revision 4,
+2026-09-28, R-064).** A continue's message a resumed iteration leaves pending is taken up by the next iteration
+(`Task.nextUp`, `Todo.selectNext`). A continue that delivers no message appends no task while the todo still holds its
+last request unfinished (`Todo.holdsUnfinished`, `launchContinuation`), which repairs
+`the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`. The plan cycle after a resumed
+iteration is told the continue's message was carried out only when it was. The offers a handoff covers are passed to
+the run (`RunDeps.handoffOffers`) in place of the spawn-order floor, and the continue that resumes a root counts an
+offer its lists left out as held (`offersHeldIn`). The **runtime view**'s plan gate, message-task and continuation
+paragraphs say so. No package, edge, process, channel, message kind or store column changed.
+
 **Review round 1 of the iteration lane (`PD-ORCH-005` clause 17, `PD-ORCH-003` revision 2, `PD-ORCH-004` revision 4,
 2026-09-28, R-064).** A stale held message closes as the record says its iteration did (`Todo.releaseStale` reads the
 iteration rows' outcome); an offer a held list elided counts as told (`offersForFirstMessage`); REQ-SESSION-194's cut

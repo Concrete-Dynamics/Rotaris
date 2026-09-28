@@ -31,3 +31,16 @@ clause 17: the message's task is to be taken up by the next iteration, once.
 - `packages/engine/src/run/run.ts` — the `Run` constructor's `appendTask('Continued Prompts', …)` for a continuation
   that resumes no open iteration.
 - `packages/engine/src/run/message-task.test.ts` — the clause 17 cases, beside which a repair's case belongs.
+
+## Repaired — 2026-09-28
+
+`launchContinuation` passes `appendsTask: false` for a continue that delivers no message — the Continue action and
+"continue without them" — while the todo still holds a task of the last request's text pending or in progress
+(`Todo.holdsUnfinished`), and the run takes that task up as it stands; a request whose task is complete or abandoned is
+appended as before. This replaces the narrower guard the clause 17 build had in the `Run` constructor for "continue
+without them" on an iteration that holds a message. The reading is recorded in OQ-75 ("A continue that states no new
+request appends no second task"). The handoff still reaches every iteration's root, because every iteration's first
+call is sent the launch content (the behaviour `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`
+records). Evidence: `run/message-task.test.ts` — the Continue action after a message was left pending works it once,
+taken up first, and a request a pause put back in the first run is worked once; reverting the guard turns both red, and
+so does narrowing it to pending tasks alone (the decline case).

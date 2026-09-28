@@ -146,15 +146,15 @@ describe('PD-ORCH-005 clause 17: a continue\'s message is also a task', () => {
     expect(shape(sid)).toEqual([['first', 'abandoned', undefined], ['second', 'pending', undefined]]);
   });
 
-  it('a partial resumed iteration requeues its own task and leaves the message pending: the run takes both up, the message after', async () => {
+  it('a partial resumed iteration requeues its own task and leaves the message pending: the next iteration takes the message up, then its own', async () => {
     const { sessions, sid } = await restedSession([
       toolCalls([{ callId: 'p1', name: 'probe', args: {} }]), // one step, then the step belt ends the turn partial
-      answer('first, again'), answer('second, done'),
+      answer('second, done'), answer('first, again'),
     ], { config: { maxStepsPerTurn: 1 } });
     expect(sessions.prompt(sid, 'second').ok).toBe(true);
     expect((await sessions.running(sid)!).status).toBe('completed');
     const [own, message] = tasksOf(sid);
-    expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.todo_task_id === own!.id ? 'own' : r.todo_task_id === message!.id ? 'message' : '?', r.outcome])).toEqual([[1, 'own', 'partial'], [2, 'own', 'succeeded'], [3, 'message', 'succeeded']]);
+    expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.todo_task_id === own!.id ? 'own' : r.todo_task_id === message!.id ? 'message' : '?', r.outcome])).toEqual([[1, 'own', 'partial'], [2, 'message', 'succeeded'], [3, 'own', 'succeeded']]);
     expect(shape(sid)).toEqual([['first', 'complete', undefined], ['second', 'complete', undefined]]);
   });
 
@@ -199,11 +199,11 @@ describe('PD-ORCH-005 clause 17: a continue\'s message is also a task', () => {
     expect(shape(sid)).toEqual([['first', 'pending', undefined], ['second', 'pending', undefined]]);
   });
 
-  it('a rest keeps the message held; declined by "continue without them", it is left pending and taken up — never appended twice', async () => {
+  it('a rest keeps the message held; declined by "continue without them", it is left pending and taken up next — never appended twice', async () => {
     let release!: () => void;
     const hold = new Promise<void>((r) => { release = r; });
     // The resumed root's step is in flight when the pause lands; the call it asks for never runs, so the iteration rests again.
-    const { sessions, sid } = await restedSession([{ parts: [{ hold }, ...toolCalls([{ callId: 'p1', name: 'probe', args: {} }]).parts] }, answer('first, done again'), answer('second, done')]);
+    const { sessions, sid } = await restedSession([{ parts: [{ hold }, ...toolCalls([{ callId: 'p1', name: 'probe', args: {} }]).parts] }, answer('second, done'), answer('first, done again')]);
     expect(sessions.prompt(sid, 'second').ok).toBe(true);
     await tick();
     expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
@@ -216,7 +216,7 @@ describe('PD-ORCH-005 clause 17: a continue\'s message is also a task', () => {
     expect((await sessions.running(sid)!).status).toBe('completed');
     const [own, message] = tasksOf(sid);
     expect(tasksOf(sid)).toHaveLength(2);
-    expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.todo_task_id === own!.id ? 'own' : r.todo_task_id === message!.id ? 'message' : '?', r.outcome])).toEqual([[1, 'own', 'cancelled'], [2, 'own', 'succeeded'], [3, 'message', 'succeeded']]);
+    expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.todo_task_id === own!.id ? 'own' : r.todo_task_id === message!.id ? 'message' : '?', r.outcome])).toEqual([[1, 'own', 'cancelled'], [2, 'message', 'succeeded'], [3, 'own', 'succeeded']]);
     expect(shape(sid)).toEqual([['first', 'complete', undefined], ['second', 'complete', undefined]]);
   });
 
@@ -249,5 +249,38 @@ describe('PD-ORCH-005 clause 17: a continue\'s message is also a task', () => {
     expect((await h.sessions.running(sid)!).status).toBe('completed');
     expect(shape(sid)).toEqual([['first', 'complete', undefined], ['LOST', 'complete', undefined], ['next', 'complete', undefined]]);
     expect(dal.iterationsOf(sid).map((r) => tasksOf(sid).find((t) => t.id === r.todo_task_id)?.text)).toEqual(['first', 'LOST', 'next']);
+  });
+
+  it('the Continue action after a message was left pending appends it no second time: it is worked once, taken up first (OQ-75)', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    const { sessions, sid } = await restedSession([{ parts: [{ hold }, ...answer('second, answered').parts] }, answer('second, done'), answer('first, done again')]);
+    expect(sessions.prompt(sid, 'second').ok).toBe(true);
+    await tick();
+    expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    release();
+    await sessions.running(sid)!;
+    expect(shape(sid)).toEqual([['first', 'pending', undefined], ['second', 'pending', undefined]]);
+    expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(shape(sid)).toEqual([['first', 'complete', undefined], ['second', 'complete', undefined]]);
+    const [own, message] = tasksOf(sid);
+    expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.todo_task_id === own!.id ? 'own' : r.todo_task_id === message!.id ? 'message' : '?', r.outcome])).toEqual([[1, 'own', 'cancelled'], [2, 'message', 'succeeded'], [3, 'own', 'succeeded']]);
+  });
+
+  it('the repair of the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending: a request a pause put back is worked once', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((r) => { release = r; });
+    const h = sessionsWith([{ parts: [{ hold }, ...answer('first, answered').parts] }, answer('first, done')]);
+    const sid = (h.sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
+    await tick();
+    expect(h.sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+    release();
+    await h.sessions.running(sid)!;
+    expect(shape(sid)).toEqual([['first', 'pending', undefined]]);
+    expect(h.sessions.continueSession(sid, 'continue').ok).toBe(true);
+    expect((await h.sessions.running(sid)!).status).toBe('completed');
+    expect(shape(sid)).toEqual([['first', 'complete', undefined]]);
+    expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.outcome])).toEqual([[1, 'cancelled'], [2, 'succeeded']]);
   });
 });

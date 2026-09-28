@@ -4,10 +4,12 @@
  *
  * Phases in insertion order; a fresh session gets one phase `main` holding
  * the task. Selection is the first pending task scanning phases in insertion
- * order. A task resolves each iteration into complete, abandoned, or back to
- * pending; consecutive pending outcomes per task are counted and the task is
- * abandoned at the per-task limit (default 3 — a setting of its own, never
- * the iteration limit).
+ * order — after a continue's message its resumed iteration left pending
+ * (`nextUp`, PD-ORCH-005 clause 17), which is taken first. A task resolves
+ * each iteration into complete, abandoned, or back to pending; consecutive
+ * pending outcomes per task are counted and the task is abandoned at the
+ * per-task limit (default 3 — a setting of its own, never the iteration
+ * limit).
  *
  * Serialised as a document carrying its own version (D-22).
  */
@@ -23,6 +25,11 @@ export interface Task {
    * holds beside its own task. Absent on every other task, and removed when the iteration closes (`releaseHeld`).
    */
   heldBy?: number;
+  /**
+   * PD-ORCH-005 clause 17: a continue's message its iteration left pending when it closed without succeeding, "so the next
+   * iteration takes it up" — selected before every other pending task, and cleared when an iteration begins it.
+   */
+  nextUp?: true;
 }
 export interface Phase {
   readonly name: string;
@@ -73,23 +80,17 @@ export class Todo {
 
   /**
    * PD-ORCH-005 clause 17: every task the iteration `iteration` holds closes with it — `complete` when it succeeded, and
-   * otherwise back to `pending`, so the next iteration takes it up. Leaving it pending is not a requeue: no consecutive
-   * retry is counted (REQ-ORCH-077 counts an iteration's own task). Returns how many closed.
+   * otherwise back to `pending`, marked to be taken up by the next iteration (`nextUp`). Leaving it pending is not a
+   * requeue: no consecutive retry is counted (REQ-ORCH-077 counts an iteration's own task). Returns how many closed.
    */
   releaseHeld(iteration: number, done: boolean): number {
     let n = 0;
     for (const task of this.all()) {
       if (task.heldBy !== iteration) continue;
-      delete task.heldBy;
-      task.state = done ? 'complete' : 'pending';
+      this.close(task, done);
       n += 1;
     }
     return n;
-  }
-
-  /** PD-ORCH-005 clause 17: whether the iteration `iteration` holds a continue's message as a task. */
-  holdsFor(iteration: number): boolean {
-    return this.all().some((t) => t.heldBy === iteration);
   }
 
   /**
@@ -102,11 +103,25 @@ export class Todo {
     let n = 0;
     for (const task of this.all()) {
       if (task.heldBy === undefined || task.heldBy === openIteration) continue;
-      task.state = succeeded.has(task.heldBy) ? 'complete' : 'pending';
-      delete task.heldBy;
+      this.close(task, succeeded.has(task.heldBy));
       n += 1;
     }
     return n;
+  }
+
+  /** PD-ORCH-005 clause 17: a held task closes with its iteration — done, or pending and taken up next. */
+  private close(task: Task, done: boolean): void {
+    delete task.heldBy;
+    task.state = done ? 'complete' : 'pending';
+    if (!done) task.nextUp = true;
+  }
+
+  /**
+   * PD-ORCH-005 clause 17 (OQ-75): whether a task carrying `text` is still to be worked — pending, or in progress — so a
+   * continue that states no new request (the Continue action, "continue without them") appends it no second time.
+   */
+  holdsUnfinished(text: string): boolean {
+    return this.all().some((t) => t.text === text && (t.state === 'pending' || t.state === 'in_progress'));
   }
 
   /**
@@ -157,20 +172,28 @@ export class Todo {
     return { schema_version: 1, phases: this.phases.map((p) => ({ name: p.name, tasks: p.tasks.map((t) => ({ ...t })) })) };
   }
 
-  /** REQ-ORCH-067: the first pending task, phases in insertion order. */
+  /**
+   * REQ-ORCH-067: the first pending task, phases in insertion order — PD-ORCH-005 clause 17: after a continue's message
+   * its resumed iteration left pending (`nextUp`), which the next iteration takes up first.
+   */
   selectNext(): Task | undefined {
-    for (const p of this.phases) for (const t of p.tasks) if (t.state === 'pending') return t;
-    return undefined;
+    return this.pendingInOrder()[0];
   }
 
   /** REQ-ORCH-067: the texts of the pending tasks, in the order selection takes them up. */
   pendingTexts(): string[] {
-    return this.all().filter((t) => t.state === 'pending').map((t) => t.text);
+    return this.pendingInOrder().map((t) => t.text);
   }
 
-  /** REQ-ORCH-072: the selected task flips to in-progress. */
+  private pendingInOrder(): Task[] {
+    const pending = this.all().filter((t) => t.state === 'pending');
+    return [...pending.filter((t) => t.nextUp === true), ...pending.filter((t) => t.nextUp !== true)];
+  }
+
+  /** REQ-ORCH-072: the selected task flips to in-progress; a message taken up next is taken up (PD-ORCH-005 clause 17). */
   begin(task: Task): void {
     task.state = 'in_progress';
+    delete task.nextUp;
   }
 
   complete(task: Task): void {

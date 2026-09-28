@@ -12,7 +12,7 @@ import { EventBus } from './run/event-bus.js';
 import { parseTokenSamples, Run, type AgentTerminals, type ModelLookup, type PermissionPosture, type RunConfig, type RunResult } from './run/run.js';
 import { iterationAgents, recordCrash } from './run/crash.js';
 import { resumeNoticeOf } from './run/resume.js';
-import { offersToldIn, openOffersText } from './run/offers.js';
+import { offersHeldIn, openOfferIds, openOffersText } from './run/offers.js';
 import { cut } from './run/cut.js';
 // PD-ORCH-004 revision 4: the offers list lives beside the run, which tells a later iteration's root; kept public here.
 export { offersToldIn, openOffersText } from './run/offers.js';
@@ -1132,7 +1132,8 @@ export class Sessions {
       const tell = (m: ChatMessage): void => { s.writer.recordAgentMessage(open.root_task_id, open.iteration, 'message', m); };
       // A continue whose run came to rest before the resumed root took a step has told it already: a notice or an offer
       // list it has not yet answered is not repeated (found by phase 4's third review).
-      const conversation = conversationOf(s.dal.agentConversation(sessionId, open.root_task_id));
+      const recorded = s.dal.agentConversation(sessionId, open.root_task_id);
+      const conversation = conversationOf(recorded);
       const unanswered = toldSinceLastAnswer(conversation);
       const notice = resumeNoticeOf(s.dal, sessionId, open.root_task_id, this.deps.terminals?.(sessionId));
       if (notice !== null && !unanswered.has(textOfMessage(notice))) tell(notice);
@@ -1140,13 +1141,22 @@ export class Sessions {
        * PD-ORCH-004 revision 3: a resumed root is told the offers it may take up, as a new iteration's reads them in the
        * handoff it is not sent (found by phase 6's second review) — only those its conversation does not already hold:
        * its own children's reports carry theirs, and an offer told once is not told again, so a root that had answered
-       * and waits takes no step for a list it has read (found by phase 6's third and fourth reviews).
+       * and waits takes no step for a list it has read (found by phase 6's third and fourth reviews). PD-ORCH-004 revision
+       * 4: an offer a list it holds left out as earlier is held too, so it is not named in a second list (OQ-80).
        */
-      const told = offersToldIn(conversation);
+      const told = offersHeldIn(s.dal, sessionId, recorded);
       const offers = openOffersText(s.dal, sessionId, (taskId) => !told.has(taskId));
       if (offers !== '') tell({ role: 'user', content: [{ kind: 'text', text: offers }] });
       if (openIteration.message !== null && openIteration.message.length > 0) tell({ role: 'user', content: [...openIteration.message] });
     }
+    /*
+     * PD-ORCH-005 clause 17 (OQ-75), and the repair of
+     * `the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`: a continue that delivers no
+     * message — the Continue action, "continue without them" — restates the last request, so it appends no task while the
+     * todo still holds that request unfinished: a continue's message a resumed iteration left pending or holds, or any
+     * request whose task a rest put back. Its task is then taken up as it stands.
+     */
+    const restatesUnfinished = (openIteration === 'decline' || openIteration.message === null) && todo !== undefined && Todo.fromDocument(todo).holdsUnfinished(prompt);
     // REQ-EVENTS-053, PD-MONITOR-001: the run's model calls that are no agent's turn count against the run itself.
     const countUsage: CountUsage = (usage, ref) => { runRef.run?.countUsage(usage, ref); };
     const supervisorSetup = this.deps.supervisor?.(workspaceRoot, sessionId, countUsage) ?? null;
@@ -1186,8 +1196,10 @@ export class Sessions {
       dal: s.dal,
       // PD-ORCH-005 clause 17: a message this continue delivered to the resumed root is also a task that closes with it.
       ...(open ? { openIteration: { resume: openIteration !== 'decline', delivered: openIteration !== 'decline' && openIteration.message !== null } } : {}),
+      // PD-ORCH-004 revision 4: the offers the payload's handoff covers, named or left out, told no later root again.
+      handoffOffers: openOfferIds(s.dal, sessionId),
       tools: null, permission, pid: this.deps.pid, host: this.deps.host, readSession: () => s.dal.getSession(sessionId), warn,
-      continuation: true, ...(todo ? { resumeTodo: todo } : {}), ...(appendsTask ? {} : { appendsTask: false }), ...(hooks ? { hooks } : {}), checkpoints,
+      continuation: true, ...(todo ? { resumeTodo: todo } : {}), ...(appendsTask && !restatesUnfinished ? {} : { appendsTask: false }), ...(hooks ? { hooks } : {}), checkpoints,
       ...(supervisors ? { supervisorFor: (conversationId: string) => supervisors.forConversation(conversationId) } : {}),
       onSaved: (generation) => summary.rebuild(generation, () => s.dal.getSession(sessionId)),
       ...(preflight ? { preflight: async (signal: AbortSignal) => { const p = await preflight({ sessionId, workspaceRoot, prompt, signal, warn, countUsage, previousIntent: priorIntent, hasUnfinishedWork: true }); decided.grant = p.grant; decided.intent = p.intent.category; return p; } } : {}),

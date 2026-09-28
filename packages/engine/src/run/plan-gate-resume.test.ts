@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import type { IntentCategory } from '@rotaris/contracts';
-import { answer, DefaultAgentBackend, ScriptedModelClient, type ModelRequest, type ScriptedCall } from '@rotaris/model';
-import { RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type RuntimePosture } from '../index.js';
+import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ModelRequest, type ScriptedCall } from '@rotaris/model';
+import { RUN_CONFIG_DEFAULTS, Sessions, type Preflight, type RunConfig, type RuntimePosture, type ToolPort } from '../index.js';
 import { decodeStoredTodo, encodeStoredTodo } from '../todo-view.js';
 
 /**
@@ -36,8 +36,14 @@ describe('PD-ORCH-003 revision 2: a resumed iteration and the gate', () => {
     grant: 'none', route: category === 'question' ? 'answer' : 'work', resolvedPlaybooks: {}, playbookFor: () => '', budgetCell: null, warnings: [],
   });
 
+  const probe: ToolPort = {
+    specs: () => [{ name: 'probe', description: 'probe', parameters: { type: 'object' } }],
+    dispatch: async () => ({ text: 'probed', isError: false, status: 'ok', durationMs: 1, label: 'probe', args: {} }),
+    cancelPending: () => 0, setMode: () => ({ requested: 'ask', effective: 'ask', downgraded: false, reason: '', previous: 'ask' }), currentMode: () => 'ask', answerApproval: () => false,
+  };
+
   /** The session starts in `auto`; the test then chooses the mode later runs start in, as the run-start control would. */
-  function sessionsWith(calls: ScriptedCall[], opts: { intent?: IntentCategory; mode?: 'auto' | 'plan' } = {}) {
+  function sessionsWith(calls: ScriptedCall[], opts: { intent?: IntentCategory; mode?: 'auto' | 'plan'; config?: Partial<RunConfig> } = {}) {
     const client = new ScriptedModelClient(calls);
     // Mutable, so the test can choose the mode (and the limit) later runs start with, as the run-start control would.
     const runtime: { -readonly [K in keyof RuntimePosture]: RuntimePosture[K] } = {
@@ -46,9 +52,10 @@ describe('PD-ORCH-003 revision 2: a resumed iteration and the gate', () => {
     };
     const sessions = new Sessions({
       clocks: clock, publisher: { increment: () => undefined, snapshot: () => undefined }, pid: 83, host: HOST, retentionCap: 20_000, warn: () => undefined,
-      mintSessionId: () => `S-pgr-${++n}`, model: { backend: new DefaultAgentBackend(client), config: { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k' } }, runtime,
+      mintSessionId: () => `S-pgr-${++n}`, model: { backend: new DefaultAgentBackend(client), config: { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k', ...opts.config } }, runtime,
       sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
       ...(opts.intent ? { preflight: async () => preflightOf(opts.intent!) } : {}),
+      ...(opts.config ? { tools: () => probe } : {}),
     });
     return { sessions, client, runtime };
   }
@@ -60,7 +67,7 @@ describe('PD-ORCH-003 revision 2: a resumed iteration and the gate', () => {
    * A session whose first run did `first`, left as a rest leaves it — iteration 1 open by a pause, its task in progress —
    * with a second task, `later`, still pending in its todo; the mode then set to `plan` with no release.
    */
-  async function restedWithPending(calls: ScriptedCall[], opts: { intent?: IntentCategory } = {}) {
+  async function restedWithPending(calls: ScriptedCall[], opts: { intent?: IntentCategory; config?: Partial<RunConfig> } = {}) {
     const h = sessionsWith([answer('first, done'), ...calls], opts);
     const sid = (h.sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
     expect((await h.sessions.running(sid)!).status).toBe('completed');
@@ -96,6 +103,9 @@ describe('PD-ORCH-003 revision 2: a resumed iteration and the gate', () => {
     expect(planned).toContain('This run resumed iteration 1');
     expect(planned).toContain('Pending tasks:\n- later');
     expect(planned).not.toContain('- go on');
+    // PD-ORCH-005 clause 17: the message is said to be carried out only when the resumed iteration closed it done.
+    if (route === 'a message') expect(planned).toContain('the resumed iteration has already carried out its message.');
+    else expect(planned).toContain('The request that continued the session follows as context.\n');
     // No terminal result beyond the first run's: the hold is not a termination (REQ-ORCH-153).
     expect(dal.eventsOfKind(sid, 'result')).toHaveLength(1);
   });
@@ -174,5 +184,19 @@ describe('PD-ORCH-003 revision 2: a resumed iteration and the gate', () => {
     expect((await sessions.running(sid)!).status).toBe('completed');
     expect(tasksOf(sid).map((t) => [t.text, t.state])).toEqual([['change the thing', 'complete']]);
     expect(dal.iterationsOf(sid)).toHaveLength(1);
+  });
+
+  it('after a partial resumed iteration the plan cycle is told the message is pending and taken up first — never that it was dealt with (PD-ORCH-005 clause 17)', async () => {
+    const { sessions, client, sid } = await restedWithPending([
+      toolCalls([{ callId: 'p1', name: 'probe', args: {} }]), // one step, then the step belt ends the resumed turn partial
+      answer('Plan: go on, then first, then later.'),
+    ], { config: { maxStepsPerTurn: 1 } });
+    expect(sessions.prompt(sid, 'go on').ok).toBe(true);
+    expect((await sessions.running(sid)!).execution_status).toBe('awaiting_plan_decision');
+    expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.outcome])).toEqual([[1, 'partial']]);
+    const planned = textOf(client.requests.at(-1)!);
+    expect(planned).toContain('Pending tasks:\n- go on\n- first\n- later\n');
+    expect(planned).toContain('did not finish its message, which is among the pending tasks above and is taken up first.');
+    expect(planned).not.toContain('already');
   });
 });

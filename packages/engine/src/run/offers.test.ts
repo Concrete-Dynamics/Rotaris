@@ -7,7 +7,7 @@ import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/stor
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ContentPart, type ModelRequest, type ScriptedCall } from '@rotaris/model';
 import { ProjectionOwner, Run, RUN_CONFIG_DEFAULTS, SequenceCounters, Sessions, SessionWriter, toSessionRecord, toTranscriptRow, type RunConfig, type RuntimePosture, type ToolPort } from '../index.js';
 import { conversationOf } from './record.js';
-import { OFFERS_HEADER, offersForFirstMessage, offersToldIn, openOffersText } from './offers.js';
+import { OFFERS_HEADER, offersForFirstMessage, offersToldIn, openOfferIds, openOffersText } from './offers.js';
 import { decodeStoredTodo, encodeStoredTodo } from '../todo-view.js';
 
 /**
@@ -129,19 +129,24 @@ describe('PD-ORCH-004 revision 4: a later iteration\'s root is told the open off
     expect(lists(first)[0]).toContain('- old (bg_0000be09)');
   });
 
-  it('offersForFirstMessage: an offer a held list left out as earlier is told too, so only the offers raised since are named', () => {
+  it('offersForFirstMessage: the offers the handoff covered — named or left out — are held, and only those raised since are named', () => {
     const sid = asSessionId('S-elided');
     const at = new Date(clock.instant()).toISOString();
     dal.upsertSession({ session_id: sid, execution_status: 'completed', workspace_root: 'C:/ws', created_at: at, updated_at: at });
+    // A child spawned before all the others, whose offer is raised only after the handoff is built.
+    dal.insertChild({ session_id: sid, task_id: 'bg_0000ff00', canonical_name: 'early', given_name: 'early', persona: 'coding-agent', state: 'running', parent_id: 'bg_0000a11e', depth: 1, iteration: 1, model_key: 'm', category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't' });
     for (let i = 0; i < 11; i += 1) offer(sid, `bg_0000a0${i.toString(16).padStart(2, '0')}`, `c${i}`);
     const handoff = openOffersText(dal, sid);
+    const covered = openOfferIds(dal, sid);
     expect(handoff).toContain('- [... earlier continuation offers elided]\n- c1 (bg_0000a001)');
     expect(handoff).not.toContain('c0');
-    expect(offersForFirstMessage(dal, sid, [{ kind: 'text', text: `the handoff\n${handoff}\nRecent iterations:` }])).toBeNull();
+    expect(offersForFirstMessage(dal, sid, [{ kind: 'text', text: `the handoff\n${handoff}\nRecent iterations:` }], covered)).toBeNull();
+    // Without the covered set the offer the list left out would be named again.
+    expect((offersForFirstMessage(dal, sid, [{ kind: 'text', text: handoff }]) as { text: string }).text).toBe(`${OFFERS_HEADER}\n- c0 (bg_0000a000)`);
     offer(sid, 'bg_0000a0ff', 'since');
-    expect(offersForFirstMessage(dal, sid, [{ kind: 'text', text: handoff }])).toEqual({ kind: 'text', text: `${OFFERS_HEADER}\n- since (bg_0000a0ff)` });
-    // A list that left nothing out elides nothing: an offer before the one it names is still told.
-    expect((offersForFirstMessage(dal, sid, [{ kind: 'text', text: `${OFFERS_HEADER}\n- c5 (bg_0000a005)\n- c6 (bg_0000a006)` }]) as { text: string }).text).toContain('- c4 (bg_0000a004)');
+    dal.setChildReport(sid, 'bg_0000ff00', JSON.stringify({ status: 'failed', summary: 'timed out', cut_off: { statement: 's', changed_paths: [], changes: '', continuation_offer: 'Continue with continuation_of: "bg_0000ff00".' } }));
+    // Raised since, whichever child raised it and however early it was spawned.
+    expect(offersForFirstMessage(dal, sid, [{ kind: 'text', text: handoff }], covered)).toEqual({ kind: 'text', text: `${OFFERS_HEADER}\n- early (bg_0000ff00)\n- since (bg_0000a0ff)` });
   });
 
   it('with more than ten open offers, a continuation\'s first iteration and every later one read one list — the handoff\'s newest ten', async () => {
@@ -181,5 +186,73 @@ describe('PD-ORCH-004 revision 4: a later iteration\'s root is told the open off
     expect(sessions.prompt(sid, 'go on').ok).toBe(true);
     expect((await sessions.running(sid)!).execution_status).toBe('awaiting_plan_decision');
     expect(userTexts(client.requests.at(-1)!).some((t) => t.includes('- old (bg_0000be09)'))).toBe(false);
+  });
+
+  /** The residue a rest leaves on iteration `n`: open by a pause, its task in progress, and the session `paused`. */
+  function restIn(sid: SessionId, n: number): void {
+    dal.db.prepare("UPDATE iterations SET state = 'open', outcome = NULL, closed_at = NULL WHERE session_id = ? AND iteration = ?").run(sid, n);
+    const stored = decodeStoredTodo(dal.getSession(sid)!.todo);
+    const planner = structuredClone(stored.planner!);
+    const own = dal.iterationsOf(sid).find((r) => r.iteration === n)!.todo_task_id;
+    for (const phase of planner.phases) for (const task of phase.tasks) if (task.id === own) task.state = 'in_progress';
+    dal.updateSessionRun(sid, { iterations_completed: n - 1, todo: encodeStoredTodo({ ...stored, planner }) });
+    dal.setIterationInterruption(sid, n, 'pause');
+    dal.db.prepare("UPDATE sessions SET execution_status = 'paused' WHERE session_id = ?").run(sid);
+  }
+  const listsHeldBy = (sid: SessionId, iteration: number): string[] => {
+    const row = dal.iterationsOf(sid).find((r) => r.iteration === iteration)!;
+    return conversationOf(dal.agentConversation(sid, row.root_task_id)).flatMap((m) => (m.role === 'user' ? lists(m.content) : []));
+  };
+
+  it('a continue that resumes a root whose list left earlier offers out tells it none of them again — and tells it one raised since', async () => {
+    const { sessions } = sessionsWith([answer('first, done'), answer('next, done'), answer('resumed, done')]);
+    const sid = (sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    // A child spawned before every offer, still running when the handoff is built.
+    dal.insertChild({ session_id: sid, task_id: 'bg_0000ff00', canonical_name: 'early', given_name: 'early', persona: 'coding-agent', state: 'running', parent_id: 'bg_0000a11e', depth: 1, iteration: 1, model_key: 'm', category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't' });
+    for (let i = 1; i <= 12; i += 1) offer(sid, `bg_00000b${i.toString(16).padStart(2, '0')}`, `c${i}`);
+    expect(sessions.prompt(sid, 'next').ok).toBe(true);
+    await sessions.running(sid)!;
+    expect(listsHeldBy(sid, 2)).toHaveLength(1);
+    restIn(sid, 2);
+    // Resumed with nothing new to tell, the root's record ends on its answer and it takes no step (OQ-70).
+    expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+    await sessions.running(sid)!;
+    expect(listsHeldBy(sid, 2)).toHaveLength(1);
+    // The early child raises its offer after the list was recorded: the next continue that resumes the root tells it that one.
+    clock.advance(1_000);
+    dal.setChildReport(sid, 'bg_0000ff00', JSON.stringify({ status: 'failed', summary: 'timed out', cut_off: { statement: 's', changed_paths: [], changes: '', continuation_offer: 'Continue with continuation_of: "bg_0000ff00".' } }));
+    dal.setChildState(sid, 'bg_0000ff00', 'failed', new Date(clock.instant()).toISOString());
+    restIn(sid, 2);
+    expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+    await sessions.running(sid)!;
+    expect(listsHeldBy(sid, 2)).toEqual([expect.stringContaining('- c12 (bg_00000b0c)'), `${OFFERS_HEADER}\n- early (bg_0000ff00)`]);
+  });
+
+  it('an offer raised during a resumed first iteration, by a child spawned before the offers its handoff left out, is told to the next iteration\'s root', async () => {
+    let sid!: SessionId;
+    const { sessions } = sessionsWith([answer('first, done'), answer('resumed, done'), answer('later, done')], {
+      during: (k) => {
+        if (k !== 2) return;
+        dal.setChildReport(sid, 'bg_0000ff00', JSON.stringify({ status: 'failed', summary: 'timed out', cut_off: { statement: 's', changed_paths: [], changes: '', continuation_offer: 'Continue with continuation_of: "bg_0000ff00".' } }));
+      },
+    });
+    sid = (sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    dal.insertChild({ session_id: sid, task_id: 'bg_0000ff00', canonical_name: 'early', given_name: 'early', persona: 'coding-agent', state: 'running', parent_id: 'bg_0000a11e', depth: 1, iteration: 1, model_key: 'm', category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't' });
+    for (let i = 1; i <= 11; i += 1) offer(sid, `bg_00000c${i.toString(16).padStart(2, '0')}`, `c${i}`);
+    // Iteration 1 left open by a rest, with a second task, `later`, pending.
+    restIn(sid, 1);
+    const stored = decodeStoredTodo(dal.getSession(sid)!.todo);
+    const planner = structuredClone(stored.planner!);
+    (planner.phases[0]!.tasks as unknown[]).push({ id: `${sid}:main:later`, text: 'later', state: 'pending', consecutiveRetries: 0 });
+    dal.updateSessionRun(sid, { todo: encodeStoredTodo({ ...stored, planner }) });
+    expect(sessions.prompt(sid, 'go on').ok).toBe(true);
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    expect(dal.iterationsOf(sid).map((r) => r.iteration)).toEqual([1, 2]);
+    const told = lists(firstMessageOf(sid, 2));
+    expect(told).toHaveLength(2);
+    expect(told[0]).toContain('- [... earlier continuation offers elided]\n- c2 (bg_00000c02)');
+    expect(told[1]).toBe(`${OFFERS_HEADER}\n- early (bg_0000ff00)`);
   });
 });

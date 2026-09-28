@@ -3347,10 +3347,6 @@ recommendations.
 Until they are built, the artifact is the latest of any kind, and a later iteration of the same run is told of no
 offer.
 
-**Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
-
-The key is registered with default 20 and minimum 1. Each background session publishes its own `bg:<id>` stream at up to 50 frames/s (the 20 ms floor), so the produced aggregate is `(agents + background sessions) × 50 frames/s`, and only one of those two factors — agents, REQ-MONITOR-285's 20 — has a ceiling. Part AL reads the key into the manager and caps the *delivered* rate per window at 1,000 frames/s by merging (REQ-MONITOR-306, REQ-SHELL-103), so a user who configures 400 background sessions saturates the run-host → main pipe, not a renderer. A stated maximum on the key would let the produced rate be computed rather than absorbed. The owner's call; recorded, not resolved.
-
 **OQ-75 — How does a continue's message close with the resumed iteration, and which continues make one?** *(`PD-ORCH-005` clause 17 (revision 4); REQ-ORCH-004, which the clause narrows, and REQ-ORCH-067, REQ-ORCH-069, REQ-ORCH-072, REQ-ORCH-077, REQ-ORCH-135 and REQ-MONITOR-125, which it does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
 
 Clause 17: "The message a continue delivers to the resumed root (clause 4) SHALL also be appended to the session's todo
@@ -3374,19 +3370,28 @@ message.
 - **Left pending is not a requeue.** No consecutive retry is counted: REQ-ORCH-077's count is an iteration's own task
   failing to finish, and the message was not the task the iteration selected.
 - **The message is held, not selected.** REQ-ORCH-067's "one task" is the task an iteration selects; the resumed
-  iteration selected its own before the rest, and it answers the message because clause 4 delivers it. When the message
-  is left pending, the next iteration selects it as any pending task, in its place in the todo (the `Continued Prompts`
-  phase, after the tasks before it). One selected by a later iteration of the same continuation run is sent that run's
-  handoff (REQ-SESSION-115), since its id is the run's own task id; in a later run it is sent as its text.
+  iteration selected its own before the rest, and it answers the message because clause 4 delivers it.
+- **Left pending, it is the next iteration's.** The clause says the next iteration takes it up, so a message left
+  pending is marked (`nextUp`, in the todo document) and selected before every other pending task, the resumed
+  iteration's own requeued or reopened task included; that iteration may be a later one of the same run or the first of
+  a later run. Several messages released together are taken up in the order they were appended. Once an iteration
+  begins it, it is an ordinary task: requeued, it goes back to its place in the todo (the `Continued Prompts` phase).
+  *The first build selected it in its place in the todo, after every task before it, so a partial close or a decline
+  had the next iteration take the resumed iteration's own task instead (found by the lane's second review).*
 - **Several continues on one open iteration.** Each continue by message that resumes the iteration appends its own task,
   held by it; they close together, in the order they were appended.
 - **Which continues make one.** Only a continue that delivers a message: a continue by message (`Sessions.prompt`), with
   text, images or both. A message of images alone makes a task whose text is empty, as a continued prompt's does. The
-  Continue action and a plan decision deliver none and append none. "Continue without them" on an iteration that holds a
-  message appends no second task for the last request, since that request is the message, which the decline leaves
-  pending; the Continue action's general re-append of the last request is recorded as
-  [`the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`](../defects/the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md)
-  and not decided here.
+  Continue action and a plan decision deliver none and append none for a message.
+- **A continue that states no new request appends no second task.** The Continue action and "continue without them"
+  continue from the last request (REQ-MONITOR-125) and append it as a task (REQ-ORCH-004); while the todo still holds a
+  task of that request's text pending or in progress — a continue's message a resumed iteration left pending or holds,
+  or any request whose task a rest put back — they append none, and the run takes that task up as it stands. A request
+  whose task is complete or abandoned is appended as before. This repairs
+  [`the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`](../defects/fixed/the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md),
+  which the clause had widened: a message left pending is the last user row, so a Continue action appended it beside
+  its own task and the run worked it twice. *The first build closed only "continue without them" on an iteration that
+  holds a message, and left the Continue action undecided (found by the lane's second review).*
 - **What a death leaves.** The todo is saved with the run's `starting` save, so a run host that dies during the
   pre-flight keeps the task as the root's record keeps the message. A task held by an iteration that is no longer open —
   a death between the iteration's close and the save that recorded the release — closes when the next run is built as
@@ -3396,8 +3401,9 @@ message.
 
 **What a ruling decides.** Whether a `partial` resumed iteration should close the message as done, since the root
 answered it; whether leaving the message pending should count toward REQ-ORCH-077's limit, so a message no iteration
-can finish is abandoned rather than taken up forever; and what the Continue action should append when the last request
-is already a task.
+can finish is abandoned rather than taken up forever; whether a message left pending should be taken up before the
+resumed iteration's own unfinished task, as built, or after it; and whether a continue that states no new request
+should recognise its last request's task by more than its text.
 
 **OQ-77 — Where does the gate hold a run that resumed an iteration, and what does that plan cycle plan?** *(`PD-ORCH-003` revision 2; REQ-ORCH-152, which the directive narrows, and REQ-ORCH-021, REQ-ORCH-067, REQ-ORCH-069, REQ-ORCH-073, REQ-ORCH-085, REQ-ORCH-153 and REQ-ORCH-154, which it does not name. Raised 2026-09-28 by building `PD-ORCH-003` revision 2 under [R-064](../product/requests.md#r-064).)*
 
@@ -3425,7 +3431,11 @@ at that gate launches.
 - **What the plan cycle plans.** It is told the plan request, then that the run resumed the iteration, which has closed,
   and the tasks still pending in the order the run takes them up (the first twenty, the count the handoff shows of its
   todo under REQ-SESSION-115, each cut to 500 characters rather than the handoff's 80, since here a task's text is the
-  work to plan and not a display title), then the launch content as the session's context, marked as already dealt with. The pending
+  work to plan and not a display title), then the launch content as the session's context. What it is told of the
+  continue's message follows what `PD-ORCH-005` clause 17 made of it: carried out when the resumed iteration succeeded;
+  not finished, among the pending tasks and taken up first, when it closed otherwise; and nothing when the continue
+  delivered no message. *The first build told it the message was already dealt with in every case, which contradicted
+  the pending list after a `partial` close and after a Continue action (found by the lane's second review).* The pending
   tasks are what the first new iteration would have selected, so the approved plan is about the work it releases.
 - **What the answer launches.** A plan decision's relaunch appends no task: the held run's stored todo already carries
   the gated work, and after this hold the last user row is the continue's message, which the resumed iteration dealt
@@ -3466,10 +3476,20 @@ handoff it is re-sent, or whether a plan cycle's root is such a root.
   first iteration reads them all in its handoff and is told nothing more. Each later iteration of the same run is told
   those raised since, including any a resumed first iteration raised.
 - **An offer a held list left out is held.** A list names the newest ten and, when there were more, says the earlier
-  ones were left out; that is the whole of what the directive tells a root. So an offer spawned before the oldest one a
-  list names that carries the elision line counts as told by it, and is not named again in a second list beside it.
-  An offer a list could not have named — raised since it was built — is still told, the newest ten of those with the
-  same elision line.
+  ones were left out; that is the whole of what the directive tells a root, so an offer a list left out is not named
+  again in a second list beside it. An offer a list could not have named — raised since it was built — is still told,
+  the newest ten of those with the same elision line, whichever child raised it and however early it was spawned.
+  - *In an iteration's first message.* The session manager passes the run the offers open when the payload's handoff
+    was built (`handoffOffers`), and those are held: the handoff covers them, named or left out.
+  - *At the continue that resumes a root.* The record keeps the lists, not what each covered, so an offer is held by a
+    list recorded as a message when its child was spawned before the oldest offer that list names and the record shows
+    it raised — its child ended, `completed_at` — no later than the list was recorded; an offer with no end recorded
+    counts as raised before. An offer raised in the same millisecond a list was recorded counts as held by it. A list a
+    compression carried into the conversation holds only what it names, as a compression's summary of a list holds
+    nothing (OQ-72).
+  - *The first repair counted every offer spawned before a list's oldest line as held, and only in the first message:
+    the continue that resumed a root named the offers its list had left out, and an offer raised after a handoff was
+    built by a child spawned early was never told to any later root of the run (found by the lane's second review).*
 - **Where.** A text part of its own after the launch content — its text and any attachments — in the same first user
   message, so the root reads it as part of its task. It is the same list, header, lines, newest ten and elision line
   as the handoff's and the resumed root's, so a later reader recognises it.
@@ -3487,6 +3507,10 @@ handoff it is re-sent, or whether a plan cycle's root is such a root.
 **What a ruling decides.** Whether "once" means once per offer across the run, so a root whose predecessor in the same
 run was told an offer is not told it again; and whether the stale lines of a re-sent handoff should be rewritten rather
 than left beside a fresh list.
+
+**Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
+
+The key is registered with default 20 and minimum 1. Each background session publishes its own `bg:<id>` stream at up to 50 frames/s (the 20 ms floor), so the produced aggregate is `(agents + background sessions) × 50 frames/s`, and only one of those two factors — agents, REQ-MONITOR-285's 20 — has a ceiling. Part AL reads the key into the manager and caps the *delivered* rate per window at 1,000 frames/s by merging (REQ-MONITOR-306, REQ-SHELL-103), so a user who configures 400 background sessions saturates the run-host → main pipe, not a renderer. A stated maximum on the key would let the produced rate be computed rather than absorbed. The owner's call; recorded, not resolved.
 
 ## Design-reference dependencies
 

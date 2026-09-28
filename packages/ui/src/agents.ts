@@ -33,6 +33,17 @@ export function cancelOffered(agent: Pick<AgentRecord, 'id' | 'presentationState
 }
 
 /**
+ * Why a surface's Cancel is not offered for the shown agent (`cancelOffered` false), one wording for the inspector and the
+ * Mission view: nothing selected; the run-level agent at rest, whose whole-iteration equivalent is clause 6's "Continue
+ * without them" (PD-ORCH-005 clause 16, OQ-74); or any other agent, whose rule is stated.
+ */
+export function cancelUnavailableReason(agent: Pick<AgentRecord, 'id' | 'presentationState'> | null): string {
+  if (agent === null) return 'Select a live agent while its run is active, or a paused child while its session rests, to cancel it.';
+  if (agent.id === RUN_AGENT_ID && agent.presentationState === 'paused') return 'The resting run is not cancelled here: "Continue without them" ends its paused agents (PD-ORCH-005 clause 6).';
+  return 'Cancel is enabled while the agent is running, waiting or queued, and for a paused child while its session rests.';
+}
+
+/**
  * Whether the Workspace's agents header offers Steer for the selected agent: a live one — running, waiting or queued —
  * while its run is active. A paused agent is not live (PD-ORCH-005 clause 13, REQ-MONITOR-045, OQ-73), so it is offered
  * none, as the inspector offers none (`inspectorEnablement`). The header's `queued`, which the inspector's REQ-MONITOR-063

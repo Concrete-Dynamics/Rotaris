@@ -158,8 +158,8 @@ record names the child it continues. A piece of work is continued once and a con
 own. An offer outlives its run: the agent that delegated the child takes it up while that agent runs, and the root of a
 later iteration or a later run takes up one the session left before — including a resumed iteration's own, from an
 earlier run — told of it once: in the handoff, at the continue that resumes it, or in the first message of a later
-iteration of the same run. Not a resume: the timed-out child is never
-restarted and earns no corrective message (`REQ-NOTIFY-112`). — `PD-ORCH-004` (revisions 3 and 4)
+iteration of the same run. Not a resume: the timed-out child is never restarted and earns no corrective message
+(`REQ-NOTIFY-112`). — `PD-ORCH-004` (revisions 3 and 4)
 _Avoid_: resume, retry (the one retry is REQ-ORCH-088's fallback model), and "continuation" alone where a session's
 next run is meant
 
@@ -277,9 +277,9 @@ agent a crash left unfinished presents so before the crash is recorded (OQ-73, a
 sentence). One `paused` child may be cancelled while its session rests: it and its `paused` descendants end `cancelled`,
 and the rest resume (clause 16); a crash-left one is cancelled from the state it is stored in, the crash left for the
 next repair or continue to record (clauses 3 and 8, OQ-74); the cancel is made under the session's lock. A session a
-store failure left busy is not one a crash left (OQ-76). Any cancel ends every unfinished descendant, live or `paused`, and its
-confirmation names each one (OQ-73, OQ-74). Not a
-terminal state and not an outcome: a `paused` agent has no report until it ends. — `PD-ORCH-005`, `REQ-MONITOR-300`
+store failure left busy is not one a crash left (OQ-76). Any cancel ends every unfinished descendant, live or
+`paused`, and its confirmation names each one (OQ-73, OQ-74). Not a terminal state and not an outcome: a `paused`
+agent has no report until it ends. — `PD-ORCH-005`, `REQ-MONITOR-300`
 _Avoid_: suspended, frozen, held (the **plan gate** and the **message-limit pause** hold a run; they leave no agent paused)
 
 **Interruption**:
@@ -313,9 +313,10 @@ _Avoid_: restart, replay, rerun
 
 **Explicit cancel**:
 REQ-MONITOR-126's confirmed control, which cancels the run by its reserved agent id: final — every agent it ends is
-`cancelled` and never resumed. Every confirmed "Cancel the run?" is it, whichever surface asks. Distinct from the stop
-control, which a second activation forces and which stays a stop. — `PD-ORCH-005` clauses 3 and 15, `REQ-MONITOR-009`,
-`REQ-MONITOR-126`
+`cancelled` and never resumed. Every confirmed "Cancel the run?" is it, whichever surface asks — except a persona
+window's on the run's own instance while the session rests, which is refused and does nothing (OQ-74). Distinct from
+the stop control, which a second activation forces and which stays a stop. — `PD-ORCH-005` clauses 3 and 15,
+`REQ-MONITOR-009`, `REQ-MONITOR-126`
 _Avoid_: stop (the stop control comes to rest)
 
 **Presentation agent state**:

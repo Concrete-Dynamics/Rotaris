@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { DELEGATION_STRATEGY_NAMES, isBusy, presentationStatus, RUN_AGENT_ID, STATUS_LABELS, type AgentRecord, type SessionRecord } from '@rotaris/contracts';
 import { AgentTable } from './AgentTable.js';
 import { AgentTree } from './AgentTree.js';
-import { CANCEL_RUN_TEXT, cancelCascade, cancelConfirmation, cancelOffered, cascadeNote, pauseAvailability } from './agents.js';
+import { CANCEL_RUN_TEXT, cancelCascade, cancelConfirmation, cancelOffered, cancelUnavailableReason, cascadeNote, pauseAvailability } from './agents.js';
 import { RUN_STATE_LABELS } from './composer.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
 import { markMotionStart } from './motion.js';
@@ -128,7 +128,7 @@ export function MissionView(props: MissionViewProps) {
           <div className="mission__actions" aria-label="Selection actions">
             <DesignButton type="button" className="btn btn-secondary" aria-disabled={!pause.enabled || pausePending} aria-describedby="mission-pause-reason" data-testid="mission-pause" data-enabled={pause.enabled && !pausePending ? '1' : '0'} onClick={() => { void requestPause(); }}>{pausePending || session?.executionStatus === 'pausing' ? 'Pausing…' : 'Pause'}</DesignButton>
             <span id="mission-pause-reason" className="text-secondary mission__reason" data-testid="mission-pause-reason">{pause.reason}</span>
-            <DesignButton type="button" className="btn btn-danger" disabled={!cancelable} data-testid="mission-cancel" title={cancelable ? `Cancel ${selectedAgent?.name ?? ''}` : 'Select a live agent, a paused one, or the run to cancel it.'} onClick={() => { if (selectedAgent) setConfirming({ agent: selectedAgent, cascade: cancelCascade(agents, selectedAgent) }); }}>Cancel selection</DesignButton>
+            <DesignButton type="button" className="btn btn-danger" disabled={!cancelable} data-testid="mission-cancel" title={cancelable ? `Cancel ${selectedAgent?.name ?? ''}` : cancelUnavailableReason(selectedAgent)} onClick={() => { if (selectedAgent) setConfirming({ agent: selectedAgent, cascade: cancelCascade(agents, selectedAgent) }); }}>Cancel selection</DesignButton>
             {selectedAgent && <DesignButton type="button" className="btn btn-ghost btn-compact" data-testid="mission-open" onClick={() => onOpen(selectedAgent)}>Open {selectedAgent.name}</DesignButton>}
           </div>
           {message && <div className="composer__hint mission__message" role="status" data-testid="mission-message">{message}</div>}

@@ -60,7 +60,8 @@ supersedes, known by the root's task id as the record's `conversation_id`, and f
 (OQ-79) — also when a plan cycle opened its gate after that iteration, so the plan gate's approve and revise never hand
 over an earlier piece of work's document ahead of the plan cycle's; the plan cycle `PD-ORCH-003` revision 2 holds after
 a resumed iteration is taken the same way, so there the resumed root's document counts only as "of any kind" (OQ-79). It
-is read once, at the continue: a later iteration of the same run is re-sent it as it stood then. The **runtime view**'s
+is read once, at the continue: a later iteration of the same run, and the plan cycle held after a resumed iteration,
+are re-sent it as it stood then (OQ-77). The **runtime view**'s
 continuation paragraph is updated. No package, edge, process, channel, command or store table changes, so the other
 views are not.
 
@@ -147,8 +148,10 @@ edge, process, channel, message kind or store column changed.
 iteration runs it unheld; when the gate would hold the run, the loop sets the hold once that iteration has closed and
 work is left, and parks before the first new iteration (`parkAtPlanGate(resumed)`, its plan cycle told the pending
 tasks by `resumedWorkSection`, that the iteration was left open, and what became of every message it held,
-`Todo.heldIds`). The message an iteration takes up is sent only to an execution root (`Run.firstMessage`), never to that
-plan cycle. A plan decision's relaunch appends no task (`RunDeps.appendsTask: false`), which also
+`Todo.heldIds`), then the launch content the continue built before that iteration ran, whose handoff therefore
+predates the close (OQ-77). The message an iteration takes up is sent only to an execution root (`Run.firstMessage`),
+never to that plan cycle. The message limit, checked as the resumed iteration closes, wins over the hold and leaves the
+continue's message `complete` with nothing open, and its resolution appends it again (OQ-76). A plan decision's relaunch appends no task (`RunDeps.appendsTask: false`), which also
 repairs the approved prompt being worked twice. Readings in OQ-77. The **runtime view**'s start order, plan gate and
 resume paragraphs say so; ADR-0062 decision 1 carries the amendment. No package, edge, process, channel, message kind or
 store column changed.

@@ -106,3 +106,33 @@ describe('PD-ORCH-005 clause 18: a crash offers the Continue action as a pause d
     }
   });
 });
+
+/**
+ * PD-CHAT-001 revision 4, "The strip": the plan gate's hint and the pause's statement are two of the four notices that
+ * "SHALL stand in the notices row below the dock", and the strip draws no explanatory sentence as visible text (found by
+ * the merged build's tenth review: only the count and the decline were measured).
+ */
+describe('PD-CHAT-001 revision 4: the plan gate\'s hint and the pause\'s statement stand in the notices row, not the strip', () => {
+  const PAUSED = 'Paused. Run controls need the run continued before they can be used.';
+  const HINT = 'A plan is waiting for your decision above.';
+
+  it('a paused session states its pause in the notices row, and the strip draws no statement', () => {
+    for (const executionStatus of ['paused', 'paused_message_limit'] as const) {
+      const html = render(session({ executionStatus }));
+      expect(notices(html), executionStatus).toContain(`<span class="composer__hint">${PAUSED}</span>`);
+      expect(strip(html), executionStatus).not.toContain('Paused.');
+      expect(strip(html), executionStatus).not.toContain(HINT);
+    }
+  });
+
+  it('a session held at the plan gate draws the gate\'s hint in the notices row in place of the pause statement, and the strip draws neither', () => {
+    const html = render(session({ executionStatus: 'awaiting_plan_decision', planGate: { cycle: 1, openedAt: 'x', plan: 'Plan: do it.', edited: null, intent: 'task', todo: '', changes: '' } }));
+    expect(notices(html)).toMatch(new RegExp(`<span id="plan-gate-hint" class="composer__hint">${HINT}`));
+    expect(notices(html)).not.toContain('Paused.');
+    expect(strip(html)).not.toContain(HINT);
+    // The strip's control is described by the hint (REQ-CHAT-007's two channels); the hint itself is not drawn there.
+    expect(strip(html)).toContain('aria-describedby="plan-gate-hint"');
+    expect(strip(html)).not.toContain('id="plan-gate-hint"');
+    expect(strip(html)).not.toContain('Paused.');
+  });
+});

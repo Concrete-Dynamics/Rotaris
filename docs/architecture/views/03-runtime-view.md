@@ -111,7 +111,11 @@ whatever the mode and the release; when the gate would hold the run, the loop ho
 closed and the stop conditions found work left — after the pause, the stop and the message limit have had their say,
 and before the first new iteration — and parks there (`parkAtPlanGate(resumed)`), its plan cycle told the tasks still
 pending ahead of the launch content (`resumedWorkSection`), which it is told the resumed iteration carried out only
-when that iteration closed the continue's message as done (`done`, `pending` or `none`: PD-ORCH-005 clause 17). A plan
+when that iteration closed the continue's message as done (`done`, `pending` or `none`: PD-ORCH-005 clause 17). The
+launch content after it is the payload the continue built before that iteration ran, so its handoff predates the close
+(OQ-77, `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`). A message-limit pause that wins there leaves
+nothing open and the continue's message `complete`, and its resolution appends that message again, as the Continue
+action does on the other routes to that state (OQ-76). A plan
 decision relaunches with `RunDeps.appendsTask: false`:
 the held run's stored todo already carries the gated work, and the last user row is not a new task. A held segment takes **one turn of the entry role** through the ordinary `turn()` path, numbered
 **iteration 0** (`root:0`) because a plan cycle is not an iteration, and then `parkAtPlanGate()` mirrors
@@ -272,8 +276,8 @@ the iteration is open. It closes with that iteration (`Todo.releaseHeld`): `comp
 the stop conditions are judged, and back to `pending` — with no consecutive retry counted, and marked `nextUp`, so the
 next selection takes it before every other pending task (`Todo.selectNext`; begun, it is an ordinary task again) — on
 every other close: partial, failed, raised, cancelled by the explicit cancel or by a pause that found nothing
-unfinished, and the closes `closeOpenIteration` makes (the decline, a crash-closed iteration, the explicit cancel after a
-rest or during the pre-flight). A rest keeps it held. A task held by an iteration that is no longer open closes when the
+unfinished, and the closes `closeOpenIteration` makes (the decline, of an iteration a rest or a crash left open, and the
+explicit cancel after a rest or during the pre-flight). A rest keeps it held. A task held by an iteration that is no longer open closes when the
 next run is built as the record says that iteration closed (`Todo.releaseStale`): `complete` when its row reads
 `succeeded`, `pending` and `nextUp` otherwise. The todo is saved with `starting`, so a death during the pre-flight keeps
 the task as the root's record keeps the message. The Continue action and a plan decision deliver no message and append
@@ -660,7 +664,8 @@ continuation payload built to REQ-SESSION-115's budgets, its artifact the latest
 published that nothing supersedes — known by its root task id as the artifact's `conversation_id`, and none when a
 plan cycle opened its gate after that iteration opened — else the latest of any kind that nothing supersedes
 (PD-ORCH-005 clause 20, OQ-79), id first and cut to 6,000 characters —
-`latestArtifactText`, read once at the continue, so a later iteration of that run is re-sent it as it stood then —
+`latestArtifactText`, read once at the continue, so a later iteration of that run, and the plan cycle held after a
+resumed iteration, are re-sent it as it stood then —
 and its progress context listing the continuation offers
 no child has taken up, the newest ten — `openOffersText` (`run/offers.ts`), which a continue that resumes an open
 iteration records for its root instead, OQ-72; and which `Run.turn()` adds to the first message of every execution

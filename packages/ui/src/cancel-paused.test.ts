@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONTEXT_CAPACITY, RUN_AGENT_ID, type AgentRecord, type SessionRecord } from '@rotaris/contracts';
 import { MissionView, missionCancelBody, missionConfirmation } from './MissionView.js';
-import { CANCEL_RUN_TEXT, PAUSE_NO_RUN, restingView } from './agents.js';
+import { CANCEL_RUN_TEXT, cancelUnavailableReason, PAUSE_NO_RUN, restingView } from './agents.js';
 import { Inspector } from './Inspector.js';
 import { useShellState } from './shell-state.js';
 import { WorkspaceView } from './WorkspaceView.js';
@@ -89,6 +89,18 @@ describe('PD-ORCH-005 clauses 13 and 16 (revision 4, OQ-73/OQ-74): the Mission v
     expect(html).not.toMatch(/>Running</);
     // With a run under way here the same status still reads as running.
     expect(mission(RUN_AGENT_ID, { session: recovery, resting: false, recovery: false, runLevel: restingRun })).toMatch(/mission__run-state[^>]*>Running</);
+  });
+  it('the inspector and the Mission view explain the resting run\'s refused Cancel alike, pointing to "Continue without them" (clause 6)', () => {
+    const recovery = session({ executionStatus: 'running' });
+    const resting = cancelUnavailableReason(restingRun);
+    expect(resting).toContain('"Continue without them" ends its paused agents');
+    expect(button(mission(RUN_AGENT_ID, { session: recovery, recovery: true, runLevel: restingRun }), 'mission-cancel')).toContain(`title="${resting.replace(/"/g, '&quot;')}"`);
+    expect(button(mission(RUN_AGENT_ID, { runLevel: restingRun }), 'mission-cancel')).not.toContain('Select a live agent');
+    // A paused child during a `pausing` run, and a finished agent, read the rule itself on both surfaces.
+    const rule = cancelUnavailableReason(finished);
+    expect(rule).toContain('for a paused child while its session rests');
+    expect(button(mission(paused.id, { session: session({ executionStatus: 'pausing' }), resting: false }), 'mission-cancel')).toContain(`title="${rule}"`);
+    expect(button(inspector(finished.id), 'inspector-cancel')).toContain(`title="${rule}"`);
   });
   it('a live run\'s run-level agent still offers it', () => {
     const live = agent({ id: RUN_AGENT_ID, name: 'orchestrator', persona: 'orchestrator', parentId: '', depth: 0, state: 'running', presentationState: 'running', live: true, interruption: null });

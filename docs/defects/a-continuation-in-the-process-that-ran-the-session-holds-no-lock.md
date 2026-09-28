@@ -25,4 +25,8 @@ existing session, with one local-dead-pid reap).
 - `packages/engine/src/sessions.ts`: `prompt`'s lock check and re-resume; `resume`'s early return for an existing
   live entry; `continueSession`, which has no check; `launchContinuation`.
 - `packages/engine/src/run/run.ts`: the teardown's `writer.release`.
-- `packages/engine/src/session-writer.ts`: `SessionWriter.open`, the only place outside `create` that claims a lock.
+- `packages/engine/src/session-writer.ts`: `SessionWriter.open` and `SessionWriter.create`, which claim a lock with a
+  writer, and `claimLockReaping`, the claim with its one dead-local-holder reap that `open` goes through.
+- `packages/engine/src/sessions.ts`: `lockForWrite`, the at-rest cancel's claim (through `claimLockReaping`), which
+  takes the lock without opening a writer and gives it back after the write. A repair of the continue paths chooses
+  whether they reuse it, call `claimLockReaping` and hold the lock for the run, or reopen a writer.

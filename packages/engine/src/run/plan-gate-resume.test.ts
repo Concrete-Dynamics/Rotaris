@@ -232,6 +232,47 @@ describe('PD-ORCH-003 revision 2: a resumed iteration and the gate', () => {
     expect(dal.planCyclesOf(sid)).toEqual([]);
   });
 
+  /**
+   * OQ-76 "Nothing open to resume", the message limit's route (found by the merged build's tenth review). The limit is
+   * checked as each iteration closes, before the stop conditions and the gate (REQ-ORCH-085/087), so a limit reached as
+   * the resumed iteration closes the continue's message `complete` (PD-ORCH-005 clause 17) leaves `paused_message_limit`
+   * with nothing open and the last user row finished. The resolution's 'continue' and 'double' (REQ-SESSION-110) then
+   * find no unfinished task of its text (OQ-75), append it again beside the pending work, and a new iteration re-works
+   * it. The same holds after any iteration that finishes the request its run was launched with as the limit is reached,
+   * with no resume and no directive, as at the base. Pinned as built, so a ruling either way turns it red.
+   */
+  for (const action of ['continue', 'double'] as const) it(`the message-limit resolution's '${action}' after a limit reached as the resumed iteration closed appends the finished message again (OQ-76)`, async () => {
+    const { sessions, runtime, sid } = await restedWithPending([answer('resumed, done'), answer('later, done'), answer('go on, again'), answer('spare')]);
+    runtime.runStartMode = 'auto';
+    runtime.messageLimit = 1;
+    expect(sessions.prompt(sid, 'go on').ok).toBe(true);
+    expect((await sessions.running(sid)!).execution_status).toBe('paused_message_limit');
+    expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.state, r.outcome])).toEqual([[1, 'closed', 'succeeded']]);
+    expect(tasksOf(sid).map((t) => [t.text, t.state])).toEqual([['first', 'complete'], ['later', 'pending'], ['go on', 'complete']]);
+    // The resolution takes the stored limit (REQ-SESSION-110), so its run takes one more iteration, `later`, and pauses
+    // at the limit again with the finished message appended as a second task, pending.
+    expect(sessions.continueSession(sid, action).ok).toBe(true);
+    expect((await sessions.running(sid)!).execution_status).toBe('paused_message_limit');
+    expect(tasksOf(sid).map((t) => [t.text, t.state])).toEqual([['first', 'complete'], ['later', 'complete'], ['go on', 'complete'], ['go on', 'pending']]);
+    // The next resolution takes it up as it stands (OQ-75), and a new iteration works the message a second time.
+    expect(sessions.continueSession(sid, 'double').ok).toBe(true);
+    await sessions.running(sid)!;
+    expect(tasksOf(sid).map((t) => [t.text, t.state])).toEqual([['first', 'complete'], ['later', 'complete'], ['go on', 'complete'], ['go on', 'complete']]);
+    expect(dal.iterationsOf(sid).map((r) => r.outcome)).toEqual(['succeeded', 'succeeded', 'succeeded']);
+  });
+
+  it('the message-limit resolution after a limit reached as a fresh run\'s only iteration finished its prompt appends that prompt again (OQ-76; as at the base)', async () => {
+    const { sessions, runtime } = sessionsWith([answer('go, done'), answer('go, again'), answer('spare')]);
+    runtime.messageLimit = 1;
+    const sid = (sessions.start(dal, 'C:/ws', 'go') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).execution_status).toBe('paused_message_limit');
+    expect(tasksOf(sid).map((t) => [t.text, t.state])).toEqual([['go', 'complete']]);
+    expect(sessions.continueSession(sid, 'double').ok).toBe(true);
+    await sessions.running(sid)!;
+    expect(tasksOf(sid).map((t) => [t.text, t.state])).toEqual([['go', 'complete'], ['go', 'complete']]);
+    expect(dal.iterationsOf(sid).map((r) => r.outcome)).toEqual(['succeeded', 'succeeded']);
+  });
+
   it('declined by "continue without them", the run is held before its first iteration, as a run that resumes nothing is', async () => {
     const { sessions, client, sid } = await restedWithPending([answer('Plan: first again.')]);
     expect(sessions.continueSession(sid, 'continue', { withoutPaused: true }).ok).toBe(true);
@@ -291,5 +332,27 @@ describe('PD-ORCH-003 revision 2: a resumed iteration and the gate', () => {
     const planned = textOf(client.requests.at(-1)!);
     expect(planned).toContain('held at the plan gate');
     expect(planned).not.toContain('The task for this iteration is an earlier message');
+  });
+
+  /**
+   * OQ-77 "The handoff after the preamble is the continue's" (found by the merged build's tenth review). The plan cycle
+   * held after a resumed iteration is sent the launch content the continue built before the crash was recorded, before
+   * clause 17 appended the message's task and before the resumed iteration worked — the behaviour
+   * `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md` records for a later iteration of the same run. Its
+   * "Authoritative session handoff" therefore shows the resumed iteration's task still in progress and not the message,
+   * while the preamble, read from the live todo, says that iteration closed and carried the message out. Pinned as built,
+   * so a repair or a ruling either way turns it red.
+   */
+  it('the plan cycle held after a resumed iteration is sent the handoff the continue built before that iteration ran (OQ-77)', async () => {
+    const { sessions, client, sid } = await restedWithPending([answer('resumed, done'), answer('Plan: do later.')]);
+    expect(sessions.prompt(sid, 'go on').ok).toBe(true);
+    expect((await sessions.running(sid)!).execution_status).toBe('awaiting_plan_decision');
+    expect(tasksOf(sid).map((t) => [t.text, t.state])).toEqual([['first', 'complete'], ['later', 'pending'], ['go on', 'complete']]);
+    const planned = textOf(client.requests.at(-1)!);
+    expect(planned).toContain('Pending tasks:\n- later\n');
+    expect(planned).toContain('the resumed iteration has already carried out its message.');
+    const handoff = planned.slice(planned.indexOf('Authoritative session handoff:'));
+    expect(handoff).toContain('Todo:\n- [in_progress] first\n- [pending] later\nProgress:');
+    expect(handoff).not.toContain('go on\nProgress:');
   });
 });

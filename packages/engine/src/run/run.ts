@@ -1482,7 +1482,10 @@ export class Run {
        * is the continue that resumed the iteration — so the tasks the next iteration would take up, in that order, lead,
        * and the launch content follows as the session's context, said to be carried out only when the resumed iteration
        * closed the messages it held as done (PD-ORCH-005 clause 17; OQ-77) — this continue's, or an earlier one's that the
-       * Continue action resumed it with (found by the iteration lane review).
+       * Continue action resumed it with (found by the iteration lane review). That launch content is the payload the
+       * continue built before the resumed iteration ran, so its handoff predates the close the preamble states; nothing
+       * rebuilds it here (OQ-77, "The handoff after the preamble is the continue's";
+       * every-iteration-is-sent-the-prompt-the-run-was-launched-with.md).
        */
       const held = this.resumedMessageIds.map((id) => this.todo.task(id)?.state);
       const message = held.length === 0 ? 'none' : held.every((state) => state === 'complete') ? 'done' : 'pending';

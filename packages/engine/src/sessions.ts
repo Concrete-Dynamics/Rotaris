@@ -1737,9 +1737,11 @@ export class Sessions {
     }
     // The continuation: the last user request stands and no user row is appended (REQ-MONITOR-125's "resumed from the composer").
     // A session with nothing open and that request finished — crash-left (clause 18), `paused` by a pause or a stop accepted
-    // after its iteration closed, or `paused` by a plan Cancel or a stop of the plan cycle held after a resumed iteration
-    // that carried out the continue's message (PD-ORCH-003 revision 2, OQ-77) — appends it to the todo again (REQ-ORCH-004;
-    // OQ-75's no-append covers only a request held unfinished): the undecided case of OQ-76's "Nothing open to resume".
+    // after its iteration closed, `paused` by a plan Cancel or a stop of the plan cycle held after a resumed iteration
+    // that carried out the continue's message (PD-ORCH-003 revision 2, OQ-77), or `paused_message_limit` by a limit reached
+    // as the iteration that finished it closed (this resolution's 'continue' and 'double') — appends it to the todo again
+    // (REQ-ORCH-004; OQ-75's no-append covers only a request held unfinished): the undecided case of OQ-76's "Nothing open
+    // to resume".
     const setup = this.setupFor(stored.workspace_root, this.deps.attended?.() ?? false, sessionId, effectiveRootOf(stored).root, resumedPersona(s.dal, sessionId, opts.withoutPaused === true));
     if (!setup.ok) return err({ code: setup.error.code, reason: setup.error.reason });
     const lastPrompt = [...s.dal.residentRows(sessionId)].reverse().find((row) => row.kind === 'user')?.body ?? stored.session_id;

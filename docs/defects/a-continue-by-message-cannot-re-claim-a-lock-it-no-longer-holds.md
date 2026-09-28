@@ -2,8 +2,9 @@
 
 `Sessions.prompt` checks the session's lock before it continues. When the lock is absent, or names another process, it
 calls `this.resume(...)` to re-claim it. But `prompt` has already found the session live in this process, and `resume`
-returns early for a live entry (`if (existing) return ok({ sessionId })`) without opening a writer. Only opening a writer
-claims a lock (`SessionWriter.open` → `dal.claimLock`). So the branch re-claims nothing, and the continuation runs and
+returns early for a live entry (`if (existing) return ok({ sessionId })`) without opening a writer, and a writer's
+opening is how `resume` claims a lock (`SessionWriter.open` → `claimLockReaping` → `dal.claimLock`). So the branch
+re-claims nothing, and the continuation runs and
 writes the session's rows with no lock of its own. That can happen when another process repaired the session: its
 `withWriter` opens a writer, then releases the lock. Nothing tests the branch. Found 2026-09-28 while building
 `PD-ORCH-005` clause 18 (R-064). `continueSession` was to mirror the branch for a session a crash left, and a probe that
@@ -24,4 +25,8 @@ itself.
 - `packages/engine/src/sessions.ts` — `Sessions.prompt`, the lock check and its `this.resume(...)` call; `Sessions.resume`,
   the early return for a live entry; `Sessions.withWriter`, which claims a lock and then releases it for a session not live
   here.
-- `packages/engine/src/session-writer.ts` — `SessionWriter.open`, the only place a lock is claimed.
+- `packages/engine/src/session-writer.ts` — `SessionWriter.open` and `SessionWriter.create`, which claim a lock with a
+  writer, and `claimLockReaping`, the claim with its one dead-local-holder reap.
+- `packages/engine/src/sessions.ts` — `lockForWrite`, the at-rest cancel's claim without a writer (`PD-ORCH-005`
+  clause 16, OQ-74), through `claimLockReaping`, given back after its write. The repair chooses whether the continues
+  reuse it, call `claimLockReaping` and hold the lock for the run, or reopen a writer.

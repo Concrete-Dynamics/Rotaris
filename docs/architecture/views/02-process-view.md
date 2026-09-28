@@ -89,7 +89,7 @@ to carry the Settings surface's live values.
 is wired end to end and, from Part Z, is CALLED: the transcript asks for the next older span when the reader scrolls
 toward the top, and the replica's `prependOlder` places it above — REQ-CHAT-165, REQ-SESSION-192; `continue`
 carries `{action, withoutPaused?}` since PD-ORCH-005's phase 5, the option clause 6's "continue without them",
-relayed as it is to the run host's `session.continue`),
+relayed as it is to the run host's `session.continue`, which since clause 18 also continues a session a crash left),
 **`session.planEdit {text}` / `session.planDecision {decision, changes?}` / `session.planRearm {sessionId}`**
 (ADR-0062 and PD-ORCH-003, REQ-ORCH-152/153/154: the plan gate's three entries, relayed to the run host that owns
 the session and answered `ack` / `{cycle, relaunched}` / `ack`. They are session commands and **not** control

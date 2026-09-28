@@ -1,0 +1,23 @@
+## A continue by message cannot re-claim a lock it no longer holds
+
+`Sessions.prompt` checks the session's lock before it continues. When the lock is absent, or names another process, it
+calls `this.resume(...)` to re-claim it. But `prompt` has already found the session live in this process, and `resume`
+returns early for a live entry (`if (existing) return ok({ sessionId })`) without opening a writer. Only opening a writer
+claims a lock (`SessionWriter.open` → `dal.claimLock`). So the branch re-claims nothing, and the continuation runs and
+writes the session's rows with no lock of its own. That can happen when another process repaired the session: its
+`withWriter` opens a writer, then releases the lock. Nothing tests the branch. Found 2026-09-28 while building
+`PD-ORCH-005` clause 18 (R-064). `continueSession` was to mirror the branch for a session a crash left, and a probe that
+threw inside it was never reached by any crash-left path, so it was not mirrored. Not repaired.
+
+## Specs
+
+ADR-0005 (the lock is the capability that authorises writing the session's rows) and REQ-SESSION-083/112/118 (load,
+validate, claim). A continuation that writes without the lock contradicts ADR-0005. No requirement names the re-claim
+itself.
+
+## Relevant files
+
+- `packages/engine/src/sessions.ts` — `Sessions.prompt`, the lock check and its `this.resume(...)` call; `Sessions.resume`,
+  the early return for a live entry; `Sessions.withWriter`, which claims a lock and then releases it for a session not live
+  here.
+- `packages/engine/src/session-writer.ts` — `SessionWriter.open`, the only place a lock is claimed.

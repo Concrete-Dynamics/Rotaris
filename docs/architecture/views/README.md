@@ -51,6 +51,13 @@ sends the stop's `cancel` op and never the explicit cancel. The paused strip's s
 `Continue with a message`. The **runtime view**'s §5 `cancel` row and Continue paragraph are updated; no package, edge,
 process, channel or command changes.
 
+**A crash offers the same choice as a pause (`PD-ORCH-005` clause 18, 2026-09-28, R-064).** `Sessions.continueSession`
+accepts a session a crash left — `interrupted`, or persisted busy and `not-live` (REQ-CHAT-008's recovery state) — beside
+`paused`, and refuses a busy one whose process may still be running it (`run-active`). The composer draws the two
+continues and "Continue without them" on it (`crashLeft`), with the same count; either choice records the crash first,
+in `launchContinuation`. Readings in OQ-76. The **runtime view**'s §5 Continue paragraph and the **process view**'s
+`session.continue` note are updated; the command's shape does not change, and no package, edge, process or channel does.
+
 **A quit answers nothing for a person, and every stored report is an artifact (`PD-ORCH-005` phase 7, 2026-09-27,
 R-062).** Main tells the application's quit apart (`QuitState`, `main/exit.ts`). That covers the immediate exit, every
 main window's close confirmed by its guard (`guardClose`), and a quit Electron starts on its own account, which

@@ -3347,6 +3347,51 @@ recommendations.
 Until they are built, the artifact is the latest of any kind, and a later iteration of the same run is told of no
 offer.
 
+**OQ-76 — Which sessions has a crash left, and what does the Continue action offer on one with nothing to resume?** *(`PD-ORCH-005` clause 18 (revision 4), with clauses 8, 11 and 19; REQ-MONITOR-125 as clause 18 extends it; REQ-CHAT-008, REQ-GIT-093, REQ-SESSION-171, REQ-SESSION-060, REQ-GIT-094 and REQ-CHAT-006, which the directive does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
+
+Clause 18: "A session a crash left — `interrupted` after a repair, or in REQ-CHAT-008's recovery state before one — SHALL
+offer the Continue action and 'continue without them' as a `paused` session does, with the same count. Either choice
+records the crash first, as any continue does (clause 8)." The clause names the two states. It does not say how the
+engine tells the recovery state apart from a session another process is still running. It does not say what a
+crash-left session offers when no iteration is open, or whether the pause's statement is drawn on it. And it does not
+say what the decline's wording means before the crash is recorded.
+
+**What the build proceeds under.**
+
+- **Which sessions a crash left.** `Sessions.continueSession` accepts a session whose status is `interrupted`. It also
+  accepts one whose status is still busy when REQ-GIT-093's liveness predicate calls it `not-live`, the one predicate
+  REQ-SESSION-171 and the repair already use. A busy session that is `live`, or whose liveness is `unknown`, is refused
+  (`run-active`), because another process may still be running it. The renderer reads the same two states as
+  `crashLeft`: `interrupted`, or busy with `needsRecovery` (the session list's `stale`). `paused_message_limit` and
+  `awaiting_plan_decision` are durable holds, not busy statuses, so a crash does not make them crash-left. They keep
+  their own continues (clause 11).
+- **The actions at the message limit.** A crash-left session is not at the message limit, so it takes `action` as a
+  manually paused session does. `continue` and `double` continue it; `cancel` leaves it as it is.
+- **Nothing open to resume.** A crash-left session with no open iteration draws the two continues where the send pill
+  stood, with no count and no decline, as a `paused` session with nothing to resume does. Its Continue action continues
+  the last request, which is REQ-MONITOR-125's "resumed from the composer".
+- **No pause statement.** "Paused. Run controls need the run continued…" stays on a paused session only. A crash-left
+  session is not paused, and its run state already says what it is (REQ-CHAT-008's "Run needs recovery", or the
+  interrupted presentation). REQ-CHAT-006's chip reason in the recovery state is left as it stands. The Continue action
+  belongs to the composer, not to the run controls.
+- **The decline's wording before the crash is recorded.** In the recovery state the agents the count names are still
+  `running` in the store, yet the decline says "The N paused agents end cancelled". The text is kept. The crash record
+  pauses them first (clause 8), then the decline cancels them, so the words describe the act at the moment it happens.
+  This matches how those agents present: as `paused` before the crash is recorded, so the agent tree agrees with the
+  count (clause 13).
+- **Either choice records the crash first, in one place.** Every continue passes `Sessions.launchContinuation`, which
+  records the crash before the stale-child settle and before it resumes or declines the open iteration. So the Continue
+  action, the continue by message (`Sessions.prompt`) and the decline need no crash-specific path.
+- **The lock.** `Sessions.prompt` tries to re-claim a lock it no longer holds, but it cannot: `resume` returns early for
+  a session already live in this process. A probe placed in that branch was never reached on any crash-left path, so
+  `continueSession` does not copy it
+  (`docs/defects/a-continue-by-message-cannot-re-claim-a-lock-it-no-longer-holds.md`).
+
+**What a ruling decides.** Whether a busy session of unknown liveness should also be continuable, for example after a
+confirmation, rather than refused. Whether a crash-left session should state something of its own in the notices row,
+where a paused session states its pause. Whether a crash that left a durable hold should offer anything beyond that
+hold's own continues.
+
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 
 The key is registered with default 20 and minimum 1. Each background session publishes its own `bg:<id>` stream at up to 50 frames/s (the 20 ms floor), so the produced aggregate is `(agents + background sessions) × 50 frames/s`, and only one of those two factors — agents, REQ-MONITOR-285's 20 — has a ceiling. Part AL reads the key into the manager and caps the *delivered* rate per window at 1,000 frames/s by merging (REQ-MONITOR-306, REQ-SHELL-103), so a user who configures 400 background sessions saturates the run-host → main pipe, not a renderer. A stated maximum on the key would let the produced rate be computed rather than absorbed. The owner's call; recorded, not resolved.

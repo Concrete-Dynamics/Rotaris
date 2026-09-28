@@ -602,7 +602,11 @@ Continue action states what it resumes from `SessionRecord.resumable` (`resumabl
 plus every agent of it not in a terminal state — the paused ones after a rest, and the ones a crash not yet recorded
 left, which its record will pause — read from the store as `planGate` is) — the count in the composer's notices row,
 describing every continue that resumes them, on a `paused` session, on one a crash left `interrupted` and on one in
-REQ-CHAT-008's recovery state, and on a `paused` one "Continue without them" beside it, behind a confirmation; the strip
+REQ-CHAT-008's recovery state, and "Continue without them" beside it, behind a confirmation. A session a crash left —
+`interrupted`, or in the recovery state (`not-live` by REQ-GIT-093's predicate) — offers both continues and the decline
+as a `paused` one does, and `Sessions.continueSession` accepts it, refusing a busy session whose process may still be
+running it (`run-active`); either choice records the crash first, in `launchContinuation` (PD-ORCH-005 clause 18,
+OQ-76). The strip
 keeps its one band, its two continues showing short labels as the send pill does — `Continue` and `Send`, named
 `Continue run` and `Continue with a message` (`PD-CHAT-001` revision 4).
 

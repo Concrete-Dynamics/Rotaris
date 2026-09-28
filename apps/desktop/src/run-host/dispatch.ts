@@ -299,7 +299,8 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       return { kind: 'ack' };
     }
     case 'session.continue': {
-      // REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause or continue a paused session; nothing is appended.
+      // REQ-SESSION-110 / REQ-MONITOR-125: resolve a pause, or continue a paused session or one a crash left (PD-ORCH-005
+      // clause 18); nothing is appended.
       // REQ-PROVIDER-066 (the continuation lease): refresh the bearers before the run resolves its setup.
       const leaseRefusal = await continuationLeaseForSession(req.sessionId);
       if (leaseRefusal) return leaseRefusal;

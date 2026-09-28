@@ -1192,10 +1192,16 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
     setPlanCollapsed(false);
   }
   const paused = session !== null && (session.executionStatus === 'paused' || session.executionStatus === 'paused_message_limit' || session.executionStatus === 'awaiting_plan_decision');
-  // PD-ORCH-005 clause 6 (OQ-71): a session at rest states what its continue resumes — a paused one; one a crash left
-  // `interrupted`; and one a crash left persisted busy with no run behind it (REQ-CHAT-008's recovery state), whose
-  // continue by message records the crash and resumes the same agents. Only the Continue action offers to decline.
-  const resumable = session !== null && (session.executionStatus === 'paused' || session.executionStatus === 'interrupted' || (sessionBusy && needsRecovery)) ? session.resumable : null;
+  /**
+   * PD-ORCH-005 clause 18: a session a crash left — `interrupted` after a repair, or persisted busy with no run behind it
+   * (REQ-CHAT-008's recovery state) — offers the Continue action and "Continue without them" as a `paused` session does,
+   * with the same count; either choice records the crash first (clause 8), in the engine. It draws no pause statement:
+   * it is not paused, and its run state says so (OQ-76).
+   */
+  const crashLeft = session !== null && (session.executionStatus === 'interrupted' || (sessionBusy && needsRecovery));
+  // PD-ORCH-005 clauses 6 and 19: a session at rest states what its continue resumes — the open iteration's root and
+  // every unfinished agent — on a paused session and on one a crash left (clause 18).
+  const resumable = session !== null && (session.executionStatus === 'paused' || crashLeft) ? session.resumable : null;
   /** The send control's accessible name, by composer mode (PD-CHAT-001 revision 2, R-040). Set beside the
     * gate and the pause it reads, so no declaration order can break it again. */
   const sendName = runActive
@@ -1526,10 +1532,10 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
               * paused and is therefore not busy: this lock is the gate's, not the status mapping's.
               */
             <DesignButton type="submit" className="btn btn-primary" disabled aria-describedby="plan-gate-hint">Answer the plan first</DesignButton>
-          ) : paused && onContinue ? (
+          ) : (paused || crashLeft) && onContinue ? (
             <>
               {/* PD-ORCH-005 clause 6: both continues resume the open iteration's agents, so the count below describes
-                * both. The strip keeps its one band (PD-CHAT-001): the count and the decline stand in the notices row,
+                * both — on a paused session and on one a crash left (clause 18). The strip keeps its one band (PD-CHAT-001): the count and the decline stand in the notices row,
                 * and the two continues take the send pill's place, so they carry short labels at every density as the
                 * pill does — `Continue` is the pill's own (REQ-CHAT-005 as PD-CHAT-001 narrows it) — with the full
                 * name as accessible name and tooltip. At full labels the paused strip scrolled at every density but
@@ -1569,7 +1575,7 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
              * offers to continue without them — confirmed, since it ends them `cancelled` for good (clauses 3 and 5). */
             <div className="composer__resume" data-testid="composer-resume">
               <span id="composer-resume-count" className="composer__hint" data-testid="composer-resume-count">{resumeCountText(resumable.agents)}</span>
-              {session?.executionStatus === 'paused' && onContinue && (
+              {(session?.executionStatus === 'paused' || crashLeft) && onContinue && (
                 <>
                   <DesignButton type="button" className="btn btn-ghost btn-compact" data-testid="composer-continue-without" onClick={() => setConfirming('decline')}
                     title={declineText(resumable.agents)} aria-describedby="composer-decline-hint">Continue without them</DesignButton>

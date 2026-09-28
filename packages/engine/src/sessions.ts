@@ -1539,6 +1539,13 @@ export class Sessions {
    * `withoutPaused` is PD-ORCH-005 clause 6's "continue without them": the agents the last run left paused end
    * `cancelled`, the open iteration closes as cancelled, and the session continues as a new iteration. Otherwise the
    * Continue action resumes them (the default).
+   *
+   * PD-ORCH-005 clause 18 (extending REQ-MONITOR-125): a session a crash left offers the same choice as a `paused` one —
+   * `interrupted` after a repair (REQ-SESSION-060, REQ-GIT-094), or persisted busy with no process behind it,
+   * REQ-CHAT-008's recovery state, which REQ-GIT-093's one liveness predicate decides (`not-live`). A busy session whose
+   * process is live, or whose liveness is unknown, is refused: another process may still be running it. Either choice
+   * records the crash first, as any continue does (clause 8), because `launchContinuation` records it before it resumes
+   * or declines the open iteration. Readings in OQ-76.
    */
   continueSession(sessionId: SessionId, action: 'continue' | 'double' | 'cancel', opts: { readonly withoutPaused?: boolean } = {}): Result<{ readonly resumed: boolean; readonly messageLimit: number | null }, { readonly code: string; readonly reason: string }> {
     const s = this.live.get(sessionId);
@@ -1549,7 +1556,10 @@ export class Sessions {
     const gone = missingWorktree(stored);
     if (gone) return err(gone);
     const atLimit = stored.execution_status === 'paused_message_limit';
-    if (!atLimit && stored.execution_status !== 'paused') return err({ code: 'not-paused', reason: `Session ${sessionId} is not paused (${stored.execution_status}).` });
+    const busyLeft = isActiveStatus(stored.execution_status);
+    if (busyLeft && this.liveness(s.dal, sessionId) !== 'not-live') return err({ code: 'run-active', reason: `Session ${sessionId} is still marked ${stored.execution_status}, and the process that ran it may still be running it.` });
+    const crashLeft = busyLeft || stored.execution_status === 'interrupted';
+    if (!atLimit && !crashLeft && stored.execution_status !== 'paused') return err({ code: 'not-paused', reason: `Session ${sessionId} is not paused (${stored.execution_status}).` });
     let limit = stored.message_limit;
     if (atLimit) {
       if (action === 'cancel') {

@@ -153,7 +153,8 @@ export function createSessionActions({ bridge, replica }: SessionActionDeps) {
 
   /**
    * REQ-SESSION-110 / REQ-MONITOR-125: continue the focused session, or resolve its pause. PD-ORCH-005 clause 6: the
-   * agents a rest left paused resume, unless `withoutPaused` asks to continue without them.
+   * agents a rest left paused resume, unless `withoutPaused` asks to continue without them — on a session a crash left
+   * too (clause 18).
    */
   async function continueSession(action: PauseResolution = 'continue', opts: { readonly withoutPaused?: boolean } = {}): Promise<{ ok: true } | { ok: false; reason: string }> {
     const sessionId = replica.getState().sessionId;

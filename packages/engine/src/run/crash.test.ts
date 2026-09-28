@@ -288,5 +288,62 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       expect(its.length).toBeGreaterThan(0);
       expect(its.filter((r) => r.messages.some((m) => m.role === 'user' && m.content.some((p) => p.kind === 'text' && p.text.startsWith('Carry out the task now'))))).toEqual([]);
     });
+
+    /**
+     * PD-ORCH-005 clause 18 (extending REQ-MONITOR-125): a session a crash left — in REQ-CHAT-008's recovery state before
+     * any repair, or `interrupted` after one — offers the Continue action and "continue without them" as a `paused`
+     * session does, and either choice records the crash first, as any continue does (clause 8). Readings in OQ-76.
+     */
+    describe('PD-ORCH-005 clause 18: a crash offers the same choice', () => {
+      const userRows = (sid: SessionId) => dal.residentRows(sid).filter((r) => r.kind === 'user').length;
+      const pausedBy = (sid: SessionId) => dal.timelineOf(sid).filter((t) => t.name === 'child_paused').map((t) => (JSON.parse(t.metadata) as { interruption: string }).interruption);
+      /** The recovery state (the status still `running`, its process dead), or the repair's `interrupted` — which records nothing of the agents (clause 8, the checkpoint listing's repair). */
+      function leftBy(state: 'recovery' | 'interrupted', sid: SessionId): Sessions {
+        const next = sessionsAs(88);
+        expect(next.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        if (state === 'interrupted') expect(next.checkpointListing(dal, 'C:/ws', sid).ok).toBe(true);
+        expect(dal.getSession(sid)!.execution_status).toBe(state === 'recovery' ? 'running' : 'interrupted');
+        expect(dal.getIteration(sid, 2)!.interruption).toBeNull();
+        return next;
+      }
+
+      for (const state of ['recovery', 'interrupted'] as const) {
+        it(`${state}: the Continue action records the crash first, then resumes every unfinished agent from its record, and appends no user row`, async () => {
+          const sid = await crashed();
+          const next = leftBy(state, sid);
+          const before = userRows(sid);
+          expect(next.continueSession(sid, 'continue')).toEqual({ ok: true, value: { resumed: true, messageLimit: null } });
+          expect((await next.running(sid))!.status).toBe('completed');
+          expect(pausedBy(sid)).toEqual(['crash', 'crash', 'crash']);
+          for (const id of ['bg_000000c1', 'bg_000000c2', 'bg_000000c3']) expect(dal.getChild(sid, id), id).toMatchObject({ state: 'succeeded', interruption: null });
+          expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.state, r.outcome])).toEqual([[1, 'closed', 'succeeded'], [2, 'closed', 'succeeded']]);
+          // REQ-MONITOR-125's "resumed from the composer": the last request stands and nothing is appended.
+          expect(userRows(sid)).toBe(before);
+        });
+
+        it(`${state}: "continue without them" records the crash first, then ends those agents cancelled, closes the iteration cancelled and continues as a new iteration`, async () => {
+          const sid = await crashed();
+          const next = leftBy(state, sid);
+          expect(next.continueSession(sid, 'continue', { withoutPaused: true }).ok).toBe(true);
+          await next.running(sid);
+          expect(pausedBy(sid)).toEqual(['crash', 'crash', 'crash']);
+          expect(dal.getIteration(sid, 2)).toMatchObject({ state: 'closed', outcome: 'cancelled', interruption: 'crash' });
+          for (const id of ['bg_000000c1', 'bg_000000c2', 'bg_000000c3']) expect(dal.getChild(sid, id)!.state, id).toBe('cancelled');
+          expect(dal.iterationsOf(sid).map((r) => r.iteration)).toEqual([1, 2, 3]);
+        });
+      }
+
+      it('a busy session whose process may still be running it is refused, and nothing is recorded', async () => {
+        const sid = await crashed();
+        const next = sessionsAs(88);
+        expect(next.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        // REQ-GIT-093: a lock naming another machine is live — this process cannot tell whether that run goes on.
+        dal.db.prepare('UPDATE session_locks SET host = ? WHERE session_id = ?').run('0000000000000000000000000000000b', sid);
+        expect(next.continueSession(sid, 'continue')).toMatchObject({ ok: false, error: { code: 'run-active' } });
+        expect(next.continueSession(sid, 'continue', { withoutPaused: true })).toMatchObject({ ok: false, error: { code: 'run-active' } });
+        expect(dal.getIteration(sid, 2)!.interruption).toBeNull();
+        expect(dal.getChild(sid, 'bg_000000c1')!.state).toBe('running');
+      });
+    });
   });
 });

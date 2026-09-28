@@ -18,7 +18,7 @@ against it when it was built: the gate now takes a `publicTool` predicate from t
 the callable map holds the very executor `executorsFor` built for a name. The same predicate is the obvious seam for
 the two readers above; they are not changed here.
 
-Noticed 2026-09-27 while repairing the review of `PD-TOOLS-004` ([R-057](../product/requests.md#r-057)). Out of
+Noticed 2026-09-27 while repairing the review of `PD-TOOLS-004` ([R-057](../../product/requests.md#r-057)). Out of
 scope there.
 
 ## Specs

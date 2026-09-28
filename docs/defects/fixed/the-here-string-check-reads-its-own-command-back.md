@@ -9,7 +9,7 @@ that pass is not evidence that the lines came back. The neighbouring *terminated
 the timeout from the diagnostic and is not affected.
 
 Noticed 2026-09-27 while turning the `failed-word` shape into a regression guard for `PD-TOOLS-003`
-([R-055](../product/requests.md#r-055)). That guard needed the same positive half, and reads it from the output
+([R-055](../../product/requests.md#r-055)). That guard needed the same positive half, and reads it from the output
 section alone through `outputOf`. Established by reading the code and by feeding the check an observation with
 no output; not measured on a live run.
 

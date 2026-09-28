@@ -12,7 +12,7 @@ start inside the workspace, a read-only tool given a workspace-relative path und
 The unit tests do not see it: `policy.test.ts` and `gate.test.ts` inject a resolver that joins a relative path to
 their root itself, which is the behaviour the production resolver lacks.
 
-Noticed 2026-09-27 while building `PD-TOOLS-004` ([R-057](../product/requests.md#r-057)), whose path match resolves
+Noticed 2026-09-27 while building `PD-TOOLS-004` ([R-057](../../product/requests.md#r-057)), whose path match resolves
 each path against the workspace root first (`resolveInWorkspace`) and so does not inherit this. Not repaired there:
 out of scope.
 

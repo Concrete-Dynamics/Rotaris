@@ -44,8 +44,8 @@ record already decides, and every ruling it needs is named as the owner's rather
   note is not moved
   ([note](../defects/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md), open; OQ-89 — OQ-76 on its branch, renumbered at the merge).* *Two more were measured red on 2026-09-27 while §2.2 was built, both before it and unchanged by it:*
   ~~`slash-proof` at its first catalogue assertion since ADR-0063
-  ([note](../defects/slash-proof-expects-every-built-in-to-carry-the-action-badge.md)), and `skills-proof`'s policy
-  launch on Linux only ([note](../defects/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md)).~~
+  ([note](../defects/fixed/slash-proof-expects-every-built-in-to-carry-the-action-badge.md)), and `skills-proof`'s policy
+  launch on Linux only ([note](../defects/fixed/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md)).~~
   **Both repaired 2026-09-28 under R-062, in the proofs and not the product** — the badge assertion reads ADR-0063's
   set (`action` for the built-ins and mirrors, `skill` for `/skill` and `/skills`), and every proof takes the global
   configuration directory from `configDirFor`; `skills-proof` passed 10 checks over 9 launches as root on Linux
@@ -144,12 +144,12 @@ held as written, the reason it was not built held, and building it found one def
   logged. Both sit before the policy launch, which fails on Linux before and after this change at "the baseline
   over a global override was not written explicitly"; on Linux the two new launches are therefore the last that
   pass, and the cause is recorded as
-  [`skills-proof-writes-its-global-policy-where-only-windows-reads-it.md`](../defects/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md).
+  [`skills-proof-writes-its-global-policy-where-only-windows-reads-it.md`](../defects/fixed/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md).
   A temporary copy of the proof with that one path spelled for Linux passed all 10 checks over 9 launches with
   `/skills` built, so the later launches are unaffected by it; the copy was not committed.
   `rows-proof` passes unchanged. `slash-proof` stops at its first catalogue assertion with and without this change —
   it expects every built-in to carry the `action` badge, which `/skill` has not since ADR-0063 — recorded as
-  [`slash-proof-expects-every-built-in-to-carry-the-action-badge.md`](../defects/slash-proof-expects-every-built-in-to-carry-the-action-badge.md).
+  [`slash-proof-expects-every-built-in-to-carry-the-action-badge.md`](../defects/fixed/slash-proof-expects-every-built-in-to-carry-the-action-badge.md).
 - *Gate round 1 of the same change found two more defects, both repaired before it merged.* (1) Drawing the listing
   as its own block took the system row off `PlainText`, so a bare URL in a skill's description stopped being a link
   (REQ-CHAT-076). Every field is now drawn through `PlainText`; `rows.test.ts` renders a listing and reads the link,
@@ -302,7 +302,7 @@ execution root.
 > instruction seam, and the catalog tests decide the isolation of both roots on any host by recording every probe.
 > **What the repair did not observe:** no proof lays an undecodable file down for the built app — the decoding half is
 > shown by the unit cases over the real port alone; and `skills-proof`'s launches after its policy launch did not run
-> on Linux, for the reason [`skills-proof-writes-its-global-policy-where-only-windows-reads-it.md`](../defects/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md)
+> on Linux, for the reason [`skills-proof-writes-its-global-policy-where-only-windows-reads-it.md`](../defects/fixed/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md)
 > records, so the run launch's catalog naming the machine skill is asserted in the script and unproven on this host.
 
 **3.4 A live run.** One `pnpm live-run` scenario with a workspace `AGENTS.md` whose instruction the model can

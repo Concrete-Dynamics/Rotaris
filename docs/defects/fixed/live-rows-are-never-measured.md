@@ -62,7 +62,7 @@ No requirement asks for the current behaviour, so nothing is minted.
 *Noticed 2026-09-15 from two screenshots the owner took of the built product: overlapping activity lines, and
 flicker while two agents produced output at once.*
 
-**Repaired 2026-09-15** ([R-021](../product/requests.md#r-021)), citing REQ-CHAT-058, REQ-CHAT-053/071 and
+**Repaired 2026-09-15** ([R-021](../../product/requests.md#r-021)), citing REQ-CHAT-058, REQ-CHAT-053/071 and
 PD-CHAT-004. Three changes, and the third is the one that stops the flicker rather than the overlap.
 
 **Measuring and reusing are separated.** `measureKey` is the four-part key for a row in any state; `reuseKey` is

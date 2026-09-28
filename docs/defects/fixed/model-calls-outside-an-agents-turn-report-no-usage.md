@@ -8,7 +8,7 @@ reports for them, reach neither the session's totals nor a `usage.update`. A con
 (PD-MONITOR-001 revision 2) cannot price them either, because it is applied where a request's usage is observed.
 
 Noticed 2026-09-23 while repairing
-[`a-delegated-childs-provider-requests-never-reach-the-runs-totals.md`](fixed/a-delegated-childs-provider-requests-never-reach-the-runs-totals.md),
+[`a-delegated-childs-provider-requests-never-reach-the-runs-totals.md`](a-delegated-childs-provider-requests-never-reach-the-runs-totals.md),
 which fixed the same gap for a child's own turn. Established by reading the call sites; not measured on a live
 run.
 

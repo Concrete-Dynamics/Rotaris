@@ -1,6 +1,6 @@
 ## The proofs of the platform-parameterised helpers read the host's separator, not the platform they name
 
-The repair recorded in [`platform-parameterised-helpers-read-the-host-separator.md`](../platform-parameterised-helpers-read-the-host-separator.md)
+The repair recorded in [`platform-parameterised-helpers-read-the-host-separator.md`](platform-parameterised-helpers-read-the-host-separator.md)
 made five helpers answer with the separator the **platform parameter** names. Two of the assertions that
 measure them still build their expectation, or their input, from `node:path`'s **host-bound** exports, so the
 proof asks for one platform's rule and compares against another's spelling. Both were green on Linux, where

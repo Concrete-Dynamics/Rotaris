@@ -21,3 +21,13 @@ entry cites its owning `REQ-<DOMAIN>-<NNN>`) is the one broken.
 - `docs/spec/11-startup-distribution-updates.md` — `REQ-STARTUP-059` and `REQ-STARTUP-060`.
 - `tools/release-naming/src/index.ts` and `packages/config/src/setup-manifest.ts` — the two `PLATFORM_KEYS` lists, held
   equal by `tools/release-guard/src/pins.test.ts`.
+
+## Repaired 2026-09-28 under R-062
+
+The entry now cites `REQ-STARTUP-060` and states what the requirement says the key is: the selector shared by release
+artifact naming, updater asset selection and manifest artifact selection — one of the three fixed keys, or the raw
+`<os>-<machine>` fallback. The definition states what the key **is**; the three key values and the fallback's shape
+stay in the requirement, per `CONTEXT-MAP.md`'s rule ("Rules, defaults, figures and shapes stay in `docs/spec/`").
+No code changed and no test pins it: the glossary is prose with no reader in the build, and `pnpm symbols` holds only
+that the identifier it cites exists. Verified by reading `REQ-STARTUP-060` in `docs/spec/11-startup-distribution-updates.md`
+against the entry, and by `tools/check-record-links.mjs` over the glossary (the entry carries no link).

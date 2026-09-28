@@ -1,5 +1,5 @@
 import { asSessionId, err, formatAmount, millis, ok, toIsoUtc, type Clocks, type MachineId, type Millis, type Result, type SessionId } from '@rotaris/kernel';
-import { APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, COST_QUALIFIERS, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type CheckpointKind, type CheckpointListPayload, type ControlRequest, type ControlResult, type CostQualifier, type ImageAttachmentInput, type PermissionPreset, type QuestionAnswers, type RunType, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding } from '@rotaris/contracts';
+import { APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, COST_QUALIFIERS, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type CheckpointKind, type CheckpointListPayload, type ControlRefusal, type ControlRequest, type ControlResult, type CostQualifier, type ImageAttachmentInput, type PermissionPreset, type QuestionAnswers, type RunType, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding } from '@rotaris/contracts';
 import { existsSync, rmSync } from 'node:fs';
 import { RELEASE_PAGE_SIZE, type CheckpointRow, type SessionRow, type StoreDal } from '@rotaris/store';
 import type { AgentBackend, ChatMessage, ContentPart } from '@rotaris/model';
@@ -1572,11 +1572,12 @@ export class Sessions {
    *
    * Refused — `{ok: false}`, which the renderer states as "not cancellable" (REQ-MONITOR-128) — for the run itself (a
    * rest's whole-iteration equivalent is clause 6's "Continue without them"), an id that is no agent of the open
-   * iteration, and one neither `paused` nor left unfinished by a crash, when the chosen child's own move fails, and
-   * while another live process holds the session's lock (`lockForWrite`). A paused descendant whose move fails is warned
-   * of and left paused, and the cancel of the chosen child still stands (OQ-74). Refused too under a store failure, as
-   * every continue is (`store-failed`, OQ-76): nothing can be recorded of the session until the reopen rebuilds the
-   * writer.
+   * iteration, one neither `paused` nor left unfinished by a crash, and a chosen child whose move is illegal. The refusals
+   * that say nothing of the agent carry the engine's words instead (OQ-74): `session_locked` while another live process
+   * holds the session's lock, and `store_failed` under a store failure, as every continue is refused (`store-failed`,
+   * OQ-76: nothing can be recorded of the session until the reopen rebuilds the writer), when the store could not be read
+   * or written to take the lock (`lockForWrite`), and when the chosen child's own move fails to be written. A paused
+   * descendant whose move fails is warned of and left paused, and the cancel of the chosen child still stands (OQ-74).
    *
    * A child a crash not yet recorded left unfinished (`crashLeftOf`), which presents `paused` (OQ-73), is cancelled from
    * the state it is stored in, as clause 3's cancellation of one agent ends its agents `cancelled`; so is each such
@@ -1612,7 +1613,7 @@ export class Sessions {
     // one copy of that rule), and refuses while another live process holds it — one that has loaded or is resuming the
     // session (OQ-74).
     const lock = this.lockForWrite(s.dal, sid, warn);
-    if (!lock) return { ok: false, refusal: { code: 'session_locked', message: 'Another process holds this session, so the agent was not cancelled.' } };
+    if ('refusal' in lock) return { ok: false, refusal: lock.refusal };
     try { return this.cancelPausedUnderLock(s, sid, agentId, row, open, warn); }
     finally { lock.release(); }
   }
@@ -1624,18 +1625,22 @@ export class Sessions {
     return target && (target.state === 'paused' || crashLeft.has(agentId)) ? { crashLeft } : null;
   }
 
-  /** The lock `cancelPausedAtRest` writes under: taken (and given back), already this process's (kept), or null — refused. */
-  private lockForWrite(dal: StoreDal, sid: SessionId, warn: (m: string) => void): { readonly release: () => void } | null {
+  /**
+   * The lock `cancelPausedAtRest` writes under: taken (and given back), already this process's (kept), or refused with
+   * the words that say why (PD-ORCH-005 clause 16, OQ-74) — `session_locked` only while another live process holds it,
+   * and `store_failed` when the store could not be read or written to take it, where no other process is involved.
+   */
+  private lockForWrite(dal: StoreDal, sid: SessionId, warn: (m: string) => void): { readonly release: () => void } | { readonly refusal: ControlRefusal } {
     const { pid, host } = this.deps;
     try {
       const held = dal.getLock(sid);
       if (held && held.pid === pid && held.host === host) return { release: () => undefined };
       const claimed = claimLockReaping(dal, sid, pid, host, toIsoUtc(this.deps.clocks.wall.instant()), this.deps.isProcessAlive ?? (() => true));
-      if (!claimed.claimed) return null;
+      if (!claimed.claimed) return { refusal: { code: 'session_locked', message: 'Another process holds this session, so the agent was not cancelled.' } };
       return { release: () => { try { dal.releaseLock(sid, pid, host); } catch (cause) { warn(`releasing the lock of ${sid} after a cancel failed: ${String(cause)}`); } } };
     } catch (cause) {
       warn(`taking the lock of ${sid} for a cancel failed: ${String(cause)}`);
-      return null;
+      return { refusal: { code: 'store_failed', message: `The workspace store could not take this session's lock, so the agent was not cancelled: ${String(cause)}` } };
     }
   }
 
@@ -1663,9 +1668,10 @@ export class Sessions {
       if (!r.ok) {
         warn(r.error.code === 'illegal-move' ? r.error.reason : `cancelling ${t.task_id} at rest failed: ${r.error.code}`);
         // The chosen child is first; a failed move of it leaves it where it stood and cancels nothing below it, and the
-        // renderer is answered that it could not be cancelled (REQ-MONITOR-128) rather than shown a cancel that did not
-        // happen. Nothing was written before it, so nothing needs republishing.
-        if (own) return { ok: false };
+        // renderer is answered rather than shown a cancel that did not happen. Nothing was written before it, so nothing
+        // needs republishing. An illegal move is REQ-MONITOR-128's "no longer cancellable"; a failed write says nothing of
+        // the agent, so it is refused `store_failed` in the engine's words, as a store failure found first is (OQ-74).
+        if (own) return r.error.code === 'illegal-move' ? { ok: false } : { ok: false, refusal: { code: 'store_failed', message: `The workspace store requires recovery before an agent can be cancelled: ${'reason' in r.error ? r.error.reason : r.error.code}` } };
         // A descendant whose move fails is left where it stood — paused, or left by the crash for its record to pause — and
         // resumes; the chosen child's cancel stands (OQ-74).
         continue;

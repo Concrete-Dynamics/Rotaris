@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -1412,7 +1412,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(JSON.parse(byName(sid, 'work').report!).errors).toEqual([]);
     });
 
-    it('clause 6, declined: "continue without them" ends the paused agents cancelled, closes the open iteration cancelled, and works in a new one', async () => {
+    it('clauses 6 and 19, declined: the count includes the root; "continue without them" ends the paused agents cancelled, closes the open iteration cancelled, and works in a new one', async () => {
       const snapshots: SessionRecord[] = [];
       const { sessions, release } = heldPair({ increment: () => undefined, snapshot: (p) => { snapshots.push(p.session); } });
       const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
@@ -1420,7 +1420,8 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       sessions.control({ op: 'pause', sessionId: sid, args: {} });
       release();
       await sessions.running(sid)!;
-      // Clause 6: what the Continue action states — the open iteration, its root and its two paused agents.
+      // Clause 6: what the Continue action states — the open iteration, its root and its two paused agents. Clause 19:
+      // the count includes the root, which resumes with them (`1 +` in `resumableOf`).
       expect(resumableOf(dal, dal.getSession(sid)!)).toEqual({ iteration: 1, agents: 3 });
       expect(snapshots.at(-1)!.resumable).toEqual({ iteration: 1, agents: 3 });
       expect(sessions.continueSession(sid, 'continue', { withoutPaused: true }).ok).toBe(true);
@@ -1990,6 +1991,27 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
         dal.releaseLock(sid, 999, HOST);
         expect(cancel(sessions, sid, byName(sid, 'two').task_id)).toEqual({ ok: true });
         expect(byName(sid, 'two').state).toBe('cancelled');
+        expect(dal.getLock(sid)).toBeUndefined();
+      });
+
+      it('a store error while taking the lock involves no other process: it is refused store_failed in the engine\'s words, not session_locked, writing nothing', async () => {
+        const { sessions, sid } = await restedFamily();
+        const read = vi.spyOn(dal, 'getLock').mockImplementationOnce(() => { throw new Error('SQLITE_IOERR: disk I/O error'); });
+        expect(cancel(sessions, sid, byName(sid, 'two').task_id)).toEqual({ ok: false, refusal: { code: 'store_failed', message: 'The workspace store could not take this session\'s lock, so the agent was not cancelled: Error: SQLITE_IOERR: disk I/O error' } });
+        read.mockRestore();
+        expect(byName(sid, 'two').state).toBe('paused');
+        expect(dal.timelineOf(sid).filter((t) => t.name === 'child_user_cancelled')).toEqual([]);
+        expect(dal.getLock(sid)).toBeUndefined();
+        expect(warnings.some((w) => w.includes('for a cancel failed'))).toBe(true);
+      });
+
+      it('a failed write of the chosen child\'s own move is refused store_failed in the engine\'s words, not "not cancellable", and the lock is given back', async () => {
+        const { sessions, sid } = await restedFamily();
+        const write = vi.spyOn(dal, 'setChildState').mockImplementationOnce(() => { throw new Error('SQLITE_FULL: database or disk is full'); });
+        expect(cancel(sessions, sid, byName(sid, 'two').task_id)).toEqual({ ok: false, refusal: { code: 'store_failed', message: 'The workspace store requires recovery before an agent can be cancelled: Error: SQLITE_FULL: database or disk is full' } });
+        write.mockRestore();
+        expect(byName(sid, 'two').state).toBe('paused');
+        expect(dal.timelineOf(sid).filter((t) => t.name === 'child_user_cancelled')).toEqual([]);
         expect(dal.getLock(sid)).toBeUndefined();
       });
     });

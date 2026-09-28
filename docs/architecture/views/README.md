@@ -74,9 +74,11 @@ next repair or continue to record (clauses 3 and 8, OQ-74). It runs no scheduler
 names a cancelled child stays counted and is blocked by the resumed run's first pass (REQ-ORCH-048, OQ-74). It is
 refused under a store failure, as every continue is (OQ-76). The cancel writes under the session's lock, taken for the
 write and given back, a dead local holder reaped by the `claimLockReaping` that `SessionWriter.open` claims through, and
-is refused while another live process holds it (`lockForWrite`); those two refusals carry `ControlRefusal` codes of
-their own (`store_failed`, `session_locked`), whose message the renderer's `cancelAgent` states rather than "not
-cancellable"; a target it refuses outright is judged before the lock is taken. Every confirmation and cascade note names
+is refused while another live process holds it (`lockForWrite`); the refusals that say nothing of the agent carry
+`ControlRefusal` codes of their own — `session_locked` for that holder, `store_failed` for a store failure, a lock the
+store could not read or take, and a chosen child's move it could not write — whose message the renderer's `cancelAgent`
+(through the `control` helper) states rather than "not cancellable"; a target it refuses outright is judged before the
+lock is taken. Every confirmation and cascade note names
 each unfinished descendant a cancel ends, live or paused (`cancelCascade`; OQ-73 and OQ-74 record the departure from
 REQ-MONITOR-064's live count), and both cancels write through one `userCancellation`. The surfaces offer a paused
 child's Cancel while its session rests (`cancelOffered(agent, runActive, resting)`, `resting` being `runLevelResting`,
@@ -86,8 +88,8 @@ cancel on the Workspace, takes no label of its own and has its call sites pinned
 through `missionConfirmation`. The **runtime view**'s `cancelAgent` and `children` rows and its crash paragraph, the
 **state-ownership view**'s rest and session-lock rows and the **sequences view**'s crash note name the new writer; the
 `iterations` and `agent_terminals` rows say only that the crash record is written at a repair or a continue, which the
-cancel is not. No package, edge, process, channel or command changes; `CONTROL_REFUSAL_CODES` gains the two refusals
-above.
+cancel is not. The **process view**'s `control.result` paragraph lists the two new refusal codes. No package, edge,
+process, channel or command changes; `CONTROL_REFUSAL_CODES` gains the two refusals above.
 
 **A paused agent presents as paused on every agent surface (`PD-ORCH-005` clause 13, revision 4, 2026-09-28, R-064).**
 `PRESENTATION_CHILD_STATES` gains `paused` and `presentationChildState` maps the child state to it, so `AgentRecord`'s

@@ -3450,7 +3450,7 @@ so that they present `paused` as the build presents them — and with it REQ-MON
 session — or whether they should present as before (running in REQ-CHAT-008's recovery state, `cancelled` once
 `interrupted`) until the crash is recorded, the tree disagreeing with clause 18's count until then.
 
-**OQ-74 — What does cancelling one paused child at rest reach, say and leave, and what does it do with a child a crash left, which clauses 3 and 8 record only at a repair or a continue?** *(`PD-ORCH-005` clause 16, revision 4, with clauses 3 and 8 — "a crash is recorded when the session is next repaired or continued", and "settling, recording interruptions and resuming happen only when a run of the session is about to start" — which the crash reading below keeps, and clauses 10 and 18, whose "Either choice records the crash first" names the Continue action and "continue without them" and not the cancel; clause 15, whose "every confirmed 'Cancel the run?' is clause 3's explicit cancel, whichever surface asks it" the reading below departs from on one surface, a persona window on the run's own instance while the session rests (cross-cited from OQ-81); REQ-MONITOR-063, which the directive narrows; REQ-MONITOR-128, which clause 16 names for the paused child's confirmation; REQ-MONITOR-064, which the directive does not name and which the cascade note below departs from by counting paused descendants where the requirement counts live ones only (OQ-73); and REQ-MONITOR-055, REQ-ORCH-133, REQ-LIBRARY-092, REQ-TOOLS-111, REQ-SHELL-075, REQ-SESSION-129, REQ-ORCH-048, REQ-ORCH-054 and REQ-CHAT-008, which it does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
+**OQ-74 — What does cancelling one paused child at rest reach, say and leave, and what does it do with a child a crash left, which clauses 3 and 8 record only at a repair or a continue?** *(`PD-ORCH-005` clause 16, revision 4, with clauses 3 and 8 — "a crash is recorded when the session is next repaired or continued", and "settling, recording interruptions and resuming happen only when a run of the session is about to start" — which the crash reading below keeps, and clauses 10 and 18, whose "Either choice records the crash first" names the Continue action and "continue without them" and not the cancel; clause 15, whose "every confirmed 'Cancel the run?' is clause 3's explicit cancel, whichever surface asks it" the reading below departs from on one surface, a persona window on the run's own instance while the session rests (cross-cited from OQ-81); REQ-MONITOR-063, which the directive narrows; REQ-MONITOR-128, which clause 16 names for the paused child's confirmation and not for its refusal, and whose "an error message states that the agent is no longer cancellable" the reading below departs from for the refusals that say nothing of the agent; REQ-MONITOR-064, which the directive does not name and which the cascade note below departs from by counting paused descendants where the requirement counts live ones only (OQ-73); and REQ-MONITOR-055, REQ-ORCH-133, REQ-LIBRARY-092, REQ-TOOLS-111, REQ-SHELL-075, REQ-SESSION-129, REQ-ORCH-048, REQ-ORCH-054 and REQ-CHAT-008, which it does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
 
 Clause 16 has "a `paused` child" offer Cancel "wherever a live agent offers it", confirmed as REQ-MONITOR-128 requires —
 naming the child and one line per paused descendant — and has it and each paused descendant end `cancelled`, the
@@ -3489,22 +3489,36 @@ only with a run behind it. The clause does not say:
   `Sessions.cancelPausedAtRest`. It is refused (`{ok: false}`, which the renderer states as "not cancellable",
   REQ-MONITOR-128) for the run's id or the root's, an id that is no child of the open iteration, and a child neither
   `paused` nor left by a crash; a refusal records nothing, and those are judged before the lock is taken, so none of
-  them claims or reaps it. It is refused too when the chosen child's own move to `cancelled` fails (a failed store
-  write), and then nothing below it is cancelled and nothing has been written; a descendant whose own move fails is
-  warned of and left where it stood, to resume with the rest, and the chosen child's cancel stands. It is refused,
-  writing nothing, under a store failure, as every continue is (`store-failed`, OQ-76): nothing can be recorded of the
-  session until the reopen rebuilds the writer. It is written under the session's lock (ADR-0005), which it does not
+  them claims or reaps it. It is refused too when the chosen child's own move to `cancelled` fails, and then nothing
+  below it is cancelled and nothing has been written: an illegal move is refused as "not cancellable", and a failed
+  store write as `store_failed` (below). A descendant whose own move fails is warned of and left where it stood, to
+  resume with the rest, and the chosen child's cancel stands. It is refused, writing nothing, under a store failure, as
+  every continue is (`store-failed`, OQ-76): nothing can be recorded of the session until the reopen rebuilds the
+  writer. It is written under the session's lock (ADR-0005), which it does not
   otherwise hold: a run releases the lock at its teardown, so a session paused in this process holds none. The cancel
   takes the lock for its write and gives it back after, keeps it when this process already holds it (a session loaded
   here), reaps a dead holder on this machine as loading a session does — through the one copy of that rule,
   `claimLockReaping`, which never reaps a holder whose pid is no positive integer — and is refused while another live
   process holds it — one that has loaded the session, or is resuming it — so it never writes into a session another
-  instance owns. These two refusals say nothing of the agent, so they carry the engine's words (`store_failed`: "The
-  workspace store requires recovery before an agent can be cancelled: …"; `session_locked`: "Another process holds this
-  session, so the agent was not cancelled."), which the renderer states in place of "not cancellable"; every other
-  refusal states none and keeps REQ-MONITOR-128's "not cancellable". *Until the merged build's twelfth review round
+  instance owns. The refusals that say nothing of the agent carry the engine's words, which the renderer states in
+  place of "not cancellable": `session_locked`, "Another process holds this session, so the agent was not cancelled.",
+  only when the lock is held by another live process; and `store_failed` for a store failure — "The workspace store
+  requires recovery before an agent can be cancelled: …" when one is found first or the chosen child's move fails to be
+  written, and "The workspace store could not take this session's lock, so the agent was not cancelled: …" when
+  reading or claiming the lock throws, where no other process is involved. Every other refusal states none, and the
+  renderer's fallback is REQ-MONITOR-128's "no longer cancellable" ("That agent is not cancellable (unknown, or already
+  finished)."). **This departs from REQ-MONITOR-128**, whose refusal sentence — "an error message states that the agent
+  is no longer cancellable" — clause 16 does not govern: the directive names REQ-MONITOR-128 for the confirmation only.
+  The build reads the requirement's sentence as written for an agent the run no longer has, and states the engine's
+  words where the refusal is the store's or another process's, because "no longer cancellable" would be false of a
+  paused child that stays cancellable once the store is restored or the other process lets the session go. Pinned in
+  `children/children.test.ts` ("the cancel is made under the session's lock": the holder, a lock the store could not
+  read, and a failed write of the chosen child) and `run/crash.test.ts`. *Until the merged build's twelfth review round
   every refusal read "That agent is not cancellable (unknown, or already finished).", false of a paused child the store
-  or another process's lock stood in front of.*
+  or another process's lock stood in front of. Until the thirteenth a store error while taking the lock was refused as
+  `session_locked`, "Another process holds this session", with no other process involved, and a failed write of the
+  chosen child's move still read "not cancellable"; and this bullet presented the engine's words as keeping
+  REQ-MONITOR-128 rather than departing from it.*
 - **A crash not yet recorded — left to the next repair or continue.** A child a crash left unfinished, the crash not
   yet recorded (`crashLeftOf`), presents `paused` (OQ-73) and so is offered Cancel, but it is stored `running`,
   `queued` and so on. The cancel ends it, and each descendant the crash left or a rest paused, `cancelled` from the state
@@ -3573,7 +3587,10 @@ status. Whether the resting run-level agent should offer a Cancel that declines 
 window on the run's own instance should withhold its Cancel while the session rests rather than confirm one the engine
 refuses. Whether the at-rest cancel should block, at the cancel, each agent whose `depends_on` names a child it cancels,
 as the live cancel's pass does (REQ-ORCH-048), counting them out of the Continue action's count and naming them in the
-confirmation, or leave them for the resumed run to block, as built.
+confirmation, or leave them for the resumed run to block, as built. Whether a refusal by the store or by another
+process's lock should state the engine's words, as built, or REQ-MONITOR-128's "no longer cancellable", which the
+requirement prescribes for a refusal and clause 16 does not displace — and, if the engine's words, whether a store error
+while taking the lock should read as the store's failure, as built, or as a refusal of its own.
 
 **OQ-75 — How does a continue's message close with the resumed iteration, and which continues make one?** *(`PD-ORCH-005` clause 17 (revision 4); REQ-ORCH-004, which the clause narrows for a continue's message alone and which the reading below departs from for the continues the clause does not govern — the Continue action, "continue without them" and the message-limit resolution's 'continue' and 'double', none of which appends its request while the todo holds it unfinished, where REQ-ORCH-004's back-pointer keeps "Every other new top-level task is appended as stated" (the plan decision's relaunch, OQ-77, is not among them: it states no new top-level task, the held run having appended the gated work already, so appending none keeps REQ-ORCH-004); and REQ-ORCH-067, REQ-ORCH-069, REQ-ORCH-072, REQ-ORCH-077, REQ-ORCH-135, REQ-MONITOR-125, REQ-SESSION-110, REQ-ORCH-086, REQ-ORCH-087 and REQ-ORCH-153, which it does not name. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
 
@@ -3671,7 +3688,7 @@ by more than its text, and whether it should append a request whose task is alre
 same state, the message-limit resolution's included); and whether a message taken up by a later iteration
 should be sent with its images, or become that iteration's launch content in place of the latest request.
 
-**OQ-76 — Which sessions has a crash left, and what does the Continue action offer on one with nothing to resume?** *(`PD-ORCH-005` clause 18 (revision 4), with clauses 8, 11 and 19; REQ-MONITOR-125 as clause 18 extends it; REQ-CHAT-008, REQ-GIT-093, REQ-SESSION-171, REQ-SESSION-060, REQ-GIT-094, REQ-CHAT-006, REQ-ORCH-004, REQ-ORCH-085, REQ-ORCH-087 and REQ-SESSION-110, which the directive does not name; and `PD-CHAT-001` revision 4 ("The strip" and "The paused continues"), with REQ-CHAT-005 as it narrows it, which the reading below departs from by drawing the two continues in the send pill's place on a session that is not paused. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
+**OQ-76 — Which sessions has a crash left, and what does the Continue action offer on one with nothing to resume?** *(`PD-ORCH-005` clause 18 (revision 4), with clauses 8, 11 and 19; clause 3, whose "those are never resumed" of the cancel control's agents the reading below departs from for a run whose explicit cancel was accepted but not carried out when its host died, and REQ-MONITOR-126 ("cannot be undone in this session"), which it departs from for the same run; REQ-MONITOR-125 as clause 18 extends it; REQ-CHAT-008, REQ-GIT-093, REQ-SESSION-171, REQ-SESSION-060, REQ-GIT-094, REQ-CHAT-006, REQ-ORCH-004, REQ-ORCH-085, REQ-ORCH-087 and REQ-SESSION-110, which the directive does not name; and `PD-CHAT-001` revision 4 ("The strip" and "The paused continues"), with REQ-CHAT-005 as it narrows it, which the reading below departs from by drawing the two continues in the send pill's place on a session that is not paused. Raised 2026-09-28 by building `PD-ORCH-005` revision 4 under [R-064](../product/requests.md#r-064).)*
 
 Clause 18: "A session a crash left — `interrupted` after a repair, or in REQ-CHAT-008's recovery state before one — SHALL
 offer the Continue action and 'continue without them' as a `paused` session does, with the same count. Either choice
@@ -3713,6 +3730,24 @@ say what the decline's wording means before the crash is recorded.
   ([`the-at-rest-cancel-writes-against-a-failed-store.md`](../defects/fixed/the-at-rest-cancel-writes-against-a-failed-store.md)).* *The first build accepted such a
   session and reported `{resumed: true}` against the failed writer, where the same call had been refused `not-paused`
   before clause 18; the round-2 review found it.*
+- **A run whose explicit cancel was in flight when it crashed.** The run-level explicit cancel (REQ-MONITOR-126, the
+  reserved run id's `cancelAgent`, which every confirmed "Cancel the run?" sends, clause 15) writes nothing durable
+  when it is accepted: `Run.cancelAgent` raises the final stop in memory, and the agents end `cancelled` and the
+  iteration closes only in the teardown, once the root's turn returns. A host that dies in that window — a call that
+  ignores the abort until its deadline, the quit's shutdown bound running out while the cancel settles, or the process
+  killed — leaves the store as any mid-run crash does: busy, the open iteration's interruption NULL, the unfinished
+  agents where they stood. The build cannot tell it apart, and treats it as crash-left: its agents present `paused` by
+  `crash` (OQ-73), the Continue action counts them (clauses 6 and 19), and the repair or a continue records the crash
+  and pauses them, so the Continue action resumes work the user confirmed as final. That departs from clause 3's "those
+  are never resumed" and from REQ-MONITOR-126's "cannot be undone in this session", for a cancel that was requested and
+  never carried out. The stop's `cancelling` status is written at once but is not final, so it cannot tell the two
+  apart either; a single child's cancel is durable at once and is not affected. The alternative — a durable mark
+  written when the explicit cancel is accepted, read by `crashLeftOf`, `resumableOf`, `recordCrash` and
+  `continueSession`, so that the next repair or continue ends those agents `cancelled` and closes the iteration — needs
+  a stored field and a reading of what the repair then records, so it is not built ahead of a ruling
+  ([`a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md`](../defects/a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md)).
+  At the base the case was reachable only by a continue by message. *Recorded at the merged build's thirteenth review
+  round; until then this question did not name it.*
 - **The actions at the message limit.** A crash-left session is not at the message limit, so it takes `action` as a
   manually paused session does. `continue` and `double` continue it; `cancel` leaves it as it is.
 - **Nothing open to resume.** A crash-left session with no open iteration draws the two continues where the send pill
@@ -3797,7 +3832,10 @@ pause, a stop or the application's quit accepted after its iteration closed, `pa
 of the plan cycle held after a resumed iteration that carried out the continue's message, or `paused_message_limit` by a
 limit reached as the iteration that finished it closed, whose resolution's 'continue' and 'double' take the same path —
 should re-run that request as built, append nothing and run nothing, or not be offered at all, which for the crash-left
-session would narrow clause 18's "SHALL offer".
+session would narrow clause 18's "SHALL offer". Whether a run whose explicit cancel was accepted but not carried out
+when its host died is one a crash left, as built, so that clause 18's Continue action resumes its agents, or whether
+clause 3's "those are never resumed" governs it, so that the cancel is made durable when it is accepted and the next
+repair or continue ends its agents `cancelled` and closes the iteration.
 
 **OQ-77 — Where does the gate hold a run that resumed an iteration, and what does that plan cycle plan?** *(`PD-ORCH-003` revision 2, with `PD-ORCH-005` clause 18; REQ-ORCH-152, which the directive narrows for an iteration a rest left open (`PD-ORCH-005` clause 4), and which the reading below that an iteration a crash left open resumes unheld too departs from for an iteration the directive does not govern; REQ-ORCH-153, whose gate that reading also departs from for the same iteration; and REQ-ORCH-021, REQ-ORCH-067, REQ-ORCH-069, REQ-ORCH-073, REQ-ORCH-085, REQ-ORCH-154, REQ-CHAT-040, REQ-SESSION-115 and REQ-TOOLS-010, which it does not name. Raised 2026-09-28 by building `PD-ORCH-003` revision 2 under [R-064](../product/requests.md#r-064).)*
 
@@ -4012,7 +4050,9 @@ from the launch content computed when the run began.
   never rewrites `iterations.opened_at` (it records only the interruption's clearing), so that plan cycle always opened
   after the iteration, and the approve or revise relaunch prefers no root: the resumed root's own document counts only
   as "of any kind", and a later record — the plan cycle's own plan, a plan-cycle child's report, or a cancelled
-  child's stub from clause 16's at-rest cancel or the decline — is handed over ahead of it. The build keeps the one
+  child's stub from clause 16's at-rest cancel — is handed over ahead of it (the decline writes no such later stub: a
+  run that resumed the iteration did not decline it, and an earlier decline wrote its stubs before this iteration
+  opened). The build keeps the one
   rule because the new work still follows the plan cycle, whose plan the approve carries in its own section; the
   alternative — prefer the resumed root's publish when the plan cycle was held after that iteration, since both
   belong to one run — was not taken, because the clause names the iteration the new one follows and nothing

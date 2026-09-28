@@ -129,11 +129,11 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
     ]);
   });
 
-  it('clause 6 with clause 8: the Continue action counts what a crash left unfinished before the crash is recorded, and the same after', () => {
+  it('clause 6 with clauses 8 and 19: the Continue action counts what a crash left unfinished, the root included, before the crash is recorded, and the same after', () => {
     const sid = 'S-count' as SessionId;
     const writer = created(sid);
     dieIn(writer, sid);
-    // The root and its three unfinished agents; not the succeeded one, nor another root's.
+    // Clause 19: the root and its three unfinished agents; not the succeeded one, nor another root's.
     expect(resumableOf(dal, dal.getSession(sid)!)).toEqual({ iteration: 2, agents: 4 });
     expect(dal.getChild(sid, 'bg_000000c1')!.state).toBe('running');
     recordCrash(dal, writer, sid, new Set(), () => undefined);
@@ -529,12 +529,12 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         });
       }
 
-      it('when the chosen child\'s own move fails, the cancel is refused and nothing below it is cancelled (REQ-MONITOR-128)', async () => {
+      it('when the chosen child\'s own move fails to be written, the cancel is refused store_failed in the engine\'s words and nothing below it is cancelled (OQ-74)', async () => {
         const sid = await crashed(rested(true), 'paused');
         const viewer = sessionsAs(88);
         expect(viewer.resume(dal, 'C:/ws', sid).ok).toBe(true);
         dal.db.exec("CREATE TRIGGER refuse_c1 BEFORE UPDATE OF state ON children WHEN NEW.state = 'cancelled' AND OLD.task_id = 'bg_000000c1' BEGIN SELECT RAISE(ABORT, 'refused'); END;");
-        expect(cancel(viewer, sid, 'bg_000000c1')).toEqual({ ok: false });
+        expect(cancel(viewer, sid, 'bg_000000c1')).toEqual({ ok: false, refusal: { code: 'store_failed', message: expect.stringMatching(/^The workspace store requires recovery before an agent can be cancelled: .*refused/) } });
         expect([dal.getChild(sid, 'bg_000000c1')!.state, dal.getChild(sid, 'bg_000000c3')!.state]).toEqual(['paused', 'paused']);
       });
     });
@@ -620,7 +620,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         expect(dal.agentTerminalsOf(sid).map((t) => [t.terminal_id, t.state])).toContainEqual(['ts_dead', 'running']);
       });
 
-      it('when the chosen child\'s own move fails, nothing is written and nothing needs republishing: the crash is still unrecorded, and its agents present as before', async () => {
+      it('when the chosen child\'s own move fails to be written, it is refused store_failed, nothing is written and nothing needs republishing: the crash is still unrecorded, and its agents present as before', async () => {
         const sid = await crashed();
         const snapshots: SessionRecord[] = [];
         const viewer = sessionsAs(88, undefined, { increment: () => undefined, snapshot: (p) => { snapshots.push(p.session); } });
@@ -628,7 +628,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         viewer.owner(sid)!.attach();
         expect(snapshots.at(-1)!.pendingApprovals).toHaveLength(1);
         dal.db.exec("CREATE TRIGGER refuse_c1 BEFORE UPDATE OF state ON children WHEN NEW.state = 'cancelled' AND OLD.task_id = 'bg_000000c1' BEGIN SELECT RAISE(ABORT, 'refused'); END;");
-        expect(cancel(viewer, sid, 'bg_000000c1')).toEqual({ ok: false });
+        expect(cancel(viewer, sid, 'bg_000000c1')).toMatchObject({ ok: false, refusal: { code: 'store_failed' } });
         expect(dal.getIteration(sid, 2)!.interruption).toBeNull();
         expect([dal.getChild(sid, 'bg_000000c1')!.state, dal.getChild(sid, 'bg_000000c3')!.state]).toEqual(['running', 'waiting_on_dependencies']);
         expect(dal.getSession(sid)!.pending_approvals).not.toBe('[]');

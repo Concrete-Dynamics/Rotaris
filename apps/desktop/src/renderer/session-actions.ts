@@ -110,12 +110,7 @@ export function createSessionActions({ bridge, replica }: SessionActionDeps) {
    * process's lock, which say nothing of the agent — and otherwise says the agent is not cancellable (REQ-MONITOR-128).
    */
   async function cancelAgent(agentId: string): Promise<{ ok: true } | { ok: false; reason: string }> {
-    const sessionId = replica.getState().sessionId;
-    if (!sessionId) return { ok: false, reason: 'No run is active.' };
-    const r = await send({ kind: 'session.control', request: { op: 'cancelAgent', sessionId, args: { agentId } } });
-    if (!r.ok) return { ok: false, reason: r.detail ?? r.headline };
-    const v = r.value as { ok: boolean; refusal?: { message?: string } };
-    return v.ok ? { ok: true } : { ok: false, reason: v.refusal?.message ?? 'That agent is not cancellable (unknown, or already finished).' };
+    return control('cancelAgent', { agentId }, 'That agent is not cancellable (unknown, or already finished).');
   }
 
   /** ADR-0010 channel 1: one control against the focused session, `false` named as a refusal (REQ-MONITOR-006). */

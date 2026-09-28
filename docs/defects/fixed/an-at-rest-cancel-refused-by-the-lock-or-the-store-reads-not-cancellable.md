@@ -13,7 +13,9 @@ Found 2026-09-28 by the twelfth review round of the merged revision 4 build of `
 
 REQ-MONITOR-128 has a refused cancel state that the agent is not cancellable. That is true of an unknown or finished
 agent. It is not true of a paused child whose cancel was stopped by the store or by the session's lock, which clause 16
-makes cancellable while its session rests. OQ-74 records the at-rest cancel's refusals.
+makes cancellable while its session rests. OQ-74 records the at-rest cancel's refusals. The repair's wording departs
+from REQ-MONITOR-128's refusal sentence, which clause 16 does not govern (the directive names the requirement for the
+confirmation only); OQ-74 records that departure and asks it (added at the merged build's thirteenth review round).
 
 ## Relevant files
 

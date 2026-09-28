@@ -1099,7 +1099,8 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
   const stripNarrow = density === 'narrow';
   // Memoised so the derivations below (REQ-CHAT-069's scope, PD-CHAT-005's depth) do not see a new array every render.
   const agents = useMemo(() => session?.agents ?? [], [session]);
-  const runLevel = useMemo(() => (entry ? runLevelAgent(session, entry) : null), [session, entry]);
+  // PD-ORCH-005 clause 13 (OQ-73): in REQ-CHAT-008's recovery state the run-level agent presents `paused`, as its agents do.
+  const runLevel = useMemo(() => (entry ? runLevelAgent(session, entry, needsRecovery) : null), [session, entry, needsRecovery]);
   const selected = selectedAgent === RUN_AGENT_ID ? runLevel : agents.find((a) => a.id === selectedAgent) ?? null;
   /** REQ-CHAT-088: the engine has already resolved each source; scope chooses the matching published plan. */
   const todoPlan = selected !== null && selected.id !== RUN_AGENT_ID ? session?.childTodos[selected.id] ?? session?.todo ?? null : session?.todo ?? null;

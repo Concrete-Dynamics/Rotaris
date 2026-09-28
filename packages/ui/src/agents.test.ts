@@ -152,3 +152,25 @@ describe('REQ-MONITOR-126 / REQ-MONITOR-128: what confirming a cancel states (PD
     expect(cancelConfirmation({ id: 'b', name: 'beta' }, [a, b, c])).toEqual({ title: 'Cancel beta?', body: 'The agent will be cancelled.', lines: [], confirmLabel: 'Cancel beta' });
   });
 });
+
+describe('agents — PD-ORCH-005 clause 13 (revision 4): a paused agent presents as paused (OQ-73)', () => {
+  const entry = { persona: 'orchestrator', model: 'm', reasoning: 'medium', tools: [] };
+  const resumable = { iteration: 1, agents: 2 };
+  it('the run-level agent of a session resting with an iteration open presents `paused`, not live and not ended — the root the Continue action counts', () => {
+    for (const executionStatus of ['paused', 'interrupted']) {
+      expect(runLevelAgent(session({ executionStatus, resumable }), entry)).toMatchObject({ state: 'paused', presentationState: 'paused', live: false, completedAt: null });
+    }
+    // REQ-CHAT-008's recovery state: only the caller knows no run is behind the busy status.
+    expect(runLevelAgent(session({ executionStatus: 'running', resumable }), entry, true)).toMatchObject({ presentationState: 'paused', live: false, completedAt: null });
+    // A live run holds its iteration open too, and presents running; a rest with nothing open presents as before.
+    expect(runLevelAgent(session({ executionStatus: 'running', resumable }), entry)).toMatchObject({ presentationState: 'running', live: true });
+    expect(runLevelAgent(session({ executionStatus: 'paused', resumable: null }), entry)?.presentationState).toBe('cancelled');
+    expect(runLevelAgent(session({ executionStatus: 'completed', resumable }), entry)?.presentationState).toBe('done');
+  });
+  it('the inspector\'s meta line names it; it is not live, so it is no live descendant and offers no steer', () => {
+    const paused = agent({ id: 'bg_00000002', parentId: 'bg_00000001', state: 'paused', presentationState: 'paused', live: false, interruption: 'stop' });
+    expect(metaLine(paused, null)).toBe('paused · — · 2 tool calls');
+    expect(liveDescendants([agent({}), paused], 'bg_00000001')).toEqual([]);
+    expect(inspectorEnablement('paused')).toMatchObject({ steer: false, popOut: true });
+  });
+});

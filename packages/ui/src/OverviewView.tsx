@@ -71,18 +71,30 @@ export function sparklinePath(samples: readonly (readonly [string, number])[], w
   return values.map((v, i) => `${i === 0 ? 'M' : 'L'}${(i * step).toFixed(1)},${(height - ((v - min) / span) * (height - 2) - 1).toFixed(1)}`).join(' ');
 }
 
-/** REQ-MONITOR-169: waiting = waiting + queued; failed = failed + cancelled (+ blocked, which presents as failed). */
-export function agentCounts(agents: readonly AgentRecord[]): { running: number; waiting: number; done: number; failed: number; depth: number } {
-  const c = { running: 0, waiting: 0, done: 0, failed: 0, depth: 0 };
+/**
+ * REQ-MONITOR-169: waiting = waiting + queued; failed = failed + cancelled (+ blocked, which presents as failed).
+ * PD-ORCH-005 clause 13 (revision 4): a `paused` agent is counted as `paused` — never waiting, and never failed (OQ-73).
+ */
+export function agentCounts(agents: readonly AgentRecord[]): { running: number; waiting: number; paused: number; done: number; failed: number; depth: number } {
+  const c = { running: 0, waiting: 0, paused: 0, done: 0, failed: 0, depth: 0 };
   for (const a of agents) {
     const p = presentationChildState(a.state);
     if (p === 'running') c.running += 1;
     else if (p === 'waiting' || p === 'queued') c.waiting += 1;
+    else if (p === 'paused') c.paused += 1;
     else if (p === 'done') c.done += 1;
     else c.failed += 1;
     c.depth = Math.max(c.depth, a.depth);
   }
   return c;
+}
+
+/**
+ * REQ-MONITOR-169's detail line. PD-ORCH-005 clause 13 puts the paused count on it between waiting and done, and only
+ * while an agent is paused, so every session with none reads exactly as the requirement words it (OQ-73).
+ */
+export function agentStatesLine(c: Pick<ReturnType<typeof agentCounts>, 'running' | 'waiting' | 'paused' | 'done' | 'failed'>): string {
+  return `running ${c.running} · waiting ${c.waiting}${c.paused > 0 ? ` · paused ${c.paused}` : ''} · done ${c.done} · failed ${c.failed}`;
 }
 
 /** REQ-MONITOR-171's dot: attached → run; background → informational; other busy → pulsing run; failed → failure; else idle. */
@@ -216,7 +228,7 @@ export function OverviewView(props: OverviewProps) {
               <Card kicker="Agents">
                 <div className="ov-kpi"><span className="kpi-value" data-testid="overview-agent-count">{session?.agents.length ?? 0}</span></div>
                 <div className="card-meta mono" data-testid="overview-agent-caps">depth {counts.depth} / {caps?.depth ?? '—'} · fan-out {counts.running} / {caps?.fanOut ?? '—'}</div>
-                <div className="card-meta mono" data-testid="overview-agent-states">running {counts.running} · waiting {counts.waiting} · done {counts.done} · failed {counts.failed}</div>
+                <div className="card-meta mono" data-testid="overview-agent-states">{agentStatesLine(counts)}</div>
               </Card>
             </div>
             <Card kicker="Sessions" className="ov-card--sessions" actions={<span className="card-meta">{sessions.length} listed</span>}>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  AgentRecordSchema, CHILD_STATES, CHILD_TRANSITIONS, INTERRUPTIONS, isInterruption, isLegalChildMove, isResumeState, isTerminalChildState, presentationChildState,
+  AgentRecordSchema, CHILD_STATES, CHILD_TRANSITIONS, INTERRUPTIONS, isInterruption, isLegalChildMove, isResumeState, isTerminalChildState, PRESENTATION_CHILD_STATES, presentationChildState,
   RESUME_STATES, resumeStateFor, TERMINAL_CHILD_STATES, type ChildState,
 } from './children.js';
 
@@ -55,10 +55,14 @@ describe('PD-ORCH-005: the paused state in the child machine (REQ-MONITOR-300 na
     expect(isInterruption(null)).toBe(false);
   });
 
-  it('a paused agent presents by REQ-MONITOR-046\'s own catch-all, queued (OQ-67), and the agent record carries its interruption', () => {
-    expect(presentationChildState('paused')).toBe('queued');
+  it('PD-ORCH-005 clause 13 (revision 4): a paused agent presents as `paused`, a presentation state of its own; every other unnamed state still takes REQ-MONITOR-046\'s catch-all; the agent record carries its interruption', () => {
+    expect(presentationChildState('paused')).toBe('paused');
+    expect(PRESENTATION_CHILD_STATES).toEqual(['running', 'waiting', 'queued', 'done', 'failed', 'cancelled', 'paused']);
+    expect(presentationChildState('queued')).toBe('queued');
+    expect(presentationChildState('starting')).toBe('queued');
+    expect(presentationChildState('anything-else')).toBe('queued');
     const base = {
-      id: 'bg_00000001', name: 'helper', givenName: 'Helper', persona: 'coding-agent', state: 'paused', presentationState: 'queued', parentId: 'bg_00000000', dependencies: [],
+      id: 'bg_00000001', name: 'helper', givenName: 'Helper', persona: 'coding-agent', state: 'paused', presentationState: 'paused', parentId: 'bg_00000000', dependencies: [],
       activity: '', model: 'm', depth: 1, background: true, category: '', spawnedAt: 't', completedAt: null, toolCalls: 3, delegationTask: '', reasoning: 'medium',
       contextUsed: 0, contextLimit: 1, compressions: 0, grantedTools: [], calledTools: [], activeTools: [], delegationSessionId: null, inheritedContext: '', live: false,
       grantedMcp: {}, mcpServers: [],

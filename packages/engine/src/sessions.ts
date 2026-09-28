@@ -768,9 +768,17 @@ export interface AgentFacts {
    * non-terminal child of a session whose status neither claims a live run nor is `idle` is PRESENTED settled to the
    * run's own outcome — its activity replaced, its active chips cleared — by this one projection, so no surface applies
    * a settling rule of its own; the ledger's own settling (REQ-ORCH-053) writes the row at the next run start. A
-   * `paused` child (PD-ORCH-005) is the exception, recorded as OQ-67: it waits in its open iteration to be resumed.
+   * `paused` child is the exception: PD-ORCH-005 clause 13 (revision 4) narrows REQ-MONITOR-211/213 and
+   * REQ-SESSION-078/180 for it, since it waits in its open iteration to be resumed.
    */
   readonly session?: { readonly executionStatus: string; readonly updatedAt: string } | undefined;
+  /**
+   * PD-ORCH-005 clauses 13 and 18 (OQ-73): the task ids of the agents a crash left unfinished in the open iteration, before
+   * the crash is recorded (`crashLeftOf`). Each is presented as the crash record will leave it — `paused`, by `crash` —
+   * so every agent surface agrees with the Continue action's count (`resumableOf`); reading the session records
+   * nothing (clause 8).
+   */
+  readonly crashLeft?: ReadonlySet<string> | undefined;
 }
 export const ENDED_WITH_RUN = 'Ended with the run.';
 const parseList = (json: string): string[] => { try { const v: unknown = JSON.parse(json); return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []; } catch { return []; } };
@@ -780,14 +788,15 @@ export function toAgentRecord(c: ChildRow, clocks: Clocks, facts: AgentFacts = {
   void clocks;
   const activity = facts.activity;
   const status = facts.session?.executionStatus ?? null;
-  // PD-ORCH-005 / OQ-67: a `paused` agent is not a leftover of a run that ended — it waits in its open iteration to be
-  // resumed, so it is presented as it is and never settled to the run's outcome. REQ-MONITOR-211/213 and
-  // REQ-SESSION-078/180, which the directive does not name, would present it `cancelled`; clauses 2, 4 and 6 make that
-  // false, and the departure is OQ-67's. Nothing runs for it, so it shows no active tool (a crash can leave one).
-  const paused = state === 'paused';
+  // PD-ORCH-005 clause 13 (revision 4, narrowing REQ-MONITOR-046/211/213 and REQ-SESSION-078/180): a `paused` agent is
+  // not a leftover of a run that ended — it waits in its open iteration to be resumed, so it presents as `paused`, keeps
+  // its last activity, and is never settled to the run's outcome. Nothing runs for it, so it shows no active tool (a
+  // crash can leave one). An agent a crash left unfinished, the crash not yet recorded, presents the same (OQ-73).
+  const crashLeft = !isTerminalChildState(state) && state !== 'paused' && facts.crashLeft?.has(c.task_id) === true;
+  const paused = state === 'paused' || crashLeft;
   const reconcile = status !== null && status !== 'idle' && !isActiveStatus(status) && !isTerminalChildState(state) && !paused;
-  const shownState: ChildState = reconcile ? reconciledState(status) : state;
-  const shownPs = reconcile ? presentationChildState(shownState) : ps;
+  const shownState: ChildState = reconcile ? reconciledState(status) : crashLeft ? 'paused' : state;
+  const shownPs = reconcile || crashLeft ? presentationChildState(shownState) : ps;
   const terminal = c.completed_at !== null || reconcile;
   return {
     id: c.task_id, name: c.canonical_name, givenName: c.given_name, persona: c.persona, state: shownState, presentationState: shownPs, parentId: c.parent_id,
@@ -807,9 +816,28 @@ export function toAgentRecord(c: ChildRow, clocks: Clocks, facts: AgentFacts = {
     inheritedContext: parseList(c.inherited_context).join(String.fromCharCode(10)),
     live: shownPs === 'running',
     ...mcpEvidenceOf(c.granted_mcp),
-    interruption: paused && isInterruption(c.interruption) ? c.interruption : null,
+    interruption: crashLeft ? 'crash' : paused && isInterruption(c.interruption) ? c.interruption : null,
   };
 }
+
+/**
+ * PD-ORCH-005 clauses 13 and 18 (OQ-73): the agents a crash left unfinished in the open iteration, the crash not yet
+ * recorded — every agent of that iteration neither terminal nor `paused`, which is exactly what `recordCrash` will pause.
+ * A crash left them where no rest records an interruption, so the open iteration's is still NULL, and the session is
+ * either `interrupted` by a repair that recorded no crash (a checkpoint listing's, OQ-69) or still claims a run no
+ * process is behind — REQ-CHAT-008's recovery state, which `notLive` confirms by the one liveness predicate
+ * (REQ-SESSION-171), asked only then. Empty for every other session, a live run above all. Reads the store and
+ * records nothing (clause 8).
+ */
+export function crashLeftOf(dal: StoreDal, r: SessionRow, notLive: () => boolean): ReadonlySet<string> {
+  const status = r.execution_status;
+  if (status !== 'interrupted' && !isActiveStatus(status)) return NONE_CRASH_LEFT;
+  const open = dal.openIterationOf(asSessionId(r.session_id));
+  if (!open || open.interruption !== null) return NONE_CRASH_LEFT;
+  if (isActiveStatus(status) && !notLive()) return NONE_CRASH_LEFT;
+  return new Set(iterationAgents(dal, asSessionId(r.session_id), open).filter((c) => !isTerminalChildState(c.state) && c.state !== 'paused').map((c) => c.task_id));
+}
+const NONE_CRASH_LEFT: ReadonlySet<string> = new Set();
 
 /** REQ-MCP-065 / REQ-MCP-114 (Part S): the row's recorded evidence as the record's two fields; an unreadable or pre-Part-S `{}` value reads as none. */
 function mcpEvidenceOf(json: string): Pick<AgentRecord, 'grantedMcp' | 'mcpServers'> {
@@ -928,7 +956,7 @@ export class Sessions {
     const writer = opened.value;
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const current = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, current), resumableOf(dal, current)), ...projectSessionTodos(current, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: current.execution_status, updatedAt: current.updated_at } })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
+      readSession: () => { const current = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); return { ...toSessionRecord(current, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, current), resumableOf(dal, current)), ...projectSessionTodos(current, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: current.execution_status, updatedAt: current.updated_at }, crashLeft: crashLeftOf(dal, current, () => this.liveness(dal, sessionId) === 'not-live') })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(current, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;
@@ -988,7 +1016,7 @@ export class Sessions {
     if (!storedAttachments.ok) return err({ code: 'attachment-invalid', reason: storedAttachments.reason });
     const owner = new ProjectionOwner({
       sessionId, seq: this.seq, timers: this.deps.clocks.timers, publisher: this.deps.publisher,
-      readSession: () => { const row = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, row), resumableOf(dal, row)), ...projectSessionTodos(row, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: row.execution_status, updatedAt: row.updated_at } })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
+      readSession: () => { const row = dal.getSession(sessionId)!; const children = dal.childrenOf(sessionId); return { ...toSessionRecord(row, queuedOf(dal, sessionId), dal.toolCallCounts(sessionId), planGateOf(dal, row), resumableOf(dal, row)), ...projectSessionTodos(row, children), agents: children.map((c) => toAgentRecord(c, this.deps.clocks, { activity: writer.activity, reasoningFor: (p) => entry.run?.reasoningFor(p) ?? null, contextLimitFor: this.deps.contextLimitFor, session: { executionStatus: row.execution_status, updatedAt: row.updated_at }, crashLeft: crashLeftOf(dal, row, () => this.liveness(dal, sessionId) === 'not-live') })), backgroundSessions: this.deps.backgroundSessions?.() ?? 0, intent: intentStatusOf(row, dal.getLaunchAudit(sessionId)?.payload ?? null), wait: entry.run?.currentWait ?? null, compression: entry.run?.currentCompression ?? null, entryContext: entry.run?.entryContext ?? { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, pendingQuestions: entry.run?.pendingQuestions() ?? [] }; },
       readResident: () => dal.residentRows(sessionId).map((r) => ({ ...toTranscriptRow(r), ...(r.attachments === '[]' ? {} : { attachments: projectAttachments(this.deps.sessionFilesDir(dal, sessionId), r.attachments) }) })),
     });
     entry.owner = owner;

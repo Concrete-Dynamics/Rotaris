@@ -21,16 +21,28 @@ export function inspectorEnablement(state: AgentRecord['presentationState'] | nu
  * from Part AH's `entryContext` (REQ-MONITOR-089) — before that every root-level meter drew zero for a run that
  * spawned no child, whatever the run had actually spent.
  */
-export function runLevelAgent(session: SessionRecord | null, entry: { readonly persona: string; readonly model: string; readonly reasoning: string; readonly tools: readonly string[] }): AgentRecord | null {
-  if (!session || session.runStartedAt === null) return null;
-  const busy = isBusy(session.executionStatus);
+/**
+ * PD-ORCH-005 clauses 13 and 19 (OQ-73): the iteration's root resumes with its paused agents and the Continue action
+ * counts it, so while the session rests with an iteration open — `paused` or `interrupted`, or in REQ-CHAT-008's
+ * recovery state, which only the caller knows (`recovery`) — the run-level agent presents as `paused` too, the tree
+ * agreeing with the count. The same sessions the composer states a count for (`WorkspaceView`'s `resumable`).
+ */
+export function runLevelResting(session: SessionRecord, recovery = false): boolean {
   const status = session.executionStatus;
-  const presentationState: AgentRecord['presentationState'] = busy ? 'running' : status === 'completed' ? 'done' : status === 'failed' ? 'failed' : status === 'waiting' ? 'running' : 'cancelled';
+  return session.resumable !== null && (status === 'paused' || status === 'interrupted' || (recovery && isBusy(status)));
+}
+
+export function runLevelAgent(session: SessionRecord | null, entry: { readonly persona: string; readonly model: string; readonly reasoning: string; readonly tools: readonly string[] }, recovery = false): AgentRecord | null {
+  if (!session || session.runStartedAt === null) return null;
+  const resting = runLevelResting(session, recovery);
+  const busy = isBusy(session.executionStatus) && !resting;
+  const status = session.executionStatus;
+  const presentationState: AgentRecord['presentationState'] = resting ? 'paused' : busy ? 'running' : status === 'completed' ? 'done' : status === 'failed' ? 'failed' : status === 'waiting' ? 'running' : 'cancelled';
   const childCalls = session.agents.reduce((n, a) => n + a.toolCalls, 0);
   return {
-    id: RUN_AGENT_ID, name: entry.persona, givenName: entry.persona, persona: entry.persona, state: busy ? 'running' : presentationState === 'done' ? 'succeeded' : presentationState === 'failed' ? 'failed' : 'cancelled',
+    id: RUN_AGENT_ID, name: entry.persona, givenName: entry.persona, persona: entry.persona, state: resting ? 'paused' : busy ? 'running' : presentationState === 'done' ? 'succeeded' : presentationState === 'failed' ? 'failed' : 'cancelled',
     presentationState, parentId: '', dependencies: [], activity: session.summary?.message ?? '', model: entry.model, depth: 0, background: false, category: '',
-    spawnedAt: session.runStartedAt, completedAt: busy ? null : session.updatedAt, toolCalls: Math.max(0, session.toolCalls.total - childCalls), delegationTask: '',
+    spawnedAt: session.runStartedAt, completedAt: busy || resting ? null : session.updatedAt, toolCalls: Math.max(0, session.toolCalls.total - childCalls), delegationTask: '',
     // REQ-MONITOR-086: the run-wide count is the sum of the per-agent counts, which is what the synthetic root shows.
     compressions: session.agents.reduce((n, a) => n + a.compressions, 0),
     reasoning: entry.reasoning, contextUsed: session.entryContext.used, contextLimit: session.entryContext.limit > 0 ? session.entryContext.limit : DEFAULT_CONTEXT_CAPACITY, grantedTools: [...entry.tools], calledTools: [], activeTools: [], delegationSessionId: null, inheritedContext: '', live: busy,

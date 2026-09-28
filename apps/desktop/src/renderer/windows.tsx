@@ -4,7 +4,7 @@ import { useStore } from 'zustand';
 import { RUN_AGENT_ID, TERMINAL_REFUSALS, type ApprovalOption, type ApprovalPayload, type CommandOutcome, type HooksSummary, type PausePayload, type PauseResolution, type ProviderDialogPayload, type ProviderSignInResult, type SessionListItemPayload, type TerminalFrame, type TerminalRefusal, type TerminalWindowPayload } from '@rotaris/contracts';
 import { Acknowledgements, ApprovalDialog, createTerminalWindowStreams, HookReviewDialog, PauseDialog, PersonaWindow, ProviderDialog, runLevelAgent, TerminalWindow, terminalWindowTitle, ToggleSwitch, type TerminalActionResult, type TerminalActions, type TerminalStreamSet } from '@rotaris/ui';
 import { acknowledge, acknowledgements, bridge, cancelAgent, cancelRun, control, displayPrefs, openLink, replica, terminalHost, terminalStreams } from './shell.js';
-import { entryOf, useConfigSnapshot, useElapsedTick } from './session-view.js';
+import { entryOf, useConfigSnapshot, useElapsedTick, useNeedsRecovery } from './session-view.js';
 
 /**
  * THE WINDOWS BESIDE THE MAIN ONE (ADR-0056: one bundle for every window, the role by route).
@@ -131,7 +131,9 @@ export function PersonaApp({ persona, initialSelect }: { persona: string; initia
     return () => { document.removeEventListener('visibilitychange', onVisibility); delete (window as unknown as { __rotarisPersonaSelect?: unknown }).__rotarisPersonaSelect; };
   }, []);
   const entry = useMemo(() => entryOf(snapshot, state.rows, state.session?.agents ?? []), [snapshot, state]);
-  const runLevel = useMemo(() => runLevelAgent(state.session, entry), [state.session, entry]);
+  // PD-ORCH-005 clause 13 (OQ-73): in REQ-CHAT-008's recovery state the run-level agent presents `paused`, as in the main window.
+  const needsRecovery = useNeedsRecovery(state.session?.id ?? null, state.session?.executionStatus ?? null);
+  const runLevel = useMemo(() => runLevelAgent(state.session, entry, needsRecovery), [state.session, entry, needsRecovery]);
   const nowIso = useElapsedTick(visible ? state.session : null);
   const declared = snapshot?.roles.find((r) => r.role === persona)?.tools ?? [];
   const display = useStore(displayPrefs, (s) => s);

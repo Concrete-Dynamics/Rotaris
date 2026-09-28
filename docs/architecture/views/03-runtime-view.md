@@ -493,9 +493,12 @@ the parent resumes with the report. Every exit from an iteration leaves every ch
 
 **The eleventh state (PD-ORCH-005).** `CHILD_TRANSITIONS` admits `paused` from every non-terminal state and leaves it
 for exactly the state the child resumes into (`RESUME_STATES`, `resumeStateFor`: where it waited, `queued` again for a
-child claimed but not started, `running`, `summarizing`); either settling path still ends it. It presents as `queued`,
-REQ-MONITOR-046's catch-all, and `toAgentRecord` never settles a `paused` child to the run's outcome for presentation,
-shows it no active tool and carries its `interruption` (**OQ-67** records the departure from REQ-MONITOR-211/213).
+child claimed but not started, `running`, `summarizing`); either settling path still ends it. It presents as `paused`,
+a presentation state of its own (`presentationChildState`; PD-ORCH-005 clause 13 narrows REQ-MONITOR-046), and
+`toAgentRecord` never settles a `paused` child to the run's outcome for presentation (clause 13 narrows REQ-MONITOR-211/213
+and REQ-SESSION-078/180), keeps its activity, shows it no active tool and carries its `interruption`. The agents a crash
+left unfinished present the same before the crash is recorded — `crashLeftOf`, read at every projection from the store
+and the one liveness predicate, names them — so every surface agrees with the Continue action's count (**OQ-73**).
 A rest moves it there (`IterationChildren.rest`, and `execute` for a child that was running: it resumes `summarizing`
 only when its turn truly finished, else `running`), and so does the crash record. A continue moves it back
 (`resumePaused`, §2); the continue that declines it ends it `cancelled`.
@@ -550,8 +553,11 @@ REQ-MONITOR-038), `delegationSessionId` (null: every child runs in the run's ses
 owner publishes the record after a commit carrying `child.spawn`, `child.transition`, `tool.start` or `tool.finish`, not
 only after a save (the twenty-eighth defect, ADR-0043 note), coalesced to one publication per 80 ms tick on the clock port. A non-terminal child of a session whose status is neither
 live nor `idle` is presented settled to the run's outcome by the projection (REQ-MONITOR-211/213), though REQ-ORCH-053's
-sweep on open settles the row first in this build's routes — **except a `paused` child** (PD-ORCH-005, OQ-67), which is
-presented as it is with its `interruption`, the record's one PD-ORCH-005 field.
+sweep on open settles the row first in this build's routes — **except a `paused` child** (PD-ORCH-005 clause 13), which is
+presented `paused` with its `interruption`, the record's one PD-ORCH-005 field, as is an agent `crashLeftOf` names (OQ-73).
+The run-level agent the surfaces synthesise (`runLevelAgent`) presents `paused` too while its session rests with an
+iteration open — `paused`, `interrupted`, or in REQ-CHAT-008's recovery state, which its caller passes — since the root
+resumes with its agents (clause 19).
 
 ## 5. Controls reaching in (ADR-0010 #1, `Sessions.control`)
 

@@ -23,7 +23,7 @@ import '@phosphor-icons/web/fill';
 // the theme — everything this window has before a surface mounts (`shell.ts`).
 import { acknowledge, acknowledgements, answerQuestions, bridge, cancelAgent, cancelQuestions, cancelRun, continueSession, control, displayPrefs, notices, openLink, pendingDisplay, planDecision, planEdit, readDisplayPrefs, refreshStats, replica, setMode, setRunStartMode, stopRun, submitPrompt, terminalHost, windowTheme, writeDisplayPref } from './shell.js';
 // What a transcript surface reads about the session it is following, shared with the persona window (`session-view.ts`).
-import { entryOf, openPersona, personasOf, useConfigSnapshot, useElapsedTick } from './session-view.js';
+import { entryOf, openPersona, personasOf, useConfigSnapshot, useElapsedTick, useNeedsRecovery } from './session-view.js';
 // The other windows this same bundle is the root of, each one a role on the route (`windows.tsx`, ADR-0056).
 import { bootApproval, bootHookReview, bootPause, bootPersona, bootProvider, bootTerminal } from './windows.js';
 /**
@@ -122,31 +122,6 @@ async function pageOlder(beforeIndex: number): Promise<boolean> {
   const page = r.value as { rows?: TranscriptRow[]; oldest?: boolean };
   replica.getState().prependOlder(page.rows ?? [], page.oldest === true);
   return true;
-}
-
-/**
- * Part AB — REQ-CHAT-008's synthetic state: the persisted session claims busy but no local run exists. The verdict
- * comes from the ONE liveness predicate (REQ-SESSION-171) through `session.list`'s `stale`, never from this window
- * inferring it from silence, and it is re-asked only when the followed session or its status changes — there is no
- * poll, because a wrong answer here would mislabel a live run and a timer would make it a race.
- */
-function useNeedsRecovery(sessionId: string | null, executionStatus: string | null): boolean {
-  const [recovery, setRecovery] = useState(false);
-  const busy = executionStatus !== null && isBusy(executionStatus);
-  useEffect(() => {
-    let live = true;
-    queueMicrotask(() => {
-      if (!live) return;
-      if (!sessionId || !busy) { setRecovery(false); return; }
-      void bridge.command({ kind: 'session.list' }).then((r) => {
-        if (!live || !r.ok) return;
-        const rows = (r.value as { sessions?: readonly SessionListItemPayload[] }).sessions ?? [];
-        setRecovery(rows.find((s) => s.sessionId === sessionId)?.stale === true);
-      });
-    });
-    return () => { live = false; };
-  }, [sessionId, busy, executionStatus]);
-  return recovery;
 }
 
 /**
@@ -355,7 +330,9 @@ function Mission({ workspace, popOut }: { workspace: string; popOut: boolean }) 
   const snapshot = useConfigSnapshot(workspace);
   const refresh = useStore(refreshStats, (st) => st);
   const entry = useMemo(() => entryOf(snapshot, rows, session?.agents ?? []), [snapshot, rows, session]);
-  const runLevel = useMemo(() => runLevelAgent(session, entry), [session, entry]);
+  // PD-ORCH-005 clause 13 (OQ-73): in REQ-CHAT-008's recovery state the run-level agent presents `paused`, as its agents do.
+  const needsRecovery = useNeedsRecovery(session?.id ?? null, session?.executionStatus ?? null);
+  const runLevel = useMemo(() => runLevelAgent(session, entry, needsRecovery), [session, entry, needsRecovery]);
   const nowIso = useElapsedTick(session);
   const [sessions, setSessions] = useState<readonly SessionListItemPayload[]>([]);
   useEffect(() => { if (workspace !== '(no workspace)') queueMicrotask(() => { void bridge.command({ kind: 'session.list' }).then((r) => { if (r.ok) setSessions((r.value as { sessions: SessionListItemPayload[] }).sessions); }); }); }, [workspace, session?.id]);

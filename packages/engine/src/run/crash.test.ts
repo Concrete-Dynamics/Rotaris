@@ -8,7 +8,7 @@ import { answer, DefaultAgentBackend, ScriptedModelClient, type ChatMessage, typ
 import type { ApprovalPayload, SessionRecord } from '@rotaris/contracts';
 import { RUN_CONFIG_DEFAULTS, Sessions, SessionWriter, type Publisher, type RunConfig, type ToolPort } from '../index.js';
 import { recordCrash } from './crash.js';
-import { resumableOf } from '../sessions.js';
+import { crashLeftOf, resumableOf } from '../sessions.js';
 import { conversationOf } from './record.js';
 import { interruptedResult } from './interruption.js';
 
@@ -287,6 +287,70 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
       const its = asked.filter((r) => r.messages.some((m) => m.content.some((p) => p.kind === 'tool-result' && p.callId === 'p1')));
       expect(its.length).toBeGreaterThan(0);
       expect(its.filter((r) => r.messages.some((m) => m.role === 'user' && m.content.some((p) => p.kind === 'text' && p.text.startsWith('Carry out the task now'))))).toEqual([]);
+    });
+
+    describe('PD-ORCH-005 clauses 13 and 18 (OQ-73): before the crash is recorded, what it left presents as the record will leave it', () => {
+      it('crashLeftOf names the open iteration\'s unfinished agents only while no rest recorded an interruption, and only for a session no run is behind', () => {
+        const sid = 'S-left' as SessionId;
+        const writer = created(sid);
+        dieIn(writer, sid);
+        const at = (status: string) => ({ ...dal.getSession(sid)!, execution_status: status });
+        const left = ['bg_000000c1', 'bg_000000c2', 'bg_000000c3'];
+        let asked = 0;
+        const notLive = (v: boolean) => () => { asked += 1; return v; };
+        expect([...crashLeftOf(dal, at('running'), notLive(true))].sort()).toEqual(left);
+        expect([...crashLeftOf(dal, at('interrupted'), notLive(false))].sort()).toEqual(left);
+        // A run is behind it: nothing. Liveness is asked only for a status that claims a run.
+        expect(crashLeftOf(dal, at('running'), notLive(false)).size).toBe(0);
+        asked = 0;
+        for (const status of ['paused', 'completed', 'failed', 'idle', 'awaiting_plan_decision']) expect(crashLeftOf(dal, at(status), notLive(true)).size).toBe(0);
+        expect(asked).toBe(0);
+        // A rest recorded the iteration's interruption: whatever it left is its own, not a crash's.
+        dal.setIterationInterruption(sid, 2, 'quit');
+        expect(crashLeftOf(dal, at('interrupted'), notLive(true)).size).toBe(0);
+      });
+
+      const shown = (snapshot: SessionRecord) => Object.fromEntries(snapshot.agents.map((a) => [a.id, [a.state, a.presentationState, a.interruption]]));
+      const expected = {
+        bg_000000c1: ['paused', 'paused', 'crash'], bg_000000c2: ['paused', 'paused', 'crash'], bg_000000c3: ['paused', 'paused', 'crash'],
+        bg_000000c4: ['succeeded', 'done', null],
+      };
+      function viewed(sid: SessionId, before: (s: Sessions) => void = () => undefined): SessionRecord {
+        const snapshots: SessionRecord[] = [];
+        const viewer = sessionsAs(88, undefined, { increment: () => undefined, snapshot: (p) => { snapshots.push(p.session); } });
+        before(viewer);
+        expect(viewer.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        viewer.owner(sid)!.attach();
+        return snapshots.at(-1)!;
+      }
+
+      it('in REQ-CHAT-008\'s recovery state, every agent the Continue action counts presents `paused` by the crash, and nothing is recorded (clause 8)', async () => {
+        const sid = await crashed();
+        const snapshot = viewed(sid);
+        expect(snapshot.resumable).toEqual({ iteration: 2, agents: 4 });
+        expect(shown(snapshot)).toMatchObject(expected);
+        expect(snapshot.agents.filter((a) => a.presentationState === 'paused')).toHaveLength(snapshot.resumable!.agents - 1);
+        expect(snapshot.agents.find((a) => a.id === 'bg_000000c1')).toMatchObject({ live: false, activity: 't', completedAt: null });
+        // Another root's child is none of the iteration's, and presents as it did.
+        expect(shown(snapshot)['bg_000000x1']).toEqual(['running', 'running', null]);
+        expect(dal.getChild(sid, 'bg_000000c1')!.state).toBe('running');
+        expect(dal.getIteration(sid, 2)!.interruption).toBeNull();
+      });
+
+      it('`interrupted` by a repair that recorded no crash (a checkpoint listing\'s), they present `paused` — not settled `cancelled` — and nothing is recorded', async () => {
+        const sid = await crashed();
+        const snapshot = viewed(sid, (s) => { s.checkpointListing(dal, 'C:/ws', sid); });
+        expect(dal.getSession(sid)!.execution_status).toBe('interrupted');
+        expect(shown(snapshot)).toMatchObject(expected);
+        expect(dal.getChild(sid, 'bg_000000c1')!.state).toBe('running');
+      });
+
+      it('once the repair records the crash, the stored rows say the same', async () => {
+        const sid = await crashed();
+        const snapshot = viewed(sid, (s) => { s.repair(dal, 'C:/ws', { sessionId: sid }); });
+        expect(dal.getChild(sid, 'bg_000000c1')!.state).toBe('paused');
+        expect(shown(snapshot)).toMatchObject(expected);
+      });
     });
   });
 });

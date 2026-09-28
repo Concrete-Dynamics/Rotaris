@@ -43,7 +43,16 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-09-27**
+## Last reconciled with the code: **2026-09-28**
+
+**A paused agent presents as paused on every agent surface (`PD-ORCH-005` clause 13, revision 4, 2026-09-28, R-064).**
+`PRESENTATION_CHILD_STATES` gains `paused` and `presentationChildState` maps the child state to it, so `AgentRecord`'s
+`presentationState` widens on the existing session-record channel. `toAgentRecord` presents the agents a crash left
+unfinished, before the crash is recorded, as the record will leave them (`crashLeftOf`, OQ-73); `runLevelAgent`
+presents the resting root `paused`, its callers passing REQ-CHAT-008's recovery state (`useNeedsRecovery`, moved to
+`renderer/session-view.ts`). The Overview counts paused agents on their own. The **runtime view**'s eleventh-state and
+projection paragraphs and the **state-ownership view**'s rest row are updated; no package, edge, process, channel or
+command changes.
 
 **A quit answers nothing for a person, and every stored report is an artifact (`PD-ORCH-005` phase 7, 2026-09-27,
 R-062).** Main tells the application's quit apart (`QuitState`, `main/exit.ts`). That covers the immediate exit, every

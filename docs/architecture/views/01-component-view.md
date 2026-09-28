@@ -10,7 +10,7 @@ only places `electron` is imported.
 | adding a package, or asking which one work belongs in | [The packages](#the-packages) |
 | adding an import that crosses a package | [The allowed-edge matrix](#the-allowed-edge-matrix-the-lint-rule-verbatim) |
 | deciding where a responsibility sits | [Where the responsibilities sit](#where-the-responsibilities-sit) |
-| touching the transcript, the Library, MCP, the code-intelligence bundle, the notices generator, the build-identifier writer and the bundled assets, or the design system | the `###` sections after it |
+| touching the transcript, the Library, MCP, the code-intelligence bundle, the notices generator, the build-identifier writer and the bundled assets, the setup manifest, or the design system | the `###` sections after it |
 
 ## The packages
 
@@ -40,7 +40,7 @@ flowchart TB
   end
 
   subgraph foundation["Foundation packages"]
-    config["config<br/>loader (merge classes, sections,<br/>slots, validate), writers, tiers,<br/>preferences, snapshot,<br/>skills/ (ADR-0063: discovery, policy, blocks),<br/>init/ (ADR-0064: the marker, the registry,<br/>the sets, classification, the gitignore grammar)"]
+    config["config<br/>loader (merge classes, sections,<br/>slots, validate), writers, tiers,<br/>preferences, snapshot,<br/>skills/ (ADR-0063: discovery, policy, blocks),<br/>init/ (ADR-0064: the marker, the registry,<br/>the sets, classification, the gitignore grammar),<br/>setup-manifest (REQ-STARTUP-058's schema)"]
     model["model<br/>ports, DefaultAgentBackend,<br/>AiSdkModelClient, ScriptedModelClient"]
     store["store<br/>schema (v16), delivery/, StoreDal, open/migrate,<br/>lock, rings,<br/>saved prompts, session artifacts"]
     platform["platform<br/>dirs, document (ADR-0004), instance,<br/>machine id, liveness, clocks, preferences"]
@@ -117,6 +117,12 @@ Edges worth knowing the reason for:
   bootstrap writer) but still no `store`.
 - **`ui` cannot import `config`**: the Settings screen reads `ConfigSnapshot` and emits a save, a per-field write
   or its live state (`contracts/src/config.ts`); the workspace service commits.
+- **`app-main` → `release-naming` is the updater's edge** (ADR-0054, built 2026-09-28): the asset name it asks the
+  feed for, the strict version order it compares by and the checksum-manifest format it parses are all the one naming
+  authority's (`tools/release-naming/src/index.ts`), so the pipeline that writes those names and that manifest and the
+  updater that reads them cannot disagree. The updater itself is `apps/desktop/src/main/updater/`, in the main root,
+  because it is the process that owns the windows, the notices and the instance record it needs; its ports over
+  Electron and the disk are one file (`electron.ts`) and everything else is pure.
 
 ## Where the responsibilities sit
 
@@ -269,6 +275,33 @@ make it true. `scripts/lib/staged-resources.mjs` is `settings-proof`'s, for stag
 the proof also takes the writer's list of git's redirecting variables from `build-id.mjs`. **Edges unchanged**:
 `apps/desktop/scripts/**` and `tools/**` are outside the boundary rule, the scripts reach the tools and never the
 reverse, and no product code imports either.
+
+*Added 2026-09-28 (R-062, ADR-0054 "The prerelease naming repair").* `scripts/lib/artifact-names.mjs` is a fourth
+shared module: the declared product version read as `apps/desktop/package.json` writes it (`declaredProductVersion`,
+validated through REQ-STARTUP-029's grammar), the installer names rendered from it (`packagingArtifactNames`), the
+configuration electron-builder is run with — the yml with `win.artifactName` and `nsis.artifactName` set to those
+literals (`configurationWithNames`, `namedConfigurationText`) — and the rule a produced file's name is held to
+(`producedNameProblem`). `package.mjs` imports it; `build-hooks.cjs` loads it by dynamic import in `afterPack`'s
+`checkNaming` and in `artifactBuildCompleted`; it imports `tools/release-naming/src/index.ts` by path, as the hook did
+before it. **Edges unchanged**: a script reaching a tool, as above.
+
+### The setup manifest and its schema (2026-09-28; `first-release-plan.md` §4.1, ADR-0054)
+
+`apps/desktop/resources/setup-manifest.json` is REQ-STARTUP-058's manifest: committed, not generated, and carried by
+`electron-builder.yml`'s `extraResources` to the root of the artifact's resources beside the two About files. Its shape
+lives in **`config`** — `setup-manifest.ts`, `SetupManifestSchema` (zod, strict, so a key it does not name refuses the
+file) — because both of its readers may import `config` and nothing lower could hold what it is cross-checked against:
+`SHIPPED_MCP_SERVERS` and `CODE_INTELLIGENCE_LANGUAGE_SERVERS` are `config`'s. The pre-build guard
+(`tools/release-guard`, outside the matrix) already read the defaults there and now takes the schema version and the
+complete-version pattern from the same module; the product's reader, the machine-setup flow, would be main's
+(REQ-STARTUP-089), and main imports `config`. **That flow is not built.** `setup-manifest.test.ts` validates the shipped
+file, refuses each malformed shape and holds its `languageServers` equal to `pins.json` and to
+`CODE_INTELLIGENCE_LANGUAGE_SERVERS`, so the two files cannot drift; `about-assets.test.ts` copies the file through
+electron-builder's own `copyFiles`. The schema's `PLATFORM_KEYS` (REQ-STARTUP-060) is a second literal of
+`tools/release-naming`'s, the naming authority — `config` has no edge to it — and `tools/release-guard`'s `pins.test.ts`,
+which imports both, holds the two lists equal and every shipped archive under one of them; the raw `<os>-<machine>`
+fallback key is refused as an archive key. The notices generator still reads `pins.json` as its manifest (OQ-73). **Edges
+unchanged**: `config` gains the `zod` dependency `contracts` already carries; no package edge moves.
 
 ### `ui/design-system` (2026-09-12)
 

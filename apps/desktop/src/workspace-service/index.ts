@@ -51,8 +51,9 @@ function instructionEnv(): { home: string; platform: NodeJS.Platform; machineDir
   const home = process.env['ROTARIS_CAPTURE_INSTRUCTIONS_HOME'];
   /*
    * `ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE`: the same seam for the machine-wide base, so the inventory a proof reads
-   * and the injection the run host builds (which honours the same variable) name one directory. Compiled out of a
-   * packaged build, where the base is always `/etc/codex`.
+   * and the injection the run host builds (which honours the same variable) name one directory. The run host reads
+   * `ROTARIS_CAPTURE_SKILLS_MACHINE` ahead of it, so a proof that sets that one sets this one to the same directory
+   * (`skills-proof` does). Compiled out of a packaged build, where the base is always `/etc/codex`.
    */
   const machine = __ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE'] : undefined;
   return { home: home === undefined || home === '' ? homedir() : home, platform: process.platform, ...(machine === undefined || machine === '' ? {} : { machineDir: machine }) };

@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 // @ts-expect-error — plain ESM beside the scripts that run it.
 import { ABOUT_ASSETS, aboutAssetProblems, afterNoticesStep, flagUsage, settleNoticesStep, WITHOUT_NOTICES } from './about-assets.mjs';
 import { BUILD_ID_ASSET, THIRD_PARTY_LICENSES_ASSET } from '../../src/main/about.js';
+import { SETUP_MANIFEST_FILE } from '@rotaris/config';
 
 const APP = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const REPO = join(APP, '..', '..');
@@ -38,6 +39,8 @@ const WINDOWS_LICENSE = `Lib/site-packages/${DIST_INFO}/licenses/LICENSE`;
 const SERVER_LICENSE = 'MIT License\n\nCopyright (c) 2025 Fixture Tool Server Authors\n\nPermission is hereby granted, free of charge, to any person obtaining a copy.\n';
 const OTHER_LICENSE = 'BSD 3-Clause License\n\nCopyright (c) Fixture Other\n\nRedistribution and use in source and binary forms, with or without modification, are permitted.\n';
 const ID = `${'0123456789abcdef'.repeat(2)}01234567`;
+/** The setup manifest as committed (REQ-STARTUP-058), which the pack must carry byte for byte (first-release-plan.md §4.1). */
+const MANIFEST_TEXT = readFileSync(join(APP, 'resources', SETUP_MANIFEST_FILE), 'utf8');
 /** `identifyBuild`'s answer for the tree the fixture stands for. */
 const BUILD = { id: ID };
 const { buildId: BUILD_ID, notices: NOTICES } = ABOUT_ASSETS as { buildId: string; notices: string };
@@ -64,6 +67,7 @@ function fixtureApp(layout: string, withNotices: boolean) {
   put(app, `resources/code-intelligence/runtime/${layout.replace(DIST_INFO, 'other_dist-1.0.dist-info')}`, OTHER_LICENSE);
   put(app, `resources/code-intelligence/runtime/${layout.replace(`${DIST_INFO}/licenses/LICENSE`, 'serena/__init__.py')}`, '# the tool server\n');
   put(app, `resources/${BUILD_ID}`, `${ID}\n`);
+  put(app, `resources/${SETUP_MANIFEST_FILE}`, MANIFEST_TEXT);
   if (withNotices) put(app, `resources/${NOTICES}`, notices());
 }
 
@@ -153,6 +157,13 @@ describe('electron-builder.yml, copied by electron-builder: the two files at the
     expect(existsSync(join(resources, 'code-intelligence/runtime/lib/python3.13/site-packages/serena/__init__.py'))).toBe(true);
     expect(existsSync(join(resources, 'code-intelligence/bundle.json'))).toBe(true);
     expect(aboutAssetProblems({ resourcesDir: resources, sourceDir: join(app, 'resources'), env: {}, toolServerLicense: POSIX_LICENSE, build: BUILD })).toEqual([]);
+  });
+
+  it('carries the setup manifest to the root of resources/, byte for byte the committed file (REQ-STARTUP-058/059, first-release-plan.md §4.1)', async () => {
+    fixtureApp(WINDOWS_LICENSE, true);
+    const resources = await packResources();
+    expect(readFileSync(join(resources, SETUP_MANIFEST_FILE), 'utf8')).toBe(MANIFEST_TEXT);
+    expect(MANIFEST_TEXT).toContain('"schemaVersion": 1');
   });
 
   it('leaves the dist-info copy out of the Windows layout too, which is the one the first release ships', async () => {

@@ -1338,7 +1338,11 @@ None. One identifier minted, five amended in place, every amended sentence quoti
   and IC-7 is recorded as discharged in `../architecture/implementation-conditions.md`.*
 - **The setup manifest as a shipped file** (`REQ-STARTUP-058`, schema version 1) is the onboarding domain's
   and is not built either. The declaration lives in the generated binding manifest and feeds that file when
-  it exists.
+  it exists. *2026-09-28: the file exists at `apps/desktop/resources/setup-manifest.json`, schema version 1, and
+  `packages/config/src/setup-manifest.test.ts` holds its `languageServers` equal to
+  `apps/desktop/scripts/code-intelligence/pins.json` (ADR-0054, "The setup manifest"). Still unbuilt: its consumer
+  (machine setup, `REQ-STARTUP-060` onward and `REQ-MCP-112`'s setup half), and the notices generator's reading of
+  it, which still reads `pins.json` (OQ-73).*
 - **Which languages the release names** is a release decision. Two are declared because two were measured;
   the disclosure says the rest are obtained the same way.
 

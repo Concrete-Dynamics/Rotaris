@@ -424,6 +424,14 @@ For a session with no presenter the gate never posts anything: it publishes `app
 `runtime.headless_approval_policy`, and returns. **No wait is created at all**, which is what
 `REQ-TOOLS-061`'s "meaning no wait occurs" requires.
 
+**`PD-TOOLS-005` (built 2026-09-28) puts a third arm between the two.** A brokered wait that ends by
+timeout marks the run's user **away** (the engine's `UserPresence`, one holder per run, on every
+agent's port); while the mark stands, an ask that would otherwise be brokered takes the headless arm —
+the same event shape, no wait created, the decision `headless-policy` — with a reason that names the
+timeout that expired rather than the absence of a UI. The user's next input to the session clears the
+mark (`Sessions.control`, `controlAsync`, and the id-routed answers). A session with no presenter is
+still reported as such, ahead of the check.
+
 The timeout is an explicit deadline on the wait rather than a per-wait timer, with `0` meaning **no
 deadline registered** — the wait is then released only by an answer or by a cancellation. Bulk cancel
 walks the map and settles each waiter `cancelled`, which `REQ-TOOLS-052`'s mapping turns into `deny`

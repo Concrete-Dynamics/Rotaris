@@ -4,7 +4,12 @@
  *   0. the About page's two files           `pnpm notices` (REQ-STARTUP-143's validation, before freezing) and
  *                                           `pnpm build-id` (REQ-SHELL-140) write into resources/ (first-release-plan.md §4.4)
  *   1. electron-vite build                  the five entries
- *   2. electron-builder --win               rebuild → pack → hooks (rule 1a, rule 4a, the assets) → installer
+ *   1′. the artifact names                   rendered from the DECLARED version through tools/release-naming
+ *                                           (REQ-STARTUP-031; lib/artifact-names.mjs) and written as literal artifactName
+ *                                           values into release/electron-builder.package.yml, the configuration the next
+ *                                           step runs with — never electron-builder's `${version}` macro, which is the
+ *                                           version normalised (`0.1.0rc1` → `0.1.0-rc1`)
+ *   2. electron-builder --win               rebuild → pack → hooks (rule 1a, rule 4a, the assets, the naming) → installer
  *   3. the packaged app, launched           rule 4 (b): the product's own path opens a store in a real
  *                                           utilityProcess and runs a terminal call; both settle in the store
  *   4. release/load-proof.json              the merged report; a non-zero exit on any miss
@@ -27,9 +32,10 @@ import { createRequire } from 'node:module';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { proofIsolationEnv, workspacesRootFor } from './lib/harness.mjs';
+import { hostSwitches, proofIsolationEnv, workspacesRootFor } from './lib/harness.mjs';
 import { closingLines, reached, STEPS } from './lib/package-verdict.mjs';
 import { ABOUT_ASSETS, flagUsage, settleNoticesStep, WITHOUT_NOTICES } from './lib/about-assets.mjs';
+import { declaredProductVersion, namedConfigurationText, packagingArtifactNames } from './lib/artifact-names.mjs';
 
 // A flag value this script does not understand is a usage error (REQ-STARTUP-149's 2), reported before any step runs.
 const usage = flagUsage(process.env);
@@ -145,7 +151,7 @@ try {
     const kept = ['ROTARIS_CAPTURE_PNG', 'ROTARIS_CAPTURE_PROMPT', 'ROTARIS_CAPTURE_AFTER_MS'];
     // The last two are the injection proof's (2026-09-27): one writes every scripted model call's system text to a
     // file it names, the other points the machine-wide instruction base at any directory — neither may ship.
-    const forbidden = ['ROTARIS_CAPTURE_CLICKS', 'ROTARIS_CAPTURE_DOUBLE_CLICKS', 'ROTARIS_CAPTURE_TYPE', 'ROTARIS_CAPTURE_CHORDS', 'ROTARIS_CAPTURE_EVAL_AT', 'ROTARIS_CAPTURE_OS_INPUT', 'ROTARIS_CAPTURE_SELECT', 'ROTARIS_CAPTURE_NOTICES', 'ROTARIS_CAPTURE_DRAG_AT', 'ROTARIS_CAPTURE_PERSONA_STEER', 'ROTARIS_THEME_PROOF_DIR', 'ROTARIS_DRIVER', 'ROTARIS_CAPTURE_MODEL_REQUESTS', 'ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE'];
+    const forbidden = ['ROTARIS_CAPTURE_CLICKS', 'ROTARIS_CAPTURE_DOUBLE_CLICKS', 'ROTARIS_CAPTURE_TYPE', 'ROTARIS_CAPTURE_CHORDS', 'ROTARIS_CAPTURE_EVAL_AT', 'ROTARIS_CAPTURE_OS_INPUT', 'ROTARIS_CAPTURE_SELECT', 'ROTARIS_CAPTURE_NOTICES', 'ROTARIS_CAPTURE_DRAG_AT', 'ROTARIS_CAPTURE_PERSONA_STEER', 'ROTARIS_THEME_PROOF_DIR', 'ROTARIS_DRIVER', 'ROTARIS_CAPTURE_MODEL_REQUESTS', 'ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE', 'ROTARIS_CAPTURE_SKILLS_MACHINE'];
     const missing = kept.filter((name) => !bundle.includes(name));
     const present = [];
     for (const file of emitted) {
@@ -173,7 +179,23 @@ try {
   // at once and was refused with EMFILE on this tree (Part S's console spike, 2026-09-05). Every node process of THIS step
   // inherits the preload; the packaged application's launch below never does.
   const builderEnv = { ...process.env, NODE_OPTIONS: `${process.env['NODE_OPTIONS'] ? `${process.env['NODE_OPTIONS']} ` : ''}--require ${JSON.stringify(join(APP, 'scripts', 'fd-gate.cjs'))}` };
-  step(`${STEPS.builder} --win${process.env['ROTARIS_PACKAGE_DIR_ONLY'] ? ' --dir' : ''}`, () => run('pnpm', ['exec', 'electron-builder', '--win', ...(process.env['ROTARIS_PACKAGE_DIR_ONLY'] ? ['--dir'] : []), '--config', config], { env: builderEnv }));
+  // REQ-STARTUP-031 / REQ-STARTUP-158: the installer's name is rendered from the manifest's DECLARED text through the
+  // naming authority and written as a literal into the configuration electron-builder runs with, because its own
+  // `${version}` is that text normalised through loose SemVer (`0.1.0rc1` → `0.1.0-rc1`). A declaration outside
+  // REQ-STARTUP-029's grammar renders no name and stops the package here. afterPack compares the configuration and
+  // artifactBuildCompleted the produced file (build-hooks.cjs). lib/artifact-names.mjs says why this is a written file
+  // and not a `-c.` override. The hooks' `./scripts/…` paths resolve against electron-builder's cwd, which is APP.
+  const naming = step('the artifact names from the declared version', () => {
+    const declared = declaredProductVersion(APP);
+    const names = packagingArtifactNames(declared);
+    const yaml = require(require.resolve('js-yaml', { paths: [dirname(require.resolve('app-builder-lib/package.json'))] }));
+    mkdirSync(RELEASE, { recursive: true });
+    const named = join('release', 'electron-builder.package.yml');
+    writeFileSync(join(APP, named), namedConfigurationText(readFileSync(join(APP, config), 'utf8'), names, yaml));
+    process.stdout.write(`[package] declared ${declared} → ${names.setup}, written into ${named} (from ${config})\n`);
+    return { declared, names, from: config, configuration: named };
+  });
+  step(`${STEPS.builder} --win${process.env['ROTARIS_PACKAGE_DIR_ONLY'] ? ' --dir' : ''}`, () => run('pnpm', ['exec', 'electron-builder', '--win', ...(process.env['ROTARIS_PACKAGE_DIR_ONLY'] ? ['--dir'] : []), '--config', naming.configuration], { env: builderEnv }));
 } catch (e) {
   finish(false, String(e.message));
 }
@@ -208,7 +230,7 @@ appRun = step('the packaged app opens a store and runs a terminal call', () => {
     ROTARIS_CAPTURE_AFTER_MS: '9000',
   };
   for (const k of Object.keys(env)) if (k.startsWith('ROTARIS_CAPTURE_') && !(k in { ROTARIS_CAPTURE_PNG: 1, ROTARIS_CAPTURE_PROMPT: 1, ROTARIS_CAPTURE_AFTER_MS: 1 })) delete env[k];
-  const r = spawnSync(exe, [ws], { env, encoding: 'utf8', timeout: 120_000, windowsHide: true });
+  const r = spawnSync(exe, [...hostSwitches, ws], { env, encoding: 'utf8', timeout: 120_000, windowsHide: true });
   const log = `${r.stdout || ''}\n${r.stderr || ''}`;
   writeFileSync(join(RELEASE, 'load-proof.app.log'), log);
   const dbs = [];

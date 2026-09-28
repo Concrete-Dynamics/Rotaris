@@ -298,7 +298,7 @@ the bounded form's `from` and its agreement with the whole window across a run) 
 `apps/desktop/scripts/lib/trace-summary.test.ts` (the account the trace verdict rests on), with
 `append-cost.test.ts` unchanged and green. The measurement point is reported back into ADR-0045 in place, and the
 reading the round left open — the comparison under a burst, and what "an empty transcript" is compared against — is
-**OQ-76**. The three runs' `results.json`, `append.json` and the two traces are under `.proof/transcript-proof/` of the
+**OQ-89**. The three runs' `results.json`, `append.json` and the two traces are under `.proof/transcript-proof/` of the
 last run; the earlier runs' logs and figures were kept beside the work and are summarised in the tables above.
 
 ## Fix round 1 — 2026-09-28 (R-062): reopened
@@ -358,8 +358,8 @@ side at the median, inside a spread three times the slack, and the pooled `sync`
 in every run. Not measured and so not claimed: whether the residual is the bounded projection, the replica's O(n) upsert
 and the measurement pass's second render (the earlier section's reasoning), or the fixtures, which are NOT reseeded
 between launches — `S0` holds 1, 18 and 35 rows before its three append launches and `S1200` 1,200, 1,217 and 1,234
-(OQ-76 names the question of what "an empty transcript" is). This note therefore stays open, with the comparison's
-reading under a burst still OQ-76's and no second repair taken on a guess (`.agents/skills/debug-ui` step 8). The six
+(OQ-89 names the question of what "an empty transcript" is). This note therefore stays open, with the comparison's
+reading under a burst still OQ-89's and no second repair taken on a guess (`.agents/skills/debug-ui` step 8). The six
 runs' logs, `append.json` files and traces were kept beside the work; `.proof/transcript-proof/` holds only the last.
 
 
@@ -422,7 +422,7 @@ spreads three to four times the slack. Not measured, and so not claimed: whether
 upsert and the measurement pass's second render, the fixtures growing between launches (`S0` at 1, 18 and 35 rows;
 `S1200` at 1,200, 1,217 and 1,234), or contention on a shared host — the loaded traces of G3 and G5 carry
 layout and busy time the empty ones do not, which a neighbour's load could equally produce. No further repair is taken
-without a trace naming its cause (`.agents/skills/debug-ui` step 8), the note stays open, and OQ-76 still holds the
+without a trace naming its cause (`.agents/skills/debug-ui` step 8), the note stays open, and OQ-89 still holds the
 reading under a burst and what "an empty transcript" holds. The six runs' logs, `append.json` files and traces (G2–G6)
 were kept beside the work; `.proof/transcript-proof/` holds only G6.
 
@@ -476,6 +476,6 @@ script is at parity in two traced pairs of eight and 1.2–4.8 ms higher on the 
 per-increment cost still grows with depth is unshown** — fix round 1's "at parity in every traced pair" is that round's
 reading, not this build's. What the quiet host adds is one observation, not a cause: every run on it passed, every
 failure of this build was on a shared host or the verifier's. No trace yet names the loaded side's extra script, so no
-repair is taken (`.agents/skills/debug-ui` step 8); the candidates stay the ones fix round 2 named. OQ-76 still holds the
+repair is taken (`.agents/skills/debug-ui` step 8); the candidates stay the ones fix round 2 named. OQ-89 still holds the
 reading under a burst and what "an empty transcript" holds. The three runs' logs, `append.json` files and traces were
 kept beside the work; `.proof/transcript-proof/` holds only H3.

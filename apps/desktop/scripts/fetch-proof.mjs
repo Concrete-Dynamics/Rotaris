@@ -25,7 +25,7 @@ import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { cleanEnvironment, findDatabases, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
+import { cleanEnvironment, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -83,7 +83,7 @@ function saveConfiguration(runtime) {
 /** The launch is ASYNCHRONOUS: this process serves the HTTP routes while Electron runs, so a synchronous wait would starve them (the proof's own first finding). */
 function spawnElectron(env) {
   return new Promise((resolveLaunch) => {
-    const child = spawn(electron, [join(app, 'out', 'main', 'index.js'), workspace], { cwd: app, windowsHide: true, env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], { cwd: app, windowsHide: true, env, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
     child.stdout.setEncoding('utf8'); child.stdout.on('data', (d) => { stdout += d; });

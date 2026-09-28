@@ -9,8 +9,9 @@ import { CODE_INTELLIGENCE_TOKEN } from './commands.js';
  *     600, `enabled: false`.
  *   - `browser`: stdio `npx -y @playwright/mcp@0.0.80 --headless` — the Playwright MCP server (Apache-2.0), pinned to an
  *     exact MAJOR.MINOR.PATCH (never a range or a tag), headless selected; `enabled: false`. The setup manifest of
- *     REQ-MCP-095 (owed with the onboarding task registry, REQ-MCP-045/098 — see ADR-0035's note) must carry this string
- *     character for character.
+ *     REQ-MCP-095 / REQ-STARTUP-058 (`apps/desktop/resources/setup-manifest.json`, built 2026-09-28) carries this string
+ *     character for character, and the pre-build guard (`tools/release-guard/src/pins.ts`, REQ-STARTUP-059) fails the
+ *     stage when the two differ.
  *   - `code_intelligence`: stdio, the reserved token of REQ-MCP-033; its arguments — the launch subcommand, then what
  *     selects stdio transport and the host-integration mode — are read from the binding manifest of REQ-MCP-116
  *     (`code-intelligence.ts`, generated from the bundled runtime by ADR-0035's build step); no project path (REQ-MCP-034

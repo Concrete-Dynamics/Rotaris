@@ -32,7 +32,7 @@ wrong.
 | **The run** | `part-h-proof` | the loop supervisor and `continue` (ADR-0059) |
 | | `part-j-proof` | the control channel: a queued message at the iteration boundary, a steer, a graceful pause, the message-limit pause |
 | | `plan-gate-proof` | the plan gate held, edited, answered (ADR-0062) |
-| | `resilience-proof` | the model ladder, the waits, the fallbacks, against scripted faults |
+| | `resilience-proof` | the model ladder, the waits, the fallbacks, against scripted faults; its `override` launch addresses a native `<select>` the wait header no longer draws, and **as root on Linux that launch outlived its 180 s timeout: SIGTERM did not end it, it was alive 649 s in, and only a SIGKILL from outside ended it** — expect to kill it (`docs/defects/resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md`) |
 | | `compression-proof` | context compression and its timeline entries (ADR-0060) |
 | | `checkpoint-proof` | the capture at iteration close through to the desktop restore (ADR-0039) |
 | | `sessions-proof` | the session browser's actions: repair, delete with ref cleanup, the exports |
@@ -41,16 +41,17 @@ wrong.
 | | `todo-proof` | the todo source priority, write-through edits, the pane |
 | | `attachments-proof` | content validation, ceilings, the capability gate, durable metadata |
 | | `artifacts-proof` | the session artifact store, the Artifacts tab, the inspector |
-| | `mcp-proof` | MCP declared three ways, against a real fixture server (ADR-0033/0034) |
-| | `code-intel-proof` | the bundled code-intelligence runtime and its manifest (ADR-0035) |
-| | `skills-proof` | portable skill discovery, with a scratch home (ADR-0063); the `/skills` listing written as one saved system row and read back after a reopen (REQ-CHAT-162) |
+| | `mcp-proof` | MCP declared three ways, against a real fixture server (ADR-0033/0034); launch 7's `.cmd`-runner check (REQ-MCP-113's wrap) is asserted on win32 only and **stated not applicable elsewhere**, the rest of the launch measured on every platform |
+| | `code-intel-proof` | the bundled code-intelligence runtime and its manifest (ADR-0035); its build step and process sampler are Windows-only (`--skip-build` passes the first, the second is caught), and **as root its branch launch cannot pass until the sentinel finds the token past `--no-sandbox`, and it hangs there rather than failing — expect to kill it** (`docs/defects/fixed/the-code-intelligence-server-dies-when-the-app-runs-as-root.md`, `docs/defects/code-intel-proofs-branch-client-waits-forever-on-a-child-that-has-exited.md`) |
+| | `skills-proof` | portable skill discovery, with a scratch home and a scratch machine-wide root (ADR-0063; `ROTARIS_CAPTURE_SKILLS_MACHINE`, off Windows only); the `/skills` listing written as one saved system row and read back after a reopen (REQ-CHAT-162) |
 | | `injection-proof` | workspace-context injection as the model port **received** it — order, the per-file switches, OQ-64, a worktree's execution root — and REQ-WORKSPACE-049's cold-cache p95 over 20 separate processes (`--skip-latency` skips it; cold only on Linux) |
-| | `sandbox-proof` | OS-level confinement (ADR-0022) — **`win32` is outside the platform set; read what it says it cannot prove** |
+| | `sandbox-proof` | OS-level confinement (ADR-0022) — **`win32` is outside the platform set; read what it says it cannot prove**; its first check asserts the **Windows** verdict's six literals, so off Windows it fails there and measures nothing (`docs/defects/sandbox-proof-asserts-the-windows-verdict-on-every-platform.md`) |
 | | `terminal-stream-proof` | the stream in the run host against a **real PTY** (ADR-0021) |
 | **Configuration and startup** | `config-proof` | hand-authored, commented files surviving every write (ADR-0036/0037) |
 | | `init-proof` | project initialization resolved once per workspace open (ADR-0064) |
 | | `workspace-proof` | reaching a project folder from inside the application: resolution, gates, switch |
 | | `settings-proof` | the Settings categories and the save bar; the About page's two files (`build-id.txt`, `THIRD-PARTY-LICENSES.txt`), absent and present (it stages them in `apps/desktop/resources/` and gives back what was there) |
+| | `updater-proof` | the updater on the one path a development host can execute: a launch that is not a released artifact performs no check and issues no request (REQ-STARTUP-106/114/150) — the log's one `info` line, and a proxy sink every request of Chromium's stack would reach that records none for the feed; the check, the download, the apply and the restart are unit-tested over fakes and their run against a real artifact is owed to the next Windows package (IC-3) |
 | **Surfaces** | `overview-proof` | the Overview painted from the run and the store |
 | | `transcript-proof` | the projection, the caches, the empty state (ADR-0045/0046), and REQ-CHAT-055's append comparison — alternating launches pooled to thirty a side, in frames and milliseconds with their spread, plus one traced launch of each fixture read back by `lib/trace-summary.mjs` |
 | | `rows-proof` | the one row renderer, in both of its surfaces at once |

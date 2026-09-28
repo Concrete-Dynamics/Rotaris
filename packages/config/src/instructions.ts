@@ -1,7 +1,7 @@
 import { statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { hasEtcHierarchy } from './skills/roots.js';
+import { hasEtcHierarchy, machineCodexDir } from './skills/roots.js';
 
 /**
  * PD-WORKSPACE-002 — instruction-file discovery: the presence check the Instructions inventory draws.
@@ -43,13 +43,11 @@ export interface InstructionDiscoveryEnv {
    *
    * It exists for the same reason `home` is injectable: a built-app proof that lays instruction files down at
    * every base must not write into, or read from, the operator's real `/etc/codex`
-   * (`ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE`, compiled out of a packaged build).
+   * (`ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE`, compiled out of a packaged build). It is the same directory the skill
+   * search's fourth user-scope root sits under (`SkillRootsEnv.machineDir`, `MACHINE_CODEX_DIR`), so one value moves both.
    */
   readonly machineDir?: string | undefined;
 }
-
-/** PD-WORKSPACE-002's machine-wide base, where a platform has an `/etc` hierarchy. */
-const MACHINE_INSTRUCTION_DIR = join('/etc', 'codex');
 
 function fileIfPresent(entries: InstructionFileEntry[], id: string, name: string, path: string, source: string, isFile: (p: string) => boolean): void {
   if (isFile(path)) entries.push({ id, name, path, source });
@@ -83,8 +81,7 @@ export function discoverInstructionFiles(env: InstructionDiscoveryEnv, isFile: (
     { idPrefix: 'user-openhands', dir: join(env.home, '.openhands'), source: 'user (~/.openhands)' },
   );
   if (hasEtcHierarchy(env.platform)) {
-    const machineDir = env.machineDir === undefined || env.machineDir.trim() === '' ? MACHINE_INSTRUCTION_DIR : resolve(env.machineDir);
-    bases.push({ idPrefix: 'machine-codex', dir: machineDir, source: 'machine (/etc/codex)' });
+    bases.push({ idPrefix: 'machine-codex', dir: machineCodexDir(env.machineDir), source: 'machine (/etc/codex)' });
   }
   for (const base of bases) {
     if (base.dir.trim() === '') continue;

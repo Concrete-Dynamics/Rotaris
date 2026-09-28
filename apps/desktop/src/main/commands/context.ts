@@ -30,6 +30,7 @@ import type { NoticeStore } from '../notices.js';
 import type { LibraryRevision } from '../library.js';
 import type { InitializationCoordinator } from '../initialization.js';
 import type { createRequirementsRuns } from '../requirements-runs.js';
+import type { Updater } from '../updater/updater.js';
 
 /**
  * COMMANDS — what main answers when the renderer asks, and the one place the answer may be found.
@@ -109,6 +110,12 @@ export interface CommandContext {
   readonly raiseNoticeKeyed: (key: string, severity: NoticeSeverity, headline: string, detail?: string, recovery?: Recovery, sessionId?: string) => boolean;
   readonly recoveryFor: (action: string | undefined, workspace?: string, sessionId?: string) => Recovery;
   readonly announceRepairs: (repaired: readonly { readonly sessionId: string; readonly from: string; readonly reason: string }[]) => void;
+  /**
+   * The updater (first-release-plan.md §4.6, ADR-0054): the one held offer, the one operation in flight, and the
+   * two notice actions it answers (`update.install`, `update.restart`). `notice.acknowledge` asks it first, so the
+   * waved-off version is recorded before the offer notice is cleared (REQ-STARTUP-116/117).
+   */
+  readonly updater: Updater;
 
   // The provider surface and the health it caches between asks.
   readonly providers: ProviderService;

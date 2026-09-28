@@ -47,7 +47,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
-import { cleanEnvironment, proofIsolationEnv } from './lib/harness.mjs';
+import { cleanEnvironment, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
 import { spawn, spawnSync } from 'node:child_process'; // Part C2 — `spawn` writes a file WHILE a launch blocks this script.
 
 const repo = resolve(import.meta.dirname, '..', '..', '..');
@@ -72,7 +72,7 @@ const expect = (condition, message) => { if (!condition) throw new Error(message
 
 function launch(name, workspace, local, preferences, extra, timeoutMs = 150_000) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), workspace], {
+  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
     cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
@@ -258,7 +258,21 @@ for (const name of ['stop', 'pause', 'compress', 'clear', 'search', 'new', 'resu
   expect(popup.names.includes(name), `/${name} is not listed: ${popup.names.join(' ')}`);
 }
 expect(popup.first === 'stop' && popup.active === 0, `the first row should be /stop and highlighted: ${popup.first} / ${popup.active}`);
-expect(popup.kinds.length === 1 && popup.kinds[0] === 'action', `every built-in and mirror carries the action badge: ${popup.kinds.join(',')}`);
+// REQ-CHAT-025 fixes the closed badge set `action`, `skill`, `prompt` and says only that `prompt` marks a prompt-file
+// entry. ADR-0063 (decision 5, `packages/ui/src/slash/skills.ts`) chose `skill` for the two fixed skill commands
+// REQ-CHAT-162 names — `/skill <path>` and `/skills` — beside the per-skill commands; the built-ins and the palette
+// mirrors carry `action`. This launch discovers no skill and has no prompt file, so the set is exactly those two, and the
+// `skill` badge sits on exactly those two rows. Until 2026-09-28 the assertion read every row as `action`, which
+// `/skill` stopped matching on 2026-09-15 (`docs/defects/fixed/slash-proof-expects-every-built-in-to-carry-the-action-badge.md`).
+// "Discovers no skill" rests on the launch's isolation: on a POSIX host a skill under the machine-wide
+// `/etc/codex/skills`, which this proof does not redirect (`ROTARIS_CAPTURE_SKILLS_MACHINE` exists since 2026-09-28
+// and is not set here), would add its own `skill` row and fail the exact set below
+// (`docs/defects/fixed/three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md`).
+const FIXED_SKILL_COMMANDS = ['skill', 'skills'];
+expect([...popup.kinds].sort().join(',') === 'action,skill', `the built-ins and mirrors carry the action badge and the two fixed skill commands the skill badge — no other kind: ${popup.kinds.join(',')}`);
+const skillBadged = rows.filter((r) => r.attrs['data-kind'] === 'skill').map((r) => r.attrs['data-command']).sort();
+expect(skillBadged.join(',') === FIXED_SKILL_COMMANDS.join(','), `exactly /skill and /skills carry the skill badge (ADR-0063): ${skillBadged.join(',')}`);
+for (const name of FIXED_SKILL_COMMANDS) expect(popup.names.includes(name), `/${name} is not listed (REQ-CHAT-162): ${popup.names.join(' ')}`);
 expect(popup.focusInComposer && !popup.focusInPopup, 'the popup took keyboard focus (REQ-CHAT-024)');
 // At most eight rows on screen; the rest behind a scroll.
 expect(popup.listClient <= popup.rowHeight * 8 + 1 && popup.listScroll > popup.listClient, `the list should show ≤ 8 rows (${popup.rowHeight} px each) and scroll beyond: client ${popup.listClient}, scroll ${popup.listScroll}`);

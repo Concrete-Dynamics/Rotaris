@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { resolveCommand, type ResolvedCommand } from '@rotaris/config';
+import { COMPLETE_VERSION_PATTERN, resolveCommand, SETUP_MANIFEST_SCHEMA_VERSION as MANIFEST_SCHEMA_VERSION, type ResolvedCommand } from '@rotaris/config';
 import { reasonOf } from './versions.js';
 
 /**
@@ -10,13 +10,15 @@ import { reasonOf } from './versions.js';
  */
 
 /**
- * Where the guard reads the setup manifest (REQ-STARTUP-058) from. **No file exists there yet**: the manifest is owed
- * (ADR-0054's §4.1 note), so until it lands this half fails naming the file — which is the requirement, not a fault of
- * the guard: a default the manifest does not pin fails the stage.
+ * Where the guard reads the setup manifest (REQ-STARTUP-058) from: the file `electron-builder.yml` carries to the root of
+ * the artifact's resources (first-release-plan.md §4.1, built 2026-09-28). Its whole shape is `@rotaris/config`'s
+ * `SetupManifestSchema`, which `setup-manifest.test.ts` validates the shipped file against; this half reads only the two
+ * fields REQ-STARTUP-059 needs, so a manifest missing from a tree still fails the stage naming the file — the
+ * requirement, not a fault of the guard: a default the manifest does not pin fails the stage.
  */
 export const SETUP_MANIFEST_LOCATION = 'apps/desktop/resources/setup-manifest.json';
-/** REQ-STARTUP-058: schema version 1. */
-export const SETUP_MANIFEST_SCHEMA_VERSION = 1;
+/** REQ-STARTUP-058: schema version 1 — the schema's own number, so the two cannot drift. */
+export const SETUP_MANIFEST_SCHEMA_VERSION: number = MANIFEST_SCHEMA_VERSION;
 /**
  * The field listing the tool-server packages the manifest pins, each `{ name, version }` (REQ-STARTUP-059's "every
  * tool-server package it lists"). With `schemaVersion` it is the whole of the manifest this guard reads; the rest of
@@ -43,9 +45,10 @@ export type ManifestReading =
  * (`1.2.3`, `1.1.403`, `1.2.3-beta.1`, `1.2.3rc1`); `^1.2.3`, `1.2`, `1.x`, `latest` and `npm:x@1.2.3` are not.
  */
 export function isCompleteVersion(version: string): boolean {
-  // One character per repetition: an optional separator inside a starred group of `+` runs backtracks exponentially on
-  // a long qualifier followed by a stray character, and a guard that hangs does not exit 1.
-  return /^\d+\.\d+\.\d+(?:[-+.]?[0-9A-Za-z])*$/.test(version);
+  // The schema's pattern, so what the guard admits is what the manifest's schema admits. One character per repetition:
+  // an optional separator inside a starred group of `+` runs backtracks exponentially on a long qualifier followed by
+  // a stray character, and a guard that hangs does not exit 1.
+  return COMPLETE_VERSION_PATTERN.test(version);
 }
 
 export function readSetupManifest(repoRoot: string, location: string = SETUP_MANIFEST_LOCATION): ManifestReading {

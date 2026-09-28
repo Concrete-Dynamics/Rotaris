@@ -628,5 +628,5 @@ claimed.
 **What the point still does not do, unchanged:** it says a frame boundary passed after the change was committed, not
 that a frame carrying it was presented. And one reading the round surfaced is on the register rather than settled here
 — whether REQ-CHAT-055's comparison is read on the update as it arrived or on one that arrived alone, and what "an empty
-transcript" holds once the run has appended to it — **OQ-76**, with the reading the proof takes: both cuts, one frame
+transcript" holds once the run has appended to it — **OQ-89**, with the reading the proof takes: both cuts, one frame
 of slack at the cadence it measured.

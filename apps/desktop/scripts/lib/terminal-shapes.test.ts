@@ -18,7 +18,7 @@
 import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 // @ts-expect-error — the shapes are plain ESM beside the script that replays them.
-import { LONG_OUTPUT_LINES, diagnosticOf, longOutputReading, outputOf, terminalShapes } from './terminal-shapes.mjs';
+import { LONG_OUTPUT_LINES, diagnosticOf, hereStringLinesReturned, longOutputReading, outputOf, terminalShapes } from './terminal-shapes.mjs';
 
 interface Shape { readonly id: string; readonly match: RegExp; readonly command: string }
 
@@ -119,6 +119,40 @@ describe('the terminal output reader', () => {
     expect(outputOf(quoting)).toBe(['a', '[terminal_output]', 'b', '[terminal_diagnostic] {"exit_code":1}'].join('\n'));
     expect(outputOf('the tool was blocked before it ran')).toBeNull();
     expect(outputOf(undefined)).toBeNull();
+  });
+});
+
+describe('the here-string check', () => {
+  const observe = (platform: 'win32' | 'linux', printed: string) => {
+    const command = terminalShapes(platform).find((s) => s.id === 'here-string')!.command;
+    return [
+      'The command exited with code 0.',
+      '[terminal_output]',
+      printed,
+      `[terminal_diagnostic] ${JSON.stringify({ command, exit_code: 0, outcome_kind: 'success', warnings: [] })}`,
+    ].join('\n');
+  };
+
+  /*
+   * The defect: the command carries both words and the diagnostic repeats the command, so a check over the whole
+   * result passed for a shell that printed nothing. This is the observation it passed on, and it must fail now.
+   */
+  it('fails an observation whose output is (no output), although the diagnostic repeats both words', () => {
+    for (const platform of PLATFORMS) {
+      const observation = observe(platform, '(no output)');
+      expect(observation).toMatch(/alpha-one/);
+      expect(observation).toMatch(/beta-two/);
+      expect(hereStringLinesReturned(observation), `${platform}: a no-output observation passed`).toBe(false);
+    }
+  });
+
+  it('passes only when both lines were printed, and fails on one line or no output section at all', () => {
+    for (const platform of PLATFORMS) {
+      expect(hereStringLinesReturned(observe(platform, 'alpha-one\nbeta-two'))).toBe(true);
+      expect(hereStringLinesReturned(observe(platform, 'alpha-one'))).toBe(false);
+    }
+    expect(hereStringLinesReturned('the tool was blocked before it ran')).toBe(false);
+    expect(hereStringLinesReturned(undefined)).toBe(false);
   });
 });
 

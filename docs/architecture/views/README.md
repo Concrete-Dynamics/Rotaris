@@ -47,9 +47,9 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 **The reserved token's launch carries the parent's sandbox switch (2026-09-28, R-062).** Three defect notes repaired
 in `apps/desktop` and `packages/ui`; one moved a process fact. The reserved token's launch of the application's own
-executable (REQ-MCP-033) now carries `--no-sandbox` when the parent was started with it, right before the token, and
-main forks the run host with the same switch so the launch builder reads it off its own argv; the sentinel finds the
-token past it. `@rotaris/platform` gains `chromium-switches.ts` (no new edge: main and the run host already import
+executable (REQ-MCP-033) now carries `--no-sandbox` when the parent was started with it, between the token and `--`
+(the token stays first; a first build that put it before the token is superseded), and main forks the run host with the
+same switch so the launch builder reads it off its own argv; the sentinel drops it before the separator. `@rotaris/platform` gains `chromium-switches.ts` (no new edge: main and the run host already import
 platform). **OQ-76** holds the reading. The **process view**'s bundled-runtime paragraph names it; no package, channel,
 message kind, command or store column changed. The About caption's type token and `settings-proof`'s computed-size
 probe changed no view.

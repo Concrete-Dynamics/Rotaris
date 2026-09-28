@@ -28,21 +28,33 @@ first argument, and REQ-STARTUP-002 and REQ-STARTUP-015 fix what that launch is 
 nothing fetched); none of the three says whether the launch carries the parent's Chromium switches. Raised as **OQ-76**
 and built under this reading: the launch carries exactly the sandbox switch the parent was started with
 (`--no-sandbox`) and nothing else of its command line — the sandbox is a property of the host the parent already
-measured, and a child of the same executable cannot measure it differently. The token is still the first argument
-that is not that switch, so a hand-written entry is unchanged.
+measured, and a child of the same executable cannot measure it differently. **The token stays the first argument**,
+as REQ-MCP-033 states; the switch stands between it and the `--` separator, and REQ-STARTUP-015's "no argument
+vocabulary beyond it" holds, because the switch is Chromium's and the sentinel drops it before the runtime sees it.
+*(Superseded, kept beside its replacement: the first build that day put the switch in front of the token and read
+"first argument" as "the first argument that is not that switch". The verifier found that a reinterpretation of a
+stated clause; the placement above keeps it.)*
 
 **What changed.** `@rotaris/platform`'s `chromium-switches.ts` is the one definition: `inheritedChromiumSwitches(argv)`
-and `afterInheritedSwitches(argv, from)`. Main forks the run host with the switch it was started with (a utility
-process's argv is what it is forked with, `main/index.ts`); the run host's `code-intelligence-launch.ts`
-(`codeIntelligenceLaunchFor`) puts it immediately before the token, never after the `--` where the runtime would
-read it; the sentinel (`main/sentinel.ts`) finds the token past it. Tests: `chromium-switches.test.ts` (3 cases) and
-`code-intelligence-launch.test.ts` (4 cases, the argument builder packaged and in development, with and without the
-switch, and no other switch inherited).
+and `withoutInheritedSwitches(afterToken)` (it replaced the first build's `afterInheritedSwitches(argv, from)`). Main
+forks the run host with the switch it was started with (a utility process's argv is what it is forked with,
+`main/index.ts`); the run host's `code-intelligence-launch.ts` (`codeIntelligenceLaunchFor`) puts it between the token
+and `--` — packaged `[token, --no-sandbox, --]`, development `[index.js, token, --no-sandbox, --]` — never after the
+`--` where the runtime would read it; the sentinel (`main/sentinel.ts`) reads the token at its fixed index and drops the
+switch standing before the separator. Tests: `chromium-switches.test.ts` (4 cases) and `code-intelligence-launch.test.ts`
+(4 cases: the argument builder packaged and in development, with and without the switch, the token at index 0 packaged
+and 1 in development, and no other switch inherited).
 
 **What was shown, and what was not.** `apps/desktop/resources/code-intelligence/` is absent on this tree and
 `pnpm code-intel:bundle` refuses off Windows (ADR-0035), so `pnpm code-intel-proof` could not run. The built app was
 driven as root under Xvfb (`pnpm app:drive`) against a scratch workspace holding one TypeScript file: the run host's
-log line reads the launch with `--no-sandbox` before the token, and the project setup's `create` step now reaches the
+log line reads the launch `… builtin:code-intelligence --no-sandbox -- project create <root>` (the first build's line
+had the switch before the token), and the project setup's `create` step now reaches the
 sentinel — it exits **127** with "the bundled code-intelligence runtime is not present in this installation", the
 sentinel's own refusal, where before it died with **SIGTRAP** before any JavaScript ran. The runtime itself serving
 as root is not shown here; it waits for a tree with the bundle.
+Measured directly as root on the built tree: `electron out/main/index.js builtin:code-intelligence --no-sandbox --
+start-mcp-server` exits 127 at the sentinel, the same line without the switch dies with SIGTRAP (exit 133); with a
+stand-in `bin/python3` under the git-ignored `apps/desktop/resources/` (removed after), the runtime received
+`start-mcp-server --transport stdio` and no switch, and its exit status 7 came back as the child's. The new placement is
+unmeasured on Windows (IC-3).

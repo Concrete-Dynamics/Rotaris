@@ -11,6 +11,14 @@
  * nothing else of its command line, because the sandbox is a property of the host the parent already measured and the
  * child cannot measure differently.
  *
+ * **Where it stands.** REQ-MCP-033 is not silent on the order: the token is the executable's FIRST argument. So the
+ * switch stands between the token and the branch's `--` separator — `rotaris builtin:code-intelligence --no-sandbox --`
+ * — which Chromium still reads (it parses switches anywhere before `--`; measured as root 2026-09-28: that line reaches
+ * the sentinel, the bare `builtin:code-intelligence --` dies with SIGTRAP). The sentinel drops it before the separator,
+ * so the runtime never receives it. (The first build, 2026-09-28, put the switch in FRONT of the token and read "first
+ * argument" as "first argument that is not that switch"; the verifier found that a stated clause reinterpreted, and the
+ * placement above keeps it.)
+ *
  * Pure over an argument vector, so the builder of the launch (the run host), the sentinel that reads it (main) and the
  * fork that hands it from main to the run host all read one definition.
  */
@@ -24,11 +32,12 @@ export function inheritedChromiumSwitches(argv: readonly string[]): readonly str
 }
 
 /**
- * The index of the first argument at or after `from` that is not an inherited switch — where the reserved token stands
- * when the launch put the switch in front of it. `--` is never skipped: it is the branch's separator, not a switch.
+ * The arguments after the token with the inherited switch the launch put between the token and `--` removed — only
+ * that run of switches, and only when the separator follows it, so the separator is next and the runtime receives
+ * none of Chromium's switches. Anything else is returned unchanged: a switch after `--` is the runtime's own argument.
  */
-export function afterInheritedSwitches(argv: readonly string[], from: number): number {
-  let at = from;
-  while (argv[at] === SANDBOX_SWITCH) at += 1;
-  return at;
+export function withoutInheritedSwitches(afterToken: readonly string[]): string[] {
+  let at = 0;
+  while (afterToken[at] === SANDBOX_SWITCH) at += 1;
+  return at > 0 && afterToken[at] === '--' ? afterToken.slice(at) : [...afterToken];
 }

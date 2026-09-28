@@ -19,13 +19,17 @@ describe('what the reserved token launches — REQ-MCP-033, REQ-STARTUP-015 (OQ-
     expect(l.args).toEqual([join(devDir, 'index.js'), 'builtin:code-intelligence', '--']);
   });
 
-  it('a parent started with --no-sandbox hands the switch to the child, right in front of the token', () => {
+  it('a parent started with --no-sandbox hands the switch to the child between the token and the separator; the token stays first', () => {
     const packaged = codeIntelligenceLaunchFor({ execPath: '/opt/Rotaris/rotaris', bundleDir: packagedDir, argv: ['/opt/Rotaris/rotaris', '--no-sandbox'] });
-    expect(packaged.args).toEqual(['--no-sandbox', 'builtin:code-intelligence', '--']);
+    expect(packaged.args).toEqual(['builtin:code-intelligence', '--no-sandbox', '--']);
+    // REQ-MCP-033: the frozen installation's executable takes the token as its FIRST argument.
+    expect(packaged.args[0]).toBe('builtin:code-intelligence');
     const dev = codeIntelligenceLaunchFor({ execPath: '/repo/node_modules/electron/dist/electron', bundleDir: devDir, argv: ['electron', join(devDir, 'index.js'), '--no-sandbox', '/a/workspace'] });
-    expect(dev.args).toEqual([join(devDir, 'index.js'), '--no-sandbox', 'builtin:code-intelligence', '--']);
+    expect(dev.args).toEqual([join(devDir, 'index.js'), 'builtin:code-intelligence', '--no-sandbox', '--']);
+    expect(dev.args[1]).toBe('builtin:code-intelligence');
     // Never after the separator, where the runtime would read it as one of its own arguments.
     expect(dev.args.indexOf('--no-sandbox')).toBeLessThan(dev.args.indexOf('--'));
+    expect(packaged.args.indexOf('--no-sandbox')).toBeLessThan(packaged.args.indexOf('--'));
   });
 
   it('inherits no other switch of the parent\'s line', () => {

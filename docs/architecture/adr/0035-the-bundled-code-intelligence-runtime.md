@@ -315,3 +315,17 @@ sentinel's own "the bundled code-intelligence runtime is not present in this ins
 JavaScript. Not shown: the runtime serving as root, because `apps/desktop/resources/code-intelligence/` is absent on
 this tree and `bundle.mjs` refuses off Windows (above), so `pnpm code-intel-proof` could not run. Nothing in the sentinel's
 own behaviour changed; it finds the token past the one switch.
+**Corrected the same day — the token stays first.** The placement above put the switch in front of the token and read
+REQ-MCP-033's "first argument" as the first argument that is not the switch; the verifier found that a stated clause
+reinterpreted. The launch is now the token first and the switch between it and `--`
+(`electron out/main/index.js builtin:code-intelligence --no-sandbox --`; packaged `Rotaris builtin:code-intelligence
+--no-sandbox --`): the sentinel reads the token at its fixed index again and drops the switch standing before the
+separator, so the runtime never receives it. Measured as root on this tree: `electron out/main/index.js
+builtin:code-intelligence --no-sandbox -- start-mcp-server` reaches the sentinel (exit 127, "not present"), the same line
+without the switch dies with SIGTRAP (exit 133); the driven app's `create` line reads
+`… builtin:code-intelligence --no-sandbox -- project create <root>` and exits 127 at the sentinel; and with a stand-in
+`bin/python3` (a shell script writing its arguments, placed under the git-ignored `apps/desktop/resources/` and removed
+after) the runtime received `-c <entry> start-mcp-server --transport stdio` — no switch — and its exit status 7 was
+propagated. **Unmeasured on Windows (IC-3):** the 2026-09-06 spike's quirk is a scheme-looking positional FOLLOWED BY
+another positional exiting before JavaScript; `--no-sandbox` is a switch, not a positional, and a packaged Windows
+parent does not normally carry it, but `Rotaris.exe builtin:code-intelligence --no-sandbox --` has not been run.

@@ -3214,10 +3214,13 @@ The key is registered with default 20 and minimum 1. Each background session pub
 
 **OQ-76 — Does the reserved token's launch of the application's own executable carry the parent's Chromium switches?** *(REQ-MCP-033, REQ-STARTUP-002, REQ-STARTUP-015. Raised 2026-09-28 by repairing `the-code-intelligence-server-dies-when-the-app-runs-as-root.md` (R-062).)*
 
-REQ-MCP-033 fixes that a `stdio` entry carrying the token launches the application's own executable with the token as
-its first argument, REQ-STARTUP-002 that this child is the one exception to the single entry point, and REQ-STARTUP-015
-what the launch is observable as: started from what the user installed, no user interface, no window. None says what
-else stands on the child's command line. The executable is a Chromium, and Chromium refuses to start as root with its
+REQ-MCP-033 fixes that a `stdio` entry carrying the token launches the application's own executable "with the same
+token `builtin:code-intelligence` as its first argument", and that "a process started with that first argument SHALL
+answer the MCP protocol"; REQ-STARTUP-002 that this child is the one exception to the single entry point; and
+REQ-STARTUP-015 what the launch is observable as: started from what the user installed, "the reserved token is a
+sentinel for a child process the product starts internally, not a user-facing invocation, and no argument vocabulary
+beyond it is defined for the shipped executable", no user interface, no window. **Where the token stands is fixed —
+first.** None says whether anything else of the parent's stands on the child's command line after it. The executable is a Chromium, and Chromium refuses to start as root with its
 sandbox on, so an operator who runs the application as root starts it with `--no-sandbox`; the child launched bare is a
 fresh Chromium, does not inherit that, and died with SIGTRAP before its sentinel ran (2026-09-27, a Linux container).
 Running as root is not a supported configuration anyone has ruled on, and Linux artifacts are withheld under IC-3, so
@@ -3226,10 +3229,21 @@ the question is narrower than it looks: whether the launch is the parent's own l
 **The reading built.** The launch carries exactly the sandbox switch the parent was started with (`--no-sandbox`), and
 nothing else of the parent's command line — the sandbox is a property of the host the parent has already measured,
 and a child of the same executable cannot measure it differently; every other switch (`--enable-logging`, a device
-scale factor, a capture seam) is the parent's business. The switch stands immediately before the token, so "the token
-as its first argument" reads as the first argument that is not that switch; a hand-written entry is unaffected.
-`@rotaris/platform`'s `chromium-switches.ts` holds the definition, and the launch builder, the sentinel and main's fork
-of the run host all read it. **A ruling the other way** — the launch carries nothing of the parent's — leaves the
+scale factor, a capture seam) is the parent's business. **The token stays the first argument; the switch stands
+between it and the branch's `--` separator** (`rotaris builtin:code-intelligence --no-sandbox -- …`; in development
+`electron out/main/index.js builtin:code-intelligence --no-sandbox -- …`). Chromium reads switches anywhere before
+`--`, so the child starts (measured as root 2026-09-28: that line reaches the sentinel, the bare
+`builtin:code-intelligence --` dies with SIGTRAP), and the sentinel drops the switch before the separator so the runtime
+never receives it (a stand-in runtime received `start-mcp-server --transport stdio` and nothing else). The switch is
+Chromium's own and defines nothing of the product's: no argument vocabulary is added beyond the token. One consequence
+stated plainly: a line typed by hand as `rotaris builtin:code-intelligence --no-sandbox -- …` is treated the same way —
+Chromium honours the switch and the sentinel drops it — and nothing is skipped anywhere else; a switch after `--` is the
+runtime's. `@rotaris/platform`'s `chromium-switches.ts` holds the definition, and the launch builder, the sentinel and
+main's fork of the run host all read it.
+*Superseded placement (first build, 2026-09-28, kept beside its replacement):* the switch stood immediately BEFORE the
+token and "the token as its first argument" was read as "the first argument that is not that switch", the sentinel
+skipping the switch to find the token. The verifier found that a reinterpretation of a clause REQ-MCP-033 states, not a
+reading where it is silent, and measured the placement above; it replaced the first on the same branch. **A ruling the other way** — the launch carries nothing of the parent's — leaves the
 product unable to host its own tool server on a host that needs the switch, and would want REQ-MCP-033 to say so.
 
 ## Design-reference dependencies

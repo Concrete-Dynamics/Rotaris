@@ -76,7 +76,7 @@ export function Inspector(props: InspectorProps) {
   const enablement = inspectorEnablement(shown?.presentationState ?? null);
   const isRunLevel = shown !== null && shown.id === RUN_AGENT_ID;
   const writable = isRunLevel && runActive && shown?.live === true;
-  const cascade = shown ? cancelCascade(agents, shown).length : 0;
+  const cascade = shown ? cancelCascade(agents, shown) : [];
   // PD-ORCH-005 clause 16: a paused child offers Cancel while its session rests; a live agent while its run is active.
   const cancellable = cancelOffered(shown, runActive, resting);
   const chips = shown ? chipStates(resolvedTools(shown, persona?.tools ?? []), shown.calledTools, shown.activeTools) : [];
@@ -170,11 +170,11 @@ export function Inspector(props: InspectorProps) {
             ))}
           </div>
           <div className="inspector__artifacts text-secondary" data-testid="inspector-artifacts">{NO_ARTIFACTS}</div>
-          <div className="inspector__cascade" data-testid="inspector-cascade" aria-live="polite">{cascadeNote(cascade, shown.presentationState === 'paused')}</div>
+          <div className="inspector__cascade" data-testid="inspector-cascade" aria-live="polite">{cascadeNote(cascade)}</div>
           {error && <div className="composer__error" role="alert">{error}</div>}
           <div className="inspector__actions">
             <DesignButton type="button" className="btn btn-secondary btn-compact" disabled={!enablement.steer || !runActive} title={enablement.steer && runActive ? `Steer ${shown.name} through its persona window` : 'Steer is enabled while the agent is running or waiting.'} onClick={() => onSteer(shown)}>Steer</DesignButton>
-            <DesignButton type="button" className="btn btn-danger btn-compact" data-testid="inspector-cancel" disabled={!cancellable} title={cancellable ? `Cancel ${shown.name}` : 'Cancel is enabled while the agent is running, waiting or queued, and for a paused agent while its session rests.'} onClick={() => onCancel(shown, cascade)}>Cancel</DesignButton>
+            <DesignButton type="button" className="btn btn-danger btn-compact" data-testid="inspector-cancel" disabled={!cancellable} title={cancellable ? `Cancel ${shown.name}` : 'Cancel is enabled while the agent is running, waiting or queued, and for a paused agent while its session rests.'} onClick={() => onCancel(shown, cascade.length)}>Cancel</DesignButton>
             <DesignButton type="button" className="btn btn-secondary btn-compact" disabled={!enablement.popOut} onClick={() => onPopOut(shown)}>Pop out</DesignButton>
           </div>
         </div>

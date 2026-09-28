@@ -268,8 +268,8 @@ own, keeps its last activity, and is not settled for display with its session (`
 agent a crash left unfinished presents so before the crash is recorded (OQ-73, a departure from clause 13's last
 sentence). One `paused` child may be cancelled while its session rests: it and its `paused` descendants end `cancelled`,
 and the rest resume (clause 16); cancelling a crash-left one records the crash first (OQ-74, a departure from clauses 3
-and 8). Not a terminal state
-and not an outcome: a `paused` agent has no report until it ends. — `PD-ORCH-005`, `REQ-MONITOR-300`
+and 8). A live agent's cancel ends its `paused` descendants with it, and its confirmation names them (OQ-73). Not a
+terminal state and not an outcome: a `paused` agent has no report until it ends. — `PD-ORCH-005`, `REQ-MONITOR-300`
 _Avoid_: suspended, frozen, held (the **plan gate** and the **message-limit pause** hold a run; they leave no agent paused)
 
 **Interruption**:

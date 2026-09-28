@@ -51,8 +51,8 @@ describe('PD-ORCH-005 clause 16 (revision 4, OQ-74): a paused child offers Cance
     expect(button(mission(paused.id), 'mission-cancel')).toMatch(/^<button/);
     expect(button(mission(paused.id), 'mission-cancel')).not.toContain('disabled');
     expect(button(mission(finished.id), 'mission-cancel')).toContain('disabled');
-    expect(missionCancelBody(paused, 1)).toBe('one (coding-agent) will be cancelled and will not resume. Cancelling cascades to 1 paused descendant.');
-    expect(missionCancelBody(agent({ presentationState: 'running' }), 0)).toBe('one (coding-agent) will be cancelled. Nothing cascades.');
+    expect(missionCancelBody(paused, [agent({ presentationState: 'paused' })])).toBe('one (coding-agent) will be cancelled and will not resume. Cancelling cascades to 1 paused descendant.');
+    expect(missionCancelBody(agent({ presentationState: 'running' }), [])).toBe('one (coding-agent) will be cancelled. Nothing cascades.');
   });
 });
 
@@ -82,5 +82,16 @@ describe('PD-ORCH-005 clauses 13 and 16 (revision 4, OQ-73/OQ-74): the Mission v
     expect(missionConfirmation(live, [], [...all, live]).cancelLabel).toBe('Keep running');
     const run = agent({ id: RUN_AGENT_ID, name: 'orchestrator', state: 'running', presentationState: 'running', live: true });
     expect(missionConfirmation(run, [live], [live])).toEqual({ title: 'Cancel the run?', body: CANCEL_RUN_TEXT, lines: ['live'], confirmLabel: 'Cancel the run', cancelLabel: 'Keep running' });
+  });
+});
+
+describe('PD-ORCH-005 clause 13 (revision 4, round 2, OQ-73): a live agent\'s cancel names the paused descendants it also ends', () => {
+  it('in a `pausing` run, the inspector\'s note for a live parent counts its child already paused', () => {
+    const live = agent({ state: 'running', presentationState: 'running', live: true, interruption: null });
+    const pausing = session({ executionStatus: 'pausing', agents: [live, grand] });
+    const html = inspector(live.id, { session: pausing, runActive: true, resting: false });
+    expect(button(html, 'inspector-cancel')).not.toContain('disabled');
+    expect(html).toContain('Cancelling cascades to 1 paused descendant.');
+    expect(missionConfirmation(live, [grand], [live, grand]).body).toBe('one (coding-agent) will be cancelled. Cancelling cascades to 1 paused descendant.');
   });
 });

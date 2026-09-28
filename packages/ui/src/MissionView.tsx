@@ -49,11 +49,12 @@ export const STRATEGY_NOTE = 'A change takes effect on the next run.';
 
 /**
  * REQ-MONITOR-055/064: the Mission view's confirmation of one agent's cancel names it, its persona and what cascades. A
- * paused child is final and says so, and counts its paused descendants (PD-ORCH-005 clauses 3 and 16, OQ-74).
+ * paused child is final and says so, and counts its paused descendants (PD-ORCH-005 clauses 3 and 16, OQ-74); a live
+ * one counts the paused descendants its cancel also ends (clause 13, OQ-73).
  */
-export function missionCancelBody(agent: Pick<AgentRecord, 'name' | 'persona' | 'presentationState'>, cascade: number): string {
+export function missionCancelBody(agent: Pick<AgentRecord, 'name' | 'persona' | 'presentationState'>, cascade: readonly Pick<AgentRecord, 'presentationState'>[]): string {
   const paused = agent.presentationState === 'paused';
-  return `${agent.name} (${agent.persona}) will be cancelled${paused ? ' and will not resume' : ''}. ${cascadeNote(cascade, paused) || 'Nothing cascades.'}`;
+  return `${agent.name} (${agent.persona}) will be cancelled${paused ? ' and will not resume' : ''}. ${cascadeNote(cascade) || 'Nothing cascades.'}`;
 }
 
 /**
@@ -64,7 +65,7 @@ export function missionCancelBody(agent: Pick<AgentRecord, 'name' | 'persona' | 
  */
 export function missionConfirmation(agent: AgentRecord, cascade: readonly AgentRecord[], agents: readonly AgentRecord[]): { title: string; body: string; lines: string[]; confirmLabel: string; cancelLabel: string } {
   const shared = cancelConfirmation(agent, agents);
-  return { ...shared, body: agent.id === RUN_AGENT_ID ? CANCEL_RUN_TEXT : missionCancelBody(agent, cascade.length), lines: cascade.map((a) => a.name) };
+  return { ...shared, body: agent.id === RUN_AGENT_ID ? CANCEL_RUN_TEXT : missionCancelBody(agent, cascade), lines: cascade.map((a) => a.name) };
 }
 
 export function MissionView(props: MissionViewProps) {

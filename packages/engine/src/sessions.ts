@@ -1569,12 +1569,14 @@ export class Sessions {
    *
    * Refused — `{ok: false}`, which the renderer states as "not cancellable" (REQ-MONITOR-128) — for the run itself (a
    * rest's whole-iteration equivalent is clause 6's "Continue without them"), an id that is no agent of the open
-   * iteration, and one neither `paused` nor left unfinished by a crash. A crash not yet recorded is recorded first, so what
+   * iteration, and one neither `paused` nor left unfinished by a crash, and when the chosen child's own move fails. A
+   * crash not yet recorded — only when `crashLeftOf` names an agent, never otherwise — is recorded first, so what
    * it cancels is what the crash record left `paused` — a reading that departs from clauses 3 and 8, which record a crash
    * only at a repair or when a run is about to start (OQ-74): the record also closes nothing but writes the iteration's
-   * interruption, withdraws every stored pending approval and ends the background sessions still marked running. Those
-   * the cancelled agents started otherwise are left as a live cancel leaves them, for the next stop, quit or crash to end
-   * (clause 10).
+   * interruption, withdraws every stored pending approval and ends the background sessions still marked running. With
+   * nothing crash-left, none of that is written — a rest's approvals and running background sessions stay (clause 10).
+   * The background sessions the cancelled agents started are otherwise left as a live cancel leaves them, for the next
+   * stop, quit or crash to end (clause 10).
    */
   private cancelPausedAtRest(s: Live | undefined, req: ControlRequest): ControlResult {
     if (!s) return { ok: false };
@@ -1603,9 +1605,15 @@ export class Sessions {
     const artifacts = s.artifacts ?? this.newArtifactStore(s.dal, sid, () => s.writer, warn);
     s.artifacts = artifacts;
     for (const t of targets) {
-      const r = s.writer.transitionChild(t.task_id, 'cancelled', 'cancellation');
-      if (!r.ok) { warn(r.error.code === 'illegal-move' ? r.error.reason : `cancelling paused ${t.task_id} failed: ${r.error.code}`); continue; }
       const own = t.task_id === agentId;
+      const r = s.writer.transitionChild(t.task_id, 'cancelled', 'cancellation');
+      if (!r.ok) {
+        warn(r.error.code === 'illegal-move' ? r.error.reason : `cancelling paused ${t.task_id} failed: ${r.error.code}`);
+        // The chosen child is first; a failed move of it leaves it paused and cancels nothing below it, and the renderer is
+        // answered that it could not be cancelled (REQ-MONITOR-128) rather than shown a cancel that did not happen.
+        if (own) { s.owner.reconcile(); return { ok: false }; }
+        continue;
+      }
       const summary = own ? 'The user cancelled this child.' : `Cancelled with ${self.canonical_name}, which the user cancelled.`;
       storeChildReport({ writer: s.writer, artifacts, warn }, t.task_id, t, { agent_name: t.canonical_name, role: t.persona, status: 'cancelled', summary, key_findings: [], last_response: '', final_response: '', errors: [] });
       s.writer.appendTimeline('child_user_cancelled', 'user', `The user cancelled child ${t.canonical_name} (${t.task_id})${own ? '' : ` with ${self.canonical_name}`} while the session rested.`, { task_id: t.task_id, ...(own ? {} : { cancelled_with: agentId }) });

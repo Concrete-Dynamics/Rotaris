@@ -18,7 +18,7 @@ import { COMMAND_NOT_RUN_TITLE, defaultUnavailableReason, parseSlash, slashNameT
 import { SlashPopup, slashRowId } from './slash/SlashPopup.js';
 import type { SlashCommand, SlashContext, SlashOutcome } from './slash/types.js';
 import { AgentTree } from './AgentTree.js';
-import { cancelConfirmation, cancelOffered, runLevelAgent, runLevelResting } from './agents.js';
+import { cancelConfirmation, cancelOffered, runLevelAgent, runLevelResting, steerOffered } from './agents.js';
 import { Inspector, type PersonaEntry } from './Inspector.js';
 import { useShellState } from './shell-state.js';
 import { DelegationHeader, ScopeToggle, scopedRows, type Acknowledger } from './TranscriptSurface.js';
@@ -1273,8 +1273,8 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
             <span className="agents__title">Agents</span>
             <span className="agents__count mono" data-testid="agents-count">{agents.length} agent{agents.length === 1 ? '' : 's'}</span>
             <div className="agents__spacer" />
-            {/* A paused agent is not live (REQ-MONITOR-045, OQ-73): it offers no Steer, as the inspector offers none. */}
-            {selected && !['done', 'failed', 'cancelled', 'paused'].includes(selected.presentationState) && onSteer && runActive && (
+            {/* A paused agent is not live (PD-ORCH-005 clause 13, OQ-73): it offers no Steer, as the inspector offers none. */}
+            {selected && steerOffered(selected, runActive) && onSteer && (
               <DesignButton type="button" className="btn btn-ghost agents__cancel" onClick={() => setSteering({ id: selected.id, name: selected.name })}>Steer {selected.name}</DesignButton>
             )}
             {/* PD-ORCH-005 clause 16: a paused child is cancellable while its session rests; a live agent while its run is active. */}

@@ -32,12 +32,17 @@ export function cancelOffered(agent: Pick<AgentRecord, 'id' | 'presentationState
 }
 
 /**
- * REQ-MONITOR-043/057: the run itself is never a tree row, but the inspector, the Mission view and the persona
- * windows present the entry role as the run-level agent — its rows are the transcript's `agent`/`tool` rows whose
- * name is the entry persona and no child's. Its tool history is still not carried; its latest prompt reading IS,
- * from Part AH's `entryContext` (REQ-MONITOR-089) — before that every root-level meter drew zero for a run that
- * spawned no child, whatever the run had actually spent.
+ * Whether the Workspace's agents header offers Steer for the selected agent: a live one — running, waiting or queued —
+ * while its run is active. A paused agent is not live (PD-ORCH-005 clause 13, REQ-MONITOR-045, OQ-73), so it is offered
+ * none, as the inspector offers none (`inspectorEnablement`). The header's `queued`, which the inspector's REQ-MONITOR-063
+ * rule does not steer, is older than clause 13 and kept.
  */
+export function steerOffered(agent: Pick<AgentRecord, 'presentationState'> | null, runActive: boolean): boolean {
+  if (agent === null || !runActive) return false;
+  const s = agent.presentationState;
+  return s === 'running' || s === 'waiting' || s === 'queued';
+}
+
 /**
  * PD-ORCH-005 clauses 13 and 19 (OQ-73): the iteration's root resumes with its paused agents and the Continue action
  * counts it, so while the session rests with an iteration open — `paused` or `interrupted`, or in REQ-CHAT-008's
@@ -50,6 +55,13 @@ export function runLevelResting(session: SessionRecord, recovery = false): boole
   return session.resumable !== null && (status === 'paused' || status === 'interrupted' || (recovery && isBusy(status)));
 }
 
+/**
+ * REQ-MONITOR-043/057: the run itself is never a tree row, but the inspector, the Mission view and the persona
+ * windows present the entry role as the run-level agent — its rows are the transcript's `agent`/`tool` rows whose
+ * name is the entry persona and no child's. Its tool history is still not carried; its latest prompt reading IS,
+ * from Part AH's `entryContext` (REQ-MONITOR-089) — before that every root-level meter drew zero for a run that
+ * spawned no child, whatever the run had actually spent.
+ */
 export function runLevelAgent(session: SessionRecord | null, entry: { readonly persona: string; readonly model: string; readonly reasoning: string; readonly tools: readonly string[] }, recovery = false): AgentRecord | null {
   if (!session || session.runStartedAt === null) return null;
   const resting = runLevelResting(session, recovery);
@@ -121,15 +133,6 @@ export function resolvedTools(agent: Pick<AgentRecord, 'grantedTools'>, declared
   return agent.grantedTools.length > 0 ? [...agent.grantedTools] : [...declared];
 }
 
-/** REQ-MONITOR-064: the live (running, waiting, queued) descendants of an agent, depth-first; the run's are every live agent. */
-export function liveDescendants(agents: readonly AgentRecord[], id: string): AgentRecord[] {
-  const live = (a: AgentRecord) => a.presentationState === 'running' || a.presentationState === 'waiting' || a.presentationState === 'queued';
-  if (id === RUN_AGENT_ID) return agents.filter(live);
-  const out: AgentRecord[] = [];
-  const walk = (parent: string) => { for (const a of agents) if (a.parentId === parent) { if (live(a)) out.push(a); walk(a.id); } };
-  walk(id);
-  return out;
-}
 /** PD-ORCH-005 clause 16: the `paused` descendants of an agent, depth-first — what cancelling a paused child cancels with it. */
 export function pausedDescendants(agents: readonly AgentRecord[], id: string): AgentRecord[] {
   const out: AgentRecord[] = [];
@@ -138,11 +141,24 @@ export function pausedDescendants(agents: readonly AgentRecord[], id: string): A
   return out;
 }
 /**
- * What cancelling an agent cancels with it: a live agent's live descendants (REQ-MONITOR-064/128); a paused child's paused
- * descendants (PD-ORCH-005 clause 16, OQ-74).
+ * What cancelling an agent cancels with it — the set the engine ends, so the confirmation never understates it: a paused
+ * child's paused descendants (PD-ORCH-005 clause 16, OQ-74); a live agent's live descendants and, since clause 13 made a
+ * paused agent its own state rather than `queued`, its paused ones too, which its cancel still ends (REQ-MONITOR-064/128,
+ * OQ-73); the run's every live or paused agent.
  */
 export function cancelCascade(agents: readonly AgentRecord[], agent: Pick<AgentRecord, 'id' | 'presentationState'>): AgentRecord[] {
-  return agent.presentationState === 'paused' ? pausedDescendants(agents, agent.id) : liveDescendants(agents, agent.id);
+  if (agent.presentationState === 'paused') return pausedDescendants(agents, agent.id);
+  const reached = (a: AgentRecord) => a.presentationState === 'paused' || a.presentationState === 'running' || a.presentationState === 'waiting' || a.presentationState === 'queued';
+  if (agent.id === RUN_AGENT_ID) return agents.filter(reached);
+  const out: AgentRecord[] = [];
+  const walk = (parent: string) => { for (const a of agents) if (a.parentId === parent) { if (reached(a)) out.push(a); walk(a.id); } };
+  walk(agent.id);
+  return out;
+}
+/** The adjective a cascade's agents share (OQ-73): `live`, `paused`, or `live and paused` for a mix. */
+export function cascadeKind(cascade: readonly Pick<AgentRecord, 'presentationState'>[]): 'live' | 'paused' | 'live and paused' {
+  const paused = cascade.filter((a) => a.presentationState === 'paused').length;
+  return paused === 0 ? 'live' : paused === cascade.length ? 'paused' : 'live and paused';
 }
 
 /**
@@ -153,7 +169,8 @@ export const CANCEL_RUN_TEXT = 'Cancellation cannot be undone in this session. T
 
 /**
  * REQ-MONITOR-126 / REQ-MONITOR-128: what confirming a cancel states. For the run instance it is the run's own cancel,
- * which is final. For an agent it names that agent and gives one line per live descendant cancelled with it. The
+ * which is final. For an agent it names that agent and gives one line per descendant cancelled with it — live, and the
+ * paused ones its cancel also ends (`cancelCascade`, OQ-73). The
  * Workspace and a persona window confirm through it, so the button REQ-SHELL-075(g) puts in the persona window can no
  * longer cancel unconfirmed (found by phase 5's third review).
  */
@@ -165,20 +182,22 @@ export function cancelConfirmation(agent: { readonly id: string; readonly name: 
     const paused = pausedDescendants(agents, agent.id).map((a) => a.name);
     return { title: `Cancel ${agent.name}?`, body: paused.length > 0 ? PAUSED_CANCEL_WITH : PAUSED_CANCEL_ALONE, lines: paused, confirmLabel: `Cancel ${agent.name}`, cancelLabel: 'Keep it paused' };
   }
-  const lines = liveDescendants(agents, agent.id).map((a) => a.name);
-  return { title: `Cancel ${agent.name}?`, body: lines.length > 0 ? 'Its live descendants will be cancelled with it:' : 'The agent will be cancelled.', lines, confirmLabel: `Cancel ${agent.name}`, cancelLabel: 'Keep running' };
+  const cascade = cancelCascade(agents, { id: agent.id, presentationState: 'running' });
+  return { title: `Cancel ${agent.name}?`, body: cascade.length > 0 ? `Its ${cascadeKind(cascade)} descendants will be cancelled with it:` : 'The agent will be cancelled.', lines: cascade.map((a) => a.name), confirmLabel: `Cancel ${agent.name}`, cancelLabel: 'Keep running' };
 }
 /** PD-ORCH-005 clauses 3 and 16: what cancelling a paused child states — it will not resume; the rest of its iteration will. */
 export const PAUSED_CANCEL_WITH = 'Cancellation cannot be undone: the agent will not resume, and its paused descendants are cancelled with it:';
 export const PAUSED_CANCEL_ALONE = 'Cancellation cannot be undone: the agent will not resume. The other paused agents resume when the session continues.';
 
 /**
- * REQ-MONITOR-064's sentence, empty when nothing cascades (REQ-SHELL-044's noun agreement). For a paused child it counts
- * the paused descendants cancelled with it (PD-ORCH-005 clause 16, OQ-74).
+ * REQ-MONITOR-064's sentence over what cancelling cascades to (`cancelCascade`), empty when nothing does (REQ-SHELL-044's
+ * noun agreement). The adjective names what is cascaded to: `live`, or — PD-ORCH-005 clauses 13 and 16, OQ-73/OQ-74 —
+ * `paused`, or `live and paused` for a live agent some of whose descendants already rest.
  */
-export function cascadeNote(count: number, paused = false): string {
+export function cascadeNote(cascade: readonly Pick<AgentRecord, 'presentationState'>[]): string {
+  const count = cascade.length;
   if (count <= 0) return '';
-  return `Cancelling cascades to ${count} ${paused ? 'paused' : 'live'} ${count === 1 ? 'descendant' : 'descendants'}.`;
+  return `Cancelling cascades to ${count} ${cascadeKind(cascade)} ${count === 1 ? 'descendant' : 'descendants'}.`;
 }
 
 /** REQ-MONITOR-274/276: pause is valid for the run-level selection only, while a run executes; the explanation is text. */

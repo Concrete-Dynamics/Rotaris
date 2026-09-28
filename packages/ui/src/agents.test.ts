@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { contextPercent, DEFAULT_CONTEXT_CAPACITY, RUN_AGENT_ID, type AgentRecord, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
-import { CANCEL_RUN_TEXT, cancelCascade, cancelConfirmation, cancelOffered, cascadeNote, PAUSED_CANCEL_ALONE, PAUSED_CANCEL_WITH, pausedDescendants, chipStates, countNoun, followedAgent, inspectorEnablement, instancesOf, liveDescendants, mcpChipStates, mcpFateText, metaLine, PAUSE_NO_RUN, PAUSE_SELECT_RUN, pauseAvailability, resolvedTools, ringFigures, rowsOf, runLevelAgent, tableOrder } from './agents.js';
+import { CANCEL_RUN_TEXT, cancelCascade, cancelConfirmation, cancelOffered, cascadeNote, PAUSED_CANCEL_ALONE, PAUSED_CANCEL_WITH, pausedDescendants, chipStates, countNoun, followedAgent, inspectorEnablement, instancesOf, mcpChipStates, mcpFateText, metaLine, PAUSE_NO_RUN, PAUSE_SELECT_RUN, pauseAvailability, resolvedTools, ringFigures, rowsOf, runLevelAgent, steerOffered, tableOrder } from './agents.js';
 import { personaColourToken } from './PersonaWindow.js';
 import { useShellState } from './shell-state.js';
 
@@ -86,11 +86,11 @@ describe('agents — chips, enablement, cascade, pause (REQ-MONITOR-060/062/063/
     const b = agent({ id: 'b', name: 'b', parentId: 'a', presentationState: 'queued', state: 'queued', live: false });
     const c = agent({ id: 'c', name: 'c', parentId: 'b', presentationState: 'done', state: 'succeeded', live: false });
     const d = agent({ id: 'd', name: 'd', parentId: 'root:1', presentationState: 'waiting', state: 'waiting_on_model_slot', live: false });
-    expect(liveDescendants([a, b, c, d], 'a').map((x) => x.id)).toEqual(['b']);
-    expect(liveDescendants([a, b, c, d], RUN_AGENT_ID).map((x) => x.id)).toEqual(['a', 'b', 'd']);
-    expect(cascadeNote(0)).toBe('');
-    expect(cascadeNote(1)).toBe('Cancelling cascades to 1 live descendant.');
-    expect(cascadeNote(3)).toBe('Cancelling cascades to 3 live descendants.');
+    expect(cancelCascade([a, b, c, d], a).map((x) => x.id)).toEqual(['b']);
+    expect(cancelCascade([a, b, c, d], { id: RUN_AGENT_ID, presentationState: 'running' }).map((x) => x.id)).toEqual(['a', 'b', 'd']);
+    expect(cascadeNote([])).toBe('');
+    expect(cascadeNote([b])).toBe('Cancelling cascades to 1 live descendant.');
+    expect(cascadeNote([a, b, d])).toBe('Cancelling cascades to 3 live descendants.');
   });
   it('pause is valid for the run-level selection only while a run executes; the refusal is the explanation text', () => {
     expect(pauseAvailability('bg_1', true, 'running')).toEqual({ enabled: false, reason: PAUSE_SELECT_RUN });
@@ -167,10 +167,9 @@ describe('agents — PD-ORCH-005 clause 13 (revision 4): a paused agent presents
     expect(runLevelAgent(session({ executionStatus: 'paused', resumable: null }), entry)?.presentationState).toBe('cancelled');
     expect(runLevelAgent(session({ executionStatus: 'completed', resumable }), entry)?.presentationState).toBe('done');
   });
-  it('the inspector\'s meta line names it; it is not live, so it is no live descendant and offers no steer', () => {
+  it('the inspector\'s meta line names it; it is not live, so it offers no steer', () => {
     const paused = agent({ id: 'bg_00000002', parentId: 'bg_00000001', state: 'paused', presentationState: 'paused', live: false, interruption: 'stop' });
     expect(metaLine(paused, null)).toBe('paused · — · 2 tool calls');
-    expect(liveDescendants([agent({}), paused], 'bg_00000001')).toEqual([]);
     expect(inspectorEnablement('paused')).toEqual({ steer: false, cancel: true, popOut: true });
   });
 });
@@ -200,12 +199,39 @@ describe('agents — PD-ORCH-005 clause 16 (revision 4): one paused child is can
     expect(cancelCascade(agents, one).map((a) => a.name)).toEqual(['grand']);
     expect(cancelCascade(agents, two)).toEqual([]);
     expect(cancelCascade([agent({ id: 'p' }), agent({ id: 'k', parentId: 'p' })], agent({ id: 'p' })).map((a) => a.id)).toEqual(['k']);
-    expect(cascadeNote(1, true)).toBe('Cancelling cascades to 1 paused descendant.');
-    expect(cascadeNote(2, true)).toBe('Cancelling cascades to 2 paused descendants.');
+    expect(cascadeNote([grand])).toBe('Cancelling cascades to 1 paused descendant.');
+    expect(cascadeNote([grand, two])).toBe('Cancelling cascades to 2 paused descendants.');
   });
   it('the confirmation names the child, gives one line per paused descendant, says it is final, and keeps it paused on dismissal (REQ-MONITOR-128)', () => {
     expect(cancelConfirmation({ id: 'one', name: 'one' }, agents)).toEqual({ title: 'Cancel one?', body: PAUSED_CANCEL_WITH, lines: ['grand'], confirmLabel: 'Cancel one', cancelLabel: 'Keep it paused' });
     expect(cancelConfirmation({ id: 'two', name: 'two' }, agents)).toEqual({ title: 'Cancel two?', body: PAUSED_CANCEL_ALONE, lines: [], confirmLabel: 'Cancel two', cancelLabel: 'Keep it paused' });
     expect(PAUSED_CANCEL_WITH).toMatch(/cannot be undone/);
+  });
+});
+
+describe('agents — PD-ORCH-005 clause 13 (revision 4, round 2): a live agent\'s cancel still ends its paused descendants, and says so (OQ-73)', () => {
+  const one = agent({ id: 'one', name: 'one', parentId: 'root:1' });
+  const grand = agent({ id: 'grand', name: 'grand', parentId: 'one', state: 'paused', presentationState: 'paused', live: false });
+  const kid = agent({ id: 'kid', name: 'kid', parentId: 'one', presentationState: 'queued', state: 'queued', live: false });
+  const done = agent({ id: 'done', name: 'done', parentId: 'one', presentationState: 'done', state: 'succeeded', live: false });
+  const deep = agent({ id: 'deep', name: 'deep', parentId: 'done', state: 'paused', presentationState: 'paused', live: false });
+  it('a live target\'s cascade is every descendant the engine cancels — live and paused, through a finished one — and the run\'s is every live or paused agent', () => {
+    expect(cancelCascade([one, grand], one).map((a) => a.name)).toEqual(['grand']);
+    expect(cancelCascade([one, grand, kid, done, deep], one).map((a) => a.name)).toEqual(['grand', 'kid', 'deep']);
+    expect(cancelCascade([one, grand, kid, done, deep], { id: RUN_AGENT_ID, presentationState: 'running' }).map((a) => a.name)).toEqual(['one', 'grand', 'kid', 'deep']);
+  });
+  it('the confirmation lists them and the note counts them, naming what they are', () => {
+    expect(cancelConfirmation({ id: 'one', name: 'one' }, [one, grand])).toEqual({ title: 'Cancel one?', body: 'Its paused descendants will be cancelled with it:', lines: ['grand'], confirmLabel: 'Cancel one', cancelLabel: 'Keep running' });
+    expect(cancelConfirmation({ id: 'one', name: 'one' }, [one, grand, kid]).body).toBe('Its live and paused descendants will be cancelled with it:');
+    expect(cascadeNote(cancelCascade([one, grand], one))).toBe('Cancelling cascades to 1 paused descendant.');
+    expect(cascadeNote(cancelCascade([one, grand, kid], one))).toBe('Cancelling cascades to 2 live and paused descendants.');
+  });
+  it('the Workspace header offers Steer to a live agent while its run is active, never to a paused one (a `pausing` run)', () => {
+    expect(steerOffered(one, true)).toBe(true);
+    expect(steerOffered(kid, true)).toBe(true);
+    expect(steerOffered(grand, true)).toBe(false);
+    expect(steerOffered(done, true)).toBe(false);
+    expect(steerOffered(one, false)).toBe(false);
+    expect(steerOffered(null, true)).toBe(false);
   });
 });

@@ -377,5 +377,62 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         expect(dal.getChild(sid, 'bg_000000c1')!.state).toBe('running');
       });
     });
+    describe('PD-ORCH-005 clause 16 (revision 4, round 2, OQ-74): the at-rest cancel walks through a finished descendant, records a crash only when one left something, and answers a failed move', () => {
+      const cancel = (s: Sessions, sid: SessionId, agentId: string) => s.control({ op: 'cancelAgent', sessionId: sid, args: { agentId } });
+      /** c1, c2 and c3 brought to rest by a pause; `recorded` whether the rest also wrote the iteration's interruption. */
+      const rested = (recorded: boolean) => (w: SessionWriter) => {
+        if (recorded) dal.setIterationInterruption(w.sessionId, 2, 'pause');
+        w.restChild('bg_000000c1', 'pause', 'running');
+        w.restChild('bg_000000c2', 'pause', 'queued');
+        w.restChild('bg_000000c3', 'pause', 'waiting_on_dependencies');
+      };
+      /** What a crash record writes beyond the agents: the iteration's interruption, the approvals and the background sessions. */
+      const crashWrites = (sid: SessionId) => ({ interruption: dal.getIteration(sid, 2)!.interruption, approvals: dal.getSession(sid)!.pending_approvals, terminals: dal.agentTerminalsOf(sid).map((t) => [t.terminal_id, t.state]), withdrawn: dal.timelineOf(sid).filter((t) => t.name === 'approval_withdrawn').length });
+
+      it('a paused descendant below a finished one is cancelled with the child the user chose', async () => {
+        const sid = await crashed((w) => {
+          w.spawnChild(child('bg_000000d1', 'running', ROOT));
+          w.spawnChild(child('bg_000000d2', 'succeeded', 'bg_000000d1'));
+          w.spawnChild(child('bg_000000d3', 'running', 'bg_000000d2'));
+        });
+        const viewer = sessionsAs(88);
+        expect(viewer.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        expect(cancel(viewer, sid, 'bg_000000d1')).toEqual({ ok: true });
+        expect(dal.getChild(sid, 'bg_000000d2')!.state).toBe('succeeded');
+        expect(dal.getChild(sid, 'bg_000000d3')).toMatchObject({ state: 'cancelled' });
+        expect(JSON.parse(dal.getChild(sid, 'bg_000000d3')!.report!)).toMatchObject({ status: 'cancelled', summary: 'Cancelled with d1, which the user cancelled.' });
+      });
+
+      it('a session a pause left at rest, its host gone since: the cancel writes no crash record — its approvals and running background sessions stay (clause 10)', async () => {
+        const sid = await crashed(rested(true), 'paused');
+        const viewer = sessionsAs(88);
+        expect(viewer.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        const before = crashWrites(sid);
+        expect(before.terminals).toContainEqual(['ts_dead', 'running']);
+        expect(cancel(viewer, sid, 'bg_000000c1')).toEqual({ ok: true });
+        expect([dal.getChild(sid, 'bg_000000c1')!.state, dal.getChild(sid, 'bg_000000c3')!.state, dal.getChild(sid, 'bg_000000c2')!.state]).toEqual(['cancelled', 'cancelled', 'paused']);
+        expect(crashWrites(sid)).toEqual(before);
+      });
+
+      it('a crash after every agent had come to rest, before the rest recorded the iteration\'s interruption: nothing is crash-left, so the cancel records no crash', async () => {
+        const sid = await crashed(rested(false));
+        const viewer = sessionsAs(88);
+        expect(viewer.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        const before = crashWrites(sid);
+        expect(before.interruption).toBeNull();
+        expect(cancel(viewer, sid, 'bg_000000c1')).toEqual({ ok: true });
+        expect(dal.getChild(sid, 'bg_000000c1')!.state).toBe('cancelled');
+        expect(crashWrites(sid)).toEqual(before);
+      });
+
+      it('when the chosen child\'s own move fails, the cancel is refused and nothing below it is cancelled (REQ-MONITOR-128)', async () => {
+        const sid = await crashed(rested(true), 'paused');
+        const viewer = sessionsAs(88);
+        expect(viewer.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        dal.db.exec("CREATE TRIGGER refuse_c1 BEFORE UPDATE OF state ON children WHEN NEW.state = 'cancelled' AND OLD.task_id = 'bg_000000c1' BEGIN SELECT RAISE(ABORT, 'refused'); END;");
+        expect(cancel(viewer, sid, 'bg_000000c1')).toEqual({ ok: false });
+        expect([dal.getChild(sid, 'bg_000000c1')!.state, dal.getChild(sid, 'bg_000000c3')!.state]).toEqual(['paused', 'paused']);
+      });
+    });
   });
 });

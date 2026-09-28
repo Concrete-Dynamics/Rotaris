@@ -29,6 +29,7 @@ import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { cleanEnvironment, configDirFor, electron, hostSwitches, proofIsolationEnv, workspacesRootFor } from './lib/harness.mjs';
+import { lineRpcClient } from './lib/line-rpc-client.mjs';
 
 const require = createRequire(import.meta.url);
 const Database = require('better-sqlite3');
@@ -159,23 +160,10 @@ async function branch({ exe, before, tail, ws, env, call = null, callTimeoutMs =
   const launchedAt = new Date();
   // `hostSwitches` ahead of the token: the branch is a Chromium process too, and as root it dies without them.
   const child = spawn(exe, [...before, ...hostSwitches, TOKEN, '--', ...tail], { env, cwd: ws, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
-  let out = Buffer.alloc(0); let stderr = ''; let preamble = null; let firstByteAt = null; const nonJson = [];
-  const pending = new Map(); let id = 0;
-  child.stderr.setEncoding('utf8'); child.stderr.on('data', (d) => { stderr += d; });
-  const send = (method, params) => new Promise((res, rej) => { const my = ++id; pending.set(my, { res, rej }); child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: my, method, params })}\n`); });
-  child.stdout.on('data', (d) => {
-    if (firstByteAt === null) firstByteAt = Date.now() - t0;
-    out = Buffer.concat([out, d]);
-    for (;;) {
-      const nl = out.indexOf(10); if (nl === -1) return;
-      const line = out.subarray(0, nl); out = out.subarray(nl + 1);
-      const text = line.toString('utf8');
-      if (preamble === null) { const b = text.indexOf('{'); if (b === -1) { preamble = (preamble ?? '') + text + '\n'; continue; } preamble = (preamble ?? '') + text.slice(0, b); }
-      if (text.trim() === '') continue;
-      let m; try { m = JSON.parse(text); } catch { nonJson.push(text.slice(0, 200)); continue; }
-      if (m.id !== undefined && pending.has(m.id)) { const p = pending.get(m.id); pending.delete(m.id); if (m.error) p.rej(new Error(JSON.stringify(m.error))); else p.res(m.result); }
-    }
-  });
+  // The client rejects every pending request when the child exits, errors or is killed by the guard, with the exit
+  // status and standard error's tail — a branch that dies fails here in seconds instead of hanging (`lib/line-rpc-client.mjs`).
+  const rpc = lineRpcClient(child, { guardMs: callTimeoutMs + 60_000, t0 });
+  const send = (method, params) => rpc.send(method, params);
   const ps = `$since = [DateTime]::Parse('${launchedAt.toISOString()}').ToLocalTime(); Get-Process -Name electron,Rotaris,python,conhost,node -ErrorAction SilentlyContinue | Where-Object { $_.StartTime -gt $since } | Select-Object Id,ProcessName,MainWindowHandle,MainWindowTitle | ConvertTo-Json -Compress`;
   const samples = [];
   const sampler = sample ? setInterval(() => {
@@ -184,11 +172,10 @@ async function branch({ exe, before, tail, ws, env, call = null, callTimeoutMs =
     samples.push({ atMs: Date.now() - t0, processes: procs.map((p) => ({ id: p.Id, name: p.ProcessName, handle: String(p.MainWindowHandle), title: p.MainWindowTitle ?? '' })) });
   }, 300) : null;
   const result = {};
-  const guard = setTimeout(() => { child.kill(); }, callTimeoutMs + 60_000);
   try {
     const init = await send('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'code-intel-proof', version: '0' } });
     result.initializeMs = Date.now() - t0; result.serverName = init.serverInfo?.name; result.protocol = init.protocolVersion;
-    child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized', params: {} })}\n`);
+    rpc.notify('notifications/initialized', {});
     const tools = await send('tools/list', {});
     result.toolsListMs = Date.now() - t0; result.toolNames = tools.tools.map((t) => t.name).sort();
     if (call) {
@@ -197,17 +184,21 @@ async function branch({ exe, before, tail, ws, env, call = null, callTimeoutMs =
       result.call = { name: call.name, ms: Date.now() - c0, isError: r.isError ?? false, text: (r.content ?? []).map((c) => c.text ?? '').join('\n').slice(0, 800) };
     }
   } catch (e) { result.error = String(e.message ?? e); }
-  child.stdin.end();
-  const exit = await new Promise((res) => { const t = setTimeout(() => { child.kill(); res({ code: null, signal: 'killed-after-30s' }); }, 30_000); child.on('exit', (c, s) => { clearTimeout(t); res({ code: c, signal: s, atMs: Date.now() - t0 }); }); });
-  clearTimeout(guard);
+  // `exited` settles however early the child went — the inline wait attached its listener only now, so a child that had
+  // already exited was reported `killed-after-30s`.
+  rpc.close();
+  let exitTimer;
+  const exit = await Promise.race([rpc.exited, new Promise((res) => { exitTimer = setTimeout(() => { child.kill(); res({ code: null, signal: 'killed-after-30s' }); }, 30_000); })]);
+  clearTimeout(exitTimer);
   if (sampler) clearInterval(sampler);
   result.exit = exit;
-  result.firstStdoutByteMs = firstByteAt;
-  result.bytesBeforeFirstBrace = Buffer.from(preamble ?? '').toString('hex');
-  result.nonJsonStdoutLines = nonJson;
+  result.firstStdoutByteMs = rpc.firstByteAt;
+  result.bytesBeforeFirstBrace = Buffer.from(rpc.preamble ?? '').toString('hex');
+  result.nonJsonStdoutLines = rpc.nonJsonLines;
   result.windowed = [...new Set(samples.flatMap((s) => s.processes.filter((p) => p.handle !== '0' && p.handle !== '')).map((p) => `${p.name}#${p.id} handle ${p.handle} "${p.title}"`))];
   result.postLaunchProcesses = [...new Set(samples.flatMap((s) => s.processes.filter((p) => p.name !== 'conhost').map((p) => p.name)))];
   result.samples = samples.length;
+  const stderr = rpc.stderr;
   result.fetchLines = stderr.split(/\r?\n/).filter((l) => /npm install|uvx|Failed to fetch|Could not find|not installed|download|Installing/i.test(l)).map((l) => l.replace(/^.*? - /, '').slice(0, 220)).slice(0, 12);
   result.stderrBytes = stderr.length;
   return result;

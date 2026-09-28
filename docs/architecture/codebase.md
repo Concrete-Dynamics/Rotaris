@@ -1075,7 +1075,9 @@ propagated); discovery of the real runtime through the token with the tier's nam
 block; the workspace binding on the launch line; a real `get_symbols_overview` call; the three-step project setup —
 completed, skipped on the marker, `skipped-no-code`, a launch-less entry refused, a cancel mid-step; the manifest's
 drift refused; the packaged binary with outbound traffic blocked, which names the fetch it needs (IC-7). Evidence under
-`.proof/code-intel-proof/`.
+`.proof/code-intel-proof/`. Its branch client is `scripts/lib/line-rpc-client.mjs` (2026-09-28, R-062): every pending
+request rejects when the child exits, errors or is killed by the guard, with the exit status and standard error's tail,
+so a branch that dies fails the launch in seconds instead of hanging it (`line-rpc-client.test.ts`, 12 cases).
 
 **What `pnpm config-proof` does.** It builds Electron and launches the app five times against commented files at
 both scopes: Settings → Runtime toggles "Allow outside workspace" through its confirmation and saves (every other

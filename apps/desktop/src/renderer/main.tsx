@@ -973,13 +973,22 @@ function dispatchNoticeAction(action: NoticeAction): void {
       void bridge.command({ kind: 'improvements.undoReview', id: action.id });
       return;
     case 'install-update':
+      // The updater (first-release-plan.md §4.6, 2026-09-28): `Update now` on the offer notice and `Try again` on the
+      // failure notice (REQ-STARTUP-116/120). Main holds the offer and runs REQ-STARTUP-122's sequence; this window
+      // names no version, no asset and no URL.
+      void bridge.command({ kind: 'update.install' });
+      return;
     case 'restart':
+      // `Restart now`, offered on the `Update installed` notice alone (REQ-STARTUP-121): the hand-over to the updated
+      // installation is main's, through the instance record.
+      void bridge.command({ kind: 'update.restart' });
+      return;
     case 'open-cloud-account':
     case 'open-project-init':
     case 'retry-run':
     case 'save-settings':
-      // Each is a member REQ-NOTIFY-044 fixes whose target does not exist in this build (no updater, no hosted cloud,
-      // no project-initialization surface, no proposal store). Nothing is dispatched and the attempt is recorded.
+      // Each is a member REQ-NOTIFY-044 fixes whose target does not exist in this build (no hosted cloud, no
+      // project-initialization surface, no proposal store). Nothing is dispatched and the attempt is recorded.
       console.warn(`notice action "${action.kind}" has no target in this build`);
       return;
   }

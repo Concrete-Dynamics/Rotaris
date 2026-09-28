@@ -13,9 +13,9 @@ import { type CommandContext, type CommandHandlers } from './context.js';
  * external link lives here and nowhere else: transcript text is model-authored, so only http and https open.
  */
 export function shellCommands(
-  ctx: Pick<CommandContext, 'capturing' | 'currentTheme' | 'log' | 'notices' | 'preferences' | 'processes' | 'requirementsPreferenceKey' | 'runHost' | 'services' | 'setTheme' | 'themeBackground'>,
+  ctx: Pick<CommandContext, 'capturing' | 'currentTheme' | 'log' | 'notices' | 'preferences' | 'processes' | 'requirementsPreferenceKey' | 'runHost' | 'services' | 'setTheme' | 'themeBackground' | 'updater'>,
 ): Pick<CommandHandlers, 'shell.hello' | 'shell.openExternal' | 'shell.openThirdPartyLicenses' | 'theme.get' | 'theme.set' | 'prefs.get' | 'prefs.set' | 'composer.readDraft' | 'composer.writeDraft' | 'notice.acknowledge' | 'notice.report' | 'shell.switchView'> {
-  const { capturing, currentTheme, log, notices, preferences, processes, requirementsPreferenceKey, runHost, services, setTheme, themeBackground } = ctx;
+  const { capturing, currentTheme, log, notices, preferences, processes, requirementsPreferenceKey, runHost, services, setTheme, themeBackground, updater } = ctx;
   return {
     'shell.hello': async (_req, { w }) => {
       const cb = w.workspaceId
@@ -143,6 +143,11 @@ export function shellCommands(
       return { ok: true };
     },
     'notice.acknowledge': async (req) => {
+      // REQ-STARTUP-116/117, REQ-SHELL-114/118: dismissing the update-offer notice FIRST records the offered version as
+      // waved off, and dismissing any other notice records nothing — the updater knows which notice is its own and
+      // answers before the clear, so the version is written before the notice naming it is gone.
+      const dismissing = req.noticeId ?? notices.current()?.id;
+      if (dismissing !== undefined) await updater.noticeDismissed(dismissing);
       // REQ-NOTIFY-026: with an identifier this is a compare-and-clear, so dismissing a notice already superseded
       // leaves its successor standing; without one it clears whatever is current.
       await notices.dismiss(req.noticeId);

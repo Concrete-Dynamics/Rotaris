@@ -19,3 +19,16 @@ so the gate `CLAUDE.md` requires before a commit cannot go green there.
 
 - `tools/symbol-artifact/replace.test.ts`: `refuse`, the `chmodSync(dir, 0o555)` staging.
 - `packages/engine/src/session-actions.test.ts`: the `chmodSync(parent, 0o555)` staging near line 337.
+
+## Repaired — 2026-09-28 under R-062
+
+**This note and `two-contention-tests-cannot-contend-as-root.md` describe one defect** — the same two tests,
+recorded twice — repaired once; see that note's "Repaired" section for the full account. In short: off Windows
+the refusal now holds for the uid running the test. An unprivileged user keeps the `chmod 0o555` parent refusal
+(the `EACCES` staging denial the ladder retries — the mechanism that passed before this defect, so the test
+still passes for that uid). Root, which ignores mode bits, instead meets an **immutable target** (`chattr +i` /
+`chflags uchg`) it cannot rename over: `EPERM`, transient, so the REAL ladder runs to five attempts with the
+previous file retained on the real filesystem. No skip, no `skipIf(root)`, no loosened assertion.
+
+Pinned by `tools/symbol-artifact/replace.test.ts` and `packages/engine/src/session-actions.test.ts`, both green
+as root under Node 24.

@@ -3411,7 +3411,10 @@ no more; its last sentence settles "every other unfinished agent of a session at
   "A paused agent — no design").
 - **The controls.** A paused agent is not live (REQ-MONITOR-045): it offers no Steer — neither in the inspector
   (`inspectorEnablement`) nor in the Workspace's agents header (`steerOffered`, which keeps the header's older `queued`).
-  Its own Cancel is clause 16's (OQ-74).
+  Its own Cancel is clause 16's (OQ-74). Neither live nor ended, it shows no elapsed time: the transcript's "This task"
+  reads its state alone (`scopeDetail`), as the agent tree, the table and the inspector already did — in REQ-CHAT-008's
+  recovery state the busy status keeps the clock ticking, and REQ-CHAT-069's "live elapsed wall-clock time" would
+  otherwise count up while nothing runs.
 - **A live agent's cancel.** Its confirmation and cascade note name every descendant its cancel ends — live and
   paused, through a finished one (`cancelCascade`) — as REQ-MONITOR-128's "one line per ... descendant that will also be
   cancelled" requires of what is cancelled; the body and the note name what they are: "Its live descendants", "Its
@@ -3459,8 +3462,13 @@ only with a run behind it. The clause does not say:
   It is refused (`{ok: false}`, which the renderer states as "not cancellable", REQ-MONITOR-128) for the run's id or the
   root's, an id that is no child of the open iteration, and a child neither `paused` nor left by a crash; a refusal
   records nothing. It is refused too when the chosen child's own move to `cancelled` fails (a failed store write), and
-  then nothing below it is cancelled. The session it reaches is one this process has loaded and holds the lock of, so no other run can be
-  behind it.
+  then nothing below it is cancelled; a paused descendant whose own move fails is warned of and left `paused`, to resume
+  with the rest, and the chosen child's cancel stands. It is written under the session's lock (ADR-0005), which it does
+  not otherwise hold: a run releases the lock at its teardown, so a session paused in this process holds none. The
+  cancel takes the lock for its write and gives it back after, keeps it when this process already holds it (a session
+  loaded here), reaps a dead holder on this machine as loading a session does, and is refused while another live
+  process holds it — one that has loaded the session, or is resuming it — so it never writes into a session another
+  instance owns.
 - **A crash not yet recorded — a departure from clauses 3 and 8.** It is recorded first (`recordCrashOf`), and the
   cancel then acts on what the record left `paused` — **only when a crash left something unfinished** (`crashLeftOf`
   names an agent neither terminal nor `paused` of an open iteration whose interruption is still NULL). Otherwise the
@@ -3489,11 +3497,16 @@ only with a run behind it. The clause does not say:
   ended unobserved (REQ-ORCH-054).
 - **Background sessions.** A cancelled agent's background terminal sessions are left as a live cancel of one child
   leaves them, for the next stop, quit or crash to end (clause 10, REQ-TOOLS-111).
-- **The cascade note.** For a paused child it counts the paused descendants cancelled with it — "Cancelling cascades to 1
-  paused descendant." — and for a live agent every descendant its cancel ends, live and paused (OQ-73).
-- **The confirmation.** Titled "Cancel <name>?", it gives one line per paused descendant and states that it cannot be
-  undone and that the agent will not resume (clause 3's "final"); with no paused descendant, that the other paused
-  agents resume when the session continues. Its dismissal reads "Keep it paused" rather than "Keep running". The
+- **The cascade note.** For any agent it counts every unfinished descendant its cancel ends, live and paused, through a
+  finished one (OQ-73). For a paused child at rest those are its paused descendants — "Cancelling cascades to 1 paused
+  descendant." — since at rest every unfinished descendant is `paused`. While a run is still `pausing`, a paused child
+  a persona window cancels (REQ-SHELL-075(g) offers it Cancel always) reaches the live run's cancel, which also ends a
+  descendant whose in-flight call has not yet let it rest; the note then says "live and paused", so the confirmation
+  never understates what the engine ends.
+- **The confirmation.** Titled "Cancel <name>?", it gives one line per descendant cancelled with it — the set the cascade
+  note counts — and states that it cannot be undone, that the agent will not resume (clause 3's "final"), and which
+  descendants are cancelled with it by the same adjective ("paused", or "live and paused" in a `pausing` run); with no
+  descendant cancelled, that the other paused agents resume when the session continues. Its dismissal reads "Keep it paused" rather than "Keep running". The
   Mission view's own confirmation adds "and will not resume" to its sentence (`missionCancelBody`), and takes its title
   and both buttons from the same `cancelConfirmation` (`missionConfirmation`). The confirmation describes the session
   as it was when Cancel was pressed: a continue confirmed in another window before this one is answered sends the

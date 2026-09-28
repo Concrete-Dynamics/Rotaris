@@ -434,5 +434,57 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         expect([dal.getChild(sid, 'bg_000000c1')!.state, dal.getChild(sid, 'bg_000000c3')!.state]).toEqual(['paused', 'paused']);
       });
     });
+    describe('PD-ORCH-005 clause 16 (revision 4, round 3, OQ-74): the at-rest cancel writes under the session\'s lock, answers a session not loaded, and keeps a failed descendant paused', () => {
+      const cancel = (s: Sessions, sid: SessionId, agentId: string) => s.control({ op: 'cancelAgent', sessionId: sid, args: { agentId } });
+      const OTHER = mintMachineId('0000000000000000000000000000000b') as MachineId;
+      const at = () => new Date(Number(clock.instant())).toISOString();
+
+      it('refused, writing nothing, while another machine holds the lock; the lock is left as it was', async () => {
+        const sid = await crashed();
+        const viewer = sessionsAs(88);
+        expect(viewer.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        dal.releaseLock(sid, 88, HOST);
+        expect(dal.claimLock(sid, 99, OTHER, at()).claimed).toBe(true);
+        expect(cancel(viewer, sid, 'bg_000000c1')).toEqual({ ok: false });
+        expect(dal.getIteration(sid, 2)!.interruption).toBeNull();
+        expect(dal.getChild(sid, 'bg_000000c1')!.state).toBe('running');
+        expect(dal.getLock(sid)).toMatchObject({ pid: 99, host: OTHER });
+      });
+
+      it('a dead local holder is reaped, the cancel made under the lock and the lock given back; a lock this process holds is kept', async () => {
+        const sid = await crashed();
+        const viewer = sessionsAs(88);
+        expect(viewer.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        expect(dal.getLock(sid)).toMatchObject({ pid: 88 });
+        expect(cancel(viewer, sid, 'bg_000000c2')).toEqual({ ok: true });
+        expect(dal.getLock(sid)).toMatchObject({ pid: 88 });
+        dal.releaseLock(sid, 88, HOST);
+        expect(dal.claimLock(sid, 99, HOST, at()).claimed).toBe(true);
+        expect(cancel(viewer, sid, 'bg_000000c1')).toEqual({ ok: true });
+        expect(dal.getChild(sid, 'bg_000000c1')!.state).toBe('cancelled');
+        expect(dal.getLock(sid)).toBeUndefined();
+      });
+
+      it('refused for a session this process has not loaded', async () => {
+        const sid = await crashed();
+        expect(cancel(sessionsAs(88), sid, 'bg_000000c1')).toEqual({ ok: false });
+        expect(dal.getChild(sid, 'bg_000000c1')!.state).toBe('running');
+      });
+
+      it('a paused descendant whose move fails stays paused, and the chosen child\'s cancel still stands', async () => {
+        const sid = await crashed((w) => {
+          dal.setIterationInterruption(w.sessionId, 2, 'pause');
+          w.restChild('bg_000000c1', 'pause', 'running');
+          w.restChild('bg_000000c2', 'pause', 'queued');
+          w.restChild('bg_000000c3', 'pause', 'waiting_on_dependencies');
+        }, 'paused');
+        const viewer = sessionsAs(88);
+        expect(viewer.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        dal.db.exec("CREATE TRIGGER refuse_c3 BEFORE UPDATE OF state ON children WHEN NEW.state = 'cancelled' AND OLD.task_id = 'bg_000000c3' BEGIN SELECT RAISE(ABORT, 'refused'); END;");
+        expect(cancel(viewer, sid, 'bg_000000c1')).toEqual({ ok: true });
+        expect([dal.getChild(sid, 'bg_000000c1')!.state, dal.getChild(sid, 'bg_000000c3')!.state]).toEqual(['cancelled', 'paused']);
+        expect(resumableOf(dal, dal.getSession(sid)!)).toEqual({ iteration: 2, agents: 3 });
+      });
+    });
   });
 });

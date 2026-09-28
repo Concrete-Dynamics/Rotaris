@@ -1976,5 +1976,21 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       // Nothing is left open, so nothing is cancellable at rest any more.
       expect(cancel(sessions, sid, byName(sid, 'two').task_id)).toEqual({ ok: false });
     });
+    describe('round 3 (OQ-74): the cancel is made under the session\'s lock', () => {
+      it('a session this process paused holds no lock: the cancel takes it for the write and gives it back; another live process holding it refuses the cancel, writing nothing', async () => {
+        const { sessions, sid } = await restedFamily();
+        expect(dal.getLock(sid)).toBeUndefined();
+        const at = new Date(Number(clock.instant())).toISOString();
+        expect(dal.claimLock(sid, 999, HOST, at).claimed).toBe(true);
+        expect(cancel(sessions, sid, byName(sid, 'two').task_id)).toEqual({ ok: false });
+        expect(byName(sid, 'two').state).toBe('paused');
+        expect(dal.timelineOf(sid).filter((t) => t.name === 'child_user_cancelled')).toEqual([]);
+        expect(dal.getLock(sid)).toMatchObject({ pid: 999 });
+        dal.releaseLock(sid, 999, HOST);
+        expect(cancel(sessions, sid, byName(sid, 'two').task_id)).toEqual({ ok: true });
+        expect(byName(sid, 'two').state).toBe('cancelled');
+        expect(dal.getLock(sid)).toBeUndefined();
+      });
+    });
   });
 });

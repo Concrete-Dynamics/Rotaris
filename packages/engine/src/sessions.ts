@@ -1,4 +1,4 @@
-import { asSessionId, err, formatAmount, millis, ok, type Clocks, type MachineId, type Millis, type Result, type SessionId } from '@rotaris/kernel';
+import { asSessionId, err, formatAmount, millis, ok, toIsoUtc, type Clocks, type MachineId, type Millis, type Result, type SessionId } from '@rotaris/kernel';
 import { APPROVAL_OPTIONS, ApprovalPayloadSchema, CHECKPOINTS_NO_TREE, COST_QUALIFIERS, localCheckpointLabel, resolvePreset, WorktreeBindingSchema, type ApprovalOption, type CheckpointKind, type CheckpointListPayload, type ControlRequest, type ControlResult, type CostQualifier, type ImageAttachmentInput, type PermissionPreset, type QuestionAnswers, type RunType, type SessionLiveness, type SessionRecord, type TranscriptRow, type WorktreeBinding } from '@rotaris/contracts';
 import { existsSync, rmSync } from 'node:fs';
 import { RELEASE_PAGE_SIZE, type CheckpointRow, type SessionRow, type StoreDal } from '@rotaris/store';
@@ -20,7 +20,7 @@ import { SessionLog, type LogLevel } from './session-log.js';
 import type { ToolPort } from './run/turn.js';
 import { settleStaleChildren } from './children/orchestration.js';
 import type { DelegationOps } from './children/delegation.js';
-import { DEFAULT_BUDGET, storeChildReport, type Budget } from './children/ledger.js';
+import { DEFAULT_BUDGET, storeChildReport, userCancellation, type Budget } from './children/ledger.js';
 import { DEFAULT_CONTEXT_CAPACITY, isInterruption, isTerminalChildState, presentationChildState, reconciledState, type AgentRecord, type ChildState } from '@rotaris/contracts';
 import type { ChildRow } from '@rotaris/store';
 import { SummaryWriter } from './run/summary.js';
@@ -1569,7 +1569,9 @@ export class Sessions {
    *
    * Refused — `{ok: false}`, which the renderer states as "not cancellable" (REQ-MONITOR-128) — for the run itself (a
    * rest's whole-iteration equivalent is clause 6's "Continue without them"), an id that is no agent of the open
-   * iteration, and one neither `paused` nor left unfinished by a crash, and when the chosen child's own move fails. A
+   * iteration, and one neither `paused` nor left unfinished by a crash, when the chosen child's own move fails, and
+   * while another live process holds the session's lock (`lockForWrite`). A paused descendant whose move fails is warned
+   * of and left paused, and the cancel of the chosen child still stands (OQ-74). A
    * crash not yet recorded — only when `crashLeftOf` names an agent, never otherwise — is recorded first, so what
    * it cancels is what the crash record left `paused` — a reading that departs from clauses 3 and 8, which record a crash
    * only at a repair or when a run is about to start (OQ-74): the record also closes nothing but writes the iteration's
@@ -1586,11 +1588,43 @@ export class Sessions {
     const open = s.dal.openIterationOf(sid);
     // The run's id and the root's are no child of the iteration, so the lookup below refuses them.
     if (!row || !open) return { ok: false };
-    // This process holds the session's lock and runs nothing for it, so no other run is behind it (REQ-GIT-093's reading).
+    const warn = (m: string) => { s.log?.warn(m); this.deps.warn(m); };
+    // ADR-0005: the write is made under the session's lock. A run releases the lock at its teardown, so a session paused
+    // in this process holds none; the cancel takes it for the write and gives it back after, keeps it when this process
+    // already holds it (a loaded session), reaps a dead local holder as `SessionWriter.open` does, and refuses while
+    // another live process holds it — one that has loaded or is resuming the session (OQ-74).
+    const lock = this.lockForWrite(s.dal, sid, warn);
+    if (!lock) return { ok: false };
+    try { return this.cancelPausedUnderLock(s, sid, agentId, row, open, warn); }
+    finally { lock.release(); }
+  }
+
+  /** The lock `cancelPausedAtRest` writes under: taken (and given back), already this process's (kept), or null — refused. */
+  private lockForWrite(dal: StoreDal, sid: SessionId, warn: (m: string) => void): { readonly release: () => void } | null {
+    const { pid, host } = this.deps;
+    try {
+      const now = toIsoUtc(this.deps.clocks.wall.instant());
+      let claimed = dal.claimLock(sid, pid, host, now);
+      if (!claimed.claimed) {
+        const h = claimed.holder;
+        if (h.pid === pid && h.host === host) return { release: () => undefined };
+        const alive = this.deps.isProcessAlive ?? (() => true);
+        if (h.host !== host || !Number.isInteger(h.pid) || h.pid <= 0 || alive(h.pid)) return null;
+        dal.releaseLock(sid, h.pid, host);
+        claimed = dal.claimLock(sid, pid, host, now);
+        if (!claimed.claimed) return null;
+      }
+      return { release: () => { try { dal.releaseLock(sid, pid, host); } catch (cause) { warn(`releasing the lock of ${sid} after a cancel failed: ${String(cause)}`); } } };
+    } catch (cause) {
+      warn(`taking the lock of ${sid} for a cancel failed: ${String(cause)}`);
+      return null;
+    }
+  }
+
+  private cancelPausedUnderLock(s: Live, sid: SessionId, agentId: string, row: SessionRow, open: NonNullable<ReturnType<StoreDal['openIterationOf']>>, warn: (m: string) => void): ControlResult {
     const crashLeft = crashLeftOf(s.dal, row, () => this.liveness(s.dal, sid) === 'not-live');
     const target = iterationAgents(s.dal, sid, open).find((c) => c.task_id === agentId);
     if (!target || (target.state !== 'paused' && !crashLeft.has(agentId))) return { ok: false };
-    const warn = (m: string) => { s.log?.warn(m); this.deps.warn(m); };
     if (crashLeft.size > 0) this.recordCrashOf(s.dal, s.writer, sid, warn);
     // Read again: the crash record has just paused what the crash left.
     const agents = iterationAgents(s.dal, sid, open);
@@ -1612,11 +1646,12 @@ export class Sessions {
         // The chosen child is first; a failed move of it leaves it paused and cancels nothing below it, and the renderer is
         // answered that it could not be cancelled (REQ-MONITOR-128) rather than shown a cancel that did not happen.
         if (own) { s.owner.reconcile(); return { ok: false }; }
+        // A descendant whose move fails is left paused, and resumes; the chosen child's cancel stands (OQ-74).
         continue;
       }
-      const summary = own ? 'The user cancelled this child.' : `Cancelled with ${self.canonical_name}, which the user cancelled.`;
-      storeChildReport({ writer: s.writer, artifacts, warn }, t.task_id, t, { agent_name: t.canonical_name, role: t.persona, status: 'cancelled', summary, key_findings: [], last_response: '', final_response: '', errors: [] });
-      s.writer.appendTimeline('child_user_cancelled', 'user', `The user cancelled child ${t.canonical_name} (${t.task_id})${own ? '' : ` with ${self.canonical_name}`} while the session rested.`, { task_id: t.task_id, ...(own ? {} : { cancelled_with: agentId }) });
+      const written = userCancellation(t, self, true);
+      storeChildReport({ writer: s.writer, artifacts, warn }, t.task_id, t, written.report);
+      s.writer.appendTimeline('child_user_cancelled', 'user', written.message, written.metadata);
     }
     s.owner.reconcile();
     return { ok: true };

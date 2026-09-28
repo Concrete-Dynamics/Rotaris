@@ -49,12 +49,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 `session.control`'s `cancelAgent` reaches `Sessions.cancelPausedAtRest` when no run is behind the session: the child
 and each `paused` descendant end `cancelled` with the live cancel's report, timeline entry and artifact, the iteration
 stays open, and `resumable` drops; a crash not yet recorded is recorded first, only when something is crash-left —
-the whole crash record, at a moment clauses 3 and 8 do not name (OQ-74's departure). A live agent's confirmation and
-cascade note now name the paused descendants its cancel also ends (`cancelCascade`, OQ-73). The surfaces offer a paused child's Cancel while its session rests
+the whole crash record, at a moment clauses 3 and 8 do not name (OQ-74's departure). The cancel writes under the
+session's lock, taken for the write and given back, and is refused while another live process holds it (`lockForWrite`).
+Every confirmation and cascade note now names each unfinished descendant a cancel ends, live or paused (`cancelCascade`,
+OQ-73 and OQ-74), and both cancels write through one `userCancellation`. The surfaces offer a paused child's Cancel while its session rests
 (`cancelOffered(agent, runActive, resting)`, `resting` being `runLevelResting`, the predicate the composer's count and
 the resting root share) and confirm by `cancelConfirmation`, the Mission view through `missionConfirmation`. The
 **runtime view**'s `cancelAgent`, `children`, `iterations` and `agent_terminals` rows and the **state-ownership view**'s
-rest row name the new writer; no package, edge, process, channel or command changes.
+rest and session-lock rows name the new writer; no package, edge, process, channel or command changes.
 
 **A paused agent presents as paused on every agent surface (`PD-ORCH-005` clause 13, revision 4, 2026-09-28, R-064).**
 `PRESENTATION_CHILD_STATES` gains `paused` and `presentationChildState` maps the child state to it, so `AgentRecord`'s

@@ -133,21 +133,16 @@ export function resolvedTools(agent: Pick<AgentRecord, 'grantedTools'>, declared
   return agent.grantedTools.length > 0 ? [...agent.grantedTools] : [...declared];
 }
 
-/** PD-ORCH-005 clause 16: the `paused` descendants of an agent, depth-first — what cancelling a paused child cancels with it. */
-export function pausedDescendants(agents: readonly AgentRecord[], id: string): AgentRecord[] {
-  const out: AgentRecord[] = [];
-  const walk = (parent: string) => { for (const a of agents) if (a.parentId === parent) { if (a.presentationState === 'paused') out.push(a); walk(a.id); } };
-  walk(id);
-  return out;
-}
 /**
- * What cancelling an agent cancels with it — the set the engine ends, so the confirmation never understates it: a paused
- * child's paused descendants (PD-ORCH-005 clause 16, OQ-74); a live agent's live descendants and, since clause 13 made a
- * paused agent its own state rather than `queued`, its paused ones too, which its cancel still ends (REQ-MONITOR-064/128,
- * OQ-73); the run's every live or paused agent.
+ * What cancelling an agent cancels with it — the set the engine ends, so the confirmation never understates it
+ * (REQ-MONITOR-064/128): every descendant not yet finished, live or paused, through a finished one; for the run, its every
+ * live or paused agent. Since clause 13 made a paused agent its own state rather than `queued`, a live agent's cancel
+ * still ends its paused descendants (OQ-73). A paused child's is the same set: at rest every unfinished descendant is
+ * paused, so it is the paused ones the at-rest cancel ends (PD-ORCH-005 clause 16, OQ-74); while a run is still
+ * `pausing`, a persona window's cancel (REQ-SHELL-075(g)) reaches the live cancel, which also ends a descendant whose
+ * in-flight call has not yet let it rest.
  */
-export function cancelCascade(agents: readonly AgentRecord[], agent: Pick<AgentRecord, 'id' | 'presentationState'>): AgentRecord[] {
-  if (agent.presentationState === 'paused') return pausedDescendants(agents, agent.id);
+export function cancelCascade(agents: readonly AgentRecord[], agent: Pick<AgentRecord, 'id'>): AgentRecord[] {
   const reached = (a: AgentRecord) => a.presentationState === 'paused' || a.presentationState === 'running' || a.presentationState === 'waiting' || a.presentationState === 'queued';
   if (agent.id === RUN_AGENT_ID) return agents.filter(reached);
   const out: AgentRecord[] = [];
@@ -170,23 +165,24 @@ export const CANCEL_RUN_TEXT = 'Cancellation cannot be undone in this session. T
 /**
  * REQ-MONITOR-126 / REQ-MONITOR-128: what confirming a cancel states. For the run instance it is the run's own cancel,
  * which is final. For an agent it names that agent and gives one line per descendant cancelled with it — live, and the
- * paused ones its cancel also ends (`cancelCascade`, OQ-73). The
+ * paused ones its cancel also ends (`cancelCascade`, OQ-73 and OQ-74). The
  * Workspace and a persona window confirm through it, so the button REQ-SHELL-075(g) puts in the persona window can no
  * longer cancel unconfirmed (found by phase 5's third review).
  */
 export function cancelConfirmation(agent: { readonly id: string; readonly name: string }, agents: readonly AgentRecord[]): { title: string; body: string; lines: string[]; confirmLabel: string; cancelLabel: string } {
   if (agent.id === RUN_AGENT_ID) return { title: 'Cancel the run?', body: CANCEL_RUN_TEXT, lines: [], confirmLabel: 'Cancel the run', cancelLabel: 'Keep running' };
-  // PD-ORCH-005 clause 16 (OQ-74): a paused child is confirmed naming it and one line per paused descendant; it is final
-  // (clause 3), and the rest of its iteration still resumes.
+  const cascade = cancelCascade(agents, agent);
+  // PD-ORCH-005 clause 16 (OQ-74): a paused child is confirmed naming it and one line per descendant cancelled with it —
+  // paused at rest, and any a `pausing` run has not yet brought to rest; it is final (clause 3), and the rest of its
+  // iteration still resumes.
   if (agents.find((a) => a.id === agent.id)?.presentationState === 'paused') {
-    const paused = pausedDescendants(agents, agent.id).map((a) => a.name);
-    return { title: `Cancel ${agent.name}?`, body: paused.length > 0 ? PAUSED_CANCEL_WITH : PAUSED_CANCEL_ALONE, lines: paused, confirmLabel: `Cancel ${agent.name}`, cancelLabel: 'Keep it paused' };
+    return { title: `Cancel ${agent.name}?`, body: cascade.length > 0 ? pausedCancelWith(cascadeKind(cascade)) : PAUSED_CANCEL_ALONE, lines: cascade.map((a) => a.name), confirmLabel: `Cancel ${agent.name}`, cancelLabel: 'Keep it paused' };
   }
-  const cascade = cancelCascade(agents, { id: agent.id, presentationState: 'running' });
   return { title: `Cancel ${agent.name}?`, body: cascade.length > 0 ? `Its ${cascadeKind(cascade)} descendants will be cancelled with it:` : 'The agent will be cancelled.', lines: cascade.map((a) => a.name), confirmLabel: `Cancel ${agent.name}`, cancelLabel: 'Keep running' };
 }
 /** PD-ORCH-005 clauses 3 and 16: what cancelling a paused child states — it will not resume; the rest of its iteration will. */
-export const PAUSED_CANCEL_WITH = 'Cancellation cannot be undone: the agent will not resume, and its paused descendants are cancelled with it:';
+export const pausedCancelWith = (kind: ReturnType<typeof cascadeKind>): string => `Cancellation cannot be undone: the agent will not resume, and its ${kind} descendants are cancelled with it:`;
+export const PAUSED_CANCEL_WITH = pausedCancelWith('paused');
 export const PAUSED_CANCEL_ALONE = 'Cancellation cannot be undone: the agent will not resume. The other paused agents resume when the session continues.';
 
 /**

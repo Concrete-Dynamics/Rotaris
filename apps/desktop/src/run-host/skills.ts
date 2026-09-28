@@ -39,8 +39,10 @@ export interface SkillHostDeps {
   /** The user's home; injectable so the proof can point discovery at a scratch tree. */
   readonly home?: string;
   /**
-   * PD-WORKSPACE-002's machine-wide instruction base, `/etc/codex` when absent; injectable on the same terms as
-   * `home`, so the injection proof lays a file down at that base without touching the machine's own.
+   * The machine-wide directory both discoveries read under, `/etc/codex` when absent: `PD-WORKSPACE-002`'s
+   * machine-wide instruction base is the directory itself, and REQ-WORKSPACE-051's fourth user-scope skill root is
+   * its `skills` child. Injectable on the same terms as `home`, so a proof lays a file down at that base, and the
+   * catalog tests stage a skill under it, without reading or touching the machine's own.
    */
   readonly machineDir?: string | undefined;
   readonly platform?: NodeJS.Platform;
@@ -107,7 +109,7 @@ export class SkillHost {
     if (held) return held;
     const started = this.deps.monotonic?.now() ?? null;
     const discovery = discoverSkills(
-      { workspaceRoot, home: this.home, platform: this.deps.platform ?? process.platform, exists: (p) => this.ports.isDirectory(p) || this.ports.isFile(p) },
+      { workspaceRoot, home: this.home, platform: this.deps.platform ?? process.platform, machineDir: this.deps.machineDir, exists: (p) => this.ports.isDirectory(p) || this.ports.isFile(p) },
       this.ports,
     );
     this.catalogs.set(workspaceRoot, discovery);

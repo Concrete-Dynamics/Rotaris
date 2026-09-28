@@ -241,8 +241,9 @@ execution root.
 > The first repair of that note missed the catalog cases' `host()` helper, and the gate's verification found it; it is
 > now repaired, with a case that decides the isolation on any host. On POSIX the proof also sets `HOME` to its scratch
 > home, after the gate traced a launch reading the operator's `~/.agents/prompts`. **One root of the operator's machine
-> is still read**: the skill search's `/etc/codex/skills`, which has no seam
-> ([`three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md`](../defects/three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md)).
+> was still read**: the skill search's `/etc/codex/skills`, which had no seam
+> ([`three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md`](../defects/fixed/three-proofs-and-the-catalog-tests-read-the-machines-own-etc-codex.md));
+> closed 2026-09-28, below.
 >
 > **Four launches.**
 >
@@ -263,9 +264,24 @@ execution root.
 > by neither the proof nor a unit test: the child's system text goes through the same `withContextUnits` call
 > (`packages/engine/src/children/orchestration.ts`), which is an argument, not an observation. The recorded calls are
 > the classifier, the entry agent (the only one carrying context) and the post-run analyst, which rightly carries none. Two defects in the same requirements were
-> noticed by the gate and recorded, not repaired here:
-> [`an-instruction-file-that-is-not-utf-8-is-injected-with-no-warning.md`](../defects/an-instruction-file-that-is-not-utf-8-is-injected-with-no-warning.md)
+> noticed by the gate and recorded, not repaired there:
+> [`an-instruction-file-that-is-not-utf-8-is-injected-with-no-warning.md`](../defects/fixed/an-instruction-file-that-is-not-utf-8-is-injected-with-no-warning.md)
 > (REQ-WORKSPACE-045's decoding half) and the `/etc/codex/skills` read above.
+>
+> **Both repaired 2026-09-28 (R-062; first-executions row 2026-09-28).** The port every discovery reads through
+> (`NODE_DISCOVERY_PORTS.readFile`) decodes with a fatal `TextDecoder`, so the note's bytes `68 69 0a ff fe c3 28 0a`
+> now produce REQ-WORKSPACE-045's warning naming the path and the error, and no block — pinned through the real port in
+> `packages/config/src/instructions.test.ts`, and red against the lenient decode. The same strictness reaches a
+> `SKILL.md`, which is skipped as an unreadable file with the decoder's reason; REQ-WORKSPACE-053's silence on the
+> encoding is **OQ-79**. The skill search's machine-wide root moved under the one injectable directory the instruction
+> base already had (`SkillRootsEnv.machineDir`; `ROTARIS_CAPTURE_SKILLS_MACHINE ?? ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE`
+> in the run host, compiled out of a packaged build), so this proof's existing variable now isolates the catalog too,
+> `skills-proof` stages a skill under its scratch machine root and lists it off Windows, `settings-proof` sets the
+> instruction seam, and the catalog tests decide the isolation of both roots on any host by recording every probe.
+> **What the repair did not observe:** no proof lays an undecodable file down for the built app — the decoding half is
+> shown by the unit cases over the real port alone; and `skills-proof`'s launches after its policy launch did not run
+> on Linux, for the reason [`skills-proof-writes-its-global-policy-where-only-windows-reads-it.md`](../defects/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md)
+> records, so the run launch's catalog naming the machine skill is asserted in the script and unproven on this host.
 
 **3.4 A live run.** One `pnpm live-run` scenario with a workspace `AGENTS.md` whose instruction the model can
 only follow if it was injected. Owner-approved, like §2.3.

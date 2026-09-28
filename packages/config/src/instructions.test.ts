@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { readInstructionsSection } from './sections/instructions.js';
 import { instructionEnabled } from './snapshot.js';
 import { enabledInstructionFiles, instructionSourceComment, mergeInstructionContext, type InstructionFileEntry } from './instructions.js';
+import { NODE_DISCOVERY_PORTS } from './skills/discover.js';
 import { loadConfiguration } from './load.js';
 import { saveDesktop } from './writers.js';
 import type { ProblemSink } from './sections/field.js';
@@ -151,6 +152,32 @@ describe('REQ-WORKSPACE-043/044/045 — the merged output', () => {
     expect(merged).toBe(`${instructionSourceComment('/cfg/AGENTS.md')}\nkept`);
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('/ws/CLAUDE.md');
+  });
+
+  it('REQ-WORKSPACE-045: a file that is not UTF-8 is a DECODING error through the real port — a warning naming the path and the error, no block, the walk not aborted', () => {
+    /*
+     * The bytes the defect note measured: `readFileSync(path, 'utf8')` returned "hi\n���(\n" for them and never threw, so
+     * the file was merged, replacement characters and all, with no warning. Through `NODE_DISCOVERY_PORTS` — the port
+     * the run host hands this merge — the decode is strict, and the throw reaches the warning path the I/O half uses.
+     */
+    const dir = tmp();
+    const bad = join(dir, 'AGENTS.md');
+    const good = join(dir, 'CLAUDE.md');
+    writeFileSync(bad, Buffer.from([0x68, 0x69, 0x0a, 0xff, 0xfe, 0xc3, 0x28, 0x0a]));
+    writeFileSync(good, 'kept\n');
+    const warnings: string[] = [];
+    const merged = mergeInstructionContext(
+      [entry('workspace:AGENTS.md', 'AGENTS.md', bad), entry('workspace:CLAUDE.md', 'CLAUDE.md', good)],
+      NODE_DISCOVERY_PORTS,
+      (m) => warnings.push(m),
+    );
+    expect(merged).toBe(`${instructionSourceComment(good)}\nkept`);
+    expect(merged).not.toContain('\uFFFD');
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain(bad);
+    expect(warnings[0]).toMatch(/could not be read \(.+\)/);
+    // The error named is the decoder's — what a user needs to fix the file — not the merge's own words alone.
+    expect(/could not be read \((.+)\); it contributes nothing$/.exec(warnings[0]!)![1]!.length).toBeGreaterThan(0);
   });
 
   it('REQ-WORKSPACE-044: the per-file limit cuts back to a line boundary, and a first line over it drops the file', () => {

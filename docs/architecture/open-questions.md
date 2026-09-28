@@ -69,7 +69,9 @@ reviewed-exceptions table may supply an identifier a dependency does not declare
 runtime). **One more was raised the same day by that generator's gate review: OQ-75** (when a component carries "its
 full license text": a licence file that only pointed elsewhere, or only carried a licence's per-file notice, had
 counted as the text, and 4 components without text became 12); the four were raised as OQ-66 to OQ-69 on their own branch and renumbered when they reached `main`
-after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71. **Two more were raised on 2026-09-28 by building `PD-TOOLS-005` (R-062): OQ-76** (which timeline word records a run's user going away and returning — REQ-ORCH-139 closes the vocabulary and it has none, so the build writes both transitions to the session log) **and OQ-77** (whether the away state resolves the approval an `ask_questions` call itself needs under the `ask` preset, which keeps every question from an away user under the default preset), **and one by its verification: OQ-78** (whether an approval already outstanding when the first wait expires keeps its own full wait, as built, or is ended with the directive's reason). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71. **Two more were raised on 2026-09-28 by building `PD-TOOLS-005` (R-062): OQ-76** (which timeline word records a run's user going away and returning — REQ-ORCH-139 closes the vocabulary and it has none, so the build writes both transitions to the session log) **and OQ-77** (whether the away state resolves the approval an `ask_questions` call itself needs under the `ask` preset, which keeps every question from an away user under the default preset), **and one by its verification: OQ-78** (whether an approval already outstanding when the first wait expires keeps its own full wait, as built, or is ended with the directive's reason). **And one more the same day by repairing REQ-WORKSPACE-045's decoding half: OQ-79** (whether a `SKILL.md` that cannot be decoded as UTF-8 is an "unreadable file"
+under REQ-WORKSPACE-053, which names the reason without saying what encoding a skill file has; built as one, skipped with the
+decoder's error — raised as OQ-76 on its branch and renumbered at the merge, OQ-76 to OQ-78 having been taken on `main`). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -3275,6 +3277,37 @@ resolved under `runtime.headless_approval_policy` with the directive's reason, i
 request that has reached the user keeps its own full wait. Recommendation: end the outstanding waits too, with the
 directive's reason — a request queued behind an unanswered dialog was never seen, and the directive's intent is that
 one unanswered approval costs one timeout.
+
+**OQ-79 — Is a `SKILL.md` that cannot be decoded as UTF-8 an "unreadable file"?** *(REQ-WORKSPACE-053, with REQ-WORKSPACE-045 and REQ-WORKSPACE-044. Raised 2026-09-28 by repairing REQ-WORKSPACE-045's decoding half, R-062. Raised as OQ-76 on its branch; renumbered OQ-79 at the merge, because OQ-76 to OQ-78 were already on `main`.)*
+
+REQ-WORKSPACE-045 names two ways a context file can be unreadable — "I/O or decoding error" — and REQ-WORKSPACE-044
+measures every limit "as UTF-8 bytes", so for an instruction file the encoding is settled: it is UTF-8, and a file that is
+not is skipped with a warning. REQ-WORKSPACE-053 lists "unreadable file" among the reasons a `SKILL.md` is skipped, but
+names no encoding for the file, and the format it does name — YAML frontmatter — is one whose own specification admits
+UTF-16 and UTF-32 as well as UTF-8. Nothing in the corpus says whether a skill file saved in one of those, or holding a
+byte sequence no UTF-8 decoder accepts, is "unreadable" (skipped with a logged reason) or is to be read leniently, each
+undecodable sequence standing as U+FFFD, and parsed.
+
+The question is live because one port serves both walks. `NODE_DISCOVERY_PORTS.readFile` reads instruction files for
+REQ-WORKSPACE-045's merge, `SKILL.md` files for REQ-WORKSPACE-053's walk, a force-loaded body for REQ-WORKSPACE-062,
+the disable manifest for REQ-WORKSPACE-052 and a `SKILL.md` loaded by hand for REQ-WORKSPACE-057/151, and until 2026-09-28 it decoded leniently, so the decoding half of
+REQ-WORKSPACE-045 was unmet (`docs/defects/fixed/an-instruction-file-that-is-not-utf-8-is-injected-with-no-warning.md`).
+Making it strict for the instruction files makes it strict for the skill files in the same line.
+
+**What the build proceeds under.** A `SKILL.md` that cannot be decoded as UTF-8 is an unreadable file: it is skipped
+with the reason `unreadable file: <the decoder's error>`, discovery continues, and the skip is listed and logged like
+every other (REQ-WORKSPACE-053). The reasons: a file parsed with replacement characters standing in for what its author
+wrote is not the file the author wrote, and a skill's `name` or `description` read that way would be silently wrong in a
+catalog a model acts on; the sibling walk that shares the port says "decoding error" outright; and REQ-WORKSPACE-044
+already fixes UTF-8 as the encoding these files are measured in. The cost is stated too: a `SKILL.md` saved in UTF-16 or
+UTF-32 — encodings YAML admits — was previously parsed as mojibake and is now skipped with a reason that names the
+path, which is the better of the two failures but is still a file the product declines. A force-loaded body and the
+disable manifest take the same arm through the same port, and so does a `SKILL.md` loaded by hand: `loadManualSkill`
+now fails with REQ-WORKSPACE-057's "SKILL.md not found: {raw}" and the decoder's reason in parentheses, the arm its I/O
+half already used, where it used to load the skill with U+FFFD in its text. If the owner rules the other way, only the port changes:
+the walk's skip arm stays for the I/O half, and the decode becomes lenient for `SKILL.md` alone. The cases are pinned in
+`packages/config/src/skills/skills.test.ts` ("REQ-WORKSPACE-053 — a SKILL.md that is not UTF-8, through the real port
+(OQ-79)"), the walk's and the hand-loaded one's.
 
 ## Design-reference dependencies
 

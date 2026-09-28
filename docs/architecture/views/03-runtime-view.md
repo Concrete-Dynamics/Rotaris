@@ -84,9 +84,18 @@ reads it back. The policy read counts towards the figure because `PD-WORKSPACE-0
 deciding what is merged. Nothing warms the merge at workspace open, as the catalog is warmed. The first read happens
 at the first agent built for a session, in the run host, after the typed prompt has been recorded as row 0. It
 therefore cannot delay the window's first input, and it never runs in the window's process. The first measurement
-(2026-09-27, Linux) is in `first-release-plan.md` §3.2. The machine-wide base's directory is injectable
-(`SkillHostDeps.machineDir`, `/etc/codex` when absent). It is a verification seam in the built app and never
-widens the platform rule.
+(2026-09-27, Linux) is in `first-release-plan.md` §3.2. The machine-wide directory is injectable
+(`SkillHostDeps.machineDir`, `/etc/codex` when absent) and, since 2026-09-28, moves both discoveries at once: the
+instruction base is the directory itself and REQ-WORKSPACE-051's fourth user-scope skill root is its `skills` child
+(`SkillRootsEnv.machineDir`, `machineCodexDir` in `config/src/skills/roots.ts`, the one place the literal lives). It is
+a verification seam in the built app (`ROTARIS_CAPTURE_SKILLS_MACHINE ?? ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE`, compiled
+out of a packaged build) and never widens the platform rule. The port every read goes through
+(`NODE_DISCOVERY_PORTS.readFile`) decodes strictly since the same day: a file that is not UTF-8 throws, and the throw
+reaches the arm each walk already had for an unreadable file — REQ-WORKSPACE-045's warning naming the path and the
+error for an instruction file, REQ-WORKSPACE-053's skip with a reason for a `SKILL.md` (OQ-79), REQ-WORKSPACE-062's
+"no block" for a force-loaded body, the disable manifest's unreadable arm, and REQ-WORKSPACE-057's "SKILL.md not found"
+with the decoder's reason for a `SKILL.md` loaded by hand (`loadManualSkill`) — where the lenient decode had merged
+replacement characters with no warning.
 
 **The set is decided in one place because it has two readers.** `instructionFiles` is a method rather than a
 step inside the context because the retrospective consumes the same list (`PD-LIBRARY-002` over
@@ -602,7 +611,9 @@ of §5 and none a channel: each is a request answered once.
   service), the same seam the skills proof uses and for the same reason: overriding `HOME` kills Electron on Windows.
   The machine-wide base's directory is injected too (`ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE`, read by the workspace
   service and the run host alike, compiled out of a packaged build), so a proof can place a file at every base
-  without writing into the machine's own `/etc`.
+  without writing into the machine's own `/etc`; in the run host the same value moves the skill search's
+  `/etc/codex/skills` as well (`ROTARIS_CAPTURE_SKILLS_MACHINE` is read first there, as `ROTARIS_CAPTURE_SKILLS_HOME` is
+  for the home), so a driven run reads no skill of the operator's machine either.
 - **The MCP layer (Part S)** — the two `mcp.json` files are layer 2 of the load (defaults → discovered → global → workspace,
   REQ-MCP-025), the merged `mcp_servers` map is resolved at load (origin, command, availability, environment with secrets
   overlaid, the URL, the normalised description) and rides on `LoadedConfiguration.mcp`; Tier B resolves it again over the

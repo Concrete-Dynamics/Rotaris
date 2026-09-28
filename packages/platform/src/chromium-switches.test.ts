@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { inheritedChromiumSwitches, SANDBOX_SWITCH, withoutInheritedSwitches } from './chromium-switches.js';
 
-describe('the Chromium switch a launch of the application\'s own executable inherits — REQ-MCP-033, REQ-STARTUP-015 (OQ-76)', () => {
+describe('the Chromium switch a launch of the application\'s own executable inherits — REQ-MCP-033, REQ-STARTUP-015 (OQ-82)', () => {
   it('carries --no-sandbox when the parent was started with it, wherever it stood', () => {
     expect(inheritedChromiumSwitches(['/opt/Rotaris/rotaris', '--no-sandbox'])).toEqual([SANDBOX_SWITCH]);
     expect(inheritedChromiumSwitches(['electron', 'out/main/index.js', '--no-sandbox', '/a/workspace'])).toEqual([SANDBOX_SWITCH]);

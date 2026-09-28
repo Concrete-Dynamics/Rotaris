@@ -183,7 +183,7 @@ async function main(): Promise<void> {
   const providers = new ProviderService({ credentials, settings: projectSettings, wall: clocks.wall, log: (m) => log(`providers: ${m}`), warn: (m) => log(`providers: ${m}`, 'warn') });
 
   // ADR-0002: one run host for the application's lifetime; one workspace service per open workspace.
-  // REQ-MCP-033 / OQ-76: the run host builds the reserved token's launch of this executable, and that launch carries the
+  // REQ-MCP-033 / OQ-82: the run host builds the reserved token's launch of this executable, and that launch carries the
   // sandbox switch THIS process was started with (`--no-sandbox`, as root on Linux). A utility process's argv is what it
   // is forked with, not the parent's, so the switch is handed over here; the run host reads it back from its own argv.
   const runHostChild = utilityProcess.fork(join(__dirname, 'run-host.js'), [...inheritedChromiumSwitches(process.argv)], { serviceName: 'rotaris-run-host' });

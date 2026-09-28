@@ -6,7 +6,7 @@
  * operator running the application that way starts it with `--no-sandbox`. The child is a fresh Chromium and inherits
  * nothing of the parent's command line by itself: launched bare it died with SIGTRAP before the sentinel ran, and the
  * project setup reported "Running as root without --no-sandbox is not supported" (2026-09-27, a cloud container). None
- * of the three requirements says whether the launch carries the parent's switches — **OQ-76** — and this is the reading
+ * of the three requirements says whether the launch carries the parent's switches — **OQ-82** — and this is the reading
  * built: a launch of the product's own executable carries exactly the sandbox switch the parent was started with, and
  * nothing else of its command line, because the sandbox is a property of the host the parent already measured and the
  * child cannot measure differently.

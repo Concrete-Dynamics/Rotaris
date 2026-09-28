@@ -11,6 +11,17 @@ Found 2026-09-27 driving the development build as root in a cloud container. Lin
 under IC-3, and running as root is not a supported configuration anyone has ruled on. So this is recorded, not
 repaired.
 
+**Added 2026-09-28 (R-062, the proof sweep).** The repair has a second half the first paragraph does not name. The
+sentinel (`apps/desktop/src/main/sentinel.ts`) reads the token at a **fixed index** — `process.argv[2]` for the
+development entry, `[1]` packaged — and Electron keeps a Chromium switch in `process.argv` (measured: `electron
+main.js --no-sandbox builtin:code-intelligence -- x` gives `argv[2] === '--no-sandbox'`). Chromium honours a switch
+only ahead of a bare `--`. So a child launched as `<exe> [main] --no-sandbox builtin:code-intelligence -- …` survives
+as root but is not recognised as the server, and `<exe> [main] builtin:code-intelligence --no-sandbox -- …` is
+recognised but hands `--no-sandbox` to the runtime. Inheriting the parent's switch therefore also means the sentinel
+finding the token past one. `pnpm code-intel-proof`'s branch launch passes `hostSwitches` before the token, the only
+place Chromium reads it, and fails as root on this tree for exactly this reason (its section 1) until the sentinel is
+repaired; the proof is not changed to work around it.
+
 ## Specs
 
 - `REQ-MCP-033` / `REQ-STARTUP-002`: the application launches its own executable to host the bundled
@@ -21,11 +32,22 @@ repaired.
 - `apps/desktop/src/run-host/host.ts`: `codeIntelligenceLaunch`, the command and arguments the reserved token runs.
 - `packages/mcp/src/setup.ts`: the setup steps that report the failure and skip `index` and `memory`.
 
+**Two more proofs stop on it (2026-09-28, R-062).** With every proof now launching as root, `pnpm notice-proof` fails
+its first check — the notice on screen is "Project setup did not finish", REQ-NOTIFY-024's one slot holding the setup
+failure where REQ-NOTIFY-224's "Workspace hooks need review" was expected — and `pnpm init-proof` fails its first —
+the background task recorded nothing, because `code-intelligence-setup` failed at `create` with SIGTRAP and the marker
+records only a completed task. Both logs carry `mcp setup: create failed — exited with signal SIGTRAP … Running as
+root without --no-sandbox is not supported`. Neither proof is at fault, and neither is changed; both measure again once
+this note's repair lands.
+
+`code-intel-proof`'s section 1 does not fail on this; it hangs, because its branch client never notices the child
+exiting ([note](../code-intel-proofs-branch-client-waits-forever-on-a-child-that-has-exited.md)).
+
 ## Repaired 2026-09-28 under R-062
 
 **The reading.** REQ-MCP-033 fixes that the token launches the application's own executable with the token as its
 first argument, and REQ-STARTUP-002 and REQ-STARTUP-015 fix what that launch is observable as (no console, no window,
-nothing fetched); none of the three says whether the launch carries the parent's Chromium switches. Raised as **OQ-76**
+nothing fetched); none of the three says whether the launch carries the parent's Chromium switches. Raised as **OQ-82**
 and built under this reading: the launch carries exactly the sandbox switch the parent was started with
 (`--no-sandbox`) and nothing else of its command line — the sandbox is a property of the host the parent already
 measured, and a child of the same executable cannot measure it differently. **The token stays the first argument**,

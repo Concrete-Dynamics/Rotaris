@@ -307,7 +307,7 @@ unreachable now that the sentinel precedes `workspaceFromArgv`; removed, not com
 with the token and `--` only, so the child — a fresh Chromium — inherited nothing and died with SIGTRAP before the
 sentinel ran; the project setup's `create` step failed, `index` and `memory` were not attempted
 (`../../defects/fixed/the-code-intelligence-server-dies-when-the-app-runs-as-root.md`). None of REQ-MCP-033,
-REQ-STARTUP-002 and REQ-STARTUP-015 says whether the launch carries the parent's switches: raised as **OQ-76**, built
+REQ-STARTUP-002 and REQ-STARTUP-015 says whether the launch carries the parent's switches: raised as **OQ-82**, built
 as "exactly the sandbox switch the parent was started with, immediately before the token, nothing else". Measured on
 the repaired build, driven as root under Xvfb against a scratch workspace holding one TypeScript file: the launch line
 reads `electron out/main/index.js --no-sandbox builtin:code-intelligence --`, and `create` now exits **127** with the

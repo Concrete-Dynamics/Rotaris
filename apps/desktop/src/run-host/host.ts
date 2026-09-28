@@ -146,7 +146,7 @@ export function createRunHost() {
     publishSetup: (status) => send({ v: CONTRACT_SCHEMA_VERSION, event: { kind: 'mcp.setupStatus', status } }),
   });
   // REQ-MCP-033 / ADR-0035 (Part T): what the reserved token launches — this application's own executable, built in
-  // `code-intelligence-launch.ts`; the sandbox switch main forked this process with rides along (OQ-76's reading).
+  // `code-intelligence-launch.ts`; the sandbox switch main forked this process with rides along (OQ-82's reading).
   const { packaged, ...codeIntelligenceLaunch } = codeIntelligenceLaunchFor({ execPath: process.execPath, bundleDir: import.meta.dirname, argv: process.argv });
   log(`mcp: the reserved token launches ${codeIntelligenceLaunch.command} ${codeIntelligenceLaunch.args.join(' ')} (${packaged ? 'packaged' : 'development'})`);
   /**
@@ -206,7 +206,7 @@ export function createRunHost() {
    * the `fetch` tool's per-call policy read (REQ-SANDBOX-038) is the existing precedent for that. A load that
    * fails leaves the shipped defaults standing — a broken configuration must not silently switch skills off.
    */
-  const machineInstructions = __ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE'] : undefined;
+  const machineDir = __ROTARIS_SEAMS__ ? process.env['ROTARIS_CAPTURE_SKILLS_MACHINE'] ?? process.env['ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE'] : undefined;
   const skills = new SkillHost({
     log: (m, level) => log(m, level ?? 'info'),
     monotonic: clocks.monotonic,
@@ -227,12 +227,15 @@ export function createRunHost() {
       ? { home: (process.env['ROTARIS_CAPTURE_SKILLS_HOME'] ?? process.env['ROTARIS_CAPTURE_INSTRUCTIONS_HOME'])! }
       : {}),
     /*
-     * `ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE` is the same seam for the machine-wide base (`/etc/codex`), read here and
-     * in the workspace service for the reason above: a proof that lays a file down at every base must not write into
-     * the machine's own `/etc`, and one that isolated only the inventory would still inject whatever is there.
-     * Unlike the two above it is compiled out of a packaged build.
+     * `ROTARIS_CAPTURE_SKILLS_MACHINE` and `ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE` are the same seam for the machine-wide
+     * directory (`/etc/codex`): the skill search's fourth user-scope root is its `skills` child and the instruction
+     * base is the directory itself, so one value moves both, as one `home` serves both discoveries above. The
+     * instructions variable is read in the workspace service as well, for the reason above: a proof that lays a file
+     * down at every base must not write into the machine's own `/etc`, and one that isolated only the inventory would
+     * still inject whatever is there — an instruction file or a skill. Unlike the two above they are compiled out of a
+     * packaged build.
      */
-    ...(machineInstructions === undefined || machineInstructions === '' ? {} : { machineDir: machineInstructions }),
+    ...(machineDir === undefined || machineDir === '' ? {} : { machineDir }),
     section: (workspaceRoot) => {
       const loaded = loadConfiguration({ globalDir: configDir, workspaceRoot });
       if (loaded.ok) return loaded.value.skills;
@@ -313,6 +316,8 @@ export function createRunHost() {
     // REQ-CONFIG-473: the loaded `event_retention_per_session` per run; this is the shipped default behind it.
     retentionCap: RUNTIME_DEFAULTS.event_retention_per_session,
     warn: (m) => log(m, 'warn'),
+    // REQ-HOOKS-138 / PD-MONITOR-002: the hook port's `log` — a `log` event at `info`, which main's default threshold keeps.
+    log: (m) => log(m),
     mintSessionId: () => randomUUID(),
     model: null,
     // ADR-0036/0037: the files, the live state, the loader's passes — once per run start.

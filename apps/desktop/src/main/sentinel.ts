@@ -105,7 +105,7 @@ if (process.argv[tokenAt] === CODE_INTELLIGENCE_TOKEN) {
   // after the token does, and the token is still the first argument. The launch of the token (packages/config) therefore
   // puts `--` second; it is dropped here so the runtime sees its own arguments only. Between the token and `--` the launch
   // may carry the one Chromium switch it inherits from the parent (`--no-sandbox`, when the parent runs as root; REQ-MCP-033
-  // / OQ-76, `@rotaris/platform`'s `chromium-switches.ts`) — the child is a fresh Chromium and died before this line ran
+  // / OQ-82, `@rotaris/platform`'s `chromium-switches.ts`) — the child is a fresh Chromium and died before this line ran
   // without it (2026-09-27); Chromium has read it by now, and it is dropped too.
   const rest = withoutInheritedSwitches(process.argv.slice(tokenAt + 1));
   if (rest[0] === '--') rest.shift();

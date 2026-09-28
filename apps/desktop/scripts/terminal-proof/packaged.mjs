@@ -31,7 +31,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { proofIsolationEnv, workspacesRootFor } from '../lib/harness.mjs';
+import { hostSwitches, proofIsolationEnv, workspacesRootFor } from '../lib/harness.mjs';
 
 const require = createRequire(import.meta.url);
 
@@ -90,7 +90,7 @@ function launch({ exe, scratchRoot, name, enabled, afterMs }) {
   env.ROTARIS_CAPTURE_AFTER_MS = String(afterMs);
   env.ROTARIS_CAPTURE_EVAL_AT = `${probe}@${afterMs - 2000}`;
 
-  const r = spawnSync(exe, [ws], { env, encoding: 'utf8', timeout: 180_000, windowsHide: true });
+  const r = spawnSync(exe, [...hostSwitches, ws], { env, encoding: 'utf8', timeout: 180_000, windowsHide: true });
   const log = `${r.stdout ?? ''}\n${r.stderr ?? ''}`;
   writeFileSync(join(scratch, 'app.log'), log);
 

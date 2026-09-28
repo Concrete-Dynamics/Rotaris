@@ -13,8 +13,8 @@
  *   2. instructions — the same workspace with `AGENTS.md` and `AGENTS.override.md` on disk: two rows, in the
  *                     requirement's order, source `workspace`, described by absolute path; the first row's switch
  *                     is turned off and saved, and the `instructions.overrides` policy lands in the file
- *                     (PD-WORKSPACE-002). The home-relative bases resolve into a scratch home, so the operator's
- *                     own files never reach the inventory.
+ *                     (PD-WORKSPACE-002). The home-relative bases resolve into a scratch home and the machine-wide
+ *                     base into a scratch directory, so the operator's own files never reach the inventory.
  *   3. display      — the Display category: the four caps moved, the save bar going dirty and back to saved, the
  *                     file written under REQ-CONFIG-172's key names with unlimited as `0`, and the two desktop
  *                     preferences written the moment they move.
@@ -92,8 +92,11 @@ function launch(name, workspace, local, preferences, extra, timeoutMs = 120_000)
       ...cleanEnvironment(), ...proofIsolationEnv({ local, preferences }),
       ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_CAPTURE_PNG: png, ROTARIS_CAPTURE_PROBE: PROBES.join(';;'), ELECTRON_DISABLE_SECURITY_WARNINGS: 'true',
       // PD-WORKSPACE-002: the scratch home for instruction-file discovery, so this proof exercises the
-      // home-relative bases without reading the operator's own files (the skills proof's seam pattern).
+      // home-relative bases without reading the operator's own files (the skills proof's seam pattern), and the
+      // scratch machine-wide directory for the same reason: an `/etc/codex/AGENTS.md` on the host would otherwise be
+      // a third row in the exact Instructions inventory below, and an `/etc/codex/skills` entry would reach the run.
       ROTARIS_CAPTURE_INSTRUCTIONS_HOME: home,
+      ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE: machine,
       ...extra,
     },
   });
@@ -117,9 +120,11 @@ const workspace = join(root, 'workspace');
 const local = join(root, 'local');
 const preferences = join(root, 'preferences');
 const home = join(root, 'home');
+const machine = join(root, 'machine-codex');
 mkdirSync(workspace, { recursive: true });
 mkdirSync(local, { recursive: true });
 mkdirSync(home, { recursive: true });
+mkdirSync(machine, { recursive: true });
 mkdirSync(join(workspace, '.rotaris'), { recursive: true });
 const configFile = join(workspace, '.rotaris', 'agents.yaml');
 writeFileSync(configFile, [

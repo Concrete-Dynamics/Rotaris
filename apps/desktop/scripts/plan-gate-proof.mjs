@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import Database from 'better-sqlite3';
-import { cleanEnvironment, proofIsolationEnv } from './lib/harness.mjs';
+import { cleanEnvironment, configDirFor, hostSwitches, proofIsolationEnv } from './lib/harness.mjs';
 
 /**
  * ADR-0062's first execution in the BUILT app: the plan gate driven end to end (REQ-ORCH-152/153/154).
@@ -69,7 +69,8 @@ const GLOBAL = [
 const root = join(output, 'run');
 const workspace = join(root, 'workspace');
 const local = join(root, 'local');
-const configDir = join(local, 'rotaris', 'config');
+// The global configuration directory by the platform that reads it (`configDirFor`), not the Windows spelling alone.
+const configDir = configDirFor(local);
 mkdirSync(join(workspace, '.rotaris'), { recursive: true });
 mkdirSync(configDir, { recursive: true });
 writeFileSync(join(workspace, 'README.md'), '# plan gate proof\n');
@@ -77,7 +78,7 @@ writeFileSync(join(configDir, 'agents.yaml'), GLOBAL);
 
 function launch(name, extra, timeoutMs = 120_000) {
   const png = join(output, `${name}.png`);
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), workspace], {
+  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace], {
     cwd: app, encoding: 'utf8', timeout: timeoutMs, windowsHide: true,
     env: {
       ...cleanEnvironment(),

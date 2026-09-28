@@ -1,4 +1,4 @@
-import { dirname, join, parse as parsePath } from 'node:path';
+import { dirname, join, parse as parsePath, resolve } from 'node:path';
 
 /**
  * REQ-WORKSPACE-051 — the search order, and nothing else. Pure: the caller supplies the platform, the
@@ -24,6 +24,18 @@ import { dirname, join, parse as parsePath } from 'node:path';
  */
 export type SkillScope = 'project' | 'user';
 
+/**
+ * The one machine-wide directory both discoveries read under: REQ-WORKSPACE-051's fourth user-scope root is
+ * `<here>/skills`, and `PD-WORKSPACE-002`'s machine-wide instruction base is this directory itself. Stated once so
+ * the two cannot drift apart, as `hasEtcHierarchy` is.
+ */
+export const MACHINE_CODEX_DIR = join('/etc', 'codex');
+
+/** `machineDir` as given, or the real directory when absent or blank — one rule for both discoveries. */
+export function machineCodexDir(machineDir: string | undefined): string {
+  return machineDir === undefined || machineDir.trim() === '' ? MACHINE_CODEX_DIR : resolve(machineDir);
+}
+
 export interface SkillRootsEnv {
   readonly workspaceRoot: string;
   /** The user's home directory. Injected rather than read, so the proof can point it at a scratch tree. */
@@ -32,6 +44,17 @@ export interface SkillRootsEnv {
   readonly platform: NodeJS.Platform;
   /** Whether a path names an existing entry of any kind — a directory OR a file (the linked-worktree `.git`). */
   readonly exists: (path: string) => boolean;
+  /**
+   * The machine-wide directory the fourth user-scope root sits under: `/etc/codex` unless given, so the root is
+   * `<machineDir>/skills`. It moves the directory and nothing else — the root keeps its scope, its rank and its
+   * platform rule, so a platform with no `/etc` hierarchy still searches no machine-wide root whatever this names.
+   *
+   * It is the same directory `PD-WORKSPACE-002`'s machine-wide instruction base reads (`InstructionDiscoveryEnv.machineDir`),
+   * and injectable for the same reason `home` is: a built-app proof, and the unit tests, must not read whatever
+   * skills the operator's real `/etc/codex/skills` holds (`ROTARIS_CAPTURE_SKILLS_MACHINE`, compiled out of a
+   * packaged build).
+   */
+  readonly machineDir?: string | undefined;
 }
 
 export interface SkillRoot {
@@ -76,7 +99,7 @@ export function skillRoots(env: SkillRootsEnv): readonly SkillRoot[] {
   roots.push({ scope: 'user', dir: join(env.home, '.agents', 'skills') });
   roots.push({ scope: 'user', dir: join(env.home, '.config', 'opencode', 'skills') });
   roots.push({ scope: 'user', dir: join(env.home, '.openhands', 'skills', 'installed') });
-  if (hasEtcHierarchy(env.platform)) roots.push({ scope: 'user', dir: join('/etc', 'codex', 'skills') });
+  if (hasEtcHierarchy(env.platform)) roots.push({ scope: 'user', dir: join(machineCodexDir(env.machineDir), 'skills') });
   return roots;
 }
 

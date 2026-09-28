@@ -23,3 +23,17 @@ None contradicted. This is a defect of the harness, a check that cannot fail, an
 - `apps/desktop/scripts/lib/terminal-shapes.mjs`: `outputOf`, which returns the `[terminal_output]` section
   without the diagnostic block.
 - `packages/agent-tools/src/terminal/index.ts`: the diagnostic block's `command` field.
+
+## Repaired — 2026-09-28, under R-062
+
+The check reads the output section alone. `apps/desktop/scripts/lib/terminal-shapes.mjs` gains
+`hereStringLinesReturned(result)`: `outputOf` first, then both words in what the shell printed, and `false` for an
+observation with no output section at all. The `terminal` scenario in `live-run.mjs` calls it, and its detail names
+each word's presence in the output section rather than in the whole result.
+
+Pinned by `apps/desktop/scripts/lib/terminal-shapes.test.ts`, "the here-string check": an observation built from the
+shape's own command on both platforms with `(no output)` as its output still matches `/alpha-one/` and `/beta-two/`
+over the whole text — the old check's pass — and `hereStringLinesReturned` answers `false` for it; it answers `true`
+only when both lines were printed, `false` on one line, on an observation with no section and on `undefined`.
+Measured: `pnpm vitest run apps/desktop/scripts/lib/` — 100 tests, 7 files, green. Not measured on a live run: it
+spends the owner's money, and the next live run of `terminal` is the first the repaired check sees.

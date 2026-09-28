@@ -25,3 +25,16 @@ function it rests on answering wrongly for a class of input is recorded rather t
 
 - `packages/agent-tools/src/tools/fence.ts`: `realPathOf`, the tail reconstruction.
 - `packages/agent-tools/src/gate.test.ts`: `ROOT = 'D:/ws'`, relative on a POSIX host.
+
+## Repaired — 2026-09-28, under R-062
+
+`realPathOf` (`packages/agent-tools/src/tools/fence.ts`) rebuilds the missing tail segment by segment with `basename`
+instead of `existing.slice(parent.length)` less one separator; the slice was one character short whenever the parent
+was `.`. `realPathOf('specs/index.md')` from a directory holding no `specs` now answers `<cwd>/specs/index.md` (it
+answered `<cwd>/pecs/index.md`), and `realPathOf('D:/ws')` on POSIX `<cwd>/D:/ws` (it answered `<cwd>/:/ws`). The
+falsified premise above — "no production caller is known to pass a relative path" — is kept beside its replacement in
+the function's comment.
+
+Pinned by: `tools/tools.test.ts` — "realPathOf rebuilds the missing tail of a relative path whole — REQ-TOOLS-129 rests
+on it answering rightly for every input", including `checkFence` over a root spelled relative, which is the shape this
+note was found by. Run against the previous slice it fails; with `basename` it passes.

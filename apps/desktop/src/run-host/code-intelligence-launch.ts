@@ -8,7 +8,7 @@ import { CODE_INTELLIGENCE_TOKEN, type BuiltinLaunch } from '@rotaris/config';
  * `spikes/code-intelligence-branch.md`); in development Electron's binary with the main bundle before them, which is
  * the interpreted installation's "own language runtime" of REQ-MCP-033. Packaged is read off the bundle's own location.
  *
- * **The launch carries the parent's sandbox switch** (OQ-76's reading, `@rotaris/platform`'s `chromium-switches.ts`):
+ * **The launch carries the parent's sandbox switch** (OQ-82's reading, `@rotaris/platform`'s `chromium-switches.ts`):
  * started as root on Linux the application runs with `--no-sandbox`, and the child — a fresh Chromium — died with
  * SIGTRAP before its sentinel ran when the switch was not on its own line (2026-09-27). The token stays the FIRST
  * argument (REQ-MCP-033 says so); the switch stands between it and `--`, where Chromium still reads it and the sentinel

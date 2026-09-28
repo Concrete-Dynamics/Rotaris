@@ -31,7 +31,8 @@ chose the old order is replaced by one that states REQ-TOOLS-154's.
 
 Items (2) and (5) still have no block. The verification suite that fills (2) is not built. Item (5) was found
 missing while making this repair and is its own note:
-[`the-inherited-context-reports-never-reach-the-child.md`](../the-inherited-context-reports-never-reach-the-child.md).
+[`the-inherited-context-reports-never-reach-the-child.md`](the-inherited-context-reports-never-reach-the-child.md)
+(repaired 2026-09-28 under R-062, and moved beside this one).
 
 Evidence: `packages/engine/src/children/notify.test.ts` asserts the positions of all six present blocks in
 order, and that a child with no dependencies starts at the workspace root. With the old `childPayload`

@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:
 import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { cleanEnvironment, findDatabases, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
+import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
 
 /**
  * Part Q's first execution in the built app: the model resilience paths against the scripted client's fault steps
@@ -55,7 +55,8 @@ function scenario(name, agentsYaml, opts = {}) {
     ...(opts.delegation ? [] : ['rotaris:', '  delegation_strategy: single']), '',
   ].join('\n'));
   if (opts.snapshot) {
-    const configDir = join(local, 'rotaris', 'config');
+    // By the platform that reads it (`configDirFor`), not the Windows spelling alone.
+    const configDir = configDirFor(local);
     mkdirSync(configDir, { recursive: true });
     writeFileSync(join(configDir, 'project_settings.yaml'), [
       'version: 1', 'providers:', '  scripted-b:', '    id: scripted-b', '    display_name: Scripted B', '    family: scripted', '    authenticated: true',
@@ -68,7 +69,9 @@ function scenario(name, agentsYaml, opts = {}) {
 function launch(name, s, extra, opts = {}) {
   const png = join(output, `${name}.png`);
   const started = Date.now();
-  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), s.workspace], {
+  // `hostSwitches`: Chromium refuses to start as root with its sandbox on, and this proof's first launch died with
+  // SIGTRAP before its first assertion (`docs/defects/fixed/resilience-proof-cannot-launch-the-app-as-root.md`).
+  const result = spawnSync(electron, [join(app, 'out', 'main', 'index.js'), ...hostSwitches, s.workspace], {
     cwd: app, encoding: 'utf8', timeout: opts.timeout ?? 180_000, windowsHide: true,
     env: {
       ...cleanEnvironment(), ...proofIsolationEnv({ local: s.local, preferences: join(s.root, 'preferences') }),

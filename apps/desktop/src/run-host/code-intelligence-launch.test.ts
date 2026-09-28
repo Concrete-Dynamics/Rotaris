@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { codeIntelligenceLaunchFor } from './code-intelligence-launch.js';
 
-describe('what the reserved token launches — REQ-MCP-033, REQ-STARTUP-015 (OQ-76)', () => {
+describe('what the reserved token launches — REQ-MCP-033, REQ-STARTUP-015 (OQ-82)', () => {
   const packagedDir = join('C:', 'Rotaris', 'resources', 'app.asar', 'out', 'main');
   const devDir = join('/', 'repo', 'apps', 'desktop', 'out', 'main');
 

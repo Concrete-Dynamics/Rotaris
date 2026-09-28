@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-28**
 
+**REQ-CHAT-048's duplicate-reasoning hygiene compares per agent (2026-09-28, R-062; OQ-90).** Step 4 kept one lookback —
+the previous thinking row of any agent — so an agent's repeated burst survived whenever another agent reasoned between
+the copies. `ui/transcript/project.ts` now keeps each agent's own previous thinking row, and the bounded form looks one
+up below its cut only for an agent whose unstamped reasoning is in the suffix. The **runtime view**'s step-4 row says so.
+No package, edge, process, channel, message kind, store column or owner of state changed.
+
 **The layout contract has one publisher, and `ui-audit` survives a thrown expression (2026-09-28, R-062).** The window
 controls (`PD-SHELL-003`) wrote their `data-ui-contract` by hand as an object; the audit's CONTRACTS sweep iterates the
 relations array, threw in the renderer on every view carrying the title bar, and the script died on the driver's

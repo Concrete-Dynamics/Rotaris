@@ -327,6 +327,53 @@ describe('ADR-0046 step 4 — the projection', () => {
     expect(projectDisplay(options([think(0, 'x'), think(1, 'x', { name: 'other', persona: 'other' })])).length).toBe(2);
   });
 
+  /**
+   * REQ-CHAT-048's "per agent" read as scoping the whole rule (OQ-90): the comparison is with the SAME agent's
+   * immediately previous thinking row, so another agent's reasoning between two equal bursts does not save the repeat.
+   * docs/defects/fixed/duplicate-reasoning-hygiene-compares-with-the-previous-thinking-row-of-any-agent.md.
+   */
+  describe('REQ-CHAT-048 per agent, with two agents\' reasoning interleaved', () => {
+    const by = (name: string) => (i: number, body: string, over: Partial<TranscriptRow> = {}) =>
+      row(i, { kind: 'thinking', body, name, persona: name, ...over });
+    const A = by('A');
+    const B = by('B');
+    const bodies = (rows: readonly TranscriptRow[]) =>
+      projectDisplay(options(rows, { groupTools: false })).map((d) => { const r = asRow(d).row; return `${r.name}:${r.body}`; });
+
+    it('A, B, A-repeat: the repeat of A\'s own previous burst projects to zero rows, and B\'s equal burst is B\'s own', () => {
+      expect(bodies([A(0, 'x'), B(1, 'x'), A(2, 'x')])).toEqual(['A:x', 'B:x']);
+    });
+
+    it('a repeat with another agent\'s different reasoning between is still dropped', () => {
+      expect(bodies([A(0, 'x'), B(1, 'y'), A(2, 'x')])).toEqual(['A:x', 'B:y']);
+      // However much of the other agent's reasoning lies between.
+      expect(bodies([A(0, 'x'), B(1, 'y'), B(2, 'z'), A(3, 'x'), B(4, 'z')])).toEqual(['A:x', 'B:y', 'B:z']);
+    });
+
+    it('an agent\'s next burst that differs from its own previous one is kept, even where it equals another agent\'s', () => {
+      expect(bodies([A(0, 'x'), B(1, 'y'), A(2, 'z')])).toEqual(['A:x', 'B:y', 'A:z']);
+      expect(bodies([A(0, 'x'), B(1, 'y'), A(2, 'y')])).toEqual(['A:x', 'B:y', 'A:y']);
+      // A stamped repeat is a real second burst, per agent as before.
+      expect(bodies([A(0, 'x'), B(1, 'y'), A(2, 'x', { durationMs: 10 })])).toEqual(['A:x', 'B:y', 'A:x']);
+    });
+
+    it('the bounded projection over the same fixture equals the whole-state one at every append', () => {
+      const all = [row(0, { kind: 'user', name: undefined, persona: undefined }), A(1, 'x'), B(2, 'y'), row(3, { name: 'B', persona: 'B' }),
+        A(4, 'x'), B(5, 'y'), A(6, 'z'), B(7, 'x'), A(8, 'z', { durationMs: 5 }), A(9, 'z')];
+      for (const groupTools of [false, true]) {
+        for (let n = 2; n <= all.length; n += 1) {
+          const before = options(all.slice(0, n - 1), { groupTools });
+          const after = options(all.slice(0, n), { groupTools });
+          const bounded = projectDisplay(after, { previous: projectDisplay(before), from: n - 1 });
+          expect(bounded, `groupTools ${groupTools}, append of row ${n - 1}`).toEqual(projectDisplay(after));
+        }
+      }
+      // And what they agree on is the per-agent reading: 4 repeats A's 1 across B's 2 and 3, 5 repeats B's 2.
+      const kept = projectDisplay(options(all, { groupTools: false })).map((d) => asRow(d).row.index);
+      expect(kept).toEqual([0, 1, 2, 3, 6, 7, 8]);
+    });
+  });
+
   it('REQ-CHAT-049: with no run in progress nothing presents as live', () => {
     const rows = [row(0, { kind: 'tool', toolName: 'read_file', toolStatus: 'running', settled: false }), row(1, { kind: 'thinking', settled: false, startedAt: '2026-09-06T09:00:00.000Z' })];
     // Grouping off, so the two rows are measured one at a time; PD-CHAT-004 would otherwise fold them into

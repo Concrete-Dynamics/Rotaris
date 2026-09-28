@@ -48,7 +48,7 @@ import { sessionCommands } from './commands/session.js';
 import { shellCommands } from './commands/shell.js';
 import { skillsCommands } from './commands/skills.js';
 import { windowCommands, windowsCommands } from './commands/windows.js';
-import { exitAfterChildWindows, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
+import { endBeforeMain, exitAfterChildWindows, RUN_HOST_END_BOUND_MS, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
 import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, type AppLogLevel } from './app-log.js'; // PD-MONITOR-002
 import { workspaceCommands } from './commands/workspace.js';
 // The answer every command ends in, and the inventory the facets above are given (ADR-0019, REQ-SHELL-020).
@@ -78,8 +78,13 @@ import { refusal, type ApprovalDialogState, type CommandContext, type CommandHan
  */
 const launchArtifact = takeArtifactVariables(process.env);
 const clocks = nodeClocks();
+/**
+ * Main's end waits for the run host's (`endBeforeMain`, `exit.ts`): a run host that outlives main keeps every session it
+ * held refused to the next launch until its pid stops answering. Nothing to wait for until the run host is forked.
+ */
+let endRunHost: () => Promise<void> = () => Promise.resolve();
 /** Every immediate exit goes through this: on Linux, `app.exit` over an open modal child segfaults (`exit.ts`). */
-const exitCleanly = (code: number): void => exitAfterChildWindows({ windows: () => BrowserWindow.getAllWindows(), exit: (c) => app.exit(c), timers: clocks.timers, nextTurn: (fn) => setImmediate(fn) }, code);
+const exitCleanly = (code: number): void => exitAfterChildWindows({ windows: () => BrowserWindow.getAllWindows(), exit: (c) => { void endRunHost().then(() => app.exit(c)); }, timers: clocks.timers, nextTurn: (fn) => setImmediate(fn) }, code);
 const dirs = resolveUserDirs();
 const layout = dataLayout(dirs);
 mkdirSync(dirs.data, { recursive: true });
@@ -257,6 +262,11 @@ async function main(): Promise<void> {
   // reported 1, 3, 6, 9, 11 and 15). Any other status is the process lost, and an `error`. A run host still running when
   // its `shutdown` bound elapses at quit is said on the quit path (`window-all-closed`, below).
   runHostChild.on('exit', (code) => log(`run host exited (${code}); NOT re-forked — every in-flight run is lost and settles through stale detection (ADR-0002)`, code === 0 ? 'info' : 'error'));
+  // A session lock ends with the application that held it: main is gone only after the run host (`endBeforeMain`).
+  // An immediate exit asked nothing of the run host, so it is ended at once; the orderly quit below gives it the grace
+  // its answered `shutdown` needs (a 0 ms timer) before ending it. Either way the next launch finds its pid dead.
+  const runHostStillRunning = (): void => { log(`quit: the run host (pid ${runHostChild.pid ?? '?'}) was still running ${RUN_HOST_END_BOUND_MS} ms after it was ended; a session it held is refused to the next launch until it exits`, 'error'); };
+  endRunHost = () => endBeforeMain(runHostChild, runHostExit, clocks.timers, { graceMs: 0, boundMs: RUN_HOST_END_BOUND_MS }, runHostStillRunning);
 
   const services = new Map<string, { child: UtilityProcess; link: ProcessLink<WorkspaceServiceRequest>; exit: ChildExit }>();
   let cancelImprovementWorkspace = (_workspaceRoot: string): void => undefined;
@@ -1551,6 +1561,8 @@ async function main(): Promise<void> {
       await shutdownAtQuit(() => runHost.request({ kind: 'shutdown', deadlineMs: 30_000 }, millis(30_000)), runHostExit, (cause) => { log(`quit: the run host did not complete its shutdown (${String(cause)}); its in-flight runs may be lost`, 'error'); });
       // REQ-GIT-101 again, one process down: each workspace service finishes its in-flight checkpoint Git before it exits.
       await Promise.all([...services].map(([key, s]) => shutdownAtQuit(() => s.link.request({ kind: 'shutdown', deadlineMs: 30_000 }, millis(330_000)), s.exit, (cause) => { log(`quit: the workspace service for ${key} did not complete its shutdown (${String(cause)}); its in-flight work may be lost`, 'error'); })));
+      // The run host is gone before main is, so no session lock it held outlives this instance (`endBeforeMain`).
+      await endBeforeMain(runHostChild, runHostExit, clocks.timers, { graceMs: RUN_HOST_END_BOUND_MS, boundMs: RUN_HOST_END_BOUND_MS }, runHostStillRunning);
       app.quit();
     })();
   });

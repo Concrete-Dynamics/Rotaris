@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-28**
 
+**A session's lock ends with the application that held it (ADR-0014, 2026-09-28, R-062).** Main is gone only after
+the run host: the orderly quit waits, bounded, for the run host's exit after its `shutdown` and ends it if it has not
+come, and an immediate exit (`exitCleanly`) ends it at once (`endBeforeMain`, `main/exit.ts`). The **runtime view**'s §6
+gains *The application's end*; the **state-ownership view**'s lock row and the **process view**'s quit paragraph say
+so. No package, edge, process, channel, message kind or store column changed.
+
 **The artifact variables stay with the launch they describe (REQ-STARTUP-106/147, ADR-0054 "The updater" item 6,
 2026-09-28, R-062).** Main's first statement takes `APPIMAGE` and `ROTARIS_PORTABLE_ARTIFACT` out of its own
 environment and hands them to the updater's classification alone (`takeArtifactVariables` in `platform`), so the run

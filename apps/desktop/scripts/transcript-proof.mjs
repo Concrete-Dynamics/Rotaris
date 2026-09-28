@@ -82,6 +82,8 @@ function launch(name, extra, timeoutMs = 240_000, electronArgs = []) {
   // held is refused to the next launch for as long as its pid answers ("held by another run in this application
   // (pid …)"). Measured 2026-09-28: the behaviour launch opened S1200 1.5 s after the invariance launch's main exited
   // and was refused by the run host that launch had left exiting. So each launch ends only when its children are gone.
+  // Since the repair of that window (`docs/defects/fixed/a-session-lock-outlives-…`) main ends its run host before it
+  // exits, so this wait finds the run host gone; it stays as the guard that says so if that ever stops being true.
   const children = [...log.matchAll(/"process":"[a-z-]+","pid":(\d+)/g)].map((m) => Number(m[1]));
   const started = Date.now();
   const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };

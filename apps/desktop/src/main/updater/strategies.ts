@@ -14,7 +14,10 @@ import type { Flavour } from './classify.js';
  */
 export interface StrategyFiles {
   pathKind(path: string): Promise<'file' | 'directory' | 'absent'>;
-  /** Copy the verified download beside its target (staging may sit on another volume, so this is a copy, not a rename). */
+  /**
+   * Copy the verified download beside its target (staging may sit on another volume, so this is a copy, not a rename).
+   * Replaces `to` when it exists: the only destination is `<name>.update`, the updater's own sibling (`applyPortable`).
+   */
   copyFile(from: string, to: string): Promise<void>;
   rename(from: string, to: string): Promise<void>;
   /** Remove a file; an absent file is not an error. */

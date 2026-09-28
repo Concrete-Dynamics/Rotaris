@@ -85,6 +85,14 @@ describe('the Windows portable strategy — REQ-STARTUP-125, REQ-STARTUP-126', (
     expect(v.files.has(`${TARGET}.update`)).toBe(false);
   });
 
+  it('a `<name>.update` left by an earlier interrupted attempt is the updater\'s own sibling: it is replaced, and the apply goes through', async () => {
+    const v = volume({ [TARGET]: 'v0.1.0', [`${TARGET}.update`]: 'stale partial', [STAGED]: 'v0.2.0' });
+    expect(await applyPortable(TARGET, STAGED, v.port)).toMatchObject({ ok: true, outcome: 'replaced' });
+    expect(v.files.get(TARGET)).toBe('v0.2.0');
+    expect(v.files.get(`${TARGET}.old`)).toBe('v0.1.0');
+    expect(v.files.has(`${TARGET}.update`)).toBe(false);
+  });
+
   it('a failure renaming the target aside, or deleting the previous backup, removes the placed sibling and changes nothing else', async () => {
     const aside = volume({ [TARGET]: 'v0.1.0', [STAGED]: 'v0.2.0' }, { 'rename-aside': 'EBUSY' });
     expect(await applyPortable(TARGET, STAGED, aside.port)).toMatchObject({ ok: false, sentence: expect.stringContaining('EBUSY') });

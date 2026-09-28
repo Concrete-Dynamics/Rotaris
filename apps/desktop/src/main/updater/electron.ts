@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { constants as fsConstants, createWriteStream, promises as fsp } from 'node:fs';
+import { createWriteStream, promises as fsp } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { app, net } from 'electron';
@@ -120,8 +120,10 @@ export function createUpdaterPorts(): UpdaterPorts {
           return 'absent';
         }
       },
-      // Exclusive: a sibling that already exists is somebody else's file, never overwritten (REQ-STARTUP-126).
-      copyFile: (from, to) => fsp.copyFile(from, to, fsConstants.COPYFILE_EXCL),
+      // Overwriting: `<name>.update` is the updater's own name beside the artifact, so a file already there is the
+      // leftover of an earlier interrupted attempt, and `applyPortable` removes a partial one when the copy fails.
+      // Nothing of the installation is touched by it (REQ-STARTUP-126).
+      copyFile: (from, to) => fsp.copyFile(from, to),
       rename: (from, to) => fsp.rename(from, to),
       removeFile: (path) => fsp.rm(path, { force: true }),
     },

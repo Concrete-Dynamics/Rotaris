@@ -324,7 +324,7 @@ lives in `tools/release-naming`. What the build decided and found:
   product's reader may import it; `setup-manifest.test.ts` validates the shipped file, refuses each malformed shape and
   holds the language-server list equal to `pins.json` and to `CODE_INTELLIGENCE_LANGUAGE_SERVERS`, so the two files cannot
   drift. `electron-builder.yml` carries it to the root of the artifact's resources, tested through electron-builder's own
-  `copyFiles`. **`pnpm release:guard v0.1.0` passes both halves, exit 0.** OQ-76 raised (what "archive layout" comprises).
+  `copyFiles`. **`pnpm release:guard v0.1.0` passes both halves, exit 0.** OQ-76 raised (what "archive layout" comprises), and OQ-77 (whether a manifest may key an archive under REQ-STARTUP-060's fallback).
   **Still owed, and not by this step:** the flow that reads the manifest — machine setup, `REQ-STARTUP-060` onward and
   `REQ-MCP-112`'s setup half, with `REQ-STARTUP-061`'s fingerprint — is not built and not in this plan; the notices
   generator still reads `pins.json` and its file says the manifest pins no machine tools, which is now false of the tree

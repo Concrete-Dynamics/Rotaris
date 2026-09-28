@@ -1261,14 +1261,15 @@ holds the two equal key for key and in order, and every archive the shipped mani
 the independent verification of this item: the first build had the second literal and nothing binding it). The raw
 `<os>-<machine>` fallback key of the same requirement is read as a key a host may compute, never one a manifest archive
 is written under — the schema refuses it, so a fallback host finds no archive to select; what machine setup then does is
-the consumer's, not built. `config` is the one package both readers may import:
+the consumer's, not built. The reading is raised as **OQ-77** rather than settled here. `config` is the one package both readers may import:
 the guard (`tools/**`, outside the boundary matrix) already reads `SHIPPED_MCP_SERVERS` and `resolveCommand` there, and
 the product's reader — the machine-setup flow, main's by `REQ-STARTUP-089` — has `config` in main's allowed edges; and
 `config` already owns both things the manifest is cross-checked against. `zod` is `config`'s first use of it, a dependency
 `contracts` already carries. The schema refuses: text that is not JSON; a non-object; a schema version other than 1; a
 missing list; a version that is a range, a partial, a floating tag or a prefixed spec; a digest that is not 64 lower-case
 hex characters; a URL that is not `https://` (`REQ-STARTUP-082`); an archive format outside the three; a top-level
-directory written as a path; an executable path that is absolute, has a `..` component or a backslash
+directory written as a path; an executable path that is absolute (a leading `/`, or a drive letter — `C:/git.exe`, added
+after the independent verification found the pattern let it through), has a `..` component or a backslash
 (`REQ-STARTUP-085`'s refusals, so the manifest never names one); an archive with no executable; a tool with no platform
 key or an unknown one; a provisioner outside `npm` and `uvx`; an empty capability list; a name listed twice in any list.
 

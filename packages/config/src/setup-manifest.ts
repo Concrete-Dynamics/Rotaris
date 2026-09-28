@@ -44,7 +44,8 @@ export const SETUP_MANIFEST_SCHEMA_VERSION = 1 as const;
  *
  * REQ-STARTUP-060's raw `<os>-<machine>` fallback is read as a key a host may compute, never one a manifest archive is
  * written under: the schema refuses it, so a host whose key is a fallback finds no archive to select. What machine setup
- * then does is the consumer's, which is not built (ADR-0054, "The setup manifest — first execution").
+ * then does is the consumer's, which is not built (ADR-0054, "The setup manifest — first execution"). The reading is
+ * raised as OQ-77, not ruled.
  */
 export const PLATFORM_KEYS = ['windows-x64', 'macos-arm64', 'linux-x86_64'] as const;
 export type PlatformKey = (typeof PLATFORM_KEYS)[number];
@@ -72,9 +73,10 @@ const nonEmpty = z.string().min(1);
 const httpsUrl = z.url({ protocol: /^https$/, hostname: z.regexes.domain, error: 'an https:// URL' });
 /**
  * A path inside the archive, relative to its layout's top-level directory (or its root), in forward slashes, with no
- * absolute or `..` component — REQ-STARTUP-085 refuses those at extraction, so the manifest never names one.
+ * absolute component (a leading `/` or a drive letter such as `C:`) and no `..` component — REQ-STARTUP-085 refuses
+ * those at extraction, so the manifest never names one.
  */
-const archivePath = z.string().regex(/^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))(?!.*\\)[^\0]+$/, 'a relative forward-slash path with no `..` component');
+const archivePath = z.string().regex(/^(?!\/)(?![A-Za-z]:)(?!.*(?:^|\/)\.\.(?:\/|$))(?!.*\\)[^\0]+$/, 'a relative forward-slash path with no `..` component');
 /** One directory name, not a path: the top-level directory an archive's entries sit under. */
 const directoryName = z.string().regex(/^(?!\.\.?$)[^\\/\0]+$/, 'one directory name');
 

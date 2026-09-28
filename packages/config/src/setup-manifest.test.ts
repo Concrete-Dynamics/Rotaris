@@ -149,7 +149,7 @@ describe('the schema refuses each malformed shape, naming the path', () => {
     const archive = (m: Record<string, unknown>) => ((m['machineTools'] as Record<string, unknown>[])[0]!['archives'] as Record<string, Record<string, unknown>>)['windows-x64']!;
     expect(problemsOf(edited((m) => { (archive(m)['layout'] as Record<string, unknown>)['format'] = '7z'; }))).toEqual([expect.stringMatching(/^machineTools\[0\]\.archives\.windows-x64\.layout\.format: /)]);
     expect(problemsOf(edited((m) => { (archive(m)['layout'] as Record<string, unknown>)['topLevelDirectory'] = 'a/b'; }))).toEqual([expect.stringMatching(/^machineTools\[0\]\.archives\.windows-x64\.layout\.topLevelDirectory: /)]);
-    for (const bad of ['/cmd/git.exe', '../git.exe', 'cmd/../../git.exe', 'cmd\\git.exe', '']) {
+    for (const bad of ['/cmd/git.exe', 'C:/git.exe', 'c:cmd/git.exe', '../git.exe', 'cmd/../../git.exe', 'cmd\\git.exe', '']) {
       expect(problemsOf(edited((m) => { archive(m)['executables'] = [bad]; })), bad).toEqual([expect.stringMatching(/^machineTools\[0\]\.archives\.windows-x64\.executables\[0\]: /)]);
     }
     expect(problemsOf(edited((m) => { archive(m)['executables'] = []; }))).toEqual([expect.stringMatching(/^machineTools\[0\]\.archives\.windows-x64\.executables: /)]);

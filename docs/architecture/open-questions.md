@@ -69,7 +69,7 @@ reviewed-exceptions table may supply an identifier a dependency does not declare
 runtime). **One more was raised the same day by that generator's gate review: OQ-75** (when a component carries "its
 full license text": a licence file that only pointed elsewhere, or only carried a licence's per-file notice, had
 counted as the text, and 4 components without text became 12); the four were raised as OQ-66 to OQ-69 on their own branch and renumbered when they reached `main`
-after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71. **One more was raised on 2026-09-28 by building the setup manifest (`first-release-plan.md` §4.1): OQ-76** (what a machine tool's "archive layout" comprises, and what path its expected executables are relative to — MinGit's entries sit at the archive root and ripgrep's under one directory). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71. **One more was raised on 2026-09-28 by building the setup manifest (`first-release-plan.md` §4.1): OQ-76** (what a machine tool's "archive layout" comprises, and what path its expected executables are relative to — MinGit's entries sit at the archive root and ripgrep's under one directory). **And OQ-77**, raised by the same item's independent verification (whether a manifest may key an archive under REQ-STARTUP-060's raw `<os>-<machine>` fallback). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -3231,6 +3231,24 @@ something else (a list of entries to keep, a strip depth); and whether expected 
 root or to the promoted tree. A different reading changes the schema's `layout` object and the shipped file, and the
 fingerprint of REQ-STARTUP-061 with them, so it is cheapest before the first release ships a manifest that installations
 have set up from.
+
+**OQ-77 — May a setup manifest key an archive under REQ-STARTUP-060's raw `<os>-<machine>` fallback?** *(REQ-STARTUP-060 with REQ-STARTUP-058. Raised 2026-09-28 by the independent verification of the setup manifest, first-release plan §4.1.)*
+
+REQ-STARTUP-060 names three platform keys, "with a raw `<os>-<machine>` fallback for anything else", and says the keys
+are shared between release artifact naming, updater asset selection and manifest artifact selection. It does not say
+whether the fallback is a key a manifest may *write* an archive under, or only one a host may *compute* and then find
+nothing under. The first reading makes the manifest's key set open-ended (any `<os>-<machine>` string); the second keeps
+it to the three, which is what artifact naming (`PLATFORM_KEYS` in `tools/release-naming`) already does.
+
+**What the build proceeds under.** The second. `SetupManifestSchema` (`packages/config/src/setup-manifest.ts`) admits an
+archive only under one of the three keys, and `tools/release-guard/src/pins.test.ts` pins that an archive under
+`freebsd-x86_64` is refused and that `config`'s key list equals release naming's. A host whose key is a fallback finds
+no archive to select; what machine setup then does (REQ-STARTUP-060 onward, REQ-MCP-112's setup half) is the consumer's,
+not built.
+
+**What a ruling decides.** Whether a manifest may carry an archive for a platform outside the three. A ruling for the
+first reading widens the schema's key to a pattern and changes nothing in the shipped file; either reading leaves the
+consumer to state what a host with no matching archive is told.
 
 **Historical question.** *(ADR-0021 "The cap is load-bearing", obligation 2; REQ-TOOLS-108; REQ-CONFIG-116. Raised by Part AL, 2026-09-09, on wiring the key into the terminal manager — defect fifty-two found it registered, validated and read by nothing.)*
 

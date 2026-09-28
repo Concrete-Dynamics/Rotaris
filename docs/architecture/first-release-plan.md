@@ -24,7 +24,7 @@ record already decides, and every ruling it needs is named as the owner's rather
 | Workspace-context injection, REQ-WORKSPACE-041..050 | built 2026-09-22 under `PD-WORKSPACE-002` | §3 |
 | Injection — REQ-WORKSPACE-049's latency bound, a built-app proof | **built 2026-09-27** (`pnpm injection-proof`); the bound **met on Linux**, the Windows gate-class reading **owed**; OQ-64 **ruled 2026-09-27**; OQ-68 raised | §3 |
 | The Windows release pipeline, REQ-STARTUP-027..038, 141..143, 156, 158, 167, 168 | the installer built once (ADR-0054, 2026-09-04); **the version guard built 2026-09-27** (§4.1), and the setup manifest it checks is owed; **the notices generator built 2026-09-27** (§4.3), its validation refusing until O-3, O-11 and OQ-74; **the two bundled assets wired into `pnpm package` 2026-09-27** (§4.4), so a package refuses with it | §4 |
-| The updater, REQ-STARTUP-107..124 | **not built** — no module in `apps/desktop/src/main/`; **in the first release**, ruled 2026-09-27 | §4.6 |
+| The updater, REQ-STARTUP-107..124 | ~~**not built** — no module in `apps/desktop/src/main/`~~; **in the first release**, ruled 2026-09-27; **built 2026-09-28** (`apps/desktop/src/main/updater/`, `pnpm updater-proof`; the compiled-in key set empty until O-2; the apply and the restart unit-tested over fakes, their run against a real artifact owed to the next Windows package, IC-3); OQ-83, OQ-84, OQ-85 raised; repaired at verification the same day (classification order, the record pass, the re-offer, the launch-time cleanup), OQ-86 raised; and at the second verification (a refused record pass now fails the restart) | §4.6 |
 
 **Deferred by "thats it".** Each item stays owed where the record already carries it:
 
@@ -519,6 +519,62 @@ first release*, following REQ-STARTUP-122's strict sequence. *Ruled 2026-09-27 a
 It shows no override anywhere (REQ-STARTUP-167). If the owner defers it, the release still compiles the key in,
 so that the next release can add the updater without stranding anyone.
 
+> **First execution, 2026-09-28 — built on Linux; the steps that need a Windows artifact are owed to the next Windows
+> package.** Reported in ADR-0054 ("The updater") and in `first-executions.md`; built under
+> [R-062](../product/requests.md#r-062).
+>
+> **What landed.** `apps/desktop/src/main/updater/`: the flavour classified once from the artifact the launch started
+> from (REQ-STARTUP-106; a source-tree or development launch performs no check and issues no request), the one endpoint
+> with the 10.0 s timeout and the Accept header (105), the offer rule with exact-name matching through
+> `tools/release-naming` and the strict order (107/108/109), every check failure one `info` line (110), the summary
+> (112), the manifest parser as the writer's exact inverse with a round-trip test (113, the format now in the naming
+> authority), the six steps of 122 in order with the signature verified before the manifest is parsed, 123's exact
+> sentences, the 1 MiB streaming into a `rotaris-update-` directory (118/124), the portable and installer strategies
+> (115/125/126), the offer notice updated in place with the action disabled during the download (116, REQ-SHELL-114/118),
+> the `updates/dismissedVersion` key written only by that notice's dismissal (116/117/146), the applied, hand-off and
+> failure notices with `Restart now` and `Try again` (119/120/121), the 1200 ms single auto-close, the restart as
+> ADR-0055's hand-over of the record to a successor (121, 161–164), and a quit that waits at most 5000 ms (046).
+>
+> **The key set is empty.** `RELEASE_SIGNING_KEYS` in `apps/desktop/src/main/updater/keys.ts` ships with no member
+> because O-2 is owed. On this tree every install refuses at the signature step with one sentence saying the build
+> carries no verification key, and nothing is downloaded — the mechanism whole, its trust anchor absent. **O-2 writes
+> the public half there, as an SPKI PEM block** (§6). The signature is Ed25519, raw, over the manifest's exact bytes;
+> §4.7's pipeline signs with `openssl pkeyutl -sign -rawin` or its equivalent, and OQ-83 asks whether the record
+> should fix that form.
+>
+> **What was executed.** 145 unit cases over fakes (`pnpm vitest run apps/desktop/src/main/updater/ …`), and one
+> driven launch of the built application under Xvfb (`pnpm updater-proof`, 7 checks): the development launch writes
+> exactly one `update check:` line at `info` saying the build is not updatable and that no request is made, and a proxy
+> sink standing in for the network saw no connection for `github.com`. **What was not, and is not faked (IC-3):** a
+> check reaching the endpoint, an offer, a download, the installer and portable apply against a real artifact, and the
+> restart between two processes — all owed to the next `pnpm package` on Windows.
+>
+> **Found beside it:** the built application's runtime opens `CONNECT redirector.gvt1.com:443` on its own — Chromium's
+> component updater — which REQ-STARTUP-160's disclosure cannot name
+> ([note](../defects/the-built-app-opens-a-connection-to-chromiums-component-updater.md)). **Raised:** OQ-83 (the
+> signature's form), OQ-84 (a packaged Windows build with neither a registry match nor the launcher's variable —
+> ADR-0054 says not updatable, REQ-STARTUP-106's copied-tree sentence says portable), OQ-85 (REQ-STARTUP-118 against
+> REQ-SHELL-118 on the download notice's title, persistence and the pause before the apply). **Two obligations the
+> portable stub (§4.5) inherits:** publish `ROTARIS_PORTABLE_ARTIFACT` with the artifact's absolute path, and forward
+> its arguments to the payload, which the successor launch's token depends on.
+>
+> **Repaired at verification, the same day.** The independent verification found three defects and the repair's tests
+> a fourth, each now pinned beside its unit (ADR-0054 "The updater", *Repaired at verification*): an inherited
+> `APPIMAGE` made a source-tree launch updatable and contacted the feed (the released-artifact test now runs first, the
+> AppImage test on a packaged Linux build alone; `pnpm updater-proof` now launches with both artifact variables set, 8
+> checks); the instance record passed to any announced successor, not only one a waiting restart started (a second
+> instance — `acceptSuccessor`); a later window's check re-offered an installed update and dropped `Restart now`; and
+> the `<name>.old` cleanup ran per window rather than per launch, deleting the backup the same process had just made.
+> 152 unit cases. **Raised by it:** OQ-86 (whether the installer's auto-close and the restart's close ask
+> REQ-STARTUP-046's active-run confirmation); OQ-84 now cites REQ-STARTUP-147's sentence too.
+>
+> **Repaired at the second verification, the same day.** A successor that started and was accepted, but that the
+> record could not be passed to (the record no longer this instance's, or the atomic replacement failed), left the
+> restart waiting for ever and every later update action `update.busy`; the claim now reports the refusal
+> (`onRecordPassFailed`), main's wait (`updater/successor.ts`) rejects, and `Update not installed` surfaces with the
+> reason (REQ-STARTUP-121). 162 unit cases in 15 files. A successor whose 5 s bound expired while the predecessor was
+> blocked can still be passed the record after it has gone — filed in `../defects/`, not repaired.
+
 **4.7 The manifest, the signature and the key record.** The pipeline writes and signs these:
 
 - `SHA256SUMS.txt`, sorted, with two-space separators, covering every asset except itself and the signature;
@@ -570,7 +626,7 @@ cannot be the gate.
 | # | What | Needed by |
 |---|---|---|
 | O-1 | ~~Rule ESC-37, ESC-38, ESC-39 and OQ-64~~ **ruled 2026-09-27** as recommended (R-052) | §2.2, §3.3 |
-| O-2 | Generate the manifest signing key pair and store the private half as a repository secret. The public half is committed | §4.7 |
+| O-2 | Generate the manifest signing key pair and store the private half as a repository secret. The public half is committed. **Where and how (2026-09-28, §4.6's first execution):** the pair is Ed25519 (`openssl genpkey -algorithm ed25519 -out release-signing.pem`); the public half (`openssl pkey -in release-signing.pem -pubout`) is written as one element of `RELEASE_SIGNING_KEYS` in `apps/desktop/src/main/updater/keys.ts`, the SPKI PEM block verbatim, `-----BEGIN PUBLIC KEY-----` to `-----END PUBLIC KEY-----`; the pipeline signs `SHA256SUMS.txt`'s exact bytes with `openssl pkeyutl -sign -inkey release-signing.pem -rawin -in SHA256SUMS.txt -out SHA256SUMS.txt.sig` (a raw 64-byte signature). Until the element exists every install refuses at the signature step and downloads nothing | §4.6, §4.7 |
 | O-3 | Give the literal contact address for the LGPL source request (REQ-STARTUP-142). It must be a single address, reachable without an account and monitored by the maintainers. **Written in `tools/notices/release-inputs.json`, key `lgplCorrespondingSourcesAddress`**, in one of the two shapes §4.3 states; validation fails naming that key until it is | §4.3 |
 | O-4 | Supply an icon, with the `.ico` sizes `electron-builder` asks for | §4.9 |
 | O-5 | ~~Choose where releases are published~~ **ruled 2026-09-27** (R-053): GitHub releases of `theUpsider/Rotaris-crw`, the product repository REQ-STARTUP-038 names | §4.2 |
@@ -603,7 +659,8 @@ supply, and each stays owed (R-053). O-11 is the same kind of item: a review onl
      the bundled interpreter*;
    - §4.4 the bundled assets — *built 2026-09-27; its "assets" rule waits for the next Windows package.*
 3. **The portable stub (§4.5).** Spike first, and report the result into ADR-0054.
-4. **The updater (§4.6)** if O-10 includes it, then the manifest and signature (§4.7) against O-2's key.
+4. ~~**The updater (§4.6)** if O-10 includes it~~ **built 2026-09-28** (§4.6's first-execution note; its apply and
+   restart steps owed a real Windows artifact), then the manifest and signature (§4.7) against O-2's key.
 5. **Assembly.** The release body (§4.8), the icon (§4.9) and the tag workflow (§4.2), run end to end against a
    prerelease tag (for example `v0.1.0rc1`) as a draft.
 6. **The gate (§5)** on O-6's machine, with the §2.3 and §3.4 live runs. When the gate is green, the owner

@@ -203,6 +203,14 @@ Two vocabularies, both closed. Widening either is a decision, not an edit.
 Invariants:
 
 - **One notice slot.** A second persistent notice replaces; it does not stack.
+- **The one exception is an update in place** (REQ-SHELL-118): `NoticeStore.update(noticeId, patch)` changes the
+  notice that is current — same id, on the same serialised chain — and answers false, drawing nothing, when that id is
+  no longer current (whatever replaced it stays, REQ-NOTIFY-024). A patch that raises the severity to `warning` or
+  `error`, or renames a notice at that severity, is recorded first, as a publication would be (REQ-NOTIFY-268). Only the
+  updater's offer uses it today (its download progress, its outcome, its failure); a new notice reaches for `report`.
+- **A disabled action carries its reason.** `action.disabled` in `packages/contracts/src/notices.ts` is the
+  accessible description REQ-SHELL-118 requires; its presence is the disabled state, and `Notice.tsx` renders the
+  control disabled with that text as its description. There is no disabled action without a reason.
 - A renderer that must raise a persistent notice sends `notice.report` — it does not draw one. That missing
   entry for a renderer was defect fifty-seven.
 - A transient acknowledgement may carry **exactly one** action, from a closed one-member type.

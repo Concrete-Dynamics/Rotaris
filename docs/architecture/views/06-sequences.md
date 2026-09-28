@@ -42,6 +42,15 @@ sequenceDiagram
     MW->>MW: resolveStartup: explicit folder → remembered (if still a directory) → cwd + prompt
     MW->>R: build window, load renderer
     R-->>M: first paint
+    MW->>M: postShowActivation(window) — once, on the window's own show event, never during construction
+    M->>M: updater.activate(window) — REQ-STARTUP-043/114
+    alt not updatable (a source-tree or development launch, a payload run without its launcher) or a demo window
+      M->>M: one application-log line at info; NO request (REQ-STARTUP-106/057/150)
+    else a released artifact, no operation in flight
+      M->>M: first check of the launch only — delete a portable's leftover <name>.old (REQ-STARTUP-115)
+      M-->>M: GET the one endpoint, 10 s, Accept header (REQ-STARTUP-105)
+      Note over M: a strictly newer release carrying this flavour's exact asset<br/>and not the waved-off version → the offer notice (REQ-STARTUP-107/108/109/116);<br/>an update already installed or handed off in this process is not offered again (REQ-STARTUP-119);<br/>every failure one log line, never a surface (REQ-STARTUP-110)
+    end
     MW->>WS: open(root) — fork one service per workspace
     WS->>WS: identify workspace, open and migrate the store
     WS-->>MW: workspaceId, storeFile
@@ -57,6 +66,66 @@ sequenceDiagram
 repository card — therefore arrives while no workspace exists yet. Those reads **wait, bounded**
 (`awaitWorkspace`, 30 s) rather than being refused; getting this wrong was a first-execution defect of the
 Overview.
+
+**The update check rides the post-show activation, and so does every window built later.** `MainWindows` fires
+`postShowActivation` once per window on the window's own show event — the launch's window, a replacement's
+(REQ-STARTUP-047's "fresh update check for that window"), an added one's, a hand-over's — and the updater answers each
+with one check or one log line, one operation in flight at a time (REQ-STARTUP-114). Phase 0 has a second entrance
+since 2026-09-28: a launch carrying `builtin:update-successor -- <endpoint>` is the successor an update restart
+started, performs no claim and no hand-over attempt, and inherits the record instead (`inheritInstance`; below).
+
+### `Update now`, and `Restart now` — the offer to the successor
+
+`apps/desktop/src/main/updater/updater.ts` (`install`, `restart`), `install.ts`, `strategies.ts`;
+`packages/platform/src/instance.ts` (`passRecord`, `inheritInstance`). ADR-0054 decided the sequence, ADR-0055 the
+hand-over of the record.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant R as renderer
+  participant M as main (updater)
+  participant F as the release feed
+  participant S as the successor
+  R->>M: update.install (Update now / Try again)
+  M->>M: the offer notice becomes "Downloading Rotaris {v}" IN PLACE, action disabled (REQ-STARTUP-118, REQ-SHELL-118)
+  M->>F: GET SHA256SUMS.txt, then SHA256SUMS.txt.sig
+  M->>M: verify the signature against the compiled-in key set — BEFORE parsing (REQ-STARTUP-122/167); empty set → refused, nothing downloaded
+  M->>M: parse the manifest (REQ-STARTUP-113)
+  M->>F: GET the one asset, redirects followed, into <temp>/rotaris-update-…/ in 1 MiB chunks; progress repainted per whole percent
+  M->>M: digest verified, case-insensitively, with REQ-STARTUP-123's sentences
+  alt portable: rename aside, move in (REQ-STARTUP-125)
+    M->>M: "Update installed" + Restart now (REQ-STARTUP-119)
+    R->>M: update.restart
+    M->>S: spawn <artifact> builtin:update-successor -- <this endpoint>, detached
+    S->>S: no claim; open its own endpoint (inheritInstance)
+    S->>M: {"successor": {pid, host, acquired_at, endpoint}}
+    M->>M: only while this restart waits (acceptSuccessor) — replace the record file atomically with the successor's fields (passRecord)
+    alt the record is not this instance's, or the replacement fails
+      M-->>S: {"ok":false,"reason":…} — the successor ends
+      M->>M: onRecordPassFailed → the wait rejects → "Update not installed", nothing closes (REQ-STARTUP-121)
+    end
+    M-->>S: {"ok":true,"record":"passed"}
+    M->>M: destroy the windows; the ordinary quit; close leaves a record that no longer names it
+  else installer: spawn the setup, detached (REQ-STARTUP-125)
+    M->>M: "Finish the update", no action; the window closes after ONE 1200 ms delay (REQ-STARTUP-119)
+  else any failure
+    M->>M: the notice becomes "Update not installed" in place, the sentence as detail, Try again (REQ-STARTUP-120)
+  end
+```
+
+A successor that cannot be started surfaces through `Update not installed` and nothing closes; one that never
+signals leaves this instance holding its record and its window, with no timeout (REQ-STARTUP-121, ADR-0055). A
+successor that started and was accepted, but that the record cannot be passed to — the record no longer names this
+instance, or its atomic replacement fails — is answered `{"ok":false,"reason":…}` and ends; the claim reports it to
+main (`onRecordPassFailed`), main's wait (`updater/successor.ts`) rejects with the reason, and the restart takes the
+same failure branch: `Update not installed`, nothing closes, the in-flight guard clears. A successor announcement that
+arrives while no restart is waiting — a sentinel launch nobody started — is answered `{"ok":false,"reason":…}`, the
+record is unchanged, nothing is reported to main, and that launch ends; the instance stays the only one
+(REQ-STARTUP-161).
+Nothing of the installation is moved or modified before the replacement is fetched whole and verified
+(REQ-STARTUP-126). The apply strategies and the restart are decided by unit tests over fakes; their run against a real
+Windows artifact is owed to the next Windows package (IC-3) — ADR-0054's "The updater" note says what was executed.
 
 ### Opening another project, from inside
 

@@ -51,6 +51,7 @@ wrong.
 | | `init-proof` | project initialization resolved once per workspace open (ADR-0064) |
 | | `workspace-proof` | reaching a project folder from inside the application: resolution, gates, switch |
 | | `settings-proof` | the Settings categories and the save bar; the About page's two files (`build-id.txt`, `THIRD-PARTY-LICENSES.txt`), absent and present (it stages them in `apps/desktop/resources/` and gives back what was there) |
+| | `updater-proof` | the updater on the one path a development host can execute: a launch that is not a released artifact performs no check and issues no request (REQ-STARTUP-106/114/150) — the log's one `info` line, and a proxy sink every request of Chromium's stack would reach that records none for the feed; the check, the download, the apply and the restart are unit-tested over fakes and their run against a real artifact is owed to the next Windows package (IC-3) |
 | **Surfaces** | `overview-proof` | the Overview painted from the run and the store |
 | | `transcript-proof` | the projection, the caches, the empty state (ADR-0045/0046) |
 | | `rows-proof` | the one row renderer, in both of its surfaces at once |

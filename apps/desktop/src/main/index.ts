@@ -21,7 +21,13 @@ import { mkdirSync, statSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { millis, toIsoUtc } from '@rotaris/kernel';
 import { type AcknowledgementAction, CHANNEL, CommandRequestSchema, type CommandRequest, CONTRACT_SCHEMA_VERSION, oklchToSrgb, parseOklch, resolveTheme, srgbToHex, type Theme, type HooksSummary, type ApprovalPayload, type PausePayload, type CommandOutcome, type NoticeSeverity, type ProposalStatus, type ProviderDialogPayload, type ProviderHealthPayload, type ProviderRow, type ProcessKind, type ProcessReply, type RunHostRequest, type WorkspaceServiceRequest, TERMINAL_WINDOW_ROLE, TERMINAL_AUTO_OPEN_PREFERENCE, type TerminalWindowCommand, type TerminalWindowOpened, type TerminalWindowPayload } from '@rotaris/contracts';
-import { claimInstance, dataLayout, inheritedChromiumSwitches, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, type HandOver } from '@rotaris/platform';
+import { claimInstance, inheritInstance, dataLayout, inheritedChromiumSwitches, nodeClocks, readOrMintMachineId, resolveUserDirs, canonicalPath, samePath, PreferenceStore, resolvePreferenceRoot, type HandOver, type InstanceRecord } from '@rotaris/platform';
+// The updater (first-release-plan.md §4.6, ADR-0054): the pure module, and the one file of it that touches Electron.
+import { createUpdater } from './updater/updater.js';
+import { createSuccessorWait } from './updater/successor.js';
+import { classifyThisInstallation, createUpdaterPorts, successorArguments, successorEndpointFromArgv } from './updater/electron.js';
+import { updateCommands } from './commands/update.js';
+import { productVersion } from './version.js';
 import { ProcessLink, UpdateRelay, type MessagePortLike } from '@rotaris/shell';
 import { CATALOGUE, createProtector, CredentialStore, destinationHint, METHOD_LABELS, ProjectSettingsStore, ProviderService, validateCatalog } from '@rotaris/providers';
 import { PROJECT_SETTINGS_FILE, scopeFiles } from '@rotaris/config';
@@ -134,16 +140,35 @@ function portOf(child: UtilityProcess): MessagePortLike {
 async function main(): Promise<void> {
   const pendingHandOvers: HandOver[] = [];
   let surface: ((h: HandOver) => void) | undefined;
+  /** REQ-STARTUP-121: armed by the updater's restart while it waits for the record to pass to the successor it started. */
+  const successorWait = createSuccessorWait();
 
-  const argvWorkspace = workspaceFromArgv(process.argv);
-  const claim = await claimInstance(
-    {
-      recordFile: layout.instanceRecord, endpointDir: dirs.data, machineId, pid: process.pid,
-      wall: clocks.wall, timers: clocks.timers, handOverIntervalMs: millis(5_000),
-      onHandOver: (h) => { if (surface) surface(h); else pendingHandOvers.push(h); },
+  /**
+   * REQ-STARTUP-121 / ADR-0055 ("The update restart is a hand-over of the record"): a launch the running instance
+   * started as its update successor carries the reserved token and the predecessor's endpoint. It is not an ordinary
+   * launch — it performs no claim and no hand-over attempt — and it carries no workspace of its own.
+   */
+  const successorOf = successorEndpointFromArgv(process.argv, app.isPackaged ? 1 : 2);
+  const argvWorkspace = successorOf === null ? workspaceFromArgv(process.argv) : undefined;
+  const claimDeps = {
+    recordFile: layout.instanceRecord, endpointDir: dirs.data, machineId, pid: process.pid,
+    wall: clocks.wall, timers: clocks.timers, handOverIntervalMs: millis(5_000),
+    onHandOver: (h: HandOver) => { if (surface) surface(h); else pendingHandOvers.push(h); },
+    onRecordPassed: () => { successorWait.passed(); },
+    // REQ-STARTUP-121: an accepted successor the record could not be passed to fails the waiting restart, which then
+    // surfaces `Update not installed` and clears the updater's in-flight guard, instead of waiting for ever.
+    onRecordPassFailed: (_successor: InstanceRecord, reason: string) => {
+      log(`update restart: the record could not be passed to the successor — ${reason} (REQ-STARTUP-121)`, 'warn');
+      successorWait.failed(reason);
     },
-    argvWorkspace ? { workspace: argvWorkspace } : {},
-  );
+    // REQ-STARTUP-161/121: the record passes only while a restart this instance started is waiting for its successor;
+    // any other announcement is refused and leaves the record as it is. Not matched on the pid the restart spawned:
+    // the portable's launcher (ADR-0054) stands between that process and the one that announces itself.
+    acceptSuccessor: () => successorWait.accepting(),
+  };
+  const claim = successorOf === null
+    ? await claimInstance(claimDeps, argvWorkspace ? { workspace: argvWorkspace } : {})
+    : await inheritInstance(claimDeps, successorOf);
 
   if (claim.outcome === 'handed-over') {
     // REQ-STARTUP-162: show nothing, write nothing, end.
@@ -151,11 +176,15 @@ async function main(): Promise<void> {
     return;
   }
   if (claim.outcome === 'refused') {
+    // An ordinary launch refused is REQ-STARTUP-164's bounded end. A successor refused ends quietly and starts no rival:
+    // the running instance keeps its record and its window, which is REQ-STARTUP-121's failure branch.
     log(`launch refused: ${claim.reason}`, 'error');
-    app.exit(2);
+    app.exit(successorOf === null ? 2 : 0);
     return;
   }
-  log(`instance claimed (pid ${process.pid}, host ${machineId})`);
+  log(successorOf === null
+    ? `instance claimed (pid ${process.pid}, host ${machineId})`
+    : `instance record inherited from the predecessor at ${successorOf} (pid ${process.pid}, host ${machineId}; REQ-STARTUP-121)`);
   // A value the variable does not accept is said once, here: after the claim, so a handed-over launch still writes nothing.
   if (appLogLevel.warning !== null) log(appLogLevel.warning, 'warn');
   app.on('will-quit', () => { void claim.close(); });
@@ -355,6 +384,36 @@ async function main(): Promise<void> {
     },
     log,
     focusedSession: () => activeWindow()?.followedSessionId ?? null,
+  });
+  /**
+   * THE UPDATER (first-release-plan.md §4.6, ADR-0054; ruled into the first release by O-10) — `main/updater/`.
+   * Classified once from the artifact the launch started from (REQ-STARTUP-106); its check runs from `MainWindows`'
+   * post-show activation below, once per window shown (REQ-STARTUP-043/114); its two notice actions arrive as the
+   * `update.install` and `update.restart` commands; the offer's dismissal reaches it through `notice.acknowledge`
+   * before the clear (REQ-STARTUP-116/117). `updater/electron.ts` is the one file of it that touches Electron, the
+   * network, the disk or a process; everything else is decided in its tests.
+   */
+  const updaterPorts = createUpdaterPorts();
+  const classification = await classifyThisInstallation();
+  const updater = createUpdater({
+    classification,
+    runningVersion: productVersion(),
+    network: updaterPorts.network, staging: updaterPorts.staging, files: updaterPorts.files, spawn: updaterPorts.spawn,
+    dismissedVersion: { read: () => preferences.read('updates/dismissedVersion'), write: (version) => preferences.write('updates/dismissedVersion', version) },
+    notices,
+    log: (level, message) => log(message, level),
+    timers: clocks.timers,
+    /**
+     * REQ-STARTUP-121: the successor is the updated installation itself, started with the sentinel and this instance's
+     * hand-over endpoint (`successorArguments`). The promise settles when `onRecordPassed` fires — the record has been
+     * rewritten with the successor's fields and the successor told — and fails when the process cannot be started, or
+     * when it started and was accepted but the record could not be passed to it (`onRecordPassFailed`; `successor.ts`).
+     * It has no timeout of its own (ADR-0055): a successor that never signals leaves this instance as it is.
+     */
+    startSuccessor: (target) => successorWait.start(() => updaterPorts.spawn.spawnDetached(target, successorArguments(claim.record.endpoint))),
+    // The window closes only after the successor has started, and the installer's hand-off closes it after its delay
+    // (REQ-STARTUP-119/121): every main window is destroyed and the ordinary quit path follows.
+    closeWindows: () => { mainWindows.dispose(); },
   });
   /**
    * Part X (REQ-LIBRARY-105): the library revision, and the ONE place it is broadcast from. `bump` takes a member of
@@ -1034,6 +1093,8 @@ async function main(): Promise<void> {
       else raiseNotice('error', title);
     },
     log,
+    // REQ-STARTUP-043/114: the update check, initiated from the post-show activation of every main window and nowhere else.
+    postShowActivation: (window) => { void updater.activate({ windowId: window.wcId }); },
   });
   /**
    * REQ-SHELL-109: "when a stream changes while the window is closed, the preference is on, and that stream is running,
@@ -1314,7 +1375,7 @@ async function main(): Promise<void> {
     mainWindows, windowFor, ownerOfAuxiliary, dialogs, dialogPayloads,
     pauseWindows, pausePayloads, presentPause, reviewPayloads,
     measurePersonaPaint, terminalWindowCommand, surface,
-    notices, raiseNotice, raiseNoticeKeyed, recoveryFor, announceRepairs,
+    notices, raiseNotice, raiseNoticeKeyed, recoveryFor, announceRepairs, updater,
     providers, healthCache, providerPayloads, providerChoices, providerRows, presentProvider, afterProviderChange,
     preferences, currentTheme: () => currentTheme, setTheme: (name) => (currentTheme = resolveTheme(name)), themeBackground, requirementsPreferenceKey,
     initialization, libraryRevision, requirementsRuns, improvementUndo, improvementRuns,
@@ -1342,6 +1403,7 @@ async function main(): Promise<void> {
     ...sessionCommands(commandContext),
     ...shellCommands(commandContext),
     ...skillsCommands(commandContext),
+    ...updateCommands(commandContext),
     ...windowCommands(commandContext),
     ...windowsCommands(commandContext),
     ...workspaceCommands(commandContext),
@@ -1466,6 +1528,9 @@ async function main(): Promise<void> {
     // ADR-0014: quit is main-driven, run-host-executed. The skeleton asks and waits, bounded.
     improvementCoordinator.shutdown();
     void (async () => {
+      // REQ-STARTUP-046 / REQ-SHELL-121: an update check, download or install still in flight is waited for at most
+      // 5000 ms; past that the download is abandoned and its partial file discarded, and the close completes.
+      await updater.quiesce(millis(5_000));
       // REQ-GIT-101: a desktop checkpoint operation in flight finishes first — bounded only by REQ-GIT-033's limits.
       if (checkpointOp.current) { log('quit: waiting for the in-flight checkpoint operation (REQ-GIT-101)'); await checkpointOp.current.catch(() => undefined); }
       // PD-MONITOR-002: each `shutdown` is raced against its child's own exit (`shutdownAtQuit`, `exit.ts`). A child that

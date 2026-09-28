@@ -15,6 +15,7 @@ interface MemoryWindow {
   closeAllowed: boolean;
   readonly focusListeners: (() => void)[];
   readonly closedListeners: (() => void)[];
+  readonly shownListeners: (() => void)[];
 }
 
 interface PendingTimer {
@@ -26,6 +27,7 @@ function harness(options: {
   readonly cwd?: string;
   readonly remembered?: string;
   readonly failLoads?: ReadonlySet<number>;
+  readonly postShowActivation?: (wcId: number) => void;
 } = {}) {
   const actions: string[] = [];
   const notices: { windowId: number; title: string; action?: string }[] = [];
@@ -41,7 +43,7 @@ function harness(options: {
     create: async ({ workspace, origin }) => {
       const win: MemoryWindow = {
         id: nextId++, workspace, destroyed: false, visible: false, minimized: false, closeAllowed: true,
-        focusListeners: [], closedListeners: [],
+        focusListeners: [], closedListeners: [], shownListeners: [],
       };
       windows.set(win.id, win);
       actions.push(`build:${workspace}:${origin}`);
@@ -59,7 +61,7 @@ function harness(options: {
     isDestroyed: (win) => win.destroyed,
     isMinimized: (win) => win.minimized,
     isVisible: (win) => win.visible,
-    show: (win) => { win.visible = true; actions.push(`show:${win.workspace}`); },
+    show: (win) => { win.visible = true; actions.push(`show:${win.workspace}`); for (const listener of win.shownListeners.splice(0)) listener(); },
     focus: (win) => { actions.push(`focus:${win.workspace}`); for (const listener of win.focusListeners) listener(); },
     restore: (win) => { win.minimized = false; actions.push(`restore:${win.workspace}`); },
     close: async (win) => {
@@ -77,6 +79,7 @@ function harness(options: {
     },
     onFocus: (win, listener) => { win.focusListeners.push(listener); },
     onClosed: (win, listener) => { win.closedListeners.push(listener); },
+    onShown: (win, listener) => { win.shownListeners.push(listener); },
     ownsAuxiliary: (_personaWindows, terminalWindows, senderId) => terminalWindows === `terminal:${senderId - 100}`,
     disposeResources: (_win, _wcId, personaWindows, terminalWindows) => actions.push(`dispose:${personaWindows}:${terminalWindows}`),
   };
@@ -110,6 +113,7 @@ function harness(options: {
     },
     reportFailure: (windowId, title) => notices.push({ windowId, title }),
     log: (message) => actions.push(`log:${message}`),
+    ...(options.postShowActivation === undefined ? {} : { postShowActivation: (window) => { actions.push(`activate:${window.workspace}`); options.postShowActivation!(window.wcId); } }),
   };
 
   const mainWindows = new MainWindows(dependencies);
@@ -122,6 +126,29 @@ function harness(options: {
 }
 
 describe('MainWindows', () => {
+  it('runs the post-show activation once per window, after the window is shown and never during construction (REQ-STARTUP-043, REQ-STARTUP-114, REQ-STARTUP-047)', async () => {
+    const activated: number[] = [];
+    const h = harness({ postShowActivation: (wcId) => activated.push(wcId) });
+    const first = await h.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });
+    // Built and loaded, not shown: nothing has been activated.
+    expect(activated).toEqual([]);
+    expect(h.actions.filter((a) => a.startsWith('activate:'))).toEqual([]);
+    const win = h.windows.get(first.wcId)!;
+    win.visible = true;
+    for (const listener of win.shownListeners.splice(0)) listener();
+    expect(activated).toEqual([first.wcId]);
+    // A second show of the same window activates nothing again.
+    for (const listener of win.shownListeners.splice(0)) listener();
+    expect(activated).toEqual([first.wcId]);
+    // A replacement window goes through the same activation — a fresh check for that window (REQ-STARTUP-047).
+    await h.mainWindows.open(first.wcId, 'C:/a');
+    h.folders.push('C:/b');
+    await h.mainWindows.choose(first.wcId, { newWindow: false });
+    expect(activated).toHaveLength(2);
+    expect(activated[1]).not.toBe(first.wcId);
+    expect(h.actions.indexOf('show:C:/b')).toBeLessThan(h.actions.indexOf('activate:C:/b'));
+  });
+
   it('tracks focus order, removes closed windows, and attributes senders', async () => {
     const h = harness();
     const first = await h.mainWindows.build({ workspace: 'C:/a', origin: 'launch' });

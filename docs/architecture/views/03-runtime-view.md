@@ -92,7 +92,7 @@ a verification seam in the built app (`ROTARIS_CAPTURE_SKILLS_MACHINE ?? ROTARIS
 out of a packaged build) and never widens the platform rule. The port every read goes through
 (`NODE_DISCOVERY_PORTS.readFile`) decodes strictly since the same day: a file that is not UTF-8 throws, and the throw
 reaches the arm each walk already had for an unreadable file — REQ-WORKSPACE-045's warning naming the path and the
-error for an instruction file, REQ-WORKSPACE-053's skip with a reason for a `SKILL.md` (OQ-76), REQ-WORKSPACE-062's
+error for an instruction file, REQ-WORKSPACE-053's skip with a reason for a `SKILL.md` (OQ-79), REQ-WORKSPACE-062's
 "no block" for a force-loaded body, the disable manifest's unreadable arm, and REQ-WORKSPACE-057's "SKILL.md not found"
 with the decoder's reason for a `SKILL.md` loaded by hand (`loadManualSkill`) — where the lenient decode had merged
 replacement characters with no warning.
@@ -229,7 +229,8 @@ makes a replayed event persist once and a ladder retry update the row in place r
 marks the live row `stalledSince`, the next output clears it, and neither publishes anything into the record
 (REQ-CHAT-164's detection half; the drawing half is the renderer's). After the step: the supervisor observes the
 message; each tool call is observed, written as a running `tool` row, dispatched through the **gate** (policy →
-approval when needed → executor; hooks in its two slots), settled with its outcome (and a `diff` row for an
+approval when needed — resolved at once under the headless policy while the run treats the user as **away**,
+`PD-TOOLS-005`, §5 → executor; hooks in its two slots), settled with its outcome (and a `diff` row for an
 edit); the results go back as one tool message; hook feedback follows as a user message. A reply with no tool call ends the turn — unless a steer is pending, in which case
 the agent takes another round; an empty reply with no call is the runtime's stuck report to the supervisor.
 
@@ -373,7 +374,7 @@ watchdog on the clock port) and the turn awaits the port's `ready()` before read
 collision prefix) and from it, in one place, the executors outside the registry (named by callable name, dispatching the
 reported name to the session's shared connection under the entry's allowance, 300 s by default), the model's listing and
 `## MCP servers` appended to the system prompt (REQ-MCP-101, byte-exact). Under `restricted` or `read_only` the MCP
-tools are withheld from the surface (ADR-0016's reading). The session's connections open on first demand under a keyed
+tools are withheld from the surface (ADR-0016's reading), and while the plan gate holds every server executor is withheld by identity — `withheldUnderPlanGate(name, false)` — rather than by the registry's answer for its name, which a server's tool offered under a free public name such as `read_file` would otherwise borrow (REQ-ORCH-153; the gate refuses the same call on dispatch through its `publicTool` predicate and the port's withheld set). The session's connections open on first demand under a keyed
 single-flight (one process per server per session, shared by every child), a per-call failure is that call's (no retry,
 no reconnect; the next call re-establishes; one `mcp_config` warning per server per session), a `tools/list_changed`
 recomputes and only narrows (the executor deleted, the prompt untouched). **Their lifetime:** the connections of a
@@ -472,6 +473,25 @@ sweep on open settles the row first in this build's routes.
 | `forceCompression` | `run.forceCompression()` → the run's **`ConversationRegistry`** (`run/conversations.ts`, ADR-0060 decision 1's second reader) → each live turn's `CompressionRunner.manual` | **Part AO** (REQ-CHAT-078..081, REQ-MONITOR-090..096): every conversation live inside `runTurn` — the root's and each child's, registered for the span of the turn and unregistered on every exit — compresses CONCURRENTLY and the answer settles once ALL have; unconditional (neither the threshold nor the futility latch is read; the `context_compressed` entry carries `trigger: manual` and NO threshold field); one pass per conversation at a time, shared with the automatic trigger (a pass in flight is joined, `due()` answers false meanwhile); refused `no_run` ("No run is active.") or `no_active_conversations` ("No active agent contexts are available to compress."); the run host raises the count toast or the persistent "Context compression incomplete" with each failing agent and reason in the detail block. **The one asynchronous control:** `Sessions.controlAsync` is its entry and the run host awaits it; the synchronous `control` answers the `no_run` refusal |
 | `clearTranscript` | `SessionWriter.clearTranscript()` — the run's own writer, or the loaded idle session's | **Part AO** (REQ-CHAT-082..084, both routes): every transcript row, resident or released to a page, deleted in ONE transaction with the **`transcript_cleared`** timeline entry, so a reader sees the old rows or none; the writer's resident count and open response rows reset so the run's next write cannot resurrect a row, the row index counter NOT reset (the `events` history keeps REQ-EVENTS-052's contiguity, the next row takes the next index); the commit hand-off carries `clear` and the projection owner drops every held row, cancels a pending growth tick and republishes — an increment from 0 with no rows, then the record. Failures: the persistent "Could not clear transcript" with the store's reason as detail; "Transcript is busy and could not be cleared." is a toast whose condition the store's synchronous transactions make unreachable in this build (stated in `sessions.ts`) |
 | everything else in REQ-MONITOR-004 | — | answers `false` (no mechanism yet) |
+
+**Every operation above but `announceShutdown` is the user's input to the run, and the first of them after an approval
+wait expired unanswered *returns* the user (`PD-TOOLS-005`).** The run's away state is one holder per run,
+`UserPresence` (`engine/run/presence.ts`), installed by `start` and every continuation beside the mode override and
+handed to every agent's port through `ToolPortContext.presence` — a delegated child's included. The gate marks it when a
+brokered wait ends by timeout (the first ask still pays the full `runtime.approval_timeout_seconds`; a timeout of 0
+never marks it) and, while it is marked, resolves every ask that would prompt at once under
+`runtime.headless_approval_policy`, source `headless-policy`, with a reason naming the timeout that expired and never
+"no approval UI"; a session that has genuinely lost its presenter is still reported with REQ-TOOLS-065's own reason,
+checked first. The return is one line at the top of `control` — before the operation is judged, so a message the
+operation then refuses still returns the user — plus the `clearTranscript` branch, which `control` answers ahead of that
+line for both of REQ-CHAT-084's routes and which returns the user only when a run is live, `controlAsync`'s
+`forceCompression` and the id-routed `answerApproval` / `answerQuestions` / `cancelQuestions`, which return the user of
+the session that held the id. The terminal-stream operations (keystrokes, resize, interrupt, kill) reach
+`run-host/terminal.ts` by stream id and never `Sessions`, so they do not return the user — a reading, stated in the
+directive's note. A new run installs a fresh holder, so no run starts away. Both transitions are session-log lines at `WARNING`
+(REQ-SESSION-142); the timeline vocabulary has no word for them (REQ-ORCH-139, **OQ-76**). Questions (REQ-TOOLS-158)
+still prompt and wait where the call is permitted; under the `ask` preset the question tool's own dispatch is an
+approval ask, which the away state resolves (**OQ-77**).
 
 A session **waiting at the plan gate** likewise has no live run. `session.planEdit {text}` records the user's own
 text and moves nothing else; `session.planDecision {decision, changes?}` carries one of exactly three answers

@@ -43,7 +43,7 @@ is one that could not be decoded.
 continues — the reading this note suggested. The requirement lists "unreadable file" among its example reasons without
 saying whether a decoding error is one; the build reads it as one, because the alternative — parsing frontmatter with
 U+FFFD standing in for what the author wrote — is not the file the author wrote, and because REQ-WORKSPACE-045 names
-the decoding error outright for the sibling walk that shares this port. That silence is raised as **OQ-76**
+the decoding error outright for the sibling walk that shares this port. That silence is raised as **OQ-79**
 (`docs/architecture/open-questions.md`); a force-loaded body (REQ-WORKSPACE-062) and the disable manifest
 (REQ-WORKSPACE-052) take the same arm through the same port, and so does a `SKILL.md` loaded by hand
 (`loadManualSkill`, REQ-WORKSPACE-057/151): it now fails with "SKILL.md not found: {raw}" and the decoder's reason in
@@ -55,7 +55,7 @@ parentheses, the arm its I/O half already used, where it used to load with U+FFF
 the real port": the bytes `68 69 0a ff fe c3 28 0a` written to a temporary `AGENTS.md`, merged with a sibling
 `CLAUDE.md` through `NODE_DISCOVERY_PORTS`, give the sibling's block alone, no U+FFFD, and one warning naming the path
 and a non-empty error. `packages/config/src/skills/skills.test.ts` — "REQ-WORKSPACE-053 — a SKILL.md that is not UTF-8,
-through the real port (OQ-76)": the same bytes as one skill's `SKILL.md`, a valid sibling discovered, the bad one in
+through the real port (OQ-79)": the same bytes as one skill's `SKILL.md`, a valid sibling discovered, the bad one in
 `skipped` with `unreadable file: …` and its path; the same bytes loaded by hand through `loadManualSkill`, as a
 directory and as the file, each failing with the "SKILL.md not found" sentence and a reason carrying no U+FFFD; and a
 case that the port still reads non-ASCII UTF-8 and a BOM as it did. The built app's behaviour on such a file is not observed by a proof: `injection-proof`'s fixture holds no

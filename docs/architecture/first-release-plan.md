@@ -36,7 +36,7 @@ record already decides, and every ruling it needs is named as the owner's rather
   `slash-proof` at its first catalogue assertion since ADR-0063
   ([note](../defects/slash-proof-expects-every-built-in-to-carry-the-action-badge.md)), and `skills-proof`'s policy
   launch on Linux only ([note](../defects/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md)).
-- The unbuilt directives `PD-TOOLS-003`, `PD-TOOLS-004`, `PD-TOOLS-005`, `PD-ORCH-004` and `PD-MONITOR-002`.
+- The unbuilt directives `PD-TOOLS-003`, `PD-TOOLS-004`, `PD-TOOLS-005` (**built 2026-09-28**, R-062), `PD-ORCH-004` and `PD-MONITOR-002`.
 - The macOS and Linux artifacts, which are bound by IC-3 and IC-8 and now also by `PD-STARTUP-001`.
 
 **One deferral the owner should look at twice.** Persona memory is a named empty slot in REQ-WORKSPACE-060's
@@ -273,7 +273,7 @@ execution root.
 > now produce REQ-WORKSPACE-045's warning naming the path and the error, and no block — pinned through the real port in
 > `packages/config/src/instructions.test.ts`, and red against the lenient decode. The same strictness reaches a
 > `SKILL.md`, which is skipped as an unreadable file with the decoder's reason; REQ-WORKSPACE-053's silence on the
-> encoding is **OQ-76**. The skill search's machine-wide root moved under the one injectable directory the instruction
+> encoding is **OQ-79**. The skill search's machine-wide root moved under the one injectable directory the instruction
 > base already had (`SkillRootsEnv.machineDir`; `ROTARIS_CAPTURE_SKILLS_MACHINE ?? ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE`
 > in the run host, compiled out of a packaged build), so this proof's existing variable now isolates the catalog too,
 > `skills-proof` stages a skill under its scratch machine root and lists it off Windows, `settings-proof` sets the

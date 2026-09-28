@@ -173,3 +173,24 @@ which personas should, and REQ-CHAT-051 defines exactly one question trailer row
 
 **Found: nothing else** in the registry. The four-stage narrowing fold, the alias table and the fail-closed
 accessor behaved as the first execution recorded them; the new name changes no stage.
+
+**Sixth execution, 2026-09-28, a tool outside the registry offered under a public name (R-062).** The fail-closed
+reading had been executed for MCP tools under their own names (the fourth execution) and, since PD-TOOLS-004, for a
+server's `write_file` at the session-approval seam. It had never been executed for the readers that identify a tool
+**by name**: `ruleFires`' class sets and `withheldUnderPlanGate`. A persona's MCP surface prefixes a server's tool only
+when its name is already taken (REQ-MCP-057), so a filesystem-style server's `read_file` reaches a persona whose public
+set lacks one under that plain name — and by the name, `ask:read-only-tool` allowed it wherever its arguments pointed,
+the fetch pair allowed a server's `fetch` on a local URL, and the plan gate let it through the hold. **Found: the
+decision's own words already forbid it and the code did not follow them** — "no facet is inferred from its name" was
+read as a statement about the *table* (the table declares nothing for the name) when the two readers were inferring the
+declaration from the name by looking the name up. The seam is PD-TOOLS-004's `publicTool` predicate, true only when the
+callable map holds the very executor the run host built for the name: `toolSetHolds` in `policy.ts` requires it before
+a class rule fires, `withheldUnderPlanGate` takes `isPublicTool` and answers `true` without it, the MCP loop in
+`run-host/tools.ts` passes `false` for every server executor, and the gate passes `false` for a name it serves with
+something other than the public tool or removed itself at the gate. Consequence 2 now holds for the class rules as it
+held for the facet accessors: under `ask` a server's read tool asks on every call and only a session approval — exact
+arguments, REQ-TOOLS-024 — quiets it; under `restricted` it is denied by the default, which the surface's withholding
+already made moot. `resolvePersonaMcp`'s prefix rule is unchanged. Measured by unit tests over the policy, the predicate,
+the gate and the real port with a stand-in MCP host (`docs/defects/fixed/an-mcp-tool-offered-under-a-public-name-is-ruled-as-that-public-tool.md`);
+the built app was not driven, since neither `plan-gate-proof` nor `mcp-proof` declares a server tool under a public
+name and both spawn Electron without the root host's `--no-sandbox` switch on this host.

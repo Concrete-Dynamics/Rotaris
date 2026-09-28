@@ -192,11 +192,11 @@ describe('REQ-WORKSPACE-053/055/056 — the SKILL.md document', () => {
   });
 });
 
-describe('REQ-WORKSPACE-053 — a SKILL.md that is not UTF-8, through the real port (OQ-76)', () => {
+describe('REQ-WORKSPACE-053 — a SKILL.md that is not UTF-8, through the real port (OQ-79)', () => {
   /*
    * REQ-WORKSPACE-045 names a decoding error as one way an instruction file is unreadable; REQ-WORKSPACE-053 lists
    * "unreadable file" among the reasons a SKILL.md is skipped without saying whether a decoding error is one. The
-   * build reads it as one (OQ-76): the same port serves both walks, and a file parsed with U+FFFD standing in for what
+   * build reads it as one (OQ-79): the same port serves both walks, and a file parsed with U+FFFD standing in for what
    * its author wrote is not the file the author wrote. The bytes are the defect note's: `68 69 0a ff fe c3 28 0a`.
    */
   const NOT_UTF8 = Buffer.from([0x68, 0x69, 0x0a, 0xff, 0xfe, 0xc3, 0x28, 0x0a]);

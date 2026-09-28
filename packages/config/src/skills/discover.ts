@@ -36,7 +36,7 @@ export interface DiscoveryPorts {
  * sequence throws, and the throw reaches the same warning path an I/O error does. The BOM is left in place
  * (`ignoreBOM`), so a file that decodes reads exactly as it did before — only the file that cannot be decoded changes
  * what happens. Every reader of these ports shares the rule: an instruction file (REQ-WORKSPACE-045), a `SKILL.md`
- * (REQ-WORKSPACE-053, OQ-76), a force-loaded body (REQ-WORKSPACE-062), the disable manifest (REQ-WORKSPACE-052) and a
+ * (REQ-WORKSPACE-053, OQ-79), a force-loaded body (REQ-WORKSPACE-062), the disable manifest (REQ-WORKSPACE-052) and a
  * `SKILL.md` loaded by hand (`loadManualSkill`, REQ-WORKSPACE-057/151), which now fails with its "SKILL.md not found"
  * sentence and the decoder's reason where it used to load with U+FFFD in the text.
  */
@@ -109,7 +109,7 @@ export function discoverSkills(env: SkillRootsEnv, ports: DiscoveryPorts = NODE_
       try {
         text = ports.readFile(path);
       } catch (cause) {
-        // REQ-WORKSPACE-053's "unreadable file", which a file that is not UTF-8 is read as too (OQ-76): skipped with
+        // REQ-WORKSPACE-053's "unreadable file", which a file that is not UTF-8 is read as too (OQ-79): skipped with
         // the reason, never parsed with replacement characters standing in for what the author wrote.
         skipped.push({ path, reason: `unreadable file: ${cause instanceof Error ? cause.message : String(cause)}` });
         continue;

@@ -52,8 +52,39 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 it from there. The run host's existing `SkillHostDeps.machineDir` now reaches `discoverSkills` too, fed by
 `ROTARIS_CAPTURE_SKILLS_MACHINE ?? ROTARIS_CAPTURE_INSTRUCTIONS_MACHINE` under `__ROTARIS_SEAMS__`. `NODE_DISCOVERY_PORTS.readFile`
 decodes with a fatal `TextDecoder`, so a file that is not UTF-8 reaches the unreadable-file arm of every walk that shares
-the port (OQ-76 for a `SKILL.md`). The **runtime view**'s §1 passage on the machine-wide base and its §7 Instructions
+the port (OQ-79 for a `SKILL.md`). The **runtime view**'s §1 passage on the machine-wide base and its §7 Instructions
 bullet name both. No package, edge, process, channel, command, message kind or store column changed.
+
+**After one unanswered approval, a run treats the user as away (`PD-TOOLS-005`, built 2026-09-28, R-062).** One holder
+per run, `UserPresence` (`engine/run/presence.ts`), installed by `Sessions.start` and every continuation beside the mode
+override and handed to every agent's port through `ToolPortContext.presence`, a delegated child's included. The gate
+(`GateDeps.presence`, passed by `run-host/tools.ts`) marks it when a brokered wait ends by timeout and, while it is
+marked, resolves every ask that would prompt at once under the headless policy with a reason naming the timeout that
+expired; the user returns on the first input to the run's session, wired at the top of `Sessions.control` and in its
+`clearTranscript` branch, in `controlAsync` and in the id-routed answers. The **runtime view** gains a clause in §3 and a
+paragraph after §5's table; the **sequences view** gains one bullet in §2; the **state-ownership view** gains a volatile
+row for the run's away mark — owned by the run host, set only by the gate's timeout arm, cleared only by `Sessions`'
+input arms, never persisted. No package, edge, process, channel, message kind or store column changed;
+the two transitions are session-log lines because the timeline vocabulary has no word for them (OQ-76).
+
+**Hook faults reach the application log (defect repair, 2026-09-28, R-062).** `HookPortContext.log` and `HookSinks.log`
+were documented "the application log only" and wired by `Sessions` to the per-session log at `INFO`, where the
+`WARNING` default of `session_log_level` dropped them, so a hook fault that reduces to a log entry (REQ-HOOKS-079/128/129)
+and the run host's account of an unresolvable hook set (REQ-HOOKS-085) were recorded nowhere at the default
+configuration. `SessionsDeps` gains `log`, the application log at `info` (PD-MONITOR-002), which the run host fills with
+its `log` event; both hook-port construction sites write through it. `CheckpointPortContext.log` is decided the other
+way and says so: it stays the per-session log, since `run-host/checkpoints.ts` already writes every checkpoint line to
+the application log through `CheckpointRootDeps.log` as well. The **process view**'s application-log paragraph gains
+the sentence. No package, edge, process, channel, message kind or store column changed.
+**Three permission-gate defects repaired (2026-09-28, R-062).** The path scope of REQ-TOOLS-018 joins each path argument
+to the workspace root before the resolver, so a workspace-relative read no longer resolves against the run host's process
+directory; `realPathOf` rebuilds a relative path's missing tail with `basename` and drops no character; and PD-TOOLS-004's
+`publicTool` predicate now decides whether a rule's tool set holds a call (`toolSetHolds` in `agent-tools/src/policy.ts`)
+and whether the plan gate withholds it (`withheldUnderPlanGate(name, isPublicTool)`, passed `false` by the run host's MCP
+loop and by the gate for a name it serves with something other than the public tool or removed itself), so an MCP tool
+offered under a public name is ruled as the undeclared tool it is. The **sequences view** §2 gains two sentences on the
+approval bullet and the **runtime view**'s MCP-surface passage one clause; no package, edge, process, channel, message
+kind or store column changed.
 
 **A session approval of a file write covers that path (`PD-TOOLS-004`, built 2026-09-27, R-057).** A grant made by
 "approve for session" on a call of the public `write_file` or `haet_edit` (`haet` folded in) now stores the set of

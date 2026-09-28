@@ -69,10 +69,9 @@ reviewed-exceptions table may supply an identifier a dependency does not declare
 runtime). **One more was raised the same day by that generator's gate review: OQ-75** (when a component carries "its
 full license text": a licence file that only pointed elsewhere, or only carried a licence's per-file notice, had
 counted as the text, and 4 components without text became 12); the four were raised as OQ-66 to OQ-69 on their own branch and renumbered when they reached `main`
-after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71. **One more was raised on 2026-09-28 by
-repairing REQ-WORKSPACE-045's decoding half: OQ-76** (whether a `SKILL.md` that cannot be decoded as UTF-8 is an "unreadable file"
+after the `/skills` listing, the injection proof and the version guard had taken OQ-67 to OQ-71. **Two more were raised on 2026-09-28 by building `PD-TOOLS-005` (R-062): OQ-76** (which timeline word records a run's user going away and returning — REQ-ORCH-139 closes the vocabulary and it has none, so the build writes both transitions to the session log) **and OQ-77** (whether the away state resolves the approval an `ask_questions` call itself needs under the `ask` preset, which keeps every question from an away user under the default preset), **and one by its verification: OQ-78** (whether an approval already outstanding when the first wait expires keeps its own full wait, as built, or is ended with the directive's reason). **And one more the same day by repairing REQ-WORKSPACE-045's decoding half: OQ-79** (whether a `SKILL.md` that cannot be decoded as UTF-8 is an "unreadable file"
 under REQ-WORKSPACE-053, which names the reason without saying what encoding a skill file has; built as one, skipped with the
-decoder's error). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+decoder's error — raised as OQ-76 on its branch and renumbered at the merge, OQ-76 to OQ-78 having been taken on `main`). Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -3215,7 +3214,71 @@ eight of O-11's twelve reviews are for a notice or a pointer.
 
 The key is registered with default 20 and minimum 1. Each background session publishes its own `bg:<id>` stream at up to 50 frames/s (the 20 ms floor), so the produced aggregate is `(agents + background sessions) × 50 frames/s`, and only one of those two factors — agents, REQ-MONITOR-285's 20 — has a ceiling. Part AL reads the key into the manager and caps the *delivered* rate per window at 1,000 frames/s by merging (REQ-MONITOR-306, REQ-SHELL-103), so a user who configures 400 background sessions saturates the run-host → main pipe, not a renderer. A stated maximum on the key would let the produced rate be computed rather than absorbed. The owner's call; recorded, not resolved.
 
-**OQ-76 — Is a `SKILL.md` that cannot be decoded as UTF-8 an "unreadable file"?** *(REQ-WORKSPACE-053, with REQ-WORKSPACE-045 and REQ-WORKSPACE-044. Raised 2026-09-28 by repairing REQ-WORKSPACE-045's decoding half, R-062.)*
+**OQ-76 — Which timeline word records that a run's user went away, and came back?** *(REQ-ORCH-139, REQ-SESSION-142,
+`PD-TOOLS-005`. Raised 2026-09-28 by building `PD-TOOLS-005` under [R-062](../product/requests.md#r-062).)*
+
+`PD-TOOLS-005` makes a run treat the user as away once an approval wait has expired unanswered, and present again on
+their next input to the session. An autopsy of such a run wants both instants: every approval ask between them was
+refused without a prompt, and the stretch is what explains a row of `permission_denied` issues. REQ-ORCH-139 closes
+the timeline-event vocabulary to the list in domain 01's Data & Formats, and domain 05's own Data & Formats names the
+only other timeline events a permission mechanism may write (`permission_approved`, `permission_mode_changed`,
+`permission_mode_downgraded`). Neither has a word for the user's presence, and the directive mints none.
+
+**What the build proceeds under.** Both transitions are written to the session log (REQ-SESSION-142) at `WARNING` —
+the default level, so that the end of a stretch is visible wherever its start is — in the words `user away: an approval
+in this run went unanswered for <N> seconds …` and `user returned: input reached this session …`
+(`packages/engine/src/run/presence.ts`). The denials themselves carry the cause in the decision's reason, which the
+`permission_denied` issue records, so an autopsy reading the store alone still sees why each ask was refused; what it
+cannot read from the store is the instant the user returned.
+
+**What a ruling decides.** Whether the timeline gains two names for the transitions, and in which domain's list, or
+whether the log line is the record. Recommendation: two names in domain 05's list, because the timeline is what an
+autopsy reads first and is among the records the export reaches (REQ-SESSION-199), and the session log is neither.
+
+**OQ-77 — Does the away state resolve the approval an `ask_questions` call itself needs under the `ask` preset?**
+*(`PD-TOOLS-005`, REQ-TOOLS-007, REQ-TOOLS-158, REQ-TOOLS-178. Raised 2026-09-28 by building `PD-TOOLS-005` under
+[R-062](../product/requests.md#r-062).)*
+
+The directive keeps questions prompting and waiting while the user is away: "questions put to the user (REQ-TOOLS-158,
+REQ-TOOLS-178) still prompt and wait". But `ask_questions` is outside REQ-TOOLS-007's read-only class, so under the
+`ask` preset — the default — its dispatch resolves to the preset's default decision, `ask`, and the call needs an
+approval before the question exists. That approval is an ask that would prompt, so while the user is away it is
+resolved at once and denied: under the default preset no question reaches an away user, and the clause is reachable
+only where the call is permitted outright — `autonomous`, a rule, or a session approval of the tool.
+
+**What the build proceeds under.** The literal reading: the away state resolves every approval ask, the question
+tool's own included, and the clause governs the question the executor raises, which still prompts and waits wherever
+the call is permitted. A gate case pins both halves (`gate.test.ts`, "a question still prompts and waits while the user
+is away").
+
+**What a ruling decides.** Whether `ask_questions`'s own dispatch is exempt from the away resolution — or from the
+preset default altogether, as the loop-control tools are under REQ-TOOLS-014 — so that a question can reach a user
+who is away in the approval sense and may still answer one. Recommendation: exempt the question tool's own dispatch
+from the away resolution and nothing else; a question is the one prompt the directive means to keep, and the preset's
+decision on the call otherwise stands.
+
+**OQ-78 — Does an approval already queued when the first wait expires still get its own full wait?**
+*(`PD-TOOLS-005`, REQ-TOOLS-052, REQ-TOOLS-055. Raised 2026-09-28 by the verification of the `PD-TOOLS-005` build under
+[R-062](../product/requests.md#r-062).)*
+
+The directive says every further approval that would prompt in the run resolves at once once one wait has ended by
+timeout. The gate consults the away state when it brokers an ask, before a wait exists. An ask brokered *before* the
+first wait expired already has its wait running: it was put to the user (published, and shown or queued behind the
+first dialog in main), so the build does not cut it short, and its own expiry is not a second transition. With several
+agents asking concurrently, each such ask can still cost a full `runtime.approval_timeout_seconds` after the first —
+the cost the directive exists to remove, reduced from one per ask to one per ask *already outstanding* at the first
+expiry.
+
+**What the build proceeds under.** The reading stated in the directive's first-execution note: a wait already running
+when the user was marked away runs to its own end; only asks brokered afterwards resolve at once.
+
+**What a ruling decides.** Whether marking the user away also ends the waits already outstanding in that run (each
+resolved under `runtime.headless_approval_policy` with the directive's reason, its dialog withdrawn), or whether a
+request that has reached the user keeps its own full wait. Recommendation: end the outstanding waits too, with the
+directive's reason — a request queued behind an unanswered dialog was never seen, and the directive's intent is that
+one unanswered approval costs one timeout.
+
+**OQ-79 — Is a `SKILL.md` that cannot be decoded as UTF-8 an "unreadable file"?** *(REQ-WORKSPACE-053, with REQ-WORKSPACE-045 and REQ-WORKSPACE-044. Raised 2026-09-28 by repairing REQ-WORKSPACE-045's decoding half, R-062. Raised as OQ-76 on its branch; renumbered OQ-79 at the merge, because OQ-76 to OQ-78 were already on `main`.)*
 
 REQ-WORKSPACE-045 names two ways a context file can be unreadable — "I/O or decoding error" — and REQ-WORKSPACE-044
 measures every limit "as UTF-8 bytes", so for an instruction file the encoding is settled: it is UTF-8, and a file that is
@@ -3244,7 +3307,7 @@ now fails with REQ-WORKSPACE-057's "SKILL.md not found: {raw}" and the decoder's
 half already used, where it used to load the skill with U+FFFD in its text. If the owner rules the other way, only the port changes:
 the walk's skip arm stays for the I/O half, and the decode becomes lenient for `SKILL.md` alone. The cases are pinned in
 `packages/config/src/skills/skills.test.ts` ("REQ-WORKSPACE-053 — a SKILL.md that is not UTF-8, through the real port
-(OQ-76)"), the walk's and the hand-loaded one's.
+(OQ-79)"), the walk's and the hand-loaded one's.
 
 ## Design-reference dependencies
 

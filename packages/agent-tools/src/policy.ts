@@ -362,7 +362,15 @@ function pathScopeMatches(scope: PathScope, req: PermissionRequest, env: Evaluat
   for (const p of paths) {
     let real: string | null;
     try {
-      real = env.resolvePath(p);
+      /*
+       * REQ-TOOLS-018: "Relative paths resolve against the workspace root." The path is joined to the root first —
+       * the join the fence and `resolvedPathSet` make — and then handed to the resolver for its real path. Until
+       * 2026-09-28 the raw argument went to the resolver, and the run host's is `realPathOf`, relative to the PROCESS
+       * directory: a workspace-relative read under `restricted` landed "outside" unless main happened to start inside
+       * the workspace (`docs/defects/fixed/path-scope-resolves-a-relative-path-against-the-process-directory.md`).
+       * The unit tests did not see it because they injected a resolver that joined the root itself.
+       */
+      real = env.resolvePath(resolveInWorkspace(env, p));
     } catch {
       real = null;
     }
@@ -385,8 +393,22 @@ function commandMatches(m: CommandMatcher, facet: string | null, segments: () =>
   }
 }
 
+/**
+ * A rule's `tools` set names PUBLIC tools — REQ-TOOLS-007's read-only and network classes, over which REQ-TOOLS-043's
+ * `ask:read-only-tool`, `restricted`'s two read rules and REQ-TOOLS-045's fetch pair are written. A call the surface
+ * serves with an MCP or plugin tool is in neither class whatever the tool is called (REQ-TOOLS-001 as ADR-0016 reads
+ * it: a tool outside the registry carries no declaration and nothing is inferred from its name), so such a rule does
+ * not fire for it and the preset's default decides. A server's own `read_file`, offered under that plain name to a
+ * persona whose public set lacks one, was allowed by `ask:read-only-tool` wherever its arguments pointed until
+ * 2026-09-28 (`docs/defects/fixed/an-mcp-tool-offered-under-a-public-name-is-ruled-as-that-public-tool.md`).
+ */
+function toolSetHolds(tools: ReadonlySet<string>, req: PermissionRequest, env: Pick<EvaluationEnv, 'publicTool'>): boolean {
+  if (!tools.has(req.toolName.toLowerCase()) && !tools.has(canonicalToolName(req.toolName).toLowerCase())) return false;
+  return env.publicTool(req.toolName);
+}
+
 function ruleFires(rule: Rule, req: PermissionRequest, env: EvaluationEnv, segments: () => readonly Segment[]): boolean {
-  if (rule.tools && !rule.tools.has(req.toolName.toLowerCase()) && !rule.tools.has(canonicalToolName(req.toolName).toLowerCase())) return false;
+  if (rule.tools && !toolSetHolds(rule.tools, req, env)) return false;
   if (rule.personas && !rule.personas.has(req.persona)) return false;
   if (rule.pathScope && !pathScopeMatches(rule.pathScope, req, env)) return false;
   if (rule.command && !commandMatches(rule.command, req.commandFacet, segments)) return false;

@@ -142,7 +142,8 @@ const profile = {
   home: join(scratch, 'home'),
   machine: join(scratch, 'machine-codex'),
 };
-const globalDir = configDirFor(profile.local);
+// The home the launch is handed, so the macOS answer (composed from the home alone) names the directory it reads.
+const globalDir = configDirFor(profile.local, process.platform, profile.home);
 const workspace = join(scratch, 'workspace');
 for (const dir of [profile.local, profile.preferences, profile.home, profile.machine, globalDir, workspace]) mkdirSync(dir, { recursive: true });
 
@@ -294,7 +295,7 @@ let latency = null;
 if (!skipLatency) {
   const lat = join(output, 'latency');
   const lprofile = { local: join(lat, 'local'), preferences: join(lat, 'prefs'), home: join(lat, 'home'), machine: join(lat, 'machine-codex') };
-  const lglobal = configDirFor(lprofile.local);
+  const lglobal = configDirFor(lprofile.local, process.platform, lprofile.home);
   const lworkspace = join(lat, 'workspace');
   for (const dir of [lprofile.local, lprofile.preferences, lprofile.home, lprofile.machine, lglobal, lworkspace]) mkdirSync(dir, { recursive: true });
   write(join(lworkspace, '.rotaris', 'agents.yaml'), ['models:', '  scripted: { provider: scripted, model_id: scripted }', 'small_model: scripted', 'medium_model: scripted', 'large_model: scripted', ''].join('\n'));

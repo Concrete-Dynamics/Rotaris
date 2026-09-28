@@ -557,7 +557,7 @@ presented as it is with its `interruption`, the record's one PD-ORCH-005 field.
 
 | Operation | Reaches | Effect |
 |---|---|---|
-| `cancel` | `run.stop.request('user_cancelled')` | REQ-SESSION-186's stop: graceful; the second activation forces; 30 s backstop (ADR-0014). **PD-ORCH-005:** a stop, forced or not, comes to rest — every unfinished agent `paused` by `stop`, the iteration open (OQ-69) — and the next continue resumes it (§2). Sent by the composer's stop control, unconfirmed (renderer `stopRun`), and by `/stop` |
+| `cancel` | `run.stop.request('user_cancelled')` | REQ-SESSION-186's stop: graceful; the second activation forces; 30 s backstop (ADR-0014). **PD-ORCH-005:** a stop, forced or not, comes to rest — every unfinished agent `paused` by `stop`, the iteration open (OQ-69) — and the next continue resumes it (§2). Sent by the composer's stop control, unconfirmed (renderer `stopRun`), and by `/stop`, offered as "Stop the active run" (clause 15) |
 | `pause` | `run.pause()` | refused while the plan gate holds (PD-ORCH-005 clause 11); `pausing` written only after acceptance; approvals and questions withdrawn, the tool deadline armed, the scheduler held; every agent stops before its next step; the run ends as `user_cancelled` → status `paused` with its row, its unfinished agents `paused` and the iteration open. **The Mission view refuses a pause for any selection but the run itself client-side, with REQ-MONITOR-276's text, and sends nothing** (Part R); the same `pause` op reaches here for the run-level selection |
 | `submitSteeringPrompt` | `run.steer(agentId, text)` | pending per conversation (`root` or a task id); the id is the string value; the persona window's steer card sends it for its instance (Part R, REQ-MONITOR-070/137) |
 | `createQueuedPrompt` / `editQueuedPrompt` / `removeQueuedPrompt` | the writer's queue units | QUEUED rows; the snapshot republished; refused once TRIGGERED. **Part AB (REQ-CHAT-039):** `createQueuedPrompt` also takes an optional `context` snapshot (a one-level record, or its JSON text) and resolves ownership before the row exists — the control channel's addressing IS the explicit session id, a snapshot naming another session is REFUSED rather than re-scoped, and an unscoped prompt is refused naming OQ-51. Ownership is the primary key's first column, so edit and trigger cannot move it |
@@ -603,7 +603,8 @@ plus every agent of it not in a terminal state — the paused ones after a rest,
 left, which its record will pause — read from the store as `planGate` is) — the count in the composer's notices row,
 describing every continue that resumes them, on a `paused` session, on one a crash left `interrupted` and on one in
 REQ-CHAT-008's recovery state, and on a `paused` one "Continue without them" beside it, behind a confirmation; the strip
-keeps its one band, its two continues showing short labels as the send pill does (OQ-71).
+keeps its one band, its two continues showing short labels as the send pill does — `Continue` and `Send`, named
+`Continue run` and `Continue with a message` (`PD-CHAT-001` revision 4).
 
 ## 6. End
 

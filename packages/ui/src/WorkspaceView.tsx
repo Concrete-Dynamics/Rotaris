@@ -819,7 +819,8 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
     setTheme: async (name) => { if (!slash?.setTheme) throw new Error(defaultUnavailableReason('theme')); okOr(await slash.setTheme(name)); },
     logout: async (provider) => { if (!slash?.logout) throw new Error(defaultUnavailableReason('logout')); okOr(await slash.logout(provider)); },
     control: async (op: ControlOp) => {
-      // REQ-CHAT-029: `/stop` cancels the live run (graceful, the Stop control's first activation) and sends no text anywhere.
+      // PD-ORCH-005 clause 15 (REQ-CHAT-029 as narrowed): `/stop` is the stop — the Stop control's graceful first
+      // activation, which brings the run to rest — and sends no text anywhere.
       if (op === 'cancel') { setStopRequested(true); const r = await onStop(false); if (!r.ok) setStopRequested(false); return r.ok ? ok(undefined) : err(r.reason); }
       if (op === 'pause') { if (!onPause) return err('Pause is unavailable because no active run exists.'); const r = await onPause(); if (r.ok) setPausePending(true); return r.ok ? ok(undefined) : err(r.reason); }
       if (op === 'forceCompression' || op === 'clearTranscript') {
@@ -1532,9 +1533,10 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
                 * and the two continues take the send pill's place, so they carry short labels at every density as the
                 * pill does — `Continue` is the pill's own (REQ-CHAT-005 as PD-CHAT-001 narrows it) — with the full
                 * name as accessible name and tooltip. At full labels the paused strip scrolled at every density but
-                * narrow (found by phase 5's second review; OQ-71 puts `Message` to the owner). */}
+                * narrow (found by phase 5's second review). PD-CHAT-001 revision 4 ("The paused continues"): the
+                * continue by message reads `Send`, the word of the send pill it stands in for. */}
               <DesignButton type="button" className="btn btn-primary composer__continue" onClick={() => { void continueRun(); }} aria-label="Continue run" title="Continue run" aria-describedby={resumable ? 'composer-resume-count' : undefined}>Continue</DesignButton>
-              <DesignButton type="submit" className="btn btn-secondary composer__continue" disabled={busy} aria-label="Continue with a message" title="Continue with a message" aria-describedby={resumable ? 'composer-resume-count' : undefined}>Message</DesignButton>
+              <DesignButton type="submit" className="btn btn-secondary composer__continue" disabled={busy} aria-label="Continue with a message" title="Continue with a message" aria-describedby={resumable ? 'composer-resume-count' : undefined}>Send</DesignButton>
             </>
           ) : (
             /*

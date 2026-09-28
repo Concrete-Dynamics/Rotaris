@@ -267,7 +267,7 @@ expect(Math.abs(popup.popup.width - popup.input.width) <= 1 && Math.abs(popup.po
 expect(popup.popup.bottom <= popup.input.top && popup.input.top - popup.popup.bottom < 24, `the popup is not directly above the composer: bottom ${popup.popup.bottom}, input top ${popup.input.top}`);
 // Each row renders `/name — description [argument hint]` and a kind badge; unavailable rows carry their reason as tooltip and description.
 const stopRow = rows.find((r) => r.attrs['data-command'] === 'stop');
-expect(stopRow && stopRow.text.startsWith('/stop — Cancel the active run') && stopRow.text.includes('action'), `the /stop row should read "/stop — Cancel the active run … action": ${stopRow?.text}`);
+expect(stopRow && stopRow.text.startsWith('/stop — Stop the active run') && stopRow.text.includes('action'), `the /stop row should read "/stop — Stop the active run … action": ${stopRow?.text}`);
 expect(stopRow.attrs['aria-disabled'] === 'true' && stopRow.attrs['title'] === 'No run is active.' && typeof stopRow.attrs['aria-describedby'] === 'string', `an unavailable row should be disabled with its reason as tooltip and description: ${JSON.stringify(stopRow.attrs)}`);
 const modelRow = rows.find((r) => r.attrs['data-command'] === 'model');
 expect(modelRow && modelRow.text.includes('/model — Switch the model [<name>]') && modelRow.attrs['aria-disabled'] === 'false', `the /model row should show its argument hint and be available: ${modelRow?.text} ${modelRow?.attrs['aria-disabled']}`);

@@ -36,9 +36,11 @@ describe('PD-ORCH-005 clause 6: the Continue action states how many agents will 
   it('a paused session with an open iteration: the strip keeps its two continues, both described by the count, which stands with the decline in the notices row (found by phase 5\'s review: the strip lost its one band)', () => {
     const html = render(session({ resumable: { iteration: 2, agents: 3 } }));
     expect(strip(html).match(/aria-describedby="composer-resume-count"/g)).toHaveLength(2);
-    // Each continue takes the pill's place, so it shows a short label and names itself in full (OQ-71).
+    // Each continue takes the pill's place, so it shows a short label and names itself in full: `Continue` and `Send`,
+    // the word of the send pill it stands in for (PD-CHAT-001 revision 4, "The paused continues").
     expect(strip(html)).toMatch(/aria-label="Continue run" title="Continue run"[^>]*>Continue</);
-    expect(strip(html)).toMatch(/aria-label="Continue with a message" title="Continue with a message"[^>]*>Message</);
+    expect(strip(html)).toMatch(/aria-label="Continue with a message" title="Continue with a message"[^>]*>Send</);
+    expect(strip(html)).not.toContain('>Message<');
     expect(strip(html)).not.toContain('Continue without them');
     expect(strip(html)).not.toContain('agents will resume');
     expect(notices(html)).toContain('<span id="composer-resume-count" class="composer__hint" data-testid="composer-resume-count">3 agents will resume</span>');

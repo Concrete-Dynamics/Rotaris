@@ -43,7 +43,13 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-09-27**
+## Last reconciled with the code: **2026-09-28**
+
+**`/stop` is offered as the stop, and the paused continue by message reads `Send` (`PD-ORCH-005` clause 15,
+`PD-CHAT-001` revision 4, 2026-09-28, R-064).** The slash catalogue describes `/stop` as "Stop the active run"; it still
+sends the stop's `cancel` op and never the explicit cancel. The paused strip's second continue shows `Send`, named
+`Continue with a message`. The **runtime view**'s §5 `cancel` row and Continue paragraph are updated; no package, edge,
+process, channel or command changes.
 
 **A quit answers nothing for a person, and every stored report is an artifact (`PD-ORCH-005` phase 7, 2026-09-27,
 R-062).** Main tells the application's quit apart (`QuitState`, `main/exit.ts`). That covers the immediate exit, every

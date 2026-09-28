@@ -106,6 +106,15 @@ describe('the banner summary — REQ-STARTUP-112', () => {
     expect(releaseSummary('## Rotaris 0.2.0\nBuilt from tag v0.2.0')).toBe('Built from tag v0.2.0');
   });
 
+  it('reads "a `## Changes` heading" as a level-2 heading whose text is `Changes` alone: `## Changes:` or `## Changes in 0.2.0` is another heading and starts nothing', () => {
+    // The reading pinned: REQ-STARTUP-112 names the heading by its text, so a heading with more text is not it; the
+    // search then runs from the top, where that heading is itself skipped as scaffolding.
+    expect(releaseSummary('Intro line\n## Changes:\n- Faster startup')).toBe('Intro line');
+    expect(releaseSummary('Intro line\n## Changes in 0.2.0\n- Faster startup')).toBe('Intro line');
+    expect(releaseSummary('Intro line\n###  CHANGES \n- Faster startup')).toBe('Intro line');
+    expect(releaseSummary('Intro line\n  ##   CHANGES  \n- Faster startup')).toBe('Faster startup');
+  });
+
   it('skips blank lines, headings, table rows, blockquotes and code fences, and strips a leading bullet marker', () => {
     const body = ['## Changes', '', '### Sub', '| name | digest |', '|---|---|', '> quoted', '```', 'not this', '```', '* The first substantive line', '- second'].join('\n');
     expect(releaseSummary(body)).toBe('The first substantive line');

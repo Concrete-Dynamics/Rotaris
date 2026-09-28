@@ -38,12 +38,12 @@ under `packages/` — the nested glossaries the context map names as well as the
 target file or directory does not exist, or when a `#fragment` names no heading (GitHub's slug, repeats numbered) and
 no explicit `<a id>` / `{#id}` in the file it points at. Links inside fenced code, inline code and HTML comments are
 text, not links, and are skipped. A failure names the file, the line, the link and the reason. Pinned by
-[`tools/check-record-links.test.ts`](../../../tools/check-record-links.test.ts) (11 cases): a fixture with one link
+[`tools/check-record-links.test.ts`](../../../tools/check-record-links.test.ts) (12 cases): a fixture with one link
 to a note at its pre-`fixed/` path and one good heading anchor, the dangling one failing with file, line and target
 and the anchor passing; a fragment naming no heading; a same-file fragment; the set of files walked; the three kinds
-of code and comment skipped with line numbers kept; the slug rules; a repeated heading and the explicit anchors.
+of code and comment skipped with line numbers kept; a stray backtick that may not pair across a blank line; the slug rules; a repeated heading and the explicit anchors.
 
-**Its first execution over the whole record** (984 relative links in 361 files) found **51** dangling links, not the
+**Its first execution over the whole record** (985 relative links in 361 files, on `main` at `392f681`) found **51** dangling links, not the
 seven this note had by hand — the note's own count was of the documents one branch touched. Every one is repaired
 in this commit; by kind:
 
@@ -54,14 +54,14 @@ in this commit; by kind:
   `slash-proof-expects-…`), `first-release-plan.md` (lines 47, 48, 147, 152, 305), `directives.md` (lines 1450, 1752,
   1808), and `requests.md` (lines 71, 75, 77 — five links in three rows' disposition cells, repointed and not one word
   of the request changed; the log's own rule protects the words, the date, the classification and the disposition).
-- **Twenty-two inside `docs/defects/fixed/` itself**: a note moved into `fixed/` keeps the relative links it was
-  written with, and each now needs one more `../`. Fourteen `../product/requests.md#r-nnn` and two
+- **Twenty-one inside `docs/defects/fixed/` itself**: a note moved into `fixed/` keeps the relative links it was
+  written with, and each now needs one more `../`. Twelve `../product/requests.md#r-nnn` and two
   `../product/directives.md#pd-…` citations in seven notes (`an-mcp-tool-offered-…`, `configured-per-token-prices-…`,
   `live-rows-are-never-measured`, `path-scope-resolves-…`, `role-gutter-truncation-…`, `the-here-string-check-…`,
-  `two-writing-children-…`); two `../../tools/check-*.mjs` in `the-directive-registers-count-…`; and four links from
+  `two-writing-children-…`); two `../../tools/check-*.mjs` in `the-directive-registers-count-…`; and five links from
   one fixed note to another still written as `fixed/<name>` or `../<name>` (`model-calls-outside-…`,
   `platform-parameterised-proofs-…`, `resilience-proof-cannot-launch-…`, `the-diff-e2e-times-out-…`,
-  `three-proofs-and-the-catalog-tests-…`). `check-request-log.mjs` never saw the fourteen because it reads the
+  `three-proofs-and-the-catalog-tests-…`). `check-request-log.mjs` never saw the twelve because it reads the
   `#r-nnn` and not the path in front of it.
 - **One stale heading anchor**: `views/03-runtime-view.md`'s router still pointed at §7 as `…schemats-v19` where the
   heading reads `v22` — the heading's version moved on and the router's link did not.
@@ -70,3 +70,13 @@ in this commit; by kind:
 What the checker cannot show: that a link points at the *right* existing file (a repointed link that reaches a
 namesake would pass), and anchors into non-Markdown files (it does not read those). Reference-style links are read;
 autolinks (`<https://…>`) and bare URLs are not links this gate owns.
+
+**Corrected 2026-09-28 by the branch's review, before merge.** The first version of this section (and of the
+`first-executions.md` row and the commit `f180732` that carried it) gave the kinds as 7 + 21 + **22** + 1 + 1, which
+sums to 52, not the 51 it reported: re-running the gate over `main` at `392f681` counts **twenty-one** inside
+`fixed/` — twelve `requests.md#r-nnn` citations, not fourteen, and five note-to-note links, not four (the list
+already named five notes) — and 985 links, not 984. The 51 and every repair stand; only the tally was wrong. The
+same review found one false negative in the gate: inline code was allowed to span a blank line, so a stray backtick
+in one paragraph paired with one paragraphs later and hid the links between — one link in
+`views/02-process-view.md` (line 345, `#message-families`, which resolves) was not being read. A code span now ends
+at a blank line, as CommonMark's does; the gate reads 991 links after the repair, every one resolving.

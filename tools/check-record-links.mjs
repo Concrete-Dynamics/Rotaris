@@ -26,8 +26,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 /**
  * Blank what does not render as a link, keeping every newline so that line
  * numbers still point at the file: fenced code (``` or ~~~, any indent up to
- * three spaces), inline code (one or more backticks, closed by the same run),
- * and HTML comments.
+ * three spaces), inline code (one or more backticks, closed by the same run
+ * within one paragraph), and HTML comments.
  * @param {string} text
  * @returns {string}
  */
@@ -38,9 +38,11 @@ export function withoutCode(text) {
   // holding at least N of the same character and nothing else. An unclosed
   // fence runs to the end of the file, as CommonMark reads it.
   out = out.replace(/^( {0,3})(`{3,}|~{3,})[^\n]*\n[\s\S]*?(?:^ {0,3}\2[ \t]*$|(?![\s\S]))/gm, blank);
-  // Inline code: a run of backticks closed by an equal run. A run with no
-  // partner is literal text and stays.
-  out = out.replace(/(`+)(?!`)[\s\S]*?[^`]\1(?!`)/g, blank);
+  // Inline code: a run of backticks closed by an equal run in the same
+  // paragraph — a code span may wrap a line but never crosses a blank one, so
+  // a stray backtick cannot pair with one paragraphs later and hide the links
+  // between them. A run with no partner is literal text and stays.
+  out = out.replace(/(`+)(?!`)(?:(?!\n[ \t]*\n)[\s\S])*?[^`]\1(?!`)/g, blank);
   return out;
 }
 

@@ -94,6 +94,13 @@ describe('check-record-links — what is not a link', () => {
     expect(links).toEqual([{ line: 6, text: 'real', target: 'missing.md' }]);
   });
 
+  it('does not let a stray backtick pair across a blank line and hide the links between', () => {
+    const text = ['A lone ` in one paragraph.', '', '[hidden?](missing.md)', '', 'and a ` in another.', ''].join('\n');
+    expect(extractLinks(withoutCode(text), text)).toEqual([{ line: 3, text: 'hidden?', target: 'missing.md' }]);
+    const wrapped = 'A span `that\nwraps [x](missing.md)` one line.\n';
+    expect(extractLinks(withoutCode(wrapped), wrapped)).toEqual([]);
+  });
+
   it('skips an HTML comment, which does not render', () => {
     const text = '<!-- [example](../defects/x.md) -->\n[kept](a.md)\n';
     expect(extractLinks(withoutCode(text), text)).toEqual([{ line: 2, text: 'kept', target: 'a.md' }]);

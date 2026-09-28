@@ -1,4 +1,4 @@
-import { pathKey } from '@rotaris/platform';
+import { APPIMAGE_VARIABLE, PORTABLE_ARTIFACT_VARIABLE, pathKey } from '@rotaris/platform';
 import type { ArtifactKind } from '@rotaris/release-naming';
 
 /**
@@ -33,10 +33,12 @@ import type { ArtifactKind } from '@rotaris/release-naming';
  *
  * A build that is not packaged — the source tree, `pnpm dev`, every proof — is classified not updatable: no check is
  * performed, and the process issues no request to the endpoint and none to any release-asset URL (REQ-STARTUP-150).
+ *
+ * The two variables are named in `@rotaris/platform` (`artifact-environment.ts`), because main takes them out of its own
+ * environment before it starts any child: `env` here is what main read at that moment, never `process.env`, so the
+ * classification sees the launch's own values and no child of this launch inherits them (REQ-STARTUP-147).
  */
-export const PORTABLE_ARTIFACT_VARIABLE = 'ROTARIS_PORTABLE_ARTIFACT';
-/** REQ-STARTUP-147: published by the AppImage runtime, tested before any other flavour test. */
-export const APPIMAGE_VARIABLE = 'APPIMAGE';
+export { APPIMAGE_VARIABLE, PORTABLE_ARTIFACT_VARIABLE } from '@rotaris/platform';
 
 /** The four flavours REQ-STARTUP-107 maps to the four artifact kinds of REQ-STARTUP-031. */
 export type Flavour = 'installer' | 'portable' | 'app-bundle' | 'appimage';

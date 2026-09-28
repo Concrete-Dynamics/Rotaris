@@ -22,6 +22,18 @@
  * `apps/desktop/src/main/updater/` over fakes, and their first execution against a real artifact is owed to the next
  * Windows package. Nothing here fakes a Windows run.
  *
+ * A second launch measures the other half of the same two variables (REQ-STARTUP-147; the defect note
+ * `docs/defects/fixed/the-artifact-variables-reach-the-products-own-child-processes.md`): each is true of the one launch whose artifact
+ * runtime set it and of no process that launch starts, so main takes both out of its own environment before it forks
+ * anything. The launch starts with both set, a scripted run in `autonomous` mode issues one `terminal` call that writes
+ * the shell's environment to a file, and the file must carry neither variable — while still carrying the launch's
+ * other variables, because the take removes those two names and nothing else. The terminal's shell is started by the
+ * confinement service from the run host's environment, which is main's as forked; it is the end of the longest chain
+ * a variable would travel (main → run host → tool shell), and every other spawn path in the run host — hooks, MCP
+ * servers, the code-intelligence branch — starts from the same run-host environment. Read from a file the shell wrote
+ * rather than from `/proc/<pid>/environ`, because Chromium rewrites its processes' title over the region that file
+ * reads, so it shows neither the variables a utility process started with nor their absence.
+ *
  *   node apps/desktop/scripts/updater-proof.mjs [--skip-build]
  *
  * Evidence: `.proof/updater-proof/` — the application log, the proxy record and `report.json`.
@@ -29,8 +41,9 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { startApp } from './lib/driver.mjs';
-import { buildDesktop, evidenceDirectory } from './lib/harness.mjs';
+import { app, buildDesktop, cleanEnvironment, electron, evidenceDirectory, hostSwitches, mainEntry, proofIsolationEnv } from './lib/harness.mjs';
 
 const output = evidenceDirectory('updater-proof');
 rmSync(output, { recursive: true, force: true });
@@ -105,8 +118,43 @@ check('no line records a request to the feed endpoint (REQ-STARTUP-150)', reques
 check('the proxy sink saw no connection for github.com — no update request left the process (REQ-STARTUP-106)', githubConnections.length === 0, `${connections.length} connection(s) in all${connections.length > 0 ? `: ${connections.map((c) => c.firstLine || '(no request line)').join(' | ')}` : ''}`);
 check('the launch quit cleanly after the check (REQ-STARTUP-046: nothing was in flight to wait for)', /quit: exiting with status 0/.test(log), lines.filter((l) => l.includes('quit:')).join(' / '));
 
+/**
+ * Stage 2 — what the product's children inherit (REQ-STARTUP-106, REQ-STARTUP-147). A capture launch: the workspace's
+ * own `agents.yaml` names the scripted model and `autonomous`, so the one `terminal` call runs without an approval.
+ */
+const stage2 = join(output, 'children');
+const workspace = join(stage2, 'workspace');
+const local = join(stage2, 'local');
+mkdirSync(join(workspace, '.rotaris'), { recursive: true });
+mkdirSync(local, { recursive: true });
+writeFileSync(join(workspace, 'README.md'), '# scratch\n');
+writeFileSync(join(workspace, '.rotaris', 'agents.yaml'), 'models:\n  scripted: { provider: scripted, model_id: scripted }\nsmall_model: scripted\nmedium_model: scripted\nlarge_model: scripted\nruntime:\n  permission_mode: autonomous\nrotaris:\n  delegation_strategy: single\n');
+const environmentFile = 'terminal-environment.txt';
+const launched = spawnSync(electron, [mainEntry, ...hostSwitches, workspace], {
+  cwd: app, encoding: 'utf8', timeout: 180_000, windowsHide: true,
+  env: {
+    ...cleanEnvironment(), ...proofIsolationEnv({ profileRoot: stage2, local }),
+    ROTARIS_MODEL_DIALECT: 'scripted', ROTARIS_INTENT_SCRIPT: 'explicit_trivial', ROTARIS_CIRCUIT_BREAKER: 'off',
+    ELECTRON_DISABLE_SECURITY_WARNINGS: 'true', ROTARIS_APP_LOG_LEVEL: 'info',
+    APPIMAGE: INHERITED_APPIMAGE, ROTARIS_PORTABLE_ARTIFACT: INHERITED_PORTABLE,
+    ROTARIS_SCRIPT: 'terminal:env,answer',
+    // `env` rather than `printenv NAME`: the file then shows what was kept as well as what was not.
+    ROTARIS_SCRIPT_TERMINAL_ARGS: JSON.stringify({ env: { command: process.platform === 'win32' ? `set > ${environmentFile}` : `env > ${environmentFile}` } }),
+    ROTARIS_CAPTURE_PNG: join(stage2, 'after-terminal.png'),
+    ROTARIS_CAPTURE_PROMPT: 'write the environment down',
+    ROTARIS_CAPTURE_AFTER_MS: '9000',
+  },
+});
+writeFileSync(join(stage2, 'app.log'), `${launched.stdout ?? ''}\n${launched.stderr ?? ''}`);
+const written = join(workspace, environmentFile);
+const terminalEnvironment = existsSync(written) ? readFileSync(written, 'utf8').split(/\r?\n/) : null;
+const has = (name) => terminalEnvironment !== null && terminalEnvironment.some((l) => l.toUpperCase().startsWith(`${name}=`));
+check('the scripted run\'s terminal call wrote its shell\'s environment (the launch ran a tool through the run host)', terminalEnvironment !== null, terminalEnvironment === null ? `no ${environmentFile}; app exit ${launched.status ?? launched.signal}, see children/app.log` : `${terminalEnvironment.length} line(s)`);
+check('the tool\'s shell carries neither APPIMAGE nor ROTARIS_PORTABLE_ARTIFACT, although the launch was started with both (REQ-STARTUP-106, REQ-STARTUP-147)', terminalEnvironment !== null && !has('APPIMAGE') && !has('ROTARIS_PORTABLE_ARTIFACT'), terminalEnvironment === null ? '(not written)' : `APPIMAGE ${has('APPIMAGE') ? 'PRESENT' : 'absent'}, ROTARIS_PORTABLE_ARTIFACT ${has('ROTARIS_PORTABLE_ARTIFACT') ? 'PRESENT' : 'absent'}`);
+check('and it still carries the launch\'s other variables — the take removes those two names and nothing else', has('ROTARIS_APP_LOG_LEVEL') && has('ROTARIS_INTENT_SCRIPT'), terminalEnvironment === null ? '(not written)' : `ROTARIS_APP_LOG_LEVEL ${has('ROTARIS_APP_LOG_LEVEL') ? 'present' : 'ABSENT'}, ROTARIS_INTENT_SCRIPT ${has('ROTARIS_INTENT_SCRIPT') ? 'present' : 'ABSENT'}`);
+
 writeFileSync(join(output, 'proxy-record.json'), `${JSON.stringify(connections, null, 2)}\n`);
-writeFileSync(join(output, 'report.json'), `${JSON.stringify({ at: new Date().toISOString(), proxyPort: port, environment: { APPIMAGE: INHERITED_APPIMAGE, ROTARIS_PORTABLE_ARTIFACT: INHERITED_PORTABLE }, checkLines, requestLines, connections: connections.length, githubConnections: githubConnections.length, checks }, null, 2)}\n`);
+writeFileSync(join(output, 'report.json'), `${JSON.stringify({ at: new Date().toISOString(), proxyPort: port, environment: { APPIMAGE: INHERITED_APPIMAGE, ROTARIS_PORTABLE_ARTIFACT: INHERITED_PORTABLE }, checkLines, requestLines, terminalEnvironment: terminalEnvironment === null ? null : { APPIMAGE: has('APPIMAGE'), ROTARIS_PORTABLE_ARTIFACT: has('ROTARIS_PORTABLE_ARTIFACT'), ROTARIS_APP_LOG_LEVEL: has('ROTARIS_APP_LOG_LEVEL') }, connections: connections.length, githubConnections: githubConnections.length, checks }, null, 2)}\n`);
 const failed = checks.filter((c) => !c.pass).length;
 console.log(`\n${checks.length - failed}/${checks.length} checks passed; evidence in ${output}`);
 if (!existsSync(started.logFile)) console.log('(no application log was written)');

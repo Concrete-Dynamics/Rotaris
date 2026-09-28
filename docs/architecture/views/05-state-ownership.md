@@ -31,7 +31,7 @@ credentials     → main, and main alone
 | The improvement queue, the one active job and **which pass it is** (`post_run` / `retrospective`, Part AT — `PD-LIBRARY-002`) | main | `main/improvements.ts` | main; the run host analyses the job it is handed and owns no queue, and a retrospective is an ordinary member of the same FIFO |
 | The improvement activity a surface draws (`active`, `pass`) | renderer (per window) | `packages/ui/src/shell-state.ts` — `improvementAnalysis` | channel 11's publisher only; the two indicators (REQ-LIBRARY-125/126) read it and never set it |
 | Credential leases handed out for a run | main | `packages/providers` | main |
-| Session locks this instance holds | run host | `packages/engine/src/sessions.ts` | run host |
+| Session locks this instance holds | run host | `packages/engine/src/sessions.ts` | run host; they end with the application because main is gone only after the run host (`endBeforeMain`, `main/exit.ts`) — a lock a run host ended at quit leaves names a dead pid and is reaped on the next claim (REQ-SESSION-047) |
 | Live runs, writers, projection owners | run host | `engine/sessions.ts`, `session-writer.ts` | run host |
 | The tool gate, per session; hooks, per run | run host | `packages/agent-tools`, `packages/hooks` | run host |
 | Live write-scope claims and each child's scope disclosure (PD-TOOLS-006) | run host | `packages/engine/src/children/write-scope.ts`, held by the iteration's `IterationChildren` | `IterationChildren.delegate` only; never persisted, so a resumed session holds none |

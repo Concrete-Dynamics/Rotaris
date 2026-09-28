@@ -268,7 +268,7 @@ describe('REQ-STARTUP-142: the shipped closure, and nothing else', () => {
     expect(tools).toContain('Tool-server packages\n');
     expect(flat(tools)).toContain('which downloads the package when that tool server is first started. None of them is contained in this artifact.');
     expect(tools).toContain('  @playwright/mcp\n    Version:  0.0.80\n    Source:   https://registry.npmjs.org/@playwright/mcp\n    License:  Apache-2.0\n');
-    // The order REQ-STARTUP-142 fixes — machine tools, then the runtime's sub-heading — with the packages after both (OQ-90).
+    // The order REQ-STARTUP-142 fixes — machine tools, then the runtime's sub-heading — with the packages after both (OQ-92).
     expect(tools.indexOf('  ripgrep\n')).toBeLessThan(tools.indexOf('Language servers provisioned'));
     expect(tools.indexOf('Language servers provisioned')).toBeLessThan(tools.indexOf('Tool-server packages'));
   });

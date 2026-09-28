@@ -272,8 +272,8 @@ since (the others are the resume's whole read, a cap or state change, and the tr
 
 **Two runs did not reach the comparison, and both were the harness's.** Run 5 was refused its session by the previous
 launch's run host, still exiting when the next launch opened the same session (pid liveness; the proof now waits for a
-launch's children — `a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md`,
-open, because the window is the product's too). Run 6 aborted at the geometry stage, whose first sample was an
+launch's children — `fixed/a-session-lock-outlives-the-application-that-held-it-for-as-long-as-its-run-host-takes-to-exit.md`,
+open when this was written, because the window is the product's too; repaired 2026-09-28, main now ends after its run host). Run 6 aborted at the geometry stage, whose first sample was an
 appointment at 3.0 s and whose live line closed at about 2.35 s — six runs of seven had caught it in exactly one sample
 (`fixed/the-geometry-stage-catches-its-live-line-in-one-sample-or-none.md`; the first sample now waits for the line).
 

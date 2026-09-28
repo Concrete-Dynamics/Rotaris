@@ -19,7 +19,7 @@
 //    would download them (machine setup) is not built, the section says so rather than that they are downloaded.
 //    Manrope, which REQ-STARTUP-142 names and no build carries yet, has its licence reproduced and its entry says it is
 //    not contained.
-//  - OQ-90: REQ-STARTUP-152 asks the file to report the tool-server package versions the manifest pins, and
+//  - OQ-92: REQ-STARTUP-152 asks the file to report the tool-server package versions the manifest pins, and
 //    REQ-STARTUP-142 names no place for them; they are a third sub-heading of the tools section, after the language
 //    servers, with the same four fields.
 //  - OQ-74: a component that carries licence text but declares no licence identifier fails validation outright; the
@@ -958,7 +958,7 @@ export function renderNotices(model) {
   out.push(wrap(`The bundled code-intelligence runtime downloads each package below at the first use of that language. None of them is contained in this artifact.`), '');
   for (const s of manifest?.languageServers ?? []) out.push(`  ${s.name}`, `    Language: ${s.language}`, `    Version:  ${s.version}`, `    Source:   ${s.source}`, `    License:  ${s.license}`, '');
   out.push(wrap(`A further language the runtime supports obtains its language server by the same route, at the first use of that language, and is not declared here.`), '');
-  // REQ-STARTUP-152: the tool-server package versions the manifest pins are the versions this file reports (OQ-90's
+  // REQ-STARTUP-152: the tool-server package versions the manifest pins are the versions this file reports (OQ-92's
   // reading places them here). The built-in configuration launches each through `npx`/`uvx`, which fetches it.
   if (manifest && manifest.toolServerPackages.length > 0) {
     out.push(subheading('Tool-server packages'));

@@ -326,7 +326,7 @@ class already carrying a requirement's visual contract is passed through rather 
 (`componentClass`).
 
 `layout-contract.ts` is **verification-only data, not behaviour**: a `UiLayoutContract` on a component root is
-serialised into `data-ui` / `data-ui-contract` and evaluated by `ui-audit` against live geometry after layout and
+serialised into `data-ui` / `data-ui-contract` — by `layoutContractAttributes` alone, which `tools/check-ui-language.mjs` enforces — and evaluated by `ui-audit` against live geometry after layout and
 animation settle (nine relations — `align-x`, `align-y`, `equal-width`, `equal-height`, `spacing-token`,
 `containment`, `text-fit`, `hit-test`, `viewport-scroll`). Nothing in the product reads it, so a contract can
 neither move a pixel nor hide a defect; it can only be wrong in public.

@@ -173,6 +173,13 @@ describe('layout-contract relations', () => {
         { id: 'broken', kind: 'schema', target: null, pass: false, detail: 'contract JSON is unreadable' },
       ]);
     });
+
+    it('reports a contract that is not a relations array as a failing schema row, with the probe\'s reason', () => {
+      // The window controls' hand-written {"relations":[…]} — the probe now marks it instead of throwing on it.
+      expect(evaluateContracts([{ id: 'shell-window-controls', unreadable: true, reason: 'contract is not a relations array', relations: [] }])).toEqual([
+        { id: 'shell-window-controls', kind: 'schema', target: null, pass: false, detail: 'contract is not a relations array' },
+      ]);
+    });
   });
 
   /**

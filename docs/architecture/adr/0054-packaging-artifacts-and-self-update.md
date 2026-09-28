@@ -1290,7 +1290,7 @@ machine setup decides (`../../defects/fixed/the-notices-file-says-the-setup-mani
 shape (a copy of the field names, held to the schema by `notices.test.ts`, because `tools/notices` imports nothing from
 `packages/`) and lists Git 2.55.0 and ripgrep 15.2.0 with their four fields. It states that machine setup, which would
 download them, is not yet in the build. It lists `@playwright/mcp` 0.0.80 under a third sub-heading for
-`REQ-STARTUP-152`, a placement OQ-90 raises. That first reading of the real manifest found the generator's assumed
+`REQ-STARTUP-152`, a placement OQ-92 raises. That first reading of the real manifest found the generator's assumed
 shape wrong on one field (`version` where the manifest says `provisionedVersion`), and the runtime's name absent from
 the manifest, so the sub-heading still reads it from `pins.json`. `pnpm notices` refuses on the same eleven problems as
 before. (4) **Nothing
@@ -1741,3 +1741,27 @@ its reason, and the successor's `launch refused` line names the check that refus
 unchanged; an announcement never accepted does not fire it), `successor.test.ts` and `updater.test.ts`. Still not
 decided here: an answer the successor no longer waits for — its 5 s bound expired while this process was blocked — is
 recorded in `../../defects/` as a defect, not repaired. Unit: 162 cases in 15 files.
+
+**Repaired — the two variables stay with the launch they describe, 2026-09-28 (same item, R-062).** (6) *A child
+inherited this artifact's path.* `classify.ts` read `APPIMAGE` and `ROTARIS_PORTABLE_ARTIFACT` from `process.env`, and
+both stayed there for the life of main, so every child of the product inherited them — the run host and the workspace
+services by `utilityProcess.fork`'s default, and from the run host every tool, terminal, hook, MCP server and
+code-intelligence branch. A packaged Rotaris started from a shell inside a portable Rotaris would have classified
+itself portable from the other artifact's path and aimed its rename-aside at that file; REQ-STARTUP-147 calls such a
+variable "set by the artifact's own runtime rather than by a user", and an inherited copy is neither. Observed before
+the repair in the built app (a scripted `terminal` call's shell carried both). **Repaired at one seam:** main's own
+environment, from which every child's is derived. The first statement of main's module body takes the two names out
+of `process.env` and returns what they held (`takeArtifactVariables`, `packages/platform/src/artifact-environment.ts`,
+where the names now live); the classification is handed that (`classifyThisInstallation(launchArtifact)`) and never
+reads `process.env`. Nothing else is removed — the AppImage runtime's `APPDIR`, `ARGV0` and `OWD` name nothing the
+product reads. What this record already decided is unchanged, and it is what makes one seam enough: the portable's
+successor is started from the launcher stub, which publishes its own variable (item 2 above), so no launch depends on
+inheriting one. Pinned by `artifact-environment.test.ts` and `apps/desktop/src/main/launch-artifact.test.ts` (the take
+precedes every fork and spawn in main's body; the classification reads what it took), and by `pnpm updater-proof`'s
+second stage — the built app launched with both variables set, one scripted `terminal` call writing its shell's
+environment: neither variable, the launch's other variables kept; 11 checks, all green. Not executed: a packaged build
+(IC-3); the hooks' and MCP servers' environments were not read separately — they are the run host's, which the
+terminal's reading measures. **Raised: OQ-90** — REQ-STARTUP-147 names the variables written for child processes and
+none removed from them, and REQ-HOOKS-032 says a run "sees exactly the environment the application itself was started
+with"; the build proceeds on this record's reading that a variable describing the artifact is not part of the
+environment a child is handed. The note: `../../defects/fixed/the-artifact-variables-reach-the-products-own-child-processes.md`.

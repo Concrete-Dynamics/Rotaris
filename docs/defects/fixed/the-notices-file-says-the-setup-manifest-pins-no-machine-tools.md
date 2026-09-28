@@ -65,7 +65,7 @@ about tools no flow yet downloads is the ruling's) and makes the file true of th
   to be downloaded after installation by machine setup, which this build does not yet carry, so this build downloads
   none of them." The "pins no machine tools" sentence stays only for a manifest that pins none.
 - A third sub-heading, "Tool-server packages", lists `@playwright/mcp` 0.0.80 with its four fields (REQ-STARTUP-152).
-  REQ-STARTUP-142 names no place for it; where it sits is raised as OQ-90.
+  REQ-STARTUP-142 names no place for it; where it sits is raised as OQ-92.
 
 Pinned by `tools/notices/notices.test.ts`: the tools section over the fixture and over the shipped manifest copied into
 it, the "pins none" branch for a manifest that pins none, the manifest's shape refusals, the pins' refusals, the real

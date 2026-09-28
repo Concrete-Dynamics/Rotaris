@@ -51,8 +51,12 @@ record already decides, and every ruling it needs is named as the owner's rather
   configuration directory from `configDirFor`; `skills-proof` passed 10 checks over 9 launches as root on Linux
   ([fixed](../defects/fixed/skills-proof-writes-its-global-policy-where-only-windows-reads-it.md),
   [fixed](../defects/fixed/slash-proof-expects-every-built-in-to-carry-the-action-badge.md)). `slash-proof` is not
-  green for it. It moves from one red to another: it now stops at the model chip's eval
-  ([note](../defects/slash-proofs-model-chip-eval-shares-its-offset-with-the-usage-notice-read.md)). On Linux as
+  green for it. It moves from one red to another: it ~~now stops at the model chip's eval~~
+  stopped at the model chip's eval ([fixed](../defects/fixed/slash-proofs-model-chip-eval-shares-its-offset-with-the-usage-notice-read.md),
+  repaired 2026-09-28 in the proof with the chip's close and the ground it measures on), and now stops at a **product**
+  red: REQ-CHAT-027's partial shade at 4.06:1 on the ground the composer dock paints, every other check passing in a
+  diagnostic run ([note](../defects/the-slash-token-colours-clear-their-floor-on-a-ground-the-composer-no-longer-paints.md);
+  ADR-0050's fourth execution). On Linux as
   root, `resilience-proof`, `sandbox-proof`, `notice-proof` and `init-proof` are red for their recorded notes
   ([override select](../defects/resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md),
   [Windows verdict](../defects/sandbox-proof-asserts-the-windows-verdict-on-every-platform.md), and
@@ -369,7 +373,7 @@ lives in `tools/release-naming`. What the build decided and found:
   (OQ-73 decides whose reader follows)~~ reads the shipped manifest since 2026-09-28 (R-062;
   `../defects/fixed/the-notices-file-says-the-setup-manifest-pins-no-machine-tools.md`) — Git and ripgrep listed with
   their four fields and stated not yet downloaded by this build (OQ-73's reading), `@playwright/mcp` under a third
-  sub-heading (REQ-STARTUP-152, OQ-90);
+  sub-heading (REQ-STARTUP-152, OQ-92);
   `afterPack` does not yet assert the manifest inside `win-unpacked` (the next Windows package, IC-3).
 - **electron-builder hyphenates a prerelease version** (`0.1.0rc1` → `0.1.0-rc1`), so step 5's prerelease would be named
   `Rotaris-0.1.0-rc1-…` unless §4.2/§4.5 render the name from the tag through `tools/release-naming`
@@ -423,7 +427,7 @@ naming each problem otherwise (REQ-STARTUP-149). It builds under four readings, 
 *2026-09-28 (R-062): the section is generated from the setup manifest the build ships.* The generator reads
 `apps/desktop/resources/setup-manifest.json` in `SetupManifestSchema`'s shape and lists Git 2.55.0 and ripgrep 15.2.0
 with their four fields, saying machine setup is not yet in the build (OQ-73's reading); the language servers follow
-from the same file; `@playwright/mcp` 0.0.80 sits under a third sub-heading for REQ-STARTUP-152, a place OQ-90 asks
+from the same file; `@playwright/mcp` 0.0.80 sits under a third sub-heading for REQ-STARTUP-152, a place OQ-92 asks
 about. Validation still refuses on the same eleven problems (O-3, O-11's components, the runtime absent from the tree).
 
 **Where the owner writes the O-3 address.** In `tools/notices/release-inputs.json`, as the value of
@@ -607,6 +611,14 @@ so that the next release can add the updater without stranding anyone.
 > (`onRecordPassFailed`), main's wait (`updater/successor.ts`) rejects, and `Update not installed` surfaces with the
 > reason (REQ-STARTUP-121). 162 unit cases in 15 files. A successor whose 5 s bound expired while the predecessor was
 > blocked can still be passed the record after it has gone — filed in `../defects/`, not repaired.
+>
+> **Repaired the same day: the artifact variables stay with their launch.** `APPIMAGE` and `ROTARIS_PORTABLE_ARTIFACT`
+> stayed in main's environment and reached every child — observed in the built app, a scripted terminal call's shell
+> carried both — so a Rotaris started from inside a portable's terminal would have classified itself from the other
+> artifact's file. Main's first statement now takes both out of its own environment and hands them to the
+> classification alone (`takeArtifactVariables`, `packages/platform`; ADR-0054 "The updater" item 6). `pnpm updater-proof`
+> gains a second launch that reads a tool shell's environment, 11 checks. **Raised:** OQ-90 (REQ-STARTUP-147 names no
+> variable removed from a child; REQ-HOOKS-032's "exactly the environment the application itself was started with").
 
 **4.7 The manifest, the signature and the key record.** The pipeline writes and signs these:
 

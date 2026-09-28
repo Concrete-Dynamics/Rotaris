@@ -323,11 +323,11 @@ function spanOf(members: readonly TranscriptRow[]): { startedAt: string; endedAt
 
 /**
  * Hygiene, per row (REQ-CHAT-048, REQ-CHAT-049) plus the caps (REQ-CHAT-166). Returns null where the row projects
- * to zero rows. `previousThinking` is the immediately previous thinking row of ANY agent, and `repeatsReasoning`
- * compares the two names, so another agent's thinking row between two equal ones keeps the second — a narrower
- * reading than REQ-CHAT-048's "per agent", recorded in
- * docs/defects/duplicate-reasoning-hygiene-compares-with-the-previous-thinking-row-of-any-agent.md. It is the only
- * lookback the incremental bound has to preserve.
+ * to zero rows. `previousThinking` is the immediately previous thinking row OF THE ROW'S OWN AGENT
+ * (`previousThinkingByAgent`): REQ-CHAT-048's "per agent" is read as scoping the whole rule, so another agent's reasoning
+ * between two equal bursts does not keep the second (OQ-91 names the other reading; the repair is recorded in
+ * docs/defects/fixed/duplicate-reasoning-hygiene-compares-with-the-previous-thinking-row-of-any-agent.md). It is the
+ * only lookback the incremental bound has to preserve.
  */
 function hygiene(row: TranscriptRow, previousThinking: TranscriptRow | null, o: ProjectOptions, expanded: boolean): TranscriptRow | null {
   if (repeatsReasoning(row, previousThinking)) return null;
@@ -343,10 +343,45 @@ function hygiene(row: TranscriptRow, previousThinking: TranscriptRow | null, o: 
   return out;
 }
 
-/** REQ-CHAT-048: per agent, an unstamped thinking row equal to the immediately previous one projects to zero rows. */
+/**
+ * REQ-CHAT-048: per agent, an unstamped thinking row equal to that agent's immediately previous thinking row projects
+ * to zero rows. The caller hands the previous thinking row of the row's own agent; the name is compared again so a
+ * caller that hands another agent's row can only keep a row, never drop one.
+ */
 function repeatsReasoning(row: TranscriptRow, previousThinking: TranscriptRow | null): boolean {
-  return row.kind === 'thinking' && row.durationMs === undefined && previousThinking !== null
-    && (previousThinking.name ?? '') === (row.name ?? '') && previousThinking.body === row.body;
+  return isUnstampedThinking(row) && previousThinking !== null
+    && thinkingAgent(previousThinking) === thinkingAgent(row) && previousThinking.body === row.body;
+}
+
+/** The only rows REQ-CHAT-048 can drop — and so the only rows whose agent's previous thinking row is ever looked up. */
+function isUnstampedThinking(row: TranscriptRow): boolean {
+  return row.kind === 'thinking' && row.durationMs === undefined;
+}
+
+/** Whose reasoning a thinking row is, for REQ-CHAT-048's "per agent": the agent the row names, as the rule always compared. */
+function thinkingAgent(row: TranscriptRow): string {
+  return row.name ?? '';
+}
+
+/**
+ * Per agent, the immediately previous thinking row, as a walk forward from `from` meets the rows. What lies below
+ * `from` is read lazily and once per agent — only for an agent whose unstamped thinking row the walk asks about —
+ * so a suffix with no reasoning in it looks nothing up, and a lookup reads at most back to that agent's own
+ * previous thinking row (to the window's start when it has none, as the single any-agent lookback did before it).
+ */
+function previousThinkingByAgent(rows: readonly TranscriptRow[], from: number): { of(row: TranscriptRow): TranscriptRow | null; saw(row: TranscriptRow): void } {
+  const byAgent = new Map<string, TranscriptRow | null>();
+  return {
+    of(row) {
+      if (!isUnstampedThinking(row)) return null;
+      const agent = thinkingAgent(row);
+      if (!byAgent.has(agent)) byAgent.set(agent, lastThinkingOf(rows, from, agent));
+      return byAgent.get(agent) ?? null;
+    },
+    saw(row) {
+      if (row.kind === 'thinking') byAgent.set(thinkingAgent(row), row);
+    },
+  };
 }
 
 /**
@@ -539,11 +574,11 @@ export function trailerRows(o: Pick<ProjectOptions, 'pendingQuestions' | 'pendin
 function cleanCut(rows: readonly TranscriptRow[], b: number, o: Pick<ProjectOptions, 'running' | 'showReasoning'>): number {
   const reach = new Map<string, number>();
   const closedAbove = new Set<string>();
-  let previousThinking = lastThinkingBefore(rows, b);
+  const thinking = previousThinkingByAgent(rows, b);
   for (let i = b; i < rows.length; i += 1) {
     const raw = rows[i]!;
-    const repeat = repeatsReasoning(raw, previousThinking);
-    if (raw.kind === 'thinking') previousThinking = raw;
+    const repeat = repeatsReasoning(raw, thinking.of(raw));
+    thinking.saw(raw);
     if (repeat) continue;
     const row = settle(raw, o.running);
     if (closesEveryRun(row)) break;
@@ -556,9 +591,10 @@ function cleanCut(rows: readonly TranscriptRow[], b: number, o: Pick<ProjectOpti
   let cut = b;
   for (let i = b - 1; i >= 0; i -= 1) {
     const raw = rows[i]!;
-    // The lookback is taken only for an unstamped thinking row, and each one ends at the next thinking row down, so
-    // the walk's lookbacks cover disjoint stretches: bounded by the walk plus one stretch below it.
-    if (raw.kind === 'thinking' && raw.durationMs === undefined && repeatsReasoning(raw, lastThinkingBefore(rows, i))) continue;
+    // The lookback is taken only for an unstamped thinking row, and each one ends at the same agent's next thinking
+    // row down, so one agent's lookbacks cover disjoint stretches: bounded, per agent, by the walk plus one stretch
+    // below it.
+    if (isUnstampedThinking(raw) && repeatsReasoning(raw, lastThinkingOf(rows, i, thinkingAgent(raw)))) continue;
     const row = settle(raw, o.running);
     if (closesEveryRun(row)) break;
     const key = agentKey(row);
@@ -591,7 +627,7 @@ export function projectDisplay(o: ProjectOptions, incremental?: { readonly previ
     if (b === -1) b = deduped.length;
     startRow = cleanCut(deduped, b, o);
     // The ROW INDEX of the clean cut, which is where re-projection begins — not `b`'s, which a run open at
-    // `b` may reach back past. REQ-CHAT-048 needs the immediately previous thinking row, kept below.
+    // `b` may reach back past. REQ-CHAT-048 needs each agent's immediately previous thinking row, looked up below.
     //
     // Never above `from`. Where every row at and after `from` is gone from `deduped` — REQ-CHAT-050's repeated diff
     // re-sent at its own index with the rows behind it removed — the cut lands past the end, and the first form read
@@ -616,17 +652,21 @@ export function projectDisplay(o: ProjectOptions, incremental?: { readonly previ
 
   const suffix = deduped.slice(startRow);
   const cleaned: TranscriptRow[] = [];
-  let previousThinking: TranscriptRow | null = startRow > 0 ? lastThinkingBefore(deduped, startRow) : null;
+  const thinking = previousThinkingByAgent(deduped, startRow);
   for (const row of suffix) {
-    const out = hygiene(row, previousThinking, o, o.expanded.has(rowKey(row)));
-    if (row.kind === 'thinking') previousThinking = row;
+    const out = hygiene(row, thinking.of(row), o, o.expanded.has(rowKey(row)));
+    thinking.saw(row);
     if (out !== null) cleaned.push(out);
   }
   return [...prefix, ...foldRuns(cleaned, o.groupTools, o.showReasoning), ...trailerRows(o)];
 }
 
-function lastThinkingBefore(rows: readonly TranscriptRow[], before: number): TranscriptRow | null {
-  for (let i = before - 1; i >= 0; i -= 1) if (rows[i]!.kind === 'thinking') return rows[i]!;
+/** REQ-CHAT-048's lookback: the nearest thinking row below `before` that `agent` wrote, or null. */
+function lastThinkingOf(rows: readonly TranscriptRow[], before: number, agent: string): TranscriptRow | null {
+  for (let i = before - 1; i >= 0; i -= 1) {
+    const row = rows[i]!;
+    if (row.kind === 'thinking' && thinkingAgent(row) === agent) return row;
+  }
   return null;
 }
 

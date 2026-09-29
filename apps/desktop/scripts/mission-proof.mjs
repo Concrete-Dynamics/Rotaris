@@ -340,7 +340,7 @@ const s6 = scenario('inspector');
   const r = launch('inspector', s6, {
     ROTARIS_SCRIPT: 'delegate:coding-agent:alpha,answer', ROTARIS_CHILD_SCRIPT: 'wait:5000,read,wait:6000,answer', ROTARIS_CAPTURE_PROMPT: 'inspect an agent',
     ROTARIS_CAPTURE_CLICKS: '.agent-row@4000;;.inspector__actions .btn>>Steer@9200',
-    ROTARIS_CAPTURE_PROBE_AT: '[data-testid="inspector-tag"]@3000;;[data-testid="inspector-name"]@3000;;[data-testid="inspector-tag"]@4500;;[data-testid="inspector-name"]@4500;;[data-testid="inspector-chips"] .chip@4500;;[data-testid="inspector-chips"] .chip@8500;;[data-testid="inspector-meta"]@8500;;[data-testid="inspector-controls-note"]@8500;;.ctx-ring@8500',
+    ROTARIS_CAPTURE_PROBE_AT: '[data-testid="inspector-tag"]@3000;;[data-testid="inspector-name"]@3000;;[data-testid="inspector-chips"] .chip@3000;;[data-testid="inspector-tag"]@4500;;[data-testid="inspector-name"]@4500;;[data-testid="inspector-chips"] .chip@4500;;[data-testid="inspector-chips"] .chip@8500;;[data-testid="inspector-meta"]@8500;;[data-testid="inspector-controls-note"]@8500;;.ctx-ring@8500',
     ROTARIS_CAPTURE_PERSONA_STEER: 'keep going, but summarise first@11000',
     ROTARIS_CAPTURE_PERSONA_PROBE_AT: '[data-testid="persona-steer"]@12000;;[data-testid="persona-steer-error"]@12000',
     ROTARIS_CAPTURE_PNG_AT: `${join(output, 'inspector-live.png')}@8600`,
@@ -349,6 +349,11 @@ const s6 = scenario('inspector');
   const db = open(s6); const row = session(db); const kids = children(db, row.session_id); const entries = timeline(db, row.session_id); db.close();
   const tag3 = probesAt(r.log, 3000, '[data-testid="inspector-tag"]')?.[0]?.text; const name3 = probesAt(r.log, 3000, '[data-testid="inspector-name"]')?.[0]?.text;
   expect(tag3 === 'Following — tracking whichever agent wrote last' && name3 === 'orchestrator', `following at 3 s: tag "${tag3}", name "${name3}" (REQ-MONITOR-053/054)`);
+  // Live-run finding K1 (REQ-MONITOR-060/061): the running run-level agent shows the tools its run resolved — a coordinator,
+  // so none of the write, terminal and commit tools its policy withholds — marked from its own history (it has delegated).
+  const rootChips = (probesAt(r.log, 3000, '[data-testid="inspector-chips"] .chip') ?? []).map((p) => [p.data['data-tool'], p.data['data-state']]);
+  expect(rootChips.length > 0 && rootChips.some((c) => c[0] === 'delegate' && c[1] !== 'not used'), `the run-level agent's chips at 3 s: ${JSON.stringify(rootChips)} (REQ-MONITOR-060)`);
+  expect(!rootChips.some((c) => ['write_file', 'haet_edit', 'haet', 'terminal', 'git_commit'].includes(c[0])), `the running coordinator lists a tool its policy withholds: ${JSON.stringify(rootChips)} (REQ-MONITOR-061)`);
   const tag45 = probesAt(r.log, 4500, '[data-testid="inspector-tag"]')?.[0]?.text; const name45 = probesAt(r.log, 4500, '[data-testid="inspector-name"]')?.[0]?.text;
   expect(tag45 === 'Pinned by selection' && name45 === 'alpha', `pinned at 4.5 s: tag "${tag45}", name "${name45}"`);
   const chips45 = (probesAt(r.log, 4500, '[data-testid="inspector-chips"] .chip') ?? []).map((p) => [p.data['data-tool'], p.data['data-state']]);
@@ -367,7 +372,7 @@ const s6 = scenario('inspector');
   const box = personaProbesAt(r.log, 12000, '[data-testid="persona-steer"]')?.[0]?.text ?? null;
   expect(box === '', `the accepted steer did not clear the box: "${box}" (REQ-MONITOR-070)`);
   expect(/persona-steer-at 11000 → sent/.test(r.log), 'the steer card was not driven');
-  results.inspector = { following: { tag: tag3, name: name3 }, pinned: { tag: tag45, name: name45 }, chipsBefore: chips45, chipsAfter: chips85, meta, note, ring, steer: steered ? JSON.parse(steered.metadata) : null, png: join(output, 'inspector-live.png') };
+  results.inspector = { following: { tag: tag3, name: name3, chips: rootChips }, pinned: { tag: tag45, name: name45 }, chipsBefore: chips45, chipsAfter: chips85, meta, note, ring, steer: steered ? JSON.parse(steered.metadata) : null, png: join(output, 'inspector-live.png') };
 }
 
 // 7. The strategy selector and the depth control write their keys; Settings shows the same values; the pop-out toggle writes its preference.

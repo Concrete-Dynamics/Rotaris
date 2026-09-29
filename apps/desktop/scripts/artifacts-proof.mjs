@@ -130,6 +130,11 @@ const PROBE_ROWS = 'tr[data-artifact-id]';
 // The Library opens on its FIRST tab (REQ-LIBRARY-103's order), so every launch below picks the Artifacts tab
 // after the view switch. Before the merge this proof drove a Library that held only this tab and needed no click.
 const ARTIFACTS_TAB = '[data-testid="library-tab"][data-tab="artifacts"]';
+// Live-run finding K1: the inspector's name, chips and artifact links, and the produced group's links.
+const INSPECTOR_NAME = '[data-testid="inspector-name"]';
+const INSPECTOR_CHIPS = '[data-testid="inspector-chips"] .chip';
+const INSPECTOR_ARTIFACTS = '[data-testid="inspector-artifacts"]';
+const INSPECTOR_PRODUCED = '[data-testid="inspector-artifacts-produced"]';
 const PROBES = [PROBE_ROWS, '[data-testid="library-artifacts"]', '[data-testid="library-artifacts-empty"]', '[data-testid="library-artifacts-inspect"]', '[data-testid="artifact-inspector"]', '[data-testid="artifact-inspector-meta"]', '[data-testid="artifact-inspector-status"]', '[data-testid="artifact-preview"]', '[data-testid="artifact-save"]'];
 const results = {};
 
@@ -216,7 +221,14 @@ const results = {};
     // artifact: REQ-LIBRARY-097's `PRIOR SIBLING ARTIFACT INDEX` reaches them and its diagnostic is recorded.
     ROTARIS_SCRIPT: 'artifact:artifact_write,delegate:coding-agent:one,delegate:tester:two,wait:4000,answer', ROTARIS_CHILD_SCRIPT: 'answer',
     ROTARIS_INTENT_SCRIPT: 'moderate_feature',
-    ROTARIS_CAPTURE_VIEWS: '6@16000', ROTARIS_CAPTURE_CLICKS: `${ARTIFACTS_TAB}@16400`, ROTARIS_CAPTURE_PROBE: PROBES.join(';;'),
+    ROTARIS_CAPTURE_VIEWS: '6@16000',
+    // Live-run finding K1 (REQ-MONITOR-052/060, REQ-LIBRARY-102/131): with the run over, the Workspace inspector follows the
+    // run-level agent — its declared tools stand in, marked from its history, and the artifact it published is linked;
+    // following the link opens the Library on the Artifacts tab with the artifact inspector open on it.
+    ROTARIS_CAPTURE_PROBE_AT: [INSPECTOR_NAME, INSPECTOR_CHIPS, INSPECTOR_ARTIFACTS, INSPECTOR_PRODUCED].map((s) => `${s}@10000`).concat(['.app-shell@12500', '[data-testid="artifact-inspector"]@12500', '[data-testid="library"]@12500']).join(';;'),
+    ROTARIS_CAPTURE_CLICKS: [`${INSPECTOR_PRODUCED} .artifact-link__open@11000`, `${ARTIFACTS_TAB}@16400`].join(';;'),
+    ROTARIS_CAPTURE_PNG_AT: `${join(output, 'children-inspector.png')}@10200`,
+    ROTARIS_CAPTURE_PROBE: PROBES.join(';;'),
     ROTARIS_CAPTURE_AFTER_MS: '18000',
   }, { files: { workspace: WORKSPACE_ORCHESTRATOR } });
   const db = new Database(oneDatabase(), { readonly: true });
@@ -242,7 +254,23 @@ const results = {};
     if (!record) throw new Error(`the artifact_published entry names an unknown artifact: ${entry.metadata}`);
     if (record.timeline_event_id !== entry.id) throw new Error(`the entry's id is not linked back onto the record: ${record.timeline_event_id} vs ${entry.id}`);
   }
+  // Live-run finding K1: the run-level agent's inspector at rest, and the link it draws for what it published.
+  const shownName = probe(r.log, INSPECTOR_NAME, 10000)[0]?.text;
+  const chips = probe(r.log, INSPECTOR_CHIPS, 10000).map((c) => `${c.data['data-tool']}:${c.data['data-state']}`);
+  const panel = probe(r.log, INSPECTOR_ARTIFACTS, 10000)[0] ?? null;
+  const produced = probe(r.log, `${INSPECTOR_PRODUCED}`, 10000)[0]?.text ?? '';
+  const published = rows.find((x) => x.kind === 'agent_published');
+  if (shownName !== 'orchestrator') throw new Error(`the inspector did not follow the run-level agent at 10 s: "${shownName}"`);
+  if (chips.length === 0) throw new Error('the run-level agent drew no tool chips (REQ-MONITOR-060): the declared tools did not stand in');
+  if (!chips.includes('delegate:used') || !chips.includes('artifact_write:used')) throw new Error(`the run-level agent's chips are not marked from its history (REQ-MONITOR-060): ${JSON.stringify(chips)}`);
+  if (/no artifact store/.test(panel?.text ?? '')) throw new Error(`the inspector still says there is no artifact store: "${panel?.text}"`);
+  if (!published || panel?.data?.['data-produced'] !== '1' || !produced.includes(published.slug)) throw new Error(`the inspector does not link what the run-level agent published: ${JSON.stringify(panel)} / "${produced}" (REQ-MONITOR-052)`);
+  const view = probe(r.log, '.app-shell', 12500)[0]?.data?.['data-view'];
+  const opened = probe(r.log, '[data-testid="artifact-inspector"]', 12500).map((d) => d.data['data-artifact-id']);
+  const library = probe(r.log, '[data-testid="library"]', 12500)[0]?.data?.['data-tab'];
+  if (view !== 'library' || library !== 'artifacts' || opened.length !== 1 || opened[0] !== published.id) throw new Error(`following the link did not open the artifact in the Library: view ${view}, tab ${library}, inspectors ${JSON.stringify(opened)} (REQ-LIBRARY-102/131)`);
   results.children = {
+    inspector: { shown: shownName, chips, produced, openedFromLink: { view, tab: library, artifact: opened[0] }, png: join(output, 'children-inspector.png') },
     children: children.map((c) => `${c.canonical_name}:${c.state}`),
     artifacts: reports.map((x) => ({ id: x.id, slug: x.slug, status: x.status, importance: x.importance, task: x.source_task_id, persona: x.source_persona, timelineEventId: x.timeline_event_id })),
     publishedEntries: timeline.length,

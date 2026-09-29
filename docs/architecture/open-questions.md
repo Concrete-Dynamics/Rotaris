@@ -5139,6 +5139,8 @@ after the scope's own validation (`writesFiles`, `scopeWithoutWriterReason` and 
 repaired. "After REQ-TOOLS-006's controls" is read as the two a child's grant meets, `coordinator_only` and
 `read_only`: the run-scoped allow-list binds the entry agent alone, and the `tool_restrictions` map is applied to no
 agent's grant today (recorded as a defect of its own), so the check follows the grant the tool port builds.
+Live on 2026-09-29 (duress, session `b4a768a2`) the orchestrator gave a scope to `verifier`. It was refused with the
+writers named, and 15 s later it delegated the task to `docs-writer`.
 
 **OQ-113 — When does REQ-LIBRARY-092's materialisation fall back to the canonical agent name?** *(REQ-LIBRARY-092, "idempotent keyed on the task id (falling back to the canonical agent name)", and its "Every terminal child report is materialized"; REQ-SESSION-115's handoff artifact as `PD-ORCH-005` clause 20 chooses it. Raised 2026-09-29 from the open note under [R-067](../product/requests.md#r-067), and ruled in the same entry. Raised as OQ-112 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
 

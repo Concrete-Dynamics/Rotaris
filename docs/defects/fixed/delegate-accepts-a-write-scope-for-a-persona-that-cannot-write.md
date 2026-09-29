@@ -54,3 +54,12 @@ things: the predicate over the controls (`haet` alone writes; `read_only`, `coor
 personas do not), the catalogue's writers for the built-in table and for a configured resolver, and the reason's text.
 Two earlier write-scope cases in `children.test.ts` scoped a `codebase-analyst` and now scope a `docs-writer`, since
 the directive forbids the earlier form.
+
+Live, 2026-09-29: `pnpm live-run --confirm --only=duress` against the unmetered `katalyst` endpoint, built from this
+branch's code, pack `.live-run/runs/2026-09-29T07-18-48-658Z` (this branch's worktree; git-ignored), session `b4a768a2`.
+At 07:38:05 the orchestrator delegated `wave3-f verification` to `verifier`, which holds `terminal` and no file tool,
+with a `write_scope`. The call answered: "Task 'wave3-f verification': rejected — write_scope was given to 'verifier',
+which cannot write files: it holds no file-writing tool (write_file, haet_edit). The delegation was not started.
+Personas that can write files: coding-agent, tester, docs-writer, refactorer. …" No record was made. Its next request,
+15 s later (traffic #116), delegated the same task to `docs-writer` (`bg_6d91af9c`), which wrote `docs/verification.md`
+and ended `succeeded`. The earlier run lost 2 min 47 s and a second child to the same mistake.

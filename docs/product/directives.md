@@ -2179,7 +2179,9 @@ revision 3 as [R-067](requests.md#r-067).*
 > refusal, a `session_id` naming no settled child, is not part of this build.
 >
 > **What was measured.** A scripted end-to-end case in `children.test.ts` over the duress call's shape, red with the
-> check removed, and the predicate, the catalogue and the reason in `write-scope.test.ts`. The row is in
+> check removed, and the predicate, the catalogue and the reason in `write-scope.test.ts`. Live, in the duress run of
+> session `b4a768a2`, a scope given to `verifier` was refused with the writers named. The orchestrator's next request,
+> 15 s later, delegated the task to `docs-writer`. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---

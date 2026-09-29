@@ -170,6 +170,17 @@ describe('model — the AI SDK adapter (ADR-0027) through one decorated fetch', 
     await collect(client.stream(request('chat', { retries: 5, onRetry: (r) => retries.push(r) })));
     expect(retries).toEqual([]);
   });
+  it('OQ-110 (REQ-ORCH-091/092): when the dispatch layer\'s retries are exhausted the ladder is handed the last attempt\'s error, its status and retry-after intact', async () => {
+    const refuse = (status: number): FetchLike => async () => new Response(JSON.stringify({ error: { message: `refused ${status}` } }), { status, headers: { 'content-type': 'application/json', 'retry-after-ms': '5', 'retry-after': '7' } });
+    const rateLimited = new AiSdkModelClient({ timers: realTimers, monotonic: realMonotonic, baseUrl: 'https://acme.example/v1', fetch: refuse(429) });
+    const limited = await collect(rateLimited.stream(request('chat', { retries: 2 })));
+    // Before: `unknown`, not transient, no status — "Failed after 3 attempts" — so REQ-ORCH-091 (c)'s wait never began.
+    expect(limited.error).toMatchObject({ code: 'http', status: 429, retryAfterMs: 7_000, retryAfter: '7' });
+    expect(limited.error?.providerMessage).toContain('refused 429');
+    const overloaded = new AiSdkModelClient({ timers: realTimers, monotonic: realMonotonic, baseUrl: 'https://acme.example/v1', fetch: refuse(503) });
+    const failed = await collect(overloaded.stream(request('chat', { retries: 1 })));
+    expect(failed.error).toMatchObject({ code: 'http', status: 503, transient: true });
+  });
   it('a 503 is transient, a 400 is not (REQ-ORCH-092 decided on the status, not on prose)', async () => {
     const at = (status: number): FetchLike => async () => new Response('{"error":{"message":"x"}}', { status, headers: { 'content-type': 'application/json' } });
     const e503 = (await collect(new AiSdkModelClient({ timers: realTimers, monotonic: realMonotonic, baseUrl: 'https://a.example/v1', fetch: at(503) }).stream(request('chat')))).error!;

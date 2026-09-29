@@ -5234,6 +5234,14 @@ written for an absorbed retry. Pinned by `ai-sdk-client.test.ts` (the two cases 
 absorbs is reported …" and "… a connection failure …") and `run/turn.test.ts` ("OQ-110 …: a retry the dispatch layer
 absorbed is written to the session log …"), each failing with the report withdrawn.
 
+**Found by building it — the ladder did not take over when the dispatch layer was exhausted.** The ruling's second half
+("the ladder takes over when they are exhausted") did not hold: the SDK reports an exhausted budget as a `RetryError`
+wrapping every attempt, which has no status, so `fromError` classified it `unknown` and fatal — a 429 that outlasted the
+five retries failed the step outright and REQ-ORCH-091 (c)'s wait never began; a 503 did the same instead of spending
+REQ-ORCH-092's transient budget. `fromError` now classifies the last attempt's error. Recorded and repaired the same day,
+[`../defects/fixed/an-exhausted-dispatch-layer-hands-the-ladder-a-failure-it-cannot-classify.md`](../defects/fixed/an-exhausted-dispatch-layer-hands-the-ladder-a-failure-it-cannot-classify.md);
+pinned by `ai-sdk-client.test.ts` ("OQ-110 (REQ-ORCH-091/092): when the dispatch layer's retries are exhausted …").
+
 **OQ-111 — Which part of a long child's transcript does the report summariser read?** *(REQ-ORCH-110, which caps the transcript the report-producing pass is given at 12,000 characters in total and 2,000 per event, and does not say which part is kept; REQ-ORCH-108, which has parents consume the report in place of the transcript; REQ-ORCH-109, whose runner-owned fields the summariser cannot write; `PD-LIBRARY-001`, the report's commands. Raised 2026-09-29 from the duress live run's finding D1 under [R-067](../product/requests.md#r-067), and ruled in the same entry. Raised as OQ-110 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
 
 `packages/engine/src/children/report.ts` builds the pass's transcript by joining the events and cutting the result to

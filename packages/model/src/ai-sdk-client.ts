@@ -1,5 +1,5 @@
 import { err, millis, ok, type MonotonicClock, type Result, type TimerHandle, type Timers } from '@rotaris/kernel';
-import { APICallError, jsonSchema, Output, streamText, tool, type LanguageModel, type ModelMessage, type ToolSet } from 'ai';
+import { APICallError, jsonSchema, Output, RetryError, streamText, tool, type LanguageModel, type ModelMessage, type ToolSet } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { modelError, type ChatMessage, type ModelClient, type ModelError, type ModelRequest, type OutputSpec, type StreamPart, type ToolSpec, type Usage } from './ports.js';
@@ -118,6 +118,14 @@ function toToolSet(specs: readonly ToolSpec[] | undefined): ToolSet | undefined 
 
 function fromError(cause: unknown, aborted: boolean): ModelError {
   if (aborted) return modelError({ code: 'aborted', headline: 'the call was aborted', transient: false });
+  /**
+   * OQ-110: the dispatch layer's retries come first and the ladder (REQ-ORCH-091/092) takes over when they are
+   * exhausted — which it can only do if it is handed the failure. The SDK reports an exhausted retry budget as a
+   * `RetryError` wrapping every attempt's error, and that wrapper has no status: read whole, a 429 met six times became
+   * `unknown` and fatal, so REQ-ORCH-091 (c)'s wait never began and the run failed on the first rate limit that outlasted
+   * the dispatch layer. The last attempt's error is the one the ladder classifies.
+   */
+  if (RetryError.isInstance(cause) && cause.lastError !== undefined) return fromError(cause.lastError, aborted);
   if (APICallError.isInstance(cause)) {
     const body = typeof cause.responseBody === 'string' ? cause.responseBody.slice(0, 500) : undefined;
     // Part Q (REQ-NOTIFY-084): the header travels in both forms — integer seconds parsed here, the raw value (an HTTP

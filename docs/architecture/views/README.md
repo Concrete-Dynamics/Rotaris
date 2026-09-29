@@ -50,7 +50,8 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 now reports each retry as it is sent (`ModelRequest.onRetry`, with the status met and the delay waited on the monotonic
 clock `AiSdkClientOptions` now takes), `DefaultAgentBackend` forwards it to `TurnSink.retried`, and the turn writes
 `dispatchRetryLine` through the run's `warn` to the session log. This repairs `a-retry-the-dispatch-layer-absorbs-leaves-no-trace.md`.
-The **runtime view**'s §3 (the ladder's paragraph) says so. No package, edge, process, channel, message kind, command or
+An exhausted budget now reaches the ladder as the last attempt's error (`fromError` unwraps the SDK's `RetryError`), which
+repairs `an-exhausted-dispatch-layer-hands-the-ladder-a-failure-it-cannot-classify.md`. The **runtime view**'s §3 (the ladder's paragraph) says so. No package, edge, process, channel, message kind, command or
 store column changed.
 
 **An explicit cancel is durable across a crash (PD-ORCH-005 clause 3 with REQ-MONITOR-126, OQ-103's last question ruled

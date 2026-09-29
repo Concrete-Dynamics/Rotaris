@@ -547,7 +547,8 @@ takes over only when those retries are exhausted. Each retry absorbed there is r
 fetch sees a request follow a failed attempt of the same call, and calls `ModelRequest.onRetry` with the status met and the
 delay waited on the monotonic clock; `DefaultAgentBackend` forwards it to `TurnSink.retried`, and the turn writes it through
 the run's `warn` to the session log at WARNING (`dispatchRetryLine`, REQ-SESSION-142) — no issue and no timeline entry,
-because the ladder was not reached. On resume the memory is
+because the ladder was not reached. An exhausted budget is handed on as the **last attempt's** error (the SDK's
+`RetryError` unwrapped in `fromError`), so its status and `retry-after` reach the ladder's classification. On resume the memory is
 rehydrated from the timeline (`ResilienceMemory.rehydrate`), so a continuation never returns to an exhausted pair and keeps the
 user's choice (REQ-SESSION-196).
 

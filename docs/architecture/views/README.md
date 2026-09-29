@@ -45,6 +45,25 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**A delegated child is watched for a stall, and one that produced no output gets its corrective message
+(REQ-ORCH-089, REQ-MONITOR-117..120, REQ-NOTIFY-111/112, 2026-09-29, R-067; OQ-127).** `children/stall.ts` is new in
+`engine`. `TurnSink` gains an optional `event` for every streamed part, and `TurnDeps` gains `onModelEvent` and
+`onToolStarted`, and `ConversationRecord` gains `everRecorded`, which a resumed child reads so that its one corrective
+message stays one per task. The watch writes a `stall` issue at every stall evaluation; the wait on tools, the recovery
+and the corrective message are session-log lines through the run's `warn`, since REQ-ORCH-139's vocabulary has no
+timeline word for them (OQ-127). The **runtime view**'s §4 names it. No package, edge, process, channel,
+command or store table changes.
+
+**A child settled without its turn gets its report (REQ-ORCH-048 / REQ-ORCH-052 / REQ-ORCH-108, 2026-09-29, R-067).**
+The scheduler's blocking cascade stores each blocked child's `blocked` report and artifact before its parent is told.
+A child whose execution raises outside its turn, on either start path, is settled `failed` with its report by
+`IterationChildren.executeSettling` and `settleRaised`, instead of being left `running`. So is a resumed child whose
+record cannot be decoded. A settle's `child_completed` hook now runs in line (REQ-HOOKS-076/080). A parent takes a
+child as ended only once its settle is done (`IterationChildren.settles`), and an agent does not return while one of
+its children's settles still runs. Each wait looks again until none of its children is settling, since another can end
+while it waits (`settlesOf`, the verifier's fifth round). So the hook comes before `iteration_end` and `session_end`.
+The **runtime view**'s §4 names all three. No package, edge, process, channel, command or store table changes.
+
 **The inspector shows the run-level agent's tools and every agent's artifact links (REQ-MONITOR-052/060/061/068/069,
 live-run finding K1, R-067, 2026-09-29).** `SessionRecord` gains `entryTools` (the root port's resolution — a new optional
 `ToolPort.resolvedTools` — and the tracker's history) and `artifacts` (the session's artifacts not superseded, a body-free

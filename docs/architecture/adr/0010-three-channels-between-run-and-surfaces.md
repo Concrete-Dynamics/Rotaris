@@ -494,7 +494,9 @@ names the pause; the continuation is Part H's route without a new user row. (b) 
 no terminal pair: the session is paused, not ended, the writer keeps its lock in-process, the next run start in
 this process continues on the same writer, and a relaunch reaps the dead pid's row (REQ-SESSION-047) — measured
 in the proof. (c) `editQueuedPrompt` is REQ-MONITOR-004's "edit a queued prompt"; the queue has no reorder.
-(d) The stall-evaluation leg of REQ-MONITOR-135 waits on the stall detector.
+(d) The stall-evaluation leg of REQ-MONITOR-135 waits on the stall detector. *2026-09-29: a delegated child's stall
+detector exists (`children/stall.ts`, REQ-ORCH-089), and the leg is still not built: nothing injects from a stall
+evaluation, and the root has no detector ([`a-stalled-child-is-never-shown-stalled.md`](../../defects/a-stalled-child-is-never-shown-stalled.md)).*
 
 **Not exercised:** the terminal-stream operations (ADR-0021), structured questions, compression, verification
 skip, a steer to a child agent in the app (the unit path is tested), REQ-MONITOR-132's two-run quit warning.

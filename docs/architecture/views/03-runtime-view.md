@@ -643,6 +643,62 @@ Each child execution holds its own `AbortController`. `IterationChildren.cancel`
 descendant `cancelled`, stores each report and `child_user_cancelled`, and aborts each execution; an execution that
 finds its record terminal writes nothing further, so the cancellation's report stays.
 
+**A child settled without its turn (REQ-ORCH-048 / REQ-ORCH-052 / REQ-ORCH-108; repaired 2026-09-29).** The cascade
+stores each blocked child's `blocked` report (`blockedReport`, naming the dependency and how it ended) with its
+artifact before the terminal callbacks resume its parent. Both start paths run a child through
+`IterationChildren.executeSettling`: the scheduler's `runChild`, and `resumePaused`, whose record load is guarded the
+same way and whose settle is tracked as `runChild`'s execution is, so a rest waits for it. A raise that `execute`'s own `try` did not catch goes to `settleRaised`. That covers the stretch that builds
+the turn's persona, tool port, compression and fingerprint, the settle after the turn, and a resumed record that does
+not decode. The child ends `failed` with a `child_exception` issue and a report naming the raise, and the teardown the
+settle in `execute` writes (REQ-ORCH-098): `child_end`, `child_result`, `child_conversation_closed` and
+`child_completed`. So no child is left `running` with no execution behind it.
+
+**A settle's hook runs in line (REQ-HOOKS-076 / REQ-HOOKS-080; repaired 2026-09-29).** Both settles, the one at the end
+of `execute` and `settleRaised`, make the terminal move and write the teardown. Then they run the `child_completed` hook
+before they tell the scheduler (`scheduler.settled`), which wakes a parent waiting on the child. From the hook's start
+until that call, the child is held in `IterationChildren.settles`. A parent that finds the child ended on its own first
+waits until none of those children is settling (`settlesOf`):
+- in `runWithChildren`, before it takes its newly ended children;
+- in `wait_for_tasks`, before it checks its set, and again after the wait.
+
+`settlesOf` looks again whenever the settles it waits on end, because another child can end meanwhile and start its
+own hook. A child settles once, so the wait ends. An agent whose loop ends while a child of its own is still settling
+waits the same way before it returns. This happens, for example, when its turn failed. A rest and a stop await the
+settles as executions. So the hook finishes before the parent is given the report, and before `iteration_end` and
+`session_end`. Before this repair, a normal end did not wait for a settle: a parent took a child's report as soon as it
+found the child ended. The repair's first form waited only on the settles running when each wait began, so a second
+child that ended during the wait was taken while its hook ran (found by the verifier's fifth round). Both are recorded
+in [`a-child-completed-hook-can-finish-after-its-iteration-ends.md`](../../defects/fixed/a-child-completed-hook-can-finish-after-its-iteration-ends.md).
+
+**The stall watch and the corrective message (REQ-ORCH-089, REQ-MONITOR-117..120, REQ-NOTIFY-111/112;
+`children/stall.ts`; OQ-127).** Each attempt of a child's execution runs a `StallWatch` on the clock port. Its
+threshold is the role's `stall_timeout`, else `runtime.child_stall_timeout`, 90 s by default, and it is the same window
+as the progress rule's. It evaluates every `max(1, min(threshold/6, 5))` seconds and never cancels anything. It is fed:
+- every streamed part (`TurnSink.event`, then `TurnDeps.onModelEvent`);
+- each tool call's start and end (`onToolStarted`, `onToolCompleted`);
+- every turn the run starts for the child (the `turn` closure in `execute`): its payload or record, its children's
+  reports, a re-prompt, the corrective message — so a wait on its own children is not counted in the silence
+  REQ-NOTIFY-112's recovery reads (`quietFor`). The watch's own evaluation still counts such a wait, and reports the
+  child stalled while it waits
+  ([`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../../defects/a-child-waiting-on-its-own-children-is-reported-stalled.md),
+  OQ-127).
+
+What it writes:
+- a silence of the threshold with no call in flight: a `stall` issue at every evaluation (REQ-MONITOR-119), and a
+  warning at entry and then every `max(threshold, 30)` s (REQ-MONITOR-120);
+- the same silence with calls in flight: a `child waiting on tools: …` line (REQ-MONITOR-118);
+- activity resuming after a stall: a `child stall recovered: …` line (REQ-MONITOR-120).
+
+Those lines, and the `child corrective message: …` line below, go to the session log through the run's `warn`, as
+OQ-76's do: REQ-ORCH-139's closed timeline vocabulary has no word for them and none is minted (OQ-127).
+
+Its per-evaluation callback has no listener yet. A child's turn can end `failed` after no output for the whole window,
+with no call in flight. Unless the outcome is one REQ-NOTIFY-112 excludes, that child is given one corrective message:
+the next user message of the conversation the failed turn left, run through the resume loop. It is given once per
+child task: across the fallback retry, and across PD-ORCH-005's resume, whose execution reads the task's whole
+conversation record (`ConversationRecord.everRecorded`) for a message it was already given. That read skips a row that
+does not decode, so it never fails a resume that `load`, which reads from the last replacement on, allows.
+
 **Write scopes (PD-TOOLS-006; `children/write-scope.ts`).** A `delegate` call may carry `write_scope`, path
 patterns in the `glob` tool's dialect (the one compiler, `kernel/glob.ts`). `IterationChildren.delegate` validates
 them before admission (an empty, absolute or root-escaping pattern is a `rejected` delegation with no record; so,

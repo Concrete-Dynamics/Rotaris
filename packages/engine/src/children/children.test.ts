@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock, millis, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling, type ChildRow } from '@rotaris/store';
-import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ModelRequest, type ScriptedCall } from '@rotaris/model';
+import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, toolCalls, type ModelRequest, type ScriptedCall } from '@rotaris/model';
 import { CHILD_STATES, CHILD_TRANSITIONS, isLegalChildMove, RUN_AGENT_ID, TASK_ID_PATTERN, TERMINAL_CHILD_STATES, type PermissionPreset, type SessionRecord } from '@rotaris/contracts';
 import { BUILT_IN_PERSONAS, canonicaliseName, ChildLedger, RUN_CONFIG_DEFAULTS, Scheduler, Sessions, SessionWriter, uniqueUnderParent, type DelegationOps, type PortToolResult, type Publisher, type RunConfig, type RoleName, type ToolPort, type ToolPortContext } from '../index.js';
 import type { PersonaResolver } from './personas.js';
@@ -205,6 +205,25 @@ describe('the ledger and the scheduler against a real store (ADR-0012)', () => {
     expect(dal.getChild(sid, idC)!.completed_at).not.toBeNull();
   });
 
+  it('REQ-ORCH-048 with REQ-ORCH-108 / REQ-ORCH-112: each child the cascade blocks has its `blocked` report stored, naming the dependency, before its parent is told', () => {
+    const l = ledger();
+    const sched = new Scheduler({ ledger: l, runChild: async () => undefined, warn: (m) => warnings.push(m) });
+    const a = spawn(l, 'a'); const idA = a.ok ? a.value.row.task_id : '';
+    const b = spawn(l, 'b', { dependsOn: [idA] }); const idB = b.ok ? b.value.row.task_id : '';
+    const c = spawn(l, 'c', { dependsOn: [idB] }); const idC = c.ok ? c.value.row.task_id : '';
+    sched.pass();
+    // The terminal callback sees each blocked child with its report already stored (REQ-ORCH-108: "before its parent resumes").
+    const seen: [string, string, number][] = [];
+    sched.onTerminal((row) => seen.push([row.task_id, row.state, row.report_stored]));
+    l.transition(idA, 'running'); l.transition(idA, 'failed'); sched.settled(dal.getChild(sid, idA)!);
+    sched.pass();
+    expect(seen).toEqual([[idA, 'failed', 0], [idB, 'blocked', 1], [idC, 'blocked', 1]]);
+    expect(JSON.parse(dal.getChild(sid, idB)!.report!)).toEqual({ agent_name: 'b', role: 'coding-agent', status: 'blocked', summary: `Blocked: Its dependency a (${idA}) ended failed, so this child never started (REQ-ORCH-048).`, key_findings: [], last_response: '', final_response: '', errors: [{ type: 'blocked', message: `Its dependency a (${idA}) ended failed, so this child never started (REQ-ORCH-048).` }] });
+    // Transitively: c names the dependency that blocked it, b, and how b ended.
+    expect(JSON.parse(dal.getChild(sid, idC)!.report!)).toMatchObject({ status: 'blocked', summary: `Blocked: Its dependency b (${idB}) ended blocked, so this child never started (REQ-ORCH-048).` });
+    expect(warnings).toEqual([]);
+  });
+
   it('REQ-ORCH-050: over the cap a child is held, promoted in the order held one per freed slot; a terminal held child is dropped', () => {
     const l = ledger(1);
     const started: string[] = [];
@@ -298,7 +317,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
    * id-routed answer finds a holder. `closed` collects each port's close (REQ-SESSION-094): the agent, the statement its
    * open calls are settled with, and how many `session.end` events the session held at that moment.
    */
-  function sessionsWith(script: (persona: string, turn: number, req: ModelRequest) => ScriptedCall, over: { cap?: number | null; childTimeoutMs?: number; childStallTimeoutMs?: number; tool?: TestTool; deaf?: readonly string[]; hooks?: HookPort; drainTimeoutMs?: number; images?: boolean; publisher?: Publisher; pending?: ReadonlySet<string>; closed?: { agent: string; statement: string; ended: number }[]; personas?: PersonaResolver; capFor?: (modelKey: string) => number | null; modelKey?: string } = {}) {
+  function sessionsWith(script: (persona: string, turn: number, req: ModelRequest) => ScriptedCall, over: { cap?: number | null; childTimeoutMs?: number; childStallTimeoutMs?: number; tool?: TestTool; deaf?: readonly string[]; hooks?: HookPort; drainTimeoutMs?: number; images?: boolean; publisher?: Publisher; pending?: ReadonlySet<string>; closed?: { agent: string; statement: string; ended: number }[]; personas?: PersonaResolver; capFor?: (modelKey: string) => number | null; modelKey?: string; raisingPort?: string } = {}) {
     // The scripted client answers by persona and by the number of calls that persona has made.
     const counts = new Map<string, number>();
     const client = new ScriptedModelClient([]);
@@ -324,6 +343,8 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
         // `selectRequestedMode` — the persona's pin, then the session override, then `runtime.permission_mode`
         // (REQ-TOOLS-048, covered in `run-host/tools.test.ts`); with no pins that is the override or the
         // start-of-run mode, which is the half this run's engine owns (REQ-TOOLS-073's second).
+        // `raisingPort`: the agent whose tool-port factory throws, as one the run host could not build would.
+        if (over.raisingPort === ctx.agentName) throw new Error(`no tool port for ${ctx.agentName}`);
         const selected = (ctx.modeOverride ?? ctx.requestedMode) as PermissionPreset;
         built.push({ persona: ctx.persona, mode: selected });
         contexts.set(ctx.agentName, ctx);
@@ -877,6 +898,224 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     const report = JSON.parse(c.report!) as { errors: { type: string; message: string }[] };
     expect(report.errors.map((e) => e.type)).toEqual(expect.arrayContaining(['timeout', 'summary_failure']));
     expect(dal.issuesOf(sid).map((i) => i.kind)).toContain('timeout');
+  });
+
+  describe('REQ-NOTIFY-111/112 with REQ-ORCH-089: a child that produces no output is given its one corrective message', () => {
+    const userText = (req: ModelRequest): string => req.messages.filter((m) => m.role === 'user').map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('')).join('\n');
+    const settle = async (until: () => boolean) => { for (let i = 0; i < 400 && !until(); i += 1) await new Promise((r) => setTimeout(r, 5)); };
+    const failed = modelError({ code: 'unknown', headline: 'the stream ended with no answer' });
+    /** Each child request is `silent` (held, then fails) or answers; `gates` releases the silent ones in order. */
+    function stalling(plan: readonly ('silent' | 'fails at once' | 'answers')[], over: { childStallTimeoutMs?: number } = {}) {
+      const gates: (() => void)[] = [];
+      const childAsked: string[] = [];
+      const made = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'quiet', task: 'TASK: be quiet' } }]) : answer('handled');
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        childAsked.push(userText(req));
+        const step = plan[turn - 1] ?? 'answers';
+        if (step === 'answers') return answer('I carried on and finished.');
+        if (step === 'fails at once') return { parts: [{ error: failed }] };
+        const hold = new Promise<void>((r) => { gates.push(r); });
+        return { parts: [{ hold }, { error: failed }] };
+      }, over);
+      return { ...made, gates, childAsked };
+    }
+    const child = (sid: SessionId) => children(sid)[0]!;
+
+    it('the step goes silent for the window and then fails: the stall is warned with its issue, the child is given one corrective message and resumes from where it stopped, and it succeeds', async () => {
+      const { sessions, gates, childAsked } = stalling(['silent', 'answers']);
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => gates.length === 1);
+      clock.advance(90_000);
+      // REQ-MONITOR-119: the stall is reported while the child is still running — nothing is cancelled.
+      expect(child(sid).state).toBe('running');
+      const stall = dal.issuesOf(sid).filter((i) => i.kind === 'stall');
+      expect(stall.map((i) => [i.severity, i.message])).toEqual([['warning', `child appears stalled: no model event or token for 90 seconds (quiet, ${child(sid).task_id}); the run is still waiting on it.`]]);
+      expect(JSON.parse(stall[0]!.metadata)).toEqual({ task_id: child(sid).task_id, silent_seconds: 90, active_tools: [], recent_tool_calls: [], last_model_event: null });
+      expect(warnings).toContain(stall[0]!.message);
+      gates[0]!();
+      const result = await sessions.running(sid)!;
+      expect(result.status).toBe('completed');
+      // Its third request is REQ-ORCH-095's, a separate re-prompt: an implementer that answered without acting on anything.
+      expect(childAsked).toHaveLength(3);
+      expect(childAsked[2]).toContain('Carry out the task now');
+      // The corrective message follows the conversation the failed turn left: the task, then the message.
+      expect(childAsked[1]).toContain('TASK: be quiet');
+      expect(childAsked[1]).toContain('[Corrective message] You produced no output for 90 seconds (the stall window, runtime.child_stall_timeout, is 90 seconds), and your last model request then failed: the stream ended with no answer.');
+      // REQ-ORCH-139: no timeline word is minted for it; the session log says it was sent (OQ-127, as OQ-76 did).
+      expect(warnings.filter((m) => m.startsWith('child corrective message:'))).toEqual([`child corrective message: quiet (${child(sid).task_id}) produced no output for 90 seconds and its model request then failed (the stream ended with no answer); it was given its one corrective message and resumes (REQ-NOTIFY-111)`]);
+      expect(dal.timelineOf(sid).filter((t) => t.name.startsWith('child_corrective') || t.name.startsWith('child_stall') || t.name.startsWith('child_waiting'))).toEqual([]);
+      expect(child(sid).state).toBe('succeeded');
+      expect(JSON.parse(child(sid).report!)).toMatchObject({ status: 'succeeded' });
+    });
+
+    it('REQ-MONITOR-119/120: a `stall` issue at every stall evaluation, and the warning only at entry and at the throttle', async () => {
+      const { sessions, gates } = stalling(['silent', 'answers']);
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => gates.length === 1);
+      clock.advance(90_000);
+      clock.advance(10_000);
+      const silent = () => dal.issuesOf(sid).filter((i) => i.kind === 'stall').map((i) => (JSON.parse(i.metadata) as { silent_seconds: number }).silent_seconds);
+      // The evaluations at 90, 95 and 100 s each record the issue; the warning is written once, at entry.
+      expect(silent()).toEqual([90, 95, 100]);
+      expect(dal.issuesOf(sid).filter((i) => i.kind === 'stall').every((i) => i.severity === 'warning')).toBe(true);
+      expect(warnings.filter((m) => m.startsWith('child appears stalled'))).toEqual([`child appears stalled: no model event or token for 90 seconds (quiet, ${child(sid).task_id}); the run is still waiting on it.`]);
+      // REQ-MONITOR-120: the next warning is due max(90 s, 30 s) after the first.
+      clock.advance(80_000);
+      expect(silent()).toHaveLength(19);
+      expect(warnings.filter((m) => m.startsWith('child appears stalled')).map((m) => /for (\d+) seconds/.exec(m)![1])).toEqual(['90', '180']);
+      gates[0]!();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+    });
+
+    it('REQ-MONITOR-118/120: a tool call in flight is waited on, not a stall; a stall that ends in output is recorded as recovered', async () => {
+      let releaseTool!: () => void;
+      const toolHeld = new Promise<void>((r) => { releaseTool = r; });
+      let speak!: () => void;
+      const spoken = new Promise<void>((r) => { speak = r; });
+      let finish!: () => void;
+      const finished = new Promise<void>((r) => { finish = r; });
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'quiet', task: 'TASK: be quiet' } }]) : answer('handled');
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        if (turn === 1) return toolCalls([{ callId: 'r1', name: 'read_file', args: { path: 'a' } }]);
+        return { parts: [{ hold: spoken }, { part: { kind: 'text', delta: 'Read it; ' } }, { hold: finished }, { part: { kind: 'text', delta: 'done.' } }, { part: { kind: 'finish', reason: 'stop' } }] };
+      }, { tool: (name, a) => (name === 'read_file' ? toolHeld.then(() => ({ text: 'contents', isError: false, status: 'ok' as const, durationMs: 1, label: name, args: a })) : undefined) });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => dal.timelineOf(sid).length > 0 && child(sid)?.state === 'running');
+      await new Promise((r) => setTimeout(r, 20));
+      clock.advance(90_000);
+      expect(warnings.filter((m) => m.startsWith('child waiting on tools:'))).toEqual([`child waiting on tools: quiet (${child(sid).task_id}) has 1 active tool call(s) and no model event or token for 90 seconds; the run is still waiting on it (REQ-MONITOR-118)`]);
+      expect(dal.issuesOf(sid).filter((i) => i.kind === 'stall')).toEqual([]);
+      releaseTool();
+      await new Promise((r) => setTimeout(r, 20));
+      clock.advance(90_000);
+      expect(dal.issuesOf(sid).filter((i) => i.kind === 'stall')).toHaveLength(1);
+      speak();
+      await new Promise((r) => setTimeout(r, 20));
+      clock.advance(5_000);
+      expect(warnings.filter((m) => m.startsWith('child stall recovered:'))).toEqual([`child stall recovered: quiet (${child(sid).task_id}) is active again after a stall (REQ-MONITOR-120)`]);
+      finish();
+      await sessions.running(sid)!;
+      expect(child(sid).state).toBe('succeeded');
+      // REQ-ORCH-139: neither is a timeline word (OQ-127).
+      expect(dal.timelineOf(sid).filter((t) => t.name.startsWith('child_stall') || t.name.startsWith('child_waiting'))).toEqual([]);
+    });
+
+    it('at most one corrective message per child: a second silent failure ends it failed', async () => {
+      const { sessions, gates, childAsked } = stalling(['silent', 'silent']);
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => gates.length === 1);
+      clock.advance(90_000);
+      gates[0]!();
+      await settle(() => gates.length === 2);
+      clock.advance(90_000);
+      gates[1]!();
+      await sessions.running(sid)!;
+      expect(childAsked).toHaveLength(2);
+      expect(childAsked.filter((t) => t.includes('[Corrective message]'))).toHaveLength(1);
+      expect(child(sid).state).toBe('failed');
+      expect(JSON.parse(child(sid).report!)).toMatchObject({ status: 'failed', errors: [{ type: 'model', message: 'the stream ended with no answer' }] });
+    });
+
+    it('a failure inside the window is not the stall condition: no corrective message, and the child ends failed', async () => {
+      const { sessions, childAsked } = stalling(['fails at once']);
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await sessions.running(sid)!;
+      expect(childAsked).toHaveLength(1);
+      expect(warnings.filter((m) => m.startsWith('child corrective message:'))).toEqual([]);
+      expect(child(sid).state).toBe('failed');
+    });
+
+    it('runtime.child_stall_timeout is the window: at 30 s, a failure 29 s into the silence earns nothing', async () => {
+      const { sessions, gates, childAsked } = stalling(['silent'], { childStallTimeoutMs: 30_000 });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => gates.length === 1);
+      clock.advance(29_000);
+      gates[0]!();
+      await sessions.running(sid)!;
+      expect(childAsked).toHaveLength(1);
+      expect(child(sid).state).toBe('failed');
+    });
+
+    it('runtime.child_stall_timeout is the window: at 30 s, a failure 30 s into the silence earns its message', async () => {
+      const { sessions, gates, childAsked } = stalling(['silent', 'answers'], { childStallTimeoutMs: 30_000 });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => gates.length === 1);
+      clock.advance(30_000);
+      gates[0]!();
+      await sessions.running(sid)!;
+      expect(childAsked[1]).toContain('[Corrective message] You produced no output for 30 seconds (the stall window, runtime.child_stall_timeout, is 30 seconds)');
+      expect(child(sid).state).toBe('succeeded');
+    });
+
+    /** How many corrective messages one request's conversation carries. */
+    const correctives = (text: string): number => (text.match(/\[Corrective message\]/g) ?? []).length;
+
+    it('REQ-NOTIFY-112 across PD-ORCH-005: a child given its corrective message before a pause is not given a second after the continue', async () => {
+      const gates: (() => void)[] = [];
+      const childAsked: string[] = [];
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'quiet', task: 'TASK: be quiet' } }]) : answer('handled');
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        childAsked.push(userText(req));
+        if (turn >= 4) return answer('I carried on and finished.');
+        const hold = new Promise<void>((r) => { gates.push(r); });
+        // The step after the corrective message is the one in flight when the pause is accepted: it asks for a call.
+        if (turn === 2) return { parts: [{ hold }, ...toolCalls([{ callId: 'p1', name: 'background_output', args: { task_id: 'bg_00000000' } }], 'Checking.').parts] };
+        return { parts: [{ hold }, { error: failed }] };
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => gates.length === 1);
+      clock.advance(90_000);
+      gates[0]!();
+      await settle(() => gates.length === 2);
+      expect(correctives(childAsked[1]!)).toBe(1);
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      gates[1]!();
+      expect((await sessions.running(sid)!).status).toBe('interrupted');
+      expect(child(sid)).toMatchObject({ state: 'paused', resume_state: 'running' });
+      // The same child task resumes from its record, goes silent for the whole window again, and fails.
+      expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+      await settle(() => gates.length === 3);
+      clock.advance(90_000);
+      gates[2]!();
+      await sessions.running(sid)!;
+      // The count is per child task: no request carries a second corrective message, and the second failure ends it failed.
+      expect(childAsked).toHaveLength(3);
+      expect(childAsked.map(correctives)).toEqual([0, 1, 1]);
+      expect(warnings.filter((m) => m.startsWith('child corrective message:'))).toHaveLength(1);
+      expect(child(sid).state).toBe('failed');
+    });
+
+    it('REQ-NOTIFY-112: a child that waited on its own child past the window was asked for no output then, so a resumed step that fails at once earns nothing', async () => {
+      let releaseLeaf!: () => void;
+      const leafHeld = new Promise<void>((r) => { releaseLeaf = r; });
+      const midAsked: string[] = [];
+      let leafAsked = 0;
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'mid', task: 'TASK: mid' } }]) : answer('handled');
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        const text = userText(req);
+        if (!text.includes('TASK: mid')) { leafAsked += 1; return { parts: [{ hold: leafHeld }, ...answer('leaf done').parts] }; }
+        midAsked.push(text);
+        if (midAsked.length === 1) return toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'leaf', task: 'TASK: leaf' } }], 'Delegating.');
+        if (midAsked.length === 2) return answer('Waiting on leaf.');
+        // Resumed with leaf's report, its step fails at once.
+        return { parts: [{ error: failed }] };
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      const byName = (name: string) => children(sid).find((c) => c.canonical_name === name);
+      await settle(() => midAsked.length === 2 && leafAsked === 1);
+      await new Promise((r) => setTimeout(r, 20));
+      clock.advance(120_000);
+      releaseLeaf();
+      await sessions.running(sid)!;
+      expect(midAsked).toHaveLength(3);
+      expect(midAsked.map(correctives)).toEqual([0, 0, 0]);
+      expect(warnings.filter((m) => m.startsWith('child corrective message:'))).toEqual([]);
+      expect(byName('mid')!.state).toBe('failed');
+    });
   });
 
   it('REQ-ORCH-088: the ceiling asks the child to land, so the step in flight finishes and its words reach the report', async () => {
@@ -2704,6 +2943,47 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       // Nothing is left open, so nothing is cancellable at rest any more.
       expect(cancel(sessions, sid, byName(sid, 'two').task_id)).toEqual({ ok: false });
     });
+    it('a dependent of the cancelled child (OQ-101) is blocked by the resumed run\'s first pass with its `blocked` report and artifact (REQ-ORCH-048 / REQ-ORCH-108 / REQ-LIBRARY-092)', async () => {
+      let release!: () => void;
+      const hold = new Promise<void>((r) => { release = r; });
+      const state = { resumed: false };
+      const rootAsked: string[] = [];
+      const textOf = (req: ModelRequest): string => req.messages.map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : p.kind === 'tool-result' ? p.result : '')).join('')).join('\n');
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          rootAsked.push(textOf(req));
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'one', task: 'TASK: one' } }]);
+          const one = /task_id: (bg_[0-9a-f]{8})/.exec(textOf(req))?.[1] ?? '';
+          if (turn === 2) return toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'after', task: 'TASK: after', depends_on: [one] } }]);
+          return answer('delegated');
+        }
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        if (state.resumed) return answer('done');
+        return { parts: [{ hold }, ...toolCalls([{ callId: 'p1', name: 'background_output', args: { task_id: 'bg_00000000' } }], 'Checking.').parts] };
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => children(sid).length === 2 && byName(sid, 'one').state === 'running' && byName(sid, 'after').state === 'waiting_on_dependencies');
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      release();
+      await sessions.running(sid)!;
+      expect([byName(sid, 'one').state, byName(sid, 'after').state]).toEqual(['paused', 'paused']);
+      const one = byName(sid, 'one').task_id;
+      const after = byName(sid, 'after').task_id;
+      // Clause 16: the at-rest cancel runs no cascade, so the dependent stays paused until the continue resumes it.
+      expect(cancel(sessions, sid, one)).toEqual({ ok: true });
+      expect(byName(sid, 'after').state).toBe('paused');
+      state.resumed = true;
+      const before = rootAsked.length;
+      expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+      await sessions.running(sid)!;
+      expect(byName(sid, 'after')).toMatchObject({ state: 'blocked', report_stored: 1 });
+      expect(JSON.parse(byName(sid, 'after').report!)).toMatchObject({ status: 'blocked', summary: `Blocked: Its dependency one (${one}) ended cancelled, so this child never started (REQ-ORCH-048).` });
+      expect(dal.artifactsOf(sid).filter((a) => a.kind === 'child_report' && a.source_task_id === after).map((a) => a.status)).toEqual(['blocked']);
+      // The root is resumed with the blocked child's report, and the iteration closes.
+      expect(rootAsked.slice(before).some((t) => t.includes(`Its dependency one (${one}) ended cancelled`))).toBe(true);
+      expect(dal.iterationsOf(sid)[0]).toMatchObject({ iteration: 1, state: 'closed' });
+    });
+
     describe('PD-ORCH-005 clause 16 (OQ-101): the cancel is made under the session\'s lock', () => {
       it('a session this process paused holds no lock: the cancel takes it for the write and gives it back; another live process holding it refuses the cancel, writing nothing', async () => {
         const { sessions, sid } = await restedFamily();
@@ -2749,6 +3029,490 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
    * application's quit, whose `quit` a stop request received first would displace (the first reason stands — the
    * board-run defect, `docs/defects/fixed/a-board-run-caught-by-a-quit-rests-as-a-stop.md`).
    */
+  describe('REQ-ORCH-052 / REQ-ORCH-108, the repair of a-child-whose-execution-raises-before-its-turn-stays-running: a raise outside the turn settles the child', () => {
+    const settle = async (until: () => boolean) => { for (let i = 0; i < 400 && !until(); i += 1) await new Promise((r) => setTimeout(r, 5)); };
+    const byName = (sid: SessionId, name: string): ChildRow | undefined => children(sid).find((c) => c.canonical_name === name);
+    const textOf = (req: ModelRequest): string => req.messages.map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : p.kind === 'tool-result' ? p.result : '')).join('')).join('\n');
+
+    it('the fresh path: a tool port that cannot be built ends the child failed with its report and artifact, and the parent\'s foreground wait returns it', async () => {
+      const rootAsked: string[] = [];
+      const completed: Readonly<Record<string, unknown>>[] = [];
+      const hooks: HookPort = {
+        auditSnapshot: () => [], trust: () => ({ withheld: 0, reinstated: 0, notice: '', workspace: 'C:/ws', fingerprint: 'f', loadWarning: '' }), announceWithheld: () => 0, hasHooksFor: () => true,
+        fireLifecycle: async (event, fields) => { if (event === 'child_completed') completed.push(fields); return []; }, advisory: () => '', toolHooks: { preTool: async () => ({ blocked: false, refusal: '' }), postTool: async () => ({ feedback: '' }) },
+      };
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') { rootAsked.push(textOf(req)); return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'broken', task: 'TASK: broken', run_in_background: false } }]) : answer('handled'); }
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        return answer('never reached');
+      }, { raisingPort: 'broken', hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => byName(sid, 'broken')?.state === 'failed');
+      const row = byName(sid, 'broken')!;
+      expect(row).toMatchObject({ state: 'failed', report_stored: 1 });
+      expect(JSON.parse(row.report!)).toMatchObject({ status: 'failed', summary: 'Child broken ended failed: its execution raised outside its turn: no tool port for broken', errors: [{ type: 'child_exception', message: 'no tool port for broken' }] });
+      expect(dal.artifactsOf(sid).filter((a) => a.kind === 'child_report' && a.source_task_id === row.task_id).map((a) => a.status)).toEqual(['failed']);
+      expect(dal.issuesOf(sid).filter((i) => i.kind === 'child_exception').map((i) => i.message)).toEqual(['Child broken raised: no tool port for broken']);
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'child_end').map((t) => t.message)).toEqual([`Child broken (${row.task_id}) ended failed.`]);
+      // REQ-ORCH-098: torn down "whether or not its execution raised" — its result and its closed conversation.
+      expect(dal.timelineOf(sid).filter((t) => JSON.parse(t.metadata).task_id === row.task_id && ['child_end', 'child_result', 'child_conversation_closed'].includes(t.name)).map((t) => t.name)).toEqual(['child_end', 'child_result', 'child_conversation_closed']);
+      // REQ-HOOKS-003: `child_completed` fires for it, whatever its final state.
+      expect(completed).toEqual([{ child_id: row.task_id, child_name: 'broken', persona: 'coding-agent', state: 'failed', status: 'failed', summary: 'Child broken ended failed: its execution raised outside its turn: no tool port for broken' }]);
+      await sessions.running(sid);
+      // The foreground delegation's wait (REQ-TOOLS-156) resolved with the report, and the run went on to its end.
+      expect(rootAsked.at(-1)).toContain('no tool port for broken');
+      expect(dal.iterationsOf(sid)[0]).toMatchObject({ iteration: 1, state: 'closed' });
+    });
+
+    it('the resume path: a record that cannot be decoded ends the child failed with its report, and the resumed iteration closes', async () => {
+      let release!: () => void;
+      const hold = new Promise<void>((r) => { release = r; });
+      const state = { resumed: false };
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'one', task: 'TASK: one' } }]) : answer('handled');
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        if (state.resumed) return answer('done');
+        return { parts: [{ hold }, ...toolCalls([{ callId: 'p1', name: 'background_output', args: { task_id: 'bg_00000000' } }], 'Checking.').parts] };
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => byName(sid, 'one')?.state === 'running');
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      release();
+      await sessions.running(sid)!;
+      const one = byName(sid, 'one')!;
+      expect(one.state).toBe('paused');
+      dal.db.prepare('UPDATE agent_messages SET body = ? WHERE session_id = ? AND task_id = ?').run('{not json', sid, one.task_id);
+      state.resumed = true;
+      expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+      await settle(() => byName(sid, 'one')?.state === 'failed');
+      const row = byName(sid, 'one')!;
+      expect(row).toMatchObject({ state: 'failed', report_stored: 1 });
+      expect(JSON.parse(row.report!)).toMatchObject({ status: 'failed', errors: [{ type: 'child_exception' }] });
+      expect(JSON.parse(row.report!).summary).toMatch(/^Child one ended failed: its record could not be loaded to resume it: /);
+      // REQ-ORCH-098: a resumed child that had a recorded conversation has it closed too.
+      expect(dal.timelineOf(sid).filter((t) => JSON.parse(t.metadata).task_id === row.task_id && ['child_end', 'child_result', 'child_conversation_closed'].includes(t.name)).map((t) => t.name)).toEqual(['child_end', 'child_result', 'child_conversation_closed']);
+      await sessions.running(sid);
+      expect(dal.iterationsOf(sid)[0]).toMatchObject({ iteration: 1, state: 'closed' });
+    });
+
+    it('the resume path: the rest waits for the settle, its `child_completed` hook included, as it waits for a fresh child\'s (PD-ORCH-005 clause 2)', async () => {
+      let release!: () => void;
+      const hold = new Promise<void>((r) => { release = r; });
+      let releaseTwo!: () => void;
+      const holdTwo = new Promise<void>((r) => { releaseTwo = r; });
+      let releaseHook!: () => void;
+      const hookHold = new Promise<void>((r) => { releaseHook = r; });
+      const state = { resumed: false, hookEntered: false, twoHeld: false };
+      const hooks: HookPort = {
+        auditSnapshot: () => [], trust: () => ({ withheld: 0, reinstated: 0, notice: '', workspace: 'C:/ws', fingerprint: 'f', loadWarning: '' }), announceWithheld: () => 0, hasHooksFor: () => true,
+        fireLifecycle: async (event, fields) => { if (event === 'child_completed' && state.resumed && fields['child_name'] === 'one') { state.hookEntered = true; await hookHold; } return []; }, advisory: () => '', toolHooks: { preTool: async () => ({ blocked: false, refusal: '' }), postTool: async () => ({ feedback: '' }) },
+      };
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'one', task: 'TASK: one' } }, { callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'two', task: 'TASK: two' } }]) : answer('handled');
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        // `two`, resumed, holds its step so the run is still live when the settle of `one` reaches its hook.
+        if (state.resumed) { state.twoHeld = true; return { parts: [{ hold: holdTwo }, ...answer('two: done').parts] }; }
+        return { parts: [{ hold }, ...toolCalls([{ callId: 'p1', name: 'background_output', args: { task_id: 'bg_00000000' } }], 'Checking.').parts] };
+      }, { hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => byName(sid, 'one')?.state === 'running' && byName(sid, 'two')?.state === 'running');
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      release();
+      await sessions.running(sid)!;
+      const one = byName(sid, 'one')!;
+      expect([one.state, byName(sid, 'two')!.state]).toEqual(['paused', 'paused']);
+      dal.db.prepare('UPDATE agent_messages SET body = ? WHERE session_id = ? AND task_id = ?').run('{not json', sid, one.task_id);
+      state.resumed = true;
+      expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+      await settle(() => state.hookEntered && state.twoHeld);
+      expect(byName(sid, 'one')?.state).toBe('failed');
+      const resting = sessions.running(sid)!;
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      let rested = false;
+      void resting.then(() => { rested = true; });
+      releaseTwo();
+      await settle(() => byName(sid, 'two')?.state !== 'running');
+      await new Promise((r) => setTimeout(r, 100));
+      // `two` has come to rest; the settle of `one` still holds in its hook, so the rest has not finished: the settle is
+      // one of the executions it waits for.
+      expect(rested).toBe(false);
+      releaseHook();
+      await resting;
+      expect(rested).toBe(true);
+    });
+  });
+
+  describe('REQ-HOOKS-076 / REQ-HOOKS-080, the repair of a-child-completed-hook-can-finish-after-its-iteration-ends: a child\'s `child_completed` hook runs in line — its parent takes it as ended, and the iteration ends, only once the hook is done', () => {
+    const settle = async (until: () => boolean, rounds = 400) => { for (let i = 0; i < rounds && !until(); i += 1) await new Promise((r) => setTimeout(r, 5)); };
+    const byName = (sid: SessionId, name: string): ChildRow | undefined => children(sid).find((c) => c.canonical_name === name);
+    const textOf = (req: ModelRequest): string => req.messages.map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('')).join('\n');
+    /** The run as a run without its hook in line would end it: given this long to get there before a test says it did not. */
+    const RACE_ROUNDS = 40;
+    /** Every lifecycle occurrence's start and end, in order, with each of `names`' `child_completed` held until it is released. */
+    function heldHooks(...names: string[]) {
+      const order: string[] = [];
+      const held = new Map<string, { hold: Promise<void>; release: () => void; entered: boolean }>();
+      for (const name of names) {
+        let release!: () => void;
+        const hold = new Promise<void>((r) => { release = r; });
+        held.set(name, { hold, release, entered: false });
+      }
+      const hooks: HookPort = {
+        auditSnapshot: () => [], trust: () => ({ withheld: 0, reinstated: 0, notice: '', workspace: 'C:/ws', fingerprint: 'f', loadWarning: '' }), announceWithheld: () => 0, hasHooksFor: () => true,
+        fireLifecycle: async (event, fields) => {
+          const label = event === 'child_completed' ? `child_completed(${String(fields['child_name'])})` : event;
+          order.push(`${label}:start`);
+          const h = event === 'child_completed' ? held.get(String(fields['child_name'])) : undefined;
+          if (h) { h.entered = true; await h.hold; }
+          order.push(`${label}:end`);
+          return [];
+        },
+        advisory: () => '', toolHooks: { preTool: async () => ({ blocked: false, refusal: '' }), postTool: async () => ({ feedback: '' }) },
+      };
+      return { order, hooks, entered: (name: string) => held.get(name)?.entered === true, release: (name: string) => { held.get(name)?.release(); } };
+    }
+    /** `heldHooks` for one child: its hook held until `release`. */
+    function heldHook(name: string) {
+      const { order, hooks, entered, release } = heldHooks(name);
+      return { order, hooks, state: { get entered() { return entered(name); } }, release: () => release(name) };
+    }
+    /** REQ-HOOKS-076's order for two children whose hooks overlap, `first`'s having started first and ended first. */
+    const bothInOrder = (first: string, second: string) => ['session_start:start', 'session_start:end', `child_completed(${first}):start`, `child_completed(${second}):start`, `child_completed(${first}):end`, `child_completed(${second}):end`, 'iteration_end:start', 'iteration_end:end', 'session_end:start', 'session_end:end'];
+    /** PD-ORCH-005 clause 1: an agent's words are in its recorded conversation once the step that said them has ended. */
+    const said = (sid: SessionId, text: string): boolean => (dal.db.prepare('SELECT body FROM agent_messages WHERE session_id = ?').all(sid) as { body: string }[]).some((r) => r.body.includes(text));
+    /** REQ-HOOKS-076: the order of a run in which each of the four events occurs once. */
+    const inOrder = (child: string) => ['session_start:start', 'session_start:end', `child_completed(${child}):start`, `child_completed(${child}):end`, 'iteration_end:start', 'iteration_end:end', 'session_end:start', 'session_end:end'];
+    const lifecycle = (order: readonly string[]) => order.filter((e) => !e.startsWith('root:'));
+    const delegation = (name: string, background = true) => ({ callId: `d-${name}`, name: 'delegate', args: { persona: 'coding-agent', task_name: name, task: `TASK: ${name}`, run_in_background: background } });
+
+    it('the fresh path: a background child whose execution raises outside its turn — the root is given its report, and the iteration ends, only after its hook', async () => {
+      const { order, hooks, state, release } = heldHook('broken');
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') { order.push(`root:${turn}`); return turn === 1 ? toolCalls([delegation('broken')]) : answer('handled'); }
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        return answer('never reached');
+      }, { raisingPort: 'broken', hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => state.entered && order.includes('root:2'));
+      await settle(() => order.includes('root:3') || order.includes('iteration_end:start'), RACE_ROUNDS);
+      // The hook holds the run: the root has not been given the report, and the iteration has not ended.
+      expect(order).not.toContain('root:3');
+      expect(order).not.toContain('iteration_end:start');
+      release();
+      await sessions.running(sid);
+      expect(order.indexOf('root:3')).toBeGreaterThan(order.indexOf('child_completed(broken):end'));
+      expect(lifecycle(order)).toEqual(inOrder('broken'));
+    });
+
+    it('the resume path: a paused child whose record cannot be decoded — the resumed root is given its report, and the iteration ends, only after its hook', async () => {
+      const { order, hooks, state, release } = heldHook('one');
+      let releaseStep!: () => void;
+      const step = new Promise<void>((r) => { releaseStep = r; });
+      const script = { resumed: false };
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') { order.push(`root:${turn}`); return turn === 1 ? toolCalls([delegation('one')]) : answer('handled'); }
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        if (script.resumed) return answer('done');
+        return { parts: [{ hold: step }, ...toolCalls([{ callId: 'p1', name: 'background_output', args: { task_id: 'bg_00000000' } }], 'Checking.').parts] };
+      }, { hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => byName(sid, 'one')?.state === 'running');
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      releaseStep();
+      await sessions.running(sid)!;
+      const one = byName(sid, 'one')!;
+      expect(one.state).toBe('paused');
+      dal.db.prepare('UPDATE agent_messages SET body = ? WHERE session_id = ? AND task_id = ?').run('{not json', sid, one.task_id);
+      script.resumed = true;
+      order.length = 0;
+      expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+      await settle(() => state.entered);
+      await settle(() => order.some((e) => e.startsWith('root:')) || order.includes('iteration_end:start'), RACE_ROUNDS);
+      // The root resumed into waiting for `one` (OQ-97); it is given the report only once the hook is done.
+      expect(order.filter((e) => e.startsWith('root:'))).toEqual([]);
+      expect(order).not.toContain('iteration_end:start');
+      release();
+      await sessions.running(sid);
+      expect(order.findIndex((e) => e.startsWith('root:'))).toBeGreaterThan(order.indexOf('child_completed(one):end'));
+      expect(lifecycle(order)).toEqual(inOrder('one'));
+      expect(dal.iterationsOf(sid)[0]).toMatchObject({ iteration: 1, state: 'closed' });
+    });
+
+    it('a child that ends while its parent is still in its turn (the normal settle): the parent is given its report, and the iteration ends, only after its hook', async () => {
+      const { order, hooks, state, release } = heldHook('quick');
+      let releaseRoot!: () => void;
+      const rootStep = new Promise<void>((r) => { releaseRoot = r; });
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') {
+          order.push(`root:${turn}`);
+          if (turn === 1) return toolCalls([delegation('quick')]);
+          // The root's step after the delegation is still streaming when the child ends and its hook starts.
+          if (turn === 2) return { parts: [{ hold: rootStep }, ...answer('still working').parts] };
+          return answer('handled');
+        }
+        if (persona === 'summariser') return answer('{"summary":"quick is done"}');
+        return answer('quick: done');
+      }, { hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => state.entered);
+      expect(byName(sid, 'quick')?.state).toBe('succeeded');
+      releaseRoot();
+      await settle(() => order.includes('root:3') || order.includes('iteration_end:start'), RACE_ROUNDS);
+      expect(order).not.toContain('root:3');
+      expect(order).not.toContain('iteration_end:start');
+      release();
+      await sessions.running(sid);
+      expect(order.indexOf('root:3')).toBeGreaterThan(order.indexOf('child_completed(quick):end'));
+      expect(lifecycle(order)).toEqual(inOrder('quick'));
+    });
+
+    it('a root whose turn fails while its child\'s hook still runs: the session ends only after the hook', async () => {
+      const { order, hooks, state, release } = heldHook('broken');
+      let releaseRoot!: () => void;
+      const rootStep = new Promise<void>((r) => { releaseRoot = r; });
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') {
+          order.push(`root:${turn}`);
+          return turn === 1 ? toolCalls([delegation('broken')]) : { parts: [{ hold: rootStep }, { error: modelError({ code: 'unknown', headline: 'the provider failed' }) }] };
+        }
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        return answer('never reached');
+      }, { raisingPort: 'broken', hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => state.entered);
+      releaseRoot();
+      await settle(() => order.includes('iteration_end:start') || order.includes('session_end:start'), RACE_ROUNDS);
+      expect(order).not.toContain('iteration_end:start');
+      expect(order).not.toContain('session_end:start');
+      release();
+      await sessions.running(sid);
+      // Whatever else the failed turn leads to, the child's hook ends before the iteration's and the session's own.
+      const done = order.indexOf('child_completed(broken):end');
+      expect(done).toBeGreaterThan(-1);
+      expect(order.filter((e, i) => i < done && (e.startsWith('iteration_end') || e.startsWith('session_end')))).toEqual([]);
+      expect(order.at(-1)).toBe('session_end:end');
+    });
+
+    it('wait_for_tasks naming a child whose settle is still running: the wait returns its report only after its hook', async () => {
+      const { order, hooks, state, release } = heldHook('quick');
+      let releaseRoot!: () => void;
+      const rootStep = new Promise<void>((r) => { releaseRoot = r; });
+      let sid!: SessionId;
+      const { sessions } = sessionsWith((persona, turn) => {
+        if (persona === 'orchestrator') {
+          order.push(`root:${turn}`);
+          if (turn === 1) return toolCalls([delegation('quick')]);
+          // Asked once `quick` has ended and its hook has started: the wait finds it terminal at once.
+          if (turn === 2) return { parts: [{ hold: rootStep }, ...toolCalls([{ callId: 'w1', name: 'wait_for_tasks', args: { task_ids: [byName(sid, 'quick')!.task_id] } }]).parts] };
+          return answer('handled');
+        }
+        if (persona === 'summariser') return answer('{"summary":"quick is done"}');
+        return answer('quick: done');
+      }, { hooks });
+      sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => state.entered);
+      releaseRoot();
+      await settle(() => order.includes('root:3'), RACE_ROUNDS);
+      expect(order).not.toContain('root:3');
+      release();
+      await sessions.running(sid);
+      expect(order.indexOf('root:3')).toBeGreaterThan(order.indexOf('child_completed(quick):end'));
+      expect(lifecycle(order)).toEqual(inOrder('quick'));
+    });
+
+    it('wait_for_tasks naming two children: the second one\'s settle does not release the wait while the first one\'s hook still runs', async () => {
+      const { order, hooks, state, release } = heldHook('first');
+      let releaseFirst!: () => void;
+      const firstStep = new Promise<void>((r) => { releaseFirst = r; });
+      let releaseSecond!: () => void;
+      const secondStep = new Promise<void>((r) => { releaseSecond = r; });
+      const waited = { issued: false };
+      let sid!: SessionId;
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          order.push(`root:${turn}`);
+          if (turn === 1) return toolCalls([delegation('first'), delegation('second')]);
+          if (turn === 2) return toolCalls([{ callId: 'w1', name: 'wait_for_tasks', args: { task_ids: [byName(sid, 'first')!.task_id, byName(sid, 'second')!.task_id] } }]);
+          return answer('handled');
+        }
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        return textOf(req).includes('TASK: first') ? { parts: [{ hold: firstStep }, ...answer('first: done').parts] } : { parts: [{ hold: secondStep }, ...answer('second: done').parts] };
+      }, { hooks, tool: (name, _args, _ctx, builtIn) => { if (name !== 'wait_for_tasks') return undefined; waited.issued = true; return builtIn(); } });
+      sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      // The wait is registered while both children still run, so it is released by a settle, not found done at once.
+      await settle(() => waited.issued);
+      releaseFirst();
+      await settle(() => state.entered);
+      releaseSecond();
+      await settle(() => order.includes('child_completed(second):end'));
+      await settle(() => order.includes('root:3'), RACE_ROUNDS);
+      expect(order).not.toContain('root:3');
+      release();
+      await sessions.running(sid);
+      expect(order.indexOf('root:3')).toBeGreaterThan(order.indexOf('child_completed(first):end'));
+      expect(lifecycle(order).filter((e) => !e.startsWith('child_completed(second)'))).toEqual(inOrder('first'));
+    });
+
+    it('wait_for_tasks waiting on the first child\'s hook while the second ends and starts its own: the wait returns only once both hooks are done', async () => {
+      const { order, hooks, entered, release } = heldHooks('first', 'second');
+      let releaseFirst!: () => void;
+      const firstStep = new Promise<void>((r) => { releaseFirst = r; });
+      let releaseSecond!: () => void;
+      const secondStep = new Promise<void>((r) => { releaseSecond = r; });
+      let releaseRoot!: () => void;
+      const rootStep = new Promise<void>((r) => { releaseRoot = r; });
+      const waited = { issued: false };
+      let sid!: SessionId;
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          order.push(`root:${turn}`);
+          if (turn === 1) return toolCalls([delegation('first'), delegation('second')]);
+          // Asked once `first` has ended and its hook has started, while `second` still runs.
+          if (turn === 2) return { parts: [{ hold: rootStep }, ...toolCalls([{ callId: 'w1', name: 'wait_for_tasks', args: { task_ids: [byName(sid, 'first')!.task_id, byName(sid, 'second')!.task_id] } }]).parts] };
+          return answer('handled');
+        }
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        return textOf(req).includes('TASK: first') ? { parts: [{ hold: firstStep }, ...answer('first: done').parts] } : { parts: [{ hold: secondStep }, ...answer('second: done').parts] };
+      }, { hooks, tool: (name, _args, _ctx, builtIn) => { if (name !== 'wait_for_tasks') return undefined; waited.issued = true; return builtIn(); } });
+      sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => order.includes('root:2') && byName(sid, 'second')?.state === 'running');
+      releaseFirst();
+      await settle(() => entered('first'));
+      releaseRoot();
+      // The wait is issued while `first`'s hook holds: it waits on that settle.
+      await settle(() => waited.issued);
+      releaseSecond();
+      await settle(() => entered('second'));
+      release('first');
+      await settle(() => order.includes('child_completed(first):end'));
+      await settle(() => order.includes('root:3'), RACE_ROUNDS);
+      // `second` ended while the wait waited on `first`: its hook still holds, so the wait has not returned its report.
+      expect(order).not.toContain('root:3');
+      release('second');
+      await sessions.running(sid);
+      expect(order.indexOf('root:3')).toBeGreaterThan(order.indexOf('child_completed(second):end'));
+      expect(lifecycle(order)).toEqual(bothInOrder('first', 'second'));
+    });
+
+    it('the resume loop waiting on the first child\'s hook while the second ends and starts its own: the parent is given the reports only once both hooks are done', async () => {
+      const { order, hooks, entered, release } = heldHooks('first', 'second');
+      let releaseFirst!: () => void;
+      const firstStep = new Promise<void>((r) => { releaseFirst = r; });
+      let releaseSecond!: () => void;
+      const secondStep = new Promise<void>((r) => { releaseSecond = r; });
+      let releaseRoot!: () => void;
+      const rootStep = new Promise<void>((r) => { releaseRoot = r; });
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          order.push(`root:${turn}`);
+          if (turn === 1) return toolCalls([delegation('first'), delegation('second')]);
+          // Still streaming when `first` ends: the turn ends with `first` ended and unobserved, so the loop finds it at once.
+          if (turn === 2) return { parts: [{ hold: rootStep }, ...answer('root is still working').parts] };
+          return answer('handled');
+        }
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        return textOf(req).includes('TASK: first') ? { parts: [{ hold: firstStep }, ...answer('first: done').parts] } : { parts: [{ hold: secondStep }, ...answer('second: done').parts] };
+      }, { hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => order.includes('root:2') && byName(sid, 'second')?.state === 'running');
+      releaseFirst();
+      await settle(() => entered('first'));
+      releaseRoot();
+      // The root's turn has ended: its loop waits on `first`'s settle.
+      await settle(() => said(sid, 'root is still working'));
+      await new Promise((r) => setTimeout(r, 20));
+      releaseSecond();
+      await settle(() => entered('second'));
+      release('first');
+      await settle(() => order.includes('child_completed(first):end'));
+      await settle(() => order.includes('root:3'), RACE_ROUNDS);
+      // `second` ended while the loop waited on `first`: its hook still holds, so neither report has been given.
+      expect(order).not.toContain('root:3');
+      release('second');
+      await sessions.running(sid);
+      expect(order.indexOf('root:3')).toBeGreaterThan(order.indexOf('child_completed(second):end'));
+      expect(lifecycle(order)).toEqual(bothInOrder('first', 'second'));
+    });
+
+    it('a root whose turn fails while the first child\'s hook runs, the second then ending and starting its own: the session ends only after both hooks', async () => {
+      const { order, hooks, entered, release } = heldHooks('first', 'second');
+      let releaseFirst!: () => void;
+      const firstStep = new Promise<void>((r) => { releaseFirst = r; });
+      let releaseSecond!: () => void;
+      const secondStep = new Promise<void>((r) => { releaseSecond = r; });
+      let releaseRoot!: () => void;
+      const rootStep = new Promise<void>((r) => { releaseRoot = r; });
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          order.push(`root:${turn}`);
+          return turn === 1 ? toolCalls([delegation('first'), delegation('second')]) : { parts: [{ hold: rootStep }, { error: modelError({ code: 'unknown', headline: 'the provider failed' }) }] };
+        }
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        return textOf(req).includes('TASK: first') ? { parts: [{ hold: firstStep }, ...answer('first: done').parts] } : { parts: [{ hold: secondStep }, ...answer('second: done').parts] };
+      }, { hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => order.includes('root:2') && byName(sid, 'second')?.state === 'running');
+      releaseFirst();
+      await settle(() => entered('first'));
+      // The root's turn fails with `second` still running: the end of its loop waits on `first`'s settle.
+      releaseRoot();
+      await new Promise((r) => setTimeout(r, 20));
+      releaseSecond();
+      await settle(() => entered('second'));
+      release('first');
+      await settle(() => order.includes('child_completed(first):end'));
+      await settle(() => order.includes('iteration_end:start') || order.includes('session_end:start'), RACE_ROUNDS);
+      // `second` ended while the root waited on `first`: its hook still holds, so the iteration has not ended.
+      expect(order).not.toContain('iteration_end:start');
+      expect(order).not.toContain('session_end:start');
+      release('second');
+      await sessions.running(sid);
+      // Whatever else the failed turn leads to, both hooks end before the iteration's and the session's own.
+      const done = order.indexOf('child_completed(second):end');
+      expect(done).toBeGreaterThan(order.indexOf('child_completed(first):end'));
+      expect(order.filter((e, i) => i < done && (e.startsWith('iteration_end') || e.startsWith('session_end')))).toEqual([]);
+      expect(order.at(-1)).toBe('session_end:end');
+    });
+
+    it('REQ-ORCH-088: a child that lands at its own limit while a child of its own is still in its hook settles only after that hook', async () => {
+      const { order, hooks, state, release } = heldHook('leaf');
+      let releaseLeaf!: () => void;
+      const leafStep = new Promise<void>((r) => { releaseLeaf = r; });
+      let releaseMid!: () => void;
+      const midStep = new Promise<void>((r) => { releaseMid = r; });
+      let midAsked = 0;
+      let sid!: SessionId;
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') { order.push(`root:${turn}`); return turn === 1 ? toolCalls([delegation('mid')]) : answer('handled'); }
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        if (!textOf(req).includes('TASK: mid')) return { parts: [{ hold: leafStep }, ...answer('leaf: done').parts] };
+        midAsked += 1;
+        if (midAsked === 1) return toolCalls([delegation('leaf')]);
+        // In flight when the limit expires: it finishes, and the child stops before its next step (the landing).
+        if (midAsked === 2) return { parts: [{ hold: midStep }, ...toolCalls([{ callId: 'b1', name: 'background_output', args: { task_id: byName(sid, 'leaf')!.task_id } }], 'Checking on leaf.').parts] };
+        return answer('mid: never asked again');
+      }, { hooks, childTimeoutMs: 60_000 });
+      sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => midAsked === 2 && byName(sid, 'leaf')?.state === 'running');
+      releaseLeaf();
+      await settle(() => state.entered);
+      clock.advance(60_000);
+      releaseMid();
+      await settle(() => order.includes('child_completed(mid):start') || order.includes('iteration_end:start'), RACE_ROUNDS);
+      // `mid` has landed, its loop ended with `leaf` in its hook: it has not settled, and the iteration has not ended.
+      expect(order).not.toContain('child_completed(mid):start');
+      expect(order).not.toContain('iteration_end:start');
+      expect(byName(sid, 'mid')?.state).toBe('running');
+      release();
+      await sessions.running(sid);
+      expect(midAsked).toBe(2);
+      const mid = byName(sid, 'mid')!;
+      expect(mid.state).toBe('failed');
+      expect((JSON.parse(mid.report!) as { errors: { type: string }[] }).errors.map((e) => e.type)).toContain('timeout');
+      expect(lifecycle(order)).toEqual(['session_start:start', 'session_start:end', 'child_completed(leaf):start', 'child_completed(leaf):end', 'child_completed(mid):start', 'child_completed(mid):end', 'iteration_end:start', 'iteration_end:end', 'session_end:start', 'session_end:end']);
+    });
+  });
+
   describe('PD-ORCH-005 clause 15: a forced stop is a stop, and a quit rests by quit', () => {
     const restsBy = async (sessions: Sessions, sid: SessionId, interruption: 'stop' | 'quit') => {
       const result = await sessions.running(sid)!;

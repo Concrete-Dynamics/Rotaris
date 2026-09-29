@@ -184,6 +184,11 @@ export interface TurnSink {
   usage(u: Usage): void;
   /** REQ-ORCH-090: the FIRST part of any kind the provider streamed — the unresponsive-model timer disarms on it. */
   started?(): void;
+  /**
+   * REQ-ORCH-089: EVERY part the provider streamed, by its kind, `error` for an error it answered with — the stall
+   * watch's "model event or token". Called before the part's own callback.
+   */
+  event?(kind: StreamPart['kind'] | 'error'): void;
 }
 
 export type TurnReport =

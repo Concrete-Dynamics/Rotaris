@@ -1092,7 +1092,11 @@ both scopes: Settings → Runtime toggles "Allow outside workspace" through its 
 line as written, the global file untouched); Settings → Models chooses a slot and its strength and saves; a toggle
 then Discard writes nothing; the composer's control writes `runtime.permission_mode` with no run active; a file
 with `max_depth: many` refuses the run naming the file, the workspace scope and `runtime.max_depth`, and the corrected
-file runs to completion. Its evidence lands under `.proof/config-proof/`; the load time is read from the app log.
+file runs to completion. Its evidence lands under `.proof/config-proof/`; the load time is read from the app log. The
+Discard scenario is seeded as a workspace already initialized, because a never-initialized one gets the
+initialization record written into the same file during the launch wherever the code-intelligence bundle is present.
+Its Runtime steps wait for their controls and are read back from the log (2026-09-28, R-062;
+[the note](../defects/fixed/config-proofs-discard-scenario-counts-the-initialization-record-as-a-discard-write.md)).
 
 **The control channel.** `contracts/src/control.ts` (the twenty-two operations, the pause payload), store v6
 (`queued_prompts`, `sessions.message_limit`, `sessions.paused_at_count`), the writer's units, `engine/src/run/run.ts`

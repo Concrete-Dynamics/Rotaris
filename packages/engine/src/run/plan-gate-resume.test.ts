@@ -339,11 +339,11 @@ describe('PD-ORCH-003 revision 2: a resumed iteration and the gate', () => {
    * OQ-104 "The handoff after the preamble is the continue's" (found by the merged build's tenth review). The plan cycle
    * held after a resumed iteration is sent the launch content the continue built at the continue — this session was
    * paused (a rest, no crash), so that is before clause 17 appended the message's task and before the resumed iteration
-   * ran — the behaviour
-   * `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md` records for a later iteration of the same run. Its
+   * ran — the staleness OQ-106 reads for a later iteration of the same run, which the repair of
+   * `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md` kept (it rebuilds no handoff). Its
    * "Authoritative session handoff" therefore shows the resumed iteration's task still in progress and not the message,
    * while the preamble, read from the live todo, says that iteration closed and carried the message out. Pinned as built,
-   * so a repair or a ruling either way turns it red.
+   * so a ruling either way turns it red.
    */
   it('the plan cycle held after a resumed iteration is sent the handoff the continue built before that iteration ran (OQ-104)', async () => {
     const { sessions, client, sid } = await restedWithPending([answer('resumed, done'), answer('Plan: do later.')]);

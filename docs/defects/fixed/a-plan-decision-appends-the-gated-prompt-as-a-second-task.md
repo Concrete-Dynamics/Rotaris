@@ -30,6 +30,7 @@ it).
 `RunDeps.appendsTask: false`: a plan decision's relaunch appends no task, since the held run's stored todo already carries
 the gated work. The approved plan still reaches the model, because every iteration's first call is sent the launch
 content, which carries `planSection` (the behaviour `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`
-records, and which this repair leaves as it is). Evidence: `run/plan-gate-resume.test.ts` — an approved first prompt runs
+recorded, and which this repair leaves as it is; that defect's repair of 2026-09-29 keeps the launch content as every
+iteration's base). Evidence: `run/plan-gate-resume.test.ts` — an approved first prompt runs
 once, and after a hold that followed a resumed iteration the approve runs the pending work and not the continue's
 message; reverting either half turns both red.

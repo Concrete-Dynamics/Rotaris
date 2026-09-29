@@ -262,7 +262,7 @@ directory per scenario:
 | `autopsy.txt` | `apps/desktop/scripts/autopsy.mjs` over that scenario's session |
 | `session.log` | the product's own per-session log, at `--session-log-level` (default `INFO`) |
 | `transcript.md` | every transcript row in full, not the 400 characters `results.json` keeps |
-| `model-traffic.jsonl` | **what the model was sent and what came back** — request and response bodies, status and duration per call. The product logs a method and a URL and nothing else, so this exists nowhere else |
+| `model-traffic.jsonl` | **what the model was sent and what came back** — request and response bodies, status and duration per call, in the file of the scenario that made the call, each naming how it ended (`outcome`: `complete`, `aborted` when the product let go — the endpoint is let go with it — `in-flight at close`, `stalled`, `released`, `cut`, `upstream-error`, `unreachable`). The product logs a method and a URL and nothing else, so this exists nowhere else |
 | `*.png` | the end of the scenario, plus one a fifth and one three fifths through its wait |
 | `node-test.log`, `diff.txt`, `changed/` | where the scenario produces them |
 

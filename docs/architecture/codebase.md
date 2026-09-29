@@ -735,7 +735,13 @@ it is a raw pipe, forwarding chunks as they arrive, because a buffering proxy wo
 loop is built on and leave every assertion green — the harness measuring a product that exists only while it is
 measured, which is the shape of the two false-symptom repairs above. `model-traffic.test.ts` pins that property
 with a case that hangs if the pipe ever buffers, verified by making it buffer. Credentials are replaced in the
-record before it is written and the `ask` scenario asserts it.
+record before it is written and the `ask` scenario asserts it. *Since 2026-09-29 (R-067, live-run findings H1 and H-g)
+a call the product aborts is let go at the endpoint too and written `aborted`, a record lands in the file of the scenario
+that made the call rather than the one current when it ended, and a call still open when the proxy closes is written
+`in-flight at close`: the first live run had nine aborted calls finish upstream and land `complete` in the next scenario's
+file, and the duress pack was one record short of its log
+(`docs/defects/fixed/the-recording-proxy-does-not-pass-a-client-abort-upstream.md`,
+`docs/defects/fixed/the-recording-proxy-writes-nothing-for-a-call-in-flight-at-close.md`).*
 
 **The proxy's own first execution found that it could not answer a single call, and the reason is kept beside
 its replacement.** The script launched every scenario with `spawnSync`, which blocks the Node event loop until

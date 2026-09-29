@@ -309,6 +309,188 @@ describe('the live run\'s recording proxy', () => {
     });
   });
 
+  /**
+   * A call the product lets go of, and a call the harness closes on (live-run findings H1 and H-g, 2026-09-29).
+   *
+   * The first live run's two timed-out intent classifiers, its loop classifier and six analyses the quit cancelled
+   * all ran to completion AT THE ENDPOINT after the product had aborted them, and were written `outcome: complete`
+   * into the NEXT scenario's traffic file: the proxy destroyed its upstream request only when the client request
+   * emitted `error`, which a client closing its connection does not do, and it wrote to whichever sink was current
+   * when the call ended. The duress run's pack held 201 `model request POST` lines against 200 records — the call
+   * in flight at the deadline was never written, because `close()` wrote nothing. Each case below is red on that
+   * form of the proxy.
+   */
+  describe('a call the client lets go of, and a call in flight at close (H1, H-g)', () => {
+    /** An upstream that answers headers and one chunk, then holds the stream open until the test lets go. */
+    async function holdingUpstream(): Promise<{ target: string; upstreamClosed: Promise<void> }> {
+      let closed: () => void = () => undefined;
+      const upstreamClosed = new Promise<void>((resolve) => { closed = resolve; });
+      const target = await upstream((req, res) => {
+        res.writeHead(200, { 'content-type': 'text/event-stream' });
+        res.write('data: one\n\n');
+        // The endpoint's side of the socket closing is the only way it learns the call was abandoned.
+        req.socket.on('close', () => closed());
+      });
+      return { target, upstreamClosed };
+    }
+    const within = <T>(promise: Promise<T>, ms: number): Promise<T | 'timed out'> =>
+      Promise.race([promise, new Promise<'timed out'>((r) => setTimeout(() => r('timed out'), ms))]);
+
+    it('a client abort mid-stream destroys the upstream request, and the record says aborted', async () => {
+      const { target, upstreamClosed } = await holdingUpstream();
+      const { proxy, sink } = await proxyTo(target);
+
+      const ac = new AbortController();
+      const answer = await fetch(`${proxy.url}/chat/completions`, { method: 'POST', body: '{"m":"x"}', signal: ac.signal });
+      const reader = (answer.body as ReadableStream<Uint8Array>).getReader();
+      expect(new TextDecoder().decode((await reader.read()).value)).toContain('one');
+      ac.abort();
+
+      // The endpoint stops answering because the product did: nothing further is generated, and nothing billed.
+      expect(await within(upstreamClosed, 5_000)).toBeUndefined();
+      await new Promise((r) => setTimeout(r, 50));
+      const written = records(sink);
+      expect(written).toHaveLength(1);
+      expect(written[0]['outcome']).toBe('aborted');
+      expect(written[0]['status']).toBe(200);
+      // What had arrived before the client let go is part of the record.
+      expect(String(written[0]['responseBody'])).toContain('one');
+      expect(written[0]['requestBody']).toBe('{"m":"x"}');
+      // The proxy's own letting go of the endpoint is not the hop failing.
+      expect(proxy.stats().failed).toBe(0);
+    });
+
+    it('a client abort before the endpoint has answered destroys the upstream request, and the record says aborted', async () => {
+      let closed: () => void = () => undefined;
+      const upstreamClosed = new Promise<void>((resolve) => { closed = resolve; });
+      // An endpoint still thinking: it has the request and has sent nothing, not even headers.
+      const target = await upstream((req) => { req.socket.on('close', () => closed()); });
+      const { proxy, sink } = await proxyTo(target);
+
+      const ac = new AbortController();
+      const pending = fetch(`${proxy.url}/chat/completions`, { method: 'POST', body: '{}', signal: ac.signal }).catch(() => 'aborted');
+      await new Promise((r) => setTimeout(r, 200));
+      ac.abort();
+      expect(await pending).toBe('aborted');
+
+      expect(await within(upstreamClosed, 5_000)).toBeUndefined();
+      await new Promise((r) => setTimeout(r, 50));
+      const written = records(sink);
+      expect(written).toHaveLength(1);
+      expect(written[0]['outcome']).toBe('aborted');
+      expect(written[0]['status']).toBeNull();
+      expect(proxy.stats().failed).toBe(0);
+    });
+
+    it('a client abort during a stall lets go of the endpoint at once, not when the hold expires', async () => {
+      const upstreamGone: { closed: () => void } = { closed: () => undefined };
+      const upstreamClosed = new Promise<void>((resolve) => { upstreamGone.closed = resolve; });
+      const target = await upstream((req, res) => {
+        req.socket.on('close', () => upstreamGone.closed());
+        res.writeHead(200, { 'content-type': 'text/event-stream' });
+        res.write('data: one\n\n');
+        setTimeout(() => res.write('data: two\n\n'), 20);
+      });
+      const { proxy, sink } = await proxyTo(target, [{ kind: 'stall', at: 1, afterChunks: 1, holdMs: 600_000 }]);
+
+      const ac = new AbortController();
+      const answer = await fetch(`${proxy.url}/chat/completions`, { method: 'POST', body: '{}', signal: ac.signal });
+      const reader = (answer.body as ReadableStream<Uint8Array>).getReader();
+      await reader.read();
+      await new Promise((r) => setTimeout(r, 300));
+      // The product's idle bound fires: it aborts the stalled call.
+      ac.abort();
+
+      expect(await within(upstreamClosed, 5_000)).toBeUndefined();
+      await new Promise((r) => setTimeout(r, 50));
+      // Two records: the stall as it began, and the product letting go of it.
+      expect(records(sink).map((r) => r['outcome'])).toEqual(['stalled', 'aborted']);
+      expect(proxy.stats().failed).toBe(0);
+    });
+
+    it('a record lands in the file of the scenario that made the call, not the one current when it ends', async () => {
+      let release: () => void = () => undefined;
+      const held = new Promise<void>((resolve) => { release = resolve; });
+      const target = await upstream((_req, res) => {
+        res.writeHead(200, { 'content-type': 'text/event-stream' });
+        res.write('data: one\n\n');
+        void held.then(() => res.end('data: [DONE]\n\n'));
+      });
+      const { proxy, sink: first } = await proxyTo(target);
+      const second = join(opened.dirs[0], 'next-scenario.jsonl');
+
+      const answer = await fetch(`${proxy.url}/chat/completions`, { method: 'POST', body: '{}' });
+      const reader = (answer.body as ReadableStream<Uint8Array>).getReader();
+      await reader.read();
+      // The next scenario begins while this call is still answering.
+      proxy.sink(second);
+      release();
+      while (!(await reader.read()).done) { /* drain */ }
+      await new Promise((r) => setTimeout(r, 50));
+
+      expect(records(first).map((r) => r['outcome'])).toEqual(['complete']);
+      expect(records(second)).toEqual([]);
+    });
+
+    it('a call in flight when the proxy closes is written as such, and the endpoint is let go', async () => {
+      const { target, upstreamClosed } = await holdingUpstream();
+      const dir = mkdtempSync(join(tmpdir(), 'model-traffic-'));
+      opened.dirs.push(dir);
+      // Not in `opened.proxies`: this case closes the proxy itself, and a second close would find it closed.
+      const proxy = (await startRecordingProxy({ upstreamUrl: target, redact: (s: string) => s })) as Proxy;
+      const sink = join(dir, 'model-traffic.jsonl');
+      proxy.sink(sink);
+
+      const answer = await fetch(`${proxy.url}/chat/completions`, { method: 'POST', body: '{"m":"last"}' });
+      const reader = (answer.body as ReadableStream<Uint8Array>).getReader();
+      await reader.read();
+      const tail = reader.read().catch(() => 'cut');
+
+      await proxy.close();
+      const written = records(sink);
+      expect(written).toHaveLength(1);
+      expect(written[0]['outcome']).toBe('in-flight at close');
+      expect(written[0]['status']).toBe(200);
+      expect(written[0]['requestBody']).toBe('{"m":"last"}');
+      expect(String(written[0]['responseBody'])).toContain('one');
+      expect(proxy.stats().recorded).toBe(1);
+      expect(await within(upstreamClosed, 5_000)).toBeUndefined();
+      await tail;
+    });
+
+    it('a call that has ended is not written again at close', async () => {
+      const target = await upstream((_req, res) => { res.writeHead(200); res.end('{"ok":true}'); });
+      const dir = mkdtempSync(join(tmpdir(), 'model-traffic-'));
+      opened.dirs.push(dir);
+      const proxy = (await startRecordingProxy({ upstreamUrl: target, redact: (s: string) => s })) as Proxy;
+      const sink = join(dir, 'model-traffic.jsonl');
+      proxy.sink(sink);
+      expect((await fetch(`${proxy.url}/chat/completions`, { method: 'POST', body: '{}' })).status).toBe(200);
+      await new Promise((r) => setTimeout(r, 50));
+      await proxy.close();
+      expect(records(sink).map((r) => r['outcome'])).toEqual(['complete']);
+    });
+
+    it('an endpoint that drops the connection mid-stream is written as an upstream error, not a client abort', async () => {
+      const target = await upstream((_req, res) => {
+        res.writeHead(200, { 'content-type': 'text/event-stream' });
+        res.write('data: one\n\n');
+        setTimeout(() => res.socket?.destroy(), 50);
+      });
+      const { proxy, sink } = await proxyTo(target);
+      await (async () => {
+        const answer = await fetch(`${proxy.url}/chat/completions`, { method: 'POST', body: '{}' });
+        return await answer.text();
+      })().catch(() => 'cut');
+      await new Promise((r) => setTimeout(r, 100));
+      const written = records(sink);
+      expect(written).toHaveLength(1);
+      expect(written[0]['outcome']).toBe('upstream-error');
+      expect(String(written[0]['responseBody'])).toContain('one');
+      expect(proxy.stats().failed).toBe(1);
+    });
+  });
+
   it('records the hop failing, and answers 502 rather than hanging', async () => {
     // An upstream that is not listening: the port is bound and released before the proxy is pointed at it.
     const target = await upstream((_req, res) => res.end());

@@ -90,7 +90,9 @@
  *   session.log        the product's own per-session log, at `--session-log-level` (default INFO)
  *   transcript.md      every transcript row in full, not the 400 characters `results.json` keeps
  *   model-traffic.jsonl  what the model was SENT and what came back — bodies, status and duration per call,
- *                      recorded by a loopback proxy the sandbox is pointed at (`--no-record-traffic` skips it).
+ *                      recorded by a loopback proxy the sandbox is pointed at (`--no-record-traffic` skips it),
+ *                      into the file of the scenario that made the call, each naming how it ended (`outcome`:
+ *                      `complete`, `aborted` when the product let go, `in-flight at close`, …).
  *                      The product logs a method and a URL and nothing else, so this exists nowhere else.
  *   *.png              the end of the scenario, plus a fifth and three fifths of the way through its wait
  *   node-test.log, diff.txt, changed/   where the scenario produces them
@@ -949,8 +951,10 @@ function finish(code) {
   // including the budget gate's early stop, because a run that stopped early is exactly the one worth reading.
   results.store = preserveStore();
   results.evidence = scenarioEvidence;
-  results.traffic = proxy === null ? { recorded: false, reason: RECORD_TRAFFIC ? 'the proxy could not start' : '--no-record-traffic' } : { recorded: true, proxy: proxy.url, ...proxy.stats() };
+  // Closed BEFORE its figures are read: a call still in flight is written `in-flight at close` into its own
+  // scenario's file as the proxy closes, and the count below includes it (live-run finding H-g).
   closeProxy();
+  results.traffic = proxy === null ? { recorded: false, reason: RECORD_TRAFFIC ? 'the proxy could not start' : '--no-record-traffic' } : { recorded: true, proxy: proxy.url, ...proxy.stats() };
   results.passed = code === 0 && checks.every((c) => c.passed);
   writeFileSync(join(output, 'results.json'), `${JSON.stringify(results, null, 2)}\n`);
   // A red names the assertion, never the run.

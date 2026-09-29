@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock, type Clocks } from '@rotaris/kernel';
@@ -48,6 +48,8 @@ const SH = {
   echoVar: (name: string) => (PS ? `Write-Output $env:${name}` : `printf '%s\\n' "$${name}"`),
   /** The variable's value in brackets, so an empty one is still visible. */
   bracketVar: (name: string) => (PS ? `Write-Output "[$env:${name}]"` : `printf '[%s]\\n' "$${name}"`),
+  /** The variable's value written to a file, so a case can see it from outside the terminal. */
+  writeVar: (name: string, path: string) => (PS ? `Set-Content -NoNewline -Path '${path}' -Value $env:${name}` : `printf '%s' "$${name}" > '${path}'`),
 };
 const clocks: Clocks = nodeClocks();
 const root = mkdtempSync(join(tmpdir(), 'rotaris-term-'));
@@ -251,23 +253,39 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     // A session of its own, so no other case's snapshot or paused command stands in it.
     const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });
     const t = terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 });
+    // The variable's command also writes the variable's value to this file, so the case can see, from outside the
+    // terminal, that the shell ran it and held the variable — before the reset, which is what OQ-133 is about.
+    const marker = join(root, 'oq133-unseen.txt');
+    rmSync(marker, { force: true });
     try {
       await t.execute(args({ command: SH.echo('ready'), timeout: 15 }), ctx());
-      // A quiet command soft-pauses and keeps running; the next call queues behind it in the shell's input.
-      expect(diag((await t.execute(args({ command: `${SH.sleep(5)}; ${SH.echo('done-later')}` }), ctx())).text)['outcome_kind']).toBe('soft_pause');
-      // Named no timeout, the variable's call waits ~3.5 s of silence and soft-pauses too: its completion is never seen.
-      expect(diag((await t.execute(args({ command: SH.setVar('ROTARIS_UNSEEN', 'set') }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      // A quiet command soft-pauses at ~1.5 s and keeps running; the next call queues behind it in the shell's input.
+      expect(diag((await t.execute(args({ command: SH.sleep(8) }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      // Named no timeout, the variable's call meets 1.5 s more of silence and soft-pauses at ~3 s, long before the
+      // `sleep 8` ends: the command has not run yet, so the file is absent, and its completion will never be seen.
+      const unseen = await t.execute(args({ command: `${SH.setVar('ROTARIS_UNSEEN', 'set')}; ${SH.writeVar('ROTARIS_UNSEEN', marker)}` }), ctx());
+      expect(diag(unseen.text)['outcome_kind']).toBe('soft_pause');
+      expect(existsSync(marker)).toBe(false);
+      // The `sleep 8` ends and the queued command runs, unseen. Wait for its file rather than for a time.
+      const ranBy = (clocks.monotonic.now() as number) + 20_000;
+      while (!existsSync(marker) || readFileSync(marker, 'utf8').trim() === '') {
+        expect(clocks.monotonic.now() as number).toBeLessThan(ranBy);
+        await new Promise((res) => setTimeout(res, 50));
+      }
+      // The shell held the variable before the respawn.
+      expect(readFileSync(marker, 'utf8').trim()).toBe('set');
       const r = await t.execute(args({ command: `${SH.sleep(20)}; ${SH.echo('late')}`, timeout: 1 }), ctx());
+      expect(diag(r.text)).toMatchObject({ exit_code: 124, kill_status: 'session_reset' });
       expect(r.text).toContain('were restored');
-      // The shell had set it before the respawn; the snapshot restored is the `ready` call's, which never held it.
+      // What was restored is the `ready` call's snapshot, the last the product saw complete, which never held it.
       expect(output((await t.execute(args({ command: SH.bracketVar('ROTARIS_UNSEEN'), timeout: 15 }), ctx())).text)).toBe('[]');
       // The same sequence with a call that names its timeout does not pause, is seen to complete, and is restored.
-      expect(diag((await t.execute(args({ command: `${SH.sleep(5)}; ${SH.echo('done-later')}` }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      expect(diag((await t.execute(args({ command: SH.sleep(5) }), ctx())).text)['outcome_kind']).toBe('soft_pause');
       expect(diag((await t.execute(args({ command: SH.setVar('ROTARIS_SEEN', 'set'), timeout: 15 }), ctx())).text)['outcome_kind']).toBe('success');
       expect((await t.execute(args({ command: `${SH.sleep(20)}; ${SH.echo('late')}`, timeout: 1 }), ctx())).text).toContain('were restored');
       expect(output((await t.execute(args({ command: SH.bracketVar('ROTARIS_SEEN'), timeout: 15 }), ctx())).text)).toBe('[set]');
-    } finally { await m.dispose(); }
-  }, 45_000);
+    } finally { await m.dispose(); rmSync(marker, { force: true }); }
+  }, 60_000);
 
   /**
    * ADR-0020's second first execution, 2026-09-12: four defects a real 22-minute run found. Each proof

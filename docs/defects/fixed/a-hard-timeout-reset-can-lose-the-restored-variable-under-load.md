@@ -36,9 +36,16 @@ What was restored was an **older** snapshot, and the chain that produced it runs
 - The timed-out `sleep 20` then reset the shell and re-applied the snapshot of an earlier case's command. That
   snapshot was without the variable, and the detail still said "were restored". So `[]`.
 
-Reproduced deterministically by widening the leftover to `sleep 5`: the old form of the case then fails with this
-note's exact assertion, `expected '[]' to be '[set]'`, in 2,538 ms (2,553 ms in the recorded failure), and the new form
-passes.
+Reproduced by widening the leftover to `sleep 3.5`, which ends the `sleep` about half a second after the variable's
+call pauses and half a second before the reset. The old form of the case then fails with this note's exact assertion,
+`expected '[]' to be '[set]'`, in 2,538 ms (2,553 ms in the recorded failure). Instrumented, the call soft-paused at
+1,505 ms, the shell ran the `export` at 1,999 ms, and the reset returned at 2,517 ms: the variable was set before the
+respawn and was not restored. The new form passes.
+
+*Corrected 2026-09-29 in the branch's verification round: this reproduction first widened the leftover to `sleep 5`.
+That fails with the same assertion, by another road. The reset lands at about 4 s while `sleep 5` still runs, so the
+`export` never ran at all, and losing a command that never ran is REQ-TOOLS-097's reset doing what it should. It showed
+the symptom, not this mechanism.*
 
 **Repair: the case, and a question for the rest.** The variable's call now names its own timeout, as the file's other
 calls that read a shell do, so it cannot soft-pause and is seen to complete. The case also asserts that the call
@@ -52,7 +59,13 @@ raised as [OQ-133](../../architecture/open-questions.md), with the reading pinne
   In its new form it was green in 20 of 20 loaded runs of the file (`pnpm vitest run
   packages/agent-tools/src/terminal/terminal.test.ts`, eight CPU burners, Node 24).
 - "PD-TOOLS-001 (OQ-133): a reset restores the snapshot of the last command the product saw complete, …": the
-  flake's mechanism in a session of its own, with a margin of seconds rather than milliseconds, beside the same
-  sequence with a timeout that restores the variable.
+  flake's mechanism in a session of its own. The variable's call soft-pauses behind a `sleep 8`. The case then waits
+  until that call has written the variable's value to a file, so the shell has run it and holds the variable, and only
+  then resets the shell by a hard timeout; the read gives `[]`. Beside it, the same sequence with a timeout restores
+  the variable. Under a temporary change that snapshots a finished paused command before the next command runs, the
+  case is red (`expected '[set]' to be '[]'`).
+  *Corrected in the verification round: the case's first form reset the shell while its `sleep 5` still ran, before
+  the variable's command had run. It pinned only REQ-TOOLS-097's loss of a command that never ran, and would have
+  passed had the product snapshotted an unseen completion.*
 
 Repaired 2026-09-29 under R-067.

@@ -6041,8 +6041,12 @@ snapshot included, took 1,486 to 1,707 ms. Under load it soft-paused, and the re
 older command.
 
 **What the build proceeds under:** the snapshot of the last command the product saw complete, as ADR-0020 records.
-The case `PD-TOOLS-001 (OQ-133): …` in `terminal.test.ts` pins that reading, and the timeout case now names its
-own timeout, so it no longer depends on it.
+The case `PD-TOOLS-001 (OQ-133): …` in `terminal.test.ts` pins that reading. Its paused command writes the variable's
+value to a file, and the case waits for that file before the reset, so the variable was set before the respawn; the
+read after it gives `[]`. The case is red under a temporary change that snapshots a finished paused command before the
+next command runs. (Its first form reset the shell before the paused command had run, which pinned only
+REQ-TOOLS-097's loss of a command that never ran; corrected in the branch's verification round.) The timeout case
+now names its own timeout, so it no longer depends on this reading.
 
 **What a ruling decides.** Whether "before the respawn" asks for the state after such a command too. Meeting it
 would take the shell's state from inside the command's own wrapper, since the shell is never idle in between. The

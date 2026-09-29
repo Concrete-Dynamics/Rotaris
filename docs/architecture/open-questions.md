@@ -4153,9 +4153,11 @@ keeps its number across runs, nor how a later root learns an offer exists.
   last created, in the listing's own index order (REQ-LIBRARY-096), so artifacts created in the same millisecond — a
   cancellation writes several reports at once — fall to their ids, a stable order but not the order they were written.
   *The first repair broke that tie by insertion order, which cost the index's order (a sort per read, found by phase 6's
-  second review).* Two more limits stand, both found by phase 6's review: a report re-materialised in place keeps its creation time (REQ-LIBRARY-092), so a later iteration's report
+  second review).* Two more limits stand, both found by phase 6's review: a report re-materialised in place keeps its creation time (REQ-LIBRARY-092), ~~so a later iteration's report
   that reuses a canonical name does not become the latest (and overwrites the earlier one:
-  `a-reused-canonical-name-overwrites-an-earlier-iterations-report-artifact.md`); and a body edited after publishing
+  `a-reused-canonical-name-overwrites-an-earlier-iterations-report-artifact.md`)~~ *(true until 2026-09-29: since
+  OQ-113's amendment was built, a later iteration's report that reuses a canonical name is an artifact of its own and
+  becomes the latest, and only the same task's report is re-materialised in place)*; and a body edited after publishing
   (REQ-LIBRARY-094) is stated as it was published.
 - **Who takes up an earlier offer.** The agent that delegated the child, while it runs. Otherwise only an iteration's
   root, of an offer the session left before that root's run took the iteration up: any earlier iteration's (the
@@ -5280,7 +5282,7 @@ writers named, and 15 s later it delegated the task to `docs-writer`.
 and, when that finds none, by its canonical name. A child of a later iteration whose name repeats an earlier child's
 finds the earlier report's artifact by name and rewrites it in place: the earlier report's summary, findings and status
 are replaced by the later child's, while the record keeps the earlier child's task id and creation time
-([`a-reused-canonical-name-overwrites-an-earlier-iterations-report-artifact.md`](../defects/a-reused-canonical-name-overwrites-an-earlier-iterations-report-artifact.md)).
+([`a-reused-canonical-name-overwrites-an-earlier-iterations-report-artifact.md`](../defects/fixed/a-reused-canonical-name-overwrites-an-earlier-iterations-report-artifact.md)).
 The requirement's parenthesis does not say when the fallback applies. Read as "when the task-id lookup finds nothing",
 two children with different task ids share one artifact, and the earlier child's report is no longer materialized,
 against the same requirement's next sentence.
@@ -5291,6 +5293,15 @@ different task ids never share or overwrite an artifact. The requirement disagre
 so it is corrected in place rather than narrowed by a directive: `REQ-LIBRARY-092`'s parenthesis now says when the
 fallback applies, with the inline mark "accepted amendment 2026-09-29, OQ-113", and domain 14's resolution record
 carries the note. Nothing is built by the ruling; the repair is owed to the note above.
+
+*Built 2026-09-29 (R-067), and its first execution reported here.* `materialiseChildReport` looks a record with a task id
+up by that id alone, and a record without one by its canonical name, among the child reports no task wrote
+(`StoreDal.artifactByCanonical`). The amendment's second half is read to cover a record with no task id too: it never
+takes over an artifact a task wrote, nor does a task take over one it did not write. The first execution — two cases in
+`packages/engine/src/artifacts/artifacts.test.ts`, "REQ-LIBRARY-092 (OQ-113): …", both red on the code before the repair —
+found the overwrite the note describes, and found that the store's own idempotence case pinned it: its last step asserted
+that a second task id under the same name updated the first artifact, which the amendment forbids, so that step is
+removed. Every caller in the build passes a child's task id, so the name key is now reached only by a record without one.
 
 **OQ-114 — Do the specification's fixed figures still hold when the model on the critical path reasons before it answers?** *(REQ-ORCH-108 and REQ-ORCH-110, the report-producing pass before the parent resumes, two attempts within 120 s; REQ-ORCH-007 and REQ-ORCH-008, the 12.0 s intent bound and its fallback; REQ-TOOLS-006, whose `coordinator_only` control removes the orchestrator's terminal; REQ-CONFIG-467 and REQ-ORCH-104, the 2.0 s loop-classification bound and its fallback; REQ-LIBRARY-127 and REQ-CONFIG-118, analysis cancelled at shutdown and its 60 s bound; REQ-TOOLS-039 under REQ-TOOLS-033, the recursive-delete deny rule; `PD-ORCH-004` revision 2, "nothing of the continued child is injected". Raised 2026-09-29 from the live runs' frictions F1 to F5 and the duress run's continuation under [R-067](../product/requests.md#r-067). Open. Raised as OQ-113 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
 

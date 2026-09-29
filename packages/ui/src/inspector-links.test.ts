@@ -61,6 +61,35 @@ describe('REQ-MONITOR-060/061 (live-run finding K1): the run-level agent\'s tool
     const names = chips(html, 'inspector-chips').map((c) => c.split(':')[0]);
     expect(names).toEqual(['read_file', 'grep', 'delegate', 'todo', 'ask_questions']);
   });
+
+  /**
+   * The verifier's finding on K1: a follow-up or continued run already holds `runStartedAt`, so the run-level agent is
+   * presented live while the run is `starting`, but its root port resolves only after the pre-flight (`Run.iterate`). The
+   * declared set stood in there — a coordinator's write, terminal and commit tools included, which REQ-MONITOR-061 forbids
+   * for a running run-level agent, and REQ-MONITOR-060 lets the declared tools stand in only where the persona has no live
+   * instance. While it is live and nothing has resolved, nothing is listed.
+   */
+  it('REQ-MONITOR-060/061: a live run-level agent whose port has not resolved yet lists no declared tool — no withheld tool stands in', () => {
+    for (const executionStatus of ['starting', 'running']) {
+      const s = session({ executionStatus, entryTools: { resolved: [], called: ['delegate'], active: [] } });
+      const root = runLevelAgent(s, entry, false)!;
+      expect(root.live).toBe(true);
+      expect(root.grantedTools).toEqual([]);
+      const html = inspector(s, RUN_AGENT_ID, root);
+      expect(chips(html, 'inspector-chips')).toEqual([]);
+      for (const withheld of ['write_file', 'terminal']) expect(html).not.toContain(`data-tool="${withheld}"`);
+      expect(html).toContain('No tools resolved.');
+      const pw = renderToStaticMarkup(createElement(PersonaWindow, {
+        persona: 'orchestrator', session: s, rows: [], runLevel: root, declaredTools: ORCHESTRATOR_DECLARED, selectedAgentId: RUN_AGENT_ID, onSelectTab: () => undefined, nowIso: null, compressionThresholdPercent: 60,
+        onSteer: async () => ({ ok: true as const }), onCancel: async () => ({ ok: true as const }),
+      }));
+      expect(chips(pw, 'persona-chips')).toEqual([]);
+      for (const withheld of ['write_file', 'terminal']) expect(pw).not.toContain(`data-tool="${withheld}"`);
+    }
+    // Once the run is over the persona has no live instance and its declared tools stand in again (REQ-MONITOR-060).
+    const rest = runLevelAgent(session({ executionStatus: 'completed', entryTools: { resolved: [], called: [], active: [] } }), entry, false)!;
+    expect(rest.grantedTools).toEqual(ORCHESTRATOR_DECLARED);
+  });
 });
 
 describe('REQ-MONITOR-044/052/068/069 (live-run finding K1): artifact links', () => {

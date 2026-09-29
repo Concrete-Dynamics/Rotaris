@@ -53,6 +53,8 @@ read per snapshot, `StoreDal.artifactLinksOf`); the config snapshot's role view 
 `contracts/src/roles.ts`. A link in the main window deep-links to the Library (`openLibrary('artifacts', id)`), which opens
 the artifact inspector; in a persona window it opens the inspector there. The **runtime view**'s compression paragraph and
 the **component view**'s `roles.ts` line name them; no package, edge, message kind, command, column or process changes.
+At its verification the runtime view gained that a live run-level agent with no resolution yet lists nothing
+(`runLevelGrant`) rather than its declared tools.
 
 **A child is recorded under its model's `models:` key (REQ-CONFIG-094, REQ-MONITOR-020/049, live-run finding D5, R-067,
 2026-09-29).** `children.model_key` was the model's bare id, so `modelCapFor` and `contextLimitFor`, keyed by the

@@ -34,6 +34,10 @@ Repaired 2026-09-29 under R-067, as the feature `docs/architecture/codebase.md`'
   withheld write, terminal and commit tools are absent) and the tracker's called and active tools; with no run live the
   role's DECLARED tools stand in — the snapshot's new `declaredTools`, by the rule the run host's persona resolver applies
   (`declaredToolsOf`; the built-in roles' tool declarations moved from the engine to `contracts/src/roles.ts` for it).
+  *As first built the declared tools also stood in for a LIVE run-level agent whose root port had not resolved yet — a
+  follow-up or continued run is presented live from `starting`, and the port resolves only after the pre-flight — so for
+  those seconds a coordinator listed the write, terminal and commit tools REQ-MONITOR-061 forbids; found by the verifier of
+  the repair and repaired the same day (below). The sentence above was not true of the code until then.*
 - **Artifact links (REQ-MONITOR-044/052/068/069).** `SessionRecord.artifacts` carries the session's artifacts not
   superseded (a body-free read per snapshot, `StoreDal.artifactLinksOf`). The inspector draws the shown agent's produced and
   received artifacts as links with their ready flag in words, and the false sentence is gone (`NO_ARTIFACTS` now reads "This
@@ -46,12 +50,36 @@ Evidence:
   `apps/desktop/src/run-host/tools.test.ts` ("REQ-MONITOR-060/061: the port reports its resolved native tools"),
   `packages/config/src/snapshot.test.ts`, `packages/contracts/src/contracts.test.ts`, `packages/store/src/store.test.ts`
   (the query plan), `apps/desktop/src/renderer/agent-links-wiring.test.ts`.
-- `pnpm artifacts-proof` item 2: at rest the inspector follows the orchestrator, its chips are marked from its history
+- `pnpm artifacts-proof` item 2: ~~at rest~~ **while the delegating run is still active** (corrected at verification: the
+  10 s probes and the 11 s click land before the run ends, and `children-inspector.png` reads "Run active" — first written
+  "at rest", which the built app never exercised) the inspector follows the orchestrator, its chips are the live root port's
+  resolution (`background_output` and `wait_for_tasks`, which no declaration names, now asserted) marked from its history
   (`delegate:used`, `artifact_write:used`), its produced link names the artifact it published, and following it opens the
   Library on the Artifacts tab with the artifact inspector on that id. On the code before the repair it fails on
   `delegate:not used` (the chips carried no history).
+- `pnpm artifacts-proof` item 5 (added at verification): the reopened session AT REST, in a freshly opened process — the
+  orchestrator's declared tools stand in, in the declaration's order, marked from the reopened history
+  (`artifact_write:used`, read under the latest iteration's `root_persona`), and its produced link is still drawn
+  (`missing-body-inspector.png`).
 - `pnpm mission-proof` item 6: the running coordinator's chips at 3 s are its run's resolution — `delegate:used`, no
   `write_file`, `terminal` or `git_commit`.
 - `pnpm live-run --confirm --only=ask` against `katalyst` (pack `.live-run/runs/2026-09-29T11-48-13-397Z`, `ask.png`): the
   inspector shows the orchestrator's tools with `read_file used`, and the artifacts line reads the new sentence.
 
+## Repair round 1 — the verifier's findings, 2026-09-29
+
+- **A live run-level agent with no resolution listed its declared tools (REQ-MONITOR-060/061).** `Run.entryTools.resolved`
+  is empty until `Run.iterate` sets the root port, after the pre-flight (about 4 s in the verifier's live run), and a
+  follow-up or continued run already holds `runStartedAt`, so the run-level agent is presented live from `starting`. The
+  declared set stood in there, a coordinator's withheld tools included. Now `runLevelGrant` (`packages/ui/src/agents.ts`)
+  lists nothing while the agent is live and unresolved, and `resolvedTools` never lets the declared tools stand in for a
+  live run-level agent (REQ-MONITOR-060: the persona has a live instance). Pinned by
+  `packages/ui/src/inspector-links.test.ts` ("a live run-level agent whose port has not resolved yet lists no declared
+  tool"), red before the change, and by `agents.test.ts`'s run-level case, which had asserted the declared set for a
+  RUNNING agent.
+- **The port's reported set is its callable native set.** `ToolPort.resolvedTools` returned the resolution's names whether
+  or not an executor held them; it now returns the native names the callable map kept, so the inspector cannot list a
+  name the agent cannot call.
+- **The proof's description.** Item 2 was described as reading the inspector at rest; it reads a running run (corrected
+  above, in `AGENTS.md` and in the proof's comment). The at-rest reading is item 5's.
+- **ADR-0048** still said "Artifact links are empty (no artifact store)"; reported back in place.

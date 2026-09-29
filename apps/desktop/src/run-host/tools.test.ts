@@ -141,14 +141,8 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
   }
 
   /**
-   * PD-TOOLS-005 through the real port: the engine's away holder reaches the gate, which marks it when the configured
-   * wait (`runtime.approval_timeout_seconds`, 300 s here) expires unanswered and, while it is marked, resolves the next
-   * ask at once with the directive's reason and presents nothing. The return is the engine's (`sessions.ts`); here the
-   * holder is cleared directly, and the following ask is brokered again.
-   */
-  /**
    * Live-run finding K1 (R-067): the inspector drew "No tools resolved." for the run-level agent. The port now reports the
-   * native set its ONE resolution kept, so the surface shows what the agent can call — and, for a coordinator, not the
+   * native set its ONE resolution kept that holds an executor, so the surface shows what the agent can call — and, for a coordinator, not the
    * write, terminal and commit tools its policy withholds (REQ-MONITOR-061).
    */
   it('REQ-MONITOR-060/061: the port reports its resolved native tools — the listing\'s own names, a coordinator\'s withheld tools absent', async () => {
@@ -176,6 +170,12 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
     expect(resolved).toEqual(root.specs().map((s) => s.name));
   });
 
+  /**
+   * PD-TOOLS-005 through the real port: the engine's away holder reaches the gate, which marks it when the configured
+   * wait (`runtime.approval_timeout_seconds`, 300 s here) expires unanswered and, while it is marked, resolves the next
+   * ask at once with the directive's reason and presents nothing. The return is the engine's (`sessions.ts`); here the
+   * holder is cleared directly, and the following ask is brokered again.
+   */
   it('PD-TOOLS-005: the run\'s away holder reaches the gate — marked by the expired wait, read before the next prompt, brokered again after the return', async () => {
     const lines: string[] = [];
     const presence = new UserPresence({ record: (m) => lines.push(m) });

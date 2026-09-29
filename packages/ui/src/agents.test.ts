@@ -25,9 +25,12 @@ describe('agents — the shared selection (REQ-MONITOR-042) and the run-level ag
   });
   it('the run-level agent is the entry role: live while the run is busy, its own tool calls the session total less the children, no record-carried context', () => {
     const entry = { persona: 'orchestrator', model: 'scripted/alpha', reasoning: 'high', tools: ['delegate', 'read_file'] };
-    const r = runLevelAgent(session({ agents: [agent({ toolCalls: 2 })] }), entry, false)!;
-    expect(r).toMatchObject({ id: RUN_AGENT_ID, name: 'orchestrator', persona: 'orchestrator', presentationState: 'running', live: true, toolCalls: 3, model: 'scripted/alpha', reasoning: 'high', grantedTools: ['delegate', 'read_file'], contextUsed: 0, contextLimit: DEFAULT_CONTEXT_CAPACITY, completedAt: null });
-    expect(runLevelAgent(session({ executionStatus: 'completed' }), entry, false)).toMatchObject({ presentationState: 'done', live: false, completedAt: '2026-09-05T10:05:00.000Z' });
+    // Live-run finding K1: a live run-level agent's tools are its root port's resolution, never the declared set standing in
+    // (REQ-MONITOR-061) — this assertion read the declared `entry.tools` of a RUNNING agent until that repair.
+    const r = runLevelAgent(session({ agents: [agent({ toolCalls: 2 })], entryTools: { resolved: ['read_file', 'delegate'], called: [], active: [] } }), entry, false)!;
+    expect(r).toMatchObject({ id: RUN_AGENT_ID, name: 'orchestrator', persona: 'orchestrator', presentationState: 'running', live: true, toolCalls: 3, model: 'scripted/alpha', reasoning: 'high', grantedTools: ['read_file', 'delegate'], contextUsed: 0, contextLimit: DEFAULT_CONTEXT_CAPACITY, completedAt: null });
+    // With no live instance the persona's declared tools stand in (REQ-MONITOR-060).
+    expect(runLevelAgent(session({ executionStatus: 'completed' }), entry, false)).toMatchObject({ presentationState: 'done', live: false, completedAt: '2026-09-05T10:05:00.000Z', grantedTools: ['delegate', 'read_file'] });
     expect(runLevelAgent(session({ executionStatus: 'failed' }), entry, false)?.presentationState).toBe('failed');
     expect(runLevelAgent(session({ executionStatus: 'paused' }), entry, false)?.presentationState).toBe('cancelled');
     expect(runLevelAgent(session({ runStartedAt: null }), entry, false)).toBeNull();

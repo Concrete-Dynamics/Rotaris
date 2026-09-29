@@ -72,12 +72,24 @@ export function runLevelResting(session: SessionRecord, recovery: boolean): bool
 }
 
 /**
+ * REQ-MONITOR-060/061 (live-run finding K1; the verifier's finding on its first repair): the run-level agent's tool set —
+ * the live run's root-port resolution when there is one; else, while the agent is live, nothing (the port resolves in
+ * `Run.iterate`, after the pre-flight, and a follow-up run is presented live from `starting` because it already holds
+ * `runStartedAt` — the declared set stood in there until this repair, withheld tools included); else, with no live
+ * instance, the persona's declared tools stand in (REQ-MONITOR-060).
+ */
+export function runLevelGrant(resolved: readonly string[], declared: readonly string[], live: boolean): string[] {
+  if (resolved.length > 0) return [...resolved];
+  return live ? [] : [...declared];
+}
+
+/**
  * REQ-MONITOR-043/057: the run itself is never a tree row, but the inspector, the Mission view and the persona
  * windows present the entry role as the run-level agent — its rows are the transcript's `agent`/`tool` rows whose
  * name is the entry persona and no child's. Its latest prompt reading is Part AH's `entryContext` (REQ-MONITOR-089) —
  * before that every root-level meter drew zero for a run that spawned no child, whatever the run had actually spent.
- * Its tools are `entryTools` (live-run finding K1, R-067): the set the live run's root port resolved, else the entry
- * persona's declared tools standing in (REQ-MONITOR-060), its called history and, while it runs, its active calls —
+ * Its tools are `entryTools` (live-run finding K1, R-067): the set the live run's root port resolved, else — only with no
+ * live instance — the entry persona's declared tools standing in (REQ-MONITOR-060, `runLevelGrant`), its called history and, while it runs, its active calls —
  * before that it drew "No tools resolved." beside a run that had made fifteen calls.
  */
 export function runLevelAgent(session: SessionRecord | null, entry: { readonly persona: string; readonly model: string; readonly reasoning: string; readonly tools: readonly string[] }, recovery: boolean): AgentRecord | null {
@@ -93,7 +105,7 @@ export function runLevelAgent(session: SessionRecord | null, entry: { readonly p
     spawnedAt: session.runStartedAt, completedAt: busy || resting ? null : session.updatedAt, toolCalls: Math.max(0, session.toolCalls.total - childCalls), delegationTask: '',
     // REQ-MONITOR-086: the run-wide count is the sum of the per-agent counts, which is what the synthetic root shows.
     compressions: session.agents.reduce((n, a) => n + a.compressions, 0),
-    reasoning: entry.reasoning, contextUsed: session.entryContext.used, contextLimit: session.entryContext.limit > 0 ? session.entryContext.limit : DEFAULT_CONTEXT_CAPACITY, grantedTools: session.entryTools.resolved.length > 0 ? [...session.entryTools.resolved] : [...entry.tools], calledTools: [...session.entryTools.called], activeTools: busy ? [...session.entryTools.active] : [], delegationSessionId: null, inheritedContext: '', live: busy,
+    reasoning: entry.reasoning, contextUsed: session.entryContext.used, contextLimit: session.entryContext.limit > 0 ? session.entryContext.limit : DEFAULT_CONTEXT_CAPACITY, grantedTools: runLevelGrant(session.entryTools.resolved, entry.tools, busy), calledTools: [...session.entryTools.called], activeTools: busy ? [...session.entryTools.active] : [], delegationSessionId: null, inheritedContext: '', live: busy,
     // Part S's evidence (REQ-MCP-065/114) is per child; the run-level agent carries none in this build.
     grantedMcp: {}, mcpServers: [],
     // PD-ORCH-005: the interruption belongs to a delegated agent's record; the synthetic run-level agent carries none.
@@ -156,9 +168,15 @@ export function mcpChipStates(server: string, granted: readonly string[], called
 export function mcpFateText(s: { readonly fate: 'connected' | 'dropped'; readonly reason?: string | undefined }): string {
   return s.fate === 'connected' ? 'connected' : `dropped${s.reason ? ` — ${s.reason}` : ''}`;
 }
-/** REQ-MONITOR-049/060: the granted set, else the persona's declared tools stand in. */
-export function resolvedTools(agent: Pick<AgentRecord, 'grantedTools'>, declared: readonly string[]): string[] {
-  return agent.grantedTools.length > 0 ? [...agent.grantedTools] : [...declared];
+/**
+ * REQ-MONITOR-049/060: the granted set, else the persona's declared tools stand in — but never for a LIVE run-level agent
+ * (REQ-MONITOR-061; see `runLevelGrant`), whose empty set means its root port has not resolved yet, not that no grant was
+ * recorded: the persona has a live instance, so REQ-MONITOR-060's stand-in does not apply, and a coordinator's declared set
+ * holds the write, terminal and commit tools its policy withholds.
+ */
+export function resolvedTools(agent: Pick<AgentRecord, 'id' | 'grantedTools' | 'live'>, declared: readonly string[]): string[] {
+  if (agent.grantedTools.length > 0) return [...agent.grantedTools];
+  return agent.id === RUN_AGENT_ID && agent.live ? [] : [...declared];
 }
 
 /**

@@ -6053,6 +6053,101 @@ and `PendingQuestions`):
 **What a ruling decides.** Whether the quit's gap is part of the quit's rest for clause 9, so that REQ-TOOLS-064,
 REQ-TOOLS-058 and REQ-CHAT-094 yield to it there, and whether a held request should announce a `timeout_seconds` it will
 not be held to. A ruling that REQ-TOOLS-064 governs the gap would restore the denial the defect note records.
+**OQ-133 — Which status does a background session take when its process dies of a signal?** *(REQ-TOOLS-109,
+REQ-TOOLS-110, REQ-TOOLS-112, REQ-TOOLS-128, REQ-TOOLS-179; OQ-10 as ruled in [R-044](../product/requests.md#r-044).
+Raised 2026-09-29 by the repair of live-run finding L4 under [R-067](../product/requests.md#r-067),
+[`a-background-session-ended-by-a-signal-reads-failed.md`](../defects/fixed/a-background-session-ended-by-a-signal-reads-failed.md).
+Open; numbered OQ-132 on its branch, renumbered at the merge, OQ-132 having been taken on `main`.)*
+
+REQ-TOOLS-109's vocabulary is `completed` (exit 0), `failed` (nonzero), `killed` (the explicit kill, −1) and `timeout`
+(124). REQ-TOOLS-179 keeps −1 for `killed` alone on a background session. A process that dies of a signal has no exit
+code at all, so it is neither a zero nor a nonzero exit, and no requirement names its status. `send_signal`
+(REQ-TOOLS-110) and the stream-control interrupt (REQ-TOOLS-128) are the two ways the agent or the user ends a
+session by a signal. REQ-TOOLS-112 reads `killed` as "the agent or the user ended it deliberately". Before this entry
+every signal death read `failed (exit -1)`: an error, a `tool_error` issue, and a −1 that REQ-TOOLS-179 does not give
+`failed` (live run of 2026-09-29, `frictions`, after the agent's own SIGINT).
+
+**What the build proceeds under** (`endOfExit` in `packages/agent-tools/src/terminal/background.ts`):
+- **A death by a signal the product delivered is `killed`, exit −1**, at REQ-TOOLS-112's `warning`, so it files no
+  `tool_error`. "Delivered" means that `send_signal` or the stream-control interrupt sent that signal to the session's
+  process group. The session remembers each signal it sent.
+- **A death by a signal the product never sent is `failed`**, with the shell's `128 + n` for signal `n` (143 for
+  SIGTERM, 139 for SIGSEGV) as its nonzero exit code. A crash, or another process's kill, is not a deliberate end by
+  the agent or the user, and −1 stays `killed`'s alone.
+- **An exit code always wins.** A command that handles the signal and exits with a code of its own is `completed` or
+  `failed` by that code, as REQ-TOOLS-109 states for any exit. The code is the command's real outcome (REQ-TOOLS-179).
+- **Windows is unchanged.** OQ-10's ruling already maps every signal there to the session's own termination, which is
+  `killed`.
+
+**What a ruling decides.** Whether a signal death the agent or the user caused is `killed`, and whether `128 + n` is
+the exit code of a signal death the product did not cause. A ruling that every signal death is `killed` would drop
+the second reading. A ruling that every one is `failed` would need a code other than −1 for it.
+
+**OQ-134 — Which shell state does a hard-timeout reset restore when a command completed that the product never saw
+complete?** *(`PD-TOOLS-001`, which narrows REQ-TOOLS-099; REQ-TOOLS-097, REQ-TOOLS-098. Raised 2026-09-29 by the
+repair of [`a-hard-timeout-reset-can-lose-the-restored-variable-under-load.md`](../defects/fixed/a-hard-timeout-reset-can-lose-the-restored-variable-under-load.md)
+under [R-067](../product/requests.md#r-067). Open; numbered OQ-133 on its branch, renumbered at the merge, OQ-132 having been taken on `main`.)*
+
+`PD-TOOLS-001` says the product "SHALL snapshot the shell's working directory and exported variables before the
+respawn". The respawn follows a wedged command, and a wedged shell cannot be asked for its state. So the build takes
+the snapshot on the idle shell after each command it sees complete, and a reset re-applies the last one
+([ADR-0020](adr/0020-terminal-execution.md)'s third first execution). The directive does not say what that snapshot
+misses. It misses a command that soft-paused (REQ-TOOLS-098) and then finished while the agent's next command waited
+behind it in the shell's input. The product never sees that completion: the next call's marker is the one it scans
+for, and a poll that later hands over a finished paused command takes no snapshot either. If that next command then
+reaches its hard timeout, the reset restores the state from before the paused command and reports "were restored".
+What the paused command set or changed — an exported variable, `cd` — is lost, although it happened before the
+respawn.
+
+This is the whole of what the repaired note measured. In `terminal.test.ts` the timeout case's first command,
+`export ROTARIS_GONE='set'`, named no timeout and queued behind a command the case before it had left soft-paused.
+It waited about 1.45 s against the 1.5 s no-output window. Over 20 loaded runs of the file the whole call, its
+snapshot included, took 1,486 to 1,707 ms. Under load it soft-paused, and the reset then restored the snapshot of an
+older command.
+
+**What the build proceeds under:** the snapshot of the last command the product saw complete, as ADR-0020 records.
+The case `PD-TOOLS-001 (OQ-134): …` in `terminal.test.ts` pins that reading. Its paused command writes the variable's
+value to a file, and the case waits for that file before the reset, so the variable was set before the respawn; the
+read after it gives `[]`. The case is red under a temporary change that snapshots a finished paused command before the
+next command runs. (Its first form reset the shell before the paused command had run, which pinned only
+REQ-TOOLS-097's loss of a command that never ran; corrected in the branch's verification round.) The timeout case
+now names its own timeout, so it no longer depends on this reading.
+
+**What a ruling decides.** Whether "before the respawn" asks for the state after such a command too. Meeting it
+would take the shell's state from inside the command's own wrapper, since the shell is never idle in between. The
+cost is an environment dump in the output of every command written behind a still-running one: through the capture,
+and through the live stream REQ-TOOLS-127 holds faithful to what the command wrote. A lighter half-measure is a
+snapshot when a poll hands over a finished paused command, which covers the agent that polls and not the one that
+moves on.
+
+**OQ-135 — Does `send_signal SIGINT` owe the session's stop when the shell discards the signal?** *(REQ-TOOLS-110,
+REQ-TOOLS-128; OQ-10 as ruled in [R-044](../product/requests.md#r-044). Raised 2026-09-29 under
+[R-067](../product/requests.md#r-067) by the verification of the repair of
+[`a-signal-sent-just-after-a-background-start-can-be-lost-under-load.md`](../defects/fixed/a-signal-sent-just-after-a-background-start-can-be-lost-under-load.md),
+for the exposure recorded open in
+[`a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md`](../defects/a-sigint-that-reaches-a-command-as-sh-starts-it-does-not-stop-the-session.md).
+Open; numbered OQ-134 on its branch, renumbered at the merge, OQ-132 having been taken on `main`.)*
+
+REQ-TOOLS-110 says `send_signal` *sends* the signal. The product sends it to every process of the session's group and
+reports it sent. R-044's ruling reads "SIGINT stops a background session". Where `/bin/sh` is `dash`, a SIGINT that
+lands on a command between `dash`'s `vfork` and the command's `exec` is discarded by that command. The shell holds its
+own copy until the command ends, so the session stops only then, and for a server never. The requirement does not say
+whether the product answers for that shell behaviour. Each repair changes something no requirement states:
+- **Re-deliver.** Check shortly after the signal that the group has ended, and send it again if it has not. A command
+  that handles SIGINT — a server shutting down gracefully — then receives two, and many programs read a second
+  interrupt as "quit now".
+- **`exec` a lone command.** Launch a command that is one simple command as `exec <command>`, so `dash` does not fork.
+  This takes the window away for that command only, and it changes which process leads the group and what the shell
+  reports.
+- **Another shell.** REQ-TOOLS-104 sends POSIX hosts to a POSIX shell, and `findShell` names `/bin/sh`. Choosing `bash`
+  where it exists would change what every background command runs under.
+
+**What the build proceeds under:** delivery once, as REQ-TOOLS-110 states, with the session reporting what its
+process does. A second `send_signal SIGINT` or interrupt stops a session the first one did not. The exposure is
+recorded open in the note above, not repaired.
+
+**What a ruling decides.** Whether R-044's "stops" binds the product past delivery, and if so, which of the three
+repairs is acceptable, or whether the window is accepted as the shell's.
 
 ## Design-reference dependencies
 

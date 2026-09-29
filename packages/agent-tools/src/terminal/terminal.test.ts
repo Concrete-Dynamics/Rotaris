@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock, type Clocks } from '@rotaris/kernel';
@@ -7,6 +7,7 @@ import { foregroundStreamId } from '@rotaris/contracts';
 import { nodeClocks } from '@rotaris/platform';
 import { classifyOutcome, diagnosticBlock, outputWarnings, stripVt } from './classify.js';
 import { parseSnapshot, snapshotCommand, wrapCommand } from './foreground.js';
+import { endOfExit } from './background.js';
 import { execFileSync } from 'node:child_process';
 import { findShell, nodePtyFactory, TerminalManager, terminalTool, TERMINAL_DEFAULTS, type BackgroundSession } from './index.js';
 import type { ToolContext } from '../tools/types.js';
@@ -47,6 +48,8 @@ const SH = {
   echoVar: (name: string) => (PS ? `Write-Output $env:${name}` : `printf '%s\\n' "$${name}"`),
   /** The variable's value in brackets, so an empty one is still visible. */
   bracketVar: (name: string) => (PS ? `Write-Output "[$env:${name}]"` : `printf '[%s]\\n' "$${name}"`),
+  /** The variable's value written to a file, so a case can see it from outside the terminal. */
+  writeVar: (name: string, path: string) => (PS ? `Set-Content -NoNewline -Path '${path}' -Value $env:${name}` : `printf '%s' "$${name}" > '${path}'`),
 };
 const clocks: Clocks = nodeClocks();
 const root = mkdtempSync(join(tmpdir(), 'rotaris-term-'));
@@ -139,6 +142,20 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
     expect(wrapCommand({ kind: 'posix', file: '/bin/sh' }, 'a\nb', 'S', 'E')).toBe("printf '%s\\n' 'S'; eval \"$(printf '%b' 'a\\nb')\"; printf 'E:%s\\n' \"$?\"");
     expect(wrapCommand({ kind: 'posix', file: '/bin/sh' }, "x='q'\ny", 'S', 'E')).toContain(`'x='\\''q'\\''\\ny'`);
   });
+  it('OQ-133: a signal death\'s status — killed (−1) for a signal the session delivered, failed (128 + n) for one it did not, an exit code as ever (REQ-TOOLS-109/179, live-run L4)', () => {
+    const none = new Set<string>();
+    expect(endOfExit(0, null, none)).toEqual({ status: 'completed', exitCode: 0 });
+    expect(endOfExit(3, null, none)).toEqual({ status: 'failed', exitCode: 3 });
+    // An exit code wins even after a signal was sent: a command that handles SIGINT and exits reports its own outcome.
+    expect(endOfExit(130, null, new Set(['SIGINT']))).toEqual({ status: 'failed', exitCode: 130 });
+    expect(endOfExit(0, null, new Set(['SIGINT']))).toEqual({ status: 'completed', exitCode: 0 });
+    // The live run's shape: the agent's own SIGINT, and the shell died of it. It read `failed (exit -1)`.
+    expect(endOfExit(null, 'SIGINT', new Set(['SIGINT']))).toEqual({ status: 'killed', exitCode: -1 });
+    expect(endOfExit(null, 'SIGKILL', new Set(['SIGTERM', 'SIGKILL']))).toEqual({ status: 'killed', exitCode: -1 });
+    // A signal nobody here sent — a crash, another process's kill — is a failure, and −1 stays `killed`'s alone.
+    expect(endOfExit(null, 'SIGTERM', none)).toEqual({ status: 'failed', exitCode: 143 });
+    expect(endOfExit(null, 'SIGSEGV', new Set(['SIGINT']))).toEqual({ status: 'failed', exitCode: 139 });
+  });
 });
 
 describe.skipIf(process.platform === 'win32')('PD-TOOLS-001: the POSIX shell-state capture survives a screen that wraps', () => {
@@ -212,7 +229,13 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
 
   it('REQ-TOOLS-097/099: the hard timeout kills the tree, restarts the session, reports 124 and session_reset; shell state is gone', async () => {
     const t = await tool();
-    await t.execute(args({ command: SH.setVar('ROTARIS_GONE', 'set') }), ctx());
+    // The variable is set by a call that names its own timeout, so it cannot soft-pause (REQ-TOOLS-098). The case
+    // before this one leaves `sleep 3` running soft-paused in this shared session, and a call that named none queued
+    // behind it for ~1.45 s against the 1.5 s no-output window. Under load it paused, the product never saw it
+    // complete, and the reset restored an older snapshot without the variable: the `[]` of
+    // docs/defects/fixed/a-hard-timeout-reset-can-lose-the-restored-variable-under-load.md (OQ-134, pinned below).
+    const set = await t.execute(args({ command: SH.setVar('ROTARIS_GONE', 'set'), timeout: 15 }), ctx());
+    expect(diag(set.text)).toMatchObject({ exit_code: 0, outcome_kind: 'success' });
     const r = await t.execute(args({ command: `${SH.sleep(20)}; ${SH.echo('late')}`, timeout: 1 }), ctx());
     expect(diag(r.text)).toMatchObject({ exit_code: 124, timeout: true, failure_kind: 'timeout', kill_status: 'session_reset', outcome_kind: 'timeout' });
     expect(r.text).toContain('[partial_terminal_output]');
@@ -226,6 +249,43 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     expect(output(after.text)).toBe('[set]');
     expect(diag(after.text)['session_reinitialized']).toBe(true);
   }, 30_000);
+  it('PD-TOOLS-001 (OQ-134): a reset restores the snapshot of the last command the product saw complete, so a soft-paused command that completed unseen is not in it', async () => {
+    // A session of its own, so no other case's snapshot or paused command stands in it.
+    const m = new TerminalManager({ factory: await nodePtyFactory(), backend: shell!, clocks, config: { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 }, env: Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')), warn: () => undefined });
+    const t = terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 1_500 });
+    // The variable's command also writes the variable's value to this file, so the case can see, from outside the
+    // terminal, that the shell ran it and held the variable — before the reset, which is what OQ-134 is about.
+    const marker = join(root, 'oq133-unseen.txt');
+    rmSync(marker, { force: true });
+    try {
+      await t.execute(args({ command: SH.echo('ready'), timeout: 15 }), ctx());
+      // A quiet command soft-pauses at ~1.5 s and keeps running; the next call queues behind it in the shell's input.
+      expect(diag((await t.execute(args({ command: SH.sleep(8) }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      // Named no timeout, the variable's call meets 1.5 s more of silence and soft-pauses at ~3 s, long before the
+      // `sleep 8` ends: the command has not run yet, so the file is absent, and its completion will never be seen.
+      const unseen = await t.execute(args({ command: `${SH.setVar('ROTARIS_UNSEEN', 'set')}; ${SH.writeVar('ROTARIS_UNSEEN', marker)}` }), ctx());
+      expect(diag(unseen.text)['outcome_kind']).toBe('soft_pause');
+      expect(existsSync(marker)).toBe(false);
+      // The `sleep 8` ends and the queued command runs, unseen. Wait for its file rather than for a time.
+      const ranBy = (clocks.monotonic.now() as number) + 20_000;
+      while (!existsSync(marker) || readFileSync(marker, 'utf8').trim() === '') {
+        expect(clocks.monotonic.now() as number).toBeLessThan(ranBy);
+        await new Promise((res) => setTimeout(res, 50));
+      }
+      // The shell held the variable before the respawn.
+      expect(readFileSync(marker, 'utf8').trim()).toBe('set');
+      const r = await t.execute(args({ command: `${SH.sleep(20)}; ${SH.echo('late')}`, timeout: 1 }), ctx());
+      expect(diag(r.text)).toMatchObject({ exit_code: 124, kill_status: 'session_reset' });
+      expect(r.text).toContain('were restored');
+      // What was restored is the `ready` call's snapshot, the last the product saw complete, which never held it.
+      expect(output((await t.execute(args({ command: SH.bracketVar('ROTARIS_UNSEEN'), timeout: 15 }), ctx())).text)).toBe('[]');
+      // The same sequence with a call that names its timeout does not pause, is seen to complete, and is restored.
+      expect(diag((await t.execute(args({ command: SH.sleep(5) }), ctx())).text)['outcome_kind']).toBe('soft_pause');
+      expect(diag((await t.execute(args({ command: SH.setVar('ROTARIS_SEEN', 'set'), timeout: 15 }), ctx())).text)['outcome_kind']).toBe('success');
+      expect((await t.execute(args({ command: `${SH.sleep(20)}; ${SH.echo('late')}`, timeout: 1 }), ctx())).text).toContain('were restored');
+      expect(output((await t.execute(args({ command: SH.bracketVar('ROTARIS_SEEN'), timeout: 15 }), ctx())).text)).toBe('[set]');
+    } finally { await m.dispose(); rmSync(marker, { force: true }); }
+  }, 60_000);
 
   /**
    * ADR-0020's second first execution, 2026-09-12: four defects a real 22-minute run found. Each proof
@@ -403,11 +463,16 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     // replaces the shell, so the group's one process is `sleep` with SIGINT at its default disposition
     // and no shell left to absorb the signal; on Windows there is no exec idiom and none is needed, as
     // OQ-10's win32 mapping terminates the tree (`end`) rather than delivering a signal. Signalling only
-    // AFTER the marker is observed is what makes the case deterministic: sending SIGINT to a session that
-    // has not finished fork/exec/setsid races the group's establishment, and such a signal can land on a
-    // process still in the shell's brief SIGINT-masked window and be lost — measured ~11 % under full-suite
-    // load with no wait, and 0 in 500 once the marker gates it. This is a property of signalling a freshly
-    // spawned tree, not of the product's delivery, which reports the signal sent in every one of those runs.
+    // AFTER the marker is observed is what makes the case deterministic. `/bin/sh` here is `dash`, which catches
+    // SIGINT under `-c` and launches a command with `vfork`; until the child `exec`s it runs dash's handler, which
+    // returns at once in a vforked child, so a SIGINT that reaches the group in that instant is discarded by the
+    // command, and the shell acts on its own copy only when the command ends — `sleep 30` outlived the poll.
+    // Sent the instant `start` returned, 38 of 200 such sessions survived under load (0 of 150 under `bash`, 0 of
+    // 150 with `exec`); gated on the marker, with `exec`, none does. The product's delivery reaches every process of
+    // the group and reports it sent in every one of those runs
+    // (docs/defects/fixed/a-signal-sent-just-after-a-background-start-can-be-lost-under-load.md); what the window still
+    // costs the product, outside this case, is recorded open (docs/defects/a-sigint-that-reaches-a-command-as-sh-starts-
+    // it-does-not-stop-the-session.md, OQ-135).
     const command = PS ? `Write-Output 'up'; ${SH.sleep(30)}` : `printf 'up\\n'; exec sleep 30`;
     const started = await t.execute(args({ command, background: true }), ctx());
     const id = /ts_[0-9a-f]{8}/.exec(started.text)![0];
@@ -430,6 +495,41 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     }
     expect((await t.execute(args({ session_action: 'list' }), ctx())).text).toContain(`✗ ${id}`);
   }, 40_000);
+  it('REQ-TOOLS-109/179, OQ-133 (live-run L4): a session the agent ends with send_signal SIGINT reads killed (−1) at warning, not an error', async () => {
+    const t = await tool();
+    // As in the OQ-10 case above: the command becomes the long-lived process, and the signal waits for its marker.
+    const command = PS ? `Write-Output 'up'; ${SH.sleep(30)}` : `printf 'up\\n'; exec sleep 30`;
+    const id = /ts_[0-9a-f]{8}/.exec((await t.execute(args({ command, background: true }), ctx())).text)![0];
+    const runningBy = (clocks.monotonic.now() as number) + 15_000;
+    while (!(output((await t.execute(args({ session_id: id, session_action: 'query' }), ctx())).text) ?? '').includes('up')) {
+      expect(clocks.monotonic.now() as number).toBeLessThan(runningBy);
+      await new Promise((res) => setTimeout(res, 25));
+    }
+    expect((await t.execute(args({ session_id: id, session_action: 'send_signal', signal: 'SIGINT' }), ctx())).text).toContain(`Sent SIGINT to session ${id}.`);
+    const endedBy = (clocks.monotonic.now() as number) + 15_000;
+    while (!(await t.execute(args({ session_action: 'list' }), ctx())).text.includes(`✗ ${id}`)) {
+      expect(clocks.monotonic.now() as number).toBeLessThan(endedBy);
+      await new Promise((res) => setTimeout(res, 50));
+    }
+    // The live run read `Session ts_… is failed (exit -1).` here: an error, and a `tool_error` issue the gate files
+    // for any observation that is one. `killed` is REQ-TOOLS-112's `warning`: the agent ended it deliberately.
+    const q = await t.execute(args({ session_id: id, session_action: 'query' }), ctx());
+    expect(q.text).toContain(`Session ${id} is killed (exit -1).`);
+    expect(diag(q.text)).toMatchObject({ session_status: 'killed', exit_code: -1, outcome_kind: 'background_terminal', outcome_severity: 'warning' });
+    expect(q.isError).toBe(false);
+  }, 40_000);
+  it.skipIf(PS)('OQ-133: a signal death the product did not send reads failed with 128 + n, never the −1 of killed', async () => {
+    const t = await tool();
+    // The shell ends itself by SIGTERM: a death by a signal no `send_signal` delivered.
+    const id = /ts_[0-9a-f]{8}/.exec((await t.execute(args({ command: 'kill -TERM $$', background: true }), ctx())).text)![0];
+    const endedBy = (clocks.monotonic.now() as number) + 15_000;
+    while (!(await t.execute(args({ session_action: 'list' }), ctx())).text.includes(`✗ ${id}`)) {
+      expect(clocks.monotonic.now() as number).toBeLessThan(endedBy);
+      await new Promise((res) => setTimeout(res, 50));
+    }
+    const q = await t.execute(args({ session_id: id, session_action: 'query' }), ctx());
+    expect(diag(q.text)).toMatchObject({ session_status: 'failed', exit_code: 143, outcome_kind: 'background_terminal', outcome_severity: 'error' });
+  }, 30_000);
   it('PD-ORCH-005 clause 10: a background session is attributed to the agent that started it, recorded at its start and at an end it reaches by itself, and listed by its session', async () => {
     const recorded: { id: string; status: string; tail: string }[] = [];
     const record = (b: BackgroundSession) => { recorded.push({ id: b.id, status: b.status, tail: b.tail() }); };

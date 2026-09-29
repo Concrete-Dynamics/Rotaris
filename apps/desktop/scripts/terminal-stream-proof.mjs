@@ -4,8 +4,11 @@
  * Runs the three suites that hold the mechanism — the streams registry behind the real terminal tool, main's
  * delivery limiter, the relay's subscription accessor — with ROTARIS_TERMINAL_PROOF_DIR set so the real halves write
  * their measurements, then asserts over those measurements:
- *   1. a command printing 10,000 lines yields frames whose `seq` is gapless and whose concatenated deltas equal the PTY
- *      output; the closing frame carries the observation's final text (REQ-TOOLS-127, REQ-SHELL-104);
+ *   1. a command printing 10,000 lines yields frames whose `seq` is gapless and whose concatenated deltas equal what
+ *      the session's tap carries — the span between the printed start marker and the end frame — and hold no
+ *      `__rot_` marker; the closing frame carries the observation's final text (REQ-TOOLS-127, REQ-SHELL-104).
+ *      Until 2026-09-29 the equality read "equal the PTY output", and the tap carried every PTY byte: the wrapper's
+ *      echo, both markers, the prompt and the environment snapshot (live-run L9, ADR-0021's report-back);
  *   2. a `bg:` session gets its own stream with its own gapless counter (REQ-TOOLS-107/127);
  *   3. with the interval at 2,000 ms a keystroke arms a flush — the echo is framed in well under the ceiling
  *      (ADR-0021 Decision; OQ-38's reading), and no closer than the 20 ms floor;
@@ -39,7 +42,7 @@ let m = {};
 try { m = JSON.parse(readFileSync(join(output, 'measurements.json'), 'utf8')); } catch { m = {}; }
 const results = {
   testsPassed: test.status === 0,
-  tenThousandLinesGapless: m.tenThousandLines?.gapless === true && m.tenThousandLines?.deltasEqualPty === true,
+  tenThousandLinesGapless: m.tenThousandLines?.gapless === true && m.tenThousandLines?.deltasEqualTap === true,
   closingFrameIsObservation: m.tenThousandLines?.closingEqualsObservation === true,
   // Live-run L9 (REQ-TOOLS-127): the live stream carries what the command wrote — no wrapper echo, no marker.
   deltasCarryOnlyTheCommand: m.tenThousandLines?.deltasCarryNoMarker === true,

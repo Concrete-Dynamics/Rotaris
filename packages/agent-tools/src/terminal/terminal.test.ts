@@ -467,7 +467,7 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     expect(diag(poll.text)).toMatchObject({ exit_code: -1, outcome_kind: 'soft_pause' });
     expect(output(poll.text)).toBe('(no output)');
     expect(poll.text).not.toContain('No output for 1.5 seconds');
-    const since = /No new output in the (under 0\.1|\d+\.\d) seconds since the previous observation, and none for (\d+\.\d) seconds in the merged terminal stream; stdout and stderr are both captured\./.exec(poll.text);
+    const since = /No new output in (under 0\.1|\d+\.\d) seconds since the previous observation, and none for (\d+\.\d) seconds in the merged terminal stream; stdout and stderr are both captured\./.exec(poll.text);
     expect(since, poll.text).not.toBeNull();
     // What it states it waited is no more than the call took (plus the stated precision), and the silence is at least the window.
     if (since![1] !== 'under 0.1') expect(Number(since![1]) * 1000).toBeLessThanOrEqual(took + 100);

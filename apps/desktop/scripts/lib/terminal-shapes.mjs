@@ -21,7 +21,7 @@ const PAD = 'x'.repeat(100);
 export const LONG_OUTPUT_LINES = 40;
 
 /**
- * The shapes, in the dialect of one platform: six on Windows, seven elsewhere.
+ * The shapes, in the dialect of one platform: seven on Windows, eight elsewhere.
  *
  * `match` is a pattern rather than a substring because the question is whether the SHAPE was issued, not
  * whether the model reproduced this file's whitespace. Too strict and a call that happened reads as a call that

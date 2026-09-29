@@ -329,6 +329,7 @@ describe.skipIf(!shell || !proofDir)('the live stream behind a real PTY (ADR-002
     const tool = terminalTool(m, { ...TERMINAL_DEFAULTS, noOutputWindowMs: 10_000 });
     const c = ctx();
     const frames: TerminalFrame[] = [];
+    // What the session's tap carries (`CommandRegion`'s span since live-run L9), not every byte the PTY produced.
     let raw = '';
     let stop = false;
     m.streams.onFrame((f) => { frames.push(f); if (f.kind === 'screen' && f.closing) stop = true; });
@@ -361,7 +362,7 @@ describe.skipIf(!shell || !proofDir)('the live stream behind a real PTY (ADR-002
     expect(own.at(-1)).toMatchObject({ kind: 'meta', meta: { running: false, exitCode: 0 } });
     expect(own.indexOf(closing!)).toBe(own.length - 2);
     // The ceiling: at the 100 ms default no two deltas of one stream are closer than the floor.
-    measurements['tenThousandLines'] = { frames: own.length, deltas: deltas.length, bytes: raw.length, elapsedMs: Math.round(elapsed), gapless: gapless(own), deltasEqualPty: deltas.map((f) => f.payload).join('') === raw, deltasCarryNoMarker: !written.includes('__rot_'), closingEqualsObservation: closing?.payload === text };
+    measurements['tenThousandLines'] = { frames: own.length, deltas: deltas.length, bytes: raw.length, elapsedMs: Math.round(elapsed), gapless: gapless(own), deltasEqualTap: deltas.map((f) => f.payload).join('') === raw, deltasCarryNoMarker: !written.includes('__rot_'), closingEqualsObservation: closing?.payload === text };
   });
 
   it('a background session publishes on its own `bg:<id>` stream with its own counter, and the foreground keeps its own', async () => {

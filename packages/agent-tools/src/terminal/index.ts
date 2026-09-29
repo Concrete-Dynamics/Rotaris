@@ -96,8 +96,13 @@ export class TerminalManager {
 
   /**
    * Part AL: a foreground command begins on the agent's stream (`fg:<agent>`, REQ-TOOLS-127). The tap feeds the
-   * registry every byte the PTY produces ahead of the capture; the registry does nothing at all when streaming is
-   * off (REQ-TOOLS-126). Returns false when no stream was opened.
+   * registry what the command wrote, ahead of the capture: the session's `CommandRegion` span, from after the printed
+   * start marker to before the end frame, and nothing between calls. The registry does nothing at all when streaming
+   * is off (REQ-TOOLS-126). Returns false when no stream was opened.
+   *
+   * Falsified reading, kept beside its replacement (live-run L9, 2026-09-29): "the tap feeds the registry every byte
+   * the PTY produces". Every byte included the shell's echo of the wrapper with both markers, the prompt, and the
+   * PD-TOOLS-001 environment snapshot after each command, so the preview showed them above and below the output.
    */
   beginForeground(key: string, session: ForegroundSession, spec: { sessionId: string; agentId: string; persona: string; command: string; workspaceRoot: string }): boolean {
     const streamId = foregroundStreamId(spec.agentId);
@@ -371,7 +376,7 @@ export function terminalTool(manager: TerminalManager, config: TerminalConfig, c
         detail = r.output !== ''
           ? 'The command is still running; this is the output so far. Poll again with an empty command.'
           : r.waited
-            ? `No new output in the ${seconds(r.waited.sinceObservedMs)} since the previous observation, and none for ${seconds(r.waited.silentMs)} in the merged terminal stream; stdout and stderr are both captured. A poll returns at once rather than waiting for output. The process may still be running. Poll by calling the tool again with an empty command, or interrupt by sending C-c with is_input=true.`
+            ? `No new output in ${seconds(r.waited.sinceObservedMs)} since the previous observation, and none for ${seconds(r.waited.silentMs)} in the merged terminal stream; stdout and stderr are both captured. A poll returns at once rather than waiting for output. The process may still be running. Poll by calling the tool again with an empty command, or interrupt by sending C-c with is_input=true.`
             : `No output for ${(config.noOutputWindowMs ?? 30_000) / 1000} seconds in the merged terminal stream; stdout and stderr are both captured. The process may still be running. Poll by calling the tool again with an empty command, or interrupt by sending C-c with is_input=true.`;
       } else if (r.error) {
         detail = `Terminal execution failed before completion: ${r.error}`;

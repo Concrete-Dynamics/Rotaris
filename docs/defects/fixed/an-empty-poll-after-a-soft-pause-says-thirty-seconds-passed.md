@@ -33,8 +33,10 @@ A poll of a command still running now carries what it measured on the monotonic 
 observation of the command — its soft pause, then each poll — and the time since the command last wrote anything.
 An empty poll's detail (`packages/agent-tools/src/terminal/index.ts`) states both, and that a poll returns at once
 rather than waiting for output, with REQ-TOOLS-098's capture semantics and poll-or-interrupt advice as before:
-"No new output in the 5.3 seconds since the previous observation, and none for 35.3 seconds in the merged terminal
-stream; …". The soft pause itself still states the window it waited out. How long a poll should wait is stated
+"No new output in 5.3 seconds since the previous observation, and none for 35.3 seconds in the merged terminal
+stream; …". (As first built it read "in the 5.3 seconds", which below a tenth of a second became "in the under 0.1
+seconds"; the article was dropped at the verifier's first round, and the real-shell case's pattern pins the form.) The
+soft pause itself still states the window it waited out. How long a poll should wait is stated
 nowhere, and is raised as [OQ-136](../../architecture/open-questions.md) with this reading built.
 
 **Pinned by** `terminal.test.ts`: "REQ-TOOLS-098 (live-run L2): an empty poll states the time it actually waited, not

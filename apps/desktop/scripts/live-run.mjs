@@ -1768,7 +1768,7 @@ if (wanted.includes('terminal')) {
   if (poll === undefined) noted('no poll followed the wedge', 'no empty-command call after it; what a poll states is unasked');
   else {
     const d = diagnosticOf(poll.result);
-    const since = /No new output in the (under 0\.1|\d+\.\d) seconds since the previous observation/.exec(poll.result);
+    const since = /No new output in (under 0\.1|\d+\.\d) seconds since the previous observation/.exec(poll.result);
     const gapMs = poll.endedAt !== null && wedge.endedAt !== null ? poll.endedAt - wedge.endedAt : null;
     if (d?.outcome_kind !== 'soft_pause' || (outputOf(poll.result) ?? '').trim() !== '(no output)') noted('the poll did not find the wedge silent', `outcome ${d?.outcome_kind ?? 'none'}; what an empty poll states is unasked`);
     else {

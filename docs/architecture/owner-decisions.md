@@ -1588,7 +1588,7 @@ within live requirements, so nothing is amended. `first-release-plan.md` §4.6 s
 
 ### ESC-42 — the money rule against the property it is said to guarantee: REQ-SHELL-045's "never rendered as zero" under REQ-PROVIDER-121's four places
 
-**Raised 2026-09-28, not yet ruled.** Found while moving `money.ts` into `kernel` for R-049 and recorded as the
+**Raised 2026-09-28. RULED 2026-09-29 ([R-067](../product/requests.md#r-067)): option (b), the floor.** Found while moving `money.ts` into `kernel` for R-049 and recorded as the
 open defect note
 [`a-cost-below-five-hundred-thousandths-renders-as-zero.md`](../defects/a-cost-below-five-hundred-thousandths-renders-as-zero.md);
 raised here under [R-062](../product/requests.md#r-062). Two live requirements state the product's one money
@@ -1674,3 +1674,60 @@ is one round in the shape `specification-gate.md` records: each amended requirem
 mark, the owning domain's resolution record carries the note, `pnpm symbols` checks the identifiers, and the
 built reading reports its first execution into this entry and `first-executions.md`. Until it is ruled the
 defect note stays open in `docs/defects/`.
+
+**RULED 2026-09-29 ([R-067](../product/requests.md#r-067)): option (b), as the escalation recommends.** The owner accepted the
+recommendation with seven others ("Accept all eight (Recommended)").
+
+- **The floor.** An amount that is not a balance, is greater than zero, and that REQ-PROVIDER-121's rounding — half-up,
+  two decimal places, four when the magnitude is below $0.01 — would render as zero renders as `< 0.0001`. The symbol
+  stands where the rule already puts it: `< $0.0001`, `< €0.0001`, `< £0.0001`; any other named currency `< 0.0001 <CODE>`;
+  and an amount whose currency the provider does not name (`PD-MONITOR-001`'s narrowing) bare, `< 0.0001`. Zero itself
+  still renders `0.00`, so nothing and a small something stay distinguishable at every surface.
+- **What option (b) left open, read so that every existing label table stays true.** Option (b) fixes the floor's text
+  and its symbol placement; it leaves four details to the ruling, each taken as follows.
+  - *A balance is outside the floor*, as option (b) states it ("an amount that is not a balance"). A balance keeps
+    REQ-PROVIDER-121's rounding down, so a balance below 0.0001 reads `0.0000`. The credit tile's renderings
+    (REQ-PROVIDER-120) are unchanged.
+  - *An amount below zero is outside it.* The ruling's words are "greater than zero"; a negative amount is rounded as
+    before.
+  - *The `incomplete` label keeps its template.* Option (b) had that cell read `at least < 0.0001` and asked the ruling
+    for a wording. The reading that keeps `PD-MONITOR-001`'s label table true is the table as written: `<amount>` takes
+    the rendered figure, the floor included, so the label reads `at least < 0.0001; some requests have no price`. That is
+    true — the priced part is greater than zero and below 0.0001, and the total is at least the priced part — and it
+    changes no cell, so `REQ-MONITOR-166`'s qualifiers and the directive's four rows stand as written. `PD-MONITOR-001`
+    revision 3 carries the floor into the one sentence that restated the rounding, and nothing else.
+  - *The floor is rendering only.* The exact figure is what is persisted, summed and exported; the floor is applied by
+    `formatAmount` and nowhere else, which `rotaris/money-only-in-money-ts` keeps true.
+- **The amendment round.** `REQ-PROVIDER-121` gains the floor sentence, and domain 04's rendering-formats line with it;
+  `REQ-SHELL-045`'s property stays and now cites the floor that delivers it; domain 12's resolution item 22 is corrected
+  in place, its stated reason kept beside the correction. Each amended requirement carries the inline mark "accepted
+  amendment 2026-09-29, ESC-42", and the resolution records of domains 04 and 12 carry the note. `PD-MONITOR-001` takes
+  revision 3, with its back-pointer at `REQ-PROVIDER-121` amended in place.
+- **What the ruling does not do.** It builds nothing. `formatAmount` renders `0.0000` for such an amount until the
+  repair of [`a-cost-below-five-hundred-thousandths-renders-as-zero.md`](../defects/a-cost-below-five-hundred-thousandths-renders-as-zero.md),
+  whose first execution reports into this entry, into `PD-MONITOR-001` and into `first-executions.md`.
+
+## Rulings after the gate — 2026-09-29
+
+*Ruled together under [R-067](../product/requests.md#r-067). The owner was asked to rule eight open decisions as
+recommended and chose "Accept all eight (Recommended)". ESC-42 is ruled above, in its own entry. The other seven are
+recorded where each was raised, and are listed here so that one place names all eight.*
+
+- **The status a graceful stop persists — `paused`, as built.** `PD-ORCH-005` revision 5 (clause 21) names
+  `REQ-SESSION-186` among what it narrows, with `REQ-SESSION-073`, whose vocabulary glosses `stopped` with the user's
+  stop; recorded under OQ-96 in `open-questions.md`.
+- **A cancel in flight when the host died — clause 3 governs.** The explicit cancel is made durable when it is accepted,
+  and the next repair or continue ends its agents `cancelled`; recorded under OQ-103.
+- **REQ-LIBRARY-092's fallback — only for a record with no task id.** Raised and ruled as OQ-113, answered by amending
+  `REQ-LIBRARY-092`.
+- **`delegate`'s `session_id` — the caller's own settled child, resumed from its record.** OQ-66's open part, ruled by
+  `PD-ORCH-005` revision 5 (clause 22) and `PD-TOOLS-006` revision 3.
+- **The two retry layers — as the specification states them.** Raised and ruled as OQ-110; the 2026-09-22 row of
+  `first-executions.md` is corrected in place.
+- **What the child-report summariser reads — the start and the most recent part, and the report's deterministic
+  facts.** Raised and ruled as OQ-111.
+- **A `write_scope` for a persona with no file-writing tool — refused.** Raised and ruled as OQ-112, by `PD-TOOLS-006`
+  revision 3.
+
+**What these rulings do not do.** They build nothing. Each ruling's repair is owed to the defect note it settles or
+names, and reports its first execution into the record that decided it.

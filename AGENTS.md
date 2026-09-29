@@ -290,7 +290,10 @@ second completion" is a reproduction, "some completion" is a coincidence.
 
 **Both were executed against a real endpoint on 2026-09-22 and both passed on the product's side**
 (`docs/architecture/first-executions.md`; pack `.live-run/runs/2026-09-22T09-05-35-955Z`). The ladder made five
-calls against two refusals and completed; the stalled stream was noticed by the **idle bound at 120.5 s**,
+calls against two refusals and completed *(falsified 2026-09-29: the two refusals were retried by the model client's
+dispatch layer — REQ-CONFIG-086's `num_retries`, default 5 — before the ladder saw them, and the ladder was never
+reached; the owner ruled that order as the specification's, OQ-110, R-067, so `faults-ladder` shows that a run survives
+the refusals and not that the ladder handled them)*; the stalled stream was noticed by the **idle bound at 120.5 s**,
 classified `transient_llm_error`, retried at 121.5 s and finished — the first live evidence that the
 eighty-second defect's repair holds.
 
@@ -354,7 +357,12 @@ reached the model. One shape did not reach its question: the wedge **soft-paused
 **The `failed-word` guard has not run against a real endpoint**: it was written on 2026-09-27, after that run,
 and the next live run of `terminal` is its first.
 
-**`duress` has not been executed.** It owes its row in `docs/architecture/first-executions.md`.
+~~**`duress` has not been executed.** It owes its row in `docs/architecture/first-executions.md`.~~ **`duress` was
+executed against a real endpoint on 2026-09-29** (pack `.live-run/runs/2026-09-29T03-06-14-929Z`; its row is in
+`docs/architecture/first-executions.md`): eight children commissioned, 309 tool calls, and two checks failed. The deadline
+check is genuine — 2,406 s of 2,400 s, about 98 % of it the endpoint generating — and the "failed with nothing to say"
+check is the harness's false positive on a child cut off with a continuation offer. What the run let through is recorded
+as notes in `docs/defects/` carrying "Live-run finding: D…" and "H-…" lines.
 
 **The traffic is recorded through a loopback proxy**, so the sandbox's `base_url` is the proxy and the endpoint
 is one hop further on. Two consequences worth knowing before reading a pack: a `model request POST` line in

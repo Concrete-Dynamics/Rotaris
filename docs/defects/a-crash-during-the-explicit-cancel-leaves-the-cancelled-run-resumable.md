@@ -36,3 +36,10 @@ carried out when the host died; the build follows clause 18 because nothing dura
 - `packages/engine/src/sessions.ts`: the control's `cancelAgent` arm (no `writer.save`), `crashLeftOf`, `resumableOf`,
   `continueSession`.
 - `packages/engine/src/run/crash.ts`: `recordCrash`, which pauses every non-terminal agent by `crash`.
+
+## Ruled 2026-09-29 (R-067), not repaired
+
+OQ-103's last question is ruled ([R-067](../product/requests.md#r-067)): clause 3's "those are never resumed" governs. The
+explicit cancel is made durable when it is accepted — a stored mark, by an appended store migration — and the next repair
+or continue ends those agents `cancelled` and closes the iteration; clause 18's Continue does not resume them, and the
+Continue action counts none of them. This note stays open until that is built.

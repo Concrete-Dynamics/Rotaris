@@ -4153,7 +4153,7 @@ keeps its number across runs, nor how a later root learns an offer exists.
   last created, in the listing's own index order (REQ-LIBRARY-096), so artifacts created in the same millisecond — a
   cancellation writes several reports at once — fall to their ids, a stable order but not the order they were written.
   *The first repair broke that tie by insertion order, which cost the index's order (a sort per read, found by phase 6's
-  second review).* Two more limits stand, both found by phase 6's review: a report re-materialised in place keeps its creation time (REQ-LIBRARY-092), ~~so a later iteration's report
+  second review).* Two more limits were found by phase 6's review; one stands, and the first stood whole until 2026-09-29 ~~Two more limits stand, both found by phase 6's review~~: a report re-materialised in place keeps its creation time (REQ-LIBRARY-092), ~~so a later iteration's report
   that reuses a canonical name does not become the latest (and overwrites the earlier one:
   `a-reused-canonical-name-overwrites-an-earlier-iterations-report-artifact.md`)~~ *(true until 2026-09-29: since
   OQ-113's amendment was built, a later iteration's report that reuses a canonical name is an artifact of its own and

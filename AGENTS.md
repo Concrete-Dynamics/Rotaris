@@ -46,7 +46,7 @@ wrong.
 | | `skills-proof` | portable skill discovery, with a scratch home and a scratch machine-wide root (ADR-0063; `ROTARIS_CAPTURE_SKILLS_MACHINE`, off Windows only); the `/skills` listing written as one saved system row and read back after a reopen (REQ-CHAT-162) |
 | | `injection-proof` | workspace-context injection as the model port **received** it — order, the per-file switches, OQ-64, a worktree's execution root — and REQ-WORKSPACE-049's cold-cache p95 over 20 separate processes (`--skip-latency` skips it; cold only on Linux) |
 | | `sandbox-proof` | OS-level confinement (ADR-0022) — **`win32` is outside the platform set; read what it says it cannot prove**; its first check asserts the **Windows** verdict's six literals, so off Windows it fails there and measures nothing (`docs/defects/sandbox-proof-asserts-the-windows-verdict-on-every-platform.md`) |
-| | `terminal-stream-proof` | the stream in the run host against a **real PTY** (ADR-0021) |
+| | `terminal-stream-proof` | the stream in the run host against a **real PTY** (ADR-0021), each command spelled in the host's shell: PowerShell on Windows, the POSIX shell elsewhere (REQ-TOOLS-104). Before 2026-09-28 it spoke PowerShell everywhere and measured nothing off Windows (`docs/defects/fixed/terminal-stream-proofs-real-pty-half-speaks-powershell-to-a-posix-shell.md`) |
 | **Configuration and startup** | `config-proof` | hand-authored, commented files surviving every write (ADR-0036/0037) |
 | | `init-proof` | project initialization resolved once per workspace open (ADR-0064) |
 | | `workspace-proof` | reaching a project folder from inside the application: resolution, gates, switch |

@@ -24,7 +24,7 @@ PowerShell through a REAL PTY". It was written on the one host where the shell i
 `terminal.test.ts` was later spelled in both shells ("every proof below is spelled in the shell the host actually
 runs"), and this file was not.
 
-Measured 2026-09-28 by the proof sweep on `main` at `392f681`, and reproduced 2026-09-29 on `fix-proofs-b6` from `main`
+Measured 2026-09-28 by the proof sweep on `main` at `392f681`, and reproduced 2026-09-28 on `fix-proofs-b6` from `main`
 at `fa377e6`: as root on Linux under Xvfb, Node 24, `/bin/sh` → `dash`. `streams.test.ts (20 tests | 6 failed)`, exit
 1 in 9 s. Another agent's `code-intel-proof` was running in a separate worktree during the reproduction. That cannot
 matter here, because the failures are exit status 127, not timing.
@@ -48,3 +48,33 @@ is the terminal every Linux and macOS user runs, so this is the half of the meas
 - `AGENTS.md`: the proof's row.
 
 Noticed 2026-09-28 by the proof sweep under R-062.
+
+## Repaired — 2026-09-28, under R-062
+
+The real-PTY half of `streams.test.ts` now spells each of its commands in the shell the host runs. A `PS`/`SH` table
+sits beside `findShell()`'s result, as in `terminal.test.ts`. On PowerShell each spelling is the old literal,
+character for character. On a POSIX shell each one is the same behaviour: a `while` loop printing `line <i>` (or
+`bg <i>`), `printf`, `read`, `sh -c 'exit 3'` for a native exit status, `stty size` for the grid the process reads
+from its terminal, and `sleep`. No assertion was loosened, and none was removed. The one assertion that named a
+PowerShell word, "the observation does not contain `Write-Output`" (the echoed command leaked into the capture), now
+names the word the host's own spelling uses (`stty` on POSIX). It asserts the same thing.
+
+Pinned by the suite itself: on a POSIX host the six cases that exited 127 now run and pass. Measured by
+`pnpm terminal-stream-proof` as root on Linux under Xvfb, Node 24, `/bin/sh` → `dash`, three runs in a row, all
+exit 0 with `Tests 40 passed (40)` and every check `true`. Another agent's `code-intel-proof` (eleven Electron
+processes) was live in a separate worktree throughout, at load 0.1–0.3:
+
+| | run 1 | run 2 | run 3 |
+|---|---|---|---|
+| 10,000 lines: frames / deltas / bytes / ms | 5 / 2 / 124,928 / 163 | 5 / 2 / 124,928 / 174 | 5 / 2 / 124,928 / 168 |
+| gapless, deltas = PTY bytes, closing = observation | yes, yes, yes | yes, yes, yes | yes, yes, yes |
+| background stream: own `bg:ts_…` id, frames, gapless | 4, yes | 4, yes | 4, yes |
+| keystroke to framed echo at interval 2,000 ms | 1.1 ms | 1.8 ms | 2.1 ms |
+| streaming off: frames on / off, exit on / off, output equal | 4 / 0, 3 / 3, yes | 4 / 0, 3 / 3, yes | 4 / 0, 3 / 3, yes |
+| resize to 80×24: what the process reports, clean | `cols=80 rows=24`, yes | `cols=80 rows=24`, yes | `cols=80 rows=24`, yes |
+
+Nothing in the product changed. **Could not show:** a Windows re-run on this branch. The PowerShell spellings are the
+same literals as before, so nothing that ran there changed, but no Windows host was available. Nothing ran on macOS
+either (IC-3). The echo is quick on `dash` because the kernel's line discipline echoes the keystroke, whereas
+PowerShell echoes it itself. Both are the frame the armed flush produces, so the figure measures the flush and not the
+shell. ADR-0021's "POSIX shell" note (2026-09-28) records this as a first execution.

@@ -341,5 +341,55 @@ guard kill with the exit status and standard error's tail (`line-rpc-client.test
 against the built branch, as root under Xvfb on Linux, drove the token-first launch to the sentinel's exit **127** in
 192 ms with the sentinel's "not present" line in the rejection. It also found that the proof launches the token in the
 order this ADR's correction retired — `--no-sandbox` ahead of the token — so as root the proof starts the application,
-not the branch, and section 1 fails at the guard (`../../defects/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md`,
+not the branch, and section 1 fails at the guard (`../../defects/fixed/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md`,
 recorded, not repaired). Not shown: section 1 passing, which waits for that note and for a tree with the bundle.
+
+**The proof on Linux as root — 2026-09-28 (R-062).** The note above was reproduced, then repaired in the proof: `branch()`
+and `exitStatus()` launch the token first and the switch between it and `--`, this ADR's corrected order, and
+`lib/launch-sites.test.ts` now fails any token launch that puts something other than the entry ahead of the token
+(`../../defects/fixed/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md`). Section 1 then
+**passed**: `tools/list` at 2,065–2,400 ms on the development entry across the three passing runs, 22 tools under a project (`list_memories` present,
+no project switching or configuration introspection), nothing on standard output before the first `{`, exit 0 on
+standard input's end, an unknown subcommand exiting the runtime's 2. The first full run went on to find a second
+harness defect. Every launch rewrote the workspace file without an `initialization:` section, so ADR-0064's background
+`code-intelligence-setup` started at each open. Section 5's click met it and was refused "already running", correctly
+(`../../defects/fixed/code-intel-proofs-setup-launches-collide-with-the-background-initialization.md`). The proof's
+workspace file now records that task as skipped. Then the whole proof passed **three runs in a row** (521 s, 522 s and 521 s, as root under Xvfb, Node 24, `--skip-build`), with
+nothing else running on the host: the discovery grant of 12 and the memories block, both launch lines carrying
+`--project`, `get_symbols_overview` naming `Greeter`, `greet` and `Counter` after provisioning TypeScript 5.9.3 and
+typescript-language-server 5.1.3 through the host's proxy (the disclosure true to the runtime), the five setup launches,
+and the drift refused. **What it could not show:** the no-window check of consequence 1 is recorded as not measured
+off Windows, because its sampler is `Get-Process` and this host has no window lister. A window opened on Linux would fail
+consequence 1 as surely as one on Windows; the instrument is what is missing. The packaged half of section 1 and section 7
+need `win-unpacked`, and no Linux artifact may be produced (IC-3), so IC-7's contained run is untouched. Nothing on
+Windows was run.
+
+**The fix round, 2026-09-29.** The whole proof was run three more times, and run 2 went red in section 5's
+`setup-again`. The product was not at fault. The open's `No model provider is authenticated yet` notice, raised at
+the 800 ms slot, landed at the same instant as the capture seam's fixed-time press on the `MCP Servers` category. It
+moved the list two rows, so Settings opened on Instructions and Start was never on screen. The setup launches now wait
+for what they press. Start is pressed once it is drawn enabled, Cancel once it is drawn, and `MCP Servers` is pressed
+again at 3 s and 6 s if it is not selected
+(`../../defects/fixed/code-intel-proofs-setup-launches-press-at-fixed-offsets.md`). The shared seam's press stays as
+it is, and its note stays open, since nine other proofs use it
+(`../../defects/the-capture-seams-settings-category-press-can-be-deflected-by-a-notice.md`). With the correction
+forced (the seam pointed at Instructions), section 5 passed. The whole proof then passed three runs in a row (522 s,
+521 s, 524 s), with another agent's proofs sharing the host in two of them. In one launch the banner deflected the
+seam's press again, and the correction put Settings back. *(Corrected by the next section: that correction did not hold, and the
+three runs in a row were not what the branch does.)*
+
+**The second fix round, 2026-09-29.** The verifier ran the same build seven times (three whole, four `--steps=5`) and
+`setup-cancel` went red three times, always the same way. Start was pressed at the instant of the notice and of the
+seam's category press. The seam's press, read before the notice and delivered after it, moved Settings to a category
+above, so Cancel had left the screen when it was pressed, and the press gave up. The 3 s correction came after `create`
+had already succeeded (about 1.8 s), and there was nothing left to cancel. The product was again not at fault. The
+setup launches now leave the shared seam alone. They open Settings with the `Ctrl+7` chord, and every press, the
+category's included, waits until the notice has been drawn (`body:has([data-testid="notice"])`), so no point is read
+before the launch's one layout shift. No assertion changed
+(`../../defects/fixed/code-intel-proofs-setup-launches-press-at-fixed-offsets.md`, reopened and repaired again; the
+seam's note stays open). **Measured** as root under Xvfb, Node 24, `--skip-build`: four `--steps=5` runs in a row
+passed (238 to 242 s). All 20 setup launches pressed Start 31 to 123 ms after the notice, and all four `setup-cancel`
+launches pressed Cancel while `create` ran and read `Cancelled`. Then three whole runs in a row passed (529 s, 528 s, 524 s), with another agent's proofs on the host for parts of
+all three: Start 41 to 128 ms after the notice in all 15 setup launches, Cancel pressed and `Cancelled` read in each
+`setup-cancel`, the window check recorded not measured on linux, and the drift refused. **What it could not show:** anything on
+Windows; the packaged branch and section 7 (IC-3), as before.

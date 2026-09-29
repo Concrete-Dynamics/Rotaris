@@ -246,6 +246,114 @@ describe('persisted session resume and continue (REQ-SESSION-083/112..118)', () 
     expect(!foreignResult.ok && foreignResult.error.reason).toContain('cannot establish whether that run is still going');
   });
 
+  /*
+   * ADR-0005, REQ-SESSION-083 (the repair of `a-continuation-in-the-process-that-ran-the-session-holds-no-lock.md` and
+   * `a-continue-by-message-cannot-re-claim-a-lock-it-no-longer-holds.md`, R-067): every run releases the session's lock at
+   * its teardown while the session stays live here, so a continue in the process that ran it claims the lock again before
+   * its first write and holds it for the run — reaping a dead local holder once, and refusing, with REQ-SESSION-048's
+   * words and nothing written, while another live process holds it.
+   */
+  describe('a continue in the process that ran the session holds the lock (ADR-0005, REQ-SESSION-047/048/083)', () => {
+    const userRows = (sid: SessionId) => dal.residentRows(sid).filter((r) => r.kind === 'user').length;
+
+    it('REQ-SESSION-083: a second and a third run in one process each hold the lock row for the run, and teardown gives it back', async () => {
+      const sessions = makeSessions(77, new DefaultAgentBackend(new ScriptedModelClient([answer('one'), answer('two'), answer('three')])));
+      const started = sessions.start(dal, 'C:/ws', 'build it');
+      if (!started.ok) throw new Error(started.error.reason);
+      const sid = started.value;
+      await sessions.running(sid);
+      expect(dal.getLock(sid)).toBeUndefined();
+      for (const message of ['keep going', 'and more']) {
+        expect(sessions.prompt(sid, message).ok).toBe(true);
+        expect(dal.getLock(sid)).toMatchObject({ pid: 77, host: HOST });
+        await sessions.running(sid);
+        expect(dal.getLock(sid)).toBeUndefined();
+      }
+    });
+
+    it('REQ-SESSION-083: the Continue action on a session paused in this process holds the lock for the run it launches', async () => {
+      const sessions = makeSessions(77, new DefaultAgentBackend(new ScriptedModelClient([answer('one'), answer('two'), answer('three')])));
+      const started = sessions.start(dal, 'C:/ws', 'pause me');
+      if (!started.ok) throw new Error(started.error.reason);
+      const sid = started.value;
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      await sessions.running(sid);
+      expect(dal.getSession(sid)!.execution_status).toBe('paused');
+      expect(dal.getLock(sid)).toBeUndefined();
+      // A resolution that launches no run gives back the lock it took for itself.
+      expect(sessions.continueSession(sid, 'cancel')).toEqual({ ok: true, value: { resumed: false, messageLimit: null } });
+      expect(dal.getLock(sid)).toBeUndefined();
+      expect(sessions.continueSession(sid, 'continue')).toEqual({ ok: true, value: { resumed: true, messageLimit: null } });
+      expect(dal.getLock(sid)).toMatchObject({ pid: 77, host: HOST });
+      await sessions.running(sid);
+      expect(dal.getSession(sid)!.execution_status).toBe('completed');
+      expect(dal.getLock(sid)).toBeUndefined();
+    });
+
+    it('REQ-SESSION-048/083: a live holder in another process refuses a continue by message and the Continue action, naming it, and nothing is written', async () => {
+      const sessions = makeSessions(77, new DefaultAgentBackend(new ScriptedModelClient([answer('one'), answer('two')])), { isProcessAlive: () => true });
+      const started = sessions.start(dal, 'C:/ws', 'pause me');
+      if (!started.ok) throw new Error(started.error.reason);
+      const sid = started.value;
+      sessions.control({ op: 'pause', sessionId: sid, args: {} });
+      await sessions.running(sid);
+      const before = { rows: dal.residentRows(sid).length, users: userRows(sid), session: { ...dal.getSession(sid)! } };
+
+      // A second instance on this machine loaded the session after this process's run released it.
+      dal.claimLock(sid, 902, HOST, '2026-09-04T00:00:00.000Z');
+      const local = sessions.prompt(sid, 'keep going');
+      expect(local).toMatchObject({ ok: false, error: { code: 'lock-held-local' } });
+      expect(!local.ok && local.error.reason).toContain('pid 902');
+      const localContinue = sessions.continueSession(sid, 'continue');
+      expect(localContinue).toMatchObject({ ok: false, error: { code: 'lock-held-local' } });
+      expect(dal.getLock(sid)).toMatchObject({ pid: 902, host: HOST });
+
+      // A lock naming another machine: REQ-SESSION-048's second case, never reaped.
+      dal.releaseLock(sid, 902, HOST);
+      dal.claimLock(sid, 903, OTHER, '2026-09-04T01:02:03.000Z');
+      const foreign = sessions.prompt(sid, 'keep going');
+      expect(foreign).toMatchObject({ ok: false, error: { code: 'lock-held-foreign' } });
+      expect(!foreign.ok && foreign.error.reason).toContain(`${OTHER}`);
+      expect(!foreign.ok && foreign.error.reason).toContain('cannot establish whether that run is still going');
+      expect(sessions.continueSession(sid, 'continue')).toMatchObject({ ok: false, error: { code: 'lock-held-foreign' } });
+      expect(dal.getLock(sid)).toMatchObject({ pid: 903, host: OTHER });
+
+      // Nothing was written by any refusal, and no run started.
+      expect(dal.residentRows(sid).length).toBe(before.rows);
+      expect(userRows(sid)).toBe(before.users);
+      expect(dal.getSession(sid)).toEqual(before.session);
+      expect(sessions.run(sid)?.isEnded).toBe(true);
+    });
+
+    it('REQ-SESSION-047: a lock a dead local process left is reaped once, and the continue holds it for its run', async () => {
+      const sessions = makeSessions(77, new DefaultAgentBackend(new ScriptedModelClient([answer('one'), answer('two')])), { isProcessAlive: (pid) => pid !== 901 });
+      const started = sessions.start(dal, 'C:/ws', 'build it');
+      if (!started.ok) throw new Error(started.error.reason);
+      const sid = started.value;
+      await sessions.running(sid);
+      dal.claimLock(sid, 901, HOST, '2026-09-04T00:00:00.000Z');
+      expect(sessions.prompt(sid, 'keep going').ok).toBe(true);
+      expect(dal.getLock(sid)).toMatchObject({ pid: 77, host: HOST });
+      await sessions.running(sid);
+      expect(dal.getLock(sid)).toBeUndefined();
+    });
+
+    it('ADR-0005: a session loaded here keeps the lock its load claimed through the continue, and its teardown gives it back', async () => {
+      const first = makeSessions(77, new DefaultAgentBackend(new ScriptedModelClient([answer('one')])));
+      const started = first.start(dal, 'C:/ws', 'build it');
+      if (!started.ok) throw new Error(started.error.reason);
+      const sid = started.value;
+      await first.running(sid);
+      const resumed = makeSessions(88, new DefaultAgentBackend(new ScriptedModelClient([answer('two')])));
+      expect(resumed.resume(dal, 'C:/ws', sid).ok).toBe(true);
+      expect(dal.getLock(sid)).toMatchObject({ pid: 88, host: HOST });
+      expect(resumed.prompt(sid, 'keep going').ok).toBe(true);
+      expect(dal.getLock(sid)).toMatchObject({ pid: 88, host: HOST });
+      await resumed.running(sid);
+      expect(dal.getLock(sid)).toBeUndefined();
+    });
+  });
+
   it('lists stored status text and marks only active unowned sessions stale', () => {
     const active = asSessionId('S-stale');
     const done = asSessionId('S-done');

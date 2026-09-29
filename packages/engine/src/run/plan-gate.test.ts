@@ -290,6 +290,32 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
     expect(cycle.decision).toBeNull();
   });
 
+  /*
+   * ADR-0005, REQ-SESSION-048/083 (the repair of `a-continue-by-message-cannot-re-claim-a-lock-it-no-longer-holds.md`,
+   * R-067): a plan decision's relaunch is a continue, so it writes and runs under the session's lock — refused, with the
+   * gate left as it stands, while another live process holds it, and claimed again when no process does.
+   */
+  it('REQ-SESSION-083: a plan decision refuses while another live process holds the lock, and a relaunch holds it for its run', async () => {
+    const sessions = sessionsWith(scripted([answer('a plan'), answer('carried out')]).backend);
+    const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
+    await sessions.running(sid)!;
+    expect(dal.getSession(sid)!.execution_status).toBe('awaiting_plan_decision');
+    // Another process on this machine took the session after this one let it go.
+    dal.releaseLock(sid, 77, HOST);
+    dal.claimLock(sid, 902, HOST, '2026-09-04T00:00:00.000Z');
+    const refused = sessions.planDecision(sid, 'approve');
+    expect(refused).toMatchObject({ ok: false, error: { code: 'lock-held-local' } });
+    expect(!refused.ok && refused.error.reason).toContain('pid 902');
+    expect(dal.getSession(sid)).toMatchObject({ execution_status: 'awaiting_plan_decision', plan_cycle: 1, plan_released: 0 });
+    expect(dal.planCycle(sid, 1)!.decision).toBeNull();
+    // That process let it go: the decision claims the lock and its relaunch holds it until the run's teardown.
+    dal.releaseLock(sid, 902, HOST);
+    expect(sessions.planDecision(sid, 'approve')).toEqual({ ok: true, value: { relaunched: true, cycle: 1 } });
+    expect(dal.getLock(sid)).toMatchObject({ pid: 77, host: HOST });
+    await sessions.running(sid)!;
+    expect(dal.getLock(sid)).toBeUndefined();
+  });
+
   it('approve releases execution one way: the next segment does not hold, and the run carries the EDITED text', async () => {
     const sessions = sessionsWith(scripted([answer('a plan'), answer('carried out')]).backend);
     const sid = (sessions.start(dal, 'C:/ws', 'change the thing') as { value: SessionId }).value;
@@ -416,7 +442,7 @@ describe('the plan gate (REQ-ORCH-152/153/154, ADR-0062)', () => {
      */
     expect(row.summary_status).toBe('paused');
     expect(row.summary_severity).toBe('warning');
-    expect(row.summary_text).toBe('The run came to rest because a person stopped it.');
+    expect(row.summary_text).toBe("The run came to rest at the user's request.");
   });
 
   it('PD-ORCH-003: a follow-up prompt after an approval is NOT held — the release is the session\'s', async () => {

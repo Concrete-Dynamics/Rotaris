@@ -102,7 +102,14 @@ to resume), **OQ-104** (where the plan gate holds a run that resumed an iteratio
 **OQ-105** (what an agent's fingerprint is taken of, when it is compared and where the warning is stated), **OQ-106** (whose
 root the handoff's artifact is taken from), **OQ-107** (which offers a later iteration's root is told, and where) **and
 OQ-108** (what the audit of clause 15, clause 19, `PD-CHAT-001` revision 4 and `PD-CHAT-002` revision 2 leaves
-undecided), each stating the reading the build proceeds under. The fifteen were raised as OQ-67 to OQ-81 on their branch and renumbered at the merge, OQ-67 to OQ-93 having been taken on `main`. **One more was raised on 2026-09-29 by building REQ-ORCH-089's stall watchdog and REQ-NOTIFY-111/112's corrective message under R-067: OQ-126** (what counts as "an outcome that produced no output within `child_stall_timeout`" when the watchdog never cancels, and what the watchdog counts, writes and calls — including the three records REQ-ORCH-139's timeline vocabulary has no word for, written to the session log instead, and whether REQ-MONITOR-119's issue at every evaluation may evict REQ-SESSION-133's ring), raised as OQ-109 on its branch and renumbered at the merge, OQ-109 to OQ-125 having been taken on `main`. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+undecided), each stating the reading the build proceeds under. The fifteen were raised as OQ-67 to OQ-81 on their branch and renumbered at the merge, OQ-67 to OQ-93 having been taken on `main`. **And OQ-109** (whether a `code_intelligence` entry configured `enabled: false` still makes `code-intelligence-setup` applicable. It is built as applicable, availability alone), raised 2026-09-28 by the repair of `plan-gate-proof`'s fixture under R-062 — raised as OQ-94 on its branch and renumbered at the merge, OQ-94 to OQ-108 having been taken on `main`. **On 2026-09-29 the owner ruled eight decisions as recommended ([R-067](../product/requests.md#r-067))**: OQ-96's
+stop status, OQ-103's last question and OQ-66's open part among the questions already here, and ESC-42 in
+`owner-decisions.md`; and four were **raised and ruled in the same entry — OQ-110** (the dispatch layer's retries come
+before the ladder's), **OQ-111** (what the report summariser reads), **OQ-112** (a `write_scope` for a persona that cannot
+write is refused) **and OQ-113** (REQ-LIBRARY-092's fallback, answered by amendment). **Three more were raised the same day
+from the live runs and left open: OQ-114** (the specification's fixed figures on a reasoning model's critical path, and a
+continuation that starts from nothing), **OQ-115** (the code-intelligence server's imperative tool description, rendered
+verbatim) **and OQ-116** (the displayed tool-call total during a long execution pass). The seven were raised as OQ-109 to OQ-115 on their branch and renumbered at the merge, OQ-109 having been taken on `main`. **OQ-117** (what an iteration is told of a task it takes up that is not the run's own) was raised the same day by the repair of `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md` and left open. **OQ-119** (whether the task the report summariser keeps as its start may pass REQ-ORCH-110's 2,000 per event) **and OQ-120** (the size of the facts given to the report summariser) were raised the same day by the repair of D1 and left open, as OQ-118 and OQ-119 on their branch, renumbered at the merge, OQ-117 and OQ-118 having been taken on `main`. **And OQ-122** (whether the window may open the setup dialog before the open's resolution, and what a skip answered in that interval records — built as: the dialog opens on the values, and such a skip performs the open's one automatic resolution first), raised 2026-09-29 by repairing `init-proof`'s red on Linux under R-062. **And OQ-123** (which run REQ-WORKSPACE-105's "no run is in progress" means — built as a run the user started, so a background run neither withdraws the setup prompt nor is drawn in its dialog), raised the same day by the same repair's second round. The two were raised as OQ-109 and OQ-110 on their branch, renumbered there to OQ-118 and OQ-119 when OQ-109 to OQ-117 had been taken on `main`, and renumbered again at the merge, OQ-118 to OQ-121 having been taken on `main` meanwhile. **One more was raised on 2026-09-29 by building REQ-ORCH-089's stall watchdog and REQ-NOTIFY-111/112's corrective message under R-067: OQ-126** (what counts as "an outcome that produced no output within `child_stall_timeout`" when the watchdog never cancels, and what the watchdog counts, writes and calls — including the three records REQ-ORCH-139's timeline vocabulary has no word for, written to the session log instead, and whether REQ-MONITOR-119's issue at every evaluation may evict REQ-SESSION-133's ring), raised as OQ-109 on its branch and renumbered at the merge, OQ-109 to OQ-125 having been taken on `main`. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -2931,6 +2938,22 @@ which carries the back-pointer. The two limits named above are not settled by th
 offer after the iteration that raised it has ended belongs to the run-continuation policy the same request opened, and
 until that is ruled the build keeps the same-iteration reading.
 
+**Ruled 2026-09-29 — OQ-66's open part, `session_id`, by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 5
+(clause 22) and [`PD-TOOLS-006`](../product/directives.md#pd-tools-006) revision 3, [R-067](../product/requests.md#r-067).** The owner
+took the recommendation. `session_id` (REQ-TOOLS-152) names, by task id, a settled child of the caller: a direct child,
+by REQ-TOOLS-155's ownership test, that has reached a terminal state. A child its `child_timeout` cut off is not one; it
+keeps `continuation_of` (`PD-ORCH-004`), and a `session_id` naming it is refused with a reason naming that field. The
+follow-up resumes the named child from its recorded conversation (`PD-ORCH-005`'s record) under its own task id, with
+the call's `task` appended as its next user message, and the child ends and reports again as any child does. A
+`session_id` that names no such child is refused like REQ-TOOLS-152's other refusals: status `rejected`, no record, no
+task id. REQ-TOOLS-152 is narrowed by `PD-TOOLS-006`, the one directive that narrows it, and its back-pointer is amended
+in place; REQ-MONITOR-300's back-pointer from `PD-ORCH-005` names the one exit from a terminal state a follow-up takes.
+Nothing is built by this ruling: until
+[`delegate-drops-session-id-and-suppress-auto-context.md`](../defects/delegate-drops-session-id-and-suppress-auto-context.md)
+is repaired the field is accepted and dropped. The first limit named above, which agent may take up an offer after its
+iteration ended, was ruled by `PD-ORCH-004` revision 3; `session_id` keeps the direct-child test, so a later
+iteration's root cannot follow up an earlier iteration's child.
+
 **OQ-67 — Where does the `/skills` listing go when there is no transcript to write it into?** *(REQ-CHAT-162 with REQ-WORKSPACE-067 and REQ-WORKSPACE-151; OQ-58. Raised 2026-09-27 by building the listing, `first-release-plan.md` §2.2; raised as OQ-66 and renumbered OQ-67 when it reached `main`, where OQ-66 had been taken by the question `PD-ORCH-004` revision 2 rules.)*
 
 REQ-CHAT-162 makes the listing "a single system row" in the transcript and requires that "a system row a skill
@@ -3508,7 +3531,7 @@ not built.
 first reading widens the schema's key to a pattern and changes nothing in the shipped file; either reading leaves the
 consumer to state what a host with no matching archive is told.
 
-**OQ-89 — Under a burst, is REQ-CHAT-055's append comparison read on the update as it arrived, or on an update that arrived alone?** *(REQ-CHAT-055, REQ-CHAT-154, REQ-CHAT-157; ADR-0045's measurement point. Raised 2026-09-28 by the measurement round R-048 authorized, taken under [R-062](../product/requests.md#r-062); the note is `docs/defects/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md`. Raised as OQ-76 on its branch; renumbered OQ-89 at the merge, because OQ-76 to OQ-88 were already on `main`.)*
+**OQ-89 — Under a burst, is REQ-CHAT-055's append comparison read on the update as it arrived, or on an update that arrived alone?** *(REQ-CHAT-055, REQ-CHAT-154, REQ-CHAT-157; ADR-0045's measurement point. Raised 2026-09-28 by the measurement round R-048 authorized, taken under [R-062](../product/requests.md#r-062); the note is `docs/defects/fixed/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md`. Raised as OQ-76 on its branch; renumbered OQ-89 at the merge, because OQ-76 to OQ-88 were already on `main`.)*
 
 REQ-CHAT-055 fixes "cost" as the time from an update's application to the frame that shows it, and compares that
 figure for an appended row at a thousand rows with the same figure on an empty transcript. The round found the proof's
@@ -3538,6 +3561,31 @@ updates so each is shown before the next arrives, which the benchmark domain's p
 visible-row term is within the requirement while the third sentence's comparison holds, or is itself the thing the
 third sentence forbids. Recommended: the first reading, as the one a reader experiences and the one the benchmark's
 phases can measure, with the third sentence read at one frame of slack as the proof reads it.
+
+**Evidence, 2026-09-29 — the CPU-profile round (recorded for the ruling; not a ruling).** The paragraph above says the
+2026-09-28 repair made the per-increment cost independent of the rows held. V8's CPU profile of the built app showed it
+had not: the transcript's own code still walked every displayed row on every increment — 1.03 ms of +1.50 ms of script
+an increment at 1,234 rows against 35 — repaired the next day (the note, "The CPU profile"), after which twelve
+consecutive runs of the proof passed both cuts, the loaded side above the empty side at the median in four of twelve;
+with five more, sixteen of seventeen, on a host other agents shared. The profile also measured what bears on this
+question's second half. The pooled empty side holds two viewport states: its first launch starts at one row and gains
+seventeen, so its viewport never fills and an append binds one new slot while every other slot keeps its row; its second
+starts at eighteen and fills within a few appends. The loaded side is always at the tail of a full viewport, where each
+append moves the bound range and rebinds every bound slot. Profiled apart on the repaired build (two pairs, a fresh
+one-row `S0` against `S1200` at 1,200), that shape still costs the loaded side about **2.0 ms more an increment**:
+layout +0.84 ms, nearly all of it forced by the tail pin, over twice the layout objects (72.0 and 79.5 dirty objects an
+increment against 34.9 and 35.3; 11.6 and 13.0 text-shaping passes against 5.7), React's DOM writes for the rebound
+slots +0.21 ms, style, paint and native time +0.6 ms, and the residue over the rows held +0.4 ms, which a one- to
+eighteen-row empty side does not cancel. Bar the residue it is visible-row work, which the first sentence permits, and
+under a burst the queue multiplies it as it multiplies everything else — so on this harness the third sentence's
+comparison, read against the first launch's part-empty viewport, charges a full viewport's rebinding to the loaded side;
+the runs above pass with it charged. What the comparison **can** decide here: a per-increment term that grows with the
+rows held and is large enough to move the pooled median by a frame — the one this round repaired failed it in eight of
+the twenty-one runs before the repair, and after it the comparison failed once in seventeen, on a saturated host. What
+it **cannot**: whether a residual inside a frame is depth-dependent work, visible-row work or the host, because a run's
+two sides are separate launches whose medians move by 20 ms with the host's load — two runs on the repaired build with
+no other Electron process but a load of up to 9 on four vCPUs read +21.15 ms (the one red since the repair) and −19.70
+ms; only a profile of the same increments names that, which is why the proof now carries one.
 
 **OQ-90 — Are the variables that name a launch's artifact removed from what the product's children inherit, and which requirement says so?** *(REQ-STARTUP-147, REQ-STARTUP-106, REQ-HOOKS-032; ADR-0054, "The updater", item (6). Raised 2026-09-28 by repairing `docs/defects/fixed/the-artifact-variables-reach-the-products-own-child-processes.md` under [R-062](../product/requests.md#r-062).)*
 
@@ -3812,9 +3860,29 @@ when the pause is accepted, a rest that finds nothing unfinished, and what a cra
   from is answered in its record as interrupted, its row settled; a call of the same step that completed keeps its
   result, as above. When the execution returns, the engine writes nothing
   more for it (REQ-SESSION-094's straggler clause). What the call's own tool gate or a streaming model step writes as it
-  finishes is not stopped; `docs/defects/a-detached-call-still-writes-through-its-tool-gate.md` records it. A root's call
-  has no such bound (`docs/defects/a-root-call-that-ignores-the-stop-holds-the-run-open.md`, which predates the
-  build).
+  finishes is not stopped; `docs/defects/fixed/a-detached-call-still-writes-through-its-tool-gate.md` records it. A root's call
+  has no such bound (`docs/defects/fixed/a-root-call-that-ignores-the-stop-holds-the-run-open.md`, which predates the
+  build). *Reported back 2026-09-29 ([R-067](../product/requests.md#r-067)): that last sentence no longer holds. The root
+  is awaited within the same 30 s, counted from the first stop request whether or not it was forced, and one still in a
+  call past it is detached as a child execution is: left `paused` by a stop or a quit, with its open call answered as
+  interrupted, or under the explicit cancel with that call answered as cut off, naming no rest. The rest that follows
+  is given what is left of the grace, counted from the first request, so the stop ends within the one 30 s rather than
+  the root's time and then a second 30 s for the children. Under the explicit cancel, which rests nothing, the child
+  executions still running once their records are settled are detached with the root, and a root given up on still
+  drains the background children, bounded by REQ-ORCH-080's own timeout (OQ-121)
+  (`docs/defects/fixed/a-root-call-that-ignores-the-stop-holds-the-run-open.md`). *First reported as "A rest that
+  follows a detached root waits for no child execution again", which was true and not enough: a root that returned at
+  29 s still gave the rest a fresh 30 s, and under the explicit cancel the children stayed attached and the drain was
+  skipped (found by the verifier of the repair, corrected the same day).*
+  *Reported back 2026-09-29 ([R-067](../product/requests.md#r-067)): the sentence "What the call's own tool gate or a
+  streaming model step writes as it finishes is not stopped" no longer holds either. Teardown closes every tool port the
+  run built before anything terminal is written: a call its gate still has open settles then, as failed with the rest's
+  interrupted statement, and the gate writes nothing after it. A model step the rest detached streams no row, settles
+  none and counts no usage when it returns, and so does one the explicit cancel leaves running past the grace: the
+  cancel's children are awaited within what is left of it after their records are settled, and detached past it
+  (`docs/defects/fixed/a-detached-call-still-writes-through-its-tool-gate.md`). *First reported without that last
+  clause, when only a rest detached: a child step that ignored the explicit cancel still wrote its row and usage after
+  `result` (found by the verifier of the repair, corrected the same day).*
 - **A call cut by no rest.** A call cut by its agent's limit, by the cancellation of that agent or by the explicit
   cancel is recorded as cut off, and its statement names no rest. Only a pause, a stop, a quit or a crash is named as
   what interrupted a call.
@@ -3870,6 +3938,20 @@ withdraws what waits on a person. One paused child is cancellable while its sess
 active run". Building it raised OQ-101 and OQ-108.
 
 Until they are built, a paused child is not cancellable at rest, and `/stop` keeps its old description.
+
+**Ruled 2026-09-29 — by [`PD-ORCH-005`](../product/directives.md#pd-orch-005) revision 5, [R-067](../product/requests.md#r-067).** The
+status a stop persists, which the build had read and not settled: a graceful user stop persists `paused`, as built, and
+so does a forced one (clause 21). REQ-SESSION-186's "A run stopped gracefully and cleanly by the user persists
+`stopped`" no longer governs a stop the user made; REQ-SESSION-186 joins the Narrows list and carries the back-pointer.
+So does REQ-SESSION-073, whose vocabulary glosses `stopped` with "the user stopped it from the interface,
+REQ-SESSION-186": `stopped` stays in the vocabulary for a run that exhausted a configured budget (REQ-MONITOR-029), and
+the rest of that requirement governs as written. REQ-MONITOR-029 and REQ-SESSION-093, which already persist `paused` for
+an interrupted or cancelled run, are unchanged. A stop and a pause both record the stop reason `user_cancelled`
+(REQ-MONITOR-301's closed set has no member for a pause), so clause 21 tells them apart only by the interruption recorded
+on the agents and the iteration (`stop` or `pause`) and by the timeline entries that name it.
+`a-graceful-stop-persists-paused-where-one-requirement-says-stopped.md` is settled by this ruling and is in
+`docs/defects/fixed/`. Nothing is built by it: the code already persists `paused` (`statusForResult`,
+`packages/engine/src/run/stop-conditions.ts`).
 
 **OQ-97 — How does a resumed iteration carry on where the directive says what and not how?** *(`PD-ORCH-005` clauses 4, 5, 6, 7 and 10; PD-TOOLS-006 revision 2; REQ-ORCH-095, REQ-ORCH-088, REQ-ORCH-152, REQ-HOOKS-075 and REQ-MONITOR-125, which the directive does not name. Raised 2026-09-27 by building `PD-ORCH-005` revisions 2 and 3 under [R-060](../product/requests.md#r-060) and [R-061](../product/requests.md#r-061). Numbered OQ-70 while it was built; renumbered when it reached `main`, where OQ-70 had been taken meanwhile.)*
 
@@ -4188,8 +4270,10 @@ no more; its last sentence settles "every other unfinished agent of a session at
   live (`AgentRecord.live`, running only) nor ended, so a waiting or queued agent read `waiting` alone where the base
   read `waiting · 1m 3s`; the merged build's eleventh review round restricted it to `paused`.* The agent tree, the
   table and the inspector drop a waiting or queued agent's time too, as they did before revision 4
-  ([`a-waiting-agents-elapsed-time-is-not-shown.md`](../defects/a-waiting-agents-elapsed-time-is-not-shown.md)); that
-  is not this directive's, and is not repaired here.
+  ([`a-waiting-agents-elapsed-time-is-not-shown.md`](../defects/fixed/a-waiting-agents-elapsed-time-is-not-shown.md)); that
+  is not this directive's, and is not repaired here. *Repaired 2026-09-29 under R-067: the tree, the table, the inspector and
+  the persona window show a waiting or queued agent's time, advancing, by a clock predicate of their own (OQ-124); a
+  `paused` agent keeps this reading.*
 - **A live agent's cancel.** Its confirmation and cascade note name every descendant its cancel ends — live and
   paused, through a finished one (`cancelCascade`) — so that neither understates what the cancel ends; the body and
   the note name what they are: "Its live descendants", "Its paused descendants" or "Its live and paused descendants
@@ -4389,7 +4473,7 @@ message.
   had the next iteration take the resumed iteration's own task instead (found by the iteration lane's second review).*
 - **Taking it up sends it.** An iteration's first message is the launch content, whose latest request is whatever
   launched the run
-  ([`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../defects/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md)),
+  ([`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../defects/fixed/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md)),
   so a message taken up by a later run's iteration, or by the iteration after a continue by a second message, would be
   selected and marked done without ever being sent as the request, and the newer request worked in its place and again
   under its own task. So a task that is a continue's message (`message`, set when it is appended and kept for good, in
@@ -4398,9 +4482,12 @@ message.
   same text, when the launch content already says it. It is sent only to an iteration's root: a plan cycle is not an
   iteration and has no iteration task (REQ-ORCH-153), so the plan cycle held after a resumed iteration whose own task
   was a message is not told it (found by the iteration lane's fifth review). Only the message's text is sent; its images
-  are not, as the task holds its text only. Every other task keeps the recorded defect's behaviour, which this does not
-  repair. *The second build selected the message and sent it nothing of it (found by the iteration lane's fourth
-  review).*
+  are not, as the task holds its text only. Every other task an iteration selects that is not the run's own, and whose
+  text is not the launch content's request, is sent the same way since the recorded defect's repair (2026-09-29, under
+  [R-067](../product/requests.md#r-067)), in words that name it a task of the session's todo rather than an earlier
+  message. *Until that repair every other task kept the recorded defect's behaviour — sent only the launch content —
+  which this reading did not repair.* *The second build selected the message and sent it nothing of it (found by the
+  iteration lane's fourth review).*
 - **Several continues on one open iteration.** Each continue by message that resumes the iteration appends its own task,
   held by it; they close together, in the order they were appended.
 - **Which continues make one.** Only a continue that delivers a message: a continue by message (`Sessions.prompt`), with
@@ -4418,15 +4505,18 @@ message.
   limit was reached as the iteration that finished it closed, a resumed one included (OQ-103, "Nothing open to resume";
   OQ-104, "What a cancel leaves") — and so is one whose task is in progress with no iteration holding it: a selection
   takes only pending tasks, so nothing would take that task up, and the run would end at once with the request not done.
-  A message a closed iteration still holds (see "What a death leaves") is judged as the run will take it: it is settled
-  first, as the run settles it before it selects, so one returned to pending is not appended a second time and one
-  completed is appended as any completed request is. A continue by message is never judged so: it states a request, so
+  A message a closed iteration still holds, and an iteration's own task its closed iteration left in progress (see "What
+  a death leaves"), are judged as the run will take them: each is settled first, as the run settles it before it
+  selects, so one returned to pending is not appended a second time and one completed is appended as any completed
+  request is. *Until 2026-09-29 only the message was settled, so an own task a death left in progress was appended
+  again beside itself and stayed in progress for good.* A continue by message is never judged so: it states a request, so
   it appends its task even when a task of the same text is still pending (REQ-ORCH-004), and the request is worked once
   for each time it was sent (pinned by the iteration lane's sixth review). *The fourth build judged such a message
   unheld, so a Continue action after the death appended it beside the task the run then returned to pending, and the run
   worked it twice (found by the iteration lane's fifth review).* *The second build counted any task in progress, which
-  ended such a continue `no_pending_tasks` (found by the iteration lane's third review); the stranded task itself is
-  [`an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md`](../defects/an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md).*
+  ended such a continue `no_pending_tasks` (found by the iteration lane's third review); the stranded task itself was
+  [`an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md`](../defects/fixed/an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md),
+  repaired 2026-09-29.*
   This repairs
   [`the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`](../defects/fixed/the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md),
   which the clause had widened: a message left pending is the last user row, so a Continue action appended it beside its
@@ -4440,7 +4530,15 @@ message.
   a death between the iteration's close and the save that recorded the release — closes when the next run is built as
   the record says its iteration closed: `complete` when the iteration's row reads `succeeded`, since the clause's "done
   when the iteration succeeds" is decided by the outcome and not by which save landed, and `pending` otherwise, so it is
-  never left in progress with nothing to close it and a message its iteration carried out is never worked again.
+  never left in progress with nothing to close it and a message its iteration carried out is never worked again. Since
+  2026-09-29 the close no longer leaves that window: an iteration's close commits the todo its task and held messages
+  were closed in, in the transaction that records `iteration.end` (`SessionWriter.endIteration`), ahead of the capture
+  and the hooks, on both closes (`iterate()` and `closeOpenIteration`). A store an earlier build wrote is still settled,
+  and an iteration's own task such a death left in progress with it — as the latest row naming it closed: `succeeded`
+  complete, `partial` requeued, `failed` or `abandoned` abandoned, `cancelled` pending (`Todo.settleStranded`; the repair
+  of
+  [`an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md`](../defects/fixed/an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md)).
+  *Until then only a held message was settled, and the save came after the capture and the hooks.*
 
 **What a ruling decides.** Whether a `partial` resumed iteration should close the message as done, since the root
 answered it; whether leaving the message pending should count toward REQ-ORCH-077's limit, so a message no iteration
@@ -4581,7 +4679,12 @@ say what the decline's wording means before the crash is recorded.
 - **The lock.** `Sessions.prompt` tries to re-claim a lock it no longer holds, but it cannot: `resume` returns early for
   a session already live in this process. A probe placed in that branch was never reached on any crash-left path, so
   `continueSession` does not copy it
-  (`docs/defects/a-continue-by-message-cannot-re-claim-a-lock-it-no-longer-holds.md`).
+  (`docs/defects/fixed/a-continue-by-message-cannot-re-claim-a-lock-it-no-longer-holds.md`). *Repaired 2026-09-29
+  (R-067), and this bullet reported back in place: every continue — `prompt`, `continueSession` and `planDecision` —
+  now claims the lock before its first write and the run it launches holds it (`holdForContinue`, through the at-rest
+  cancel's `claimLockReaping`), so a crash-left session's continue reaps the dead local holder its crash left, or
+  refuses with REQ-SESSION-048's words while another live process holds the lock. The dead branch in `prompt` is gone.
+  ADR-0005's section "the lock a continue takes back" records the first execution.*
 
 **What a ruling decides.** Whether a crash-left session's strip should draw the two continues in the send pill's place,
 as built, or keep the send pill (REQ-CHAT-005) with the Continue action and the decline in the notices row, since
@@ -4600,6 +4703,16 @@ session would narrow clause 18's "SHALL offer". Whether a run whose explicit can
 when its host died is one a crash left, as built, so that clause 18's Continue action resumes its agents, or whether
 clause 3's "those are never resumed" governs it, so that the cancel is made durable when it is accepted and the next
 repair or continue ends its agents `cancelled` and closes the iteration.
+
+**Ruled 2026-09-29 — the last question, [R-067](../product/requests.md#r-067).** The owner took the recommendation: clause 3's
+"those are never resumed" governs a run whose explicit cancel was accepted but not carried out when its host died. The
+cancel is made durable when it is accepted — a stored mark, written by an **appended** store migration — and read where
+the build reads a crash: the next repair or continue ends those agents `cancelled` and closes the iteration, the Continue
+action counts none of them, and clause 18's Continue does not resume them. REQ-MONITOR-126's "cannot be undone in this
+session" then holds across the host's death. No directive text changes: clause 3 already says it, and the reading above,
+which departed from it, is withdrawn by this ruling. The other questions of this entry stay open. Nothing is built by the
+ruling; the repair is owed to
+[`a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md`](../defects/a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md).
 
 **OQ-104 — Where does the gate hold a run that resumed an iteration, and what does that plan cycle plan?** *(`PD-ORCH-003` revision 2, with `PD-ORCH-005` clause 18; REQ-ORCH-152, which the directive narrows for an iteration a rest left open (`PD-ORCH-005` clause 4), and which the reading below that an iteration a crash left open resumes unheld too departs from for an iteration the directive does not govern; REQ-ORCH-153, whose gate that reading also departs from for the same iteration; and REQ-ORCH-021, REQ-ORCH-067, REQ-ORCH-069, REQ-ORCH-073, REQ-ORCH-085, REQ-ORCH-154, REQ-CHAT-040, REQ-SESSION-115 and REQ-TOOLS-010, which it does not name. Raised 2026-09-28 by building `PD-ORCH-003` revision 2 under [R-065](../product/requests.md#r-065). Numbered OQ-77 while it was built; renumbered when it reached `main`, where OQ-77 had been taken meanwhile.)*
 
@@ -4662,12 +4775,15 @@ and what the answer at that gate launches.
   published anything, and its progress and recent iterations are from before the close — while the preamble, read from
   the live todo, says that iteration has closed and, when it succeeded, carried the message out. The payload's own
   opening ("Prior session context is authoritative") leaves the role two statements of the todo that disagree. This is
-  the behaviour
-  [`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../defects/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md)
-  records for a later iteration of the same run, met here by the first turn after the resumed iteration; nothing
-  rebuilds the payload for the plan cycle, and the pending tasks the preamble lists are what the approved plan releases.
-  Measured in `plan-gate-resume.test.ts`, "the plan cycle held after a resumed iteration is sent the handoff the continue
-  built before that iteration ran". Recorded at the merged build's tenth review.
+  the staleness OQ-106 reads for a later iteration of the same run ("The handoff is read once"), met here by the first
+  turn after the resumed iteration; nothing rebuilds the payload for the plan cycle, and the pending tasks the preamble
+  lists are what the approved plan releases. The repair of
+  [`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../defects/fixed/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md)
+  (2026-09-29) keeps this: it adds an execution iteration's own task after the launch content and rebuilds no
+  handoff, and a plan cycle is sent no iteration task. *Until that repair this bullet called the staleness the behaviour
+  that defect records; the repair left it, so it stands on this reading and the ruling question below.* Measured in
+  `plan-gate-resume.test.ts`, "the plan cycle held after a resumed iteration is sent the handoff the continue built
+  before that iteration ran". Recorded at the merged build's tenth review.
 - **What the answer launches.** A plan decision's relaunch appends no task: the held run's stored todo already carries
   every task — the gated work, and after this hold the continue's message too, which `PD-ORCH-005` clause 17 made a task
   of its own and closed with the resumed iteration, `complete` or `pending` and taken up first — so appending the last
@@ -4844,14 +4960,18 @@ from the launch content computed when the run began.
   artifact is carried — was not taken: it would carry nothing where an unsuperseded artifact stands.
 - **The handoff is read once, when the continuation starts its run.** REQ-SESSION-115's handoff is "the payload handed
   to the run", built at the continue, and clause 20's "that nothing supersedes" holds of it then. A later iteration of
-  the same run is not a new handoff: it is re-sent the launch content computed at the continue, by the recorded defect
-  `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`, so **its artifact line can name an artifact
+  the same run is not a new handoff: it is re-sent the launch content computed at the continue — the base of every
+  iteration, which the repair of
+  [`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../defects/fixed/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md)
+  (2026-09-29) kept, adding only the iteration's own task after it — so **its artifact line can name an artifact
   superseded since, or another agent's where the resumed root published its first artifact after the continue**, as
   its todo and progress lines can be stale. The plan cycle held after a resumed iteration (`PD-ORCH-003` revision 2)
   is sent the same stale payload, whose artifact line was read before the resumed root published anything (OQ-104, "The
-  handoff after the preamble is the continue's"). The artifact line is not recomputed alone; the repair belongs to that
-  defect, which must keep the three flows it names, and `PD-ORCH-004` revision 4 adds only the open offers to that
-  first message.
+  handoff after the preamble is the continue's"). The artifact line is not recomputed alone, and `PD-ORCH-004` revision
+  4 adds only the open offers to that first message. *Until that repair this bullet said the payload was re-sent by
+  that defect and that its repair, which had to keep the three flows it names, would settle the staleness; the repair
+  kept those flows by keeping the payload as every iteration's base, so the staleness stands on this reading and the
+  ruling question below.*
 - **A cancelled child's stub report counts as "of any kind".** A cancelled agent's report is stored as an artifact
   (REQ-LIBRARY-092), and clause 16 (OQ-101) adds a route that writes one every time: cancelling a `paused` child while
   its session rests. When the iteration's root published nothing, the handoff then carries that stub ("The user
@@ -4914,9 +5034,9 @@ handoff it is re-sent, or whether a plan cycle's root is such a root.
   message, so the root reads it as part of its task. It is the same list, header, lines, newest ten and elision line
   as the handoff's and the resumed root's, so a later reader recognises it.
 - **The re-sent handoff is left as it is.** A later iteration of a continuation run is re-sent the payload built at
-  the continue, whose list can name an offer taken up since (the behaviour
-  [`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../defects/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md)
-  records). Those lines are not rewritten; an offer the payload already names is not named again, and one taken up since
+  the continue, whose list can name an offer taken up since (OQ-106's "The handoff is read once", which the repair of
+  [`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../defects/fixed/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md)
+  kept; *until that repair this bullet called it the behaviour that defect records*). Those lines are not rewritten; an offer the payload already names is not named again, and one taken up since
   is refused at admission with "already continued by".
 - **A plan cycle is told none.** A plan cycle is not an iteration (REQ-ORCH-153) and its root takes up no offer
   (OQ-99), so neither a plan cycle at a run's start nor one held after a resumed iteration (`PD-ORCH-003` revision 2)
@@ -4957,7 +5077,9 @@ the build kept.
 - **A stop during a plan cycle, as the session shows it.** The cycle's agents end `cancelled` with their reports, no
   iteration row exists, and `plan_released` stays 0, so the next prompt or continue is held again. The session persists
   `paused` (REQ-SESSION-186's persisted status for a stop). Its result's summary reads "The run came to rest because a
-  person stopped it.", because the summary is classified from the stop reason alone. Both are kept. The status is what
+  person stopped it.", because the summary is classified from the stop reason alone. *Since 2026-09-29 (R-067, OQ-118)
+  it reads "The run came to rest at the user's request.", the one message every rest a person asked for gets.* Both are
+  kept. The status is what
   a stop persists, and the wording describes the run, not an agent left to resume.
 - **"No other control stands outside the dock."** The sentence governs the run-state notices it names and the strip's
   input controls. Three controls outside the dock and outside the notices row stay where they are, because each
@@ -4998,6 +5120,456 @@ as clause 15 reads, or be withheld (OQ-101). Whether the "Command not run" notic
 move into the notices row, a layout change. Whether a stop during a plan cycle should persist a status and a summary of
 its own rather than a stop's `paused` and "came to rest".
 
+**OQ-109 — Does a `code_intelligence` entry configured `enabled: false` still make `code-intelligence-setup` applicable?** *(REQ-WORKSPACE-090, REQ-MCP-037, REQ-CONFIG-465, REQ-MCP-040, REQ-WORKSPACE-083. Raised 2026-09-28 by the repair of [`plan-gate-proof-turns-code-intelligence-off-with-a-key-nothing-reads.md`](../defects/fixed/plan-gate-proof-turns-code-intelligence-off-with-a-key-nothing-reads.md), under [R-062](../product/requests.md#r-062). Raised as OQ-94 on its branch and renumbered at the merge, OQ-94 to OQ-108 having been taken on `main`.)*
+
+REQ-WORKSPACE-090 makes the initialization task applicable exactly when the resolved configuration holds a server
+named `code_intelligence` that is launchable, "judged by the one availability rule REQ-MCP-037 fixes", and it forbids
+this domain a second rule. REQ-MCP-037's rule looks at the transport and the command, and never at `enabled`. So a
+workspace whose entry is disabled still has the task pending on first open, and still runs the bundled runtime's
+`project create` in the background. Measured in `plan-gate-proof` on Linux, 1.8 to 10.4 s of work for a server no run
+will connect to. REQ-CONFIG-465 says of a disabled entry that "no connection to it is attempted". The setup launches
+the runtime's own command line, not a connection to the server, and so falls outside that sentence's letter. Two
+readings:
+
+- **availability alone** — `enabled` does not enter applicability. A disabled entry's workspace is still set up, so
+  enabling the entry later finds the project ready. This is the letter of REQ-WORKSPACE-090 and REQ-MCP-037.
+- **enabled and available** — a disabled entry makes the task inapplicable, like an unlaunchable one. Nothing runs for
+  a server the user turned off, which is the spirit of REQ-CONFIG-465 and REQ-MCP-040's "turning a server off is a
+  choice". But it is a second input to a rule REQ-WORKSPACE-090 says has only one.
+
+**What the build proceeds under:** the first reading (`apps/desktop/src/run-host/mcp.ts`, `setupApplicable`), because
+it is the one the requirements state. The proofs that disable the entry to keep run starts short are unaffected,
+because the setup does not delay a run start. **A ruling would decide** whether `enabled: false` is part of what
+"launchable" means for this task.
+
+**OQ-110 — Which retries come first when a model call fails: the dispatch layer's, or the ladder's?** *(REQ-CONFIG-086, whose `num_retries` "overrides the dispatch layer's default of **5**"; REQ-ORCH-091 (c), the suspended wait on a 429 without Retry-After, with its `model_wait` issue; REQ-ORCH-092, the transient budget (default 1), its delay min(2.0, n) and its `transient_llm_error` issue; REQ-SESSION-142, the session log. Raised 2026-09-29 from the first live run's finding L3 under [R-067](../product/requests.md#r-067), and ruled in the same entry. Raised as OQ-109 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
+
+In the live run of 2026-09-29 (pack `2026-09-29T02-41-56-779Z`, scenario `faults-ladder`, session `474a2d22`) the
+recording proxy answered one completion 429 and the next 500. Both were retried inside the model client by the SDK's own
+backoff — the 429 at +2.0 s, the 500 at +4.0 s — because `packages/model/src/ai-sdk-client.ts:242` passes
+`maxRetries: req.retries`, and the run's `modelRetries` is 5 (`packages/engine/src/run/run.ts:89`). The ladder
+(`run/ladder.ts`) was never reached: the session has no issue row, its timeline holds only `run_start` and `run_end`,
+and its session log says nothing of either failure. Read alone, REQ-ORCH-091 (c) has a 429 wait 60 s and record a
+`model_wait` issue, and REQ-ORCH-092 has a 500 retried once after 1 s and recorded as `transient_llm_error`; REQ-CONFIG-086
+has a dispatch layer that retries five times by default before either sees the failure. The 2026-09-22 row of
+`first-executions.md` read the same traffic as the ladder recovering.
+
+**Ruled 2026-09-29 — as the specification states the two layers, [R-067](../product/requests.md#r-067).** The owner took the
+recommendation. The dispatch layer's retries (REQ-CONFIG-086's `num_retries`, default 5) come first, and the ladder
+(REQ-ORCH-091/092) takes over when they are exhausted; nothing is added to the ladder, and neither requirement is
+amended. So that an absorbed retry is diagnosable, each retry the dispatch layer absorbs SHALL be written to the session
+log (REQ-SESSION-142) with the status it met and the delay it waited. The 2026-09-22 row of `first-executions.md` is
+corrected in place, its falsified reason kept beside the replacement, and the live run's ladder check is to say what it
+can see: that the run survived the refusals, not that the ladder handled them. Nothing is built by the ruling; the
+session-log line is owed to the note that records L3, and the check to the note that records H3.
+
+**OQ-111 — Which part of a long child's transcript does the report summariser read?** *(REQ-ORCH-110, which caps the transcript the report-producing pass is given at 12,000 characters in total and 2,000 per event, and does not say which part is kept; REQ-ORCH-108, which has parents consume the report in place of the transcript; REQ-ORCH-109, whose runner-owned fields the summariser cannot write; `PD-LIBRARY-001`, the report's commands. Raised 2026-09-29 from the duress live run's finding D1 under [R-067](../product/requests.md#r-067), and ruled in the same entry. Raised as OQ-110 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
+
+`packages/engine/src/children/report.ts` builds the pass's transcript by joining the events and cutting the result to
+12,000 characters from its head (`transcriptText`, line 79). In the duress live run of 2026-09-29 (pack
+`2026-09-29T03-06-14-929Z`, session `379f1490`) the request that summarised child `d` was 12,388 characters and ended
+`… [63288 characters omitted]` before `d`'s first edit. Five of the seven stored reports contradict their own
+deterministic `edited_files`: `a` "did not write the documentation file", `c2` "does not show the creation of
+docs/overview.md", `d` "shows no edits to the documents", `e` "No write to docs/decisions.md was observed", `d2` "shows no
+document writes". `d`'s artifact read "No write or edit tool calls … are shown" directly above its own "Edited Files"
+list, and it was the first thing the continuation `d2` read.
+
+**Ruled 2026-09-29 — [R-067](../product/requests.md#r-067).** The owner took the recommendation. Within REQ-ORCH-110's
+12,000-character cap, the transcript the summariser reads keeps its **start** — the task as given — and its **most
+recent part**, with the omission marked between them, stating how much was left out. The pass is also given the
+report's deterministic facts — the files the child edited, the commands it ran and their outcomes — so a report never
+denies work the record shows. REQ-ORCH-110 fixes how much and not which part, so the ruling fills a silence and amends
+nothing; the facts are what REQ-ORCH-109 already keeps runner-owned, given to the pass to condense and never to
+overwrite. Nothing is built by the ruling; the repair is owed to the note that records D1.
+
+**Built 2026-09-29 under [R-067](../product/requests.md#r-067).** `produceReport` reads `reportTranscript` and hands the
+pass `reportFacts` beside it. The transcript's start is the ledger row's task, as one event cut to REQ-ORCH-110's 2,000;
+the blocks the payload puts ahead of the task are replaced by a marker stating their size. Then comes the marker, then
+the most recent part, 12,000 characters with the markers. The note is
+[`a-long-childs-report-denies-the-edits-it-made`](../defects/fixed/a-long-childs-report-denies-the-edits-it-made.md),
+repaired. Two bounds the ruling leaves to the build are raised as questions of their own: a task longer than 2,000
+characters (OQ-119) and the size of the facts (OQ-120).
+Live on 2026-09-29 (duress, session `b4a768a2`), none of the six stored reports denied its own edited files, where the
+earlier run had five of seven. The reconciling child's request left 57,547 characters out and still ended on its edits.
+
+*The build's first claim, falsified by the branch's verification and kept beside its correction:* "the first event, the
+task as given". The first event is the child's whole REQ-TOOLS-154 payload, and the task comes last in it. In that same
+live run every summarising request's start began `user: Workspace root: …` and was cut inside the task, and the request
+for the last child lost its task's `EXPECTED OUTCOME` and `MUST DO`. The facts, the most recent part and the stored
+reports measured above are unaffected; the start was not the task. The start built since is the task itself. Live
+again on 2026-09-29 (duress, session `059ae1d7`), all six summarising requests started with the child's task, whole,
+with 313 to 1,653 characters of payload blocks marked omitted ahead of it, and none of the six summaries denied its facts.
+
+
+**OQ-112 — May `delegate` give a `write_scope` to a persona that holds no file-writing tool?** *(`PD-TOOLS-006` over REQ-TOOLS-152; REQ-ORCH-095, whose text-only completion let the child end `succeeded`. Raised 2026-09-29 from the duress live run's finding D6 under [R-067](../product/requests.md#r-067), and ruled in the same entry. Raised as OQ-111 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
+
+`PD-TOOLS-006` validates a `write_scope`'s patterns — empty, absolute, outside the root — and says nothing of the persona
+that declares it. In the duress live run of 2026-09-29 (pack `2026-09-29T03-06-14-929Z`, session `379f1490`, tool call
+#24) the orchestrator delegated `c: write docs/overview.md` to `codebase-analyst`, whose granted tools are read-only, with
+`write_scope: ["docs/overview.md"]`. The call was accepted (`queued`). The child ran for 2 min 47 s, answered that it had no
+file-writing tool, and its report read `succeeded` — REQ-ORCH-095 lets a text-only ending succeed after its one
+re-prompt. The orchestrator then commissioned `c2` for the same file. The scope claimed a path nobody the claim protected
+could write, and fenced the parent and every sibling out of it meanwhile.
+
+**Ruled 2026-09-29 — by [`PD-TOOLS-006`](../product/directives.md#pd-tools-006) revision 3, [R-067](../product/requests.md#r-067).** The
+owner took the recommendation. A delegation carrying a `write_scope` to a persona that holds no file-writing tool —
+neither `write_file` nor `haet_edit` (with its alias `haet`) — is refused beside REQ-TOOLS-152's other refusals: status
+`rejected`, before any record is created and with no task id. Its reason says that the persona cannot write files and,
+where the persona catalogue shows any, names the personas that can. A persona's tools are the ones it would be granted
+for the child, after REQ-TOOLS-006's controls. REQ-TOOLS-152 is narrowed by `PD-TOOLS-006`, and its back-pointer is
+amended in place. REQ-ORCH-095 is untouched: a child with no scope that answers in text still ends as that requirement
+says. Nothing is built by this ruling; the finding's note is D6's in `docs/defects/`.
+
+**Built 2026-09-29 under [R-067](../product/requests.md#r-067).** `IterationChildren.delegate` refuses the scope straight
+after the scope's own validation (`writesFiles`, `scopeWithoutWriterReason` and `fileWriters` in
+`children/write-scope.ts`); the note is
+[`delegate-accepts-a-write-scope-for-a-persona-that-cannot-write`](../defects/fixed/delegate-accepts-a-write-scope-for-a-persona-that-cannot-write.md),
+repaired. "After REQ-TOOLS-006's controls" is read as the two a child's grant meets, `coordinator_only` and
+`read_only`: the run-scoped allow-list binds the entry agent alone, and the `tool_restrictions` map is applied to no
+agent's grant today (recorded as a defect of its own), so the check follows the grant the tool port builds.
+The persona checked is the one the ledger resolves, an alias included; the first build read the built-in table without
+its aliases, so `playwright` with a scope was accepted as `ui-verifier` (found by the branch's verification, repaired).
+Live again on 2026-09-29 (duress, session `059ae1d7`), scopes given to `codebase-analyst` and to `verifier` were both
+refused, and each task went next to a writer.
+Live on 2026-09-29 (duress, session `b4a768a2`) the orchestrator gave a scope to `verifier`. It was refused with the
+writers named, and 15 s later it delegated the task to `docs-writer`.
+
+**OQ-113 — When does REQ-LIBRARY-092's materialisation fall back to the canonical agent name?** *(REQ-LIBRARY-092, "idempotent keyed on the task id (falling back to the canonical agent name)", and its "Every terminal child report is materialized"; REQ-SESSION-115's handoff artifact as `PD-ORCH-005` clause 20 chooses it. Raised 2026-09-29 from the open note under [R-067](../product/requests.md#r-067), and ruled in the same entry. Raised as OQ-112 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
+
+`materialiseChildReport` (`packages/engine/src/artifacts/store.ts:322`) looks the artifact up by the child's task id
+and, when that finds none, by its canonical name. A child of a later iteration whose name repeats an earlier child's
+finds the earlier report's artifact by name and rewrites it in place: the earlier report's summary, findings and status
+are replaced by the later child's, while the record keeps the earlier child's task id and creation time
+([`a-reused-canonical-name-overwrites-an-earlier-iterations-report-artifact.md`](../defects/a-reused-canonical-name-overwrites-an-earlier-iterations-report-artifact.md)).
+The requirement's parenthesis does not say when the fallback applies. Read as "when the task-id lookup finds nothing",
+two children with different task ids share one artifact, and the earlier child's report is no longer materialized,
+against the same requirement's next sentence.
+
+**Ruled 2026-09-29 — answered by amendment, [R-067](../product/requests.md#r-067).** The owner took the recommendation:
+materialisation falls back to the canonical name only for a record that carries no task id, and two children with
+different task ids never share or overwrite an artifact. The requirement disagreed with itself under the reading built,
+so it is corrected in place rather than narrowed by a directive: `REQ-LIBRARY-092`'s parenthesis now says when the
+fallback applies, with the inline mark "accepted amendment 2026-09-29, OQ-113", and domain 14's resolution record
+carries the note. Nothing is built by the ruling; the repair is owed to the note above.
+
+**OQ-114 — Do the specification's fixed figures still hold when the model on the critical path reasons before it answers?** *(REQ-ORCH-108 and REQ-ORCH-110, the report-producing pass before the parent resumes, two attempts within 120 s; REQ-ORCH-007 and REQ-ORCH-008, the 12.0 s intent bound and its fallback; REQ-TOOLS-006, whose `coordinator_only` control removes the orchestrator's terminal; REQ-CONFIG-467 and REQ-ORCH-104, the 2.0 s loop-classification bound and its fallback; REQ-LIBRARY-127 and REQ-CONFIG-118, analysis cancelled at shutdown and its 60 s bound; REQ-TOOLS-039 under REQ-TOOLS-033, the recursive-delete deny rule; `PD-ORCH-004` revision 2, "nothing of the continued child is injected". Raised 2026-09-29 from the live runs' frictions F1 to F5 and the duress run's continuation under [R-067](../product/requests.md#r-067). Open. Raised as OQ-113 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
+
+The live runs of 2026-09-29 ran the built product against the owner's self-hosted endpoint (`qwen3.8-flash-next`, a
+model that reasons before it answers; packs `2026-09-29T02-41-56-779Z` and `2026-09-29T03-06-14-929Z`). The product met
+each requirement below as written, and each written figure cost the run time or tokens on its critical path.
+
+- **The report summariser (F1).** Every child's report waits on a summarising call before its parent resumes. Summariser
+  time on the critical path: `edit` 47.0 s; `requirements` 60.0 s and 39.2 s; `frictions` 40.8 s; `terminal` 9.7 s and
+  33.9 s — 230.6 s of the 1,182.0 s wall clock of the four delegating runs (19.5 %). Each summary is a short JSON and
+  took 647 to 3,430 output tokens, most of them reasoning. In the duress run seven summaries took 172.8 s, and 8,743 of
+  their 10,838 output tokens were reasoning.
+- **The intent bound (F2).** The pre-flight classification waited 3.5, 12.0, 10.2, 8.0, 4.5, 5.9 and 12.0 s (56.1 s in all)
+  and ran into its 12 s bound twice, taking REQ-ORCH-007's fallback (`moderate_feature`); each answer took 207 to 1,641
+  output tokens for three fields. The same bound was raised from 8.0 s under ESC-35 for a slow first token; here the
+  cost is the reasoning. And the orchestrator holds no terminal (REQ-TOOLS-006): asked to run `node --test` itself, it
+  told the user to run it.
+- **The loop-classification bound (F3).** The 2.0 s bound cannot be met by this model: one classification took 8.5 s and
+  610 output tokens, and in the duress run the classifier answered `"loop_detected": false` 23 s after the fallback had
+  already declared a loop on counts (recorded as D3, a defect of the fallback's own).
+- **The improvement analysis (F4).** No post-run analysis completed in either run: `improvement_artifacts` holds no row.
+  Each scenario quit within 3 s of its run ending, and REQ-LIBRARY-127 cancels an analysis in progress at shutdown; the
+  six analyst calls took 22 to 134 s at the endpoint, three of them beyond REQ-CONFIG-118's 60 s bound.
+- **The recursive-delete rule (F5).** The starter deny rule refused `rm -rf /tmp/mut` on a scratch path outside the
+  workspace (`edit`, tool call #38), as REQ-TOOLS-039 states it.
+- **The continuation that starts from nothing.** `PD-ORCH-004` gives a continuation no part of the continued child, and
+  the duress run's continuation `d2` of the cut-off `d` made 34 reads before its first edit — 6 min 40 s of its 515 s —
+  re-deriving what `d` had known, beside a report whose summary denied `d`'s edits (OQ-111).
+
+**What the build proceeds under.** Every figure as written; nothing here is a defect of the code.
+
+**What a ruling decides.** Whether any of these figures or rules should change for a model of this kind — for example
+whether the summarising pass may run off the parent's critical path or be skipped where the report's deterministic facts
+suffice, whether the intent and loop-classification bounds should scale with the model's measured latency or request no
+reasoning, whether an analysis in progress may finish within a bound after the last window closes, whether the
+recursive-delete rule should admit a scratch directory, and whether a continuation should be given its predecessor's
+record or report beyond the offer. Each is a change to a requirement or a directive that states the behavioural target
+or the owner's choice, so each would be a directive or a revision, not a repair.
+
+**OQ-115 — Should the bundled code-intelligence server's tool descriptions reach the system prompt verbatim?** *(REQ-MCP-101, which renders each tool's description text in the persona's MCP section; REQ-MCP-015, which puts usage-instruction retrieval in the READ tier every persona carrying the server holds. Raised 2026-09-29 from the first live run's finding L8 under [R-067](../product/requests.md#r-067). Open. Raised as OQ-114 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
+
+`packages/config/src/mcp/prompt.ts:29` renders each server tool's description as REQ-MCP-101 requires, and the bundled
+server's usage-instruction tool describes itself imperatively ("IMPORTANT: If you have not yet read the manual, call this
+tool immediately …"; bound as `initial_instructions` in READ by
+`packages/config/src/mcp/code-intelligence-manifest.generated.ts:36`). Every agent's system prompt carries it, and agents
+obey it. In the live run of 2026-09-29 it was called three times — the orchestrator's first call in `requirements`
+(2,188 ms), the verifier in the same session, and a child in `frictions` (2,244 ms) — and again by the orchestrator and
+one child in the duress run. Each call returns 7.1 to 7.5 thousand characters, which every later request of that agent
+re-sends: 33 requests in the first run, about 60,000 input tokens. The instruction also moves each agent's first step
+onto a manual about a tool it may not need.
+
+**What the build proceeds under.** REQ-MCP-101 as written: the description rendered verbatim. No requirement lets the
+product rewrite a server's own description, and REQ-MCP-015 grants the tool.
+
+**What a ruling decides.** Whether the product may substitute its own description for a bundled server's tool (a
+product-owned override the manifest carries), whether usage-instruction retrieval should leave the READ tier or the
+built-in grants, or whether the cost stands. Each departs from REQ-MCP-101 or REQ-MCP-015, which state the target.
+
+**OQ-116 — Is a run's displayed tool-call total the persisted one while a long pass is still running?** *(REQ-ORCH-097, which accumulates per-child tool-call counters "after each successful execution pass"; REQ-MONITOR-102, which persists a session-wide total and has a displayed total be the persisted value. Raised 2026-09-29 from the duress live run's finding D4 under [R-067](../product/requests.md#r-067). Open. Raised as OQ-115 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
+
+The root's calls are added to the persisted total after its turn returns, and a child's when it settles
+(`packages/engine/src/run/run.ts`, `packages/engine/src/children/orchestration.ts`). In the duress run of 2026-09-29 (pack
+`2026-09-29T03-06-14-929Z`, session `379f1490`) the root's one execution pass lasted the whole 40-minute run: at the
+deadline `sessions.tool_calls` read 240 against 309 `tool_calls` rows — the orchestrator's 54 and the running child
+`f`'s 15 missing, `f`'s own `children.tool_calls` 0 — and the autopsy's header said 240 above a per-tool breakdown summing
+to 309. REQ-ORCH-097's "after each successful execution pass" is met to the letter, and a surface following REQ-MONITOR-102
+shows a figure 69 calls behind the record for as long as the pass lasts. The crash half of the same finding — calls made
+before a crash that never reach the total — is a defect of its own,
+[`a-roots-calls-before-a-crash-never-reach-the-session-total.md`](../defects/a-roots-calls-before-a-crash-never-reach-the-session-total.md).
+
+**What the build proceeds under.** REQ-ORCH-097 as written: accumulated at the end of each pass.
+
+**What a ruling decides.** Whether the counters are accumulated as each call completes, so the displayed total follows the
+record during a pass, which would amend or narrow REQ-ORCH-097's timing; or whether the lag stands and the surface says
+the total is as of the last completed pass.
+
+**OQ-117 — What is an iteration told of a task it takes up that is not the run's own, and with what?** *(REQ-CHAT-040, whose queued prompt becomes a task "carrying the prompt text as its content"; REQ-ORCH-004 and REQ-ORCH-135, whose task a resumed session carries on and "stays anchored"; REQ-ORCH-072, which gives the root execution record "the task's execution payload"; REQ-CHAT-090 and REQ-CHAT-091, which let the user rename a task; and `PD-ORCH-005` clause 17 with OQ-102, whose message is told in words of its own. Raised 2026-09-29 by the repair of [`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`](../defects/fixed/every-iteration-is-sent-the-prompt-the-run-was-launched-with.md) under [R-067](../product/requests.md#r-067). Open.)*
+
+No requirement says what an iteration's first message holds when the task it selected is not the one the launch
+content states: a queued prompt (REQ-CHAT-040), a task a pause, a stop or a death put back and a later message's run
+takes up (REQ-ORCH-135), a task after a plan decision's gated one, or an improvement run's proposal (REQ-LIBRARY-059,
+whose launch prompt lists every proposal). The recorded defect sent such an iteration the launch content alone, so the
+task was marked done without ever reaching a model.
+
+**What the build proceeds under.**
+
+- **The launch content is the base, and the task follows it.** Every execution iteration's first message is the launch
+  content — which keeps the three flows the defect named: the approved plan, the executor's instructions and the
+  continuation's handoff — then, when the selected task is not the run's own (`RunDeps.taskId`) and its text is not the
+  launch content's request, a text part naming it the task to work on: "The task for this iteration is the task below,
+  from the session's todo. Work on it now. What precedes it is what this run was launched with: read it as context, and
+  leave any other work it asks for to its own task." followed by the task's text. The words are the build's; a
+  continue's message keeps OQ-102's. The alternative — the task's text alone, in place of the launch content — was
+  tried and reverted in `PD-ORCH-005` phase 2, because it loses all three flows.
+- **A task of the same text as the launch content's request is told nothing more**, whichever task it is: the Continue
+  action that restates a pending request, a plan decision's gated request, or a queued prompt that repeats the launch
+  prompt word for word. The launch content already states it.
+- **The run's own task is told nothing more even when the user renamed it** (REQ-CHAT-091): its iteration is sent the
+  launch content, which still states the request as it was sent.
+- **Only the task's text is sent.** A task holds its text only, so a request put back and taken up by a later run is sent
+  without the images its prompt carried, as OQ-102 reads for a message.
+- **The handoff is not rebuilt** (OQ-104, OQ-106).
+
+**What a ruling decides.** Whether the product should word the task part otherwise, or name a queued prompt as
+REQ-CHAT-040's "Queued Prompt: <id>"; whether a task that repeats the launch content's request should still be told it;
+whether a renamed own task should be sent its new text; and whether a task taken up by a later run should carry the
+images its prompt was sent with, which needs a task to hold them.
+
+**OQ-118 — May the end-of-run summary say which rest a person asked for, and what a continue will resume?** *(REQ-ORCH-082
+rule 1, "not asserting which of the two person-stops it was" and "no rule of this list may distinguish the two";
+REQ-MONITOR-125, a paused session persists "with an interruption message"; `PD-ORCH-005` clauses 2, 3 and 21, under which
+a pause and a stop leave agents a continue resumes and the explicit cancel leaves none, and all three record the stop
+reason `user_cancelled`. Raised 2026-09-29 by the repair of
+[`a-paused-runs-notice-says-a-person-stopped-it.md`](../defects/fixed/a-paused-runs-notice-says-a-person-stopped-it.md)
+under [R-067](../product/requests.md#r-067). Open.)*
+
+The note asked for rule 1's message to say which rest it was — a pause, a stop or the explicit cancel — and whether a
+continue resumes the agents, since `PD-ORCH-005` made that matter. REQ-ORCH-082 forbids exactly that: its rule 1 conveys
+that "the run came to rest because a person stopped it" without "asserting which of the two person-stops it was", and "no
+rule of this list may distinguish the two, there being nothing on the stop-reason axis to distinguish them by". Clause 21
+confirms the axis is still empty (a stop and a pause "record the same stop reason"), and no directive names REQ-ORCH-082.
+Wording the arm by rest, as the triage proposed (passing `restCause`, the final stop and the pause request to
+`summarise`), would change a clause, so it was not built.
+
+**The reading built.** Rule 1's message is worded so it fits all three rests and names none: "The run came to rest at the
+user's request." It no longer says "stopped", which a paused session's banner set beside its own row "Run paused at the
+user's request" read as a stop. It bakes in no persisted status, so it stands whatever a rest persists (clause 21's
+`paused`, R-067's ruling 2). Which rest it was is told by the transcript's system row ("Run paused at the user's request;
+continue it from the composer." after a pause, "Run paused: interrupted by user." after a stop or a cancel) and by the
+timeline; what a continue resumes is told by the Continue action's count (`resumable`, clause 6 and clause 19), which
+reads nothing after the explicit cancel because nothing is left to resume.
+
+**What a ruling decides.** Whether REQ-ORCH-082 should gain a way to tell a pause, a stop and the explicit cancel apart
+in the summary (a directive naming it, or a stop reason of the pause's own in REQ-MONITOR-301's closed set), so that the
+one notice a rest raises can say which it was and whether a continue resumes its agents; or whether the neutral wording
+stands and the row and the Continue action are where the difference is told.
+
+**OQ-119 — May the task the report summariser keeps as its start be longer than REQ-ORCH-110's 2,000 characters per event?** *(REQ-ORCH-110, "2000 characters for any one event"; OQ-111's ruling, whose kept start is "the task as given"; REQ-TOOLS-154, whose payload carries the task last. Raised 2026-09-29 by the repair of D1 under [R-067](../product/requests.md#r-067), from the branch's verification; raised as OQ-118 on its branch and renumbered at the merge, OQ-117 and OQ-118 having been taken on `main`. Open.)*
+
+OQ-111's first build kept the transcript's first event as its start. That event is the child's whole REQ-TOOLS-154
+payload, which puts the workspace root, the write scopes, the sibling index, the attached artifacts and the inherited
+reports ahead of the task, so the per-event cut kept those blocks and lost the task's tail. In the duress live run of
+2026-09-29 (pack `2026-09-29T07-18-48-658Z`, session `b4a768a2`), every one of the six summarising requests began
+`user: Workspace root: …` and was cut inside the task, 297 to 3,017 of its characters omitted. A payload with a sibling
+index and inherited reports ahead of the task lost the task entirely. The repair keeps the ledger row's task itself as
+the start, with the blocks ahead of it replaced by a marker stating their size. The delegations in that run carried
+tasks of 105 to 3,447 characters, and six of the twelve were longer than 2,000.
+
+**What the build proceeds under.** The start is one event, so REQ-ORCH-110's per-event cut applies to it: a task longer
+than 2,000 characters keeps its first 2,000 (the marker ahead of it included), and the rest is marked omitted like any
+event's. The task's closing sections are the ones lost.
+
+**What a ruling decides.** Whether the task as given is exempt from the per-event cap, so its whole is kept within the
+12,000 total. That would narrow REQ-ORCH-110's per-event figure for this one event. The alternative is that the cut stands.
+
+**OQ-120 — How large may the facts given to the report summariser be, and which are kept when they are larger?** *(OQ-111's ruling, which gives the pass the report's deterministic facts and no bound on them; REQ-ORCH-110, "The report-producing pass MUST be bounded"; REQ-ORCH-109. Raised 2026-09-29 by the repair of D1 under [R-067](../product/requests.md#r-067), from the branch's verification; raised as OQ-119 on its branch and renumbered at the merge. Open.)*
+
+The ruling adds the edited files and the commands with their outcomes to what the pass reads, and says nothing of their
+size. A child that ran many long commands would make the pass unbounded, which REQ-ORCH-110 forbids.
+
+**What the build proceeds under.** REQ-ORCH-110's two figures, borrowed: each command is cut to 2,000 characters, and the
+block to 12,000 from its head, which keeps the edited files and the earliest commands. In the duress live run of
+2026-09-29 no block came near either figure.
+
+**What a ruling decides.** Whether those figures are the facts' own, or the facts count within the transcript's 12,000;
+and, where the block is cut, whether it keeps the earliest commands or, as the transcript does, the most recent.
+
+**OQ-121 — Does the explicit cancel's drain wait past the stop's 30 s?** *(REQ-ORCH-080, "wait up to the shutdown-drain
+timeout (default 120 s; 0 disables) for still-running background children without cancelling them"; REQ-SESSION-092,
+"if the loop has not reached a stop check within 30.0 seconds, a hard cancel follows"; REQ-MONITOR-129; `PD-ORCH-005`
+clause 3, which keeps the explicit cancel "as today", and OQ-96's "The explicit cancel and a child summarising". Raised
+2026-09-29 by the repair round of
+[`a-root-call-that-ignores-the-stop-holds-the-run-open.md`](../defects/fixed/a-root-call-that-ignores-the-stop-holds-the-run-open.md)
+under [R-067](../product/requests.md#r-067). Numbered OQ-119 on its branch; renumbered OQ-121 at the merge, origin/main's OQ-119 and OQ-120 having taken the numbers first. Open.)*
+
+A stop that brings the run to rest leaves the background children `paused` and drains nothing (`PD-ORCH-005`). The
+explicit cancel cancels them, so REQ-ORCH-080's drain applies to it: the run waits up to the drain timeout for them,
+records the drain-timeout issue for what is left and then cancels it. REQ-SESSION-092 bounds the same stop at 30 s, after
+which a hard cancel follows, and REQ-ORCH-080's default is four times that. The two requirements do not say which
+bound governs when both apply. The first build of the root's bound hid the question: a root that returned drained, and
+one the grace gave up on skipped the drain, so the same cancel waited up to 120 s or not at all depending on the root
+(found by the verifier of that build).
+
+**The reading built.** The drain is REQ-ORCH-080's own bound, not the grace's, and it runs whether the root returned or
+was given up on at the grace (`Run.turn`): the explicit cancel with active background children can take the grace and
+then the drain timeout, 150 s at the defaults. The 30 s stays the bound on how long any one execution is awaited: once
+the drain is over, a child execution still running past the grace, counted from the first stop request, is detached
+(`IterationChildren.outlast`), so it writes nothing into the finished session (REQ-SESSION-094). A stop
+and a quit drain nothing and end within the one 30 s. The application's quit (REQ-MONITOR-131, REQ-MONITOR-283) is a
+stop, so its 30 s force exit is not met by a drain.
+
+**What a ruling decides.** Whether the explicit cancel's drain should be bounded by REQ-SESSION-092's 30 s (the drain
+given what is left of the grace, or the drain replaced by the grace for the cancel), or run after it as built; and
+whether REQ-ORCH-080's drain should still apply to the explicit cancel at all, now that `PD-ORCH-005` has a stop leave
+the background children paused rather than cancelled.
+
+**OQ-122 — May the window open the setup dialog before the open's resolution, and what does a skip answered in that interval record?** *(REQ-WORKSPACE-083, REQ-WORKSPACE-084, REQ-WORKSPACE-086, REQ-WORKSPACE-088, REQ-WORKSPACE-102, REQ-WORKSPACE-105, REQ-WORKSPACE-111, REQ-WORKSPACE-141; ADR-0064, "On Linux as root — 2026-09-28". Raised 2026-09-29 by repairing `../defects/fixed/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md` under [R-062](../product/requests.md#r-062). Raised as OQ-109 on its branch, then renumbered OQ-118 on the branch, OQ-109 to OQ-117 having been taken on `main` meanwhile, and renumbered OQ-122 at the merge, OQ-118 to OQ-121 having been taken on `main` by then.)*
+
+The window reads the initialization state as it mounts. REQ-WORKSPACE-105 makes the prompt due "exactly when at least
+one consent-requiring task is pending and no run is in progress", and the mount read's values say so, so the window
+opens the dialog. Main's one automatic resolution comes later, in REQ-WORKSPACE-141's interactive slot, 800 ms after the
+workspace is acknowledged. But REQ-WORKSPACE-083 makes the prompt request a **product of that resolution**, and the same
+resolution starts the background tasks "regardless of whether a prompt is also due". A skip answered between the two
+meets clauses that pull apart:
+
+- REQ-WORKSPACE-086 records "every given pending task id as skipped", and REQ-WORKSPACE-111 persists "the listed task
+  ids". The dialog lists the runnable tasks (REQ-WORKSPACE-083, REQ-WORKSPACE-106), `code-intelligence-setup` among them.
+- REQ-WORKSPACE-088 says that task "starts by itself when the workspace opens". A skip recorded before the resolution
+  leaves it resolved, so the resolution starts nothing, now or on any later open.
+- REQ-WORKSPACE-084 owes an **attempted** task exactly one outcome. ADR-0064's finding (2) leaves such a task out of a
+  skip on that ground. A task not yet started is not attempted.
+
+Readings:
+
+- **the dialog waits for the resolution**: the window auto-opens the dialog only once the open's resolution has produced
+  the prompt request. That needs a signal beside REQ-WORKSPACE-105's nine values, which that clause says are "exactly"
+  what the interface works from. The composer gate of REQ-WORKSPACE-112 would also stay off until then.
+- **the skip brings the resolution forward**: the dialog opens on the values. A skip that arrives before the open's one
+  automatic resolution performs that resolution first, or waits for the one under way. The background task it starts
+  is then attempted, and finding (2)'s reading applies. The slot then finds the resolution made (REQ-WORKSPACE-102).
+- **the skip withholds the owed task**: a pending background task is left out of the skip until the resolution has
+  started it. This contradicts REQ-WORKSPACE-086 and REQ-WORKSPACE-111 for an id that is given and listed. It was built
+  first on the repairing branch and withdrawn before it merged.
+- **literal**: the skip records every given id, and the background task never starts on that open or any later one.
+  This contradicts REQ-WORKSPACE-083 and REQ-WORKSPACE-088.
+
+**What the build proceeds under:** the second reading (`InitializationCoordinator.skip` and `resolve` in
+`apps/desktop/src/main/initialization.ts`). It keeps REQ-WORKSPACE-105's values as they are. It records every given
+id except one the live run is attempting, which is the exception ADR-0064 already rests on REQ-WORKSPACE-084, and one
+already recorded completed, which is not pending (REQ-WORKSPACE-086; added 2026-09-29 by the repair of
+`../defects/fixed/a-skip-can-move-a-completed-task-into-skipped.md`). It runs the
+open's resolution once, and only when the window has plainly accepted input, since the skip is the window's own
+answer (REQ-WORKSPACE-102). **A ruling would decide** whether the dialog may precede the resolution at all. If it may
+not, the first reading replaces the second, and the skip path then never meets an unresolved open.
+
+**OQ-123 — Which run does REQ-WORKSPACE-105's "no run is in progress" mean: any run, or one that answers the setup prompt?** *(REQ-WORKSPACE-083, REQ-WORKSPACE-103, REQ-WORKSPACE-105, REQ-WORKSPACE-106, REQ-WORKSPACE-107, REQ-WORKSPACE-110, REQ-WORKSPACE-112; ADR-0064, "On Linux as root — 2026-09-28". Raised 2026-09-29 by repairing `../defects/fixed/the-setup-dialog-takes-a-background-run-as-its-own.md` under [R-062](../product/requests.md#r-062). Raised as OQ-110 on its branch, then renumbered OQ-119 on the branch, OQ-109 to OQ-117 having been taken on `main` meanwhile — `main`'s OQ-110 already stood when this one was raised under that number — and renumbered OQ-123 at the merge, OQ-118 to OQ-121 having been taken on `main` by then.)*
+
+REQ-WORKSPACE-105 makes the setup prompt due "exactly when at least one consent-requiring task is pending and no run is
+in progress", and its nine values carry one in-progress flag. On a fresh workspace with a consent task, the open's
+resolution produces the prompt request **and** starts the background tasks "regardless of whether a prompt is also due"
+(REQ-WORKSPACE-083). So a background run is in progress while the prompt it was raised beside is still unanswered. The
+clauses pull apart:
+
+- REQ-WORKSPACE-107 closes an auto-opened, unanswered dialog without a skip "when the underlying prompt request
+  disappears". REQ-WORKSPACE-112 gates the composer "while the setup prompt is unanswered".
+- REQ-WORKSPACE-110 says "Pressing Initialize while a run is already live SHALL start nothing and flip the dialog to its
+  in-progress state". That describes a dialog still in its prompt state, with Initialize to press, while a run is live.
+  On one window the only such run is a background run.
+- REQ-WORKSPACE-103: background tasks start "without any dialog and without blocking the interface; nothing renders
+  their progress live".
+
+Readings:
+
+- **any run**: while the background run is live the prompt is not due. An auto-opened dialog closes unanswered
+  (REQ-WORKSPACE-107), the composer gate lifts, and when the run ends the prompt is due again, but the dialog has
+  already had its one automatic opening (REQ-WORKSPACE-105). The user meets the gate with the dialog shut. This reading
+  leaves REQ-WORKSPACE-110's case unreachable.
+- **a run that answers the prompt**: a run the user started, which runs the listed consent tasks. A background run
+  answers nothing, so the prompt stays due beside it, the gate stays on, and the dialog stays in its prompt state until
+  the user skips, or presses Initialize and so flips it to the live run (REQ-WORKSPACE-110).
+
+**What the build proceeds under:** the second reading. The state carries `backgroundRun` beside the report and the
+nine values, unchanged (`packages/contracts/src/initialization.ts`). `setupPromptDue` (`packages/ui/src/ProjectSetupDialog.tsx`)
+is the one answer that the window's auto-open and the composer gate read. The dialog draws a background run's report
+only once Initialize has been pressed (`dialogReport`). Before this, the built product followed neither reading
+consistently: the window lifted the gate for any run, as the first reading does, but kept the dialog open and drew the
+background run inside it. **A ruling would decide** which run REQ-WORKSPACE-105 means. If it is any run, the dialog closes
+on the background start and the composer gate goes with it.
+
+**OQ-124 — Which agents' elapsed clocks advance: REQ-MONITOR-045's "live", or every agent neither ended nor paused?** *(REQ-MONITOR-107, "While the agent is live the figure advances"; REQ-MONITOR-045, "An agent is \"live\" exactly when its presentation state is running"; REQ-MONITOR-064, whose "live (running, waiting, or queued)" uses the word in a second, wider sense; REQ-MONITOR-110/111 with resolution item 25 of `docs/spec/resolutions/02-run-monitoring-steering.md`, "A surface holding a spawn timestamp and showing a fallback … is now a defect"; OQ-100, whose reading keeps a `paused` agent's figure off "This task". Raised 2026-09-29 by the repair of
+[`a-waiting-agents-elapsed-time-is-not-shown.md`](../defects/fixed/a-waiting-agents-elapsed-time-is-not-shown.md)
+under [R-067](../product/requests.md#r-067). Open. Raised as OQ-122 and renumbered OQ-124 at the merge, main having
+taken OQ-122 and OQ-123.)*
+
+REQ-MONITOR-107 has the figure advance "while the agent is live" and fixed "once the agent is terminal", and says nothing of
+an agent that is neither. Read with REQ-MONITOR-045's definition, a waiting or queued agent is not live, so the
+requirement does not ask its figure to advance; but REQ-MONITOR-111 forbids the fallback wherever a spawn timestamp was
+recorded, so the figure must be shown, and a figure measured from the spawn timestamp that stood still while the agent
+waited would be neither its elapsed time nor its time at completion. REQ-MONITOR-064 already calls a running, waiting or
+queued agent live.
+
+**The reading built.** The clock has its own predicate, `clockAdvances` (`packages/ui/src/AgentTree.tsx`): an agent not
+ended, holding a parseable spawn timestamp, whose presentation state is running, waiting or queued — REQ-MONITOR-064's
+live set. Its figure is shown and advances on the surface's one-second tick on the four surfaces with a slot for it (the
+tree meta, the Mission table, the inspector meta, the persona window's context card); an ended agent's is fixed at
+completion minus spawn. `AgentRecord.live` keeps REQ-MONITOR-045's running-only sense and still drives the pulse, the
+motion and the inspector's writability. A `paused` agent keeps OQ-100's reading (no figure; the tree reads its state,
+the inspector and the context card their fallback), since nothing runs for it and REQ-CHAT-008's recovery state keeps
+the tick going. The tick condition (REQ-MONITOR-110) needed no change: it runs while the followed session is busy, and a
+running, waiting or queued agent is presented only then (a session at rest settles or pauses every unfinished agent).
+One case is not covered by that sentence, found at the verification of this repair: a session whose persisted status is
+literally `idle` is not reconciled (`reconcile` in `packages/engine/src/sessions.ts` excludes `idle`), so a non-terminal
+child held there would keep its running, waiting or queued state while the tick stands, and its figure would show without
+advancing. No path is known to leave a child unfinished under an `idle` session; it is stated, not built for.
+
+**What a ruling decides.** Whether a waiting or queued agent's figure advances (as built) or stands, and whether a
+`paused` agent should show a figure — fixed at its pause, or advancing — rather than OQ-100's fallback, which
+REQ-MONITOR-111's "a surface that has a spawn timestamp and shows a fallback … is a defect" reads against.
+
+**OQ-125 — What does an agent surface's artifact link open, and which artifacts does it list as an agent's?** *(REQ-MONITOR-052 and REQ-MONITOR-069, "artifact links", which name no target; REQ-MONITOR-044, "artifacts (name, producer, ready flag), produced and received artifact ids"; REQ-MONITOR-068's persona-wide card; REQ-LIBRARY-102, which lets "actions" deep-link to the Library's artifacts tab; REQ-LIBRARY-131's modeless, per-window artifact inspector; REQ-LIBRARY-136, which hides superseded artifacts from the Library's table. Raised 2026-09-29 by the repair of
+[`the-inspector-says-no-artifact-store-and-no-tools.md`](../defects/fixed/the-inspector-says-no-artifact-store-and-no-tools.md)
+(live-run finding K1) under [R-067](../product/requests.md#r-067). Open. Raised as OQ-123 and renumbered OQ-125 at
+the merge, main having taken OQ-122 and OQ-123.)*
+
+The specification asks for artifact links on three agent surfaces and says what an agent carries about its artifacts,
+but not what following a link does, nor whether a superseded artifact is still one of an agent's.
+
+**The reading built.** In the main window a link deep-links to the Library on its Artifacts tab and opens the artifact
+inspector on that artifact (REQ-LIBRARY-102's deep-link, REQ-LIBRARY-131's inspector, re-raised when already open). A persona
+window has no route to the main window's Library, so there a link opens the artifact inspector in the persona window itself
+— REQ-LIBRARY-131 makes the inspectors per window. An agent PRODUCED an artifact whose producer (`created_by`, else the
+record's canonical name — REQ-LIBRARY-136's "producer") is its name, and RECEIVED one whose consumers name it; the
+run-level agent is matched by the entry persona, which is the name the root publishes under
+(`a-roots-publish-names-its-persona-as-its-author.md` records why that is the persona and not the canonical name). A
+superseded artifact is listed nowhere, as the Library's table lists it nowhere. The ready flag is stated in words:
+"ready" (REQ-LIBRARY-136), else the status.
+
+**What a ruling decides.** Whether a link should open the Library (as built in the main window), an inspector in place
+(as built in a persona window) or something else; and whether an agent's links should keep its superseded artifacts.
 
 ## Design-reference dependencies
 

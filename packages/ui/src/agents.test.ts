@@ -13,7 +13,7 @@ const row = (over: Partial<TranscriptRow>): TranscriptRow => ({ index: 0, kind: 
 const session = (over: Partial<SessionRecord>): SessionRecord => ({
   id: 's1', executionStatus: 'running', workspaceRoot: 'C:\\ws', createdAt: 'x', updatedAt: '2026-09-05T10:05:00.000Z', historyOpen: true, truncation: { truncated: false, droppedCount: 0, cap: null, lastTrimAt: null }, agents: [], pendingApprovals: [], pendingQuestions: [],
   tokenUsage: { input: 0, output: 0 }, cost: '0', stopReason: null, runType: 'task_run', improvementArtifactIds: [], runStartedAt: '2026-09-05T10:00:00.000Z', iterationsCompleted: 0, summary: null, permissionMode: 'ask', sandboxed: false, backgroundSessions: 0, intent: null, queuedPrompts: [], todo: null, childTodos: {}, messageLimit: null, pausedAtCount: null, planGate: null, planReleased: false, resumable: null,
-  usageHistory: [], costLabel: { text: '', qualifier: 'unknown' }, toolCalls: { total: 5, agents: 2, byTool: [] }, worktreeBranch: null, wait: null, compression: null, entryContext: { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, ...over,
+  usageHistory: [], costLabel: { text: '', qualifier: 'unknown' }, toolCalls: { total: 5, agents: 2, byTool: [] }, worktreeBranch: null, wait: null, compression: null, entryContext: { used: 0, limit: DEFAULT_CONTEXT_CAPACITY }, entryTools: { resolved: [], called: [], active: [] }, artifacts: [], ...over,
 });
 
 describe('agents — the shared selection (REQ-MONITOR-042) and the run-level agent (REQ-MONITOR-043/057)', () => {
@@ -25,9 +25,12 @@ describe('agents — the shared selection (REQ-MONITOR-042) and the run-level ag
   });
   it('the run-level agent is the entry role: live while the run is busy, its own tool calls the session total less the children, no record-carried context', () => {
     const entry = { persona: 'orchestrator', model: 'scripted/alpha', reasoning: 'high', tools: ['delegate', 'read_file'] };
-    const r = runLevelAgent(session({ agents: [agent({ toolCalls: 2 })] }), entry, false)!;
-    expect(r).toMatchObject({ id: RUN_AGENT_ID, name: 'orchestrator', persona: 'orchestrator', presentationState: 'running', live: true, toolCalls: 3, model: 'scripted/alpha', reasoning: 'high', grantedTools: ['delegate', 'read_file'], contextUsed: 0, contextLimit: DEFAULT_CONTEXT_CAPACITY, completedAt: null });
-    expect(runLevelAgent(session({ executionStatus: 'completed' }), entry, false)).toMatchObject({ presentationState: 'done', live: false, completedAt: '2026-09-05T10:05:00.000Z' });
+    // Live-run finding K1: a live run-level agent's tools are its root port's resolution, never the declared set standing in
+    // (REQ-MONITOR-061) — this assertion read the declared `entry.tools` of a RUNNING agent until that repair.
+    const r = runLevelAgent(session({ agents: [agent({ toolCalls: 2 })], entryTools: { resolved: ['read_file', 'delegate'], called: [], active: [] } }), entry, false)!;
+    expect(r).toMatchObject({ id: RUN_AGENT_ID, name: 'orchestrator', persona: 'orchestrator', presentationState: 'running', live: true, toolCalls: 3, model: 'scripted/alpha', reasoning: 'high', grantedTools: ['read_file', 'delegate'], contextUsed: 0, contextLimit: DEFAULT_CONTEXT_CAPACITY, completedAt: null });
+    // With no live instance the persona's declared tools stand in (REQ-MONITOR-060).
+    expect(runLevelAgent(session({ executionStatus: 'completed' }), entry, false)).toMatchObject({ presentationState: 'done', live: false, completedAt: '2026-09-05T10:05:00.000Z', grantedTools: ['delegate', 'read_file'] });
     expect(runLevelAgent(session({ executionStatus: 'failed' }), entry, false)?.presentationState).toBe('failed');
     expect(runLevelAgent(session({ executionStatus: 'paused' }), entry, false)?.presentationState).toBe('cancelled');
     expect(runLevelAgent(session({ runStartedAt: null }), entry, false)).toBeNull();

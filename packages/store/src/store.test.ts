@@ -9,8 +9,10 @@ import { asSessionId, millis, mintMachineId, mintWorkspaceId, type MachineId, ty
 import { nodeClocks } from '@rotaris/platform';
 import { claimAsideName, CURRENT_SCHEMA_VERSION, MIGRATIONS, establishWorkspaceId, expandArtifact as expandArtifactInto, migrateStore, openStore, openWorkspaceStore, PROMPT_CAPS, restoreStore, SIDECAR_PATTERN, StoreDal, storeDir, storeFile, takeBackup, forgetSpelling, type RunHostControl } from './index.js';
 
-/** PD-ORCH-005 revision 4 clause 14: what v24 added, undone before v23's so a test that lowers `user_version` below 24 can climb it again. */
-const UNDO_V24 = 'DROP TABLE agent_fingerprints;';
+/** REQ-TOOLS-152 (R-067): what v25 added, undone before v24's so a test that lowers `user_version` below 25 can climb it again. */
+const UNDO_V25 = 'ALTER TABLE children DROP COLUMN suppress_auto_context;';
+/** PD-ORCH-005 revision 4 clause 14: what v24 added, undone before v23's so a test that lowers `user_version` below 24 can climb it again. v25's goes first. */
+const UNDO_V24 = `${UNDO_V25} DROP TABLE agent_fingerprints;`;
 /** PD-ORCH-005: what v23 added, undone so a test that lowers `user_version` below 23 can migrate forward through it again. v24's goes first. */
 const UNDO_V23 = `${UNDO_V24} ALTER TABLE children DROP COLUMN interruption; ALTER TABLE children DROP COLUMN resume_state; ALTER TABLE children DROP COLUMN write_scope; DROP TABLE iterations; DROP TABLE agent_messages; DROP TABLE agent_terminals;`;
 
@@ -654,6 +656,8 @@ describe('store - a declared index is a claim about a query plan; the plan is as
     // index's own order, with no sort (found by phase 6's third review: a hand-written copy did not cover the statement).
     const statements = (new StoreDal(r.db) as unknown as { stmts: Record<string, { source: string }> }).stmts;
     expect(plan(statements['artifactsOf']!.source, 's')).toBe('SEARCH artifacts USING INDEX artifacts_by_created (session_id=?)');
+    // Live-run finding K1 (REQ-MONITOR-044/052): the agent surfaces' links are read at every snapshot, through the same index.
+    expect(plan(statements['artifactLinksOf']!.source, 's')).toBe('SEARCH artifacts USING INDEX artifacts_by_created (session_id=?)');
     r.db.close();
     forgetSpelling(r.dir);
   });
@@ -762,11 +766,11 @@ describe('store — v5: the child ledger (ADR-0012, REQ-ORCH-043/049/050/151)', 
     // rebuilt `improvement_artifacts` for PD-LIBRARY-002's retrospective, which belongs to no session;
     // v20 gives `plan_cycles` the cascade REQ-SESSION-166's delete assumes; v21 records the cost qualifier; v22 the
     // continuation a child was delegated as (PD-ORCH-004); v23 the record a paused run resumes from (PD-ORCH-005); v24 the
-    // fingerprint each agent started with (PD-ORCH-005 revision 4 clause 14).
-    expect(CURRENT_SCHEMA_VERSION).toBe(24);
+    // fingerprint each agent started with (PD-ORCH-005 revision 4 clause 14); v25 the call's `suppress_auto_context` (REQ-TOOLS-152).
+    expect(CURRENT_SCHEMA_VERSION).toBe(25);
     dal.insertChild(child(sid, 'bg_00000001'));
     const c = dal.getChild(sid, 'bg_00000001')!;
-    expect(c).toMatchObject({ state: 'queued', launch_generation: 0, report_stored: 0, observed: 0, context_injected: 0, tool_calls: 0, completed_at: null, report: null, continuation_of: null, interruption: null, resume_state: null, write_scope: '[]' });
+    expect(c).toMatchObject({ state: 'queued', launch_generation: 0, report_stored: 0, observed: 0, context_injected: 0, tool_calls: 0, completed_at: null, report: null, continuation_of: null, interruption: null, resume_state: null, write_scope: '[]', suppress_auto_context: 0 });
     // PD-ORCH-004: a continuation carries the task id of the child it continues.
     dal.insertChild({ ...child(sid, 'bg_00000002'), continuation_of: 'bg_00000001' });
     expect(dal.getChild(sid, 'bg_00000002')!.continuation_of).toBe('bg_00000001');
@@ -1058,10 +1062,10 @@ describe('store — v11: the saved prompts (Part X; REQ-LIBRARY-137/138/139, REQ
   it('is v19, and the migration list is append-only with nothing renumbered', () => {
     // Part X reserved v11, Part Y v12, Part AB v13, Part AE v14 and Part AK v15 (plan Reservations, ruled 2026-09-09: the ladder and
     // the pin ride with the v15 reservation) before any of them was written; PD-LIBRARY-001 appended v16; the plan gate appended
-    // v17; ADR-0061 appended v18; ADR-0065 appended v19; the plan_cycles cascade appended v20; PD-MONITOR-001 revision 2 appended v21; PD-ORCH-004 appended v22; PD-ORCH-005 appended v23, and its revision 4 v24. The ladder is asserted whole rather than at its top, so a later part
+    // v17; ADR-0061 appended v18; ADR-0065 appended v19; the plan_cycles cascade appended v20; PD-MONITOR-001 revision 2 appended v21; PD-ORCH-004 appended v22; PD-ORCH-005 appended v23, and its revision 4 v24; REQ-TOOLS-152's `suppress_auto_context` (R-067) appended v25. The ladder is asserted whole rather than at its top, so a later part
     // that renumbers an earlier entry fails here and not on a user's disk.
-    expect(MIGRATIONS.map((m) => m.to)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]);
-    expect(CURRENT_SCHEMA_VERSION).toBe(24);
+    expect(MIGRATIONS.map((m) => m.to)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]);
+    expect(CURRENT_SCHEMA_VERSION).toBe(25);
   });
 });
 
@@ -1236,6 +1240,25 @@ describe('store — v24: the fingerprint an agent started with (PD-ORCH-005 revi
     const dal = new StoreDal(r.db);
     expect(dal.agentMessagesOf(sid, 'bg_000000a1')).toHaveLength(1);
     expect(dal.agentFingerprintOf(sid, 'bg_000000a1')).toBeUndefined();
+    r.db.close();
+    forgetSpelling(r.dir);
+  });
+
+  it('REQ-TOOLS-152: a v24 store migrates to v25; a child written before it gives the sibling index, and the flag a delegate set is stored', () => {
+    const { r, sid } = open('3');
+    r.db.exec(UNDO_V25);
+    r.db.pragma('user_version = 24');
+    r.db.prepare(`INSERT INTO children (session_id, task_id, canonical_name, given_name, persona, state, parent_id, depth, iteration, model_key, task, spawned_at)
+      VALUES (?, 'bg_00000001', 'old', 'old', 'coding-agent', 'failed', 'root', 1, 1, 'm', 't', 't')`).run(sid);
+    expect(migrateStore(r.db)).toEqual({ kind: 'migrated', from: 24, to: CURRENT_SCHEMA_VERSION });
+    const dal = new StoreDal(r.db);
+    expect(dal.getChild(sid, 'bg_00000001')!.suppress_auto_context).toBe(0);
+    const child = { session_id: sid, canonical_name: 'x', given_name: 'x', persona: 'coding-agent', state: 'queued', parent_id: 'root', depth: 1, iteration: 1, model_key: 'm', category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't' };
+    dal.insertChild({ ...child, task_id: 'bg_00000002', suppress_auto_context: 1 });
+    dal.insertChild({ ...child, task_id: 'bg_00000003' });
+    expect(dal.getChild(sid, 'bg_00000002')!.suppress_auto_context).toBe(1);
+    expect(dal.getChild(sid, 'bg_00000003')!.suppress_auto_context).toBe(0);
+    expect(() => dal.insertChild({ ...child, task_id: 'bg_00000004', suppress_auto_context: 2 })).toThrow(/CHECK/);
     r.db.close();
     forgetSpelling(r.dir);
   });

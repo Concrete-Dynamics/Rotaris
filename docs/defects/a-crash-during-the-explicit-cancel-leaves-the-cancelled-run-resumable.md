@@ -4,7 +4,8 @@ The run-level explicit cancel (`cancelAgent` for the reserved run id, REQ-MONITO
 run?" sends, `PD-ORCH-005` clause 15) writes nothing durable when it is accepted. `Run.cancelAgent` only raises the
 in-memory `StopRequest` as final; the agents end `cancelled` and the iteration closes later, in `iterate`'s `finally`,
 once the root's turn returns. If the run host dies in that window — a call that ignores the abort until its deadline
-(`a-root-call-that-ignores-the-stop-holds-the-run-open.md`), the quit's shutdown bound running out while the cancel
+([`a-root-call-that-ignores-the-stop-holds-the-run-open.md`](fixed/a-root-call-that-ignores-the-stop-holds-the-run-open.md),
+repaired 2026-09-29: the root is now given up on at the 30 s grace, which shortens the window but does not close it), the quit's shutdown bound running out while the cancel
 settles, or the process being killed — the store is identical to an ordinary mid-run crash: a busy status, the open
 iteration's interruption NULL, and the unfinished agents where they stood.
 
@@ -36,3 +37,10 @@ carried out when the host died; the build follows clause 18 because nothing dura
 - `packages/engine/src/sessions.ts`: the control's `cancelAgent` arm (no `writer.save`), `crashLeftOf`, `resumableOf`,
   `continueSession`.
 - `packages/engine/src/run/crash.ts`: `recordCrash`, which pauses every non-terminal agent by `crash`.
+
+## Ruled 2026-09-29 (R-067), not repaired
+
+OQ-103's last question is ruled ([R-067](../product/requests.md#r-067)): clause 3's "those are never resumed" governs. The
+explicit cancel is made durable when it is accepted — a stored mark, by an appended store migration — and the next repair
+or continue ends those agents `cancelled` and closes the iteration; clause 18's Continue does not resume them, and the
+Continue action counts none of them. This note stays open until that is built.

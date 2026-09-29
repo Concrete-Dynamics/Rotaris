@@ -35,8 +35,9 @@ first met this defect as a store failure: a reused number collided with the dead
   every child with the iteration's number — so neither a dead run's children nor an earlier plan cycle's (every cycle
   is numbered 0) count toward `maxTotal`, resolve a `depends_on` or become the credited child.
 - **The task.** The dead iteration's todo task goes back to `pending` (`Todo.reopen`), so `selectNext` picks it again.
-  What that iteration is sent is the open defect `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`:
-  the launch content, as for every task that is not the run's own.
+  What that iteration is sent was the open defect `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`:
+  the launch content, as for every task that is not the run's own. Since that defect's repair (2026-09-29) it is sent the
+  launch content and then the task's own text.
 - **The continued task's id.** A continuation numbers the task it appends past the stored count, the highest
   iteration row and every id the todo already holds (`continuedTaskId`), so a new prompt never shares an id with a
   dead iteration's reopened one — the stale count had minted the same `continued:N` twice (found by the re-review).

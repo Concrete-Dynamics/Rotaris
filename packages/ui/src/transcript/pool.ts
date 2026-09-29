@@ -112,6 +112,112 @@ export function buildOffsets(heights: readonly number[]): OffsetTable {
   return { offsets, total: y };
 }
 
+/**
+ * Which row identities the measurement pass has re-measured, and when (REQ-CHAT-058's measurements, as the offset table
+ * reads them). The pass stamps each delivery (`beginMeasuring`) and marks every identity whose recorded height it
+ * changed or whose entry either bounded cache evicted (`markMeasured`); a table built at stamp `s` then knows that an
+ * identity is stale exactly when it was marked after `s` (`remeasuredSince`). The ledger also holds the table React
+ * committed last, which the next one is built against (`commitTable`), and forgets the marks that table has read, so it
+ * holds one delivery's worth of identities, not a session's.
+ */
+export interface MeasureLedger {
+  stamp: number;
+  readonly marked: Map<string, number>;
+  committed: HeightTable | null;
+}
+
+export function createMeasureLedger(): MeasureLedger {
+  return { stamp: 0, marked: new Map(), committed: null };
+}
+
+/** The pane's layout effect, once React has committed `table`: the next table is built against it. */
+export function commitTable(ledger: MeasureLedger, table: HeightTable): void {
+  ledger.committed = table;
+  forgetMeasured(ledger, table.stamp);
+}
+
+export function beginMeasuring(ledger: MeasureLedger): void {
+  ledger.stamp += 1;
+}
+
+export function markMeasured(ledger: MeasureLedger, identity: string): void {
+  ledger.marked.set(identity, ledger.stamp);
+}
+
+export function remeasuredSince(ledger: MeasureLedger, identity: string, since: number): boolean {
+  return (ledger.marked.get(identity) ?? -1) > since;
+}
+
+export function forgetMeasured(ledger: MeasureLedger, upTo: number): void {
+  for (const [identity, stamp] of ledger.marked) if (stamp <= upTo) ledger.marked.delete(identity);
+}
+
+/** An offset table together with what its heights were read against, so the next one can reuse what did not change. */
+export interface HeightTable extends OffsetTable {
+  readonly heights: readonly number[];
+  readonly display: readonly DisplayRow[];
+  readonly width: number;
+  readonly expanded: ReadonlySet<string>;
+  /** The measurement stamp the heights were read at (`MeasureLedger`). */
+  readonly stamp: number;
+}
+
+/**
+ * ADR-0045's offset table for `next.display`, reading a height (`heightOf`) only for a row that is not the same row
+ * object at the same position as in `previous`, or whose identity the measurement pass re-measured since `previous` was
+ * built (`remeasured`) — and re-summing the offsets only from the first height that changed. A change of width or of
+ * the expansion set rebuilds it whole, which is a reader's action or a resize, never an increment.
+ *
+ * REQ-CHAT-055: "the work of painting and measuring MUST depend on how many rows are visible and how many rows changed,
+ * not on how many rows the transcript holds in total". The first form of the table read every displayed row's height
+ * on every rebuild — one measurement key, two cache lookups and, for every row never yet on screen, `estimateHeight` —
+ * and the pane rebuilt it two or three times an increment (the new rows, then each measurement they caused). V8's CPU
+ * profile of the built app (2026-09-29, the defect note's "CPU profile" section) put that pass at about 0.3 ms an
+ * increment at 1,200 rows against nothing on an empty transcript, the largest single term of the loaded side's extra
+ * script. What is still proportional to the rows held here is a pointer comparison and an array copy per row, which
+ * cost microseconds at the window's bound.
+ *
+ * The result is the table `buildOffsets(next.display.map(heightOf))` would build, value for value, provided
+ * `heightOf` reads nothing but the row, the width, the expansion set and the measurements filed under the row's
+ * identity — the pane's does — and `remeasured` answers true for every identity whose measurements changed since
+ * `previous.stamp` (`transcript.test.ts` holds it to that over seeded walks).
+ */
+export function reuseOffsets(
+  previous: HeightTable | null,
+  next: { readonly display: readonly DisplayRow[]; readonly width: number; readonly expanded: ReadonlySet<string>; readonly stamp: number },
+  /** Null when nothing has been re-measured since `previous` was built, which spares the lookup for every reused row. */
+  remeasured: ((identity: string, since: number) => boolean) | null,
+  heightOf: (d: DisplayRow) => number,
+): HeightTable {
+  const { display, width, expanded, stamp } = next;
+  const n = display.length;
+  const heights = new Array<number>(n);
+  // The first position whose height may differ from `previous` — everything above it keeps its offset.
+  let from = 0;
+  let i = 0;
+  if (previous !== null && previous.width === width && previous.expanded === expanded) {
+    const before = previous.display;
+    const shared = Math.min(n, before.length);
+    from = shared;
+    for (; i < shared && display[i] === before[i]; i += 1) {
+      const d = display[i]!;
+      const held = previous.heights[i]!;
+      const height = remeasured !== null && remeasured(d.key, previous.stamp) ? heightOf(d) : held;
+      heights[i] = height;
+      if (height !== held && i < from) from = i;
+    }
+    if (i < from) from = i;
+  }
+  for (; i < n; i += 1) heights[i] = heightOf(display[i]!);
+  // `from` is at most the shorter of the two arrays, so `previous.offsets[from]` exists whenever `from` is above 0.
+  const offsets = new Array<number>(n + 1);
+  if (from === 0) offsets[0] = 0;
+  else for (let k = 0; k <= from; k += 1) offsets[k] = previous!.offsets[k]!;
+  let y = offsets[from]!;
+  for (let k = from; k < n; k += 1) { y += heights[k]!; offsets[k + 1] = y; }
+  return { offsets, total: offsets[n]!, heights, display, width, expanded, stamp };
+}
+
 /** The displayed row containing `y`, by binary search over the prefix sums. */
 export function indexAt(table: OffsetTable, y: number): number {
   const { offsets } = table;
@@ -178,16 +284,20 @@ export function restoreAnchor(display: readonly DisplayRow[], table: OffsetTable
 export type UpdateShape = 'append' | 'truncate' | 'replace' | 'extend' | 'other';
 
 export function updateShape(before: readonly DisplayRow[], after: readonly DisplayRow[]): UpdateShape {
-  const a = before.map((d) => d.key);
-  const b = after.map((d) => d.key);
-  if (a.length === b.length && a.every((k, i) => k === b[i])) return 'replace';
-  const shared = Math.min(a.length, b.length);
+  // The same displayed-row OBJECT at a position carries the same key, and step 4's bounded form hands the pane the
+  // previous projection's prefix itself, so the key comparison starts where the two arrays first hold different objects.
+  // The first form mapped both arrays to their keys on every update — two passes over every displayed row, which the
+  // 2026-09-29 CPU profile named among the loaded side's extra script (REQ-CHAT-055); the answer is the same.
+  const shared = Math.min(before.length, after.length);
   let common = 0;
-  while (common < shared && a[common] === b[common]) common += 1;
-  if (common === a.length && b.length > a.length) return 'append';
-  if (common === b.length && a.length > b.length) return 'truncate';
+  while (common < shared && before[common] === after[common]) common += 1;
+  while (common < shared && before[common]!.key === after[common]!.key) common += 1;
+  if (common === before.length && before.length === after.length) return 'replace';
+  if (common === before.length && after.length > before.length) return 'append';
+  if (common === after.length && before.length > after.length) return 'truncate';
   // The last displayed row kept its identity and grew, and rows were appended after it: REQ-CHAT-053's fourth shape.
-  if (a.length > 0 && common === a.length - 1 && b.length >= a.length && a[a.length - 1] === b[a.length - 1]) return 'extend';
+  const last = before.length - 1;
+  if (before.length > 0 && common === last && after.length >= before.length && before[last]!.key === after[last]!.key) return 'extend';
   return 'other';
 }
 

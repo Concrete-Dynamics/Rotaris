@@ -202,7 +202,10 @@ declines silently when no session is followed.
 disabling input routing in every other window of the family — because no application-modal surface existed yet (no
 palette, no keyboard help); the registry holds the family so it has a place to land. **Built 2026-09-06 in Part W**,
 when the palette became that surface. The persona window's terminal-preview parity (REQ-SHELL-075 b) is owed with ADR-0021.
-Artifact links are empty (no artifact store). The MCP heading per server in the inspector and the window's per-server
+Artifact links are empty (no artifact store). *The reason was stale when written: the store existed since Part Y; the
+inspector did not link into it.* **Built 2026-09-29** (live-run finding K1, [R-067](../../product/requests.md#r-067)):
+`SessionRecord.artifacts` carries the session's artifacts not superseded, the inspector and the persona window draw an
+agent's produced and received links, and what a link opens is a reading (OQ-125). The MCP heading per server in the inspector and the window's per-server
 lines are slots (`data-slot="mcp"`) the merge fills from Part S's fields.
 
 **Found:** nothing in the registry or the windows themselves. The two defects this part found were in the publication

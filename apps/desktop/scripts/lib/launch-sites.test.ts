@@ -14,6 +14,12 @@
  *      bundle it forks. Chromium honours a switch anywhere before a bare `--`, so the rule is: before any `'--'`, and
  *      after every positional argument unless the entry is the product's own main, whose `workspaceFromArgv` skips a
  *      switch. A launch with `ELECTRON_RUN_AS_NODE` starts no Chromium and is exempt.
+ *   3. **A launch of the reserved token keeps the token first** (REQ-MCP-033): the sentinel (`src/main/sentinel.ts`)
+ *      reads it at one fixed index — the argument right after the entry on the development binary, the first on a
+ *      packaged one — so the switch goes between the token and `--`, the product's own order
+ *      (`src/run-host/code-intelligence-launch.ts`). Rule 2 admits the switch ahead of the token too, and
+ *      `code-intel-proof` put it there: as root the application started instead of the server
+ *      (`docs/defects/fixed/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md`).
  *
  * This is a static scan, not a launch: it reads the scripts' text, so it is decidable on any host and in `pnpm check`.
  * What it does not measure is that Chromium honours the switch where the rule puts it; the proofs measure that.
@@ -66,10 +72,14 @@ function elements(inner: string): string[] {
 
 interface Launch { readonly file: string; readonly binary: string; readonly args: string[] | null; readonly call: string }
 
-/** Every `spawn`/`spawnSync` of the development Electron binary (`electron`) or a packaged one (`exe`). */
+/**
+ * Every `spawn`/`spawnSync`/`spawnBounded` of the development Electron binary (`electron`) or a packaged one (`exe`).
+ * `spawnBounded` (`lib/bounded-launch.mjs`) is a launch like the other two — it passes its arguments to `spawn` as
+ * given — so a script moved onto it must carry the switch there, and the scan must see it or the count drops.
+ */
 function launches(file: string, text: string): Launch[] {
   const found: Launch[] = [];
-  for (const m of text.matchAll(/\b(?:spawn|spawnSync)\(\s*(electron|exe)\s*,\s*/g)) {
+  for (const m of text.matchAll(/\b(?:spawn|spawnSync|spawnBounded)\(\s*(electron|exe)\s*,\s*/g)) {
     // The call's text up to its first `);` is enough to see an `ELECTRON_RUN_AS_NODE` option; bracket-matching the
     // whole call would have to parse the regular expressions some options hold.
     const end = text.indexOf(');', m.index!);
@@ -115,8 +125,16 @@ function launchProblem(launch: Launch): string | null {
   if (launch.binary === 'electron' && !productMain(launch.args[0]!) && at !== launch.args.length - 1) {
     return `\`...hostSwitches\` precedes a positional argument of ${launch.args[0]}, which reads it as one`;
   }
+  // Rule 3: the reserved token sits at the sentinel's fixed index — first, or right after the product's main entry.
+  const token = launch.args.findIndex(isToken);
+  if (token > 0 && !(token === 1 && productMain(launch.args[0]!))) {
+    return `the reserved token follows ${launch.args[token - 1]}, not the entry; the sentinel reads it at one fixed index (REQ-MCP-033)`;
+  }
   return null;
 }
+
+/** The reserved token of REQ-MCP-033, spelled as the literal or as the scripts' `TOKEN` constant. */
+const isToken = (element: string): boolean => element === 'TOKEN' || element === "'builtin:code-intelligence'";
 
 const all = scripts(SCRIPTS);
 
@@ -130,8 +148,9 @@ describe('R-062: the proof harness platform rules, kept at every script', () => 
     const found = all.flatMap((f) => launches(relative(SCRIPTS, f).split(sep).join('/'), readFileSync(f, 'utf8')));
     // The scan must be seeing the launches at all, or the next assertion is vacuous. On 2026-09-28 it sees 42 spawn
     // sites in 40 files: 41 carrying the switch (the driver's among them) and `build-hooks.cjs`'s node-mode probe.
+    // `resilience-proof`'s launch is a `spawnBounded` since the same day, and still one of the 42.
     expect(found.length).toBeGreaterThanOrEqual(42);
-    expect(found.map((l) => l.file)).toEqual(expect.arrayContaining(['lib/driver.mjs', 'traceability-proof.mjs', 'live-run.mjs']));
+    expect(found.map((l) => l.file)).toEqual(expect.arrayContaining(['lib/driver.mjs', 'traceability-proof.mjs', 'live-run.mjs', 'resilience-proof.mjs']));
     const problems = found.map((l) => [l.file, launchProblem(l)]).filter(([, p]) => p !== null);
     expect(problems).toEqual([]);
   });
@@ -145,5 +164,21 @@ describe('R-062: the proof harness platform rules, kept at every script', () => 
     expect(launchProblem(call("[join(app, 'out', 'main', 'index.js'), ...hostSwitches, workspace]"))).toBeNull();
     expect(launchProblem(call("[driver, join(app, 'out', 'main', 'workspace-service.js'), fixture, ...hostSwitches]"))).toBeNull();
     expect(launchProblem(launches('fixture.cjs', "spawnSync(exe, [probe, dir], { env: { ELECTRON_RUN_AS_NODE: '1' } });")[0]!)).toBeNull();
+  });
+
+  it('a launch of the reserved token keeps it at the sentinel\'s index, the switch after it, including code-intel-proof as it was (REQ-MCP-033)', () => {
+    const call = (binary: string, args: string) => launches('fixture.mjs', `spawn(${binary}, ${args}, { env });`)[0]!;
+    // code-intel-proof's branch launch before the repair: rule 2 passed it, and as root the application started instead.
+    expect(launchProblem(call('exe', "[...before, ...hostSwitches, TOKEN, '--', ...tail]"))).toMatch(/reserved token follows \.\.\.hostSwitches/);
+    expect(launchProblem(call('electron', "[mainEntry, ...hostSwitches, 'builtin:code-intelligence', '--', 'start-mcp-server']"))).toMatch(/reserved token follows/);
+    // The product's own order, on both binaries.
+    expect(launchProblem(call('exe', "[...before, TOKEN, ...hostSwitches, '--', ...tail]"))).toBeNull();
+    expect(launchProblem(call('electron', "[mainEntry, TOKEN, ...hostSwitches, '--', 'no-such-subcommand']"))).toBeNull();
+    expect(launchProblem(call('exe', "[TOKEN, ...hostSwitches, '--', ...tail]"))).toBeNull();
+    // And the scan reaches code-intel-proof's two token launches, so the rule is not vacuous there.
+    const text = readFileSync(join(SCRIPTS, 'code-intel-proof.mjs'), 'utf8');
+    const tokenLaunches = launches('code-intel-proof.mjs', text).filter((l) => l.args?.some(isToken));
+    expect(tokenLaunches).toHaveLength(2);
+    expect(tokenLaunches.map(launchProblem)).toEqual([null, null]);
   });
 });

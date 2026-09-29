@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AgentRecord, SessionRecord, TranscriptRow } from '@rotaris/contracts';
-import { chipStates, countNoun, instancesOf, mcpFateText, resolvedTools, rowsOf } from './agents.js';
+import { agentArtifacts, chipStates, countNoun, instancesOf, mcpFateText, personaArtifacts, resolvedTools, rowsOf } from './agents.js';
+import { AgentArtifactLinks, ArtifactLinkList } from './ArtifactLinks.js';
 import { AgentCancelConfirm } from './AgentCancelConfirm.js';
-import { elapsedLabel } from './AgentTree.js';
+import { elapsedLabel, elapsedShown } from './AgentTree.js';
 import { ContextRing } from './ContextRing.js';
 import { RowList, type Acknowledger } from './TranscriptSurface.js';
 import type { TerminalPreview } from './terminal/streams.js'; // Part AL2
@@ -18,7 +19,8 @@ import { Button as DesignButton, EmptyState as DesignEmptyState, PageHeader as D
  * the muted state; (b) the "Agent transcript" card (accessible name `{name} transcript`, min height 260 px, the
  * empty sentence) showing only that agent's rows through the ONE row renderer; (c) "Context" with the ring and
  * `{n} tool calls · {elapsed}`; (d) "Instance controls" read-only (REQ-MONITOR-059); (e) "Current activity";
- * (f) "Tools and artifacts" — native tools and the active ones, one muted line per MCP server (REQ-MCP-100, wired at the merge); (g) "Steer agent"
+ * (f) "Tools and artifacts" — native tools and the active ones, one muted line per MCP server (REQ-MCP-100, wired at the merge), and
+ * the instance's artifact links, produced and received (live-run finding K1; the persona-wide card lists every instance's); (g) "Steer agent"
  * with the placeholder, "Send steer" (empty or whitespace sends nothing; accepted clears; refused keeps the text,
  * REQ-MONITOR-070) and the danger "Cancel" for that instance. The terminal-preview parity of REQ-SHELL-075 (b) was
  * owed with ADR-0021 until Part AL2: the window now draws the live preview from its own stream set (`terminalPreview`).
@@ -52,10 +54,14 @@ export interface PersonaWindowProps {
    */
   readonly terminalPreview?: ((streamId: string) => TerminalPreview | null) | undefined;
   readonly openTerminal?: ((streamId: string) => void) | undefined;
+  /** REQ-MONITOR-068/069 (live-run finding K1): follow an artifact link — the window's root opens the artifact. */
+  readonly onOpenArtifact?: ((id: string) => void) | undefined;
 }
 
 export const TRANSCRIPT_EMPTY = 'No transcript activity for this agent yet.';
 export const ARTIFACTS_EMPTY = 'No artifacts published yet.';
+/** REQ-MONITOR-069 (live-run finding K1): the instance's own artifact line when it produced and received none. */
+export const INSTANCE_ARTIFACTS_EMPTY = 'No artifacts produced or received.';
 export const STEER_PLACEHOLDER = 'Add context or redirect this agent…';
 export const ACTIVITY_EMPTY = 'No activity text has been recorded for this agent.';
 
@@ -67,7 +73,7 @@ export const ACTIVITY_EMPTY = 'No activity text has been recorded for this agent
 export { personaColourToken };
 
 export function PersonaWindow(props: PersonaWindowProps) {
-  const { persona, session, rows, runLevel, declaredTools, selectedAgentId, onSelectTab, nowIso, compressionThresholdPercent, onSteer, onCancel, focusSteer, onOpenLink, onAcknowledge, showReasoning = false, autoCollapseTools = false, terminalPreview, openTerminal } = props;
+  const { persona, session, rows, runLevel, declaredTools, selectedAgentId, onSelectTab, nowIso, compressionThresholdPercent, onSteer, onCancel, focusSteer, onOpenLink, onAcknowledge, showReasoning = false, autoCollapseTools = false, terminalPreview, openTerminal, onOpenArtifact } = props;
   const agents = session?.agents ?? [];
   const instances = instancesOf(persona, agents, runLevel);
   const shown = instances.find((a) => a.id === selectedAgentId) ?? instances[0] ?? null;
@@ -86,7 +92,10 @@ export function PersonaWindow(props: PersonaWindowProps) {
   };
   const own = shown ? rowsOf(rows, shown) : [];
   const chips = shown ? chipStates(resolvedTools(shown, declaredTools), shown.calledTools, shown.activeTools) : [];
-  const elapsed = shown && (shown.live || shown.completedAt) ? elapsedLabel(shown, nowIso) : null;
+  const elapsed = shown && elapsedShown(shown) ? elapsedLabel(shown, nowIso) : null;
+  // REQ-MONITOR-068/069 (live-run finding K1): the persona-wide card and the instance's own links, from the session's artifacts.
+  const byPersona = personaArtifacts(instances, session?.artifacts ?? []);
+  const links = shown ? agentArtifacts(shown, session?.artifacts ?? []) : { produced: [], received: [] };
   return (
     <div className="persona-window" data-persona={persona} data-shown={shown?.id ?? ''} data-instances={instances.length}>
       <DesignPageHeader className="persona-window__header page-header">
@@ -101,7 +110,7 @@ export function PersonaWindow(props: PersonaWindowProps) {
       </div>
       <section className="card persona-window__artifacts" aria-label={`Artifacts by ${persona} (all instances)`}>
         <div className="ov-card__head"><span className="card-kicker">Artifacts by {persona} (all instances)</span></div>
-        <div className="card-body text-secondary">{ARTIFACTS_EMPTY}</div>
+        <div className="card-body" data-testid="persona-artifacts" data-count={byPersona.length}>{byPersona.length === 0 ? <span className="text-secondary">{ARTIFACTS_EMPTY}</span> : <ArtifactLinkList links={byPersona} onOpen={onOpenArtifact} testId="persona-artifacts-links" />}</div>
       </section>
       {shown && (
         <div className="persona-window__page" role="tabpanel" aria-label={shown.name}>
@@ -161,7 +170,10 @@ export function PersonaWindow(props: PersonaWindowProps) {
                 {srv.name}: {srv.fate === 'connected' ? ((shown.grantedMcp[srv.name] ?? []).join(', ') || 'no tools granted') : mcpFateText(srv)}
               </div>
             ))}
-            <div className="text-secondary">Active now: {shown.activeTools.length === 0 ? 'none' : shown.activeTools.join(', ')}. {ARTIFACTS_EMPTY}</div>
+            <div className="text-secondary">Active now: {shown.activeTools.length === 0 ? 'none' : shown.activeTools.join(', ')}.</div>
+            <div className="persona-window__instance-artifacts" data-testid="persona-instance-artifacts" data-produced={links.produced.length} data-received={links.received.length}>
+              <AgentArtifactLinks produced={links.produced} received={links.received} empty={INSTANCE_ARTIFACTS_EMPTY} onOpen={onOpenArtifact} testId="persona-instance-artifacts" />
+            </div>
           </section>
           <section className="card persona-window__steer" aria-label="Steer agent">
             <div className="ov-card__head"><span className="card-kicker">Steer agent</span></div>

@@ -39,7 +39,14 @@ export const RoleViewSchema = z.object({
   rawThinking: z.string().nullable(),
   thinkingOrigin: z.enum(CONFIG_ORIGINS),
   tier: z.string().nullable(),
+  /** The role's `tools:` as the files state it; empty when neither file states one (Settings shows it as written). */
   tools: z.array(z.string()),
+  /**
+   * REQ-MONITOR-060 / REQ-TOOLS-002 (live-run finding K1, R-067): the tools the role DECLARES — `tools` when the files state
+   * any, else the built-in role's declaration (`declaredToolsOf`), the rule the run host's persona resolver applies. What
+   * stands in on an agent surface where no resolved set is known.
+   */
+  declaredTools: z.array(z.string()),
 });
 /** The runtime keys the screen edits (REQ-CONFIG-256's set plus the diagnostics toggle), resolved. */
 export const RuntimeViewSchema = z.object({

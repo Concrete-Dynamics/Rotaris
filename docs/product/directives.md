@@ -947,6 +947,9 @@ and deliberately not repaired here. The row is in
 
 ### PD-MONITOR-001 — a cost the provider reported is carried and shown under its own qualifier
 
+*Revision 3 (2026-09-29, [R-067](requests.md#r-067)) — **the floor**: ESC-42's ruling carried into the rendering of a
+figure with no currency, below. The label table is unchanged.*
+
 *Revision 2 (2026-09-23, [R-049](requests.md#r-049)) — **configured rates price a request the provider did
 not**, below. Revision 1 (2026-09-16, [R-026](requests.md#r-026)) is quoted where it is replaced, never
 deleted. A changed directive takes a revision and never a new number ([`README.md`](README.md)).*
@@ -986,9 +989,20 @@ The qualifier is recorded with the total, so a label read back later is the labe
 > undecided (OQ-21, ADR-0031). Both are now decided: prices are decimal strings, and multiplying a decimal
 > by a whole token count is exact in `money.ts`'s representation with no library.
 
-A figure whose currency the provider does not name SHALL be rendered as the amount alone, under the
-rounding of `REQ-PROVIDER-121` — half-up, two decimal places, four below one hundredth — and SHALL NOT
-be given a currency symbol the product chose for it.
+A figure whose currency the provider does not name SHALL be rendered as the amount alone, under
+`REQ-PROVIDER-121`'s rule — half-up, two decimal places, four below one hundredth, and the floor `< 0.0001` for an
+amount greater than zero that would otherwise read as zero — and SHALL NOT be given a currency symbol the product
+chose for it (revision 3). The floor fills a label's `<amount>` as any rendered figure does, so the table above is
+unchanged: a run whose priced requests came to more than zero and less than 0.00005 reads `< 0.0001 at configured
+rates`, `< 0.0001 reported by the provider`, or `at least < 0.0001; some requests have no price`, and each of those is
+true. The figure recorded with the qualifier is the exact one; the floor is rendering only.
+
+> **Revision 2 said, and no longer governs:** "A figure whose currency the provider does not name SHALL be rendered as
+> the amount alone, under the rounding of `REQ-PROVIDER-121` — half-up, two decimal places, four below one hundredth —
+> and SHALL NOT be given a currency symbol the product chose for it." Under that rounding a run priced at more than
+> zero and less than 0.00005 read `0.0000 at configured rates`: a figure that says it was priced and reads as nothing,
+> which `REQ-SHELL-045` says never happens. ESC-42 was ruled option (b) on 2026-09-29, and `REQ-PROVIDER-121` now
+> carries the floor this sentence restates.
 
 **Why.** Observed live 2026-09-16, run `a26918e8` (logged as [R-026](requests.md#r-026)): a whole run
 against a metered provider, `cost` = `"0"`, the label reading *"price not established"*. That is
@@ -1060,7 +1074,7 @@ adding to it.
 > **Narrows:** REQ-MONITOR-166, REQ-PROVIDER-121
 
 *Raised by the owner, 2026-09-16; logged as [R-026](requests.md#r-026). Revised 2026-09-23; logged as
-[R-049](requests.md#r-049).*
+[R-049](requests.md#r-049). Revision 3, 2026-09-29, logged as [R-067](requests.md#r-067) with the ruling of ESC-42.*
 
 > **First execution, 2026-09-16, the day it was raised:** it found the reading half harder than the
 > asking half, and the corpus friendlier than expected. The SDK's usage mapping keeps the token fields
@@ -1895,6 +1909,36 @@ so a child that genuinely loops is still stopped at the same point.
 > **What was not measured.** No built-app run: the scripted client cannot cut a child off while it is making progress
 > and then begin a second iteration. No live run was made. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **First live execution, 2026-09-29 — the duress scenario of `pnpm live-run`, under [R-066](requests.md#r-066), recorded
+> under [R-067](requests.md#r-067):** the built product at `fa377e6` (revisions 1 to 3 built; revision 4's `offers.ts` not
+> yet on that commit) against the owner's self-hosted endpoint (`qwen3.8-flash-next`, unmetered), pack
+> `.live-run/runs/2026-09-29T03-06-14-929Z/`, session `379f1490`. It is the first time a real model was cut off while
+> making progress, and every part of the directive held end to end:
+> - **The progress rule.** Child `d` (`bg_b8da141a`, `docs-writer`) reached its 1,200 s `child_timeout` at 03:34:25 with
+>   61 tool calls, the last of them inside the final stall window; its report says "Cut off while making progress: this child completed a tool
+>   call within the final 90s before its 1200s limit expired." It ended `failed` with the timeout error "Child timed out
+>   after 1200s", as REQ-ORCH-088 has it.
+> - **The changed paths, in order.** `cut_off.changed_paths` is `docs/api.md`, `docs/overview.md`, in the order first
+>   changed, and matches the report's deterministic `edited_files`.
+> - **The offer's text.** "Continuation offer: the remaining work may be delegated to a new child as a continuation of this
+>   one — call delegate with continuation_of: "bg_b8da141a". A piece of work is continued once; a continuation is not
+>   offered one of its own."
+> - **The continuation.** The orchestrator took the offer at tool call #242, 03:35:55, 22 s after `d` settled: `d2`
+>   (`bg_7d79e866`) carries `continuation_of` = `bg_b8da141a` in its record, was offered nothing of its own, and ended
+>   `succeeded` at 03:44:30 (515 s), finishing the reconciliation `d` had begun.
+>
+> **What it found beside the directive.** Nothing in the text was wrong. Two costs showed, each recorded elsewhere:
+> revision 2's "nothing of the continued child is injected" had `d2` make 34 reads before its first edit (6 min 40 s of
+> its 515 s), re-deriving what `d` knew — put to the owner as [OQ-114](../architecture/open-questions.md); and the first thing `d2` read was
+> `d`'s report artifact, whose summary denied the edits `d` had made, because the summariser read only the transcript's
+> head (`a-long-childs-report-denies-the-edits-it-made.md`, ruled as OQ-111). The duress run's own check "no child ended
+> failed with nothing to say" flagged `d`, a false positive of the harness
+> (`the-duress-silent-child-check-flags-a-cut-off-child.md`).
+>
+> **What was not measured.** An offer taken up by a later iteration's or a later run's root (revisions 3 and 4): this one
+> was taken within its iteration by the agent that delegated `d`. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 ---
 
 <a id="pd-monitor-002"></a>
@@ -1956,7 +2000,13 @@ are not recorded, and cannot be recovered afterwards.
 > launch's own driving wrote. At `warning` a clean launch and quit writes nothing, its `quit:` lines included, which
 > is what a threshold above `info` costs: 24 launches driven to a last-window close at the default level wrote no
 > `warning` or `error` line and quit in 40–69 ms, and one ended by the driver's `app.exit` at `warning` wrote nothing
-> at all. The review's run of the same close found the first version of the unanswered-`shutdown` line firing on
+> at all. *Falsified 2026-09-29 for the immediate exit (the sentence above is kept as written): in the live run of that day
+> 7 of 9 launches ended through the capture seam's immediate exit (`exitCleanly`, `endRunHost` with a grace of 0) wrote
+> `error   CHILD PROCESS GONE (Utility rotaris-run-host: killed, exit 15)` after "run host exited (0)" and "quit: exiting
+> with status 0" — main kills the run host itself and logs Electron's report of the kill at `error`. One such exit writing
+> nothing was the race going the other way. Recorded as
+> [`an-orderly-quit-logs-the-run-host-gone-at-error.md`](../defects/an-orderly-quit-logs-the-run-host-gone-at-error.md)
+> (live-run finding L13); the last-window close's 24 clean quits are not contradicted.* The review's run of the same close found the first version of the unanswered-`shutdown` line firing on
 > orderly quits (3 in 26, each waiting out the 30 s bound), because a child's answer can lose the race with its own
 > exit; the quit now races each `shutdown` against the child's exit, recorded as
 > [`a-childs-shutdown-ack-can-lose-the-race-with-its-exit.md`](../defects/fixed/a-childs-shutdown-ack-can-lose-the-race-with-its-exit.md).
@@ -1994,6 +2044,11 @@ are not recorded, and cannot be recovered afterwards.
 
 ### PD-TOOLS-006 — a delegated child may declare a write scope that its siblings may not write into
 
+*Revision 3 (2026-09-29, [R-067](requests.md#r-067)) — **what else `delegate` refuses, and what `session_id` names**,
+a section added after "The disclosure"; the owner's rulings on OQ-112 and on OQ-66's open part. Nothing is replaced. This
+directive is the one that narrows REQ-TOOLS-152, and the symbol generator admits one narrowing directive per requirement,
+so a narrowing of `delegate`'s fields lands here whatever it is about.*
+
 *Revision 2 (2026-09-27, [R-059](requests.md#r-059)) — **a resumed child re-claims its scope**, in "What is unchanged",
 ruled with PD-ORCH-005. Revision 1 (2026-09-23, [R-049](requests.md#r-049)) is otherwise unchanged.*
 
@@ -2022,6 +2077,23 @@ prefix of REQ-TOOLS-154: the child's own `write_scope` when it has one, and the 
 other child of the run that is live when this child is accepted, each under that child's canonical name.
 The block is omitted when there is nothing to list.
 
+**What else `delegate` refuses, and what `session_id` names (revision 3).** Two further refusals SHALL stand beside
+REQ-TOOLS-152's own. Each is reported with status `rejected`, before any record is created and with no task id, and its
+reason names the cause:
+- a delegation carrying a `write_scope` to a persona that holds no file-writing tool — neither `write_file` nor
+  `haet_edit` (with its alias `haet`) — whose reason SHALL say that the persona cannot write files and, where the
+  persona catalogue shows any, name the personas that can;
+- a delegation whose `session_id` names no settled child of the calling agent.
+
+A persona's tools, for the first of these, are the ones it would be granted for the child, after REQ-TOOLS-006's
+controls.
+
+REQ-TOOLS-152's `session_id` names, by its task id, a settled child of the calling agent: a direct child, by
+REQ-TOOLS-155's ownership test, that has reached a terminal state and that its `child_timeout` did not cut off. The
+follow-up resumes that child from its record with the call's `task` as its next user message, as PD-ORCH-005 clause 22
+states. A child its `child_timeout` cut off keeps PD-ORCH-004's `continuation_of`, and a `session_id` naming one is
+refused with a reason that names that field.
+
 **What is unchanged.** A child delegated without a `write_scope` claims nothing and is refused only where a
 live sibling's claim reaches. A `write_scope` never limits the child that declared it: that child may write
 outside its own patterns wherever no other claim reaches. A claim belongs to one run and lapses with its child, so a
@@ -2048,10 +2120,24 @@ write that crosses a live claim is stopped with the name of its owner. What it c
 - **The parent is refused too.** A parent that wants to write into a live child's scope waits for the child
   or writes elsewhere.
 
+**Why revision 3, and what it costs.** In the duress live run of 2026-09-29 the orchestrator delegated a documentation
+file to `codebase-analyst`, a persona that holds no file-writing tool, with that file as its `write_scope`. The scope was
+accepted, the child ran for 2 min 47 s and could only answer that it had no file-writing tool, its report still read
+`succeeded`, and a second child was commissioned for the same file. A refusal at the call moves that discovery to the
+moment the parent can still choose. And `session_id` was accepted and dropped
+([`delegate-drops-session-id-and-suppress-auto-context.md`](../defects/delegate-drops-session-id-and-suppress-auto-context.md)),
+so a caller that set it was told nothing and got a fresh child. What it costs:
+- a parent can no longer give a read-only child a scope for coordination alone;
+- a persona whose only writing tools are ones the claim does not fence — the code-intelligence server's editing tools,
+  `terminal`, MCP or plugin tools — counts as holding no file-writing tool and is refused a scope, although it can write
+  files; a scope could not have fenced those writes either ("The file tools only", above);
+- a follow-up re-sends the child's whole conversation, where a fresh child sends only its payload.
+
 > **Narrows:** REQ-TOOLS-152, REQ-TOOLS-154
 > **Extends:** REQ-ORCH-028
 
-*Raised by the owner, 2026-09-23; logged as [R-049](requests.md#r-049). Revision 2 logged as [R-059](requests.md#r-059).*
+*Raised by the owner, 2026-09-23; logged as [R-049](requests.md#r-049). Revision 2 logged as [R-059](requests.md#r-059),
+revision 3 as [R-067](requests.md#r-067).*
 
 > **First execution, 2026-09-23, the day it was ruled:** the mechanism was built as written, and one clause of
 > the disclosure proved false for one reader. The block lists "the `write_scope` of every other child of the run
@@ -2080,6 +2166,29 @@ write that crosses a live claim is stopped with the name of its owner. What it c
 > - two children accepted in one millisecond re-claim in acceptance order.
 >
 > **What was not measured.** No built-app run declared a scope. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **First execution of revision 3's scope refusal, 2026-09-29, built under [R-067](requests.md#r-067):** the refusal
+> was built as written ([OQ-112](../architecture/open-questions.md)). `IterationChildren.delegate` refuses a
+> `write_scope` for a known persona that cannot write files, straight after the scope's own validation, with status
+> `rejected`, no record and no task id. The reason names the catalogue's writers. The phrase "after REQ-TOOLS-006's
+> controls" met one gap in the build. The per-persona `tool_restrictions` map, the fourth control, narrows no agent's
+> grant today ([`a-personas-tool-restrictions-never-narrow-its-grant`](../defects/a-personas-tool-restrictions-never-narrow-its-grant.md)).
+> The check therefore reads the two controls a child's grant does meet, `coordinator_only` and `read_only`. The
+> clause's text is not wrong; the build lacks a control it names. Two existing scripted cases had scoped a read-only
+> `codebase-analyst`, which the directive now forbids, and they scope a `docs-writer` instead. Revision 3's other
+> refusal, a `session_id` naming no settled child, is not part of this build.
+>
+> The persona checked is the one the ledger resolves, an alias included. The first build read the built-in table
+> without its aliases, so `playwright` with a scope reached the ledger and was accepted as `ui-verifier`; the branch's
+> verification found it, and the check now reads the ledger's resolution.
+>
+> **What was measured.** Scripted end-to-end cases in `children.test.ts` over the duress call's shape and over the
+> alias, each red with its check removed, and the predicate, the catalogue and the reason in `write-scope.test.ts`. Live, in the duress run of
+> session `b4a768a2`, a scope given to `verifier` was refused with the writers named. The orchestrator's next request,
+> 15 s later, delegated the task to `docs-writer`. In a second duress run built from the alias repair (session `059ae1d7`), a scope given
+> to `codebase-analyst`, the finding's own shape, and one given to `verifier` were both refused, and each task went next
+> to a writer (`docs-writer`, `tester`). No alias was delegated live. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
@@ -2133,6 +2242,11 @@ builds "failed". That would be false, and it would read as a broken pipeline. Wh
 <a id="pd-orch-005"></a>
 
 ### PD-ORCH-005 — a continued session resumes the agents its last run left unfinished, from their full record
+
+*Revision 5 (2026-09-29, [R-067](requests.md#r-067)) — **two rulings on what the build left open**: clause 21 (the
+status a stop persists, OQ-96) and clause 22 (a follow-up by `session_id` resumes a settled child, OQ-66's open part)
+are added, and `REQ-SESSION-186` and `REQ-SESSION-073` join the Narrows list. Nothing is replaced. The owner took both
+recommendations.*
 
 *Revision 4 (2026-09-28, [R-064](requests.md#r-064)) — **the owner's rulings on the questions the build raised**
 (OQ-94 to OQ-99): clause 1's last sentence is replaced, clauses 13 to 20 are added, and the Narrows list names the
@@ -2254,6 +2368,23 @@ the paused agents. "Continue without them" is offered beside the Continue action
 iteration's root published that nothing supersedes and, when the root published none, the latest artifact of any kind
 that nothing supersedes.
 
+**(21) A stop persists `paused` (revision 5).** A stop the user made — graceful and clean, or forced — SHALL persist the
+session status `paused`, as a pause does (clause 2), and SHALL NOT persist `stopped`. REQ-SESSION-186's stop control, its
+two activations and the outcome it presents are unchanged. `stopped` remains the status of a run that exhausted a
+configured budget (REQ-MONITOR-029), which REQ-SESSION-073's vocabulary keeps. A stop and a pause record the same stop
+reason, `user_cancelled` (REQ-ORCH-069, REQ-MONITOR-301's closed set having no member for a pause), so a stop is told
+apart from a pause only by the interruption it records on its agents and its iteration (`stop`, clause 3) and by the
+timeline entries that name it.
+
+**(22) A follow-up resumes a settled child (revision 5).** A `delegate` call whose `session_id` names a settled child of
+the calling agent — a direct child that has reached a terminal state and that its `child_timeout` did not cut off —
+SHALL resume that child from its record: its identity, as clause 4 restores it, and its conversation, with the call's
+`task` appended as its next user message. The child keeps its task id, leaves its terminal state for the state it
+resumes into, and ends and reports again as any child does. Clause 5 names what a continue resumes; a follow-up is the
+parent's own act, and clause 5 does not bar it. A child its `child_timeout` cut off is still never resumed: its route is
+PD-ORCH-004's `continuation_of`. What `session_id` names, and how a `session_id` naming no such child is refused, is
+PD-TOOLS-006 revision 3.
+
 **What is unchanged.** A continuation is still not a resume: a timed-out child is never resumed and earns no corrective
 message (REQ-NOTIFY-112). The message-limit pause and the plan gate keep their durable holds. The run host is still
 never re-forked, and a crashed session still needs repair or a continue before anything runs (ADR-0002). How a
@@ -2288,6 +2419,21 @@ What it costs:
 - a fingerprint beside each agent's record.
 
 Until they are built, the product behaves as the readings in OQ-94 to OQ-99 recorded.
+
+**Why revision 5, and what it costs.** The owner ruled two questions the build had left to the record ([R-067](requests.md#r-067)).
+REQ-SESSION-186 has a graceful, clean stop persist `stopped`, and REQ-SESSION-073's vocabulary glosses `stopped` with
+that stop, while clause 3 has a stop leave the state a pause leaves, and REQ-MONITOR-029 and REQ-SESSION-093 persist
+`paused`; the build persisted `paused`, and the directive now names both requirements it departs from, so a reader of
+either finds it. And REQ-TOOLS-152's `session_id` — "reuse a previous
+delegation's session for a retry or a follow-up" — had no meaning under the full record, so the field was accepted and
+dropped, and a parent with a question for a child that had finished could only start a fresh child that rediscovers
+everything. What it costs:
+- `stopped` is never persisted for a user's stop, and a stop and a pause both record the stop reason `user_cancelled`, so
+  a session tells a stop from a pause only by the interruption recorded on its agents and its iteration and by the
+  timeline;
+- a terminal child is no longer always final: REQ-MONITOR-300's table gains one exit from a terminal state, taken only by
+  a follow-up the parent asks for;
+- a follow-up sends the child's whole conversation to its model again, compressed when it no longer fits.
 
 > Revision 1 said, and no longer governs, clause (1):
 > **(1) The interruption is recorded on each unfinished child.** When a run comes to rest with children that have not
@@ -2334,12 +2480,12 @@ Until they are built, the product behaves as the readings in OQ-94 to OQ-99 reco
 > back-pointer is removed. It extended REQ-ORCH-053, REQ-SESSION-065 and REQ-NOTIFY-121; revision 2 narrows them,
 > because the settle no longer cancels a `paused` agent.
 
-> **Narrows:** REQ-MONITOR-256, REQ-MONITOR-123, REQ-ORCH-072, REQ-ORCH-002, REQ-ORCH-052, REQ-MONITOR-300, REQ-ORCH-053, REQ-SESSION-065, REQ-NOTIFY-121, REQ-SESSION-115, REQ-SESSION-129, REQ-SESSION-025, REQ-TOOLS-054, REQ-TOOLS-111, REQ-ORCH-134, REQ-MONITOR-014, REQ-MONITOR-046, REQ-MONITOR-211, REQ-MONITOR-213, REQ-SESSION-078, REQ-SESSION-180, REQ-ORCH-135, REQ-MONITOR-130, REQ-SESSION-108, REQ-TOOLS-063, REQ-CHAT-029, REQ-MONITOR-063, REQ-ORCH-004
+> **Narrows:** REQ-MONITOR-256, REQ-MONITOR-123, REQ-ORCH-072, REQ-ORCH-002, REQ-ORCH-052, REQ-MONITOR-300, REQ-ORCH-053, REQ-SESSION-065, REQ-NOTIFY-121, REQ-SESSION-115, REQ-SESSION-129, REQ-SESSION-025, REQ-TOOLS-054, REQ-TOOLS-111, REQ-ORCH-134, REQ-MONITOR-014, REQ-MONITOR-046, REQ-MONITOR-211, REQ-MONITOR-213, REQ-SESSION-078, REQ-SESSION-180, REQ-ORCH-135, REQ-MONITOR-130, REQ-SESSION-108, REQ-TOOLS-063, REQ-CHAT-029, REQ-MONITOR-063, REQ-ORCH-004, REQ-SESSION-186, REQ-SESSION-073
 > **Extends:** REQ-MONITOR-125
 
 *Raised by the owner, 2026-09-27; logged as [R-058](requests.md#r-058) and ruled as drafted, every fork as recommended,
 by [R-059](requests.md#r-059). Revision 2 logged as [R-060](requests.md#r-060), revision 3 as [R-061](requests.md#r-061),
-revision 4 as [R-064](requests.md#r-064).*
+revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-067).*
 
 > **First execution of revisions 2 and 3, 2026-09-27, ruled by [R-060](requests.md#r-060) and
 > [R-061](requests.md#r-061) and built under [R-063](requests.md#r-063):** the mechanism was built as written, in a spike and seven phases, and each phase was
@@ -2413,10 +2559,11 @@ revision 4 as [R-064](requests.md#r-064).*
 >   and the decline, which had the same gap.
 >
 > Two defects were read and left unrepaired:
-> - [`a-graceful-stop-persists-paused-where-one-requirement-says-stopped.md`](../defects/a-graceful-stop-persists-paused-where-one-requirement-says-stopped.md),
->   which is still the corpus's contradiction;
+> - [`a-graceful-stop-persists-paused-where-one-requirement-says-stopped.md`](../defects/fixed/a-graceful-stop-persists-paused-where-one-requirement-says-stopped.md),
+>   which is still the corpus's contradiction; *settled 2026-09-29 by revision 5's clause 21 ([R-067](requests.md#r-067))*;
 > - [`delegate-drops-session-id-and-suppress-auto-context.md`](../defects/delegate-drops-session-id-and-suppress-auto-context.md),
->   because the resume gives `session_id` no meaning.
+>   because the resume gives `session_id` no meaning. *Revision 5's clause 22 gives it one (2026-09-29); the note stays open until
+>   it is built.*
 >
 > Other defects noticed along the way are recorded in `docs/defects/`.
 >

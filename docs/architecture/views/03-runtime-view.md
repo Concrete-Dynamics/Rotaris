@@ -15,7 +15,7 @@ is forwarded (ADR-0009/0010).
 | touching delegation | [§4 Children](#4-children-adr-0012) |
 | adding or changing a control operation | [§5 Controls reaching in](#5-controls-reaching-in-adr-0010-1-sessionscontrol) |
 | changing teardown, or acting on a session no run holds | [§6 End](#6-end) and [§6a](#6a-the-session-browsers-actions-reaching-a-record-no-run-holds-part-u) |
-| adding a table or a column | [§7 The store the run writes](#7-the-store-the-run-writes-packagesstoresrcschemats-v24) |
+| adding a table or a column | [§7 The store the run writes](#7-the-store-the-run-writes-packagesstoresrcschemats-v25) |
 | adding a configuration key | [§8 Configuration's three tiers](#8-configurations-three-tiers-adr-0037-as-they-touch-the-run) |
 | drawing something from a publication | [§9 What a surface does with a publication](#9-what-a-surface-does-with-a-publication-adr-0046-adr-0045-part-z) |
 
@@ -134,7 +134,8 @@ and before the first new iteration — and parks there (`parkAtPlanGate(resumed)
 pending ahead of the launch content (`resumedWorkSection`), which it is told the resumed iteration carried out only
 when that iteration closed the continue's message as done (`done`, `pending` or `none`: PD-ORCH-005 clause 17). The
 launch content after it is the payload the continue built before that iteration ran, so its handoff predates the close
-(OQ-104, `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`). A message-limit pause that wins there leaves
+(OQ-104, "The handoff after the preamble is the continue's", which the repair of
+`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md` left as it reads). A message-limit pause that wins there leaves
 nothing open and the continue's message `complete`, and its resolution appends that message again, as the Continue
 action does on the other routes to that state (OQ-103). A plan
 decision relaunches with `RunDeps.appendsTask: false`:
@@ -206,7 +207,7 @@ flowchart TB
   L0 -. "a continue: the open iteration first" .-> RES["iterate(open row): the same number, root and task;<br/>resumePaused() · the root from its record;<br/>iteration_resumed (PD-ORCH-005 clause 4)"]
   RES --> TURN
   OUT -- "the explicit cancel, an abort, or a rest<br/>that found nothing unfinished" --> PEND["task back to pending"]
-  C & RQ & AB & PEND --> E["iteration.end event · CHECKPOINT capture (ADR-0039, awaited) · iteration_end hooks ·<br/>iterationsCompleted += 1 · save running (aggregates, todo, progress)"]
+  C & RQ & AB & PEND --> E["endIteration(): iteration.end event · the row closed · the todo stored (ONE transaction) ·<br/>CHECKPOINT capture (ADR-0039, awaited) · iteration_end hooks ·<br/>iterationsCompleted += 1 · save running (aggregates, todo, progress — published)"]
   E --> ML{"message limit in force<br/>and count ≥ limit?"}
   ML -- yes --> PL["pauseAtLimit(): status paused_message_limit + count + limit (durable),<br/>run.paused event to main, no terminal pair; the Run ends"]
   ML -- no --> L0
@@ -239,7 +240,20 @@ hard-cancel budget — and leaves each unfinished child `paused` where it stood 
 execution record `paused`, and the iteration open (above). A child whose `child_timeout` expired during the rest ends
 `failed` as it would have without one, unsummarised; one whose execution raised is left `paused`, as the root is
 (**OQ-96**). An execution a stop's grace gave up on is **detached**: when it returns it writes nothing — no row, no
-record, no report (REQ-SESSION-094). Every agent the rest leaves paused, the root included, has any call it never
+record, no report (REQ-SESSION-094). Its model step writes nothing either: while `TurnDeps.detached` reads true the
+step streams no row, settles none and counts no usage (2026-09-29), and teardown closes its tool port (§6), so its gate
+writes nothing when its call returns. **The root is bounded the same way (REQ-SESSION-092 / REQ-MONITOR-129, 2026-09-29):**
+`turn()` awaits the root's turn no longer than `stopGraceSpent`, which settles `STOP_GRACE` after the first stop
+request, forced or not. A root still in a call then is detached like a child — its turn's `detached` reads true, so it
+writes nothing when the call returns — and the rest that follows is given what is left of the grace, counted from the
+same first request (`Run.stopGraceLeft` → `IterationChildren.rest(cause, grace)`: none after a root given up on, so what
+still executes is detached at once), so a stop ends within the one 30 s. The root is left `paused` by a stop or a quit,
+its open call answered as interrupted; under the explicit cancel its open call is answered as cut off, naming no rest. The
+explicit cancel rests nothing: it drains the active background children (REQ-ORCH-080, bounded by the drain's own
+timeout, whether the root returned or was given up on — **OQ-121**), settles every child record (`finalize`), then
+awaits what still executes within what is left of the grace and detaches it (`IterationChildren.outlast`: none is left
+after a root given up on), so a child's step that ignored the cancel writes nothing when it returns. So does any stop that
+rests nothing (one the run raises itself, a plan cycle's). The repair of `a-root-call-that-ignores-the-stop-holds-the-run-open.md`. Every agent the rest leaves paused, the root included, has any call it never
 returned from or raised out of answered in its record as interrupted, its row settled (`answerOpenCalls`, which the crash
 record uses for a dead run's agents too), so a resume sends a conversation whose every call has its result; a call of
 that step that completed keeps what it returned, read back from its settled row. A rest that finds nothing unfinished closes the iteration as before. The cause is
@@ -306,27 +320,44 @@ no task for it. A continue that delivers no message — the Continue action, "co
 resolution's 'continue' and 'double' (REQ-SESSION-110) — restates the last request, so `launchContinuation` passes `appendsTask: false` while the todo still holds that request unfinished
 (`Todo.holdsUnfinished`: a task of that text pending, or in progress and held by the open iteration — its own task or
 a message it holds), and the run takes that task up as it stands; a task in progress that no iteration holds does
-not count, since no selection would take it up. The todo is judged as the run will read it: a message a closed iteration
-still holds is settled first (`Todo.releaseStale` against `succeededIterationsOf`, as the run's constructor settles
-it), so one a death left held and the run returns to pending is not appended a second time. A continue by message always
+not count, since no selection would take it up. The todo is judged as the run will read it: what a death between an
+iteration's close and the save of its todo left is settled first (`settleClosedIterations`, which the run's constructor
+calls too) — a message a closed iteration still holds (`Todo.releaseStale` against `succeededIterationsOf`), and an
+iteration's own task left in progress (`Todo.settleStranded`, as the latest row naming it closed) — so one the run
+returns to pending is not appended a second time. A continue by message always
 appends its task, even beside a pending task of the same text: it states a request (REQ-ORCH-004, OQ-102). The plan cycle held after a resumed iteration is told what became of
 every message that iteration held (`Todo.heldIds`, read when the run is built): this continue's, or an earlier one's a
 Continue action resumed it with. A message is marked as one for good (`Task.message`), so the iteration that takes it up
-is sent it: `iterate()` records the selected message's text when it is not the launch content's own request, and
-`Run.firstMessage` adds it to an execution root's first message after the launch content and before the offers list —
-never to a plan cycle's, which is not an iteration, including the one held after a resumed iteration whose own task was
-a message.
+is told it in clause 17's words.
+
+**Every iteration is sent its own task (REQ-CHAT-040, REQ-ORCH-004 / REQ-ORCH-135; the repair of
+`every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`, 2026-09-29).** The launch content — the prompt and its
+attachments, or a continuation's handoff payload, with a plan decision's `planSection` — is the base of every
+execution iteration's first message. `iterate()` records the task it selected (`Run.takenUp`) when that task is not the
+run's own (`RunDeps.taskId`) and its text is not the launch content's request (`taskLabel ?? task`) — a queued prompt,
+a task a pause, a stop or a death put back, an earlier request, an improvement run's proposal, a continue's message — and
+`Run.firstMessage` adds it as a text part after the launch content and before the offers list, naming it the task to
+work on (`takenUpText`; a continue's message in clause 17's words). The run's own task, and a task whose text is the
+launch content's request (the Continue action restating a pending request, a plan decision's gated request), are told
+nothing more. Never a plan cycle's root, which is not an iteration, including the one held after a resumed iteration
+whose own task was a message. The launch content is not rebuilt per iteration: a later iteration of a continuation is
+re-sent the handoff as it was read at the continue (OQ-106, "The handoff is read once"; OQ-104 for the plan cycle held
+after a resumed iteration).
 
 **An iteration a previous run left open, declined (PD-ORCH-005 clause 6; the repair of the crashed-iteration defect).**
 Every execution iteration has an `iterations` row from the moment its root is minted, and `iteration.end` and the row's
-close commit in one transaction (`endIteration`). A rest or a dead run host leaves that row open. **Declined** —
+close commit in one transaction (`endIteration`) — with the session's todo, its task and held messages already closed
+in it, so a death while the capture or the `iteration_end` hooks run leaves no task in progress with nothing open to
+hold it (the repair of `an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md`, 2026-09-29;
+until then the todo was saved only after them; the close takes no save generation and publishes nothing, so the
+renderer sees the closed task with the save that follows the hooks). A rest or a dead run host leaves that row open. **Declined** —
 `continueSession(…, { withoutPaused: true })`, "continue without them" — before its first iteration a run ends every
 `paused` agent of the open iteration `cancelled` with a report saying so (`cancelPausedAgents`), closes the row `cancelled`
 (`closeLeftOpenIteration`, REQ-ORCH-135) — its `iteration.end` summary names the decline and what left the agents paused,
 a crash on clause 18's route included; every run that closes one was told to decline it —
 and attempts that iteration's one
 checkpoint capture (REQ-GIT-051, no child credited; its hooks' `iteration_end` is not fired — the hooks that saw it
-begin were the dead run's): the task it held goes back to `pending` (`Todo.reopen`), and the count moves past it, so
+begin were the dead run's): the task it held goes back to `pending` (`Todo.reopen`) in the close's transaction, and the count moves past it, so
 the run's own first iteration takes the next number rather than the dead one's. The count is also never below the
 highest iteration recorded closed, and a continuation's appended task id is numbered past the count, the highest row
 and every id the todo holds (`continuedTaskId`). The ledger
@@ -527,7 +558,17 @@ threshold, no compression can bring the count under it, and the reason is stated
 REQ-ORCH-093 recovery path is never latched. **`SessionRecord.entryContext`**
 carries the entry role's latest prompt reading and its model's advertised limit (REQ-MONITOR-089): the entry
 role has no `children` row, so this is the only route by which the synthetic root agent's meter gets a figure —
-before it, a run that spawned no child drew zero however much it had spent.
+before it, a run that spawned no child drew zero however much it had spent. **`SessionRecord.entryTools`** (live-run
+finding K1, 2026-09-29) is the same route for its tools: `resolved` is the native set the live run's root port kept
+(`ToolPort.resolvedTools`, the one resolution's names the callable map kept, so a coordinator's withheld tools are absent —
+REQ-MONITOR-061), `called`
+and `active` the tracker's under the persona the root dispatches as (`Run.entryTools`); with no run live nothing is
+resolved, the history is read under the latest iteration's `root_persona` (`entryToolsOf`), and the surface lets the
+role's declared tools stand in (REQ-MONITOR-060; the snapshot's `declaredTools`). A LIVE run-level agent whose root port
+has not resolved yet — the pre-flight, before `Run.iterate` sets the port — lists nothing (`runLevelGrant`), never the
+declared set (REQ-MONITOR-061). **`SessionRecord.artifacts`** is the
+session's artifacts not superseded, with producer, ready flag and consumers (`artifactLinksOf`, one body-free read through
+`artifacts_by_created` per snapshot) — what the inspector's and the persona window's artifact links read (REQ-MONITOR-052/068/069).
 
 **The MCP surface (Part S; ADR-0033/0034).** A port is created synchronously but its MCP surface needs discovery, so the
 run start kicks discovery off for every carried, launchable server (`McpHost.prepare`, each bounded by REQ-MCP-053's 35 s
@@ -572,7 +613,10 @@ a time, re-runnable, cancellable; the status held in the run host for the applic
 into the **ledger** (one row per child, every transition one transaction with its `child.transition` event);
 the **scheduler** is a pass to quiescence triggered by a state change, never a timer (cascade `blocked`, admit
 on `succeeded` + report stored, promote one held child per freed model slot, claim starts); a child runs its own
-turn loop under its persona's tools, model, credential and supervisor; its **report** comes from a bounded summarising pass on `default_summary_model` (REQ-CONFIG-065) or the entry model;
+turn loop under its persona's tools, model, credential and supervisor; its **report** comes from a bounded summarising pass on `default_summary_model` (REQ-CONFIG-065) or the entry model,
+which reads the task as given (the ledger row's, the payload's blocks ahead of it marked omitted) and the most recent
+part of the transcript within 12,000 characters, the omission marked between them, beside the report's deterministic
+facts — edited files, commands and exit codes (OQ-111; OQ-119 and OQ-120 ask its two bounds);
 the parent resumes with the report. Every exit from an iteration leaves every child record terminal — except a rest
 (PD-ORCH-005), which leaves every unfinished child `paused`.
 
@@ -636,7 +680,10 @@ does not decode, so it never fails a resume that `load`, which reads from the la
 
 **Write scopes (PD-TOOLS-006; `children/write-scope.ts`).** A `delegate` call may carry `write_scope`, path
 patterns in the `glob` tool's dialect (the one compiler, `kernel/glob.ts`). `IterationChildren.delegate` validates
-them before admission (an empty, absolute or root-escaping pattern is a `rejected` delegation with no record) and,
+them before admission (an empty, absolute or root-escaping pattern is a `rejected` delegation with no record; so,
+since revision 3, is a scope for a known persona, or an alias of one, that cannot write files — `writesFiles`:
+`write_file`, `haet_edit` or `haet` surviving `coordinator_only` and `read_only` — whose reason names the catalogue's
+writers, `fileWriters`) and,
 once the ledger has accepted the child, records its **claim** in `WriteClaims` — in memory, in acceptance order —
 together with the child's **disclosure**: its own scope and the live scopes of the others as they
 stand at that moment. The disclosure is rendered as a block immediately after the workspace-root line of the child's
@@ -683,11 +730,23 @@ kept. `childPayload`'s sixth argument places it as item (5), after the artifact 
 `execute` passes what was remembered and nothing else of it changed. The ids stay on `children.inherited_context` for the
 agent surfaces (REQ-MONITOR-074); the run holds no other record of which of them counted.
 
+**The sibling-artifact index can be suppressed (REQ-TOOLS-152, REQ-TOOLS-154 item (3), REQ-CONFIG-107; repaired
+2026-09-29 under R-067).** A `delegate` call carrying `suppress_auto_context: true` forwards it as
+`DelegateRequest.suppressAutoContext`; `ChildLedger.spawn` stores it on the child (`children.suppress_auto_context`, v25).
+`IterationChildren.artifactContext` omits REQ-LIBRARY-097's `PRIOR SIBLING ARTIFACT INDEX` when the row carries it or the
+child's role has `skip_auto_sibling_context` (the run host's persona resolver maps it to `Persona.skipAutoSiblingContext`),
+and keeps the attached artifacts, which the caller named; the `context_selection` diagnostic records
+`sibling_index_suppressed`. Because the flag is on the row, REQ-ORCH-088's retry and a resumed child's retry omit it too.
+
 **The record the agent surfaces read (Part R; REQ-MONITOR-044).** Each child's `AgentRecord` carries, beside what Part B
 projected, `reasoning` (the persona's configured level, `medium` when none), `contextUsed` (the input count of its latest
 model step) and `contextLimit` — **from Part AH the model's own `max_input_tokens`** where the configuration states one
 (`contextLimitsOf` → `contextLimitFor`), REQ-MONITOR-080's default otherwise; Part R declared that lookup and recorded it
-unfilled, and REQ-MONITOR-078's capacity ladder needed the same figure — plus **`compressions`** (REQ-MONITOR-281, Part AH),
+unfilled, and REQ-MONITOR-078's capacity ladder needed the same figure. The lookup is by `children.model_key`, which is
+**the `models:` key of the model the child runs on** (`childModelKey`: the role's `Persona.modelKey`, a synthetic copy
+mapped to the key the loader recorded it was copied from (`LoadedConfiguration.syntheticOrigins`, `syntheticOriginOf`), else the run's `RunConfig.modelKey`, the model id only where no configuration names a key) — the
+same key `modelCapFor` reads `max_parallel` under (REQ-CONFIG-094, REQ-MONITOR-020); it was the bare model id until
+live-run finding D5, so neither lookup ever matched a qualified key (repaired 2026-09-29 under R-067) — plus **`compressions`** (REQ-MONITOR-281, Part AH),
 `grantedTools` (from `children.granted_tools`), `calledTools` and `activeTools` (kept incrementally by the writer's
 `AgentActivity` at `tool.start`/`tool.finish`, seeded once from the ring on load — never recomputed over the transcript,
 REQ-MONITOR-038), `delegationSessionId` (null: every child runs in the run's session) and `inheritedContext`. The projection
@@ -793,7 +852,12 @@ crash-left session too, which that revision prescribes only on a paused one (OQ-
 
 ## 6. End
 
-`teardown(reason)` runs every step guarded even on exception (REQ-SESSION-094): the pause's tool deadline cancelled; for a
+`teardown(reason)` runs every step guarded even on exception (REQ-SESSION-094): **every tool port this run built closed
+first** (`Run.closePorts` → `ToolPort.close(cutOff)`, 2026-09-29): a call a port still has open — only one the stop's
+grace detached can be — settles at once in the tool-call ring and with its `tool.finish`, as failed with the rest's
+interrupted statement, and from then on nothing the port's gate writes reaches the session (`writerSink` in
+`run-host/tools.ts`) and no `post_tool` hook fires for its call, so a straggler writes nothing into the finished session
+or a later run of it; the pause's tool deadline cancelled; for a
 run at rest, its agents' background sessions recorded and, for a stop or a quit, ended (PD-ORCH-005 clause 10) → the stop reason classified to the
 terminal result (REQ-MONITOR-301) and the persisted status (REQ-SESSION-093 / REQ-MONITOR-029) →
 `session_end` hooks → `run_end` timeline entry → pending publications flushed → **the terminal transaction**
@@ -824,6 +888,22 @@ pid that is gone, the case REQ-SESSION-047 reaps on the next claim, and no launc
 in this application" by a run host still exiting. The lock is never released early from inside a stopping run host and
 the liveness probe is unchanged (REQ-SESSION-049/050/056).
 
+**A continue in the process that ran the session takes the lock back (ADR-0005, REQ-SESSION-047/048/083, 2026-09-29,
+R-067).** A run's teardown releases the lock while the session stays live in `Sessions.live`, so every continue claims
+it again before its first write: the continue by message (`prompt`), the Continue action and the message-limit
+resolution (`continueSession`) and the plan decision (`planDecision`) each call `holdForContinue` once their refusals
+that write nothing have answered. It keeps a lock this process already holds (a session loaded here, or one held at the
+plan gate, whose park does not release it), claims through `claimLockReaping` otherwise — REQ-SESSION-047's one reap of
+a dead local holder, the rule `SessionWriter.open` and the at-rest cancel's `lockForWrite` claim by (`claimHold`, the
+one claim of a live session's lock outside a load) — and refuses, with `resume`'s REQ-SESSION-048 words
+(`lock-held-local` naming the pid, `lock-held-foreign` naming the machine) and nothing written, while another live
+process holds it. The run the continue launches holds the lock until its own teardown releases it; a continue that
+launches no run (the resolution's `cancel`, the plan's `cancel`, a refusal after the claim) gives back what it took.
+Before this, `prompt`'s re-claim went through `resume`, which answers at once for a live session and claimed nothing,
+and the other two claimed nothing at all, so every run after a process's first ran with no lock row
+(`docs/defects/fixed/a-continuation-in-the-process-that-ran-the-session-holds-no-lock.md`; `part-j-proof` samples the
+store through a pause and its Continue and fails on a continued run with no holder).
+
 ## 6a. The session browser's actions reaching a record no run holds (Part U)
 
 Three actions of REQ-SESSION-182 reach a session's record from OUTSIDE a run, all in the run host, none a control operation
@@ -848,21 +928,21 @@ of §5 and none a channel: each is a request answered once.
   record, no run pauses, a live session exports what it holds at that instant; the file is written afterwards, outside
   the transaction, through `replaceDocument` with REQ-TRACE-061's ladder.
 
-## 7. The store the run writes (`packages/store/src/schema.ts`, v24)
+## 7. The store the run writes (`packages/store/src/schema.ts`, v25)
 
 | Table | Holds | Written by |
 |---|---|---|
-| `sessions` | the session record: status (**`waiting`** while an agent is parked on a provider limit, Part Q — REQ-SESSION-073's arm, presented as `running`; the wait's own fields live on the record's `wait`, not in a column; **pending question prompts likewise live on the record's `pendingQuestions`**, derived from the live run at every snapshot — Part AC, so REQ-SESSION-025's persistence limb is owed), workspace, run columns (stop reason, iterations, tokens, cost and **`cost_qualifier`** — v21, PD-MONITOR-001 revision 2's qualifier recorded with the total, backfilled `reported` for a non-zero total written before it — summary, todo, progress, permission mode, pending approvals, message limit, paused-at count, **`token_samples`** — v7, REQ-MONITOR-166's history the run samples every 10 s and once at the end, 120 kept), truncation facts, **`worktree`** (v8, REQ-GIT-015's binding as JSON; NULL = no worktree, REQ-GIT-017), **`sandbox_mode`** (v8, REQ-SHELL-125's choice; honoured since Part AR — ADR-0022: the mode gates the run at start and wraps every new command string, and the recorded `sandboxed`/`sandbox_backend` always agree with the verdict that governed whether the run was allowed to start, REQ-SANDBOX-094) and **`last_restored_sequence`** (v9, REQ-SESSION-195 / REQ-GIT-155: NULL until a restore succeeds, written in that restore's transaction, untouched by every refusal), and **`plan_cycle` / `plan_released`** (v17, REQ-ORCH-153/154: the cycle awaiting an answer, NULL when none, and approval's one-way release, cleared only by the next user prompt) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, `recordRestore`, **`openPlanGate`/`resolvePlanGate`**; the binding and the mode at `create` only |
+| `sessions` | the session record: status (**`waiting`** while an agent is parked on a provider limit, Part Q — REQ-SESSION-073's arm, presented as `running`; the wait's own fields live on the record's `wait`, not in a column; **pending question prompts likewise live on the record's `pendingQuestions`**, derived from the live run at every snapshot — Part AC, so REQ-SESSION-025's persistence limb is owed), workspace, run columns (stop reason, iterations, tokens, cost and **`cost_qualifier`** — v21, PD-MONITOR-001 revision 2's qualifier recorded with the total, backfilled `reported` for a non-zero total written before it — summary, todo, progress, permission mode, pending approvals, message limit, paused-at count, **`token_samples`** — v7, REQ-MONITOR-166's history the run samples every 10 s and once at the end, 120 kept), truncation facts, **`worktree`** (v8, REQ-GIT-015's binding as JSON; NULL = no worktree, REQ-GIT-017), **`sandbox_mode`** (v8, REQ-SHELL-125's choice; honoured since Part AR — ADR-0022: the mode gates the run at start and wraps every new command string, and the recorded `sandboxed`/`sandbox_backend` always agree with the verdict that governed whether the run was allowed to start, REQ-SANDBOX-094) and **`last_restored_sequence`** (v9, REQ-SESSION-195 / REQ-GIT-155: NULL until a restore succeeds, written in that restore's transaction, untouched by every refusal), and **`plan_cycle` / `plan_released`** (v17, REQ-ORCH-153/154: the cycle awaiting an answer, NULL when none, and approval's one-way release, cleared only by the next user prompt) | writer's `save`, `endRun`, `pauseAtLimit`, `resolvePause`, `recordRestore`, **`openPlanGate`/`resolvePlanGate`**, **`endIteration`** (the todo only, in the transaction that records `iteration.end` and closes the iteration's row; no save generation, so the renderer sees it with the next save); the binding and the mode at `create` only |
 | `plan_cycles` (**v17**, REQ-ORCH-154; cascade **v20**) | one row per plan cycle: `opened_at`, the role's `plan` VERBATIM (never rewritten after the insert), the classified `intent`, the `todo` the plan implies, the `changes` the user stated when choosing revise into it, the user's `edited` text (NULL until they edit � which is what makes "editing alone never approves it" structural), and the `decision` with `decided_at`. Keyed `(session_id, cycle)`, so an answer is recorded once and a second answer for the same cycle changes nothing. `session_id` carries `REFERENCES sessions(session_id) ON DELETE CASCADE` since v20 (REQ-SESSION-166: the VERBATIM plan text leaves with the session; rows already orphaned are dropped by the migration, which is the delete the user asked for) | `openPlanGate` (one durable transaction with the status and the `plan_gate_opened` entry), `recordPlanEdit`, `resolvePlanGate` |
 | `checkpoints` (v9) | REQ-GIT-016's record, one row per checkpoint keyed `(session_id, sequence)` — ref, commit, created_at, iteration, child_name, `files` as one JSON list, `kind` from REQ-GIT-067's vocabulary; `checkpoint_count` is a count over these rows, never stored (ADR-0039); the listing is `ORDER BY sequence` under the primary key (a plan the store test asserts) | `recordCheckpoint` (insert + the trim to `max_per_session`, one transaction with the timeline entry and the event) |
-| `session_locks` | `(session_id, pid, host, acquired_at)` — the capability token (ADR-0005) | `create`/`open` (INSERT OR IGNORE), `endRun`, release |
+| `session_locks` | `(session_id, pid, host, acquired_at)` — the capability token (ADR-0005) | `create`/`open` (INSERT OR IGNORE), a continue's `holdForContinue` and the at-rest cancel's `lockForWrite` (both through `claimHold` → `claimLockReaping`), `endRun`, release |
 | `transcript_rows` | the rows, resident or released to a page (REQ-SESSION-131/192). Part Z added derived `chars` and transient `streamId`. Part AE adds ordered image metadata in `attachments` (v14): original name, content-derived media type, size, session-relative path and SHA-256 digest; bytes remain under the session files directory and reopen verifies availability and digest (REQ-CHAT-046/153/173). **REQ-CHAT-162's `/skills` listing (2026-09-27) is one `system` row whose body is the listing** — the text `contracts/skills.ts` fixes and the row renderer reads back — appended outside any run through the loaded session's writer (`run-host/skills.ts`'s `writeSkillListing`), so it is saved, recorded as a `transcript.row` event and exported like any row; no column and no migration | `appendRow`, `settleRow`, `upsertMessageRow` |
 | `events` | the wire history: one line per event, ordinal per session, trimmed by the retention cap (ADR-0009) | every unit, in the same transaction as what it records |
 | `launch_audits` | one per session, the primary key the one-shot | `recordLaunchAudit` |
 | `timeline` | ordered named entries with actor and metadata, each carrying **`id`** (12 hex) and **`severity`** (`debug` \| `info` \| `warning` \| `error`, default `info`) as their own columns since **v10** — REQ-SESSION-134's shape, which the table held neither of until the repair of Part U's thirty-second defect; a row written before v10 keeps an empty id and the export omits the field rather than minting one (REQ-SESSION-199) — including Part Q's session-wide memory, `model_exhausted {provider, model}` and `model_override {provider, model, model_key}`, rehydrated on resume, and Part AH's **`context_compressed`** (REQ-CONFIG-135's four inputs and the trigger token number as separate fields, the count source, the before/after token and message counts, the latency) which a session opened again counts to seed REQ-MONITOR-086's per-agent figure (the wire-event catalogue is closed at 23 kinds, REQ-EVENTS-041, so no event carries them); `model_fallback`, `unresponsive_model_fallback`, `child_timeout_fallback` beside them; **Part AO's `transcript_cleared`** (`removed`, `next_index`) written in the clear's own transaction, and its `context_compressed` entries with `trigger: manual`, which carry the counts and the latency but NO threshold field because none was read (REQ-CHAT-081) | `appendTimeline`, the queue/pause/steering units, `recordCheckpoint` (`checkpoint_created`), `recordRestore` (`checkpoint_restored`, or the `issue` entry of the `checkpoint_restore` warning), the REQ-GIT-094 repair (`session.interrupted_recovered`), the ladder; PD-ORCH-005's **`child_paused`** (`task_id, interruption, from_state, resume_state`, in `restChild`'s transaction), **`iteration_paused`** (`iteration, interruption, paused_agents`), **`approval_withdrawn`** (`request_id, tool, persona, interruption`), **`question_withdrawn`** (`tool, persona, interruption`, the gate's) and **`run_pause_refused`** (a pause accepted in the pre-flight, refused once the plan hold is known) |
 | `permission_audit`, `tool_calls`, `issues` (+ `ring_state`) | the three rings (ADR-0024); audit and issues refuse UPDATE by trigger | the gate's sink through the writer |
-| `children`, `model_slot_queue` | the ledger and the held-slot order (ADR-0012); **`granted_mcp`** (Part S, no migration — the existing JSON column) now holds `{ granted: {server: [callable…]}, servers: [{name, transport, origin, fate: connected \| dropped, reason?}] }` written at spawn from the persona's memoised surface, projected as `AgentRecord.grantedMcp` / `mcpServers` (REQ-MCP-065/114); **`continuation_of`** (**v22**, PD-ORCH-004: the task id of the child this one was delegated to continue, NULL for every other child and for every row written before v22), written once at spawn; a stored `report` may carry a runner-owned **`cut_off`** object (no migration — the existing JSON column); **`write_scope`** (**v23**, PD-TOOLS-006 revision 2: the declared patterns as JSON, `'[]'` when none and for every row written before v23), written once at spawn; **`interruption`** and **`resume_state`** (**v23**, PD-ORCH-005: what left the child `paused` and the state it resumes into; set when it is paused, cleared when it resumes, and kept when a paused child is ended `cancelled` instead — declined, cancelled while the run came to rest, or cancelled on its own while its session rests (`Sessions.cancelPausedAtRest`, PD-ORCH-005 clause 16) — so a terminal row may still carry both; NULL on a child never paused; CHECKed to `pause \| stop \| quit \| crash` and to the five resume states) | `spawnChild`, `transitionChild`, `claimChildStart`, `storeChildReport`; the rest columns by **`restChild`** (a rest, and the crash record) and cleared by **`resumeChild`** |
-| `iterations` (**v23**, PD-ORCH-005) | one row per EXECUTION iteration keyed `(session_id, iteration)`, `iteration >= 1` by CHECK (a plan cycle is not an iteration, REQ-ORCH-153's ruling, and has no row — it runs while the plan gate holds, where clause 11 refuses a pause and has a stop or a quit record no interruption and end the cycle's agents as before; a crash during one leaves no row open, OQ-96): the root's task id, canonical name and persona (clause 1: "the root's task id is recorded with its iteration"), the todo item it works on (`todo_task_id`) and the text the root was given, `state` `open \| closed`, the closing `outcome` (the run loop's five iteration outcomes, REQ-ORCH-073/135's among them, CHECKed), the last `interruption` while open (cleared on resume), and the two instants. At most one row per session is open — the partial unique index `iterations_one_open` enforces it. **A pause, a stop, a quit and a crash leave it open with their interruption** (`recordIterationInterruption` at the rest; the crash record at the next repair or continue). **The next continue resumes it** — the same row, its interruption cleared — **unless the user declines**, when its paused agents end `cancelled` and the row closes `cancelled` before that run's first iteration (`closeLeftOpenIteration`, §2) | `openIteration` when the root is minted for an execution iteration (refusing, with a warning and no store failure, a number already taken or a second open row); `endIteration` — `iteration.end` and the close in ONE transaction — at every iteration's end and for one a previous run left open; `recordIterationInterruption` at a rest and in the crash record (at a repair or a continue) |
+| `children`, `model_slot_queue` | the ledger and the held-slot order (ADR-0012); **`granted_mcp`** (Part S, no migration — the existing JSON column) now holds `{ granted: {server: [callable…]}, servers: [{name, transport, origin, fate: connected \| dropped, reason?}] }` written at spawn from the persona's memoised surface, projected as `AgentRecord.grantedMcp` / `mcpServers` (REQ-MCP-065/114); **`continuation_of`** (**v22**, PD-ORCH-004: the task id of the child this one was delegated to continue, NULL for every other child and for every row written before v22), written once at spawn; a stored `report` may carry a runner-owned **`cut_off`** object (no migration — the existing JSON column); **`write_scope`** (**v23**, PD-TOOLS-006 revision 2: the declared patterns as JSON, `'[]'` when none and for every row written before v23), written once at spawn; **`interruption`** and **`resume_state`** (**v23**, PD-ORCH-005: what left the child `paused` and the state it resumes into; set when it is paused, cleared when it resumes, and kept when a paused child is ended `cancelled` instead — declined, cancelled while the run came to rest, or cancelled on its own while its session rests (`Sessions.cancelPausedAtRest`, PD-ORCH-005 clause 16) — so a terminal row may still carry both; NULL on a child never paused; CHECKed to `pause \| stop \| quit \| crash` and to the five resume states); **`suppress_auto_context`** (**v25**, REQ-TOOLS-152, R-067: `1` when the `delegate` call set it, CHECKed to `0 \| 1`, `0` for every row written before v25), written once at spawn and read at every assembly of the child's payload — its first, REQ-ORCH-088's retry, a resumed child's retry — which then omits the sibling-artifact index; the role's `skip_auto_sibling_context` (REQ-CONFIG-107) forces the same omission from configuration and is not copied here | `spawnChild`, `transitionChild`, `claimChildStart`, `storeChildReport`; the rest columns by **`restChild`** (a rest, and the crash record) and cleared by **`resumeChild`** |
+| `iterations` (**v23**, PD-ORCH-005) | one row per EXECUTION iteration keyed `(session_id, iteration)`, `iteration >= 1` by CHECK (a plan cycle is not an iteration, REQ-ORCH-153's ruling, and has no row — it runs while the plan gate holds, where clause 11 refuses a pause and has a stop or a quit record no interruption and end the cycle's agents as before; a crash during one leaves no row open, OQ-96): the root's task id, canonical name and persona (clause 1: "the root's task id is recorded with its iteration"), the todo item it works on (`todo_task_id`) and the text the root was given, `state` `open \| closed`, the closing `outcome` (the run loop's five iteration outcomes, REQ-ORCH-073/135's among them, CHECKed), the last `interruption` while open (cleared on resume), and the two instants. At most one row per session is open — the partial unique index `iterations_one_open` enforces it. **A pause, a stop, a quit and a crash leave it open with their interruption** (`recordIterationInterruption` at the rest; the crash record at the next repair or continue). **The next continue resumes it** — the same row, its interruption cleared — **unless the user declines**, when its paused agents end `cancelled` and the row closes `cancelled` before that run's first iteration (`closeLeftOpenIteration`, §2) | `openIteration` when the root is minted for an execution iteration (refusing, with a warning and no store failure, a number already taken or a second open row); `endIteration` — `iteration.end`, the close and the session's todo in ONE transaction — at every iteration's end and for one a previous run left open; `recordIterationInterruption` at a rest and in the crash record (at a repair or a continue) |
 | `agent_messages` (**v23**, PD-ORCH-005 clauses 1 and 12) | every agent's conversation keyed `(session_id, task_id, seq)` — `seq` per agent, taken inside the insert — each entry a `message` (one `ChatMessage` as JSON) or a `replacement` (a compression: the whole conversation that replaced the one before, as a JSON array), with the `iteration` it belongs to. A resume reads from the agent's last replacement forward (`agentConversation`); the full history stays. The transcript clear deletes the entries of every iteration that is not open (`clearClosedAgentMessages`, in the clear's own transaction, its count in `transcript_cleared`'s `records_removed`); a plan cycle's entries (iteration 0) are never open. No index: every read is a primary-key prefix (asserted) | `recordAgentMessage`, one transaction per entry, fed by each agent's `Conversation` (§3) |
 | `agent_fingerprints` (**v24**, PD-ORCH-005 revision 4 clause 14) | one row per agent keyed `(session_id, task_id)` as its conversation is: the `iteration`, the SHA-256 (hex) of the system prompt (`instructions`) and of the tool definitions (`tools`) its first model request carried, and when. The first is kept (`INSERT OR IGNORE`); a resume compares against it and never replaces it. An agent recorded before v24 has none, and its resume records one and states nothing. The transcript clear deletes closed iterations' rows with their records (`clearClosedAgentFingerprints`, its count in `transcript_cleared`'s `fingerprints_removed`). The read is the primary key (asserted) | `recordAgentFingerprint`, one transaction, from `ConversationRecord.fingerprint` at an execution's first model step |
 | `agent_terminals` (**v23**, PD-ORCH-005 clause 10) | the background terminal sessions an agent started, keyed `(session_id, terminal_id)`: the starting agent's task id, the command, `state` (REQ-TOOLS-109's `running \| completed \| failed \| killed \| timeout`, or the rest that ended it, `stop \| quit \| crash`), the exit code, the last recorded output and when it was recorded; an upsert moves one row, never appends a second, refuses an id that names another agent's command, and records an end once (it moves only a `running` row) | `recordAgentTerminal`: the run host's terminal attribution at a session's start and at an end it reaches by itself; the run's `restTerminals` at a rest (before a stop's kill); `Sessions.closeAll` at a quit; the crash record (a repair or a continue) |
@@ -947,9 +1027,16 @@ of §5 and none a channel: each is a request answered once.
   is also what lets REQ-WORKSPACE-115's refresh promise to show "the values the persisted section holds at that
   moment" while disturbing nothing else — it is one file, read on its own, on demand. Writes go the ordinary
   Tier A way (`config.setField` → `writeConfigFields`), and `overlaySection` replaces both id lists wholesale
-  (REQ-CONFIG-050) while every other top-level key stays put. Because the lists are replaced wholesale, the
-  execution re-reads the section immediately before each recording: a skip answered while a background task ran
-  was otherwise erased by that task's own outcome, which is the second defect ADR-0064's first execution found.
+  (REQ-CONFIG-050) while every other top-level key stays put. Because the lists are replaced wholesale, main's
+  coordinator makes every marker write through a queue, one per workspace root (`InitializationCoordinator.marker`),
+  one write at a time in the order asked, and builds each patch — a skip's, each of a run's recordings through
+  `ExecuteDeps.commit`, the silent stamp — inside its turn from the file as the previous write left it; a skip
+  decides which ids it leaves out in that turn too (ADR-0064, "Fourth round" and "Fifth round", 2026-09-29).
+  *Superseded 2026-09-29:* "the execution re-reads the section immediately before each recording: a skip answered
+  while a background task ran was otherwise erased by that task's own outcome, which is the second defect ADR-0064's
+  first execution found." The erasure was real; the re-read (`ExecuteDeps.reread`, now removed) did not end it,
+  because a read taken before the write, outside the order the writes land in, still missed a skip whose write was in
+  flight, and the skip built its own patch from the in-memory state the run's write had not reached yet.
   `project_init.source_extensions` is read from the same file and decides classification (REQ-WORKSPACE-099).
 - **The one per-call read** — the `fetch` tool's egress policy and `tool_call_timeout` are loaded from the saved
   files at every call, without the live state (REQ-SANDBOX-038/118): a saved edit to the host lists reaches the
@@ -985,8 +1072,8 @@ reader's place is kept. Six steps, in order, on every publication:
 | 1 applicability | `replica.ts` | an earliest-changed index before the oldest row held is **declined** — one further whole read, the rows on display unchanged (REQ-SESSION-161) |
 | 2 reset | `replica.ts` | a whole-session update sets the expectation and classifies **`reset`** |
 | 3 row classification | `replica.ts` (`classifyRows`) | one `insert` per row added, one `remove` per row removed, one `update` per changed retained row; **one `noop` and no row counters** when nothing changed. Six cumulative counters, pure, byte-identical across two replays (REQ-UIBENCH-064/083) |
-| 4 projection | `ui/transcript/project.ts`, through `ui/transcript/projector.ts` | role-to-kind mapping, duplicate-reasoning and dead-session hygiene, edit-diff placement, folding, display caps, then the computed trailer rows — **one question trailer** reading `pendingQuestions[0]`'s own steps ("N step(s) — first title", the wording written once here, REQ-CHAT-168) and one per approval. **Bounded by what changed**: from the earliest-changed index back to the nearest group boundary, never over the resident window. **Run once per change of its inputs, not once per render** (2026-09-28, the R-048 measurement round): the pane holds one projector, keyed on every input step 4 reads, so the three or four renders one increment causes — its own, the measurement pass's, the tail pin's scroll event, a whole-session update's — project the window once; the bounded form is taken only for an append or a row replaced at its own index (a removal, an insertion — REQ-CHAT-069's scope switched — or a run member that no longer joins its run projects the window: R-062's fix round 1), and its clean cut reads runs on the rows hygiene keeps — REQ-CHAT-048's dropped reasoning skipped, REQ-CHAT-049's settle applied — with the reused prefix never reaching past the changed index (fix round 2). REQ-CHAT-048 compares an unstamped thinking row with **its own agent's** immediately previous thinking row (2026-09-28, OQ-91's reading): the walk keeps one per agent, and the bounded form looks an agent's up below the cut only when that agent's unstamped reasoning is in the suffix |
-| 5 present | `ui/transcript/TranscriptPane.tsx` | the displayed array, the preserved anchor and the expansion map to ADR-0045's recycler |
+| 4 projection | `ui/transcript/project.ts`, through `ui/transcript/projector.ts` | role-to-kind mapping, duplicate-reasoning and dead-session hygiene, edit-diff placement, folding, display caps, then the computed trailer rows — **one question trailer** reading `pendingQuestions[0]`'s own steps ("N step(s) — first title", the wording written once here, REQ-CHAT-168) and one per approval. **Bounded by what changed**: from the earliest-changed index back to the nearest group boundary, never over the resident window. **Run once per change of its inputs, not once per render** (2026-09-28, the R-048 measurement round): the pane holds one projector, keyed on every input step 4 reads, so the three or four renders one increment causes — its own, the measurement pass's, the tail pin's scroll event, a whole-session update's — project the window once; the bounded form is taken only for an append or a row replaced at its own index (a removal, an insertion — REQ-CHAT-069's scope switched — or a run member that no longer joins its run projects the window: R-062's fix round 1), and its clean cut reads runs on the rows hygiene keeps — REQ-CHAT-048's dropped reasoning skipped, REQ-CHAT-049's settle applied — with the reused prefix never reaching past the changed index (fix round 2). REQ-CHAT-048 compares an unstamped thinking row with **its own agent's** immediately previous thinking row (2026-09-28, OQ-91's reading): the walk keeps one per agent, and the bounded form looks an agent's up below the cut only when that agent's unstamped reasoning is in the suffix. **No pass over the window an increment** (2026-09-29, the CPU-profile round of R-048's order, REQ-CHAT-055): the reusable prefix is found by bisection over the previous display's *reach* (the highest row index any displayed row up to a position covers), carried forward by each bounded projection; a run beginning or ending (`running`) is bounded from the first row that settles with it (`settlesWithRunning`) rather than projecting the window; and the places REQ-CHAT-057/067 draw from (`placementsFrom`) ride with the projection, built from the previous one's |
+| 5 present | `ui/transcript/TranscriptPane.tsx` | the displayed array, the preserved anchor and the expansion map to ADR-0045's recycler; the offset table is rebuilt only where it changed (`pool.ts`'s `reuseOffsets`, 2026-09-29) — a row that is the same object at the same position, and whose identity the measurement pass has not re-measured since the committed table (the pane's `MeasureLedger`, which the two measurement caches also tell of their evictions), keeps its height and its offset — and the update shape compares keys only past the rows both arrays share |
 
 **During a recovery episode** the surface is *reconciling* and the subscription handler **drops** further
 publications for that session rather than queueing them, so exactly one `refused` and one `reset` are counted per
@@ -996,7 +1083,8 @@ episode however many arrive — an arrival-timing dependency would break the ben
 with `H_max` a declared product constant of 4,320 px — allocated at window construction, never added to or removed
 from, **emptied rather than unmounted**, and rendered whether or not the transcript holds any rows. The slot index is
 the framework key, never the row identity. Heights are **measured** by a `ResizeObserver` into a bounded cache and fed
-to a prefix-sum offset table, which is what makes the anchor of REQ-CHAT-071 exact: the identity and viewport offset
+to a prefix-sum offset table — rebuilt from the first height that changed, not from the top (REQ-CHAT-055) — which is
+what makes the anchor of REQ-CHAT-071 exact: the identity and viewport offset
 of the top visible row, restored by finding that row again, never by re-applying a stored pixel offset. A retained
 rendering is reused only while identity, content, laid-out width and expansion state are all unchanged; a live row is
 redrawn on every repaint. Expansion state lives in the pane, keyed by stable identity, because a slot rebind would

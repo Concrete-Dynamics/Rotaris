@@ -1,6 +1,6 @@
 import { Budget, millis, toIsoUtc, type Clocks, type MachineId, type Millis, type SessionId, type TimerHandle, type Timers } from '@rotaris/kernel';
 import type { IterationRow, SessionRow } from '@rotaris/store';
-import { DEFAULT_CONTEXT_CAPACITY, interruptionPhrase, isAnswerOnly, type ApprovalOption, type Interruption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RootExecutionRecord } from '@rotaris/contracts';
+import { DEFAULT_CONTEXT_CAPACITY, interruptionPhrase, isAnswerOnly, type ApprovalOption, type EntryToolsPayload, type Interruption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt, type RootExecutionRecord } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ContentPart, ModelError, ModelRef, ThinkingLevel, TurnReport } from '@rotaris/model';
 import type { EventBus } from './event-bus.js';
 import type { ProjectionOwner } from '../projection-owner.js';
@@ -34,6 +34,7 @@ import type { ResolvedTrigger, TurnCompression } from './compression.js';
 import { ConversationRegistry, type ManualCompressionReport } from './conversations.js'; // Part AO
 import { ConversationRecord } from './record.js';
 import { answerOpenCalls, iterationAgents } from './crash.js';
+import { interruptedResult } from './interruption.js';
 import { firstTurn, resumedStart, resumeNoticeOf, type TurnStart } from './resume.js';
 import { offersForFirstMessage } from './offers.js';
 import { randomUUID } from 'node:crypto';
@@ -60,6 +61,12 @@ export interface RunConfig {
   readonly persona: string;
   readonly systemPrompt: string;
   readonly model: ModelRef;
+  /**
+   * REQ-CONFIG-094 / REQ-MONITOR-049: the `models:` key `model` was resolved from — what a child that runs on the run's
+   * model is recorded under, so its cap and its context limit are found. Absent where no configuration names one (a
+   * test, the process-wide model); the model's id then stands in.
+   */
+  readonly modelKey?: string | undefined;
   readonly thinking: ThinkingLevel;
   readonly modelTimeoutMs: number;
   readonly modelRetries: number;
@@ -316,6 +323,16 @@ export class Run {
   private ended = false;
   private startedAt: Millis | null = null;
   private hardCancel: Budget | null = null;
+  /**
+   * REQ-SESSION-092 / REQ-MONITOR-129: settles when the stop's 30 s grace has run out, counted from the first stop request
+   * whether or not it was forced. The root's turn is awaited no longer than this (`withinStopGrace`): a root whose call
+   * ignores its abort is given up on here, as a rest gives up on a child's execution, so it cannot hold the run and its
+   * lock open (the repair of `a-root-call-that-ignores-the-stop-holds-the-run-open.md`).
+   */
+  private readonly stopGraceSpent: Promise<void>;
+  private spendStopGrace: (() => void) | null = null;
+  /** When `stopGraceSpent` settles, on the monotonic clock: what is left of the grace is read from it (`stopGraceLeft`). */
+  private stopGraceDeadline: Millis | null = null;
   private iterationsCompleted = 0;
   private initialIterations = 0;
   private lastFailure: string | null = null;
@@ -358,6 +375,8 @@ export class Run {
   }
   /** Every tool port this run created — the root's and each child's — so an answer, a cancel or a mode change reaches all of them (REQ-TOOLS-030). */
   private readonly ports = new Set<ToolPort>();
+  /** Live-run finding K1: the port the current iteration's root dispatches through — the one resolution `entryTools` reports. */
+  private rootPort: ToolPort | null = null;
   /** REQ-HOOKS-087: the session's hook attachment, removed at the end of the run. */
   private hooks: HookPort | null;
   private preflight: Preflight | null = null;
@@ -420,10 +439,13 @@ export class Run {
    */
   private resumedMessageIds: readonly string[] = [];
   /**
-   * PD-ORCH-005 clause 17 ("so the next iteration takes it up"): the text of a continue's message the current iteration
-   * selected when the launch content's request is another — sent to its fresh root as the task to work on (OQ-102).
+   * REQ-CHAT-040, REQ-ORCH-004 / REQ-ORCH-135: the todo task the current iteration selected when it is not the run's own
+   * and the launch content's request is another — a queued prompt, a task a pause, a stop or a death put back, an earlier
+   * request, an improvement run's proposal — sent to its fresh root after the launch content as the task to work on.
+   * `message` is PD-ORCH-005 clause 17's continue's message ("so the next iteration takes it up", OQ-102), told in its
+   * own words. The repair of `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md`.
    */
-  private messageTakenUp: string | null = null;
+  private takenUp: { readonly text: string; readonly message: boolean } | null = null;
   private appliedEntryModel: ModelRef | null = null;
 
   constructor(private readonly deps: RunDeps) {
@@ -442,8 +464,9 @@ export class Run {
         : Todo.fresh(deps.taskId, deps.taskLabel ?? deps.task, deps.config.consecutiveRetryLimit);
     const openRow = deps.dal?.openIterationOf(deps.sessionId) ?? null;
     // PD-ORCH-005 clause 17: a task held by an iteration that is no longer open closes as the record says that iteration
-    // did — done when it closed succeeded, pending otherwise — before anything reads the todo.
-    if (deps.dal) this.todo.releaseStale(openRow?.iteration ?? null, succeededIterationsOf(deps.dal, deps.sessionId));
+    // did — done when it closed succeeded, pending otherwise — before anything reads the todo; and so does an iteration's
+    // own task an earlier build's death left in progress after its iteration closed (`settleClosedIterations`).
+    if (deps.dal) settleClosedIterations(this.todo, deps.dal, deps.sessionId, openRow);
     const open = deps.openIteration === undefined ? null : openRow;
     this.resumeFrom = deps.openIteration?.resume === true ? open : null;
     this.restedIteration = open?.iteration ?? null;
@@ -469,6 +492,7 @@ export class Run {
     const closedIterations = deps.dal?.iterationsOf(deps.sessionId).filter((i) => i.state === 'closed').map((i) => i.iteration) ?? [];
     this.iterationsCompleted = Math.max(stored?.iterations_completed ?? 0, ...closedIterations);
     this.initialIterations = this.iterationsCompleted;
+    this.stopGraceSpent = new Promise<void>((resolve) => { this.spendStopGrace = resolve; });
     // Sticky and observable: a request before the loop exists replays here (REQ-SESSION-092).
     this.stop.onRequested((s) => {
       // REQ-MONITOR-012: whatever is blocked on a person is released first, then the run stops. PD-ORCH-005 clause 9: a
@@ -480,6 +504,14 @@ export class Run {
       try { if (withdrawBy !== null) this.withdrawPending(withdrawBy); else this.cancelPending(); } catch (cause) { this.deps.warn(`releasing pending approvals on ${this.sessionId} failed: ${String(cause)}`); }
       if (rest !== null) this.children?.beginRest();
       this.abort.abort();
+      // The root's bound: the grace counted from the first request, forced at its first activation or not, so a root that
+      // honours the abort a moment after a forced stop still records what its step did.
+      const spend = this.spendStopGrace;
+      if (spend !== null) {
+        this.spendStopGrace = null;
+        this.stopGraceDeadline = millis(this.deps.clocks.monotonic.now() + STOP_GRACE);
+        this.deps.clocks.timers.after(STOP_GRACE, spend);
+      }
       if (s.forced || this.hardCancel) return;
       // REQ-SESSION-092 / REQ-MONITOR-129: graceful first; the 30 s deadline hard-cancels and sweeps again.
       this.hardCancel = Budget.begin(this.deps.clocks.monotonic.now(), STOP_GRACE);
@@ -602,6 +634,16 @@ export class Run {
     const model = this.entryOverride.model ?? this.deps.config.model;
     const advertised = this.deps.compression?.triggerFor(model).advertisedInputLimit ?? null;
     return { used: this.deps.writer.activity.contextUsed(this.deps.config.persona), limit: advertised !== null && advertised > 0 ? advertised : DEFAULT_CONTEXT_CAPACITY };
+  }
+  /**
+   * REQ-MONITOR-060/061 (live-run finding K1, R-067): the entry role's tools as the run-level agent presents them — the native
+   * set its port's one resolution kept (policy narrowing applied), and its called and in-flight tools from the tracker the
+   * writer feeds, keyed by the persona the root dispatches under. Like `entryContext`, the entry role has no `children` row.
+   */
+  get entryTools(): EntryToolsPayload {
+    const persona = this.deps.config.persona;
+    const activity = this.deps.writer.activity;
+    return { resolved: [...(this.rootPort?.resolvedTools?.() ?? [])], called: activity.calledTools(persona), active: activity.activeTools(persona) };
   }
   /** REQ-MONITOR-048 (Part R): the persona's configured thinking level as this run resolved it; null when the persona is unknown or states none. */
   reasoningFor(persona: string): string | null {
@@ -769,10 +811,12 @@ export class Run {
     this.todo.begin(task);
     const iteration = resume?.iteration ?? this.iterationsCompleted + 1;
     this.iterationTask = { id: task.id, text: task.text };
-    // PD-ORCH-005 clause 17: a continue's message this iteration takes up is its task even when the run was launched by
-    // another request — the launch content names that one as the latest, so the message is sent beside it (OQ-102). A
-    // resumed root carries on from its record and is sent no launch content, so for it this is never read.
-    this.messageTakenUp = task.message === true && task.text !== (this.deps.taskLabel ?? this.deps.task) ? task.text : null;
+    // The task this iteration selected is its task even when the run was launched by another request: the launch content
+    // is the base of every iteration, so a task that is not the run's own is sent beside it — unless the launch content's
+    // request is that same text, when the launch content already says it (REQ-CHAT-040; PD-ORCH-005 clause 17 and OQ-102
+    // for a continue's message). The run's own task is the launch content's request. A resumed root carries on from its
+    // record and is sent no launch content, so for it this is never read.
+    this.takenUp = task.id !== this.deps.taskId && task.text !== (this.deps.taskLabel ?? this.deps.task) ? { text: task.text, message: task.message === true } : null;
     if (resume) {
       writer.recordIterationInterruption(iteration, null);
       writer.appendTimeline('iteration_resumed', 'rotaris', `Iteration ${iteration}, left open by ${interruptionPhrase(resume.interruption ?? '')}, resumed.`, { iteration, interruption: resume.interruption, root_task_id: resume.root_task_id });
@@ -843,8 +887,9 @@ export class Run {
       }
     }
     if (this.iterationRest !== null) return await this.leaveIterationOpen(iteration, this.iterationRest);
-    // PD-ORCH-005 clause 1: `iteration.end` and the iteration's record closing with its outcome, in one transaction.
-    writer.endIteration(iteration, { task: task.text, outcome, summary }, outcome);
+    // PD-ORCH-005 clause 1: `iteration.end` and the iteration's record closing with its outcome, in one transaction — with
+    // the todo its task and held messages were just closed in, so no death before the save below strands them in progress.
+    writer.endIteration(iteration, { task: task.text, outcome, summary }, outcome, this.todoJson());
     this.iterationTask = null;
     // ADR-0039 / REQ-GIT-051: exactly one capture per iteration that closes, at the moment it closes — after
     // `iteration.end` is recorded and BEFORE the hooks' `iteration_end`: the checkpoint records the iteration's work as
@@ -881,16 +926,17 @@ export class Run {
    * (REQ-ORCH-153: a plan cycle is not an iteration and takes up no offer or task) — PD-ORCH-004 revision 4's list of the
    * open continuation offers that content does not already hold, as a text part after it. A continuation's first
    * iteration holds them all in its handoff — those it names and those it left out (`handoffOffers`); each later
-   * iteration of the same run is told those raised since (OQ-107). Between the two, PD-ORCH-005 clause 17's message the
-   * iteration takes up, when the launch content's request is another (`messageTakenUp`, OQ-102).
+   * iteration of the same run is told those raised since (OQ-107). Between the two, the todo task the iteration selected
+   * when it is not the run's own and the launch content's request is another (`takenUp`) — a continue's message among
+   * them (PD-ORCH-005 clause 17, OQ-102).
    */
   private firstMessage(task: string, launch: readonly ContentPart[] | undefined, execution: boolean): readonly ContentPart[] | undefined {
     const base = launch ?? [{ kind: 'text', text: task }];
-    // PD-ORCH-005 clause 17: the continue's message this iteration takes up, when the launch content is another request's.
-    // Only `iterate()` sets it, and every continuation carries its launch content (`Sessions.launchContinuation`). A plan
+    // The task this iteration selected, when the launch content is another request's. Only `iterate()` sets it. A plan
     // cycle is not an iteration and has no iteration task (REQ-ORCH-153), and PD-ORCH-003 revision 2's plan cycle runs
-    // after the resumed iteration's `iterate()` has set it — so only an execution root is told it (found by the iteration lane review).
-    const takenUp: ContentPart[] = !execution || this.messageTakenUp === null ? [] : [{ kind: 'text', text: messageTakenUpText(this.messageTakenUp) }];
+    // after the resumed iteration's `iterate()` has set it — so only an execution root is told it (found by the iteration
+    // lane review). With no launch content the base is already the selected task's own text (`iterate()`'s `modelTask`).
+    const takenUp: ContentPart[] = !execution || launch === undefined || this.takenUp === null ? [] : [{ kind: 'text', text: takenUpText(this.takenUp) }];
     const offers = execution && this.deps.dal ? offersForFirstMessage(this.deps.dal, this.sessionId, base, this.deps.handoffOffers) : null;
     if (offers === null && takenUp.length === 0) return launch;
     return [...base, ...takenUp, ...(offers === null ? [] : [offers])];
@@ -941,8 +987,9 @@ export class Run {
   }
 
   /**
-   * The open iteration closes `cancelled` with every agent it left paused, each with `agentReport`'s words: `iteration.end`
-   * and the row's close in one transaction, its capture, its todo task back to `pending`, and the count moved past it.
+   * The open iteration closes `cancelled` with every agent it left paused, each with `agentReport`'s words: its todo task
+   * back to `pending` and `iteration.end` and the row's close with that todo in one transaction, its capture, and the
+   * count moved past it.
    * `only` names the one iteration the caller may close. False when none is open, or the open one is not that one.
    */
   private async closeOpenIteration(summary: (open: IterationRow) => string, agentReport: (c: ChildRow) => string, only?: number | null): Promise<boolean> {
@@ -950,14 +997,15 @@ export class Run {
     const open = dal?.openIterationOf(this.sessionId);
     if (!dal || !open || (only !== undefined && open.iteration !== only)) return false;
     this.cancelPausedAgents(dal, open, agentReport);
-    this.deps.writer.endIteration(open.iteration, { task: this.todo.textOf(open.todo_task_id) ?? open.task, outcome: 'cancelled', summary: summary(open) }, 'cancelled');
+    this.todo.reopen(open.todo_task_id);
+    // PD-ORCH-005 clause 17: a continue's message the iteration held is left pending, so the next iteration takes it up.
+    this.todo.releaseHeld(open.iteration, false);
+    // The close and the todo it leaves in one transaction, as `iterate()`'s close is.
+    this.deps.writer.endIteration(open.iteration, { task: this.todo.textOf(open.todo_task_id) ?? open.task, outcome: 'cancelled', summary: summary(open) }, 'cancelled', this.todoJson());
     // REQ-GIT-051: the iteration closes here, so its one capture is attempted here — it records the work done in it. No
     // child is credited: none finished the iteration. Its hooks' `iteration_end` is not fired: an iteration left open by
     // an earlier run began under that run's hooks, and one this run left open ends with the run.
     await this.captureCheckpoint(open.iteration, '');
-    this.todo.reopen(open.todo_task_id);
-    // PD-ORCH-005 clause 17: a continue's message the iteration held is left pending, so the next iteration takes it up.
-    this.todo.releaseHeld(open.iteration, false);
     this.iterationsCompleted = Math.max(this.iterationsCompleted, open.iteration);
     return true;
   }
@@ -1137,7 +1185,7 @@ export class Run {
       ? new IterationChildren({
         rootRecord,
         // REQ-GIT-019: the children are told the root they work in — the worktree for an isolated run.
-        sessionId: this.sessionId, workspaceRoot: this.deps.effectiveRoot ?? this.deps.workspaceRoot, dal: this.deps.dal, writer, owner, backend, clocks: this.deps.clocks, model: config.model, thinking: config.thinking,
+        sessionId: this.sessionId, workspaceRoot: this.deps.effectiveRoot ?? this.deps.workspaceRoot, dal: this.deps.dal, writer, owner, backend, clocks: this.deps.clocks, model: config.model, ...(config.modelKey === undefined ? {} : { modelKey: config.modelKey }), thinking: config.thinking,
         modelTimeoutMs: config.modelTimeoutMs, modelRetries: config.modelRetries, credentialFor: config.credentialFor, maxStepsPerTurn: config.maxStepsPerTurn,
         // Part Q: each child gets its own cell over the shared memory, catalogue and wait registry.
         resilience: { forChild: (persona, current, bound) => { const effective = this.memory.effective(withSettings(this.catalogue, current), this.catalogue); return this.resilienceFor(agentCell(effective, this.fallbackFor(persona, effective)), bound); } },
@@ -1170,6 +1218,7 @@ export class Run {
       : null;
     this.children = children;
     const tools = children && this.deps.toolsFor ? this.portFor(config.persona, config.persona, children, this.rootId, 0) : this.register(this.deps.tools);
+    this.rootPort = tools;
     // PD-ORCH-005 clause 4: a resumed iteration's agents are restored first, so the root resumes among them.
     // The timeline records each agent resumed (`child_resumed`), so a resume is not a warning (phase 4's review).
     if (resume && children) children.resumePaused();
@@ -1179,6 +1228,8 @@ export class Run {
     const compression = this.compressionFor(this.rootResilience().cell.model, () => this.plannerTodoLines());
     // PD-ORCH-005 revision 4 clause 14: one check per execution of the root, at its first model step.
     const fingerprint = this.record.fingerprint(rootTaskId, rootCanonical, iteration);
+    /** REQ-SESSION-092: the stop's grace ran out before the root's turn returned, and the run went on without it. */
+    let rootDetached = false;
     const turnFn = (text: string | null, history: readonly ChatMessage[]) => {
       const content = launching ? this.firstMessage(text ?? task, contentOverride ?? this.deps.taskContent, iterationOverride === undefined) : undefined;
       const initialCall = initial;
@@ -1212,17 +1263,37 @@ export class Run {
       recorder: this.record.recorder(rootTaskId, iteration),
       // PD-ORCH-005 revision 4 clause 14: the fingerprint of the instructions and tools the root started with.
       fingerprint,
+      // REQ-SESSION-094: a root the stop's grace gave up on writes nothing more when its call returns.
+      detached: () => rootDetached,
       }, text, history, this.abort.signal, content);
     };
     let outcome: TurnOutcome | null = null;
     try {
       const start: TurnStart = resume ? this.resumedRootStart(rootTaskId) : { kind: 'fresh', task };
-      outcome = children ? await children.runWithChildren(this.rootId, turnFn, start, this.abort.signal) : await firstTurn(turnFn, start);
-      this.aggregates.addToolCalls(outcome.toolCallCount);
-      // REQ-ORCH-080: a stop with active background children drains before anything is cancelled — only a stop that
-      // cancels them (the explicit cancel); a stop that brings the run to rest leaves them paused (PD-ORCH-005).
+      const running = children ? children.runWithChildren(this.rootId, turnFn, start, this.abort.signal) : firstTurn(turnFn, start);
+      /*
+       * REQ-SESSION-092 / REQ-MONITOR-129: a stop bounds how long the root is awaited, as a rest bounds a child's execution
+       * (`IterationChildren.rest`). Past the grace the root is detached: it is left where it stood — paused by a rest, its
+       * open call answered as interrupted, below — and a turn that returns after that writes nothing more.
+       */
+      const settled = await Promise.race([running, this.stopGraceSpent.then(() => { rootDetached = true; return null; })]);
+      if (settled === null) {
+        // The turn's end is no longer awaited, so its raise must be handled here or it is an unhandled rejection.
+        running.catch(() => undefined);
+        this.deps.warn(`iteration ${iteration}: the root ${config.persona} did not return within the stop's 30 s grace and was given up on (REQ-SESSION-092)`);
+      } else {
+        outcome = settled;
+        this.aggregates.addToolCalls(outcome.toolCallCount);
+      }
+      /*
+       * REQ-ORCH-080: a stop with active background children drains before anything is cancelled — only a stop that
+       * cancels them (the explicit cancel); a stop that brings the run to rest leaves them paused (PD-ORCH-005). A root
+       * given up on drains them as one that returned does: the drain is bounded by its own timeout, not by the stop's
+       * grace (OQ-121).
+       */
       if (children && this.stop.requested && this.restCause === null && children.scheduler.hasNonTerminal) await children.drain(this.deps.drainTimeoutMs ?? millis(120_000));
-      return outcome.report;
+      // A root given up on reports nothing of its own: `iterate` reads the stop before the report (REQ-SESSION-092).
+      return outcome?.report ?? { status: 'succeeded', text: '', usage: { input: 0, output: 0 } };
     } finally {
       /*
        * PD-ORCH-005 clause 2 (narrowing REQ-ORCH-052): an iteration that comes to rest with work unfinished — the root
@@ -1231,8 +1302,13 @@ export class Run {
        */
       const rest = iterationOverride === undefined ? this.restCause : null;
       const rootFinished = outcome !== null && outcome.paused !== true && !this.abort.signal.aborted && outcome.report.status !== 'failed';
+      /** Whether the root's open calls were answered as interrupted by a rest. */
+      let answered = false;
       if (rest !== null && (!rootFinished || (children?.scheduler.hasNonTerminal ?? false))) {
-        if (children) { const n = await children.rest(rest); if (n > 0) this.deps.warn(`iteration ${iteration}: ${n} child(ren) left paused by ${rest} (PD-ORCH-005)`); }
+        // Every child's execution had the stop's grace beside the root's, counted from the same first request: the rest
+        // is given what is left of it — none after a root given up on, and never a fresh 30 s after a root that returned
+        // late — so the stop stays bounded at the one 30 s (REQ-SESSION-092).
+        if (children) { const n = await children.rest(rest, this.stopGraceLeft()); if (n > 0) this.deps.warn(`iteration ${iteration}: ${n} child(ren) left paused by ${rest} (PD-ORCH-005)`); }
         /*
          * Clause 3: the explicit cancel is final even when it arrives while the run is coming to rest — the rest waits on
          * every execution, which can take the pause's whole tool deadline. Read again once the rest is done: cancelled
@@ -1244,14 +1320,46 @@ export class Run {
         } else {
           this.iterationRest = this.restCause;
           rootRecord.state = 'paused';
-          // Clauses 3 and 4: a root that raised out of a call has that call answered as interrupted, as a child's is.
+          // Clauses 3 and 4: a root that raised out of a call, or was given up on in one, has that call answered as
+          // interrupted, as a child's is.
           if (this.deps.dal) answerOpenCalls(this.deps.dal, writer, this.sessionId, { taskId: rootTaskId, name: config.persona }, iteration, this.restCause);
+          answered = true;
         }
       } else if (children) {
         // REQ-ORCH-052: every exit path from an iteration leaves every child record terminal.
         const n = children.finalize(this.stop.requested ? 'cancelled: the run was stopped while this child was in flight' : 'cancelled during iteration cleanup');
         if (n > 0) this.deps.warn(`iteration ${iteration}: ${n} child(ren) settled cancelled at exit (REQ-ORCH-052)`);
+        /*
+         * REQ-SESSION-092 / REQ-SESSION-094: a stop that rests nothing — the explicit cancel, a stop the run raises itself,
+         * a plan cycle's — aborted every child execution with the root. Each is awaited within what is left of the grace
+         * (none after a root given up on), and what still executes then is detached, so a child's step or call that
+         * ignored the stop writes nothing into the finished session when it returns.
+         */
+        if (this.stop.requested && await children.outlast(this.stopGraceLeft())) this.deps.warn(`iteration ${iteration}: child executions still running at the stop's 30 s grace were given up on (REQ-SESSION-092)`);
       }
+      // A root given up on that no rest paused — the explicit cancel — still leaves no call row running (REQ-SESSION-129):
+      // its open call is recorded cut off, naming no rest (OQ-96, "A call cut by no rest").
+      if (rootDetached && !answered && this.deps.dal) answerOpenCalls(this.deps.dal, writer, this.sessionId, { taskId: rootTaskId, name: config.persona }, iteration, null);
+    }
+  }
+
+  /**
+   * REQ-SESSION-092: what is left of the stop's 30 s grace, counted from the first stop request — the whole of it when no
+   * stop has been requested.
+   */
+  private stopGraceLeft(): Millis {
+    return this.stopGraceDeadline === null ? STOP_GRACE : millis(Math.max(0, this.stopGraceDeadline - this.deps.clocks.monotonic.now()));
+  }
+
+  /**
+   * REQ-SESSION-094: closes every port this run built (`ToolPort.close`) — the root's and each child's, not a port the
+   * caller handed it — its open calls settled with what cut them off: the rest the run came to, or none named.
+   */
+  private closePorts(): void {
+    const cutOff = interruptedResult(this.restCause, true, '');
+    for (const p of this.ports) {
+      if (p === this.deps.tools) continue;
+      try { p.close?.(cutOff); } catch (cause) { this.deps.warn(`closing a tool port of ${this.sessionId} failed: ${String(cause)}`); }
     }
   }
 
@@ -1484,8 +1592,8 @@ export class Run {
        * closed the messages it held as done (PD-ORCH-005 clause 17; OQ-104) — this continue's, or an earlier one's that the
        * Continue action resumed it with (found by the iteration lane review). That launch content is the payload the
        * continue built before the resumed iteration ran, so its handoff predates the close the preamble states; nothing
-       * rebuilds it here (OQ-104, "The handoff after the preamble is the continue's";
-       * every-iteration-is-sent-the-prompt-the-run-was-launched-with.md).
+       * rebuilds it here (OQ-104, "The handoff after the preamble is the continue's", which the repair of
+       * every-iteration-is-sent-the-prompt-the-run-was-launched-with.md kept: a plan cycle is sent no iteration task).
        */
       const held = this.resumedMessageIds.map((id) => this.todo.task(id)?.state);
       const message = held.length === 0 ? 'none' : held.every((state) => state === 'complete') ? 'done' : 'pending';
@@ -1703,6 +1811,10 @@ export class Run {
   /** REQ-SESSION-094: the ordered pipeline, each step guarded, the whole of it run even on exception. */
   private async teardown(reasonIn: StopReason): Promise<RunResult> {
     const { writer, owner, bus, clocks } = this.deps;
+    // REQ-SESSION-094: every agent's turn has returned or been given up on, so nothing of this run's tool ports is owed
+    // from here. Each is closed before anything terminal is written: a call still open settles now, and one that returns
+    // later writes nothing through its gate into the finished session, or into a later run's.
+    this.closePorts();
     // PD-ORCH-005 clause 10: a run that comes to rest records its agents' background sessions — a stop and a quit end them,
     // and so does the explicit cancel, which is a stop the user made final (OQ-96). Guarded like every teardown step.
     const ended = this.terminalsEndedBy();
@@ -1813,12 +1925,31 @@ export function succeededIterationsOf(dal: StoreDal, sessionId: SessionId): Read
 }
 
 /**
- * PD-ORCH-005 clause 17 ("so the next iteration takes it up"): what a fresh root is told when the todo task its iteration
- * selected is a continue's message and the launch content's request is another — the message, as the task to work on.
- * Its attachments are not carried: the task holds the message's text only (OQ-102).
+ * What a death between an iteration's close and the save of its todo left, settled as the record says that iteration
+ * closed, before anything reads the todo — here and by the session manager before it judges what a continue restates:
+ * a task a closed iteration still holds (PD-ORCH-005 clause 17, `Todo.releaseStale`), and an iteration's own task left in
+ * progress (`Todo.settleStranded`), read from the latest row whose `todo_task_id` names it. Since the close and the todo
+ * commit together (`SessionWriter.endIteration`) neither is left by this build; a store an earlier build wrote can hold
+ * both (the repair of `an-iterations-own-task-is-left-in-progress-by-a-death-before-the-todo-save.md`).
  */
-function messageTakenUpText(message: string): string {
-  return `The task for this iteration is an earlier message from the user, which the iteration it was sent to did not finish. Work on it now; the latest user request above is a separate task.\n\n${message}`;
+export function settleClosedIterations(todo: Todo, dal: StoreDal, sessionId: SessionId, open: IterationRow | null | undefined): void {
+  const rows = dal.iterationsOf(sessionId);
+  todo.releaseStale(open?.iteration ?? null, succeededIterationsOf(dal, sessionId));
+  todo.settleStranded(open?.todo_task_id ?? null, (taskId) => {
+    const latest = rows.filter((r) => r.todo_task_id === taskId).at(-1);
+    return latest?.state === 'closed' ? latest.outcome : undefined;
+  });
+}
+
+/**
+ * What a fresh root is told, after the launch content, when the todo task its iteration selected is not the run's own and
+ * the launch content's request is another — the task's text, as the task to work on (REQ-CHAT-040, REQ-ORCH-004 /
+ * REQ-ORCH-135). A continue's message is told in PD-ORCH-005 clause 17's words ("so the next iteration takes it up",
+ * OQ-102). Attachments are not carried: a task holds its text only (OQ-102).
+ */
+function takenUpText(task: { readonly text: string; readonly message: boolean }): string {
+  if (task.message) return `The task for this iteration is an earlier message from the user, which the iteration it was sent to did not finish. Work on it now; the latest user request above is a separate task.\n\n${task.text}`;
+  return `The task for this iteration is the task below, from the session's todo. Work on it now. What precedes it is what this run was launched with: read it as context, and leave any other work it asks for to its own task.\n\n${task.text}`;
 }
 
 /** OQ-8: the comparable form of a cumulative usage payload — two requests whose totals agree raise one event. */

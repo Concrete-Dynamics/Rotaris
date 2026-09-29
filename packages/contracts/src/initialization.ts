@@ -94,6 +94,13 @@ export const InitializationStateSchema = z.object({
   report: InitRunReportSchema,
   /** REQ-WORKSPACE-102: the resolution itself failed; the window stays usable and offers "Check again". */
   resolutionFailed: z.boolean(),
+  /**
+   * The run `report` describes was started by the resolution for pending background tasks (REQ-WORKSPACE-083), not by
+   * the user. Nothing renders such a run's progress live (REQ-WORKSPACE-103), so the setup dialog takes its report only
+   * once the user has pressed Initialize (REQ-WORKSPACE-110), and it neither answers nor withdraws the setup prompt
+   * (OQ-123). False before any run.
+   */
+  backgroundRun: z.boolean(),
 });
 export type InitializationStateView = z.infer<typeof InitializationStateSchema>;
 

@@ -105,18 +105,41 @@ export async function terminalManagerFromHost(clocks: Clocks, warn: (m: string) 
   return new TerminalManager({ factory: await nodePtyFactory(), backend, clocks, config: { ...TERMINAL_DEFAULTS, commandTimeoutS: shellCommandTimeoutS }, env, warn });
 }
 
-/** The sink the gate writes through: every unit lands in the session writer's transactions. */
-function writerSink(writer: SessionWriter, sessionId: string, clocks: Clocks, warn: (m: string) => void): GateSink {
-  return {
-    decision: (e) => { const r = writer.recordDecision({ timestamp: toIsoUtc(clocks.wall.instant()), session_id: sessionId, ...e }); return r.ok ? r.value : null; },
-    approvalRequested: (p) => { writer.recordEvent('approval.requested', p); },
-    pendingChanged: (pending) => { writer.save(writer.currentStatus, { pending_approvals: JSON.stringify(pending) }); },
-    issue: (i) => { writer.recordIssue(i); },
-    timeline: (name, actor, message, metadata) => { writer.appendTimeline(name, actor, message, metadata); },
-    toolOpen: (o) => { const r = writer.openToolCall(o); return r.ok ? r.value : null; },
-    toolSettle: (ordinal, o, s) => { writer.settleToolCall(ordinal, o, s); },
+/**
+ * The sink the gate writes through: every unit lands in the session writer's transactions — until `close`.
+ *
+ * REQ-SESSION-094: the writer outlives the run (a continue in this process writes through the same one), so a call the
+ * stop's grace detached, returning after its run ended, would write its settle, `tool.finish` and issues into the
+ * finished session, or into a later run of it. `close` settles each call still open, as failed with the engine's
+ * statement, before the run's terminal pair, and drops every write after it. The repair of
+ * `a-detached-call-still-writes-through-its-tool-gate.md`.
+ */
+function writerSink(writer: SessionWriter, sessionId: string, clocks: Clocks, warn: (m: string) => void): { readonly sink: GateSink; readonly close: (cutOff: string) => void; readonly closed: () => boolean } {
+  let closed = false;
+  const open = new Map<number, { readonly call: Parameters<GateSink['toolOpen']>[0]; readonly started: number }>();
+  const sink: GateSink = {
+    decision: (e) => { if (closed) return null; const r = writer.recordDecision({ timestamp: toIsoUtc(clocks.wall.instant()), session_id: sessionId, ...e }); return r.ok ? r.value : null; },
+    approvalRequested: (p) => { if (!closed) writer.recordEvent('approval.requested', p); },
+    pendingChanged: (pending) => { if (!closed) writer.save(writer.currentStatus, { pending_approvals: JSON.stringify(pending) }); },
+    issue: (i) => { if (!closed) writer.recordIssue(i); },
+    timeline: (name, actor, message, metadata) => { if (!closed) writer.appendTimeline(name, actor, message, metadata); },
+    toolOpen: (o) => {
+      if (closed) return null;
+      const r = writer.openToolCall(o);
+      if (!r.ok) return null;
+      open.set(r.value, { call: o, started: clocks.monotonic.now() });
+      return r.value;
+    },
+    toolSettle: (ordinal, o, s) => { if (closed) return; open.delete(ordinal); writer.settleToolCall(ordinal, o, s); },
     warn,
   };
+  const close = (cutOff: string): void => {
+    if (closed) return;
+    closed = true;
+    for (const [ordinal, { call, started }] of open) writer.settleToolCall(ordinal, call, { status: 'failed', elapsed_ms: clocks.monotonic.now() - started, is_error: true, result: cutOff });
+    open.clear();
+  };
+  return { sink, close, closed: () => closed };
 }
 
 /**
@@ -308,6 +331,9 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   const callable = new Map<string, ToolExecutor>();
   for (const n of resolved.tools) { const e = executors.get(n); if (e) callable.set(n, e); }
   const specs = [...callable.values()].map(toolSpec);
+  // REQ-MONITOR-060/061 (live-run finding K1): the native tools the one resolution kept AND that hold an executor — the
+  // names the agent can call, before the MCP surface joins the callable map on `ready()` (those are shown per server).
+  const nativeResolved = [...callable.keys()];
 
   /*
    * REQ-TOOLS-048 (narrowed by PD-TOOLS-002): the requested mode is SELECTED here, at agent construction, from
@@ -320,6 +346,8 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   let mode: PermissionPreset = selectRequestedMode({ pin, override: ctx.modeOverride ?? null, runtime: ctx.requestedMode });
   const policy = new PolicyContext(buildPolicy({ preset: mode, workspaceRoot: root }));
   const approvals = new PendingApprovals(deps.clocks.timers);
+  const writes = writerSink(ctx.writer, ctx.sessionId, deps.clocks, ctx.warn);
+  const toolHooks = ctx.hooks ?? null;
   const gate = new Gate({
     sessionId: ctx.sessionId, workspaceRoot: root, policy, approvals, attended: ctx.attended, presenter: deps.presenter,
     headlessPolicy: runtime.headlessPolicy, abortHook: ctx.abortRun, approvalTimeoutMs: runtime.approvalTimeoutMs,
@@ -329,8 +357,10 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     // set lacks one) is a different object, and its session approval keeps REQ-TOOLS-024's exact match.
     publicTool: (name) => { const e = callable.get(name) ?? callable.get(name.toLowerCase()); return e !== undefined && executors.get(e.name) === e; },
     monotonic: deps.clocks.monotonic, wall: deps.clocks.wall, timers: deps.clocks.timers,
-    sink: writerSink(ctx.writer, ctx.sessionId, deps.clocks, ctx.warn), nextSequence: deps.nextSequence,
-    hooks: ctx.hooks ?? null,
+    sink: writes.sink, nextSequence: deps.nextSequence,
+    // REQ-SESSION-094: a call that returns after its run ended fires no `post_tool` hook — the run's hooks write into its
+    // session, and the run has removed its own attachment (REQ-HOOKS-087).
+    hooks: toolHooks ? { preTool: (c) => toolHooks.preTool(c), postTool: (c) => (writes.closed() ? Promise.resolve({ feedback: '' }) : toolHooks.postTool(c)) } : null,
     // REQ-ORCH-153, enforcement point 2: the authoritative one — refused whichever role issues the call and by
     // whatever route the tool reached it, including a name this port's narrowing never saw.
     planGateHeld,
@@ -386,6 +416,8 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
 
   return {
     specs: () => specs,
+    // REQ-MONITOR-060/061 (live-run finding K1): the native callable set — what the inspector shows.
+    resolvedTools: () => nativeResolved,
     ready,
     promptSection: () => mcpSection,
     dispatch: async (call: PortToolCall, signal): Promise<PortToolResult> => {
@@ -425,5 +457,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     answerQuestions: (requestId, answers) => questions.resolve(requestId, answers),
     cancelQuestions: (requestId) => questions.cancel(requestId),
     pendingQuestions: () => questions.pending(),
+    // REQ-SESSION-094: the run has ended; what this port's gate still has open settles now, and nothing more is written.
+    close: (cutOff) => writes.close(cutOff),
   };
 }

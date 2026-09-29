@@ -6,7 +6,7 @@ import { canonicaliseRoles, mergeLayers, overlaySection, PLAIN_OPS } from './mer
 import { loadConfiguration, readDelegationStrategy, type LoadedConfiguration } from './load.js';
 import { parseConfig } from './document.js';
 import { referentialMessages, renderFatal, renderProblems } from './validate.js';
-import { resolveSlotsAndReasoning, registeredAliases, resolveSlotBase, unwrapSynthetic } from './slots.js';
+import { resolveSlotsAndReasoning, registeredAliases, resolveSlotBase, syntheticOriginOf, unwrapSynthetic } from './slots.js';
 import { readRuntimeSection, validateRuntimeField, RUNTIME_DEFAULTS } from './sections/runtime.js';
 import { effectivePricing, readModelEntry, providerEffort } from './sections/models.js';
 import { readCircuitBreakerSection, CIRCUIT_BREAKER_DEFAULTS } from './circuit-breaker-section.js';
@@ -194,6 +194,16 @@ describe('REQ-CONFIG-063..081 tier aliases and reasoning synthesis', () => {
     expect(c.personas['planner']).toMatchObject({ model: 'gpt-4o', thinking: null });
     expect(c.models['__persona__:verifier']?.thinking).toBe('low');
     expect(c.warnings).toContain("thinking for role librarian skipped: 'missing' is not a configured model");
+  });
+  it('REQ-CONFIG-081/094: each synthetic copy records the models: key it was copied from, even where two keys name the same provider model', () => {
+    const c = loaded(null, 'models:\n  openai-compatible--alpha/qwen: { provider: openai-compatible, model_id: qwen, base_url: https://alpha.example/v1, max_parallel: 1 }\n  openai-compatible--beta/qwen: { provider: openai-compatible, model_id: qwen, base_url: https://beta.example/v1, max_parallel: 4 }\nsmall_model: openai-compatible--beta/qwen\nsmall_model_thinking: high\npersonas:\n  verifier: { model: openai-compatible--beta/qwen, thinking: low }\n  tester: { model: openai-compatible--alpha/qwen, thinking: low }\n');
+    expect(c.personas['verifier']?.model).toBe('__persona__:verifier');
+    expect(c.syntheticOrigins['__persona__:verifier']).toBe('openai-compatible--beta/qwen');
+    expect(c.syntheticOrigins['__persona__:tester']).toBe('openai-compatible--alpha/qwen');
+    expect(c.syntheticOrigins['__startup_slot__:small_model']).toBe('openai-compatible--beta/qwen');
+    expect(syntheticOriginOf('__persona__:verifier', c.syntheticOrigins)).toBe('openai-compatible--beta/qwen');
+    // A name the loader did not synthesise is its own key.
+    expect(syntheticOriginOf('openai-compatible--alpha/qwen', c.syntheticOrigins)).toBe('openai-compatible--alpha/qwen');
   });
   it('the transform is pure over a draft', () => {
     const draft = { slots: { small_model: 'a', medium_model: 'a', large_model: 'a', default_summary_model: 'small_model', improvement_collector_model: null, retrospective_model: null, gatekeeper_model: null, fallback_model: null }, slotThinking: { small_model: null, medium_model: null, large_model: null, default_summary_model: null, improvement_collector_model: null, retrospective_model: null, gatekeeper_model: null, fallback_model: null }, models: { a: readModelEntry('a', { provider: 'p', model_id: 'a' }, sink())! }, personas: {}, compressorModel: 'small_model', circuitBreakerModel: 'x' };

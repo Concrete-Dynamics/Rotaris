@@ -104,6 +104,8 @@ export interface SpawnInput {
   readonly continuationOf?: string | undefined;
   /** PD-TOOLS-006 revision 2: the validated patterns the child declared, stored with its record; absent means none. */
   readonly writeScope?: readonly string[] | undefined;
+  /** REQ-TOOLS-152: the call's `suppress_auto_context`, stored with its record; absent means the index is given. */
+  readonly suppressAutoContext?: boolean | undefined;
 }
 
 export type SpawnRejection = { readonly reason: string };
@@ -288,6 +290,8 @@ export class ChildLedger {
       continuation_of: input.continuationOf ?? null,
       // PD-TOOLS-006 revision 2: "the `write_scope` a child declared is stored with its record".
       write_scope: JSON.stringify(input.writeScope ?? []),
+      // REQ-TOOLS-152: the call's `suppress_auto_context`, so every assembly of the payload — a retry's included — omits the index.
+      suppress_auto_context: input.suppressAutoContext === true ? 1 : 0,
     };
     const r = this.deps.writer.spawnChild(row);
     if (!r.ok) return { ok: false, error: { reason: `The child could not be recorded: ${r.error.code}` } };

@@ -13,11 +13,11 @@ import type { ArtifactStore } from '../artifacts/store.js';
 import { ChildLedger, storeChildReport, userCancellation, type Budget } from './ledger.js';
 import { childPayload, completionNotification, inheritedContextBlock, parseReport, priorAgentContext, reportBlock, resumeMessage } from './notify.js';
 import { CHILD_STALL_TIMEOUT_MS, continuationRefusal, cutOffLines, cutOffReport, ProgressLog, type CutOff } from './cut-off.js';
-import { BUILT_IN_PERSONAS, type Persona, type PersonaResolver, type RoleName } from './personas.js';
+import { BUILT_IN_PERSONAS, resolveRole, type Persona, type PersonaResolver, type RoleName } from './personas.js';
 import { fallbackReport, produceReport, type ReportInput, type SummariserDeps } from './report.js';
 import { Scheduler } from './scheduler.js';
 import { correctiveInstruction, correctiveMessageLine, hadCorrectiveMessage, StallWatch, stallRecoveredLine, stallRecoveryDue, stallWaitingLine, stallWarning } from './stall.js';
-import { validateWriteScope, WriteClaims, writeScopeBlock, type ClaimHit, type ScopeDisclosure } from './write-scope.js';
+import { fileWriters, scopeWithoutWriterReason, validateWriteScope, WriteClaims, writeScopeBlock, writesFiles, type ClaimHit, type ScopeDisclosure } from './write-scope.js';
 import type { HookPort } from '../hooks-port.js';
 import { withContextUnits, withPlaybook } from '../run/run.js';
 import { STOP_GRACE } from '../run/grace.js';
@@ -63,6 +63,8 @@ export interface ChildrenDeps {
   readonly backend: AgentBackend;
   readonly clocks: Clocks;
   readonly model: ModelRef;
+  /** REQ-CONFIG-094: the `models:` key of `model` (`RunConfig.modelKey`); absent means its id stands in. */
+  readonly modelKey?: string | undefined;
   readonly thinking: ThinkingLevel;
   readonly modelTimeoutMs: number;
   readonly modelRetries: number;
@@ -142,6 +144,19 @@ export interface ChildrenDeps {
   readonly rootRecord?: RootExecutionRecord | undefined;
   /** PD-ORCH-005 clause 1: the conversation record each child's turn appends to; absent means nothing is recorded. */
   readonly record?: ConversationRecord | undefined;
+}
+
+/**
+ * REQ-CONFIG-094 / REQ-MONITOR-049 / REQ-MONITOR-020 (live-run finding D5): the key a child is recorded under — its
+ * `model_key` — is the `models:` key of the model it runs on, the key configuration states `max_parallel` and
+ * `max_input_tokens` under. It was the model's bare id, which no configured key matched once a key was qualified
+ * (`openai-compatible--katalyst/qwen3.8-flash-next`), so every cap lookup found none and every context meter read
+ * REQ-MONITOR-080's default. The role's own key when it names a model; else the run's; the id stands in only where no
+ * configuration names a key.
+ */
+export function childModelKey(persona: Pick<Persona, 'modelRef' | 'modelKey'> | undefined, run: Pick<ChildrenDeps, 'model' | 'modelKey'>): string {
+  if (persona?.modelRef) return persona.modelKey ?? persona.modelRef.modelId;
+  return run.modelKey ?? run.model.modelId;
 }
 
 function personaOf(deps: ChildrenDeps, name: string): Persona | undefined {
@@ -228,6 +243,17 @@ export class IterationChildren implements DelegationOps {
     // PD-TOOLS-006: a scope that cannot be honoured refuses the delegation before a record exists, like every refusal here.
     const scope = validateWriteScope(req.writeScope ?? []);
     if (!scope.ok) return { status: 'rejected', canonicalName: req.taskName, message: scope.reason };
+    /*
+     * PD-TOOLS-006 revision 3 (OQ-112): a scope for a persona that cannot write files. The persona is the one the ledger
+     * will resolve, an alias included — `personaOf`'s built-in path reads the table alone, so `playwright` would pass
+     * as unknown and the ledger would then accept it as `ui-verifier` (found by the branch's verification). Its other
+     * readers above are recorded in `docs/defects/delegate-reads-no-alias-on-the-built-in-table.md`. An unknown persona
+     * is the ledger's refusal.
+     */
+    const named = this.deps.personas ? persona : resolveRole(req.persona)?.persona;
+    if (scope.patterns.length > 0 && named !== undefined && !writesFiles(named)) {
+      return { status: 'rejected', canonicalName: req.taskName, message: scopeWithoutWriterReason(named.name, fileWriters(this.deps.personas)) };
+    }
     // PD-ORCH-004: a continuation is admitted only for the caller's own child that offered one, and only once.
     const continuationOf = req.continuationOf ?? '';
     if (continuationOf !== '') {
@@ -236,9 +262,10 @@ export class IterationChildren implements DelegationOps {
     }
     const r = this.ledger.spawn({
       parentId, parentDepth, persona: req.persona, taskName: req.taskName, task: req.task, dependsOn: req.dependsOn, inheritedContext: req.inheritedContext,
-      category: req.category, background: req.runInBackground, modelKey: persona?.modelRef?.modelId ?? this.deps.model.modelId, grantedTools: persona?.tools ?? [],
+      category: req.category, background: req.runInBackground, modelKey: childModelKey(persona, this.deps), grantedTools: persona?.tools ?? [],
       ...(continuationOf !== '' ? { continuationOf } : {}),
       ...(scope.patterns.length > 0 ? { writeScope: scope.patterns } : {}),
+      ...(req.suppressAutoContext === true ? { suppressAutoContext: true } : {}),
     });
     if (!r.ok) return { status: 'rejected', canonicalName: req.taskName, message: r.error.reason };
     const { row, held, aliasResolved, inherited } = r.value;
@@ -414,17 +441,14 @@ export class IterationChildren implements DelegationOps {
    * every child that never started where it stood. Nothing summarises and nothing is settled. Returns how many ended
    * paused.
    */
-  async rest(cause: Interruption): Promise<number> {
+  async rest(cause: Interruption, grace: Millis = STOP_GRACE): Promise<number> {
     this.beginRest();
     // A stop and a quit have aborted every execution; REQ-SESSION-092's grace bounds how long their ends are awaited. A
-    // pause waits for the step in flight, whose own model timeout bounds it (REQ-MONITOR-123).
-    const executions = Promise.allSettled([...this.executing]).then(() => false);
-    if (cause === 'pause') await executions;
-    else {
-      let grace: TimerHandle | undefined;
-      this.detached = await Promise.race([executions, new Promise<boolean>((r) => { grace = this.deps.clocks.timers.after(STOP_GRACE, () => r(true)); })]);
-      grace?.cancel();
-    }
+    // pause waits for the step in flight, whose own model timeout bounds it (REQ-MONITOR-123). `grace` is what is left of
+    // it, counted from the first stop request (`Run.stopGraceLeft`): none when the run already spent it waiting for its
+    // root, so what still executes is detached now, and never a fresh 30 s after a root that returned late.
+    if (cause === 'pause') await Promise.allSettled([...this.executing]);
+    else await this.outlast(grace);
     // Clause 3: an explicit cancel that arrived meanwhile is final — nothing more is paused; the caller settles the rest.
     if ((this.deps.restCause?.() ?? null) === null) return 0;
     for (const c of this.ledger.all()) {
@@ -914,7 +938,7 @@ export class IterationChildren implements DelegationOps {
     this.controllers.set(row.task_id, summarising);
     const onRunAbortWhileSummarising = () => { if ((deps.restCause?.() ?? null) !== null) summarising.abort(); };
     deps.runSignal.addEventListener('abort', onRunAbortWhileSummarising, { once: true });
-    const reportInput: ReportInput = { agentName: row.canonical_name, role: row.persona, status, messages, toolCallCount: toolCalls, toolsUsed: [...new Set(messages.flatMap((m) => m.content.flatMap((p) => (p.kind === 'tool-call' ? [p.name] : []))))], lastText, finalTextIsFinal: finalIsFinal, errors };
+    const reportInput: ReportInput = { agentName: row.canonical_name, role: row.persona, status, messages, toolCallCount: toolCalls, toolsUsed: [...new Set(messages.flatMap((m) => m.content.flatMap((p) => (p.kind === 'tool-call' ? [p.name] : []))))], lastText, finalTextIsFinal: finalIsFinal, errors, task: row.task };
     let produced: Awaited<ReturnType<typeof produceReport>>;
     try {
       produced = await produceReport(reportInput, cancelled || this.resting ? null : deps.summariser, summarising.signal, this.resting && !cancelled ? 'the run was coming to rest, so no summarising call was made' : undefined, () => this.resting);
@@ -963,7 +987,10 @@ export class IterationChildren implements DelegationOps {
     const store = this.deps.artifacts;
     if (!store) return [];
     const blocks: string[] = [];
-    const index = siblingIndexBlock(store.hydrate().records);
+    // REQ-TOOLS-152: the call's `suppress_auto_context`, stored on the row, or the role's `skip_auto_sibling_context`
+    // (REQ-CONFIG-107) omits the index; the attached artifacts are the caller's explicit choice and are carried either way.
+    const suppressed = row.suppress_auto_context === 1 || personaOf(this.deps, row.persona)?.skipAutoSiblingContext === true;
+    const index = suppressed ? { text: '', included: 0, elided: 0 } : siblingIndexBlock(store.hydrate().records);
     if (index.text !== '') blocks.push(index.text);
     const references = this.attached.get(row.task_id) ?? [];
     let full: ReturnType<typeof fullContextBlock> | null = null;
@@ -980,7 +1007,7 @@ export class IterationChildren implements DelegationOps {
     if (blocks.length > 0) {
       this.deps.writer.appendTimeline('context_selection', 'rotaris', `${row.canonical_name} was given ${index.included} sibling artifact(s)${full ? ` and ${full.included} attached artifact(s)` : ''}.`, {
         task_id: row.task_id, canonical_name: row.canonical_name,
-        sibling_index_included: index.included, sibling_index_elided: index.elided,
+        sibling_index_included: index.included, sibling_index_elided: index.elided, sibling_index_suppressed: suppressed,
         attached_included: full?.included ?? 0, attached_elided: full?.elided ?? [], attached_unresolved: full?.unresolved ?? [],
       });
     }
@@ -995,6 +1022,26 @@ export class IterationChildren implements DelegationOps {
     const left = this.ledger.all().filter((c) => !isTerminalChildState(c.state));
     if (left.length > 0) this.deps.writer.recordIssue({ kind: 'background_child_drain_timeout', severity: 'warning', actor: 'rotaris', message: `${left.length} background child(ren) still running after the ${timeoutMs / 1000} s drain: ${left.map((c) => c.canonical_name).join(', ')}.` });
     return left.length;
+  }
+
+  /**
+   * REQ-SESSION-092 / REQ-SESSION-094: every execution in flight — each aborted by the stop — is awaited within `grace`,
+   * what is left of the stop's 30 s, and whatever still executes after that is detached: it streams, settles and records
+   * nothing more when it returns, whatever its record says by then. A rest calls it for a stop or a quit, and `Run.turn`
+   * for a stop that brings the iteration to no rest (the explicit cancel), after `finalize`. Returns whether any execution
+   * was detached.
+   */
+  async outlast(grace: Millis): Promise<boolean> {
+    if (this.executing.size === 0) return false;
+    if (grace <= 0) this.detached = true;
+    else {
+      let timer: TimerHandle | undefined;
+      const executions = Promise.allSettled([...this.executing]).then(() => false);
+      const cut = await Promise.race([executions, new Promise<boolean>((r) => { timer = this.deps.clocks.timers.after(grace, () => r(true)); })]);
+      timer?.cancel();
+      if (cut) this.detached = true;
+    }
+    return this.detached;
   }
 
   /** REQ-ORCH-052: every exit path leaves every record terminal. */

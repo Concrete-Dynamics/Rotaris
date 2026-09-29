@@ -6,7 +6,7 @@ import { isBusy, isViewId, LIBRARY_TABS, THEMES, type AnalysisPass, type NoticeA
 // provider that carries this window's preview registry down to every transcript surface (ADR-0047).
 import { TERMINAL_WINDOW_ROLE } from '@rotaris/contracts';
 import { TerminalHostProvider } from '@rotaris/ui';
-import { Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, rebasePending, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, restingView, statusStripRunItem, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, type SlashHost, RequirementsBoard } from '@rotaris/ui';
+import { Acknowledgements, type AboutInfo, applyChange, AppShell, SETTINGS_CATEGORIES, branchStripItem, foldLibraryQuery, GitView, LibraryView, OverviewView, PromptsTab, ProposalsTab, rebasePending, isDirty, liveStateOf, motionReduced, pendingFrom, ProvidersCard, savePayload, SessionBrowser, setStoredMotionPreference, StashDialog, type DeleteOutcome, type ExportOutcome, SettingsView, StartSessionDialog, unattendedAdvisory, UnsavedGuardDialog, useShellState, WorkspaceView, bindNewSessionOpener, bindProjectFolderOpener, bindRetrospectiveStarter, type LaunchOptions, type McpSettingsProps, type PendingChange, type PendingSettings, type ProvidersCardProps, type StatusItem, AgentPopOutToggle, MissionView, restingView, statusStripRunItem, ArtifactsTab, ArtifactInspector, type ArtifactLoaded, type ImprovementHistoryPayload, type ProposalMutationResult, type ProposalReviewResult, RowProof, type TrailerRow, WorktreeDialog, ProjectSetupDialog, setupPromptDue, type SlashHost, RequirementsBoard } from '@rotaris/ui';
 // Part AO — the prompt roots' reader (REQ-CHAT-160) the composer's binder calls, and the shape it answers.
 import { bindPromptRootsReader } from '@rotaris/ui';
 import type { PromptsRootsResult } from '@rotaris/contracts';
@@ -273,7 +273,8 @@ function Workspace({ models, modelsLoaded, workspace, popOut, prompts, onOpenSta
    * (REQ-WORKSPACE-105) and otherwise only when the user asks for it from the sidebar's Project section.
    */
   const init = useInitialization();
-  const promptDue = init.state !== null && init.state.view.consentPending.length > 0 && !init.state.view.running;
+  // REQ-WORKSPACE-105/112: a background run in progress does not lift the gate (OQ-123; `setupPromptDue`).
+  const promptDue = setupPromptDue(init.state);
   const openProjectSetup = useShellState((s) => s.openProjectSetup);
   return <>
     {worktreeOpen && (
@@ -470,6 +471,13 @@ function Library({ prompts, layout, onLayout }: { prompts: PromptsApi; layout: P
       : [...current, { id, raised: 1 }]));
   }, []);
   const focusedProposalId = useShellState((state) => state.libraryProposalId);
+  // REQ-LIBRARY-102 / REQ-MONITOR-052 (live-run finding K1): an agent surface's artifact link deep-links here — the Artifacts
+  // tab, and the inspector opened (or re-raised, REQ-LIBRARY-131) for that artifact. Derived during render when the request
+  // arrives, then consumed, so the same link followed again opens it again.
+  const focusedArtifactId = useShellState((state) => state.libraryArtifactId);
+  const [seenArtifactFocus, setSeenArtifactFocus] = useState<string | null>(null);
+  if (focusedArtifactId !== seenArtifactFocus) { setSeenArtifactFocus(focusedArtifactId); if (focusedArtifactId !== null) inspect(focusedArtifactId); }
+  useEffect(() => { if (focusedArtifactId !== null) useShellState.getState().takeLibraryArtifactId(); }, [focusedArtifactId]);
   const readImprovements = useCallback(async () => {
     const result = await bridge.command({ kind: 'improvements', command: { action: 'list' } });
     return result.ok ? { ok: true as const, records: result.value as ImprovementArtifactRecord[] } : { ok: false as const, reason: result.detail ?? result.headline };
@@ -1223,11 +1231,13 @@ function App({ version, workspace, home, processes, initialTheme, initialReduced
   const projectSetup = useShellState((s) => s.projectSetup);
   const autoOpenProjectSetup = useShellState((s) => s.autoOpenProjectSetup);
   const closeProjectSetup = useShellState((s) => s.closeProjectSetup);
-  const setupPromptDue = initialization.state !== null && initialization.state.view.consentPending.length > 0 && !initialization.state.view.running;
+  // REQ-WORKSPACE-105: due on the same reading as the composer gate, so a background run in progress does not hold the
+  // automatic opening back until it ends (OQ-123).
+  const promptDueNow = setupPromptDue(initialization.state);
   const autoOpened = useRef(false);
   useEffect(() => {
-    if (setupPromptDue && !autoOpened.current) { autoOpened.current = true; autoOpenProjectSetup(); }
-  }, [setupPromptDue, autoOpenProjectSetup]);
+    if (promptDueNow && !autoOpened.current) { autoOpened.current = true; autoOpenProjectSetup(); }
+  }, [promptDueNow, autoOpenProjectSetup]);
   return (<>
     <AppShell
       onModality={onModality}

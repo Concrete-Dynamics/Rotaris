@@ -42,7 +42,7 @@ assertions and passes them, and `cancel` and `same-tier` pass after it (REQ-ORCH
 the built app on Linux for the first time). The proof then stops at scenario 4 (`override`) for a reason that is not
 this note's: its `ROTARIS_CAPTURE_SELECT` names `.wait-header select`, and the wait header's chooser is a
 `DesignSearchableSelect` — recorded as
-[`resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md`](../resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md),
+[`resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md`](resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md),
 not repaired here. Scenarios 5 to 7 (REQ-ORCH-088's child timeout among them) are therefore still unmeasured in the
 built app on Linux. `workspace-proof`'s two hand-over reds named in `a-driven-launch-dies-as-root-on-linux.md` were
 not re-run in this round.

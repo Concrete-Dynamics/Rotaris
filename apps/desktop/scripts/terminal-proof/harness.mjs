@@ -1,8 +1,9 @@
 /**
  * Part AL2 — the run-host half of `pnpm terminal-proof`'s REQ-SHELL-166 section, as a Node child of the Electron half.
  *
- * It is the PRODUCT's own modules in the product's own arrangement, minus Electron: the real terminal manager over a
- * real PowerShell in a real pseudo-terminal (`@rotaris/agent-tools`, node-pty), the real streams registry behind it,
+ * It is the PRODUCT's own modules in the product's own arrangement, minus Electron: the real terminal manager over the
+ * host's real shell (REQ-TOOLS-104: PowerShell on Windows, a POSIX shell elsewhere; `ready.shell` says which) in a real
+ * pseudo-terminal (`@rotaris/agent-tools`, node-pty), the real streams registry behind it,
  * the real `createTerminalHost` of `apps/desktop/src/run-host/terminal.ts` answering the seven `terminal.*` requests
  * (so the key table, the write-back refusals and REQ-SHELL-107's audit wording are the shipped code), and the real
  * `FrameDeliveryLimiter` of `apps/desktop/src/main/terminal.ts` over a real `UpdateRelay` at the point of delivery.

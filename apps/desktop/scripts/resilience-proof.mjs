@@ -3,8 +3,8 @@ import { createRequire } from 'node:module';
 import { join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, oneDatabase, proofIsolationEnv } from './lib/harness.mjs';
-import { overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
-import { choose, startApp, stopApp, until } from './lib/driver.mjs';
+import { logTail, overrunMessage, spawnBounded } from './lib/bounded-launch.mjs';
+import { choose, startApp, stopApp, stopOverrunMessage, until } from './lib/driver.mjs';
 
 /**
  * Part Q's first execution in the built app: the model resilience paths against the scripted client's fault steps
@@ -13,9 +13,10 @@ import { choose, startApp, stopApp, until } from './lib/driver.mjs';
  * `pnpm resilience-proof`.
  *
  * Every scenario runs to its end whatever the one before it did: a failed scenario is recorded in `results.json` with
- * its reason, the next one runs, and the proof exits 1 at the end if any failed. Every launch is BOUNDED
- * (`spawnBounded`): one that overruns its timeout is ended — SIGTERM, a grace, SIGKILL — and reported as a failure with
- * its log tail, where `spawnSync`'s timeout had left the override launch alive 649 s after its 180 s
+ * its reason, the next one runs, and the proof exits 1 at the end if any failed. Every launch is BOUNDED — the ten the
+ * capture seams drive by `spawnBounded`, the driven override launch by the driver's `stopApp` — and one that overruns
+ * is ended (SIGTERM, a grace, SIGKILL) and reported as a failure with its log tail, where `spawnSync`'s timeout had left
+ * the override launch alive 649 s after its 180 s
  * (`docs/defects/fixed/resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md`).
  */
 const require = createRequire(import.meta.url);
@@ -101,6 +102,11 @@ async function launch(name, s, extra, opts = {}) {
  * the design system's `SearchableSelect`, by two real clicks — then the run waited for in the store. Its first form
  * addressed `.wait-header select`, a native control the header no longer draws, so no model was ever chosen and the
  * launch waited on a result that could not come. Each step lands in `override.steps.json`.
+ *
+ * It is bounded as the `spawnBounded` launches are, by its own means: the steps by `boundMs` (a store wait still
+ * polling is abandoned with them), and the ending by `stopApp` — the closing picture and the driver's quit each within
+ * a bound, then SIGTERM, a grace and SIGKILL for an application that has not exited. It fails as `launch` fails: on a
+ * step that did not happen, an overrun, a non-zero exit, or no screenshot — every one of them with the log's tail.
  */
 const SETTLED = new Set(['completed', 'failed', 'stopped', 'interrupted', 'paused', 'paused_message_limit']);
 async function drivenOverride(s, { boundMs = 180_000 } = {}) {
@@ -108,7 +114,9 @@ async function drivenOverride(s, { boundMs = 180_000 } = {}) {
   rmSync(join(s.root, 'app.log'), { force: true });
   const trail = [];
   const started = Date.now();
-  const launched = await startApp({ root: s.root, workspace: s.workspace, timeoutMs: 60_000, extra: { ROTARIS_SCRIPT: 'fail:quota,answer,answer' } });
+  // A launch whose driver never answers is ended by `startApp` itself, and the failure carries its log's tail.
+  const launched = await startApp({ root: s.root, workspace: s.workspace, timeoutMs: 60_000, extra: { ROTARIS_SCRIPT: 'fail:quota,answer,answer' } })
+    .catch((cause) => { throw new Error(`override: ${cause instanceof Error ? cause.message : String(cause)}`); });
   const step = async (label, pending) => {
     const at = Date.now() - started;
     try {
@@ -121,6 +129,7 @@ async function drivenOverride(s, { boundMs = 180_000 } = {}) {
     }
   };
   const d = launched.driver;
+  const giveUp = new AbortController();
   let value;
   let failure = null;
   let bound;
@@ -131,14 +140,14 @@ async function drivenOverride(s, { boundMs = 180_000 } = {}) {
         await step('Ctrl+2', d.chord('Ctrl+2'));
         await step('the composer', d.waitFor('.composer__input'));
         await step('Ctrl+L', d.chord('Ctrl+L'));
-        await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus' }));
+        await step('the caret in the composer', until(() => d.eval(`document.activeElement?.classList.contains('composer__input') === true`), (v) => v === true, { what: 'the composer holding focus', signal: giveUp.signal }));
         await step('the prompt', d.type('quota with no candidate', { enter: true }));
         await step('the wait header', d.waitFor('.wait-header', { timeoutMs: 60_000 }));
         const during = await step('the header during the wait', d.probe('.wait-header'));
         await step('the waiting picture', d.screenshot(join(output, 'override-waiting.png')));
         await step('Change model', d.click('.wait-header .btn-secondary', { text: 'Change model' }));
         const chosen = await step('the chooser → beta', choose(d, '.wait-header button[aria-label="Change model"]', 'beta'));
-        const settled = await step('the run settled', until(() => { const db = open(s); try { return session(db); } finally { db.close(); } }, (row) => row !== undefined && SETTLED.has(row.execution_status), { timeoutMs: 90_000, what: 'the session settling' }));
+        const settled = await step('the run settled', until(() => { const db = open(s); try { return session(db); } finally { db.close(); } }, (row) => row !== undefined && SETTLED.has(row.execution_status), { timeoutMs: 90_000, what: 'the session settling', signal: giveUp.signal }));
         // EVIDENCE, not an assertion: the header's absence once the run has settled.
         const after = await step('the header after the change', d.probe('.wait-header'));
         return { during, chosen, settled, after };
@@ -149,14 +158,20 @@ async function drivenOverride(s, { boundMs = 180_000 } = {}) {
     failure = cause;
   } finally {
     clearTimeout(bound);
+    // Steps still pending after the bound are abandoned: a store wait stops at its next poll rather than running on
+    // beside the next scenario; a driver request is rejected when `stopApp` closes the connection.
+    giveUp.abort(new Error('the override launch was given up'));
   }
-  await d.screenshot(png).catch(() => undefined);
-  const stopped = await stopApp(launched);
+  const stopped = await stopApp(launched, { screenshot: png });
   const log = existsSync(launched.logFile) ? readFileSync(launched.logFile, 'utf8') : '';
   writeFileSync(join(output, 'override.log'), log);
   writeFileSync(join(output, 'override.steps.json'), `${JSON.stringify(trail, null, 2)}\n`);
-  if (failure) throw new Error(`override: ${failure.message}; see override.log and override.steps.json`);
-  if (stopped.overran) throw new Error(`override did not exit within ${stopped.overran.afterQuitMs} ms of the driver's quit; ${stopped.overran.endedBy} ended it; see override.log`);
+  const problems = [];
+  if (failure) problems.push(`override: ${failure.message} (see override.steps.json)`);
+  if (stopped.overran) problems.push(stopOverrunMessage('override', stopped, log).split('\n--- ')[0]);
+  else if (stopped.exit.code !== 0) problems.push(`override exited ${stopped.exit.code ?? stopped.exit.signal} on the driver's quit`);
+  if (!existsSync(png)) problems.push(`override produced no screenshot (the closing picture: ${stopped.screenshot})`);
+  if (problems.length > 0) throw new Error(`${problems.join('; ')}\n--- the launch's last words ---\n${logTail(log)}\n(see override.log)`);
   return { log, png, value, elapsedMs: Date.now() - started };
 }
 

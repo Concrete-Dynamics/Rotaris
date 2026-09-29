@@ -62,7 +62,7 @@ record already decides, and every ruling it needs is named as the owner's rather
   [Windows verdict](../defects/sandbox-proof-asserts-the-windows-verdict-on-every-platform.md), and
   [code intelligence as root](../defects/fixed/the-code-intelligence-server-dies-when-the-app-runs-as-root.md) for the last
   two). **`resilience-proof` repaired 2026-09-28 under R-062, in the proof and not the product:** scenario 4 chooses the
-  model through the driver and every launch is bounded, and all ten launches pass as root on Linux. The overrun it
+  model through the driver and every launch is bounded, and all ten scenario blocks (eleven launches) pass as root on Linux. The overrun it
   showed was a product loop, not an ignored signal: a quit whose standard output has been closed never ends
   ([note](../defects/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md), open; REQ-MONITOR-131's
   backstop).

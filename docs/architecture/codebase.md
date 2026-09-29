@@ -1030,9 +1030,10 @@ header with REQ-NOTIFY-063's notice); a quota with a same-tier candidate (the tr
 (the indefinite wait, `setModel` from the header, the override honoured after a relaunch); an unresponsive model with
 and without a role fallback; a hung child under a small `child_timeout` with and without a fallback; a 503 (one
 transient retry) and a 401 (no retry). Evidence under `.proof/resilience-proof/`. **Since 2026-09-28 (R-062)** the override
-launch is driven (the header's `SearchableSelect` chosen by real clicks, `override.steps.json`), every launch is a
-`spawnBounded` (`lib/bounded-launch.mjs`: an overrun is ended by SIGTERM, a grace, then SIGKILL and reported with its log
-tail), and every scenario runs to its end with its failure listed in `results.json`
+launch is driven (the header's `SearchableSelect` chosen by real clicks, `override.steps.json`), every launch is
+bounded — the ten seam-driven ones by `spawnBounded`, the driven one by the driver's `stopApp`, both ending an overrun
+through `lib/bounded-launch.mjs` by SIGTERM, a grace, then SIGKILL and reporting it with its log tail — and every
+scenario runs to its end with its failure listed in `results.json`
 ([note](../defects/fixed/resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md)).
 `spawnSync`'s own timeout could not bound a launch: it closes the pipes as it signals, and the application's quit then
 loops on its own EPIPE ([note](../defects/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md), open).

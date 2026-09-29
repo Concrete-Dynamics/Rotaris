@@ -45,10 +45,20 @@ REQ-NOTIFY-263's indefinite-wait header, the `model_wait` issue, `model_override
 (REQ-NOTIFY-089), the system row, no same-tier fallback, and the calls moving to `scripted-b/beta`. The relaunch and
 resume keeps its capture seams, which wait on deadlines. Each step lands in `override.steps.json`.
 
-**The overrun.** Every launch of the proof now goes through `spawnBounded` (`lib/bounded-launch.mjs`), with no
-`spawnSync`. A launch past its timeout gets SIGTERM, a 10 s grace, then SIGKILL to its process group, and the proof
-reports a failure naming the bound, what ended the launch, and the last thirty lines of its log. The proof has no
-shared launch helper (`harness.mjs` says why), so the helper sits in `lib/` for the others. Every scenario now runs
+**The overrun.** Every launch of the proof is now bounded, and none goes through `spawnSync`. The ten launches the
+capture seams drive go through `spawnBounded` (`lib/bounded-launch.mjs`): a launch past its timeout gets SIGTERM, a
+10 s grace, then SIGKILL to its process group. The driven override launch is bounded by the driver's own ending: its
+steps by a 180 s bound (a store wait still polling is abandoned with them), `startApp` ends a launch whose driver
+never answers, and `stopApp` asks for the closing picture and sends the driver's quit each within 10 s, allows 15 s
+to exit, then ends the application by SIGTERM, the same grace and SIGKILL (`endOverrun`). Either way the proof reports
+a failure naming the bound, what ended the launch, and the last thirty lines of its log; the override launch also
+fails, as the others do, on a non-zero exit or a missing screenshot. While a `spawnBounded` launch is live, a SIGINT,
+SIGTERM or SIGHUP to the proof SIGKILLs the launch's group before the proof dies of the signal, because the launch
+leads its own process group and a Ctrl+C to the proof no longer reaches it. `lib/bounded-launch.test.ts` and
+`lib/driver.test.ts` pin these against real child processes and a socket that never answers. (The driven launch's
+bounds, its exit and screenshot checks, its log tail and the signal handling were added in the verification round:
+the first form's `stopApp` waited on the quit without a bound, and an interrupted proof left its launch running.) The
+proof has no shared launch helper (`harness.mjs` says why), so the helper sits in `lib/` for the others. Every scenario now runs
 to its end whatever the one before it did: a failure goes into `results.json`'s `failures` and the proof exits 1 at
 the end.
 
@@ -71,3 +81,15 @@ launch was ended at 25 s by SIGTERM, which it answered in 57 ms with `quit: requ
 it was reported as `override overran its 25000 ms bound: SIGTERM ended it after 57 ms.` with its log tail. The
 SIGKILL step is pinned by the unit test against a child that ignores SIGTERM. It was not reached by the real
 application, which answers SIGTERM whenever its pipes are open.
+
+Re-run after the verification round (the driven launch's bounds, its exit and screenshot checks, the signal handling),
+same host and command, with another agent's transcript proof running in a different worktree: exit 0 in 3 min 29 s,
+all ten scenario blocks passed (`override` 13 s: the chooser driven as the design-system kind 1.5 s in, the run
+settled 2.4 s later, `override.png` present). The driven launch's failure path was exercised against the real
+application in a scratch copy of the proof that asked the chooser for a model it does not offer, with a 40 s bound:
+it failed after 17 s with `override: nothing matched "[role=\"option\"][data-value=\"gamma\"]" within 15000 ms`
+followed by the log's last thirty lines, which end on the driver's `screenshot → ok`, `quit → ok` and
+`quit: exiting with status 0`; no process of that launch was left. `stopApp` against a socket that never answers, and
+an interrupted proof, were reproduced from the verifier's own scripts: `stopApp` returned in 12 s with the quit
+unanswered and SIGTERM having ended the child, and SIGINT, SIGTERM and SIGHUP to the proof's group each left no
+launch behind, the proof dying of the signal.

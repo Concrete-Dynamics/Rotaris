@@ -234,9 +234,10 @@ not built; the Copilot/codex native loop (REQ-ORCH-146) is not built.
 4 had stopped measuring. Its seam addressed `.wait-header select`, but the header draws the design system's
 `SearchableSelect`, so no model was chosen. The run kept REQ-NOTIFY-092's indefinite wait, as it should, and the
 launch outlived its 180 s `spawnSync` timeout. The first launch is now driven: the chooser is operated by two real
-clicks, and the run is waited for in the store. Every launch goes through `lib/bounded-launch.mjs`'s `spawnBounded`,
-so an overrun is ended by SIGTERM, a grace, then SIGKILL and reported with its log tail. Every scenario now runs to its
-end. **Found nothing new about the ladder:** all ten scenario blocks passed, and the numbers match the measurements
+clicks, and the run is waited for in the store. Every launch is bounded: the ten the capture seams drive go through
+`lib/bounded-launch.mjs`'s `spawnBounded`, and the driven one ends through the driver's `stopApp` (the closing picture
+and the quit each within a bound, then the same `endOverrun`). Either way an overrun is ended by SIGTERM, a grace, then
+SIGKILL and reported with its log tail. Every scenario now runs to its end. **Found nothing new about the ladder:** all ten scenario blocks passed, and the numbers match the measurements
 above (the indefinite wait's header, `model_override` → `beta`, the resumed session on `scripted-b/beta`, the 30 s
 unresponsive fallback, the 8 s child timeout with and without a fallback, the 503's one retry, the 401's none).
 **Found a product loop in the quit path while tracing the overrun.** The signal was not ignored: `spawnSync` had

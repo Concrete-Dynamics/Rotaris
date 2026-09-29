@@ -1193,6 +1193,23 @@ export class SessionWriter {
   }
 
   /**
+   * PD-ORCH-005 clause 3 (OQ-103's last question, ruled under R-067): the explicit cancel (REQ-MONITOR-126) was accepted —
+   * marked on the open iteration at once, before anything of it is carried out, so a host that dies before its teardown
+   * leaves a store the next repair or continue reads as that cancel and never as a crash (`recordCrash`). At the stronger
+   * durability setting (ADR-0058), as a terminal save is: the mark stands for a final act. `false` when no iteration is
+   * open, or the open one is already marked (the first acceptance is kept).
+   */
+  recordCancelAccepted(): Result<boolean, WriteFailure> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    try {
+      return ok(dal.durableTransaction(() => dal.markCancelAccepted(sessionId, toIsoUtc(wall.instant()))));
+    } catch (cause) {
+      return this.fail(cause);
+    }
+  }
+
+  /**
    * PD-ORCH-005 clause 10: a background terminal session an agent started, or what became of it — its state, exit code
    * and last output. Its own transaction; `false` when the id names another agent's terminal (left as it was).
    */

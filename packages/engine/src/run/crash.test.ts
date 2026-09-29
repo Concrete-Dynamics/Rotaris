@@ -2,14 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FakeClock, mintMachineId, ok, type MachineId, type SessionId } from '@rotaris/kernel';
+import { FakeClock, millis, mintMachineId, ok, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
 import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ChatMessage, type ModelRequest } from '@rotaris/model';
 import { RUN_AGENT_ID, type ApprovalPayload, type SessionRecord } from '@rotaris/contracts';
 import { RUN_CONFIG_DEFAULTS, Sessions, SessionWriter, type CheckpointPort, type Publisher, type RunConfig, type ToolPort } from '../index.js';
-import { decodeStoredTodo } from '../todo-view.js';
-import { recordCrash } from './crash.js';
-import { crashLeftOf, resumableOf } from '../sessions.js';
+import { decodeStoredTodo, encodeStoredTodo } from '../todo-view.js';
+import { ACCEPTED_CANCEL_REPORT, recordCrash } from './crash.js';
+import { cancelLeftOf, crashLeftOf, resumableOf, toAgentRecord } from '../sessions.js';
 import { conversationOf } from './record.js';
 import { interruptedResult } from './interruption.js';
 import type { HookPort } from '../hooks-port.js';
@@ -77,7 +77,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
     const writer = created(sid);
     dieIn(writer, sid);
     const r = recordCrash(dal, writer, sid, new Set(['ts_live']), () => undefined);
-    expect(r).toEqual({ iteration: 2, paused: 3, withdrawn: 1, terminals: 1 });
+    expect(r).toEqual({ iteration: 2, paused: 3, cancelled: 0, withdrawn: 1, terminals: 1 });
     expect(dal.getIteration(sid, 2)).toMatchObject({ state: 'open', interruption: 'crash' });
     const state = (id: string) => dal.getChild(sid, id)!;
     expect(state('bg_000000c1')).toMatchObject({ state: 'paused', interruption: 'crash', resume_state: 'running' });
@@ -101,7 +101,7 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
     expect(dal.agentTerminalsOf(sid).map((t) => [t.terminal_id, t.state])).toEqual([['ts_dead', 'crash'], ['ts_done', 'completed'], ['ts_live', 'running']]);
 
     const before = { messages: dal.agentMessagesOf(sid, ROOT).length, timeline: dal.timelineOf(sid).length };
-    expect(recordCrash(dal, writer, sid, new Set(['ts_live']), () => undefined)).toEqual({ iteration: null, paused: 0, withdrawn: 0, terminals: 0 });
+    expect(recordCrash(dal, writer, sid, new Set(['ts_live']), () => undefined)).toEqual({ iteration: null, paused: 0, cancelled: 0, withdrawn: 0, terminals: 0 });
     expect({ messages: dal.agentMessagesOf(sid, ROOT).length, timeline: dal.timelineOf(sid).length }).toEqual(before);
   });
 
@@ -198,9 +198,101 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
     dal.setIterationInterruption(sid, 1, 'pause');
     writer.spawnChild({ ...child('bg_000000c1', 'running', ROOT), iteration: 1 });
     writer.restChild('bg_000000c1', 'pause', 'running');
-    expect(recordCrash(dal, writer, sid, new Set(), () => undefined)).toEqual({ iteration: null, paused: 0, withdrawn: 0, terminals: 0 });
+    expect(recordCrash(dal, writer, sid, new Set(), () => undefined)).toEqual({ iteration: null, paused: 0, cancelled: 0, withdrawn: 0, terminals: 0 });
     expect(dal.getIteration(sid, 1)!.interruption).toBe('pause');
     expect(dal.getChild(sid, 'bg_000000c1')).toMatchObject({ state: 'paused', interruption: 'pause' });
+  });
+
+  /**
+   * OQ-103's last question, ruled 2026-09-29 (R-067): clause 3's "those are never resumed" governs a run whose explicit
+   * cancel was accepted and not carried out when its host died. The mark `Run.cancelAgent` writes when the cancel is
+   * accepted is what tells it apart (store v27); the repair of
+   * docs/defects/fixed/a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md.
+   */
+  describe('PD-ORCH-005 clause 3 with REQ-MONITOR-126 (OQ-103 ruled): an explicit cancel accepted and never carried out', () => {
+    /** The residue of a host that died in iteration 2 after the explicit cancel was accepted, its todo task in progress. */
+    function cancelledThenDied(writer: SessionWriter, sid: SessionId): void {
+      dieIn(writer, sid);
+      writer.save('cancelling', { todo: encodeStoredTodo({ planner: { schema_version: 1, phases: [{ name: 'main', tasks: [{ id: 't', text: 't', state: 'in_progress', consecutiveRetries: 0 }] }] }, agent: null }) });
+      expect(writer.recordCancelAccepted()).toEqual({ ok: true, value: true });
+    }
+
+    it('the store marks the open iteration only, and keeps the first acceptance', () => {
+      const sid = 'S-mark' as SessionId;
+      const writer = created(sid);
+      expect(writer.recordCancelAccepted()).toEqual({ ok: true, value: false });
+      dieIn(writer, sid);
+      expect(dal.getIteration(sid, 2)!.cancel_accepted_at).toBeNull();
+      expect(writer.recordCancelAccepted()).toEqual({ ok: true, value: true });
+      const first = dal.getIteration(sid, 2)!.cancel_accepted_at;
+      expect(first).not.toBeNull();
+      clock.advance(millis(5_000));
+      expect(writer.recordCancelAccepted()).toEqual({ ok: true, value: false });
+      expect(dal.getIteration(sid, 2)!.cancel_accepted_at).toBe(first);
+    });
+
+    it('before it is recorded, no agent is crash-left, the Continue action counts nothing, and every unfinished agent is named cancel-left', () => {
+      const sid = 'S-before' as SessionId;
+      const writer = created(sid);
+      cancelledThenDied(writer, sid);
+      const row = dal.getSession(sid)!;
+      expect(crashLeftOf(dal, row, () => true)).toEqual(new Set());
+      expect(resumableOf(dal, row)).toBeNull();
+      expect(cancelLeftOf(dal, row, () => true)).toEqual(new Set(['bg_000000c1', 'bg_000000c2', 'bg_000000c3']));
+      // Only while no run carries the cancel out, and not under a store failure.
+      expect(cancelLeftOf(dal, row, () => false)).toEqual(new Set());
+      expect(cancelLeftOf(dal, row, () => true, true)).toEqual(new Set());
+      // Presented as the record will leave them: cancelled, never paused by a crash.
+      const shown = toAgentRecord(dal.getChild(sid, 'bg_000000c1')!, clock, { session: { executionStatus: row.execution_status, updatedAt: row.updated_at }, crashLeft: crashLeftOf(dal, row, () => true), cancelLeft: cancelLeftOf(dal, row, () => true) });
+      expect(shown).toMatchObject({ state: 'cancelled', presentationState: 'cancelled', interruption: null, live: false, activeTools: [] });
+    });
+
+    it('the record ends every unfinished agent cancelled with its report and closes the iteration cancelled — the calls answered, the approval withdrawn, the dead background sessions ended, the task back to pending — and only once', () => {
+      const sid = 'S-cancel' as SessionId;
+      const writer = created(sid);
+      cancelledThenDied(writer, sid);
+      const r = recordCrash(dal, writer, sid, new Set(['ts_live']), () => undefined);
+      expect(r).toEqual({ iteration: 2, paused: 0, cancelled: 3, withdrawn: 1, terminals: 1 });
+      expect(dal.getIteration(sid, 2)).toMatchObject({ state: 'closed', outcome: 'cancelled', interruption: null });
+      for (const id of ['bg_000000c1', 'bg_000000c2', 'bg_000000c3']) {
+        expect(dal.getChild(sid, id), id).toMatchObject({ state: 'cancelled', interruption: null, resume_state: null });
+        expect(JSON.parse(dal.getChild(sid, id)!.report!), id).toMatchObject({ status: 'cancelled', summary: ACCEPTED_CANCEL_REPORT });
+      }
+      expect(dal.getChild(sid, 'bg_000000c4')).toMatchObject({ state: 'succeeded' });
+      // Another root's orphan is the stale-child settle's, as before.
+      expect(dal.getChild(sid, 'bg_000000x1')).toMatchObject({ state: 'running' });
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'child_paused')).toEqual([]);
+      // The root's calls, which never started, are answered so no conversation or row is left open.
+      expect(conversationOf(dal.agentConversation(sid, ROOT)).at(-1)).toMatchObject({ role: 'tool', content: [{ callId: 'a', isError: true }, { callId: 'b', isError: true }] });
+      expect(dal.getSession(sid)!.pending_approvals).toBe('[]');
+      expect(dal.agentTerminalsOf(sid).map((t) => [t.terminal_id, t.state])).toEqual([['ts_dead', 'crash'], ['ts_done', 'completed'], ['ts_live', 'running']]);
+      // REQ-ORCH-135: the task stays anchored; the count moves past the closed iteration.
+      expect(decodeStoredTodo(dal.getSession(sid)!.todo).planner!.phases[0]!.tasks).toMatchObject([{ id: 't', state: 'pending' }]);
+      expect(dal.getSession(sid)!.iterations_completed).toBe(2);
+      // The close is the vocabulary's `iteration.end`; REQ-ORCH-139's closed timeline vocabulary gains no word for it.
+      expect(dal.eventsOfKind(sid, 'iteration.end').map((e) => JSON.parse(e.payload) as { iteration: number; outcome: string })).toMatchObject([{ iteration: 2, outcome: 'cancelled' }]);
+      expect(dal.timelineOf(sid).map((t) => t.name)).not.toContain('iteration_cancelled');
+      expect(resumableOf(dal, dal.getSession(sid)!)).toBeNull();
+
+      const before = { messages: dal.agentMessagesOf(sid, ROOT).length, timeline: dal.timelineOf(sid).length };
+      expect(recordCrash(dal, writer, sid, new Set(['ts_live']), () => undefined)).toEqual({ iteration: null, paused: 0, cancelled: 0, withdrawn: 0, terminals: 0 });
+      expect({ messages: dal.agentMessagesOf(sid, ROOT).length, timeline: dal.timelineOf(sid).length }).toEqual(before);
+    });
+
+    it('a cancel that overtook a rest: the iteration a stop had left open is closed too, and the agent the stop paused ends cancelled', () => {
+      const sid = 'S-overtaken' as SessionId;
+      const writer = created(sid);
+      dal.insertIteration({ session_id: sid, iteration: 1, root_task_id: ROOT, root_canonical_name: 'orchestrator', root_persona: 'orchestrator', todo_task_id: 't', task: 't', opened_at: 't' });
+      dal.setIterationInterruption(sid, 1, 'stop');
+      writer.spawnChild({ ...child('bg_000000c1', 'running', ROOT), iteration: 1 });
+      writer.restChild('bg_000000c1', 'stop', 'running');
+      expect(writer.recordCancelAccepted()).toEqual({ ok: true, value: true });
+      expect(resumableOf(dal, dal.getSession(sid)!)).toBeNull();
+      expect(recordCrash(dal, writer, sid, new Set(), () => undefined)).toMatchObject({ iteration: 1, paused: 0, cancelled: 1 });
+      expect(dal.getIteration(sid, 1)).toMatchObject({ state: 'closed', outcome: 'cancelled' });
+      // As clause 6's decline leaves a paused agent it cancels (`Run.cancelPausedAgents`): terminal, never resumed.
+      expect(dal.getChild(sid, 'bg_000000c1')).toMatchObject({ state: 'cancelled' });
+    });
   });
 
   describe('when it is recorded (Sessions)', () => {
@@ -1079,6 +1171,109 @@ describe('PD-ORCH-005 clause 3: recording a crash (run/crash.ts)', () => {
         expect(dal.getIteration(sid, 2)!.interruption).toBeNull();
         expect(dal.getChild(sid, 'bg_000000c1')!.state).toBe('running');
       });
+    });
+
+    /**
+     * OQ-103's last question, ruled 2026-09-29 (R-067): the explicit cancel is made durable when it is accepted, and the next
+     * repair or continue ends its agents `cancelled` and closes the iteration; clause 18's Continue resumes none of them.
+     * The repair of docs/defects/fixed/a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md.
+     */
+    describe('PD-ORCH-005 clause 3 with REQ-MONITOR-126 (OQ-103 ruled): a run whose explicit cancel was accepted and never carried out', () => {
+      /** A process whose root's first model call holds until `release`, then answers. */
+      function holding() {
+        let release!: () => void;
+        const hold = new Promise<void>((r) => { release = r; });
+        const client = new ScriptedModelClient([{ parts: [{ hold }, ...answer('never').parts] }]);
+        const config: RunConfig = { ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k' };
+        const sessions = new Sessions({
+          clocks: clock, publisher: NONE, pid: 77, host: HOST, retentionCap: 20_000, warn: () => undefined, mintSessionId: () => 'S-held',
+          model: { backend: new DefaultAgentBackend(client), config }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
+        });
+        return { sessions, release: () => release() };
+      }
+      const cancelRun = (s: Sessions, sid: SessionId) => s.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: RUN_AGENT_ID } });
+
+      it('the cancel is marked on the open iteration when it is accepted, before the run carries it out, and the run\'s own close keeps the mark', async () => {
+        const { sessions, release } = holding();
+        const sid = (sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
+        await vi.waitFor(() => { expect(dal.openIterationOf(sid)).toBeDefined(); });
+        expect(dal.getIteration(sid, 1)!.cancel_accepted_at).toBeNull();
+        expect(cancelRun(sessions, sid)).toEqual({ ok: true });
+        // Durable at once: a host that died here would leave the mark for the next repair or continue.
+        expect(dal.getIteration(sid, 1)).toMatchObject({ state: 'open', cancel_accepted_at: expect.any(String) });
+        release();
+        await sessions.running(sid);
+        expect(dal.getIteration(sid, 1)).toMatchObject({ state: 'closed', outcome: 'cancelled', cancel_accepted_at: expect.any(String) });
+      });
+
+      it('a cancel accepted as the iteration begins, before it is recorded open, marks it when it opens', async () => {
+        const { sessions, release } = holding();
+        const sid = (sessions.start(dal, 'C:/ws', 'first') as { value: SessionId }).value;
+        let cancelled = false;
+        sessions.bus.attach(sid, { mode: 'blocking', deliver: (e) => {
+          if (e.event === 'iteration.start' && !cancelled) { cancelled = true; expect(dal.openIterationOf(sid)).toBeUndefined(); expect(cancelRun(sessions, sid)).toEqual({ ok: true }); }
+          return undefined;
+        } });
+        release();
+        await sessions.running(sid);
+        expect(cancelled).toBe(true);
+        expect(dal.getIteration(sid, 1)).toMatchObject({ state: 'closed', outcome: 'cancelled', cancel_accepted_at: expect.any(String) });
+      });
+
+      const cancelledThenDied = () => crashed((w) => { expect(w.recordCancelAccepted()).toEqual({ ok: true, value: true }); }, 'running');
+
+      it('loading the session records nothing; its agents present cancelled, none crash-left, and the Continue action counts nothing (clause 8)', async () => {
+        const sid = await cancelledThenDied();
+        const snapshots: SessionRecord[] = [];
+        const viewer = sessionsAs(88, undefined, { increment: () => undefined, snapshot: (p) => { snapshots.push(p.session); } });
+        expect(viewer.resume(dal, 'C:/ws', sid).ok).toBe(true);
+        viewer.owner(sid)!.attach();
+        const seen = snapshots.at(-1)!;
+        expect(seen.resumable).toBeNull();
+        expect(['bg_000000c1', 'bg_000000c2', 'bg_000000c3'].map((id) => seen.agents.find((a) => a.id === id)!.presentationState)).toEqual(['cancelled', 'cancelled', 'cancelled']);
+        expect(seen.agents.filter((a) => a.interruption !== null)).toEqual([]);
+        expect(dal.getIteration(sid, 2)).toMatchObject({ state: 'open', interruption: null });
+        expect(dal.getChild(sid, 'bg_000000c1')!.state).toBe('running');
+      });
+
+      it('the repair ends them cancelled and closes the iteration; the session is left with nothing to resume', async () => {
+        const sid = await cancelledThenDied();
+        const warned: string[] = [];
+        const report = sessionsAs(88, undefined, NONE, () => false, (m) => { warned.push(m); }).repair(dal, 'C:/ws', { sessionId: sid });
+        expect(report.repaired).toHaveLength(1);
+        expect(dal.getSession(sid)!.execution_status).toBe('interrupted');
+        expect(dal.getIteration(sid, 2)).toMatchObject({ state: 'closed', outcome: 'cancelled', interruption: null });
+        expect(['bg_000000c1', 'bg_000000c2', 'bg_000000c3'].map((id) => dal.getChild(sid, id)!.state)).toEqual(['cancelled', 'cancelled', 'cancelled']);
+        // REQ-LIBRARY-092: each report is materialised, as every terminal child's is.
+        expect(dal.artifactsOf(sid).filter((a) => a.source_task_id !== null && ['bg_000000c1', 'bg_000000c2', 'bg_000000c3'].includes(a.source_task_id)).map((a) => a.status).sort()).toEqual(['cancelled', 'cancelled', 'cancelled']);
+        expect(resumableOf(dal, dal.getSession(sid)!)).toBeNull();
+        expect(warned.some((m) => m.includes('was closed cancelled'))).toBe(true);
+      });
+
+      for (const how of ['the Continue action', '"continue without them"', 'a continue by message'] as const) {
+        for (const state of ['recovery', 'interrupted'] as const) {
+          it(`${state}: ${how} resumes none of them — they end cancelled, the iteration closes cancelled, and the session goes on as a new iteration`, async () => {
+            const sid = await cancelledThenDied();
+            const personas: (string | undefined)[] = [];
+            const next = sessionsAs(88, (p) => personas.push(p));
+            expect(next.resume(dal, 'C:/ws', sid).ok).toBe(true);
+            if (state === 'interrupted') expect(next.checkpointListing(dal, 'C:/ws', sid).ok).toBe(true);
+            const rootBefore = dal.agentConversation(sid, ROOT).length;
+            if (how === 'the Continue action') expect(next.continueSession(sid, 'continue').ok).toBe(true);
+            else if (how === '"continue without them"') expect(next.continueSession(sid, 'continue', { withoutPaused: true }).ok).toBe(true);
+            else expect(next.prompt(sid, 'second').ok).toBe(true);
+            expect((await next.running(sid))!.status).toBe('completed');
+            expect(['bg_000000c1', 'bg_000000c2', 'bg_000000c3'].map((id) => dal.getChild(sid, id)!.state)).toEqual(['cancelled', 'cancelled', 'cancelled']);
+            for (const id of ['bg_000000c1', 'bg_000000c2', 'bg_000000c3']) expect(JSON.parse(dal.getChild(sid, id)!.report!), id).toMatchObject({ status: 'cancelled', summary: ACCEPTED_CANCEL_REPORT });
+            expect(dal.timelineOf(sid).filter((t) => t.name === 'child_paused' || t.name === 'iteration_resumed')).toEqual([]);
+            expect(dal.iterationsOf(sid).map((r) => [r.iteration, r.state, r.outcome])).toEqual([[1, 'closed', 'succeeded'], [2, 'closed', 'cancelled'], [3, 'closed', 'succeeded']]);
+            // The cancelled root was not restored: its record gained only the answers to its cut calls, and the run was set up as the entry role.
+            expect(dal.agentConversation(sid, ROOT).length).toBe(rootBefore + 1);
+            expect(dal.iterationsOf(sid)[2]!.root_task_id).not.toBe(ROOT);
+            expect(personas).toEqual([undefined]);
+          });
+        }
+      }
     });
   });
 });

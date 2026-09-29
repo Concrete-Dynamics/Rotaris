@@ -32,7 +32,7 @@ record already decides, and every ruling it needs is named as the owner's rather
   PKCE authenticators, Git integration and merge, the manual compression part, and persona memory.
 - The open notes in `../defects/`. *Since 2026-09-29 ([R-067](../product/requests.md#r-067)) the owner has ruled the
   decisions five of them waited on — ESC-42's floor, OQ-103's cancel in flight, REQ-LIBRARY-092's fallback (OQ-113),
-  `delegate`'s `session_id` (OQ-66; built 2026-09-29, its note in `fixed/`, OQ-130 open on the readings built) and the graceful stop's status (OQ-96, whose note is settled) — and has directed that
+  `delegate`'s `session_id` (OQ-66; built 2026-09-29, its note in `fixed/`, OQ-131 open on the readings built) and the graceful stop's status (OQ-96, whose note is settled) — and has directed that
   this workflow repair the open notes and the live runs' findings. Each note stays open until its repair lands; OQ-114 to
   OQ-116 are open against the live runs' figures and block nothing in this plan.*
 - The ~~four~~ red proofs: ~~`transcript-proof`,~~ `library-proof`, `part-h-proof`, and `theme-proof`'s contrast section

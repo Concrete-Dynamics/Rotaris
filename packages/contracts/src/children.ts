@@ -91,7 +91,7 @@ export function isResumeState(s: unknown): s is ResumeState {
  * PD-ORCH-005 clause 22 (revision 5, narrowing REQ-MONITOR-300): the one exit from a terminal state. A settled child its
  * parent follows up by `delegate`'s `session_id` leaves its terminal state for `queued`, the state a child that has not
  * started waits in, and from there starts as any queued child does — under REQ-ORCH-050's per-model cap and REQ-ORCH-046's
- * active limit (OQ-130). The move is not in `CHILD_TRANSITIONS`, which keeps terminal states absorbing for every other
+ * active limit (OQ-131). The move is not in `CHILD_TRANSITIONS`, which keeps terminal states absorbing for every other
  * move; it is the writer's `followUpChild` alone, and the engine decides which settled child may take it.
  */
 export const FOLLOW_UP_STATE = 'queued' satisfies ChildState;

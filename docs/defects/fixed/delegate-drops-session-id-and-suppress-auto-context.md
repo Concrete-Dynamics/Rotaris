@@ -79,7 +79,7 @@ Repaired 2026-09-29 under [R-067](../../product/requests.md#r-067). Both halves 
   parent again.
 - The stored write scope is claimed again. A call the record left open is answered as cut off first. A follow-up waits for
   a cancelled child's execution to wind down. A child that never started is given its payload first, and REQ-ORCH-048's
-  cascade leaves it. OQ-130 records these readings and the ones clause 22 does not state.
+  cascade leaves it. OQ-131 records these readings and the ones clause 22 does not state.
 
 **Pinned by.**
 - `packages/agent-tools/src/tools/delegation.test.ts` ("delegate — session_id"): the id reaches the port, and the
@@ -113,6 +113,6 @@ in the describe and fifteen in the file; it counted the two outer cases twice. I
 and fourteen with the later iteration's case.
 
 The cancel race's case follows up a child the user cancelled, and it ends `succeeded`. That is a reading where
-`PD-ORCH-005` clauses 3, 16 and 22 meet, recorded in OQ-130 and put to the owner.
+`PD-ORCH-005` clauses 3, 16 and 22 meet, recorded in OQ-131 and put to the owner.
 
 The live check the task named as optional was not made.

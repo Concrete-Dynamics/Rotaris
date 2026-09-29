@@ -313,9 +313,9 @@ export class IterationChildren implements DelegationOps {
    * name, persona, parent, dependencies, background flag and stored write scope, re-claimed now as any accepted child's
    * is — with the call's `task` appended as its next user message; it waits in `queued` and is started by the scheduler
    * as any queued child is, from its record (`execute`), and ends and reports again. The call's other fields are the
-   * child's own already and are not read (OQ-130). A `session_id` naming no settled child of the caller is refused
+   * child's own already and are not read (OQ-131). A `session_id` naming no settled child of the caller is refused
    * `rejected` with no record touched. A child whose record holds
-   * no conversation — it never started — is given the payload it would have started with first (OQ-130).
+   * no conversation — it never started — is given the payload it would have started with first (OQ-131).
    */
   private async followUp(parentId: string, taskId: string, req: DelegateRequest): Promise<DelegateOutcome> {
     const rejected = (message: string): DelegateOutcome => ({ status: 'rejected', canonicalName: req.taskName, message });
@@ -360,7 +360,7 @@ export class IterationChildren implements DelegationOps {
    * — a direct child by REQ-TOOLS-155's ownership test, in a terminal state, that its `child_timeout` did not cut off. Like
    * `background_output`, another agent's child reads as no child of the caller's. A child the limit cut off keeps
    * PD-ORCH-004's `continuation_of`, and the reason names that field. A child the user cancelled is settled and is not
-   * refused: PD-ORCH-005 clauses 3 and 16 are read as about a continue's resume (OQ-130, put to the owner).
+   * refused: PD-ORCH-005 clauses 3 and 16 are read as about a continue's resume (OQ-131, put to the owner).
    */
   private followUpRefusalFor(parentId: string, taskId: string): string | null {
     const head = `session_id '${taskId}' names no settled child of yours`;

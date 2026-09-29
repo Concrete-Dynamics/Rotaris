@@ -2198,7 +2198,7 @@ revision 3 as [R-067](requests.md#r-067).*
 > - a child that has not ended;
 > - a child its `child_timeout` cut off, with a reason that names `continuation_of`.
 >
-> The text met the code in two places, and [OQ-130](../architecture/open-questions.md) records the reading built for
+> The text met the code in two places, and [OQ-131](../architecture/open-questions.md) records the reading built for
 > each:
 > - "names no settled child of the calling agent" is one reason for an unknown id and for another agent's child alike.
 >   REQ-TOOLS-155's parent scoping reads another's child as none of the caller's, as `background_output` does.
@@ -2738,7 +2738,7 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 > The child keeps its identity and its stored write scope, and it ends, reports and notifies its parent again. A child
 > the timeout cut off is refused, and the reason names `continuation_of`.
 >
-> The text met the code in these places, and [OQ-130](../architecture/open-questions.md) records the reading built for
+> The text met the code in these places, and [OQ-131](../architecture/open-questions.md) records the reading built for
 > each:
 > - **The state it resumes into is `queued`,** so the follow-up waits under REQ-ORCH-050's cap and REQ-ORCH-046's active
 >   limit. It holds no place in either when it is followed up, unlike a paused agent that "keeps the place" it held.

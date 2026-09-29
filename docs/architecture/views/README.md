@@ -46,7 +46,7 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 ## Last reconciled with the code: **2026-09-29**
 
 **A follow-up by `session_id` resumes a settled child from its record (PD-ORCH-005 clause 22, PD-TOOLS-006 revision 3,
-2026-09-29, R-067; OQ-130).** `delegate` forwards `session_id`. `IterationChildren.followUp` refuses an id that is no
+2026-09-29, R-067; OQ-131, raised as OQ-130 on its branch and renumbered at the merge).** `delegate` forwards `session_id`. `IterationChildren.followUp` refuses an id that is no
 settled child of the caller, and waits for a cancelled child's execution to wind down. It re-claims the stored write
 scope and answers a call left open. The writer's new `followUpChild` makes the one exit from a terminal state
 (`isLegalFollowUp`), to `queued`, in one transaction with the follow-up's message in `agent_messages`; `StoreDal.reopenChild`
@@ -55,6 +55,18 @@ clears the completion time, the report and the observation, over existing column
 and its §7 rows for `children` and `agent_messages` name the new writer. The **state-ownership view**'s conversation-record
 row names it as a writer and a reader. No package, edge, process, channel, message kind, command or store table changes,
 and no migration is appended.
+
+**An explicit cancel is durable across a crash (PD-ORCH-005 clause 3 with REQ-MONITOR-126, OQ-103's last question ruled
+under R-067, 2026-09-29).** `iterations.cancel_accepted_at` (store **v27**, appended) is written the moment the reserved run
+id's `cancelAgent` is accepted (`SessionWriter.recordCancelAccepted`), and by `Run.turn` for an iteration it opens after. An
+open iteration carrying it is closed `cancelled` by the next repair or continue, its unfinished agents ended `cancelled`
+(`recordCrash` → `recordAcceptedCancel`), never paused by a crash; `crashLeftOf` and `resumableOf` read it, the new
+`cancelLeftOf` presents those agents `cancelled` meanwhile, and a continue is set up as the entry role; the run-level
+agent (`runLevelAgent`) is presented `cancelled` and not live in REQ-CHAT-008's recovery state with nothing to resume.
+The record writes no timeline word of its own (REQ-ORCH-139); its close is the vocabulary's `iteration.end`. This repairs
+`a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md`. The **runtime view**'s §2 (the paragraph "An
+explicit cancel the host died before carrying out"), §4 (the run-level agent) and §7 (`iterations`), and the
+**state-ownership view**'s rest rows say so. One store column is added; no package, edge, process, channel, message kind or command changed.
 
 **A confirmed cancel of one agent is shown at once (REQ-MONITOR-128/296, 2026-09-29, R-067; OQ-129).** The renderer's
 `cancelAgent` lays a per-window overlay (`packages/ui/src/cancel-overlay.ts`, the store `cancelOverlays` in `shell.ts`)

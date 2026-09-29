@@ -811,7 +811,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(dal.eventsOfKind(sid, 'child.complete')).toHaveLength(2);
     });
 
-    it('OQ-130: a child that never started — blocked by its dependency — is followed up from the payload it would have started with, then the follow-up, and REQ-ORCH-048\'s cascade does not block it again', async () => {
+    it('OQ-131: a child that never started — blocked by its dependency — is followed up from the payload it would have started with, then the follow-up, and REQ-ORCH-048\'s cascade does not block it again', async () => {
       let sid = '' as SessionId;
       let followed = false;
       const { sessions, client } = sessionsWith((persona, turn, req) => {

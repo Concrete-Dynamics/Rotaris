@@ -21,7 +21,7 @@ export interface SchedulerDeps {
   /**
    * PD-ORCH-005 clause 22: whether the child's record holds a conversation — a settled child its parent followed up,
    * waiting in `queued` to start from its record. REQ-ORCH-048's cascade settles a dependent before it has started, and
-   * this one has: its dependencies were judged when it was first admitted, so the cascade leaves it (OQ-130). Absent
+   * this one has: its dependencies were judged when it was first admitted, so the cascade leaves it (OQ-131). Absent
    * means no child has one.
    */
   readonly hasConversation?: ((taskId: string) => boolean) | undefined;

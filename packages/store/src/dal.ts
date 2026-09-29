@@ -287,6 +287,11 @@ export interface IterationRow {
    * the root's turn returns, and by the crash record. NULL on a row written before v26: not known.
    */
   readonly root_tool_calls: number | null;
+  /**
+   * v27 — PD-ORCH-005 clause 3 (OQ-103, R-067): when the explicit cancel (REQ-MONITOR-126) was accepted while this
+   * iteration was open; NULL when none was. An OPEN row carrying it is a cancel its run never carried out.
+   */
+  readonly cancel_accepted_at: string | null;
 }
 export type IterationInsert = Pick<IterationRow, 'session_id' | 'iteration' | 'root_task_id' | 'root_canonical_name' | 'root_persona' | 'todo_task_id' | 'task' | 'opened_at'>;
 
@@ -569,6 +574,8 @@ export class StoreDal {
       setIterationInterruption: db.prepare("UPDATE iterations SET interruption = ? WHERE session_id = ? AND iteration = ? AND state = 'open'"),
       // v26 — REQ-MONITOR-102: a NULL count (a row older than v26) is not known and stays NULL.
       addIterationRootCalls: db.prepare('UPDATE iterations SET root_tool_calls = root_tool_calls + ? WHERE session_id = ? AND iteration = ? AND root_tool_calls IS NOT NULL'),
+      // v27 — PD-ORCH-005 clause 3 (OQ-103): the explicit cancel's mark, on the open iteration only, the first acceptance kept.
+      markCancelAccepted: db.prepare("UPDATE iterations SET cancel_accepted_at = ? WHERE session_id = ? AND state = 'open' AND cancel_accepted_at IS NULL"),
 
       // v23 — PD-ORCH-005: the agents' conversations. The sequence is per agent and taken inside the insert, as the slot queue's is.
       insertAgentMessage: db.prepare(`INSERT INTO agent_messages (session_id, task_id, seq, iteration, kind, body, at)
@@ -633,7 +640,8 @@ export class StoreDal {
       artifactById: db.prepare('SELECT * FROM artifacts WHERE session_id = ? AND id = ?'),
       artifactBySlug: db.prepare('SELECT * FROM artifacts WHERE session_id = ? AND slug = ?'),
       artifactByTask: db.prepare('SELECT * FROM artifacts WHERE session_id = ? AND source_task_id = ?'),
-      artifactByCanonical: db.prepare("SELECT * FROM artifacts WHERE session_id = ? AND canonical_name = ? AND kind = 'child_report' ORDER BY created_at, id"),
+      // REQ-LIBRARY-092 as amended (OQ-113): the name keys only a report no task wrote.
+      artifactByCanonical: db.prepare("SELECT * FROM artifacts WHERE session_id = ? AND canonical_name = ? AND kind = 'child_report' AND (source_task_id IS NULL OR source_task_id = '') ORDER BY created_at, id"),
       slugsLike: db.prepare('SELECT slug FROM artifacts WHERE session_id = ? AND (slug = ? OR slug LIKE ?)'),
       // REQ-LIBRARY-094: only the body's timestamp moves here — the body itself is a file, so the row records that it changed and nothing more.
       touchArtifactEdited: db.prepare('UPDATE artifacts SET edited_at = ? WHERE session_id = ? AND id = ?'),
@@ -753,6 +761,13 @@ export class StoreDal {
   /** v26 — REQ-MONITOR-102: `n` more of the root's calls held by the session total; false when the count is not known (NULL). */
   addIterationRootCalls(id: SessionId, iteration: number, n: number): boolean {
     return this.stmts['addIterationRootCalls']!.run(n, id, iteration).changes === 1;
+  }
+  /**
+   * v27 — PD-ORCH-005 clause 3 (OQ-103, R-067): the explicit cancel was accepted at `at` while the session's open iteration
+   * was open. False when none is open, or its mark is already set (the first acceptance is kept).
+   */
+  markCancelAccepted(id: SessionId, at: string): boolean {
+    return this.stmts['markCancelAccepted']!.run(at, id).changes === 1;
   }
   insertAgentMessage(row: Omit<AgentMessageRow, 'seq'>): void {
     this.stmts['insertAgentMessage']!.run(row);
@@ -1248,6 +1263,10 @@ export class StoreDal {
   artifactByTask(id: SessionId, taskId: string): ArtifactRow | undefined {
     return this.stmts['artifactByTask']!.get(id, taskId) as ArtifactRow | undefined;
   }
+  /**
+   * REQ-LIBRARY-092's fallback key as amended 2026-09-29 (OQ-113): the earliest child report under `canonicalName` that
+   * carries no task id — never one a task wrote, which only its own task id finds (`artifactByTask`).
+   */
   artifactByCanonical(id: SessionId, canonicalName: string): ArtifactRow | undefined {
     return (this.stmts['artifactByCanonical']!.all(id, canonicalName) as ArtifactRow[])[0];
   }

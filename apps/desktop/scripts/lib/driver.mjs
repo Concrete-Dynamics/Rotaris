@@ -13,6 +13,7 @@ import { connect as connectSocket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { app as appDirectory, cleanEnvironment, electron, hostSwitches, mainEntry, proofIsolationEnv } from './harness.mjs';
+import { endOverrun, exitWithin } from './bounded-launch.mjs';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -144,4 +145,62 @@ export async function startApp({ root, workspace, extra = {}, electronArgs = [],
     throw new Error(`${cause.message}\n--- the app's last words ---\n${tail}`);
   });
   return { child, driver, endpointFile, logFile, local, preferences };
+}
+
+/**
+ * End a driven launch: the driver's `quit`, then at most `graceMs` for the process to exit. One that has not exited by
+ * then is ENDED (`endOverrun`: SIGTERM, the same grace, SIGKILL) and the result says so — a proof reports `overran`
+ * as a failure rather than moving on with an application still running beside the next launch.
+ */
+export async function stopApp(started, { graceMs = 15_000 } = {}) {
+  await started.driver.quit();
+  started.driver.close();
+  const exit = await exitWithin(started.child, graceMs);
+  if (exit) return { exit, overran: null };
+  const ended = await endOverrun(started.child, { graceMs });
+  return { exit: ended.exit, overran: { afterQuitMs: graceMs, ...ended } };
+}
+
+/**
+ * Poll `probe` (async, any value) until `accept(value)` holds, or throw at `timeoutMs` naming `what` and the last value
+ * seen — the waiting primitive for a condition that is not one selector: a store row, a probe's attribute, an absence.
+ */
+export async function until(probe, accept, { timeoutMs = 15_000, intervalMs = 150, what = 'the condition' } = {}) {
+  const started = Date.now();
+  let last;
+  for (;;) {
+    try { last = await probe(); } catch (cause) { last = { error: cause instanceof Error ? cause.message : String(cause) }; }
+    if (accept(last)) return last;
+    if (Date.now() - started > timeoutMs) throw new Error(`${what} did not hold within ${timeoutMs} ms; last seen ${JSON.stringify(last)?.slice(0, 600)}`);
+    await sleep(intervalMs);
+  }
+}
+
+/**
+ * Choose `value` in the control at `selector`, whichever of the product's two chooser kinds it is — waiting for it
+ * first. A native `<select>` takes the value through the prototype setter and a `change` event (what React listens
+ * to), and the choice is confirmed once the control shows it; the design system's `SearchableSelect` is a button and a listbox, so it is driven as a person drives it: a real
+ * click on the trigger, then a real click on the `[role="option"]` carrying the wanted `data-value`, each waiting for
+ * its control. Resolves with the kind driven; rejects when the control, or the option, never appears.
+ */
+export async function choose(driver, selector, value, { timeoutMs = 15_000 } = {}) {
+  await driver.waitFor(selector, { timeoutMs });
+  const kind = await driver.eval(`document.querySelector(${JSON.stringify(selector)}) instanceof HTMLSelectElement ? 'native' : 'design-system'`);
+  if (kind === 'native') {
+    const chosen = await driver.eval(`(() => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      if (![...el.options].some((o) => o.value === ${JSON.stringify(value)})) return 'no such option';
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(el, ${JSON.stringify(value)});
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+      return 'dispatched';
+    })()`);
+    if (chosen !== 'dispatched') throw new Error(`${selector} offers no ${JSON.stringify(value)}`);
+    // A CONTROLLED select snaps back to its prop on the same turn and shows the choice only once the product's own
+    // state has taken it — so the choice is confirmed by waiting for that, not by reading the element straight away.
+    await until(() => driver.eval(`document.querySelector(${JSON.stringify(selector)})?.value ?? null`), (v) => v === value, { timeoutMs, what: `${selector} showing ${JSON.stringify(value)}` });
+    return { kind, value };
+  }
+  await driver.click(selector, { timeoutMs });
+  await driver.click(`[role="option"][data-value=${JSON.stringify(value)}]`, { timeoutMs });
+  return { kind, value };
 }

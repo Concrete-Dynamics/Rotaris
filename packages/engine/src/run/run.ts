@@ -34,6 +34,7 @@ import type { ResolvedTrigger, TurnCompression } from './compression.js';
 import { ConversationRegistry, type ManualCompressionReport } from './conversations.js'; // Part AO
 import { ConversationRecord } from './record.js';
 import { answerOpenCalls, iterationAgents } from './crash.js';
+import { interruptedResult } from './interruption.js';
 import { firstTurn, resumedStart, resumeNoticeOf, type TurnStart } from './resume.js';
 import { offersForFirstMessage } from './offers.js';
 import { randomUUID } from 'node:crypto';
@@ -1304,6 +1305,18 @@ export class Run {
     }
   }
 
+  /**
+   * REQ-SESSION-094: closes every port this run built (`ToolPort.close`) — the root's and each child's, not a port the
+   * caller handed it — its open calls settled with what cut them off: the rest the run came to, or none named.
+   */
+  private closePorts(): void {
+    const cutOff = interruptedResult(this.restCause, true, '');
+    for (const p of this.ports) {
+      if (p === this.deps.tools) continue;
+      try { p.close?.(cutOff); } catch (cause) { this.deps.warn(`closing a tool port of ${this.sessionId} failed: ${String(cause)}`); }
+    }
+  }
+
   private register(port: ToolPort | null): ToolPort | null {
     if (port) this.ports.add(port);
     return port;
@@ -1752,6 +1765,10 @@ export class Run {
   /** REQ-SESSION-094: the ordered pipeline, each step guarded, the whole of it run even on exception. */
   private async teardown(reasonIn: StopReason): Promise<RunResult> {
     const { writer, owner, bus, clocks } = this.deps;
+    // REQ-SESSION-094: every agent's turn has returned or been given up on, so nothing of this run's tool ports is owed
+    // from here. Each is closed before anything terminal is written: a call still open settles now, and one that returns
+    // later writes nothing through its gate into the finished session, or into a later run's.
+    this.closePorts();
     // PD-ORCH-005 clause 10: a run that comes to rest records its agents' background sessions — a stop and a quit end them,
     // and so does the explicit cancel, which is a stop the user made final (OQ-96). Guarded like every teardown step.
     const ended = this.terminalsEndedBy();

@@ -293,9 +293,10 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
    * `deaf`: the personas whose calls ignore their abort — a provider that does not honour it — so a test can have a call
    * outlive a stop. `hooks`, `drainTimeoutMs` and `publisher` reach the session as their names say; `images` has the
    * model accept image input. `pending`: request ids every port reports as its own live approval or question set, so an
-   * id-routed answer finds a holder.
+   * id-routed answer finds a holder. `closed` collects each port's close (REQ-SESSION-094): the agent, the statement its
+   * open calls are settled with, and how many `session.end` events the session held at that moment.
    */
-  function sessionsWith(script: (persona: string, turn: number, req: ModelRequest) => ScriptedCall, over: { cap?: number | null; childTimeoutMs?: number; childStallTimeoutMs?: number; tool?: TestTool; deaf?: readonly string[]; hooks?: HookPort; drainTimeoutMs?: number; images?: boolean; publisher?: Publisher; pending?: ReadonlySet<string> } = {}) {
+  function sessionsWith(script: (persona: string, turn: number, req: ModelRequest) => ScriptedCall, over: { cap?: number | null; childTimeoutMs?: number; childStallTimeoutMs?: number; tool?: TestTool; deaf?: readonly string[]; hooks?: HookPort; drainTimeoutMs?: number; images?: boolean; publisher?: Publisher; pending?: ReadonlySet<string>; closed?: { agent: string; statement: string; ended: number }[] } = {}) {
     // The scripted client answers by persona and by the number of calls that persona has made.
     const counts = new Map<string, number>();
     const client = new ScriptedModelClient([]);
@@ -325,7 +326,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
         contexts.set(ctx.agentName, ctx);
         let mode: PermissionPreset = selected;
         const held = (id: string): boolean => over.pending?.has(id) ?? false;
-        const base = { cancelPending: () => 0, setMode: (m: string) => { const previous = mode; mode = m as PermissionPreset; return { requested: mode, effective: mode, downgraded: false, reason: '', previous }; }, currentMode: () => mode, answerApproval: held, answerQuestions: held, cancelQuestions: held };
+        const base = { close: (statement: string) => { over.closed?.push({ agent: ctx.agentName, statement, ended: dal.eventsOfKind(ctx.sessionId, 'session.end').length }); }, cancelPending: () => 0, setMode: (m: string) => { const previous = mode; mode = m as PermissionPreset; return { requested: mode, effective: mode, downgraded: false, reason: '', previous }; }, currentMode: () => mode, answerApproval: held, answerQuestions: held, cancelQuestions: held };
         return ctx.delegation
           ? { ...delegationPort(ctx.delegation, ctx.parentId ?? 'root', over.tool, ctx), ...base }
           : { specs: () => [], dispatch: async () => ({ text: '', isError: true, status: 'failed', durationMs: 0, label: '', args: {} }), ...base };
@@ -1316,7 +1317,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     });
 
     /** One background child whose steps the test scripts one by one; each step may wait on the promise it is given. */
-    function scriptedChild(steps: readonly ((n: number) => ScriptedCall)[], over: { childTimeoutMs?: number; summary?: (req: ModelRequest) => ScriptedCall; root?: (turn: number) => ScriptedCall; tool?: TestTool; deaf?: readonly string[]; hooks?: HookPort; drainTimeoutMs?: number } = {}) {
+    function scriptedChild(steps: readonly ((n: number) => ScriptedCall)[], over: { childTimeoutMs?: number; summary?: (req: ModelRequest) => ScriptedCall; root?: (turn: number) => ScriptedCall; tool?: TestTool; deaf?: readonly string[]; hooks?: HookPort; drainTimeoutMs?: number; closed?: { agent: string; statement: string; ended: number }[] } = {}) {
       const seen = { summaries: 0, childSteps: 0 };
       const { sessions, client } = sessionsWith((persona, turn, req) => {
         if (persona === 'orchestrator') return over.root?.(turn) ?? (turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'work', task: 'TASK: work', write_scope: ['src/**'] } }]) : answer('ok'));
@@ -1769,6 +1770,66 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
         finish({ text: 'late', isError: false, status: 'ok', durationMs: 1, label: 'hang', args: {} });
         await new Promise((r) => setTimeout(r, 30));
         expect({ events: dal.eventsFrom(sid, 1, 10_000).length, rows: dal.residentRows(sid).length, row: rootHangRow(sid), record: dal.agentConversation(sid, dal.iterationsOf(sid)[0]!.root_task_id).length }).toEqual(before);
+      });
+    });
+
+    describe('REQ-SESSION-094: a detached call no longer writes through its tool gate or its stream (the repair of a-detached-call-still-writes-through-its-tool-gate.md)', () => {
+      it('teardown closes every port the run built, before the terminal pair, each with the statement its open calls settle with', async () => {
+        const closed: { agent: string; statement: string; ended: number }[] = [];
+        const { sessions } = scriptedChild([() => answer('done')], { closed });
+        const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+        expect((await sessions.running(sid)!).status).toBe('completed');
+        expect(closed.map((c) => c.agent).sort()).toEqual(['orchestrator', 'work']);
+        // Before `session.end`: nothing a port settles can follow the terminal pair.
+        expect(closed.every((c) => c.ended === 0 && c.statement === interruptedResult(null, true, ''))).toBe(true);
+      });
+
+      it('after a stop, a port is closed with the stop\'s statement', async () => {
+        const closed: { agent: string; statement: string; ended: number }[] = [];
+        const g = gate();
+        const { sessions, seen } = scriptedChild([() => ({ parts: [{ hold: g.hold }, ...look().parts] })], { closed });
+        const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+        await settle(() => seen.childSteps === 1);
+        sessions.control({ op: 'cancel', sessionId: sid, args: {} });
+        g.open();
+        await sessions.running(sid)!;
+        expect(closed.map((c) => c.statement)).toEqual([interruptedResult('stop', true, ''), interruptedResult('stop', true, '')]);
+      });
+
+      /** Everything a finished session holds that a straggler could append to. */
+      const holdings = (sid: SessionId) => ({ events: dal.eventsFrom(sid, 1, 10_000).map((e) => e.kind), rows: dal.residentRows(sid), timeline: dal.timelineOf(sid).length, issues: dal.issuesOf(sid).length });
+
+      it('a child\'s model step the stop\'s grace gave up on streams no row and counts no usage when it returns', async () => {
+        const g = gate();
+        // It streams a first word before the stop, so the row it would settle afterwards already exists.
+        const { sessions, seen } = scriptedChild([() => ({ parts: [{ part: { kind: 'text', delta: 'Before. ' } }, { hold: g.hold }, ...answer('Words after the run ended.', { input: 7, output: 3 }).parts] })], { deaf: ['child'] });
+        const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+        await settle(() => seen.childSteps === 1);
+        sessions.control({ op: 'cancel', sessionId: sid, args: {} });
+        await new Promise((r) => setTimeout(r, 20));
+        clock.advance(30_000);
+        await sessions.running(sid)!;
+        expect(byName(sid, 'work')).toMatchObject({ state: 'paused', interruption: 'stop' });
+        expect(dal.residentRows(sid).filter((r) => r.kind === 'agent' && r.name === 'work').map((r) => [r.body, r.settled])).toEqual([['Before. ', 0]]);
+        const before = holdings(sid);
+        g.open();
+        await new Promise((r) => setTimeout(r, 30));
+        expect(holdings(sid)).toEqual(before);
+      });
+
+      it('a root\'s model step the stop\'s grace gave up on streams no row and counts no usage when it returns', async () => {
+        const g = gate();
+        const { sessions } = sessionsWith((persona) => (persona === 'orchestrator' ? { parts: [{ hold: g.hold }, ...answer('Root words after the run ended.', { input: 7, output: 3 }).parts] } : answer('done')), { deaf: ['orchestrator'] });
+        const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+        await new Promise((r) => setTimeout(r, 20));
+        sessions.control({ op: 'cancel', sessionId: sid, args: {} });
+        await new Promise((r) => setTimeout(r, 20));
+        clock.advance(30_000);
+        await sessions.running(sid)!;
+        const before = holdings(sid);
+        g.open();
+        await new Promise((r) => setTimeout(r, 30));
+        expect(holdings(sid)).toEqual(before);
       });
     });
 

@@ -97,6 +97,13 @@ export interface ToolPort {
   cancelQuestions?(requestId: string): boolean;
   /** REQ-CHAT-097: what the whole-session update publishes for this port's conversation. */
   pendingQuestions?(): readonly QuestionPrompt[];
+  /**
+   * REQ-SESSION-094: the run has ended. Every call this port still has open is settled at once, as failed with
+   * `cutOff`, and from here nothing the port's gate would write for any call reaches the session — no settle, no
+   * `tool.finish`, no issue, no audit or timeline entry, no approvals mirror — so a call the stop's grace detached writes
+   * nothing when it returns. Idempotent. Optional because a port with no sink of its own has nothing to close.
+   */
+  close?(cutOff: string): void;
 }
 
 export interface TurnDeps {
@@ -220,6 +227,8 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
    * than dropped with the report it belonged to.
    */
   const observeRequestUsage = (u: PricedUsage): void => {
+    // REQ-SESSION-094: a step the run gave up on and that returned after it ended counts toward nothing.
+    if (deps.detached?.() === true) return;
     usage = { input: usage.input + u.input, output: usage.output + u.output };
     deps.onRequestUsage?.(u);
   };
@@ -421,7 +430,7 @@ async function step(deps: TurnDeps, choice: ModelChoice, messages: readonly Chat
     stall.timer?.cancel();
     stall.timer = clocks.timers.after(STALL_AFTER, () => {
       const row = liveRow();
-      if (row === null) return;
+      if (row === null || deps.detached?.() === true) return;
       stalled = true;
       owner.markStalled(row, toIsoUtc(clocks.wall.instant()));
     });
@@ -448,9 +457,15 @@ async function step(deps: TurnDeps, choice: ModelChoice, messages: readonly Chat
     writer.settleRow(reasoningIndex, reasoning, durationMs === undefined ? {} : { durationMs });
     reasoningIndex = null;
   };
+  /**
+   * REQ-SESSION-094: the run gave up on this step and has ended (`TurnDeps.detached`). Its stream is a binding into the
+   * finished session, so from here it writes and publishes nothing: no row appended, grown or settled.
+   */
+  const detached = (): boolean => deps.detached?.() === true;
   const sink = {
     started: () => { seen = true; timer?.cancel(); armStall(); },
     delta: (d: string) => {
+      if (detached()) return;
       outputArrived();
       // REQ-CHAT-163: a reasoning burst is finished the moment the answer body starts, so its row settles here
       // rather than at the end of the call - a thinking row that stayed live past its own content would keep
@@ -471,6 +486,7 @@ async function step(deps: TurnDeps, choice: ModelChoice, messages: readonly Chat
      * REQ-CHAT-059 keys a thinking row by its START TIME, which is why `startedAt` is stamped on the append.
      */
     reasoning: (d: string) => {
+      if (detached()) return;
       outputArrived();
       reasoning += d;
       if (reasoningIndex === null) {
@@ -496,7 +512,9 @@ async function step(deps: TurnDeps, choice: ModelChoice, messages: readonly Chat
   }
   // REQ-CHAT-164: "when a streamed phase completes, its animation MUST stop where it stands" - settling does that,
   // and no completion row is appended for either phase.
-  settleReasoning();
-  if (index !== null) writer.upsertMessageRow(segment, 'agent', report.text || text, true, {});
+  if (!detached()) {
+    settleReasoning();
+    if (index !== null) writer.upsertMessageRow(segment, 'agent', report.text || text, true, {});
+  }
   return { report, unresponsive: unresponsive && !signal.aborted };
 }

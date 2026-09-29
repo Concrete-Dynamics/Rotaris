@@ -240,7 +240,9 @@ hard-cancel budget — and leaves each unfinished child `paused` where it stood 
 execution record `paused`, and the iteration open (above). A child whose `child_timeout` expired during the rest ends
 `failed` as it would have without one, unsummarised; one whose execution raised is left `paused`, as the root is
 (**OQ-96**). An execution a stop's grace gave up on is **detached**: when it returns it writes nothing — no row, no
-record, no report (REQ-SESSION-094). **The root is bounded the same way (REQ-SESSION-092 / REQ-MONITOR-129, 2026-09-29):**
+record, no report (REQ-SESSION-094). Its model step writes nothing either: while `TurnDeps.detached` reads true the
+step streams no row, settles none and counts no usage (2026-09-29), and teardown closes its tool port (§6), so its gate
+writes nothing when its call returns. **The root is bounded the same way (REQ-SESSION-092 / REQ-MONITOR-129, 2026-09-29):**
 `turn()` awaits the root's turn no longer than `stopGraceSpent`, which settles `STOP_GRACE` after the first stop
 request, forced or not. A root still in a call then is detached like a child — its turn's `detached` reads true, so it
 writes nothing when the call returns — and the rest that follows waits for no child execution again
@@ -778,7 +780,12 @@ crash-left session too, which that revision prescribes only on a paused one (OQ-
 
 ## 6. End
 
-`teardown(reason)` runs every step guarded even on exception (REQ-SESSION-094): the pause's tool deadline cancelled; for a
+`teardown(reason)` runs every step guarded even on exception (REQ-SESSION-094): **every tool port this run built closed
+first** (`Run.closePorts` → `ToolPort.close(cutOff)`, 2026-09-29): a call a port still has open — only one the stop's
+grace detached can be — settles at once in the tool-call ring and with its `tool.finish`, as failed with the rest's
+interrupted statement, and from then on nothing the port's gate writes reaches the session (`writerSink` in
+`run-host/tools.ts`) and no `post_tool` hook fires for its call, so a straggler writes nothing into the finished session
+or a later run of it; the pause's tool deadline cancelled; for a
 run at rest, its agents' background sessions recorded and, for a stop or a quit, ended (PD-ORCH-005 clause 10) → the stop reason classified to the
 terminal result (REQ-MONITOR-301) and the persisted status (REQ-SESSION-093 / REQ-MONITOR-029) →
 `session_end` hooks → `run_end` timeline entry → pending publications flushed → **the terminal transaction**

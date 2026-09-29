@@ -225,7 +225,8 @@ that honours the abort the moment to record its step.
 root's detach flag, the children's spent grace, the cut-off answer under the cancel, the grace counted from a forced
 first request) was reverted in turn and turned exactly its case red. **Not executed:** a live provider or tool that
 ignores its abort; the straggling call's own tool gate, which is a separate path
-(`../../defects/a-detached-call-still-writes-through-its-tool-gate.md`). **Nothing in the decision changes;** its hard
+(`../../defects/fixed/a-detached-call-still-writes-through-its-tool-gate.md`, repaired the same day: teardown closes
+every tool port first, and a detached model step writes nothing). **Nothing in the decision changes;** its hard
 cancel now reaches the root.
 
 ## Main is gone only after the run host — 2026-09-28, first execution (R-062)

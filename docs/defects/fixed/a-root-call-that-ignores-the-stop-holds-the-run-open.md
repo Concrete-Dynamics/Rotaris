@@ -42,7 +42,7 @@ that returns after the run ended writes no event, row or record entry. All five 
 (the run never ended), and reverting each limb in turn turned exactly its case red. ADR-0014 carries the first
 execution, and OQ-96's bullet "An execution the stop's grace gives up on" is reported back in place.
 
-What stays open: the tool gate's own writes when the detached call returns are
-[`a-detached-call-still-writes-through-its-tool-gate.md`](../a-detached-call-still-writes-through-its-tool-gate.md)'s.
-The root's calls before the detach join no session total, as a raise's did not before
+The tool gate's own writes when the detached call returns were
+[`a-detached-call-still-writes-through-its-tool-gate.md`](a-detached-call-still-writes-through-its-tool-gate.md)'s,
+repaired the same day. What stays open: the root's calls before the detach join no session total, as a raise's did not before
 ([`a-roots-calls-before-a-crash-never-reach-the-session-total.md`](../a-roots-calls-before-a-crash-never-reach-the-session-total.md)).

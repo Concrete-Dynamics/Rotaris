@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**A detached call writes nothing through its tool gate or its stream (REQ-SESSION-094, 2026-09-29, R-067).** `ToolPort`
+gains `close(cutOff)`, and `Run.teardown` closes every port the run built before anything terminal is written: the
+run host's `writerSink` settles each call its gate still has open, as failed with the rest's interrupted statement, and
+drops every write after it, and the port's gate fires no `post_tool` hook after it. A model step whose `detached` reads true streams no row, settles none and counts no usage.
+This repairs `a-detached-call-still-writes-through-its-tool-gate.md`. The **runtime view**'s §2 and §6 say so. No
+package, edge, process, channel, message kind or store column changed.
+
 **A root call that ignores the stop no longer holds the run open (REQ-SESSION-092, REQ-MONITOR-129, REQ-SESSION-094,
 2026-09-29, R-067).** `Run.turn` awaits the root's turn no longer than the stop's 30 s grace, counted from the first
 stop request (`stopGraceSpent`); a root still in a call then is detached as a child execution is, left `paused` by a

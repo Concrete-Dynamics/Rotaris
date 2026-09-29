@@ -45,6 +45,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**A retry the dispatch layer absorbs is written to the session log (OQ-110 ruled under R-067, 2026-09-29).** REQ-CONFIG-086's
+`num_retries` stay the dispatch layer's, spent inside the model client before the ladder; the client's decorated fetch
+now reports each retry as it is sent (`ModelRequest.onRetry`, with the status met and the delay waited on the monotonic
+clock `AiSdkClientOptions` now takes), `DefaultAgentBackend` forwards it to `TurnSink.retried`, and the turn writes
+`dispatchRetryLine` through the run's `warn` to the session log. This repairs `a-retry-the-dispatch-layer-absorbs-leaves-no-trace.md`.
+The **runtime view**'s §3 (the ladder's paragraph) says so. No package, edge, process, channel, message kind, command or
+store column changed.
+
 **An explicit cancel is durable across a crash (PD-ORCH-005 clause 3 with REQ-MONITOR-126, OQ-103's last question ruled
 under R-067, 2026-09-29).** `iterations.cancel_accepted_at` (store **v27**, appended) is written the moment the reserved run
 id's `cancelAgent` is accepted (`SessionWriter.recordCancelAccepted`), and by `Run.turn` for an iteration it opens after. An

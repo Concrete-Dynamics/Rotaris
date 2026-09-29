@@ -5221,6 +5221,19 @@ corrected in place, its falsified reason kept beside the replacement, and the li
 can see: that the run survived the refusals, not that the ladder handled them. Nothing is built by the ruling; the
 session-log line is owed to the note that records L3, and the check to the note that records H3.
 
+**Built 2026-09-29 under R-067 — the session-log line.** The decorated fetch of `packages/model/src/ai-sdk-client.ts` is the
+one place a dispatch-layer retry is seen: one call makes one request per attempt, so a request that follows a failed
+attempt of the same call is a retry. The client calls `ModelRequest.onRetry` as the retry is sent, with the status the
+attempt before it met (or none, and the failure beneath it, for a connection failure) and the delay waited, **measured on
+the monotonic clock** (`AiSdkClientOptions.monotonic`) rather than recomputed from the SDK's backoff rule, which the next pin
+may change. `DefaultAgentBackend` forwards it to `TurnSink.retried`, and the turn writes `dispatchRetryLine` through the
+run's `warn` — so the line is in the session log at its default WARNING level, and in the application log beside it. The
+level is this build's reading: the ruling names the session log and not a level, and at INFO the line would be absent from
+every session log left at REQ-SESSION-142's default. Nothing is added to the ladder; no issue and no timeline entry is
+written for an absorbed retry. Pinned by `ai-sdk-client.test.ts` (the two cases "OQ-110 …: each retry the dispatch layer
+absorbs is reported …" and "… a connection failure …") and `run/turn.test.ts` ("OQ-110 …: a retry the dispatch layer
+absorbed is written to the session log …"), each failing with the report withdrawn.
+
 **OQ-111 — Which part of a long child's transcript does the report summariser read?** *(REQ-ORCH-110, which caps the transcript the report-producing pass is given at 12,000 characters in total and 2,000 per event, and does not say which part is kept; REQ-ORCH-108, which has parents consume the report in place of the transcript; REQ-ORCH-109, whose runner-owned fields the summariser cannot write; `PD-LIBRARY-001`, the report's commands. Raised 2026-09-29 from the duress live run's finding D1 under [R-067](../product/requests.md#r-067), and ruled in the same entry. Raised as OQ-110 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
 
 `packages/engine/src/children/report.ts` builds the pass's transcript by joining the events and cutting the result to

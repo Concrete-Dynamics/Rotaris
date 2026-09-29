@@ -1,4 +1,4 @@
-import { err, millis, ok, type Result, type TimerHandle, type Timers } from '@rotaris/kernel';
+import { err, millis, ok, type MonotonicClock, type Result, type TimerHandle, type Timers } from '@rotaris/kernel';
 import { APICallError, jsonSchema, Output, streamText, tool, type LanguageModel, type ModelMessage, type ToolSet } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
@@ -23,6 +23,8 @@ import { costAskFor, reportedCostExtractor, reportedCostFrom } from './reported-
  *   the redacting hook (REQ-PROVIDER-131). It is a security-relevant
  *   chokepoint (ADR-0027 consequence 4).
  * - The retry count is the request's (REQ-PROVIDER-089), never the SDK's own.
+ * - Each retry the SDK absorbs is reported through `req.onRetry` as it is sent, with what the attempt
+ *   before it met and the delay it waited (OQ-110): the decorated fetch is the one place a retry is seen.
  * - An error preserves the HTTP status and the provider's message, cut to 500
  *   characters (REQ-PROVIDER-071, REQ-ORCH-091/092).
  * - `timeoutMs` is an IDLE bound, re-armed on every part the provider streams
@@ -48,6 +50,12 @@ export interface AiSdkClientOptions {
    * the one production site — `apps/desktop/src/run-host/configuration.ts` — already holds clocks.
    */
   readonly timers: Timers;
+  /**
+   * ADR-0006's monotonic clock, which the delay before a dispatch-layer retry is measured on (OQ-110). Required for
+   * the reason `timers` is: the SDK's backoff is its own (`retry-after-ms`, `retry-after`, else 2 s doubling), and
+   * the delay it waited is read off this clock rather than recomputed from a rule the next pin may change.
+   */
+  readonly monotonic: MonotonicClock;
 }
 
 const SECRET_HEADER = /authorization|api-key|x-api-key|cookie/i;
@@ -151,13 +159,35 @@ export function outputDowngrade(warnings: readonly unknown[], output: OutputSpec
   return null;
 }
 
+/** OQ-110: a request that met no response, as one line — `fetch failed` says nothing without the cause beneath it. */
+function failureOf(cause: unknown): string {
+  const e = cause as { message?: unknown; cause?: { message?: unknown; code?: unknown } } | null;
+  const message = typeof e?.message === 'string' ? e.message : String(cause);
+  const under = typeof e?.cause?.code === 'string' ? e.cause.code : typeof e?.cause?.message === 'string' ? e.cause.message : null;
+  return (under === null || under === '' || message.includes(under) ? message : `${message} (${under})`).slice(0, 200);
+}
+
 export class AiSdkModelClient implements ModelClient {
   constructor(private readonly opts: AiSdkClientOptions) {}
 
   private languageModel(req: ModelRequest): LanguageModel {
     // The one decorated fetch. The credential is resolved per request, inside the request path.
     const base = this.opts.fetch ?? fetch;
+    /**
+     * OQ-110: the SDK retries a failed attempt inside `streamText` (REQ-CONFIG-086's `num_retries`, handed over as
+     * `maxRetries`) and says nothing to its caller unless every retry fails. One call makes one request per attempt
+     * through this fetch — the tool set carries no `execute`, so there is one step — so a request that follows a
+     * failed attempt of the same call IS a retry, and the failure and the instant it was met are all it needs.
+     */
+    let failed: { readonly status: number | null; readonly failure?: string; readonly at: number } | null = null;
+    let retried = 0;
     const decorated: FetchLike = async (input, init) => {
+      if (failed !== null) {
+        retried += 1;
+        const delayMs = Math.max(0, Math.round(this.opts.monotonic.now() - failed.at));
+        req.onRetry?.({ attempt: retried, of: req.retries, status: failed.status, ...(failed.failure === undefined ? {} : { failure: failed.failure }), delayMs });
+        failed = null;
+      }
       const credential = await req.resolveCredential();
       const headers = new Headers(init?.headers);
       for (const [k, v] of Object.entries(this.opts.headers ?? {})) headers.set(k, v);
@@ -165,7 +195,15 @@ export class AiSdkModelClient implements ModelClient {
       if (credential) headers.set('authorization', `Bearer ${credential}`);
       const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
       this.opts.onRequest?.({ url, method: init?.method ?? 'POST', headers: redactHeaders(Object.fromEntries(headers.entries())) });
-      return base(input, { ...init, headers });
+      try {
+        const response = await base(input, { ...init, headers });
+        if (!response.ok) failed = { status: response.status, at: this.opts.monotonic.now() };
+        return response;
+      } catch (cause) {
+        // An abort is the call ending, never an attempt the SDK retries.
+        if (init?.signal?.aborted !== true) failed = { status: null, failure: failureOf(cause), at: this.opts.monotonic.now() };
+        throw cause;
+      }
     };
     if (req.model.dialect === 'responses') {
       const openai = createOpenAI({ baseURL: req.model.baseUrl ?? this.opts.baseUrl, apiKey: 'resolved-per-request', fetch: decorated });

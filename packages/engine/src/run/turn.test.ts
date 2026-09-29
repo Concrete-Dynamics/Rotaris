@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling } from '@rotaris/store';
-import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ScriptedCall } from '@rotaris/model';
+import { answer, DefaultAgentBackend, ScriptedModelClient, toolCalls, type ModelClient, type ScriptedCall } from '@rotaris/model';
 import { RUN_CONFIG_DEFAULTS, Sessions, type ModeChange, type PortToolCall, type PortToolResult, type Publisher, type RunConfig, type SessionsDeps, type ToolPort } from '../index.js';
 import { conversationOf } from './record.js';
 import { interruptedResult } from './interruption.js';
@@ -63,13 +63,13 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
 
   const config = (over: Partial<RunConfig> = {}): RunConfig => ({ ...RUN_CONFIG_DEFAULTS, model: MODEL, credentialFor: () => async () => 'k', ...over });
 
-  function sessionsWith(calls: ScriptedCall[], port: ToolPort | null, extra: { attended?: boolean; runtime?: { permissionMode: string; pauseToolDeadlineMs?: number }; terminals?: SessionsDeps['terminals']; hooks?: HookPort } = {}) {
+  function sessionsWith(calls: ScriptedCall[], port: ToolPort | null, extra: { attended?: boolean; runtime?: { permissionMode: string; pauseToolDeadlineMs?: number }; terminals?: SessionsDeps['terminals']; hooks?: HookPort; wrap?: (c: ModelClient) => ModelClient } = {}) {
     const client = new ScriptedModelClient(calls);
     let n = 0;
     const logLines: string[] = [];
     const sessions = new Sessions({
       clocks: clock, publisher: NONE, pid: 77, host: HOST, retentionCap: 20_000, warn: (m) => warnings.push(m), mintSessionId: () => `S${++n}`,
-      model: { backend: new DefaultAgentBackend(client), config: config() }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
+      model: { backend: new DefaultAgentBackend(extra.wrap ? extra.wrap(client) : client), config: config() }, sessionFilesDir: (_d, sid) => join(dir, 'sessions', sid),
       ...(port ? { tools: () => port } : {}), attended: () => extra.attended ?? true,
       runtime: { permissionMode: extra.runtime?.permissionMode ?? 'ask', allowUnsandboxedAutonomous: false, sandbox: { requested: false, available: false, backend: '' }, sessionLogLevel: 'WARNING', ...(extra.runtime?.pauseToolDeadlineMs === undefined ? {} : { pauseToolDeadlineMs: extra.runtime.pauseToolDeadlineMs }) },
       sessionLogAppender: () => (line) => { logLines.push(line); },
@@ -254,6 +254,27 @@ describe('engine/run — the tool loop inside an iteration (REQ-TOOLS-180, REQ-O
     sessions.control({ op: 'cancel', sessionId: sid, args: {} });
     expect(logLines.length).toBe(before);
     expect(logLines.every((l) => /^\d{4}-\d\d-\d\dT.*(WARNING|ERROR)/.test(l))).toBe(true);
+  });
+
+  it('OQ-110 (REQ-CONFIG-086, REQ-SESSION-142): a retry the dispatch layer absorbed is written to the session log with the status it met and the delay it waited', async () => {
+    const { port } = fakePort();
+    // The client stands where the AI-SDK adapter stands: it absorbed a 429 and a 500 before the answer it streams.
+    const wrap = (inner: ModelClient): ModelClient => ({
+      stream: (req) => {
+        req.onRetry?.({ attempt: 1, of: req.retries, status: 429, delayMs: 2_008 });
+        req.onRetry?.({ attempt: 2, of: req.retries, status: 500, delayMs: 4_008 });
+        return inner.stream(req);
+      },
+    });
+    const { sessions, logLines } = sessionsWith([answer('recovered')], port, { wrap });
+    const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+    expect((await sessions.running(sid)!).status).toBe('completed');
+    const retried = logLines.filter((l) => /retried by the dispatch layer/.test(l));
+    expect(retried).toHaveLength(2);
+    expect(retried[0]).toMatch(/^\d{4}-\d\d-\d\dT\S+ WARNING .* on p\/m met HTTP 429 and waited 2008 ms before retry 1 of 5 \(REQ-CONFIG-086/);
+    expect(retried[1]).toMatch(/met HTTP 500 and waited 4008 ms before retry 2 of 5/);
+    // The ladder was never reached: no issue and no timeline entry claims it (OQ-110 adds nothing to it).
+    expect(dal.eventsFrom(sid, 1, 10_000).map((e) => e.kind).filter((k) => /issue|wait/.test(k))).toEqual([]);
   });
 
   describe('PD-ORCH-005 clauses 2, 9 and 10: what a pause does, and what becomes of the background sessions', () => {

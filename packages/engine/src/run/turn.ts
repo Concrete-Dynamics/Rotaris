@@ -3,13 +3,13 @@ import { millis, toIsoUtc, type Clocks, type TimerHandle } from '@rotaris/kernel
 /** REQ-CHAT-164: ten seconds of provider silence on a call in flight. */
 const STALL_AFTER = millis(10_000);
 import { terminalRowStreamId, type ApprovalOption, type Interruption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt } from '@rotaris/contracts';
-import type { AgentBackend, ChatMessage, ContentPart, ModelRef, ThinkingLevel, ToolSpec, TurnReport } from '@rotaris/model';
+import type { AgentBackend, ChatMessage, ContentPart, DispatchRetry, ModelRef, ThinkingLevel, ToolSpec, TurnReport } from '@rotaris/model';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { SessionWriter } from '../session-writer.js';
 import type { LoopSupervisor, SupervisorEscalation } from './supervisor.js';
 import { resilientStep, type StepOutcome, type TurnResilience } from './ladder.js';
 import { priceRequest, type PricedUsage } from './pricing.js';
-import type { ModelChoice } from './resilience.js';
+import { providerIdentity, type ModelChoice } from './resilience.js';
 import { CompressionRunner, type TurnCompression } from './compression.js';
 import { Conversation, type ConversationRecorder } from './conversation.js';
 import { interruptedResult } from './interruption.js';
@@ -422,6 +422,19 @@ export async function runTurn(deps: TurnDeps, task: string | null, history: read
 }
 
 /**
+ * OQ-110 (ruled 2026-09-29, R-067): the session-log line for one retry the dispatch layer absorbed. The dispatch
+ * layer's retries (REQ-CONFIG-086's `num_retries`, default 5) come before the resilience ladder (REQ-ORCH-091/092),
+ * which takes over only when they are exhausted, so a retry absorbed there records no issue and no timeline entry —
+ * this line is the one trace it leaves, with the status the failed attempt met and the delay waited before the retry.
+ * It goes out through the run's `warn`, which the session log takes at its default WARNING level (REQ-SESSION-142).
+ */
+export function dispatchRetryLine(agentName: string, provider: string, modelId: string, r: DispatchRetry): string {
+  const met = r.status === null ? `a connection failure${r.failure === undefined ? '' : ` (${r.failure})`}` : `HTTP ${r.status}`;
+  // The provider as the ladder's own lines name it (`providerIdentity`), so the two layers' lines about one call agree.
+  return `model request retried by the dispatch layer: ${agentName} on ${provider}/${modelId} met ${met} and waited ${r.delayMs} ms before retry ${r.attempt} of ${r.of} (REQ-CONFIG-086 num_retries; the ladder of REQ-ORCH-091/092 takes over only when they are exhausted)`;
+}
+
+/**
  * One model step streamed into one `agent` row: first delta appends it unsettled, growth ticks, the end settles it.
  * The choice carries the model, its reasoning level and REQ-ORCH-145's per-model timeout and retry count. With
  * `unresponsiveMs` set, a timer on the clock port aborts the call when no event of any kind arrived within it
@@ -526,6 +539,8 @@ async function step(deps: TurnDeps, choice: ModelChoice, messages: readonly Chat
     },
     usage: () => { outputArrived(); },
     event: (kind: string) => { deps.onModelEvent?.(kind); },
+    // OQ-110: a retry the dispatch layer absorbed is written where a person diagnosing the run reads (REQ-SESSION-142).
+    retried: (r: DispatchRetry) => { deps.warn(dispatchRetryLine(deps.agentName, providerIdentity(deps.resilience?.catalogue ?? [], choice.model), choice.model.modelId, r)); },
   };
   let report: TurnReport;
   try {

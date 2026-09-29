@@ -540,7 +540,14 @@ inclusive). If it did, and the child then ends failed on that timeout, the store
 the workspace paths its own `write_file`/`haet_edit`/`haet` calls changed with `ok` (the name matched in lower case, as the
 gate's fallback dispatches it; resolved lexically against the root; both attempts, in the order first changed, each once), and — unless the child is itself a continuation — the offer naming `continuation_of`. The report block and
 `background_output` render it after the result text; nothing resumes the child. See §4 for the continuation.
-Per-model `timeout` / `num_retries` ride the choice (REQ-ORCH-145). On resume the memory is
+Per-model `timeout` / `num_retries` ride the choice (REQ-ORCH-145). **`num_retries` is the dispatch layer's, not the
+ladder's** (REQ-CONFIG-086, default 5; OQ-110): the model client hands it to the SDK as `maxRetries`, so a 429, a 5xx or a
+connection failure is retried inside the call, with the SDK's own backoff, before any rung above sees it, and the ladder
+takes over only when those retries are exhausted. Each retry absorbed there is reported as it is sent — the decorated
+fetch sees a request follow a failed attempt of the same call, and calls `ModelRequest.onRetry` with the status met and the
+delay waited on the monotonic clock; `DefaultAgentBackend` forwards it to `TurnSink.retried`, and the turn writes it through
+the run's `warn` to the session log at WARNING (`dispatchRetryLine`, REQ-SESSION-142) — no issue and no timeline entry,
+because the ladder was not reached. On resume the memory is
 rehydrated from the timeline (`ResilienceMemory.rehydrate`), so a continuation never returns to an exhausted pair and keeps the
 user's choice (REQ-SESSION-196).
 

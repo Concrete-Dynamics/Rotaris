@@ -8,8 +8,8 @@ agent's "This task" scope and persona window (`rowsOf`, `scopedRows`), and its a
 as well as its own. Only `followedAgent` prefers the child, since it looks a row's name up among the children first.
 
 The ledger keeps a direct child of the root off the current root's canonical name (`siblingNames.add(root.canonicalName)`
-in `ChildLedger.spawn`). It does not keep a grandchild off that name. Nor does it keep a child off the name of an earlier root
-that differs from the current one, as a root resumed as the entry role does (OQ-97): such a child is named after the
+in `ChildLedger.spawn`). It does not keep a grandchild off that name. Nor does it keep a child off the name of an earlier
+root that differs from the current one, as a root resumed as the entry role does (OQ-97): such a child is named after the
 earlier root when its model-chosen task name canonicalises to it.
 
 For the entry persona this was already so before the repair of
@@ -33,5 +33,5 @@ artifacts) is not met either. REQ-ORCH-044 makes a name unique only under its pa
 - `packages/ui/src/agents.ts` — `ownRow`, `rowsOf`, `artifactNames`, `agentArtifacts`, `personaArtifacts`, and
   `followedAgent`, the one reading that prefers a child.
 - `packages/ui/src/TranscriptSurface.tsx` — `scopedRows`.
-- `packages/engine/src/children/ledger.ts` — `ChildLedger.spawn`'s sibling names, which hold the current root's canonical name
-  for a root's child only.
+- `packages/engine/src/children/ledger.ts` — `ChildLedger.spawn`'s sibling names, which hold the current root's canonical
+  name for a root's child only.

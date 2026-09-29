@@ -532,12 +532,13 @@ describe('PD-ORCH-005 clause 20: the handoff prefers the root\'s own artifact', 
 
   /*
    * Found by the fifth review of the repair of the-run-level-agent-is-known-by-its-entry-persona-alone.md: a plan cycle's
-   * root has no iteration row (REQ-ORCH-153), so the session named it only while the process that ran it held its run
-   * (`Run.currentRoot`). Reopened in a fresh process, a session parked at the gate named no root, and the plan cycle root's
-   * publish — recorded under its canonical name since the repair of a-roots-publish-names-its-persona-as-its-author.md,
-   * where it had carried the persona the surfaces know the run-level agent by — was no agent's while the user reviewed
-   * the plan. A root's publish carries its task id as its conversation (OQ-106), so a publish whose conversation is no
-   * child's and no iteration's root is the publish of a root with no iteration row, and names it.
+   * root has no iteration row (REQ-ORCH-153), so the session named it only through its live run (`Run.currentRoot`), which
+   * the session lets go of once `start()` settles — as the park does. A session at the gate named no root, in the process
+   * that parked it and reopened in a fresh one, and the plan cycle root's publish — recorded under its canonical name since
+   * the repair of a-roots-publish-names-its-persona-as-its-author.md, where it had carried the persona the surfaces know the
+   * run-level agent by — was no agent's while the user reviewed the plan. A root's publish carries its task id as its
+   * conversation (OQ-106), so a publish whose conversation is no child's and no iteration's root is the publish of a root
+   * with no iteration row, and names it.
    */
   describe('REQ-LIBRARY-093 with REQ-MONITOR-044 and OQ-106: a plan cycle\'s root is named by its publishes once the process that ran it is gone', () => {
     const publishing = (ops: ArtifactOps | undefined): ToolPort => ({

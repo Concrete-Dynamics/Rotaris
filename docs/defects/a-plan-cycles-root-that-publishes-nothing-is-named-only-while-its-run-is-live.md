@@ -23,10 +23,12 @@ It needs all of the following:
 - plan mode;
 - a persona id the canonicaliser rewrites (every built-in id is its own canonical name);
 - a plan cycle's root that read an artifact of the session and published none;
-- no iteration root of the session with the same canonical name;
+- no other root of the session with the same canonical name that the session names: an iteration's, or a plan
+  cycle's that published;
 - a surface that reads the session after the cycle parked or ended.
 
-Its rows are unaffected, since they carry the persona the surfaces know the run-level agent by.
+Its rows are unaffected where its persona is the entry persona a surface knows the run-level agent by: a plan cycle's root
+is always a fresh root, named by its persona.
 
 Established on 2026-09-29, while repairing the fifth review's finding on that note, with a throwaway case that was not
 kept. A plan cycle's root of `Lead Planner` read an artifact and parked; the artifact's `consumed_by` read
@@ -35,8 +37,9 @@ kept. A plan cycle's root of `Lead Planner` read an artifact and parked; the art
 ## Specs
 
 REQ-MONITOR-044 (an agent carries its "produced and received artifact ids"), REQ-MONITOR-052 and REQ-MONITOR-069
-(artifact links in the inspector and the instance tab) and REQ-MONITOR-068 (the persona-wide artifacts card): the received
-link is missing. REQ-LIBRARY-093 and REQ-LIBRARY-099 are why the read carries the canonical name.
+(artifact links in the inspector and the instance tab): the received link is missing. REQ-LIBRARY-093 and REQ-LIBRARY-099
+are why the read carries the canonical name. REQ-MONITOR-068's persona-wide card lists what an instance produced, so it
+is not affected.
 
 ## Relevant files
 

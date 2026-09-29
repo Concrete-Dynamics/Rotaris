@@ -34,3 +34,9 @@ Recurred again 2026-09-29, twice more. The verifier's first attempt on this bran
 (started 22:03:45, sandbox `/tmp/rotaris-live-run/2026-09-29T22-03-45-462Z`) was swept by the same worktree's live run
 started at 22:08:13. It died reading `faults-stall`'s store back (`expected one workspace database … found 0`, at
 `readSession` from the stall scenario), after `faults-ladder` had run.
+
+Recurred a fourth time the same evening. The repairer's round-1 rerun of `--only=faults,edit` on `fix-traffic-proxy`
+(started 22:44:39, sandbox `/tmp/rotaris-live-run/2026-09-29T22-44-40-230Z`) was swept by the
+`/home/user/Rotaris-crw-wt-termout` live run (`--only=terminal`) that started at 22:46:42, and died at `readSession` with
+`expected one workspace database … found 0` before any check was printed. The rerun that followed was held until no other
+worktree's `node …/live-run.mjs` process was running — a workaround at the caller, not a repair of the sweep.

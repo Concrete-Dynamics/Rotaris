@@ -53,3 +53,13 @@ The teardown's `child_result` and `child_conversation_closed` were added in the 
 the first form wrote only `child_end` and `child_completed`, which left REQ-ORCH-098's "whether or not its execution
 raised … its conversation is closed, a `child_conversation_closed` timeline event is emitted" unmet. Both tests now
 assert the three entries, and both fail with the two lines removed from `settleRaised`.
+
+**Two edges this repair leaves, stated rather than hidden.**
+- *A raise outside the turn while the run is coming to rest, before it has detached.* `settleRaised` ends such a child
+  `failed`, where PD-ORCH-005 would leave an unfinished agent `paused`. The path has not been shown reachable: a raise
+  in the stretch before the turn happens before any rest could matter to it, and one in the settle after the turn comes
+  after the child has answered. Choosing `paused` would be choosing a rest behaviour the directive does not state, so
+  the reading built is REQ-ORCH-052's settle.
+- *A raise after the child's own terminal transition.* `settleRaised` leaves a terminal child as it is and does not call
+  the scheduler's terminal callbacks, so a parent waiting on it is not released. Recorded in
+  [`a-raise-after-a-childs-terminal-transition-never-releases-its-parent.md`](../a-raise-after-a-childs-terminal-transition-never-releases-its-parent.md).

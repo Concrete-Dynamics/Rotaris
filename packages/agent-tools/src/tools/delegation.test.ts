@@ -51,3 +51,34 @@ describe('delegate — suppress_auto_context (REQ-TOOLS-152)', () => {
     expect('suppressAutoContext' in seen[2]!).toBe(false);
   });
 });
+
+/**
+ * PD-ORCH-005 clause 22 / PD-TOOLS-006 revision 3: `session_id` names a settled child of the caller, which the follow-up
+ * resumes from its record with the call's `task` as its next user message. The tool carries the id to the engine's port.
+ */
+describe('delegate — session_id (REQ-TOOLS-152, PD-ORCH-005 clause 22)', () => {
+  function capture() {
+    const seen: Parameters<DelegationPort['delegate']>[1][] = [];
+    const port: DelegationPort = {
+      delegate: async (_parent, req) => { seen.push(req); return { status: 'queued', canonicalName: req.taskName, taskId: req.sessionId ?? 'bg_00000002', message: 'Accepted.' }; },
+      backgroundOutput: () => ({ status: 'not_found', state: '', text: '' }),
+      waitForTasks: async () => ({ immediate: true, requested: 0, text: '' }),
+    };
+    return { seen, tool: delegateTool(port, 'root:1') };
+  }
+  const ctx = {} as ToolContext;
+
+  it('REQ-TOOLS-152: a call that names a session_id carries it to the port; one that names none carries nothing', async () => {
+    const { seen, tool } = capture();
+    const followUp = await tool.execute(tool.schema.parse({ persona: 'coder', task_name: 'build', task: 'TASK: and the tests?', session_id: 'bg_00000001' }), ctx);
+    await tool.execute(tool.schema.parse({ persona: 'coder', task_name: 'fresh', task: 'TASK: other' }), ctx);
+    expect(seen[0]!.sessionId).toBe('bg_00000001');
+    expect('sessionId' in seen[1]!).toBe(false);
+    // The observation names the task id the follow-up resumed: the child's own.
+    expect(followUp.text).toContain('task_id: bg_00000001');
+  });
+
+  it('tells the model what the argument does', () => {
+    expect(capture().tool.description).toMatch(/session_id/);
+  });
+});

@@ -320,6 +320,16 @@ export class ChildLedger {
     if (r.ok) return { ok: true, row: r.value };
     return { ok: false, reason: r.error.code === 'illegal-move' ? r.error.reason : `recording failed: ${r.error.code}` };
   }
+  /**
+   * PD-ORCH-005 clause 22: a settled child followed up moves back to `queued` with `messages` joining its record — the
+   * writer's one transaction. A refusal names both states and changes nothing.
+   */
+  followUp(taskId: string, messages: readonly unknown[]): { ok: true; row: ChildRow } | { ok: false; reason: string } {
+    const row = this.get(taskId);
+    const r = this.deps.writer.followUpChild(taskId, row?.iteration ?? this.deps.iteration, messages);
+    if (r.ok) return { ok: true, row: r.value };
+    return { ok: false, reason: r.error.code === 'illegal-move' ? r.error.reason : `recording failed: ${r.error.code}` };
+  }
   claimStart(taskId: string): boolean {
     const row = this.get(taskId);
     const r = this.deps.writer.claimChildStart(taskId, row?.canonical_name ?? taskId);

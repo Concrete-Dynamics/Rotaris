@@ -2132,7 +2132,7 @@ file to `codebase-analyst`, a persona that holds no file-writing tool, with that
 accepted, the child ran for 2 min 47 s and could only answer that it had no file-writing tool, its report still read
 `succeeded`, and a second child was commissioned for the same file. A refusal at the call moves that discovery to the
 moment the parent can still choose. And `session_id` was accepted and dropped
-([`delegate-drops-session-id-and-suppress-auto-context.md`](../defects/delegate-drops-session-id-and-suppress-auto-context.md)),
+([`delegate-drops-session-id-and-suppress-auto-context.md`](../defects/fixed/delegate-drops-session-id-and-suppress-auto-context.md)),
 so a caller that set it was told nothing and got a fresh child. What it costs:
 - a parent can no longer give a read-only child a scope for coordination alone;
 - a persona whose only writing tools are ones the claim does not fence — the code-intelligence server's editing tools,
@@ -2197,6 +2197,25 @@ revision 3 as [R-067](requests.md#r-067).*
 > to `codebase-analyst`, the finding's own shape, and one given to `verifier` were both refused, and each task went next
 > to a writer (`docs-writer`, `tester`). No alias was delegated live. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **First execution of revision 3's `session_id`, 2026-09-29, built under [R-067](requests.md#r-067) with `PD-ORCH-005`
+> clause 22:** the refusal and what `session_id` names were built as written. `IterationChildren.followUp` refuses, with
+> status `rejected`, no record touched and no task id:
+> - an id that is no task id of the caller's own children;
+> - a child that has not ended;
+> - a child its `child_timeout` cut off, with a reason that names `continuation_of`.
+>
+> The text met the code in two places, and [OQ-131](../architecture/open-questions.md) records the reading built for
+> each:
+> - "names no settled child of the calling agent" is one reason for an unknown id and for another agent's child alike.
+>   REQ-TOOLS-155's parent scoping reads another's child as none of the caller's, as `background_output` does.
+> - "cut off" is read from the child's stored report: a `timeout` error, or `PD-ORCH-004`'s `cut_off` block.
+>
+> The follow-up re-claims the child's stored `write_scope` as revision 2 has a resumed child do.
+>
+> **What was measured.** Scripted end-to-end cases in `children.test.ts`, each red on the code before the repair, where
+> the id was dropped and a fresh child spawned. **What was not measured.** No built-app or live run set `session_id`. The
+> row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 
@@ -2568,9 +2587,9 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 > Two defects were read and left unrepaired:
 > - [`a-graceful-stop-persists-paused-where-one-requirement-says-stopped.md`](../defects/fixed/a-graceful-stop-persists-paused-where-one-requirement-says-stopped.md),
 >   which is still the corpus's contradiction; *settled 2026-09-29 by revision 5's clause 21 ([R-067](requests.md#r-067))*;
-> - [`delegate-drops-session-id-and-suppress-auto-context.md`](../defects/delegate-drops-session-id-and-suppress-auto-context.md),
+> - [`delegate-drops-session-id-and-suppress-auto-context.md`](../defects/fixed/delegate-drops-session-id-and-suppress-auto-context.md),
 >   because the resume gives `session_id` no meaning. *Revision 5's clause 22 gives it one (2026-09-29); the note stays open until
->   it is built.*
+>   it is built. Built and repaired the same day, recorded below.*
 >
 > Other defects noticed along the way are recorded in `docs/defects/`.
 >
@@ -2714,6 +2733,51 @@ revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-06
 >   independently (OQ-82 for the code-intelligence child), and its repairs stand.
 >
 > The evidence packs are under `.live-run/runs/`, outside the repository.
+
+> **First execution of revision 5's clause 22, 2026-09-29, built under [R-067](requests.md#r-067):** a `delegate` call
+> whose `session_id` names a settled child of the caller resumes that child from its record. The build:
+> - `IterationChildren.followUp` admits the call;
+> - the writer's `followUpChild` makes REQ-MONITOR-300's one exit from a terminal state, in one transaction with the
+>   follow-up's user message in the record;
+> - the scheduler starts the child as any queued child;
+> - `execute` finds the conversation in its record and carries on from it under the child's own task id.
+>
+> The child keeps its identity and its stored write scope, and it ends, reports and notifies its parent again. A child
+> the timeout cut off is refused, and the reason names `continuation_of`.
+>
+> The text met the code in these places, and [OQ-131](../architecture/open-questions.md) records the reading built for
+> each:
+> - **The state it resumes into is `queued`,** so the follow-up waits under REQ-ORCH-050's cap and REQ-ORCH-046's active
+>   limit. It holds no place in either when it is followed up, unlike a paused agent that "keeps the place" it held.
+> - **Only the call's `task` is read.** The child's identity is its record's.
+> - **A child that never started has no conversation,** so it is given its payload first. REQ-ORCH-048's cascade does
+>   not block it again.
+> - **A follow-up waits for the child's execution to wind down.** Building it found that a child the user cancelled is
+>   settled before its aborted execution returns. An execution that then found its record live again wrote over the
+>   follow-up, which a case pins.
+> - **The fallback retry starts from the payload** and loses the follow-up. That is put to the owner.
+> - **A child the user cancelled is settled, and may be followed up.** Clause 3 says a cancelled agent is "never
+>   resumed", and clause 16 calls a paused child's cancel "final as clause 3 says". Clause 22 names every terminal state
+>   but the cut-off one, and says clause 5, which lists `cancelled`, does not bar a follow-up. The build reads clauses 3
+>   and 16 as about a continue's resume, which a follow-up is not, so a parent can follow up a child the user cancelled
+>   (REQ-MONITOR-128). The cancel race's case pins it. Refusing it would add a refusal PD-TOOLS-006 revision 3 does not
+>   list; that is put to the owner.
+>
+> Three places of the resume path serve the follow-up unchanged:
+> - clause 3's crash record and clause 2's rest pause a follow-up that has not started, from its record;
+> - clause 4's resume starts it again from the record;
+> - a case pauses one held behind a model slot and continues it.
+>
+> The defect note is repaired:
+> [`delegate-drops-session-id-and-suppress-auto-context.md`](../defects/fixed/delegate-drops-session-id-and-suppress-auto-context.md).
+>
+> **What was measured.** Fourteen cases in `children.test.ts` (twelve in the clause 22 describe, with the transition
+> table's case and the writer's) and two in `agent-tools`' `delegation.test.ts`. The two tool cases and the first seven
+> engine cases were red on the code before the repair. Each later case was red with its own limb removed. This report
+> first said fifteen cases; that counted the two outer cases twice, and the case for a later iteration's root, added
+> since, had not been written. **What was not
+> measured.** No built-app or live run followed a child up. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
 

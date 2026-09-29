@@ -28,3 +28,9 @@ worktree's live run started at 21:01:07, and when the first run's `edit` launch 
 (`expected one workspace database below /tmp/rotaris-live-run/2026-09-29T20-59-46-627Z/local; found 0`). Its app and its
 recording proxy kept working through the deletion — the `edit` pack's `model-traffic.jsonl` holds all 72 calls — so the
 run spent its tokens and lost only its store.
+
+Recurred again 2026-09-29, twice more. The verifier's first attempt on this branch (started 21:48:35) was swept by the
+`/home/user/Rotaris-crw-wt-termout` live run that started at 21:52:23. The repairer's rerun of `--only=faults,edit`
+(started 22:03:45, sandbox `/tmp/rotaris-live-run/2026-09-29T22-03-45-462Z`) was swept by the same worktree's live run
+started at 22:08:13. It died reading `faults-stall`'s store back (`expected one workspace database … found 0`, at
+`readSession` from the stall scenario), after `faults-ladder` had run.

@@ -597,8 +597,8 @@ export async function dispatch(req: RunHostRequest, h: RunHost): Promise<Process
       if (!s) return { kind: 'refused', code: 'workspace.unknown', headline: 'That workspace is not open in the run host' };
       const run = configuredFor(s.root) ?? (configure(s.root, true).ok ? configuredFor(s.root) : null);
       // Part AS: `applicable` (REQ-WORKSPACE-090) is read off the same resolution every other answer is.
-      if (req.action === 'status') return { kind: 'mcp.setup', status: mcp.setupStatus(run?.cfg ?? null) };
-      if (req.action === 'cancel') return { kind: 'mcp.setup', status: mcp.cancelSetup() };
+      if (req.action === 'status') return { kind: 'mcp.setup', status: mcp.setupStatus(s.root, run?.cfg ?? null) };
+      if (req.action === 'cancel') return { kind: 'mcp.setup', status: mcp.cancelSetup(s.root) };
       if (!run) return { kind: 'refused', code: 'mcp.configuration', headline: 'The configuration could not be loaded' };
       const started = mcp.startSetup(run.cfg, s.root);
       if (!started.ok) return { kind: 'refused', code: 'mcp.setup.running', headline: started.reason };

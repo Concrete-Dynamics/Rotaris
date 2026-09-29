@@ -43,7 +43,9 @@ change to the code (stated in `CLAUDE.md`):
 
 The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the names in the code.
 
-## Last reconciled with the code: **2026-09-24**
+## Last reconciled with the code: **2026-09-29**
+
+**Project initialization across a workspace switch (R-052).** The run host's code-intelligence setup state is keyed by workspace root. Its `mcp.setupStatus` event names the root so main routes progress to the matching task and window. Closing a workspace window cancels its setup; the replacement starts independently. The process view's initialization paragraph names the new event shape.
 
 **Product-drawn main-window chrome (`PD-SHELL-003`, built and revised 2026-09-24).** On Windows, Linux and macOS the main
 `BrowserWindow` is frameless with its native menu hidden. The existing title bar now ends in minimize,

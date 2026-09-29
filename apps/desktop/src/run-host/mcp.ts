@@ -46,7 +46,7 @@ export interface McpHostDeps {
    * moment that step finishes" without main asking on a cadence (SR-3). Optional so the host stays
    * constructible in a test that does not care.
    */
-  readonly publishSetup?: ((status: McpSetupStatus) => void) | undefined;
+  readonly publishSetup?: ((workspaceRoot: string, status: McpSetupStatus) => void) | undefined;
 }
 
 export interface McpSessionContext {
@@ -352,12 +352,16 @@ export class McpHost {
 
   // ---- REQ-MCP-099 / REQ-MCP-112: the code-intelligence project setup (ADR-0035, Part T) ---------------------------
 
-  private setup: { status: McpSetupStatus; abort: AbortController | null } = { status: idleSetup(), abort: null };
+  private readonly setups = new Map<string, { status: McpSetupStatus; abort: AbortController | null }>();
 
-  /** Part AS: the ONE place `setup` is assigned, so every change reaches the push of ADR-0064 and none can be forgotten. */
-  private setSetup(next: { status: McpSetupStatus; abort: AbortController | null }): void {
-    this.setup = next;
-    this.deps.publishSetup?.(next.status);
+  private setupFor(workspaceRoot: string): { status: McpSetupStatus; abort: AbortController | null } {
+    return this.setups.get(workspaceRoot) ?? { status: idleSetup(), abort: null };
+  }
+
+  /** Part AS: the ONE place a workspace's setup is assigned, so every change reaches its own subscriber. */
+  private setSetup(workspaceRoot: string, next: { status: McpSetupStatus; abort: AbortController | null }): void {
+    this.setups.set(workspaceRoot, next);
+    this.deps.publishSetup?.(workspaceRoot, next.status);
   }
 
   /**
@@ -370,14 +374,16 @@ export class McpHost {
     return cfg.mcp.servers[CODE_INTELLIGENCE_SERVER_NAME]?.availability.available === true;
   }
 
-  setupStatus(cfg: LoadedConfiguration | null = null): McpSetupStatus {
-    return { ...this.setup.status, applicable: cfg === null ? this.setup.status.applicable : this.setupApplicable(cfg) };
+  setupStatus(workspaceRoot: string, cfg: LoadedConfiguration | null = null): McpSetupStatus {
+    const status = this.setupFor(workspaceRoot).status;
+    return { ...status, applicable: cfg === null ? status.applicable : this.setupApplicable(cfg) };
   }
 
   /** REQ-MCP-112: cancellable at any point; the step in flight is terminated (REQ-MCP-099's ask, grace, tree kill) and the rest are not attempted. */
-  cancelSetup(): McpSetupStatus {
-    if (this.setup.abort && this.setup.status.state === 'running') { this.setup.abort.abort(); this.deps.log('mcp setup: cancellation requested'); }
-    return this.setup.status;
+  cancelSetup(workspaceRoot: string): McpSetupStatus {
+    const setup = this.setupFor(workspaceRoot);
+    if (setup.abort && setup.status.state === 'running') { setup.abort.abort(); this.deps.log(`mcp setup: cancellation requested for ${workspaceRoot}`); }
+    return setup.status;
   }
 
   /**
@@ -387,26 +393,26 @@ export class McpHost {
    * "not a local launch" failure and no substitute command is tried; the contains-code walk once per run.
    */
   startSetup(cfg: LoadedConfiguration, workspaceRoot: string): { ok: true; status: McpSetupStatus } | { ok: false; reason: string } {
-    if (this.setup.status.state === 'running') return { ok: false, reason: 'A code-intelligence setup is already running for this workspace; wait for it to finish or cancel it first.' };
+    if (this.setupFor(workspaceRoot).status.state === 'running') return { ok: false, reason: 'A code-intelligence setup is already running for this workspace; wait for it to finish or cancel it first.' };
     const server = cfg.mcp.servers[CODE_INTELLIGENCE_SERVER_NAME];
     const steps = (): McpSetupStep[] => CODE_INTELLIGENCE_SETUP_STEPS.map((s) => ({ id: s.id, label: s.label, status: 'pending', detail: '', elapsedMs: null }));
     const startedAt = toIsoUtc(this.deps.clocks.wall.instant());
     const applicable = this.setupApplicable(cfg);
     if (!server) {
-      this.setSetup({ status: { provisioning: provisioning(), state: 'finished', steps: steps().map((s) => ({ ...s, status: 'not-attempted', detail: 'not attempted: no code_intelligence server is configured' })), outcome: 'unavailable', message: `No server named '${CODE_INTELLIGENCE_SERVER_NAME}' is configured, so there is no code-intelligence runtime to set this workspace up for.`, containsCode: null, invocation: '', startedAt, applicable }, abort: null });
-      return { ok: true, status: this.setup.status };
+      this.setSetup(workspaceRoot, { status: { provisioning: provisioning(), state: 'finished', steps: steps().map((s) => ({ ...s, status: 'not-attempted', detail: 'not attempted: no code_intelligence server is configured' })), outcome: 'unavailable', message: `No server named '${CODE_INTELLIGENCE_SERVER_NAME}' is configured, so there is no code-intelligence runtime to set this workspace up for.`, containsCode: null, invocation: '', startedAt, applicable }, abort: null });
+      return { ok: true, status: this.setupFor(workspaceRoot).status };
     }
     const invocation = deriveSetupInvocation(server.entry, server.resolved);
     if (!invocation.ok) {
       this.deps.log(`mcp setup: refused — ${invocation.reason}`, 'warn');
-      this.setSetup({ status: { provisioning: provisioning(), state: 'finished', steps: steps().map((s) => ({ ...s, status: 'not-attempted', detail: 'not attempted: no setup command could be derived' })), outcome: 'unavailable', message: `Setup is not available: ${invocation.reason}. This is not retried.`, containsCode: null, invocation: '', startedAt, applicable }, abort: null });
-      return { ok: true, status: this.setup.status };
+      this.setSetup(workspaceRoot, { status: { provisioning: provisioning(), state: 'finished', steps: steps().map((s) => ({ ...s, status: 'not-attempted', detail: 'not attempted: no setup command could be derived' })), outcome: 'unavailable', message: `Setup is not available: ${invocation.reason}. This is not retried.`, containsCode: null, invocation: '', startedAt, applicable }, abort: null });
+      return { ok: true, status: this.setupFor(workspaceRoot).status };
     }
     const containsCode = workspaceContainsCode(workspaceRoot, cfg.files.workspace.agents);
     const markerPresent = existsSync(join(workspaceRoot, ...CODE_INTELLIGENCE_MARKER_SEGMENTS));
     const abort = new AbortController();
     const line = `${invocation.command} ${invocation.args.join(' ')}`.trim();
-    this.setSetup({ status: { provisioning: provisioning(), state: 'running', steps: steps(), outcome: null, message: '', containsCode, invocation: line, startedAt, applicable }, abort });
+    this.setSetup(workspaceRoot, { status: { provisioning: provisioning(), state: 'running', steps: steps(), outcome: null, message: '', containsCode, invocation: line, startedAt, applicable }, abort });
     this.deps.log(`mcp setup: started for ${workspaceRoot} — invocation '${line}', contains code ${containsCode}, marker ${markerPresent ? 'present' : 'absent'}`);
     const description = server.description as ServerDescription;
     const env = { ...this.deps.parentEnv, ...(description.transport === 'stdio' ? description.env : {}) };
@@ -414,19 +420,20 @@ export class McpHost {
       invocation, workspaceRoot, steps: CODE_INTELLIGENCE_SETUP_STEPS, creationStepId: 'create', markerPresent, containsCode, env,
       clocks: this.deps.clocks, log: this.mcpLog, signal: abort.signal,
       onStep: (step, all) => {
-        this.setSetup({ ...this.setup, status: { ...this.setup.status, steps: all.map((s) => ({ id: s.id as McpSetupStep['id'], label: s.label, status: s.status, detail: s.detail, elapsedMs: s.elapsedMs })) } });
+        const setup = this.setupFor(workspaceRoot);
+        this.setSetup(workspaceRoot, { ...setup, status: { ...setup.status, steps: all.map((s) => ({ id: s.id as McpSetupStep['id'], label: s.label, status: s.status, detail: s.detail, elapsedMs: s.elapsedMs })) } });
         this.deps.log(`mcp setup: ${step.id} ${step.status}${step.detail ? ` — ${step.detail.slice(0, 200)}` : ''}${step.elapsedMs === null ? '' : ` (${step.elapsedMs.toFixed(0)} ms)`}`);
       },
     }).then((report) => {
       const message = report.outcome === 'completed'
         ? (containsCode ? 'Every step succeeded: the workspace is set up for code intelligence.' : 'The project was created; indexing and the memory store were skipped because the workspace contains no code.')
         : report.outcome === 'cancelled' ? 'The setup was cancelled; the workspace is only partly set up.' : 'A step failed, so the workspace is only partly set up.';
-      this.setSetup({ status: { ...this.setup.status, state: 'finished', outcome: report.outcome, message }, abort: null });
+      this.setSetup(workspaceRoot, { status: { ...this.setupFor(workspaceRoot).status, state: 'finished', outcome: report.outcome, message }, abort: null });
       this.deps.log(`mcp setup: ${report.outcome} — ${message}`);
     }, (cause: unknown) => {
-      this.setSetup({ status: { ...this.setup.status, state: 'finished', outcome: 'failed', message: `The setup stopped unexpectedly: ${String(cause instanceof Error ? cause.message : cause)}` }, abort: null });
+      this.setSetup(workspaceRoot, { status: { ...this.setupFor(workspaceRoot).status, state: 'finished', outcome: 'failed', message: `The setup stopped unexpectedly: ${String(cause instanceof Error ? cause.message : cause)}` }, abort: null });
     });
-    return { ok: true, status: this.setup.status };
+    return { ok: true, status: this.setupFor(workspaceRoot).status };
   }
 
   // ---- lifetime -------------------------------------------------------------------------------------------------

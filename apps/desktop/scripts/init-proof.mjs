@@ -163,8 +163,9 @@ const log3 = launch('consent', s3, {
     // beside it passed on that. A box that exists and cannot be seen is UIR-014's class.
     'JSON.stringify({probe:"dialog",headline:document.querySelector(\'[data-testid="project-setup-headline"]\')?.textContent??null,intro:document.querySelector(\'[data-testid="project-setup-intro"]\')?.textContent??null,word:document.querySelector(\'[data-setup-task-word]\')?.textContent??null,visible:(()=>{const d=document.querySelector(\'[data-testid="project-setup-dialog"]\');if(!d)return null;const r=d.getBoundingClientRect();return r.width>0&&r.height>0&&r.top<window.innerHeight&&r.bottom>0&&r.left<window.innerWidth&&r.right>0&&document.elementFromPoint(r.left+r.width/2,r.top+8)!==null&&d.contains(document.elementFromPoint(r.left+r.width/2,r.top+8));})(),send:document.querySelector(\'[data-testid="composer-send"]\')?.disabled??null,reason:document.querySelector(\'[data-testid="composer-send"]\')?.title??document.querySelector(\'.composer__refusal\')?.textContent??null})>>[data-testid="project-setup-dialog"]@~15000',
   ].join(';;'),
-  // Pressed as soon as the dialog exists, not at a clock: the run reaches it when it reaches it.
-  ROTARIS_CAPTURE_KEYS: 'Escape>>[data-testid="project-setup-dialog"]@~18000',
+  // The dialog can paint from the first read before the open-time resolution starts. Wait for the
+  // background task's outcome, then Escape answers only the consent task this scenario measures.
+  ROTARIS_CAPTURE_KEYS: 'Escape>>[data-testid="project-setup-dialog"][data-setup-state="prompt"] [data-testid="project-setup-log"]@~18000',
   ROTARIS_CAPTURE_AFTER_MS: '32000',
 }, 120_000);
 const dialog3 = JSON.parse(evalOf(log3, 'probe:"dialog"'));

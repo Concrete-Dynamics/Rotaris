@@ -560,7 +560,7 @@ export const ProcessEventSchema = z.discriminatedUnion('kind', [
    * main can talk, and SR-3 withdrew polling exactly where they can. REQ-WORKSPACE-109 is what needs
    * it: a step must be visible "at the moment that step finishes", which a poll can only approximate.
    */
-  z.object({ kind: z.literal('mcp.setupStatus'), status: McpSetupStatusSchema }),
+  z.object({ kind: z.literal('mcp.setupStatus'), workspaceRoot: z.string(), status: McpSetupStatusSchema }),
 ]);
 export type ProcessEvent = z.infer<typeof ProcessEventSchema>;
 export const ProcessEventEnvelopeSchema = z.object({ v, event: ProcessEventSchema });

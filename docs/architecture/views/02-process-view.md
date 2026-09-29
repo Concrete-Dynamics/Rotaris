@@ -366,8 +366,10 @@ workspace open), `initialization.start`, `initialization.skip {ids}` and `initia
 the whole state. Main is the coordinator because REQ-WORKSPACE-085 gives the marker **one writer** and that file
 is the workspace service's (`config.setField`, Tier A) while the one shipped task's work is the run host's
 (`mcp.setup`) — and the matrix gives neither of those two an edge to the other. The run host gained one event,
-`mcp.setupStatus`, pushed on every change of the setup's status: the task follows a live setup through it rather
-than on a cadence, because REQ-WORKSPACE-109 wants a step visible at the moment it finishes and SR-3 withdrew
+`mcp.setupStatus {workspaceRoot, status}`, pushed on every change of that workspace's setup: the task follows only
+its own live setup through it rather than on a cadence. The run host keeps one setup state per workspace; closing
+a main window cancels that workspace's run while a replacement resolves independently (REQ-WORKSPACE-013).
+REQ-WORKSPACE-109 wants a step visible at the moment it finishes and SR-3 withdrew
 polling wherever two processes can talk. `ROTARIS_INIT_TEST_TASK=consent|fail` (verification only) registers an
 ordinary task through the ordinary registry, which is the only way to reach the consent dialog and the composer
 gate: the shipped set requires no consent (REQ-WORKSPACE-088, REQ-WORKSPACE-104).

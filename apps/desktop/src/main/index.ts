@@ -207,6 +207,7 @@ async function main(): Promise<void> {
   runHostChild.on('exit', (code) => log(`run host exited (${code}); NOT re-forked — every in-flight run is lost and settles through stale detection (ADR-0002)`));
 
   const services = new Map<string, { child: UtilityProcess; link: ProcessLink<WorkspaceServiceRequest> }>();
+  const workspaceIds = new Map<string, string>();
   let cancelImprovementWorkspace = (_workspaceRoot: string): void => undefined;
   /**
    * Step A1 of the window builder (ADR-0048's registry over main windows; ADR-0055 consequences 5 and 6).
@@ -265,7 +266,7 @@ async function main(): Promise<void> {
       const child = utilityProcess.fork(join(__dirname, 'workspace-service.js'), [], { serviceName: `rotaris-workspace:${key}` });
       svc = { child, link: new ProcessLink<WorkspaceServiceRequest>(portOf(child), clocks.timers) };
       services.set(key, svc);
-      child.on('exit', (code) => { log(`workspace service for ${key} exited (${code})`); services.delete(key); cancelImprovementWorkspace(key); });
+      child.on('exit', (code) => { log(`workspace service for ${key} exited (${code})`); services.delete(key); workspaceIds.delete(key); cancelImprovementWorkspace(key); });
       // The service's log lines reach main's log too (Part P: the checkpoint capture, preview and restore lines the proof reads).
       svc.link.onEvent((e) => { if (e.kind === 'log') logAt(e.level, 'workspace service', e.message); });
       // ADR-0002 c.7 / ADR-0058: the service's narrow requests back to main are forwarded to the run host, bounded.
@@ -290,11 +291,12 @@ async function main(): Promise<void> {
     // other project's window — and every workspace-scoped command resolves its window through that field.
     // REQ-NOTIFY-224 / REQ-SHELL-016: the unreviewed-hooks notice is raised after the window exists, never a dialog by itself.
     if (ack.kind === 'workspace.ack') {
+      workspaceIds.set(key, opened.workspaceId);
       // REQ-WORKSPACE-141: initialization resolution takes the same slot as the hook-review notice — once
       // the window is interactive, never during its construction and never as a dialog opened unbidden.
       initialization.open(key, scopeFiles(resolveUserDirs().config, key).workspace.agents);
       clocks.timers.after(millis(process.env['ROTARIS_CAPTURE_RESUME'] ? 1_800 : 800), () => {
-        void initialization.resolve(true).catch((cause: unknown) => log(`initialization: resolve failed (${String(cause)})`));
+        void initialization.resolve(true, key).catch((cause: unknown) => log(`initialization: resolve failed (${String(cause)})`));
         void runHost.request({ kind: 'hooks.summary', workspaceId: opened.workspaceId }, millis(10_000)).then((r) => {
           if (r.kind === 'hooks.summary' && r.summary.status === 'review') { raiseNoticeKeyed(`hooks.review:${r.summary.workspace}:${r.summary.fingerprint}`, 'warning', 'Workspace hooks need review', r.summary.notice, recoveryFor('hooks.review', r.summary.workspace)); return; }
           // REQ-WORKSPACE-152 (3): once the window is interactive, never as a dialog; the only run-time consequence is REQ-WORKSPACE-137's refusal.
@@ -848,30 +850,30 @@ async function main(): Promise<void> {
       return r.kind === 'config.snapshot' ? { ok: true } : { ok: false, reason: r.kind === 'refused' ? r.headline : `the service answered ${r.kind}` };
     },
     setup: {
-      start: async () => {
-        const id = activeWindow()?.workspaceId;
+      start: async (root) => {
+        const id = workspaceIds.get(root);
         if (!id) return { ok: false, reason: 'no workspace is open' };
         const r = await runHost.request({ kind: 'mcp.setup', workspaceId: id, action: 'start' }, millis(15_000));
         return r.kind === 'mcp.setup' ? { ok: true, status: r.status } : { ok: false, reason: r.kind === 'refused' ? r.headline : `the run host answered ${r.kind}` };
       },
-      cancel: async () => {
-        const id = activeWindow()?.workspaceId;
+      cancel: async (root) => {
+        const id = workspaceIds.get(root);
         if (id) await runHost.request({ kind: 'mcp.setup', workspaceId: id, action: 'cancel' }, millis(15_000));
       },
-      status: async () => {
-        const id = activeWindow()?.workspaceId;
+      status: async (root) => {
+        const id = workspaceIds.get(root);
         if (!id) return null;
         const r = await runHost.request({ kind: 'mcp.setup', workspaceId: id, action: 'status' }, millis(15_000));
         return r.kind === 'mcp.setup' ? r.status : null;
       },
     },
-    publish: (state) => {
-      for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(CHANNEL.initializationState, { v: CONTRACT_SCHEMA_VERSION, ...state });
+    publish: (root, state) => {
+      for (const owner of orderedMainWindows()) if (owner.workspace === root && !owner.win.isDestroyed()) owner.win.webContents.send(CHANNEL.initializationState, { v: CONTRACT_SCHEMA_VERSION, ...state });
     },
     banner: (headline, detail) => raiseNotice('error', headline, detail),
     modelReachable: () => providers.list().some((row) => row.authenticated),
   });
-  runHost.onEvent((e) => { if (e.kind === 'mcp.setupStatus') initialization.onSetupStatus(e.status); });
+  runHost.onEvent((e) => { if (e.kind === 'mcp.setupStatus') initialization.onSetupStatus(e.workspaceRoot, e.status); });
   /**
    * Verification only — `ROTARIS_INIT_TEST_TASK=consent|fail`. REQ-WORKSPACE-080's last sentence is what
    * this exercises and it is the only way to exercise it: "a setup task added after the fact SHALL
@@ -997,6 +999,9 @@ async function main(): Promise<void> {
     samePath,
     chooseProjectFolder: (win, startAt) => chooseProjectFolder(win, startAt),
     openWorkspace: (workspace) => openWorkspaceInner(workspace),
+    onWorkspaceClosed: (workspace) => {
+      if (!orderedMainWindows().some((owner) => owner.workspace === workspace)) initialization.close(workspace);
+    },
     closeGuard: (owner) => owner.win.webContents
       .executeJavaScript('typeof window.__rotarisCloseGuard === "function" ? window.__rotarisCloseGuard() : true')
       .then((proceed: unknown) => proceed !== false)

@@ -58,6 +58,7 @@ export interface MainWindowsDependencies<TWindow, TPersonaWindows, TTerminalWind
     workspace: string,
     owner: MainWindowView<TWindow, TPersonaWindows, TTerminalWindows>,
   ) => Promise<{ readonly workspaceId: string; readonly storeFile: string } | undefined>;
+  readonly onWorkspaceClosed?: ((workspace: string) => void) | undefined;
   readonly closeGuard: (owner: MainWindowView<TWindow, TPersonaWindows, TTerminalWindows>) => Promise<boolean>;
   readonly activeRunCount: (workspaceId: string) => Promise<number | null>;
   readonly persistWorkspace: (workspace: string) => Promise<void>;
@@ -511,6 +512,7 @@ export class MainWindows<TWindow, TPersonaWindows, TTerminalWindows, TApproval =
     if (!record) return;
     record.deferredOffer?.cancel();
     this.#records.delete(id);
+    this.dependencies.onWorkspaceClosed?.(record.workspace);
     const index = this.#focusOrder.indexOf(id);
     if (index >= 0) this.#focusOrder.splice(index, 1);
     this.dependencies.adapter.disposeResources(record.win, record.wcId, record.personaWindows, record.terminalWindows);

@@ -170,3 +170,9 @@ not a proof of the happy path.
 was demonstrated there; no implementation condition is raised and none is discharged. **IC-7 is
 untouched**: running `project create` for real is the first time the product's own flow provokes the
 language-server question that condition describes, and the observation is recorded without changing it.
+
+## Defect round — switching projects during initialization, 2026-09-29
+
+The owner saw "Project setup did not finish" after choosing another project. A built-app reproduction opened A, started its background `project create`, then selected B before A finished. B's task failed immediately while A continued. **The falsified reason** was that the one setup status in the run host could stand for the whole application: it was actually a workspace operation, while REQ-WORKSPACE-013 requires the replacement's resolution to proceed independently of outgoing cancellation. The one listener in main and the status event without workspace identity repeated the same mistake. A refusal because A was running was also translated into REQ-WORKSPACE-094's unrelated "not a local launch" result.
+
+The run host now holds setup state by workspace root and accepts one run **per workspace**. The status event carries that root; main follows and publishes it only for the matching workspace. Closing A's window cancels A's run without waiting before B starts. The built switch was repeated with the same shape: A was cancelled, B completed all three steps, B's marker was written, and no false banner appeared. The focused test covers two live status streams and cancellation. The defect note is `docs/defects/fixed/switching-projects-routed-setup-through-one-global-status.md`.

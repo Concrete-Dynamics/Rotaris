@@ -27,9 +27,9 @@ export interface TaskSets {
   readonly consent: readonly InitializationTask[];
 }
 
-export async function deriveSets(registry: TaskRegistry, state: InitializationState, log: (message: string) => void): Promise<TaskSets> {
+export async function deriveSets(registry: TaskRegistry, state: InitializationState, log: (message: string) => void, workspaceRoot?: string): Promise<TaskSets> {
   const applicable: InitializationTask[] = [];
-  for (const task of registry.all()) if (await isApplicable(task, log)) applicable.push(task);
+  for (const task of registry.all()) if (await isApplicable(task, log, workspaceRoot)) applicable.push(task);
   const completed = new Set(state.completed);
   const skipped = new Set(state.skipped);
   const pending = applicable.filter((t) => !completed.has(t.id) && !skipped.has(t.id));

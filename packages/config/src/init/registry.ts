@@ -52,7 +52,7 @@ export interface InitializationTask {
   readonly label: string;
   readonly description: string;
   /** REQ-WORKSPACE-080: raising counts as not applicable, and is logged. */
-  readonly applicable: () => boolean | Promise<boolean>;
+  readonly applicable: (workspaceRoot?: string) => boolean | Promise<boolean>;
   readonly run: (context: TaskContext) => Promise<TaskResult>;
   /** REQ-WORKSPACE-080: defaults to false. REQ-WORKSPACE-082: "a task that declares nothing about consent behaves as background". */
   readonly requiresConsent?: boolean | undefined;
@@ -89,9 +89,9 @@ export class TaskRegistry {
 }
 
 /** REQ-WORKSPACE-080: a predicate that raises is logged and treated as "not applicable". */
-export async function isApplicable(task: InitializationTask, log: (message: string) => void): Promise<boolean> {
+export async function isApplicable(task: InitializationTask, log: (message: string) => void, workspaceRoot?: string): Promise<boolean> {
   try {
-    return await task.applicable();
+    return await task.applicable(workspaceRoot);
   } catch (cause) {
     log(`initialization: the applicability predicate of '${task.id}' raised (${String(cause)}); treated as not applicable`);
     return false;

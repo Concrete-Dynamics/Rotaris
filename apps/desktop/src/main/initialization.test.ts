@@ -7,7 +7,7 @@ import type { InitializationStateView, McpSetupStatus, McpSetupStep } from '@rot
 import { readInitializationState, writeConfigFields, type PlainMap } from '@rotaris/config';
 import {
   CODE_INTELLIGENCE_FAILED_SUMMARY, CODE_INTELLIGENCE_SUCCESS_CODE, CODE_INTELLIGENCE_SUCCESS_NON_CODE,
-  CODE_INTELLIGENCE_TASK_ID, InitializationCoordinator, NOT_A_LOCAL_LAUNCH_ERROR,
+  CODE_INTELLIGENCE_TASK_ID, InitializationCoordinator,
 } from './initialization.js';
 
 function workspace(): { root: string; agents: string } {
@@ -32,6 +32,8 @@ interface Harness {
   readonly published: InitializationStateView[];
   readonly banners: { headline: string; detail: string }[];
   readonly writes: PlainMap[];
+  readonly startedRoots: string[];
+  readonly cancelledRoots: string[];
   readonly root: string;
   readonly agents: string;
   push(s: McpSetupStatus): void;
@@ -42,28 +44,30 @@ function harness(options: { applicable?: boolean; startFails?: boolean; writeFai
   const published: InitializationStateView[] = [];
   const banners: { headline: string; detail: string }[] = [];
   const writes: PlainMap[] = [];
+  const startedRoots: string[] = [];
+  const cancelledRoots: string[] = [];
   const clock = new FakeClock(0, Date.parse('2026-09-15T12:00:00Z'));
   const coordinator = new InitializationCoordinator({
     clocks: clock,
     log: () => undefined,
-    writeMarker: async (_root, patch) => {
+    writeMarker: async (root, patch) => {
       if (options.writeFails) return { ok: false, reason: options.writeFails };
       writes.push(patch);
       // The real path is the workspace service's `commitConfigFields`, which is this call plus a reload.
-      const r = await writeConfigFields(agents, patch);
+      const r = await writeConfigFields(join(root, '.rotaris', 'agents.yaml'), patch);
       return r.ok ? { ok: true } : { ok: false, reason: r.error.fault };
     },
     setup: {
-      start: async () => (options.startFails ? { ok: false, reason: 'not a local launch' } : { ok: true, status: status() }),
-      cancel: async () => undefined,
+      start: async (root) => { startedRoots.push(root); return options.startFails ? { ok: false, reason: 'not a local launch' } : { ok: true, status: status() }; },
+      cancel: async (root) => { cancelledRoots.push(root); },
       status: async () => status({ applicable: options.applicable !== false }),
     },
-    publish: (s) => published.push(s),
+    publish: (_root, s) => published.push(s),
     banner: (headline, detail) => banners.push({ headline, detail }),
     modelReachable: () => options.modelReachable !== false,
   });
   coordinator.open(root, agents);
-  return { coordinator, published, banners, writes, root, agents, push: (s) => coordinator.onSetupStatus(s) };
+  return { coordinator, published, banners, writes, startedRoots, cancelledRoots, root, agents, push: (s) => coordinator.onSetupStatus(root, s) };
 }
 
 /** REQ-WORKSPACE-088: the one registered task, its id and its label, and that it needs no consent. */
@@ -83,6 +87,40 @@ describe('the default task set', () => {
 });
 
 describe('resolution on workspace open', () => {
+  it('resolves the workspace named by a delayed open callback, not whichever window is now active', async () => {
+    const h = harness();
+    const next = workspace();
+    h.coordinator.open(next.root, next.agents);
+    await h.coordinator.resolve(true, h.root);
+    await new Promise((r) => setImmediate(r));
+    expect(h.startedRoots).toEqual([h.root]);
+    expect(readInitializationState(next.agents).completed).toEqual([]);
+    h.coordinator.close(h.root);
+    h.coordinator.onSetupStatus(h.root, status({ state: 'finished', outcome: 'cancelled', steps: [step('create', 'failed', 'cancelled')] }));
+  });
+
+  /** REQ-WORKSPACE-013: the replacement starts its own setup while the outgoing one is still being cancelled. */
+  it('keeps two workspace setups and their status streams separate during a switch', async () => {
+    const h = harness();
+    const next = workspace();
+    await h.coordinator.resolve(true);
+    await new Promise((r) => setImmediate(r));
+    h.coordinator.open(next.root, next.agents);
+    await h.coordinator.resolve(true);
+    await new Promise((r) => setImmediate(r));
+    expect(h.startedRoots).toEqual([h.root, next.root]);
+
+    h.coordinator.close(h.root);
+    expect(h.cancelledRoots).toEqual([h.root]);
+    h.coordinator.onSetupStatus(h.root, status({ state: 'finished', outcome: 'cancelled', steps: [step('create', 'failed', 'cancelled')] }));
+    // A's completion cannot conclude B's run or put a failure banner over B.
+    expect(readInitializationState(next.agents).completed).toEqual([]);
+    h.coordinator.onSetupStatus(next.root, status({ state: 'finished', outcome: 'completed', containsCode: true, steps: [step('create', 'succeeded'), step('index', 'succeeded'), step('memory', 'succeeded')] }));
+    await new Promise((r) => setImmediate(r));
+    expect(readInitializationState(next.agents).completed).toEqual([CODE_INTELLIGENCE_TASK_ID]);
+    expect(h.banners).toEqual([]);
+  });
+
   /** REQ-WORKSPACE-083: a never-initialized workspace with no applicable task is marked silently. */
   it('marks a workspace with nothing applicable, stamping last_run and starting nothing', async () => {
     const h = harness({ applicable: false });
@@ -160,14 +198,14 @@ describe('resolution on workspace open', () => {
     expect(h.banners[0]).toEqual({ headline: 'Project setup did not finish', detail: CODE_INTELLIGENCE_FAILED_SUMMARY });
   });
 
-  /** REQ-WORKSPACE-094: a non-local launch is a non-retryable failure and no substitute is attempted. */
-  it('fails non-retryably when the entry is not a local launch', async () => {
+  /** A refused start is not REQ-WORKSPACE-094's non-local launch verdict; only an unavailable status is. */
+  it('reports a refused start with its own retryable reason', async () => {
     const h = harness({ startFails: true });
     await h.coordinator.resolve(true);
     await new Promise((r) => setImmediate(r));
     const task = h.published.at(-1)!.report.tasks[0]!;
-    expect(task.error).toBe(NOT_A_LOCAL_LAUNCH_ERROR);
-    expect(task.retryable).toBe(false);
+    expect(task.error).toBe("Code intelligence could not start this project's setup: not a local launch");
+    expect(task.retryable).toBe(true);
   });
 });
 

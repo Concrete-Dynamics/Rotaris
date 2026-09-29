@@ -49,9 +49,9 @@ export const NOT_A_LOCAL_LAUNCH_SUMMARY = 'Code intelligence project setup was s
 
 export interface SetupPort {
   /** Starts the run host's setup; the reply is the status as it stands. */
-  readonly start: () => Promise<{ readonly ok: true; readonly status: McpSetupStatus } | { readonly ok: false; readonly reason: string }>;
-  readonly cancel: () => Promise<void>;
-  readonly status: () => Promise<McpSetupStatus | null>;
+  readonly start: (root: string) => Promise<{ readonly ok: true; readonly status: McpSetupStatus } | { readonly ok: false; readonly reason: string }>;
+  readonly cancel: (root: string) => Promise<void>;
+  readonly status: (root: string) => Promise<McpSetupStatus | null>;
 }
 
 export interface InitializationDeps {
@@ -60,7 +60,7 @@ export interface InitializationDeps {
   /** The workspace `agents.yaml` write, routed to the service that owns it. */
   readonly writeMarker: (root: string, patch: PlainMap) => Promise<{ readonly ok: true } | { readonly ok: false; readonly reason: string }>;
   readonly setup: SetupPort;
-  readonly publish: (state: InitializationStateView) => void;
+  readonly publish: (root: string, state: InitializationStateView) => void;
   /** REQ-WORKSPACE-103: a failed background run reaches a banner, never a dialog. */
   readonly banner: (headline: string, detail: string) => void;
   /** REQ-WORKSPACE-110: a consent task runs an agent, so it needs a reachable model. */
@@ -98,7 +98,7 @@ export class InitializationCoordinator {
   private readonly workspaces = new Map<string, WorkspaceEntry>();
   private active: string | null = null;
   /** The live setup's step sink, set for as long as `code-intelligence-setup` is running. */
-  private setupListener: ((status: McpSetupStatus) => void) | null = null;
+  private readonly setupListeners = new Map<string, (status: McpSetupStatus) => void>();
 
   constructor(private readonly deps: InitializationDeps) {
     this.registry.register(this.codeIntelligenceTask());
@@ -116,11 +116,11 @@ export class InitializationCoordinator {
       label: CODE_INTELLIGENCE_TASK_LABEL,
       description: CODE_INTELLIGENCE_TASK_DESCRIPTION,
       requiresConsent: false,
-      applicable: async () => (await this.deps.setup.status())?.applicable === true,
+      applicable: async (root = this.active ?? '') => (await this.deps.setup.status(root))?.applicable === true,
       run: async (ctx) => {
-        const started = await this.deps.setup.start();
-        if (!started.ok) return this.failure(NOT_A_LOCAL_LAUNCH_ERROR, NOT_A_LOCAL_LAUNCH_SUMMARY, false, []);
-        return await this.followSetup(started.status, ctx.signal, ctx.onStep);
+        const started = await this.deps.setup.start(ctx.workspaceRoot);
+        if (!started.ok) return this.failure(`Code intelligence could not start this project's setup: ${started.reason}`, CODE_INTELLIGENCE_FAILED_SUMMARY, true, []);
+        return await this.followSetup(ctx.workspaceRoot, started.status, ctx.signal, ctx.onStep);
       },
     };
   }
@@ -133,7 +133,7 @@ export class InitializationCoordinator {
    * REQ-WORKSPACE-109: each step reported the moment it finishes. The status arrives on channel
    * `mcp.setupStatus`, which the run host pushes on every change — no cadence, SR-3.
    */
-  private followSetup(first: McpSetupStatus, signal: AbortSignal, onStep: (s: { name: string; status: string; detail: string }) => void): Promise<TaskResult> {
+  private followSetup(root: string, first: McpSetupStatus, signal: AbortSignal, onStep: (s: { name: string; status: string; detail: string }) => void): Promise<TaskResult> {
     return new Promise<TaskResult>((resolve) => {
       const seen = new Map<string, string>();
       const drain = (status: McpSetupStatus): void => {
@@ -144,12 +144,13 @@ export class InitializationCoordinator {
           onStep({ name: STEP_LABEL[step.id] ?? step.label, status: step.status, detail: step.detail });
         }
         if (status.state !== 'finished') return;
-        this.setupListener = null;
+        this.setupListeners.delete(root);
         resolve(this.resultOf(status));
       };
-      this.setupListener = drain;
-      const onAbort = (): void => { void this.deps.setup.cancel(); };
+      this.setupListeners.set(root, drain);
+      const onAbort = (): void => { void this.deps.setup.cancel(root); };
       signal.addEventListener('abort', onAbort, { once: true });
+      if (signal.aborted) onAbort();
       drain(first);
     });
   }
@@ -179,8 +180,8 @@ export class InitializationCoordinator {
   }
 
   /** The run host pushes here; main routes it in. */
-  onSetupStatus(status: McpSetupStatus): void {
-    this.setupListener?.(status);
+  onSetupStatus(root: string, status: McpSetupStatus): void {
+    this.setupListeners.get(root)?.(status);
   }
 
   // ---- per workspace -----------------------------------------------------------------------------
@@ -218,7 +219,7 @@ export class InitializationCoordinator {
   private nowIso = (): string => toIsoUtc(this.deps.clocks.wall.instant());
 
   private async sets(e: WorkspaceEntry): Promise<TaskSets> {
-    return await deriveSets(this.registry, e.state, (m) => this.deps.log(m, 'warn'));
+    return await deriveSets(this.registry, e.state, (m) => this.deps.log(m, 'warn'), e.root);
   }
 
   /** The nine values plus the labels and the live report, as one message. */
@@ -235,7 +236,7 @@ export class InitializationCoordinator {
   }
 
   private async publish(e: WorkspaceEntry): Promise<void> {
-    this.deps.publish(await this.viewFor(e));
+    this.deps.publish(e.root, await this.viewFor(e));
   }
 
   /** REQ-WORKSPACE-115: the persisted section as it is on disk right now, and nothing else disturbed. */
@@ -245,7 +246,7 @@ export class InitializationCoordinator {
     // In-progress and last-error describe this session only and are NOT taken from disk.
     e.state = readInitializationState(e.agentsFile);
     const state = await this.viewFor(e);
-    this.deps.publish(state);
+    this.deps.publish(e.root, state);
     return state;
   }
 
@@ -254,8 +255,8 @@ export class InitializationCoordinator {
    * marked silently; pending background work starts at once; pending consent work raises the prompt.
    * REQ-WORKSPACE-102: automatic exactly once per open, and a user-requested check is additional.
    */
-  async resolve(automatic: boolean): Promise<InitializationStateView> {
-    const e = this.current();
+  async resolve(automatic: boolean, root?: string): Promise<InitializationStateView> {
+    const e = root === undefined ? this.current() : this.workspaces.get(root) ?? null;
     if (!e) return { view: EMPTY_INITIALIZATION_VIEW, labels: {}, descriptions: {}, report: EMPTY_RUN_REPORT, resolutionFailed: false };
     if (automatic && e.resolvedOnce) return await this.viewFor(e);
     if (automatic) e.resolvedOnce = true;
@@ -330,7 +331,7 @@ export class InitializationCoordinator {
       e.report = result.report;
       const failed = result.report.tasks.filter((t) => t.status === 'failure');
       e.lastError = failed.length === 0 ? null : failed.map((t) => t.error).join(' ');
-      if (background && failed.length > 0) {
+      if (background && failed.length > 0 && this.active === e.root && !controller.signal.aborted) {
         // REQ-WORKSPACE-103: a banner carrying the task's own summary, with the stated fallback.
         this.deps.banner(BACKGROUND_FAILED_HEADLINE, failed[0]?.summary ?? BACKGROUND_FAILED_FALLBACK);
       }
@@ -340,11 +341,11 @@ export class InitializationCoordinator {
       e.lastError = String(cause);
       e.report = { running: false, current: null, currentLabel: '', currentSteps: [], tasks: [], outcome: 'failed', error: String(cause) };
       this.deps.log(`initialization: the run broke down for ${e.root} (${String(cause)})`, 'warn');
-      if (background) this.deps.banner(BACKGROUND_FAILED_HEADLINE, `${BACKGROUND_FAILED_FALLBACK} ${BACKGROUND_BROKE_DOWN}`);
+      if (background && this.active === e.root && !controller.signal.aborted) this.deps.banner(BACKGROUND_FAILED_HEADLINE, `${BACKGROUND_FAILED_FALLBACK} ${BACKGROUND_BROKE_DOWN}`);
     } finally {
       e.running = null;
       e.attempting = new Set();
-      this.setupListener = null;
+      this.setupListeners.delete(e.root);
       // The state on disk is authoritative: a skip answered while this ran wrote its own ids there.
       e.state = readInitializationState(e.agentsFile);
       await this.publish(e);

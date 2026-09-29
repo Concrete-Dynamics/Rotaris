@@ -109,9 +109,7 @@ before the ladder's), **OQ-111** (what the report summariser reads), **OQ-112** 
 write is refused) **and OQ-113** (REQ-LIBRARY-092's fallback, answered by amendment). **Three more were raised the same day
 from the live runs and left open: OQ-114** (the specification's fixed figures on a reasoning model's critical path, and a
 continuation that starts from nothing), **OQ-115** (the code-intelligence server's imperative tool description, rendered
-verbatim) **and OQ-116** (the displayed tool-call total during a long execution pass). The seven were raised as OQ-109 to OQ-115 on their branch and renumbered at the merge, OQ-109 having been taken on `main`. **OQ-117** (what an iteration is told of a task it takes up that is not the run's own) was raised the same day by the repair of `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md` and left open. **OQ-119** (whether the task the report summariser keeps as its start may pass REQ-ORCH-110's 2,000 per event) **and OQ-120** (the size of the facts given to the report summariser) were raised the same day by the repair of D1 and left open, as OQ-118 and OQ-119 on their branch, renumbered at the merge, OQ-117 and OQ-118 having been taken on `main`. **And OQ-122** (whether the window may open the setup dialog before the open's resolution, and what a skip answered in that interval records — built as: the dialog opens on the values, and such a skip performs the open's one automatic resolution first), raised 2026-09-29 by repairing `init-proof`'s red on Linux under R-062. **And OQ-123** (which run REQ-WORKSPACE-105's "no run is in progress" means — built as a run the user started, so a background run neither withdraws the setup prompt nor is drawn in its dialog), raised the same day by the same repair's second round. The two were raised as OQ-109 and OQ-110 on their branch, renumbered there to OQ-118 and OQ-119 when OQ-109 to OQ-117 had been taken on `main`, and renumbered again at the merge, OQ-118 to OQ-121 having been taken on `main` meanwhile. **One more was raised on 2026-09-29 by building REQ-ORCH-089's stall watchdog and REQ-NOTIFY-111/112's corrective message under R-067: OQ-127** (what counts as "an outcome that produced no output within `child_stall_timeout`" when the watchdog never cancels, and what the watchdog counts, writes and calls — including the three records REQ-ORCH-139's timeline vocabulary has no word for, written to the session log instead, and whether REQ-MONITOR-119's issue at every evaluation may evict REQ-SESSION-133's ring), raised as OQ-109 on its branch, renumbered there to OQ-126 when OQ-109 to OQ-125 had been taken on `main`, and renumbered again at the merge, OQ-126 having been taken on `main` meanwhile. **And OQ-129** (whether the iteration the
-record of an accepted explicit cancel closes takes REQ-GIT-051's capture — built as: none is captured), raised the same day
-by the repair of `a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md` under OQ-103's ruling. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+verbatim) **and OQ-116** (the displayed tool-call total during a long execution pass). The seven were raised as OQ-109 to OQ-115 on their branch and renumbered at the merge, OQ-109 having been taken on `main`. **OQ-117** (what an iteration is told of a task it takes up that is not the run's own) was raised the same day by the repair of `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md` and left open. **OQ-119** (whether the task the report summariser keeps as its start may pass REQ-ORCH-110's 2,000 per event) **and OQ-120** (the size of the facts given to the report summariser) were raised the same day by the repair of D1 and left open, as OQ-118 and OQ-119 on their branch, renumbered at the merge, OQ-117 and OQ-118 having been taken on `main`. **And OQ-122** (whether the window may open the setup dialog before the open's resolution, and what a skip answered in that interval records — built as: the dialog opens on the values, and such a skip performs the open's one automatic resolution first), raised 2026-09-29 by repairing `init-proof`'s red on Linux under R-062. **And OQ-123** (which run REQ-WORKSPACE-105's "no run is in progress" means — built as a run the user started, so a background run neither withdraws the setup prompt nor is drawn in its dialog), raised the same day by the same repair's second round. The two were raised as OQ-109 and OQ-110 on their branch, renumbered there to OQ-118 and OQ-119 when OQ-109 to OQ-117 had been taken on `main`, and renumbered again at the merge, OQ-118 to OQ-121 having been taken on `main` meanwhile. **One more was raised on 2026-09-29 by building REQ-ORCH-089's stall watchdog and REQ-NOTIFY-111/112's corrective message under R-067: OQ-127** (what counts as "an outcome that produced no output within `child_stall_timeout`" when the watchdog never cancels, and what the watchdog counts, writes and calls — including the three records REQ-ORCH-139's timeline vocabulary has no word for, written to the session log instead, and whether REQ-MONITOR-119's issue at every evaluation may evict REQ-SESSION-133's ring), raised as OQ-109 on its branch, renumbered there to OQ-126 when OQ-109 to OQ-125 had been taken on `main`, and renumbered again at the merge, OQ-126 having been taken on `main` meanwhile. **And OQ-129** (what REQ-MONITOR-128's optimistic cancel of one agent shows, where, and until when — built as the agents' activity text, in the window that sent the cancel, until the engine's next record), raised 2026-09-29 by the repair of `cancelling-one-agent-is-not-shown-cancelled-until-the-engine-answers.md` under R-067, raised as OQ-128 on its branch and renumbered at the merge, OQ-128 having been taken on `main` meanwhile. **And OQ-130** (whether the iteration the record of an accepted explicit cancel closes takes REQ-GIT-051's capture — built as: none is captured), raised the same day by the repair of `a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md` under OQ-103's ruling, raised as OQ-129 on its branch and renumbered at the merge, OQ-129 having been taken on `main` meanwhile. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -4364,8 +4362,10 @@ only with a run behind it. The clause does not say:
   requires recovery before an agent can be cancelled: …" when one is found first or the chosen child's move fails to be
   written, and "The workspace store could not take this session's lock, so the agent was not cancelled: …" when
   reading or claiming the lock throws, where no other process is involved. Every other refusal states none, and the
-  renderer's fallback is REQ-MONITOR-128's "no longer cancellable" ("That agent is not cancellable (unknown, or already
-  finished)."). **This departs from REQ-MONITOR-128**, whose refusal sentence — "an error message states that the agent
+  renderer's fallback is REQ-MONITOR-128's "no longer cancellable" ("That agent is no longer cancellable." since
+  2026-09-29 under R-067, with the repair of
+  [`cancelling-one-agent-is-not-shown-cancelled-until-the-engine-answers.md`](../defects/fixed/cancelling-one-agent-is-not-shown-cancelled-until-the-engine-answers.md);
+  *until then "That agent is not cancellable (unknown, or already finished)."*). **This departs from REQ-MONITOR-128**, whose refusal sentence — "an error message states that the agent
   is no longer cancellable" — clause 16 does not govern: the directive names REQ-MONITOR-128 for the confirmation only.
   The build reads the requirement's sentence as written for an agent the run no longer has, and states the engine's
   words where the refusal is the store's or another process's, because "no longer cancellable" would be false of a
@@ -4416,8 +4416,12 @@ only with a run behind it. The clause does not say:
   "Keep it paused" rather than "Keep running", on the Workspace and in a persona window through `AgentCancelConfirm`
   (its own module beside the cancel rules, the run's cancel on the Workspace included), whose props take no label a call
   site could override; a test over both call sites' source fails when either takes the labels itself again. The Mission
-  view's own confirmation adds "and will not resume" to its sentence (`missionCancelBody`), and takes its title and both
-  buttons from the same `cancelConfirmation` (`missionConfirmation`). The confirmation describes the session as it was
+  view's own confirmation names the agent and its persona and then states the paused child's cancel in the shared words
+  (`missionCancelBody`, from `pausedCancelWith` and `PAUSED_CANCEL_ALONE`: "Cancellation cannot be undone: the agent will
+  not resume, …") since 2026-09-29 under R-067, with the repair of
+  [`the-mission-views-paused-child-confirmation-omits-that-it-cannot-be-undone.md`](../defects/fixed/the-mission-views-paused-child-confirmation-omits-that-it-cannot-be-undone.md);
+  *until then it only added "and will not resume" to its own sentence, and never said the cancel cannot be undone*. It
+  takes its title and both buttons from the same `cancelConfirmation` (`missionConfirmation`). The confirmation describes the session as it was
   when Cancel was pressed: a continue confirmed in another window before this one is answered sends the cancel to the
   live run, which cancels every unfinished descendant rather than the paused ones listed — the same window a live
   agent's confirmation has when its descendants change under it.
@@ -4755,7 +4759,7 @@ one a crash left under clause 18 with nothing open to resume ("Nothing open to r
 resuming the cancelled agents, not the Continue action. That is what a cancel carried out by its own run leaves too:
 `resilience-proof`'s `cancel` launch rests `paused` with nothing open to resume (its iteration closed `cancelled`), and
 the next send takes the cancelled task up as a new iteration, as here. One reading departs from a requirement and is raised as
-**OQ-129**: no checkpoint is captured for the iteration the record closes (REQ-GIT-051). The first execution — the unit
+**OQ-130**: no checkpoint is captured for the iteration the record closes (REQ-GIT-051). The first execution — the unit
 tests in `run/crash.test.ts` ("PD-ORCH-005 clause 3 with REQ-MONITOR-126 (OQ-103 ruled): …", at the store and at
 `Sessions`: the mark at acceptance and at an iteration opened after it, the repair, and the Continue action, "continue
 without them" and a continue by message from the recovery state and from `interrupted`) — found the repair holding on
@@ -5863,12 +5867,42 @@ what a prompt that was never delivered is called, since the specification's voca
 describes it by REQ-MONITOR-134's verb, `steering_not_delivered`, and names no new state); and whether a steer after the
 rest should instead be accepted and kept for the resumed agent, rather than refused.
 
-**OQ-129 — Is a checkpoint captured for the iteration the record of an accepted explicit cancel closes?** *(REQ-GIT-051,
+**OQ-129 — What is the optimistic cancel of one agent: which activity line, on which surfaces, and until when?** *(REQ-MONITOR-128, "optimistically shown as cancelled, with an activity line stating that the user cancelled them"; REQ-MONITOR-296, "eventually overwritten by the authoritative final read"; REQ-MONITOR-006(b); REQ-MONITOR-038; PD-ORCH-005 clause 16 and OQ-100/OQ-101, whose cascade counts paused descendants; the reading below departs from REQ-MONITOR-128's "each of its live descendants" by showing paused descendants cancelled too, as OQ-100 and OQ-101 depart from it. Raised 2026-09-29 by the repair of [`cancelling-one-agent-is-not-shown-cancelled-until-the-engine-answers.md`](../defects/fixed/cancelling-one-agent-is-not-shown-cancelled-until-the-engine-answers.md) under [R-067](../product/requests.md#r-067). Open. Raised as OQ-128 on its branch and renumbered OQ-129 at the merge, OQ-128 having been taken on `main` meanwhile.)*
+
+The requirement names an optimistic state and a line. It does not say where the line is drawn, whether it outlives the
+engine's answer, or which windows show the state before the engine does.
+
+**What the build proceeds under** (`packages/ui/src/cancel-overlay.ts`, written by the renderer's `cancelAgent`):
+- **The line is the agent's activity text.** The agent the user cancelled reads "The user cancelled this agent.", and
+  each descendant cancelled with it reads "Cancelled with <name>, which the user cancelled.", in every surface that
+  draws an agent's activity. The engine's republished record keeps the delegated task as the activity, so the line
+  lasts only until that record arrives. What outlives it is the timeline's `child_user_cancelled` entry and the report
+  ("The user cancelled this child."). No transcript row is added in the renderer.
+- **The set is `cancelCascade`'s.** It holds the agent and every unfinished descendant, live or paused, which is the
+  set the engine ends and the confirmation names (OQ-100, OQ-101). A paused child's at-rest cancel is shown at once too,
+  and the Continue action's count drops with it.
+- **Only the window that sent the cancel shows it early.** The overlay is per window, beside the replica and never
+  written into it (ADR-0043). In that window, every agent surface shows it: the Workspace, Mission, Overview and a
+  persona window. Another window shows the cancel when the engine's record reaches it.
+- **Until when.** Until the engine answers, the overlay is laid over whatever record the replica holds, so an unrelated
+  publication does not bring the agents back. A refusal removes it and states the engine's words, or "That agent is no
+  longer cancellable.". An acceptance pins it to every record the replica took up to that moment, and the first
+  whole-session update taken after it overwrites it. The window numbers each record its replica takes, in order
+  (`witness`, from the replica's subscription in `shell.ts`), so a reader drawing an older record than the replica's
+  newest, as a persona window's copy coalesced up to 120 ms behind does (REQ-SHELL-076), still shows the cancel. An
+  agent the engine's record already shows finished is never overlaid. *Until the verifier's finding of 2026-09-29, an
+  acceptance pinned the overlay to the one record the replica held at that moment, and "the next whole-session update
+  overwrites it". That reason was falsified before merge: the engine publishes its cancelled record and answers inside
+  one coalesce interval, so a persona window drawing the record before it lost the overlay and showed its agents
+  `running` again until its next delivery.*
+
+**OQ-130 — Is a checkpoint captured for the iteration the record of an accepted explicit cancel closes?** *(REQ-GIT-051,
 "Exactly one capture SHALL be attempted for each iteration that closes, at the moment it closes"; REQ-GIT-045;
 `PD-ORCH-005` clause 3 with OQ-103's last question, ruled under [R-067](../product/requests.md#r-067). Raised 2026-09-29 by
 the repair of
 [`a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md`](../defects/fixed/a-crash-during-the-explicit-cancel-leaves-the-cancelled-run-resumable.md).
-Open.)*
+Open. Raised as OQ-129 on its branch and renumbered OQ-130 at the merge, OQ-129 having been taken on `main`
+meanwhile.)*
 
 The ruling has the next repair or continue close an iteration whose explicit cancel was accepted and never carried out.
 The close is written from the store alone (`recordAcceptedCancel`), by the repair — `Sessions.repairOne`, which holds no

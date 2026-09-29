@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
  */
 describe('PD-ORCH-005 clauses 13, 16 and 18 (OQ-100, OQ-101, OQ-103): the renderer roots draw from the recovery fact', () => {
   const source = (file: string): string => readFileSync(new URL(`./${file}`, import.meta.url), 'utf8');
-  for (const [file, session] of [['main.tsx', 'session'], ['windows.tsx', 'state.session']] as const) it(file, () => {
+  for (const [file, session] of [['main.tsx', 'session'], ['windows.tsx', 'session']] as const) it(file, () => {
     const text = source(file);
     expect(text).toContain(`const needsRecovery = useNeedsRecovery(${session}?.id ?? null, ${session}?.executionStatus ?? null);`);
     expect(text).toContain(`restingView(${session}, entry, needsRecovery)`);

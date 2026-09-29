@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONTEXT_CAPACITY, RUN_AGENT_ID, type AgentRecord, type SessionRecord } from '@rotaris/contracts';
 import { MissionView, missionCancelBody, missionConfirmation } from './MissionView.js';
-import { CANCEL_RUN_TEXT, cancelUnavailableReason, PAUSE_NO_RUN, restingView } from './agents.js';
+import { CANCEL_RUN_TEXT, cancelConfirmation, cancelUnavailableReason, PAUSE_NO_RUN, PAUSED_CANCEL_ALONE, PAUSED_CANCEL_WITH, restingView } from './agents.js';
 import { Inspector } from './Inspector.js';
 import { useShellState } from './shell-state.js';
 import { WorkspaceView } from './WorkspaceView.js';
@@ -54,12 +54,27 @@ describe('PD-ORCH-005 clause 16 (revision 4, OQ-101): a paused child offers Canc
     expect(button(inspector(finished.id), 'inspector-cancel')).toContain('disabled');
   });
 
-  it('the Mission view enables "Cancel selection" for a paused child with no run active, and its confirmation says the child will not resume', () => {
+  it('the Mission view enables "Cancel selection" for a paused child with no run active, and its confirmation says the cancel cannot be undone', () => {
     expect(button(mission(paused.id), 'mission-cancel')).toMatch(/^<button/);
     expect(button(mission(paused.id), 'mission-cancel')).not.toContain('disabled');
     expect(button(mission(finished.id), 'mission-cancel')).toContain('disabled');
-    expect(missionCancelBody(paused, [agent({ presentationState: 'paused' })])).toBe('one (coding-agent) will be cancelled and will not resume. Cancelling cascades to 1 paused descendant.');
+    expect(missionCancelBody(paused, [agent({ presentationState: 'paused' })])).toBe(`one (coding-agent) will be cancelled. ${PAUSED_CANCEL_WITH}`);
+    expect(missionCancelBody(paused, [])).toBe(`one (coding-agent) will be cancelled. ${PAUSED_CANCEL_ALONE}`);
     expect(missionCancelBody(agent({ presentationState: 'running' }), [])).toBe('one (coding-agent) will be cancelled. Nothing cascades.');
+  });
+
+  // The note "the Mission view's paused-child confirmation omits that it cannot be undone": clause 16 makes the cancel
+  // "final as clause 3 says", and every surface that confirms it states that finality in the same words.
+  it('the Mission view states a paused child\'s cancel final in the words the Workspace and a persona window use (clauses 3 and 16)', () => {
+    const all = [paused, grand, finished];
+    for (const cascade of [[grand], []]) {
+      const shared = cancelConfirmation(paused, cascade.length > 0 ? all : [paused, finished]);
+      const mission = missionConfirmation(paused, cascade, cascade.length > 0 ? all : [paused, finished]);
+      expect(shared.body).toContain('Cancellation cannot be undone');
+      expect(mission.body.endsWith(shared.body)).toBe(true);
+      expect(mission.lines).toEqual(shared.lines);
+      expect(mission.cancelLabel).toBe('Keep it paused');
+    }
   });
 });
 
@@ -120,7 +135,7 @@ describe('PD-ORCH-005 clauses 13 and 16 (revision 4, OQ-100/OQ-101): the Mission
   it('the Mission view\'s confirmation takes its title and buttons from cancelConfirmation: "Keep it paused" for a paused child', () => {
     const all = [paused, grand, finished];
     const forPaused = missionConfirmation(paused, [grand], all);
-    expect(forPaused).toEqual({ title: 'Cancel one?', body: 'one (coding-agent) will be cancelled and will not resume. Cancelling cascades to 1 paused descendant.', lines: ['grand'], confirmLabel: 'Cancel one', cancelLabel: 'Keep it paused' });
+    expect(forPaused).toEqual({ title: 'Cancel one?', body: `one (coding-agent) will be cancelled. ${PAUSED_CANCEL_WITH}`, lines: ['grand'], confirmLabel: 'Cancel one', cancelLabel: 'Keep it paused' });
     const live = agent({ id: 'bg_00000009', name: 'live', state: 'running', presentationState: 'running', live: true, interruption: null });
     expect(missionConfirmation(live, [], [...all, live]).cancelLabel).toBe('Keep running');
     const run = agent({ id: RUN_AGENT_ID, name: 'orchestrator', state: 'running', presentationState: 'running', live: true });

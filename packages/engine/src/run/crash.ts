@@ -157,7 +157,7 @@ export const ACCEPTED_CANCEL_REPORT = 'Cancelled: the user cancelled the run, an
  * is the vocabulary's `iteration.end` event above, and the caller warns it to the session log (OQ-76's channel).
  *
  * No checkpoint is captured: the record runs from a repair, which has no Git port, or before a continue's run exists
- * (OQ-129). The pending approvals and the background sessions are the crash's to record, as for any dead run.
+ * (OQ-130). The pending approvals and the background sessions are the crash's to record, as for any dead run.
  */
 function recordAcceptedCancel(dal: StoreDal, writer: SessionWriter, sessionId: SessionId, open: IterationRow, warn: (m: string) => void, artifacts: ArtifactStore | undefined): number {
   const unfinished = iterationAgents(dal, sessionId, open).filter((c) => !isTerminalChildState(c.state));

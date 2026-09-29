@@ -57,6 +57,16 @@ The record writes no timeline word of its own (REQ-ORCH-139); its close is the v
 explicit cancel the host died before carrying out"), §4 (the run-level agent) and §7 (`iterations`), and the
 **state-ownership view**'s rest rows say so. One store column is added; no package, edge, process, channel, message kind or command changed.
 
+**A confirmed cancel of one agent is shown at once (REQ-MONITOR-128/296, 2026-09-29, R-067; OQ-129).** The renderer's
+`cancelAgent` lays a per-window overlay (`packages/ui/src/cancel-overlay.ts`, the store `cancelOverlays` in `shell.ts`)
+over the session before it sends `cancelAgent`. The agent and every unfinished descendant show `cancelled` with an
+activity line saying the user cancelled them. A refusal removes the overlay, and the first whole-session update the
+replica takes after an acceptance overwrites it; the store numbers each record the replica takes (`witness`), so a
+persona window's coalesced copy, up to 120 ms behind, keeps the overlay until its own later delivery. The Workspace, Mission and Overview roots read `useShownSession` and a persona window
+`useCancelOverlaid`; the replica keeps its two writers. The **runtime view**'s `cancelAgent` row and the
+**state-ownership view**'s volatile table name it. No package, edge, process, message kind, channel, command or store
+table changes.
+
 **The run-level agent owns every row, call and artifact its roots carry (REQ-MONITOR-071, REQ-CHAT-069, REQ-MONITOR-053,
 REQ-MONITOR-060, REQ-MONITOR-044 with PD-ORCH-005 clause 4, OQ-97 and REQ-LIBRARY-093, 2026-09-29, R-067).**
 `SessionRecord` gains `entryRoots`: each root of the session once, by the name its rows and calls carry and its canonical

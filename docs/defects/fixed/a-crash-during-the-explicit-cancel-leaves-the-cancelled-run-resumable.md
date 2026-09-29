@@ -73,4 +73,4 @@ record, the presentation and the count at the store, and at `Sessions` the mark 
 after it, the repair, and the Continue action, "continue without them" and a continue by message from the recovery state and from `interrupted`;
 thirteen of its fourteen cases fail with the repair's reads and writes withdrawn — and by the store's v27 migration test in
 `packages/store/src/store.test.ts`. No checkpoint is captured for the iteration the record closes; that reading is raised
-as OQ-129. The ruling's report-back is in OQ-103, and its first execution in `docs/architecture/first-executions.md`.
+as OQ-130 (OQ-129 on the branch, renumbered at the merge). The ruling's report-back is in OQ-103, and its first execution in `docs/architecture/first-executions.md`.

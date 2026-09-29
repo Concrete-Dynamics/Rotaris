@@ -584,6 +584,18 @@ an `approval.present` event and awaits main's `approval.shown` request, bounded 
 confirmation is a presenter error. Main reports `ok: false` when no main window exists, which is the
 unattended case reached without a lapse.
 
+**The handshake's bound met a queued request (2026-09-28, the fourteenth review round of the merged revision 4 build of
+`PD-ORCH-005`).** *"A late or absent confirmation is a presenter error"* was false for a request queued behind an open
+dialog. Main confirmed only what it showed, so such a request was denied unshown once the open dialog had stayed up for
+10 s, although `REQ-TOOLS-063` drops a queued request only on a timeout or a cancellation
+(`docs/defects/fixed/a-queued-approval-is-denied-unshown-after-ten-seconds.md`). Main now acknowledges a request that
+waits behind the open dialog, or behind requests queued ahead of it, with `approval.queued`. The bound then no longer
+applies. A request main never acknowledges is still a presenter error at 10 s. The gate races the presentation against
+its own wait, so a queued request that times out or is cancelled is dropped unshown and counts as cancelled
+(`REQ-TOOLS-054`). A window that closes while the application stays hands its queued requests back to main, which
+answers each not shown (`REQ-TOOLS-058`), so a request the bound no longer covers never hangs (`REQ-TOOLS-064`). During
+the application's quit it answers nothing, and the shutdown withdraws them (`PD-ORCH-005` clause 9).
+
 **Second execution, 2026-09-03, with children.** `PendingApprovals` is per TOOL PORT, and with delegation every
 agent — the root and each child — holds its own port. A session-level route for an answer would have reached the
 one port the session was created with and missed every agent's; caught in the code before it ran, so it is not

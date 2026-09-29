@@ -2,9 +2,10 @@ import { StrictMode, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand';
 import { RUN_AGENT_ID, TERMINAL_REFUSALS, type ApprovalOption, type ApprovalPayload, type CommandOutcome, type HooksSummary, type PausePayload, type PauseResolution, type ProviderDialogPayload, type ProviderSignInResult, type SessionListItemPayload, type TerminalFrame, type TerminalRefusal, type TerminalWindowPayload } from '@rotaris/contracts';
-import { Acknowledgements, ApprovalDialog, createTerminalWindowStreams, HookReviewDialog, PauseDialog, PersonaWindow, ProviderDialog, runLevelAgent, TerminalWindow, terminalWindowTitle, ToggleSwitch, type TerminalActionResult, type TerminalActions, type TerminalStreamSet } from '@rotaris/ui';
-import { acknowledge, acknowledgements, bridge, cancelAgent, control, displayPrefs, openLink, replica, stopRun, terminalHost, terminalStreams } from './shell.js';
-import { entryOf, useConfigSnapshot, useElapsedTick } from './session-view.js';
+import { Acknowledgements, ApprovalDialog, createTerminalWindowStreams, HookReviewDialog, PauseDialog, PersonaWindow, ProviderDialog, restingView, TerminalWindow, terminalWindowTitle, ToggleSwitch, type TerminalActionResult, type TerminalActions, type TerminalStreamSet } from '@rotaris/ui';
+import { acknowledge, acknowledgements, bridge, cancelAgent, cancelRun, control, displayPrefs, openLink, replica, terminalHost, terminalStreams } from './shell.js';
+import { entryOf, useConfigSnapshot, useElapsedTick, useNeedsRecovery } from './session-view.js';
+import { followCoalesced } from './coalesced-follow.js';
 
 /**
  * THE WINDOWS BESIDE THE MAIN ONE (ADR-0056: one bundle for every window, the role by route).
@@ -98,15 +99,16 @@ export function PersonaApp({ persona, initialSelect }: { persona: string; initia
   const [focusSteer, setFocusSteer] = useState(initialSelect?.focusSteer ? 1 : 0);
   const [visible, setVisible] = useState(!document.hidden);
   const snapshot = useConfigSnapshot('persona');
-  useEffect(() => {
-    // REQ-SHELL-076: one rebuild per 120 ms interval; a hidden window rebuilds nothing.
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const unsubscribe = replica.subscribe(() => {
-      if (document.hidden || timer !== null) return;
-      timer = setTimeout(() => { timer = null; if (!document.hidden) setState({ session: replica.getState().session, rows: replica.getState().rows }); }, 120);
-    });
-    return () => { unsubscribe(); if (timer !== null) clearTimeout(timer); };
-  }, []);
+  // REQ-SHELL-076: one rebuild per 120 ms interval; a hidden window rebuilds nothing. What the replica applied between the
+  // first render's read and this subscription is delivered as it is taken (`followCoalesced`): a session at rest
+  // publishes nothing more, so a missed transcript would stay missing (PD-ORCH-005 clause 13, OQ-100).
+  useEffect(() => followCoalesced({
+    subscribe: (listener) => replica.subscribe(listener),
+    read: () => ({ session: replica.getState().session, rows: replica.getState().rows }),
+    deliver: (next) => setState((prev) => (prev.session === next.session && prev.rows === next.rows ? prev : next)),
+    hidden: () => document.hidden,
+    intervalMs: 120,
+  }), []);
   useEffect(() => {
     const onVisibility = () => {
       const sessionId = replica.getState().sessionId;
@@ -131,7 +133,10 @@ export function PersonaApp({ persona, initialSelect }: { persona: string; initia
     return () => { document.removeEventListener('visibilitychange', onVisibility); delete (window as unknown as { __rotarisPersonaSelect?: unknown }).__rotarisPersonaSelect; };
   }, []);
   const entry = useMemo(() => entryOf(snapshot, state.rows, state.session?.agents ?? []), [snapshot, state]);
-  const runLevel = useMemo(() => runLevelAgent(state.session, entry), [state.session, entry]);
+  // PD-ORCH-005 clause 13 (OQ-100): in REQ-CHAT-008's recovery state the run-level agent presents `paused`, as in the main
+  // window — from `restingView`, the one call the Workspace and the Mission root make too.
+  const needsRecovery = useNeedsRecovery(state.session?.id ?? null, state.session?.executionStatus ?? null);
+  const { runLevel } = useMemo(() => restingView(state.session, entry, needsRecovery), [state.session, entry, needsRecovery]);
   const nowIso = useElapsedTick(visible ? state.session : null);
   const declared = snapshot?.roles.find((r) => r.role === persona)?.tools ?? [];
   const display = useStore(displayPrefs, (s) => s);
@@ -143,7 +148,9 @@ export function PersonaApp({ persona, initialSelect }: { persona: string; initia
       persona={persona} session={state.session} rows={state.rows} runLevel={runLevel} declaredTools={declared} selectedAgentId={selected} onSelectTab={setSelected}
       nowIso={nowIso} compressionThresholdPercent={snapshot?.compressorThresholdPercentage ?? 60} focusSteer={focusSteer}
       onSteer={(agentId, text) => control('submitSteeringPrompt', { agentId, text }, 'Steering is unavailable for this run.')}
-      onCancel={(agentId) => (agentId === RUN_AGENT_ID ? stopRun(false) : cancelAgent(agentId))}
+      // REQ-SHELL-075(g) / REQ-MONITOR-009: the confirmed Cancel of the run's own instance is the run's final cancel
+      // (PD-ORCH-005 clauses 3 and 15); of a child, that child's.
+      onCancel={(agentId) => (agentId === RUN_AGENT_ID ? cancelRun() : cancelAgent(agentId))}
     />
     {/* ADR-0049's fourth decision: the acknowledgement stack is PER WINDOW, so this window owns its own — the same
         shared component the main window draws, swept for accessibility here in its own right (REQ-SHELL-112). */}

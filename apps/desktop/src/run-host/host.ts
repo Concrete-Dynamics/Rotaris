@@ -257,8 +257,8 @@ export function createRunHost() {
     },
   });
 
-  const configure = (workspaceRoot: string, attended: boolean) => {
-    const r = configureRun(workspaceRoot, attended, configurationDeps);
+  const configure = (workspaceRoot: string, attended: boolean, entryPersona?: string) => {
+    const r = configureRun(workspaceRoot, attended, configurationDeps, entryPersona === undefined ? undefined : { entryPersona });
     if (r.ok) { configured.set(workspaceRoot, r.value); mcp.newConfiguration(r.value.cfg); }
     return r;
   };
@@ -322,7 +322,7 @@ export function createRunHost() {
     model: null,
     // ADR-0036/0037: the files, the live state, the loader's passes — once per run start.
     configure: (workspaceRoot, ctx) => {
-      const r = configure(workspaceRoot, ctx.attended);
+      const r = configure(workspaceRoot, ctx.attended, ctx.entryPersona);
       if (r.ok) { configuredRuns.set(ctx.sessionId, r.value); runBearers.set(ctx.sessionId, leased.get(workspaceRoot) ?? {}); }
       // REQ-WORKSPACE-060: the units as a GETTER, read at every agent construction, so a skill invoked between
       // prompts reaches the next agent built and never retracts one already running (REQ-CONFIG-166).
@@ -397,6 +397,15 @@ export function createRunHost() {
       },
     }),
     backgroundSessions: () => terminal?.runningBackground ?? 0,
+    // PD-ORCH-005 clause 10: the background sessions a session's agents started, as this process holds them, and ending
+    // them (REQ-TOOLS-109's end). Read through `terminal` at each call, since the manager arrives after the host starts.
+    terminals: (sessionId) => ({
+      list: () => (terminal?.backgroundOwnedBy(sessionId) ?? []).map((b) => ({ id: b.id, taskId: b.owner?.taskId ?? '', command: b.command, startedAt: b.startedAt, status: b.status, exitCode: b.exitCode, tail: b.tail() })),
+      end: async (ids) => {
+        const wanted = new Set(ids);
+        await Promise.all((terminal?.backgroundOwnedBy(sessionId) ?? []).filter((b) => wanted.has(b.id)).map((b) => b.end('killed')));
+      },
+    }),
     attended: () => presenters.attended,
     sessionLogAppender: (dal, sid) => fileAppender(join(dirname(dal.db.name), 'sessions', sid, 'session.log')),
     // ADR-0015: the hook set per run from the two file scopes; the hook process inherits this process's environment (REQ-HOOKS-032).

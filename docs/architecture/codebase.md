@@ -485,7 +485,9 @@ in `configuration.ts`'s header.)
    while a surface is open. `pnpm palette-proof` drives five launches and reads the block through the **operating
    system's own cursor and keyboard** — the injected events every other proof uses enter the renderer below the host's
    input block and would pass through a disabled window, which is recorded in ADR-0048 beside the reading that a
-   disabled window can still be raised to the foreground. **Found — one defect:** binding Ctrl+L and Ctrl+Return through
+   disabled window can still be raised to the foreground. That host-input half runs on Windows only. Since 2026-09-28
+   the proof states it not applicable elsewhere and asserts the application's own reading there
+   ([note](../defects/fixed/palette-proof-reads-the-win32-host-input-on-every-platform.md)). **Found — one defect:** binding Ctrl+L and Ctrl+Return through
    the registry deferred both by two animation frames, so a keystroke immediately after Ctrl+L reached whatever held
    focus before; the product's own prompt seam types at that speed and stopped submitting, which is how it surfaced.
 

@@ -39,7 +39,7 @@ assertion that can never fail.
 
 Beside it, an unanswered reading. With `code_intelligence` disabled, `code-intelligence-setup` is still applicable
 and still runs in the background. REQ-WORKSPACE-090 makes applicability exactly REQ-MCP-037's availability rule,
-and that rule never mentions `enabled`. Raised as OQ-94, not changed here.
+and that rule never mentions `enabled`. Raised as OQ-109 (OQ-94 on its branch, renumbered at the merge), not changed here.
 
 ## Relevant files
 

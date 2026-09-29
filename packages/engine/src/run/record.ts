@@ -1,0 +1,114 @@
+import { createHash } from 'node:crypto';
+import type { SessionId } from '@rotaris/kernel';
+import type { ChatMessage, ToolSpec } from '@rotaris/model';
+import type { AgentMessageRow, StoreDal } from '@rotaris/store';
+import type { SessionWriter } from '../session-writer.js';
+import type { ConversationRecorder } from './conversation.js';
+
+/**
+ * PD-ORCH-005 clauses 1 and 12 — the conversation record: every agent's conversation, the iteration root's and every
+ * child's at every depth, kept as it happens under the agent's task id, and the record a paused, stopped, quit or crashed
+ * run is resumed from.
+ *
+ * The record is fed by the `Conversation` itself (the spike's finding: `push` and `replace` are the only two ways a
+ * conversation changes), so a message reaches the record at the moment it joins the conversation and never by a copy
+ * taken afterwards. A compression is a `replace`, and it is written as a replacement of the whole conversation — a
+ * resume sends the compressed conversation, and the full history stays in the table.
+ *
+ * The iteration an entry belongs to is carried with it, which is what the transcript clear reads: it removes the
+ * records of closed iterations and keeps an open one's (clause 12).
+ */
+export class ConversationRecord {
+  constructor(private readonly writer: SessionWriter, private readonly dal: StoreDal | undefined, private readonly sessionId: SessionId) {}
+
+  /** The recorder an agent's turn hands its `Conversation`: every push one message, every replace one replacement. */
+  recorder(taskId: string, iteration: number): ConversationRecorder {
+    return {
+      appended: (message) => { this.writer.recordAgentMessage(taskId, iteration, 'message', message); },
+      replaced: (messages) => { this.writer.recordAgentMessage(taskId, iteration, 'replacement', messages); },
+    };
+  }
+
+  /**
+   * REQ-ORCH-088's fallback retry starts the child's conversation again from its payload, so the record says so: an
+   * empty replacement, after which the second attempt's messages are the conversation a resume would send.
+   */
+  restarted(taskId: string, iteration: number): void {
+    this.writer.recordAgentMessage(taskId, iteration, 'replacement', []);
+  }
+
+  /**
+   * PD-ORCH-005 revision 4 clause 14: the check one execution of an agent makes at its first model step, handed the system
+   * prompt and the tool definitions that step's request carries. An agent with no fingerprint recorded has it recorded —
+   * what it started with. An agent that has one is being resumed (a task id is never executed twice otherwise), and when
+   * either digest differs the run states, as a warning, which agent resumed under changed instructions: an issue at
+   * warning severity with its timeline entry, and a line in the transcript (OQ-105). Only the first call of an execution
+   * acts, so REQ-ORCH-088's retry and REQ-ORCH-095's re-prompt, which run within it, compare nothing. Nothing with no store.
+   */
+  fingerprint(taskId: string, agentName: string, iteration: number): FingerprintCheck {
+    let checked = false;
+    return (systemPrompt, specs) => {
+      if (checked || !this.dal) return;
+      checked = true;
+      const current = fingerprintOf(systemPrompt, specs);
+      const started = this.dal.agentFingerprintOf(this.sessionId, taskId);
+      if (!started) { this.writer.recordAgentFingerprint(taskId, iteration, current.instructions, current.tools); return; }
+      const instructionsChanged = started.instructions !== current.instructions;
+      const toolsChanged = started.tools !== current.tools;
+      if (!instructionsChanged && !toolsChanged) return;
+      const what = instructionsChanged && toolsChanged ? 'system instructions and tool definitions' : instructionsChanged ? 'system instructions' : 'tool definitions';
+      const message = `Agent ${agentName} (${taskId}) resumed under changed instructions: its ${what} differ from the ones it started with.`;
+      this.writer.recordIssue({ kind: 'resumed_under_changed_instructions', severity: 'warning', actor: agentName, message, metadata: { task_id: taskId, iteration, instructions_changed: instructionsChanged, tools_changed: toolsChanged } });
+      this.writer.appendRow('system', message, true);
+    };
+  }
+
+  /** The conversation a resume sends the agent's model: its last replacement, then every message after it. Empty with no store. */
+  load(taskId: string): ChatMessage[] {
+    return this.dal ? conversationOf(this.dal.agentConversation(this.sessionId, taskId)) : [];
+  }
+}
+
+/**
+ * The conversation an agent's record describes, from its entries as `agentConversation` reads them: the last
+ * replacement's messages (when the read starts at one), then each message in order. Pure, so the decode is tested
+ * apart from the store.
+ */
+export function conversationOf(rows: readonly AgentMessageRow[]): ChatMessage[] {
+  const out: ChatMessage[] = [];
+  for (const row of rows) {
+    const body: unknown = JSON.parse(row.body);
+    if (row.kind === 'replacement') {
+      out.length = 0;
+      if (Array.isArray(body)) out.push(...(body as ChatMessage[]));
+    } else {
+      out.push(body as ChatMessage);
+    }
+  }
+  return out;
+}
+
+/** PD-ORCH-005 revision 4 clause 14: handed the system prompt and the tool definitions of an agent's model request. */
+export type FingerprintCheck = (systemPrompt: string, specs: readonly ToolSpec[]) => void;
+
+/**
+ * PD-ORCH-005 revision 4 clause 14: the fingerprint of an agent's instructions and tools — the SHA-256 of the system
+ * prompt as the request carries it, and of its tool definitions. The definitions are taken in name order with every
+ * object's keys sorted, so the order a listing was assembled in is not a change; a name, a description or a parameter
+ * schema that differs is.
+ */
+export function fingerprintOf(systemPrompt: string, specs: readonly ToolSpec[]): { readonly instructions: string; readonly tools: string } {
+  const sha = (text: string): string => createHash('sha256').update(text, 'utf8').digest('hex');
+  const ordered = [...specs].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  return { instructions: sha(systemPrompt), tools: sha(stableJson(ordered)) };
+}
+
+/** JSON with every object's keys in sorted order, so two equal values serialise alike whatever order they were built in. */
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value !== null && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>).filter(([, v]) => v !== undefined).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stableJson(v)}`).join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
+}

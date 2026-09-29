@@ -63,6 +63,15 @@ the listing and the callable set would diverge — the model would be told it ma
 `Run.planHeld` is settled once, after the pre-flight (so the answer group is known) and before the first
 thing the gate withholds, and is never cleared in place.
 
+> **Amended by [`PD-ORCH-003`](../../product/directives.md#pd-orch-003) revision 2, 2026-09-28.** A run that resumes
+> an iteration a rest left open (`PD-ORCH-005` clause 4) — or, by OQ-104's reading, one a crash left open once the
+> crash is recorded (clause 18) — runs it unheld, and when the gate would hold the run it holds once that iteration
+> has closed and the stop conditions found work left, before the first new iteration. So a segment boundary can now
+> fall inside a run: the resumed iteration is work already under way — usually of an execution that was already
+> released, though not always, since a session that never held a release can be switched to `plan` before it is
+> continued — and the plan cycle after it is a segment of its own, whose turn builds its ports under the hold. The
+> flag is still set once and never cleared in place, and every point that enforces it still reads it live.
+
 The enforcement points nevertheless read it through a **closure** rather than copying a boolean. That costs
 nothing and keeps the code honest: if release-in-place is ever adopted, the three points follow the run's
 own state rather than a stale copy taken at construction.
@@ -287,7 +296,7 @@ assertion reads the inspection's matches. Any launch refused as held by another 
 Recorded and repaired in
 [`plan-gate-proof-turns-code-intelligence-off-with-a-key-nothing-reads.md`](../../defects/fixed/plan-gate-proof-turns-code-intelligence-off-with-a-key-nothing-reads.md).
 **Found beside it:** with the entry disabled, the workspace's `code-intelligence-setup` still runs, because
-applicability is REQ-MCP-037's availability and that rule does not read `enabled` (OQ-94, built as the letter).
+applicability is REQ-MCP-037's availability and that rule does not read `enabled` (OQ-109, built as the letter).
 **What it could not show:** launches 3 to 6 keep their fixed offsets (the revise at 6,000 and 6,600 ms, the approve
 at 6,000, the chip at 10,000 and 11,000, the prompts at 10,000 and 15,000). They were green on every run here and
 were not moved. Windows and macOS were not run (IC-3).

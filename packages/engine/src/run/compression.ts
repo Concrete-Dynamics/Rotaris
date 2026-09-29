@@ -130,7 +130,7 @@ export async function compress(input: CompressionInput, deps: CompressorDeps, si
 
   const summary = clampSummary(text);
   const rebuilt = rebuild(original, summary, input.todoLines, messages.slice(from));
-  conversation.replace(rebuilt);
+  if (!conversation.replace(rebuilt)) return fail('the agent\'s turn ended before the compressing pass completed');
   return { ok: true, reason: '', nothingToDo: false, beforeTokens: before, afterTokens: estimateTokens(rebuilt, input.charsPerToken), beforeMessages: messages.length, afterMessages: rebuilt.length, summary };
 }
 

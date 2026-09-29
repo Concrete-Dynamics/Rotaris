@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { IntentStatusSchema } from './intent.js';
-import { PlanGateSchema } from './control.js';
+import { PlanGateSchema, ResumableSchema } from './control.js';
 import { ApprovalPayloadSchema, QuestionPromptSchema } from './tools.js';
 import { AgentRecordSchema } from './children.js';
 import { CONTRACT_SCHEMA_VERSION } from './version.js';
@@ -262,6 +262,8 @@ export const SessionRecordSchema = z.object({
    * the fact a surface showing the mode has to state or it offers a gate that will not open.
    */
   planReleased: z.boolean(),
+  /** PD-ORCH-005 clause 6: the open iteration the Continue action resumes, and how many agents it resumes; null when none is open. */
+  resumable: ResumableSchema.nullable(),
   /** REQ-MONITOR-166: the token history the run sampled — [at, cumulative total], oldest first, at most 120 (named without the word the secret test forbids). */
   usageHistory: z.array(z.tuple([z.string(), z.number().int().nonnegative()])),
   /**

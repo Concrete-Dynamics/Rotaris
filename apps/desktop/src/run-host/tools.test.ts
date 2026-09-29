@@ -10,7 +10,7 @@ import { SessionWriter, UserPresence, type ToolPortContext } from '@rotaris/engi
 import { forgetSpelling, migrateStore, openStore, StoreDal } from '@rotaris/store';
 import { personaResolverFor, runtimeFromConfiguration, type ConfiguredRun } from './configuration.js';
 import type { McpHost } from './mcp.js';
-import { createToolPort, isEntryPort, toolSpec, type ToolPortDeps } from './tools.js';
+import { createToolPort, isEntryPort, RunHostPresenter, toolSpec, type ToolPortDeps } from './tools.js';
 
 /**
  * Part N's finding: the entry test was written against the root id `root`, which Part B had already made
@@ -187,6 +187,37 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
     expect(asked).toEqual(['src/api/users.ts', 'src/ui/view.ts']);
   });
 
+  it('PD-ORCH-005 clause 9 through the port: a rest withdraws the approval a call waits on, and the call reaches the turn marked interrupted', async () => {
+    const port = portFor(null, null);
+    const pending = port.dispatch({ callId: 'c1', name: 'write_file', rawArgs: JSON.stringify({ operation: 'create', path: 'w.txt', content: 'x' }), persona: 'coding-agent', agentId: 'coding-agent', agentName: 'coding-agent' }, new AbortController().signal);
+    await vi.waitFor(() => expect(presented).toHaveLength(1));
+    expect(port.withdrawPending?.('pause')).toBe(1);
+    const r = await pending;
+    expect(r).toMatchObject({ status: 'blocked', isError: true, interrupted: true });
+    expect(existsSync(join(dir, 'w.txt'))).toBe(false);
+    expect(dal.timelineOf(asSessionId('S1')).map((t) => t.name)).toContain('approval_withdrawn');
+    expect(dal.auditOf(asSessionId('S1'))).toEqual([]);
+    expect(port.withdrawPending?.('pause')).toBe(0);
+  });
+
+  it('PD-ORCH-005 clause 9 through the port (found by phase 3\'s review): a rest withdraws a waiting question — recorded as withdrawn, the call never run, no tool error raised', async () => {
+    const port = portFor(null, null, {}, { tools: '[read_file, ask_questions]' });
+    const call = { callId: 'q1', name: 'ask_questions', rawArgs: JSON.stringify({ steps: [{ id: 'a', title: 'Which one?' }] }), persona: 'coding-agent', agentId: 'coding-agent', agentName: 'coding-agent' };
+    const pending = port.dispatch(call, new AbortController().signal);
+    // Under `ask` the call is approved first; the question it then puts is the wait the rest withdraws.
+    await vi.waitFor(() => expect(presented).toHaveLength(1));
+    expect(port.answerApproval(presented[0]!.request_id, 'once')).toBe(true);
+    await vi.waitFor(() => expect(port.pendingQuestions?.()).toHaveLength(1));
+    expect(port.withdrawPending?.('stop')).toBe(1);
+    const r = await pending;
+    expect(r).toMatchObject({ status: 'blocked', isError: true, interrupted: true });
+    expect(r.text).toBe('The questions were withdrawn by the stop before the user answered. Nothing was answered; ask again if the answers are still needed.');
+    expect(port.pendingQuestions?.()).toEqual([]);
+    const timeline = dal.timelineOf(asSessionId('S1'));
+    expect(JSON.parse(timeline.find((t) => t.name === 'question_withdrawn')!.metadata)).toMatchObject({ tool: 'ask_questions', interruption: 'stop' });
+    expect(dal.issuesOf(asSessionId('S1')).map((i) => i.kind)).not.toContain('tool_error');
+  });
+
   /**
    * PD-TOOLS-004 through the port: the gate's `publicTool` is what keeps a server's own `write_file` — offered under
    * that name to a persona whose public set lacks one — on REQ-TOOLS-024's exact match, while the public `write_file`
@@ -289,3 +320,52 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
     expect(unpinned.currentMode()).toBe<PermissionPreset>('autonomous');
   });
 });
+
+/**
+ * ADR-0019's handshake with REQ-TOOLS-063's queue. Main must acknowledge a present-request within the bound, by showing
+ * the dialog or by saying it queued the request behind the one already open. A queued request then waits for its turn
+ * unbounded. Before `approval.queued` existed, a request queued behind a dialog left open for more than 10 s was denied
+ * "because the approval request could not be shown".
+ */
+describe('RunHostPresenter (ADR-0019, REQ-TOOLS-063)', () => {
+  const payload = (id: string): ApprovalPayload => ({ request_id: id, session_id: 's', agent_id: 'a', persona: 'p', tool_name: 'delegate', command: '', argument_summary: '', rule_id: 'preset:ask', reason: 'r', sequence: 1 });
+  const presenterWith = () => {
+    const clock = new FakeClock();
+    const posted: string[] = [];
+    const closed: string[] = [];
+    const presenter = new RunHostPresenter({ post: (p) => posted.push(p.request_id), close: (id) => closed.push(id), clocks: clock, shownBoundMs: 10_000 });
+    return { clock, posted, closed, presenter };
+  };
+
+  it('a request main queued behind its open dialog is not denied at the bound, and resolves when it is shown', async () => {
+    const t = presenterWith();
+    let settled: unknown = null;
+    void t.presenter.present(payload('q1')).then((r) => { settled = r; });
+    expect(t.presenter.queued('q1')).toBe(true);
+    t.clock.advance(60_000);
+    await Promise.resolve();
+    expect(settled).toBeNull();
+    expect(t.presenter.shown('q1', true)).toBe(true);
+    await Promise.resolve();
+    expect(settled).toEqual({ ok: true });
+  });
+
+  it('a request main never acknowledges is still a presenter error at the bound', async () => {
+    const t = presenterWith();
+    const r = t.presenter.present(payload('q2'));
+    t.clock.advance(10_000);
+    expect(await r).toEqual({ ok: false, error: 'main did not confirm the dialog within 10000 ms' });
+    expect(t.presenter.queued('q2')).toBe(false);
+  });
+
+  it('closing a request still queued releases it and tells main to drop it', async () => {
+    const t = presenterWith();
+    const r = t.presenter.present(payload('q3'));
+    t.presenter.queued('q3');
+    t.presenter.close('q3');
+    expect(await r).toMatchObject({ ok: false });
+    expect(t.closed).toEqual(['q3']);
+    expect(t.presenter.shown('q3', true)).toBe(false);
+  });
+});
+

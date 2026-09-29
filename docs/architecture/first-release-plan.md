@@ -57,11 +57,12 @@ record already decides, and every ruling it needs is named as the owner's rather
   red: REQ-CHAT-027's partial shade at 4.06:1 on the ground the composer dock paints, every other check passing in a
   diagnostic run ([note](../defects/the-slash-token-colours-clear-their-floor-on-a-ground-the-composer-no-longer-paints.md);
   ADR-0050's fourth execution). On Linux as
-  root, `resilience-proof`, `sandbox-proof`, `notice-proof` and `init-proof` are red for their recorded notes
-  ([override select](../defects/resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md),
-  [Windows verdict](../defects/sandbox-proof-asserts-the-windows-verdict-on-every-platform.md), and
+  root, `resilience-proof`, `notice-proof` and `init-proof` are red for their recorded notes
+  ([override select](../defects/resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md), and
   [code intelligence as root](../defects/fixed/the-code-intelligence-server-dies-when-the-app-runs-as-root.md) for the last
-  two).
+  two). `sandbox-proof` reads the host's own verdict since 2026-09-28 ([Windows verdict, fixed](../defects/fixed/sandbox-proof-asserts-the-windows-verdict-on-every-platform.md)).
+  It is green on Linux without `bwrap`. On Linux with `bwrap` it is red on a **product** defect that IC-8's first Linux
+  execution found ([absent-subpath residue](../defects/the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md)).
 - The unbuilt directives `PD-TOOLS-003`, `PD-TOOLS-004`, `PD-TOOLS-005` (**built 2026-09-28**, R-062), `PD-ORCH-004` and `PD-MONITOR-002`.
 - The macOS and Linux artifacts, which are bound by IC-3 and IC-8 and now also by `PD-STARTUP-001`.
 

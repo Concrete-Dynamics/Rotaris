@@ -637,7 +637,7 @@ export class IterationChildren implements DelegationOps {
     // it reports is written only while this execution still belongs to a live run (REQ-SESSION-094). REQ-ORCH-139's closed
     // timeline vocabulary has no word for the wait on tools, the recovery or the corrective message, so, as OQ-76 did for
     // the user's presence, they are written to the session log through the run's `warn` and no timeline word is minted;
-    // OQ-109 asks the owner for the words.
+    // OQ-126 asks the owner for the words.
     const stallWatch = new StallWatch(deps.clocks, stallMs, {
       // REQ-MONITOR-119: the `stall` issue at every stall evaluation; REQ-MONITOR-120 throttles only the warning.
       stalled: (s) => {
@@ -760,7 +760,7 @@ export class IterationChildren implements DelegationOps {
         /*
          * REQ-NOTIFY-111/112: a child whose turn failed after it produced no output for the whole stall window does not end
          * as a failure: it is given one corrective message and resumes from where it stopped, its conversation carrying on
-         * with the message (OQ-109). Once per child task; never on an answer-only route, after its own limit, a cancel, the
+         * with the message (OQ-126). Once per child task; never on an answer-only route, after its own limit, a cancel, the
          * rest, loop supervision's escalation, or an error no instruction can address.
          */
         const failedStep = outcome.report.status === 'failed' ? outcome.report.error : null;
@@ -768,7 +768,7 @@ export class IterationChildren implements DelegationOps {
           corrected = true;
           const quietS = Math.floor(stallWatch.quietFor() / 1000);
           const instruction = correctiveInstruction({ quietS, windowS: stallMs / 1000, failure: failedStep?.headline ?? 'no reason was given' });
-          // The message itself is in the child's conversation record (REQ-ORCH-140); the session log says it was sent (OQ-109).
+          // The message itself is in the child's conversation record (REQ-ORCH-140); the session log says it was sent (OQ-126).
           deps.warn(correctiveMessageLine(row.canonical_name, row.task_id, quietS, failedStep?.headline ?? 'no reason was given'));
           stallWatch.activity();
           const stopped = outcome;

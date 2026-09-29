@@ -10,14 +10,14 @@ the verifier of the stall watchdog's build (2026-09-29, R-067), established by r
 Its other half is repaired and is not this note: a child resumed after such a wait was blamed for it by REQ-NOTIFY-112's
 recovery, and a resumed step that failed at once earned the corrective message. Since the verifier's second round
 (2026-09-29) every turn the run starts for a child starts its silence again, so the recovery no longer reads the wait
-(OQ-109; `children.test.ts`, "a child that waited on its own child past the window …"). What this note records — the
+(OQ-126; `children.test.ts`, "a child that waited on its own child past the window …"). What this note records — the
 warning and the `stall` issues written during the wait — is unchanged.
 
 ## Specs
 
 REQ-ORCH-089 and REQ-MONITOR-118/119 tell a stall from a wait only by "active tool calls"; they do not name a wait on
 delegated children, which the watch then reads as silence. Whether that wait pauses the watch, or counts as waiting on
-N active children at the informational level of REQ-MONITOR-118, is a reading OQ-109 does not yet state.
+N active children at the informational level of REQ-MONITOR-118, is a reading OQ-126 does not yet state.
 
 ## Relevant files
 

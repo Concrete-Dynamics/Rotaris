@@ -606,7 +606,7 @@ settle in `execute` writes (REQ-ORCH-098): `child_end`, `child_result`, `child_c
 `child_completed`. So no child is left `running` with no execution behind it.
 
 **The stall watch and the corrective message (REQ-ORCH-089, REQ-MONITOR-117..120, REQ-NOTIFY-111/112;
-`children/stall.ts`; OQ-109).** Each attempt of a child's execution runs a `StallWatch` on the clock port. Its
+`children/stall.ts`; OQ-126).** Each attempt of a child's execution runs a `StallWatch` on the clock port. Its
 threshold is the role's `stall_timeout`, else `runtime.child_stall_timeout`, 90 s by default, and it is the same window
 as the progress rule's. It evaluates every `max(1, min(threshold/6, 5))` seconds and never cancels anything. It is fed:
 - every streamed part (`TurnSink.event`, then `TurnDeps.onModelEvent`);
@@ -616,7 +616,7 @@ as the progress rule's. It evaluates every `max(1, min(threshold/6, 5))` seconds
   REQ-NOTIFY-112's recovery reads (`quietFor`). The watch's own evaluation still counts such a wait, and reports the
   child stalled while it waits
   ([`a-child-waiting-on-its-own-children-is-reported-stalled.md`](../../defects/a-child-waiting-on-its-own-children-is-reported-stalled.md),
-  OQ-109).
+  OQ-126).
 
 What it writes:
 - a silence of the threshold with no call in flight: a `stall` issue at every evaluation (REQ-MONITOR-119), and a
@@ -625,7 +625,7 @@ What it writes:
 - activity resuming after a stall: a `child stall recovered: …` line (REQ-MONITOR-120).
 
 Those lines, and the `child corrective message: …` line below, go to the session log through the run's `warn`, as
-OQ-76's do: REQ-ORCH-139's closed timeline vocabulary has no word for them and none is minted (OQ-109).
+OQ-76's do: REQ-ORCH-139's closed timeline vocabulary has no word for them and none is minted (OQ-126).
 
 Its per-evaluation callback has no listener yet. A child's turn can end `failed` after no output for the whole window,
 with no call in flight. Unless the outcome is one REQ-NOTIFY-112 excludes, that child is given one corrective message:

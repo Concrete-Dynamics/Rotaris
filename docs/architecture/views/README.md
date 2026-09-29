@@ -46,12 +46,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 ## Last reconciled with the code: **2026-09-29**
 
 **A delegated child is watched for a stall, and one that produced no output gets its corrective message
-(REQ-ORCH-089, REQ-MONITOR-117..120, REQ-NOTIFY-111/112, 2026-09-29, R-067; OQ-109).** `children/stall.ts` is new in
+(REQ-ORCH-089, REQ-MONITOR-117..120, REQ-NOTIFY-111/112, 2026-09-29, R-067; OQ-126).** `children/stall.ts` is new in
 `engine`. `TurnSink` gains an optional `event` for every streamed part, and `TurnDeps` gains `onModelEvent` and
 `onToolStarted`, and `ConversationRecord` gains `everRecorded`, which a resumed child reads so that its one corrective
 message stays one per task. The watch writes a `stall` issue at every stall evaluation; the wait on tools, the recovery
 and the corrective message are session-log lines through the run's `warn`, since REQ-ORCH-139's vocabulary has no
-timeline word for them (OQ-109). The **runtime view**'s §4 names it. No package, edge, process, channel,
+timeline word for them (OQ-126). The **runtime view**'s §4 names it. No package, edge, process, channel,
 command or store table changes.
 
 **A child settled without its turn gets its report (REQ-ORCH-048 / REQ-ORCH-052 / REQ-ORCH-108, 2026-09-29, R-067).**

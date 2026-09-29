@@ -45,7 +45,7 @@ run.
 ## Repaired — 2026-09-29
 
 Repaired 2026-09-29 under R-067. The watchdog and the recovery are built in `packages/engine/src/children/stall.ts` and
-wired in `IterationChildren.execute`. The readings are [OQ-109](../../architecture/open-questions.md).
+wired in `IterationChildren.execute`. The readings are [OQ-126](../../architecture/open-questions.md).
 
 **The watch (REQ-ORCH-089, REQ-MONITOR-117 to REQ-MONITOR-120).** Every attempt of a child's execution runs a
 `StallWatch`. It uses the clock ports and never cancels anything. Its threshold is the role's `stall_timeout`, else
@@ -98,15 +98,15 @@ and the role case fails with the role's window dropped.
 - REQ-MONITOR-135's stall-evaluation leg is missing.
 
 REQ-NOTIFY-112's other three recovery-eligible conditions are not detected, so REQ-NOTIFY-111's third-recovery
-escalation is unreachable (OQ-109). No live run was made (the `duress` scenario was not run).
+escalation is unreachable (OQ-126). No live run was made (the `duress` scenario was not run).
 
 **Corrected by the verifier's first round, 2026-09-29.** The first form wrote the `stall` issue only with each
 throttled warning, which narrowed REQ-MONITOR-119's "every stall evaluation" (the throttle of REQ-MONITOR-120 bounds
 "the warning itself"). The issue is now written at every evaluation, and the ring eviction that reasoning feared is
-the question OQ-109 leaves for a ruling. `children.test.ts`'s "a `stall` issue at every stall evaluation" fails when
+the question OQ-126 leaves for a ruling. `children.test.ts`'s "a `stall` issue at every stall evaluation" fails when
 the issue is written with the warning only. The timeline words `child_waiting_on_tools`, `child_stall_recovered` and
 `child_corrective_message` are outside REQ-ORCH-139's closed vocabulary; the first form minted them without saying so,
-and OQ-109 now records the gap and the reading built.
+and OQ-126 now records the gap and the reading built.
 
 **Corrected by the verifier's second round, 2026-09-29.** Three corrections, each with the reason it replaces:
 - *Once per child task.* The first form held the count in a variable of one execution and said "one message per child
@@ -122,7 +122,7 @@ and OQ-109 now records the gap and the reading built.
   `child_waiting_on_tools`, `child_stall_recovered` and `child_corrective_message`, names REQ-ORCH-139 forbids, on the
   reason that the session log was out of reach without editing `Run.turn`. It was not: the run's `warn`, which the
   children already hold, is the channel OQ-76's lines reach the session log through. They are session-log lines now,
-  and OQ-109 keeps the question of their words for the owner.
+  and OQ-126 keeps the question of their words for the owner.
 
 **Corrected by the verifier's third round, 2026-09-29.** Two statements and one edge:
 - *The wait on its own children.* The second round's "a wait on its own children is never counted as its silence" is

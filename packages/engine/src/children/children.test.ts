@@ -824,7 +824,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       // The corrective message follows the conversation the failed turn left: the task, then the message.
       expect(childAsked[1]).toContain('TASK: be quiet');
       expect(childAsked[1]).toContain('[Corrective message] You produced no output for 90 seconds (the stall window, runtime.child_stall_timeout, is 90 seconds), and your last model request then failed: the stream ended with no answer.');
-      // REQ-ORCH-139: no timeline word is minted for it; the session log says it was sent (OQ-109, as OQ-76 did).
+      // REQ-ORCH-139: no timeline word is minted for it; the session log says it was sent (OQ-126, as OQ-76 did).
       expect(warnings.filter((m) => m.startsWith('child corrective message:'))).toEqual([`child corrective message: quiet (${child(sid).task_id}) produced no output for 90 seconds and its model request then failed (the stream ended with no answer); it was given its one corrective message and resumes (REQ-NOTIFY-111)`]);
       expect(dal.timelineOf(sid).filter((t) => t.name.startsWith('child_corrective') || t.name.startsWith('child_stall') || t.name.startsWith('child_waiting'))).toEqual([]);
       expect(child(sid).state).toBe('succeeded');
@@ -880,7 +880,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       finish();
       await sessions.running(sid)!;
       expect(child(sid).state).toBe('succeeded');
-      // REQ-ORCH-139: neither is a timeline word (OQ-109).
+      // REQ-ORCH-139: neither is a timeline word (OQ-126).
       expect(dal.timelineOf(sid).filter((t) => t.name.startsWith('child_stall') || t.name.startsWith('child_waiting'))).toEqual([]);
     });
 

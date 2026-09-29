@@ -5,7 +5,7 @@ issue when the child goes silent, and it calls its stall callback on every evalu
 stalled. `IterationChildren.execute` passes that callback nowhere. No host listens to it, so:
 - nothing reaches the child's `AgentRecord`;
 - no surface draws a stalled badge, a stalled activity text or a countdown that advances with each evaluation;
-- a recovery is written as a session-log line (`child stall recovered: …`) through the run's `warn` (OQ-109), and is
+- a recovery is written as a session-log line (`child stall recovered: …`) through the run's `warn` (OQ-126), and is
   not notified to any surface.
 
 The entry agent (the root) is not watched at all. The watch is built into a child's execution only, and wiring it into
@@ -29,7 +29,7 @@ stall callback.
 - `REQ-MONITOR-117`: "Each agent is evaluated for a stall". The root is not.
 - `REQ-MONITOR-135`: injection "opportunistically from stall evaluations".
 - `REQ-TUI-139` describes the stalled activity text for the terminal interface. Which surface of this product owes a
-  badge is for `REQ-SHELL-023`'s surfaces to say. OQ-109 records the readings the watch was built under.
+  badge is for `REQ-SHELL-023`'s surfaces to say. OQ-126 records the readings the watch was built under.
 
 ## Relevant files
 

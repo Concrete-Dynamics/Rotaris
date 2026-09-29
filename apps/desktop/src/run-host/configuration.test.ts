@@ -315,4 +315,49 @@ personas:
     expect(runtime.modelCapFor!('qwen3.8-flash-next')).toBeNull();
     expect(contextLimitsOf(r.value.cfg)['qwen3.8-flash-next']).toBeUndefined();
   });
+
+  it('REQ-CONFIG-094: two keys naming the same provider model never share a count — a role on a synthetic copy is recorded under the key it was copied from, the run under its own', () => {
+    const ALPHA = 'openai-compatible--alpha/qwen';
+    const BETA = 'openai-compatible--beta/qwen';
+    mkdirSync(join(dir, 'ws', '.rotaris'), { recursive: true });
+    writeFileSync(join(dir, 'ws', '.rotaris', 'agents.yaml'), `default_persona: orchestrator
+models:
+  ${ALPHA}:
+    provider: openai-compatible
+    model_id: qwen
+    base_url: https://alpha.example/v1
+    api_key: k
+    max_input_tokens: 32768
+    max_parallel: 1
+  ${BETA}:
+    provider: openai-compatible
+    model_id: qwen
+    base_url: https://beta.example/v1
+    api_key: k
+    max_input_tokens: 131072
+    max_parallel: 4
+large_model: ${ALPHA}
+medium_model: ${ALPHA}
+small_model: ${ALPHA}
+personas:
+  orchestrator:
+    name: Orchestrator
+    model: ${BETA}
+    thinking: high
+  coding-agent:
+    name: Coding agent
+    model: ${BETA}
+    thinking: low
+`);
+    const r = configureRun(join(dir, 'ws'), true, deps({}));
+    if (!r.ok) throw new Error(r.error.reason);
+    const run = r.value.model.config;
+    expect(r.value.cfg.personas['orchestrator']?.model).toBe('__persona__:orchestrator');
+    expect(run.modelKey).toBe(BETA);
+    const coder = childModelKey(r.value.personas!.resolve('coding-agent')!.persona, run);
+    expect(coder).toBe(BETA);
+    const runtime = runtimeFromConfiguration(r.value.cfg);
+    expect(runtime.modelCapFor!(coder)).toBe(4);
+    expect(contextLimitsOf(r.value.cfg)[coder]).toBe(131_072);
+  });
 });

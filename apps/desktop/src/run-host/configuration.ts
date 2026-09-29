@@ -3,7 +3,7 @@ import { isAbsolute, join } from 'node:path';
 import type { Clocks, Result } from '@rotaris/kernel';
 import { err, ok } from '@rotaris/kernel';
 import { resolvePreset, SANDBOX_MODE_NAMES, type HeadlessPolicy, type ModelTier, type SandboxModeName } from '@rotaris/contracts';
-import { compressionTrigger, effectivePricing, isPlainMap, launchConfigurationSnapshot, loadConfiguration, overlayLiveState, PROJECT_SETTINGS_FILE, readProjectSnapshot, renderFatal, unwrapSynthetic, type BuiltinLaunch, type LiveState, type LoadedConfiguration, type ModelEntry, type ProjectSnapshot } from '@rotaris/config';
+import { compressionTrigger, effectivePricing, isPlainMap, launchConfigurationSnapshot, loadConfiguration, overlayLiveState, PROJECT_SETTINGS_FILE, readProjectSnapshot, renderFatal, syntheticOriginOf, type BuiltinLaunch, type LiveState, type LoadedConfiguration, type ModelEntry, type ProjectSnapshot } from '@rotaris/config';
 import { renderUnavailability, type AvailabilityVerdict, type PolicyRead } from '@rotaris/agent-tools';
 import { BUILT_IN_PERSONAS, parseLogLevel, resolveRole, RUN_CONFIG_DEFAULTS, TIER_ROLES, type CatalogueEntry, type ClassifierSlots, type McpGrantEvidence, type ModelChoice, type ModelLookup, type ModelSetup, type Persona, type PersonaResolver, type ResolvedTrigger, type RoleName, type RunSetup, type RuntimePosture, type TierRole } from '@rotaris/engine';
 import { AiSdkModelClient, DefaultAgentBackend, type AgentBackend, type ModelClient, type ModelRef, type ThinkingLevel } from '@rotaris/model';
@@ -238,8 +238,8 @@ export function personaResolverFor(cfg: LoadedConfiguration, scripted: boolean, 
       systemPrompt: prompt,
       implementer: tools.some((t) => ['write_file', 'haet_edit', 'haet', 'terminal'].includes(t)),
       // REQ-CONFIG-094 (live-run finding D5): the `models:` key beside the reference, a synthetic copy (REQ-CONFIG-081)
-      // unwrapped to the entry it was copied from — the key a child of this role is recorded and capped under.
-      ...(modelRef && entry ? { modelRef, modelKey: unwrapSynthetic(entry.model, cfg.models), thinking: thinkingOf(cfg.models[entry.model]) } : {}),
+      // mapped to the entry the loader recorded it was copied from — the key a child of this role is recorded and capped under.
+      ...(modelRef && entry ? { modelRef, modelKey: syntheticOriginOf(entry.model, cfg.syntheticOrigins), thinking: thinkingOf(cfg.models[entry.model]) } : {}),
       ...(fallbackRef && entry?.fallback_model ? { fallbackModel: fallbackRef, fallbackThinking: thinkingOf(cfg.models[entry.fallback_model]) } : {}),
       // REQ-CONFIG-109 / REQ-TOOLS-048: the role's `permission_mode` pin, parsed by the loader and read at agent
       // construction and at every mid-session change (REQ-TOOLS-074). Absent means the role takes the session's mode.
@@ -588,7 +588,7 @@ export function prepareRun(workspaceRoot: string, attended: boolean, deps: Confi
         systemPrompt: entryRole.persona.systemPrompt,
         model,
         // REQ-CONFIG-094 (live-run finding D5): the run's model's `models:` key, which a child on the run's model is recorded under.
-        ...(entryRole.persona.modelKey !== undefined ? { modelKey: entryRole.persona.modelKey } : entryModelName !== null ? { modelKey: unwrapSynthetic(entryModelName, cfg.models) } : {}),
+        ...(entryRole.persona.modelKey !== undefined ? { modelKey: entryRole.persona.modelKey } : entryModelName !== null ? { modelKey: syntheticOriginOf(entryModelName, cfg.syntheticOrigins) } : {}),
         thinking: entryRole.persona.thinking ?? thinkingOf(entry),
         modelTimeoutMs: Math.round((entry?.timeout ?? runtime.modelTimeoutS) * 1000),
         modelRetries: entry?.num_retries ?? RUN_CONFIG_DEFAULTS.modelRetries,

@@ -19,6 +19,12 @@ export interface SlotDraft {
 export interface SlotResolution {
   /** REQ-CONFIG-071: which roles referenced a tier before substitution. */
   readonly resolvedPersonaModelTiers: Readonly<Record<string, TierAlias>>;
+  /**
+   * REQ-CONFIG-081 / REQ-CONFIG-094: each loader-owned synthetic name mapped to the `models:` key it was copied from,
+   * recorded when the copy is made — the only place the origin is known, since two keys may name the same provider
+   * model (live-run finding D5, verifier round 1).
+   */
+  readonly syntheticOrigins: Readonly<Record<string, string>>;
   readonly warnings: readonly string[];
 }
 
@@ -48,6 +54,7 @@ export function resolveSlotBase(slots: Readonly<Record<ModelSlot, string | null>
 
 export function resolveSlotsAndReasoning(draft: SlotDraft): SlotResolution {
   const warnings: string[] = [];
+  const origins: Record<string, string> = {};
   // REQ-CONFIG-067: an unset fallback resolves to whatever small_model resolves to, before referential validation.
   if (draft.slots.fallback_model === null || draft.slots.fallback_model === '') draft.slots.fallback_model = draft.slots.small_model;
 
@@ -77,6 +84,7 @@ export function resolveSlotsAndReasoning(draft: SlotDraft): SlotResolution {
     if (!base) { warnings.push(`${slot}_thinking skipped: ${slot} names '${resolved.base}', which is not a configured model`); continue; }
     const name = `${STARTUP_SLOT_PREFIX}${slot}`;
     draft.models[name] = { ...base, thinking: level };
+    origins[name] = resolved.base;
     draft.slots[slot] = name;
   }
 
@@ -88,10 +96,21 @@ export function resolveSlotsAndReasoning(draft: SlotDraft): SlotResolution {
     if (!base) { warnings.push(`thinking for role ${role} skipped: '${persona.model}' is not a configured model`); continue; }
     const name = `${PERSONA_SYNTHETIC_PREFIX}${role}`;
     draft.models[name] = thinking === 'provider_default' ? { ...base, thinking: null, reasoning_effort: null } : { ...base, thinking };
+    origins[name] = syntheticOriginOf(persona.model, origins);
     draft.personas[role] = { ...persona, model: name };
   }
 
-  return { resolvedPersonaModelTiers: tiers, warnings };
+  return { resolvedPersonaModelTiers: tiers, syntheticOrigins: origins, warnings };
+}
+
+/**
+ * REQ-CONFIG-094: the `models:` key a name counts against — a loader-owned synthetic copy (REQ-CONFIG-081) is the key
+ * the loader recorded it was copied from; every other name is its own key. Never a guess by provider and model id.
+ */
+export function syntheticOriginOf(name: string, origins: Readonly<Record<string, string>>): string {
+  let current = name;
+  for (let hops = 0; hops < 4 && origins[current] !== undefined && origins[current] !== current; hops++) current = origins[current]!;
+  return current;
 }
 
 /** REQ-CONFIG-253/255: a synthetic name unwrapped to the model it was copied from. */

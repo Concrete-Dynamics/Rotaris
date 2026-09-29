@@ -30,8 +30,8 @@ Live-run finding: D5 (live runs of 2026-09-29)
 A child's `model_key` is now the `models:` key of the model it runs on (REQ-CONFIG-094: the cap is "counted by the entry's
 key", a synthetic copy against the entry it was copied from). `childModelKey` in
 `packages/engine/src/children/orchestration.ts` takes the role's `Persona.modelKey` when the role names its own model — set
-by the run host's persona resolver from the role's `model`, a `__persona__:` synthetic copy unwrapped by `unwrapSynthetic`
-— and otherwise the run's `RunConfig.modelKey`, which `prepareRun` sets from the entry role's model. The model id stands in
+by the run host's persona resolver from the role's `model`, a `__persona__:` synthetic copy mapped to the key it was
+copied from by `syntheticOriginOf` over the loader's `syntheticOrigins` (see the correction below) — and otherwise the run's `RunConfig.modelKey`, which `prepareRun` sets from the entry role's model. The model id stands in
 only where no configuration names a key (the engine's tests, the process-wide model). `modelCapFor` and `contextLimitFor`
 were already keyed by the `models:` key and are unchanged; they now match. The compression threshold was never affected:
 `compressionTriggerFor` finds the entry by model id.
@@ -49,5 +49,24 @@ Re-measured live: `pnpm live-run --only=edit` on 2026-09-29 against `katalyst`, 
 `.live-run/runs/2026-09-29T10-11-17-489Z/` of the `fix-child-spawn` worktree (git-ignored) — both children's
 `model_key` is `openai-compatible--katalyst/qwen3.8-flash-next`, and the inspector in `edit/edit.early.png` reads
 "7,802 of 262,144 tokens", the configured `max_input_tokens`, where the duress pack read "… of 265,000".
+
+**Corrected in place, verifier round 1 (2026-09-29).** The first form of this repair read a synthetic copy's origin with
+`unwrapSynthetic` (`packages/config/src/slots.ts`). *Falsified reason kept:* "a `__persona__:` synthetic copy unwrapped by
+`unwrapSynthetic`" — that function does not know the origin; it guesses the first non-synthetic key with the same
+`provider` and `model_id`, so where two `models:` keys name the same provider model (every live-run key is
+`openai-compatible--<endpoint>/<model>`, all provider `openai-compatible`) a role on `beta`'s copy was recorded under
+`alpha`, counted against `alpha`'s cap and metered at `alpha`'s `max_input_tokens` — the very case REQ-CONFIG-094 says
+never shares a count. *Replacement:* the loader records each synthetic name's source key at the moment it makes the copy
+(`SlotResolution.syntheticOrigins`, carried on `LoadedConfiguration.syntheticOrigins`, computed and never serialised), and
+the run host's persona resolver and `prepareRun` read it through `syntheticOriginOf`. Pinned by
+`packages/config/src/load.test.ts` ("each synthetic copy records the models: key it was copied from, even where two keys name
+the same provider model") and `apps/desktop/src/run-host/configuration.test.ts` ("two keys naming the same provider model
+never share a count" — fails on the `unwrapSynthetic` form, receiving `openai-compatible--alpha/qwen` where
+`openai-compatible--beta/qwen` is expected). The same guess still serves the preference read-back
+(REQ-CONFIG-253/255); recorded, not repaired here:
+[`../preference-read-back-guesses-a-synthetic-copys-origin-by-provider-and-model-id.md`](../preference-read-back-guesses-a-synthetic-copys-origin-by-provider-and-model-id.md).
+
+Rows written before this repair keep the bare id in `children.model_key`; a session resumed from before it still meters
+such a child at REQ-MONITOR-080's default and finds no cap for it. Nothing rewrites those rows.
 
 Noticed while repairing it: [`../the-per-model-cap-counts-only-one-iterations-children.md`](../the-per-model-cap-counts-only-one-iterations-children.md).

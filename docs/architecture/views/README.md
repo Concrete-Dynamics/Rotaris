@@ -48,8 +48,10 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 **A child is recorded under its model's `models:` key (REQ-CONFIG-094, REQ-MONITOR-020/049, live-run finding D5, R-067,
 2026-09-29).** `children.model_key` was the model's bare id, so `modelCapFor` and `contextLimitFor`, keyed by the
 `models:` key, never matched a qualified key. `childModelKey` now records the role's `Persona.modelKey` (set by the run
-host's persona resolver, a synthetic copy unwrapped) or the run's `RunConfig.modelKey`. The **runtime view**'s agent-record
-paragraph names it; no package, edge, message, column or process changes.
+host's persona resolver, a synthetic copy mapped to the key the loader recorded it was copied from —
+`LoadedConfiguration.syntheticOrigins`, never a guess by provider and model id, since two keys may name the same provider
+model) or the run's `RunConfig.modelKey`. The **runtime view**'s agent-record paragraph names it; no package, edge, message,
+column or process changes.
 
 **`delegate`'s `suppress_auto_context` reaches the child (REQ-TOOLS-152, REQ-CONFIG-107, R-067, 2026-09-29).** The tool
 forwards the flag, `ChildLedger.spawn` stores it (`children.suppress_auto_context`, store **v25**), and

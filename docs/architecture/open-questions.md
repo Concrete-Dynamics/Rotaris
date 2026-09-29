@@ -3898,7 +3898,12 @@ Until they are built, a paused child is not cancellable at rest, and `/stop` kee
 status a stop persists, which the build had read and not settled: a graceful user stop persists `paused`, as built, and
 so does a forced one (clause 21). REQ-SESSION-186's "A run stopped gracefully and cleanly by the user persists
 `stopped`" no longer governs a stop the user made; REQ-SESSION-186 joins the Narrows list and carries the back-pointer.
-REQ-MONITOR-029 and REQ-SESSION-093, which already persist `paused` for an interrupted or cancelled run, are unchanged.
+So does REQ-SESSION-073, whose vocabulary glosses `stopped` with "the user stopped it from the interface,
+REQ-SESSION-186": `stopped` stays in the vocabulary for a run that exhausted a configured budget (REQ-MONITOR-029), and
+the rest of that requirement governs as written. REQ-MONITOR-029 and REQ-SESSION-093, which already persist `paused` for
+an interrupted or cancelled run, are unchanged. A stop and a pause both record the stop reason `user_cancelled`
+(REQ-MONITOR-301's closed set has no member for a pause), so clause 21 tells them apart only by the interruption recorded
+on the agents and the iteration (`stop` or `pause`) and by the timeline entries that name it.
 `a-graceful-stop-persists-paused-where-one-requirement-says-stopped.md` is settled by this ruling and is in
 `docs/defects/fixed/`. Nothing is built by it: the code already persists `paused` (`statusForResult`,
 `packages/engine/src/run/stop-conditions.ts`).

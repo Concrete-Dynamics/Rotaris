@@ -29,13 +29,19 @@ REQ-SESSION-186 is not in the directive's Narrows list, so the contradiction is 
 belongs to an ESC. A stop is told apart from a pause by `children.interruption` and `iterations.interruption` (`stop`),
 as well as by `stop_reason` and the timeline. OQ-96 records the reading.
 
+> **Corrected 2026-09-29.** "as well as by `stop_reason`" is false of a stop against a pause: both record
+> `user_cancelled` (`packages/engine/src/run/run.ts`, the stop conditions at the top of the iteration loop and
+> `teardown`), and REQ-MONITOR-301's closed set has no member for a pause. `stop_reason` tells a quit
+> (`application_shutdown`) from the rest; a stop is told apart from a pause only by the interruption and the timeline.
+
 ## Settled 2026-09-29 by the owner's ruling (R-067)
 
 Settled 2026-09-29 by the owner's ruling ([R-067](../../product/requests.md#r-067)): a graceful user stop persists
 `paused`, as built. [`PD-ORCH-005`](../../product/directives.md#pd-orch-005) revision 5 adds clause 21 — a stop the user
 made, graceful and clean or forced, persists `paused` as a pause does and never `stopped` — and names `REQ-SESSION-186`
-among what it narrows; `REQ-SESSION-186` carries the back-pointer in `docs/spec/07-sessions-persistence.md`, in the same
-commit. The contradiction this note recorded is no longer ungoverned: `REQ-SESSION-186`'s `stopped` gives way where the
+among what it narrows, with `REQ-SESSION-073`, whose vocabulary glosses `stopped` with the user's stop; both carry the
+back-pointer in `docs/spec/07-sessions-persistence.md`, and `stopped` stays in the vocabulary for an exhausted budget
+(`REQ-MONITOR-029`). The contradiction this note recorded is no longer ungoverned: `REQ-SESSION-186`'s `stopped` gives way where the
 directive reaches, and `REQ-MONITOR-029` and `REQ-SESSION-093` stand. OQ-96 carries the ruling.
 
 No code changed. `packages/engine/src/run/stop-conditions.ts` already persists `paused` for a user's stop (confirmed on

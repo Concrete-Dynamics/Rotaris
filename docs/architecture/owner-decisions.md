@@ -1714,7 +1714,8 @@ recommended and chose "Accept all eight (Recommended)". ESC-42 is ruled above, i
 recorded where each was raised, and are listed here so that one place names all eight.*
 
 - **The status a graceful stop persists — `paused`, as built.** `PD-ORCH-005` revision 5 (clause 21) names
-  `REQ-SESSION-186` among what it narrows; recorded under OQ-96 in `open-questions.md`.
+  `REQ-SESSION-186` among what it narrows, with `REQ-SESSION-073`, whose vocabulary glosses `stopped` with the user's
+  stop; recorded under OQ-96 in `open-questions.md`.
 - **A cancel in flight when the host died — clause 3 governs.** The explicit cancel is made durable when it is accepted,
   and the next repair or continue ends its agents `cancelled`; recorded under OQ-103.
 - **REQ-LIBRARY-092's fallback — only for a record with no task id.** Raised and ruled as OQ-112, answered by amending

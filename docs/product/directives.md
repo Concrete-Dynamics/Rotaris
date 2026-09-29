@@ -2084,6 +2084,9 @@ reason names the cause:
   persona catalogue shows any, name the personas that can;
 - a delegation whose `session_id` names no settled child of the calling agent.
 
+A persona's tools, for the first of these, are the ones it would be granted for the child, after REQ-TOOLS-006's
+controls.
+
 REQ-TOOLS-152's `session_id` names, by its task id, a settled child of the calling agent: a direct child, by
 REQ-TOOLS-155's ownership test, that has reached a terminal state and that its `child_timeout` did not cut off. The
 follow-up resumes that child from its record with the call's `task` as its next user message, as PD-ORCH-005 clause 22
@@ -2124,6 +2127,9 @@ moment the parent can still choose. And `session_id` was accepted and dropped
 ([`delegate-drops-session-id-and-suppress-auto-context.md`](../defects/delegate-drops-session-id-and-suppress-auto-context.md)),
 so a caller that set it was told nothing and got a fresh child. What it costs:
 - a parent can no longer give a read-only child a scope for coordination alone;
+- a persona whose only writing tools are ones the claim does not fence — the code-intelligence server's editing tools,
+  `terminal`, MCP or plugin tools — counts as holding no file-writing tool and is refused a scope, although it can write
+  files; a scope could not have fenced those writes either ("The file tools only", above);
 - a follow-up re-sends the child's whole conversation, where a fresh child sends only its payload.
 
 > **Narrows:** REQ-TOOLS-152, REQ-TOOLS-154
@@ -2215,7 +2221,8 @@ builds "failed". That would be false, and it would read as a broken pipeline. Wh
 
 *Revision 5 (2026-09-29, [R-067](requests.md#r-067)) — **two rulings on what the build left open**: clause 21 (the
 status a stop persists, OQ-96) and clause 22 (a follow-up by `session_id` resumes a settled child, OQ-66's open part)
-are added, and `REQ-SESSION-186` joins the Narrows list. Nothing is replaced. The owner took both recommendations.*
+are added, and `REQ-SESSION-186` and `REQ-SESSION-073` join the Narrows list. Nothing is replaced. The owner took both
+recommendations.*
 
 *Revision 4 (2026-09-28, [R-064](requests.md#r-064)) — **the owner's rulings on the questions the build raised**
 (OQ-94 to OQ-99): clause 1's last sentence is replaced, clauses 13 to 20 are added, and the Narrows list names the
@@ -2339,8 +2346,11 @@ that nothing supersedes.
 
 **(21) A stop persists `paused` (revision 5).** A stop the user made — graceful and clean, or forced — SHALL persist the
 session status `paused`, as a pause does (clause 2), and SHALL NOT persist `stopped`. REQ-SESSION-186's stop control, its
-two activations and the outcome it presents are unchanged. A stop is told apart from a pause by the interruption it
-records on its agents and its iteration (`stop`, clause 3) and by its stop reason.
+two activations and the outcome it presents are unchanged. `stopped` remains the status of a run that exhausted a
+configured budget (REQ-MONITOR-029), which REQ-SESSION-073's vocabulary keeps. A stop and a pause record the same stop
+reason, `user_cancelled` (REQ-ORCH-069, REQ-MONITOR-301's closed set having no member for a pause), so a stop is told
+apart from a pause only by the interruption it records on its agents and its iteration (`stop`, clause 3) and by the
+timeline entries that name it.
 
 **(22) A follow-up resumes a settled child (revision 5).** A `delegate` call whose `session_id` names a settled child of
 the calling agent — a direct child that has reached a terminal state and that its `child_timeout` did not cut off —
@@ -2387,14 +2397,16 @@ What it costs:
 Until they are built, the product behaves as the readings in OQ-94 to OQ-99 recorded.
 
 **Why revision 5, and what it costs.** The owner ruled two questions the build had left to the record ([R-067](requests.md#r-067)).
-REQ-SESSION-186 has a graceful, clean stop persist `stopped`, while clause 3 has a stop leave the state a pause leaves,
-and REQ-MONITOR-029 and REQ-SESSION-093 persist `paused`; the build persisted `paused`, and the directive now names the
-requirement it departs from, so a reader of REQ-SESSION-186 finds it. And REQ-TOOLS-152's `session_id` — "reuse a previous
+REQ-SESSION-186 has a graceful, clean stop persist `stopped`, and REQ-SESSION-073's vocabulary glosses `stopped` with
+that stop, while clause 3 has a stop leave the state a pause leaves, and REQ-MONITOR-029 and REQ-SESSION-093 persist
+`paused`; the build persisted `paused`, and the directive now names both requirements it departs from, so a reader of
+either finds it. And REQ-TOOLS-152's `session_id` — "reuse a previous
 delegation's session for a retry or a follow-up" — had no meaning under the full record, so the field was accepted and
 dropped, and a parent with a question for a child that had finished could only start a fresh child that rediscovers
 everything. What it costs:
-- `stopped` is never persisted for a user's stop, so a session tells a stop from a pause only by its interruption and its
-  stop reason;
+- `stopped` is never persisted for a user's stop, and a stop and a pause both record the stop reason `user_cancelled`, so
+  a session tells a stop from a pause only by the interruption recorded on its agents and its iteration and by the
+  timeline;
 - a terminal child is no longer always final: REQ-MONITOR-300's table gains one exit from a terminal state, taken only by
   a follow-up the parent asks for;
 - a follow-up sends the child's whole conversation to its model again, compressed when it no longer fits.
@@ -2444,7 +2456,7 @@ everything. What it costs:
 > back-pointer is removed. It extended REQ-ORCH-053, REQ-SESSION-065 and REQ-NOTIFY-121; revision 2 narrows them,
 > because the settle no longer cancels a `paused` agent.
 
-> **Narrows:** REQ-MONITOR-256, REQ-MONITOR-123, REQ-ORCH-072, REQ-ORCH-002, REQ-ORCH-052, REQ-MONITOR-300, REQ-ORCH-053, REQ-SESSION-065, REQ-NOTIFY-121, REQ-SESSION-115, REQ-SESSION-129, REQ-SESSION-025, REQ-TOOLS-054, REQ-TOOLS-111, REQ-ORCH-134, REQ-MONITOR-014, REQ-MONITOR-046, REQ-MONITOR-211, REQ-MONITOR-213, REQ-SESSION-078, REQ-SESSION-180, REQ-ORCH-135, REQ-MONITOR-130, REQ-SESSION-108, REQ-TOOLS-063, REQ-CHAT-029, REQ-MONITOR-063, REQ-ORCH-004, REQ-SESSION-186
+> **Narrows:** REQ-MONITOR-256, REQ-MONITOR-123, REQ-ORCH-072, REQ-ORCH-002, REQ-ORCH-052, REQ-MONITOR-300, REQ-ORCH-053, REQ-SESSION-065, REQ-NOTIFY-121, REQ-SESSION-115, REQ-SESSION-129, REQ-SESSION-025, REQ-TOOLS-054, REQ-TOOLS-111, REQ-ORCH-134, REQ-MONITOR-014, REQ-MONITOR-046, REQ-MONITOR-211, REQ-MONITOR-213, REQ-SESSION-078, REQ-SESSION-180, REQ-ORCH-135, REQ-MONITOR-130, REQ-SESSION-108, REQ-TOOLS-063, REQ-CHAT-029, REQ-MONITOR-063, REQ-ORCH-004, REQ-SESSION-186, REQ-SESSION-073
 > **Extends:** REQ-MONITOR-125
 
 *Raised by the owner, 2026-09-27; logged as [R-058](requests.md#r-058) and ruled as drafted, every fork as recommended,

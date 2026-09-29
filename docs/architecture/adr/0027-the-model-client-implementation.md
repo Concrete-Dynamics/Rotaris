@@ -230,6 +230,22 @@ it) and the mapping's raw-header path is the one to watch. REQ-ORCH-093's contex
 left failing as before; REQ-NOTIFY-062's hosted-credit branch has no hosted provider; the stall watchdog (REQ-ORCH-089) is
 not built; the Copilot/codex native loop (REQ-ORCH-146) is not built.
 
+**Re-run on Linux as root, 2026-09-28 (R-062): the proof's override launch driven, every launch bounded.** Scenario
+4 had stopped measuring. Its seam addressed `.wait-header select`, but the header draws the design system's
+`SearchableSelect`, so no model was chosen. The run kept REQ-NOTIFY-092's indefinite wait, as it should, and the
+launch outlived its 180 s `spawnSync` timeout. The first launch is now driven: the chooser is operated by two real
+clicks, and the run is waited for in the store. Every launch goes through `lib/bounded-launch.mjs`'s `spawnBounded`,
+so an overrun is ended by SIGTERM, a grace, then SIGKILL and reported with its log tail. Every scenario now runs to its
+end. **Found nothing new about the ladder:** all ten scenario blocks passed, and the numbers match the measurements
+above (the indefinite wait's header, `model_override` → `beta`, the resumed session on `scripted-b/beta`, the 30 s
+unresponsive fallback, the 8 s child timeout with and without a fallback, the 503's one retry, the 401's none).
+**Found a product loop in the quit path while tracing the overrun.** The signal was not ignored: `spawnSync` had
+closed the pipes, and the quit's first log line met EPIPE, which main's uncaught-exception handler logs to the same
+closed stream without end
+([note](../../defects/a-quit-with-its-standard-output-closed-loops-on-its-own-epipe.md), recorded and not repaired).
+The repair is in [the proof's note](../../defects/fixed/resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md).
+**Could not show:** the ladder against a real provider's 429 (unchanged from above); anything on Windows (IC-3).
+
 ## Fourth execution — 2026-09-12, the timeout a real run found (REQ-CONFIG-115, REQ-ORCH-092)
 
 *Found by a 22-minute run against claude-haiku-4.5 on OpenRouter, not by a test. Two defects, one shape.*

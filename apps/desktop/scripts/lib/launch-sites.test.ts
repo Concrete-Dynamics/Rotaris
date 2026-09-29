@@ -4,7 +4,7 @@
  * Both rules live in `harness.mjs`, and both were broken by scripts that spelled their own answer:
  *
  *   1. **The scratch global configuration directory comes from `configDirFor`.** Twelve scripts spelled
- *      `join(local, 'rotaris', 'config')`, which is the Windows answer only; off Windows the product never read what
+ *      `join(local, 'rotaris', 'config')`, which was then the Windows answer only; off Windows the product never read what
  *      those proofs wrote (REQ-CONFIG-001, REQ-STARTUP-145). `proof-isolation.test.ts` keeps `configDirFor` in step with
  *      the product's `resolveUserDirs`; this file keeps every script on `configDirFor`.
  *   2. **Every launch of Electron carries `hostSwitches`, and carries it where no positional reader sees it.** As root,
@@ -140,7 +140,9 @@ const all = scripts(SCRIPTS);
 
 describe('R-062: the proof harness platform rules, kept at every script', () => {
   it('no script but the harness spells the scratch global configuration directory itself (REQ-CONFIG-001, REQ-STARTUP-145)', () => {
-    const spelled = all.filter((f) => f !== HARNESS && /['"]rotaris['"]\s*,\s*['"]config['"]/.test(readFileSync(f, 'utf8')));
+    // Both Windows spellings are refused: `rotaris\config` (the product's until 2026-09-29) and REQ-CONFIG-001's
+    // `rotaris\rotaris`, which `configDirFor` answers since.
+    const spelled = all.filter((f) => f !== HARNESS && /['"]rotaris['"]\s*,\s*['"](?:config|rotaris)['"]/.test(readFileSync(f, 'utf8')));
     expect(spelled.map((f) => relative(SCRIPTS, f))).toEqual([]);
   });
 

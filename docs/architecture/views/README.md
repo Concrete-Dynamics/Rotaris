@@ -45,6 +45,14 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**The Windows global configuration directory is REQ-CONFIG-001's `%LOCALAPPDATA%\rotaris\rotaris\` (R-067).**
+`resolveUserDirs`'s `win32` case answered `rotaris\config` until now; the data directory stays the sibling `rotaris\data`
+(D-04), and no earlier directory is adopted (REQ-STARTUP-145). The proof harness's `configDirFor` moved with it. This
+repairs `the-windows-global-configuration-directory-is-not-the-one-req-config-001-spells.md`. The **process view**'s
+diagram and files-on-disk table and the **state-ownership view**'s configuration rows spell the new directory, and the
+process view says that on Windows it is also the directory the preference store's `Rotaris\Rotaris` root names. No
+package, edge, process, message kind, channel, command or store column changed.
+
 **The application log survives the loss of its reader (REQ-MONITOR-131, R-067).** Main's log writes through
 `standardStreamWriter` (`main/app-log.ts`) instead of `console.log`: the stream's `error` event is listened for, and from
 its first failure nothing more is written to it; standard error gets the same listener. A quit whose standard output

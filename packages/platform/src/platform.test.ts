@@ -15,9 +15,21 @@ const OTHER = mintMachineId('00000000000000000000000000000002');
 describe('platform — per-user directories (REQ-STARTUP-145)', () => {
   it('on Windows both directories are under the LOCAL profile, never the roaming one', () => {
     const d = resolveUserDirs({ platform: 'win32', env: { LOCALAPPDATA: 'C:\\U\\me\\AppData\\Local', APPDATA: 'C:\\U\\me\\AppData\\Roaming' }, home: 'C:\\U\\me' });
-    expect(d.config).toBe(win32.join('C:\\U\\me\\AppData\\Local', 'rotaris', 'config'));
+    expect(d.config).toBe(win32.join('C:\\U\\me\\AppData\\Local', 'rotaris', 'rotaris'));
     expect(d.data).toBe(win32.join('C:\\U\\me\\AppData\\Local', 'rotaris', 'data'));
+    expect(d.config).not.toContain('Roaming');
     expect(d.data).not.toContain('Roaming');
+  });
+  it('REQ-CONFIG-001: the Windows global configuration directory is spelled %LOCALAPPDATA%\\rotaris\\rotaris\\, and it is not the data directory (D-04)', () => {
+    // Until 2026-09-29 the `win32` case answered `<LOCALAPPDATA>\rotaris\config`, a name the requirement never spells
+    // (`docs/defects/fixed/the-windows-global-configuration-directory-is-not-the-one-req-config-001-spells.md`).
+    const d = resolveUserDirs({ platform: 'win32', env: { LOCALAPPDATA: 'C:\\Users\\me\\AppData\\Local' }, home: 'C:\\Users\\me' });
+    expect(d.config).toBe('C:\\Users\\me\\AppData\\Local\\rotaris\\rotaris');
+    expect(d.data).toBe('C:\\Users\\me\\AppData\\Local\\rotaris\\data');
+    expect(d.config).not.toBe(d.data);
+    // With LOCALAPPDATA unset the same spelling is composed from the home's own local profile.
+    const unset = resolveUserDirs({ platform: 'win32', env: {}, home: 'C:\\Users\\me' });
+    expect(unset.config).toBe('C:\\Users\\me\\AppData\\Local\\rotaris\\rotaris');
   });
   it('on Linux the XDG variables govern', () => {
     const d = resolveUserDirs({ platform: 'linux', env: { XDG_CONFIG_HOME: '/x/cfg', XDG_DATA_HOME: '/x/data' }, home: '/home/me' });
@@ -31,7 +43,7 @@ describe('platform — per-user directories (REQ-STARTUP-145)', () => {
     // The defect this pins: a bare host-bound `join` spelled the Windows answer with POSIX separators
     // whenever the question was asked off Windows. Production always agrees with its host, so this is
     // a proof-of-the-rule case — other-platform answers decided on every operating system.
-    const win = { config: 'C:\\U\\me\\AppData\\Local\\rotaris\\config', data: 'C:\\U\\me\\AppData\\Local\\rotaris\\data' } as const;
+    const win = { config: 'C:\\U\\me\\AppData\\Local\\rotaris\\rotaris', data: 'C:\\U\\me\\AppData\\Local\\rotaris\\data' } as const;
     const layout = dataLayout(win, 'win32');
     expect(layout.workspaces).toBe(win32.join(win.data, 'workspaces'));
     expect(layout.instanceRecord).toBe(win32.join(win.data, 'instance.json'));

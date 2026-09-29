@@ -75,6 +75,13 @@ on the pane-layout keys of `REQ-SHELL-069`.
 The preference store's *physical path and on-disk encoding are explicitly free* (`REQ-SHELL-006`) —
 the only observable obligations are the location convention, no elevation, outside every workspace,
 absent-is-not-an-error, and survive-a-restart.
+*Reconciled with the code, 2026-09-29 (R-067):* the product resolved (1) on Windows as
+`%LOCALAPPDATA%\rotaris\config\` until this date, and the process view spelled that answer; both now spell
+`REQ-CONFIG-001`'s `%LOCALAPPDATA%\rotaris\rotaris\`, and (2) stays the sibling `%LOCALAPPDATA%\rotaris\data\`
+([the note](../../defects/fixed/the-windows-global-configuration-directory-is-not-the-one-req-config-001-spells.md)).
+On Windows that directory is also the one the preference store's platform-standard `Rotaris\Rotaris` root names, the
+filesystem folding case. What this assumption separates is keys and files — `REQ-SHELL-006` leaves the store's path
+free — so the two share a directory and no file, and neither reads what the other writes.
 
 **A4 — The traceability store lives in the user's own repository, not under `.rotaris/`. (hard)**
 `REQ-TRACE-001` (default `docs/requirements`, repository-relative and configurable),

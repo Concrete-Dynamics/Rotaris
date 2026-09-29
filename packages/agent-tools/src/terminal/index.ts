@@ -89,6 +89,10 @@ export class TerminalManager {
   constructor(private readonly deps: TerminalManagerDeps) {
     this.streams = new TerminalStreams({ clocks: deps.clocks, emulator: deps.emulator ?? xtermEmulatorFactory, warn: deps.warn });
   }
+  /** The shell every session of this manager runs — what the tool description names (live-run L1). */
+  get backend(): ShellBackend {
+    return this.deps.backend;
+  }
 
   /**
    * Part AL: a foreground command begins on the agent's stream (`fg:<agent>`, REQ-TOOLS-127). The tap feeds the
@@ -251,10 +255,24 @@ export interface BackgroundAttribution {
   readonly onEnded?: ((session: BackgroundSession) => void) | undefined;
 }
 
+/**
+ * The tool description names the shell the host actually runs (REQ-TOOLS-104 for Windows; ADR-0020's `/bin/sh` else the
+ * login shell elsewhere). Live-run finding L1: on Linux it named only Windows' shell, never that the POSIX shell is
+ * `/bin/sh` — dash on the host of the run — so a model wrote bash (`${PIPESTATUS[0]}`, `<(…)`) for a shell without it.
+ * With no backend known, both sentences stand.
+ */
+const POWERSHELL_SHELL = 'On Windows the shell is PowerShell, not bash: `&&`, `;`, `2>&1` and `$env:VAR` work; a bash heredoc never returns, and bash arrays, `[[ … ]]` and `source` are unavailable.';
+const posixShell = (file: string): string => `The shell is \`${file}\`, a POSIX shell that may not be bash: write POSIX syntax — bash arrays, \`\${PIPESTATUS[…]}\`, \`[[ … ]]\`, process substitution \`<(…)\` and \`source\` may be unavailable, and a command that uses them fails with a nonzero exit code.`;
+const TERMINAL_USE = 'One command per call; use `&&` or `;` for sequences. `background=true` runs a command in its own process and returns a session id for later `query` / `kill`. A command that prints nothing for 30 s returns early with exit −1 while it keeps running; poll with an empty command, interrupt with `C-c` and `is_input=true`; stdout and stderr share the captured terminal stream. failure_kind is one of `timeout`, `invalid_request`, `execution_error`, `sandbox_unavailable`; `sandbox_unavailable` means the command never executed because this host could not apply the OS-level confinement the session requires — the cause is the host\'s configuration, neither a retry nor a reformulated command helps, and the detail and output should be relayed to the user.';
+export function terminalDescription(backend: ShellBackend | null | undefined): string {
+  const shell = backend?.kind === 'powershell' ? POWERSHELL_SHELL : backend?.kind === 'posix' ? posixShell(backend.file) : `${POWERSHELL_SHELL} ${posixShell('/bin/sh')}`;
+  return `Run a command in a persistent shell session (working directory and variables persist across calls). ${shell} ${TERMINAL_USE}`;
+}
+
 export function terminalTool(manager: TerminalManager, config: TerminalConfig, confinement?: ConfinementPort, attribution?: BackgroundAttribution): ToolExecutor<TerminalArgs> {
   return {
     name: 'terminal',
-    description: 'Run a command in a persistent shell session (working directory and variables persist across calls). On Windows the shell is PowerShell, not bash: `&&`, `;`, `2>&1` and `$env:VAR` work; a bash heredoc never returns, and bash arrays, `[[ … ]]` and `source` are unavailable. One command per call; use `&&` or `;` for sequences. `background=true` runs a command in its own process and returns a session id for later `query` / `kill`. A command that prints nothing for 30 s returns early with exit −1 while it keeps running; poll with an empty command, interrupt with `C-c` and `is_input=true`; stdout and stderr share the captured terminal stream. failure_kind is one of `timeout`, `invalid_request`, `execution_error`, `sandbox_unavailable`; `sandbox_unavailable` means the command never executed because this host could not apply the OS-level confinement the session requires — the cause is the host\'s configuration, neither a retry nor a reformulated command helps, and the detail and output should be relayed to the user.',
+    description: terminalDescription(manager.backend),
     schema: terminalSchema,
     validationError: (a, detail) => invalid(`Invalid terminal request: ${detail}`, { command: typeof a['command'] === 'string' ? a['command'] : '' }),
     label: (a) => renderAction({ command: a.command, timeout: a.timeout, reset: a.reset, background: a.background, session_id: a.session_id, session_action: a.session_action }),

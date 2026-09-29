@@ -61,8 +61,9 @@
  *                 mid-answer with the socket held open (is that reported as a user cancellation, which is
  *                 the eighty-second defect's signature?). Neither injected refusal reaches the endpoint,
  *                 so the ladder half costs nothing but retries.
- *   8. terminal  — the TERMINAL under duress, one run, six named shapes replayed from the record: a
- *                 multi-line here-string, forty lines of long output, a wedge with no `timeout` supplied,
+ *   8. terminal  — the TERMINAL under duress, one run, the named shapes replayed from the record: a
+ *                 multi-line here-string, forty lines of long output, off Windows a bash-ism `/bin/sh` cannot
+ *                 expand (live-run L1), a wedge with no `timeout` supplied,
  *                 an exit-0 output carrying docker's lower-case `failed to connect` line, a `git diff` with
  *                 differences exiting 1, and a read-only git pipeline through a pipe. Asserted from
  *                 `tool_calls`, never from the model's prose; a shape the model never attempted is a NOTE,
@@ -828,7 +829,8 @@ function readSession() {
   } finally { db.close(); }
 }
 /**
- * Every tool call of one session with its `entry` parsed — `{ ordinal, tool_name, agent_name, status, args, result }`.
+ * Every tool call of one session with its `entry` parsed — `{ ordinal, tool_name, agent_name, status, args, result,
+ * elapsedMs, endedAt }`.
  *
  * The scenarios below assert from THIS and never from the model's prose. A run that says it ran a command and a
  * run that ran one are different facts, and only one of them is in the store.
@@ -841,7 +843,8 @@ function readToolCalls(sessionId) {
       .map((call) => {
         let entry = {};
         try { entry = JSON.parse(call.entry); } catch { /* a row that will not parse is still a call that happened */ }
-        return { ...call, args: entry.args ?? {}, result: String(entry.result ?? '') };
+        // `elapsed_ms` is the call's own duration and `timestamp` its end, both as the product recorded them.
+        return { ...call, args: entry.args ?? {}, result: String(entry.result ?? ''), elapsedMs: typeof entry.elapsed_ms === 'number' ? entry.elapsed_ms : null, endedAt: typeof entry.timestamp === 'string' ? Date.parse(entry.timestamp) : null };
       });
   } finally { db.close(); }
 }
@@ -1645,7 +1648,7 @@ if (wanted.includes('faults')) {
 
 // ── 8. The terminal under duress ─────────────────────────────────────────────────────────────────────────
 /**
- * Six shapes the record NAMES, replayed; never a plausible family resembling them.
+ * The shapes the record NAMES, replayed; never a plausible family resembling them.
  *
  * `codebase.md` states why that distinction is the whole scenario: sixty real-PTY runs at four geometries could
  * not reproduce a concatenation the live run had shown, and the trigger the sixty missed was narrow — an empty
@@ -1658,6 +1661,7 @@ if (wanted.includes('faults')) {
  * |---|---|
  * | `here-string`   | a multi-line command lost its newlines in the PTY, so a here-string never terminated |
  * | `long-output`   | the concatenation above, and the agent's capture VT-stripped where the window's was not |
+ * | `unexpandable`  | live-run finding L1 — `a-posix-command-that-fails-to-expand-loses-its-end-marker.md`: a bash-ism dash cannot expand abandoned the wrapper's end frame, so a finished command read as a soft pause (POSIX only) |
  * | `wedge`         | `hardMs` passed and read nowhere: a call supplying no `timeout` had the soft pause and no hard cap (REQ-TOOLS-097) |
  * | `failed-word`   | `exit-0-output-flagged-on-the-word-failed-twice.md` — PD-TOOLS-003's capitals-only marker, and a real regression guard |
  * | `diff-exit-1`   | `git-diff-with-differences-read-as-a-failure.md` — ESC-41's carve-out, and a real regression guard |
@@ -1724,6 +1728,20 @@ if (wanted.includes('terminal')) {
     // The agent's capture and the terminal window's are meant to be the same rendering of the same bytes: the
     // strip landed for the live stream and the agent's capture was left behind, so the two diverged.
     check(!reading.escaped, 'the agent read a VT-stripped capture', reading.escaped ? 'an escape sequence survived into the recorded result' : 'no escape sequence in the recorded result');
+  }
+
+  // Live-run L1: the command ends at once with the shell's own error status, never a soft pause after the window. The
+  // shape exists only off win32 (`terminalShapes`), so on Windows nothing is asked here: not applicable, not a NOTE.
+  if (shapeOf('unexpandable') !== undefined) {
+    const unexpandable = attempted('unexpandable')[0];
+    if (unexpandable === undefined) noted('the unexpandable bash-ism was not attempted', 'no terminal call carried it; the wrapper\'s guard is unasked');
+    else {
+      const d = diagnosticOf(unexpandable.result);
+      const elapsed = unexpandable.elapsedMs ?? NaN;
+      check(d?.outcome_kind !== 'soft_pause' && d?.exit_code !== -1, 'a command sh could not expand ended with its own status, not a soft pause', `outcome ${d?.outcome_kind ?? 'none'}, exit ${d?.exit_code ?? 'none'}`);
+      check(Number.isFinite(elapsed) && elapsed < 30_000, 'it ended inside the no-output window rather than after it', `${Number.isFinite(elapsed) ? Math.round(elapsed) : '?'} ms`);
+      check(/\bran\b/.test(outputOf(unexpandable.result) ?? ''), 'what the line printed before its error came back', `output ${JSON.stringify((outputOf(unexpandable.result) ?? '').slice(0, 120))}`);
+    }
   }
 
   const wedge = attempted('wedge')[0];

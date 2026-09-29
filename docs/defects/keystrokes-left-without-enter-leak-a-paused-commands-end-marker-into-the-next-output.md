@@ -21,7 +21,7 @@ The detail was `exit_code` 0 and `success`. Recorded, not repaired.
 
 - `REQ-TOOLS-127`: every frame is faithful to what the command wrote, and the wrapper and its markers are the
   product's, not the command's. The sibling
-  [`a-command-sh-cannot-parse-shows-the-agent-the-wrappers-end-marker`](a-command-sh-cannot-parse-shows-the-agent-the-wrappers-end-marker.md)
+  [`a-command-sh-cannot-parse-shows-the-agent-the-wrappers-end-marker`](fixed/a-command-sh-cannot-parse-shows-the-agent-the-wrappers-end-marker.md)
   records the same leak by another road.
 - `REQ-TOOLS-096`: keystrokes are written as is. The prefixing follows from that, so the leak, not the prefix, is the
   defect. Whether the product should clear a pending partial line before it writes a command is not stated.

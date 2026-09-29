@@ -21,7 +21,7 @@ const PAD = 'x'.repeat(100);
 export const LONG_OUTPUT_LINES = 40;
 
 /**
- * The six shapes, in the dialect of one platform.
+ * The shapes, in the dialect of one platform: six on Windows, seven elsewhere.
  *
  * `match` is a pattern rather than a substring because the question is whether the SHAPE was issued, not
  * whether the model reproduced this file's whitespace. Too strict and a call that happened reads as a call that
@@ -56,6 +56,11 @@ export function terminalShapes(platform = process.platform) {
     : [
       { id: 'here-string', match: /<<\s*'?EOF/, command: "cat <<'EOF'\nalpha-one\nbeta-two\nEOF" },
       { id: 'long-output', match: /LINE-/, command: `awk 'BEGIN{for(i=1;i<=${LONG_OUTPUT_LINES};i++)printf "LINE-%03d ${PAD}\\n", i}'` },
+      // Live-run finding L1, the tail of the edit scenario's recorded test command: a bash-ism `/bin/sh` (dash) cannot
+      // expand, which abandoned the rest of the line — the wrapper's end frame with it — so a command that finished at
+      // once read as a soft pause, exit −1, after 30 s. POSIX only: PowerShell has no such expansion, and its wrapper's `try` is the
+      // guard this one was modelled on.
+      { id: 'unexpandable', match: /PIPESTATUS/, command: `printf '%s\\n' ran; echo "EXIT=\${PIPESTATUS[0]}"` },
       ...common,
       { id: 'pipe-to-shell', match: /\|\s*(?:sh|bash|zsh)\b/, command: "git status --porcelain | sh -c 'head -5'" },
     ];

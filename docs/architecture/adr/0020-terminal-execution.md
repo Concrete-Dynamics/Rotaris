@@ -287,6 +287,26 @@ tool promises (the same property dot-sourcing buys on the PowerShell side). `$?`
 own status, so the exit-status expression is unchanged and consequence 1's forgery argument is untouched. The
 single-line path keeps today's wrapper byte for byte.
 
+*Reported back 2026-09-29 (R-067), from the live runs' first POSIX terminal against a model
+([`a-posix-command-that-fails-to-expand-loses-its-end-marker`](../../defects/fixed/a-posix-command-that-fails-to-expand-loses-its-end-marker.md),
+live-run finding L1): **the reading that neither path needed a guard is FALSIFIED, and kept here beside its
+replacement.** "The single-line path keeps today's wrapper byte for byte" left the command UNGUARDED:
+`printf <start>; <command>; printf <end>`. An interactive `sh` that meets an error in the line it is running
+abandons the rest of that line. The errors seen were an expansion it cannot perform (`${PIPESTATUS[0]}` under dash,
+`Bad substitution`), a syntax it lacks (`<(…)`, `Syntax error: "(" unexpected`) and an unterminated quote; a
+trailing `# note` comments the end frame out as well. The end frame then never printed, and a command that
+finished in 0.1 s read as a soft pause with exit −1 after 30 s — twice in one run, and once more under duress.
+The same abandoned line put the echoed wrapper, marker included, into what the model read
+([`a-command-sh-cannot-parse-shows-the-agent-the-wrappers-end-marker`](../../defects/fixed/a-command-sh-cannot-parse-shows-the-agent-the-wrappers-end-marker.md)).
+`eval` is no guard: an error inside a special built-in abandons the line the same way, measured under dash and
+under bash in POSIX mode. **`command eval` is the guard.** POSIX's `command` removes a special built-in's special
+properties, so the error becomes that utility's own nonzero status (2 under dash) and the shell goes on to the end
+frame — the posix twin of the PowerShell `try` above. Both paths now run the command as
+`command eval '<command>'`: a single line single-quoted, a multi-line command through the same `printf '%b'`
+carrier. The command still runs in THIS shell, so what it sets persists. The tool description now names the
+shell the host runs — `/bin/sh`, a POSIX shell that may not be bash — where it named only Windows' shell.
+Pinned by "REQ-TOOLS-097/098/179 (live-run L1): …" in `terminal.test.ts`, red on the unguarded wrapper.*
+
 **A second defect, from the same first execution, in the CLEANING rather than the wrapper.** `cleanLines`
 found the start of the captured region by looking for a row that was **exactly** the marker. The marker's row
 can carry the shell's PROMPT in front of it: the line discipline echoes what we write as soon as it arrives,

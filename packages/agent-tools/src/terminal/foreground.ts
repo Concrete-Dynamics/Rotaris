@@ -198,11 +198,22 @@ export function wrapCommand(backend: ShellBackend, command: string, start: strin
   // carried across as ONE physical line and rebuilt on the far side, where its newlines are intact. `%b` is
   // POSIX printf's own escape-expanding conversion, `eval` runs the result in THIS shell — not a subshell, so
   // what the command sets persists into the next call — and `$?` after it is the payload's own status.
-  if (command.includes('\n')) {
-    const payload = command.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/'/g, `'\\''`);
-    return `printf '%s\\n' '${start}'; eval "$(printf '%b' '${payload}')"; printf '${end}:%s\\n' "$?"`;
-  }
-  return `printf '%s\\n' '${start}'; ${command}; printf '${end}:%s\\n' "$?"`;
+  //
+  // FALSIFIED, kept beside its replacement (live-run finding L1, 2026-09-29): "the single-line path keeps today's
+  // wrapper byte for byte" — `printf <start>; <command>; printf <end>`, nothing guarding the command. An interactive
+  // `sh` that meets an error in the LINE it is running — an expansion it cannot perform (`${PIPESTATUS[0]}` under
+  // dash: `Bad substitution`), a syntax it does not have (`<(…)`: `Syntax error: "(" unexpected`), an unterminated
+  // quote — abandons the rest of that line; a trailing `# note` comments it out. Either way the end frame never
+  // printed, and a command that finished in 0.1 s read as a soft pause, exit −1. Plain `eval` is no guard: an error
+  // inside a SPECIAL built-in abandons the line the same way (measured under dash and bash). `command eval` is:
+  // POSIX's `command` takes a special built-in's special properties away, so the error becomes that utility's own
+  // nonzero status and the shell goes on to the end frame — dash reports 2. This is the posix twin of the PowerShell
+  // branch's `try`. The command reaches `eval` single-quoted, one physical line either way, and still runs in THIS
+  // shell, so what it sets persists as before.
+  const payload = command.includes('\n')
+    ? `"$(printf '%b' '${command.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/'/g, `'\\''`)}')"`
+    : `'${command.replace(/'/g, `'\\''`)}'`;
+  return `printf '%s\\n' '${start}'; command eval ${payload}; printf '${end}:%s\\n' "$?"`;
 }
 
 /**

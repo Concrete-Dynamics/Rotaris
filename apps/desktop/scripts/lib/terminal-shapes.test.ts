@@ -17,6 +17,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
+import { existsSync, realpathSync } from 'node:fs';
 // @ts-expect-error — the shapes are plain ESM beside the script that replays them.
 import { LONG_OUTPUT_LINES, diagnosticOf, hereStringLinesReturned, longOutputReading, outputOf, terminalShapes } from './terminal-shapes.mjs';
 
@@ -29,8 +30,11 @@ describe('the terminal shapes the live run replays', () => {
     describe(platform, () => {
       const shapes: Shape[] = terminalShapes(platform);
 
-      it('carries all six shapes, each named once', () => {
-        expect(shapes.map((s) => s.id)).toEqual(['here-string', 'long-output', 'wedge', 'failed-word', 'diff-exit-1', 'pipe-to-shell']);
+      it('carries every shape of its platform, each named once', () => {
+        // Live-run L1's `unexpandable` is POSIX only: PowerShell has no such expansion.
+        expect(shapes.map((s) => s.id)).toEqual(platform === 'win32'
+          ? ['here-string', 'long-output', 'wedge', 'failed-word', 'diff-exit-1', 'pipe-to-shell']
+          : ['here-string', 'long-output', 'unexpandable', 'wedge', 'failed-word', 'diff-exit-1', 'pipe-to-shell']);
       });
 
       it('matches its own command — the round trip the scenario depends on', () => {
@@ -169,6 +173,23 @@ describe('the docker line the failed-word shape replays', () => {
       : spawnSync('sh', ['-c', command], { encoding: 'utf8', timeout: 60_000 });
     expect(run.status, String(run.error ?? run.stderr)).toBe(0);
     expect(run.stdout.trim()).toBe('failed to connect to the docker API');
+  });
+});
+
+describe('the bash-ism the unexpandable shape replays (live-run L1)', () => {
+  /*
+   * The shape is a guard only while it carries the input that failed: an expansion the host's `/bin/sh` cannot
+   * perform. Measured where that shell is dash, as it was on the live run's host; a `/bin/sh` that is bash expands
+   * it, and there the shape asks nothing of the wrapper's guard.
+   */
+  const dash = process.platform !== 'win32' && existsSync('/bin/sh') && realpathSync('/bin/sh').endsWith('dash');
+  it.skipIf(!dash)('fails to expand under a dash /bin/sh, after printing its first line, run for real', () => {
+    const shapes: Shape[] = terminalShapes();
+    const command = shapes.find((s) => s.id === 'unexpandable')!.command;
+    const run = spawnSync('/bin/sh', ['-c', command], { encoding: 'utf8', timeout: 60_000 });
+    expect(run.stdout.trim()).toBe('ran');
+    expect(run.stderr).toMatch(/Bad substitution/);
+    expect(run.status).not.toBe(0);
   });
 });
 

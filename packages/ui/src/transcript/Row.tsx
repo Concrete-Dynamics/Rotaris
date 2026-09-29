@@ -357,14 +357,69 @@ export function trailerText(t: TrailerRow): string {
  * one agent, and recorded as `docs/defects/group-header-claims-the-role-gutter.md`.
  */
 export function placements(displays: readonly DisplayRow[]): readonly RowPlace[] {
-  const roles = displays.map((d) => (d.shape === 'row' ? rowRole(d.row) : d.shape === 'group' ? d.role : `trailer:${d.trailer.sort}`));
-  const toolIndexes: number[] = [];
-  displays.forEach((d, i) => { if (d.shape === 'row' && d.row.kind === 'tool') toolIndexes.push(i); });
-  const recent = new Set(toolIndexes.length < 2 ? toolIndexes : toolIndexes.slice(-2));
-  return displays.map((d, i) => ({
-    blockStart: i === 0 || roles[i] !== roles[i - 1] || d.shape === 'trailer',
-    recentTool: recent.has(i),
-  }));
+  return placementsFrom(null, displays).places;
+}
+
+/** What `placementsFrom` carries from one displayed array to the next. */
+export interface Placed {
+  readonly display: readonly DisplayRow[];
+  readonly places: readonly RowPlace[];
+  /** The positions of the tool rows in `display`, ascending: REQ-CHAT-067's "most recent pair" is their last two. */
+  readonly tools: readonly number[];
+}
+
+/** The role a block is broken on (REQ-CHAT-057): an activity line's is its agent's, and a trailer's is its own. */
+function blockRole(d: DisplayRow): string {
+  return d.shape === 'row' ? rowRole(d.row) : d.shape === 'group' ? d.role : `trailer:${d.trailer.sort}`;
+}
+
+const isToolRow = (d: DisplayRow): boolean => d.shape === 'row' && d.row.kind === 'tool';
+
+/**
+ * `placements(display)`, built from `previous` — the places of the array the pane showed before — rather than from
+ * nothing. A position before the first one whose displayed-row OBJECT changed keeps its place object: its role and the
+ * role above it are the same, so its block start is, and its recency changes only where it enters or leaves the last
+ * two tool rows, which are the only places rebuilt there. From the first changed position on, the places are computed.
+ * Step 4's bounded form hands the pane the previous projection's prefix itself, so an increment rebuilds the places of
+ * the rows it changed and of at most two tool rows above them.
+ *
+ * REQ-CHAT-055 (the work of an update depends on the rows that changed, not the rows held): the first form computed
+ * every place once per projection — a role, a tool test and a new object for each of a thousand rows — and V8's CPU
+ * profile of the built app (2026-09-29, the defect note's "CPU profile" section) named it among the loaded side's extra
+ * script. The places are the ones `placements` computes, value for value (`rows.test.ts`, `projector.test.ts`).
+ */
+export function placementsFrom(previous: Placed | null, display: readonly DisplayRow[]): Placed {
+  let first = 0;
+  let tools: number[] = [];
+  let places: RowPlace[] = [];
+  if (previous !== null) {
+    const before = previous.display;
+    const shared = Math.min(before.length, display.length);
+    while (first < shared && before[first] === display[first]) first += 1;
+    // The tool rows above `first` are where they were; the list is ascending, so the part above is a prefix of it.
+    let kept = 0;
+    let hi = previous.tools.length;
+    while (kept < hi) { const mid = (kept + hi) >> 1; if (previous.tools[mid]! < first) kept = mid + 1; else hi = mid; }
+    tools = previous.tools.slice(0, kept);
+    places = previous.places.slice(0, first);
+  }
+  for (let i = first; i < display.length; i += 1) if (isToolRow(display[i]!)) tools.push(i);
+  const recent = new Set(tools.slice(-2));
+  // Above `first`, only a row entering or leaving the most recent pair changes place.
+  if (previous !== null) {
+    for (const at of [...previous.tools.slice(-2), ...recent]) {
+      if (at >= first || places[at]!.recentTool === recent.has(at)) continue;
+      places[at] = { blockStart: places[at]!.blockStart, recentTool: recent.has(at) };
+    }
+  }
+  let above = first > 0 ? blockRole(display[first - 1]!) : '';
+  for (let i = first; i < display.length; i += 1) {
+    const d = display[i]!;
+    const role = blockRole(d);
+    places.push({ blockStart: i === 0 || role !== above || d.shape === 'trailer', recentTool: recent.has(i) });
+    above = role;
+  }
+  return { display, places, tools };
 }
 
 /**

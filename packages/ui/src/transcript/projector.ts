@@ -58,8 +58,9 @@ export type ProjectFunction = (o: ProjectOptions, incremental?: { readonly previ
 
 /**
  * The inputs step 4 reads, by how each is compared: `rows` and `expanded` by identity (in `sameInputs` and
- * `sameButRows`), the lists element by element, the rest by value. An input absent here would be a change the memo
- * cannot see.
+ * `sameButRowsAndRunning`), the lists element by element, `running` and the rest by value. An input absent here would be
+ * a change the memo cannot see. `running` is compared apart because a change of it alone can take the bounded form
+ * (`changedFrom`).
  */
 const LIST_KEYS = ['pendingQuestions', 'pendingApprovals'] as const;
 const VALUE_KEYS = ['groupTools', 'showReasoning', 'questionAgent'] as const;

@@ -322,7 +322,7 @@ Sixty negative runs are not a negative result when none of them carries the inpu
 issues the recorded commands verbatim, and asserts from `tool_calls` — what the agent passed, what came back —
 rather than from what the model says it did.
 
-**One of the six shapes is a NOTE, on purpose.** The pipe-to-shell deny fires exactly as `REQ-TOOLS-036/038`
+**One of the shapes is a NOTE, on purpose.** The pipe-to-shell deny fires exactly as `REQ-TOOLS-036/038`
 specify; its note exists to measure what it costs, not to accuse the product. A shape the model never issued is
 also a NOTE. Reporting a faithful behaviour as a fault is how a scenario teaches its reader to ignore it — the
 mistake the board scenario made twice. The `FAILED`-marker shape was the second NOTE until 2026-09-27: it now

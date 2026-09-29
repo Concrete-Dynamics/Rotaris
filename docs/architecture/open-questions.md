@@ -3488,7 +3488,7 @@ not built.
 first reading widens the schema's key to a pattern and changes nothing in the shipped file; either reading leaves the
 consumer to state what a host with no matching archive is told.
 
-**OQ-89 — Under a burst, is REQ-CHAT-055's append comparison read on the update as it arrived, or on an update that arrived alone?** *(REQ-CHAT-055, REQ-CHAT-154, REQ-CHAT-157; ADR-0045's measurement point. Raised 2026-09-28 by the measurement round R-048 authorized, taken under [R-062](../product/requests.md#r-062); the note is `docs/defects/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md`. Raised as OQ-76 on its branch; renumbered OQ-89 at the merge, because OQ-76 to OQ-88 were already on `main`.)*
+**OQ-89 — Under a burst, is REQ-CHAT-055's append comparison read on the update as it arrived, or on an update that arrived alone?** *(REQ-CHAT-055, REQ-CHAT-154, REQ-CHAT-157; ADR-0045's measurement point. Raised 2026-09-28 by the measurement round R-048 authorized, taken under [R-062](../product/requests.md#r-062); the note is `docs/defects/fixed/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md`. Raised as OQ-76 on its branch; renumbered OQ-89 at the merge, because OQ-76 to OQ-88 were already on `main`.)*
 
 REQ-CHAT-055 fixes "cost" as the time from an update's application to the frame that shows it, and compares that
 figure for an appended row at a thousand rows with the same figure on an empty transcript. The round found the proof's
@@ -3518,6 +3518,31 @@ updates so each is shown before the next arrives, which the benchmark domain's p
 visible-row term is within the requirement while the third sentence's comparison holds, or is itself the thing the
 third sentence forbids. Recommended: the first reading, as the one a reader experiences and the one the benchmark's
 phases can measure, with the third sentence read at one frame of slack as the proof reads it.
+
+**Evidence, 2026-09-29 — the CPU-profile round (recorded for the ruling; not a ruling).** The paragraph above says the
+2026-09-28 repair made the per-increment cost independent of the rows held. V8's CPU profile of the built app showed it
+had not: the transcript's own code still walked every displayed row on every increment — 1.03 ms of +1.50 ms of script
+an increment at 1,234 rows against 35 — repaired the next day (the note, "The CPU profile"), after which twelve
+consecutive runs of the proof passed both cuts, the loaded side above the empty side at the median in four of twelve;
+with five more, sixteen of seventeen, on a host other agents shared. The profile also measured what bears on this
+question's second half. The pooled empty side holds two viewport states: its first launch starts at one row and gains
+seventeen, so its viewport never fills and an append binds one new slot while every other slot keeps its row; its second
+starts at eighteen and fills within a few appends. The loaded side is always at the tail of a full viewport, where each
+append moves the bound range and rebinds every bound slot. Profiled apart on the repaired build (two pairs, a fresh
+one-row `S0` against `S1200` at 1,200), that shape still costs the loaded side about **2.0 ms more an increment**:
+layout +0.84 ms, nearly all of it forced by the tail pin, over twice the layout objects (72.0 and 79.5 dirty objects an
+increment against 34.9 and 35.3; 11.6 and 13.0 text-shaping passes against 5.7), React's DOM writes for the rebound
+slots +0.21 ms, style, paint and native time +0.6 ms, and the residue over the rows held +0.4 ms, which a one- to
+eighteen-row empty side does not cancel. Bar the residue it is visible-row work, which the first sentence permits, and
+under a burst the queue multiplies it as it multiplies everything else — so on this harness the third sentence's
+comparison, read against the first launch's part-empty viewport, charges a full viewport's rebinding to the loaded side;
+the runs above pass with it charged. What the comparison **can** decide here: a per-increment term that grows with the
+rows held and is large enough to move the pooled median by a frame — the one this round repaired failed it in eight of
+the twenty-one runs before the repair, and after it the comparison failed once in seventeen, on a saturated host. What
+it **cannot**: whether a residual inside a frame is depth-dependent work, visible-row work or the host, because a run's
+two sides are separate launches whose medians move by 20 ms with the host's load — two runs on the repaired build with
+no other Electron process but a load of up to 9 on four vCPUs read +21.15 ms (the one red since the repair) and −19.70
+ms; only a profile of the same increments names that, which is why the proof now carries one.
 
 **OQ-90 — Are the variables that name a launch's artifact removed from what the product's children inherit, and which requirement says so?** *(REQ-STARTUP-147, REQ-STARTUP-106, REQ-HOOKS-032; ADR-0054, "The updater", item (6). Raised 2026-09-28 by repairing `docs/defects/fixed/the-artifact-variables-reach-the-products-own-child-processes.md` under [R-062](../product/requests.md#r-062).)*
 

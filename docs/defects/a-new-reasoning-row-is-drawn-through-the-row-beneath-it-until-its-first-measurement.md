@@ -30,4 +30,4 @@ whenever an appointment lands inside that frame.
 - `apps/desktop/scripts/transcript-proof.mjs` — stage 3b, the appointments every 300 ms from 3,300 ms and the `≤ 1 px` bound.
 
 Noticed 2026-09-29 while taking REQ-CHAT-055's CPU-profile round
-(`appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md`); recorded, not repaired — it is outside that round.
+(`fixed/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md`); recorded, not repaired — it is outside that round.

@@ -122,7 +122,7 @@ What is kept from this round is the falsification, as a test rather than as pros
 if one of these terms ever becomes the dominant one — which is the only condition under which the seam
 change would be worth revisiting.
 
-## Measurement round authorized — 2026-09-23 ([R-048](../product/requests.md#r-048))
+## Measurement round authorized — 2026-09-23 ([R-048](../../product/requests.md#r-048))
 
 No directive is owed: REQ-CHAT-055 is correct and the product fails it. The owner authorized the round this
 note ends on, in this order:
@@ -135,7 +135,7 @@ note ends on, in this order:
    laid out again on every append and a pin-to-bottom scroll write forcing a synchronous layout; neither is
    to be taken on a guess (`.agents/skills/debug-ui` step 8).
 
-## Not taken 2026-09-27 ([R-054](../product/requests.md#r-054))
+## Not taken 2026-09-27 ([R-054](../../product/requests.md#r-054))
 
 The owner asked for this round again under R-054, and it did not start. All three steps drive the built
 application, and the session ran in a Linux container as uid 0, where Electron will not start with Chromium's
@@ -144,7 +144,7 @@ and neither was done. So no proof was re-run, no trace was taken and no code cha
 R-048 left it, for a host that can launch the application: a Windows or Linux desktop, or a container running as
 an unprivileged user.
 
-## The round taken — 2026-09-28 ([R-062](../product/requests.md#r-062), in R-048's order)
+## The round taken — 2026-09-28 ([R-062](../../product/requests.md#r-062), in R-048's order)
 
 Host: a Linux container as uid 0, Node 24.21.0, Electron 44.1.1 (Chromium 152), the app under `xvfb-run` with
 `--no-sandbox` (`hostSwitches`), four vCPUs. The frame cadence measured in the renderer — sixty consecutive animation
@@ -370,7 +370,7 @@ drew something the whole-state projection does not, on a pure append: `cleanCut`
 reads the rows hygiene keeps (a live duplicate reasoning row REQ-CHAT-048 drops split its agent's activity line), and a
 repeated edit diff REQ-CHAT-050 drops, re-sent at its own index with the rows behind it removed, let the reused prefix
 reach past `from`. Recorded and repaired as
-[`fixed/the-bounded-projection-reads-runs-on-rows-hygiene-drops.md`](fixed/the-bounded-projection-reads-runs-on-rows-hygiene-drops.md);
+[`fixed/the-bounded-projection-reads-runs-on-rows-hygiene-drops.md`](the-bounded-projection-reads-runs-on-rows-hygiene-drops.md);
 `projector.test.ts` pins both, and its seeded walks now run seven seeds with diff rows and reasoning durations over every
 value of `running`, `groupTools` and `showReasoning`. Fix round 1's claim that the bounded form is "taken only where it
 projects what the whole-state form projects" was false for those two shapes until this repair; the pass/fail series above
@@ -479,3 +479,300 @@ failure of this build was on a shared host or the verifier's. No trace yet names
 repair is taken (`.agents/skills/debug-ui` step 8); the candidates stay the ones fix round 2 named. OQ-89 still holds the
 reading under a burst and what "an empty transcript" holds. The three runs' logs, `append.json` files and traces were
 kept beside the work; `.proof/transcript-proof/` holds only H3.
+
+## The CPU profile — 2026-09-29 (R-062, R-048's order continued): the loaded side's extra script named, and repaired
+
+*Fix round 3 left this note open on one observation: in every traced pair the loaded side's script was 1.2–4.2 ms higher
+per increment, and no trace named it — Chromium's `FunctionCall` event names only the entry point React's scheduler was
+called through, never the component or helper the time went to. This round adds V8's own sampling profiler to the same
+traced launches, names the extra script by function, and repairs only what it names.*
+
+**The instrument.** The traced launches add `disabled-by-default-v8.cpu_profiler` and its fine interval
+(`…cpu_profiler.hires`) to the startup-tracing categories; V8 sampled the renderer's main thread every 168–174 µs (169 at
+the median), 3,100–3,750 samples over a launch's increments. `apps/desktop/scripts/lib/trace-summary.mjs` reads the
+`Profile` and `ProfileChunk` events back and charges every sample inside the increments' span — the first kept apply to
+the last shown frame, the span the trace account's per-increment figures read — by the trace account's own bucket rule: a
+sample inside style, layout, pre-paint, paint or the commit is the browser's whatever script was on the stack (so a
+forced layout is layout, and `under` says which function forced it), a sample with no event open is idle, V8's own
+`(idle)` inside a task is not (the frames' paint was sampled as it — measured, not assumed), and every other sample is the
+sampled function's self time, named by the source module the renderer bundle's `//#region` markers place its line in. A
+gap between samples longer than four intervals is capped at four. `append.json` gains `profile`: each side per increment
+by function and by module, and loaded minus empty. `trace-summary.test.ts` pins the placement of samples across chunks,
+the gap cap, the naming, the charging and the per-increment difference (6 cases).
+
+**Host.** The same Linux container as uid 0, Node 24.21.0, Electron 44.1.1, `xvfb-run`, four vCPUs. Other agents' Electron
+proofs ran beside most of the naming launches (8 to 22 other Electron processes counted). A per-function difference
+tolerates that better than the timing comparison does, because the functions it names are near zero on the empty side
+whatever the neighbours do; the totals do not, and are read with that in mind.
+
+### What the profile names
+
+Three traced pairs in the proof's own launch order — a scratch driver of the proof's append stage alone: plant, two
+untraced alternating pairs, then three traced pairs, so the empty launches hold `S0` at 35, 52 and 69 rows and the loaded
+ones `S1200` at 1,234, 1,251 and 1,268, both viewports full as in the proof's traced pair — on `main`'s product at
+`fa377e6` with only the instrument added. Loaded minus empty, milliseconds per increment:
+
+| per increment | pair 1 | pair 2 | pair 3 | mean, empty → loaded | mean difference |
+| --- | --- | --- | --- | --- | --- |
+| main thread busy | +2.29 | +1.41 | +1.70 | 8.48 → 10.28 | **+1.80** |
+| script | +1.18 | +1.32 | +2.00 | 3.96 → 5.46 | **+1.50** |
+| layout | +0.49 | +0.01 | −0.09 | 1.59 → 1.73 | +0.14 |
+| style | −0.02 | −0.01 | +0.10 | 0.61 → 0.64 | +0.03 |
+| paint, pre-paint and commit | +0.23 | +0.04 | −0.14 | 0.61 → 0.65 | +0.04 |
+| garbage collection | +0.10 | −0.02 | −0.01 | 0.09 → 0.11 | +0.02 |
+| native, unbucketed | +0.32 | +0.08 | −0.13 | 1.59 → 1.68 | +0.09 |
+
+The extra is script, as the trace account had said. By module (script self time):
+
+| module | pair 1 | pair 2 | pair 3 | mean, empty → loaded | mean difference |
+| --- | --- | --- | --- | --- | --- |
+| `packages/ui/src/transcript/project.ts` | +0.32 | +0.23 | +0.30 | 0.12 → 0.40 | **+0.28** |
+| `packages/ui/src/transcript/TranscriptPane.tsx` | +0.09 | +0.23 | +0.42 | 0.91 → 1.15 | **+0.24** |
+| `packages/ui/src/transcript/pool.ts` | +0.20 | +0.20 | +0.17 | 0.01 → 0.20 | **+0.19** |
+| `packages/ui/src/transcript/Row.tsx` | +0.18 | +0.16 | +0.23 | 0.04 → 0.23 | **+0.19** |
+| `react-dom` | −0.14 | +0.08 | +0.40 | 1.61 → 1.73 | +0.11 |
+| `src/renderer/main.tsx` | +0.05 | +0.12 | +0.12 | 0.05 → 0.15 | +0.10 |
+| `packages/ui/src/transcript/cache.ts` | +0.07 | +0.04 | +0.09 | 0.09 → 0.16 | +0.07 |
+| `packages/ui/src/transcript/projector.ts` | +0.03 | +0.12 | +0.02 | 0.02 → 0.07 | +0.06 |
+| *the six transcript modules together* | +0.89 | +0.97 | +1.23 | 1.17 → 2.21 | **+1.03** |
+
+**Named: the transcript's own code, walking every displayed row on every increment.** Of +1.50 ms of script an increment,
+1.03 ms is in the six modules of `packages/ui/src/transcript/`, larger on the loaded side in every pair, and the functions
+carrying it are at or near zero on the empty side — work that grows with the rows held, which REQ-CHAT-055 forbids to the
+extent that it moves the shown-update figure, and which the burst makes move it by multiplying it by the queue in front
+of each sample. By function, grouped by the pass each belongs to (mean difference over the three pairs; larger on the
+loaded side in all three unless marked):
+
+| pass | functions and their mean difference, ms per increment | what it did on every increment |
+| --- | --- | --- |
+| the offset table | the table's memo in `TranscriptPane.tsx` +0.084, `estimateHeight` +0.077, `wrappedLines` +0.060, `peek` +0.038, `measureKey` +0.035 — **+0.29** | rebuilt over every displayed row two or three times an increment (the new rows, then each measurement they caused): a key, two cache lookups and, for every row never yet on screen, an estimate |
+| the projection | `projectDisplay` +0.083, `lastIndexOf` +0.053, `foldRuns` +0.053, `changedFrom` +0.039 (two pairs of three), smaller helpers — **+0.34** with `projector.ts` | the bounded form filtered the whole previous display, then searched it again for its cut; a run beginning or ending (`running` flipping) projected the whole window, twice a run; the changed row was found by a scan from the top |
+| the places | `placements` +0.046 and its map +0.050, `rowRole` +0.018 — **+0.11** | REQ-CHAT-057/067's two facts recomputed for every displayed row once a projection |
+| the update shape | `updateShape` +0.039 and its map +0.012 — **+0.05** | both displays mapped to their keys to classify an append |
+
+Not named as the product's own work over the rows held: React's reconciliation and DOM writes (+0.11, two pairs of three),
+the layout the pin's effect forces (+0.18 of layout under it, two pairs of three — the browser's), the renderer shell's
+`App` and `Workspace` and the composer (+0.10, among them the composer draft's IPC write, `write`, +0.044), and small
+native and collection terms that change sign between pairs.
+
+**The comparison's other shape, measured and not repaired.** The traced pair holds both viewports full. The comparison's
+first empty launch does not: `S0` starts at one row and gains seventeen, so its viewport never fills and an append binds
+a new slot while every other slot keeps its row; on the loaded side every append at the tail moves the bound range and so
+rebinds every bound slot. Profiled once as a pair of its own (a fresh `S0` at one row against `S1200` at 1,200): the main
+thread busy **+3.43 ms** an increment — script +1.73, of it React's DOM writes for the rebound slots +0.45 and the
+transcript's own passes above about +1.1; layout +0.87 over twice the objects (73 dirty layout objects an increment
+against 36, twelve text-shaping passes against six); style +0.25 (50 elements restyled against 25); paint, pre-paint and
+commit +0.23. In the traced pairs, whose empty side is full too, the dirty objects and the text shaping are nearly level
+(67–78 against 79–85 dirty objects and 12–14 against 14–15 shaping passes an increment in fix round 3's three pairs).
+That part is visible-row work: REQ-CHAT-055's first sentence permits it, and its third sentence's comparison charges it to
+the loaded side whenever the empty side's viewport is part-empty — OQ-89's second reading. It is not the product's defect
+on the record's present reading, and it is not repaired here; it is measured again after the repair below.
+
+### The repair — only the passes the profile named
+
+All in `packages/ui/src/transcript/`, each built to answer what the whole pass answered, each with a test that fails on
+the first form:
+
+1. **The offset table is rebuilt where it changed** (`pool.ts`'s `reuseOffsets`): a row that is the same object at the
+   same position, and whose identity the measurement pass has not re-measured since the committed table, keeps its height
+   and its offset, and the prefix sums are re-summed from the first height that changed. The pane stamps each
+   `ResizeObserver` delivery and marks the identities it re-measures in a `MeasureLedger`; the two measurement caches
+   report their evictions and clears to it (`cache.ts`'s new `onEvict`); with nothing marked, the pane hands the table no
+   lookup at all. *Test:* at 1,200 displayed rows an append reads one height and a measurement of three identities reads
+   three — the first form read 1,201 — and a seeded walk of 800 steps (appends, settles, removals, rows changed in place,
+   measurements, evictions, resizes, toggles) holds the table to `buildOffsets` of every height at every step.
+2. **The update shape compares keys only past the rows both arrays share** (`pool.ts`'s `updateShape`). *Test:* an append
+   at 1,200 reads at most four keys — the first form read 2,401 — and 2,000 seeded pairs answer what the first form
+   answered. (It never answers `extend`, and neither did the first form: recorded as
+   [`the-update-shape-never-answers-extend.md`](../the-update-shape-never-answers-extend.md).)
+3. **The places are built from the previous projection's** (`Row.tsx`'s `placementsFrom`, carried by the projector): a
+   row the bounded form carried over keeps its place object, and above the first changed position only a row entering or
+   leaving the most recent tool pair gets a new one. *Test:* an appended tool row at 1,200 builds its own place and
+   rebuilds one above it, the tool row it pushes out of the most recent pair — the first form built 1,201 — and a seeded
+   walk of 1,000 steps and the projector's walks hold the places to `placements`.
+4. **The bounded projection finds its reusable prefix by bisection** over the previous display's reach, the highest row
+   index any displayed row up to a position covers, which each bounded projection carries forward (`project.ts`), and
+   finds the changed row by bisection too; the redundant filter is gone. *Test:* the second of two appends at 1,200 asks
+   the rows above it nothing (at most eight reads of a row's shape) — the first form asked 4,800.
+5. **A run beginning or ending is bounded from the first row that settles with it** (`projector.ts`'s `changedFrom`,
+   `project.ts`'s `settlesWithRunning`): `settle` is the only place step 4 reads `running`, and it answers differently only
+   for a row still streaming or still marked running. *Test:* at 1,200 rows with a live call at the tail, the run starting
+   and then ending are each projected from that call — the first form projected the window — and the projector's seeded
+   walks now flip `running` in about one step of twelve and still equal the whole-state projection at every step.
+
+What each of these still reads of the rows held is a pointer comparison per row, an array copy or a bisection per
+update — the residue measured below, not a pass that re-derives anything per row.
+
+### Measured after
+
+**The profile, step by step** (the same scratch driver and launch order, three traced pairs each; other agents' proofs ran
+beside both steps — 11 to 19 other Electron processes counted — which the totals show and the transcript modules largely
+do not):
+
+| loaded minus empty, ms per increment (mean of three pairs) | before | after 1–3 and the filter's removal | after all five |
+| --- | --- | --- | --- |
+| main thread busy | +1.80 | +1.23 | +0.62 |
+| script | **+1.50** | +0.68 | **+0.36** |
+| `project.ts` | +0.28 | +0.20 | +0.04 |
+| `TranscriptPane.tsx` | +0.24 | +0.17 | +0.18 |
+| `pool.ts` | +0.19 | +0.08 | +0.05 |
+| `Row.tsx` | +0.19 | +0.01 | +0.04 |
+| `projector.ts` | +0.06 | +0.04 | +0.05 |
+
+`cache.ts` (+0.07 before) fell below the modules the aggregation listed at both steps (at most +0.004 and +0.013 an
+increment). The last column's build lacks one later refinement that the proof runs below carry: with nothing re-measured,
+`reuseOffsets` is handed no lookup. Every step moved the number of the pass it repaired (`.agents/skills/debug-ui` step
+8): `estimateHeight` from +0.077 to +0.021 (the rows that changed), `placements` and its map from +0.10 to
+`placementsFrom`'s +0.008, `updateShape`'s key maps gone, `lastIndexOf` from +0.053 (+0.038 once the filter was gone) to
+nothing once the cut was bisected — for `extendReach`'s copy of the reach, +0.030 — and `foldRuns` from +0.053 to nothing
+once a run's beginning and end were bounded.
+
+**The comparison: twelve consecutive runs of the proof on the repaired build** (Q1–Q12; `pnpm build`, then
+`xvfb-run -a -s "-screen 0 1600x1000x24" node apps/desktop/scripts/transcript-proof.mjs --skip-build`, a runner that
+waited before each run until no other agent's Electron process was running and counted them every five seconds during
+it; 62 pooled samples a side in every run, the frame cadence 16.7 ms in every launch, slack one frame; 33 bounded
+projections a launch of 34–36, where fix rounds 1–3 read 31 — the two a run's beginning and end took whole are bounded
+now; every traced launch covered 31 of 31 increments and carried its profile):
+
+| run | other Electron processes: at start / most during | every update, loaded vs empty (ms) | row appends | IQR empty / loaded | `sync` median, loaded vs empty | frames median, loaded vs empty | verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Q1 | 0 / 8 | 62.4 vs 65.65, **−3.25** | 57.35 vs 64.75, −7.40 | 43 / 33.2 | 3.25 vs 3 | 3.74 vs 3.93 | pass |
+| Q2 | 0 / 11 | 67.5 vs 63.45, **+4.05** | 60.95 vs 59.9, +1.05 | 42 / 44.7 | 4.1 vs 3.3 | 4.05 vs 3.8 | pass |
+| Q3 | 0 / 0 | 76.1 vs 71.35, **+4.75** | 70.5 vs 68.75, +1.75 | 48.4 / 59.4 | 4.3 vs 3.65 | 4.56 vs 4.28 | pass |
+| Q4 | 0 / 0 | 59.45 vs 69.05, **−9.60** | 57.1 vs 66.45, −9.35 | 43 / 37.7 | 4.4 vs 3.4 | 3.56 vs 4.14 | pass |
+| Q5 | 0 / 0 | 70.55 vs 67.25, **+3.30** | 67.6 vs 64.8, +2.80 | 42.6 / 39.1 | 4.05 vs 3.15 | 4.22 vs 4.03 | pass |
+| Q6 | 0 / 9 | 65.05 vs 75.65, **−10.60** | 61.75 vs 73.45, −11.70 | 47.2 / 41.6 | 3.8 vs 3.65 | 3.9 vs 4.53 | pass |
+| Q7 | 0 / 8 | 71.25 vs 59.6, **+11.65** | 66.3 vs 56.05, +10.25 | 46.5 / 35.5 | 3.95 vs 3.2 | 4.27 vs 3.57 | pass |
+| Q8 | 0 / 8 | 75.2 vs 94.65, **−19.45** | 70.8 vs 91.8, −21.00 | 53.4 / 54.1 | 3.9 vs 4.55 | 4.5 vs 5.67 | pass |
+| Q9 | 0 / 0 | 64 vs 71.6, **−7.60** | 59.25 vs 67.95, −8.70 | 50.9 / 45 | 4.15 vs 3.7 | 3.83 vs 4.29 | pass |
+| Q10 | 0 / 8 | 51.75 vs 64.95, **−13.20** | 50.6 vs 63.6, −13.00 | 41.9 / 38.9 | 4.25 vs 3.15 | 3.1 vs 3.89 | pass |
+| Q11 | 0 / 0 | 58.9 vs 63.45, **−4.55** | 53.8 vs 59.55, −5.75 | 41.2 / 50 | 4.4 vs 3.2 | 3.53 vs 3.8 | pass |
+| Q12 | 0 / 11 | 65.6 vs 67.45, **−1.85** | 59.35 vs 64.35, −5.00 | 50 / 42 | 4.1 vs 3.35 | 3.93 vs 4.04 | pass |
+
+**Twelve passes in twelve**, both cuts in every run. The loaded side's median stands above the empty side's in four runs
+of twelve (+3.3 to +11.7 ms, inside the slack) and below it in eight; the median difference over the twelve is −3.9 ms on
+every update and −6.6 ms on the row appends. Before the repair the same comparison read six passes in twelve on fix round
+2's build and thirteen in twenty-one across the fix rounds, the loaded side above at the median in eighteen of the
+twenty-one. The synchronous apply (`sync`) still stands above the empty side's in eleven runs of twelve, by 0.15–1.2 ms
+at the median (0.3–2.55 ms in every run of the fix rounds) — the residue and the rebinding below, inside a frame, and a figure
+REQ-CHAT-055 does not judge. The host was not quiet throughout: the runner waited for no other Electron process at each start, and in
+five runs (Q3, Q4, Q5, Q9, Q11) none appeared at any sample; in the other seven another agent's proof started part-way
+through (8–11 of its processes at most) — by fix round 3's standard, none at the start or after the run, Q8 was quiet
+too. The five runs with no neighbour at any sample read +4.75, −9.60, +3.30, −7.60 and −4.55 ms. The host's load was read
+only at each run's start and end (1-minute load 0.16–3.39 at the starts), so whether other work than Electron shared it is
+not known for these twelve.
+
+**Five more runs, waiting for a quiet host** (QQ1–QQ5; the same build and command). The runner waited before each
+run for thirty seconds with no other Electron process and counted them every five seconds during it; from QQ3 on it also
+sampled the host's 1-minute load. QQ3 and QQ4 had no other Electron process at any sample and still shared the host with
+other agents' gates — at QQ4's end their `pnpm check`, eslint and vitest in two other worktrees — at a load of 3 to 9 on
+four vCPUs; so from QQ5 the runner also waited for a load under 1.0 before a run, and a run counts as **quiet** only when no
+sample found another Electron process and the load stayed under 4.0, the host never saturated. The append stage's samples
+are counted apart; a run's own launches load the host to about 2–3:
+
+| run | other Electron processes: at start / most at a sample / append-stage samples with any | highest 1-min load | every update, loaded vs empty (ms) | row appends | IQR empty / loaded | `sync` median, loaded vs empty | frames median, loaded vs empty | verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| QQ1 | 0 / 11 / 15 of 43 | not sampled | 70.7 vs 70.65, **+0.05** | 66.35 vs 67.65, −1.30 | 50.3 / 55.8 | 4.4 vs 3.25 | 4.24 vs 4.24 | pass |
+| QQ2 | 0 / 11 / 18 of 42 | not sampled | 54.3 vs 60.85, **−6.55** | 51.1 vs 59.5, −8.40 | 36.9 / 34.3 | 3.95 vs 3.15 | 3.25 vs 3.65 | pass |
+| QQ3 | 0 / 0 / 0 of 43 | 9.36 | 113.65 vs 92.5, **+21.15** | 105.95 vs 75.25, +30.70 | 68.8 / 86.8 | 5.2 vs 3.85 | 6.81 vs 5.54 | **fail** |
+| QQ4 | 0 / 0 / 0 of 43 | 8.07 | 76.1 vs 95.8, **−19.70** | 67.55 vs 92.45, −24.90 | 48.5 / 60 | 5.55 vs 4.7 | 4.56 vs 5.74 | pass |
+| QQ5 | 0 / 16 / 22 of 43 | 5.44 | 83.75 vs 77.5, **+6.25** | 79.25 vs 73.85, +5.40 | 56.2 / 41.4 | 4.25 vs 3.7 | 5.02 vs 4.64 | pass |
+
+**Four passes in five**. QQ3 failed (+21.15 ms) and QQ4 passed (−19.70) under the same kind of load: a host at twice its
+cores moves a run's medians by twenty milliseconds either way, whichever side it lands on. **No run met that
+criterion.** The stricter wait allowed one start in an hour — QQ5, after 1,005 s — and another agent's proof started 2.8
+minutes into it; collecting stopped at 07:19 UTC with the host still shared (24 other Electron processes). Over all
+seventeen runs since the repair the comparison passed **sixteen**, the loaded side above the empty side at the median in
+seven (median difference −3.25 ms on every update, −5.75 on the row appends); before it, thirteen of twenty-one.
+
+**The traced pair of each run, after** (per increment over the increments' span — the profile of the proof's own traced
+launches, the empty side at 35 rows and the loaded at 1,234):
+
+| run | main thread busy, empty → loaded | script | layout | the transcript modules' script |
+| --- | --- | --- | --- | --- |
+| Q1 | 7.48 → 9.54 (+2.06) | 3.55 → 4.52 (+0.97) | 1.35 → 1.70 (+0.35) | 1.06 → 1.52 (+0.46) |
+| Q2 | 9.01 → 9.05 (+0.04) | 4.21 → 4.31 (+0.09) | 1.95 → 1.70 (−0.24) | 1.31 → 1.37 (+0.06) |
+| Q3 | 10.00 → 10.97 (+0.98) | 4.57 → 5.53 (+0.96) | 1.94 → 1.87 (−0.08) | 1.20 → 1.79 (+0.59) |
+| Q4 | 11.80 → 9.26 (−2.54) | 5.71 → 4.21 (−1.49) | 2.44 → 1.92 (−0.52) | 1.62 → 1.37 (−0.25) |
+| Q5 | 8.18 → 8.32 (+0.14) | 3.99 → 3.99 (0.00) | 1.49 → 1.66 (+0.17) | 1.14 → 1.30 (+0.17) |
+| Q6 | 7.66 → 7.59 (−0.07) | 3.60 → 3.63 (+0.03) | 1.55 → 1.43 (−0.13) | 0.96 → 1.23 (+0.27) |
+| Q7 | 9.60 → 12.18 (+2.59) | 4.61 → 6.20 (+1.59) | 1.80 → 2.28 (+0.49) | 1.29 → 2.15 (+0.85) |
+| Q8 | 7.63 → 8.46 (+0.84) | 3.61 → 3.76 (+0.15) | 1.57 → 1.60 (+0.04) | 1.08 → 1.30 (+0.22) |
+| Q9 | 10.76 → 11.50 (+0.74) | 4.97 → 5.09 (+0.12) | 2.03 → 2.14 (+0.11) | 1.41 → 1.80 (+0.39) |
+| Q10 | 8.48 → 8.22 (−0.25) | 3.93 → 3.74 (−0.18) | 1.94 → 1.66 (−0.27) | 1.29 → 1.24 (−0.05) |
+| Q11 | 6.84 → 10.12 (+3.29) | 3.16 → 4.80 (+1.64) | 1.35 → 1.92 (+0.57) | 0.86 → 1.42 (+0.56) |
+| Q12 | 9.90 → 8.13 (−1.78) | 4.93 → 3.97 (−0.96) | 2.06 → 1.52 (−0.54) | 1.57 → 1.26 (−0.31) |
+
+Over the twelve pairs the loaded side's main thread is +0.50 ms busier an increment (above in eight pairs), its script
++0.24 (above in eight) and its layout −0.01 (above in six), against +1.80, +1.50 and +0.14 before; the transcript's
+modules +0.25 (above in nine), against +1.03. A single traced pair still moves by a millisecond or two with the host —
+Q7's and Q11's loaded launches were 2.6 and 3.3 ms busier an increment, Q4's and Q12's 2.5 and 1.8 ms less busy — which
+is why no verdict is read off one pair.
+
+**What still reads the rows held** (the twelve pairs; every product function whose difference is positive in at least
+nine of them and at least +0.003 ms, loaded minus empty, ms per increment):
+
+| function | module | what it still reads of the rows held | mean difference | pairs above |
+| --- | --- | --- | --- | --- |
+| `project` | `projector.ts` | the projector's own step, with what V8 inlined into it (the input comparisons) | +0.027 | 11/12 |
+| `updateShape` | `pool.ts` | a pointer comparison over the rows both displays share | +0.024 | 12/12 |
+| `changedFrom` | `projector.ts` | a pointer comparison over the two rows arrays up to the first difference | +0.020 | 12/12 |
+| the attachments effect | `TranscriptPane.tsx` | `rows.flatMap` over every row's attachments, on every change of the rows | +0.020 | 12/12 |
+| `modelCallStartedAt`, and its memo in `WorkspaceView.tsx` | `packages/ui/src/composer.ts` | a scan from the tail for an unsettled row — the whole array once every row has settled (REQ-CHAT-158's approximated boundary) | +0.020, +0.008 | 11/12, 10/12 |
+| `reuseOffsets` | `pool.ts` | the offset table's unchanged prefix, copied | +0.019 | 11/12 |
+| `TranscriptPane` and `isLive` | `TranscriptPane.tsx`, `project.ts` | the pane's render body, whose one walk of the displayed rows is `display.some(isLive)` | +0.017, +0.009 | 9/12, 9/12 |
+| `dropRepeatedDiffs` | `project.ts` | REQ-CHAT-050's filter over the window's rows, once a projection | +0.017 | 12/12 |
+| `extendReach` and `lastIndexOf` | `project.ts` | the reach's unchanged prefix, copied, and each new row's reach | +0.016, +0.004 | 11/12, 10/12 |
+| `classifyRows` and `projectIncrement` | `packages/ui-core/src/replica.ts` | the replica's upsert: the held window filtered twice at the earliest change, and copied | +0.013, +0.009 | 10–11/12, 11–12/12 |
+| `placementsFrom` and `blockRole` | `Row.tsx` | the places' unchanged prefix, sliced, and the new rows' roles | +0.008, +0.003 | 9/12, 11/12 |
+
+Each is under three hundredths of a millisecond an increment at 1,234 rows; together they come to about +0.2 ms, most of
+the transcript modules' +0.25 above and a quarter of what the profile named. None re-derives anything per row — each
+compares a pointer, copies a number or tests a field per row — and REQ-CHAT-055 forbids such a residue not "in itself"
+but "to the extent that it moves" the shown-update figure, which the twelve runs do not show it doing. They are not
+repaired here, because this round repairs what the profile named as moving the comparison. Should the comparison
+regress, the profile the proof now carries says whether it is one of these.
+
+**The comparison's other shape, after the repair** (two pairs on the repaired build, a fresh one-row `S0` against
+`S1200` at 1,200, the same driver): the main thread busy **+2.01 ms** an increment (+1.30 and +2.72) — layout +0.84
+(+0.86 and +0.82), nearly all of it the layout the pin's effect forces, over twice the objects (79.5 and 72.0 dirty layout
+objects an increment against 35.3 and 34.9; 13.0 and 11.6 text-shaping passes against 5.7 and 5.7); script +0.60, of it
+React's DOM writes for the rebound slots +0.21 and the residue above +0.41 (the empty side holds 1 to 18 rows here, so
+none of it cancels); style +0.14 (51–56 elements restyled against 26); paint, pre-paint and commit +0.17; native +0.27.
+Down from +3.43 by the script the repair removed (+1.73 → +0.60); the layout (+0.87 → +0.84) is the rebinding's, which
+the repair was not for. The pooled comparison passes with it in Q1–Q12 and in sixteen runs of seventeen — the empty side's
+first launch is one of its two — so on this harness it does not decide the verdict; OQ-89 holds whether it should.
+
+## Repaired — 2026-09-29 under R-062
+
+REQ-CHAT-055's append comparison passes: twelve consecutive runs of `transcript-proof` on the repaired build passed, and
+sixteen of seventeen in all, both cuts at one frame of slack at the cadence the proof measured. Its one red since the
+repair (QQ3, +21.15 ms) ran with no other Electron process but at a load of up to 9 on four vCPUs, and QQ4 under the same
+load passed by −19.70 ms: a saturated host moves the comparison by a frame either way, which is the harness's limit,
+recorded as OQ-89's evidence, not the product's. The cause is named by function in V8's CPU profile of the built app —
+the transcript's own passes over every displayed row, 1.03 ms of the loaded side's +1.50 ms of script an increment — and
+repaired in `packages/ui/src/transcript/` alone, each pass pinned by a test that fails on its first form
+(`transcript.test.ts`, `projector.test.ts`, `rows.test.ts`: nine cases, the seeded walks extended). The traced pairs now
+agree with the passes, which fix round 3's did not: the loaded side's script +0.24 ms an increment over twelve pairs,
+from +1.50. The proof carries the profile from now on (`append.json`'s `profile`; `trace-summary.test.ts`, six cases), so
+a regression is named by function rather than guessed at. What remains of the rows held is the residue tabled above —
+about 0.2 ms an increment at 1,234 rows, none of it a pass that re-derives a row — which REQ-CHAT-055 does not forbid
+while it does not move the shown-update figure.
+
+**Not shown: twelve runs on a quiet host.** Other agents' proofs and gates shared this host all day. Five of Q1–Q12 saw
+no other Electron process at any sample, their load unsampled, and all five passed; no run from QQ3 on had both no other
+Electron process and a load under 4.0 throughout. The move rests on the twelve consecutive passes, sixteen of seventeen,
+and the profile's agreement with them; a series on a host that stays quiet is the check still owed, and a red there
+reopens this note.
+
+Left open, and not this note's: the comparison's reading under a burst and against which empty transcript (**OQ-89**,
+with this round's evidence — the part-empty first launch still charges a full viewport's rebinding, about 1.6 ms an
+increment, to the loaded side), and the proof on Windows, which this Linux container cannot run. Noticed on the way and
+recorded, not repaired:
+[`a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md`](../a-new-reasoning-row-is-drawn-through-the-row-beneath-it-until-its-first-measurement.md),
+[`the-update-shape-never-answers-extend.md`](../the-update-shape-never-answers-extend.md), and — running the proofs whose
+surfaces this round touched — [`terminal-proofs-live-section-drives-powershell-commands-on-every-platform.md`](../terminal-proofs-live-section-drives-powershell-commands-on-every-platform.md)
+and [`chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md`](../chat-controls-proof-reads-a-failed-project-setup-as-the-compress-passs-notice.md);
+`rows-proof`, `questions-proof`, `layout-proof`, `compression-proof` and `plan-gate-proof` passed. The runs' logs,
+`append.json` files and traces were kept beside the work; `.proof/transcript-proof/` holds only the last. Reported back
+into ADR-0045 in place, with one row in `first-executions.md` and OQ-89's evidence.

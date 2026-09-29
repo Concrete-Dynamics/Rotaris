@@ -352,6 +352,13 @@ export class Run {
   private rootId = 'root';
   private rootIterationId = 'root:1';
   private rootRecord: RootExecutionRecord | null = null;
+  /**
+   * PD-ORCH-005 clauses 3 and 4: the name the current root's rows carry — the persona its iteration was opened with
+   * (`iterations.root_persona`), so a root resumed as the entry role because that persona is no longer configured (OQ-97)
+   * keeps writing under the name its earlier rows and the crash record read (the repair of
+   * `a-root-resumed-under-a-fallback-persona-hides-its-rows-from-the-crash-record.md`). It is the run's persona otherwise.
+   */
+  private rootName: string;
 
   /** REQ-ORCH-072: the current iteration's root execution record. */
   get rootExecutionRecord(): RootExecutionRecord | null {
@@ -442,6 +449,7 @@ export class Run {
 
   constructor(private readonly deps: RunDeps) {
     this.sessionId = deps.sessionId;
+    this.rootName = deps.config.persona;
     this.hooks = deps.hooks ?? null;
     this.record = new ConversationRecord(deps.writer, deps.dal, deps.sessionId);
     this.memory = deps.resilience?.memory ?? new ResilienceMemory();
@@ -625,7 +633,7 @@ export class Run {
   get entryContext(): { readonly used: number; readonly limit: number } {
     const model = this.entryOverride.model ?? this.deps.config.model;
     const advertised = this.deps.compression?.triggerFor(model).advertisedInputLimit ?? null;
-    return { used: this.deps.writer.activity.contextUsed(this.deps.config.persona), limit: advertised !== null && advertised > 0 ? advertised : DEFAULT_CONTEXT_CAPACITY };
+    return { used: this.deps.writer.activity.contextUsed(this.rootName), limit: advertised !== null && advertised > 0 ? advertised : DEFAULT_CONTEXT_CAPACITY };
   }
   /** REQ-MONITOR-048 (Part R): the persona's configured thinking level as this run resolved it; null when the persona is unknown or states none. */
   reasoningFor(persona: string): string | null {
@@ -1147,6 +1155,9 @@ export class Run {
     // PD-ORCH-005 clause 4: a resumed iteration's root is restored with its identity — its task id and canonical name.
     const rootTaskId = resume?.root_task_id ?? mintTaskId(takenTaskIds(this.deps.dal, this.sessionId));
     const rootCanonical = resume?.root_canonical_name ?? canonicaliseName(config.persona);
+    // Clause 4 with OQ-97: a resumed root keeps the name its rows carry, even when it runs as the entry role now.
+    const rootName = resume?.root_persona ?? config.persona;
+    this.rootName = rootName;
     const rootRecord: RootExecutionRecord = {
       taskId: rootTaskId,
       canonicalName: rootCanonical,
@@ -1199,7 +1210,7 @@ export class Run {
       }, iteration)
       : null;
     this.children = children;
-    const tools = children && this.deps.toolsFor ? this.portFor(config.persona, config.persona, children, this.rootId, 0) : this.register(this.deps.tools);
+    const tools = children && this.deps.toolsFor ? this.portFor(config.persona, rootName, children, this.rootId, 0) : this.register(this.deps.tools);
     // PD-ORCH-005 clause 4: a resumed iteration's agents are restored first, so the root resumes among them.
     // The timeline records each agent resumed (`child_resumed`), so a resume is not a warning (phase 4's review).
     if (resume && children) children.resumePaused();
@@ -1217,7 +1228,7 @@ export class Run {
       launching = false;
       initial = false;
       return runTurn({
-      writer, owner, backend, tools, clocks: this.deps.clocks, persona: config.persona, agentName: config.persona,
+      writer, owner, backend, tools, clocks: this.deps.clocks, persona: config.persona, agentName: rootName,
       // REQ-ORCH-019: the rendered playbook is part of the instructions the role is given.
       // REQ-WORKSPACE-060 (ADR-0063): then the session's always-active context units, read at THIS construction
       // so a skill force-loaded since the last turn reaches this agent (REQ-CONFIG-166).
@@ -1303,7 +1314,7 @@ export class Run {
           rootRecord.state = 'paused';
           // Clauses 3 and 4: a root that raised out of a call, or was given up on in one, has that call answered as
           // interrupted, as a child's is.
-          if (this.deps.dal) answerOpenCalls(this.deps.dal, writer, this.sessionId, { taskId: rootTaskId, name: config.persona }, iteration, this.restCause);
+          if (this.deps.dal) answerOpenCalls(this.deps.dal, writer, this.sessionId, { taskId: rootTaskId, name: rootName }, iteration, this.restCause);
           answered = true;
         }
       } else if (children) {
@@ -1320,7 +1331,7 @@ export class Run {
       }
       // A root given up on that no rest paused — the explicit cancel — still leaves no call row running (REQ-SESSION-129):
       // its open call is recorded cut off, naming no rest (OQ-96, "A call cut by no rest").
-      if (rootDetached && !answered && this.deps.dal) answerOpenCalls(this.deps.dal, writer, this.sessionId, { taskId: rootTaskId, name: config.persona }, iteration, null);
+      if (rootDetached && !answered && this.deps.dal) answerOpenCalls(this.deps.dal, writer, this.sessionId, { taskId: rootTaskId, name: rootName }, iteration, null);
     }
   }
 
@@ -1481,7 +1492,7 @@ export class Run {
       for (const w of this.waits.all()) this.memory.setOverride(w.provider, w.model, { key, choice });
       writer.appendTimeline('model_override', 'user', `The user chose ${key} (${provider}/${choice.model.modelId}) during the wait on ${waiting.provider}/${waiting.model}; it stands for the rest of the session.`, { provider: waiting.provider, model: waiting.model, model_key: key, to_provider: provider, to_model: choice.model.modelId });
       writer.appendRow('system', `Model changed to ${key} during the wait; the run resumes on it now and keeps it for the rest of the session.`, true);
-      if (waiting.agent === this.deps.config.persona) this.entryOverride = { ...this.entryOverride, model: choice.model };
+      if (waiting.agent === this.rootName) this.entryOverride = { ...this.entryOverride, model: choice.model };
       this.waits.resolveWithModel(key, choice);
       return true;
     }

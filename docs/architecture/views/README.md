@@ -45,6 +45,13 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**A root resumed as the entry role keeps its rows' name (PD-ORCH-005 clauses 3 and 4, OQ-97, 2026-09-29, R-067).**
+`Run.turn` names the root's rows, its tool port and its open calls by the persona its iteration was opened with
+(`rootName`: `iterations.root_persona` for a resumed root), not by the persona the run is set up as, so a root resumed as
+the entry role because its persona is no longer configured writes where `recordCrash` reads. This repairs
+`a-root-resumed-under-a-fallback-persona-hides-its-rows-from-the-crash-record.md`. The **runtime view**'s §6 crash
+paragraph says so. No package, edge, process, channel, message kind or store column changed.
+
 **A detached call writes nothing through its tool gate or its stream (REQ-SESSION-094, 2026-09-29, R-067).** `ToolPort`
 gains `close(cutOff)`, and `Run.teardown` closes every port the run built before anything terminal is written: the
 run host's `writerSink` settles each call its gate still has open, as failed with the rest's interrupted statement, and

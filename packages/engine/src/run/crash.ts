@@ -100,7 +100,8 @@ export function recordCrash(dal: StoreDal, writer: SessionWriter, sessionId: Ses
       if (r.ok) paused += 1;
       else warn(r.error.code === 'illegal-move' ? r.error.reason : `recording ${c.task_id} paused by a crash failed: ${r.error.code}`);
     }
-    // The root's rows carry its persona (`Run.turn`'s agent name), a child's its canonical name.
+    // The root's rows carry the persona its iteration was opened with (`Run.turn`'s agent name, which a root resumed as
+    // the entry role keeps), a child's its canonical name.
     const unfinished = agents.filter((c) => !isTerminalChildState(c.state)).map((c) => ({ taskId: c.task_id, name: c.canonical_name }));
     for (const agent of [{ taskId: open.root_task_id, name: open.root_persona }, ...unfinished]) answerOpenCalls(dal, writer, sessionId, agent, open.iteration, 'crash');
     writer.appendTimeline('iteration_paused', 'rotaris', `Iteration ${open.iteration} was left open by ${interruptionPhrase('crash')}; its unfinished agents are paused and resume when the session is continued.`, { iteration: open.iteration, interruption: 'crash', paused_agents: paused });

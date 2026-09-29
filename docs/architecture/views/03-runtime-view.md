@@ -270,7 +270,8 @@ store when the session is next repaired (`repairOne`) or continued (`launchConti
 which now leaves a `paused` agent alone): the open iteration's interruption `crash`, its unfinished agents `paused`, an
 unanswered last `assistant` message answered (`answerOpenCalls`: a call whose row settled keeps its result, one whose
 row is `running` is answered as interrupted and its row settles, and one with no row, which never started, is answered
-as not run), the stored approvals withdrawn, and the background
+as not run — the root's rows found by the persona its iteration was opened with, `iterations.root_persona`, which a root
+resumed as the entry role keeps as its rows' name, OQ-97), the stored approvals withdrawn, and the background
 sessions still recorded running and not held by this process ended by the crash. Loading a session records and
 settles nothing (clause 8), and neither does the user's cancel of one crash-left child while the session rests: it
 cancels that child and its descendants from where they stood, answers their own calls the crash cut off (no later crash

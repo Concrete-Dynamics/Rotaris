@@ -3986,7 +3986,11 @@ treat a resumed child.
   identity restored (found by phase 4's review). The persona holds for the whole run, so an iteration the run goes on
   to after the resumed one runs as it too, and a session model override made for the current entry role does not
   reach it. A persona the configuration no longer knows cannot be restored: the run is set up as the entry role, and
-  its warnings say so. *The first repair refused that continue and named "continue without them"; a crashed session
+  its warnings say so. The root keeps its name all the same: its rows carry the persona `iterations.root_persona`
+  records, the name its earlier rows and the crash record read, while each row's `persona` names the entry role it runs
+  as. *As first built the resumed root's rows carried the entry role's name, so a crash in its step found none of them
+  and answered a call that had completed as never started (`a-root-resumed-under-a-fallback-persona-hides-its-rows-from-the-crash-record.md`,
+  repaired 2026-09-29 under R-067).* *The first repair refused that continue and named "continue without them"; a crashed session
   cannot take that route, which needs a `paused` one, so it was left no way on (found by phase 4's second review).*
   The pre-flight classifies the continue's message as it classifies any continuation's, and its route, grant and
   playbook reach the resumed agents as they reach the agents of any run.

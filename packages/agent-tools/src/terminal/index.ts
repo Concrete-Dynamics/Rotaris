@@ -89,11 +89,20 @@ export class TerminalManager {
   constructor(private readonly deps: TerminalManagerDeps) {
     this.streams = new TerminalStreams({ clocks: deps.clocks, emulator: deps.emulator ?? xtermEmulatorFactory, warn: deps.warn });
   }
+  /** The shell every session of this manager runs — what the tool description names (live-run L1). */
+  get backend(): ShellBackend {
+    return this.deps.backend;
+  }
 
   /**
    * Part AL: a foreground command begins on the agent's stream (`fg:<agent>`, REQ-TOOLS-127). The tap feeds the
-   * registry every byte the PTY produces ahead of the capture; the registry does nothing at all when streaming is
-   * off (REQ-TOOLS-126). Returns false when no stream was opened.
+   * registry what the command wrote, ahead of the capture: the session's `CommandRegion` span, from after the printed
+   * start marker to before the end frame, and nothing between calls. The registry does nothing at all when streaming
+   * is off (REQ-TOOLS-126). Returns false when no stream was opened.
+   *
+   * Falsified reading, kept beside its replacement (live-run L9, 2026-09-29): "the tap feeds the registry every byte
+   * the PTY produces". Every byte included the shell's echo of the wrapper with both markers, the prompt, and the
+   * PD-TOOLS-001 environment snapshot after each command, so the preview showed them above and below the output.
    */
   beginForeground(key: string, session: ForegroundSession, spec: { sessionId: string; agentId: string; persona: string; command: string; workspaceRoot: string }): boolean {
     const streamId = foregroundStreamId(spec.agentId);
@@ -182,6 +191,15 @@ export class TerminalManager {
   }
 }
 
+/**
+ * A measured span as the observation states it: tenths of a second, and "under 0.1 seconds" below that (live-run L2).
+ * Truncated to the tenth, never rounded, so what an observation says it waited is never more than was measured: the
+ * verifier's live run of 2026-09-29 read "1.7 seconds" for 1,686 ms under rounding.
+ */
+export function seconds(ms: number): string {
+  return ms < 100 ? 'under 0.1 seconds' : `${(Math.floor(ms / 100) / 10).toFixed(1)} seconds`;
+}
+
 function invalid(message: string, a: { readonly command: string }): Observation {
   const diag = diagnosticBlock({ backend: BACKEND_NAME, command: a.command, detail: message, error_class: 'ValueError', exit_code: null, failure_kind: 'invalid_request', outcome_kind: 'invalid_request', outcome_severity: 'warning', warnings: [] });
   return errorObservation(`${message}\n${outputSection('', false)}\n${diag}`, { outcomeKind: 'invalid_request', failureKind: 'invalid_request', exitCode: null, warnings: [] });
@@ -251,10 +269,24 @@ export interface BackgroundAttribution {
   readonly onEnded?: ((session: BackgroundSession) => void) | undefined;
 }
 
+/**
+ * The tool description names the shell the host actually runs (REQ-TOOLS-104 for Windows; ADR-0020's `/bin/sh` else the
+ * login shell elsewhere). Live-run finding L1: on Linux it named only Windows' shell, never that the POSIX shell is
+ * `/bin/sh` — dash on the host of the run — so a model wrote bash (`${PIPESTATUS[0]}`, `<(…)`) for a shell without it.
+ * With no backend known, both sentences stand.
+ */
+const POWERSHELL_SHELL = 'On Windows the shell is PowerShell, not bash: `&&`, `;`, `2>&1` and `$env:VAR` work; a bash heredoc never returns, and bash arrays, `[[ … ]]` and `source` are unavailable.';
+const posixShell = (file: string): string => `The shell is \`${file}\`, a POSIX shell that may not be bash: write POSIX syntax — bash arrays, \`\${PIPESTATUS[…]}\`, \`[[ … ]]\`, process substitution \`<(…)\` and \`source\` may be unavailable, and a command that uses them fails with a nonzero exit code.`;
+const TERMINAL_USE = 'One command per call; use `&&` or `;` for sequences. `background=true` runs a command in its own process and returns a session id for later `query` / `kill`. A command that prints nothing for 30 s returns early with exit −1 while it keeps running; poll with an empty command, interrupt with `C-c` and `is_input=true`; stdout and stderr share the captured terminal stream. failure_kind is one of `timeout`, `invalid_request`, `execution_error`, `sandbox_unavailable`; `sandbox_unavailable` means the command never executed because this host could not apply the OS-level confinement the session requires — the cause is the host\'s configuration, neither a retry nor a reformulated command helps, and the detail and output should be relayed to the user.';
+export function terminalDescription(backend: ShellBackend | null | undefined): string {
+  const shell = backend?.kind === 'powershell' ? POWERSHELL_SHELL : backend?.kind === 'posix' ? posixShell(backend.file) : `${POWERSHELL_SHELL} ${posixShell('/bin/sh')}`;
+  return `Run a command in a persistent shell session (working directory and variables persist across calls). ${shell} ${TERMINAL_USE}`;
+}
+
 export function terminalTool(manager: TerminalManager, config: TerminalConfig, confinement?: ConfinementPort, attribution?: BackgroundAttribution): ToolExecutor<TerminalArgs> {
   return {
     name: 'terminal',
-    description: 'Run a command in a persistent shell session (working directory and variables persist across calls). On Windows the shell is PowerShell, not bash: `&&`, `;`, `2>&1` and `$env:VAR` work; a bash heredoc never returns, and bash arrays, `[[ … ]]` and `source` are unavailable. One command per call; use `&&` or `;` for sequences. `background=true` runs a command in its own process and returns a session id for later `query` / `kill`. A command that prints nothing for 30 s returns early with exit −1 while it keeps running; poll with an empty command, interrupt with `C-c` and `is_input=true`; stdout and stderr share the captured terminal stream. failure_kind is one of `timeout`, `invalid_request`, `execution_error`, `sandbox_unavailable`; `sandbox_unavailable` means the command never executed because this host could not apply the OS-level confinement the session requires — the cause is the host\'s configuration, neither a retry nor a reformulated command helps, and the detail and output should be relayed to the user.',
+    description: terminalDescription(manager.backend),
     schema: terminalSchema,
     validationError: (a, detail) => invalid(`Invalid terminal request: ${detail}`, { command: typeof a['command'] === 'string' ? a['command'] : '' }),
     label: (a) => renderAction({ command: a.command, timeout: a.timeout, reset: a.reset, background: a.background, session_id: a.session_id, session_action: a.session_action }),
@@ -342,9 +374,14 @@ export function terminalTool(manager: TerminalManager, config: TerminalConfig, c
             : ' There was no earlier shell state to restore.';
         detail = `The command exceeded its timeout of ${timeoutMs / 1000} seconds; the terminal session was forcibly restarted to terminate the process tree, and shell state (working directory, variables, aliases, background jobs) was lost${r.killStatus === 'reset_failed' ? ' — restarting the session failed' : ''}.${restoreNote}${r.error ? ` (${r.error})` : ''}`;
       } else if (r.softPaused) {
-        detail = r.output === ''
-          ? `No output for ${(config.noOutputWindowMs ?? 30_000) / 1000} seconds in the merged terminal stream; stdout and stderr are both captured. The process may still be running. Poll by calling the tool again with an empty command, or interrupt by sending C-c with is_input=true.`
-          : 'The command is still running; this is the output so far. Poll again with an empty command.';
+        // REQ-TOOLS-098: an empty capture states the elapsed no-output window. For the soft pause that is the window it
+        // waited out; for a poll — which returns at once — it is what the poll measured (live-run L2): a poll that said
+        // "No output for 30 seconds" after under a millisecond had the model counting thirty seconds per poll.
+        detail = r.output !== ''
+          ? 'The command is still running; this is the output so far. Poll again with an empty command.'
+          : r.waited
+            ? `No new output in ${seconds(r.waited.sinceObservedMs)} since the previous observation, and none for ${seconds(r.waited.silentMs)} in the merged terminal stream; stdout and stderr are both captured. A poll returns at once rather than waiting for output. The process may still be running. Poll by calling the tool again with an empty command, or interrupt by sending C-c with is_input=true.`
+            : `No output for ${(config.noOutputWindowMs ?? 30_000) / 1000} seconds in the merged terminal stream; stdout and stderr are both captured. The process may still be running. Poll by calling the tool again with an empty command, or interrupt by sending C-c with is_input=true.`;
       } else if (r.error) {
         detail = `Terminal execution failed before completion: ${r.error}`;
       } else {

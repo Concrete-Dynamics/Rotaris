@@ -4,8 +4,14 @@
  * Runs the three suites that hold the mechanism — the streams registry behind the real terminal tool, main's
  * delivery limiter, the relay's subscription accessor — with ROTARIS_TERMINAL_PROOF_DIR set so the real halves write
  * their measurements, then asserts over those measurements:
- *   1. a command printing 10,000 lines yields frames whose `seq` is gapless and whose concatenated deltas equal the PTY
- *      output; the closing frame carries the observation's final text (REQ-TOOLS-127, REQ-SHELL-104);
+ *   1. a command printing 10,000 lines yields frames whose `seq` is gapless and whose concatenated deltas equal what
+ *      the session's tap carries — the span between the printed start marker and the end frame — and hold no
+ *      `__rot_` marker; the closing frame carries the observation's final text (REQ-TOOLS-127, REQ-SHELL-104).
+ *      Until 2026-09-29 the equality read "equal the PTY output", and the tap carried every PTY byte: the wrapper's
+ *      echo, both markers, the prompt and the environment snapshot (live-run L9, ADR-0021's report-back);
+ *   1b. live-run L9, second round: two commands on one foreground stream, applied to the renderer's display
+ *      (`TerminalStreamSet` over `@xterm/headless`), show the second command's first line on a row of its own while it
+ *      runs — never glued onto the first command's closing text (REQ-TOOLS-127, REQ-SHELL-104);
  *   2. a `bg:` session gets its own stream with its own gapless counter (REQ-TOOLS-107/127);
  *   3. with the interval at 2,000 ms a keystroke arms a flush — the echo is framed in well under the ceiling
  *      (ADR-0021 Decision; OQ-38's reading), and no closer than the 20 ms floor;
@@ -28,7 +34,7 @@ rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });
 // Serially (`--no-file-parallelism`): the real-PTY suite must not share the CPU with the synthetic load test, whose
 // spin would slow a keystroke echo the proof measures against REQ-SHELL-166's budget.
-const args = ['exec', 'vitest', 'run', '--no-file-parallelism', 'packages/agent-tools/src/terminal/streams.test.ts', 'apps/desktop/src/main/terminal.test.ts', 'apps/desktop/src/main/terminal-load.test.ts', 'packages/shell/src/shell.test.ts'];
+const args = ['exec', 'vitest', 'run', '--no-file-parallelism', 'packages/agent-tools/src/terminal/streams.test.ts', 'apps/desktop/src/main/terminal.test.ts', 'apps/desktop/src/main/terminal-display.test.ts', 'apps/desktop/src/main/terminal-load.test.ts', 'packages/shell/src/shell.test.ts'];
 const env = { ...process.env, ROTARIS_TERMINAL_PROOF_DIR: output };
 const test = process.platform === 'win32'
   ? spawnSync('cmd.exe', ['/d', '/s', '/c', `pnpm ${args.join(' ')}`], { cwd: repo, encoding: 'utf8', timeout: 600_000, env })
@@ -39,8 +45,12 @@ let m = {};
 try { m = JSON.parse(readFileSync(join(output, 'measurements.json'), 'utf8')); } catch { m = {}; }
 const results = {
   testsPassed: test.status === 0,
-  tenThousandLinesGapless: m.tenThousandLines?.gapless === true && m.tenThousandLines?.deltasEqualPty === true,
+  tenThousandLinesGapless: m.tenThousandLines?.gapless === true && m.tenThousandLines?.deltasEqualTap === true,
   closingFrameIsObservation: m.tenThousandLines?.closingEqualsObservation === true,
+  // Live-run L9 (REQ-TOOLS-127): the live stream carries what the command wrote — no wrapper echo, no marker.
+  deltasCarryOnlyTheCommand: m.tenThousandLines?.deltasCarryNoMarker === true,
+  // Live-run L9, second round: the next command on a re-opened stream starts on a fresh row of the display.
+  reopenedStreamStartsOnAFreshRow: m.reopenedStream?.freshRow === true,
   backgroundStreamOwnCounter: m.backgroundStream?.gapless === true && typeof m.backgroundStream?.streamId === 'string' && m.backgroundStream.streamId.startsWith('bg:ts_'),
   keystrokeArmsFlushUnderCeiling: typeof m.armedFlush?.keyToFrameMs === 'number' && m.armedFlush.keyToFrameMs < 500 && m.armedFlush.intervalMs === 2000,
   fortyStreamsUnderBound: typeof m.fortyStreams?.deliveredPeakPerSecond === 'number' && m.fortyStreams.deliveredPeakPerSecond <= 1000 && m.fortyStreams.streams === 40,
@@ -83,7 +93,7 @@ if (!results.passed) {
   process.exit(1);
 }
 console.log(`terminal-stream-proof PASSED ${join(output, 'results.json')}`);
-console.log(JSON.stringify({ tenThousandLines: m.tenThousandLines, armedFlush: m.armedFlush, fortyStreams: m.fortyStreams, streamingOff: m.streamingOff, resize: m.resize }, null, 2));
+console.log(JSON.stringify({ tenThousandLines: m.tenThousandLines, reopenedStream: m.reopenedStream, armedFlush: m.armedFlush, fortyStreams: m.fortyStreams, streamingOff: m.streamingOff, resize: m.resize }, null, 2));
 // Part T2: the two-window aggregate and obligation 2's ladder, in the run log as well as in results.json — the second
 // is the number the owner is owed (`streams | windows | offered/s | delivered/s | merged | pending | maxLag | median`).
 console.log(`terminal-stream-proof two windows (REQ-MONITOR-306): ${JSON.stringify(m.fortyStreamsTwoWindows)}`);

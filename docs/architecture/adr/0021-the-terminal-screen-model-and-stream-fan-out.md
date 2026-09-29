@@ -645,5 +645,28 @@ assertion is kept.
 The echo figure is small because the kernel's line discipline echoes on a POSIX PTY, where PowerShell echoes the
 keystroke itself. Either way it is the frame the armed flush produced.
 
+*Reported back 2026-09-29 (R-067), from the first live run's `terminal` scenario
+([`the-terminal-preview-shows-the-command-wrapper`](../../defects/fixed/the-terminal-preview-shows-the-command-wrapper.md),
+live-run finding L9): **"the deltas byte-equal to the PTY's bytes" measured the wrong equality, and is kept here beside
+its replacement.** The foreground tap forwarded every byte the PTY produced. On a POSIX PTY those include the shell's
+echo of the whole wrapped line, which names both markers, the prompt, and — after the command, before the stream
+closes — the product's own PD-TOOLS-001 snapshot, the session's environment in base64. The preview of the live run
+showed `s\n' "$?"` and `__rot_…_s` above the command's output. REQ-TOOLS-127 holds every frame before the closing one
+faithful to what the command wrote, not to what the PTY carried. The foreground session now gives its taps only the
+bytes between the printed start marker and the end frame (`CommandRegion`, `terminal/foreground.ts`), the same span the
+agent's capture has always kept, and nothing between calls. The proof's equality now reads "the deltas equal what the
+tap carries", and it asserts no marker in them. The PowerShell side is unmeasured: the region is told from the echo by
+the quote that follows the marker in both wrappers, and a Windows host has not run it.*
+
+*Reported back again the same day, at the verifier's second round: **the repair made a display defect visible that
+the wrapper's echo had hidden.** The closing frame's literal replacement (OQ-5's reading) leaves the display's cursor
+after the observation's last character, its trailing newline trimmed. The next command on the same re-opened
+`fg:<agent>` stream then drew its first line onto that row (`first-cmdsecond-cmd`, measured from a real PTY). The
+display now starts a re-opened stream on the row after the closing text (`applyFrame`,
+`packages/ui/src/terminal/emulator.ts`). It adds no byte to any frame. `pnpm terminal-stream-proof` asserts it
+through the renderer's own display (`reopenedStreamStartsOnAFreshRow`). The PowerShell side is still unmeasured, and
+under ConPTY, which repaints with cursor positioning, a printed start marker not followed by a newline would
+withhold the whole preview.*
+
 **Could not show.** A Windows re-run on the branch (no host). Anything on macOS (IC-3). The synthetic ladder and the
 packaged limb are unchanged, and are owed where the third execution left them.

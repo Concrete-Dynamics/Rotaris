@@ -61,8 +61,9 @@
  *                 mid-answer with the socket held open (is that reported as a user cancellation, which is
  *                 the eighty-second defect's signature?). Neither injected refusal reaches the endpoint,
  *                 so the ladder half costs nothing but retries.
- *   8. terminal  — the TERMINAL under duress, one run, six named shapes replayed from the record: a
- *                 multi-line here-string, forty lines of long output, a wedge with no `timeout` supplied,
+ *   8. terminal  — the TERMINAL under duress, one run, the named shapes replayed from the record: a
+ *                 multi-line here-string, forty lines of long output, off Windows a bash-ism `/bin/sh` cannot
+ *                 expand (live-run L1), a wedge with no `timeout` supplied,
  *                 an exit-0 output carrying docker's lower-case `failed to connect` line, a `git diff` with
  *                 differences exiting 1, and a read-only git pipeline through a pipe. Asserted from
  *                 `tool_calls`, never from the model's prose; a shape the model never attempted is a NOTE,
@@ -110,7 +111,7 @@ import { homedir, tmpdir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, proofIsolationEnv, tokensDirFor } from './lib/harness.mjs';
 import { startRecordingProxy } from './lib/model-traffic.mjs';
-import { LONG_OUTPUT_LINES, diagnosticOf, hereStringLinesReturned, longOutputReading, outputOf, terminalShapes } from './lib/terminal-shapes.mjs';
+import { LONG_OUTPUT_LINES, diagnosticOf, hereStringLinesReturned, longOutputReading, outputOf, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
 
 const require = createRequire(import.meta.url);
 const repo = resolve(import.meta.dirname, '..', '..', '..');
@@ -828,7 +829,8 @@ function readSession() {
   } finally { db.close(); }
 }
 /**
- * Every tool call of one session with its `entry` parsed — `{ ordinal, tool_name, agent_name, status, args, result }`.
+ * Every tool call of one session with its `entry` parsed — `{ ordinal, tool_name, agent_name, status, args, result,
+ * elapsedMs, endedAt }`.
  *
  * The scenarios below assert from THIS and never from the model's prose. A run that says it ran a command and a
  * run that ran one are different facts, and only one of them is in the store.
@@ -841,7 +843,8 @@ function readToolCalls(sessionId) {
       .map((call) => {
         let entry = {};
         try { entry = JSON.parse(call.entry); } catch { /* a row that will not parse is still a call that happened */ }
-        return { ...call, args: entry.args ?? {}, result: String(entry.result ?? '') };
+        // `elapsed_ms` is the call's own duration and `timestamp` its end, both as the product recorded them.
+        return { ...call, args: entry.args ?? {}, result: String(entry.result ?? ''), elapsedMs: typeof entry.elapsed_ms === 'number' ? entry.elapsed_ms : null, endedAt: typeof entry.timestamp === 'string' ? Date.parse(entry.timestamp) : null };
       });
   } finally { db.close(); }
 }
@@ -1645,7 +1648,7 @@ if (wanted.includes('faults')) {
 
 // ── 8. The terminal under duress ─────────────────────────────────────────────────────────────────────────
 /**
- * Six shapes the record NAMES, replayed; never a plausible family resembling them.
+ * The shapes the record NAMES, replayed; never a plausible family resembling them.
  *
  * `codebase.md` states why that distinction is the whole scenario: sixty real-PTY runs at four geometries could
  * not reproduce a concatenation the live run had shown, and the trigger the sixty missed was narrow — an empty
@@ -1658,7 +1661,9 @@ if (wanted.includes('faults')) {
  * |---|---|
  * | `here-string`   | a multi-line command lost its newlines in the PTY, so a here-string never terminated |
  * | `long-output`   | the concatenation above, and the agent's capture VT-stripped where the window's was not |
+ * | `unexpandable`  | live-run finding L1 — `a-posix-command-that-fails-to-expand-loses-its-end-marker.md`: a bash-ism dash cannot expand abandoned the wrapper's end frame, so a finished command read as a soft pause (POSIX only) |
  * | `wedge`         | `hardMs` passed and read nowhere: a call supplying no `timeout` had the soft pause and no hard cap (REQ-TOOLS-097) |
+ * | `poll`          | live-run finding L2 — `an-empty-poll-after-a-soft-pause-says-thirty-seconds-passed.md`: an empty poll returned at once and said thirty seconds had passed |
  * | `failed-word`   | `exit-0-output-flagged-on-the-word-failed-twice.md` — PD-TOOLS-003's capitals-only marker, and a real regression guard |
  * | `diff-exit-1`   | `git-diff-with-differences-read-as-a-failure.md` — ESC-41's carve-out, and a real regression guard |
  * | `pipe-to-shell` | `a-read-only-git-pipeline-was-withheld-by-the-pipe-to-shell-rule.md` — also cost, not contradiction |
@@ -1682,7 +1687,7 @@ if (wanted.includes('terminal')) {
     'Do not rewrite them, do not split them, do not add a timeout argument, and do not skip one because you',
     'expect it to fail — a failure is the answer for some of them. Report what each did in one line.',
     '',
-    ...SHAPES.map((shape, i) => `${i + 1}. ${shape.command}`),
+    ...SHAPES.map((shape, i) => `${i + 1}. ${shape.prompt ?? shape.command}`),
   ].join('\n');
   const log = await launch('terminal', {
     ROTARIS_CAPTURE_PROMPT: PROMPT,
@@ -1726,6 +1731,30 @@ if (wanted.includes('terminal')) {
     check(!reading.escaped, 'the agent read a VT-stripped capture', reading.escaped ? 'an escape sequence survived into the recorded result' : 'no escape sequence in the recorded result');
   }
 
+  // Live-run L1: the command ends at once with the shell's own error status, never a soft pause after the window. The
+  // shape exists only off win32 (`terminalShapes`), so on Windows nothing is asked here: not applicable, not a NOTE.
+  // The guard is credited only where a shell refused the expansion (`unexpandableReading`). Until the verifier's second
+  // round the three checks ran on any result, and a line bash had expanded (the model had run `exec bash` first) passed
+  // all three with the guard never asked.
+  if (shapeOf('unexpandable') !== undefined) {
+    const unexpandable = attempted('unexpandable')[0];
+    if (unexpandable === undefined) noted('the unexpandable bash-ism was not attempted', 'no terminal call carried it; the wrapper\'s guard is unasked');
+    else {
+      const d = diagnosticOf(unexpandable.result);
+      const elapsed = unexpandable.elapsedMs ?? NaN;
+      const reading = unexpandableReading(unexpandable.result, elapsed);
+      const said = `outcome ${d?.outcome_kind ?? 'none'}, exit ${d?.exit_code ?? 'none'}, output ${JSON.stringify(reading.printed.slice(0, 120))}`;
+      if (reading.kind === 'expanded') noted('the shell expanded the bash-ism', `the guard is unasked this run: ${said}`);
+      else if (reading.kind === 'other') noted('the bash-ism met neither a refusal nor an expansion', `the guard is unasked this run: ${said}`);
+      else {
+        check(reading.kind === 'refused', 'the shell refused to expand the line, and the call ended with its nonzero status', said);
+        check(d?.outcome_kind !== 'soft_pause' && d?.exit_code !== -1, 'a command sh could not expand ended with its own status, not a soft pause', `outcome ${d?.outcome_kind ?? 'none'}, exit ${d?.exit_code ?? 'none'}`);
+        check(Number.isFinite(elapsed) && elapsed < 30_000, 'it ended inside the no-output window rather than after it', `${Number.isFinite(elapsed) ? Math.round(elapsed) : '?'} ms`);
+        check(/\bran\b/.test(reading.printed), 'what the line printed before its error came back', `output ${JSON.stringify(reading.printed.slice(0, 120))}`);
+      }
+    }
+  }
+
   const wedge = attempted('wedge')[0];
   if (wedge === undefined) noted('the wedge was not attempted', 'no terminal call carried it; the hard cap is unasked');
   else {
@@ -1740,6 +1769,23 @@ if (wanted.includes('terminal')) {
       // PD-TOOLS-001: the reset must say what it lost AND what it put back, never be silent about the shell.
       check(/restored|failed|no earlier shell state/.test(wedge.result), 'the reset reported what it restored', 'the detail names the shell state');
     } else noted('the wedge did not reach the hard cap', 'it soft-paused first; the hard bound is unmeasured this run');
+  }
+
+  // Live-run L2: the first poll after the wedge. What it says it waited must be no more than the time between the wedge's
+  // end and its own, both as the product recorded them; the no-output window it never waited out must not be claimed.
+  const poll = wedge === undefined ? undefined
+    : terminals.find((call) => call.ordinal > wedge.ordinal && String(call.args.command ?? '') === '' && call.args.is_input !== true && call.args.session_action === undefined && call.args.background !== true);
+  if (poll === undefined) noted('no poll followed the wedge', 'no empty-command call after it; what a poll states is unasked');
+  else {
+    const d = diagnosticOf(poll.result);
+    const since = /No new output in (under 0\.1|\d+\.\d) seconds since the previous observation/.exec(poll.result);
+    const gapMs = poll.endedAt !== null && wedge.endedAt !== null ? poll.endedAt - wedge.endedAt : null;
+    if (d?.outcome_kind !== 'soft_pause' || (outputOf(poll.result) ?? '').trim() !== '(no output)') noted('the poll did not find the wedge silent', `outcome ${d?.outcome_kind ?? 'none'}; what an empty poll states is unasked`);
+    else {
+      check(!/No output for 30 seconds/.test(poll.result), 'an empty poll did not claim the no-output window it never waited out', /No output for 30 seconds/.test(poll.result) ? 'it said "No output for 30 seconds"' : 'no window claimed');
+      const claimed = since === null ? null : since[1] === 'under 0.1' ? 0 : Number(since[1]) * 1000;
+      check(claimed !== null && gapMs !== null && claimed <= gapMs + 100, 'what the poll said it waited is no more than the time that passed', `stated ${since?.[1] ?? 'nothing'} s, ${gapMs === null ? '?' : Math.round(gapMs)} ms between the wedge's end and the poll's`);
+    }
   }
 
   const failedWord = attempted('failed-word')[0];
@@ -1782,7 +1828,7 @@ if (wanted.includes('terminal')) {
     platform: process.platform, status: read?.session.execution_status, stopReason: read?.session.stop_reason,
     attempted: seen, terminalCalls: terminals.length,
     diagnostics: SHAPES.map((shape) => {
-      const call = attempted(shape.id)[0];
+      const call = shape.id === 'poll' ? poll : attempted(shape.id)[0];
       return { id: shape.id, command: shape.command, ...(call === undefined ? { attempted: false } : { attempted: true, ordinal: call.ordinal, status: call.status, diagnostic: diagnosticOf(call.result) }) };
     }),
   };

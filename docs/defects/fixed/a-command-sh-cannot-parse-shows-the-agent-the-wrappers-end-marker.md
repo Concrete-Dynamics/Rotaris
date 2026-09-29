@@ -29,3 +29,15 @@ leaked into what the model read"; recorded, not repaired.
 
 - `packages/agent-tools/src/terminal/foreground.ts` — `wrapCommand`'s POSIX branch, and the filtering that strips the
   wrapper's echo from a command that finished, and not from one whose end marker never came.
+
+## Repaired — 2026-09-29 under R-067
+
+Repaired by the same change as its cause,
+[`a-posix-command-that-fails-to-expand-loses-its-end-marker`](a-posix-command-that-fails-to-expand-loses-its-end-marker.md)
+(L1): the POSIX wrapper runs the command under `command eval`, so a syntax `/bin/sh` rejects is that utility's nonzero
+status and the end frame is printed after it. With the end frame printed, the capture is cut on its ordinary terms and
+the echoed wrapper is dropped as it is for any command. **Pinned by** the process-substitution line
+(`comm -13 <(…) <(…)`, the recorded shape) in `terminal.test.ts`'s "REQ-TOOLS-097/098/179 (live-run L1): …", which
+asserts no soft pause, an exit code of its own and no `__rot_` in the observation, against the host's real dash; the
+live run of 2026-09-29 on the built branch (pack `.live-run/runs/2026-09-29T21-26-58-720Z`, git-ignored) passed
+"no end marker leaked into what the model read" across both scenarios. Repaired 2026-09-29 under R-067.

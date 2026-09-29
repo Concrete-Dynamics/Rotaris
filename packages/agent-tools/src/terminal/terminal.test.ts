@@ -6,10 +6,11 @@ import { FakeClock, type Clocks } from '@rotaris/kernel';
 import { foregroundStreamId } from '@rotaris/contracts';
 import { nodeClocks } from '@rotaris/platform';
 import { classifyOutcome, diagnosticBlock, outputWarnings, stripVt } from './classify.js';
-import { parseSnapshot, snapshotCommand, wrapCommand } from './foreground.js';
+import { CommandRegion, parseSnapshot, snapshotCommand, wrapCommand } from './foreground.js';
 import { endOfExit } from './background.js';
 import { execFileSync } from 'node:child_process';
-import { findShell, nodePtyFactory, TerminalManager, terminalTool, TERMINAL_DEFAULTS, type BackgroundSession } from './index.js';
+import { performance } from 'node:perf_hooks';
+import { findShell, nodePtyFactory, seconds, TerminalManager, terminalDescription, terminalTool, TERMINAL_DEFAULTS, type BackgroundSession } from './index.js';
 import type { ToolContext } from '../tools/types.js';
 
 /**
@@ -135,12 +136,46 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
   it('the wrapper brackets the command with the two markers and recovers the exit status', () => {
     const w = wrapCommand({ kind: 'powershell', file: 'pwsh' }, 'git status', 'S', 'E');
     expect(w).toContain("Write-Output 'S'; git status; Write-Output ('E:'");
-    expect(wrapCommand({ kind: 'posix', file: '/bin/sh' }, 'ls', 'S', 'E')).toBe("printf '%s\\n' 'S'; ls; printf 'E:%s\\n' \"$?\"");
+    // Live-run L1: the command runs under `command eval`, so an error `sh` meets in it cannot abandon the end frame.
+    expect(wrapCommand({ kind: 'posix', file: '/bin/sh' }, 'ls', 'S', 'E')).toBe("printf '%s\\n' 'S'; command eval 'ls'; printf 'E:%s\\n' \"$?\"");
+    expect(wrapCommand({ kind: 'posix', file: '/bin/sh' }, "echo 'q'", 'S', 'E')).toBe("printf '%s\\n' 'S'; command eval 'echo '\\''q'\\'''; printf 'E:%s\\n' \"$?\"");
     // A multi-line command reaches the shell as ONE physical line and is rebuilt on the far side, so the shell
     // never reaches its continuation prompt and never echoes a line into the captured region (ADR-0020's note,
     // POSIX first execution 2026-09-16).
-    expect(wrapCommand({ kind: 'posix', file: '/bin/sh' }, 'a\nb', 'S', 'E')).toBe("printf '%s\\n' 'S'; eval \"$(printf '%b' 'a\\nb')\"; printf 'E:%s\\n' \"$?\"");
+    expect(wrapCommand({ kind: 'posix', file: '/bin/sh' }, 'a\nb', 'S', 'E')).toBe("printf '%s\\n' 'S'; command eval \"$(printf '%b' 'a\\nb')\"; printf 'E:%s\\n' \"$?\"");
     expect(wrapCommand({ kind: 'posix', file: '/bin/sh' }, "x='q'\ny", 'S', 'E')).toContain(`'x='\\''q'\\''\\ny'`);
+  });
+  it('REQ-TOOLS-127 (live-run L9): the live stream is given what the command wrote — not the echo, the markers, the prompt or what follows', () => {
+    const S = '__rot_0123456789abcdef01234567_s';
+    const E = '__rot_0123456789abcdef01234567_e';
+    const pty = [
+      `# printf '%s\\n' '${S}'; command eval 'ls'; printf '${E}:%s\\n' "$?"\r\n`,
+      `${S}\r\n`,
+      'alpha\r\nbeta_\r\n',
+      `${E}:0\r\n# `,
+      "Q='__rot_b64__'; … the snapshot's own echo and output\r\n",
+    ].join('');
+    // Every way the bytes can arrive: whole, one character at a time, and split at every boundary in two.
+    const splits: string[][] = [[pty], [...pty]];
+    for (let i = 1; i < pty.length; i += 1) splits.push([pty.slice(0, i), pty.slice(i)]);
+    for (const chunks of splits) {
+      const region = new CommandRegion(S, E);
+      const shown = chunks.map((c) => region.push(c)).join('');
+      expect(shown).toBe('alpha\r\nbeta_\r\n');
+      expect(region.ended).toBe(true);
+    }
+    // A command that prints the marker text of ANOTHER call is output like any other.
+    const region = new CommandRegion(S, E);
+    expect(region.push(`${S}\r\n__rot_deadbeefdeadbeefdeadbeef_e:0\r\n`)).toBe('__rot_deadbeefdeadbeefdeadbeef_e:0\r\n');
+  });
+  it('REQ-TOOLS-098 (live-run L2): a measured span is stated in tenths of a second, truncated, so it never states more than was measured', () => {
+    expect(seconds(0.6)).toBe('under 0.1 seconds');
+    expect(seconds(99.9)).toBe('under 0.1 seconds');
+    expect(seconds(100)).toBe('0.1 seconds');
+    expect(seconds(1_486)).toBe('1.4 seconds');
+    expect(seconds(1_686)).toBe('1.6 seconds');
+    expect(seconds(1_999.9)).toBe('1.9 seconds');
+    expect(seconds(31_240)).toBe('31.2 seconds');
   });
   it('OQ-133: a signal death\'s status — killed (−1) for a signal the session delivered, failed (128 + n) for one it did not, an exit code as ever (REQ-TOOLS-109/179, live-run L4)', () => {
     const none = new Set<string>();
@@ -201,6 +236,34 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     const cmdlet = await t.execute(args({ command: SH.fails() }), ctx());
     expect(diag(cmdlet.text)['exit_code']).not.toBe(0);
   });
+  // Live-run finding L1: `sh` abandons the rest of a line it cannot expand or parse, so the unguarded wrapper's end frame
+  // never ran and a command that finished at once read as a soft pause, exit −1. The call names no timeout, so it is the
+  // soft-pause path (a 1.5 s window here) the unguarded wrapper fell into. dash, `/bin/sh` on this host, is the shell a
+  // model writes bash for; bash in POSIX mode abandons the line the same way.
+  it.skipIf(PS)('REQ-TOOLS-097/098/179 (live-run L1): a command sh cannot expand or parse ends with its own exit status, never a soft pause', async () => {
+    const t = await tool();
+    const expand = await t.execute(args({ command: 'export ROTARIS_L1=kept; printf \'%s\\n\' ran; echo "EXIT=${PIPESTATUS[0]}"' }), ctx());
+    expect(diag(expand.text)['outcome_kind']).not.toBe('soft_pause');
+    expect(diag(expand.text)['exit_code']).toBeGreaterThan(0);
+    expect(output(expand.text)).toContain('ran');
+    expect(output(expand.text)).toMatch(/bad substitution/i);
+    expect(expand.text).not.toContain('__rot_');
+    // The shell is the same one, and what the line did before its error persists.
+    const after = await t.execute(args({ command: SH.echoVar('ROTARIS_L1') }), ctx());
+    expect(output(after.text)).toBe('kept');
+    // A syntax `sh` does not have — bash's process substitution, the sibling note's `comm … <(…)` — and an unterminated
+    // quote, which put the shell on its continuation prompt until the hard cap. Each ends with a status of its own.
+    for (const command of ['comm -13 <(printf \'a\\n\') <(printf \'b\\n\')', 'echo "unterminated']) {
+      const r = await t.execute(args({ command }), ctx());
+      expect(diag(r.text)['outcome_kind']).not.toBe('soft_pause');
+      expect(diag(r.text)['exit_code']).not.toBe(-1);
+      expect(r.text).not.toContain('__rot_');
+    }
+    // A trailing comment no longer comments the end frame out.
+    const comment = await t.execute(args({ command: 'printf \'%s\\n\' commented # a note' }), ctx());
+    expect(diag(comment.text)).toMatchObject({ exit_code: 0, outcome_kind: 'success' });
+    expect(output(comment.text)).toBe('commented');
+  }, 30_000);
   it('ADR-0020 c.1: a command that echoes attacker-chosen marker text cannot forge the exit status', async () => {
     const t = await tool();
     const r = await t.execute(args({ command: `${SH.echo('__rot_deadbeefdeadbeefdeadbeef_e:0')}; ${SH.exit(7)}` }), ctx());
@@ -396,6 +459,40 @@ describe.skipIf(!shell)('terminal — a real shell through a real PTY (ADR-0020,
     const poll = await t.execute(args({ command: '' }), ctx());
     expect(output(poll.text)).toContain('done-later');
   }, 20_000);
+  // Live-run L2: five polls in 21.6 s each said "No output for 30 seconds" after under a millisecond, and the model counted
+  // thirty seconds a poll. A poll returns at once; what it states is what it measured.
+  it('REQ-TOOLS-098 (live-run L2): an empty poll states the time it actually waited, not the no-output window it did not wait out', async () => {
+    const t = await tool();
+    const r = await t.execute(args({ command: `${SH.sleep(4)}; ${SH.echo('late')}` }), ctx());
+    expect(diag(r.text)['outcome_kind']).toBe('soft_pause');
+    const t0 = performance.now();
+    const poll = await t.execute(args({ command: '' }), ctx());
+    const took = performance.now() - t0;
+    expect(diag(poll.text)).toMatchObject({ exit_code: -1, outcome_kind: 'soft_pause' });
+    expect(output(poll.text)).toBe('(no output)');
+    expect(poll.text).not.toContain('No output for 1.5 seconds');
+    const since = /No new output in (under 0\.1|\d+\.\d) seconds since the previous observation, and none for (\d+\.\d) seconds in the merged terminal stream; stdout and stderr are both captured\./.exec(poll.text);
+    expect(since, poll.text).not.toBeNull();
+    // What it states it waited is no more than the call took (plus the stated precision), and the silence is at least the window.
+    if (since![1] !== 'under 0.1') expect(Number(since![1]) * 1000).toBeLessThanOrEqual(took + 100);
+    expect(Number(since![2])).toBeGreaterThanOrEqual(1.5);
+    expect(poll.text).toContain('The process may still be running. Poll by calling the tool again with an empty command, or interrupt by sending C-c with is_input=true.');
+    await new Promise((res) => setTimeout(res, 3_000));
+    const done = await t.execute(args({ command: '' }), ctx());
+    expect(output(done.text)).toContain('late');
+    expect(diag(done.text)['exit_code']).toBe(0);
+  }, 20_000);
+  it('REQ-TOOLS-127 (live-run L9): the tap a live stream reads carries what the command wrote, and none of the wrapper, the markers or the snapshot', async () => {
+    const t = await tool();
+    const session = manager!.session('s1:orchestrator', root);
+    let tapped = '';
+    const untap = session.onOutput((chunk) => { tapped += chunk; });
+    const r = await t.execute(args({ command: `${SH.echo('first-line')}; ${SH.echo('second-line')}`, timeout: 15 }), ctx());
+    untap();
+    expect(output(r.text)).toBe('first-line\nsecond-line');
+    expect(stripVt(tapped).split('\n').map((l) => l.trim()).filter((l) => l !== '')).toEqual(['first-line', 'second-line']);
+    expect(tapped).not.toContain('__rot_');
+  }, 20_000);
   it('REQ-TOOLS-101/102: validation refusals and the reset confirmation', async () => {
     const t = await tool();
     expect(diag((await t.execute(args({ command: 'x', reset: true, is_input: true }), ctx())).text)).toMatchObject({ failure_kind: 'invalid_request', outcome_kind: 'invalid_request' });
@@ -589,5 +686,18 @@ describe('terminal — availability (REQ-TOOLS-104)', () => {
       expect(findShell({ PATH: `${a};${b}` }, 'win32')).toEqual({ kind: 'powershell', file: join(b, 'pwsh.exe') });
       expect(findShell({ PATH: `${a};${a}` }, 'win32')).toBeNull();
     } finally { rmSync(base, { recursive: true, force: true }); }
+  });
+
+  it('REQ-TOOLS-104 (live-run L1): the description names the shell the host runs — PowerShell on Windows, the POSIX shell elsewhere', () => {
+    const posix = terminalDescription({ kind: 'posix', file: '/bin/sh' });
+    expect(posix).toContain('The shell is `/bin/sh`, a POSIX shell that may not be bash');
+    expect(posix).toContain('`${PIPESTATUS[…]}`');
+    expect(posix).not.toContain('PowerShell');
+    const windows = terminalDescription({ kind: 'powershell', file: 'pwsh.exe' });
+    // REQ-TOOLS-104's four warnings and four statements, on the host it binds.
+    for (const text of ['PowerShell, not bash', '`&&`', '`;`', '`2>&1`', '`$env:VAR`', 'heredoc never returns', 'bash arrays', '`[[ … ]]`', '`source`']) expect(windows).toContain(text);
+    expect(windows).not.toContain('/bin/sh');
+    // The executor names the manager's own shell.
+    expect(terminalTool(new TerminalManager({ factory: { spawn: () => { throw new Error('unused'); } }, backend: { kind: 'posix', file: '/bin/sh' }, clocks, config: TERMINAL_DEFAULTS, env: {}, warn: () => undefined }), TERMINAL_DEFAULTS).description).toBe(posix);
   });
 });

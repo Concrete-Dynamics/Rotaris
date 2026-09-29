@@ -5464,6 +5464,10 @@ motion and the inspector's writability. A `paused` agent keeps OQ-100's reading 
 the inspector and the context card their fallback), since nothing runs for it and REQ-CHAT-008's recovery state keeps
 the tick going. The tick condition (REQ-MONITOR-110) needed no change: it runs while the followed session is busy, and a
 running, waiting or queued agent is presented only then (a session at rest settles or pauses every unfinished agent).
+One case is not covered by that sentence, found at the verification of this repair: a session whose persisted status is
+literally `idle` is not reconciled (`reconcile` in `packages/engine/src/sessions.ts` excludes `idle`), so a non-terminal
+child held there would keep its running, waiting or queued state while the tick stands, and its figure would show without
+advancing. No path is known to leave a child unfinished under an `idle` session; it is stated, not built for.
 
 **What a ruling decides.** Whether a waiting or queued agent's figure advances (as built) or stands, and whether a
 `paused` agent should show a figure — fixed at its pause, or advancing — rather than OQ-100's fallback, which

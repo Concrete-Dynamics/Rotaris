@@ -16,6 +16,11 @@ export interface Persona {
   readonly implementer: boolean;
   /** REQ-CONFIG-098: the role's own model once configuration resolves it; absent means the run's model. */
   readonly modelRef?: ModelRef | undefined;
+  /**
+   * REQ-CONFIG-094: the `models:` key `modelRef` was resolved from, a loader-owned synthetic copy unwrapped to the entry
+   * it was copied from — the key a child of this role is recorded and capped under. Absent with `modelRef`.
+   */
+  readonly modelKey?: string | undefined;
   readonly thinking?: ThinkingLevel | undefined;
   /** REQ-CONFIG-110 / REQ-ORCH-144: the role's own `fallback_model`; absent means the run-level slot (REQ-CONFIG-065). */
   readonly fallbackModel?: ModelRef | undefined;
@@ -31,6 +36,11 @@ export interface Persona {
    * children and no others. Read by PD-ORCH-004's progress rule; absent means the run's value.
    */
   readonly stallTimeoutMs?: number | undefined;
+  /**
+   * REQ-CONFIG-107: the role's `skip_auto_sibling_context` — the persona-level setting REQ-TOOLS-152 names, which forces the
+   * omission `suppress_auto_context` asks for on every child of this role. Absent means false: the index is given.
+   */
+  readonly skipAutoSiblingContext?: boolean | undefined;
   /**
    * REQ-MCP-065 / REQ-MCP-114 (Part S): the MCP grant evidence recorded on a child's row at spawn — the granted tools per
    * server and every carried server's fate. Supplied by the run host's resolver from the same memoised resolution the

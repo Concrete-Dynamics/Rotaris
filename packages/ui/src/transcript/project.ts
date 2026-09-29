@@ -385,6 +385,17 @@ function previousThinkingByAgent(rows: readonly TranscriptRow[], from: number): 
 }
 
 /**
+ * Whether `settle` can answer differently for this row with a run in progress and without one — the only way step 4
+ * reads `running`. A row it answers for identically either way projects identically either way, which is what lets a
+ * change of `running` take the bounded form from the first row that settles with it (`projector.ts`'s `changedFrom`).
+ * It errs toward yes: a thinking row that could go stale counts whether or not it has.
+ */
+export function settlesWithRunning(row: TranscriptRow): boolean {
+  if (row.toolStatus === 'running') return true;
+  return row.kind === 'thinking' && (row.durationMs === undefined || (!row.settled && row.startedAt !== undefined));
+}
+
+/**
  * REQ-CHAT-049 and REQ-CHAT-062's settling — the part of hygiene that decides whether a streamed row is still live,
  * and therefore (REQ-CHAT-066) whether it may fold. Split from the caps so `cleanCut` can read runs exactly as
  * `foldRuns` will form them without paying for the caps, which no run reads.
@@ -621,10 +632,9 @@ export function projectDisplay(o: ProjectOptions, incremental?: { readonly previ
   const deduped = dropRepeatedDiffs(o.rows);
 
   let startRow = 0;
-  let prefix: DisplayRow[] = [];
+  let prefix: readonly DisplayRow[] = [];
   if (incremental) {
-    let b = deduped.findIndex((r) => r.index >= incremental.from);
-    if (b === -1) b = deduped.length;
+    const b = firstAtOrAfter(deduped, incremental.from);
     startRow = cleanCut(deduped, b, o);
     // The ROW INDEX of the clean cut, which is where re-projection begins — not `b`'s, which a run open at
     // `b` may reach back past. REQ-CHAT-048 needs each agent's immediately previous thinking row, looked up below.
@@ -634,10 +644,17 @@ export function projectDisplay(o: ProjectOptions, incremental?: { readonly previ
     // that as +Infinity and reused the whole previous display, removed rows included (R-062's fix round 2). The rows
     // from `from` on are the changed ones by definition, so nothing displayed for them before is reusable.
     const boundaryIndex = Math.min(deduped[startRow]?.index ?? Number.POSITIVE_INFINITY, incremental.from);
-    prefix = incremental.previous.filter((d) => d.shape !== 'trailer' && lastIndexOf(d) < boundaryIndex);
-    // A reusable prefix must be a prefix: stop at the first displayed row that is not below the boundary.
-    const cut = incremental.previous.findIndex((d) => d.shape === 'trailer' || lastIndexOf(d) >= boundaryIndex);
-    if (cut !== -1) prefix = incremental.previous.slice(0, cut) as DisplayRow[];
+    // A reusable prefix must be a prefix: stop at the first displayed row that is not below the boundary — a trailer,
+    // or a row reaching the boundary. When there is none, the whole previous display is the prefix.
+    //
+    // Found by bisection over the previous display's REACH (`reachOf`: the highest row index any displayed row up to a
+    // position covers), which a bounded projection carries forward from the display it was built on. The first form
+    // FILTERED the previous display down to the rows below the boundary, then searched it again from the start for the
+    // same position and replaced the filter's result with the slice above it: two passes over every displayed row an
+    // increment, asking each where it ends. V8's CPU profile of the built app named them (`lastIndexOf` and the
+    // projection's own time, 2026-09-29, the defect note's "CPU profile" section; REQ-CHAT-055).
+    const cut = firstReaching(reachOf(incremental.previous), boundaryIndex);
+    prefix = cut === -1 ? incremental.previous : incremental.previous.slice(0, cut);
     // `cleanCut` reads the runs of the NEW rows. A previous run could still reach across the boundary when a row it
     // held was replaced in place by one that does not join it (a tool row become prose): its members below the
     // boundary would be neither reused (the header reaches past it) nor re-projected (they sit before it). The
@@ -658,7 +675,66 @@ export function projectDisplay(o: ProjectOptions, incremental?: { readonly previ
     thinking.saw(row);
     if (out !== null) cleaned.push(out);
   }
-  return [...prefix, ...foldRuns(cleaned, o.groupTools, o.showReasoning), ...trailerRows(o)];
+  const display = [...prefix, ...foldRuns(cleaned, o.groupTools, o.showReasoning), ...trailerRows(o)];
+  // The next bounded projection will search this display's reach; its prefix's is the previous display's, unchanged.
+  if (incremental && prefix.length > 0) reaches.set(display, extendReach(reachOf(incremental.previous), prefix.length, display));
+  return display;
+}
+
+/**
+ * The REACH of a displayed array: at each position, the highest row index covered by any displayed row at or before it
+ * (`lastIndexOf`), a trailer covering every index. It never decreases, so the first position reaching a row index is a
+ * bisection rather than a pass. Held against the array it describes; a bounded projection's is its prefix's, copied,
+ * and the rest computed, and any other array's is computed whole the first time it is asked for.
+ */
+const reaches = new WeakMap<readonly DisplayRow[], Float64Array>();
+
+function extendReach(previous: Float64Array | null, keep: number, display: readonly DisplayRow[]): Float64Array {
+  const reach = new Float64Array(display.length);
+  if (previous !== null && keep > 0) reach.set(previous.subarray(0, keep));
+  let highest = keep > 0 ? reach[keep - 1]! : Number.NEGATIVE_INFINITY;
+  for (let p = keep; p < display.length; p += 1) {
+    const d = display[p]!;
+    const last = d.shape === 'trailer' ? Number.POSITIVE_INFINITY : lastIndexOf(d);
+    if (last > highest) highest = last;
+    reach[p] = highest;
+  }
+  return reach;
+}
+
+function reachOf(display: readonly DisplayRow[]): Float64Array {
+  let reach = reaches.get(display);
+  if (reach === undefined) {
+    reach = extendReach(null, 0, display);
+    reaches.set(display, reach);
+  }
+  return reach;
+}
+
+/** The first position whose reach is at least `index`, or -1: the first displayed row that is a trailer or reaches it. */
+function firstReaching(reach: Float64Array, index: number): number {
+  let lo = 0;
+  let hi = reach.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (reach[mid]! < index) lo = mid + 1; else hi = mid;
+  }
+  return lo === reach.length ? -1 : lo;
+}
+
+/**
+ * The position of the first row whose index is at least `index`, or `rows.length` — by bisection, because the resident
+ * window is in index order (`ProjectOptions.rows`) and `dropRepeatedDiffs` keeps that order. The bounded form's first
+ * form searched it from the start, a pass over every row held for a position an increment puts near the end.
+ */
+function firstAtOrAfter(rows: readonly TranscriptRow[], index: number): number {
+  let lo = 0;
+  let hi = rows.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (rows[mid]!.index < index) lo = mid + 1; else hi = mid;
+  }
+  return lo;
 }
 
 /** REQ-CHAT-048's lookback: the nearest thinking row below `before` that `agent` wrote, or null. */

@@ -40,7 +40,7 @@ REQ-WORKSPACE-111 ("the skip path SHALL persist the listed task ids as skipped")
 task (REQ-WORKSPACE-083) and drew its card (REQ-WORKSPACE-106), and the skip recorded it. The fault is in the order.
 REQ-WORKSPACE-083 makes the prompt request a product of the open's resolution, and REQ-WORKSPACE-141 puts that
 resolution in the interactive slot, yet the skip was answered before the resolution had run. Whether the dialog may open
-before the resolution at all is OQ-118.
+before the resolution at all is OQ-122.
 
 ## Relevant files
 
@@ -60,7 +60,7 @@ ADR-0064's finding (2) leaves it out of the skip on REQ-WORKSPACE-084's ground. 
 REQ-WORKSPACE-086 says, the background task included when the resolution started nothing. The 800 ms slot then finds
 the open's one automatic resolution made and makes no second one (REQ-WORKSPACE-102). The window's mount read, the slot
 and the dialog are unchanged. `init-proof`'s scenario 3 also asserts that the background task started beside the
-consent prompt and was recorded completed, so the proof pins the requirement and not the race. The reading is OQ-118's
+consent prompt and was recorded completed, so the proof pins the requirement and not the race. The reading is OQ-122's
 second.
 
 **A first repair was withdrawn before it merged.** It kept a per-workspace flag, `backgroundOwed`. While the flag held,

@@ -2,7 +2,7 @@ import { millis, toIsoUtc, type Clocks, type TimerHandle } from '@rotaris/kernel
 
 /** REQ-CHAT-164: ten seconds of provider silence on a call in flight. */
 const STALL_AFTER = millis(10_000);
-import { terminalRowStreamId, type ApprovalOption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt } from '@rotaris/contracts';
+import { terminalRowStreamId, type ApprovalOption, type Interruption, type PermissionPreset, type QuestionAnswers, type QuestionPrompt } from '@rotaris/contracts';
 import type { AgentBackend, ChatMessage, ContentPart, ModelRef, ThinkingLevel, ToolSpec, TurnReport } from '@rotaris/model';
 import type { ProjectionOwner } from '../projection-owner.js';
 import type { SessionWriter } from '../session-writer.js';
@@ -11,7 +11,9 @@ import { resilientStep, type StepOutcome, type TurnResilience } from './ladder.j
 import { priceRequest, type PricedUsage } from './pricing.js';
 import type { ModelChoice } from './resilience.js';
 import { CompressionRunner, type TurnCompression } from './compression.js';
-import { Conversation } from './conversation.js';
+import { Conversation, type ConversationRecorder } from './conversation.js';
+import { interruptedResult } from './interruption.js';
+import type { FingerprintCheck } from './record.js';
 
 /**
  * The tool loop inside one iteration (REQ-TOOLS-180, REQ-ORCH-146's non-native case): step the model;
@@ -43,6 +45,11 @@ export interface PortToolResult {
   readonly blockedReason?: string;
   /** REQ-HOOKS-074: post_tool feedback for a call that produced no observation — delivered as a following user message. */
   readonly followUp?: string;
+  /**
+   * PD-ORCH-005: the run's rest cut this call short — its approval or question was withdrawn (clause 9), or its executor
+   * reported the rest interrupted it. The turn records it as interrupted and never re-run.
+   */
+  readonly interrupted?: boolean;
 }
 export interface ModeChange {
   readonly requested: PermissionPreset;
@@ -69,6 +76,12 @@ export interface ToolPort {
   dispatch(call: PortToolCall, signal: AbortSignal): Promise<PortToolResult>;
   /** REQ-MONITOR-012 / REQ-TOOLS-177: every waiting approval released, before the run stops. */
   cancelPending(): number;
+  /**
+   * PD-ORCH-005 clause 9: the run comes to rest — every approval and question this port's calls wait on is WITHDRAWN,
+   * never denied: each waiting call settles as interrupted and never run, and the withdrawal is recorded. Optional
+   * because a port with nothing to wait on has nothing to withdraw.
+   */
+  withdrawPending?(cause: Interruption): number;
   /** REQ-TOOLS-025/073: the next call is decided under the replacement. */
   setMode(mode: string, source: string): ModeChange;
   currentMode(): PermissionPreset;
@@ -84,6 +97,13 @@ export interface ToolPort {
   cancelQuestions?(requestId: string): boolean;
   /** REQ-CHAT-097: what the whole-session update publishes for this port's conversation. */
   pendingQuestions?(): readonly QuestionPrompt[];
+  /**
+   * REQ-SESSION-094: the run has ended. Every call this port still has open is settled at once, as failed with
+   * `cutOff`, and from here nothing the port's gate would write for any call reaches the session — no settle, no
+   * `tool.finish`, no issue, no audit or timeline entry, no approvals mirror — so a call the stop's grace detached writes
+   * nothing when it returns. Idempotent. Optional because a port with no sink of its own has nothing to close.
+   */
+  close?(cutOff: string): void;
 }
 
 export interface TurnDeps {
@@ -111,6 +131,18 @@ export interface TurnDeps {
   readonly steering?: (() => readonly SteeringPrompt[]) | undefined;
   /** REQ-MONITOR-123: a graceful pause — the turn stops before its next model step. */
   readonly shouldPause?: (() => boolean) | undefined;
+  /**
+   * PD-ORCH-005 clause 2 / REQ-ORCH-134: aborted when the pause's tool deadline passes, cutting every call still in flight;
+   * absent means only the turn's own signal cuts a call.
+   */
+  readonly cutCalls?: AbortSignal | undefined;
+  /** PD-ORCH-005: what the run is coming to rest by, for the interrupted results it records; null while it is not. */
+  readonly interruption?: (() => Interruption | null) | undefined;
+  /**
+   * REQ-SESSION-094: the run gave up waiting for this turn and has ended. A step or a call that returns after that writes
+   * nothing more — no row settled, nothing recorded — and the turn ends where it stands. Absent means never.
+   */
+  readonly detached?: (() => boolean) | undefined;
   /** Part Q: the ladder over every model step of this agent (REQ-ORCH-090/091/092); absent means the bare step. */
   readonly resilience?: TurnResilience | undefined;
   /**
@@ -134,7 +166,16 @@ export interface TurnDeps {
    * progress rule and the list of paths a child changed; absent means nobody is listening.
    */
   readonly onToolCompleted?: ((call: PortToolCall, result: PortToolResult) => void) | undefined;
+  /** PD-ORCH-005 clause 1: observes every message as it joins this agent's conversation — the conversation record. */
+  readonly recorder?: ConversationRecorder | undefined;
+  /**
+   * PD-ORCH-005 revision 4 clause 14: handed the system prompt and the tool definitions each model step's request carries,
+   * just before the step goes out; the agent's record keeps the first and a resume compares against it.
+   */
+  readonly fingerprint?: FingerprintCheck | undefined;
 }
+
+type ToolResultPart = { kind: 'tool-result'; callId: string; name: string; result: string; isError: boolean };
 
 export interface SteeringPrompt {
   readonly id: string;
@@ -147,7 +188,10 @@ export interface TurnOutcome {
   readonly messages: readonly ChatMessage[];
   readonly toolCallCount: number;
   readonly escalation?: SupervisorEscalation | undefined;
-  /** REQ-MONITOR-123: the turn stopped for a pause; the task is left where it was. */
+  /**
+   * REQ-MONITOR-123 / PD-ORCH-005: the turn stopped where it stood because the run is coming to rest — before its next
+   * model step, or mid-step with its calls' results recorded (interrupted ones as such); the task is left where it was.
+   */
   readonly paused?: boolean | undefined;
 }
 
@@ -162,10 +206,12 @@ function injectSteering(deps: TurnDeps, conversation: Conversation): number {
   return pending.length;
 }
 
-export async function runTurn(deps: TurnDeps, task: string, history: readonly ChatMessage[], signal: AbortSignal, initialContent?: readonly ContentPart[]): Promise<TurnOutcome> {
+export async function runTurn(deps: TurnDeps, task: string | null, history: readonly ChatMessage[], signal: AbortSignal, initialContent?: readonly ContentPart[]): Promise<TurnOutcome> {
   const { writer, owner, tools, clocks } = deps;
   // ADR-0060: the history is an object whose array is SWAPPED by a compression, never spliced under a call in flight.
-  const conv = new Conversation([...history, { role: 'user', content: initialContent ?? [{ kind: 'text', text: task }] }]);
+  // PD-ORCH-005: a null task continues the history as it stands — how a recorded conversation is resumed.
+  const conv = new Conversation(history, deps.recorder);
+  if (task !== null) conv.push({ role: 'user', content: initialContent ?? [{ kind: 'text', text: task }] });
   // ADR-0034: the MCP surface is demanded before the listing and the prompt are read — one resolution feeds both.
   if (tools?.ready) await tools.ready();
   const specs = tools?.specs() ?? [];
@@ -181,6 +227,8 @@ export async function runTurn(deps: TurnDeps, task: string, history: readonly Ch
    * than dropped with the report it belonged to.
    */
   const observeRequestUsage = (u: PricedUsage): void => {
+    // REQ-SESSION-094: a step the run gave up on and that returned after it ended counts toward nothing.
+    if (deps.detached?.() === true) return;
     usage = { input: usage.input + u.input, output: usage.output + u.output };
     deps.onRequestUsage?.(u);
   };
@@ -202,8 +250,12 @@ export async function runTurn(deps: TurnDeps, task: string, history: readonly Ch
     ? deps.compression.registry.register({ agent: deps.agentName, compress: async (s) => { const r = await compression.manual(conv, condensed, s); if (r.kind === 'compressed') condensed = true; return r; } })
     : null;
   try {
+  // REQ-MONITOR-123 / PD-ORCH-005 clause 2: the turn stops before its next model call — checked again after every awaited
+  // piece that precedes the step, since a pause accepted meanwhile allows no model call (found by phase 3's review).
+  const stopsHere = (): TurnOutcome | null => (deps.shouldPause?.() === true ? { report: { status: 'succeeded', text: lastReport.text, usage }, messages: conv.snapshot(), toolCallCount, paused: true } : null);
   for (;;) {
-    if (deps.shouldPause?.()) return { report: { status: 'succeeded', text: lastReport.text, usage }, messages: conv.snapshot(), toolCallCount, paused: true };
+    const before = stopsHere();
+    if (before) return before;
     injectSteering(deps, conv);
     const supervision = await deps.supervisor?.check();
     if (supervision?.kind === 'inject') {
@@ -225,9 +277,16 @@ export async function runTurn(deps: TurnDeps, task: string, history: readonly Ch
      * call goes out over the compressed context. This sits where ADR-0059's `check()` sits — between steps,
      * with no request in flight, which is the only place the conversation may be replaced.
      */
+    const afterSupervision = stopsHere();
+    if (afterSupervision) return afterSupervision;
     if (compression && !signal.aborted && compression.due(conv, condensed)) {
       if (await compression.run(conv, 'automatic', condensed, signal)) condensed = true;
+      const afterCompression = stopsHere();
+      if (afterCompression) return afterCompression;
     }
+    // PD-ORCH-005 revision 4 clause 14: what this step's request carries — the instructions after the MCP section is
+    // appended and the listing after the port is ready — is what an agent's fingerprint is taken of.
+    deps.fingerprint?.(stepDeps.systemPrompt, specs);
     // REQ-CHAT-054: one stable message key per response SEGMENT. A tool boundary ends a segment, so the next step's
     // response is a distinct row; the ladder re-running THIS step on a fallback reuses the key and so persists once.
     const segment = `${deps.agentName}#${steps}`;
@@ -246,6 +305,7 @@ export async function runTurn(deps: TurnDeps, task: string, history: readonly Ch
       ? await resilientStep({ writer, clocks, warn: deps.warn, agent: deps.agentName, onRequestUsage: observeRequestUsage }, resilience, (choice, unresponsiveMs) => step(stepDeps, choice, conv.snapshot(), specs, signal, unresponsiveMs, segment), signal)
       : await (async () => { const o = await step(stepDeps, { model: deps.model, thinking: deps.thinking }, conv.snapshot(), specs, signal, null, segment); observeRequestUsage(priceRequest(o.report.usage, null)); return o.report; })();
     lastReport = report;
+    if (deps.detached?.() === true) return { report: { ...report, usage }, messages: conv.snapshot(), toolCallCount, paused: true };
     // REQ-MONITOR-049 (Part R): the step's input count is this agent's latest prompt-token reading; the surface reads it from the record.
     // REQ-MONITOR-089: after a compression the reading FALLS, because the step that follows one reports the shorter prompt.
     writer.activity.usage(deps.agentName, report.usage.input);
@@ -263,16 +323,34 @@ export async function runTurn(deps: TurnDeps, task: string, history: readonly Ch
       if (calls.length === 0 && !signal.aborted && injectSteering(deps, conv) > 0) continue;
       return { report: { ...report, usage }, messages: conv.snapshot(), toolCallCount };
     }
-    const results: ChatMessage['content'] = [];
+    const results: ToolResultPart[] = [];
     const followUps: string[] = [];
+    /**
+     * PD-ORCH-005 clauses 2, 3 and 9: whether the run's rest cut this step short. Every call of the step still gets a
+     * result, so the conversation never ends on calls with none (the spike's finding: a stop used to return without
+     * the step's `tool` message, losing the results of the calls that DID complete): a completed call its own, a call
+     * cut off or withdrawn the interrupted statement with whatever it produced, and a call the step asked for but had
+     * not started when the rest began the statement that it never ran — no new call starts once the run is coming to
+     * rest, and a paused agent makes no model step after this one.
+     */
+    let cut = false;
+    const cause = (): Interruption | null => deps.interruption?.() ?? null;
     for (const c of calls) {
-      if (signal.aborted) break;
+      // Only the run's rest (or the turn's own abort) skips a call: REQ-ORCH-088's landing lets the step's calls run.
+      if (signal.aborted || cause() !== null) {
+        cut = true;
+        const text = interruptedResult(cause(), false, '');
+        results.push({ kind: 'tool-result', callId: c.callId, name: c.name, result: text, isError: true });
+        // REQ-MONITOR-105 / REQ-SESSION-129: `blocked` is a call skipped before it ran; no row is ever left `running`.
+        writer.appendRow('tool', `${c.name}`, true, { persona: deps.persona, name: deps.agentName, toolName: c.name, toolStatus: 'blocked', callKey: c.callId, startedAt: toIsoUtc(clocks.wall.instant()), input: c.args, output: text, blockedReason: text });
+        continue;
+      }
       toolCallCount += 1;
       deps.supervisor?.observe({ kind: 'tool', name: c.name, args: c.args });
       const prior = deps.dispatched.get(c.callId);
       if (prior !== undefined) {
         // REQ-ORCH-141: a replayed id is not dispatched again.
-        (results as { kind: 'tool-result'; callId: string; name: string; result: string; isError: boolean }[]).push({ kind: 'tool-result', callId: c.callId, name: c.name, result: prior, isError: false });
+        results.push({ kind: 'tool-result', callId: c.callId, name: c.name, result: prior, isError: false });
         continue;
       }
       const startedAt = toIsoUtc(clocks.wall.instant());
@@ -283,7 +361,11 @@ export async function runTurn(deps: TurnDeps, task: string, history: readonly Ch
       const rowResult = writer.appendRow('tool', `${c.name}`, false, { persona: deps.persona, name: deps.agentName, toolName: c.name, toolStatus: 'running', callKey: c.callId, startedAt, input: c.args, ...(streamId === undefined ? {} : { streamId }) });
       const rowIndex = rowResult.ok ? rowResult.value.index : null;
       const call: PortToolCall = { callId: c.callId, name: c.name, rawArgs: c.args, persona: deps.persona, agentId: deps.agentName, agentName: deps.agentName };
-      const r = await tools.dispatch(call, signal);
+      // REQ-ORCH-134 (PD-ORCH-005 clause 2): the call runs under the turn's signal and the pause's tool deadline.
+      const callSignal = deps.cutCalls ? AbortSignal.any([signal, deps.cutCalls]) : signal;
+      const r = await tools.dispatch(call, callSignal);
+      if (deps.detached?.() === true) return { report: { status: 'succeeded', text: lastReport.text, usage }, messages: conv.snapshot(), toolCallCount, paused: true };
+      const interrupted = r.interrupted === true || callSignal.aborted;
       deps.onToolCompleted?.(call, r);
       deps.dispatched.set(c.callId, r.text);
       if (rowIndex !== null) {
@@ -291,17 +373,24 @@ export async function runTurn(deps: TurnDeps, task: string, history: readonly Ch
         // REQ-CHAT-050: the user-only edit-diff row directly beneath the tool row that produced it.
         if (r.diff !== undefined && r.status === 'ok') writer.appendRow('diff', r.diff, true, { persona: deps.persona, name: deps.agentName, callKey: c.callId, diff: r.diff });
       }
-      (results as { kind: 'tool-result'; callId: string; name: string; result: string; isError: boolean }[]).push({ kind: 'tool-result', callId: c.callId, name: c.name, result: r.text, isError: r.isError });
+      if (interrupted) {
+        cut = true;
+        // Clause 3: "recorded as interrupted, with whatever output it had produced"; a withdrawn call (`blocked`) never ran.
+        results.push({ kind: 'tool-result', callId: c.callId, name: c.name, result: interruptedResult(cause(), r.status !== 'blocked', r.text), isError: true });
+      } else {
+        results.push({ kind: 'tool-result', callId: c.callId, name: c.name, result: r.text, isError: r.isError });
+      }
       if (r.followUp !== undefined && r.followUp !== '') followUps.push(r.followUp);
     }
-    if (signal.aborted) return { report: { status: 'succeeded', text: report.text, usage }, messages: conv.snapshot(), toolCallCount };
-    conv.push({ role: 'tool', content: results as { kind: 'tool-result'; callId: string; name: string; result: string; isError: boolean }[] });
+    conv.push({ role: 'tool', content: results });
     // REQ-HOOKS-074: nothing is placed between the assistant's calls and their results; feedback for an errored call follows as a user message.
     if (followUps.length > 0) conv.push({ role: 'user', content: [{ kind: 'text', text: followUps.join('\n') }] });
     owner.flushPending();
+    if (cut || signal.aborted) return { report: { status: 'succeeded', text: report.text, usage }, messages: conv.snapshot(), toolCallCount, paused: true };
   }
   } finally {
     unregister?.(); // Part AO
+    conv.close(); // PD-ORCH-005: a manual pass that finishes after this turn replaces and records nothing.
   }
 }
 
@@ -341,7 +430,7 @@ async function step(deps: TurnDeps, choice: ModelChoice, messages: readonly Chat
     stall.timer?.cancel();
     stall.timer = clocks.timers.after(STALL_AFTER, () => {
       const row = liveRow();
-      if (row === null) return;
+      if (row === null || deps.detached?.() === true) return;
       stalled = true;
       owner.markStalled(row, toIsoUtc(clocks.wall.instant()));
     });
@@ -368,9 +457,15 @@ async function step(deps: TurnDeps, choice: ModelChoice, messages: readonly Chat
     writer.settleRow(reasoningIndex, reasoning, durationMs === undefined ? {} : { durationMs });
     reasoningIndex = null;
   };
+  /**
+   * REQ-SESSION-094: the run gave up on this step and has ended (`TurnDeps.detached`). Its stream is a binding into the
+   * finished session, so from here it writes and publishes nothing: no row appended, grown or settled.
+   */
+  const detached = (): boolean => deps.detached?.() === true;
   const sink = {
     started: () => { seen = true; timer?.cancel(); armStall(); },
     delta: (d: string) => {
+      if (detached()) return;
       outputArrived();
       // REQ-CHAT-163: a reasoning burst is finished the moment the answer body starts, so its row settles here
       // rather than at the end of the call - a thinking row that stayed live past its own content would keep
@@ -391,6 +486,7 @@ async function step(deps: TurnDeps, choice: ModelChoice, messages: readonly Chat
      * REQ-CHAT-059 keys a thinking row by its START TIME, which is why `startedAt` is stamped on the append.
      */
     reasoning: (d: string) => {
+      if (detached()) return;
       outputArrived();
       reasoning += d;
       if (reasoningIndex === null) {
@@ -416,7 +512,9 @@ async function step(deps: TurnDeps, choice: ModelChoice, messages: readonly Chat
   }
   // REQ-CHAT-164: "when a streamed phase completes, its animation MUST stop where it stands" - settling does that,
   // and no completion row is appended for either phase.
-  settleReasoning();
-  if (index !== null) writer.upsertMessageRow(segment, 'agent', report.text || text, true, {});
+  if (!detached()) {
+    settleReasoning();
+    if (index !== null) writer.upsertMessageRow(segment, 'agent', report.text || text, true, {});
+  }
   return { report, unresponsive: unresponsive && !signal.aborted };
 }

@@ -30,40 +30,40 @@ wrong.
 | Area | Script | What it measures |
 |---|---|---|
 | **The run** | `part-h-proof` | the loop supervisor and `continue` (ADR-0059) |
-| | `part-j-proof` | the control channel: a queued message at the iteration boundary, a steer, a graceful pause, the message-limit pause |
+| | `part-j-proof` | the control channel: a queued message at the iteration boundary, a steer, a graceful pause (its rest's summary, and the session lock the Continue holds for its run, sampled while the app runs), the message-limit pause |
 | | `plan-gate-proof` | the plan gate held, edited, answered (ADR-0062) |
-| | `resilience-proof` | the model ladder, the waits, the fallbacks, against scripted faults; its `override` launch addresses a native `<select>` the wait header no longer draws, and **as root on Linux that launch outlived its 180 s timeout: SIGTERM did not end it, it was alive 649 s in, and only a SIGKILL from outside ended it** — expect to kill it (`docs/defects/resilience-proofs-override-launch-selects-a-native-select-the-wait-header-no-longer-draws.md`) |
+| | `resilience-proof` | the model ladder, the waits, the fallbacks, against scripted faults; the `override` launch is driven (the chooser the wait header draws), every launch is bounded (`lib/bounded-launch.mjs`: an overrun is ended by SIGTERM, a grace, then SIGKILL and reported with its log tail), and every scenario runs to its end with failures listed in `results.json` |
 | | `compression-proof` | context compression and its timeline entries (ADR-0060) |
-| | `checkpoint-proof` | the capture at iteration close through to the desktop restore (ADR-0039) |
-| | `sessions-proof` | the session browser's actions: repair, delete with ref cleanup, the exports |
+| | `checkpoint-proof` | the capture at iteration close through to the desktop restore (ADR-0039); the `live` launch's lock is probed dead the moment it returns (`lib/lock-holder.mjs`), so a lock that outlives the application fails there and is not blamed on the `repaired` step (`docs/defects/fixed/checkpoint-proofs-repaired-step-blames-the-repair-for-a-lock-its-live-launch-left-held.md`) |
+| | `sessions-proof` | the session browser's actions: repair, delete with ref cleanup, the exports; its planted locks read the machine identifier where the product mints it on the running platform (`machineIdFileFor`; `docs/defects/fixed/sessions-proof-reads-the-machine-identifier-at-the-windows-path-on-every-platform.md`) |
 | **Tools** | `fetch-proof` | `fetch` and its egress policy, read from saved configuration at **every** call |
 | | `questions-proof` | `ask_questions`, the trailer row, the stepper, the two control operations |
 | | `todo-proof` | the todo source priority, write-through edits, the pane |
 | | `attachments-proof` | content validation, ceilings, the capability gate, durable metadata |
 | | `artifacts-proof` | the session artifact store, the Artifacts tab, the inspector |
-| | `mcp-proof` | MCP declared three ways, against a real fixture server (ADR-0033/0034); launch 7's `.cmd`-runner check (REQ-MCP-113's wrap) is asserted on win32 only and **stated not applicable elsewhere**, the rest of the launch measured on every platform |
+| | `mcp-proof` | MCP declared three ways, against a real fixture server (ADR-0033/0034); launches 6 and 7 are driven, each step waiting for its condition (`<name>.steps.json`); launch 7's `.cmd`-runner check (REQ-MCP-113's wrap) is asserted on win32 only and **stated not applicable elsewhere**, the rest of the launch measured on every platform |
 | | `code-intel-proof` | the bundled code-intelligence runtime and its manifest (ADR-0035); it builds by platform; its window sampler is Windows-only, and elsewhere section 1 records the no-window check **not measured** (the instrument is missing, not the requirement), with its reason, in `results.json`; its setup launches open Settings with the Ctrl+7 chord rather than the shared category seam, and every press waits for the open's notice to have drawn and then for the control it presses (`docs/defects/fixed/code-intel-proofs-setup-launches-press-at-fixed-offsets.md`); a press step that never matches logs `never matched`, which is expected for the `MCP Servers` step whenever Settings already opens there; its branch launch is the product's order, the token first and `hostSwitches` between it and `--`, which `lib/launch-sites.test.ts` holds for every token launch (`docs/defects/fixed/code-intel-proofs-branch-launch-puts-the-sandbox-switch-ahead-of-the-token.md`); its branch client (`lib/line-rpc-client.mjs`) fails every pending request when the child exits, errors or is killed, with the exit status and standard error's tail, so it no longer hangs (`docs/defects/fixed/the-code-intelligence-server-dies-when-the-app-runs-as-root.md`, `docs/defects/fixed/code-intel-proofs-branch-client-waits-forever-on-a-child-that-has-exited.md`) |
 | | `skills-proof` | portable skill discovery, with a scratch home and a scratch machine-wide root (ADR-0063; `ROTARIS_CAPTURE_SKILLS_MACHINE`, off Windows only); the `/skills` listing written as one saved system row and read back after a reopen (REQ-CHAT-162) |
 | | `injection-proof` | workspace-context injection as the model port **received** it — order, the per-file switches, OQ-64, a worktree's execution root — and REQ-WORKSPACE-049's cold-cache p95 over 20 separate processes (`--skip-latency` skips it; cold only on Linux) |
-| | `sandbox-proof` | OS-level confinement (ADR-0022) — **`win32` is outside the platform set; read what it says it cannot prove**; its first check asserts the **Windows** verdict's six literals, so off Windows it fails there and measures nothing (`docs/defects/sandbox-proof-asserts-the-windows-verdict-on-every-platform.md`) |
-| | `terminal-stream-proof` | the stream in the run host against a **real PTY** (ADR-0021) |
+| | `sandbox-proof` | OS-level confinement (ADR-0022). The proof reads the host's own verdict (`process.platform`, the launcher on `PATH`, its own trial) and asserts the product's answer for that case (`docs/defects/fixed/sandbox-proof-asserts-the-windows-verdict-on-every-platform.md`). On `win32` and on Linux without `bwrap` it proves the refusal path. **Where the backend is available it also runs REQ-SANDBOX-127's six effects (IC-8)**, and on Linux with `bwrap` it is **red** on REQ-SANDBOX-077's absent-subpath residue, a product defect (`docs/defects/the-bubblewrap-carve-out-leaves-an-empty-protected-directory-on-the-host.md`). Read `results.json` → `effects` |
+| | `terminal-stream-proof` | the stream in the run host against a **real PTY** (ADR-0021), each command spelled in the host's shell: PowerShell on Windows, the POSIX shell elsewhere (REQ-TOOLS-104). Before 2026-09-28 it spoke PowerShell everywhere and measured nothing off Windows (`docs/defects/fixed/terminal-stream-proofs-real-pty-half-speaks-powershell-to-a-posix-shell.md`) |
 | **Configuration and startup** | `config-proof` | hand-authored, commented files surviving every write (ADR-0036/0037) |
 | | `init-proof` | project initialization resolved once per workspace open (ADR-0064); scenario 3 reads the dialog **before** its Escape (the reading marks the document and the key waits for the mark), and asserts that the background task starts and completes beside the consent prompt. Before the repairs it failed on Linux in both orders: a skip landing ahead of the resolution swallowed the background task (`docs/defects/fixed/a-skip-answered-before-the-open-resolves-swallows-the-background-task.md`), and the background run drew itself in the dialog, which then refused Escape when the resolution came first (`docs/defects/fixed/the-setup-dialog-takes-a-background-run-as-its-own.md`) |
 | | `workspace-proof` | reaching a project folder from inside the application: resolution, gates, switch |
 | | `settings-proof` | the Settings categories and the save bar; the About page's two files (`build-id.txt`, `THIRD-PARTY-LICENSES.txt`), absent and present (it stages them in `apps/desktop/resources/` and gives back what was there) |
 | | `updater-proof` | the updater on the one path a development host can execute: a launch that is not a released artifact performs no check and issues no request (REQ-STARTUP-106/114/150) — the log's one `info` line, and a proxy sink every request of Chromium's stack would reach that records none for the feed and **none at all** from launch to first paint and quit (REQ-STARTUP-160, REQ-SHELL-005 — the spellchecker's dictionary download it once caught), with a net-log naming the URL of any connection it does record; and a second launch, started with both artifact variables set, whose one scripted `terminal` call finds neither in its shell's environment (REQ-STARTUP-147); the check, the download, the apply and the restart are unit-tested over fakes and their run against a real artifact is owed to the next Windows package (IC-3) |
 | **Surfaces** | `overview-proof` | the Overview painted from the run and the store |
-| | `transcript-proof` | the projection, the caches, the empty state (ADR-0045/0046), and REQ-CHAT-055's append comparison — alternating launches pooled to thirty a side, in frames and milliseconds with their spread, plus one traced launch of each fixture read back by `lib/trace-summary.mjs` |
+| | `transcript-proof` | the projection, the caches, the empty state (ADR-0045/0046), and REQ-CHAT-055's append comparison — alternating launches pooled to thirty a side, in frames and milliseconds with their spread, plus one traced launch of each fixture read back by `lib/trace-summary.mjs`, which since 2026-09-29 also carries V8's CPU profile: `append.json`'s `profile` names the script per increment by function and by source module, loaded minus empty |
 | | `rows-proof` | the one row renderer, in both of its surfaces at once |
 | | `composer-proof` | the composer's chips, drafts, history recall and run header |
 | | `slash-proof` | the composer's slash-command catalogue; every eval is read by offset AND expression (`lib/capture-evals.mjs`), and REQ-CHAT-027's ground is the first opaque background from the input up; **red on the product** since the composer dock: the partial shade is corrected against `--rt-bg` and painted on `--rt-surface` (`docs/defects/the-slash-token-colours-clear-their-floor-on-a-ground-the-composer-no-longer-paints.md`) |
 | | `chat-controls-proof` | manual compression, the transcript clear, the prompt-file commands |
-| | `palette-proof` | one action vocabulary reaching the screen three ways |
+| | `palette-proof` | one action vocabulary reaching the screen three ways. ADR-0048's **host-input** reading (`os-input.ps1`: a real Win32 click and keystrokes, and `IsWindowEnabled`) runs on `win32` only. Elsewhere `results.json` → `modality.hostInput` states it not applicable and why, and the application's own `isEnabled` reading is still asserted (`docs/defects/fixed/palette-proof-reads-the-win32-host-input-on-every-platform.md`) |
 | | `notice-proof` | the notice store and its chain (ADR-0049) |
 | | `library-proof` | the Library shell and its Prompts tab |
 | | `mission-proof` | the Mission view, the per-agent inspector, the persona windows |
 | | `git-proof` | the Git view and the worktrees |
-| | `terminal-proof` | the terminal grid, the pop-out window, the transcript preview (ADR-0047) |
+| | `terminal-proof` | the terminal grid, the pop-out window, the transcript preview (ADR-0047). Its live section spells the size probe, the motion command and the flood in the shell its harness reports (REQ-TOOLS-104). Before 2026-09-28 they were PowerShell everywhere, and off Windows four checks measured nothing (`docs/defects/fixed/terminal-proofs-live-section-drives-a-posix-shell-with-powershell.md`) |
 | | `improvements-proof` | the reviewed-improvement lifecycle end to end |
 | | `retrospective-proof` | the retrospective pass, driven from its surfaces against the built app (PD-LIBRARY-002) |
 | | `theme-proof` | the themes and scales, rendered — plus two counterfactuals that must stay red |
@@ -231,6 +231,7 @@ neither path depends on what the other did.
 | `sign-in` | Settings → Models → Add endpoint, filled and pressed in the product's dialog | the credential file, the snapshot's authenticated record, the catalogue, the bootstrapped `agents.yaml`, no credential in any log |
 | `ask` | one real run: read `src/todos.js`, answer | the leased bearer, a request to the endpoint, a completed session, settled tool rows, usage figures, an answer naming the real exports |
 | `edit` | one real run: implement `REQ-103`, then run the suite in the terminal | `clearCompleted` exported and tested, the terminal tool used, the session's tool-call total agreeing with the ring across every agent (`REQ-MONITOR-102`), `git diff` non-empty, and **`node --test` run again by the script itself** — the agent's own report is never the evidence |
+| `resume` | one real delegating run, paused through the composer's Pause while a child runs and continued through its Continue (`PD-ORCH-005`) | the paused composer drew its children `paused` with the Continue action's count; the timeline's `iteration_paused` by `pause` and `iteration_resumed` for the same iteration; every child paused by the pause resumed under its own task id; each one's `agent_messages` continue across the pause, and its next request carried what it recorded last; the iteration closed `succeeded`, the session completed, and **both notes it asked for are read back from disk** |
 | `requirements` | the board: `REQ-104` selected, the move control pressed, the release confirmed, the run watched to review and its decision taken | the card's own trail `backlog → running → review → done`, exactly one release and an accept in the delivery history, the run record carrying its session identifier and the permissions it was granted (`REQ-TRACE-464/472`), real usage from the endpoint, the run confined to a worktree of its own, `completedCount` exported and tested **inside that worktree**, and **`node --test` run there by the script itself** |
 | `shell` | a relaunch with no prompt | Overview painted from the store: the sessions the runs left, the repository card's branch |
 | `frictions` | one real run engineered to trip the inducible autopsy frictions, read back from the store | first-use `write_file` with no operation repair, SIGINT delivered with no platform refusal — **red by design until the fixes land**; the exit-trace friction is recorded but not inducible on demand, and the stall-abort one moved to `faults` |
@@ -289,7 +290,10 @@ second completion" is a reproduction, "some completion" is a coincidence.
 
 **Both were executed against a real endpoint on 2026-09-22 and both passed on the product's side**
 (`docs/architecture/first-executions.md`; pack `.live-run/runs/2026-09-22T09-05-35-955Z`). The ladder made five
-calls against two refusals and completed; the stalled stream was noticed by the **idle bound at 120.5 s**,
+calls against two refusals and completed *(falsified 2026-09-29: the two refusals were retried by the model client's
+dispatch layer — REQ-CONFIG-086's `num_retries`, default 5 — before the ladder saw them, and the ladder was never
+reached; the owner ruled that order as the specification's, OQ-110, R-067, so `faults-ladder` shows that a run survives
+the refusals and not that the ladder handled them)*; the stalled stream was noticed by the **idle bound at 120.5 s**,
 classified `transient_llm_error`, retried at 121.5 s and finished — the first live evidence that the
 eighty-second defect's repair holds.
 
@@ -353,7 +357,12 @@ reached the model. One shape did not reach its question: the wedge **soft-paused
 **The `failed-word` guard has not run against a real endpoint**: it was written on 2026-09-27, after that run,
 and the next live run of `terminal` is its first.
 
-**`duress` has not been executed.** It owes its row in `docs/architecture/first-executions.md`.
+~~**`duress` has not been executed.** It owes its row in `docs/architecture/first-executions.md`.~~ **`duress` was
+executed against a real endpoint on 2026-09-29** (pack `.live-run/runs/2026-09-29T03-06-14-929Z`; its row is in
+`docs/architecture/first-executions.md`): eight children commissioned, 309 tool calls, and two checks failed. The deadline
+check is genuine — 2,406 s of 2,400 s, about 98 % of it the endpoint generating — and the "failed with nothing to say"
+check is the harness's false positive on a child cut off with a continuation offer. What the run let through is recorded
+as notes in `docs/defects/` carrying "Live-run finding: D…" and "H-…" lines.
 
 **The traffic is recorded through a loopback proxy**, so the sandbox's `base_url` is the proxy and the endpoint
 is one hop further on. Two consequences worth knowing before reading a pack: a `model request POST` line in

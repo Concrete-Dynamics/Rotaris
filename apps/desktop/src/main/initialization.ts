@@ -402,7 +402,7 @@ export class InitializationCoordinator {
     const e = this.current();
     if (!e) return { ok: false, reason: 'no workspace is open' };
     // REQ-WORKSPACE-083: the prompt a skip answers is a product of the open's resolution, and the same resolution starts
-    // the background tasks. The window's mount read can open the dialog before main's 800 ms slot (OQ-118), so a skip
+    // the background tasks. The window's mount read can open the dialog before main's 800 ms slot (OQ-122), so a skip
     // answered in that interval performs the open's one automatic resolution first (REQ-WORKSPACE-102; the window is
     // plainly accepting input, since it answered) and is recorded against what that resolution left. Without it the
     // skip wrote `code-intelligence-setup` as skipped before it had started, and the resolution then started nothing

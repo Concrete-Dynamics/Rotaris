@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { errorObservation, observation, type ToolExecutor } from './types.js';
+import { errorObservation, INTERRUPTED_FAILURE_KIND, observation, type ToolExecutor } from './types.js';
 
 /**
  * REQ-TOOLS-152/153/155/156: the three delegation tools over a port the engine fills. What the caller
@@ -8,12 +8,13 @@ import { errorObservation, observation, type ToolExecutor } from './types.js';
  * `wait_for_tasks` with the returned id.
  */
 export interface DelegationPort {
-  delegate(parentId: string, req: { persona: string; taskName: string; task: string; dependsOn: readonly string[]; inheritedContext: readonly string[]; category: string; runInBackground: boolean; attachArtifacts: readonly string[]; writeScope: readonly string[]; continuationOf?: string | undefined }): Promise<
+  delegate(parentId: string, req: { persona: string; taskName: string; task: string; dependsOn: readonly string[]; inheritedContext: readonly string[]; category: string; runInBackground: boolean; attachArtifacts: readonly string[]; writeScope: readonly string[]; continuationOf?: string | undefined; suppressAutoContext?: boolean | undefined }): Promise<
     | { status: 'queued' | 'waiting_on_dependencies' | 'waiting_on_model_slot'; canonicalName: string; taskId: string; message: string; attachments?: { attached: number; unresolved: readonly string[] } | undefined }
     | { status: 'rejected'; canonicalName: string; message: string }
   >;
   backgroundOutput(parentId: string, taskId: string, detail: 'summary' | 'verbatim'): { status: 'ok' | 'still_running' | 'not_found'; state: string; text: string };
-  waitForTasks(parentId: string, taskIds: readonly string[]): Promise<{ immediate: boolean; requested: number; text: string } | { refused: string }>;
+  /** PD-ORCH-005: `interrupted` when the run came to rest while the caller waited — the tasks waited on were paused with it. */
+  waitForTasks(parentId: string, taskIds: readonly string[]): Promise<{ immediate: boolean; requested: number; text: string } | { refused: string } | { interrupted: string }>;
 }
 
 const delegateSchema = z.object({
@@ -45,7 +46,7 @@ export function delegateTool(port: DelegationPort, parentId: string): ToolExecut
     schema: delegateSchema,
     label: (a) => `delegate ${a.persona}: ${a.task_name}`,
     execute: async (a) => {
-      const r = await port.delegate(parentId, { persona: a.persona, taskName: a.task_name, task: a.task, dependsOn: a.depends_on, inheritedContext: a.inherited_context, category: a.category ?? '', runInBackground: a.run_in_background, attachArtifacts: a.attach_artifacts, writeScope: a.write_scope, ...(a.continuation_of === undefined ? {} : { continuationOf: a.continuation_of }) });
+      const r = await port.delegate(parentId, { persona: a.persona, taskName: a.task_name, task: a.task, dependsOn: a.depends_on, inheritedContext: a.inherited_context, category: a.category ?? '', runInBackground: a.run_in_background, attachArtifacts: a.attach_artifacts, writeScope: a.write_scope, ...(a.continuation_of === undefined ? {} : { continuationOf: a.continuation_of }), ...(a.suppress_auto_context ? { suppressAutoContext: true } : {}) });
       if (r.status === 'rejected') return errorObservation(renderDelegateObservation(r.canonicalName, 'rejected', r.message, null));
       // REQ-LIBRARY-098 (Part Y): the attachments are injected as the child's `PRIOR AGENT CONTEXT (FULL)` block; what
       // the store could not resolve is reported HERE, to the caller, rather than only inside the child's own block.
@@ -60,7 +61,10 @@ export function delegateTool(port: DelegationPort, parentId: string): ToolExecut
       if (!a.run_in_background) {
         // REQ-TOOLS-153: the same mechanism as wait_for_tasks, over exactly this one task.
         const w = await port.waitForTasks(parentId, [r.taskId]);
-        text += `\n\n${'refused' in w ? w.refused : w.text}`;
+        // PD-ORCH-005: a wait cut short by the run coming to rest still delegated — the child exists and is paused with
+        // the run — so the call reports the task id and the interrupted wait, and is NOT marked interrupted: an agent told
+        // "not re-run" would delegate the same work twice.
+        text += `\n\n${'refused' in w ? w.refused : 'interrupted' in w ? w.interrupted : w.text}`;
       }
       return observation(text);
     },
@@ -95,6 +99,8 @@ export function waitForTasksTool(port: DelegationPort, parentId: string): ToolEx
     execute: async (a) => {
       const r = await port.waitForTasks(parentId, a.task_ids);
       if ('refused' in r) return errorObservation(r.refused);
+      // PD-ORCH-005: the run came to rest while this call waited; the wait is interrupted and never re-run.
+      if ('interrupted' in r) return errorObservation(r.interrupted, { failureKind: INTERRUPTED_FAILURE_KIND });
       return observation(r.text);
     },
   };

@@ -116,6 +116,6 @@ had failed, and twice on merged `main` at `1f3bad9` — each releasing the follo
 **`transcript-proof` as a whole is still red, and further on.** It reaches REQ-CHAT-055's append comparison
 now, which the group-expansion red had been hiding, and fails it: a median of 83.9 ms at 1,200 rows against
 36.8 ms on an empty transcript. That is not one of this note's three reds and is not repaired here — it is
-recorded as `docs/defects/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md`.
+recorded as `docs/defects/fixed/appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md`.
 `pnpm check` is green in the branch but for `terminal.test.ts`'s real `git diff` end-to-end, which is its
 own open note and red on `main` before this change.

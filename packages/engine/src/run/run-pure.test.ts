@@ -67,6 +67,20 @@ describe('engine/run — the closed vocabularies and their total mappings', () =
     expect(summarise({ stopReason: 'agent_session_aborted', completed: 0, abandoned: 1, lastFailure: 'boom' })).toMatchObject({ status: 'failed', severity: 'error', message: expect.stringContaining('boom') });
     expect(summarise({ stopReason: 'tasks_complete', completed: 1, abandoned: 1, lastFailure: null })).toMatchObject({ status: 'completed', severity: 'warning' });
   });
+  /*
+   * REQ-ORCH-082 rule 1 (the repair of `a-paused-runs-notice-says-a-person-stopped-it.md`, R-067): a pause, a stop and
+   * the explicit cancel all record `user_cancelled` (PD-ORCH-005 clause 21), so the one message they share conveys that
+   * a person brought the run to rest and names none of those rests — it said "a person stopped it", which a paused
+   * session's notice then contradicted beside its own "Run paused" row. It bakes in no persisted status either: the
+   * token is this summary's own (REQ-SESSION-074), whatever status the rest persists.
+   */
+  it('REQ-ORCH-082 rule 1: every rest a person asked for gets one message, which names no pause, stop or cancel', () => {
+    const rest = summarise({ stopReason: 'user_cancelled', completed: 0, abandoned: 0, lastFailure: null });
+    expect(rest).toEqual({ status: 'paused', severity: 'warning', message: "The run came to rest at the user's request." });
+    expect(rest.message).not.toMatch(/stop|paus|cancel|interrupt/i);
+    // Rule 1 reads the stop reason alone: the counts and the failure change nothing.
+    expect(summarise({ stopReason: 'user_cancelled', completed: 2, abandoned: 1, lastFailure: 'boom' })).toEqual(rest);
+  });
 });
 
 describe('engine/run — the todo in miniature (REQ-ORCH-004/067/077)', () => {

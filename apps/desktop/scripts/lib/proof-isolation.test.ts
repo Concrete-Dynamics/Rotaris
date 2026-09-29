@@ -17,7 +17,7 @@
 import { describe, expect, it } from 'vitest';
 import { posix, win32 } from 'node:path';
 import { resolveUserDirs, dataLayout } from '@rotaris/platform';
-import { configDirFor, proofIsolationEnv, scratchHomeFor, tokensDirFor, workspacesRootFor } from './harness.mjs';
+import { configDirFor, machineIdFileFor, proofIsolationEnv, scratchHomeFor, tokensDirFor, workspacesRootFor } from './harness.mjs';
 
 const PROFILE = 'D:\\repo\\.proof\\transcript-proof\\profile';
 const LOCAL = `${PROFILE}\\local`;
@@ -137,7 +137,12 @@ describe('proof isolation lands inside the scratch profile on every platform', (
       expect(tokensDirFor(LOCAL, platform)).toBe(dataLayout(dirs, platform).tokens);
       // And the configuration directory, where the discovery snapshot the live run reads back lives.
       expect(configDirFor(LOCAL, platform)).toBe(dirs.config);
+      // And the machine identifier (REQ-SESSION-046), which `sessions-proof` plants into the locks that name this machine.
+      expect(machineIdFileFor(LOCAL, platform)).toBe(dataLayout(dirs, platform).machineId);
     }
+    // The spelling `sessions-proof` used everywhere is the Windows answer only; on Linux the data directory ends in `rotaris`.
+    expect(machineIdFileFor(LOCAL, 'win32')).toBe(`${LOCAL}\\rotaris\\data\\machine-id`);
+    expect(machineIdFileFor(LOCAL, 'linux')).toBe(`${LOCAL.split(win32.sep).join(posix.sep)}/rotaris/data/rotaris/machine-id`);
     // And the answers really do differ, so the test above is not agreeing with itself.
     expect(workspacesRootFor(LOCAL, 'win32')).not.toBe(workspacesRootFor(LOCAL, 'linux'));
     expect(configDirFor(LOCAL, 'darwin')).not.toBe(configDirFor(LOCAL, 'linux'));
@@ -153,6 +158,7 @@ describe('proof isolation lands inside the scratch profile on every platform', (
     expect(configDirFor(LOCAL, 'darwin', home)).toBe('/scratch/own-home/Library/Application Support/rotaris');
     expect(workspacesRootFor(LOCAL, 'darwin', home)).toBe(dataLayout(dirs, 'darwin').workspaces);
     expect(tokensDirFor(LOCAL, 'darwin', home)).toBe(dataLayout(dirs, 'darwin').tokens);
+    expect(machineIdFileFor(LOCAL, 'darwin', home)).toBe(dataLayout(dirs, 'darwin').machineId);
     // The home is not read on the other two: their answers are rooted at `local`, as their launches are.
     expect(configDirFor(LOCAL, 'linux', home)).toBe(configDirFor(LOCAL, 'linux'));
     expect(configDirFor(LOCAL, 'win32', home)).toBe(configDirFor(LOCAL, 'win32'));

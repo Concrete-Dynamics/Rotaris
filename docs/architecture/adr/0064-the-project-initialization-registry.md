@@ -191,7 +191,7 @@ REQ-WORKSPACE-111 ("SHALL persist the listed task ids as skipped") both name tha
 REQ-WORKSPACE-083 lists and REQ-WORKSPACE-106 draws a card for. The earlier text here also said a dialog raised before
 the resolution "is not itself against a requirement". That was a reading, not a finding: REQ-WORKSPACE-083 makes the
 prompt request a product of the resolution, and REQ-WORKSPACE-141 puts the resolution in the interactive slot.
-**OQ-118** now carries the question.
+**OQ-122** now carries the question.
 
 **The repair built follows the specification's order (revised 2026-09-29).** The prompt a skip answers is a product
 of the open's resolution. So a skip that arrives before the open's one automatic resolution performs that resolution
@@ -224,7 +224,7 @@ recorded no decision. That is against REQ-WORKSPACE-103 ("nothing renders their 
 command's reply, so the repair is in what the window draws, not in holding main's publishes. The state carries
 `backgroundRun` beside the report, and REQ-WORKSPACE-105's nine values are unchanged. The dialog draws that run only
 once Initialize is pressed (REQ-WORKSPACE-110's flip). A background run neither withdraws the setup prompt nor lifts the
-gate (`setupPromptDue`, **OQ-119**). `init-proof` now reads the dialog before its Escape, and no assertion changed.
+gate (`setupPromptDue`, **OQ-123**). `init-proof` now reads the dialog before its Escape, and no assertion changed.
 **Measured** as root under Xvfb on Linux, Node 24, on 2026-09-29, after one `pnpm build` at `19aef49`:
 `init-proof --skip-build` passed six runs in a row (175, 175, 172, 172, 173 and 173 s), all five scenarios. At the end
 of the runs, another agent's Electron processes on the host numbered 0, 6, 9, 9, 16 and 16. The runs took three orders.
@@ -245,13 +245,13 @@ which on a resolved open is a view recomputed through the run host's `setup.stat
 inside that read was recorded completed, and the skip then **moved** it into `skipped` (`recordPatch` moves an id
 between the lists). The verifier reproduced it with the coordinator's harness. That is against REQ-WORKSPACE-086 ("every
 given **pending** task id") and REQ-WORKSPACE-084 (a success "is recorded as completed"). **The repair:** a skip after
-the open's resolution awaits that resolution and reads nothing more. A skip before it still performs it (OQ-118). After
+the open's resolution awaits that resolution and reads nothing more. A skip before it still performs it (OQ-122). After
 the last await, in one turn, the skip leaves out an id the live run is attempting and an id already recorded
 completed. A run clears `attempting` only after its outcome is in the state, so the two cannot disagree. An id no longer
 applicable is not dropped: that would need the read the repair removes, and the view shows no inapplicable id either
 way. Two cases in `initialization.test.ts` fail on the code before the repair. The second also fails with the first
 change alone, so it pins the completed filter. REQ-WORKSPACE-105's "any run" reading in `packages/config/src/init/sets.ts`
-(`promptDue`, reached only by its own test) was retired, so `setupPromptDue` is the one reading (OQ-119). **Measured** as
+(`promptDue`, reached only by its own test) was retired, so `setupPromptDue` is the one reading (OQ-123). **Measured** as
 root under Xvfb on Linux, Node 24, after one `pnpm build`: `init-proof --skip-build` passed three runs in a row (173 s,
 173 s and 172 s), all five scenarios. At the end of run 3, another agent's Electron processes numbered 11; there were
 none before that. In run 1 the dialog was read first. The resolution and the background start followed, and then

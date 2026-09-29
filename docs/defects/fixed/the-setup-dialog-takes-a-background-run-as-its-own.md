@@ -16,7 +16,7 @@ under Xvfb, Node 24, `--skip-build`, at `0551f33`, with another agent's Electron
 PASS, PASS, red, red, PASS, PASS, so the proof was never green three times in a row.
 
 1. **The skip's own resolution (new with `10fb898`).** A skip that arrives before the open's resolution now performs that
-   resolution first (OQ-118). The resolution starts the background run and publishes `running: true` while the skip is
+   resolution first (OQ-122). The resolution starts the background run and publishes `running: true` while the skip is
    still in flight. The dialog stays mounted until `onSkip` answers, so it redraws as running under the user's own
    Escape. Run 3: Escape at .321, `running code-intelligence-setup … (background)` at .329, the proof's dialog probe at
    .353 reading `{headline: 'Set up this project?', intro: null, word: 'Running', send: false}`, then `skipped
@@ -47,7 +47,7 @@ order only as "not shown" on Windows. Order 2 was reproduced red here, on Linux.
   prompt and a live background run coexist. The window read "a run is in progress" (REQ-WORKSPACE-105) as withdrawing
   the prompt for the background run too. That lifted the composer gate of REQ-WORKSPACE-112 while the consent task was
   unanswered, and made the dialog's opening depend on when the mount read landed. Which run REQ-WORKSPACE-105's "no run
-  is in progress" means is the next open question on this branch, OQ-119.
+  is in progress" means is the next open question on this branch, OQ-123.
 
 ## Relevant files
 
@@ -77,7 +77,7 @@ order only as "not shown" on Windows. Order 2 was reproduced red here, on Linux.
   live, and a failed background run stays on its banner.
 - `setupPromptDue` is now the one reading of "the prompt is due", used by the window's auto-open and by the composer
   gate (`apps/desktop/src/renderer/main.tsx`). A background run neither withdraws the prompt nor lifts the gate. The
-  reading is **OQ-119**, raised.
+  reading is **OQ-123**, raised.
 - `init-proof`'s scenario 3 reads the dialog before its Escape: the reading marks the document and the key waits for
   the mark. No assertion changed. The AGENTS.md row no longer claims scenario 3 held in both orders.
 - The fix is in what the window draws, not in holding main's publishes during a skip, because a push can reach the

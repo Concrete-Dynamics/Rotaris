@@ -4,7 +4,7 @@ import { toIsoUtc, type Clocks } from '@rotaris/kernel';
 import { presetRank, resolvePreset, type ApprovalPayload, type PermissionPreset, type ToolStatus } from '@rotaris/contracts';
 import {
   askQuestionsTool, buildPolicy, directWorkBundle, fetchTool, FileToolState, findShell, Gate, gitReadTool, globTool, grepTool, haetEditTool, haetReadTool, nodePtyFactory, PendingApprovals, PendingQuestions, PolicyContext, readFileTool, realPathOf,
-  resolveToolSet, selectRequestedMode, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, withheldUnderPlanGate, writeFileTool, type ConfinementPort, type GateSink, type PolicyRead, type PresenterPort, type ToolExecutor,
+  resolveToolSet, selectRequestedMode, TERMINAL_DEFAULTS, TerminalManager, terminalTool, TodoList, todoTool, withheldUnderPlanGate, writeFileTool, type BackgroundAttribution, type BackgroundSession, type ConfinementPort, type GateSink, type PolicyRead, type PresenterPort, type ToolExecutor,
 } from '@rotaris/agent-tools';
 import { BUILT_IN_PERSONAS, type ModeChange, type PersonaResolver, type PortToolCall, type PortToolResult, type RoleName, type SessionWriter, type ToolPort, type ToolPortContext } from '@rotaris/engine';
 import { CODE_INTELLIGENCE_MEMORY_GATE } from '@rotaris/config';
@@ -30,28 +30,44 @@ export function fileAppender(file: string): (line: string) => void {
   };
 }
 
-/** ADR-0019: the run host's side of the presenter channel — post a present-request, await main's `approval.shown`. */
+/**
+ * ADR-0019: the run host's side of the presenter channel. It posts a present-request and awaits main's `approval.shown`.
+ * Main must acknowledge within `shownBoundMs`, either by showing the dialog or, when a dialog is already open in its
+ * window, with `approval.queued` (REQ-TOOLS-063: shown one at a time, the next as soon as the open one closes). A queued
+ * request is then awaited without a bound, because a person's reading of the open dialog is not a presenter fault. The
+ * gate's own wait ends it if it times out or is cancelled while queued, and `close` releases it.
+ */
 export class RunHostPresenter implements PresenterPort {
-  private readonly waiters = new Map<string, (r: { ok: true } | { ok: false; error: string }) => void>();
+  private readonly waiters = new Map<string, { readonly settle: (r: { ok: true } | { ok: false; error: string }) => void; readonly bound: { cancel(): void } }>();
   constructor(private readonly deps: { readonly post: (payload: ApprovalPayload) => void; readonly close: (requestId: string) => void; readonly clocks: Clocks; readonly shownBoundMs: number }) {}
   present(payload: ApprovalPayload): Promise<{ ok: true } | { ok: false; error: string }> {
     return new Promise((resolve) => {
-      const h = this.deps.clocks.timers.after(this.deps.shownBoundMs as never, () => {
+      const bound = this.deps.clocks.timers.after(this.deps.shownBoundMs as never, () => {
         this.waiters.delete(payload.request_id);
         resolve({ ok: false, error: `main did not confirm the dialog within ${this.deps.shownBoundMs} ms` });
       });
-      this.waiters.set(payload.request_id, (r) => { h.cancel(); resolve(r); });
+      this.waiters.set(payload.request_id, { settle: (r) => { bound.cancel(); resolve(r); }, bound });
       this.deps.post(payload);
     });
+  }
+  /** REQ-TOOLS-063: main queued the request behind its open dialog; the bound no longer applies. */
+  queued(requestId: string): boolean {
+    const w = this.waiters.get(requestId);
+    if (!w) return false;
+    w.bound.cancel();
+    return true;
   }
   shown(requestId: string, ok: boolean, error?: string): boolean {
     const w = this.waiters.get(requestId);
     if (!w) return false;
     this.waiters.delete(requestId);
-    w(ok ? { ok: true } : { ok: false, error: error ?? 'the dialog could not be shown' });
+    w.settle(ok ? { ok: true } : { ok: false, error: error ?? 'the dialog could not be shown' });
     return true;
   }
   close(requestId: string): void {
+    // A request closed while still queued is never shown; its waiter is released so nothing is left behind.
+    const w = this.waiters.get(requestId);
+    if (w) { this.waiters.delete(requestId); w.settle({ ok: false, error: 'the request was closed before it was shown' }); }
     this.deps.close(requestId);
   }
 }
@@ -89,22 +105,55 @@ export async function terminalManagerFromHost(clocks: Clocks, warn: (m: string) 
   return new TerminalManager({ factory: await nodePtyFactory(), backend, clocks, config: { ...TERMINAL_DEFAULTS, commandTimeoutS: shellCommandTimeoutS }, env, warn });
 }
 
-/** The sink the gate writes through: every unit lands in the session writer's transactions. */
-function writerSink(writer: SessionWriter, sessionId: string, clocks: Clocks, warn: (m: string) => void): GateSink {
-  return {
-    decision: (e) => { const r = writer.recordDecision({ timestamp: toIsoUtc(clocks.wall.instant()), session_id: sessionId, ...e }); return r.ok ? r.value : null; },
-    approvalRequested: (p) => { writer.recordEvent('approval.requested', p); },
-    pendingChanged: (pending) => { writer.save(writer.currentStatus, { pending_approvals: JSON.stringify(pending) }); },
-    issue: (i) => { writer.recordIssue(i); },
-    timeline: (name, actor, message, metadata) => { writer.appendTimeline(name, actor, message, metadata); },
-    toolOpen: (o) => { const r = writer.openToolCall(o); return r.ok ? r.value : null; },
-    toolSettle: (ordinal, o, s) => { writer.settleToolCall(ordinal, o, s); },
+/**
+ * The sink the gate writes through: every unit lands in the session writer's transactions — until `close`.
+ *
+ * REQ-SESSION-094: the writer outlives the run (a continue in this process writes through the same one), so a call the
+ * stop's grace detached, returning after its run ended, would write its settle, `tool.finish` and issues into the
+ * finished session, or into a later run of it. `close` settles each call still open, as failed with the engine's
+ * statement, before the run's terminal pair, and drops every write after it. The repair of
+ * `a-detached-call-still-writes-through-its-tool-gate.md`.
+ */
+function writerSink(writer: SessionWriter, sessionId: string, clocks: Clocks, warn: (m: string) => void): { readonly sink: GateSink; readonly close: (cutOff: string) => void; readonly closed: () => boolean } {
+  let closed = false;
+  const open = new Map<number, { readonly call: Parameters<GateSink['toolOpen']>[0]; readonly started: number }>();
+  const sink: GateSink = {
+    decision: (e) => { if (closed) return null; const r = writer.recordDecision({ timestamp: toIsoUtc(clocks.wall.instant()), session_id: sessionId, ...e }); return r.ok ? r.value : null; },
+    approvalRequested: (p) => { if (!closed) writer.recordEvent('approval.requested', p); },
+    pendingChanged: (pending) => { if (!closed) writer.save(writer.currentStatus, { pending_approvals: JSON.stringify(pending) }); },
+    issue: (i) => { if (!closed) writer.recordIssue(i); },
+    timeline: (name, actor, message, metadata) => { if (!closed) writer.appendTimeline(name, actor, message, metadata); },
+    toolOpen: (o) => {
+      if (closed) return null;
+      const r = writer.openToolCall(o);
+      if (!r.ok) return null;
+      open.set(r.value, { call: o, started: clocks.monotonic.now() });
+      return r.value;
+    },
+    toolSettle: (ordinal, o, s) => { if (closed) return; open.delete(ordinal); writer.settleToolCall(ordinal, o, s); },
     warn,
   };
+  const close = (cutOff: string): void => {
+    if (closed) return;
+    closed = true;
+    for (const [ordinal, { call, started }] of open) writer.settleToolCall(ordinal, call, { status: 'failed', elapsed_ms: clocks.monotonic.now() - started, is_error: true, result: cutOff });
+    open.clear();
+  };
+  return { sink, close, closed: () => closed };
+}
+
+/**
+ * PD-ORCH-005 clause 10: each background session an agent starts is that agent's (its task id), recorded when it
+ * starts and when it ends by itself — its own exit, its timeout, or the agent's kill. An end a rest records first is
+ * kept: the record takes one end.
+ */
+function backgroundAttribution(writer: SessionWriter, sessionId: string, taskId: string): BackgroundAttribution {
+  const record = (s: BackgroundSession): void => { writer.recordAgentTerminal({ terminal_id: s.id, task_id: taskId, command: s.command, started_at: s.startedAt, state: s.status, exit_code: s.exitCode, output_tail: s.tail() }); };
+  return { owner: { sessionId, taskId }, onStarted: record, onEnded: record };
 }
 
 /** The executors this build registers (decision 3 of the plan, plus `fetch` since Part N); the registry removes any other declared name (REQ-TOOLS-004). */
-function executorsFor(root: string, deps: ToolPortDeps, runtime: RuntimeFromConfiguration, todoExecutor: ToolExecutor): Map<string, ToolExecutor> {
+function executorsFor(root: string, deps: ToolPortDeps, runtime: RuntimeFromConfiguration, todoExecutor: ToolExecutor, attribution?: BackgroundAttribution): Map<string, ToolExecutor> {
   /*
    * REQ-CONFIG-468 and REQ-WORKSPACE-059: the additional read-only roots and the cataloged skill directories
    * reach the fence, which is built PER PORT from this run's configuration.
@@ -153,7 +202,7 @@ function executorsFor(root: string, deps: ToolPortDeps, runtime: RuntimeFromConf
       return { spec: { mode: c.mode, executionRoot, writableRoots: c.writableRoots, allowNetwork: c.allowNetwork }, verdict: c.verdict ?? { available: false, backend: 'unavailable', reason: '', remediation: '' } };
     },
   };
-  if (deps.terminal) list.push(terminalTool(deps.terminal, { ...TERMINAL_DEFAULTS, commandTimeoutS: runtime.shellCommandTimeoutS }, confinement) as ToolExecutor);
+  if (deps.terminal) list.push(terminalTool(deps.terminal, { ...TERMINAL_DEFAULTS, commandTimeoutS: runtime.shellCommandTimeoutS }, confinement, attribution) as ToolExecutor);
   return new Map(list.map((e) => [e.name, e]));
 }
 
@@ -209,7 +258,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   // handoff), and the production half of ADR-0021 obligation 2 stays open exactly that far.
   const shellLimits = deps.configured?.(ctx.workspaceRoot)?.cfg.runtime;
   if (deps.terminal && shellLimits) deps.terminal.setBackgroundLimits({ maxSessions: shellLimits.shell_max_background_sessions, timeoutS: shellLimits.shell_background_timeout });
-  const executors = executorsFor(root, deps, runtime, watchedTodo);
+  const executors = executorsFor(root, deps, runtime, watchedTodo, ctx.parentId === undefined ? undefined : backgroundAttribution(ctx.writer, ctx.sessionId, ctx.parentId));
   // ADR-0036: the configured persona over the built-in table; the built-in table alone when no configuration resolved.
   const resolver = deps.personas(ctx.workspaceRoot);
   const persona = resolver?.resolve(ctx.persona)?.persona ?? BUILT_IN_PERSONAS[ctx.persona as RoleName] ?? BUILT_IN_PERSONAS.orchestrator;
@@ -294,6 +343,8 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
   let mode: PermissionPreset = selectRequestedMode({ pin, override: ctx.modeOverride ?? null, runtime: ctx.requestedMode });
   const policy = new PolicyContext(buildPolicy({ preset: mode, workspaceRoot: root }));
   const approvals = new PendingApprovals(deps.clocks.timers);
+  const writes = writerSink(ctx.writer, ctx.sessionId, deps.clocks, ctx.warn);
+  const toolHooks = ctx.hooks ?? null;
   const gate = new Gate({
     sessionId: ctx.sessionId, workspaceRoot: root, policy, approvals, attended: ctx.attended, presenter: deps.presenter,
     headlessPolicy: runtime.headlessPolicy, abortHook: ctx.abortRun, approvalTimeoutMs: runtime.approvalTimeoutMs,
@@ -303,8 +354,10 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     // set lacks one) is a different object, and its session approval keeps REQ-TOOLS-024's exact match.
     publicTool: (name) => { const e = callable.get(name) ?? callable.get(name.toLowerCase()); return e !== undefined && executors.get(e.name) === e; },
     monotonic: deps.clocks.monotonic, wall: deps.clocks.wall, timers: deps.clocks.timers,
-    sink: writerSink(ctx.writer, ctx.sessionId, deps.clocks, ctx.warn), nextSequence: deps.nextSequence,
-    hooks: ctx.hooks ?? null,
+    sink: writes.sink, nextSequence: deps.nextSequence,
+    // REQ-SESSION-094: a call that returns after its run ended fires no `post_tool` hook — the run's hooks write into its
+    // session, and the run has removed its own attachment (REQ-HOOKS-087).
+    hooks: toolHooks ? { preTool: (c) => toolHooks.preTool(c), postTool: (c) => (writes.closed() ? Promise.resolve({ feedback: '' }) : toolHooks.postTool(c)) } : null,
     // REQ-ORCH-153, enforcement point 2: the authoritative one — refused whichever role issues the call and by
     // whatever route the tool reached it, including a name this port's narrowing never saw.
     planGateHeld,
@@ -367,6 +420,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
       const status: Exclude<ToolStatus, 'running'> = r.status;
       return {
         text: r.text, isError: r.isError, status, durationMs: r.durationMs, label: r.label, args: r.args,
+        ...(r.interrupted === true ? { interrupted: true } : {}),
         ...(r.observation?.diff === undefined ? {} : { diff: r.observation.diff }),
         ...(r.status === 'blocked' ? { blockedReason: r.blockedReason ?? r.decision?.reason ?? '' } : {}),
         ...(r.followUp === undefined ? {} : { followUp: r.followUp }),
@@ -375,6 +429,8 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     // REQ-MONITOR-012 / REQ-TOOLS-054/177 and REQ-CHAT-096: run stop, shutdown and host teardown release every wait
     // on a person — the approvals AND the question prompts, on the one sweep the engine already performs.
     cancelPending: () => approvals.cancelAll() + questions.cancelAll(),
+    // PD-ORCH-005 clause 9: a rest withdraws both — each waiting call settles as interrupted and never run, never denied.
+    withdrawPending: (cause) => approvals.withdrawAll(cause) + questions.withdrawAll(cause),
     setMode: (requested, _source): ModeChange => {
       const previous = mode;
       const wanted = resolvePreset(requested).preset;
@@ -396,5 +452,7 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
     answerQuestions: (requestId, answers) => questions.resolve(requestId, answers),
     cancelQuestions: (requestId) => questions.cancel(requestId),
     pendingQuestions: () => questions.pending(),
+    // REQ-SESSION-094: the run has ended; what this port's gate still has open settles now, and nothing more is written.
+    close: (cutOff) => writes.close(cutOff),
   };
 }

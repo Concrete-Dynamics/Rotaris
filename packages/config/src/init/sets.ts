@@ -78,7 +78,7 @@ export function viewOf(state: InitializationState, sets: TaskSets, running: bool
 
 /*
  * REQ-WORKSPACE-105's "the setup prompt SHALL be due exactly when …" is read in one place, `setupPromptDue` in
- * `packages/ui/src/ProjectSetupDialog.tsx`, because which run "no run is in progress" means is OQ-119 and the reading
+ * `packages/ui/src/ProjectSetupDialog.tsx`, because which run "no run is in progress" means is OQ-123 and the reading
  * built needs the published `backgroundRun` beside the nine values. The "any run" reading that stood here was retired
  * with it, so the codebase holds one.
  */

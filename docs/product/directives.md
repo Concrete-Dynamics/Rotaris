@@ -157,7 +157,9 @@ of REQ-SESSION-136, which this directive does not require and does not forbid.
 
 ### PD-CHAT-001 — the composer's selector chips open their alternatives in a press-revealed popover
 
-*Revision 3 (2026-09-18, [R-041](requests.md#r-041)) — **the compact strip**, below.
+*Revision 4 (2026-09-28, [R-064](requests.md#r-064)) — **the notices row and the paused continues**: two sentences of
+"The strip" are replaced and a paragraph is added; the owner's ruling on OQ-98.
+Revision 3 (2026-09-18, [R-041](requests.md#r-041)) — **the compact strip**, below.
 Revision 2 (2026-09-18, [R-040](requests.md#r-040)) — the docked strip — is quoted where it is
 replaced, never deleted. A changed directive takes a revision and never a new number
 ([`README.md`](README.md)).*
@@ -188,11 +190,24 @@ without a visible label is a control without a name.
 
 **The strip.** The composer's field and its controls SHALL share ONE outer contour — the textarea
 above, a 34 px strip below, a single `surface` border and the large radius around both. The strip
-SHALL carry every control the composer draws: the persona selector, the model selector, the
+SHALL carry every input control the composer draws: the persona selector, the model selector, the
 reasoning-effort, run-start-mode and permission-mode value chips, the attach, stash, steer and
-pause actions, the token estimate, and the send pill. No control SHALL stand on a second chip row
-outside the dock, and no explanatory sentence SHALL be drawn as visible text — REQ-CHAT-007's
-two-channel rule (tooltip plus accessible description) carries what the strip does not show.
+pause actions, the token estimate, and the send pill, or on a paused session the two continues that
+take its place. A notice and the action that belongs to it — the plan gate's hint, the pause's
+statement, the count of agents a continue resumes and "Continue without them" — SHALL stand in the
+notices row below the dock; no other control stands outside the dock, and the strip draws no
+explanatory sentence as visible text — REQ-CHAT-007's two-channel rule (tooltip plus accessible
+description) carries what the strip does not show (revision 4).
+
+> Revision 3 said, and no longer governs: "The strip SHALL carry every control the composer draws: … and the send pill.
+> No control SHALL stand on a second chip row outside the dock, and no explanatory sentence SHALL be drawn as visible
+> text". The Continue action's count and decline (PD-ORCH-005 clause 6) are a notice's line and its action, and in the
+> strip they wrapped it to three lines at the product's default window (OQ-98).
+
+**The paused continues (revision 4).** On a paused session the send pill's place is taken by two continues, which carry
+short labels at every density, as the pill does: `Continue`, named `Continue run`, and `Send`, named `Continue with a
+message`. Each states its full name as its accessible name and its tooltip. `Send` takes its word from the send pill it
+stands in for.
 
 Each strip control SHALL present as an icon-led control — the icon, the current value in the mono
 face, a press affordance — whose alternatives open in the SAME press-revealed panel the chip's
@@ -239,11 +254,27 @@ the warning confirmation dialog REQ-CHAT-009 fixes, with Cancel holding initial 
 
 *Raised by the owner, 2026-09-13; logged as [R-010](requests.md#r-010). **Revised** at the owner's
 request, 2026-09-18; logged as [R-040](requests.md#r-040). **Revised again** at the owner's request,
-2026-09-18; logged as [R-041](requests.md#r-041).*
+2026-09-18; logged as [R-041](requests.md#r-041). Revision 4 logged as [R-064](requests.md#r-064).*
+
+> **First execution of revision 4, 2026-09-28, ruled by [R-064](requests.md#r-064) and built with `PD-ORCH-005` revision 4
+> under [R-065](requests.md#r-065):** the revision was built as written. The notices row already held the plan gate's
+> hint, the pause's statement, the Continue action's count and "Continue without them"; the build added the tests that
+> pin each there, and the paused strip's second continue now reads `Send`, named `Continue with a message`. The text met
+> the code in two places, recorded in [OQ-103](../architecture/open-questions.md) and [OQ-108](../architecture/open-questions.md):
+> - on a session a crash left, the two continues take the send pill's place as on a paused one;
+> - three controls stand outside the dock and outside the notices row, and are read as outside this sentence: REQ-CHAT-021's
+>   command banner, the refusal line with its recovery action, and REQ-CHAT-169's attachment list.
+>
+> **What was measured.** `continue-action.test.ts`; in the built app, the paused strip as one band
+> with `Continue` and `Send`, and the count and the decline in the notices row, on a paused and a crash-left session.
+> The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 <a id="pd-chat-002"></a>
 
 ### PD-CHAT-002 — structured questions present an auto-opened, docked all-in-one form and a rendered transcript summary
+
+*Revision 2 (2026-09-28, [R-064](requests.md#r-064)) — **a prompt the application's quit dismisses**, the last sentence
+of the second paragraph; the owner's ruling with PD-ORCH-005's OQ-96.*
 
 When an agent invokes `ask_questions`, the pending prompt SHALL NOT require clicking a transcript
 trailer row or opening a detached modal dialog. Instead, the interactive question prompt SHALL
@@ -256,7 +287,13 @@ options are present), and a freeform textarea editor (when `allow_freeform` is t
 is selected). The Submit control SHALL appear at the bottom of the form and SHALL remain disabled
 until every step holds an answer. Activating Submit SHALL deliver every step's answer in a single
 payload to the waiting tool call. A Cancel affordance SHALL be present, and pressing Escape or
-dismissing the prompt SHALL cancel the questions and immediately release the waiting tool call.
+dismissing the prompt SHALL cancel the questions and immediately release the waiting tool call —
+except a dismissal the application's quit causes, which SHALL cancel nothing: the quit withdraws the
+questions under `PD-ORCH-005` clause 9, and a withdrawn question is never an answer (revision 2).
+
+> Revision 1 said, and no longer governs: "pressing Escape or dismissing the prompt SHALL cancel the questions and
+> immediately release the waiting tool call." A quit dismissed the prompt as its window unloaded, and the questions
+> were recorded as cancelled by the user ahead of the quit's withdrawal.
 
 A settled `ask_questions` tool row in the transcript history SHALL expand into a rendered read-only
 summary card displaying each step's title and the user's selected option or freeform response (or
@@ -279,7 +316,17 @@ scrollable all-step form.
 > **Narrows:** REQ-CHAT-101, REQ-CHAT-103
 > **Extends:** REQ-CHAT-061, REQ-CHAT-097, REQ-CHAT-100, REQ-CHAT-102
 
-*Raised by the owner, 2026-09-13; logged as [R-011](requests.md#r-011).*
+*Raised by the owner, 2026-09-13; logged as [R-011](requests.md#r-011). Revision 2 logged as [R-064](requests.md#r-064).*
+
+> **First execution of revision 2, 2026-09-28, ruled by [R-064](requests.md#r-064) and built with `PD-ORCH-005` revision 4
+> under [R-065](requests.md#r-065):** the sentence was already built when the owner ruled it; main drops the dock's
+> cancellation while the application quits. The build re-cited that guard to this revision, and found one case beside
+> it: a question pending in a plan cycle when the quit lands was cancelled by the run. A stop or a quit during a plan
+> cycle now withdraws it ([OQ-108](../architecture/open-questions.md)).
+>
+> **What was measured.** `session.test.ts` and `plan-gate.test.ts`, each red when its limb is reverted. **What was not
+> measured.** No built-app quit with a question open was driven for this revision; phase 7 of revisions 2 and 3 drove
+> one. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 <a id="pd-chat-003"></a>
 
@@ -777,6 +824,9 @@ requirement a mechanism contradicts is named by the directive or it is an ungove
 
 ### PD-ORCH-003 — an approval releases the plan gate for the session, not only for the run
 
+*Revision 2 (2026-09-28, [R-064](requests.md#r-064)) — **a resumed iteration and the gate**, a paragraph added after
+the rule; the owner's ruling on OQ-97's third question. Nothing is replaced.*
+
 **The rule.** An approval taken under `REQ-ORCH-153` SHALL release execution for the remainder of the run
 that received it **and for every later run of the same session**, until the gate is re-armed. A run started
 in a session that holds an approved release SHALL NOT be held at the gate, whatever the run-start mode says.
@@ -793,6 +843,13 @@ setting keeps its value and its persistence under `REQ-ORCH-152`, and no answer 
 
 A surface that offers the run-start mode for a session holding a release SHALL state that the session is
 released, so the control never reads as promising a gate that will not open.
+
+**A resumed iteration and the gate (revision 2).** A continue that resumes an iteration a rest left open (`PD-ORCH-005`
+clause 4) SHALL run that iteration without holding it at the gate, whatever the run-start mode and whether or not the
+session holds a release, since it is work already under way. When the gate would hold that run, because the session
+holds no release and the mode is `plan` or the release was re-armed, it SHALL hold before the first new iteration the
+run begins. The build of PD-ORCH-005 held neither the resumed iteration nor the new ones after it (OQ-97). The owner
+ruled that re-arming asks for a plan before new work, and the resumed iteration is not new work.
 
 **Why, and what it costs.** The unit a person plans is the **piece of work**, and a session is this
 product's name for that. Approval already installs the run's execution grants, so the transition from
@@ -841,7 +898,7 @@ precedence stays unambiguous.
 
 > **Narrows:** REQ-ORCH-152
 
-*Raised by the owner, 2026-09-17; logged as [R-035](requests.md#r-035).*
+*Raised by the owner, 2026-09-17; logged as [R-035](requests.md#r-035). Revision 2 logged as [R-064](requests.md#r-064).*
 
 **First execution, 2026-09-17 — the mechanism held, and the proof that measured it did not.**
 `pnpm plan-gate-proof` gained two launches the day the directive was written and ran them against the built
@@ -868,9 +925,30 @@ as [`a-chip-option-announces-its-label-and-hint-as-one-word.md`](../defects/fixe
 and deliberately not repaired here. The row is in
 [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
+> **First execution of revision 2, 2026-09-28, ruled by [R-064](requests.md#r-064) and built with `PD-ORCH-005` revision 4
+> under [R-065](requests.md#r-065):** the rule was built as written. A run that resumes an open iteration runs it unheld;
+> when the gate would hold the run, it parks before the first new iteration, and its plan cycle is told the pending
+> tasks and what became of the continue's message. Building it found every approved prompt worked twice, because a
+> plan decision's relaunch appended the gated prompt as a second task
+> ([`a-plan-decision-appends-the-gated-prompt-as-a-second-task.md`](../defects/fixed/a-plan-decision-appends-the-gated-prompt-as-a-second-task.md),
+> repaired: the relaunch appends none). The text met the code in these places, each recorded in [OQ-104](../architecture/open-questions.md):
+> - an iteration a crash left open runs unheld once the crash is recorded, as a rest's does;
+> - the message limit, checked as the resumed iteration closes, wins over the hold;
+> - the held plan cycle is sent the handoff the continue built;
+> - no surface re-arms the gate on a paused session, since the run-start control is disabled there (REQ-CHAT-006).
+>
+> **What was measured.** `plan-gate-resume.test.ts` and `plan-text.test.ts`, each limb red when reverted. In the built
+> app, a plan-mode session paused mid-iteration, re-armed by command and continued: the resumed iteration ran unheld,
+> and the gate held before the next one.
+>
+> **What was not measured.** No live run was made. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
 <a id="pd-monitor-001"></a>
 
 ### PD-MONITOR-001 — a cost the provider reported is carried and shown under its own qualifier
+
+*Revision 3 (2026-09-29, [R-067](requests.md#r-067)) — **the floor**: ESC-42's ruling carried into the rendering of a
+figure with no currency, below. The label table is unchanged.*
 
 *Revision 2 (2026-09-23, [R-049](requests.md#r-049)) — **configured rates price a request the provider did
 not**, below. Revision 1 (2026-09-16, [R-026](requests.md#r-026)) is quoted where it is replaced, never
@@ -911,9 +989,20 @@ The qualifier is recorded with the total, so a label read back later is the labe
 > undecided (OQ-21, ADR-0031). Both are now decided: prices are decimal strings, and multiplying a decimal
 > by a whole token count is exact in `money.ts`'s representation with no library.
 
-A figure whose currency the provider does not name SHALL be rendered as the amount alone, under the
-rounding of `REQ-PROVIDER-121` — half-up, two decimal places, four below one hundredth — and SHALL NOT
-be given a currency symbol the product chose for it.
+A figure whose currency the provider does not name SHALL be rendered as the amount alone, under
+`REQ-PROVIDER-121`'s rule — half-up, two decimal places, four below one hundredth, and the floor `< 0.0001` for an
+amount greater than zero that would otherwise read as zero — and SHALL NOT be given a currency symbol the product
+chose for it (revision 3). The floor fills a label's `<amount>` as any rendered figure does, so the table above is
+unchanged: a run whose priced requests came to more than zero and less than 0.00005 reads `< 0.0001 at configured
+rates`, `< 0.0001 reported by the provider`, or `at least < 0.0001; some requests have no price`, and each of those is
+true. The figure recorded with the qualifier is the exact one; the floor is rendering only.
+
+> **Revision 2 said, and no longer governs:** "A figure whose currency the provider does not name SHALL be rendered as
+> the amount alone, under the rounding of `REQ-PROVIDER-121` — half-up, two decimal places, four below one hundredth —
+> and SHALL NOT be given a currency symbol the product chose for it." Under that rounding a run priced at more than
+> zero and less than 0.00005 read `0.0000 at configured rates`: a figure that says it was priced and reads as nothing,
+> which `REQ-SHELL-045` says never happens. ESC-42 was ruled option (b) on 2026-09-29, and `REQ-PROVIDER-121` now
+> carries the floor this sentence restates.
 
 **Why.** Observed live 2026-09-16, run `a26918e8` (logged as [R-026](requests.md#r-026)): a whole run
 against a metered provider, `cost` = `"0"`, the label reading *"price not established"*. That is
@@ -985,7 +1074,7 @@ adding to it.
 > **Narrows:** REQ-MONITOR-166, REQ-PROVIDER-121
 
 *Raised by the owner, 2026-09-16; logged as [R-026](requests.md#r-026). Revised 2026-09-23; logged as
-[R-049](requests.md#r-049).*
+[R-049](requests.md#r-049). Revision 3, 2026-09-29, logged as [R-067](requests.md#r-067) with the ruling of ESC-42.*
 
 > **First execution, 2026-09-16, the day it was raised:** it found the reading half harder than the
 > asking half, and the corpus friendlier than expected. The SDK's usage mapping keeps the token fields
@@ -1647,6 +1736,9 @@ waiting for them; answering or writing anything to the session ends that.
 
 ### PD-ORCH-004 — a child cut off while making progress hands its work back to the parent
 
+*Revision 4 (2026-09-28, [R-064](requests.md#r-064)) — **how a later root learns of an offer**, a paragraph added
+after "Naming the continuation"; the owner's ruling on OQ-99. Nothing is replaced.*
+
 *Revision 3 (2026-09-27, [R-059](requests.md#r-059)) — **an offer outlives its run**, the last sentence of "Naming the
 continuation", ruled with PD-ORCH-005. Revision 2 (2026-09-27, [R-058](requests.md#r-058)) — **how the parent names the
 child it continues**, which rules OQ-66. Revision 1 (2026-09-23, [R-048](requests.md#r-048)) is otherwise unchanged.*
@@ -1680,6 +1772,16 @@ is, and nothing of the continued child is injected into it. **An offer outlives 
 open until it is taken up once — by the agent that delegated the child while that agent runs, or, in a later iteration
 or a later run of the session, by that iteration's root agent.
 
+**How a later root learns of an offer (revision 4).** Every root that may take up an open offer SHALL be told of it,
+once:
+- the root of a new run, in the continuation handoff's progress context;
+- a resumed root, at the continue that resumes it, unless its conversation already holds the offer;
+- the root of each later iteration of the same run, in that iteration's first message.
+
+Each list names the open offers' children by canonical name and task id, the newest ten, and says when earlier ones
+were left out. Revision 3 gave a later root the right to an offer and no way to learn that one existed. The build told
+a new run's root and a resumed root, and the owner ruled that a later iteration of the same run is told as well.
+
 > Revision 2 said, and no longer governs: "Which agent may take up an offer once the iteration that raised it has
 > ended — after a stop, a pause or an interruption — is for the run-continuation policy R-058 opened; until that is
 > ruled, only the agent that delegated the child can, within the same iteration."
@@ -1702,7 +1804,7 @@ so a child that genuinely loops is still stopped at the same point.
 > **Narrows:** REQ-ORCH-088
 > **Extends:** REQ-TOOLS-152 (revision 2)
 
-*Raised by the owner, 2026-09-23; logged as [R-048](requests.md#r-048). Revision 2 logged as [R-058](requests.md#r-058), revision 3 as [R-059](requests.md#r-059).*
+*Raised by the owner, 2026-09-23; logged as [R-048](requests.md#r-048). Revision 2 logged as [R-058](requests.md#r-058), revision 3 as [R-059](requests.md#r-059), revision 4 as [R-064](requests.md#r-064).*
 
 > **First execution, 2026-09-27, built under [R-057](requests.md#r-057):** the mechanism was built as written, and the
 > text met the code in four places. **(1) The stall window had no reader.** `runtime.child_stall_timeout` and a role's
@@ -1734,7 +1836,9 @@ so a child that genuinely loops is still stopped at the same point.
 > REQ-TOOLS-155's ownership test, and every iteration mints a new root task. So a continuation can be taken up only
 > within the iteration whose child was cut off: a later iteration, or the next run after a stop, is refused with
 > "names no child task of yours", and the offer's text does not say so (OQ-66); this limit is read from `run/run.ts`
-> and `owns()`, not exercised by a test. The continuation's payload is
+> and `owns()`, not exercised by a test. *Revision 3 lifted this limit on 2026-09-27: an earlier iteration's offer, and
+> a resumed iteration's own from an earlier run, are the later root's to take up (`continuationRefusalFor`, OQ-99), and
+> the handoff lists the open offers.* The continuation's payload is
 > assembled as any child's is; nothing of the timed-out child is injected into it. What was measured: unit and scripted
 > end-to-end tests only. These cover the rule at a call completed exactly at the window's start and one millisecond
 > before it, a 60 s window set through the run's configuration, the path list's order, de-duplication and failed
@@ -1751,6 +1855,87 @@ so a child that genuinely loops is still stopped at the same point.
 > launch the app as root and made no assertion
 > ([`resilience-proof-cannot-launch-the-app-as-root.md`](../defects/fixed/resilience-proof-cannot-launch-the-app-as-root.md)).
 > No live run was made, so the offer's wording has not met a real model. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **First execution of revision 3, 2026-09-27, ruled by [R-059](requests.md#r-059) and built with PD-ORCH-005 under [R-063](requests.md#r-063):** the rule was
+> built as written, and the text met the code in three places. OQ-99 records each reading.
+>
+> **(1) Who "that iteration's root" is for an offer.** A resumed iteration keeps its number across runs, so "an earlier
+> iteration" alone would have given its root none of the offers its own children left in a run before. The build's
+> first cut read it that way, and the review found it: the words "or a later run of the session" had become redundant.
+> The root of a later run now takes up an offer from any earlier iteration, or from its own iteration if the child ended
+> in an earlier run, whoever delegated it. Within an iteration, only the delegating agent takes it up, while that agent
+> runs. The refusal names both routes.
+>
+> **(2) How a later root learns an offer exists.** The text gives the right and no channel. A new iteration's root reads
+> the open offers, the newest ten, in the handoff's progress context. A resumed root is told, at the continue, the
+> offers its conversation does not already hold. An offer counts as held when it came in a child's report or in a list
+> the root was told, and a passing mention of the task id does not count. Three reviews shaped that rule: the second
+> made the list told at every continue; the third found a root that had answered taking a step to read it each time;
+> the fourth found a mention counted as the offer. Each falsified reading is kept in OQ-99.
+>
+> **(3) REQ-SESSION-115's "latest orchestrator artifact".** The built-in orchestrator publishes no artifact of its own.
+> The handoff therefore states the latest artifact of any kind that nothing supersedes, id first, cut to 6,000
+> characters without splitting a character. This replaces the placeholder that said none was recorded, repairing
+> [`the-continuation-payload-says-no-artifact-is-recorded.md`](../defects/fixed/the-continuation-payload-says-no-artifact-is-recorded.md).
+> Two limits stand, each recorded:
+> - a report re-materialised under a reused canonical name keeps its first creation time;
+> - a document edited after publishing is stated as published.
+>
+> **What was measured.** Unit and scripted end-to-end tests in `children.test.ts`, `session-resume.test.ts` and
+> `turn.test.ts`:
+> - the earlier-iteration offer, the earlier-run offer of the resumed iteration's own child, and a grandchild's;
+> - the refusals;
+> - the list's cap, and the told-once rule;
+> - the artifact's choice, cut and rendering.
+>
+> Each limb turned a test red when reverted.
+>
+> **What was not measured.** No built-app run took up an offer, because the scripted client cannot time a child out
+> while it is making progress. No live run was made. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **First execution of revision 4, 2026-09-28, ruled by [R-064](requests.md#r-064) and built with `PD-ORCH-005` revision 4
+> under [R-065](requests.md#r-065):** the rule was built as written. Every execution root's first message names the open
+> offers that message does not already hold (`offersForFirstMessage`), and a plan cycle is told none. The list and its
+> reader moved to `packages/engine/src/run/offers.ts`, so the run tells a later iteration's root without importing the
+> session manager, and REQ-SESSION-194's cut is one function, `run/cut.ts`. The text met the code in one place, recorded
+> in [OQ-107](../architecture/open-questions.md): "told of it, once" is read once per root, and the offers a handoff already covered, named or elided,
+> count as told.
+>
+> **What was measured.** `offers.test.ts`, through the run, each limb red when reverted.
+>
+> **What was not measured.** No built-app run: the scripted client cannot cut a child off while it is making progress
+> and then begin a second iteration. No live run was made. The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **First live execution, 2026-09-29 — the duress scenario of `pnpm live-run`, under [R-066](requests.md#r-066), recorded
+> under [R-067](requests.md#r-067):** the built product at `fa377e6` (revisions 1 to 3 built; revision 4's `offers.ts` not
+> yet on that commit) against the owner's self-hosted endpoint (`qwen3.8-flash-next`, unmetered), pack
+> `.live-run/runs/2026-09-29T03-06-14-929Z/`, session `379f1490`. It is the first time a real model was cut off while
+> making progress, and every part of the directive held end to end:
+> - **The progress rule.** Child `d` (`bg_b8da141a`, `docs-writer`) reached its 1,200 s `child_timeout` at 03:34:25 with
+>   61 tool calls, the last of them inside the final stall window; its report says "Cut off while making progress: this child completed a tool
+>   call within the final 90s before its 1200s limit expired." It ended `failed` with the timeout error "Child timed out
+>   after 1200s", as REQ-ORCH-088 has it.
+> - **The changed paths, in order.** `cut_off.changed_paths` is `docs/api.md`, `docs/overview.md`, in the order first
+>   changed, and matches the report's deterministic `edited_files`.
+> - **The offer's text.** "Continuation offer: the remaining work may be delegated to a new child as a continuation of this
+>   one — call delegate with continuation_of: "bg_b8da141a". A piece of work is continued once; a continuation is not
+>   offered one of its own."
+> - **The continuation.** The orchestrator took the offer at tool call #242, 03:35:55, 22 s after `d` settled: `d2`
+>   (`bg_7d79e866`) carries `continuation_of` = `bg_b8da141a` in its record, was offered nothing of its own, and ended
+>   `succeeded` at 03:44:30 (515 s), finishing the reconciliation `d` had begun.
+>
+> **What it found beside the directive.** Nothing in the text was wrong. Two costs showed, each recorded elsewhere:
+> revision 2's "nothing of the continued child is injected" had `d2` make 34 reads before its first edit (6 min 40 s of
+> its 515 s), re-deriving what `d` knew — put to the owner as [OQ-114](../architecture/open-questions.md); and the first thing `d2` read was
+> `d`'s report artifact, whose summary denied the edits `d` had made, because the summariser read only the transcript's
+> head (`a-long-childs-report-denies-the-edits-it-made.md`, ruled as OQ-111). The duress run's own check "no child ended
+> failed with nothing to say" flagged `d`, a false positive of the harness
+> (`the-duress-silent-child-check-flags-a-cut-off-child.md`).
+>
+> **What was not measured.** An offer taken up by a later iteration's or a later run's root (revisions 3 and 4): this one
+> was taken within its iteration by the agent that delegated `d`. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
@@ -1814,7 +1999,13 @@ are not recorded, and cannot be recovered afterwards.
 > launch's own driving wrote. At `warning` a clean launch and quit writes nothing, its `quit:` lines included, which
 > is what a threshold above `info` costs: 24 launches driven to a last-window close at the default level wrote no
 > `warning` or `error` line and quit in 40–69 ms, and one ended by the driver's `app.exit` at `warning` wrote nothing
-> at all. The review's run of the same close found the first version of the unanswered-`shutdown` line firing on
+> at all. *Falsified 2026-09-29 for the immediate exit (the sentence above is kept as written): in the live run of that day
+> 7 of 9 launches ended through the capture seam's immediate exit (`exitCleanly`, `endRunHost` with a grace of 0) wrote
+> `error   CHILD PROCESS GONE (Utility rotaris-run-host: killed, exit 15)` after "run host exited (0)" and "quit: exiting
+> with status 0" — main kills the run host itself and logs Electron's report of the kill at `error`. One such exit writing
+> nothing was the race going the other way. Recorded as
+> [`an-orderly-quit-logs-the-run-host-gone-at-error.md`](../defects/an-orderly-quit-logs-the-run-host-gone-at-error.md)
+> (live-run finding L13); the last-window close's 24 clean quits are not contradicted.* The review's run of the same close found the first version of the unanswered-`shutdown` line firing on
 > orderly quits (3 in 26, each waiting out the 30 s bound), because a child's answer can lose the race with its own
 > exit; the quit now races each `shutdown` against the child's exit, recorded as
 > [`a-childs-shutdown-ack-can-lose-the-race-with-its-exit.md`](../defects/fixed/a-childs-shutdown-ack-can-lose-the-race-with-its-exit.md).
@@ -1852,6 +2043,11 @@ are not recorded, and cannot be recovered afterwards.
 
 ### PD-TOOLS-006 — a delegated child may declare a write scope that its siblings may not write into
 
+*Revision 3 (2026-09-29, [R-067](requests.md#r-067)) — **what else `delegate` refuses, and what `session_id` names**,
+a section added after "The disclosure"; the owner's rulings on OQ-112 and on OQ-66's open part. Nothing is replaced. This
+directive is the one that narrows REQ-TOOLS-152, and the symbol generator admits one narrowing directive per requirement,
+so a narrowing of `delegate`'s fields lands here whatever it is about.*
+
 *Revision 2 (2026-09-27, [R-059](requests.md#r-059)) — **a resumed child re-claims its scope**, in "What is unchanged",
 ruled with PD-ORCH-005. Revision 1 (2026-09-23, [R-049](requests.md#r-049)) is otherwise unchanged.*
 
@@ -1880,6 +2076,23 @@ prefix of REQ-TOOLS-154: the child's own `write_scope` when it has one, and the 
 other child of the run that is live when this child is accepted, each under that child's canonical name.
 The block is omitted when there is nothing to list.
 
+**What else `delegate` refuses, and what `session_id` names (revision 3).** Two further refusals SHALL stand beside
+REQ-TOOLS-152's own. Each is reported with status `rejected`, before any record is created and with no task id, and its
+reason names the cause:
+- a delegation carrying a `write_scope` to a persona that holds no file-writing tool — neither `write_file` nor
+  `haet_edit` (with its alias `haet`) — whose reason SHALL say that the persona cannot write files and, where the
+  persona catalogue shows any, name the personas that can;
+- a delegation whose `session_id` names no settled child of the calling agent.
+
+A persona's tools, for the first of these, are the ones it would be granted for the child, after REQ-TOOLS-006's
+controls.
+
+REQ-TOOLS-152's `session_id` names, by its task id, a settled child of the calling agent: a direct child, by
+REQ-TOOLS-155's ownership test, that has reached a terminal state and that its `child_timeout` did not cut off. The
+follow-up resumes that child from its record with the call's `task` as its next user message, as PD-ORCH-005 clause 22
+states. A child its `child_timeout` cut off keeps PD-ORCH-004's `continuation_of`, and a `session_id` naming one is
+refused with a reason that names that field.
+
 **What is unchanged.** A child delegated without a `write_scope` claims nothing and is refused only where a
 live sibling's claim reaches. A `write_scope` never limits the child that declared it: that child may write
 outside its own patterns wherever no other claim reaches. A claim belongs to one run and lapses with its child, so a
@@ -1906,10 +2119,24 @@ write that crosses a live claim is stopped with the name of its owner. What it c
 - **The parent is refused too.** A parent that wants to write into a live child's scope waits for the child
   or writes elsewhere.
 
+**Why revision 3, and what it costs.** In the duress live run of 2026-09-29 the orchestrator delegated a documentation
+file to `codebase-analyst`, a persona that holds no file-writing tool, with that file as its `write_scope`. The scope was
+accepted, the child ran for 2 min 47 s and could only answer that it had no file-writing tool, its report still read
+`succeeded`, and a second child was commissioned for the same file. A refusal at the call moves that discovery to the
+moment the parent can still choose. And `session_id` was accepted and dropped
+([`delegate-drops-session-id-and-suppress-auto-context.md`](../defects/delegate-drops-session-id-and-suppress-auto-context.md)),
+so a caller that set it was told nothing and got a fresh child. What it costs:
+- a parent can no longer give a read-only child a scope for coordination alone;
+- a persona whose only writing tools are ones the claim does not fence — the code-intelligence server's editing tools,
+  `terminal`, MCP or plugin tools — counts as holding no file-writing tool and is refused a scope, although it can write
+  files; a scope could not have fenced those writes either ("The file tools only", above);
+- a follow-up re-sends the child's whole conversation, where a fresh child sends only its payload.
+
 > **Narrows:** REQ-TOOLS-152, REQ-TOOLS-154
 > **Extends:** REQ-ORCH-028
 
-*Raised by the owner, 2026-09-23; logged as [R-049](requests.md#r-049). Revision 2 logged as [R-059](requests.md#r-059).*
+*Raised by the owner, 2026-09-23; logged as [R-049](requests.md#r-049). Revision 2 logged as [R-059](requests.md#r-059),
+revision 3 as [R-067](requests.md#r-067).*
 
 > **First execution, 2026-09-23, the day it was ruled:** the mechanism was built as written, and one clause of
 > the disclosure proved false for one reader. The block lists "the `write_scope` of every other child of the run
@@ -1921,6 +2148,46 @@ write that crosses a live claim is stopped with the name of its owner. What it c
 > resolution**, so a write the claim refuses never costs the user an approval first. The block follows the
 > workspace-root line, which `childPayload` places after the artifact blocks rather than first, as
 > `REQ-TOOLS-154` requires; that order is recorded as a defect of its own and is not changed here. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **First execution of revision 2, 2026-09-27, ruled by [R-059](requests.md#r-059) and built with PD-ORCH-005 under [R-063](requests.md#r-063):** the rule was
+> built as written, and it found nothing the text got wrong.
+>
+> The declared scope is stored with the child's record at spawn (`children.write_scope`, store v23). When a child
+> resumes, its scope is claimed again from the moment it is accepted.
+>
+> Covering the re-claim order found one thing: the store listed children accepted in the same millisecond by their
+> random task ids. So "the child accepted first holds that path" could fall to the later child on a resume. The
+> child queries now order by insertion (`spawned_at, rowid`), and the order is pinned in `store.test.ts`.
+>
+> **What was measured.** Two scripted end-to-end cases in `children.test.ts`, each red when its limb is reverted:
+> - a resumed child's stored scope refuses a sibling's write;
+> - two children accepted in one millisecond re-claim in acceptance order.
+>
+> **What was not measured.** No built-app run declared a scope. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **First execution of revision 3's scope refusal, 2026-09-29, built under [R-067](requests.md#r-067):** the refusal
+> was built as written ([OQ-112](../architecture/open-questions.md)). `IterationChildren.delegate` refuses a
+> `write_scope` for a known persona that cannot write files, straight after the scope's own validation, with status
+> `rejected`, no record and no task id. The reason names the catalogue's writers. The phrase "after REQ-TOOLS-006's
+> controls" met one gap in the build. The per-persona `tool_restrictions` map, the fourth control, narrows no agent's
+> grant today ([`a-personas-tool-restrictions-never-narrow-its-grant`](../defects/a-personas-tool-restrictions-never-narrow-its-grant.md)).
+> The check therefore reads the two controls a child's grant does meet, `coordinator_only` and `read_only`. The
+> clause's text is not wrong; the build lacks a control it names. Two existing scripted cases had scoped a read-only
+> `codebase-analyst`, which the directive now forbids, and they scope a `docs-writer` instead. Revision 3's other
+> refusal, a `session_id` naming no settled child, is not part of this build.
+>
+> The persona checked is the one the ledger resolves, an alias included. The first build read the built-in table
+> without its aliases, so `playwright` with a scope reached the ledger and was accepted as `ui-verifier`; the branch's
+> verification found it, and the check now reads the ledger's resolution.
+>
+> **What was measured.** Scripted end-to-end cases in `children.test.ts` over the duress call's shape and over the
+> alias, each red with its check removed, and the predicate, the catalogue and the reason in `write-scope.test.ts`. Live, in the duress run of
+> session `b4a768a2`, a scope given to `verifier` was refused with the writers named. The orchestrator's next request,
+> 15 s later, delegated the task to `docs-writer`. In a second duress run built from the alias repair (session `059ae1d7`), a scope given
+> to `codebase-analyst`, the finding's own shape, and one given to `verifier` were both refused, and each task went next
+> to a writer (`docs-writer`, `tester`). No alias was delegated live. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 ---
@@ -1975,6 +2242,15 @@ builds "failed". That would be false, and it would read as a broken pipeline. Wh
 
 ### PD-ORCH-005 — a continued session resumes the agents its last run left unfinished, from their full record
 
+*Revision 5 (2026-09-29, [R-067](requests.md#r-067)) — **two rulings on what the build left open**: clause 21 (the
+status a stop persists, OQ-96) and clause 22 (a follow-up by `session_id` resumes a settled child, OQ-66's open part)
+are added, and `REQ-SESSION-186` and `REQ-SESSION-073` join the Narrows list. Nothing is replaced. The owner took both
+recommendations.*
+
+*Revision 4 (2026-09-28, [R-064](requests.md#r-064)) — **the owner's rulings on the questions the build raised**
+(OQ-94 to OQ-99): clause 1's last sentence is replaced, clauses 13 to 20 are added, and the Narrows list names the
+requirements the build departs from. Nothing else is replaced. The owner took every recommendation.*
+
 *Revision 3 (2026-09-27, [R-061](requests.md#r-061)) — **what a pause does not wait for, and what outlives it**:
 clauses 9 to 12, added; nothing earlier is replaced. The owner ruled clause 9 and delegated clauses 10 to 12.*
 
@@ -1986,8 +2262,12 @@ and the two closing paragraphs are replaced, and clauses 3 and 5 to 8 are adjust
 **(1) Every agent's conversation is recorded as it happens.** The session record SHALL keep the full conversation of
 every agent of a run — the iteration's root and every child at every depth — appended as it happens: each message sent
 to and received from the model, each tool call with its arguments, and each tool result, under the agent's task id. The
-root's task id is recorded with its iteration. This is the record a resume is made from, and the same record a
-session's transcript is drawn from.
+root's task id is recorded with its iteration. This is the record a resume is made from. The session's transcript is
+a second record of the same run, written as the run happens beside this one (revision 4).
+
+> Revision 3 said, and no longer governs, clause (1)'s last sentence: "This is the record a resume is made from, and the
+> same record a session's transcript is drawn from." The build kept the two as parallel records (OQ-95), and the owner
+> ruled that they stay so.
 
 **(2) A pause stops every agent where it stands.** An accepted whole-run pause SHALL let every in-flight tool call
 finish, within REQ-ORCH-134's deadline, and then stop every agent before its next model step: no queued child starts,
@@ -2046,12 +2326,71 @@ Paging the transcript never touches it. Clearing the transcript clears the recor
 iteration's record is kept until the iteration closes. A compression is written into the record, so a resume sends the
 compressed conversation.
 
+**(13) A paused agent presents as paused (revision 4).** An agent in the child state `paused` SHALL present in a
+presentation state of its own, `paused`, on every agent surface — the agent tree, the counters, the inspector, the
+Mission view and a persona window — and SHALL keep its last activity. A session at rest SHALL NOT settle a `paused` agent
+to the run's outcome for display; every other unfinished agent of a session at rest is settled as before.
+
+**(14) What the record keeps beside the conversation (revision 4).** Each agent's record SHALL also keep a fingerprint
+of the system instructions and the tool definitions the agent started with. A resumed agent runs with its persona's
+current instructions and tools; when they differ from the fingerprint, the run SHALL state, as a warning, which agent
+resumed under changed instructions.
+
+**(15) The stop and the explicit cancel (revision 4).** A forced stop is a stop: its agents come to rest as clause 3
+says. A stop or a quit during a plan cycle ends the cycle's agents and records no interruption, and the plan gate keeps
+its hold (clause 11). `/stop` SHALL be the stop, offered with the description "Stop the active run". Every confirmed
+"Cancel the run?" is clause 3's explicit cancel, whichever surface asks it. In each case this directive decides:
+- an iteration a pause, a stop or a quit leaves open SHALL NOT be closed; REQ-ORCH-135 governs the explicit cancel, a run
+  the product ends on its own account, and a rest that finds nothing unfinished;
+- REQ-MONITOR-130's cancelling of a run is the explicit cancel; a stop leaves its agents `paused`;
+- a pause SHALL stop every agent before its next model step, in place of REQ-SESSION-108's outer-loop boundary;
+- an approval dialog the application's quit closes SHALL answer nothing, and the quit withdraws the approval
+  (clause 9). REQ-TOOLS-063's Deny governs every other close. A question the quit dismisses is PD-CHAT-002 revision 2's.
+
+**(16) One paused child may be cancelled while its session rests (revision 4).** A `paused` child SHALL offer Cancel
+wherever a live agent offers it. Confirmed as REQ-MONITOR-128 requires, naming the child and one line per paused
+descendant, it and each paused descendant end `cancelled`, final as clause 3 says. The open iteration stays open, the
+rest of its agents resume with it, and the Continue action's count drops by as many as were cancelled.
+
+**(17) A continue's message is also a task (revision 4).** The message a continue delivers to the resumed root
+(clause 4) SHALL also be appended to the session's todo as a task. That task closes with the resumed iteration: done
+when the iteration succeeds, and left pending when it is cancelled or fails, so the next iteration takes it up.
+
+**(18) A crash offers the same choice (revision 4).** A session a crash left — `interrupted` after a repair, or in
+REQ-CHAT-008's recovery state before one — SHALL offer the Continue action and "continue without them" as a `paused`
+session does, with the same count. Either choice records the crash first, as any continue does (clause 8).
+
+**(19) The Continue action's count (revision 4).** The count clause 6 requires includes the root, which resumes with
+the paused agents. "Continue without them" is offered beside the Continue action alone; a continue by message resumes.
+
+**(20) The handoff's artifact (revision 4).** The artifact REQ-SESSION-115's handoff carries is the latest artifact the
+iteration's root published that nothing supersedes and, when the root published none, the latest artifact of any kind
+that nothing supersedes.
+
+**(21) A stop persists `paused` (revision 5).** A stop the user made — graceful and clean, or forced — SHALL persist the
+session status `paused`, as a pause does (clause 2), and SHALL NOT persist `stopped`. REQ-SESSION-186's stop control, its
+two activations and the outcome it presents are unchanged. `stopped` remains the status of a run that exhausted a
+configured budget (REQ-MONITOR-029), which REQ-SESSION-073's vocabulary keeps. A stop and a pause record the same stop
+reason, `user_cancelled` (REQ-ORCH-069, REQ-MONITOR-301's closed set having no member for a pause), so a stop is told
+apart from a pause only by the interruption it records on its agents and its iteration (`stop`, clause 3) and by the
+timeline entries that name it.
+
+**(22) A follow-up resumes a settled child (revision 5).** A `delegate` call whose `session_id` names a settled child of
+the calling agent — a direct child that has reached a terminal state and that its `child_timeout` did not cut off —
+SHALL resume that child from its record: its identity, as clause 4 restores it, and its conversation, with the call's
+`task` appended as its next user message. The child keeps its task id, leaves its terminal state for the state it
+resumes into, and ends and reports again as any child does. Clause 5 names what a continue resumes; a follow-up is the
+parent's own act, and clause 5 does not bar it. A child its `child_timeout` cut off is still never resumed: its route is
+PD-ORCH-004's `continuation_of`. What `session_id` names, and how a `session_id` naming no such child is refused, is
+PD-TOOLS-006 revision 3.
+
 **What is unchanged.** A continuation is still not a resume: a timed-out child is never resumed and earns no corrective
 message (REQ-NOTIFY-112). The message-limit pause and the plan gate keep their durable holds. The run host is still
 never re-forked, and a crashed session still needs repair or a continue before anything runs (ADR-0002). How a
 continuation offer outlives its run is PD-ORCH-004 revision 3; how a resumed child re-claims its write scope is
 PD-TOOLS-006 revision 2. A pause and a stop share one mechanism, so an agent paused while the application stays open
-and an agent left by a quit resume the same way.
+and an agent left by a quit resume the same way. How every later root learns of an open offer is PD-ORCH-004 revision
+4, and how the plan gate meets a resumed iteration is PD-ORCH-003 revision 2 (revision 4).
 
 **Why, and what it costs.** Every stop, pause, quit or crash ended every child, and the next run's root was told
 nothing about them and could not address them: in run `2e21e324` the user stopped a run whose children had been
@@ -2061,6 +2400,39 @@ from the conversation they record. What it costs: a table of agent conversations
 resumed agent sends its whole conversation to its model again, compressed when it no longer fits; a pause no longer lets
 children finish their turn, so a paused agent has no report until it ends; and one child state (`paused`) and one
 column (`children.interruption`) are added, with `children.write_scope` stored for PD-TOOLS-006.
+
+**Why revision 4, and what it costs.** Building revisions 2 and 3 raised six questions the text did not decide, and the
+build recorded the reading it proceeded under for each (OQ-94 to OQ-99). The owner took every recommendation. Most confirm
+the reading built and make it traceable: the requirements the build departs from are now named, so a reader of each finds
+this directive. Five change the product:
+- a paused agent reads as paused, so an agent stopped mid-task no longer looks as though it never started;
+- one paused child can be dropped while the rest resume, where the only choices were all or none;
+- a continue's message survives an iteration that ends without addressing it;
+- a crash offers the same choice as a stop;
+- the handoff prefers what the root itself published.
+
+What it costs:
+- a presentation state that every agent surface must draw;
+- a session command that works with no run behind it;
+- one task per continue by message;
+- a fingerprint beside each agent's record.
+
+Until they are built, the product behaves as the readings in OQ-94 to OQ-99 recorded.
+
+**Why revision 5, and what it costs.** The owner ruled two questions the build had left to the record ([R-067](requests.md#r-067)).
+REQ-SESSION-186 has a graceful, clean stop persist `stopped`, and REQ-SESSION-073's vocabulary glosses `stopped` with
+that stop, while clause 3 has a stop leave the state a pause leaves, and REQ-MONITOR-029 and REQ-SESSION-093 persist
+`paused`; the build persisted `paused`, and the directive now names both requirements it departs from, so a reader of
+either finds it. And REQ-TOOLS-152's `session_id` — "reuse a previous
+delegation's session for a retry or a follow-up" — had no meaning under the full record, so the field was accepted and
+dropped, and a parent with a question for a child that had finished could only start a fresh child that rediscovers
+everything. What it costs:
+- `stopped` is never persisted for a user's stop, and a stop and a pause both record the stop reason `user_cancelled`, so
+  a session tells a stop from a pause only by the interruption recorded on its agents and its iteration and by the
+  timeline;
+- a terminal child is no longer always final: REQ-MONITOR-300's table gains one exit from a terminal state, taken only by
+  a follow-up the parent asks for;
+- a follow-up sends the child's whole conversation to its model again, compressed when it no longer fits.
 
 > Revision 1 said, and no longer governs, clause (1):
 > **(1) The interruption is recorded on each unfinished child.** When a run comes to rest with children that have not
@@ -2107,10 +2479,231 @@ column (`children.interruption`) are added, with `children.write_scope` stored f
 > back-pointer is removed. It extended REQ-ORCH-053, REQ-SESSION-065 and REQ-NOTIFY-121; revision 2 narrows them,
 > because the settle no longer cancels a `paused` agent.
 
-> **Narrows:** REQ-MONITOR-256, REQ-MONITOR-123, REQ-ORCH-072, REQ-ORCH-002, REQ-ORCH-052, REQ-MONITOR-300, REQ-ORCH-053, REQ-SESSION-065, REQ-NOTIFY-121, REQ-SESSION-115, REQ-SESSION-129, REQ-SESSION-025, REQ-TOOLS-054, REQ-TOOLS-111, REQ-ORCH-134
+> **Narrows:** REQ-MONITOR-256, REQ-MONITOR-123, REQ-ORCH-072, REQ-ORCH-002, REQ-ORCH-052, REQ-MONITOR-300, REQ-ORCH-053, REQ-SESSION-065, REQ-NOTIFY-121, REQ-SESSION-115, REQ-SESSION-129, REQ-SESSION-025, REQ-TOOLS-054, REQ-TOOLS-111, REQ-ORCH-134, REQ-MONITOR-014, REQ-MONITOR-046, REQ-MONITOR-211, REQ-MONITOR-213, REQ-SESSION-078, REQ-SESSION-180, REQ-ORCH-135, REQ-MONITOR-130, REQ-SESSION-108, REQ-TOOLS-063, REQ-CHAT-029, REQ-MONITOR-063, REQ-ORCH-004, REQ-SESSION-186, REQ-SESSION-073
+> **Extends:** REQ-MONITOR-125
 
 *Raised by the owner, 2026-09-27; logged as [R-058](requests.md#r-058) and ruled as drafted, every fork as recommended,
-by [R-059](requests.md#r-059). Revision 2 logged as [R-060](requests.md#r-060), revision 3 as [R-061](requests.md#r-061).*
+by [R-059](requests.md#r-059). Revision 2 logged as [R-060](requests.md#r-060), revision 3 as [R-061](requests.md#r-061),
+revision 4 as [R-064](requests.md#r-064), revision 5 as [R-067](requests.md#r-067).*
+
+> **First execution of revisions 2 and 3, 2026-09-27, ruled by [R-060](requests.md#r-060) and
+> [R-061](requests.md#r-061) and built under [R-063](requests.md#r-063):** the mechanism was built as written, in a spike and seven phases, and each phase was
+> reviewed adversarially until no blocking or should-fix finding remained. The text met the code in these places.
+>
+> **The spike** ([`../architecture/spikes/agent-resume.md`](../architecture/spikes/agent-resume.md)) recorded one agent,
+> paused it, restored it into a new conversation and continued it. It found five things no clause states:
+> - the original request was read from the conversation's constructor only;
+> - a stop dropped the results of the calls in its step that had completed;
+> - a compression has to be written into the record as a replacement;
+> - an agent's position is its record read with the ledger, since a parent waiting on its children resumes into waiting
+>   and takes no model step;
+> - `runTurn` needed a way to continue a history with no new message.
+>
+> Each was built.
+>
+> **(1) The record.** Store v23 appends `iterations`, `agent_messages` and `agent_terminals`, and
+> `children.interruption`, `resume_state` and `write_scope`. Every agent's conversation is recorded as it changes, and a
+> compression is one replacement entry, so a resume reads from the last replacement forward. The transcript's rows are
+> written as before, and OQ-95 records how the build reads "the same record a session's transcript is drawn from".
+> Building it found that a crashed iteration's number was reused by the next run. That is
+> [`a-crashed-iteration-number-is-reused-by-the-next-run.md`](../defects/fixed/a-crashed-iteration-number-is-reused-by-the-next-run.md),
+> repaired.
+>
+> **(2) The rest (clauses 2, 3 and 8 to 11).** A pause, a stop and a quit leave every unfinished agent `paused` with its
+> interruption, and leave the iteration open. A crash is recorded from the store at the next repair or continue, and
+> never at a load.
+>
+> The text was silent in four places, and OQ-96 records each reading:
+> - a model step already streaming when the pause lands finishes, and it is the last one;
+> - a parent holding a child's unread report is unfinished;
+> - no summarising call, retry, fallback or condensation follows the rest;
+> - an execution that a stop's 30-second grace gives up on is detached.
+>
+> A paused agent presents as `queued` and is never settled for display. That departs from four requirements the
+> directive does not name, and OQ-94 records it.
+>
+> Clause 3 also repaired two defects:
+> [`a-pause-settles-children-instead-of-holding-them.md`](../defects/fixed/a-pause-settles-children-instead-of-holding-them.md)
+> and [`cancelling-one-child-does-not-stop-it.md`](../defects/fixed/cancelling-one-child-does-not-stop-it.md).
+>
+> **(3) The resume (clauses 4, 5, 7 and 10).** Every continue resumes the open iteration first. The root and each
+> paused agent carry on from their records under their identity. A call recorded as interrupted is handed back
+> "not run", or "interrupted" with whatever output it had. A continue's message is recorded as the resumed root's next
+> message at the continue. Each resumed child has a fresh `child_timeout` and re-claims its write scope in acceptance
+> order. OQ-97 records the readings: the persona a resumed root runs as, what a resumed child's count holds, and the
+> plan-decision route.
+>
+> **(4) The Continue action (clause 6).** It states the count: the root and every unfinished agent. The count is shown
+> on a paused session, on one a crash left interrupted, and on one opened in REQ-CHAT-008's recovery state. "Continue
+> without them" is offered on a paused session and is confirmed. OQ-98 records this, with two readings against
+> PD-CHAT-001 and the short label `Message`, which is put to the owner.
+>
+> **What building it found against the build's own readings.** Both were found in the built app and repaired, and the
+> falsified readings are kept beside their replacements:
+> - Every confirmed "Cancel the run?" sent the stop, so the cancel was resumable. The composer's stop was itself
+>   confirmed as a cancel. See [`every-run-cancel-surface-sends-the-stop.md`](../defects/fixed/every-run-cancel-surface-sends-the-stop.md).
+>   OQ-96 now names the surface each control belongs to.
+> - A quit with an approval open recorded the call as denied, and the agent stepped on the denial, against clause 9.
+>   REQ-TOOLS-063's "closing the window answers Deny" fired as the main window took its dialog down. A quit with a
+>   question open was recorded as cancelled, through REQ-CHAT-101's cancellation on unload. A quit Electron starts
+>   itself (SIGTERM, a logout, `app.quit()`) closed the dialog even before the window's guard. See
+>   [`a-quit-denies-the-approval-it-should-withdraw.md`](../defects/fixed/a-quit-denies-the-approval-it-should-withdraw.md).
+>   Main now tells a quit apart (`QuitState`) and sends neither answer during one. OQ-96 records the departure from
+>   REQ-TOOLS-063 and REQ-CHAT-101.
+>
+> The build repaired two further defects:
+> - [`the-continuation-payload-says-no-artifact-is-recorded.md`](../defects/fixed/the-continuation-payload-says-no-artifact-is-recorded.md),
+>   with PD-ORCH-004 revision 3;
+> - [`a-stale-settled-childs-report-is-never-an-artifact.md`](../defects/fixed/a-stale-settled-childs-report-is-never-an-artifact.md),
+>   and the decline, which had the same gap.
+>
+> Two defects were read and left unrepaired:
+> - [`a-graceful-stop-persists-paused-where-one-requirement-says-stopped.md`](../defects/fixed/a-graceful-stop-persists-paused-where-one-requirement-says-stopped.md),
+>   which is still the corpus's contradiction; *settled 2026-09-29 by revision 5's clause 21 ([R-067](requests.md#r-067))*;
+> - [`delegate-drops-session-id-and-suppress-auto-context.md`](../defects/delegate-drops-session-id-and-suppress-auto-context.md),
+>   because the resume gives `session_id` no meaning. *Revision 5's clause 22 gives it one (2026-09-29); the note stays open until
+>   it is built.*
+>
+> Other defects noticed along the way are recorded in `docs/defects/`.
+>
+> **What was measured.** Unit and scripted end-to-end tests: more than a hundred cases in 29 test files cite this
+> directive. Each phase ran a mutation pass over its new limbs, and each limb turned a test red, with the exceptions its
+> commits name:
+> - two guards removed as redundant;
+> - the tool deadline's cancel at a run's exit, which is timer hygiene;
+> - `track`'s change, which no test can observe while
+>   [`a-child-whose-execution-raises-before-its-turn-stays-running.md`](../defects/a-child-whose-execution-raises-before-its-turn-stays-running.md)
+>   stands;
+> - main's `before-quit`, which only the built app reaches.
+>
+> In the built app, driven, one session went through three rests with one child (`bg_d5cb3784`):
+> - **A pause with the child's write waiting on approval.** The approval was withdrawn by the pause, the call was
+>   recorded "not run", and the Continue action read "2 agents will resume". The continue resumed the same child, and
+>   its write asked for approval afresh.
+> - **A stop during its next model step.** The child and the iteration were paused by `stop`, and the continue resumed
+>   them.
+> - **A quit by closing the window, with the write waiting on approval again.** The approval was withdrawn by the
+>   quit, and nothing was recorded as denied. The relaunch, and then opening the session, changed no record. The
+>   continue resumed the child, whose next answer quoted the first message and the last tool result of the request it
+>   was sent. Both were written by the previous process, so the relaunched agent resumed its own conversation. The
+>   iteration then closed `succeeded`.
+>
+>
+> Three quits were driven on their own, each with a call waiting on a person: a window close with an approval open,
+> SIGTERM with an approval open, and a window close with the question dock open. Each came to rest by the quit, with
+> the approval or question withdrawn and the call recorded "not run".
+>
+> The reviews also drove the app:
+> - a crash (`kill -9`), relaunch and continue by message: the count was shown, and the agents resumed;
+> - the confirmed decline;
+> - the confirmed run cancel from the Mission view and from a persona window;
+> - the strip at seven window sizes.
+>
+> **What was not measured.**
+> - No live run was made, so a real model has not yet resumed from its record. The live run of 2026-09-29 measured
+>   one, recorded below revision 4's note.
+> - Only Linux under Xvfb was driven.
+> - The scripted model client restarts its script for every run
+>   ([`the-scripted-client-restarts-its-script-for-every-run.md`](../defects/the-scripted-client-restarts-its-script-for-every-run.md)),
+>   so a driven agent's steps after a continue are the script's first steps again. Its record is what is resumed.
+> - The driver's own quit is an immediate exit that skips the shutdown
+>   ([`the-drivers-quit-skips-the-applications-shutdown.md`](../defects/the-drivers-quit-skips-the-applications-shutdown.md));
+>   the quit above was a window close.
+>
+> The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **First execution of revision 4, 2026-09-28, ruled by [R-064](requests.md#r-064) and built under
+> [R-065](requests.md#r-065):** clauses 13 to 20 were built as written, in four lanes that ran in parallel, each on its own
+> branch and worktree and each reviewed adversarially until no blocking or should-fix finding remained. The merged build
+> was then reviewed across the lanes for fourteen rounds and driven in the built app. The text met the code in these
+> places, and each reading is an open question:
+> - **Clause 13** ([OQ-100](../architecture/open-questions.md)). `paused` is a presentation state of its own on every agent surface, drawn in the waiting
+>   colour (`--rt-wait`) with no pulse, and a paused agent keeps its task line as its activity; the Overview counts it on
+>   its own. The run-level agent presents `paused` while its session rests, and the agents a crash left present `paused`
+>   before the crash is recorded, so the tree agrees with the Continue action's count. That second reading departs from
+>   the clause's last sentence and is put to the owner.
+> - **Clause 14** ([OQ-105](../architecture/open-questions.md)). Store v24 appends `agent_fingerprints`: the SHA-256 of the system prompt and of the tool
+>   definitions each agent's first model request carried. A resume under a different pair states a
+>   `resumed_under_changed_instructions` warning issue and one transcript row naming the agent. The issue kind is coined
+>   beside REQ-ORCH-139's vocabulary, and the fingerprint covers the whole system prompt, so a changed pre-flight playbook
+>   warns too; both are put to the owner.
+> - **Clause 15** ([OQ-108](../architecture/open-questions.md)). The audit found it built, with one exception: a board run caught by the application's quit
+>   rested by `stop` ([`a-board-run-caught-by-a-quit-rests-as-a-stop.md`](../defects/fixed/a-board-run-caught-by-a-quit-rests-as-a-stop.md),
+>   repaired). A stop or a quit during a plan cycle now withdraws what waits on a person. `/stop` reads "Stop the active
+>   run".
+> - **Clause 16** ([OQ-101](../architecture/open-questions.md)). `session.control`'s `cancelAgent` ends a paused child and its paused descendants `cancelled`
+>   while no run is behind the session, under the session's lock, with the live cancel's report and artifact, and the
+>   count drops. A child a crash left is cancelled from its stored state, and the crash is left for the next repair or
+>   continue. The first cut wrote the whole crash record
+>   ([`cancelling-one-crash-left-child-records-the-whole-crash.md`](../defects/fixed/cancelling-one-crash-left-child-records-the-whole-crash.md),
+>   repaired), and wrote against a failed store
+>   ([`the-at-rest-cancel-writes-against-a-failed-store.md`](../defects/fixed/the-at-rest-cancel-writes-against-a-failed-store.md), repaired).
+> - **Clause 17** ([OQ-102](../architecture/open-questions.md)). The message is a task the resumed iteration holds: done when the iteration succeeds, pending
+>   on any other close and taken up by the next iteration. The Continue action, the decline and the message-limit
+>   resolution append no second task while the todo holds the last request unfinished. That reading reaches beyond the
+>   clause, into REQ-ORCH-004, and it repaired
+>   [`the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md`](../defects/fixed/the-continue-action-appends-the-last-prompt-again-while-its-task-is-pending.md).
+> - **Clause 18** ([OQ-103](../architecture/open-questions.md)). A session a crash left offers both continues and the decline with the same count, and each
+>   records the crash first; a session a store failure left busy is refused, since it did not crash. On a crash-left
+>   session the two continues take the send pill's place as they do on a paused one.
+> - **Clause 19** was already built; the audit added its tests.
+> - **Clause 20** ([OQ-106](../architecture/open-questions.md)). The handoff takes the latest artifact the most recent iteration's root published, known by
+>   the root's task id, and falls back to the latest of any kind.
+>
+> **What building it found in the code before it.** Each was repaired, and each note is in `docs/defects/fixed/`:
+> - a plan decision's relaunch appended the gated prompt as a second task, so every approved prompt was worked twice;
+> - a request queued behind an open approval dialog was denied unshown after ten seconds. That repair's first cut left a
+>   request queued behind a closing window to hang, which the orchestrator's own review found and repaired;
+> - the composer's Pause stayed disabled after the first pause;
+> - the status strip read "run Running" in the recovery state;
+> - a persona window at rest could keep a first view without its transcript;
+> - the Mission view offered Pause and Cancel with no run behind the session.
+>
+> The open defects noticed along the way are recorded in `docs/defects/`.
+>
+> **What was measured.** The gate went from 2418 to 2620 passing tests, with only the three known failures, and each new
+> limb turned a test red when reverted. Thirteen scenarios were driven in the built app, each as the text says:
+> - the `paused` presentation after a pause and after a stop;
+> - one paused child cancelled at rest with its paused descendant, then the rest continued;
+> - a crash-left session's presentation, and a crash-left child cancelled at rest;
+> - the paused strip's `Continue` and `Send` with the count and decline in the notices row, and `/stop`;
+> - a crash-left session in the recovery state and after a repair, "Continue without them", the Continue action, and a
+>   continue by message;
+> - a continue's message as a held task;
+> - a resume under a changed persona's instructions, with its single warning;
+> - the plan gate around a resumed iteration (`PD-ORCH-003` revision 2).
+>
+> **What was not measured.**
+> - The four repairs of the last review round were checked in the built app by the round that made them; the independent
+>   re-drive did not run, because the subagents' usage limit was reached.
+> - Persona windows cannot be addressed by the driver, so their state was read from screen captures
+>   ([`the-driver-cannot-address-persona-or-approval-windows.md`](../defects/the-driver-cannot-address-persona-or-approval-windows.md)).
+> - Clause 14's orchestrator-instructions and tool-change variants were not driven.
+> - Clause 20 is not observable with the scripted client; its evidence is the tests.
+> - No live run was made with the build, and only Linux under Xvfb was driven; the live run of 2026-09-29 follows.
+>
+> The row is in [`../architecture/first-executions.md`](../architecture/first-executions.md).
+
+> **Measured by the live run, 2026-09-29, under [R-066](requests.md#r-066):** the built product against the owner's
+> self-hosted endpoint (`qwen3.8-flash-next`, registered unmetered), in `pnpm live-run`'s throwaway workspace.
+> - Every standard scenario passed. `edit` split its work between two children writing in parallel under declared
+>   write scopes, `requirements` carried a card from release to done in a worktree of its own, and the fault ladder
+>   and the stalled stream each ended `completed`.
+> - A scenario of its own, `resume`, measured this directive against a real model:
+>   - it paused a delegating run through the composer's Pause while two children ran, and the paused composer drew
+>     both `paused` with "3 agents will resume" (clauses 6, 13 and 19);
+>   - the Continue resumed the same iteration and both children under their own task ids, each record continuing
+>     across the pause (3 entries before it, 15 and 17 after), and each child's next request carried what it had
+>     recorded last (clauses 1 to 4);
+>   - one child's first `read_file` had been cut off by the pause and recorded "not run"; resumed, the model read that
+>     result in its own record, read the file again and wrote its note (clause 4);
+>   - the iteration closed `succeeded`, and both notes were read back from disk.
+> - It found two launches that fail as root, each repaired
+>   ([`the-live-run-cannot-launch-as-root.md`](../defects/fixed/the-live-run-cannot-launch-as-root.md),
+>   [`the-code-intelligence-server-dies-when-the-app-runs-as-root.md`](../defects/fixed/the-code-intelligence-server-dies-when-the-app-runs-as-root.md)). `main` had repaired both
+>   independently (OQ-82 for the code-intelligence child), and its repairs stand.
+>
+> The evidence packs are under `.live-run/runs/`, outside the repository.
 
 ---
 

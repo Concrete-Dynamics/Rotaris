@@ -37,7 +37,7 @@ skipped: [code-intelligence-setup, verification-consent]` after it.
 Repaired 2026-09-29 under R-062. `InitializationCoordinator.skip` (`apps/desktop/src/main/initialization.ts`) now:
 
 - waits only for the open's automatic resolution when one is made or under way (`await e.automatic`), and reads
-  nothing more. It performs the resolution itself only when none has begun (OQ-118). The status round trip after the
+  nothing more. It performs the resolution itself only when none has begun (OQ-122). The status round trip after the
   resolution, and the window it opened, are gone.
 - leaves out, beside an id the live run is attempting, every id already recorded **completed** in the coordinator's
   state, and logs it. The filter runs in the same turn as the last await. A run clears `attempting` only after its

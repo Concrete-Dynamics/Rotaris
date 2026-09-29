@@ -72,10 +72,14 @@ function elements(inner: string): string[] {
 
 interface Launch { readonly file: string; readonly binary: string; readonly args: string[] | null; readonly call: string }
 
-/** Every `spawn`/`spawnSync` of the development Electron binary (`electron`) or a packaged one (`exe`). */
+/**
+ * Every `spawn`/`spawnSync`/`spawnBounded` of the development Electron binary (`electron`) or a packaged one (`exe`).
+ * `spawnBounded` (`lib/bounded-launch.mjs`) is a launch like the other two — it passes its arguments to `spawn` as
+ * given — so a script moved onto it must carry the switch there, and the scan must see it or the count drops.
+ */
 function launches(file: string, text: string): Launch[] {
   const found: Launch[] = [];
-  for (const m of text.matchAll(/\b(?:spawn|spawnSync)\(\s*(electron|exe)\s*,\s*/g)) {
+  for (const m of text.matchAll(/\b(?:spawn|spawnSync|spawnBounded)\(\s*(electron|exe)\s*,\s*/g)) {
     // The call's text up to its first `);` is enough to see an `ELECTRON_RUN_AS_NODE` option; bracket-matching the
     // whole call would have to parse the regular expressions some options hold.
     const end = text.indexOf(');', m.index!);
@@ -144,8 +148,9 @@ describe('R-062: the proof harness platform rules, kept at every script', () => 
     const found = all.flatMap((f) => launches(relative(SCRIPTS, f).split(sep).join('/'), readFileSync(f, 'utf8')));
     // The scan must be seeing the launches at all, or the next assertion is vacuous. On 2026-09-28 it sees 42 spawn
     // sites in 40 files: 41 carrying the switch (the driver's among them) and `build-hooks.cjs`'s node-mode probe.
+    // `resilience-proof`'s launch is a `spawnBounded` since the same day, and still one of the 42.
     expect(found.length).toBeGreaterThanOrEqual(42);
-    expect(found.map((l) => l.file)).toEqual(expect.arrayContaining(['lib/driver.mjs', 'traceability-proof.mjs', 'live-run.mjs']));
+    expect(found.map((l) => l.file)).toEqual(expect.arrayContaining(['lib/driver.mjs', 'traceability-proof.mjs', 'live-run.mjs', 'resilience-proof.mjs']));
     const problems = found.map((l) => [l.file, launchProblem(l)]).filter(([, p]) => p !== null);
     expect(problems).toEqual([]);
   });

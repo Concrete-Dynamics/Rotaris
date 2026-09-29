@@ -2,7 +2,7 @@
 // first on the command line it hands the process to the bundled runtime and exits before anything below is evaluated.
 import './sentinel.js';
 import type { PersonaWindows, TerminalWindows } from './windows.js'; // Part AL2: the terminal window's registry beside the persona windows'
-import { createElectronMainWindowAdapter, createElectronProjectFolderChooser, MainWindows, removeApplicationMenu } from './main-windows.js';
+import { createElectronMainWindowAdapter, createElectronProjectFolderChooser, MainWindows, removeApplicationMenu, type CloseGuard } from './main-windows.js';
 import { createNoticeStore } from './notices.js';
 import { createLibraryRevision } from './library.js';
 // The driver seam (verification only; `ROTARIS_DRIVER` names its endpoint file). Never reached by a product surface.
@@ -48,7 +48,7 @@ import { sessionCommands } from './commands/session.js';
 import { shellCommands } from './commands/shell.js';
 import { skillsCommands } from './commands/skills.js';
 import { windowCommands, windowsCommands } from './commands/windows.js';
-import { endBeforeMain, exitAfterChildWindows, RUN_HOST_END_BOUND_MS, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
+import { closeThroughGuards, dialogCloseAnswersDeny, endBeforeMain, exitAfterChildWindows, QuitState, RUN_HOST_END_BOUND_MS, shutdownAtQuit, watchChildExit, type ChildExit } from './exit.js';
 import { APP_LOG_LEVEL_VARIABLE, appLogThreshold, createAppLog, type AppLogLevel } from './app-log.js'; // PD-MONITOR-002
 import { workspaceCommands } from './commands/workspace.js';
 import { withoutRuntimeRequests } from './runtime-requests.js'; // REQ-STARTUP-160
@@ -79,13 +79,15 @@ import { refusal, type ApprovalDialogState, type CommandContext, type CommandHan
  */
 const launchArtifact = takeArtifactVariables(process.env);
 const clocks = nodeClocks();
+/** PD-ORCH-005 clause 9: what tells a surface the application's quit closed from one a person closed (`exit.ts`). */
+const quit = new QuitState();
 /**
  * Main's end waits for the run host's (`endBeforeMain`, `exit.ts`): a run host that outlives main keeps every session it
  * held refused to the next launch until its pid stops answering. Nothing to wait for until the run host is forked.
  */
 let endRunHost: () => Promise<void> = () => Promise.resolve();
 /** Every immediate exit goes through this: on Linux, `app.exit` over an open modal child segfaults (`exit.ts`). */
-const exitCleanly = (code: number): void => exitAfterChildWindows({ windows: () => BrowserWindow.getAllWindows(), exit: (c) => { void endRunHost().then(() => app.exit(c)); }, timers: clocks.timers, nextTurn: (fn) => setImmediate(fn) }, code);
+const exitCleanly = (code: number): void => { quit.exiting(); exitAfterChildWindows({ windows: () => BrowserWindow.getAllWindows(), exit: (c) => { void endRunHost().then(() => app.exit(c)); }, timers: clocks.timers, nextTurn: (fn) => setImmediate(fn) }, code); };
 const dirs = resolveUserDirs();
 const layout = dataLayout(dirs);
 mkdirSync(dirs.data, { recursive: true });
@@ -297,6 +299,10 @@ async function main(): Promise<void> {
    * the moment there are two.
    */
   let mainWindows!: MainWindows<BrowserWindow, PersonaWindows, TerminalWindows, ApprovalPayload, ApprovalDialogState>;
+  /** Each open main window's close guard, by its `webContents` id (`guardClose`, `main-windows.ts`). */
+  const closeGuards = new Map<number, CloseGuard>();
+  /** PD-ORCH-005 clause 9: whether the application is quitting (`QuitState`), over the main windows as they are now. */
+  const quitting = (): boolean => quit.quitting(mainWindows.ordered().map((m) => ({ wcId: m.wcId, destroyed: m.win.isDestroyed() })));
   /** The window a message came from, when that sender is a main window at all (a dialog or a persona window is not). */
   const windowFor = (senderId: number): MainWindowState | undefined => mainWindows?.forSender(senderId);
   /**
@@ -692,7 +698,8 @@ async function main(): Promise<void> {
       dialogPayloads.delete(dlgWcId);
       if (mainWindows.openDialog(w.wcId) === entry) mainWindows.setOpenDialog(w.wcId, null);
       // REQ-TOOLS-063: closing the window answers Deny; a request already answered or cancelled asks nothing more.
-      if (!entry.answered) void runHost.request({ kind: 'session.control', request: { op: 'answerApproval', sessionId: payload.session_id, args: { requestId: payload.request_id, option: 'deny' } } }, millis(5_000)).catch(() => undefined);
+      // PD-ORCH-005 clause 9: a dialog the application's quit closed answers nothing — the shutdown withdraws it.
+      if (dialogCloseAnswersDeny({ answered: entry.answered, quitting: quitting() })) void runHost.request({ kind: 'session.control', request: { op: 'answerApproval', sessionId: payload.session_id, args: { requestId: payload.request_id, option: 'deny' } } }, millis(5_000)).catch(() => undefined);
       clocks.timers.after(millis(50), () => { void presentNext(w); });
     });
     try {
@@ -855,7 +862,12 @@ async function main(): Promise<void> {
       // presents it. With no main window at all there is nobody to ask, which REQ-TOOLS-064 answers through
       // the headless policy — main says "not shown" and decides nothing itself (ADR-0019).
       const owner = ownerOf(e.payload.session_id);
-      if (owner) { mainWindows.enqueueApproval(owner.wcId, e.payload); void presentNext(owner); }
+      // REQ-TOOLS-063: a request that waits behind the open dialog is acknowledged as queued, so the run host does not
+      // read the wait as a presenter that failed to show it.
+      if (owner) {
+        if (mainWindows.enqueueApproval(owner.wcId, e.payload)) void runHost.request({ kind: 'approval.queued', requestId: e.payload.request_id }, millis(5_000)).catch(() => undefined);
+        void presentNext(owner);
+      }
       else void runHost.request({ kind: 'approval.shown', requestId: e.payload.request_id, ok: false, error: 'no main window is open' }, millis(5_000)).catch(() => undefined);
     }
     else if (e.kind === 'approval.close') {
@@ -1028,7 +1040,7 @@ async function main(): Promise<void> {
     broadcast: (payload) => { for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(CHANNEL.requirementsChanged, payload); },
     log,
   });
-  app.on('window-all-closed', () => { void requirementsRuns.cancelAll('the last window closed'); });
+  app.on('window-all-closed', () => { void requirementsRuns.quitAll('the last window closed'); });
 
   // A3: hoisted out of the builder below — `runCommand` calls this for whichever window opened the persona
   // window, and it closes over nothing per window (the window it measures is its argument).
@@ -1084,6 +1096,8 @@ async function main(): Promise<void> {
       void runHost.request({ kind: 'presenter.revoke', windowId: String(wcId) }, millis(5_000)).catch(() => undefined);
     },
     forgetTerminalFrames: (wcId) => terminalFrames.forget(wcId),
+    closeConfirmed: (wcId) => { quit.closeConfirmed(wcId); },
+    closeGuard: (wcId, guard) => { if (guard) closeGuards.set(wcId, guard); else closeGuards.delete(wcId); },
     log,
   });
 
@@ -1119,6 +1133,13 @@ async function main(): Promise<void> {
       else raiseNotice('error', title);
     },
     log,
+    // REQ-TOOLS-063/064: a request queued behind a closing window's dialog is never shown there, and the run host no
+    // longer bounds its wait, so main says so — REQ-TOOLS-058's presenter-error denial — rather than leave it to hang.
+    // PD-ORCH-005 clause 9: a quit's closing windows answer nothing; the run host's shutdown withdraws the request.
+    unshownApprovals: (approvals) => {
+      if (quitting()) return;
+      for (const approval of approvals) void runHost.request({ kind: 'approval.shown', requestId: approval.request_id, ok: false, error: 'its main window closed before it was shown' }, millis(5_000)).catch(() => undefined);
+    },
     // REQ-STARTUP-043/114: the update check, initiated from the post-show activation of every main window and nowhere else.
     postShowActivation: (window) => { void updater.activate({ windowId: window.wcId }); },
   });
@@ -1407,7 +1428,7 @@ async function main(): Promise<void> {
     initialization, libraryRevision, requirementsRuns, improvementUndo, improvementRuns,
     enqueueImprovement: (job) => improvementCoordinator.enqueue(job),
     chooseSave, chooseExportPath, chooseDirectory, chooseSkillFile,
-    openHookReview, restoreFlow, checkpointOp,
+    openHookReview, restoreFlow, checkpointOp, quitting,
   };
   /**
    * Every command this product answers, filed under its kind. `CommandHandlers` is total over
@@ -1548,6 +1569,30 @@ async function main(): Promise<void> {
     themeName: () => currentTheme.name,
     resultSeen: () => resultSeen,
     exit: (code) => { exitCleanly(code); },
+  });
+
+  /*
+   * PD-ORCH-005 clause 9: a quit Electron starts on its own account — SIGTERM, the desktop's logout, `app.quit()` —
+   * closes every window at once, an approval dialog before its main window's close guard has answered, and the dialog's
+   * close would be sent as the person's Deny. Such a quit is turned into the main windows' guarded close, all or none
+   * (`closeThroughGuards`): every guard is asked, every close is confirmed, and only then does any window close, so a
+   * dialog only ever closes once every main window's close is confirmed. The last close reaches `window-all-closed`,
+   * which shuts the children down and quits; that quit finds no main window open and goes ahead. A guard that refuses
+   * keeps every window, its dialogs and the application, as a refused close always did.
+   */
+  let guardsAsked = false;
+  app.on('before-quit', (event) => {
+    const open = mainWindows.ordered().filter((m) => !m.win.isDestroyed() && !quit.isClosing(m.wcId));
+    if (open.length === 0) return;
+    event.preventDefault();
+    if (guardsAsked) return;
+    guardsAsked = true;
+    log(`quit: closing ${open.length} main window(s) through their close guards first (PD-ORCH-005 clause 9)`);
+    const guards = open.map((m) => closeGuards.get(m.wcId) ?? { ask: async () => true, confirm: () => quit.closeConfirmed(m.wcId), close: () => m.win.close() });
+    void closeThroughGuards(guards).then((closing) => {
+      guardsAsked = false;
+      if (!closing) log('quit: a close guard refused; the application stays');
+    });
   });
 
   app.on('window-all-closed', () => {

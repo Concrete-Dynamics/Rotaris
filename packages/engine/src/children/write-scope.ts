@@ -1,5 +1,7 @@
 import { posix } from 'node:path';
 import { globToRegExp } from '@rotaris/kernel';
+import { BUILT_IN_PERSONAS, type Persona, type PersonaResolver } from './personas.js';
+import { isFileWritingTool } from './report.js';
 
 /**
  * PD-TOOLS-006: a delegated child's declared write scope, and the claims live scopes make on workspace paths.
@@ -21,6 +23,44 @@ export type ScopeVerdict =
   | { readonly ok: false; readonly reason: string };
 
 const ABSOLUTE = /^(?:[\\/]|[A-Za-z]:)/;
+
+/**
+ * PD-TOOLS-006 revision 3 (OQ-112): whether a persona holds a file-writing tool — `write_file`, or `haet_edit` with its
+ * alias `haet` — among the tools it would be granted for a child, after REQ-TOOLS-006's controls. `coordinator_only`
+ * removes all three, and `read_only` reduces the set to REQ-TOOLS-007's read-only class, which holds none of them; the
+ * run-scoped allow-list binds the entry agent alone, never a child. A persona whose only writing tools are ones the
+ * claim does not fence (`terminal`, MCP or plugin tools) counts as holding none, as the directive states.
+ *
+ * `coordinator_only` is applied here unconditionally. The run host's tool port (`apps/desktop/src/run-host/tools.ts`)
+ * applies it only where delegation is available and the session is not in direct work; a delegated child always has
+ * delegation, so the two agree today. A change to either condition changes this check with it.
+ */
+export function writesFiles(persona: Pick<Persona, 'tools' | 'coordinatorOnly' | 'readOnly'>): boolean {
+  return !persona.coordinatorOnly && !persona.readOnly && persona.tools.some(isFileWritingTool);
+}
+
+/**
+ * PD-TOOLS-006 revision 3: the personas of the catalogue that can write files, in its order — the known roles the ledger's
+ * unknown-persona refusal lists, or the built-in table where no configuration resolves them.
+ */
+export function fileWriters(personas: PersonaResolver | undefined): readonly string[] {
+  const catalogue = personas ? personas.knownRoles().map((n) => personas.resolve(n)?.persona) : Object.values(BUILT_IN_PERSONAS);
+  return catalogue.filter((p): p is Persona => p !== undefined && writesFiles(p)).map((p) => p.name);
+}
+
+/**
+ * PD-TOOLS-006 revision 3 (OQ-112): the reason a delegation carrying a `write_scope` to `persona`, which cannot write
+ * files, is refused — naming the personas of the catalogue that can, where there are any.
+ *
+ * The reason it was not refused, kept beside its replacement: the scope was validated for its patterns alone. In the
+ * duress live run of 2026-09-29 `codebase-analyst` was accepted with `write_scope: ["docs/overview.md"]`, claimed the
+ * file for 2 min 47 s while it could only answer that it had no file-writing tool, and a second child was commissioned
+ * for the same file.
+ */
+export function scopeWithoutWriterReason(persona: string, writers: readonly string[]): string {
+  const can = writers.length > 0 ? ` Personas that can write files: ${writers.join(', ')}.` : '';
+  return `write_scope was given to '${persona}', which cannot write files: it holds no file-writing tool (write_file, haet_edit). The delegation was not started.${can} Delegate the writing to a persona that can, or delegate to '${persona}' without a write_scope.`;
+}
 
 /**
  * PD-TOOLS-006's argument: an empty pattern, an absolute pattern, or one that reaches outside the workspace root

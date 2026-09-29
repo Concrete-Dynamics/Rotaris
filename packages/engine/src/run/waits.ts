@@ -87,6 +87,16 @@ export class WaitRegistry {
     return parked.length;
   }
 
+  /**
+   * PD-ORCH-005 clause 2: an accepted pause ends every wait at once. Nothing about it is the user's cancel, so each resumes;
+   * the ladder sees the run at rest and makes no call. Returns how many.
+   */
+  releaseForRest(): number {
+    const parked = [...this.pending.values()];
+    for (const p of parked) p.resolve({ kind: 'resume' });
+    return parked.length;
+  }
+
   /** A change-model choice that could not be applied: the wait continues, the header names why. */
   reject(reason: string): void {
     for (const p of this.pending.values()) p.state = { ...p.state, rejection: reason };

@@ -57,6 +57,11 @@ export interface TurnResilience {
   readonly condense?: (() => Promise<boolean>) | undefined;
   /** REQ-ORCH-093: this call resumes a parent, so its rejection is recorded as `parent_resume_bad_request`. */
   readonly resumeIssue?: boolean | undefined;
+  /**
+   * PD-ORCH-005 clause 2: the run is coming to rest, so no further model call is made — the report the step already has
+   * stands, and no retry, fallback re-run, condensation or wait follows it (found by phase 3's review). Absent means never.
+   */
+  readonly resting?: (() => boolean) | undefined;
 }
 
 /** REQ-ORCH-093: at most twice for one call. */
@@ -106,11 +111,17 @@ export async function resilientStep(deps: LadderDeps, r: TurnResilience, call: (
   let transient = 0;
   let validation = 0;
   let condensations = 0;
+  let last: TurnReport | null = null;
   for (;;) {
+    // PD-ORCH-005 clause 2: a rest accepted during a backoff, a condensation or a wait ends the step on what it has.
+    if (last !== null && r.resting?.() === true) return last;
     const { report, unresponsive } = await call(cell.model, unresponsiveThreshold(r));
+    last = report;
     // OQ-8: one observation per completed provider request, before the ladder decides what to do with it — priced at
     // the rates of the model this attempt was sent to, which after a fallback is not the model the agent started on.
     deps.onRequestUsage?.(priceRequest(report.usage, entryOf(catalogue, cell.model.model)?.pricing));
+    // PD-ORCH-005 clause 2: the step in flight when the run came to rest is the last call; its report stands as it is.
+    if (r.resting?.() === true) return report;
     const provider = providerIdentity(catalogue, cell.model.model);
     const modelId = cell.model.model.modelId;
     if (unresponsive && !signal.aborted && cell.fallback !== null && !cell.fallbackAttempted) {
@@ -208,6 +219,6 @@ export async function resilientStep(deps: LadderDeps, r: TurnResilience, call: (
       cell.model = withSettings(catalogue, decision.choice);
       continue;
     }
-    // Auto-resume: retry the same model.
+    // Auto-resume: retry the same model — unless a pause released the wait, which the loop's top ends the step on.
   }
 }

@@ -816,6 +816,138 @@ export const MIGRATIONS: readonly Migration[] = [
       ALTER TABLE children ADD COLUMN continuation_of TEXT;
     `,
   },
+  {
+    to: 23,
+    /*
+     * PD-ORCH-005 revisions 2 and 3 (R-060, R-061), with PD-TOOLS-006 revision 2 (R-059): the record a paused, stopped,
+     * quit or crashed run is resumed from.
+     *
+     * This migration lands ahead of most of its writers, which is the one exception to the rule stated at the top of
+     * this file: PD-ORCH-005 is built in phases on one branch, the schema first, and every table and column here gains its
+     * writer in a later phase of the same build, before the build reaches `main`. Its shape was settled against every
+     * clause before it was appended (OQ-95, on clause 1's record, aside), because once it ships it is never edited.
+     *
+     * On `children`: `interruption` is what left the agent `paused` (`pause | stop | quit | crash`, NULL for an agent that
+     * is not paused), `resume_state` the state it moves back into when its iteration resumes (REQ-MONITOR-300 narrowed:
+     * `queued | waiting_on_dependencies | waiting_on_model_slot | running | summarizing`), and `write_scope` the patterns it
+     * declared, which a resumed child claims again (PD-TOOLS-006 revision 2) — `'[]'` for every row written before this
+     * version, which is what a child that declared nothing reads as, and true of them: no row before this version could be
+     * resumed. The writer keeps `interruption` and `resume_state` set or cleared together.
+     *
+     * `iterations`: one row per execution iteration, carrying the ROOT's task id and canonical name (clause 1: "the root's
+     * task id is recorded with its iteration") and the todo task it works on (`todo_task_id`, a todo item's id — not a
+     * child's `bg_` task id, REQ-ORCH-036). An iteration opens when it begins and closes when it ends; a pause, a stop, a
+     * quit and a crash leave it open (clause 2), and it is resumed from here. At most one is open per session, which the
+     * partial unique index enforces rather than trusts. A plan cycle is not an iteration (REQ-ORCH-153's ruling) and has
+     * no row: it runs while the plan gate holds, where clause 11 refuses a pause and has a quit record no interruption (a
+     * stop or a crash during one is the interruption phase's open question). `interruption` is the last interruption while
+     * open, cleared when the iteration resumes; `outcome` is the run loop's iteration outcome at close (REQ-ORCH-073/135).
+     *
+     * `agent_messages`: every agent's conversation, appended as it happens (clause 1) under the agent's task id — the
+     * root's and every child's. `kind = 'message'` is one message; `kind = 'replacement'` is a compression, whose body is
+     * the whole conversation that replaced the one before it (clause 12: "a compression is written into the record"),
+     * so a resume reads from an agent's last replacement forward and the full history stays in the table. `iteration`
+     * is what the transcript clear reads: it removes the records of closed iterations and keeps an open one's.
+     *
+     * `agent_terminals`: the background terminal sessions an agent started (clause 10), what became of each and the last
+     * output recorded for it, so a resumed agent can be told — after a quit or a crash, when the process that held them
+     * is gone. `state` is REQ-TOOLS-109's closed vocabulary (`running | completed | failed | killed | timeout`) with the
+     * three ways a rest ends a session beside it (`stop | quit | crash`).
+     *
+     * Every table cascades with its session: the record is deleted with it (clause 12). Every read is a primary-key prefix
+     * except the terminal listing's order by start time over one session's few rows; the one index is the constraint.
+     */
+    sql: `
+      ALTER TABLE children ADD COLUMN interruption TEXT
+        CHECK (interruption IS NULL OR interruption IN ('pause', 'stop', 'quit', 'crash'));
+      ALTER TABLE children ADD COLUMN resume_state TEXT
+        CHECK (resume_state IS NULL OR resume_state IN ('queued', 'waiting_on_dependencies', 'waiting_on_model_slot', 'running', 'summarizing'));
+      ALTER TABLE children ADD COLUMN write_scope TEXT NOT NULL DEFAULT '[]';
+
+      CREATE TABLE iterations (
+        session_id          TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+        iteration           INTEGER NOT NULL CHECK (iteration >= 1),
+        root_task_id        TEXT NOT NULL,
+        root_canonical_name TEXT NOT NULL,
+        root_persona        TEXT NOT NULL,
+        todo_task_id        TEXT NOT NULL,
+        task                TEXT NOT NULL,
+        state               TEXT NOT NULL CHECK (state IN ('open', 'closed')),
+        outcome             TEXT CHECK (outcome IS NULL OR outcome IN ('succeeded', 'failed', 'partial', 'cancelled', 'abandoned')),
+        interruption        TEXT CHECK (interruption IS NULL OR interruption IN ('pause', 'stop', 'quit', 'crash')),
+        opened_at           TEXT NOT NULL,
+        closed_at           TEXT,
+        PRIMARY KEY (session_id, iteration)
+      );
+      CREATE UNIQUE INDEX iterations_one_open ON iterations(session_id) WHERE state = 'open';
+
+      CREATE TABLE agent_messages (
+        session_id TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+        task_id    TEXT NOT NULL,
+        seq        INTEGER NOT NULL,
+        iteration  INTEGER NOT NULL,
+        kind       TEXT NOT NULL CHECK (kind IN ('message', 'replacement')),
+        body       TEXT NOT NULL,
+        at         TEXT NOT NULL,
+        PRIMARY KEY (session_id, task_id, seq)
+      );
+
+      CREATE TABLE agent_terminals (
+        session_id  TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+        terminal_id TEXT NOT NULL,
+        task_id     TEXT NOT NULL,
+        command     TEXT NOT NULL,
+        started_at  TEXT NOT NULL,
+        state       TEXT NOT NULL CHECK (state IN ('running', 'completed', 'failed', 'killed', 'timeout', 'stop', 'quit', 'crash')),
+        exit_code   INTEGER,
+        output_tail TEXT NOT NULL DEFAULT '',
+        updated_at  TEXT NOT NULL,
+        PRIMARY KEY (session_id, terminal_id)
+      );
+    `,
+  },
+  {
+    to: 24,
+    /*
+     * PD-ORCH-005 revision 4 clause 14 (R-064, built under R-065): "Each agent's record SHALL also keep a fingerprint of the
+     * system instructions and the tool definitions the agent started with."
+     *
+     * `agent_fingerprints`: one row per agent, the root's and every child's, keyed as its conversation is in
+     * `agent_messages` (session, task id), so the fingerprint sits beside the agent's record. `instructions` and `tools` are
+     * SHA-256 digests (hex) of the system prompt and of the tool definitions the agent's first model request carried — a
+     * digest, not a second copy of the instructions (REQ-SESSION-029). The first is kept: a resume compares against what
+     * the agent started with, and the writer never replaces a row (OQ-105). `iteration` is what clause 12's transcript clear
+     * reads, as it is for the conversation: it removes the fingerprints of closed iterations with their records. An agent
+     * recorded before this version has none, and a resume of it records one and states nothing (REQ-SESSION-132).
+     *
+     * The table cascades with its session (clause 12). Every read is the primary key.
+     */
+    sql: `
+      CREATE TABLE agent_fingerprints (
+        session_id   TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+        task_id      TEXT NOT NULL,
+        iteration    INTEGER NOT NULL,
+        instructions TEXT NOT NULL,
+        tools        TEXT NOT NULL,
+        at           TEXT NOT NULL,
+        PRIMARY KEY (session_id, task_id)
+      );
+    `,
+  },
+  {
+    to: 25,
+    /*
+     * REQ-TOOLS-152 (R-067): "`suppress_auto_context` — omits the automatic index of prior sibling artifacts". The flag a
+     * `delegate` call carried is stored with the child's record, as its `write_scope` is (PD-TOOLS-006 revision 2), so every
+     * assembly of the child's payload reads it: its first, REQ-ORCH-088's retry, and a resumed child's retry in a later run,
+     * whose launch-time memory is gone. `1` omits the index; `0` — every row written before this version, and true of them:
+     * no call before this version could set it — gives it. The persona-level setting (REQ-CONFIG-107,
+     * `skip_auto_sibling_context`) is configuration, read at each assembly, and is not copied here.
+     */
+    sql: `
+      ALTER TABLE children ADD COLUMN suppress_auto_context INTEGER NOT NULL DEFAULT 0 CHECK (suppress_auto_context IN (0, 1));
+    `,
+  },
 ];
 
 export const CURRENT_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1]!.to;

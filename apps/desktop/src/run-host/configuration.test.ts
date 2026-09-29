@@ -3,7 +3,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FakeClock } from '@rotaris/kernel';
-import { authProvidersOf, classifierSlotsOf, configureRun, credentialResolver, egressReader, entryTierOf, personaResolverFor, runtimeFromConfiguration } from './configuration.js';
+import { authProvidersOf, classifierSlotsOf, configureRun, contextLimitsOf, credentialResolver, egressReader, entryTierOf, personaResolverFor, runtimeFromConfiguration } from './configuration.js';
+import { childModelKey } from '@rotaris/engine';
 import { nodeClocks } from '@rotaris/platform';
 import { loadConfiguration, type ModelEntry } from '@rotaris/config';
 
@@ -176,12 +177,187 @@ personas:
     model: selected
 runtime:
   child_stall_timeout: 45
+  graceful_pause_tool_deadline: 12
 `);
     const loaded = loadConfiguration({ globalDir: join(dir, 'global'), workspaceRoot: join(dir, 'ws') });
     if (!loaded.ok) throw new Error('configuration');
     expect(runtimeFromConfiguration(loaded.value).childStallTimeoutMs).toBe(45_000);
+    // REQ-ORCH-134 / PD-ORCH-005 clause 2: the pause's tool deadline reaches the run.
+    expect(runtimeFromConfiguration(loaded.value).pauseToolDeadlineMs).toBe(12_000);
     const personas = personaResolverFor(loaded.value, true, () => undefined);
     expect(personas.resolve('coding-agent')!.persona.stallTimeoutMs).toBe(30_000);
     expect(personas.resolve('tester')!.persona.stallTimeoutMs).toBeUndefined();
+  });
+});
+
+/** REQ-CONFIG-107 / REQ-TOOLS-152: the persona-level setting that forces `suppress_auto_context`'s omission reaches the engine's persona. */
+describe('skip_auto_sibling_context reaches the persona (REQ-CONFIG-107, REQ-TOOLS-152)', () => {
+  it('REQ-CONFIG-107: only the role that states it true carries it; the default (false) carries nothing', () => {
+    mkdirSync(join(dir, 'ws', '.rotaris'), { recursive: true });
+    writeFileSync(join(dir, 'ws', '.rotaris', 'agents.yaml'), `default_persona: coding-agent
+models:
+  selected:
+    provider: openai
+    model_id: first
+    api_key: k
+large_model: selected
+medium_model: selected
+small_model: selected
+personas:
+  coding-agent:
+    name: Coding agent
+    model: selected
+    skip_auto_sibling_context: true
+  tester:
+    name: Tester
+    model: selected
+    skip_auto_sibling_context: false
+`);
+    const loaded = loadConfiguration({ globalDir: join(dir, 'global'), workspaceRoot: join(dir, 'ws') });
+    if (!loaded.ok) throw new Error('configuration');
+    const personas = personaResolverFor(loaded.value, true, () => undefined);
+    expect(personas.resolve('coding-agent')!.persona.skipAutoSiblingContext).toBe(true);
+    expect(personas.resolve('tester')!.persona.skipAutoSiblingContext).toBeUndefined();
+    expect(personas.resolve('verifier')!.persona.skipAutoSiblingContext).toBeUndefined();
+  });
+});
+
+/**
+ * PD-ORCH-005 clause 4: a continue that resumes an open iteration restores its root with its identity, persona
+ * included, so the run is set up as the persona that root ran as — even when `default_persona` has changed since.
+ */
+describe('a resumed root is set up as the persona it ran as (PD-ORCH-005 clause 4, found by phase 4\'s review)', () => {
+  const agents = `default_persona: coding-agent
+models:
+  selected:
+    provider: openai
+    model_id: first
+    api_key: k
+large_model: selected
+medium_model: selected
+small_model: selected
+personas:
+  coding-agent:
+    name: Coding agent
+    model: selected
+  tester:
+    name: Tester
+    model: selected
+`;
+
+  it('the entry persona given replaces default_persona for that run; absent, default_persona stands', () => {
+    mkdirSync(join(dir, 'ws', '.rotaris'), { recursive: true });
+    writeFileSync(join(dir, 'ws', '.rotaris', 'agents.yaml'), agents);
+    const resumed = configureRun(join(dir, 'ws'), true, deps({}), { entryPersona: 'tester' });
+    expect(resumed.ok && resumed.value.model.config.persona).toBe('tester');
+    const fresh = configureRun(join(dir, 'ws'), true, deps({}));
+    expect(fresh.ok && fresh.value.model.config.persona).toBe('coding-agent');
+  });
+
+  it('a persona the configuration no longer knows cannot be restored: the run is set up as the entry role, and says so (found by phase 4\'s second review — a refusal left a crashed session no way on)', () => {
+    mkdirSync(join(dir, 'ws', '.rotaris'), { recursive: true });
+    writeFileSync(join(dir, 'ws', '.rotaris', 'agents.yaml'), agents);
+    const r = configureRun(join(dir, 'ws'), true, deps({}), { entryPersona: 'gone-role' });
+    expect(r.ok && r.value.model.config.persona).toBe('coding-agent');
+    expect(r.ok && r.value.warnings).toContain("configuration: the open iteration's root ran as 'gone-role', which this configuration no longer knows; it resumes as the entry role 'coding-agent' (PD-ORCH-005).");
+  });
+});
+
+/**
+ * Live-run finding D5 (REQ-CONFIG-094, REQ-MONITOR-049, REQ-MONITOR-020): a child is recorded under the `models:` key of
+ * the model it runs on, so the cap and the context limit configuration states under that key are found. The live run's
+ * shape: a qualified key whose model id is the bare name, a role on a synthetic copy, a role on the run's model.
+ */
+describe('a child is recorded under its model\'s models: key (live-run finding D5)', () => {
+  const KEY = 'openai-compatible--katalyst/qwen3.8-flash-next';
+  const agents = `default_persona: orchestrator
+models:
+  ${KEY}:
+    provider: openai-compatible
+    model_id: qwen3.8-flash-next
+    base_url: https://katalyst.example/v1
+    api_key: k
+    max_input_tokens: 262144
+    max_parallel: 2
+large_model: ${KEY}
+medium_model: ${KEY}
+small_model: ${KEY}
+personas:
+  orchestrator:
+    name: Orchestrator
+    model: ${KEY}
+  coding-agent:
+    name: Coding agent
+    model: ${KEY}
+    thinking: low
+`;
+
+  it('REQ-CONFIG-094: the role\'s key (a synthetic copy unwrapped) and the run\'s key are the qualified key, under which the cap and the limit are found', () => {
+    mkdirSync(join(dir, 'ws', '.rotaris'), { recursive: true });
+    writeFileSync(join(dir, 'ws', '.rotaris', 'agents.yaml'), agents);
+    const r = configureRun(join(dir, 'ws'), true, deps({}));
+    if (!r.ok) throw new Error(r.error.reason);
+    const run = r.value.model.config;
+    expect(run.model.modelId).toBe('qwen3.8-flash-next');
+    expect(run.modelKey).toBe(KEY);
+    const personas = r.value.personas!;
+    // The role on a synthetic copy (REQ-CONFIG-081) counts against the entry it was copied from.
+    expect(r.value.cfg.personas['coding-agent']?.model).toBe('__persona__:coding-agent');
+    expect(personas.resolve('coding-agent')!.persona.modelKey).toBe(KEY);
+    const coder = childModelKey(personas.resolve('coding-agent')!.persona, run);
+    // A role configuration does not name runs on the run's model, and is recorded under the run's key.
+    const tester = childModelKey(personas.resolve('tester')!.persona, run);
+    expect([coder, tester]).toEqual([KEY, KEY]);
+    const runtime = runtimeFromConfiguration(r.value.cfg);
+    expect(runtime.modelCapFor!(coder)).toBe(2);
+    expect(contextLimitsOf(r.value.cfg)[coder]).toBe(262_144);
+    // What was recorded before: the bare id, under which nothing is configured.
+    expect(runtime.modelCapFor!('qwen3.8-flash-next')).toBeNull();
+    expect(contextLimitsOf(r.value.cfg)['qwen3.8-flash-next']).toBeUndefined();
+  });
+
+  it('REQ-CONFIG-094: two keys naming the same provider model never share a count — a role on a synthetic copy is recorded under the key it was copied from, the run under its own', () => {
+    const ALPHA = 'openai-compatible--alpha/qwen';
+    const BETA = 'openai-compatible--beta/qwen';
+    mkdirSync(join(dir, 'ws', '.rotaris'), { recursive: true });
+    writeFileSync(join(dir, 'ws', '.rotaris', 'agents.yaml'), `default_persona: orchestrator
+models:
+  ${ALPHA}:
+    provider: openai-compatible
+    model_id: qwen
+    base_url: https://alpha.example/v1
+    api_key: k
+    max_input_tokens: 32768
+    max_parallel: 1
+  ${BETA}:
+    provider: openai-compatible
+    model_id: qwen
+    base_url: https://beta.example/v1
+    api_key: k
+    max_input_tokens: 131072
+    max_parallel: 4
+large_model: ${ALPHA}
+medium_model: ${ALPHA}
+small_model: ${ALPHA}
+personas:
+  orchestrator:
+    name: Orchestrator
+    model: ${BETA}
+    thinking: high
+  coding-agent:
+    name: Coding agent
+    model: ${BETA}
+    thinking: low
+`);
+    const r = configureRun(join(dir, 'ws'), true, deps({}));
+    if (!r.ok) throw new Error(r.error.reason);
+    const run = r.value.model.config;
+    expect(r.value.cfg.personas['orchestrator']?.model).toBe('__persona__:orchestrator');
+    expect(run.modelKey).toBe(BETA);
+    const coder = childModelKey(r.value.personas!.resolve('coding-agent')!.persona, run);
+    expect(coder).toBe(BETA);
+    const runtime = runtimeFromConfiguration(r.value.cfg);
+    expect(runtime.modelCapFor!(coder)).toBe(4);
+    expect(contextLimitsOf(r.value.cfg)[coder]).toBe(131_072);
   });
 });

@@ -3,7 +3,7 @@ import { isAbsolute, join } from 'node:path';
 import type { Clocks, Result } from '@rotaris/kernel';
 import { err, ok } from '@rotaris/kernel';
 import { resolvePreset, SANDBOX_MODE_NAMES, type HeadlessPolicy, type ModelTier, type SandboxModeName } from '@rotaris/contracts';
-import { compressionTrigger, effectivePricing, isPlainMap, launchConfigurationSnapshot, loadConfiguration, overlayLiveState, PROJECT_SETTINGS_FILE, readProjectSnapshot, renderFatal, type BuiltinLaunch, type LiveState, type LoadedConfiguration, type ModelEntry, type ProjectSnapshot } from '@rotaris/config';
+import { compressionTrigger, effectivePricing, isPlainMap, launchConfigurationSnapshot, loadConfiguration, overlayLiveState, PROJECT_SETTINGS_FILE, readProjectSnapshot, renderFatal, syntheticOriginOf, type BuiltinLaunch, type LiveState, type LoadedConfiguration, type ModelEntry, type ProjectSnapshot } from '@rotaris/config';
 import { renderUnavailability, type AvailabilityVerdict, type PolicyRead } from '@rotaris/agent-tools';
 import { BUILT_IN_PERSONAS, parseLogLevel, resolveRole, RUN_CONFIG_DEFAULTS, TIER_ROLES, type CatalogueEntry, type ClassifierSlots, type McpGrantEvidence, type ModelChoice, type ModelLookup, type ModelSetup, type Persona, type PersonaResolver, type ResolvedTrigger, type RoleName, type RunSetup, type RuntimePosture, type TierRole } from '@rotaris/engine';
 import { AiSdkModelClient, DefaultAgentBackend, type AgentBackend, type ModelClient, type ModelRef, type ThinkingLevel } from '@rotaris/model';
@@ -104,6 +104,9 @@ export function runtimeFromConfiguration(cfg: LoadedConfiguration, verdict: Avai
     // PD-ORCH-004: `runtime.child_stall_timeout` reaches the run as the window of the progress rule — the first reader
     // of a key the loader validated from the start.
     childStallTimeoutMs: Math.round(r.child_stall_timeout * 1000),
+    // REQ-ORCH-134 / PD-ORCH-005 clause 2: `runtime.graceful_pause_tool_deadline` reaches the run as the pause's tool
+    // deadline — the first reader of a key the loader validated from the start.
+    pauseToolDeadlineMs: Math.round(r.graceful_pause_tool_deadline * 1000),
     // REQ-ORCH-152 / REQ-CONFIG-476: the run-start mode reaches the run. The loader validated the key from Part I
     // and nothing read it until the plan gate was built (ADR-0062).
     runStartMode: r.run_start_mode,
@@ -234,7 +237,9 @@ export function personaResolverFor(cfg: LoadedConfiguration, scripted: boolean, 
       readOnly: stated(role, 'read_only') ? entry!.read_only : base?.readOnly ?? false,
       systemPrompt: prompt,
       implementer: tools.some((t) => ['write_file', 'haet_edit', 'haet', 'terminal'].includes(t)),
-      ...(modelRef ? { modelRef, thinking: thinkingOf(entry ? cfg.models[entry.model] : null) } : {}),
+      // REQ-CONFIG-094 (live-run finding D5): the `models:` key beside the reference, a synthetic copy (REQ-CONFIG-081)
+      // mapped to the entry the loader recorded it was copied from — the key a child of this role is recorded and capped under.
+      ...(modelRef && entry ? { modelRef, modelKey: syntheticOriginOf(entry.model, cfg.syntheticOrigins), thinking: thinkingOf(cfg.models[entry.model]) } : {}),
       ...(fallbackRef && entry?.fallback_model ? { fallbackModel: fallbackRef, fallbackThinking: thinkingOf(cfg.models[entry.fallback_model]) } : {}),
       // REQ-CONFIG-109 / REQ-TOOLS-048: the role's `permission_mode` pin, parsed by the loader and read at agent
       // construction and at every mid-session change (REQ-TOOLS-074). Absent means the role takes the session's mode.
@@ -242,6 +247,9 @@ export function personaResolverFor(cfg: LoadedConfiguration, scripted: boolean, 
       // REQ-CONFIG-108: the role's `stall_timeout` substitutes for `runtime.child_stall_timeout` on its children
       // (PD-ORCH-004's progress rule is its reader); null or absent means the run's value.
       ...(typeof entry?.stall_timeout === 'number' ? { stallTimeoutMs: Math.round(entry.stall_timeout * 1000) } : {}),
+      // REQ-CONFIG-107 / REQ-TOOLS-152: the role's `skip_auto_sibling_context` forces the omission `suppress_auto_context`
+      // asks for; the engine reads it at each assembly of a child's payload. False or absent gives the index.
+      ...(entry?.skip_auto_sibling_context === true ? { skipAutoSiblingContext: true } : {}),
       // REQ-MCP-065 (Part S): the grant evidence the ledger records at spawn, read from the run host's memoised surface at that moment.
       ...(mcpEvidence ? { mcpEvidence: () => mcpEvidence(role) } : {}),
     };
@@ -450,6 +458,11 @@ export interface ConfigureDeps {
 export interface PrepareOptions {
   readonly boardPermissions?: 'permissive' | undefined;
   readonly sandboxMode?: string | undefined;
+  /**
+   * PD-ORCH-005 clause 4: the role the run's entry agent is set up as, in place of `default_persona` — the persona an
+   * open iteration's root ran as, which a continue that resumes it restores. Absent means `default_persona`.
+   */
+  readonly entryPersona?: string | undefined;
 }
 
 /**
@@ -466,8 +479,8 @@ export interface PreparedRun {
   readonly complete: (bearers: Readonly<Record<string, string>>) => ConfiguredRun;
 }
 
-export function configureRun(workspaceRoot: string, attended: boolean, deps: ConfigureDeps): Result<ConfiguredRun, ConfigureRefusal> {
-  const prepared = prepareRun(workspaceRoot, attended, deps);
+export function configureRun(workspaceRoot: string, attended: boolean, deps: ConfigureDeps, options?: PrepareOptions): Result<ConfiguredRun, ConfigureRefusal> {
+  const prepared = prepareRun(workspaceRoot, attended, deps, undefined, options);
   return prepared.ok ? ok(prepared.value.complete(deps.bearers(workspaceRoot))) : prepared;
 }
 
@@ -519,18 +532,28 @@ export function prepareRun(workspaceRoot: string, attended: boolean, deps: Confi
   }
   // The override is folded into the captured configuration, so the run, its snapshot and its audit
   // all read one mode rather than the file's and the dialog's separately (REQ-SANDBOX-104, -122).
-  const cfg: LoadedConfiguration = granted.runtime.sandbox_mode === mode.value
+  const moded: LoadedConfiguration = granted.runtime.sandbox_mode === mode.value
     ? granted
     : { ...granted, runtime: { ...granted.runtime, sandbox_mode: mode.value } };
-  const warnings: string[] = [...cfg.warnings.map((w) => `configuration: ${w}`)];
-  if (cfg.referential.length > 0) {
-    const lines = cfg.referential.map((m) => `configuration: ${m}`);
+  const warnings: string[] = [...moded.warnings.map((w) => `configuration: ${w}`)];
+  if (moded.referential.length > 0) {
+    const lines = moded.referential.map((m) => `configuration: ${m}`);
     // REQ-CONFIG-246: with no person present, referential errors are always fatal to the run.
-    if (!attended) return err({ reason: `The configuration has ${cfg.referential.length} unresolved reference(s) and no one is present to correct them: ${cfg.referential.join('; ')}`, cfg });
+    if (!attended) return err({ reason: `The configuration has ${moded.referential.length} unresolved reference(s) and no one is present to correct them: ${moded.referential.join('; ')}`, cfg: moded });
     warnings.push(...lines);
   }
   const scripted = deps.env['ROTARIS_MODEL_DIALECT'] === 'scripted';
-  const personas = personaResolverFor(cfg, scripted, (m) => warnings.push(m), deps.mcpEvidence ? (role) => deps.mcpEvidence!(cfg, workspaceRoot, role) : undefined);
+  const personas = personaResolverFor(moded, scripted, (m) => warnings.push(m), deps.mcpEvidence ? (role) => deps.mcpEvidence!(moded, workspaceRoot, role) : undefined);
+  /*
+   * PD-ORCH-005 clause 4: a continue that resumes an open iteration sets the run up as the persona its root ran as,
+   * folded into the captured configuration so the entry role, its model tier and the log read one persona. A persona the
+   * configuration no longer knows cannot be restored: the run is set up as the entry role, and says so — refusing left a
+   * crashed session no way on (found by phase 4's second review).
+   */
+  const wanted = options?.entryPersona;
+  const restored = wanted !== undefined && personas.resolve(wanted) !== null ? wanted : undefined;
+  if (wanted !== undefined && restored === undefined) warnings.push(`configuration: the open iteration's root ran as '${wanted}', which this configuration no longer knows; it resumes as the entry role '${moded.defaultPersona}' (PD-ORCH-005).`);
+  const cfg: LoadedConfiguration = restored === undefined ? moded : { ...moded, defaultPersona: restored };
   const entryRole = personas.resolve(cfg.defaultPersona);
   if (!entryRole) return err({ reason: `default_persona '${cfg.defaultPersona}' names no role this build knows.`, cfg });
   const entryModelName = cfg.personas[cfg.defaultPersona]?.model ?? null;
@@ -564,6 +587,8 @@ export function prepareRun(workspaceRoot: string, attended: boolean, deps: Confi
         persona: cfg.defaultPersona,
         systemPrompt: entryRole.persona.systemPrompt,
         model,
+        // REQ-CONFIG-094 (live-run finding D5): the run's model's `models:` key, which a child on the run's model is recorded under.
+        ...(entryRole.persona.modelKey !== undefined ? { modelKey: entryRole.persona.modelKey } : entryModelName !== null ? { modelKey: syntheticOriginOf(entryModelName, cfg.syntheticOrigins) } : {}),
         thinking: entryRole.persona.thinking ?? thinkingOf(entry),
         modelTimeoutMs: Math.round((entry?.timeout ?? runtime.modelTimeoutS) * 1000),
         modelRetries: entry?.num_retries ?? RUN_CONFIG_DEFAULTS.modelRetries,

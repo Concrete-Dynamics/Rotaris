@@ -30,6 +30,12 @@ export interface DelegateRequest {
    * as its continuation. Absent or empty delegates ordinary work.
    */
   readonly continuationOf?: string | undefined;
+  /**
+   * REQ-TOOLS-152: omit the automatic index of prior sibling artifacts (REQ-LIBRARY-097, item (3) of REQ-TOOLS-154) from
+   * the child's payload. Absent or false gives it, unless the persona's `skip_auto_sibling_context` (REQ-CONFIG-107) forces
+   * the same omission.
+   */
+  readonly suppressAutoContext?: boolean | undefined;
 }
 
 /** REQ-LIBRARY-098: what became of the caller's attachments, so the tool reports it rather than guessing. */
@@ -57,8 +63,11 @@ export interface WaitOutcome {
 export interface DelegationOps {
   delegate(parentId: string, req: DelegateRequest): Promise<DelegateOutcome>;
   backgroundOutput(parentId: string, taskId: string, detail: 'summary' | 'verbatim'): BackgroundOutput;
-  /** REQ-TOOLS-156: an empty list means all of the caller's active background children. */
-  waitForTasks(parentId: string, taskIds: readonly string[]): Promise<WaitOutcome | { readonly refused: string }>;
+  /**
+   * REQ-TOOLS-156: an empty list means all of the caller's active background children. PD-ORCH-005: `interrupted` when
+   * the run came to rest while the caller waited, the tasks it waited on paused with it.
+   */
+  waitForTasks(parentId: string, taskIds: readonly string[]): Promise<WaitOutcome | { readonly refused: string } | { readonly interrupted: string }>;
   /** For the tree and the strip. */
   children(): readonly ChildRow[];
 }

@@ -176,7 +176,7 @@ describe('the project setup dialog', () => {
  * user's own Escape, or ignored Escape so no decision was recorded, and the window lifted the composer gate while the
  * consent task was unanswered.
  */
-describe('the project setup dialog beside a background run (REQ-WORKSPACE-103/107/110, OQ-119)', () => {
+describe('the project setup dialog beside a background run (REQ-WORKSPACE-103/107/110, OQ-123)', () => {
   const live: InitRunReport = {
     ...EMPTY_RUN_REPORT, running: true, current: 'code-intelligence-setup', currentLabel: 'Code intelligence project setup',
     currentSteps: [{ name: 'Project configuration', status: 'succeeded', detail: '' }],

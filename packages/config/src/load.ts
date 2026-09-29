@@ -85,6 +85,8 @@ export interface LoadedConfiguration {
   readonly delegationStrategy: DelegationStrategy;
   /** REQ-CONFIG-071: computed, never serialised (REQ-CONFIG-072). */
   readonly resolvedPersonaModelTiers: Readonly<Record<string, TierAlias>>;
+  /** REQ-CONFIG-081 / REQ-CONFIG-094: computed, never serialised — each synthetic name's source `models:` key (see `syntheticOriginOf`). */
+  readonly syntheticOrigins: Readonly<Record<string, string>>;
   /** REQ-CONFIG-034: the snapshot providers marked authenticated whose models and slots were folded in. */
   readonly authenticatedProviders: readonly string[];
   /** REQ-CONFIG-341: the slot values the snapshot layer supplied, so an editor can name `discovered` as an origin. */
@@ -381,6 +383,7 @@ export function resolveMerged(top: PlainMap, ctx: ResolveContext): Result<Loaded
     injectAgentsMd,
     delegationStrategy: ctx.delegationStrategy,
     resolvedPersonaModelTiers: resolution.resolvedPersonaModelTiers,
+    syntheticOrigins: resolution.syntheticOrigins,
     authenticatedProviders: ctx.authenticatedProviders ?? [],
     discoveredSlots: ctx.discoveredSlots ?? {},
     warnings,

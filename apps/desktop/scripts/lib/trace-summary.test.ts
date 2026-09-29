@@ -3,10 +3,15 @@
  * a forced layout recognised as a layout under script, a window's buckets adding up to at most its length, and
  * the marks paired by sequence number. Pinned against a synthetic trace so the proof's verdict about WHERE an
  * append's frames go cannot rest on arithmetic nobody checked.
+ *
+ * The second half pins the CPU-profile account the 2026-09-29 round added (the note's "CPU profile" section): the
+ * samples placed on the trace clock across chunks and sorted, a gap longer than a few intervals capped rather than
+ * charged to one function, each sample charged by the trace account's own bucket rule — so a forced layout is the
+ * browser's and V8's `(idle)` inside a task is not the thread waiting — and functions named by their bundle module.
  */
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the summariser is plain ESM beside the scripts that run it.
-import { BUCKET_NAMES, accountWindow, applyWindows, bucketOf, median, readTrace, selfTimes, spread, summariseAppendTrace } from './trace-summary.mjs';
+import { BUCKET_NAMES, CPU_PROFILE_CATEGORIES, accountWindow, applyWindows, attributeProfile, bucketOf, bundleRegions, frameName, median, moduleAt, moduleOfName, profileDifference, readCpuProfile, readTrace, selfTimes, spread, summariseAppendProfile, summariseAppendTrace } from './trace-summary.mjs';
 
 const PID = 7;
 const TID = 7;
@@ -157,5 +162,140 @@ describe('trace-summary: REQ-CHAT-055 measurement round — the account of an ap
     const s = spread([10, 12, 11, 30, 13]);
     expect(s).toEqual({ n: 5, median: 12, p25: 11, p75: 13, iqr: 2, min: 10, max: 30, mad: 1 });
     expect(spread([]).n).toBe(0);
+  });
+});
+
+// ── V8's CPU profile ────────────────────────────────────────────────────────────────────────────────────────────
+
+const PROFILER_TID = 9;
+const BUNDLE = 'index-abc.js';
+const profileEvent = (startTime: number, id = '0x1', tid = TID) => ({ ph: 'P', name: 'Profile', id, pid: PID, tid, ts: startTime, cat: 'disabled-by-default-v8.cpu_profiler', args: { data: { startTime } } });
+const chunk = (ts: number, nodes: unknown[], samples: number[], timeDeltas: number[], id = '0x1') => (
+  { ph: 'P', name: 'ProfileChunk', id, pid: PID, tid: PROFILER_TID, ts, cat: 'disabled-by-default-v8.cpu_profiler', args: { data: { cpuProfile: { nodes, samples }, timeDeltas } } });
+const node = (id: number, functionName: string, parent?: number, lineNumber = -1) => (
+  { id, ...(parent === undefined ? {} : { parent }), callFrame: { functionName, url: lineNumber < 0 ? '' : `app://renderer/assets/${BUNDLE}`, lineNumber, columnNumber: 0, scriptId: lineNumber < 0 ? 0 : 3 } });
+const NODES = [
+  node(1, '(root)'), node(2, '(program)', 1), node(3, '(idle)', 1), node(4, '(garbage collector)', 1),
+  node(5, 'onIncrement', 1, 1), node(6, '', 5, 4),
+];
+/** Samples every 500 µs from 1,000 µs; the node of each, in order. */
+function sampled(ids: number[]) {
+  return [profileEvent(1_000), chunk(1_000, NODES, ids, ids.map((_, i) => (i === 0 ? 0 : 500)))];
+}
+
+describe('trace-summary: which functions the script time went to (the 2026-09-29 CPU-profile round, REQ-CHAT-055)', () => {
+  it('asks the trace for the profiler and its fine interval', () => {
+    expect(CPU_PROFILE_CATEGORIES).toEqual(['disabled-by-default-v8.cpu_profiler', 'disabled-by-default-v8.cpu_profiler.hires']);
+  });
+
+  it('places the samples on the trace clock across chunks, sorts a negative delta back into order and gathers nodes from every chunk', () => {
+    const events = [
+      profileEvent(10_000),
+      chunk(10_100, [node(1, '(root)'), node(5, 'onIncrement', 1, 1)], [5, 5], [0, 500]),
+      // A later chunk introduces a node and one sample timestamped before the previous one.
+      chunk(10_200, [node(6, '', 5, 4)], [6, 5], [-200, 700]),
+      // Another profile's chunk, and another process's, are not this one's.
+      chunk(10_300, [], [5], [1], '0x2'),
+      { ...chunk(10_300, [], [5], [1]), pid: 99 },
+    ];
+    const profile = readCpuProfile(events, { pid: PID, tid: TID });
+    expect([...profile.nodes.keys()]).toEqual([1, 5, 6]);
+    expect(profile.samples.map((s: { t: number; node: number }) => [s.t, s.node])).toEqual([[10_000, 5], [10_300, 6], [10_500, 5], [11_000, 5]]);
+    // Positive gaps 300, 200, 500: the interval is their median, and a sample stands for the gap to the next one.
+    expect(profile.intervalUs).toBe(300);
+    expect(profile.samples.map((s: { dur: number }) => s.dur)).toEqual([300, 200, 500, 300]);
+    expect(profile.cappedUs).toBe(0);
+    expect(readCpuProfile(events, { pid: PID, tid: 1234 })).toBeNull();
+    expect(readCpuProfile(events, null)).toBeNull();
+  });
+
+  it('caps a gap of many intervals rather than charging it to the function sampled before it, and says how much it removed', () => {
+    const events = [profileEvent(0), chunk(1, NODES, [5, 5, 5, 5, 5], [0, 100, 100, 5_000, 100])];
+    const profile = readCpuProfile(events, { pid: PID, tid: TID });
+    expect(profile.intervalUs).toBe(100);
+    expect(profile.samples.map((s: { dur: number }) => s.dur)).toEqual([100, 100, 400, 100, 100]);
+    expect(profile.cappedUs).toBe(4_600);
+  });
+
+  it('names a function by the bundle module its line lies in, and a made-up frame by itself', () => {
+    const bundle = bundleRegions([
+      '//#region \\0rolldown/runtime.js', 'var x = 1;', '//#endregion',
+      '//#region ../../packages/ui/src/transcript/pool.ts', 'function estimateHeight() {}', '//#endregion',
+    ].join('\n'));
+    expect(bundle.regions).toEqual([{ line: 0, module: 'rolldown/runtime.js' }, { line: 3, module: 'packages/ui/src/transcript/pool.ts' }]);
+    expect(moduleAt(bundle, 4)).toBe('packages/ui/src/transcript/pool.ts');
+    expect(moduleAt(bundle, 1)).toBe('rolldown/runtime.js');
+    expect(moduleAt(bundleRegions('var x;\n//#region a.js\n'), 0)).toBeNull();
+    const at = (functionName: string, lineNumber: number, url = `app://renderer/assets/${BUNDLE}`) => ({ functionName, url, lineNumber });
+    expect(frameName(at('estimateHeight', 4), bundle, BUNDLE)).toBe('estimateHeight packages/ui/src/transcript/pool.ts:5');
+    expect(frameName(at('', 1), bundle, BUNDLE)).toBe('(anonymous) rolldown/runtime.js:2');
+    expect(frameName(at('invoke', 1, 'node:electron/js2c/sandbox_bundle'), bundle, BUNDLE)).toBe('invoke sandbox_bundle:2');
+    expect(frameName({ functionName: '(garbage collector)', url: '', lineNumber: -1 })).toBe('(garbage collector)');
+    expect(moduleOfName('estimateHeight packages/ui/src/transcript/pool.ts:5')).toBe('packages/ui/src/transcript/pool.ts');
+    expect(moduleOfName('get scrollHeight index.js:12')).toBe('index.js');
+    expect(moduleOfName('(program)')).toBe('(program)');
+  });
+
+  it('charges each sample by the trace account\'s own rule: a forced layout is the browser\'s, no open event is idle, V8\'s (idle) inside a task is not', () => {
+    const events = [
+      x('RunTask', 1_000, 4_000, {}, 'disabled-by-default-devtools.timeline'),
+      x('FunctionCall', 1_100, 2_900, { data: { functionName: 'onIncrement' } }),
+      x('Layout', 2_000, 1_000, { beginData: { dirtyObjects: 3, totalObjects: 40 } }),
+      x('Paint', 6_000, 1_000),
+      // 1,000 RunTask only · 1,500 the call · 2,000 and 2,500 the forced layout · 3,000 the call again · 3,500 a
+      // collection · 4,000 and 4,500 the task with no script (V8 says idle, then program) · 5,000 and 5,500 nothing
+      // open · 6,000 and 6,500 the frame's paint (V8 says idle) · 7,000 to 10,500 nothing open.
+      ...sampled([2, 5, 6, 6, 6, 4, 3, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]),
+    ];
+    const profile = readCpuProfile(events, { pid: PID, tid: TID });
+    const own = selfTimes(events, PID, TID);
+    const account = attributeProfile(profile, own, { start: 1_000, end: 11_000 });
+    expect(account.samples).toBe(20);
+    expect(account.idle).toBe(10 * 500);
+    expect(account.browser.layout).toBe(1_000);
+    expect(account.browser.paint).toBe(1_000);
+    expect(account.gc).toBe(500);
+    expect(account.program).toBe(3 * 500);
+    // Without a bundle a function is named by its script's file and 1-based line.
+    expect(Object.fromEntries(account.functions)).toEqual({ 'onIncrement index-abc.js:2': 500, '(anonymous) index-abc.js:5': 500 });
+    expect(account.script).toBe(1_000);
+    expect(account.busy).toBe(1_000 + 2_000 + 500 + 1_500);
+    expect(account.busy + account.idle).toBe(10_000);
+    // Which script was on top of the stack when Blink did the work: the forced layout names the function, the frame's paint names none.
+    expect(Object.fromEntries(account.under)).toEqual({ 'layout under (anonymous) index-abc.js:5': 1_000, 'paint under (idle)': 1_000 });
+    // A span clips the samples it reads.
+    const clipped = attributeProfile(profile, own, { start: 2_000, end: 3_000 });
+    expect(clipped.samples).toBe(2);
+    expect(clipped.browser.layout).toBe(1_000);
+  });
+
+  it('summarises a traced launch per increment over the increments it names, by function and by module, and ranks loaded minus empty', () => {
+    const bundle = bundleRegions(['//#region ../../packages/ui/src/app.ts', 'function onIncrement() {', '', '', '  (() => {})();', '}'].join('\n'));
+    const launch = (pinSamples: number) => {
+      const ids = [5, ...Array.from({ length: pinSamples }, () => 6)];
+      return [
+        mark('rotaris:apply:2', 0), mark('rotaris:shown:2', 900), // the attach: not among the launch's increments
+        mark('rotaris:apply:3', 1_000), mark('rotaris:shown:3', 2_000 + pinSamples * 500),
+        x('RunTask', 1_000, 1_000 + pinSamples * 500, {}, 'disabled-by-default-devtools.timeline'),
+        x('FunctionCall', 1_000, 1_000 + pinSamples * 500, { data: { functionName: 'onIncrement' } }),
+        profileEvent(1_000), chunk(1_000, NODES, ids, ids.map((_, i) => (i === 0 ? 0 : 500))),
+      ];
+    };
+    const options = { seqs: new Set([3]), bundle, bundleUrl: BUNDLE };
+    const empty = summariseAppendProfile(launch(1), options);
+    const loaded = summariseAppendProfile(launch(4), options);
+    expect(empty.increments).toBe(1);
+    expect(empty.intervalUs).toBe(500);
+    expect(empty.perIncrement.script).toBe(1);
+    expect(loaded.perIncrement.script).toBe(2.5);
+    expect(loaded.functions[0]).toEqual({ function: '(anonymous) packages/ui/src/app.ts:5', selfMs: 2 });
+    expect(loaded.modules).toEqual([{ module: 'packages/ui/src/app.ts', selfMs: 2.5 }]);
+    const difference = profileDifference(empty, loaded);
+    expect(difference.functions[0]).toEqual({ name: '(anonymous) packages/ui/src/app.ts:5', emptyMs: 0.5, loadedMs: 2, differenceMs: 1.5 });
+    expect(difference.modules[0]).toMatchObject({ name: 'packages/ui/src/app.ts', differenceMs: 1.5 });
+    expect(difference.totals.find((t: { name: string }) => t.name === 'script')).toMatchObject({ emptyMs: 1, loadedMs: 2.5, differenceMs: 1.5 });
+    expect(profileDifference(null, loaded)).toBeNull();
+    // A trace with no profile of the marks' thread has nothing to say.
+    expect(summariseAppendProfile(launch(1).filter((e) => e.name !== 'Profile'), options)).toBeNull();
   });
 });

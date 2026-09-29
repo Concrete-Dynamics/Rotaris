@@ -30,7 +30,9 @@ interface Harness {
   readonly raised: { severity: string; headline: string; detail: string | undefined }[];
   readonly svcAsked: WorkspaceServiceRequest[];
   readonly hostAsked: RunHostRequest[];
-  readonly ctx: Pick<CommandContext, 'capturing' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'pauseWindows' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runHost' | 'services'>;
+  readonly ctx: Pick<CommandContext, 'capturing' | 'dialogs' | 'log' | 'mainWindows' | 'notices' | 'pauseWindows' | 'quitting' | 'raiseNotice' | 'recoveryFor' | 'relay' | 'runHost' | 'services'>;
+  /** PD-ORCH-005 clause 9: what `quitting()` answers. */
+  readonly quit: { now: boolean };
 }
 
 function harness(svc: (req: WorkspaceServiceRequest) => Promise<ProcessReply> | ProcessReply, host: (req: RunHostRequest) => Promise<ProcessReply> | ProcessReply): Harness {
@@ -38,8 +40,10 @@ function harness(svc: (req: WorkspaceServiceRequest) => Promise<ProcessReply> | 
   const raised: Harness['raised'] = [];
   const svcAsked: WorkspaceServiceRequest[] = [];
   const hostAsked: RunHostRequest[] = [];
+  const quit = { now: false };
   const ctx = {
     capturing: false,
+    quitting: () => quit.now,
     dialogs: new Map(),
     log: (m: string) => { logs.push(m); },
     mainWindows: { takeMintedSession: () => 'minted-1' } as unknown as CommandContext['mainWindows'],
@@ -51,7 +55,7 @@ function harness(svc: (req: WorkspaceServiceRequest) => Promise<ProcessReply> | 
     runHost: { request: async (req: RunHostRequest) => { hostAsked.push(req); return host(req); } },
     services: new Map([[canonicalPath(WORKSPACE), { link: { request: async (req: WorkspaceServiceRequest) => { svcAsked.push(req); return svc(req); } } }]]) as unknown as CommandContext['services'],
   };
-  return { logs, raised, svcAsked, hostAsked, ctx };
+  return { logs, raised, svcAsked, hostAsked, ctx, quit };
 }
 
 const created = { kind: 'worktree.created', path: `${WORKSPACE}/.rotaris/worktrees/minted-1`, branch: 'rotaris/session/minted-1', baseBranch: 'main', baseRevision: 'abc' } as const;
@@ -107,5 +111,40 @@ describe('session.start, driven without a process behind it', () => {
     expect(h.hostAsked[0]).toMatchObject({ kind: 'session.start', sessionId: 'minted-1', effectiveRoot: created.path, sandboxMode: 'off' });
     expect((h.hostAsked[0] as { worktree?: { created_by_session?: boolean } }).worktree?.created_by_session).toBe(true);
     expect(h.logs.some((l) => l.includes('bound to'))).toBe(true);
+  });
+});
+
+describe('session.continue (PD-ORCH-005 clause 6)', () => {
+  const continued = { kind: 'session.continued', sessionId: 'S1', resumed: true, messageLimit: null } as const;
+  it('relays the decline to the run host, and a plain continue without one', async () => {
+    const h = harness(() => ({ kind: 'ack' }), () => continued);
+    const commands = sessionCommands(h.ctx);
+    expect(await commands['session.continue']({ kind: 'session.continue', sessionId: 'S1', action: 'continue', withoutPaused: true }, windowOn('ws-1'))).toEqual({ ok: true, value: { resumed: true, messageLimit: null } });
+    expect(await commands['session.continue']({ kind: 'session.continue', sessionId: 'S1', action: 'continue' }, windowOn('ws-1'))).toEqual({ ok: true, value: { resumed: true, messageLimit: null } });
+    expect(h.hostAsked).toEqual([
+      { kind: 'session.continue', sessionId: 'S1', action: 'continue', withoutPaused: true },
+      { kind: 'session.continue', sessionId: 'S1', action: 'continue' },
+    ]);
+  });
+});
+
+describe('PD-CHAT-002 revision 2 and PD-ORCH-005 clause 9: a question the quit closes is withdrawn, never cancelled', () => {
+  const cancel = { kind: 'session.control', request: { op: 'cancelQuestions', sessionId: 'S1', args: { requestId: 'Q1' } } } as const;
+
+  it('the dock\'s cancel while the application stays reaches the run host, as REQ-CHAT-101 has it', async () => {
+    const h = harness(() => ({ kind: 'ack' }), () => ({ kind: 'control.result', result: { ok: true } }));
+    await sessionCommands(h.ctx)['session.control'](cancel, windowOn('ws-1'));
+    expect(h.hostAsked).toEqual([{ kind: 'session.control', request: cancel.request }]);
+  });
+
+  it('the dock\'s cancel sent as the application quits is the quit\'s: nothing reaches the run host, whose shutdown withdraws the question', async () => {
+    const h = harness(() => ({ kind: 'ack' }), () => ({ kind: 'control.result', result: { ok: true } }));
+    h.quit.now = true;
+    expect(await sessionCommands(h.ctx)['session.control'](cancel, windowOn('ws-1'))).toEqual({ ok: true, value: { ok: true } });
+    expect(h.hostAsked).toEqual([]);
+    expect(h.logs.some((l) => /left for the quit to withdraw/.test(l))).toBe(true);
+    // Any other control still goes through while the quit is under way.
+    await sessionCommands(h.ctx)['session.control']({ kind: 'session.control', request: { op: 'pause', sessionId: 'S1', args: {} } }, windowOn('ws-1'));
+    expect(h.hostAsked.map((r) => (r as { request: { op: string } }).request.op)).toEqual(['pause']);
   });
 });

@@ -5,7 +5,7 @@ import { RUN_AGENT_ID, skillListing, skillListingBody, type AgentRecord, type Qu
 import { trailerRows } from './transcript/project.js';
 import {
   compactTask, defaultExpanded, delegationSummary, expansionKey, groupDurationMs, groupSeverity, groupSummary, isLiveTerminalRow,
-  personaColourToken, placements, reasoningSummary, Row, rowKey, rowMenuEntries, rowRole, rowTask, rowTime, stalledLabel, stripOutcomeGlyph,
+  personaColourToken, placements, placementsFrom, reasoningSummary, Row, rowKey, rowMenuEntries, rowRole, rowTask, rowTime, stalledLabel, stripOutcomeGlyph,
   THINKING_LIVE_CUTOFF_MS, toolOutcome, trailerText, TranscriptSurfaceProvider, type DisplayRow,
 } from './transcript/Row.js';
 import { RUN_OWNED_KINDS, SCOPE_NO_AGENT, scopedRows } from './TranscriptSurface.js';
@@ -71,6 +71,67 @@ describe('rows — REQ-CHAT-047/057, the role and the attribution', () => {
     const one = [display(row({ index: 0, kind: 'tool' }))];
     expect(placements(one).map((p) => p.recentTool)).toEqual([true]);
     expect(placements([]).length).toBe(0);
+  });
+});
+
+/**
+ * REQ-CHAT-055: an increment's work depends on the rows it changed, not on the rows held. V8's CPU profile of the built
+ * app (2026-09-29, the defect note `appending-at-1200-rows-costs-two-to-three-times-an-empty-transcript.md`, "CPU
+ * profile") named `placements` over the whole displayed array, once per projection, among the loaded side's extra
+ * script. `placementsFrom` builds the places from the previous array's: these hold it to the answer `placements` gives,
+ * and to the work an increment needs.
+ */
+describe('rows — REQ-CHAT-057/067 places, built from the previous array\'s (REQ-CHAT-055)', () => {
+  /** The first form of `placements`, kept as the oracle the incremental one answers to. */
+  const oracle = (displays: readonly DisplayRow[]) => {
+    const roles = displays.map((d) => (d.shape === 'row' ? rowRole(d.row) : d.shape === 'group' ? d.role : `trailer:${d.trailer.sort}`));
+    const toolIndexes: number[] = [];
+    displays.forEach((d, i) => { if (d.shape === 'row' && d.row.kind === 'tool') toolIndexes.push(i); });
+    const recent = new Set(toolIndexes.length < 2 ? toolIndexes : toolIndexes.slice(-2));
+    return displays.map((d, i) => ({ blockStart: i === 0 || roles[i] !== roles[i - 1] || d.shape === 'trailer', recentTool: recent.has(i) }));
+  };
+  const personas = ['orchestrator', 'coder', 'reviewer'];
+
+  it('answers what the whole pass answered over a seeded walk of appends, settles, removals, rows changed in place and trailers', () => {
+    let seed = 0xb10c;
+    const rand = () => { seed = (seed + 0x6d2b79f5) | 0; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    let next = 0;
+    const make = (): DisplayRow => {
+      const index = next;
+      next += 1;
+      const kind = rand() < 0.45 ? 'tool' : rand() < 0.2 ? 'user' : 'agent';
+      return display(row({ index, kind, persona: personas[Math.floor(rand() * personas.length)]! }));
+    };
+    const trailers = trailerRows({ pendingQuestions: [prompt(['one'])], pendingApprovals: [], questionAgent: 'orchestrator' });
+    let rows: DisplayRow[] = [make(), make()];
+    let placed = placementsFrom(null, rows);
+    for (let step = 0; step < 1_000; step += 1) {
+      const r = rand();
+      const body = rows.filter((d) => d.shape !== 'trailer');
+      if (r < 0.4) rows = [...body, make(), ...(rand() < 0.2 ? trailers : [])];
+      else if (r < 0.55 && body.length > 0) rows = [...body.slice(0, -1), make()];
+      else if (r < 0.65 && body.length > 3) rows = body.slice(0, body.length - 1 - Math.floor(rand() * 3));
+      else if (r < 0.75 && body.length > 0) { const at = Math.floor(rand() * body.length); rows = [...body.slice(0, at), make(), ...body.slice(at + 1)]; }
+      else if (r < 0.85) rows = [...body, ...trailers];
+      else rows = [...body, make(), make()];
+      placed = placementsFrom(placed, rows);
+      expect(placed.places, `step ${step}`).toEqual(oracle(rows));
+      expect(placed.tools, `step ${step}`).toEqual(rows.flatMap((d, i) => (d.shape === 'row' && d.row.kind === 'tool' ? [i] : [])));
+    }
+  });
+
+  it('an appended row at 1,200 builds its own place and keeps every place above it but the pair it displaces (fails on the whole pass)', () => {
+    const held = Array.from({ length: 1_200 }, (_, i) => display(row({ index: i, kind: i % 10 === 0 ? 'tool' : 'agent', persona: 'orchestrator' })));
+    const before = placementsFrom(null, held);
+    const after = placementsFrom(before, [...held, display(row({ index: 1_200, kind: 'tool', persona: 'orchestrator' }))]);
+    const rebuilt = after.places.slice(0, 1_200).filter((p, i) => p !== before.places[i]).length;
+    // The tool row at 1,180 leaves the most recent pair (1,190 and the new 1,200 are it now); nothing else above the new
+    // row changes place. The first form — `placements` over the whole array — made 1,201 new places for it.
+    expect(rebuilt).toBe(1);
+    expect(after.places[1_180]).toEqual({ blockStart: false, recentTool: false });
+    expect(after.places[1_190]).toBe(before.places[1_190]);
+    expect(after.places[1_200]).toEqual({ blockStart: false, recentTool: true });
+    expect(after.places).toEqual(oracle(after.display));
   });
 });
 
@@ -245,7 +306,7 @@ describe('rows — REQ-CHAT-068/069, delegation and scope', () => {
     id: 'c1', name: 'helper', givenName: 'helper', persona: 'coding-agent', state: 'running', presentationState: 'running', parentId: 'run',
     dependencies: [], activity: '', model: 'm', depth: 1, background: true, category: 'implementation', spawnedAt: AT, completedAt: null,
     toolCalls: 0, delegationTask: 'a'.repeat(400), reasoning: 'high', contextUsed: 0, contextLimit: 1, grantedTools: [], calledTools: [],
-    activeTools: [], delegationSessionId: null, inheritedContext: '', live: true, grantedMcp: {}, mcpServers: [], compressions: 0,
+    activeTools: [], delegationSessionId: null, inheritedContext: '', live: true, grantedMcp: {}, mcpServers: [], compressions: 0, interruption: null,
   };
 
   it('REQ-CHAT-068: three facts, the task compacted to 110 characters with an ellipsis where it is cut', () => {

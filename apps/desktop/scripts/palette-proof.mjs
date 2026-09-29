@@ -14,7 +14,10 @@ import { cleanEnvironment, findDatabases, hostSwitches, oneDatabase, proofIsolat
  *  3. ADR-0048's application modality, OBSERVED rather than assumed: with the palette open in the main window, a real
  *     operating-system click and real keystrokes aimed at the persona window change nothing in it; closing the palette
  *     gives it input again. Injected events are not used for this, because they enter the renderer below the host's
- *     input block and would pass through a disabled window.
+ *     input block and would pass through a disabled window. The host-input half is WIN32 ONLY: its driver is
+ *     `os-input.ps1` (Win32 cursor and keyboard queue, `IsWindowEnabled`), and X11 has no per-window enabled state
+ *     to report. On any other platform that half is stated not applicable in `results.json` and the application's
+ *     own reading is still asserted (`docs/defects/fixed/palette-proof-reads-the-win32-host-input-on-every-platform.md`).
  *  4. The shortcut table still carries the window: Ctrl+3, Ctrl+, and Ctrl+L, and Ctrl+Return declining while the send
  *     control is disabled (REQ-SHELL-049/050).
  *  5. The palette is reachable at the minimum window size (REQ-SHELL-022's 1000×680).
@@ -28,6 +31,8 @@ const repo = resolve(import.meta.dirname, '..', '..', '..');
 const app = join(repo, 'apps', 'desktop');
 const electron = process.platform === 'win32' ? join(repo, 'node_modules', 'electron', 'dist', 'electron.exe') : join(repo, 'node_modules', 'electron', 'dist', 'electron');
 const osInputScript = join(app, 'scripts', 'os-input.ps1');
+/** The host-input driver is Win32's (`os-input.ps1`); nowhere else does this harness have one. */
+const hostInput = process.platform === 'win32';
 const output = resolve(repo, '.proof', 'palette-proof');
 if (relative(repo, output).startsWith(`..${sep}`) || relative(repo, output) === '..') throw new Error(`proof output escaped the repository: ${output}`);
 rmSync(output, { recursive: true, force: true });
@@ -208,11 +213,14 @@ const s3 = scenario('modality');
     ROTARIS_CAPTURE_VIEWS: '3@3500',
     // The row is selected first and popped out after, the way Part R's proof does it — the control belongs to a selected row.
     ROTARIS_CAPTURE_CLICKS: '.agent-table__row@5000;;.agent-table__row .btn>>Pop out@7500',
-    ROTARIS_CAPTURE_OS_INPUT_SCRIPT: osInputScript,
     // Before the palette: the persona window takes input. Then the palette opens, the same click and keystrokes are
-    // aimed at it, and the host reports what it did. Then the palette closes and input is given back.
+    // aimed at it, and the host reports what it did. Then the palette closes and input is given back. The host's
+    // input and its reading are sent only where there is a driver for them (`hostInput`).
     ROTARIS_CAPTURE_WINDOWS_AT: '8500;;11200;;15200',
-    ROTARIS_CAPTURE_OS_INPUT: 'where@8800;;click:.persona-window__tabs .tab@9200;;where@11400;;click:.persona-window__tabs .tab@11800;;type:zzz@12400;;where@15400',
+    ...(hostInput ? {
+      ROTARIS_CAPTURE_OS_INPUT_SCRIPT: osInputScript,
+      ROTARIS_CAPTURE_OS_INPUT: 'where@8800;;click:.persona-window__tabs .tab@9200;;where@11400;;click:.persona-window__tabs .tab@11800;;type:zzz@12400;;where@15400',
+    } : {}),
     ROTARIS_CAPTURE_CHORDS: 'Ctrl+K@10600;;Escape@14400',
     ROTARIS_CAPTURE_PERSONA_PROBE_AT: '[data-testid="persona-agent-name"]@9600;;[data-testid="persona-agent-name"]@13000;;.persona-window__tabs .tab@13000',
     ROTARIS_CAPTURE_INSPECT_AT: '[data-testid="command-palette"]@11200;;[data-testid="command-palette"]@15200',
@@ -226,30 +234,46 @@ const s3 = scenario('modality');
   expect(paletteOpen && paletteOpen.matches.length === 1, 'the palette was not open for the modality reading');
   const during = windowsAt(r.log, 11200) ?? [];
   expect(during[0]?.enabled === false, `with the palette open the persona window still takes input: ${JSON.stringify(during[0])} (ADR-0048)`);
-  const hostDuring = osInputAt(r.log, 11400, 'where');
-  expect(hostDuring && hostDuring.personaEnabled === false, `the host reports the persona window enabled while the palette is open: ${JSON.stringify(hostDuring)} (ADR-0048)`);
-  const clickDuring = osInputAt(r.log, 11800, 'click');
-  // A disabled window can still be RAISED by the host — Windows refuses the input, not the z-order — so being in the
-  // foreground is not evidence either way. What the reading turns on is that the host reports the window disabled at
-  // the moment of the click, and that the window's own content is unchanged by the click and the keystrokes after it.
-  expect(clickDuring && clickDuring.personaEnabled === false, `a real click found the persona window enabled: ${JSON.stringify(clickDuring)} (ADR-0048)`);
-  // The window's own content is unchanged by the click and the keystrokes that followed it.
+  // The host's own reading and a real input, where this harness can deliver one (Windows). Elsewhere the reading does
+  // not exist — X11 has no per-window enabled state — and no real input reaches the persona window, so "its content
+  // did not change" would be true of an input never sent; both are stated not applicable rather than asserted.
+  let hostDuring = null;
+  let clickDuring = null;
   const nameBefore = personaProbesAt(r.log, 9600, '[data-testid="persona-agent-name"]')?.[0]?.text;
   const nameDuring = personaProbesAt(r.log, 13000, '[data-testid="persona-agent-name"]')?.[0]?.text;
-  expect(nameBefore && nameDuring === nameBefore, `the persona window's content changed under a blocked click: ${nameBefore} → ${nameDuring} (ADR-0048)`);
+  if (hostInput) {
+    hostDuring = osInputAt(r.log, 11400, 'where');
+    expect(hostDuring && hostDuring.personaEnabled === false, `the host reports the persona window enabled while the palette is open: ${JSON.stringify(hostDuring)} (ADR-0048)`);
+    clickDuring = osInputAt(r.log, 11800, 'click');
+    // A disabled window can still be RAISED by the host — Windows refuses the input, not the z-order — so being in the
+    // foreground is not evidence either way. What the reading turns on is that the host reports the window disabled at
+    // the moment of the click, and that the window's own content is unchanged by the click and the keystrokes after it.
+    expect(clickDuring && clickDuring.personaEnabled === false, `a real click found the persona window enabled: ${JSON.stringify(clickDuring)} (ADR-0048)`);
+    // The window's own content is unchanged by the click and the keystrokes that followed it.
+    expect(nameBefore && nameDuring === nameBefore, `the persona window's content changed under a blocked click: ${nameBefore} → ${nameDuring} (ADR-0048)`);
+  }
   const after = windowsAt(r.log, 15200) ?? [];
   const paletteClosed = inspectAt(r.log, 15200, '[data-testid="command-palette"]');
   expect(paletteClosed && paletteClosed.matches.length === 0, 'the palette did not close on Escape');
   expect(after[0]?.enabled === true, `closing the palette did not give the persona window its input back: ${JSON.stringify(after[0])} (ADR-0048)`);
-  const hostAfter = osInputAt(r.log, 15400, 'where');
-  expect(hostAfter && hostAfter.personaEnabled === true, `the host still reports the persona window disabled after the palette closed: ${JSON.stringify(hostAfter)}`);
+  const hostAfter = hostInput ? osInputAt(r.log, 15400, 'where') : null;
+  if (hostInput) expect(hostAfter && hostAfter.personaEnabled === true, `the host still reports the persona window disabled after the palette closed: ${JSON.stringify(hostAfter)}`);
   expect(/application modality on: 1 persona window\(s\) disabled/.test(r.log) && /application modality off: 1 persona window\(s\) enabled/.test(r.log), 'main did not log the modality pair (ADR-0048)');
   results.modality = {
     enabledBefore: before[0].enabled, enabledDuring: during[0]?.enabled, enabledAfter: after[0]?.enabled,
-    hostDuring: { personaEnabled: hostDuring.personaEnabled, foregroundIsPersona: hostDuring.foregroundIsPersona },
-    clickDuring: { personaEnabled: clickDuring.personaEnabled, foregroundIsPersona: clickDuring.foregroundIsPersona, at: clickDuring.clickedAt, note: 'the host raises a disabled window but delivers it no input' },
-    hostAfter: { personaEnabled: hostAfter.personaEnabled },
-    personaContent: { before: nameBefore, during: nameDuring },
+    ...(hostInput ? {
+      hostDuring: { personaEnabled: hostDuring.personaEnabled, foregroundIsPersona: hostDuring.foregroundIsPersona },
+      clickDuring: { personaEnabled: clickDuring.personaEnabled, foregroundIsPersona: clickDuring.foregroundIsPersona, at: clickDuring.clickedAt, note: 'the host raises a disabled window but delivers it no input' },
+      hostAfter: { personaEnabled: hostAfter.personaEnabled },
+      personaContent: { before: nameBefore, during: nameDuring },
+    } : {
+      hostInput: {
+        applicable: false,
+        reason: `the host-input driver is Win32's (os-input.ps1: the Win32 cursor and keyboard queue, IsWindowEnabled) and this host is ${process.platform}; X11 has no per-window enabled state to report, and with no real input sent the persona window's unchanged content would prove nothing`,
+        notMeasured: 'that a REAL operating-system click and keystrokes are refused by the disabled persona window on this platform (an XTEST driver would measure it)',
+        personaContentUnasserted: { before: nameBefore, during: nameDuring },
+      },
+    }),
     png: r.png, elapsedMs: r.elapsedMs,
   };
   expect(r.errors.length === 0, `renderer errors: ${r.errors.join(' | ')}`);

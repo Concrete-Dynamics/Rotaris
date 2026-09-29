@@ -146,6 +146,9 @@ Invariants:
 
 - **A declared name with no executor is removed from the persona**, not offered and failed. One resolution
   feeds both the prompt listing and the gate, so what the model is told it has is what the gate will allow.
+  Each removal is logged with the persona and the control (REQ-TOOLS-006) by `createToolPort`: a narrowing
+  control's (`run_allow_list`, `coordinator_only`, `read_only`, `tool_restrictions`) at `info` through
+  `ToolPortContext.info`, a prerequisite's (REQ-TOOLS-004's reason codes, `executor_absent` among them) at `warning`.
 - The gate decides; the executor never asks. An approval travels `gate → presenter → main → dialog` — see
   [`06-sequences.md` §2](06-sequences.md#2-a-permission-approval-end-to-end).
 - A tool that reaches the filesystem states its read roots; a tool that reaches the network reads the egress

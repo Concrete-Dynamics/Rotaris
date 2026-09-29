@@ -176,6 +176,46 @@ ${pin === null ? '' : `    permission_mode: ${pin}\n`}${tools === null ? '' : ` 
   });
 
   /**
+   * Live-run finding L14 (R-067): every coordinated run wrote four `warning` lines for the orchestrator's
+   * `coordinator_only` removals — the configuration working as designed. REQ-TOOLS-006 obliges the line and names no
+   * level; a REQ-TOOLS-006 control's removal is written at `info` (PD-MONITOR-002's default threshold keeps it), and a
+   * REQ-TOOLS-004 prerequisite's removal — a declared tool this run cannot provide — stays a warning.
+   */
+  it('REQ-TOOLS-006: a narrowing control\'s removal is logged at info with the persona and the control; a REQ-TOOLS-004 prerequisite\'s stays a warning', async () => {
+    mkdirSync(join(dir, '.rotaris'), { recursive: true });
+    writeFileSync(join(dir, '.rotaris', 'agents.yaml'), yaml(null, null));
+    const loaded = loadConfiguration({ globalDir: join(dir, 'global'), workspaceRoot: dir });
+    if (!loaded.ok) throw new Error('configuration');
+    const cfg = loaded.value;
+    const resolver = personaResolverFor(cfg, true, (m) => warnings.push(m));
+    const infos: string[] = [];
+    const deps: ToolPortDeps = { clocks: new FakeClock(), runtime: () => runtimeFromConfiguration(cfg), personas: () => resolver, presenter: { present: async () => ({ ok: true }), close: () => undefined }, nextSequence: () => 1, fileStates: new Map(), terminal: null, egress: () => permissivePolicyRead };
+    createToolPort({
+      sessionId: asSessionId('S1'), workspaceRoot: dir, writer, persona: 'orchestrator', agentName: 'orchestrator', parentId: 'root:1', depth: 0,
+      delegation: {} as NonNullable<ToolPortContext['delegation']>,
+      requestedMode: 'ask', modeOverride: null, attended: () => true, warn: (m) => warnings.push(m), info: (m) => infos.push(m), abortRun: () => undefined,
+    }, deps);
+    const removed = (lines: readonly string[]) => lines.filter((l) => / removed from orchestrator by /.test(l));
+    expect(removed(warnings).filter((l) => l.includes(' by coordinator_only '))).toEqual([]);
+    for (const tool of ['terminal', 'write_file', 'haet_edit', 'haet']) expect(removed(infos)).toContain(`tool '${tool}' removed from orchestrator by coordinator_only (REQ-TOOLS-004/006)`);
+    // No artifact store was handed to this port: that removal is a prerequisite's, and it is not moved below warning.
+    expect(removed(warnings)).toContain("tool 'artifact_read' removed from orchestrator by prerequisite (artifact_store_absent) (REQ-TOOLS-004/006)");
+    expect(removed(infos).filter((l) => l.includes(' by prerequisite '))).toEqual([]);
+
+    // The same orchestrator doing the work itself (no delegation runtime) keeps its write and command tools; `terminal`
+    // then needs a backend this port was not given, and `delegate` a runtime — prerequisites' removals, still warnings.
+    warnings.length = 0;
+    infos.length = 0;
+    createToolPort({
+      sessionId: asSessionId('S1'), workspaceRoot: dir, writer, persona: 'orchestrator', agentName: 'orchestrator', parentId: 'root:1', depth: 0,
+      requestedMode: 'ask', modeOverride: null, attended: () => true, warn: (m) => warnings.push(m), info: (m) => infos.push(m), abortRun: () => undefined,
+    }, deps);
+    expect(removed(warnings)).toContain("tool 'terminal' removed from orchestrator by prerequisite (terminal_backend_absent) (REQ-TOOLS-004/006)");
+    expect(removed(warnings)).toContain("tool 'delegate' removed from orchestrator by prerequisite (delegation_runtime_absent) (REQ-TOOLS-004/006)");
+    expect(removed(infos)).toEqual([]);
+  });
+
+  /**
    * PD-TOOLS-005 through the real port: the engine's away holder reaches the gate, which marks it when the configured
    * wait (`runtime.approval_timeout_seconds`, 300 s here) expires unanswered and, while it is marked, resolves the next
    * ask at once with the directive's reason and presents nothing. The return is the engine's (`sessions.ts`); here the

@@ -87,4 +87,17 @@ during runs 1 and 3: 8 and 11 Electron processes at their start.
 
 In each run, launch 2's lock pid was dead at the first probe.
 
+**Second round, with `plantedDeadPid`** (`f8d8799` and `cfe4c9a`, the same build, `--skip-build`). Three more runs in
+a row exited 0 in 101 s, 99 s and 100 s, each with "sessions proof: 10 scenarios passed" and all ten scenarios in
+`results.json`. The host was loaded: 4.4 to 7.3, with 8 to 16 Electron processes from another tree at each start.
+
+| Run | Launch 2's lock pid | `C-deadlock`'s planted pid | `D-live`'s holder pid |
+|---|---|---|---|
+| 1 | 25897 | 27057 | 27056 |
+| 2 | 32021 | 741 | 740 |
+| 3 | 3397 | 4745 | 4734 |
+
+In run 2 the pid counter wrapped between launch 2 and `repair-all` (32 021, then 741). The planted pid was still dead
+when the product probed it. On Linux only the `linux` branch runs; the `win32` branch is pinned by the unit case.
+
 **Not shown:** Windows and macOS (IC-3). The macOS path is measured by the unit test only.

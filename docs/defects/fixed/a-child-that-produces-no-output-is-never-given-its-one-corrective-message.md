@@ -52,33 +52,38 @@ wired in `IterationChildren.execute`. The readings are [OQ-109](../../architectu
 `runtime.child_stall_timeout`, else 90 s, and its cadence is REQ-MONITOR-117's. It is fed three things:
 - every streamed part of every model step: `TurnSink.event`, `TurnDeps.onModelEvent`;
 - every tool call's start and end: `TurnDeps.onToolStarted`, `onToolCompleted`;
-- the corrective message.
+- every turn the run starts for the child: its payload or record, its children's reports, a re-prompt, the corrective
+  message.
 
 What it writes:
 - at every stall evaluation, a `stall` issue carrying the active tools, the last five tool calls and the last model
   event's type (REQ-MONITOR-119); at stall entry, and at REQ-MONITOR-120's throttle after that, a warning on the run's
   warning channel too;
-- with a tool call in flight, a `child_waiting_on_tools` entry instead;
-- when activity resumes, `child_stall_recovered`.
+- with a tool call in flight, a `child waiting on tools: …` line in the session log instead (REQ-MONITOR-118);
+- when activity resumes, a `child stall recovered: …` line (REQ-MONITOR-120).
 
 **The corrective message (REQ-NOTIFY-111/112).** Some children's turns end `failed` after no output for the whole window,
-with no tool call in flight. Such a child is given one corrective message (`child_corrective_message`) and resumes from
-the conversation the failed turn left. The exceptions are the outcomes REQ-NOTIFY-112 excludes, loop supervision's
-escalation, the rest and an answer-only route. It gets one message per child task, across REQ-ORCH-088's fallback retry
-too.
+with no tool call in flight. Such a child is given one corrective message and resumes from the conversation the failed
+turn left; the session log says so in a `child corrective message: …` line. The exceptions are the outcomes
+REQ-NOTIFY-112 excludes, loop supervision's escalation, the rest and an answer-only route. It gets one message per child
+task: across REQ-ORCH-088's fallback retry, and across PD-ORCH-005's resume, which reads from the task's conversation
+record whether it was already given one.
 
 Evidence:
-- `stall.test.ts`, eleven unit cases over `FakeClock`: the cadence, the throttle, entry and repeat, the recovery, the
-  wait on tools, the diagnostics, output against model events, eligibility against every excluded outcome, and the
-  composed and fixed instructions.
-- `children.test.ts`, "a child that produces no output is given its one corrective message", seven end-to-end cases
+- `stall.test.ts`, twelve unit cases over `FakeClock`: the cadence, the throttle, entry and repeat, the recovery, the
+  wait on tools, the diagnostics, output against model events, eligibility against every excluded outcome, the
+  composed and fixed instructions, and which conversations carry a corrective message.
+- `record.test.ts`, one case: `everRecorded` returns the messages a compression or the retry's restart replaced.
+- `children.test.ts`, "a child that produces no output is given its one corrective message", nine end-to-end cases
   through `Sessions`:
   - the stall is warned while the child still runs, and the message follows its task and lets it succeed;
   - a `stall` issue at every evaluation, and the warning only at entry and at the throttle;
   - a second silent failure ends the child `failed` with no second message;
   - a failure inside the window earns nothing;
   - `runtime.child_stall_timeout` of 30 s is the window, at 29 s against 30 s;
-  - waiting on a tool call is not a stall, and a stall that ends in output is recorded recovered.
+  - waiting on a tool call is not a stall, and a stall that ends in output is recorded recovered;
+  - a child given its message, paused mid-turn and continued, is not given a second when its resumed step fails silent;
+  - a child that waited on its own child past the window, and whose resumed step fails at once, is given nothing.
 - `ladder.test.ts`, two end-to-end cases: one message across the fallback retry, and a role's `stall_timeout` as the
   threshold.
 - `model.test.ts`: every streamed part reaches `TurnSink.event`.
@@ -101,3 +106,19 @@ the question OQ-109 leaves for a ruling. `children.test.ts`'s "a `stall` issue a
 the issue is written with the warning only. The timeline words `child_waiting_on_tools`, `child_stall_recovered` and
 `child_corrective_message` are outside REQ-ORCH-139's closed vocabulary; the first form minted them without saying so,
 and OQ-109 now records the gap and the reading built.
+
+**Corrected by the verifier's second round, 2026-09-29.** Three corrections, each with the reason it replaces:
+- *Once per child task.* The first form held the count in a variable of one execution and said "one message per child
+  task", having shown only REQ-ORCH-088's retry. PD-ORCH-005's resume is a new execution of the same task, and a
+  paused and continued child was given a second message. The resumed execution now reads the task's whole
+  conversation record for a corrective message (`hadCorrectiveMessage`, `ConversationRecord.everRecorded`), and
+  `children.test.ts`'s "across PD-ORCH-005" fails without it.
+- *The silence.* The first form started the silence again only at the attempt's start, at a tool result and at the
+  corrective message, so a child that waited on its own children past the window was blamed for that wait: a resumed
+  step that failed at once earned the message. Every turn the run starts for the child now starts it again, and
+  "a child that waited on its own child past the window" fails without it.
+- *The words.* The first round wrote the wait, the recovery and the message as the timeline entries
+  `child_waiting_on_tools`, `child_stall_recovered` and `child_corrective_message`, names REQ-ORCH-139 forbids, on the
+  reason that the session log was out of reach without editing `Run.turn`. It was not: the run's `warn`, which the
+  children already hold, is the channel OQ-76's lines reach the session log through. They are session-log lines now,
+  and OQ-109 keeps the question of their words for the owner.

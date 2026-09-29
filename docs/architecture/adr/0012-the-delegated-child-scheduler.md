@@ -481,3 +481,14 @@ REQ-SESSION-133's ring. That reasoning narrowed REQ-MONITOR-119's "every stall e
 (REQ-MONITOR-120) bounds only "the warning itself", so it is kept here as the falsified reason: the issue is now
 written at every evaluation, and the eviction is left to a ruling in OQ-109. The same round recorded in OQ-109 that
 three of the timeline words the watch and the recovery write are outside REQ-ORCH-139's closed vocabulary.
+
+**Corrected in place by the verifier's second round, 2026-09-29.** Two claims above were narrower than they read.
+"Once per child … state the execution keeps across attempts" is true of REQ-ORCH-088's retry and false of PD-ORCH-005's
+resume, which is a new execution of the same task: a paused and continued child was given a second message. The count
+is now read, at a resumed execution's start, from the task's whole conversation record. And the silence the recovery
+reads started again only at the attempt's start, a tool result and the corrective message, so a child that waited on its
+own children past the window was blamed for the wait; every turn the run starts for the child now starts it again.
+Neither changes the decision: the watch still reads only the clock port and the child's own events. The three timeline
+words are no longer written: they are session-log lines through the run's `warn`, as OQ-76's are, the reason for
+minting them (that the log was out of reach without editing `Run.turn`) having been false. `children.test.ts` now has
+nine cases, `stall.test.ts` twelve, and `record.test.ts` one more.

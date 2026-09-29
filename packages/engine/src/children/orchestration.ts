@@ -16,7 +16,7 @@ import { CHILD_STALL_TIMEOUT_MS, continuationRefusal, cutOffLines, cutOffReport,
 import { BUILT_IN_PERSONAS, type Persona, type PersonaResolver, type RoleName } from './personas.js';
 import { fallbackReport, produceReport, type ReportInput, type SummariserDeps } from './report.js';
 import { Scheduler } from './scheduler.js';
-import { correctiveInstruction, StallWatch, stallRecoveryDue, stallWarning } from './stall.js';
+import { correctiveInstruction, correctiveMessageLine, hadCorrectiveMessage, StallWatch, stallRecoveredLine, stallRecoveryDue, stallWaitingLine, stallWarning } from './stall.js';
 import { validateWriteScope, WriteClaims, writeScopeBlock, type ClaimHit, type ScopeDisclosure } from './write-scope.js';
 import type { HookPort } from '../hooks-port.js';
 import { withContextUnits, withPlaybook } from '../run/run.js';
@@ -633,9 +633,10 @@ export class IterationChildren implements DelegationOps {
     const stallMs = millis(persona?.stallTimeoutMs ?? deps.childStallTimeoutMs ?? CHILD_STALL_TIMEOUT_MS);
     const progress = new ProgressLog(deps.workspaceRoot);
     // REQ-ORCH-089 / REQ-MONITOR-117..120: the stall watch over the same window — visibility only, it cancels nothing. What
-    // it reports is written only while this execution still belongs to a live run (REQ-SESSION-094). The timeline words
-    // `child_waiting_on_tools`, `child_stall_recovered` and `child_corrective_message` are outside REQ-ORCH-139's closed
-    // vocabulary: OQ-109 records the gap and this reading.
+    // it reports is written only while this execution still belongs to a live run (REQ-SESSION-094). REQ-ORCH-139's closed
+    // timeline vocabulary has no word for the wait on tools, the recovery or the corrective message, so, as OQ-76 did for
+    // the user's presence, they are written to the session log through the run's `warn` and no timeline word is minted;
+    // OQ-109 asks the owner for the words.
     const stallWatch = new StallWatch(deps.clocks, stallMs, {
       // REQ-MONITOR-119: the `stall` issue at every stall evaluation; REQ-MONITOR-120 throttles only the warning.
       stalled: (s) => {
@@ -644,13 +645,18 @@ export class IterationChildren implements DelegationOps {
         if (s.warn) deps.warn(message);
         deps.writer.recordIssue({ kind: 'stall', severity: 'warning', actor: row.canonical_name, message, metadata: { task_id: row.task_id, silent_seconds: s.silentS, active_tools: s.activeTools, recent_tool_calls: s.recentCalls, last_model_event: s.lastModelEvent } });
       },
-      waiting: (w) => { if (!this.detached) deps.writer.appendTimeline('child_waiting_on_tools', 'rotaris', `${row.canonical_name} (${row.task_id}) is waiting on ${w.activeCalls} active tool call(s): no model event or token for ${w.silentS} seconds.`, { task_id: row.task_id, active_calls: w.activeCalls, silent_seconds: w.silentS }); },
-      recovered: () => { if (!this.detached) deps.writer.appendTimeline('child_stall_recovered', 'rotaris', `${row.canonical_name} (${row.task_id}) is active again after a stall.`, { task_id: row.task_id }); },
+      waiting: (w) => { if (!this.detached) deps.warn(stallWaitingLine(row.canonical_name, row.task_id, w.activeCalls, w.silentS)); },
+      recovered: () => { if (!this.detached) deps.warn(stallRecoveredLine(row.canonical_name, row.task_id)); },
       // REQ-ORCH-089's stall callback: no host listens yet, so no badge draws (`a-stalled-child-is-never-shown-stalled.md`).
       evaluated: () => undefined,
     });
-    /** REQ-NOTIFY-112: the one corrective message about its lack of progress, per child task, however often the outcome recurs. */
-    let corrected = false;
+    /**
+     * REQ-NOTIFY-112: the one corrective message about its lack of progress, per child task, however often the outcome
+     * recurs. It holds across REQ-ORCH-088's retry within this execution, and a resumed execution (PD-ORCH-005) of a task
+     * that already had it reads so from what the task was told: its whole record, replaced messages included, and the
+     * conversation it resumes from.
+     */
+    let corrected = resume !== null && (hadCorrectiveMessage(resume.history) || hadCorrectiveMessage(deps.record?.everRecorded(row.task_id) ?? []));
     // Part Q: the child's own cell — its model (an override of the session applied), its role's fallback, one fallback across both routes.
     const resilience = deps.resilience?.forChild(persona, { model: persona?.modelRef ?? deps.model, thinking: persona?.thinking ?? deps.thinking }, childTimeoutMs) ?? null;
     // Part AH: this child's own capacity and its own plan — the ledger row is where a child's task plan lives.
@@ -713,7 +719,13 @@ export class IterationChildren implements DelegationOps {
         backstop.handle = deps.clocks.timers.after(CHILD_LANDING_GRACE, () => { controller.abort(); });
       });
       let firstCall = true;
-      const turn = (task: string | null, history: readonly ChatMessage[]) => { const wasFirst = firstCall; firstCall = false; return runTurn({
+      const turn = (task: string | null, history: readonly ChatMessage[]) => {
+        const wasFirst = firstCall; firstCall = false;
+        // REQ-NOTIFY-112: the run hands the child something to answer — its payload, its record, its children's reports, a
+        // re-prompt or the corrective message — so the silence it could be blamed for starts now. A wait on its own children
+        // before this asked it for no output.
+        stallWatch.activity();
+        return runTurn({
         writer: deps.writer, owner: deps.owner, backend: deps.backend, tools, clocks: deps.clocks, persona: row.persona, agentName: row.canonical_name,
         // REQ-WORKSPACE-060 (ADR-0063): the session's context units follow the role's instructions and its playbook,
         // read at THIS construction so a skill force-loaded since the last child reaches this one.
@@ -755,7 +767,8 @@ export class IterationChildren implements DelegationOps {
           corrected = true;
           const quietS = Math.floor(stallWatch.quietFor() / 1000);
           const instruction = correctiveInstruction({ quietS, windowS: stallMs / 1000, failure: failedStep?.headline ?? 'no reason was given' });
-          deps.writer.appendTimeline('child_corrective_message', 'rotaris', `${row.canonical_name} (${row.task_id}) produced no output for ${quietS} seconds and its model request failed; it was given its one corrective message and resumes (REQ-NOTIFY-111).`, { task_id: row.task_id, quiet_seconds: quietS, error: failedStep?.headline ?? '' });
+          // The message itself is in the child's conversation record (REQ-ORCH-140); the session log says it was sent (OQ-109).
+          deps.warn(correctiveMessageLine(row.canonical_name, row.task_id, quietS, failedStep?.headline ?? 'no reason was given'));
           stallWatch.activity();
           const stopped = outcome;
           let first = true;

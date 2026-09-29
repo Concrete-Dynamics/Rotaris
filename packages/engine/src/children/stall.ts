@@ -1,5 +1,5 @@
 import { millis, type Clocks, type Millis, type TimerHandle } from '@rotaris/kernel';
-import type { ModelError } from '@rotaris/model';
+import type { ChatMessage, ModelError } from '@rotaris/model';
 
 /**
  * REQ-ORCH-089 / REQ-MONITOR-117..120, the stall watchdog, and REQ-NOTIFY-111/112, the one corrective message a child
@@ -90,7 +90,11 @@ export class StallWatch {
     this.timer = null;
   }
 
-  /** The run gave the child something to answer (its payload, a corrective message): the silence starts again. */
+  /**
+   * The run gave the child something to answer — its payload, its record at a resume, its children's reports, a re-prompt
+   * or the corrective message: the silence starts again, so a wait on its own children before it is not counted as the
+   * child's silence (REQ-NOTIFY-112).
+   */
   activity(): void {
     const now = this.clocks.monotonic.now();
     this.lastEventAt = now;
@@ -164,6 +168,27 @@ export function stallWarning(agentName: string, taskId: string, silentS: number)
   return `child appears stalled: no model event or token for ${silentS} seconds (${agentName}, ${taskId}); the run is still waiting on it.`;
 }
 
+/*
+ * The three lines below go to the session log through the run's `warn` (REQ-SESSION-142), in the manner OQ-76 set for the
+ * user's presence: REQ-ORCH-139 closes the timeline vocabulary and it has no word for any of them, so none is minted here.
+ * OQ-109 asks the owner for the words.
+ */
+
+/** REQ-MONITOR-118's informational message: the silence with tool calls in flight, which is a wait and not a stall. */
+export function stallWaitingLine(agentName: string, taskId: string, activeCalls: number, silentS: number): string {
+  return `child waiting on tools: ${agentName} (${taskId}) has ${activeCalls} active tool call(s) and no model event or token for ${silentS} seconds; the run is still waiting on it (REQ-MONITOR-118)`;
+}
+
+/** REQ-MONITOR-120's recovery: activity resumed after a stall. */
+export function stallRecoveredLine(agentName: string, taskId: string): string {
+  return `child stall recovered: ${agentName} (${taskId}) is active again after a stall (REQ-MONITOR-120)`;
+}
+
+/** REQ-NOTIFY-111: that the child was given its one corrective message, and why. */
+export function correctiveMessageLine(agentName: string, taskId: string, quietS: number, failure: string): string {
+  return `child corrective message: ${agentName} (${taskId}) produced no output for ${quietS} seconds and its model request then failed (${failure}); it was given its one corrective message and resumes (REQ-NOTIFY-111)`;
+}
+
 /** REQ-NOTIFY-112's stuck condition this build detects: the child produced no output within the window before it failed. */
 export interface NoOutputCondition {
   readonly quietS: number;
@@ -178,13 +203,16 @@ export interface NoOutputCondition {
  */
 export const FIXED_CORRECTIVE_INSTRUCTION = 'You appear to be repeating a cycle of reading files and editing them without making progress. Stop re-reading: make the change the task needs now with what you already know, check it once, and answer with what you did.';
 
+/** How a composed corrective message begins, so the conversation that carries one says so (REQ-NOTIFY-112's per-task count). */
+export const CORRECTIVE_MARK = '[Corrective message]';
+
 /**
  * REQ-NOTIFY-111: the corrective instruction for `condition`, composed from what is known of it, or the fixed
  * instruction where there is nothing to compose from.
  */
 export function correctiveInstruction(condition: NoOutputCondition | null): string {
   if (condition === null) return FIXED_CORRECTIVE_INSTRUCTION;
-  return `[Corrective message] You produced no output for ${condition.quietS} seconds (the stall window, runtime.child_stall_timeout, is ${condition.windowS} seconds), and your last model request then failed: ${condition.failure}. Carry on from where you stopped: take the next step of your task with your tools, keep each step small so that output starts promptly, and answer with what you did.`;
+  return `${CORRECTIVE_MARK} You produced no output for ${condition.quietS} seconds (the stall window, runtime.child_stall_timeout, is ${condition.windowS} seconds), and your last model request then failed: ${condition.failure}. Carry on from where you stopped: take the next step of your task with your tools, keep each step small so that output starts promptly, and answer with what you did.`;
 }
 
 /** What `stallRecoveryDue` reads of a child whose turn has just returned. */
@@ -231,4 +259,13 @@ export function stallRecoveryDue(i: StallRecoveryInput): boolean {
   if (i.status !== 'failed' || i.escalated || i.aborted || i.timedOut || i.resting || i.paused || i.answerRoute || i.corrected) return false;
   if (i.error !== null && unrecoverableFailure(i.error)) return false;
   return i.activeCalls === 0 && i.quietMs >= i.thresholdMs;
+}
+
+/**
+ * REQ-NOTIFY-112: "the count is per child task". A child's execution can end and the same task carry on in another —
+ * PD-ORCH-005's resume after a pause, a stop, a quit or a crash — so whether the task already had its message is read
+ * from what it was told: a user message that is a corrective message, composed or fixed, anywhere in `messages`.
+ */
+export function hadCorrectiveMessage(messages: readonly ChatMessage[]): boolean {
+  return messages.some((m) => m.role === 'user' && m.content.some((p) => p.kind === 'text' && (p.text.startsWith(CORRECTIVE_MARK) || p.text === FIXED_CORRECTIVE_INSTRUCTION)));
 }

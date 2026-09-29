@@ -14,8 +14,9 @@ names that no list in `docs/spec/` or `docs/product/` has. A grep of `appendTime
 - `packages/engine/src/run/turn.ts`: `loop_supervisor_activation`, `steering_injected`;
 - `packages/engine/src/run/compression.ts`: `context_compressed`;
 - `packages/engine/src/children/orchestration.ts`: `child_timeout_fallback` (the vocabulary's word for the fact looks
-  to be `fallback_model`), `context_selection`, and the three OQ-109 records (`child_waiting_on_tools`,
-  `child_stall_recovered`, `child_corrective_message`);
+  to be `fallback_model`) and `context_selection`. The three OQ-109 records (`child_waiting_on_tools`,
+  `child_stall_recovered`, `child_corrective_message`) were written here until the verifier's second round of
+  2026-09-29 moved them to the session log, as OQ-76 did; they were never on `main`;
 - `packages/engine/src/session-writer.ts`: `child_paused`, `child_resumed`, `pause_resolved`, `prompt_queued`,
   `prompt_triggered`, `run_paused_message_limit`, `transcript_cleared`.
 

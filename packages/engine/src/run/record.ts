@@ -63,6 +63,20 @@ export class ConversationRecord {
     };
   }
 
+  /**
+   * Every message the agent's record holds, including those a compression or REQ-ORCH-088's restart replaced — what the
+   * agent was ever told, where `load` is only what a resume sends. Empty with no store.
+   */
+  everRecorded(taskId: string): ChatMessage[] {
+    if (!this.dal) return [];
+    const out: ChatMessage[] = [];
+    for (const row of this.dal.agentMessagesOf(this.sessionId, taskId)) {
+      const body: unknown = JSON.parse(row.body);
+      if (row.kind === 'replacement') { if (Array.isArray(body)) out.push(...(body as ChatMessage[])); } else out.push(body as ChatMessage);
+    }
+    return out;
+  }
+
   /** The conversation a resume sends the agent's model: its last replacement, then every message after it. Empty with no store. */
   load(taskId: string): ChatMessage[] {
     return this.dal ? conversationOf(this.dal.agentConversation(this.sessionId, taskId)) : [];

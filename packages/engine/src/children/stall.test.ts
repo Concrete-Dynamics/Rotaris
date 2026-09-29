@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FakeClock, millis } from '@rotaris/kernel';
 import { modelError } from '@rotaris/model';
-import { correctiveInstruction, FIXED_CORRECTIVE_INSTRUCTION, stallCadence, stallRecoveryDue, stallRepeat, StallWatch, stallWarning, type StallRecoveryInput, type StallReport } from './stall.js';
+import { correctiveInstruction, FIXED_CORRECTIVE_INSTRUCTION, hadCorrectiveMessage, stallCadence, stallRecoveryDue, stallRepeat, StallWatch, stallWarning, type StallRecoveryInput, type StallReport } from './stall.js';
 
 function watched(thresholdMs: number) {
   const clock = new FakeClock();
@@ -143,5 +143,17 @@ describe('REQ-NOTIFY-111/112: the corrective message', () => {
     expect(correctiveInstruction({ quietS: 95, windowS: 90, failure: 'the stream ended' })).toBe('[Corrective message] You produced no output for 95 seconds (the stall window, runtime.child_stall_timeout, is 90 seconds), and your last model request then failed: the stream ended. Carry on from where you stopped: take the next step of your task with your tools, keep each step small so that output starts promptly, and answer with what you did.');
     expect(correctiveInstruction(null)).toBe(FIXED_CORRECTIVE_INSTRUCTION);
     expect(FIXED_CORRECTIVE_INSTRUCTION).toMatch(/reading files and editing them/);
+  });
+
+  it('REQ-NOTIFY-112 "per child task": a conversation that carries a corrective message, composed or fixed, says so; the words elsewhere do not', () => {
+    const user = (text: string) => ({ role: 'user' as const, content: [{ kind: 'text' as const, text }] });
+    const composed = correctiveInstruction({ quietS: 95, windowS: 90, failure: 'the stream ended' });
+    expect(hadCorrectiveMessage([user('TASK: x'), { role: 'assistant', content: [{ kind: 'text', text: 'ok' }] }, user(composed)])).toBe(true);
+    expect(hadCorrectiveMessage([user(FIXED_CORRECTIVE_INSTRUCTION)])).toBe(true);
+    expect(hadCorrectiveMessage([])).toBe(false);
+    expect(hadCorrectiveMessage([user('TASK: x')])).toBe(false);
+    // Only what the run told the child counts: the child quoting it, or a task mentioning it further in, is not the message.
+    expect(hadCorrectiveMessage([{ role: 'assistant', content: [{ kind: 'text', text: composed }] }])).toBe(false);
+    expect(hadCorrectiveMessage([user(`TASK: explain what a ${composed}`)])).toBe(false);
   });
 });

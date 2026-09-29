@@ -611,21 +611,23 @@ threshold is the role's `stall_timeout`, else `runtime.child_stall_timeout`, 90 
 as the progress rule's. It evaluates every `max(1, min(threshold/6, 5))` seconds and never cancels anything. It is fed:
 - every streamed part (`TurnSink.event`, then `TurnDeps.onModelEvent`);
 - each tool call's start and end (`onToolStarted`, `onToolCompleted`);
-- the corrective message.
+- every turn the run starts for the child (the `turn` closure in `execute`): its payload or record, its children's
+  reports, a re-prompt, the corrective message — so a wait on its own children is never counted as its silence.
 
 What it writes:
 - a silence of the threshold with no call in flight: a `stall` issue at every evaluation (REQ-MONITOR-119), and a
   warning at entry and then every `max(threshold, 30)` s (REQ-MONITOR-120);
-- the same silence with calls in flight: `child_waiting_on_tools`;
-- activity resuming after a stall: `child_stall_recovered`.
+- the same silence with calls in flight: a `child waiting on tools: …` line (REQ-MONITOR-118);
+- activity resuming after a stall: a `child stall recovered: …` line (REQ-MONITOR-120).
 
-Those two timeline words and `child_corrective_message` are not in REQ-ORCH-139's closed vocabulary; OQ-109 records
-the gap and the reading built.
+Those lines, and the `child corrective message: …` line below, go to the session log through the run's `warn`, as
+OQ-76's do: REQ-ORCH-139's closed timeline vocabulary has no word for them and none is minted (OQ-109).
 
 Its per-evaluation callback has no listener yet. A child's turn can end `failed` after no output for the whole window,
-with no call in flight. Unless the outcome is one REQ-NOTIFY-112 excludes, that child is given one corrective message
-(`child_corrective_message`): the next user message of the conversation the failed turn left, run through the resume
-loop. It is given once per child task, across the fallback retry too.
+with no call in flight. Unless the outcome is one REQ-NOTIFY-112 excludes, that child is given one corrective message:
+the next user message of the conversation the failed turn left, run through the resume loop. It is given once per
+child task: across the fallback retry, and across PD-ORCH-005's resume, whose execution reads the task's whole
+conversation record (`ConversationRecord.everRecorded`) for a message it was already given.
 
 **Write scopes (PD-TOOLS-006; `children/write-scope.ts`).** A `delegate` call may carry `write_scope`, path
 patterns in the `glob` tool's dialect (the one compiler, `kernel/glob.ts`). `IterationChildren.delegate` validates

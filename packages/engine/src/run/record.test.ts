@@ -29,6 +29,13 @@ describe('conversationOf — the decode a resume reads (PD-ORCH-005)', () => {
     // REQ-ORCH-088's retry: an empty replacement starts the conversation again.
     expect(conversationOf([row(1, 'message', user('a')), row(2, 'replacement', []), row(3, 'message', user('a again'))])).toEqual([user('a again')]);
   });
+
+  it('everRecorded: every message the record holds, the ones a compression or REQ-ORCH-088\'s restart replaced included (REQ-NOTIFY-112\'s per-task count reads it)', () => {
+    const rows = [row(1, 'message', user('a')), row(2, 'message', user('told once')), row(3, 'replacement', []), row(4, 'message', user('a again')), row(5, 'replacement', [user('summary')])];
+    const record = new ConversationRecord(undefined as unknown as SessionWriter, { agentMessagesOf: () => rows } as unknown as StoreDal, asSessionId('s'));
+    expect(record.everRecorded('t')).toEqual([user('a'), user('told once'), user('a again'), user('summary')]);
+    expect(new ConversationRecord(undefined as unknown as SessionWriter, undefined, asSessionId('s')).everRecorded('t')).toEqual([]);
+  });
 });
 
 describe('the conversation record in a run (PD-ORCH-005 clauses 1 and 12)', () => {

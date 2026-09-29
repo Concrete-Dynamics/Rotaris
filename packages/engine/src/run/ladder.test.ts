@@ -668,7 +668,7 @@ describe('engine/run/ladder — the resilience paths in the run (REQ-ORCH-088/09
       expect(timeline(sid)).toContain('child_timeout_fallback');
       const requests = childRequests(s);
       expect(requests.map((r) => [r.model.modelId, corrective(r)])).toEqual([['a1', false], ['a1', true], ['f1', false]]);
-      expect(timeline(sid).filter((n) => n === 'child_corrective_message')).toHaveLength(1);
+      expect(warnings.filter((m) => m.startsWith('child corrective message:'))).toHaveLength(1);
       expect(dal.childrenOf(sid)[0]!.state).toBe('failed');
     });
 

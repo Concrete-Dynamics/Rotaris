@@ -824,7 +824,9 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       // The corrective message follows the conversation the failed turn left: the task, then the message.
       expect(childAsked[1]).toContain('TASK: be quiet');
       expect(childAsked[1]).toContain('[Corrective message] You produced no output for 90 seconds (the stall window, runtime.child_stall_timeout, is 90 seconds), and your last model request then failed: the stream ended with no answer.');
-      expect(dal.timelineOf(sid).filter((t) => t.name === 'child_corrective_message')).toHaveLength(1);
+      // REQ-ORCH-139: no timeline word is minted for it; the session log says it was sent (OQ-109, as OQ-76 did).
+      expect(warnings.filter((m) => m.startsWith('child corrective message:'))).toEqual([`child corrective message: quiet (${child(sid).task_id}) produced no output for 90 seconds and its model request then failed (the stream ended with no answer); it was given its one corrective message and resumes (REQ-NOTIFY-111)`]);
+      expect(dal.timelineOf(sid).filter((t) => t.name.startsWith('child_corrective') || t.name.startsWith('child_stall') || t.name.startsWith('child_waiting'))).toEqual([]);
       expect(child(sid).state).toBe('succeeded');
       expect(JSON.parse(child(sid).report!)).toMatchObject({ status: 'succeeded' });
     });
@@ -865,7 +867,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       await settle(() => dal.timelineOf(sid).length > 0 && child(sid)?.state === 'running');
       await new Promise((r) => setTimeout(r, 20));
       clock.advance(90_000);
-      expect(dal.timelineOf(sid).filter((t) => t.name === 'child_waiting_on_tools').map((t) => t.message)).toEqual([`quiet (${child(sid).task_id}) is waiting on 1 active tool call(s): no model event or token for 90 seconds.`]);
+      expect(warnings.filter((m) => m.startsWith('child waiting on tools:'))).toEqual([`child waiting on tools: quiet (${child(sid).task_id}) has 1 active tool call(s) and no model event or token for 90 seconds; the run is still waiting on it (REQ-MONITOR-118)`]);
       expect(dal.issuesOf(sid).filter((i) => i.kind === 'stall')).toEqual([]);
       releaseTool();
       await new Promise((r) => setTimeout(r, 20));
@@ -874,10 +876,12 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       speak();
       await new Promise((r) => setTimeout(r, 20));
       clock.advance(5_000);
-      expect(dal.timelineOf(sid).filter((t) => t.name === 'child_stall_recovered').map((t) => t.message)).toEqual([`quiet (${child(sid).task_id}) is active again after a stall.`]);
+      expect(warnings.filter((m) => m.startsWith('child stall recovered:'))).toEqual([`child stall recovered: quiet (${child(sid).task_id}) is active again after a stall (REQ-MONITOR-120)`]);
       finish();
       await sessions.running(sid)!;
       expect(child(sid).state).toBe('succeeded');
+      // REQ-ORCH-139: neither is a timeline word (OQ-109).
+      expect(dal.timelineOf(sid).filter((t) => t.name.startsWith('child_stall') || t.name.startsWith('child_waiting'))).toEqual([]);
     });
 
     it('at most one corrective message per child: a second silent failure ends it failed', async () => {
@@ -901,7 +905,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
       await sessions.running(sid)!;
       expect(childAsked).toHaveLength(1);
-      expect(dal.timelineOf(sid).filter((t) => t.name === 'child_corrective_message')).toEqual([]);
+      expect(warnings.filter((m) => m.startsWith('child corrective message:'))).toEqual([]);
       expect(child(sid).state).toBe('failed');
     });
 
@@ -925,6 +929,74 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       await sessions.running(sid)!;
       expect(childAsked[1]).toContain('[Corrective message] You produced no output for 30 seconds (the stall window, runtime.child_stall_timeout, is 30 seconds)');
       expect(child(sid).state).toBe('succeeded');
+    });
+
+    /** How many corrective messages one request's conversation carries. */
+    const correctives = (text: string): number => (text.match(/\[Corrective message\]/g) ?? []).length;
+
+    it('REQ-NOTIFY-112 across PD-ORCH-005: a child given its corrective message before a pause is not given a second after the continue', async () => {
+      const gates: (() => void)[] = [];
+      const childAsked: string[] = [];
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'quiet', task: 'TASK: be quiet' } }]) : answer('handled');
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        childAsked.push(userText(req));
+        if (turn >= 4) return answer('I carried on and finished.');
+        const hold = new Promise<void>((r) => { gates.push(r); });
+        // The step after the corrective message is the one in flight when the pause is accepted: it asks for a call.
+        if (turn === 2) return { parts: [{ hold }, ...toolCalls([{ callId: 'p1', name: 'background_output', args: { task_id: 'bg_00000000' } }], 'Checking.').parts] };
+        return { parts: [{ hold }, { error: failed }] };
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => gates.length === 1);
+      clock.advance(90_000);
+      gates[0]!();
+      await settle(() => gates.length === 2);
+      expect(correctives(childAsked[1]!)).toBe(1);
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      gates[1]!();
+      expect((await sessions.running(sid)!).status).toBe('interrupted');
+      expect(child(sid)).toMatchObject({ state: 'paused', resume_state: 'running' });
+      // The same child task resumes from its record, goes silent for the whole window again, and fails.
+      expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+      await settle(() => gates.length === 3);
+      clock.advance(90_000);
+      gates[2]!();
+      await sessions.running(sid)!;
+      // The count is per child task: no request carries a second corrective message, and the second failure ends it failed.
+      expect(childAsked).toHaveLength(3);
+      expect(childAsked.map(correctives)).toEqual([0, 1, 1]);
+      expect(warnings.filter((m) => m.startsWith('child corrective message:'))).toHaveLength(1);
+      expect(child(sid).state).toBe('failed');
+    });
+
+    it('REQ-NOTIFY-112: a child that waited on its own child past the window was asked for no output then, so a resumed step that fails at once earns nothing', async () => {
+      let releaseLeaf!: () => void;
+      const leafHeld = new Promise<void>((r) => { releaseLeaf = r; });
+      const midAsked: string[] = [];
+      let leafAsked = 0;
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') return turn === 1 ? toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'coding-agent', task_name: 'mid', task: 'TASK: mid' } }]) : answer('handled');
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        const text = userText(req);
+        if (!text.includes('TASK: mid')) { leafAsked += 1; return { parts: [{ hold: leafHeld }, ...answer('leaf done').parts] }; }
+        midAsked.push(text);
+        if (midAsked.length === 1) return toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'coding-agent', task_name: 'leaf', task: 'TASK: leaf' } }], 'Delegating.');
+        if (midAsked.length === 2) return answer('Waiting on leaf.');
+        // Resumed with leaf's report, its step fails at once.
+        return { parts: [{ error: failed }] };
+      });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      const byName = (name: string) => children(sid).find((c) => c.canonical_name === name);
+      await settle(() => midAsked.length === 2 && leafAsked === 1);
+      await new Promise((r) => setTimeout(r, 20));
+      clock.advance(120_000);
+      releaseLeaf();
+      await sessions.running(sid)!;
+      expect(midAsked).toHaveLength(3);
+      expect(midAsked.map(correctives)).toEqual([0, 0, 0]);
+      expect(warnings.filter((m) => m.startsWith('child corrective message:'))).toEqual([]);
+      expect(byName('mid')!.state).toBe('failed');
     });
   });
 

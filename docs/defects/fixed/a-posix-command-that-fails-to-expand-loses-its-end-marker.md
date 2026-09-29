@@ -54,3 +54,14 @@ shape `unexpandable` (POSIX only), the recorded bash-ism itself. On the built br
 `shell_failure`, exit 2, its output `ran` and `/bin/sh: 1: eval: Bad substitution`; no end marker reached the model;
 the `edit` scenario's six terminal calls all ended with their own status, none soft-paused. 42 checks passed, none
 failed. Repaired 2026-09-29 under R-067.
+
+**Corrected at the verifier's second round, 2026-09-29.** The scenario's three `unexpandable` checks ran on any
+result, so they could pass with the guard never asked. In the verifier's live run (pack
+`.live-run/runs/2026-09-29T22-08-13-005Z`, session `ca68aeb1`) the model read the new description, ran `exec bash`,
+and bash expanded the bash-ism (`success`, exit 0, `ran` and `EXIT=0`); all three checks passed. The scenario now
+credits the guard only where the shell refused the line: `Bad substitution` in what it printed, and a nonzero exit of
+its own (`unexpandableReading`, `apps/desktop/scripts/lib/terminal-shapes.mjs`). A soft pause, exit −1 or the whole
+window is still a FAIL, since that is L1's signature. A line the shell expanded is a NOTE, "the guard is unasked this
+run". `terminal-shapes.test.ts` pins the three readings on the two recorded observations. The `exec bash` call itself
+soft-paused for 30 s: recorded as
+[`a-command-that-replaces-the-shell-reads-as-a-soft-pause`](../a-command-that-replaces-the-shell-reads-as-a-soft-pause.md).

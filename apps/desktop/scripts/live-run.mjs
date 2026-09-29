@@ -111,7 +111,7 @@ import { homedir, tmpdir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
 import { cleanEnvironment, configDirFor, findDatabases, hostSwitches, proofIsolationEnv, tokensDirFor } from './lib/harness.mjs';
 import { startRecordingProxy } from './lib/model-traffic.mjs';
-import { LONG_OUTPUT_LINES, diagnosticOf, hereStringLinesReturned, longOutputReading, outputOf, terminalShapes } from './lib/terminal-shapes.mjs';
+import { LONG_OUTPUT_LINES, diagnosticOf, hereStringLinesReturned, longOutputReading, outputOf, terminalShapes, unexpandableReading } from './lib/terminal-shapes.mjs';
 
 const require = createRequire(import.meta.url);
 const repo = resolve(import.meta.dirname, '..', '..', '..');
@@ -1733,15 +1733,25 @@ if (wanted.includes('terminal')) {
 
   // Live-run L1: the command ends at once with the shell's own error status, never a soft pause after the window. The
   // shape exists only off win32 (`terminalShapes`), so on Windows nothing is asked here: not applicable, not a NOTE.
+  // The guard is credited only where a shell refused the expansion (`unexpandableReading`). Until the verifier's second
+  // round the three checks ran on any result, and a line bash had expanded (the model had run `exec bash` first) passed
+  // all three with the guard never asked.
   if (shapeOf('unexpandable') !== undefined) {
     const unexpandable = attempted('unexpandable')[0];
     if (unexpandable === undefined) noted('the unexpandable bash-ism was not attempted', 'no terminal call carried it; the wrapper\'s guard is unasked');
     else {
       const d = diagnosticOf(unexpandable.result);
       const elapsed = unexpandable.elapsedMs ?? NaN;
-      check(d?.outcome_kind !== 'soft_pause' && d?.exit_code !== -1, 'a command sh could not expand ended with its own status, not a soft pause', `outcome ${d?.outcome_kind ?? 'none'}, exit ${d?.exit_code ?? 'none'}`);
-      check(Number.isFinite(elapsed) && elapsed < 30_000, 'it ended inside the no-output window rather than after it', `${Number.isFinite(elapsed) ? Math.round(elapsed) : '?'} ms`);
-      check(/\bran\b/.test(outputOf(unexpandable.result) ?? ''), 'what the line printed before its error came back', `output ${JSON.stringify((outputOf(unexpandable.result) ?? '').slice(0, 120))}`);
+      const reading = unexpandableReading(unexpandable.result, elapsed);
+      const said = `outcome ${d?.outcome_kind ?? 'none'}, exit ${d?.exit_code ?? 'none'}, output ${JSON.stringify(reading.printed.slice(0, 120))}`;
+      if (reading.kind === 'expanded') noted('the shell expanded the bash-ism', `the guard is unasked this run: ${said}`);
+      else if (reading.kind === 'other') noted('the bash-ism met neither a refusal nor an expansion', `the guard is unasked this run: ${said}`);
+      else {
+        check(reading.kind === 'refused', 'the shell refused to expand the line, and the call ended with its nonzero status', said);
+        check(d?.outcome_kind !== 'soft_pause' && d?.exit_code !== -1, 'a command sh could not expand ended with its own status, not a soft pause', `outcome ${d?.outcome_kind ?? 'none'}, exit ${d?.exit_code ?? 'none'}`);
+        check(Number.isFinite(elapsed) && elapsed < 30_000, 'it ended inside the no-output window rather than after it', `${Number.isFinite(elapsed) ? Math.round(elapsed) : '?'} ms`);
+        check(/\bran\b/.test(reading.printed), 'what the line printed before its error came back', `output ${JSON.stringify(reading.printed.slice(0, 120))}`);
+      }
     }
   }
 

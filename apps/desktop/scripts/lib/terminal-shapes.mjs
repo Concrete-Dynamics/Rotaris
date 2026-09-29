@@ -113,6 +113,30 @@ export function hereStringLinesReturned(result) {
 }
 
 /**
+ * What the `unexpandable` shape (live-run L1) met, read from one recorded observation — so the scenario credits the
+ * wrapper's guard only where a shell actually failed to expand the bash-ism.
+ *
+ * - `refused`: the shell said it could not expand the line (`Bad substitution`, dash's and bash's words) and the call
+ *   ended with a nonzero exit code of its own — the guard was asked, and answered.
+ * - `paused`: the call soft-paused, or returned exit −1, or took the whole no-output window — L1's signature, which is
+ *   a FAIL whatever the shell was, since a line that ended at once must not read as still running.
+ * - `expanded`: neither, and the line's second half printed `EXIT=<n>`: the shell expanded it (bash; the verifier's
+ *   live run of 2026-09-29 met it after the model ran `exec bash`), so the guard was never asked and the scenario says
+ *   so as a NOTE, never as a PASS.
+ * - `other`: none of those — a result the scenario cannot credit either way, also a NOTE.
+ */
+export function unexpandableReading(result, elapsedMs) {
+  const d = diagnosticOf(result);
+  const printed = outputOf(result) ?? '';
+  const exit = typeof d?.exit_code === 'number' ? d.exit_code : null;
+  const paused = d?.outcome_kind === 'soft_pause' || exit === -1 || !(Number.isFinite(elapsedMs) && elapsedMs < 30_000);
+  const badSubstitution = /bad substitution/i.test(printed);
+  const refused = !paused && badSubstitution && exit !== null && exit > 0;
+  const expanded = !paused && !refused && /EXIT=\d+/.test(printed);
+  return { kind: paused ? 'paused' : refused ? 'refused' : expanded ? 'expanded' : 'other', exit, badSubstitution, printed };
+}
+
+/**
  * What the long-output assertion asks of one captured result: the distinct markers, and the lines carrying more
  * than one of them. Two markers on one line is the concatenation; fewer than `LONG_OUTPUT_LINES` distinct is a
  * capture that lost output.

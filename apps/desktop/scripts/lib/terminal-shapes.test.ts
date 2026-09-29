@@ -19,7 +19,7 @@ import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { existsSync, realpathSync } from 'node:fs';
 // @ts-expect-error — the shapes are plain ESM beside the script that replays them.
-import { LONG_OUTPUT_LINES, diagnosticOf, hereStringLinesReturned, longOutputReading, outputOf, terminalShapes } from './terminal-shapes.mjs';
+import { LONG_OUTPUT_LINES, diagnosticOf, hereStringLinesReturned, longOutputReading, outputOf, terminalShapes, unexpandableReading } from './terminal-shapes.mjs';
 
 interface Shape { readonly id: string; readonly match: RegExp; readonly command: string; readonly prompt?: string }
 
@@ -191,6 +191,27 @@ describe('the bash-ism the unexpandable shape replays (live-run L1)', () => {
     expect(run.stdout.trim()).toBe('ran');
     expect(run.stderr).toMatch(/Bad substitution/);
     expect(run.status).not.toBe(0);
+  });
+
+  /*
+   * What the scenario credits (the verifier's second round). Two observations recorded verbatim from the live runs of
+   * 2026-09-29: the builder's (pack `2026-09-29T21-26-58-720Z`, call #6), where dash refused the line, and the
+   * verifier's (pack `2026-09-29T22-08-13-005Z`, call #8), where the model had run `exec bash` first and bash expanded
+   * it. The second passed all three of the scenario's checks before, with the guard never asked.
+   */
+  const command = `printf '%s\\n' ran; echo \\"EXIT=\${PIPESTATUS[0]}\\"`;
+  const diagnostic = (fields: Record<string, unknown>) => `[terminal_diagnostic] ${JSON.stringify({ backend: 'single-session', command, timeout: false, timeout_seconds: 100, warnings: [], ...fields })}`;
+  const refusedByDash = `The command exited with code 2.\n[terminal_output]\nran\n/bin/sh: 1: eval: Bad substitution\n${diagnostic({ detail: 'The command exited with code 2.', exit_code: 2, outcome_kind: 'shell_failure', outcome_severity: 'error' })}`;
+  const expandedByBash = `The command exited with code 0.\n[terminal_output]\nran\nEXIT=0\n${diagnostic({ detail: 'The command exited with code 0.', exit_code: 0, outcome_kind: 'success', outcome_severity: 'info' })}`;
+  const softPaused = `No output for 30 seconds …\n[terminal_output]\nran\n${diagnostic({ detail: 'The command is still running; this is the output so far. Poll again with an empty command.', exit_code: -1, outcome_kind: 'soft_pause', outcome_severity: 'warning' })}`;
+  it('credits the guard only where the shell refused the expansion; an expansion is unasked, and L1\'s soft pause is a failure', () => {
+    expect(unexpandableReading(refusedByDash, 14)).toMatchObject({ kind: 'refused', exit: 2, badSubstitution: true });
+    expect(unexpandableReading(expandedByBash, 21)).toMatchObject({ kind: 'expanded', exit: 0, badSubstitution: false });
+    expect(unexpandableReading(softPaused, 30_027)).toMatchObject({ kind: 'paused', exit: -1 });
+    // A refusal that took the whole window is L1's signature too, whatever the exit code says.
+    expect(unexpandableReading(refusedByDash, 30_000).kind).toBe('paused');
+    // The diagnostic repeats the command, which carries `EXIT=`; the reading looks at what the shell printed alone.
+    expect(unexpandableReading(`[terminal_output]\n(no output)\n${diagnostic({ exit_code: 0, outcome_kind: 'success' })}`, 5).kind).toBe('other');
   });
 });
 

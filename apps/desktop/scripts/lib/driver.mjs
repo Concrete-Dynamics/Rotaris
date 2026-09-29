@@ -13,7 +13,7 @@ import { connect as connectSocket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { app as appDirectory, cleanEnvironment, electron, hostSwitches, mainEntry, proofIsolationEnv } from './harness.mjs';
-import { endOverrun, exitWithin } from './bounded-launch.mjs';
+import { endedHow, endOverrun, exitWithin, hasExited, logTail } from './bounded-launch.mjs';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -140,35 +140,83 @@ export async function startApp({ root, workspace, extra = {}, electronArgs = [],
   if (detached) child.unref();
   writeFileSync(join(root, 'app.pid'), `${child.pid}\n`);
 
-  const driver = await connect(endpointFile, { timeoutMs }).catch((cause) => {
-    const tail = existsSync(logFile) ? readFileSync(logFile, 'utf8').split('\n').slice(-20).join('\n') : '(no log)';
-    throw new Error(`${cause.message}\n--- the app's last words ---\n${tail}`);
-  });
+  const driver = await connectOrEnd(child, endpointFile, logFile, { timeoutMs, group: detached });
   return { child, driver, endpointFile, logFile, local, preferences };
 }
 
 /**
- * End a driven launch: the driver's `quit`, then at most `graceMs` for the process to exit. One that has not exited by
- * then is ENDED (`endOverrun`: SIGTERM, the same grace, SIGKILL) and the result says so — a proof reports `overran`
- * as a failure rather than moving on with an application still running beside the next launch.
+ * Connect to a launch's driver, or END the launch and say so. A launch whose driver never answers is not left running:
+ * a non-detached child holds the proof's event loop open, so the proof would hang at its end with the application
+ * still up beside it. `endOverrun` ends it (SIGTERM, `graceMs`, SIGKILL — to its group when `group`) before the
+ * failure is thrown, and the failure carries what ended it and the log's last lines.
  */
-export async function stopApp(started, { graceMs = 15_000 } = {}) {
-  await started.driver.quit();
+export async function connectOrEnd(child, endpointFile, logFile, { timeoutMs = 60_000, graceMs = 10_000, group = false } = {}) {
+  try {
+    return await connect(endpointFile, { timeoutMs });
+  } catch (cause) {
+    const ended = hasExited(child) ? null : await endOverrun(child, { graceMs, group });
+    const fate = ended
+      ? `the launch was ended: ${endedHow(ended)}`
+      : `the launch had already exited ${child.exitCode ?? child.signalCode}`;
+    const tail = existsSync(logFile) ? logTail(readFileSync(logFile, 'utf8'), 20) : '(no log)';
+    throw new Error(`${cause.message}; ${fate}\n--- the app's last words ---\n${tail}`);
+  }
+}
+
+/**
+ * `{ value }` or `{ error }` once `pending` settles, or `null` when `ms` passes first — a bound on one driver request,
+ * whose socket may be connected to a main process that no longer answers.
+ */
+export function within(pending, ms) {
+  let timer;
+  return Promise.race([
+    Promise.resolve(pending).then((value) => ({ value }), (error) => ({ error })),
+    new Promise((resolve) => { timer = setTimeout(() => resolve(null), ms); }),
+  ]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * End a driven launch within a bound, whatever the main process does. With `screenshot`, the closing picture is asked
+ * for first, at most `quitMs`; then the driver's `quit`, at most `quitMs`; then at most `graceMs` for the process to
+ * exit. One that has not exited by then — because it did not answer, or answered and stayed — is ENDED (`endOverrun`:
+ * SIGTERM, the same grace, SIGKILL) and the result says so: a proof reports `overran` as a failure
+ * (`stopOverrunMessage`) rather than moving on with an application still running beside the next launch. No step here
+ * waits without a bound, so the whole ending is at most `2 × quitMs + 2 × graceMs` and the SIGKILL's reaping.
+ */
+export async function stopApp(started, { graceMs = 15_000, quitMs = 10_000, screenshot } = {}) {
+  let pictured = null;
+  if (screenshot) {
+    const shot = await within(started.driver.screenshot(screenshot), quitMs);
+    pictured = shot === null ? `unanswered within ${quitMs} ms` : shot.error ? `refused: ${shot.error.message ?? shot.error}` : 'taken';
+  }
+  const quit = await within(started.driver.quit(), quitMs);
   started.driver.close();
+  const quitAnswered = quit !== null;
   const exit = await exitWithin(started.child, graceMs);
-  if (exit) return { exit, overran: null };
+  if (exit) return { exit, overran: null, quitAnswered, screenshot: pictured };
   const ended = await endOverrun(started.child, { graceMs });
-  return { exit: ended.exit, overran: { afterQuitMs: graceMs, ...ended } };
+  return { exit: ended.exit, overran: { quitAnswered, quitMs, afterQuitMs: graceMs, ...ended }, quitAnswered, screenshot: pictured };
+}
+
+/** The sentence a proof throws for a driven launch `stopApp` had to end: what the quit did, what ended it, its last words. */
+export function stopOverrunMessage(name, stopped, log) {
+  const o = stopped.overran;
+  const quit = o.quitAnswered
+    ? `did not exit within ${o.afterQuitMs} ms of the driver's quit`
+    : `did not answer the driver's quit within ${o.quitMs} ms, nor exit ${o.afterQuitMs} ms after it`;
+  return `${name} ${quit}: ${endedHow(o)}.\n--- the launch's last words ---\n${logTail(log)}`;
 }
 
 /**
  * Poll `probe` (async, any value) until `accept(value)` holds, or throw at `timeoutMs` naming `what` and the last value
  * seen — the waiting primitive for a condition that is not one selector: a store row, a probe's attribute, an absence.
+ * An aborted `signal` ends the wait at its next poll, so a caller that has given up on a launch does not leave it polling.
  */
-export async function until(probe, accept, { timeoutMs = 15_000, intervalMs = 150, what = 'the condition' } = {}) {
+export async function until(probe, accept, { timeoutMs = 15_000, intervalMs = 150, what = 'the condition', signal } = {}) {
   const started = Date.now();
   let last;
   for (;;) {
+    if (signal?.aborted) throw new Error(`${what}: abandoned (${signal.reason instanceof Error ? signal.reason.message : String(signal.reason ?? 'aborted')})`);
     try { last = await probe(); } catch (cause) { last = { error: cause instanceof Error ? cause.message : String(cause) }; }
     if (accept(last)) return last;
     if (Date.now() - started > timeoutMs) throw new Error(`${what} did not hold within ${timeoutMs} ms; last seen ${JSON.stringify(last)?.slice(0, 600)}`);

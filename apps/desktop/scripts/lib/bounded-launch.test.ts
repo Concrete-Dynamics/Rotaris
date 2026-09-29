@@ -3,10 +3,15 @@
  * is what the operating system does with the signals: a child that exits by itself, one that takes SIGTERM, one that
  * ignores it (the shape `resilience-proof`'s override launch had, alive 649 s after a 180 s timeout), and a process
  * group whose member outlives its leader. `spawnBounded` is pinned the same way, including the shape that made
- * `spawnSync` hang: the quit path's own line must still reach the proof after SIGTERM, because the pipes stay open.
+ * `spawnSync` hang: the quit path's own line must still reach the proof after SIGTERM, because the pipes stay open —
+ * and a proof killed by a signal mid-launch takes its launch with it, though the launch leads its own process group.
  * No product code runs here.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error — the module is plain ESM beside the scripts that run it.
 import { endOverrun, exitWithin, logTail, overrunMessage, spawnBounded } from './bounded-launch.mjs';
@@ -112,6 +117,32 @@ describe('R-062: ending a proof launch within its bound', () => {
     expect(Date.now() - started).toBeLessThan(6_000);
     const helper = Number(/helper (\d+)/.exec(r.stdout)?.[1] ?? 0);
     if (helper > 0) { try { process.kill(helper, 'SIGKILL'); } catch { /* gone */ } }
+  });
+
+  it.skipIf(!POSIX).each(['SIGINT', 'SIGTERM', 'SIGHUP'] as const)('a proof that dies of %s mid-launch takes its spawnBounded launch with it, and still dies of the signal', async (sig) => {
+    // The launch leads its own process group, so a signal to the proof's group (Ctrl+C) no longer reaches it, and Node
+    // emits no `exit` on a fatal signal: without the proof's own handler the launch outlived the proof in another session.
+    const dir = mkdtempSync(join(tmpdir(), 'bounded-signal-'));
+    const pidFile = join(dir, 'launch.pid');
+    const module = pathToFileURL(join(import.meta.dirname, 'bounded-launch.mjs')).href;
+    const launch = `require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setInterval(() => {}, 1000);`;
+    const proof = spawn(process.execPath, ['--input-type=module', '-e',
+      `const { spawnBounded } = await import(${JSON.stringify(module)}); await spawnBounded(process.execPath, ['-e', ${JSON.stringify(launch)}], { timeoutMs: 60_000 });`,
+    ], { stdio: 'ignore', detached: true });
+    try {
+      for (let i = 0; i < 200 && !existsSync(pidFile); i += 1) await new Promise((r) => setTimeout(r, 50));
+      const launched = Number(readFileSync(pidFile, 'utf8'));
+      expect(alive(launched)).toBe(true);
+      const died = new Promise<{ code: number | null; signal: string | null }>((resolve) => proof.once('exit', (code, signal) => resolve({ code, signal })));
+      process.kill(-proof.pid!, sig); // the proof's whole group, as a terminal sends it
+      expect(await died).toEqual({ code: null, signal: sig });
+      for (let i = 0; i < 50 && alive(launched); i += 1) await new Promise((r) => setTimeout(r, 50));
+      expect(alive(launched)).toBe(false);
+    } finally {
+      try { process.kill(-proof.pid!, 'SIGKILL'); } catch { /* gone */ }
+      if (existsSync(pidFile)) { try { process.kill(Number(readFileSync(pidFile, 'utf8')), 'SIGKILL'); } catch { /* gone */ } }
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('logTail keeps the last non-empty lines', () => {

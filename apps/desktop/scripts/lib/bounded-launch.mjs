@@ -26,9 +26,45 @@ const KILL_REAP_MS = 5_000;
 /** How long the pipes may stay open after the process exited — a helper holding them is not a reason to hang. */
 const PIPE_GRACE_MS = 2_000;
 
-/** Every launch `spawnBounded` started and has not seen end, so a proof that dies mid-launch does not leave one behind. */
+/**
+ * Every launch `spawnBounded` started and has not seen end, so a proof that dies mid-launch does not leave one behind.
+ *
+ * On POSIX a launch leads its OWN process group (`detached`), so the signal a terminal sends to the proof's group —
+ * Ctrl+C's SIGINT, a closed terminal's SIGHUP — no longer reaches it the way it reached a `spawnSync` child, and
+ * Node does not emit `exit` on a fatal signal. So while a launch is live the proof also answers SIGINT, SIGTERM and
+ * SIGHUP: every live launch's group is SIGKILLed, and the signal is raised again once this handler is out of the way,
+ * so the proof still dies of it as it would have (unless the proof installed its own handler, which then decides).
+ */
 const live = new Set();
-process.on('exit', () => { for (const child of live) signal(child, 'SIGKILL', true); });
+const FATAL_SIGNALS = POSIX ? ['SIGINT', 'SIGTERM', 'SIGHUP'] : [];
+const onFatal = new Map();
+function endLive() {
+  for (const child of live) signal(child, 'SIGKILL', true);
+  live.clear();
+}
+process.on('exit', endLive);
+function removeFatalHandlers() {
+  for (const [sig, handler] of onFatal) process.off(sig, handler);
+  onFatal.clear();
+}
+function track(child) {
+  live.add(child);
+  if (onFatal.size > 0) return;
+  for (const sig of FATAL_SIGNALS) {
+    const handler = () => {
+      endLive();
+      removeFatalHandlers();
+      if (process.listenerCount(sig) === 0) process.kill(process.pid, sig);
+    };
+    onFatal.set(sig, handler);
+    process.on(sig, handler);
+  }
+}
+/** A launch seen to end is no longer the proof's to clean up; with none left, the proof's signals are its own again. */
+function untrack(child) {
+  live.delete(child);
+  if (live.size === 0) removeFatalHandlers();
+}
 
 const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms).unref?.(); });
 
@@ -86,7 +122,7 @@ export async function spawnBounded(command, args, { timeoutMs, graceMs = 10_000,
   if (!(timeoutMs > 0)) throw new Error('spawnBounded needs a positive timeoutMs');
   const started = Date.now();
   const child = spawn(command, args, { cwd, env, windowsHide, detached: POSIX, stdio: ['ignore', 'pipe', 'pipe'] });
-  live.add(child);
+  track(child);
   let stdout = '';
   let stderr = '';
   child.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk; });
@@ -98,7 +134,7 @@ export async function spawnBounded(command, args, { timeoutMs, graceMs = 10_000,
   let exit = first;
   let overran = null;
   if (first && 'error' in first) {
-    live.delete(child);
+    untrack(child);
     return { status: null, signal: null, stdout, stderr, elapsedMs: Date.now() - started, overran: null, error: first.error };
   }
   if (first === null) {
@@ -108,7 +144,7 @@ export async function spawnBounded(command, args, { timeoutMs, graceMs = 10_000,
   await Promise.race([closed, sleep(PIPE_GRACE_MS)]);
   child.stdout.destroy();
   child.stderr.destroy();
-  if (hasExited(child)) live.delete(child);
+  if (hasExited(child)) untrack(child);
   return { status: exit?.code ?? null, signal: exit?.signal ?? null, stdout, stderr, elapsedMs: Date.now() - started, overran };
 }
 
@@ -123,10 +159,14 @@ export function logTail(log, lines = 30) {
  */
 export function overrunMessage(name, result, log) {
   const o = result.overran;
-  const how = o.endedBy === 'SIGTERM'
+  return `${name} overran its ${o.timeoutMs} ms bound: ${endedHow(o)}.\n--- the launch's last words ---\n${logTail(log)}`;
+}
+
+/** What ended an overrun, from `endOverrun`'s account of it — the clause every overrun message shares. */
+export function endedHow(o) {
+  return o.endedBy === 'SIGTERM'
     ? `SIGTERM ended it after ${o.afterTermMs} ms`
     : o.endedBy === 'SIGKILL'
       ? `SIGTERM did not end it within ${o.afterTermMs} ms; SIGKILL did`
       : `neither SIGTERM (${o.afterTermMs} ms) nor SIGKILL (${o.afterKillMs} ms) was reaped`;
-  return `${name} overran its ${o.timeoutMs} ms bound: ${how}.\n--- the launch's last words ---\n${logTail(log)}`;
 }

@@ -5250,6 +5250,14 @@ REQ-ORCH-092's transient budget. `fromError` now classifies the last attempt's e
 [`../defects/fixed/an-exhausted-dispatch-layer-hands-the-ladder-a-failure-it-cannot-classify.md`](../defects/fixed/an-exhausted-dispatch-layer-hands-the-ladder-a-failure-it-cannot-classify.md);
 pinned by `ai-sdk-client.test.ts` ("OQ-110 (REQ-ORCH-091/092): when the dispatch layer's retries are exhausted …").
 
+**Built 2026-09-29 under R-067 — the live run's ladder check.** The ruling's last clause ("the live run's ladder check is to
+say what it can see") is built in `apps/desktop/scripts/live-run.mjs`: for each refusal the `faults-ladder` launch
+injected, the check requires the session log's dispatch-layer line naming that status or the ladder's own `model_wait` /
+`transient_llm_error` issue, never the call count, and a NOTE names which layer it was. Shown live the same day (pack
+`2026-09-29T21-11-24-678Z`, passed): both refusals answered by the dispatch layer (`HTTP 429 waited 2006 ms, retry 1 of 5`;
+`HTTP 500 waited 4002 ms, retry 2 of 5`), the ladder not reached. Recorded in
+[`../defects/fixed/two-live-run-checks-cannot-see-what-they-claim.md`](../defects/fixed/two-live-run-checks-cannot-see-what-they-claim.md).
+
 **OQ-111 — Which part of a long child's transcript does the report summariser read?** *(REQ-ORCH-110, which caps the transcript the report-producing pass is given at 12,000 characters in total and 2,000 per event, and does not say which part is kept; REQ-ORCH-108, which has parents consume the report in place of the transcript; REQ-ORCH-109, whose runner-owned fields the summariser cannot write; `PD-LIBRARY-001`, the report's commands. Raised 2026-09-29 from the duress live run's finding D1 under [R-067](../product/requests.md#r-067), and ruled in the same entry. Raised as OQ-110 on its branch and renumbered at the merge, OQ-109 having been taken on `main`.)*
 
 `packages/engine/src/children/report.ts` builds the pass's transcript by joining the events and cutting the result to

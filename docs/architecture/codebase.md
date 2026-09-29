@@ -770,7 +770,9 @@ what the checks claim about the product is unverified, and that first execution 
 `first-executions.md`. *Both ran live on 2026-09-22 (the row is there). The ladder half is corrected 2026-09-29 (R-067, OQ-110): the
 429 and the 500 are retried by the model client's dispatch layer (REQ-CONFIG-086's `num_retries`, default 5) before the
 ladder sees them, which the owner ruled is the specification's order; the scenario shows the run surviving the refusals,
-not the ladder waiting or falling back.*
+not the ladder waiting or falling back. Its check once passed on the call count alone; since 2026-09-29 it reads, for each
+injected refusal, the session log's dispatch-layer line or the ladder's own issue, and names which layer it was
+(`docs/defects/fixed/two-live-run-checks-cannot-see-what-they-claim.md`).*
 
 **Two scenarios enter the gap this page names below** — "short tasks against an unmetered endpoint, so no
 generation near the model timeout, no multi-line command, and no re-spawn", where all seven of one session's

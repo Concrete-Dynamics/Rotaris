@@ -1,4 +1,4 @@
-import { contextPercent, DEFAULT_CONTEXT_CAPACITY, isBusy, RUN_AGENT_ID, type AgentRecord, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
+import { contextPercent, DEFAULT_CONTEXT_CAPACITY, isBusy, RUN_AGENT_ID, type AgentRecord, type SessionArtifactLink, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
 import { treeRows } from './AgentTree.js';
 
 /**
@@ -74,9 +74,11 @@ export function runLevelResting(session: SessionRecord, recovery: boolean): bool
 /**
  * REQ-MONITOR-043/057: the run itself is never a tree row, but the inspector, the Mission view and the persona
  * windows present the entry role as the run-level agent — its rows are the transcript's `agent`/`tool` rows whose
- * name is the entry persona and no child's. Its tool history is still not carried; its latest prompt reading IS,
- * from Part AH's `entryContext` (REQ-MONITOR-089) — before that every root-level meter drew zero for a run that
- * spawned no child, whatever the run had actually spent.
+ * name is the entry persona and no child's. Its latest prompt reading is Part AH's `entryContext` (REQ-MONITOR-089) —
+ * before that every root-level meter drew zero for a run that spawned no child, whatever the run had actually spent.
+ * Its tools are `entryTools` (live-run finding K1, R-067): the set the live run's root port resolved, else the entry
+ * persona's declared tools standing in (REQ-MONITOR-060), its called history and, while it runs, its active calls —
+ * before that it drew "No tools resolved." beside a run that had made fifteen calls.
  */
 export function runLevelAgent(session: SessionRecord | null, entry: { readonly persona: string; readonly model: string; readonly reasoning: string; readonly tools: readonly string[] }, recovery: boolean): AgentRecord | null {
   if (!session || session.runStartedAt === null) return null;
@@ -91,7 +93,7 @@ export function runLevelAgent(session: SessionRecord | null, entry: { readonly p
     spawnedAt: session.runStartedAt, completedAt: busy || resting ? null : session.updatedAt, toolCalls: Math.max(0, session.toolCalls.total - childCalls), delegationTask: '',
     // REQ-MONITOR-086: the run-wide count is the sum of the per-agent counts, which is what the synthetic root shows.
     compressions: session.agents.reduce((n, a) => n + a.compressions, 0),
-    reasoning: entry.reasoning, contextUsed: session.entryContext.used, contextLimit: session.entryContext.limit > 0 ? session.entryContext.limit : DEFAULT_CONTEXT_CAPACITY, grantedTools: [...entry.tools], calledTools: [], activeTools: [], delegationSessionId: null, inheritedContext: '', live: busy,
+    reasoning: entry.reasoning, contextUsed: session.entryContext.used, contextLimit: session.entryContext.limit > 0 ? session.entryContext.limit : DEFAULT_CONTEXT_CAPACITY, grantedTools: session.entryTools.resolved.length > 0 ? [...session.entryTools.resolved] : [...entry.tools], calledTools: [...session.entryTools.called], activeTools: busy ? [...session.entryTools.active] : [], delegationSessionId: null, inheritedContext: '', live: busy,
     // Part S's evidence (REQ-MCP-065/114) is per child; the run-level agent carries none in this build.
     grantedMcp: {}, mcpServers: [],
     // PD-ORCH-005: the interruption belongs to a delegated agent's record; the synthetic run-level agent carries none.
@@ -262,6 +264,21 @@ export function instancesOf(persona: string, agents: readonly AgentRecord[], run
 export function rowsOf(rows: readonly TranscriptRow[], agent: AgentRecord): TranscriptRow[] {
   if (agent.id === RUN_AGENT_ID) return rows.filter((r) => !NOT_FOLLOWED_KINDS.has(r.kind) && (r.name === agent.persona || (r.name === undefined && r.persona === agent.persona)));
   return rows.filter((r) => r.name === agent.name && !NOT_FOLLOWED_KINDS.has(r.kind));
+}
+
+/**
+ * REQ-MONITOR-044/052/069 (live-run finding K1, R-067): an agent's artifact links — the ones it PRODUCED (the artifact's
+ * producer is the agent's name: a child's canonical name, the run-level agent's entry persona, which is the name the root
+ * publishes and dispatches under) and the ones it RECEIVED (its name among the artifact's consumers), each in the session's
+ * creation order. A pure reading of the session's list, so every surface draws the same links.
+ */
+export function agentArtifacts(agent: Pick<AgentRecord, 'name'>, artifacts: readonly SessionArtifactLink[]): { readonly produced: SessionArtifactLink[]; readonly received: SessionArtifactLink[] } {
+  return { produced: artifacts.filter((a) => a.producer === agent.name), received: artifacts.filter((a) => a.producer !== agent.name && a.consumedBy.includes(agent.name)) };
+}
+/** REQ-MONITOR-068 (live-run finding K1): the persona-wide card — every artifact any instance of the persona produced. */
+export function personaArtifacts(instances: readonly Pick<AgentRecord, 'name'>[], artifacts: readonly SessionArtifactLink[]): SessionArtifactLink[] {
+  const names = new Set(instances.map((a) => a.name));
+  return artifacts.filter((a) => names.has(a.producer));
 }
 
 /** REQ-MONITOR-052/069: the meta line and the context line, the elapsed fallback an em-dash / a hyphen. */

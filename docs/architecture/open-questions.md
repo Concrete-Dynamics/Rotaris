@@ -5469,6 +5469,26 @@ running, waiting or queued agent is presented only then (a session at rest settl
 `paused` agent should show a figure — fixed at its pause, or advancing — rather than OQ-100's fallback, which
 REQ-MONITOR-111's "a surface that has a spawn timestamp and shows a fallback … is a defect" reads against.
 
+**OQ-123 — What does an agent surface's artifact link open, and which artifacts does it list as an agent's?** *(REQ-MONITOR-052 and REQ-MONITOR-069, "artifact links", which name no target; REQ-MONITOR-044, "artifacts (name, producer, ready flag), produced and received artifact ids"; REQ-MONITOR-068's persona-wide card; REQ-LIBRARY-102, which lets "actions" deep-link to the Library's artifacts tab; REQ-LIBRARY-131's modeless, per-window artifact inspector; REQ-LIBRARY-136, which hides superseded artifacts from the Library's table. Raised 2026-09-29 by the repair of
+[`the-inspector-says-no-artifact-store-and-no-tools.md`](../defects/fixed/the-inspector-says-no-artifact-store-and-no-tools.md)
+(live-run finding K1) under [R-067](../product/requests.md#r-067). Open.)*
+
+The specification asks for artifact links on three agent surfaces and says what an agent carries about its artifacts,
+but not what following a link does, nor whether a superseded artifact is still one of an agent's.
+
+**The reading built.** In the main window a link deep-links to the Library on its Artifacts tab and opens the artifact
+inspector on that artifact (REQ-LIBRARY-102's deep-link, REQ-LIBRARY-131's inspector, re-raised when already open). A persona
+window has no route to the main window's Library, so there a link opens the artifact inspector in the persona window itself
+— REQ-LIBRARY-131 makes the inspectors per window. An agent PRODUCED an artifact whose producer (`created_by`, else the
+record's canonical name — REQ-LIBRARY-136's "producer") is its name, and RECEIVED one whose consumers name it; the
+run-level agent is matched by the entry persona, which is the name the root publishes under
+(`a-roots-publish-names-its-persona-as-its-author.md` records why that is the persona and not the canonical name). A
+superseded artifact is listed nowhere, as the Library's table lists it nowhere. The ready flag is stated in words:
+"ready" (REQ-LIBRARY-136), else the status.
+
+**What a ruling decides.** Whether a link should open the Library (as built in the main window), an inspector in place
+(as built in a persona window) or something else; and whether an agent's links should keep its superseded artifacts.
+
 ## Design-reference dependencies
 
 The approved visual design reference was **not available** to the architects who produced the slice

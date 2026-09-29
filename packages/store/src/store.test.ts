@@ -656,6 +656,8 @@ describe('store - a declared index is a claim about a query plan; the plan is as
     // index's own order, with no sort (found by phase 6's third review: a hand-written copy did not cover the statement).
     const statements = (new StoreDal(r.db) as unknown as { stmts: Record<string, { source: string }> }).stmts;
     expect(plan(statements['artifactsOf']!.source, 's')).toBe('SEARCH artifacts USING INDEX artifacts_by_created (session_id=?)');
+    // Live-run finding K1 (REQ-MONITOR-044/052): the agent surfaces' links are read at every snapshot, through the same index.
+    expect(plan(statements['artifactLinksOf']!.source, 's')).toBe('SEARCH artifacts USING INDEX artifacts_by_created (session_id=?)');
     r.db.close();
     forgetSpelling(r.dir);
   });

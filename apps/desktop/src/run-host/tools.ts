@@ -413,6 +413,8 @@ export function createToolPort(ctx: ToolPortContext, deps: ToolPortDeps): ToolPo
 
   return {
     specs: () => specs,
+    // REQ-MONITOR-060/061 (live-run finding K1): the native tools the one resolution kept — what the inspector shows.
+    resolvedTools: () => resolved.tools,
     ready,
     promptSection: () => mcpSection,
     dispatch: async (call: PortToolCall, signal): Promise<PortToolResult> => {

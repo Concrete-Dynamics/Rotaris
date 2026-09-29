@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import type { z } from 'zod';
 import {
+  BUILT_IN_ROLE_NAMES, BUILT_IN_ROLE_TOOLS, declaredToolsOf,
   CHANNEL_SCHEMAS,
   CONTRACT_SCHEMA_VERSION,
   CONTROL_OPS,
@@ -208,5 +209,19 @@ describe('contracts — theme data (REQ-SHELL-128..145)', () => {
       expect(contrastRatio(raiseLightness(colour, 4.5, against), against)).toBeGreaterThanOrEqual(4.5);
       expect(contrastRatio(raiseLightness(colour, 3, against), against)).toBeGreaterThanOrEqual(3);
     }
+  });
+});
+
+/**
+ * Live-run finding K1 (R-067): the built-in roles' tool declarations moved here so the loader's role view and the run host's
+ * persona resolver read ONE rule; a stated list wins, a built-in role stating none declares its own, any other role none.
+ */
+describe('REQ-TOOLS-002 / REQ-MONITOR-060: declaredToolsOf', () => {
+  it('a stated list wins; a built-in role stating none declares the built-in list; an unknown role declares nothing', () => {
+    expect(declaredToolsOf('orchestrator', ['grep'])).toEqual(['grep']);
+    expect(declaredToolsOf('orchestrator', [])).toBe(BUILT_IN_ROLE_TOOLS.orchestrator);
+    expect(BUILT_IN_ROLE_TOOLS.orchestrator).toEqual(expect.arrayContaining(['read_file', 'write_file', 'terminal', 'delegate', 'todo', 'ask_questions']));
+    expect(declaredToolsOf('house-style', [])).toEqual([]);
+    for (const role of BUILT_IN_ROLE_NAMES) expect(BUILT_IN_ROLE_TOOLS[role].length).toBeGreaterThan(0);
   });
 });

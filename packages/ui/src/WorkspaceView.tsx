@@ -1187,7 +1187,9 @@ export function WorkspaceView({ session, rows, onSubmit, onStop, onCancelRun, on
       compressionThresholdPercent={compressionThresholdPercent} runActive={runActive} resting={resting} nowIso={nowIso}
       onSteer={(agent) => { if (onOpenPersona) onOpenPersona(agent, true); else setSteering({ id: agent.id, name: agent.name }); }}
       onCancel={inspectorCancel} onPopOut={(agent) => onOpenPersona?.(agent, false)} onSetModel={onSetModel} onSetReasoning={onSetReasoning}
-      drawer={narrow} onCloseDrawer={narrow ? () => setDrawer(null) : undefined} />
+      drawer={narrow} onCloseDrawer={narrow ? () => setDrawer(null) : undefined}
+      // REQ-MONITOR-052 / REQ-LIBRARY-102 (live-run finding K1): a link deep-links to the Library, which opens the artifact.
+      onOpenArtifact={(id) => useShellState.getState().openLibrary('artifacts', id)} />
   );
   /*
    * REQ-ORCH-153 / REQ-NOTIFY-049: a session held at the plan gate presents as paused, so the paused read takes it

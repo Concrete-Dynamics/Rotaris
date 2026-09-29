@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { RUN_AGENT_ID, type AgentRecord, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
-import { cancelCascade, cancelOffered, cancelUnavailableReason, cascadeNote, chipStates, followedAgent, inspectorEnablement, instancesOf, mcpChipStates, mcpFateText, metaLine, resolvedTools } from './agents.js';
+import { agentArtifacts, cancelCascade, cancelOffered, cancelUnavailableReason, cascadeNote, chipStates, followedAgent, inspectorEnablement, instancesOf, mcpChipStates, mcpFateText, metaLine, resolvedTools } from './agents.js';
 import { elapsedLabel, elapsedShown } from './AgentTree.js';
+import { AgentArtifactLinks } from './ArtifactLinks.js';
 import { ContextRing } from './ContextRing.js';
 import { markMotionStart } from './motion.js';
 import { Button as DesignButton, SearchableSelect as DesignSearchableSelect, Select as DesignSelect } from './design-system/index.js';
@@ -14,7 +15,8 @@ import { PopoverMenu } from './design-system/overlays.js';
  * caption (052/065); the model and reasoning controls writable for the run-level agent while a run executes with the
  * next-iteration note, otherwise disabled with the per-persona note (057/058), the current model always named
  * (066), withheld models listed with their reason (067); the scope note; the tool chips in the resolved set's own
- * order marked active/used/not used (060/061/062); artifact links (none — no artifact store yet); the cascade note
+ * order marked active/used/not used (060/061/062) — the run-level agent's from `entryTools` since live-run finding K1;
+ * artifact links, produced and received, each opening the artifact (052, K1: `SessionRecord.artifacts`); the cascade note
  * (064); Steer, Cancel and Pop out on the SHOWN agent with 063's enablement and 055's naming. Structure from
  * docs/spec; language from docs/design/system. The MCP heading per server (060's second half, REQ-MCP-065/114) was
  * wired at the merge of Parts R and S from the record's `mcpServers` and `grantedMcp`.
@@ -51,16 +53,19 @@ export interface InspectorProps {
   /** REQ-MONITOR-051: rendered as an overlay drawer below 1180 px; the caller says whether it is open there. */
   readonly drawer?: boolean | undefined;
   readonly onCloseDrawer?: (() => void) | undefined;
+  /** REQ-MONITOR-052 / REQ-LIBRARY-102 (live-run finding K1): follow an artifact link — the caller opens the artifact. */
+  readonly onOpenArtifact?: ((id: string) => void) | undefined;
 }
 
 export const FOLLOWING_TAG = 'Following — tracking whichever agent wrote last';
 export const PINNED_TAG = 'Pinned by selection';
 export const PER_PERSONA_NOTE = 'Model and reasoning are set per persona and edited in persona settings.';
 export const NEXT_ITERATION_NOTE = 'Takes effect from the next iteration.';
-export const NO_ARTIFACTS = 'No artifacts yet — this build has no artifact store.';
+/** REQ-MONITOR-052 (live-run finding K1): the empty sentence — it said "this build has no artifact store", false since Part Y. */
+export const NO_ARTIFACTS = 'This agent has produced and received no artifacts yet.';
 
 export function Inspector(props: InspectorProps) {
-  const { session, rows, personas, runLevel, selectedAgentId, onSelect, models, withheldModels = [], compressionThresholdPercent, runActive, resting, nowIso, onSteer, onCancel, onPopOut, onSetModel, onSetReasoning, drawer = false, onCloseDrawer } = props;
+  const { session, rows, personas, runLevel, selectedAgentId, onSelect, models, withheldModels = [], compressionThresholdPercent, runActive, resting, nowIso, onSteer, onCancel, onPopOut, onSetModel, onSetReasoning, drawer = false, onCloseDrawer, onOpenArtifact } = props;
   const agents = useMemo(() => session?.agents ?? [], [session]);
   const selected = useMemo(() => (selectedAgentId === RUN_AGENT_ID ? runLevel : agents.find((a) => a.id === selectedAgentId) ?? null), [selectedAgentId, agents, runLevel]);
   const followed = useMemo(() => (selected ? null : followedAgent(rows, agents, runLevel)), [selected, rows, agents, runLevel]);
@@ -81,6 +86,7 @@ export function Inspector(props: InspectorProps) {
   const cancellable = cancelOffered(shown, runActive, resting);
   const chips = shown ? chipStates(resolvedTools(shown, persona?.tools ?? []), shown.calledTools, shown.activeTools) : [];
   const elapsed = shown && elapsedShown(shown) ? elapsedLabel(shown, nowIso) : null;
+  const links = shown ? agentArtifacts(shown, session?.artifacts ?? []) : { produced: [], received: [] };
   const currentModel = shown?.model ?? '';
   const modelOptions = useMemo(() => {
     // REQ-MONITOR-066: the current model is always an option, even when the catalogue no longer lists it.
@@ -169,7 +175,10 @@ export function Inspector(props: InspectorProps) {
               </div>
             ))}
           </div>
-          <div className="inspector__artifacts text-secondary" data-testid="inspector-artifacts">{NO_ARTIFACTS}</div>
+          <div className="inspector__artifacts" aria-label="Artifacts" data-testid="inspector-artifacts" data-produced={links.produced.length} data-received={links.received.length}>
+            <span className="card-kicker">Artifacts</span>
+            <AgentArtifactLinks produced={links.produced} received={links.received} empty={NO_ARTIFACTS} onOpen={onOpenArtifact} testId="inspector-artifacts" />
+          </div>
           <div className="inspector__cascade" data-testid="inspector-cascade" aria-live="polite">{cascadeNote(cascade)}</div>
           {error && <div className="composer__error" role="alert">{error}</div>}
           <div className="inspector__actions">

@@ -18,6 +18,13 @@ export interface SchedulerDeps {
   /** Runs a child from `starting` to a terminal state; never throws into the pass. */
   readonly runChild: (row: ChildRow) => Promise<void>;
   readonly warn: (m: string) => void;
+  /**
+   * PD-ORCH-005 clause 22: whether the child's record holds a conversation — a settled child its parent followed up,
+   * waiting in `queued` to start from its record. REQ-ORCH-048's cascade settles a dependent before it has started, and
+   * this one has: its dependencies were judged when it was first admitted, so the cascade leaves it (OQ-130). Absent
+   * means no child has one.
+   */
+  readonly hasConversation?: ((taskId: string) => boolean) | undefined;
 }
 
 const PRE_START: ReadonlySet<string> = new Set<ChildState>(['waiting_on_dependencies', 'queued', 'waiting_on_model_slot']);
@@ -94,7 +101,7 @@ export class Scheduler {
       if (!PRE_START.has(c.state)) continue;
       const deps = this.deps_(c).map((d) => all.find((x) => x.task_id === d));
       const cause = deps.find((d): d is ChildRow => d !== undefined && (d.state === 'failed' || d.state === 'cancelled' || d.state === 'blocked'));
-      if (cause) {
+      if (cause && this.deps.hasConversation?.(c.task_id) !== true) {
         const r = this.deps.ledger.transition(c.task_id, 'blocked');
         if (r.ok) {
           changed = true;

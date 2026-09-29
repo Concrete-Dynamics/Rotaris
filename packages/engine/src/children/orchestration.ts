@@ -202,6 +202,8 @@ export class IterationChildren implements DelegationOps {
    * does, so the hook finishes before the parent goes on and before the iteration's own hooks.
    */
   private readonly settles = new Map<string, Promise<void>>();
+  /** PD-ORCH-005 clause 22: each child's execution in flight, by task id, so a follow-up of a settled child waits for its end. */
+  private readonly executionOf = new Map<string, Promise<void>>();
   /** REQ-ORCH-133 / REQ-MONITOR-128: each executing child's own abort, so cancelling one child stops it (and only it). */
   private readonly controllers = new Map<string, AbortController>();
   /** PD-ORCH-005 clause 2: the run is coming to rest — no child starts, every agent stops before its next model step. */
@@ -220,7 +222,7 @@ export class IterationChildren implements DelegationOps {
   constructor(private readonly deps: ChildrenDeps, readonly iteration: number) {
     this.ledger = new ChildLedger({ dal: deps.dal, writer: deps.writer, sessionId: deps.sessionId, iteration, budget: deps.budget, modelCap: deps.modelCap, warn: deps.warn , personas: deps.personas, ...(deps.artifacts ? { artifacts: deps.artifacts } : {}), ...(deps.rootRecord ? { rootRecord: deps.rootRecord } : {}) });
     this.endedInEarlierRun = new Set(this.ledger.all().filter((c) => isTerminalChildState(c.state)).map((c) => c.task_id));
-    this.scheduler = new Scheduler({ ledger: this.ledger, runChild: (row) => this.track(this.executeSettling(row)), warn: deps.warn });
+    this.scheduler = new Scheduler({ ledger: this.ledger, runChild: (row) => this.track(this.executeSettling(row)), warn: deps.warn, hasConversation: (taskId) => (deps.record?.load(taskId).length ?? 0) > 0 });
     this.scheduler.onTerminal((row) => { const w = this.resumeWaiters.get(row.parent_id); if (w) { this.resumeWaiters.delete(row.parent_id); w(); } });
     // PD-TOOLS-006: a claim lapses at its child's terminal state. Liveness is also read from the ledger at every
     // query, so a child settled by a path that fires no listener (a stale sweep) holds nothing either; this only
@@ -235,6 +237,8 @@ export class IterationChildren implements DelegationOps {
   // ---- DelegationOps -----------------------------------------------------------------------
 
   async delegate(parentId: string, req: DelegateRequest): Promise<DelegateOutcome> {
+    // PD-ORCH-005 clause 22 / PD-TOOLS-006 revision 3: a `session_id` follows up a settled child; it creates no record.
+    if ((req.sessionId ?? '') !== '') return await this.followUp(parentId, req.sessionId!, req);
     const parent = this.ledger.get(parentId);
     const parentDepth = parent ? parent.depth : (this.ledger.isRoot(parentId) ? this.ledger.root.depth : 0);
     const persona = personaOf(this.deps, req.persona);
@@ -301,6 +305,88 @@ export class IterationChildren implements DelegationOps {
     }
     if (now.state === 'waiting_on_dependencies') return { status: 'waiting_on_dependencies', canonicalName: row.canonical_name, taskId: row.task_id, message: `Waiting on ${req.dependsOn.join(', ')}.${alias}`, attachments };
     return { status: 'queued', canonicalName: row.canonical_name, taskId: row.task_id, message: `Accepted; the child runs in the ${req.runInBackground ? 'background' : 'foreground'}.${alias}`, attachments };
+  }
+
+  /**
+   * PD-ORCH-005 clause 22 and PD-TOOLS-006 revision 3 (OQ-66's open part, ruled by R-067): `delegate` with `session_id`
+   * follows up the settled child it names. The child resumes from its record under its own identity — task id, canonical
+   * name, persona, parent, dependencies, background flag and stored write scope, re-claimed now as any accepted child's
+   * is — with the call's `task` appended as its next user message; it waits in `queued` and is started by the scheduler
+   * as any queued child is, from its record (`execute`), and ends and reports again. The call's other fields are the
+   * child's own already and are not read (OQ-130). A `session_id` naming no settled child of the caller is refused
+   * `rejected` with no record touched. A child whose record holds
+   * no conversation — it never started — is given the payload it would have started with first (OQ-130).
+   */
+  private async followUp(parentId: string, taskId: string, req: DelegateRequest): Promise<DelegateOutcome> {
+    const rejected = (message: string): DelegateOutcome => ({ status: 'rejected', canonicalName: req.taskName, message });
+    const refused = this.followUpRefusalFor(parentId, taskId);
+    if (refused !== null) return rejected(refused);
+    /*
+     * A child can be settled while its execution still winds down — a cancel settles the record and aborts the execution,
+     * which returns once its turn does — and an execution that found its record live again would write over the follow-up.
+     * So the follow-up waits for it, and then asks again.
+     */
+    const winding = this.executionOf.get(taskId);
+    if (winding !== undefined) {
+      await winding;
+      const again = this.followUpRefusalFor(parentId, taskId);
+      if (again !== null) return rejected(again);
+    }
+    // REQ-ORCH-153 needs no second check here: the gate holds only a plan cycle, whose children were admitted under it.
+    const row = this.ledger.get(taskId)!;
+    // Clause 4's rule for a record: every call it holds has its result before a message follows it. An execution that
+    // raised out of a call leaves one open; it is answered as cut off, naming no rest.
+    answerOpenCalls(this.deps.dal, this.deps.writer, this.deps.sessionId, { taskId, name: row.canonical_name }, row.iteration, null);
+    // PD-TOOLS-006 revision 2: the stored scope is claimed again from the moment the child is accepted again, before a
+    // payload that discloses it is assembled. A claim whose child stays terminal (the write below refused) holds nothing.
+    this.acceptScope(row, storedScope(row));
+    const messages: ChatMessage[] = [];
+    if ((this.deps.record?.load(taskId).length ?? 0) === 0) messages.push({ role: 'user', content: [{ kind: 'text', text: this.startingPayload(row) }] });
+    messages.push({ role: 'user', content: [{ kind: 'text', text: req.task }] });
+    const r = this.ledger.followUp(taskId, messages);
+    if (!r.ok) return rejected(r.reason);
+    this.scheduler.pass();
+    const now = this.ledger.get(taskId) ?? r.row;
+    const said = `Following up ${now.canonical_name} (${now.persona}): it resumes from its record under its own task id, with this task as its next message, and reports again when it ends.`;
+    if (now.state === 'waiting_on_model_slot') {
+      const cap = this.deps.modelCap(now.model_key) ?? 0;
+      return { status: 'waiting_on_model_slot', canonicalName: now.canonical_name, taskId, message: `${said} Queued behind model '${now.model_key}''s slot cap: ${this.ledger.slotsInUse(now.model_key)} of ${cap} slots in use; it starts by itself once a slot opens.` };
+    }
+    return { status: 'queued', canonicalName: now.canonical_name, taskId, message: said };
+  }
+
+  /**
+   * PD-TOOLS-006 revision 3: the refusal of a `session_id` naming `taskId`, or null. It names a settled child of the caller
+   * — a direct child by REQ-TOOLS-155's ownership test, in a terminal state, that its `child_timeout` did not cut off. Like
+   * `background_output`, another agent's child reads as no child of the caller's. A child the limit cut off keeps
+   * PD-ORCH-004's `continuation_of`, and the reason names that field.
+   */
+  private followUpRefusalFor(parentId: string, taskId: string): string | null {
+    const head = `session_id '${taskId}' names no settled child of yours`;
+    const row = TASK_ID_PATTERN.test(taskId) && !this.ledger.isRoot(taskId) ? this.ledger.get(taskId) : undefined;
+    if (row === undefined || !this.owns(parentId, row)) return `${head}: none of your children has that task id. Give session_id the task_id a delegate call returned to you, or delegate a new child without it.`;
+    if (!isTerminalChildState(row.state)) return `${head}: ${row.canonical_name} has not ended (state: ${row.state}). Wait for it with wait_for_tasks, and follow it up once it has ended.`;
+    const report = parseReport(row);
+    if (report?.cut_off !== undefined || (report?.errors ?? []).some((e) => e.type === 'timeout')) {
+      return `${head}: ${row.canonical_name} was cut off by its child_timeout, and a child cut off is never resumed. Its route is continuation_of: "${taskId}", where its report offers a continuation (PD-ORCH-004).`;
+    }
+    return null;
+  }
+
+  /**
+   * REQ-TOOLS-154: the payload a child starts from, as `execute` assembles it for a fresh start — REQ-ORCH-047's
+   * prior-agent-context block the first time it is given, the workspace root, the write-scope disclosure, the artifact
+   * blocks, the inherited context and the task. A follow-up of a child that never started records it ahead of the
+   * follow-up (PD-ORCH-005 clause 22).
+   */
+  private startingPayload(row: ChildRow): string {
+    let prior = '';
+    if (row.context_injected === 0) {
+      const depRows = (JSON.parse(row.depends_on) as string[]).map((d) => this.ledger.get(d)).filter((d): d is ChildRow => d !== undefined);
+      prior = priorAgentContext(depRows);
+      if (prior) this.ledger.markContextInjected(row.task_id);
+    }
+    return childPayload(this.deps.workspaceRoot, row.task, prior, this.artifactContext(row), writeScopeBlock(this.disclosures.get(row.task_id)), this.inherited.get(row.task_id) ?? '');
   }
 
   /** REQ-TOOLS-155: whether `row` is a direct child of the agent `parentId` — the root's children whichever name the root goes by. */
@@ -657,12 +743,19 @@ export class IterationChildren implements DelegationOps {
    * (persona, resilience, compression, the tool port, the fingerprint) before its `try`, or the settle after it — is
    * settled here.
    */
-  private async executeSettling(row: ChildRow, resume: ChildResume | null = null): Promise<void> {
-    try {
-      await this.execute(row, resume);
-    } catch (cause) {
-      await this.settleRaised(row, cause, 'its execution raised outside its turn');
-    }
+  private executeSettling(row: ChildRow, resume: ChildResume | null = null): Promise<void> {
+    const execution = (async () => {
+      try {
+        await this.execute(row, resume);
+      } catch (cause) {
+        await this.settleRaised(row, cause, 'its execution raised outside its turn');
+      }
+    })();
+    // PD-ORCH-005 clause 22: a follow-up of this child waits for this execution to end (`followUp`).
+    this.executionOf.set(row.task_id, execution);
+    const forget = () => { if (this.executionOf.get(row.task_id) === execution) this.executionOf.delete(row.task_id); };
+    void execution.then(forget, forget);
+    return execution;
   }
 
   /**
@@ -701,12 +794,22 @@ export class IterationChildren implements DelegationOps {
    * restored `summarizing` had answered, so its record ends on its answer: it resumes into waiting, takes no step, and
    * writes its report.
    */
-  private async execute(row: ChildRow, resume: ChildResume | null = null): Promise<void> {
-    const resumed = resume !== null;
+  private async execute(row: ChildRow, resumeFromRest: ChildResume | null = null): Promise<void> {
     const { deps } = this;
+    /*
+     * PD-ORCH-005 clause 22: a child the scheduler starts whose record holds a conversation is a settled child its parent
+     * followed up — the follow-up is in its record, after everything it said — so it carries on from the record, as a
+     * resumed agent does, rather than from its payload. Every other child the scheduler starts has none.
+     */
+    let resume = resumeFromRest;
+    if (resume === null && row.state === 'starting') {
+      const recorded = deps.record?.load(row.task_id) ?? [];
+      if (recorded.length > 0) resume = { history: recorded, assessed: false };
+    }
     const started = deps.clocks.monotonic.now();
     this.startedAt.set(row.task_id, started);
-    if (!resumed) {
+    // A child the scheduler claimed starts running; one resumed from a rest was moved back by `resumePaused`.
+    if (row.state === 'starting') {
       const moved = this.ledger.transition(row.task_id, 'running');
       if (!moved.ok) { deps.warn(moved.reason); return; }
     }

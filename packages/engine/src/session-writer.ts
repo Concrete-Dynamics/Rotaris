@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { err, maskArguments, ok, redactRowString, toIsoUtc, type Instant, type MachineId, type Result, type SessionId, type WallClock } from '@rotaris/kernel';
 import { RELEASE_PAGE_SIZE, RESIDENT_ROW_CAP, type AgentTerminalRow, type CheckpointRow, type IterationInsert, type QueuedPromptRow, type ChildInsert, type ChildRow, type RowToolFields, type SessionRunPatch, type StoreDal, type TranscriptRowRecord } from '@rotaris/store';
-import { interruptionPhrase, isLegalChildMove, isResumeState, isTerminalChildState, type ChildState, type ImageAttachment, type Interruption, type ResumeState, type RunType, type SettlingPath, type TimelineSeverity, type TranscriptRow } from '@rotaris/contracts';
+import { FOLLOW_UP_STATE, interruptionPhrase, isLegalChildMove, isLegalFollowUp, isResumeState, isTerminalChildState, type ChildState, type ImageAttachment, type Interruption, type ResumeState, type RunType, type SettlingPath, type TimelineSeverity, type TranscriptRow } from '@rotaris/contracts';
 import { EVENT_SCHEMA_VERSION, locator, serializeEvent, type EventKind, type WireEvent } from './events.js';
 import { isActiveStatus, summarise } from './run/stop-conditions.js';
 import { AgentActivity } from './children/activity.js';
@@ -1103,6 +1103,43 @@ export class SessionWriter {
         dal.setChildRest(sessionId, taskId, null, null);
         if (line.ok) dal.insertEvent(sessionId, this.nextOrdinal, 'child.transition', at, EVENT_SCHEMA_VERSION, null, line.value);
         dal.insertTimeline(sessionId, dal.nextTimelineOrdinal(sessionId), at, 'child_resumed', 'rotaris', `Child ${current.canonical_name} (${taskId}), paused by ${interruptionPhrase(current.interruption ?? '')}, resumed ${into === 'running' ? 'running' : `as ${into}`}.`, JSON.stringify({ task_id: taskId, interruption: current.interruption, resume_state: into }), timelineId(), 'info');
+      });
+    } catch (cause) {
+      return this.fail(cause);
+    }
+    if (line.ok) { const o = this.nextOrdinal++; this.deps.onCommitted({ kind: 'event', ordinal: o, events: [{ ordinal: o, event: ev, line: line.value }] }); }
+    this.trimIfOverflowed(at);
+    return ok(dal.getChild(sessionId, taskId)!);
+  }
+
+  /**
+   * PD-ORCH-005 clause 22 (revision 5): a settled child its parent follows up by `session_id` leaves its terminal state
+   * for `queued` (`FOLLOW_UP_STATE`), its completion time, report and observation cleared, since it ends, reports and is
+   * observed again. `messages` — the call's `task` as a user message, after the child's payload where its record holds no
+   * conversation — join its conversation record, with `child.transition` and a `child_resumed` timeline entry, in ONE
+   * transaction: no reader sees the child queued without the message it is to answer, and a rest or a crash before it
+   * starts leaves a record it resumes from. Refused unless the child is terminal; which settled child may be followed up
+   * is the engine's (PD-TOOLS-006 revision 3).
+   */
+  followUpChild(taskId: string, iteration: number, messages: readonly unknown[]): Result<ChildRow, WriteFailure | { code: 'illegal-move'; from: string; to: string; reason: string }> {
+    if (this.failedReason) return err({ code: 'history-failed', reason: this.failedReason });
+    const { dal, sessionId, wall } = this.deps;
+    const current = dal.getChild(sessionId, taskId);
+    if (!current) return err({ code: 'illegal-move', from: '(none)', to: FOLLOW_UP_STATE, reason: `child ${taskId} does not exist in session ${sessionId}` });
+    const from = current.state as ChildState;
+    if (!isLegalFollowUp(from)) {
+      return err({ code: 'illegal-move', from, to: FOLLOW_UP_STATE, reason: `child ${taskId} is in state '${from}', not a terminal one, and cannot be followed up (REQ-MONITOR-300, PD-ORCH-005 clause 22)` });
+    }
+    const at = toIsoUtc(wall.instant());
+    const ev = this.envelope('child.transition', at, { child_id: taskId, from_state: from, to_state: FOLLOW_UP_STATE });
+    const line = serializeEvent(ev);
+    if (!line.ok) this.deps.warn(`event child.transition could not be serialised and was not recorded: ${line.error.reason}`);
+    try {
+      dal.transaction(() => {
+        dal.reopenChild(sessionId, taskId, FOLLOW_UP_STATE);
+        for (const m of messages) dal.insertAgentMessage({ session_id: sessionId, task_id: taskId, iteration, kind: 'message', body: JSON.stringify(m), at });
+        if (line.ok) dal.insertEvent(sessionId, this.nextOrdinal, 'child.transition', at, EVENT_SCHEMA_VERSION, null, line.value);
+        dal.insertTimeline(sessionId, dal.nextTimelineOrdinal(sessionId), at, 'child_resumed', 'rotaris', `Child ${current.canonical_name} (${taskId}), which had ended ${from}, was followed up by its parent; it resumes as ${FOLLOW_UP_STATE}.`, JSON.stringify({ task_id: taskId, follow_up: true, from_state: from, resume_state: FOLLOW_UP_STATE }), timelineId(), 'info');
       });
     } catch (cause) {
       return this.fail(cause);

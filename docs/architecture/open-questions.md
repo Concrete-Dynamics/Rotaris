@@ -109,7 +109,7 @@ before the ladder's), **OQ-111** (what the report summariser reads), **OQ-112** 
 write is refused) **and OQ-113** (REQ-LIBRARY-092's fallback, answered by amendment). **Three more were raised the same day
 from the live runs and left open: OQ-114** (the specification's fixed figures on a reasoning model's critical path, and a
 continuation that starts from nothing), **OQ-115** (the code-intelligence server's imperative tool description, rendered
-verbatim) **and OQ-116** (the displayed tool-call total during a long execution pass). The seven were raised as OQ-109 to OQ-115 on their branch and renumbered at the merge, OQ-109 having been taken on `main`. **OQ-117** (what an iteration is told of a task it takes up that is not the run's own) was raised the same day by the repair of `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md` and left open. **OQ-119** (whether the task the report summariser keeps as its start may pass REQ-ORCH-110's 2,000 per event) **and OQ-120** (the size of the facts given to the report summariser) were raised the same day by the repair of D1 and left open, as OQ-118 and OQ-119 on their branch, renumbered at the merge, OQ-117 and OQ-118 having been taken on `main`. **And OQ-122** (whether the window may open the setup dialog before the open's resolution, and what a skip answered in that interval records — built as: the dialog opens on the values, and such a skip performs the open's one automatic resolution first), raised 2026-09-29 by repairing `init-proof`'s red on Linux under R-062. **And OQ-123** (which run REQ-WORKSPACE-105's "no run is in progress" means — built as a run the user started, so a background run neither withdraws the setup prompt nor is drawn in its dialog), raised the same day by the same repair's second round. The two were raised as OQ-109 and OQ-110 on their branch, renumbered there to OQ-118 and OQ-119 when OQ-109 to OQ-117 had been taken on `main`, and renumbered again at the merge, OQ-118 to OQ-121 having been taken on `main` meanwhile. **One more was raised on 2026-09-29 by building REQ-ORCH-089's stall watchdog and REQ-NOTIFY-111/112's corrective message under R-067: OQ-127** (what counts as "an outcome that produced no output within `child_stall_timeout`" when the watchdog never cancels, and what the watchdog counts, writes and calls — including the three records REQ-ORCH-139's timeline vocabulary has no word for, written to the session log instead, and whether REQ-MONITOR-119's issue at every evaluation may evict REQ-SESSION-133's ring), raised as OQ-109 on its branch, renumbered there to OQ-126 when OQ-109 to OQ-125 had been taken on `main`, and renumbered again at the merge, OQ-126 having been taken on `main` meanwhile. **And OQ-129** (what REQ-MONITOR-128's optimistic cancel of one agent shows, where, and until when — built as the agents' activity text, in the window that sent the cancel, until the engine's next record), raised 2026-09-29 by the repair of `cancelling-one-agent-is-not-shown-cancelled-until-the-engine-answers.md` under R-067, raised as OQ-128 on its branch and renumbered at the merge, OQ-128 having been taken on `main` meanwhile. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
+verbatim) **and OQ-116** (the displayed tool-call total during a long execution pass). The seven were raised as OQ-109 to OQ-115 on their branch and renumbered at the merge, OQ-109 having been taken on `main`. **OQ-117** (what an iteration is told of a task it takes up that is not the run's own) was raised the same day by the repair of `every-iteration-is-sent-the-prompt-the-run-was-launched-with.md` and left open. **OQ-119** (whether the task the report summariser keeps as its start may pass REQ-ORCH-110's 2,000 per event) **and OQ-120** (the size of the facts given to the report summariser) were raised the same day by the repair of D1 and left open, as OQ-118 and OQ-119 on their branch, renumbered at the merge, OQ-117 and OQ-118 having been taken on `main`. **And OQ-122** (whether the window may open the setup dialog before the open's resolution, and what a skip answered in that interval records — built as: the dialog opens on the values, and such a skip performs the open's one automatic resolution first), raised 2026-09-29 by repairing `init-proof`'s red on Linux under R-062. **And OQ-123** (which run REQ-WORKSPACE-105's "no run is in progress" means — built as a run the user started, so a background run neither withdraws the setup prompt nor is drawn in its dialog), raised the same day by the same repair's second round. The two were raised as OQ-109 and OQ-110 on their branch, renumbered there to OQ-118 and OQ-119 when OQ-109 to OQ-117 had been taken on `main`, and renumbered again at the merge, OQ-118 to OQ-121 having been taken on `main` meanwhile. **One more was raised on 2026-09-29 by building REQ-ORCH-089's stall watchdog and REQ-NOTIFY-111/112's corrective message under R-067: OQ-127** (what counts as "an outcome that produced no output within `child_stall_timeout`" when the watchdog never cancels, and what the watchdog counts, writes and calls — including the three records REQ-ORCH-139's timeline vocabulary has no word for, written to the session log instead, and whether REQ-MONITOR-119's issue at every evaluation may evict REQ-SESSION-133's ring), raised as OQ-109 on its branch, renumbered there to OQ-126 when OQ-109 to OQ-125 had been taken on `main`, and renumbered again at the merge, OQ-126 having been taken on `main` meanwhile. **And OQ-129** (what REQ-MONITOR-128's optimistic cancel of one agent shows, where, and until when — built as the agents' activity text, in the window that sent the cancel, until the engine's next record), raised 2026-09-29 by the repair of `cancelling-one-agent-is-not-shown-cancelled-until-the-engine-answers.md` under R-067, raised as OQ-128 on its branch and renumbered at the merge, OQ-128 having been taken on `main` meanwhile. **And OQ-130** (what a follow-up by `delegate`'s `session_id` does beyond what `PD-ORCH-005` clause 22 states — built as: the child resumes into `queued` and starts as any queued child does, only the call's `task` is read, a child that never started is given its payload first, and a follow-up waits for an execution still winding down), raised 2026-09-29 by building clause 22 under R-067. Four closed together on **2026-09-11** on the owner's ruling — **OQ-5** and **OQ-38** (the two
 terminal readings, ratified into `REQ-TOOLS-127` and `REQ-CONFIG-117`, the second narrowed in the ratifying),
 **OQ-55** (the background-session key gains a maximum) and **OQ-45** (ADR-0061 takes the improvement store's write
 path) — which is the first time a ruling closed more than one at once, and it happened because three of the four
@@ -2949,10 +2949,15 @@ the call's `task` appended as its next user message, and the child ends and repo
 task id. REQ-TOOLS-152 is narrowed by `PD-TOOLS-006`, the one directive that narrows it, and its back-pointer is amended
 in place; REQ-MONITOR-300's back-pointer from `PD-ORCH-005` names the one exit from a terminal state a follow-up takes.
 Nothing is built by this ruling: until
-[`delegate-drops-session-id-and-suppress-auto-context.md`](../defects/delegate-drops-session-id-and-suppress-auto-context.md)
+[`delegate-drops-session-id-and-suppress-auto-context.md`](../defects/fixed/delegate-drops-session-id-and-suppress-auto-context.md)
 is repaired the field is accepted and dropped. The first limit named above, which agent may take up an offer after its
 iteration ended, was ruled by `PD-ORCH-004` revision 3; `session_id` keeps the direct-child test, so a later
 iteration's root cannot follow up an earlier iteration's child.
+
+**Built 2026-09-29 under [R-067](../product/requests.md#r-067).** `delegate` forwards `session_id`, and a follow-up resumes
+the named child as ruled. Its refusals are those ruled above. What the ruling left unstated, and the readings built, are
+OQ-130. The defect note is repaired:
+[`delegate-drops-session-id-and-suppress-auto-context.md`](../defects/fixed/delegate-drops-session-id-and-suppress-auto-context.md).
 
 **OQ-67 — Where does the `/skills` listing go when there is no transcript to write it into?** *(REQ-CHAT-162 with REQ-WORKSPACE-067 and REQ-WORKSPACE-151; OQ-58. Raised 2026-09-27 by building the listing, `first-release-plan.md` §2.2; raised as OQ-66 and renumbered OQ-67 when it reached `main`, where OQ-66 had been taken by the question `PD-ORCH-004` revision 2 rules.)*
 
@@ -5845,6 +5850,59 @@ engine's answer, or which windows show the state before the engine does.
   overwrites it". That reason was falsified before merge: the engine publishes its cancelled record and answers inside
   one coalesce interval, so a persona window drawing the record before it lost the overlay and showed its agents
   `running` again until its next delivery.*
+
+**OQ-130 — What does a follow-up by `session_id` do that clause 22 does not state?** *(`PD-ORCH-005` clause 22 and
+`PD-TOOLS-006` revision 3, which rule OQ-66's open part; REQ-TOOLS-152, REQ-TOOLS-153, REQ-TOOLS-155, REQ-MONITOR-300,
+REQ-ORCH-046, REQ-ORCH-048, REQ-ORCH-050, REQ-ORCH-088, REQ-ORCH-108, REQ-ORCH-139, REQ-LIBRARY-092. Raised 2026-09-29 by
+building clause 22 under [R-067](../product/requests.md#r-067), the repair of
+[`delegate-drops-session-id-and-suppress-auto-context.md`](../defects/fixed/delegate-drops-session-id-and-suppress-auto-context.md). Open.)*
+
+Clause 22 says which child a follow-up resumes, that it resumes from its record with the call's `task` as its next user
+message, and that it ends and reports again as any child does. It does not say which state the child resumes into, what
+becomes of the call's other fields, or what a child with no recorded conversation resumes from.
+
+**What the build proceeds under** (`IterationChildren.followUp` in `packages/engine/src/children/orchestration.ts`,
+`SessionWriter.followUpChild`):
+- **The child resumes into `queued`** (`FOLLOW_UP_STATE`) and is started by the scheduler as any queued child is: under
+  REQ-ORCH-050's per-model cap, where it can be held `waiting_on_model_slot`, and under REQ-ORCH-046's active limit. The
+  call reports `queued` or `waiting_on_model_slot` in REQ-TOOLS-153's shape, with the child's own canonical name and task
+  id. It is not moved straight to `running`, as a paused child that was running is, because it holds no place in any
+  limit when it is followed up. Its total and its depth are unchanged: no record is created.
+- **Only `task` is read from the call.** `run_in_background: false` still enrols the caller in the wait, as the tool does
+  for any call. Every other field — `persona`, `task_name`, `depends_on`, `inherited_context`, `category`,
+  `attach_artifacts`, `write_scope`, `continuation_of`, `suppress_auto_context` — is left unread: the child keeps its
+  recorded identity, as clause 4 restores it, and its stored write scope is claimed again. A call whose `persona`
+  differs from the child's is not refused. The refusals are `PD-TOOLS-006` revision 3's alone.
+- **"Cut off by its `child_timeout`"** is read from the child's stored report: a `timeout` error, or PD-ORCH-004's
+  `cut_off` block. A child whose REQ-ORCH-088 fallback retry ended it some other way was not cut off.
+- **Another agent's child reads as no child of the caller's.** The reason says none of the caller's children has that
+  id. It does not say the id is another agent's: that is REQ-TOOLS-155's parent scoping, as `background_output` applies
+  it. OQ-81's `inherited_context` refusal, which names the owner, is not followed.
+- **A child that never started** — `blocked` by REQ-ORCH-048, or cancelled before it started — has no conversation to
+  resume. It is given the payload it would have started with, recorded ahead of the follow-up. REQ-ORCH-048's cascade does
+  not block again a queued child whose record holds a conversation, since its dependencies were judged when it was first
+  admitted. The same holds for a child whose dependency was itself followed up and has since failed.
+- **The follow-up and its record move together.** The move out of the terminal state, the cleared completion time,
+  report and observation, the recorded message, `child.transition` and the timeline entry are one transaction. So a
+  rest, or a crash, before the child starts leaves a record it resumes from. A call its execution left open is first
+  answered as cut off, with the statement that names no rest.
+- **A follow-up waits for an execution still winding down.** A child the user cancelled is settled at once, and its
+  aborted execution returns only when its turn does. The follow-up waits for that execution to end, then checks the
+  child again, so the old execution never writes over the new one.
+- **The earlier report is replaced.** The report column is cleared, and the child's report artifact is re-materialised
+  in place when it reports again (REQ-LIBRARY-092, the same task id). The earlier report survives in its
+  `child.complete` event.
+- **The timeline entry is `child_resumed`**, with `follow_up: true` and the state it left. It is not a word of
+  REQ-ORCH-139's vocabulary, as the rest's own use of it is not
+  ([`the-run-writes-timeline-events-outside-its-closed-vocabulary.md`](../defects/the-run-writes-timeline-events-outside-its-closed-vocabulary.md)).
+- **REQ-ORCH-088's fallback retry of a follow-up starts from the child's payload**, as a resumed child's retry does
+  (`PD-ORCH-005`'s first execution). The retry therefore carries neither the conversation nor the follow-up's `task`.
+  Whether the retry should carry the follow-up is put to the owner.
+- **REQ-ORCH-153 needs no check of its own.** The plan gate holds only a plan cycle, and a follow-up names the caller's
+  own child, which was admitted under the gate.
+
+**What a ruling decides.** Whether each reading above stands, the retry most of all. A ruling that a follow-up resumes
+straight into `running`, as a resumed child does, would take it out of REQ-ORCH-050's cap.
 
 ## Design-reference dependencies
 

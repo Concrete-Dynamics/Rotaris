@@ -36,6 +36,12 @@ export interface DelegateRequest {
    * the same omission.
    */
   readonly suppressAutoContext?: boolean | undefined;
+  /**
+   * REQ-TOOLS-152's `session_id`, as PD-ORCH-005 clause 22 and PD-TOOLS-006 revision 3 rule it: the task id of a settled
+   * child of the caller, which the call follows up — the child resumes from its record with `task` as its next user
+   * message, under its own task id, persona, dependencies and write scope. Absent or empty delegates a new child.
+   */
+  readonly sessionId?: string | undefined;
 }
 
 /** REQ-LIBRARY-098: what became of the caller's attachments, so the tool reports it rather than guessing. */

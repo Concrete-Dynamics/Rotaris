@@ -45,6 +45,17 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**A follow-up by `session_id` resumes a settled child from its record (PD-ORCH-005 clause 22, PD-TOOLS-006 revision 3,
+2026-09-29, R-067; OQ-130).** `delegate` forwards `session_id`. `IterationChildren.followUp` refuses an id that is no
+settled child of the caller, and waits for a cancelled child's execution to wind down. It re-claims the stored write
+scope and answers a call left open. The writer's new `followUpChild` makes the one exit from a terminal state
+(`isLegalFollowUp`), to `queued`, in one transaction with the follow-up's message in `agent_messages`; `StoreDal.reopenChild`
+clears the completion time, the report and the observation, over existing columns. The scheduler starts the child, and
+`execute` carries on from its record. The **runtime view** gains the follow-up paragraph beside the continuations one,
+and its §7 rows for `children` and `agent_messages` name the new writer. The **state-ownership view**'s conversation-record
+row names it as a writer and a reader. No package, edge, process, channel, message kind, command or store table changes,
+and no migration is appended.
+
 **A confirmed cancel of one agent is shown at once (REQ-MONITOR-128/296, 2026-09-29, R-067; OQ-129).** The renderer's
 `cancelAgent` lays a per-window overlay (`packages/ui/src/cancel-overlay.ts`, the store `cancelOverlays` in `shell.ts`)
 over the session before it sends `cancelAgent`. The agent and every unfinished descendant show `cancelled` with an

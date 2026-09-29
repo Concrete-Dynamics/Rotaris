@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { FakeClock, millis, mintMachineId, type MachineId, type SessionId } from '@rotaris/kernel';
 import { migrateStore, openStore, StoreDal, forgetSpelling, type ChildRow } from '@rotaris/store';
 import { answer, DefaultAgentBackend, modelError, ScriptedModelClient, toolCalls, type ModelRequest, type ScriptedCall } from '@rotaris/model';
-import { CHILD_STATES, CHILD_TRANSITIONS, isLegalChildMove, RUN_AGENT_ID, TASK_ID_PATTERN, TERMINAL_CHILD_STATES, type PermissionPreset, type SessionRecord } from '@rotaris/contracts';
+import { CHILD_STATES, CHILD_TRANSITIONS, FOLLOW_UP_STATE, isLegalChildMove, isLegalFollowUp, RUN_AGENT_ID, TASK_ID_PATTERN, TERMINAL_CHILD_STATES, type PermissionPreset, type SessionRecord } from '@rotaris/contracts';
 import { BUILT_IN_PERSONAS, canonicaliseName, ChildLedger, RUN_CONFIG_DEFAULTS, Scheduler, Sessions, SessionWriter, uniqueUnderParent, type DelegationOps, type PortToolResult, type Publisher, type RunConfig, type RoleName, type ToolPort, type ToolPortContext } from '../index.js';
 import type { PersonaResolver } from './personas.js';
 import type { ProjectionOwner } from '../projection-owner.js';
@@ -46,6 +46,11 @@ describe('the transition table (REQ-MONITOR-300)', () => {
     expect(CHILD_TRANSITIONS.queued).toEqual(['starting', 'waiting_on_model_slot', 'blocked', 'paused']);
     expect(CHILD_TRANSITIONS.running).toEqual(['summarizing', 'succeeded', 'failed', 'paused']);
   });
+
+  it('PD-ORCH-005 clause 22: a follow-up is the one exit from a terminal state, to `queued`, and it leaves no other state', () => {
+    for (const from of CHILD_STATES) expect(isLegalFollowUp(from)).toBe(TERMINAL_CHILD_STATES.has(from));
+    expect(FOLLOW_UP_STATE).toBe('queued');
+  });
 });
 
 describe('the ledger and the scheduler against a real store (ADR-0012)', () => {
@@ -70,6 +75,22 @@ describe('the ledger and the scheduler against a real store (ADR-0012)', () => {
 
   const ledger = (cap: number | null = null, budget = { maxDepth: 3, maxTotal: 20, maxActive: 6 }) => new ChildLedger({ dal, writer, sessionId: sid, iteration: 1, budget, modelCap: () => cap, warn: (m) => warnings.push(m) });
   const spawn = (l: ChildLedger, name: string, over: Partial<Parameters<ChildLedger['spawn']>[0]> = {}) => l.spawn({ parentId: 'root', parentDepth: 0, persona: 'coding-agent', taskName: name, task: `do ${name}`, dependsOn: [], inheritedContext: [], category: '', background: true, modelKey: 'm', grantedTools: [], ...over });
+
+  it('PD-ORCH-005 clause 22: the writer\'s follow-up reopens a settled child — completion, report and observation cleared, the messages recorded — and refuses one that has not ended, changing nothing', () => {
+    const l = ledger();
+    const a = spawn(l, 'a'); const id = a.ok ? a.value.row.task_id : '';
+    l.claimStart(id); l.transition(id, 'running');
+    const live = l.followUp(id, [{ role: 'user', content: [{ kind: 'text', text: 'more?' }] }]);
+    expect(live).toMatchObject({ ok: false, reason: expect.stringMatching(/is in state 'running', not a terminal one, and cannot be followed up/) });
+    expect(dal.agentConversation(sid, id)).toHaveLength(0);
+    l.transition(id, 'succeeded'); l.storeReport(id, { status: 'succeeded', summary: 's' }); l.markObserved(id);
+    expect(dal.getChild(sid, id)).toMatchObject({ state: 'succeeded', report_stored: 1, observed: 1, completed_at: expect.any(String) });
+    const r = l.followUp(id, [{ role: 'user', content: [{ kind: 'text', text: 'more?' }] }]);
+    expect(r.ok).toBe(true);
+    expect(dal.getChild(sid, id)).toMatchObject({ state: 'queued', report: null, report_stored: 0, observed: 0, completed_at: null });
+    expect(conversationOf(dal.agentConversation(sid, id))).toEqual([{ role: 'user', content: [{ kind: 'text', text: 'more?' }] }]);
+    expect(dal.eventsOfKind(sid, 'child.transition').map((e) => JSON.parse(e.payload) as { from_state: string; to_state: string }).at(-1)).toMatchObject({ from_state: 'succeeded', to_state: 'queued' });
+  });
 
   it('REQ-ORCH-046: the five checks in order reject with no record; aliases resolve; names are unique per parent', () => {
     const l = ledger(null, { maxDepth: 1, maxTotal: 2, maxActive: 1 });
@@ -294,7 +315,7 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     };
     const builtIn = async (name: string, a: Record<string, unknown>, ok: (text: string) => PortToolResult): Promise<PortToolResult> => {
       if (name === 'delegate') {
-        const r = await ops.delegate(parentId, { persona: String(a['persona']), taskName: String(a['task_name']), task: String(a['task']), dependsOn: (a['depends_on'] as string[]) ?? [], inheritedContext: (a['inherited_context'] as string[] | undefined) ?? [], category: '', runInBackground: a['run_in_background'] !== false, writeScope: (a['write_scope'] as string[] | undefined) ?? [], ...(typeof a['continuation_of'] === 'string' ? { continuationOf: a['continuation_of'] } : {}), ...(a['suppress_auto_context'] === true ? { suppressAutoContext: true } : {}), ...(Array.isArray(a['attach_artifacts']) ? { attachArtifacts: a['attach_artifacts'] as string[] } : {}) });
+        const r = await ops.delegate(parentId, { persona: String(a['persona']), taskName: String(a['task_name']), task: String(a['task']), dependsOn: (a['depends_on'] as string[]) ?? [], inheritedContext: (a['inherited_context'] as string[] | undefined) ?? [], category: '', runInBackground: a['run_in_background'] !== false, writeScope: (a['write_scope'] as string[] | undefined) ?? [], ...(typeof a['continuation_of'] === 'string' ? { continuationOf: a['continuation_of'] } : {}), ...(typeof a['session_id'] === 'string' ? { sessionId: a['session_id'] } : {}), ...(a['suppress_auto_context'] === true ? { suppressAutoContext: true } : {}), ...(Array.isArray(a['attach_artifacts']) ? { attachArtifacts: a['attach_artifacts'] as string[] } : {}) });
         if (r.status === 'rejected') return { ...ok(`Task '${r.canonicalName}': rejected — ${r.message}`), isError: true, status: 'failed' };
         let text = `Task '${r.canonicalName}': ${r.status} — ${r.message}\ntask_id: ${r.taskId}`;
         if (a['run_in_background'] === false) { const w = await ops.waitForTasks(parentId, [r.taskId]); text += `\n\n${'refused' in w ? w.refused : 'interrupted' in w ? w.interrupted : w.text}`; }
@@ -641,6 +662,265 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       expect(payloads.get('build')).toContain('no-such-artifact');
       const buildSelection = selection.map((t) => JSON.parse(t.metadata) as Record<string, unknown>).find((m) => m['task_id'] === build.task_id);
       expect(buildSelection).toMatchObject({ sibling_index_suppressed: true, sibling_index_included: 0, attached_unresolved: ['no-such-artifact'] });
+    });
+  });
+
+  describe('PD-ORCH-005 clause 22 / PD-TOOLS-006 revision 3 (OQ-66, R-067): a follow-up by session_id resumes the caller\'s own settled child from its record', () => {
+    const textOf = (m: ModelRequest['messages'][number]): string => m.content.map((p) => (p.kind === 'text' ? p.text : p.kind === 'tool-result' ? p.result : '')).join('');
+    const isRoot = (req: ModelRequest) => /^You are the orchestrator/.test(textOf(req.messages[0]!));
+    const rootRequests = (client: ScriptedModelClient) => client.requests.filter(isRoot);
+    const childRequests = (client: ScriptedModelClient) => client.requests.filter((r) => !isRoot(r) && !/summarise/i.test(textOf(r.messages[0]!)));
+    /** The text of the root's last tool result in its `n`th request (1-based): what its last delegate call observed. */
+    const observed = (client: ScriptedModelClient, n: number) => textOf(rootRequests(client)[n - 1]!.messages.at(-1)!);
+
+    /**
+     * The root delegates `survey`, ends its turn and, resumed with the survey's report (its third request), calls
+     * `delegate` again with `followUp(surveyId)` as the rest of the call's arguments; what that call observed is the last
+     * message of its fourth request. Then it answers. `child` scripts the survey's steps.
+     */
+    async function surveyThenFollowUp(followUp: (surveyId: string) => Record<string, unknown>, child: (step: number, req: ModelRequest) => ScriptedCall = (step) => answer(step === 1 ? 'The module is small.' : 'It has two files: a.ts and b.ts.'), over: { childTimeoutMs?: number } = {}) {
+      let sid = '' as SessionId;
+      const { sessions, client } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'survey', task: 'TASK: survey the module' } }], 'Surveying.');
+          if (turn === 2) return answer('Waiting for the survey.');
+          if (turn === 3) return toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'survey', task: 'TASK: which files does it have?', ...followUp(children(sid).find((c) => c.canonical_name === 'survey')!.task_id) } }], 'Following up.');
+          return answer(`root turn ${turn}`);
+        }
+        if (persona === 'summariser') return answer('{"summary":"surveyed","key_findings":[],"tags":[]}');
+        return child(req.messages.filter((m) => m.role === 'assistant').length + 1, req);
+      }, over);
+      sid = (sessions.start(dal, 'C:/ws', 'survey, then ask again') as { value: SessionId }).value;
+      const result = await sessions.running(sid)!;
+      return { sid, result, client };
+    }
+
+    it('clause 22: the named child resumes under its own task id from its recorded conversation, the call\'s task as its next user message, and ends and reports again', async () => {
+      const { sid, result, client } = await surveyThenFollowUp((id) => ({ session_id: id }));
+      expect(result.status).toBe('completed');
+      // No second record: the follow-up is the same child.
+      const rows = children(sid);
+      expect(rows).toHaveLength(1);
+      const survey = rows[0]!;
+      expect(survey).toMatchObject({ canonical_name: 'survey', state: 'succeeded', observed: 1, report_stored: 1 });
+      // Its second request carries its whole first conversation, then the follow-up as the next user message.
+      const [first, second] = childRequests(client);
+      expect(second).toBeDefined();
+      const firstTexts = first!.messages.map(textOf);
+      expect(second!.messages.slice(0, firstTexts.length).map(textOf)).toEqual(firstTexts);
+      expect(textOf(second!.messages[firstTexts.length]!)).toBe('The module is small.');
+      expect(second!.messages.at(-1)!.role).toBe('user');
+      expect(textOf(second!.messages.at(-1)!)).toBe('TASK: which files does it have?');
+      // The record holds the follow-up where the model saw it.
+      const record = conversationOf(dal.agentConversation(sid, survey.task_id));
+      expect(record.map(textOf)).toEqual(expect.arrayContaining(['TASK: which files does it have?', 'It has two files: a.ts and b.ts.']));
+      // REQ-MONITOR-300 narrowed by clause 22: one exit from the terminal state, then the path any child takes.
+      const moves = dal.eventsOfKind(sid, 'child.transition').map((e) => JSON.parse(e.payload) as { from_state: string; to_state: string });
+      expect(moves.map((m) => m.to_state)).toEqual(['starting', 'running', 'summarizing', 'succeeded', 'queued', 'starting', 'running', 'summarizing', 'succeeded']);
+      expect(moves[4]).toEqual(expect.objectContaining({ from_state: 'succeeded', to_state: 'queued' }));
+      // It reported again: two stored reports, the second the follow-up's.
+      expect(dal.eventsOfKind(sid, 'child.complete')).toHaveLength(2);
+      expect(JSON.parse(survey.report!)).toMatchObject({ final_response: 'It has two files: a.ts and b.ts.' });
+      // REQ-TOOLS-153: the call returned the child's own task id; the root was told of its second end.
+      expect(observed(client, 4)).toMatch(new RegExp(`^Task 'survey': queued — .*\\ntask_id: ${survey.task_id}$`));
+      const told = rootRequests(client)[4]!;
+      expect(textOf([...told.messages].reverse().find((m) => m.role === 'user')!)).toContain('It has two files: a.ts and b.ts.');
+      expect(dal.timelineOf(sid).filter((t) => t.name === 'child_resumed').map((t) => JSON.parse(t.metadata) as Record<string, unknown>)).toEqual([expect.objectContaining({ task_id: survey.task_id, follow_up: true, from_state: 'succeeded', resume_state: 'queued' })]);
+    });
+
+    it('run_in_background false waits for the follow-up as for any child, and the call returns its new report', async () => {
+      const { sid, result, client } = await surveyThenFollowUp((id) => ({ session_id: id, run_in_background: false }));
+      expect(result.status).toBe('completed');
+      expect(children(sid)).toHaveLength(1);
+      expect(observed(client, 4)).toContain('It has two files: a.ts and b.ts.');
+    });
+
+    /** A settled child of another agent — a grandchild's shape — in the case's one session, `S1`. */
+    const othersChild = () => {
+      const OTHER = 'bg_0000a7e1';
+      dal.insertChild({ session_id: 'S1' as SessionId, task_id: OTHER, canonical_name: 'grand', given_name: 'grand', persona: 'codebase-analyst', state: 'succeeded', parent_id: 'bg_0000a11e', depth: 2, iteration: 1, model_key: 'm', category: '', background: 1, task: 't', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: 't' });
+      return { session_id: OTHER };
+    };
+    it.each([
+      ['no task', () => ({ session_id: 'bg_0000dead' }), 1],
+      ['a name rather than a task id', () => ({ session_id: 'survey' }), 1],
+      ["another agent's child", othersChild, 2],
+    ] as const)('PD-TOOLS-006 revision 3: a session_id naming %s is refused rejected, with no record and no task id', async (_name, followUp, records) => {
+      const { sid, client } = await surveyThenFollowUp(followUp);
+      expect(children(sid)).toHaveLength(records);
+      expect(observed(client, 4)).toMatch(/^Task 'survey': rejected — .*session_id.*no settled child of yours/);
+      expect(observed(client, 4)).not.toContain('task_id:');
+      expect(dal.eventsOfKind(sid, 'child.transition').map((e) => (JSON.parse(e.payload) as { to_state: string }).to_state)).not.toContain('queued');
+    });
+
+    it('PD-TOOLS-006 revision 3: a session_id naming a child that has not ended is refused rejected, and the child runs on untouched', async () => {
+      let release!: () => void;
+      const held = new Promise<void>((r) => { release = r; });
+      let sid = '' as SessionId;
+      const { sessions, client } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'slow', task: 'TASK: slow' } }, { callId: 'd2', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'quick', task: 'TASK: quick' } }], 'Two.');
+          if (turn === 2) { const slow = children(sid).find((c) => c.canonical_name === 'slow')!; return toolCalls([{ callId: 'd3', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'slow', task: 'TASK: and?', session_id: slow.task_id } }]); }
+          // The refusal is observed; only now may `slow` end.
+          if (turn === 3) release();
+          return answer(`root turn ${turn}`);
+        }
+        if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+        return textOf(req.messages.at(-1)!).includes('TASK: slow') ? { parts: [{ hold: held }, { part: { kind: 'text', delta: 'slow done' } }, { part: { kind: 'finish', reason: 'stop' } }] } : answer('quick done');
+      });
+      sid = (sessions.start(dal, 'C:/ws', 'two') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(children(sid)).toHaveLength(2);
+      expect(observed(client, 3)).toMatch(/^Task 'slow': rejected — .*session_id.*has not ended/);
+      expect(children(sid).find((c) => c.canonical_name === 'slow')).toMatchObject({ state: 'succeeded' });
+      expect(dal.eventsOfKind(sid, 'child.complete')).toHaveLength(2);
+    });
+
+    it('OQ-130: a child that never started — blocked by its dependency — is followed up from the payload it would have started with, then the follow-up, and REQ-ORCH-048\'s cascade does not block it again', async () => {
+      let sid = '' as SessionId;
+      let followed = false;
+      const { sessions, client } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'a', task: 'TASK: a' } }]);
+          if (turn === 2) return toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'b', task: 'TASK: b', depends_on: [children(sid).find((c) => c.canonical_name === 'a')!.task_id] } }]);
+          const b = children(sid).find((c) => c.canonical_name === 'b');
+          if (!followed && b?.state === 'blocked') { followed = true; return toolCalls([{ callId: 'd3', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'b', task: 'TASK: go ahead without a', session_id: b.task_id } }]); }
+          return answer(`root turn ${turn}`);
+        }
+        if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+        // `a` says nothing and calls nothing, twice, so it ends failed and `b` is blocked; `b` answers.
+        return answer(req.messages.some((m) => textOf(m).includes('TASK: b')) ? 'b went ahead.' : '');
+      });
+      sid = (sessions.start(dal, 'C:/ws', 'a then b') as { value: SessionId }).value;
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      expect(followed).toBe(true);
+      const b = children(sid).find((c) => c.canonical_name === 'b')!;
+      expect(children(sid).find((c) => c.canonical_name === 'a')!.state).toBe('failed');
+      expect(b.state).toBe('succeeded');
+      const asked = childRequests(client).filter((r) => r.messages.some((m) => textOf(m).includes('TASK: b')));
+      expect(asked).toHaveLength(1);
+      const users = asked[0]!.messages.filter((m) => m.role === 'user').map(textOf);
+      // Its payload — the workspace root, then its task — and then the follow-up as its next user message.
+      expect(users).toHaveLength(2);
+      expect(users[0]).toMatch(/Workspace root: C:\/ws\.[\s\S]*TASK: b$/);
+      expect(users[1]).toBe('TASK: go ahead without a');
+      const moves = dal.eventsOfKind(sid, 'child.transition').map((e) => JSON.parse(e.payload) as { child_id: string; to_state: string }).filter((m) => m.child_id === b.task_id).map((m) => m.to_state);
+      expect(moves).toEqual(['blocked', 'queued', 'starting', 'running', 'summarizing', 'succeeded']);
+    });
+
+    it('PD-ORCH-005 clauses 2 and 4: a follow-up still waiting for a model slot when the run is paused is paused where it stood, and the continue starts it from its record, the follow-up included', async () => {
+      let sid = '' as SessionId;
+      let release!: () => void;
+      const hog = new Promise<void>((r) => { release = r; });
+      let followed = false;
+      const { sessions, client } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'survey', task: 'TASK: survey the module' } }]);
+          const survey = children(sid).find((c) => c.canonical_name === 'survey');
+          if (!followed && survey?.state === 'succeeded') {
+            followed = true;
+            // `hog` takes the one model slot first, so the follow-up waits for it.
+            return toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'hog', task: 'TASK: hog' } }, { callId: 'd3', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'survey', task: 'TASK: which files does it have?', session_id: survey.task_id } }]);
+          }
+          return answer(`root turn ${turn}`);
+        }
+        if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+        const last = req;
+        if (last.messages.some((m) => textOf(m).includes('TASK: hog'))) return { parts: [{ hold: hog }, { part: { kind: 'text', delta: 'hog done' } }, { part: { kind: 'finish', reason: 'stop' } }] };
+        return answer(textOf(last.messages.at(-1)!) === 'TASK: which files does it have?' ? 'It has two files.' : 'The module is small.');
+      }, { cap: 1 });
+      sid = (sessions.start(dal, 'C:/ws', 'survey, then ask again') as { value: SessionId }).value;
+      for (let i = 0; i < 400 && children(sid).find((c) => c.canonical_name === 'survey')?.state !== 'waiting_on_model_slot'; i += 1) await new Promise((r) => setTimeout(r, 5));
+      expect(children(sid).find((c) => c.canonical_name === 'survey')!.state).toBe('waiting_on_model_slot');
+      expect(sessions.control({ op: 'pause', sessionId: sid, args: {} })).toEqual({ ok: true });
+      release();
+      expect((await sessions.running(sid)!).status).toBe('interrupted');
+      const paused = children(sid).find((c) => c.canonical_name === 'survey')!;
+      expect(paused).toMatchObject({ state: 'paused', interruption: 'pause', resume_state: 'waiting_on_model_slot', report_stored: 0 });
+      // The follow-up is in the record the continue resumes from.
+      expect(textOf(conversationOf(dal.agentConversation(sid, paused.task_id)).at(-1)!)).toBe('TASK: which files does it have?');
+      expect(sessions.continueSession(sid, 'continue').ok).toBe(true);
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      const survey = children(sid).find((c) => c.canonical_name === 'survey')!;
+      expect(survey.state).toBe('succeeded');
+      expect(JSON.parse(survey.report!)).toMatchObject({ final_response: 'It has two files.' });
+      // Its request after the continue carried its first conversation and the follow-up — never its payload afresh.
+      const second = childRequests(client).filter((r) => textOf(r.messages.at(-1)!) === 'TASK: which files does it have?');
+      expect(second).toHaveLength(1);
+      expect(second[0]!.messages.filter((m) => m.role === 'user').map(textOf).filter((t) => t.includes('TASK: survey the module'))).toHaveLength(1);
+      expect(second[0]!.messages.some((m) => m.role === 'assistant' && textOf(m) === 'The module is small.')).toBe(true);
+    });
+
+    it('clause 22 with REQ-ORCH-133: a child the user cancelled mid-step is followed up only once its execution has wound down, so that execution writes nothing over the follow-up', async () => {
+      let sid = '' as SessionId;
+      let release!: () => void;
+      const held = new Promise<void>((r) => { release = r; });
+      let followed = false;
+      const { sessions, client } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          if (turn === 1) return toolCalls([{ callId: 'd1', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'survey', task: 'TASK: survey the module' } }]);
+          const survey = children(sid).find((c) => c.canonical_name === 'survey');
+          if (!followed && survey?.state === 'cancelled') { followed = true; return toolCalls([{ callId: 'd2', name: 'delegate', args: { persona: 'codebase-analyst', task_name: 'survey', task: 'TASK: try again', session_id: survey.task_id } }]); }
+          return answer(`root turn ${turn}`);
+        }
+        if (persona === 'summariser') return answer('{"summary":"done","key_findings":[],"tags":[]}');
+        // The first step ignores its abort (a provider that does not honour it) and ends only when released.
+        return textOf(req.messages.at(-1)!) === 'TASK: try again' ? answer('Tried again.') : { parts: [{ hold: held }, { part: { kind: 'text', delta: 'late words' } }, { part: { kind: 'finish', reason: 'stop' } }] };
+      }, { deaf: ['child'] });
+      sid = (sessions.start(dal, 'C:/ws', 'survey') as { value: SessionId }).value;
+      for (let i = 0; i < 400 && childRequests(client).length === 0; i += 1) await new Promise((r) => setTimeout(r, 5));
+      const id = children(sid)[0]!.task_id;
+      expect(sessions.control({ op: 'cancelAgent', sessionId: sid, args: { agentId: id } })).toEqual({ ok: true });
+      // The root is told, and follows it up while the cancelled step still streams.
+      for (let i = 0; i < 400 && !followed; i += 1) await new Promise((r) => setTimeout(r, 5));
+      await new Promise((r) => setTimeout(r, 20));
+      expect(children(sid)[0]!.state).toBe('cancelled');
+      expect(childRequests(client)).toHaveLength(1);
+      release();
+      expect((await sessions.running(sid)!).status).toBe('completed');
+      const survey = children(sid)[0]!;
+      expect(survey.state).toBe('succeeded');
+      expect(JSON.parse(survey.report!)).toMatchObject({ final_response: 'Tried again.' });
+      // Two reports — the cancel's and the follow-up's — and nothing from the wound-down step between them.
+      expect(dal.eventsOfKind(sid, 'child.complete').map((e) => (JSON.parse(e.payload) as { report: { status: string } }).report.status)).toEqual(['cancelled', 'succeeded']);
+      expect(childRequests(client)).toHaveLength(2);
+    });
+
+    it('clause 4\'s rule for a record, at a follow-up: a call left open by an execution that raised out of it is answered as cut off before the follow-up is appended', async () => {
+      const CRASHY = 'bg_0000c0de';
+      const { sid, client } = await surveyThenFollowUp((surveyId) => {
+        const survey = dal.getChild('S1' as SessionId, surveyId)!;
+        dal.insertChild({ session_id: survey.session_id as SessionId, task_id: CRASHY, canonical_name: 'crashy', given_name: 'crashy', persona: 'codebase-analyst', state: 'failed', parent_id: survey.parent_id, depth: 1, iteration: 1, model_key: 'm', category: '', background: 1, task: 'TASK: crashy', depends_on: '[]', inherited_context: '[]', granted_tools: '[]', granted_mcp: '{}', spawned_at: survey.spawned_at });
+        dal.setChildObserved(survey.session_id as SessionId, CRASHY);
+        for (const m of [{ role: 'user', content: [{ kind: 'text', text: 'TASK: crashy' }] }, { role: 'assistant', content: [{ kind: 'tool-call', callId: 'x1', name: 'read_file', args: '{"path":"a.ts"}' }] }]) {
+          dal.insertAgentMessage({ session_id: survey.session_id as SessionId, task_id: CRASHY, iteration: 1, kind: 'message', body: JSON.stringify(m), at: 't' });
+        }
+        return { session_id: CRASHY };
+      }, (_step, req) => answer(req.messages.some((m) => textOf(m) === 'TASK: crashy') ? 'Crashy answers.' : 'The module is small.'));
+      expect(children(sid).find((c) => c.task_id === CRASHY)!.state).toBe('succeeded');
+      const asked = childRequests(client).find((r) => r.messages.some((m) => textOf(m) === 'TASK: crashy'))!;
+      const tail = asked.messages.slice(-3);
+      expect(tail.map((m) => m.role)).toEqual(['assistant', 'tool', 'user']);
+      expect(tail[1]!.content).toEqual([expect.objectContaining({ kind: 'tool-result', callId: 'x1', isError: true, result: expect.stringMatching(/^This call was not run: its agent was stopped before it started/) })]);
+      expect(textOf(tail[2]!)).toBe('TASK: which files does it have?');
+    });
+
+    it('PD-TOOLS-006 revision 3: a child its child_timeout cut off is refused, and the reason names continuation_of', async () => {
+      // The survey never answers within its limit: its step holds until the limit and the landing grace have passed.
+      let release!: () => void;
+      const held = new Promise<void>((r) => { release = r; });
+      const { sid, client } = await (async () => {
+        const run = surveyThenFollowUp((id) => ({ session_id: id }), (step) => (step === 1 ? { parts: [{ hold: held }, { part: { kind: 'text', delta: 'partial' } }, { part: { kind: 'finish', reason: 'stop' } }] } : answer('never')), { childTimeoutMs: 1_000 });
+        await new Promise((r) => setTimeout(r, 10));
+        clock.advance(1_000);
+        release();
+        return run;
+      })();
+      const survey = children(sid).find((c) => c.canonical_name === 'survey')!;
+      expect(JSON.parse(survey.report!)).toMatchObject({ errors: expect.arrayContaining([expect.objectContaining({ type: 'timeout' })]) });
+      expect(survey.state).toBe('failed');
+      expect(observed(client, 4)).toMatch(/^Task 'survey': rejected — .*child_timeout.*continuation_of/);
+      expect(dal.eventsOfKind(sid, 'child.transition').map((e) => (JSON.parse(e.payload) as { to_state: string }).to_state)).not.toContain('queued');
     });
   });
 

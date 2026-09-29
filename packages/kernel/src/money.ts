@@ -106,16 +106,29 @@ export function isZeroAmount(text: string): boolean {
   return v === null ? false : v.units === 0n;
 }
 
+/** REQ-PROVIDER-121's floor (accepted amendment 2026-09-29, ESC-42), bare: no figure this product renders names a currency. */
+export const AMOUNT_FLOOR = '< 0.0001';
+
 /**
  * REQ-PROVIDER-121's rendering of an amount that is not a balance: rounded **half-up**, to 2 decimal
- * places, or to 4 when the magnitude is below one hundredth. REQ-SHELL-045 adds "so a cost that is small
- * but not nothing is never rendered as zero", which the rule does not deliver below 0.00005 — that amount
- * renders `0.0000`, and the contradiction is recorded in `docs/defects/` rather than resolved here.
+ * places, or to 4 when the magnitude is below one hundredth — and an amount greater than zero that this
+ * rounding would render as zero renders as the floor `< 0.0001` instead, which is what delivers REQ-SHELL-045's
+ * "a cost that is small but not nothing is never rendered as zero" (ESC-42 option (b), ruled 2026-09-29 under
+ * R-067). Zero itself renders `0.00`, so nothing and a small something stay distinguishable. An amount below zero
+ * is rounded as before and never floored (the ruling's "greater than zero"); a balance, rounded down, is outside
+ * the floor too, and is not rendered here at all (ADR-0031 holds its division open). The floor is rendering only:
+ * the exact figure is what is persisted and summed.
+ *
+ * The floor replaces the whole figure, so a label template that takes `<amount>` takes it whole —
+ * `< 0.0001 at configured rates`, `at least < 0.0001; some requests have no price` — and every row of
+ * PD-MONITOR-001's label table stays as written.
  *
  * The currency is deliberately not this function's business. The product has no currency anywhere
  * yet, and a figure a provider reports without naming one is rendered bare rather than under a
  * symbol the product picked for it — PD-MONITOR-001's narrowing of REQ-PROVIDER-121, where the
- * symbol table applies to an amount whose currency is known.
+ * symbol table applies to an amount whose currency is known. So the floor is bare here; where a currency is one
+ * day known, its symbol stands where the rule puts it, before the digits and after the `<` (`< $0.0001`), or its
+ * code after them (`< 0.0001 <CODE>`).
  */
 export function formatAmount(text: string): string | null {
   const v = parse(text);
@@ -130,5 +143,7 @@ export function formatAmount(text: string): string | null {
   const remainder = magnitude % divisor;
   // Half-up: away from zero at the exact half, which is what REQ-PROVIDER-127 restates for percentages.
   const rounded = remainder * 2n >= divisor ? quotient + 1n : quotient;
+  // ESC-42: only the four-place band can round a non-zero amount to zero (below 0.00005); above zero, that is the floor.
+  if (rounded === 0n && v.units > 0n) return AMOUNT_FLOOR;
   return render(negative ? -rounded : rounded, places);
 }

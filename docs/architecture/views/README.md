@@ -45,6 +45,12 @@ The diagrams are Mermaid; GitHub renders them. Names in the diagrams are the nam
 
 ## Last reconciled with the code: **2026-09-29**
 
+**A small non-zero cost renders as the floor `< 0.0001`, never as zero (ESC-42 ruled option (b) under R-067, 2026-09-29).**
+`formatAmount` (`kernel/money.ts`) returns `AMOUNT_FLOOR` where REQ-PROVIDER-121's half-up rounding brings an amount
+greater than zero to zero; `costLabelOf` is unchanged and every label takes the floor as its `<amount>`. This repairs
+`a-cost-below-five-hundred-thousandths-renders-as-zero.md`. The **runtime view**'s §3 ("What a step costs") says so. No
+package, edge, process, channel, message kind, command or store column changed.
+
 **A retry the dispatch layer absorbs is written to the session log (OQ-110 ruled under R-067, 2026-09-29).** REQ-CONFIG-086's
 `num_retries` stay the dispatch layer's, spent inside the model client before the ladder; the client's decorated fetch
 now reports each retry as it is sent (`ModelRequest.onRetry`, with the status met and the delay waited on the monotonic

@@ -465,8 +465,10 @@ none of the three. `Aggregates.addRequest` adds the figure to the run's total in
 `configured` (every request priced, at least one at configured rates). The qualifier is persisted with the total
 (`sessions.cost_qualifier`, v21) and rebuilt on a continuation from it and the token totals. The total reaches
 `usage.update` and `session.end` in the payload's existing `cost.total`; the label is `costLabelOf(cost,
-qualifier)`, rendered half-up to two places or four below one hundredth and with no currency symbol, because no
-figure names a currency and the product picks none. A configured price reaches the entry exact because the loader
+qualifier)`, rendered half-up to two places or four below one hundredth — and, for an amount greater than zero that
+this rounding would bring to zero, as the floor `< 0.0001` (`formatAmount`'s `AMOUNT_FLOOR`; ESC-42, REQ-PROVIDER-121 as
+amended), zero itself reading `0.00` — and with no currency symbol, because no figure names a currency and the product
+picks none. The floor is rendering only; the persisted total stays exact. A configured price reaches the entry exact because the loader
 reads it from the YAML scalar's source text (`config/prices.ts`, `exactPrices`) before the plain value's double is
 used — the discovery snapshot's prices likewise. **Every agent's requests are counted**: the entry agent's turn
 and every delegated child's turn, at any depth, hand each completed request to the one `Run.onRequestUsage`

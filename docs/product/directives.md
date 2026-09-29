@@ -1104,6 +1104,13 @@ adding to it.
 > `0.0024 at configured rates`. A cost below 0.00005 still renders `0.0000`, which contradicts REQ-SHELL-045's
 > own promise and is recorded in `docs/defects/`. The row is in
 > [`../architecture/first-executions.md`](../architecture/first-executions.md).
+>
+> **First execution of revision 3, 2026-09-29, the day it was ruled:** the floor held as written. `formatAmount`
+> returns `< 0.0001` for an amount greater than zero that the half-up rounding brings to zero, and `costLabelOf`
+> needed no change, because each label takes the rendered figure whole: `< 0.0001 at configured rates`,
+> `< 0.0001 reported by the provider`, `at least < 0.0001; some requests have no price` — the table above, unchanged.
+> The stored figure is the exact one. The row is in
+> [`../architecture/first-executions.md`](../architecture/first-executions.md).
 
 <a id="pd-tools-001"></a>
 

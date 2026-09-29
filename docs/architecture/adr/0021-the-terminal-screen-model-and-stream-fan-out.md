@@ -658,5 +658,15 @@ agent's capture has always kept, and nothing between calls. The proof's equality
 tap carries", and it asserts no marker in them. The PowerShell side is unmeasured: the region is told from the echo by
 the quote that follows the marker in both wrappers, and a Windows host has not run it.*
 
+*Reported back again the same day, at the verifier's second round: **the repair made a display defect visible that
+the wrapper's echo had hidden.** The closing frame's literal replacement (OQ-5's reading) leaves the display's cursor
+after the observation's last character, its trailing newline trimmed. The next command on the same re-opened
+`fg:<agent>` stream then drew its first line onto that row (`first-cmdsecond-cmd`, measured from a real PTY). The
+display now starts a re-opened stream on the row after the closing text (`applyFrame`,
+`packages/ui/src/terminal/emulator.ts`). It adds no byte to any frame. `pnpm terminal-stream-proof` asserts it
+through the renderer's own display (`reopenedStreamStartsOnAFreshRow`). The PowerShell side is still unmeasured, and
+under ConPTY, which repaints with cursor positioning, a printed start marker not followed by a newline would
+withhold the whole preview.*
+
 **Could not show.** A Windows re-run on the branch (no host). Anything on macOS (IC-3). The synthetic ladder and the
 packaged limb are unchanged, and are owed where the third execution left them.

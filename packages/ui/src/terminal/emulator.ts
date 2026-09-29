@@ -64,13 +64,19 @@ export interface StreamDisplay {
   /** Set when the stream went from running to closed; never unset, whatever a later meta says (REQ-SHELL-105). */
   readonly closed: boolean;
   readonly framesApplied: number;
+  /**
+   * The last frame written was a closing one whose text left the cursor after its last character, not at column 0
+   * (the closing text is the observation's, its trailing newline trimmed). Read once, when the next command re-opens
+   * the stream: that command's output starts on the row after the closing text (live-run L9).
+   */
+  readonly closingEndsMidRow: boolean;
 }
 
 export type ApplyOutcome = 'applied' | 'stale' | 'wrong-stream';
 
 export function createStreamDisplay(frame: DisplayFrame, factory: EmulatorFactory): StreamDisplay {
   const meta: TerminalStreamMeta = frame.meta ?? { ...UNKNOWN_STREAM_META, streamId: frame.streamId, sessionId: frame.sessionId };
-  return { streamId: frame.streamId, emulator: factory(meta.cols, meta.rows), meta, lastSeq: 0, closed: false, framesApplied: 0 };
+  return { streamId: frame.streamId, emulator: factory(meta.cols, meta.rows), meta, lastSeq: 0, closed: false, framesApplied: 0, closingEndsMidRow: false };
 }
 
 /**
@@ -85,6 +91,7 @@ export function applyFrame(display: StreamDisplay, frame: DisplayFrame): { reado
   if (seq <= display.lastSeq) return { display, outcome: 'stale' };
   let meta = display.meta;
   let closed = display.closed;
+  let reopened = false;
   if (frame.meta) {
     const incoming = frame.meta;
     /*
@@ -98,7 +105,9 @@ export function applyFrame(display: StreamDisplay, frame: DisplayFrame): { reado
      * higher `seq` is the next command opening the same stream (the exit code goes with it). An older frame can never
      * reopen anything — the sequence rule above already refuses it — so idempotence is intact.
      */
-    const reopened = closed && incoming.running;
+    // A display created from a late attacher's closing resync frame starts with `running: false` and never saw the
+    // transition, so "not running before, running now" is also the next command opening the stream.
+    reopened = (closed || !meta.running) && incoming.running;
     if (reopened) closed = false;
     const running = closed ? false : incoming.running;
     if (!closed && meta.running && !incoming.running) closed = true;
@@ -106,11 +115,27 @@ export function applyFrame(display: StreamDisplay, frame: DisplayFrame): { reado
     if (reopened && incoming.exitCode === undefined) delete (meta as { exitCode?: number }).exitCode;
     if (meta.cols !== display.emulator.cols || meta.rows !== display.emulator.rows) display.emulator.resize(meta.cols, meta.rows);
   }
+  /*
+   * Live-run L9, second round (2026-09-29): since the run host's stream carries only what the command wrote, the next
+   * command's first delta is its own first line. The closing text above it is the observation's, its trailing newline
+   * trimmed, so the literal replacement leaves the cursor after that text's last character, and the next command's
+   * first line was drawn onto the previous command's last row ("first-cmdsecond-cmd"). Before L9's repair the echoed
+   * wrapper took that glued position and hid it. A re-opened stream now starts on the row after the closing text:
+   * the display moves its own cursor to column 0 of the next row, as a terminal would under a new prompt. No byte is
+   * added to any frame and nothing the command wrote is changed; a screen frame replaces the screen and needs none.
+   */
+  let closingEndsMidRow = display.closingEndsMidRow;
   if (frame.kind === 'screen') {
     display.emulator.reset();
     display.emulator.write(frame.closing ? frame.payload.replace(/\r?\n/g, '\r\n') : frame.payload);
-  } else if (frame.kind === 'delta') {
-    display.emulator.write(frame.payload);
+    closingEndsMidRow = frame.closing === true && frame.payload !== '' && !frame.payload.endsWith('\n');
+  } else {
+    if (reopened && closingEndsMidRow) display.emulator.write('\r\n');
+    if (reopened) closingEndsMidRow = false;
+    if (frame.kind === 'delta') {
+      display.emulator.write(frame.payload);
+      closingEndsMidRow = false;
+    }
   }
-  return { display: { ...display, meta, closed, lastSeq: seq, framesApplied: display.framesApplied + 1 }, outcome: 'applied' };
+  return { display: { ...display, meta, closed, lastSeq: seq, framesApplied: display.framesApplied + 1, closingEndsMidRow }, outcome: 'applied' };
 }

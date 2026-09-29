@@ -191,9 +191,13 @@ export class TerminalManager {
   }
 }
 
-/** A measured span as the observation states it: tenths of a second, and "under 0.1 seconds" below that (live-run L2). */
+/**
+ * A measured span as the observation states it: tenths of a second, and "under 0.1 seconds" below that (live-run L2).
+ * Truncated to the tenth, never rounded, so what an observation says it waited is never more than was measured: the
+ * verifier's live run of 2026-09-29 read "1.7 seconds" for 1,686 ms under rounding.
+ */
 export function seconds(ms: number): string {
-  return ms < 100 ? 'under 0.1 seconds' : `${(ms / 1000).toFixed(1)} seconds`;
+  return ms < 100 ? 'under 0.1 seconds' : `${(Math.floor(ms / 100) / 10).toFixed(1)} seconds`;
 }
 
 function invalid(message: string, a: { readonly command: string }): Observation {

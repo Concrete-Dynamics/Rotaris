@@ -168,9 +168,13 @@ describe('terminal — pure parts (REQ-TOOLS-100, 112, 113; PD-TOOLS-003)', () =
     const region = new CommandRegion(S, E);
     expect(region.push(`${S}\r\n__rot_deadbeefdeadbeefdeadbeef_e:0\r\n`)).toBe('__rot_deadbeefdeadbeefdeadbeef_e:0\r\n');
   });
-  it('REQ-TOOLS-098 (live-run L2): a measured span is stated in tenths of a second, never rounded up to a window', () => {
+  it('REQ-TOOLS-098 (live-run L2): a measured span is stated in tenths of a second, truncated, so it never states more than was measured', () => {
     expect(seconds(0.6)).toBe('under 0.1 seconds');
-    expect(seconds(1_486)).toBe('1.5 seconds');
+    expect(seconds(99.9)).toBe('under 0.1 seconds');
+    expect(seconds(100)).toBe('0.1 seconds');
+    expect(seconds(1_486)).toBe('1.4 seconds');
+    expect(seconds(1_686)).toBe('1.6 seconds');
+    expect(seconds(1_999.9)).toBe('1.9 seconds');
     expect(seconds(31_240)).toBe('31.2 seconds');
   });
   it('OQ-133: a signal death\'s status — killed (−1) for a signal the session delivered, failed (128 + n) for one it did not, an exit code as ever (REQ-TOOLS-109/179, live-run L4)', () => {

@@ -35,14 +35,16 @@ An empty poll's detail (`packages/agent-tools/src/terminal/index.ts`) states bot
 rather than waiting for output, with REQ-TOOLS-098's capture semantics and poll-or-interrupt advice as before:
 "No new output in 5.3 seconds since the previous observation, and none for 35.3 seconds in the merged terminal
 stream; …". (As first built it read "in the 5.3 seconds", which below a tenth of a second became "in the under 0.1
-seconds"; the article was dropped at the verifier's first round, and the real-shell case's pattern pins the form.) The
+seconds"; the article was dropped at the verifier's first round, and the real-shell case's pattern pins the form.
+At the second round the span is truncated to the tenth rather than rounded, so a poll never states more than it
+measured: rounding had read "1.7 seconds" for 1,686 ms in the verifier's live run.) The
 soft pause itself still states the window it waited out. How long a poll should wait is stated
 nowhere, and is raised as [OQ-136](../../architecture/open-questions.md) with this reading built.
 
 **Pinned by** `terminal.test.ts`: "REQ-TOOLS-098 (live-run L2): an empty poll states the time it actually waited, not
 the no-output window it did not wait out", against the host's real shell. It failed with the detail left as it was
 ("No output for 1.5 seconds …" after a poll of a few milliseconds). "REQ-TOOLS-098 (live-run L2): a measured span is
-stated in tenths of a second, …" pins the rendering. The live run's `terminal` scenario gained the shape `poll`, one
+stated in tenths of a second, truncated, …" pins the rendering (1,686 ms reads "1.6 seconds"). The live run's `terminal` scenario gained the shape `poll`, one
 empty command right after the wedge. On the built branch against `katalyst` (pack
 `.live-run/runs/2026-09-29T21-36-38-297Z` of the `fix-terminal-output` worktree; git-ignored) the poll took 2 ms and
 said "No new output in the 5.3 seconds since the previous observation, and none for 35.3 seconds"; 5,294 ms had passed

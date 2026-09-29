@@ -17,6 +17,11 @@ runs. The next case's `export ROTARIS_GONE='set'` then read back, verbatim:
 
 The detail was `exit_code` 0 and `success`. Recorded, not repaired.
 
+Since live-run L9's repair (2026-09-29) the same road also blanks the live preview. The foreground tap passes bytes
+only after the printed start marker (`CommandRegion`), and here that marker is never printed, so the region never
+opens and the call's live stream carries nothing until its closing frame. Before that repair the preview showed
+everything the PTY carried.
+
 ## Specs
 
 - `REQ-TOOLS-127`: every frame is faithful to what the command wrote, and the wrapper and its markers are the

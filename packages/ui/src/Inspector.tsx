@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { RUN_AGENT_ID, type AgentRecord, type SessionRecord, type TranscriptRow } from '@rotaris/contracts';
 import { cancelCascade, cancelOffered, cancelUnavailableReason, cascadeNote, chipStates, followedAgent, inspectorEnablement, instancesOf, mcpChipStates, mcpFateText, metaLine, resolvedTools } from './agents.js';
-import { elapsedLabel } from './AgentTree.js';
+import { elapsedLabel, elapsedShown } from './AgentTree.js';
 import { ContextRing } from './ContextRing.js';
 import { markMotionStart } from './motion.js';
 import { Button as DesignButton, SearchableSelect as DesignSearchableSelect, Select as DesignSelect } from './design-system/index.js';
@@ -80,7 +80,7 @@ export function Inspector(props: InspectorProps) {
   // PD-ORCH-005 clause 16: a paused child offers Cancel while its session rests; a live agent while its run is active.
   const cancellable = cancelOffered(shown, runActive, resting);
   const chips = shown ? chipStates(resolvedTools(shown, persona?.tools ?? []), shown.calledTools, shown.activeTools) : [];
-  const elapsed = shown && (shown.live || shown.completedAt) ? elapsedLabel(shown, nowIso) : null;
+  const elapsed = shown && elapsedShown(shown) ? elapsedLabel(shown, nowIso) : null;
   const currentModel = shown?.model ?? '';
   const modelOptions = useMemo(() => {
     // REQ-MONITOR-066: the current model is always an option, even when the catalogue no longer lists it.

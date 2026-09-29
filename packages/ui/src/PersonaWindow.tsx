@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { AgentRecord, SessionRecord, TranscriptRow } from '@rotaris/contracts';
 import { chipStates, countNoun, instancesOf, mcpFateText, resolvedTools, rowsOf } from './agents.js';
 import { AgentCancelConfirm } from './AgentCancelConfirm.js';
-import { elapsedLabel } from './AgentTree.js';
+import { elapsedLabel, elapsedShown } from './AgentTree.js';
 import { ContextRing } from './ContextRing.js';
 import { RowList, type Acknowledger } from './TranscriptSurface.js';
 import type { TerminalPreview } from './terminal/streams.js'; // Part AL2
@@ -86,7 +86,7 @@ export function PersonaWindow(props: PersonaWindowProps) {
   };
   const own = shown ? rowsOf(rows, shown) : [];
   const chips = shown ? chipStates(resolvedTools(shown, declaredTools), shown.calledTools, shown.activeTools) : [];
-  const elapsed = shown && (shown.live || shown.completedAt) ? elapsedLabel(shown, nowIso) : null;
+  const elapsed = shown && elapsedShown(shown) ? elapsedLabel(shown, nowIso) : null;
   return (
     <div className="persona-window" data-persona={persona} data-shown={shown?.id ?? ''} data-instances={instances.length}>
       <DesignPageHeader className="persona-window__header page-header">

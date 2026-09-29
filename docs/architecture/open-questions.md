@@ -4270,8 +4270,10 @@ no more; its last sentence settles "every other unfinished agent of a session at
   live (`AgentRecord.live`, running only) nor ended, so a waiting or queued agent read `waiting` alone where the base
   read `waiting · 1m 3s`; the merged build's eleventh review round restricted it to `paused`.* The agent tree, the
   table and the inspector drop a waiting or queued agent's time too, as they did before revision 4
-  ([`a-waiting-agents-elapsed-time-is-not-shown.md`](../defects/a-waiting-agents-elapsed-time-is-not-shown.md)); that
-  is not this directive's, and is not repaired here.
+  ([`a-waiting-agents-elapsed-time-is-not-shown.md`](../defects/fixed/a-waiting-agents-elapsed-time-is-not-shown.md)); that
+  is not this directive's, and is not repaired here. *Repaired 2026-09-29 under R-067: the tree, the table, the inspector and
+  the persona window show a waiting or queued agent's time, advancing, by a clock predicate of their own (OQ-122); a
+  `paused` agent keeps this reading.*
 - **A live agent's cancel.** Its confirmation and cascade note name every descendant its cancel ends — live and
   paused, through a finished one (`cancelCascade`) — so that neither understates what the cancel ends; the body and
   the note name what they are: "Its live descendants", "Its paused descendants" or "Its live and paused descendants
@@ -5441,6 +5443,31 @@ stop, so its 30 s force exit is not met by a drain.
 given what is left of the grace, or the drain replaced by the grace for the cancel), or run after it as built; and
 whether REQ-ORCH-080's drain should still apply to the explicit cancel at all, now that `PD-ORCH-005` has a stop leave
 the background children paused rather than cancelled.
+
+**OQ-122 — Which agents' elapsed clocks advance: REQ-MONITOR-045's "live", or every agent neither ended nor paused?** *(REQ-MONITOR-107, "While the agent is live the figure advances"; REQ-MONITOR-045, "An agent is \"live\" exactly when its presentation state is running"; REQ-MONITOR-064, whose "live (running, waiting, or queued)" uses the word in a second, wider sense; REQ-MONITOR-110/111 with resolution item 25 of `docs/spec/resolutions/02-run-monitoring-steering.md`, "A surface holding a spawn timestamp and showing a fallback … is now a defect"; OQ-100, whose reading keeps a `paused` agent's figure off "This task". Raised 2026-09-29 by the repair of
+[`a-waiting-agents-elapsed-time-is-not-shown.md`](../defects/fixed/a-waiting-agents-elapsed-time-is-not-shown.md)
+under [R-067](../product/requests.md#r-067). Open.)*
+
+REQ-MONITOR-107 has the figure advance "while the agent is live" and fixed "once the agent is terminal", and says nothing of
+an agent that is neither. Read with REQ-MONITOR-045's definition, a waiting or queued agent is not live, so the
+requirement does not ask its figure to advance; but REQ-MONITOR-111 forbids the fallback wherever a spawn timestamp was
+recorded, so the figure must be shown, and a figure measured from the spawn timestamp that stood still while the agent
+waited would be neither its elapsed time nor its time at completion. REQ-MONITOR-064 already calls a running, waiting or
+queued agent live.
+
+**The reading built.** The clock has its own predicate, `clockAdvances` (`packages/ui/src/AgentTree.tsx`): an agent not
+ended, holding a parseable spawn timestamp, whose presentation state is running, waiting or queued — REQ-MONITOR-064's
+live set. Its figure is shown and advances on the surface's one-second tick on the four surfaces with a slot for it (the
+tree meta, the Mission table, the inspector meta, the persona window's context card); an ended agent's is fixed at
+completion minus spawn. `AgentRecord.live` keeps REQ-MONITOR-045's running-only sense and still drives the pulse, the
+motion and the inspector's writability. A `paused` agent keeps OQ-100's reading (no figure; the tree reads its state,
+the inspector and the context card their fallback), since nothing runs for it and REQ-CHAT-008's recovery state keeps
+the tick going. The tick condition (REQ-MONITOR-110) needed no change: it runs while the followed session is busy, and a
+running, waiting or queued agent is presented only then (a session at rest settles or pauses every unfinished agent).
+
+**What a ruling decides.** Whether a waiting or queued agent's figure advances (as built) or stands, and whether a
+`paused` agent should show a figure — fixed at its pause, or advancing — rather than OQ-100's fallback, which
+REQ-MONITOR-111's "a surface that has a spawn timestamp and shows a fallback … is a defect" reads against.
 
 ## Design-reference dependencies
 

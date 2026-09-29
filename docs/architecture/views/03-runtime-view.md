@@ -656,16 +656,19 @@ settle in `execute` writes (REQ-ORCH-098): `child_end`, `child_result`, `child_c
 **A settle's hook runs in line (REQ-HOOKS-076 / REQ-HOOKS-080; repaired 2026-09-29).** Both settles, the one at the end
 of `execute` and `settleRaised`, make the terminal move and write the teardown. Then they run the `child_completed` hook
 before they tell the scheduler (`scheduler.settled`), which wakes a parent waiting on the child. From the hook's start
-until that call, the child is held in `IterationChildren.settles`. A parent that finds the child ended on its own waits
-for that settle first (`settlesOf`):
+until that call, the child is held in `IterationChildren.settles`. A parent that finds the child ended on its own first
+waits until none of those children is settling (`settlesOf`):
 - in `runWithChildren`, before it takes its newly ended children;
 - in `wait_for_tasks`, before it checks its set, and again after the wait.
 
-An agent whose loop ends while a child of its own is still settling waits for that settle before it returns. This
-happens, for example, when its turn failed. A rest and a stop await the settles as executions. So the hook finishes
-before the parent is given the report, and before `iteration_end` and `session_end`. Before this repair, a normal end
-did not wait for a settle: a parent took a child's report as soon as it found the child ended
-([`a-child-completed-hook-can-finish-after-its-iteration-ends.md`](../../defects/fixed/a-child-completed-hook-can-finish-after-its-iteration-ends.md)).
+`settlesOf` looks again whenever the settles it waits on end, because another child can end meanwhile and start its
+own hook. A child settles once, so the wait ends. An agent whose loop ends while a child of its own is still settling
+waits the same way before it returns. This happens, for example, when its turn failed. A rest and a stop await the
+settles as executions. So the hook finishes before the parent is given the report, and before `iteration_end` and
+`session_end`. Before this repair, a normal end did not wait for a settle: a parent took a child's report as soon as it
+found the child ended. The repair's first form waited only on the settles running when each wait began, so a second
+child that ended during the wait was taken while its hook ran (found by the verifier's fifth round). Both are recorded
+in [`a-child-completed-hook-can-finish-after-its-iteration-ends.md`](../../defects/fixed/a-child-completed-hook-can-finish-after-its-iteration-ends.md).
 
 **The stall watch and the corrective message (REQ-ORCH-089, REQ-MONITOR-117..120, REQ-NOTIFY-111/112;
 `children/stall.ts`; OQ-127).** Each attempt of a child's execution runs a `StallWatch` on the clock port. Its

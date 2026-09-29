@@ -79,4 +79,6 @@ reached `iteration_end` and `session_end` while the `child_completed` hook still
 `execute` had the same gap, reached by a race. The repair is recorded in
 [`a-child-completed-hook-can-finish-after-its-iteration-ends.md`](a-child-completed-hook-can-finish-after-its-iteration-ends.md).
 Since then, a parent takes a child as ended only once its settle, hook included, is done. A normal end now waits for
-it too.
+it too. The verifier's fifth round found that this held only for the settles running when a wait began: a second child
+that ended during the wait was taken while its own hook ran. Since that round's repair, each wait looks again until
+none of its children is settling (recorded on the same note).

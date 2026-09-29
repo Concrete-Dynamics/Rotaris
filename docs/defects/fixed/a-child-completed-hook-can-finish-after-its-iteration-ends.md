@@ -93,8 +93,57 @@ All six fail on the code before the repair. Removing each wait in turn fails the
 - removing either settle's mark fails the cases whose child that settle settles.
 
 The wait at the loop's end also covers a child that stops at its own limit (REQ-ORCH-088's landing) with a child of its
-own still settling. No case pins that route.
+own still settling. No case pinned that route in this repair. The fifth round's landing case, below, pins it.
 
 A hook that raises still leaves a parent waiting in the resume loop or in `wait_for_tasks` unreleased. The mark now ends,
 so a parent that found the child ended on its own goes on, but `scheduler.settled` is still not called. That is recorded
 in [`a-raise-after-a-childs-terminal-transition-never-releases-its-parent.md`](../a-raise-after-a-childs-terminal-transition-never-releases-its-parent.md).
+
+## Found by the verifier's fifth round — 2026-09-29, and repaired
+
+The claim above, "a parent takes a child as ended only once that settle is done", was false of the repair as it stood.
+Each wait took the settles running when it began and awaited them once. While a parent waited on one child's hook, a
+second child could end and start its own hook. When the first hook ended, the parent went on without looking again:
+- `wait_for_tasks` found its whole set ended and returned both reports;
+- `runWithChildren`'s loop took both children as newly ended;
+- an agent whose loop had ended returned, so the iteration could reach `iteration_end` while the second hook ran.
+
+The verifier reproduced the first two with probe tests. Both recorded this order before the second hook was released:
+1. `session_start` started and ended;
+2. the root's first and second model calls;
+3. `child_completed(first)` started;
+4. `child_completed(second)` started;
+5. `child_completed(first)` ended;
+6. the root's third model call, given the second child's report while its hook still ran.
+
+In those probes the root's own loop end waited again and held `iteration_end` back. That did not hold for the third
+route, where an agent's loop had already ended.
+
+The repair is in `IterationChildren.settlesOf`, which all four waits use. Once the settles it waits on end, it looks
+again, and it resolves only once none of its tasks is settling. A task settles once, so the wait ends. It still returns
+null when none is settling, so an agent with nothing to wait for does not yield. So the claim above now holds, and so do
+the runtime view's "the hook finishes before the parent is given the report" and the views README's entry.
+
+The second wait in `wait_for_tasks` looks again for a narrower reason. When the last settle of its set releases the
+scheduler's wait (`Scheduler.waitFor`), every settle of the set has already begun. A child's terminal move and the start
+of its settle run in one synchronous stretch. But a rest releases that wait early (`Scheduler.hold`). After that, a
+task of the set can still end and start its settle, for example a child whose limit expired, which the rest does not
+stop. This is established by reading the code; no case drives it.
+
+Evidence is four new cases in the same describe. The first three hold two children's hooks:
+- `wait_for_tasks` waiting on the first child's hook while the second ends and starts its own (the verifier's first
+  probe);
+- the resume loop waiting on the first child's hook while the second ends and starts its own (the verifier's second
+  probe);
+- a root whose turn fails while the first child's hook runs, the second then ending and starting its own;
+- REQ-ORCH-088: a child that lands at its own limit while a child of its own is still in its hook (the route the
+  repair above left unpinned). It holds one hook.
+
+With `settlesOf` back to a single wait, the three two-hook cases fail, in five runs of five. With the repair, all ten
+cases pass. The mutation pass was repeated over the repaired code, removing each wait in turn:
+- the first wait in `wait_for_tasks`: the one-child wait case fails;
+- the second: the two-child wait case fails;
+- the wait in the loop: the fresh, resume and normal-settle cases fail, and so does the resume-loop two-hook case;
+- the wait at the loop's end: the failed-turn case, the failed-turn two-hook case and the landing case fail.
+
+Repaired 2026-09-29 under R-067.

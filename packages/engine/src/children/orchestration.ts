@@ -446,13 +446,16 @@ export class IterationChildren implements DelegationOps {
   }
 
   /**
-   * REQ-HOOKS-080: the settles still running among `taskIds`, to be awaited before any of them is taken as ended — or
-   * null when none is, so an agent with none to wait for does not yield.
+   * REQ-HOOKS-080: a wait that ends once none of `taskIds` is settling, to be awaited before any of them is taken as
+   * ended — or null when none is, so an agent with none to wait for does not yield. It looks again whenever the settles
+   * it waits on end, because another of `taskIds` can have ended meanwhile and be running its own hook: a wait on only
+   * the settles running when it began let that one through (found by the verifier's fifth round). A task settles once,
+   * so the wait ends.
    */
   private settlesOf(taskIds: readonly string[]): Promise<unknown> | null {
     if (this.settles.size === 0) return null;
     const running = taskIds.flatMap((id) => { const settle = this.settles.get(id); return settle === undefined ? [] : [settle]; });
-    return running.length === 0 ? null : Promise.all(running);
+    return running.length === 0 ? null : Promise.all(running).then(() => this.settlesOf(taskIds));
   }
 
   /**

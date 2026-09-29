@@ -3148,25 +3148,38 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
     const textOf = (req: ModelRequest): string => req.messages.map((m) => m.content.map((p) => (p.kind === 'text' ? p.text : '')).join('')).join('\n');
     /** The run as a run without its hook in line would end it: given this long to get there before a test says it did not. */
     const RACE_ROUNDS = 40;
-    /** Every lifecycle occurrence's start and end, in order, with `name`'s `child_completed` held until `release`. */
-    function heldHook(name: string) {
+    /** Every lifecycle occurrence's start and end, in order, with each of `names`' `child_completed` held until it is released. */
+    function heldHooks(...names: string[]) {
       const order: string[] = [];
-      let release!: () => void;
-      const hold = new Promise<void>((r) => { release = r; });
-      const state = { entered: false };
+      const held = new Map<string, { hold: Promise<void>; release: () => void; entered: boolean }>();
+      for (const name of names) {
+        let release!: () => void;
+        const hold = new Promise<void>((r) => { release = r; });
+        held.set(name, { hold, release, entered: false });
+      }
       const hooks: HookPort = {
         auditSnapshot: () => [], trust: () => ({ withheld: 0, reinstated: 0, notice: '', workspace: 'C:/ws', fingerprint: 'f', loadWarning: '' }), announceWithheld: () => 0, hasHooksFor: () => true,
         fireLifecycle: async (event, fields) => {
           const label = event === 'child_completed' ? `child_completed(${String(fields['child_name'])})` : event;
           order.push(`${label}:start`);
-          if (event === 'child_completed' && fields['child_name'] === name) { state.entered = true; await hold; }
+          const h = event === 'child_completed' ? held.get(String(fields['child_name'])) : undefined;
+          if (h) { h.entered = true; await h.hold; }
           order.push(`${label}:end`);
           return [];
         },
         advisory: () => '', toolHooks: { preTool: async () => ({ blocked: false, refusal: '' }), postTool: async () => ({ feedback: '' }) },
       };
-      return { order, hooks, state, release };
+      return { order, hooks, entered: (name: string) => held.get(name)?.entered === true, release: (name: string) => { held.get(name)?.release(); } };
     }
+    /** `heldHooks` for one child: its hook held until `release`. */
+    function heldHook(name: string) {
+      const { order, hooks, entered, release } = heldHooks(name);
+      return { order, hooks, state: { get entered() { return entered(name); } }, release: () => release(name) };
+    }
+    /** REQ-HOOKS-076's order for two children whose hooks overlap, `first`'s having started first and ended first. */
+    const bothInOrder = (first: string, second: string) => ['session_start:start', 'session_start:end', `child_completed(${first}):start`, `child_completed(${second}):start`, `child_completed(${first}):end`, `child_completed(${second}):end`, 'iteration_end:start', 'iteration_end:end', 'session_end:start', 'session_end:end'];
+    /** PD-ORCH-005 clause 1: an agent's words are in its recorded conversation once the step that said them has ended. */
+    const said = (sid: SessionId, text: string): boolean => (dal.db.prepare('SELECT body FROM agent_messages WHERE session_id = ?').all(sid) as { body: string }[]).some((r) => r.body.includes(text));
     /** REQ-HOOKS-076: the order of a run in which each of the four events occurs once. */
     const inOrder = (child: string) => ['session_start:start', 'session_start:end', `child_completed(${child}):start`, `child_completed(${child}):end`, 'iteration_end:start', 'iteration_end:end', 'session_end:start', 'session_end:end'];
     const lifecycle = (order: readonly string[]) => order.filter((e) => !e.startsWith('root:'));
@@ -3338,6 +3351,165 @@ describe('an iteration with children, end to end against the run (REQ-ORCH-055..
       await sessions.running(sid);
       expect(order.indexOf('root:3')).toBeGreaterThan(order.indexOf('child_completed(first):end'));
       expect(lifecycle(order).filter((e) => !e.startsWith('child_completed(second)'))).toEqual(inOrder('first'));
+    });
+
+    it('wait_for_tasks waiting on the first child\'s hook while the second ends and starts its own: the wait returns only once both hooks are done', async () => {
+      const { order, hooks, entered, release } = heldHooks('first', 'second');
+      let releaseFirst!: () => void;
+      const firstStep = new Promise<void>((r) => { releaseFirst = r; });
+      let releaseSecond!: () => void;
+      const secondStep = new Promise<void>((r) => { releaseSecond = r; });
+      let releaseRoot!: () => void;
+      const rootStep = new Promise<void>((r) => { releaseRoot = r; });
+      const waited = { issued: false };
+      let sid!: SessionId;
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          order.push(`root:${turn}`);
+          if (turn === 1) return toolCalls([delegation('first'), delegation('second')]);
+          // Asked once `first` has ended and its hook has started, while `second` still runs.
+          if (turn === 2) return { parts: [{ hold: rootStep }, ...toolCalls([{ callId: 'w1', name: 'wait_for_tasks', args: { task_ids: [byName(sid, 'first')!.task_id, byName(sid, 'second')!.task_id] } }]).parts] };
+          return answer('handled');
+        }
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        return textOf(req).includes('TASK: first') ? { parts: [{ hold: firstStep }, ...answer('first: done').parts] } : { parts: [{ hold: secondStep }, ...answer('second: done').parts] };
+      }, { hooks, tool: (name, _args, _ctx, builtIn) => { if (name !== 'wait_for_tasks') return undefined; waited.issued = true; return builtIn(); } });
+      sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => order.includes('root:2') && byName(sid, 'second')?.state === 'running');
+      releaseFirst();
+      await settle(() => entered('first'));
+      releaseRoot();
+      // The wait is issued while `first`'s hook holds: it waits on that settle.
+      await settle(() => waited.issued);
+      releaseSecond();
+      await settle(() => entered('second'));
+      release('first');
+      await settle(() => order.includes('child_completed(first):end'));
+      await settle(() => order.includes('root:3'), RACE_ROUNDS);
+      // `second` ended while the wait waited on `first`: its hook still holds, so the wait has not returned its report.
+      expect(order).not.toContain('root:3');
+      release('second');
+      await sessions.running(sid);
+      expect(order.indexOf('root:3')).toBeGreaterThan(order.indexOf('child_completed(second):end'));
+      expect(lifecycle(order)).toEqual(bothInOrder('first', 'second'));
+    });
+
+    it('the resume loop waiting on the first child\'s hook while the second ends and starts its own: the parent is given the reports only once both hooks are done', async () => {
+      const { order, hooks, entered, release } = heldHooks('first', 'second');
+      let releaseFirst!: () => void;
+      const firstStep = new Promise<void>((r) => { releaseFirst = r; });
+      let releaseSecond!: () => void;
+      const secondStep = new Promise<void>((r) => { releaseSecond = r; });
+      let releaseRoot!: () => void;
+      const rootStep = new Promise<void>((r) => { releaseRoot = r; });
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          order.push(`root:${turn}`);
+          if (turn === 1) return toolCalls([delegation('first'), delegation('second')]);
+          // Still streaming when `first` ends: the turn ends with `first` ended and unobserved, so the loop finds it at once.
+          if (turn === 2) return { parts: [{ hold: rootStep }, ...answer('root is still working').parts] };
+          return answer('handled');
+        }
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        return textOf(req).includes('TASK: first') ? { parts: [{ hold: firstStep }, ...answer('first: done').parts] } : { parts: [{ hold: secondStep }, ...answer('second: done').parts] };
+      }, { hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => order.includes('root:2') && byName(sid, 'second')?.state === 'running');
+      releaseFirst();
+      await settle(() => entered('first'));
+      releaseRoot();
+      // The root's turn has ended: its loop waits on `first`'s settle.
+      await settle(() => said(sid, 'root is still working'));
+      await new Promise((r) => setTimeout(r, 20));
+      releaseSecond();
+      await settle(() => entered('second'));
+      release('first');
+      await settle(() => order.includes('child_completed(first):end'));
+      await settle(() => order.includes('root:3'), RACE_ROUNDS);
+      // `second` ended while the loop waited on `first`: its hook still holds, so neither report has been given.
+      expect(order).not.toContain('root:3');
+      release('second');
+      await sessions.running(sid);
+      expect(order.indexOf('root:3')).toBeGreaterThan(order.indexOf('child_completed(second):end'));
+      expect(lifecycle(order)).toEqual(bothInOrder('first', 'second'));
+    });
+
+    it('a root whose turn fails while the first child\'s hook runs, the second then ending and starting its own: the session ends only after both hooks', async () => {
+      const { order, hooks, entered, release } = heldHooks('first', 'second');
+      let releaseFirst!: () => void;
+      const firstStep = new Promise<void>((r) => { releaseFirst = r; });
+      let releaseSecond!: () => void;
+      const secondStep = new Promise<void>((r) => { releaseSecond = r; });
+      let releaseRoot!: () => void;
+      const rootStep = new Promise<void>((r) => { releaseRoot = r; });
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') {
+          order.push(`root:${turn}`);
+          return turn === 1 ? toolCalls([delegation('first'), delegation('second')]) : { parts: [{ hold: rootStep }, { error: modelError({ code: 'unknown', headline: 'the provider failed' }) }] };
+        }
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        return textOf(req).includes('TASK: first') ? { parts: [{ hold: firstStep }, ...answer('first: done').parts] } : { parts: [{ hold: secondStep }, ...answer('second: done').parts] };
+      }, { hooks });
+      const sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => order.includes('root:2') && byName(sid, 'second')?.state === 'running');
+      releaseFirst();
+      await settle(() => entered('first'));
+      // The root's turn fails with `second` still running: the end of its loop waits on `first`'s settle.
+      releaseRoot();
+      await new Promise((r) => setTimeout(r, 20));
+      releaseSecond();
+      await settle(() => entered('second'));
+      release('first');
+      await settle(() => order.includes('child_completed(first):end'));
+      await settle(() => order.includes('iteration_end:start') || order.includes('session_end:start'), RACE_ROUNDS);
+      // `second` ended while the root waited on `first`: its hook still holds, so the iteration has not ended.
+      expect(order).not.toContain('iteration_end:start');
+      expect(order).not.toContain('session_end:start');
+      release('second');
+      await sessions.running(sid);
+      // Whatever else the failed turn leads to, both hooks end before the iteration's and the session's own.
+      const done = order.indexOf('child_completed(second):end');
+      expect(done).toBeGreaterThan(order.indexOf('child_completed(first):end'));
+      expect(order.filter((e, i) => i < done && (e.startsWith('iteration_end') || e.startsWith('session_end')))).toEqual([]);
+      expect(order.at(-1)).toBe('session_end:end');
+    });
+
+    it('REQ-ORCH-088: a child that lands at its own limit while a child of its own is still in its hook settles only after that hook', async () => {
+      const { order, hooks, state, release } = heldHook('leaf');
+      let releaseLeaf!: () => void;
+      const leafStep = new Promise<void>((r) => { releaseLeaf = r; });
+      let releaseMid!: () => void;
+      const midStep = new Promise<void>((r) => { releaseMid = r; });
+      let midAsked = 0;
+      let sid!: SessionId;
+      const { sessions } = sessionsWith((persona, turn, req) => {
+        if (persona === 'orchestrator') { order.push(`root:${turn}`); return turn === 1 ? toolCalls([delegation('mid')]) : answer('handled'); }
+        if (persona === 'summariser') return answer('{"summary":"x"}');
+        if (!textOf(req).includes('TASK: mid')) return { parts: [{ hold: leafStep }, ...answer('leaf: done').parts] };
+        midAsked += 1;
+        if (midAsked === 1) return toolCalls([delegation('leaf')]);
+        // In flight when the limit expires: it finishes, and the child stops before its next step (the landing).
+        if (midAsked === 2) return { parts: [{ hold: midStep }, ...toolCalls([{ callId: 'b1', name: 'background_output', args: { task_id: byName(sid, 'leaf')!.task_id } }], 'Checking on leaf.').parts] };
+        return answer('mid: never asked again');
+      }, { hooks, childTimeoutMs: 60_000 });
+      sid = (sessions.start(dal, 'C:/ws', 'x') as { value: SessionId }).value;
+      await settle(() => midAsked === 2 && byName(sid, 'leaf')?.state === 'running');
+      releaseLeaf();
+      await settle(() => state.entered);
+      clock.advance(60_000);
+      releaseMid();
+      await settle(() => order.includes('child_completed(mid):start') || order.includes('iteration_end:start'), RACE_ROUNDS);
+      // `mid` has landed, its loop ended with `leaf` in its hook: it has not settled, and the iteration has not ended.
+      expect(order).not.toContain('child_completed(mid):start');
+      expect(order).not.toContain('iteration_end:start');
+      expect(byName(sid, 'mid')?.state).toBe('running');
+      release();
+      await sessions.running(sid);
+      expect(midAsked).toBe(2);
+      const mid = byName(sid, 'mid')!;
+      expect(mid.state).toBe('failed');
+      expect((JSON.parse(mid.report!) as { errors: { type: string }[] }).errors.map((e) => e.type)).toContain('timeout');
+      expect(lifecycle(order)).toEqual(['session_start:start', 'session_start:end', 'child_completed(leaf):start', 'child_completed(leaf):end', 'child_completed(mid):start', 'child_completed(mid):end', 'iteration_end:start', 'iteration_end:end', 'session_end:start', 'session_end:end']);
     });
   });
 

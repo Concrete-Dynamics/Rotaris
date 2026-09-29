@@ -55,3 +55,12 @@ the new cut keeps the task, both edits, the check and the final answer, and that
 marker's count exactly. The third checks that a short transcript is given whole. The fourth checks the facts block,
 for edits, for none, and for a command with no exit code. The fifth runs the request through `produceReport`. It
 carries the facts and the new transcript, and it fails when `produceReport` is given back the head-only cut.
+
+Live, 2026-09-29: `pnpm live-run --confirm --only=duress` against the unmetered `katalyst` endpoint, built from this
+branch's code. Pack `.live-run/runs/2026-09-29T07-18-48-658Z` (this branch's worktree; git-ignored), session `b4a768a2`. All six summariser requests read the task as given, then a marker, then the child's most
+recent part ending in its final answer. Each transcript was exactly 12,000 characters, with between 13,219 and 57,547
+characters omitted. Each request carried the `Facts:` block. The reconciling child `wave2-d` (`bg_d2b9ae67`, 53 calls)
+is the one the earlier run's `d` denied. Its request (traffic #114) left 57,547 characters out, and its facts read
+`Edited files: docs/overview.md, docs/api.md`. None of the six stored reports contradicts its own `edited_files`, where
+the earlier run had five of seven. `wave2-d`'s summary begins "The agent reconciled docs/api.md and docs/overview.md …
+and editing both docs".
